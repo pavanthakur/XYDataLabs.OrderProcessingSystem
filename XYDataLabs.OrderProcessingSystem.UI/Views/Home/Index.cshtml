@@ -1,0 +1,61 @@
+﻿@{
+    ViewData["Title"] = "Payment Form";
+}
+
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <!-- Hidden container for device session ID -->
+                <div id="deviceIdHiddenFieldName" style="display: none;"></div>
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">Payment Information</h4>
+                </div>
+                <div class="card-body">
+                    <form id="payment-form">
+                        <div class="mb-3">
+                            <label for="holderName" class="form-label">Holder Name</label>
+                            <input type="text" class="form-control" id="holderName" value="" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="cardNumber" class="form-label">Card Number</label>
+                            <input type="text" class="form-control" id="cardNumber" value="4111111111111111"
+                                   maxlength="16" required>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col">
+                                <label for="expiryMonth" class="form-label">Expiry Month</label>
+                                <input type="text" class="form-control" id="expiryMonth" placeholder="MM"
+                                       maxlength="2" required>
+                            </div>
+                            <div class="col">
+                                <label for="expiryYear" class="form-label">Expiry Year</label>
+                                <input type="text" class="form-control" id="expiryYear" placeholder="YY"
+                                       maxlength="2" required>
+                            </div>
+                            <div class="col">
+                                <label for="cvv" class="form-label">CVV</label>
+                                <input type="text" class="form-control" id="cvv" value=""
+                                       maxlength="3" required>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Email</label>
+                            <input type="email" class="form-control" id="email" value="" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="orderId" class="form-label">Order ID</label>
+                            <input type="text" class="form-control" id="orderId" value="" required>
+                        </div>
+                        <button id="pay-button" type="submit" class="btn btn-primary w-100">Process Payment</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+
+    <script src="~/js/payment.js" asp-append-version="true"></script>
+}
