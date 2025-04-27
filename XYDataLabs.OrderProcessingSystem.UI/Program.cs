@@ -1,6 +1,9 @@
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Add Configuration to the services so it can be injected into views
+builder.Services.AddSingleton<IConfiguration>(builder.Configuration);
 
 // Add CORS services
 //builder.Services.AddCors(options =>
@@ -51,7 +54,12 @@ if (!app.Environment.IsDevelopment())
 //app.UseCors("AllowOpenPay");
 app.UseCors("AllowAll");
 
-app.UseHttpsRedirection();
+// Only use HTTPS redirection if enabled in configuration
+if (builder.Configuration.GetValue<bool>("UseHttpsRedirection"))
+{
+    app.UseHttpsRedirection();
+}
+
 app.UseStaticFiles();
 
 app.UseRouting();

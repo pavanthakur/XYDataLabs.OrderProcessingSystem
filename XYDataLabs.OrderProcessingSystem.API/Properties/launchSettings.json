@@ -34,15 +34,15 @@
     "Container (Dockerfile)": {
       "commandName": "Docker",
       "launchBrowser": true,
-      "launchUrl": "{Scheme}://{ServiceHost}:{ServicePort}/swagger",
+      "launchUrl": "{Scheme}://{ServiceHost}:{ServicePort}/swagger/index.html",
       "environmentVariables": {
-        "ASPNETCORE_HTTPS_PORTS": "8081",
+        //"ASPNETCORE_HTTPS_PORTS": "8081",
         "ASPNETCORE_HTTP_PORTS": "8080",
         "ASPNETCORE_ENVIRONMENT": "Development",
         "CORS_ALLOWED_ORIGINS": "http://ui:8080"
       },
-      "publishAllPorts": true,
-      "useSSL": true
+      "publishAllPorts": false, // 👈 optional, to avoid random ports
+      "useSSL": false
     },
     "Production": {
       "commandName": "Project",

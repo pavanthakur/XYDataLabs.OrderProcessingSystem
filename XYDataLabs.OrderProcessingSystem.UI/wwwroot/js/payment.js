@@ -58,7 +58,7 @@ document.getElementById('payment-form').addEventListener('submit', function (e) 
             };
 
             // Call your API endpoint
-            fetch('https://localhost:44393/api/payments/processpayment', {
+            fetch(API_BASE_URL + '/api/payments/processpayment', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'

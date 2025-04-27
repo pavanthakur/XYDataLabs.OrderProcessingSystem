@@ -95,7 +95,11 @@ else
 //app.UseCors("AllowPaymentUI");
 app.UseCors("AllowAll");
 
-app.UseHttpsRedirection();
+// Only use HTTPS redirection if enabled in configuration
+if (builder.Configuration.GetValue<bool>("UseHttpsRedirection"))
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseAuthorization();
 

@@ -24,15 +24,25 @@ FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
 RUN dotnet publish "./XYDataLabs.OrderProcessingSystem.API.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
+# This stage is used for debugging (development)
+FROM build AS debug
+WORKDIR /app
+COPY --from=build /app/build .
+ENV ASPNETCORE_URLS=http://+:8080
+ENV ASPNETCORE_HTTP_PORTS=8080
+ENV DOTNET_RUNNING_IN_CONTAINER=true
+ENTRYPOINT ["dotnet", "XYDataLabs.OrderProcessingSystem.API.dll"]
+
 # This stage is used in production
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
 
 # Set environment variables for configuration
-ENV ASPNETCORE_URLS=http://+:8080;https://+:8081
+#ENV ASPNETCORE_URLS=http://+:8080;https://+:8081
+ENV ASPNETCORE_URLS=http://+:8080
 ENV ASPNETCORE_HTTP_PORTS=8080
-ENV ASPNETCORE_HTTPS_PORTS=8081
+#ENV ASPNETCORE_HTTPS_PORTS=8081 #https commented for docker explicitly
 ENV DOTNET_RUNNING_IN_CONTAINER=true
 
 ENTRYPOINT ["dotnet", "XYDataLabs.OrderProcessingSystem.API.dll"]

@@ -39,9 +39,10 @@ WORKDIR /app
 COPY --from=publish /app/publish .
 
 # Set environment variables for configuration
-ENV ASPNETCORE_URLS=http://+:8080;https://+:8081
+#ENV ASPNETCORE_URLS=http://+:8080;https://+:8081
+ENV ASPNETCORE_URLS=http://+:8080
 ENV ASPNETCORE_HTTP_PORTS=8080
-ENV ASPNETCORE_HTTPS_PORTS=8081
+#ENV ASPNETCORE_HTTPS_PORTS=8081 #https commented for docker explicitly
 ENV DOTNET_RUNNING_IN_CONTAINER=true
 
 ENTRYPOINT ["dotnet", "XYDataLabs.OrderProcessingSystem.UI.dll"]

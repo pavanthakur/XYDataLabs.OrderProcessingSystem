@@ -1,6 +1,9 @@
-﻿@{
+﻿@using Microsoft.Extensions.Configuration
+@{
     ViewData["Title"] = "Payment Form";
 }
+
+@inject IConfiguration Configuration
 
 <div class="container py-5">
     <div class="row justify-content-center">
@@ -56,6 +59,8 @@
 </div>
 
 @section Scripts {
-
+    <script>
+        const API_BASE_URL = '@Configuration["API_BASE_URL"]';
+    </script>
     <script src="~/js/payment.js" asp-append-version="true"></script>
 }
