@@ -4,8 +4,8 @@
         {
             "type": "chrome",
             "request": "launch",
-            "name": "Launch Chrome (UI 5002)",
-            "url": "http://localhost:5002",
+            "name": "Launch Chrome (UI 5003)",
+            "url": "https://localhost:5003",
             "webRoot": "${workspaceFolder}/XYDataLabs.OrderProcessingSystem.UI/wwwroot"
         }
     ]

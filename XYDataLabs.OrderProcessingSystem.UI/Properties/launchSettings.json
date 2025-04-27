@@ -33,13 +33,13 @@
       "launchBrowser": true,
       "launchUrl": "{Scheme}://{ServiceHost}:{ServicePort}",
       "environmentVariables": {
-        //"ASPNETCORE_HTTPS_PORTS": "8081",
+        "ASPNETCORE_HTTPS_PORTS": "8081",
         "ASPNETCORE_HTTP_PORTS": "8080",
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "API_BASE_URL": "http://api:8080"
+        "API_BASE_URL": "https://api:8081"
       },
       "publishAllPorts": false, // 👈 optional, to avoid random ports
-      "useSSL": false
+      "useSSL": true
     },
     "Production": {
       "commandName": "Project",

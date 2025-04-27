@@ -6,11 +6,13 @@ services:
       - ./XYDataLabs.OrderProcessingSystem.Domain:/app/../XYDataLabs.OrderProcessingSystem.Domain
       - ./XYDataLabs.OrderProcessingSystem.Infrastructure:/app/../XYDataLabs.OrderProcessingSystem.Infrastructure
       - ./XYDataLabs.OpenPayAdapter:/app/../XYDataLabs.OpenPayAdapter
+      - ./dev-certs/aspnetapp.pfx:/https/aspnetapp.pfx:ro
     environment:
       - DOTNET_USE_POLLING_FILE_WATCHER=1
 
   ui:
     volumes:
       - ./XYDataLabs.OrderProcessingSystem.UI:/app
+      - ./dev-certs/aspnetapp.pfx:/https/aspnetapp.pfx:ro
     environment:
       - DOTNET_USE_POLLING_FILE_WATCHER=1
