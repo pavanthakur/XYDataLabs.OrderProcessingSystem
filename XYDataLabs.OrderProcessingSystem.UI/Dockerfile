@@ -28,6 +28,20 @@ COPY . .
 WORKDIR "/src/XYDataLabs.OrderProcessingSystem.UI"
 RUN dotnet build "./XYDataLabs.OrderProcessingSystem.UI.csproj" -c $BUILD_CONFIGURATION -o /app/build
 
+# This stage is specifically for development with volume mounts
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS dev
+WORKDIR /app
+COPY ["XYDataLabs.OrderProcessingSystem.UI/XYDataLabs.OrderProcessingSystem.UI.csproj", "./"]
+RUN dotnet restore "XYDataLabs.OrderProcessingSystem.UI.csproj"
+
+ENV ASPNETCORE_URLS=http://+:8080
+ENV ASPNETCORE_HTTP_PORTS=8080
+ENV DOTNET_RUNNING_IN_CONTAINER=true
+ENV DOTNET_WATCH_RESTART_ON_RUDE_EDIT=1
+ENV DOTNET_USE_POLLING_FILE_WATCHER=1
+
+ENTRYPOINT ["dotnet", "watch", "run", "--no-restore"]
+
 # This stage is used to publish the service project to be copied to the final stage
 FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
