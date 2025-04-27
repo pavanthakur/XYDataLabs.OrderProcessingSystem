@@ -4,6 +4,11 @@
     <ProjectVersion>2.1</ProjectVersion>
     <DockerTargetOS>Linux</DockerTargetOS>
     <DockerPublishLocally>False</DockerPublishLocally>
+    <ProjectGuid>8C5FD138-BE8E-46B8-97BA-F1153D1E6ADF</ProjectGuid>
+    <DockerLaunchAction>LaunchBrowser</DockerLaunchAction>
+    <DockerServiceUrl>{Scheme}://localhost:{ServicePort}/swagger</DockerServiceUrl>
+    <DockerServiceName>xydatalabs.orderprocessingsystem.api</DockerServiceName>
+    <DockerComposeProjectName>xydatalabsorderprocessingsystem</DockerComposeProjectName>
   </PropertyGroup>
   <ItemGroup>
     <None Include="docker-compose.override.yml">
