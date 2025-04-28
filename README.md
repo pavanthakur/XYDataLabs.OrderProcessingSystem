@@ -42,34 +42,35 @@ Q:\GIT\TestAppXY_OrderProcessingSystem> dotnet dev-certs https --trust
 This repository contains the implementation of Domain Driven Design and Clean Architecture in ASP.NET Core.
 
 # ⚙️ Features
-1. Domain Driven Design
-2. REST API
-3. API Versioning
-4. Logging with Serilog
-5. EF Core Code First Approach 
-5. Microsoft SQL Server
-7. AutoMapper
-8. Swagger 
-9. LoggingMiddleware 
-10. ErrorHandlingMiddleware
-11. Fluent Assertions
-12. xUnit For UnitTest
-13. Moq For UnitTest
-14. Bogus For UnitTest
-15. Docker
+1.	Domain Driven Design
+2.	REST API
+3.	API Versioning
+4.	Logging with Serilog
+5.	EF Core Code First Approach 
+6.	Microsoft SQL Server
+7.	AutoMapper
+8.	Swagger 
+9.	LoggingMiddleware 
+10.	ErrorHandlingMiddleware
+11.	Fluent Assertions
+12.	xUnit For UnitTest
+13.	Moq For UnitTest
+14.	Bogus For UnitTest
+15.	Docker
+
 
 # TODO
-Make Docker launch configurable seperate profile http and https
-Add another API
-Sql Post Gres
-Redis
-Azure hosting
-Store sensitive data in key vault
-Azure App Insight configuration
-Azure Service bus communication
-Azure containerization using Docker
-Kubernetes
-Angular
-SignalR
-Remove Auto Mapper
-CQRS without MediaR
+1.	Make Docker launch configurable seperate profile http and https
+2.	Add another API
+3.	Sql Post Gres
+4.	Redis
+5.	Azure hosting
+6.	Store sensitive data in key vault
+7.	Azure App Insight configuration
+8.	Azure Service bus communication
+9.	Azure containerization using Docker
+10.	Kubernetes
+11.	Angular
+12.	SignalR
+13.	Remove Auto Mapper
+14.	CQRS without MediaR
