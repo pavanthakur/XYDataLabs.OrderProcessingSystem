@@ -6,7 +6,11 @@ WORKDIR /app
 EXPOSE 8080 8081
 
 # Add health check using curl (will be configured by Docker Compose)
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+# Align timezone with UI container (Asia/Kolkata) so log timestamps match
+RUN apt-get update && apt-get install -y curl tzdata && rm -rf /var/lib/apt/lists/*
+ENV TZ=Asia/Kolkata
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo "$TZ" > /etc/timezone
+RUN mkdir -p /logs
 
 # This stage is used to build the service project
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
@@ -37,6 +41,10 @@ RUN dotnet publish "./XYDataLabs.OrderProcessingSystem.API.csproj" -c $BUILD_CON
 # This stage is specifically for development with volume mounts
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS dev
 WORKDIR /app
+# Align timezone with UI for dev/watch scenario as well
+RUN apt-get update && apt-get install -y tzdata && rm -rf /var/lib/apt/lists/*
+ENV TZ=Asia/Kolkata
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo "$TZ" > /etc/timezone
 
 # Copy all project files for dependency resolution
 COPY ["XYDataLabs.OrderProcessingSystem.API/XYDataLabs.OrderProcessingSystem.API.csproj", "./"]

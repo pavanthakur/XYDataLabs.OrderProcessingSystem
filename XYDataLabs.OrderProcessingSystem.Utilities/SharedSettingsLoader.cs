@@ -30,46 +30,58 @@ namespace XYDataLabs.OrderProcessingSystem.Utilities
             }
             else
             {
-                // Non-Docker scenario: Use only sharedsettings.{environment}.json (simplified)
-                // Default to 'dev' profile which contains all necessary configuration
+                // Non-Docker scenario: Load solution-level sharedsettings first, then project-level (if present) to override
                 var currentDir = Directory.GetCurrentDirectory();
                 var sharedSettingsFileName = $"sharedsettings.{environmentName}.json";
-                
-                string sharedSettingsPath = sharedSettingsFileName;
-                
-                // Check if sharedsettings exists in current directory
-                if (!File.Exists(Path.Combine(currentDir, sharedSettingsFileName)))
+
+                string? projectSharedPath = null;
+                string? solutionSharedPath = null;
+
+                // Project-level sharedsettings
+                var projectCandidate = Path.Combine(currentDir, sharedSettingsFileName);
+                if (File.Exists(projectCandidate))
                 {
-                    // Try parent directory (for projects running from their own folders)
-                    if (File.Exists(Path.Combine(currentDir, "..", sharedSettingsFileName)))
-                    {
-                        sharedSettingsPath = Path.GetFullPath(Path.Combine(currentDir, "..", sharedSettingsFileName));
-                    }
-                    else
-                    {
-                        // Find the solution root by looking for .sln file
-                        var searchDir = currentDir;
-                        while (searchDir != null)
-                        {
-                            if (Directory.GetFiles(searchDir, "*.sln").Length > 0)
-                            {
-                                var candidatePath = Path.Combine(searchDir, sharedSettingsFileName);
-                                if (File.Exists(candidatePath))
-                                {
-                                    sharedSettingsPath = Path.GetRelativePath(currentDir, candidatePath);
-                                    break;
-                                }
-                            }
-                            searchDir = Directory.GetParent(searchDir)?.FullName;
-                        }
-                    }
+                    projectSharedPath = projectCandidate;
                 }
-                
-                builder
-                    .SetBasePath(Directory.GetCurrentDirectory())
-                    .AddJsonFile(sharedSettingsPath, optional: false, reloadOnChange: true);
-                
-                Console.WriteLine($"[DEBUG] Non-Docker: Using single shared settings file: {sharedSettingsPath}");
+
+                // Discover solution root and solution-level sharedsettings
+                var searchDir = currentDir;
+                while (searchDir != null)
+                {
+                    if (Directory.GetFiles(searchDir, "*.sln").Length > 0)
+                    {
+                        var candidatePath = Path.Combine(searchDir, sharedSettingsFileName);
+                        if (File.Exists(candidatePath))
+                        {
+                            solutionSharedPath = candidatePath;
+                        }
+                        break;
+                    }
+                    searchDir = Directory.GetParent(searchDir)?.FullName;
+                }
+
+                // Decide primary file (must exist)
+                var primaryPath = solutionSharedPath ?? projectSharedPath;
+                if (primaryPath is null)
+                {
+                    throw new FileNotFoundException($"Could not find {sharedSettingsFileName} in project or solution root.");
+                }
+
+                builder.SetBasePath(currentDir)
+                       .AddJsonFile(primaryPath, optional: false, reloadOnChange: true);
+
+                // If both exist and are different, layer project-level on top to allow overrides
+                if (!string.IsNullOrEmpty(solutionSharedPath) && !string.IsNullOrEmpty(projectSharedPath) &&
+                    !Path.GetFullPath(solutionSharedPath!).Equals(Path.GetFullPath(projectSharedPath!), StringComparison.OrdinalIgnoreCase))
+                {
+                    builder.AddJsonFile(projectSharedPath!, optional: true, reloadOnChange: true);
+                    Console.WriteLine($"[DEBUG] Non-Docker: Loaded solution shared settings: {solutionSharedPath}");
+                    Console.WriteLine($"[DEBUG] Non-Docker: Loaded project shared settings overrides: {projectSharedPath}");
+                }
+                else
+                {
+                    Console.WriteLine($"[DEBUG] Non-Docker: Using single shared settings file: {primaryPath}");
+                }
                 Console.WriteLine($"[DEBUG] Non-Docker: Simplified configuration - no local appsettings dependencies");
                     //.AddEnvironmentVariables();
             }
@@ -89,6 +101,14 @@ namespace XYDataLabs.OrderProcessingSystem.Utilities
         {
             LoadSharedSettings(builder, environmentName, isDocker);
             var configuration = builder.Build();
+
+            // Warn if DB connection string is missing
+            var conn = configuration.GetConnectionString("OrderProcessingSystemDbConnection");
+            if (string.IsNullOrWhiteSpace(conn))
+            {
+                Console.WriteLine("[WARNING] ConnectionStrings:OrderProcessingSystemDbConnection not found or empty after loading settings.");
+            }
+
             if (services != null)
             {
                 services.Configure<ApiSettings>(configuration.GetSection("ApiSettings"));

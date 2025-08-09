@@ -42,28 +42,29 @@ builder.Host.UseSerilog((context, services, loggerConfiguration) =>
         .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Information)
         .Enrich.FromLogContext()
         .Enrich.WithProperty("Environment", environmentName)
-        .Enrich.WithProperty("Application", "UI");
+        .Enrich.WithProperty("Application", "UI")
+        .Enrich.WithProperty("Runtime", isDocker ? "Docker" : "Local");
 
     if (isDocker)
     {
         // Docker: Use console output (primary) + file output 
         loggerConfiguration
-            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] {Message:lj}{NewLine}{Exception}")
+            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] [{Runtime}] {Message:lj}{NewLine}{Exception}")
             .WriteTo.File(
                 path: "/logs/ui-.log",
                 rollingInterval: RollingInterval.Day,
-                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] {Message:lj}{Exception}{NewLine}"
+                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] [{Runtime}] {Message:lj}{Exception}{NewLine}"
             );
     }
     else
     {
         // Non-Docker: Use file output + console
         loggerConfiguration
-            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] {Message:lj}{NewLine}{Exception}")
+            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] [{Runtime}] {Message:lj}{NewLine}{Exception}")
             .WriteTo.File(
                 path: "../logs/ui-.log",
                 rollingInterval: RollingInterval.Day,
-                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] {Message:lj}{Exception}{NewLine}"
+                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] [{Runtime}] {Message:lj}{Exception}{NewLine}"
             );
     }
 });

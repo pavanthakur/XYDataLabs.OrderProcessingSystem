@@ -8,6 +8,7 @@ using Serilog.Events;
 using System.Reflection;
 using XYDataLabs.OrderProcessingSystem.Utilities;
 using Microsoft.Extensions.Configuration;
+using System.Text.RegularExpressions;
 
 // Bootstrap Serilog as early as possible so Log.* writes go to console immediately
 Log.Logger = new LoggerConfiguration()
@@ -39,6 +40,18 @@ var activeSettings = SharedSettingsLoader.AddAndBindSettings(
     out apiSettings,
     out _ // ignore useHttps
 );
+
+// Verify DB connection string presence (mask password before logging)
+var dbConn = builder.Configuration.GetConnectionString("OrderProcessingSystemDbConnection");
+if (string.IsNullOrWhiteSpace(dbConn))
+{
+    Console.WriteLine("[CONFIG ERROR] ConnectionStrings:OrderProcessingSystemDbConnection is missing or empty. Check sharedsettings.dev.json at solution root.");
+}
+else
+{
+    var masked = Regex.Replace(dbConn, @"(?i)(Password|Pwd)=([^;]+)", "$1=***");
+    Console.WriteLine($"[CONFIG] Resolved DB connection: {masked}");
+}
 
 builder.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>(); // Required for LoggingMiddleware
 
@@ -121,26 +134,27 @@ builder.Host.UseSerilog((context, services, loggerConfiguration) =>
         .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Information)
         .Enrich.FromLogContext()
         .Enrich.WithProperty("Environment", environmentName)
-        .Enrich.WithProperty("Application", "API");
+        .Enrich.WithProperty("Application", "API")
+        .Enrich.WithProperty("Runtime", isDocker ? "Docker" : "Local");
 
     if (isDocker)
     {
         loggerConfiguration
-            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] {Message:lj}{NewLine}{Exception}")
+            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] [{Runtime}] {Message:lj}{NewLine}{Exception}")
             .WriteTo.File(
                 path: "/logs/webapi-.log",
                 rollingInterval: RollingInterval.Day,
-                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] {Message:lj}{Exception}{NewLine}"
+                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] [{Runtime}] {Message:lj}{Exception}{NewLine}"
             );
     }
     else
     {
         loggerConfiguration
-            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] {Message:lj}{NewLine}{Exception}")
+            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] [{Runtime}] {Message:lj}{NewLine}{Exception}")
             .WriteTo.File(
                 path: "../logs/webapi-.log",
                 rollingInterval: RollingInterval.Day,
-                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] {Message:lj}{Exception}{NewLine}"
+                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] [{Runtime}] {Message:lj}{Exception}{NewLine}"
             );
     }
 });
