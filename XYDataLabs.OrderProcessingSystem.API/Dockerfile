@@ -2,20 +2,29 @@
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
 WORKDIR /app
-# Expose HTTP and HTTPS
+# Expose HTTP and HTTPS - these will be overridden by Docker Compose
 EXPOSE 8080 8081
 
-# Add health check using curl
+# Add health check using curl (will be configured by Docker Compose)
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl --fail http://localhost:8080/swagger || exit 1
 
 # This stage is used to build the service project
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
+
+# Copy all project files for dependency resolution
 COPY ["XYDataLabs.OrderProcessingSystem.API/XYDataLabs.OrderProcessingSystem.API.csproj", "XYDataLabs.OrderProcessingSystem.API/"]
+COPY ["XYDataLabs.OrderProcessingSystem.Application/XYDataLabs.OrderProcessingSystem.Application.csproj", "XYDataLabs.OrderProcessingSystem.Application/"]
+COPY ["XYDataLabs.OrderProcessingSystem.Domain/XYDataLabs.OrderProcessingSystem.Domain.csproj", "XYDataLabs.OrderProcessingSystem.Domain/"]
+COPY ["XYDataLabs.OrderProcessingSystem.Infrastructure/XYDataLabs.OrderProcessingSystem.Infrastructure.csproj", "XYDataLabs.OrderProcessingSystem.Infrastructure/"]
+COPY ["XYDataLabs.OrderProcessingSystem.Utilities/XYDataLabs.OrderProcessingSystem.Utilities.csproj", "XYDataLabs.OrderProcessingSystem.Utilities/"]
+COPY ["XYDataLabs.OpenPayAdapter/XYDataLabs.OpenPayAdapter.csproj", "XYDataLabs.OpenPayAdapter/"]
+
+# Restore dependencies
 RUN dotnet restore "./XYDataLabs.OrderProcessingSystem.API/XYDataLabs.OrderProcessingSystem.API.csproj"
+
+# Copy all source code
 COPY . .
 WORKDIR "/src/XYDataLabs.OrderProcessingSystem.API"
 RUN dotnet build "./XYDataLabs.OrderProcessingSystem.API.csproj" -c $BUILD_CONFIGURATION -o /app/build
@@ -28,14 +37,18 @@ RUN dotnet publish "./XYDataLabs.OrderProcessingSystem.API.csproj" -c $BUILD_CON
 # This stage is specifically for development with volume mounts
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS dev
 WORKDIR /app
+
+# Copy all project files for dependency resolution
 COPY ["XYDataLabs.OrderProcessingSystem.API/XYDataLabs.OrderProcessingSystem.API.csproj", "./"]
+COPY ["XYDataLabs.OrderProcessingSystem.Application/XYDataLabs.OrderProcessingSystem.Application.csproj", "../XYDataLabs.OrderProcessingSystem.Application/"]
+COPY ["XYDataLabs.OrderProcessingSystem.Domain/XYDataLabs.OrderProcessingSystem.Domain.csproj", "../XYDataLabs.OrderProcessingSystem.Domain/"]
+COPY ["XYDataLabs.OrderProcessingSystem.Infrastructure/XYDataLabs.OrderProcessingSystem.Infrastructure.csproj", "../XYDataLabs.OrderProcessingSystem.Infrastructure/"]
+COPY ["XYDataLabs.OrderProcessingSystem.Utilities/XYDataLabs.OrderProcessingSystem.Utilities.csproj", "../XYDataLabs.OrderProcessingSystem.Utilities/"]
+COPY ["XYDataLabs.OpenPayAdapter/XYDataLabs.OpenPayAdapter.csproj", "../XYDataLabs.OpenPayAdapter/"]
+
 RUN dotnet restore "XYDataLabs.OrderProcessingSystem.API.csproj"
 
-ENV ASPNETCORE_URLS=http://+:8080;https://+:8081
-ENV ASPNETCORE_HTTP_PORTS=8080
-ENV ASPNETCORE_HTTPS_PORTS=8081
-ENV ASPNETCORE_Kestrel__Certificates__Default__Password=P@ss100
-ENV ASPNETCORE_Kestrel__Certificates__Default__Path=/https/aspnetapp.pfx
+# Remove hardcoded ports - let Docker Compose environment variables control this
 ENV DOTNET_RUNNING_IN_CONTAINER=true
 ENV DOTNET_WATCH_RESTART_ON_RUDE_EDIT=1
 ENV DOTNET_USE_POLLING_FILE_WATCHER=1
@@ -55,11 +68,7 @@ ENTRYPOINT ["dotnet", "XYDataLabs.OrderProcessingSystem.API.dll"]
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
-
-# Set environment variables for configuration
-ENV ASPNETCORE_URLS=http://+:8080;https://+:8081
-ENV ASPNETCORE_HTTP_PORTS=8080
-ENV ASPNETCORE_HTTPS_PORTS=8081
+# Note: sharedsettings.json and certificate copying is handled by docker-compose volumes
+# Remove hardcoded ports - let Docker Compose environment variables control this
 ENV DOTNET_RUNNING_IN_CONTAINER=true
-
 ENTRYPOINT ["dotnet", "XYDataLabs.OrderProcessingSystem.API.dll"]

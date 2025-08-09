@@ -8,9 +8,8 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <UserSecretsId>ea81fb46-489a-4a69-bba2-45521f53ab6d</UserSecretsId>
-    <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
-    <DockerfileContext>.</DockerfileContext>
+    <UserSecretsId>ea81fb46-489a-4a69-bba2-45521f53ab6d</UserSecretsId>    <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+    <DockerfileContext>..</DockerfileContext>
   </PropertyGroup>
 
   <ItemGroup>
@@ -31,10 +30,15 @@
 
   <ItemGroup>
     <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Application\XYDataLabs.OrderProcessingSystem.Application.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Utilities\XYDataLabs.OrderProcessingSystem.Utilities.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Folder Include="Configurations\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Watch Remove="bin\**\*;obj\**\*" />
   </ItemGroup>
 
 </Project>

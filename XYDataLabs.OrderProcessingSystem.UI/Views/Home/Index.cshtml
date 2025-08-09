@@ -60,7 +60,9 @@
 
 @section Scripts {
     <script>
-        const API_BASE_URL = '@Configuration["API_BASE_URL"]';
+        // Always use the value from backend-provided ViewData
+        const API_BASE_URL = '@ViewData["ApiBaseUrl"]';
+        console.log('API_BASE_URL:', API_BASE_URL);
     </script>
     <script src="~/js/payment.js" asp-append-version="true"></script>
 }

@@ -1,74 +1,30 @@
-{
+﻿{
   "profiles": {
     "http": {
       "commandName": "Project",
       "launchBrowser": true,
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "API_BASE_URL": "http://localhost:5208"
+        "USE_HTTPS": "false"
       },
-      "dotnetRunMessages": true,
-      "applicationUrl": "http://localhost:5239"
+      "applicationUrl": "http://localhost:5002"
     },
     "https": {
       "commandName": "Project",
       "launchBrowser": true,
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "API_BASE_URL": "https://localhost:7112"
+        "USE_HTTPS": "true"
       },
-      "dotnetRunMessages": true,
-      "applicationUrl": "https://localhost:7210;http://localhost:5239"
+      "applicationUrl": "https://localhost:5003"
     },
-    "IIS Express": {
-      "commandName": "IISExpress",
-      "launchBrowser": true,
-      "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development",
-        "API_BASE_URL": "https://localhost:44393"
-      }
-    },
-    "Container (Dockerfile)": {
-      "commandName": "Docker",
-      "launchBrowser": true,
-      "launchUrl": "{Scheme}://{ServiceHost}:{ServicePort}",
-      "environmentVariables": {
-        "ASPNETCORE_HTTPS_PORTS": "8081",
-        "ASPNETCORE_HTTP_PORTS": "8080",
-        "ASPNETCORE_ENVIRONMENT": "Development",
-        "API_BASE_URL": "https://api:8081"
-      },
-      "publishAllPorts": false, // 👈 optional, to avoid random ports
-      "useSSL": true
-    },
-    "Production": {
-      "commandName": "Project",
-      "launchBrowser": false,
-      "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Production",
-        "API_BASE_URL": "https://api.xydatalabs.com"
-      },
-      "dotnetRunMessages": true,
-      "applicationUrl": "https://localhost:7210;http://localhost:5239"
-    },
-    "Staging": {
+    "XYDataLabs.OrderProcessingSystem.UI": {
       "commandName": "Project",
       "launchBrowser": true,
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Staging",
-        "API_BASE_URL": "https://staging-api.xydatalabs.com"
+        "ASPNETCORE_ENVIRONMENT": "Development"
       },
-      "dotnetRunMessages": true,
-      "applicationUrl": "https://localhost:7210;http://localhost:5239"
-    }
-  },
-  "$schema": "http://json.schemastore.org/launchsettings.json",
-  "iisSettings": {
-    "windowsAuthentication": false,
-    "anonymousAuthentication": true,
-    "iisExpress": {
-      "applicationUrl": "http://localhost:49077",
-      "sslPort": 44340
+      "applicationUrl": "https://localhost:59716;http://localhost:59717"
     }
   }
 }

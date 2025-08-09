@@ -1,0 +1,99 @@
+{
+  "ApiSettings": {
+    "UI": {
+      "http": {
+        "Host": "localhost",
+        "Port": 5002,
+        "HttpsEnabled": false
+      },
+      "https": {
+        "Host": "localhost",
+        "Port": 5003,
+        "HttpsEnabled": true,
+        "CertPassword": "P@ss100",
+        "CertPath": "/https/aspnetapp.pfx"
+      }
+    },
+    "API": {
+      "http": {
+        "Host": "localhost",
+        "Port": 5000,
+        "HttpsEnabled": false
+      },
+      "https": {
+        "Host": "localhost",
+        "Port": 5001,
+        "HttpsEnabled": true,
+        "CertPassword": "P@ss100",
+        "CertPath": "/https/aspnetapp.pfx"
+      }
+    }
+  },
+  "LaunchSettings": {
+    "Environment": "Production",
+    "DefaultProfile": "https",
+    "LaunchBrowser": false,
+    "HotReloadEnabled": false,
+    "API": {
+      "LaunchUrl": "swagger",
+      "EnvironmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Production",
+        "CORS_ALLOWED_ORIGINS": "https://ui.xydatalabs.com"
+      }
+    },
+    "UI": {
+      "EnvironmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Production",
+        "API_BASE_URL": "https://api.xydatalabs.com"
+      }
+    }
+  },
+  "Azure": {
+    "Local": {
+      "Enabled": false
+    },
+    "Cloud": {
+      "Enabled": true,
+      "ResourceGroup": "rg-orderprocessing-prod",
+      "Location": "East US",
+      "WebApps": {
+        "API": {
+          "Name": "wa-orderprocessing-api-prod",
+          "Url": "https://api.xydatalabs.com",
+          "CustomDomain": "api.xydatalabs.com"
+        },
+        "UI": {
+          "Name": "wa-orderprocessing-ui-prod",
+          "Url": "https://ui.xydatalabs.com",
+          "CustomDomain": "ui.xydatalabs.com"
+        }
+      },
+      "Database": {
+        "ServerName": "sql-orderprocessing-prod.database.windows.net",
+        "DatabaseName": "OrderProcessingDB",
+        "Edition": "Premium"
+      }
+    }
+  },
+  "Docker": {
+    "Networks": {
+      "Name": "xy-prod-network",
+      "Subnet": "172.22.0.0/16",
+      "Gateway": "172.22.0.1"
+    },
+    "Volumes": {
+      "Database": {
+        "Name": "orderprocessing_db_prod",
+        "Persistent": true,
+        "BackupEnabled": true,
+        "BackupSchedule": "daily"
+      },
+      "Logs": {
+        "Name": "orderprocessing_logs_prod",
+        "Persistent": true,
+        "BackupEnabled": true,
+        "BackupSchedule": "daily"
+      }
+    }
+  }
+}

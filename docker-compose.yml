@@ -1,60 +1,67 @@
-﻿services:
+# Base Docker Compose file for Visual Studio compatibility
+# This is a copy of docker-compose.dev.yml for VS compatibility
+# For other environments, use: 
+#   UAT: docker-compose -f docker-compose.uat.yml up
+#   PROD: docker-compose -f docker-compose.prod.yml up
+
+version: '3.8'
+
+services:
   api:
     image: xydatalabs-orderprocessingsystem-api
     build:
       context: .
       dockerfile: XYDataLabs.OrderProcessingSystem.API/Dockerfile
-      target: dev  # Use the dev target for development
+      target: final
     ports:
-      - "5000:8080" 
-      - "5001:8081"  # HTTPS
+      - "${API_HTTP_PORT}:${API_HTTP_PORT}"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=http://+:8080;https://+:8081
-      - ASPNETCORE_HTTP_PORTS=8080
-      - ASPNETCORE_HTTPS_PORTS=8081
+      - ASPNETCORE_URLS=http://+:${API_HTTP_PORT}
+      - ASPNETCORE_HTTP_PORTS=${API_HTTP_PORT}
+      - USE_HTTPS=false
     volumes:
       - ./dev-certs/aspnetapp.pfx:/https/aspnetapp.pfx:ro
+      - ./sharedsettings.dev.json:/app/sharedsettings.dev.json:ro
     networks:
       - xynetwork
-    profiles: ["api", "all"]  # Add profiles
+    profiles: ["http", "all", "api"]
     healthcheck:
-      test: curl --fail https://localhost:8081/swagger --insecure || exit 1
+      test: curl --fail http://localhost:${API_HTTP_PORT}/swagger --insecure || exit 1
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 30s
+      retries: 2
+      start_period: 10s
 
   ui:
     image: xydatalabs-orderprocessingsystem-ui
     build:
       context: .
       dockerfile: XYDataLabs.OrderProcessingSystem.UI/Dockerfile
-      target: dev  # Use the dev target for development
+      target: final
     ports:
-      - "5002:8080"  # HTTP (fixed mapping: host 5002 -> container 8080)
-      - "5003:8081"  # HTTPS
+      - "${UI_HTTP_PORT}:${UI_HTTP_PORT}"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=http://+:8080;https://+:8081
-      - ASPNETCORE_HTTP_PORTS=8080
-      - ASPNETCORE_HTTPS_PORTS=8081
-      - API_BASE_URL=https://localhost:5001
+      - ASPNETCORE_URLS=http://+:${UI_HTTP_PORT}
+      - ASPNETCORE_HTTP_PORTS=${UI_HTTP_PORT}
+      - ApiSettings__BaseUrl=http://localhost:${API_HTTP_PORT}
+      - USE_HTTPS=false
     volumes:
-      - ./dev-certs/aspnetapp.pfx:/https/aspnetapp.pfx:ro
+      - ./sharedsettings.dev.json:/app/sharedsettings.dev.json:ro
+    networks:
+      - xynetwork
+    profiles: ["http", "all", "ui"]
     depends_on:
       api:
         condition: service_healthy
-    networks:
-      - xynetwork
-    profiles: ["ui", "all"]  # Add profiles
     healthcheck:
-      test: curl --fail https://localhost:8081/Home/Error --insecure || exit 1
+      test: curl --fail http://localhost:${UI_HTTP_PORT} --insecure || exit 1
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 30s
+      retries: 2
+      start_period: 10s
 
 networks:
   xynetwork:
-    driver: bridge
+    external: true

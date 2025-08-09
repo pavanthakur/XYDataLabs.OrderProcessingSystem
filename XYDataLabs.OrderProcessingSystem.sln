@@ -24,6 +24,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "dev-certs", "dev-certs", "{
 		dev-certs\aspnetapp.pfx = dev-certs\aspnetapp.pfx
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XYDataLabs.OrderProcessingSystem.Utilities", "XYDataLabs.OrderProcessingSystem.Utilities\XYDataLabs.OrderProcessingSystem.Utilities.csproj", "{DFC0BB5F-D671-DE7D-4A5D-D10E77984910}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -62,6 +64,10 @@ Global
 		{95911636-E160-4B82-8078-ABBF1A1A13C3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{95911636-E160-4B82-8078-ABBF1A1A13C3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{95911636-E160-4B82-8078-ABBF1A1A13C3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DFC0BB5F-D671-DE7D-4A5D-D10E77984910}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DFC0BB5F-D671-DE7D-4A5D-D10E77984910}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DFC0BB5F-D671-DE7D-4A5D-D10E77984910}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DFC0BB5F-D671-DE7D-4A5D-D10E77984910}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

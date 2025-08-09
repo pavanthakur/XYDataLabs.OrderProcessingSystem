@@ -1,0 +1,124 @@
+# Development Environment - Complete Configuration
+# Usage: docker-compose -f docker-compose.dev.yml --profile http up
+# Purpose: Development-friendly configuration with simplified setup
+
+services:
+  api:
+    image: xydatalabs-orderprocessingsystem-api
+    build:
+      context: .
+      dockerfile: XYDataLabs.OrderProcessingSystem.API/Dockerfile
+      target: final
+    ports:
+      - "${API_HTTP_PORT}:${API_HTTP_PORT}"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:${API_HTTP_PORT}
+      - ASPNETCORE_HTTP_PORTS=${API_HTTP_PORT}
+      - USE_HTTPS=false
+    volumes:
+      - ./logs:/logs
+      - ./dev-certs/aspnetapp.pfx:/https/aspnetapp.pfx:ro
+      - ./sharedsettings.dev.json:/app/sharedsettings.dev.json:ro
+    networks:
+      - xy-dev-network
+    profiles: ["http", "all", "api"]
+    healthcheck:
+      test: curl --fail http://localhost:${API_HTTP_PORT}/swagger --insecure || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 2
+      start_period: 10s
+
+  api-https:
+    image: xydatalabs-orderprocessingsystem-api
+    build:
+      context: .
+      dockerfile: XYDataLabs.OrderProcessingSystem.API/Dockerfile
+      target: final
+    ports:
+      - "${API_HTTPS_PORT}:${API_HTTPS_PORT}"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=https://+:${API_HTTPS_PORT}
+      - ASPNETCORE_HTTPS_PORTS=${API_HTTPS_PORT}
+      - ASPNETCORE_Kestrel__Certificates__Default__Password=P@ss100
+    volumes:
+      - ./logs:/logs
+      - ./dev-certs/aspnetapp.pfx:/https/aspnetapp.pfx:ro
+      - ./sharedsettings.dev.json:/app/sharedsettings.dev.json:ro
+    networks:
+      - xy-dev-network
+    profiles: ["https", "all", "api-https"]
+    healthcheck:
+      test: curl --fail https://localhost:${API_HTTPS_PORT}/swagger --insecure || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 2
+      start_period: 10s
+
+  ui:
+    image: xydatalabs-orderprocessingsystem-ui
+    build:
+      context: .
+      dockerfile: XYDataLabs.OrderProcessingSystem.UI/Dockerfile
+      target: final
+    ports:
+      - "${UI_HTTP_PORT}:${UI_HTTP_PORT}"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:${UI_HTTP_PORT}
+      - ASPNETCORE_HTTP_PORTS=${UI_HTTP_PORT}
+      - ApiSettings__BaseUrl=http://localhost:${API_HTTP_PORT}
+      - USE_HTTPS=false
+    volumes:
+      - ./logs:/logs
+      - ./sharedsettings.dev.json:/app/sharedsettings.dev.json:ro
+    networks:
+      - xy-dev-network
+    profiles: ["http", "all", "ui"]
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: curl --fail http://localhost:${UI_HTTP_PORT} --insecure || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 2
+      start_period: 10s
+
+  ui-https:
+    image: xydatalabs-orderprocessingsystem-ui
+    build:
+      context: .
+      dockerfile: XYDataLabs.OrderProcessingSystem.UI/Dockerfile
+      target: final
+    ports:
+      - "${UI_HTTPS_PORT}:${UI_HTTPS_PORT}"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=https://+:${UI_HTTPS_PORT}
+      - ASPNETCORE_HTTPS_PORTS=${UI_HTTPS_PORT}
+      - ASPNETCORE_Kestrel__Certificates__Default__Password=P@ss100
+      - ApiSettings__BaseUrl=https://localhost:${API_HTTPS_PORT}
+    volumes:
+      - ./logs:/logs
+      - ./dev-certs/aspnetapp.pfx:/https/aspnetapp.pfx:ro
+      - ./sharedsettings.dev.json:/app/sharedsettings.dev.json:ro
+    networks:
+      - xy-dev-network
+    profiles: ["https", "all", "ui-https"]
+    depends_on:
+      api-https:
+        condition: service_healthy
+    healthcheck:
+      test: curl --fail https://localhost:${UI_HTTPS_PORT} --insecure || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 2
+      start_period: 10s
+
+# Development networking
+networks:
+  xy-dev-network:
+    external: true

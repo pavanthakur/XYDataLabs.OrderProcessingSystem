@@ -1,0 +1,152 @@
+# Production Environment - Complete Configuration
+# Usage: docker-compose -f docker-compose.prod.yml --profile https up
+# Purpose: Production-optimized settings, security, performance, monitoring
+
+services:
+  api:
+    image: xydatalabs-orderprocessingsystem-api
+    build:
+      context: .
+      dockerfile: XYDataLabs.OrderProcessingSystem.API/Dockerfile
+      target: final
+    ports:
+      - "${API_HTTP_PORT}:${API_HTTP_PORT}"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:${API_HTTP_PORT}
+      - ASPNETCORE_HTTP_PORTS=${API_HTTP_PORT}
+      - USE_HTTPS=false
+      - Database__ConnectionString=Server=sql-orderprocessing-prod.database.windows.net;Database=OrderProcessingDB;Trusted_Connection=False;MultipleActiveResultSets=true;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;
+      - Logging__LogLevel__Default=Warning
+      - Logging__LogLevel__Microsoft=Warning
+      - Logging__LogLevel__System=Error
+    volumes:
+      - ./logs:/logs
+      - ./dev-certs/aspnetapp.pfx:/https/aspnetapp.pfx:ro
+      - ./sharedsettings.prod.json:/app/sharedsettings.prod.json:ro
+    networks:
+      - xy-prod-network
+    profiles: ["http", "all", "api"]
+    restart: unless-stopped
+    mem_limit: 1g
+    cpus: 1.0
+    healthcheck:
+      test: curl --fail http://localhost:${API_HTTP_PORT}/swagger --insecure || exit 1
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  api-https:
+    image: xydatalabs-orderprocessingsystem-api
+    build:
+      context: .
+      dockerfile: XYDataLabs.OrderProcessingSystem.API/Dockerfile
+      target: final
+    ports:
+      - "${API_HTTPS_PORT}:${API_HTTPS_PORT}"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=https://+:${API_HTTPS_PORT}
+      - ASPNETCORE_HTTPS_PORTS=${API_HTTPS_PORT}
+      - ASPNETCORE_Kestrel__Certificates__Default__Password=P@ss100
+      - Database__ConnectionString=Server=sql-orderprocessing-prod.database.windows.net;Database=OrderProcessingDB;Trusted_Connection=False;MultipleActiveResultSets=true;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;
+      - Logging__LogLevel__Default=Warning
+      - Logging__LogLevel__Microsoft=Warning
+      - Logging__LogLevel__System=Error
+    volumes:
+      - ./logs:/logs
+      - ./dev-certs/aspnetapp.pfx:/https/aspnetapp.pfx:ro
+      - ./sharedsettings.prod.json:/app/sharedsettings.prod.json:ro
+    networks:
+      - xy-prod-network
+    profiles: ["https", "all", "api-https"]
+    restart: unless-stopped
+    mem_limit: 1g
+    cpus: 1.0
+    healthcheck:
+      test: curl --fail https://localhost:${API_HTTPS_PORT}/swagger --insecure || exit 1
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  ui:
+    image: xydatalabs-orderprocessingsystem-ui
+    build:
+      context: .
+      dockerfile: XYDataLabs.OrderProcessingSystem.UI/Dockerfile
+      target: final
+    ports:
+      - "${UI_HTTP_PORT}:${UI_HTTP_PORT}"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:${UI_HTTP_PORT}
+      - ASPNETCORE_HTTP_PORTS=${UI_HTTP_PORT}
+      - ApiSettings__BaseUrl=http://localhost:${API_HTTP_PORT}
+      - USE_HTTPS=false
+      - Logging__LogLevel__Default=Warning
+      - Logging__LogLevel__Microsoft=Warning
+      - Logging__LogLevel__System=Error
+    volumes:
+      - ./logs:/logs
+      - ./sharedsettings.prod.json:/app/sharedsettings.prod.json:ro
+    networks:
+      - xy-prod-network
+    profiles: ["http", "all", "ui"]
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 0.5
+    healthcheck:
+      test: curl --fail http://localhost:${UI_HTTP_PORT} --insecure || exit 1
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  ui-https:
+    image: xydatalabs-orderprocessingsystem-ui
+    build:
+      context: .
+      dockerfile: XYDataLabs.OrderProcessingSystem.UI/Dockerfile
+      target: final
+    ports:
+      - "${UI_HTTPS_PORT}:${UI_HTTPS_PORT}"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=https://+:${UI_HTTPS_PORT}
+      - ASPNETCORE_HTTPS_PORTS=${UI_HTTPS_PORT}
+      - ASPNETCORE_Kestrel__Certificates__Default__Password=P@ss100
+      - ApiSettings__BaseUrl=https://localhost:${API_HTTPS_PORT}
+      - Logging__LogLevel__Default=Warning
+      - Logging__LogLevel__Microsoft=Warning
+      - Logging__LogLevel__System=Error
+    volumes:
+      - ./logs:/logs
+      - ./dev-certs/aspnetapp.pfx:/https/aspnetapp.pfx:ro
+      - ./sharedsettings.prod.json:/app/sharedsettings.prod.json:ro
+    networks:
+      - xy-prod-network
+    profiles: ["https", "all", "ui-https"]
+    depends_on:
+      api-https:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 0.5
+    healthcheck:
+      test: curl --fail https://localhost:${UI_HTTPS_PORT} --insecure || exit 1
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+# Production networking with enhanced security
+networks:
+  xy-prod-network:
+    external: true
+    driver_opts:
+      encrypted: "true"

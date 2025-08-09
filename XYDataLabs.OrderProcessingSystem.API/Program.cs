@@ -1,13 +1,47 @@
 using AutoMapper;
 using XYDataLabs.OrderProcessingSystem.API.Middleware;
 using XYDataLabs.OrderProcessingSystem.Application;
+using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
 using Serilog;
+using Serilog.Events;
 using System.Reflection;
+using XYDataLabs.OrderProcessingSystem.Utilities;
+using Microsoft.Extensions.Configuration;
+
+// Bootstrap Serilog as early as possible so Log.* writes go to console immediately
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
+    .CreateBootstrapLogger();
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configure CORS
+var isDocker = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true";
+
+// Map .NET environment names to our simplified profile names
+var environmentName = builder.Environment.EnvironmentName switch
+{
+    "Development" => "dev",
+    "Staging" => "uat", 
+    "Production" => "prod",
+    _ => "dev" // Default to dev for any other environment
+};
+
+// Centralized loading, binding, and active ApiSettings selection
+ApiSettings apiSettings;
+var activeSettings = SharedSettingsLoader.AddAndBindSettings(
+    builder.Services,
+    builder.Configuration,
+    environmentName,
+    isDocker,
+    s => s.API,
+    out apiSettings,
+    out _ // ignore useHttps
+);
+
+builder.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>(); // Required for LoggingMiddleware
+
 builder.Services.AddCors(options =>
 {
     //options.AddPolicy("AllowPaymentUI", policy =>
@@ -56,9 +90,17 @@ builder.Services.AddSwaggerGen(options =>
     // Optionally, you can customize the Swagger UI or API info
     options.SwaggerDoc("v1", new OpenApiInfo
     {
-        Title = "OrderProcessingSystem API",
+        Title = $"OrderProcessingSystem API - {environmentName.ToUpper()} Environment",
         Version = "v1",
-        Description = "OrderProcessingSystem API with Customer, Order endpoints",
+        Description = $"OrderProcessingSystem API with Customer, Order endpoints running in {environmentName.ToUpper()} environment" + 
+                     (isDocker ? " 🐳 (Docker)" : " 🖥️ (Local)"),
+    });
+    
+    // Add server configuration for proper Swagger API calls
+    options.AddServer(new OpenApiServer 
+    { 
+        Url = activeSettings.GetBaseUrl(),
+        Description = $"{environmentName.ToUpper()} Server"
     });
 });
 
@@ -69,24 +111,113 @@ var mappingConfig = new MapperConfiguration(mapperConfiguration =>
 IMapper mapper = mappingConfig.CreateMapper();
 builder.Services.AddSingleton(mapper);
 
-// Add services to the container.
-var logger = new LoggerConfiguration()
-    .ReadFrom.Configuration(builder.Configuration)
-    .Enrich.FromLogContext()
-    .CreateLogger();
-builder.Logging.ClearProviders();
-builder.Logging.AddSerilog(logger);
-
-var app = builder.Build();
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+// Configure Serilog with environment-aware paths  
+builder.Host.UseSerilog((context, services, loggerConfiguration) =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-    app.UseDeveloperExceptionPage();
+    loggerConfiguration
+        .MinimumLevel.Information()
+        .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+        .MinimumLevel.Override("Microsoft.AspNetCore.Hosting.Diagnostics", LogEventLevel.Error)
+        .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Information)
+        .Enrich.FromLogContext()
+        .Enrich.WithProperty("Environment", environmentName)
+        .Enrich.WithProperty("Application", "API");
+
+    if (isDocker)
+    {
+        loggerConfiguration
+            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] {Message:lj}{NewLine}{Exception}")
+            .WriteTo.File(
+                path: "/logs/webapi-.log",
+                rollingInterval: RollingInterval.Day,
+                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] {Message:lj}{Exception}{NewLine}"
+            );
+    }
+    else
+    {
+        loggerConfiguration
+            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] {Message:lj}{NewLine}{Exception}")
+            .WriteTo.File(
+                path: "../logs/webapi-.log",
+                rollingInterval: RollingInterval.Day,
+                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] {Message:lj}{Exception}{NewLine}"
+            );
+    }
+});
+
+Log.Information("Serilog is now configured and working for API in {Environment} environment (Docker: {IsDocker})", environmentName, isDocker);
+
+// Kestrel HTTPS configuration using ApiSettings
+if (activeSettings.HttpsEnabled && !string.IsNullOrWhiteSpace(activeSettings.CertPath) && !string.IsNullOrWhiteSpace(activeSettings.CertPassword))
+{
+    Console.WriteLine($"[Kestrel] HTTPS enabled: Using certificate at {activeSettings.CertPath}");
+    builder.WebHost.ConfigureKestrel(options =>
+    {
+        options.ListenAnyIP(activeSettings.Port, listenOptions =>
+        {
+            listenOptions.UseHttps(activeSettings.CertPath, activeSettings.CertPassword);
+        });
+        options.ListenAnyIP(apiSettings.API.http.Port); // HTTP fallback using configured port
+    });
 }
 else
 {
+    Console.WriteLine("[Kestrel] HTTPS NOT enabled: Only HTTP will be used.");
+    builder.WebHost.ConfigureKestrel(options =>
+    {
+        options.ListenAnyIP(activeSettings.Port); // HTTP only using configured port
+    });
+}
+
+var app = builder.Build();
+
+SharedSettingsLoader.PrintApiSettingsDebug(apiSettings, activeSettings, "API", isDocker);
+
+// Add Serilog request logging
+app.UseSerilogRequestLogging();
+
+// Configure the HTTP request pipeline.
+// Environment-specific middleware configuration using our simplified profile names
+if (environmentName == "dev" || environmentName == "uat")
+{
+    // Enable Swagger for Development and UAT environments
+    app.UseSwagger();
+    app.UseSwaggerUI(options =>
+    {
+        // Use relative path for Docker compatibility
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "OrderProcessingSystem API v1");
+        options.RoutePrefix = "swagger"; // Set Swagger UI to /swagger/index.html
+    });
+    
+    if (environmentName == "dev")
+    {
+        app.UseDeveloperExceptionPage();
+    }
+}
+else if (environmentName == "prod")
+{
+    // Production environment configuration
+    
+    // TEMPORARY: Enable Swagger for Production testing
+    // TODO: DISABLE SWAGGER IN PRODUCTION for security reasons
+    // To disable: Comment out the next 6 lines and uncomment the security block below
+    app.UseSwagger();
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "OrderProcessingSystem API v1");
+        options.RoutePrefix = "swagger";
+    });
+    
+    /* PRODUCTION SECURITY CONFIGURATION (currently commented for testing)
+    // Uncomment this block and comment out Swagger above for production security:
+    app.UseExceptionHandler("/Home/Error");
+    app.UseHsts();
+    // Note: Swagger should be disabled in production for security
+    */
+}
+else
+{
+    // Fallback for other environments
     app.UseExceptionHandler("/Home/Error");
     app.UseHsts();
 }
@@ -95,8 +226,8 @@ else
 //app.UseCors("AllowPaymentUI");
 app.UseCors("AllowAll");
 
-// Only use HTTPS redirection if enabled in configuration
-if (builder.Configuration.GetValue<bool>("UseHttpsRedirection"))
+// Only use HTTPS redirection if enabled in ApiSettings
+if (activeSettings.HttpsEnabled)
 {
     app.UseHttpsRedirection();
 }
@@ -109,4 +240,19 @@ app.UseMiddleware<ErrorHandlingMiddleware>();
 
 app.MapControllers();
 
-app.Run();
+Console.WriteLine($"[DEBUG] API is running and listening on https://{activeSettings.Host}:{activeSettings.Port} (or http://{activeSettings.Host}:{apiSettings.API.http.Port})");
+
+try
+{
+    Log.Information("Starting API web host");
+    app.Run();
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "API application terminated unexpectedly");
+    throw;
+}
+finally
+{
+    Log.CloseAndFlush();
+}

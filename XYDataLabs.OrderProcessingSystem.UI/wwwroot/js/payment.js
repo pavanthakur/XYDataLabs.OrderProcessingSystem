@@ -129,3 +129,5 @@ document.getElementById('expiryYear').addEventListener('input', function (e) {
 document.getElementById('cvv').addEventListener('input', function (e) {
     this.value = this.value.replace(/\D/g, '');
 });
+
+console.log('API_BASE_URL (from payment.js):', typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : 'NOT DEFINED');

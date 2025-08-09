@@ -14,6 +14,15 @@
             src="https://js.openpay.mx/openpay-data.v1.min.js"></script>
 </head>
 <body class="bg-light">
+    <!-- Environment Indicator -->
+    <div class="alert alert-@ViewData["EnvironmentColor"] alert-dismissible fade show m-0 text-center" role="alert" style="border-radius: 0;">
+        <strong>🚀 Environment: @ViewData["Environment"]</strong>
+        @if (ViewData["IsDocker"] is true)
+        {
+            <span class="badge bg-info ms-2">🐳 Docker</span>
+        }
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
 
     @RenderBody()
 

@@ -1,0 +1,94 @@
+{
+  "ApiSettings": {
+    "UI": {
+      "http": {
+        "Host": "localhost",
+        "Port": 5002,
+        "HttpsEnabled": false
+      },
+      "https": {
+        "Host": "localhost",
+        "Port": 5003,
+        "HttpsEnabled": true,
+        "CertPassword": "P@ss100",
+        "CertPath": "/https/aspnetapp.pfx"
+      }
+    },
+    "API": {
+      "http": {
+        "Host": "localhost",
+        "Port": 5000,
+        "HttpsEnabled": false
+      },
+      "https": {
+        "Host": "localhost",
+        "Port": 5001,
+        "HttpsEnabled": true,
+        "CertPassword": "P@ss100",
+        "CertPath": "/https/aspnetapp.pfx"
+      }
+    }
+  },
+  "LaunchSettings": {
+    "Environment": "Staging",
+    "DefaultProfile": "https",
+    "LaunchBrowser": false,
+    "HotReloadEnabled": false,
+    "API": {
+      "LaunchUrl": "swagger",
+      "EnvironmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Staging",
+        "CORS_ALLOWED_ORIGINS": "https://localhost:5003;https://uat-ui.xydatalabs.com"
+      }
+    },
+    "UI": {
+      "EnvironmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Staging",
+        "API_BASE_URL": "https://localhost:5001"
+      }
+    }
+  },
+  "Azure": {
+    "Local": {
+      "Enabled": false
+    },
+    "Cloud": {
+      "Enabled": true,
+      "ResourceGroup": "rg-orderprocessing-uat",
+      "Location": "East US",
+      "WebApps": {
+        "API": {
+          "Name": "wa-orderprocessing-api-uat",
+          "Url": "https://wa-orderprocessing-api-uat.azurewebsites.net"
+        },
+        "UI": {
+          "Name": "wa-orderprocessing-ui-uat",
+          "Url": "https://wa-orderprocessing-ui-uat.azurewebsites.net"
+        }
+      },
+      "Database": {
+        "ServerName": "sql-orderprocessing-uat.database.windows.net",
+        "DatabaseName": "OrderProcessingDB"
+      }
+    }
+  },
+  "Docker": {
+    "Networks": {
+      "Name": "xy-uat-network",
+      "Subnet": "172.21.0.0/16",
+      "Gateway": "172.21.0.1"
+    },
+    "Volumes": {
+      "Database": {
+        "Name": "orderprocessing_db_uat",
+        "Persistent": true,
+        "BackupEnabled": true
+      },
+      "Logs": {
+        "Name": "orderprocessing_logs_uat",
+        "Persistent": true,
+        "BackupEnabled": true
+      }
+    }
+  }
+}

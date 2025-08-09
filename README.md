@@ -17,8 +17,15 @@ Q:\GIT\TestAppXY_OrderProcessingSystem> dotnet dev-certs https --trust
   2. Now open the solution with VS 2022 and build the solution to make sure that there is no error.
   3. Now choose either of http or https or Docker profile as startup project and then run it. On startup necessary databases will be created in **MSSQLLocalDB**. Along with seed data.
      Note : change sql server IP Address, username and password
-  4. Start the project from Visual Studio code with below commands
-      Q:\GIT\TestAppXY_OrderProcessingSystem> docker-compose -f docker-compose.yml -f docker-compose.override.yml --profile all up --build --force-recreate
+  4. Start the project using the PowerShell automation script with environment-specific configurations:
+      # Development environment
+      Q:\GIT\TestAppXY_OrderProcessingSystem> .\start-docker.ps1 -Environment dev -Profile http
+      
+      # UAT environment  
+      Q:\GIT\TestAppXY_OrderProcessingSystem> .\start-docker.ps1 -Environment uat -Profile https
+      
+      # Production environment
+      Q:\GIT\TestAppXY_OrderProcessingSystem> .\start-docker.ps1 -Environment prod -Profile https -CleanCache
   5. Ensure in Windows Docker Desktop Container "testappxy_orderprocessingsystem" with API and UI Images are loaded. Ensure ports for http and https are correct as below
      Test the APIs using Swagger for all the business use cases.
      i) a. For Docker profile to start API with https -> https://localhost:5001/swagger/index.html

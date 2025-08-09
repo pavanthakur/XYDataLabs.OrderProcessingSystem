@@ -7,14 +7,16 @@
     <ProjectGuid>8C5FD138-BE8E-46B8-97BA-F1153D1E6ADF</ProjectGuid>
     <DockerLaunchAction>LaunchBrowser</DockerLaunchAction>
     <DockerServiceUrl>{Scheme}://localhost:{ServicePort}/swagger</DockerServiceUrl>
-    <DockerServiceName>xydatalabs.orderprocessingsystem.api</DockerServiceName>
+    <DockerServiceName>api</DockerServiceName>
     <DockerComposeProjectName>xydatalabsorderprocessingsystem</DockerComposeProjectName>
+    <!-- Fix: Remove the .yml extension since Docker SDK adds it automatically -->
+    <DockerComposeBaseFilePath>docker-compose.dev</DockerComposeBaseFilePath>
+    <DockerComposeOverrideFilePath></DockerComposeOverrideFilePath>
   </PropertyGroup>
   <ItemGroup>
-    <None Include="docker-compose.override.yml">
-      <DependentUpon>docker-compose.yml</DependentUpon>
-    </None>
-    <None Include="docker-compose.yml" />
+    <None Include="docker-compose.dev.yml" />
+    <None Include="docker-compose.uat.yml" />
+    <None Include="docker-compose.prod.yml" />
     <None Include=".dockerignore" />
   </ItemGroup>
 </Project>
