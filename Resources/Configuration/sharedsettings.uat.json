@@ -66,12 +66,12 @@
     "UI": {
       "http": {
         "Host": "localhost",
-        "Port": 5002,
+        "Port": 5032,
         "HttpsEnabled": false
       },
       "https": {
         "Host": "localhost",
-        "Port": 5003,
+        "Port": 5033,
         "HttpsEnabled": true,
         "CertPassword": "P@ss100",
         "CertPath": "/https/aspnetapp.pfx"
@@ -80,12 +80,12 @@
     "API": {
       "http": {
         "Host": "localhost",
-        "Port": 5000,
+        "Port": 5030,
         "HttpsEnabled": false
       },
       "https": {
         "Host": "localhost",
-        "Port": 5001,
+        "Port": 5031,
         "HttpsEnabled": true,
         "CertPassword": "P@ss100",
         "CertPath": "/https/aspnetapp.pfx"
@@ -101,13 +101,13 @@
       "LaunchUrl": "swagger",
       "EnvironmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Staging",
-        "CORS_ALLOWED_ORIGINS": "https://localhost:5003;https://uat-ui.xydatalabs.com"
+        "CORS_ALLOWED_ORIGINS": "https://localhost:5033;https://uat-ui.xydatalabs.com"
       }
     },
     "UI": {
       "EnvironmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Staging",
-        "API_BASE_URL": "https://localhost:5001"
+        "API_BASE_URL": "https://localhost:5031"
       }
     }
   },

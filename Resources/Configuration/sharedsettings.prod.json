@@ -67,12 +67,12 @@
     "UI": {
       "http": {
         "Host": "localhost",
-        "Port": 5002,
+        "Port": 5042,
         "HttpsEnabled": false
       },
       "https": {
         "Host": "localhost",
-        "Port": 5003,
+        "Port": 5043,
         "HttpsEnabled": true,
         "CertPassword": "P@ss100",
         "CertPath": "/https/aspnetapp.pfx"
@@ -81,12 +81,12 @@
     "API": {
       "http": {
         "Host": "localhost",
-        "Port": 5000,
+        "Port": 5040,
         "HttpsEnabled": false
       },
       "https": {
         "Host": "localhost",
-        "Port": 5001,
+        "Port": 5041,
         "HttpsEnabled": true,
         "CertPassword": "P@ss100",
         "CertPath": "/https/aspnetapp.pfx"
