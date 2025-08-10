@@ -29,14 +29,16 @@ namespace XYDataLabs.OrderProcessingSystem.Utilities
             
             // Find the solution root directory for shared settings
             var currentDirectory = Directory.GetCurrentDirectory();
-            var basePath = GetSolutionRoot(currentDirectory) ?? currentDirectory;
+            var basePath = isDocker ? currentDirectory : (GetSolutionRoot(currentDirectory) ?? currentDirectory);
             
             Console.WriteLine($"[DEBUG] Loading shared settings: Environment={environmentName}, IsDocker={isDocker}, Effective={effectiveEnvironment}");
+            Console.WriteLine($"[DEBUG] Base path: {basePath}");
             
             return builder
                 .SetBasePath(basePath)
-                .AddJsonFile($"sharedsettings.{effectiveEnvironment}.json", optional: false, reloadOnChange: true)
-                .AddJsonFile($"appsettings.{effectiveEnvironment}.json", optional: true, reloadOnChange: true);
+                .AddJsonFile($"Resources/Configuration/sharedsettings.{effectiveEnvironment}.json", optional: false, reloadOnChange: true);
+                // REMOVED: .AddJsonFile($"appsettings.{effectiveEnvironment}.json", optional: true, reloadOnChange: true);
+                // All configuration now consolidated in sharedsettings files for Azure Key Vault readiness
         }
 
         /// <summary>
@@ -95,9 +97,9 @@ namespace XYDataLabs.OrderProcessingSystem.Utilities
 
                 var certificateSearchPaths = new[]
                 {
-                    Path.Combine(currentDirectory, "dev-certs", certificateFileName),
-                    Path.GetFullPath(Path.Combine(currentDirectory, "..", "dev-certs", certificateFileName)),
-                    GetSolutionRoot(currentDirectory) is string root ? Path.Combine(root, "dev-certs", certificateFileName) : null
+                    Path.Combine(currentDirectory, "Resources", "Certificates", certificateFileName),
+                    Path.GetFullPath(Path.Combine(currentDirectory, "..", "Resources", "Certificates", certificateFileName)),
+                    GetSolutionRoot(currentDirectory) is string root ? Path.Combine(root, "Resources", "Certificates", certificateFileName) : null
                 };
 
                 string? resolvedCertificatePath = null;
@@ -113,7 +115,7 @@ namespace XYDataLabs.OrderProcessingSystem.Utilities
                 }
                 else
                 {
-                    Console.WriteLine($"[WARNING] Certificate file {certificateFileName} not found in dev-certs folder(s)");
+                    Console.WriteLine($"[WARNING] Certificate file {certificateFileName} not found in Resources/Certificates folder(s)");
                 }
             }
 

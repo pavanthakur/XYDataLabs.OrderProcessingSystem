@@ -23,10 +23,10 @@ var isDocker = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER")
 // Map .NET environment names to our simplified profile names
 var environmentName = builder.Environment.EnvironmentName switch
 {
-    "Development" => "dev",
-    "Staging" => "uat", 
-    "Production" => "prod",
-    _ => "dev" // Default to dev for any other environment
+    "Development" => Constants.Environments.Dev,
+    "Staging" => Constants.Environments.Uat, 
+    "Production" => Constants.Environments.Production,
+    _ => Constants.Environments.Dev // Default to dev for any other environment
 };
 
 // Centralized loading, binding, and active ApiSettings selection

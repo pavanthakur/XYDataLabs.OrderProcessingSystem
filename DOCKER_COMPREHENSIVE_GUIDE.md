@@ -133,7 +133,7 @@
 ### 2. SSL Certificates (Required for HTTPS)
 ```powershell
 # Generate development certificates
-dotnet dev-certs https -ep ./dev-certs/aspnetapp.pfx -p P@ss100
+dotnet dev-certs https -ep ./Resources/Certificates/aspnetapp.pfx -p P@ss100
 dotnet dev-certs https --trust
 ```
 
@@ -366,7 +366,7 @@ docker network rm xynetwork
 ```powershell
 # Regenerate certificates
 dotnet dev-certs https --clean
-dotnet dev-certs https -ep ./dev-certs/aspnetapp.pfx -p P@ss100
+dotnet dev-certs https -ep ./Resources/Certificates/aspnetapp.pfx -p P@ss100
 dotnet dev-certs https --trust
 ```
 

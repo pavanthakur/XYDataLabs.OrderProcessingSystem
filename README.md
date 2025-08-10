@@ -9,7 +9,7 @@ Note : Logs can be checked inside TestAppXY_OrderProcessingSystem\logs\ folder.
 -->
 
 # Certificate were generated with below commands
-Q:\GIT\TestAppXY_OrderProcessingSystem> dotnet dev-certs https -ep ./dev-certs/aspnetapp.pfx -p P@ss100
+Q:\GIT\TestAppXY_OrderProcessingSystem> dotnet dev-certs https -ep ./Resources/Certificates/aspnetapp.pfx -p P@ss100
 Q:\GIT\TestAppXY_OrderProcessingSystem> dotnet dev-certs https --trust
 
 # 🏃‍♂️ How to Run the Project

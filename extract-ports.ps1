@@ -1,6 +1,6 @@
 # PowerShell script to extract ports from sharedsettings.json and update .env file
 param(
-    [string]$SharedSettingsPath = "sharedsettings.json",
+    [string]$SharedSettingsPath = "Resources/Configuration/sharedsettings.json",
     [string]$EnvFilePath = ".env"
 )
 

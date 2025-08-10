@@ -23,10 +23,10 @@ namespace XYDataLabs.OrderProcessingSystem.UI.Controllers
             // Map .NET environment names to our simplified profile names
             var environmentName = environment switch
             {
-                "Development" => "dev",
-                "Staging" => "uat", 
-                "Production" => "prod",
-                _ => "dev" // Default to dev for any other environment
+                "Development" => Constants.Environments.Dev,
+                "Staging" => Constants.Environments.Uat, 
+                "Production" => Constants.Environments.Production,
+                _ => Constants.Environments.Dev // Default to dev for any other environment
             };
 
             // Log home page access (business event)

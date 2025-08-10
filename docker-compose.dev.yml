@@ -18,8 +18,8 @@ services:
       - USE_HTTPS=false
     volumes:
       - ./logs:/logs
-      - ./dev-certs/aspnetapp.pfx:/https/aspnetapp.pfx:ro
-      - ./sharedsettings.dev.json:/app/sharedsettings.dev.json:ro
+      - ./Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
+      - ./Resources/Configuration/sharedsettings.dev.json:/app/Resources/Configuration/sharedsettings.dev.json:ro
     networks:
       - xy-dev-network
     profiles: ["http", "all", "api"]
@@ -45,8 +45,8 @@ services:
       - ASPNETCORE_Kestrel__Certificates__Default__Password=P@ss100
     volumes:
       - ./logs:/logs
-      - ./dev-certs/aspnetapp.pfx:/https/aspnetapp.pfx:ro
-      - ./sharedsettings.dev.json:/app/sharedsettings.dev.json:ro
+      - ./Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
+      - ./Resources/Configuration/sharedsettings.dev.json:/app/Resources/Configuration/sharedsettings.dev.json:ro
     networks:
       - xy-dev-network
     profiles: ["https", "all", "api-https"]
@@ -73,7 +73,7 @@ services:
       - USE_HTTPS=false
     volumes:
       - ./logs:/logs
-      - ./sharedsettings.dev.json:/app/sharedsettings.dev.json:ro
+      - ./Resources/Configuration/sharedsettings.dev.json:/app/Resources/Configuration/sharedsettings.dev.json:ro
     networks:
       - xy-dev-network
     profiles: ["http", "all", "ui"]
@@ -103,8 +103,8 @@ services:
       - ApiSettings__BaseUrl=https://localhost:${API_HTTPS_PORT}
     volumes:
       - ./logs:/logs
-      - ./dev-certs/aspnetapp.pfx:/https/aspnetapp.pfx:ro
-      - ./sharedsettings.dev.json:/app/sharedsettings.dev.json:ro
+      - ./Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
+      - ./Resources/Configuration/sharedsettings.dev.json:/app/Resources/Configuration/sharedsettings.dev.json:ro
     networks:
       - xy-dev-network
     profiles: ["https", "all", "ui-https"]

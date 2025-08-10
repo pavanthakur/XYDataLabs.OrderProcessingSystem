@@ -22,8 +22,8 @@ services:
       - Logging__LogLevel__System=Error
     volumes:
       - ./logs:/logs
-      - ./dev-certs/aspnetapp.pfx:/https/aspnetapp.pfx:ro
-      - ./sharedsettings.prod.json:/app/sharedsettings.prod.json:ro
+      - ./Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
+      - ./Resources/Configuration/sharedsettings.prod.json:/app/Resources/Configuration/sharedsettings.prod.json:ro
     networks:
       - xy-prod-network
     profiles: ["http", "all", "api"]
@@ -56,8 +56,8 @@ services:
       - Logging__LogLevel__System=Error
     volumes:
       - ./logs:/logs
-      - ./dev-certs/aspnetapp.pfx:/https/aspnetapp.pfx:ro
-      - ./sharedsettings.prod.json:/app/sharedsettings.prod.json:ro
+      - ./Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
+      - ./Resources/Configuration/sharedsettings.prod.json:/app/Resources/Configuration/sharedsettings.prod.json:ro
     networks:
       - xy-prod-network
     profiles: ["https", "all", "api-https"]
@@ -90,7 +90,7 @@ services:
       - Logging__LogLevel__System=Error
     volumes:
       - ./logs:/logs
-      - ./sharedsettings.prod.json:/app/sharedsettings.prod.json:ro
+      - ./Resources/Configuration/sharedsettings.prod.json:/app/Resources/Configuration/sharedsettings.prod.json:ro
     networks:
       - xy-prod-network
     profiles: ["http", "all", "ui"]
@@ -126,8 +126,8 @@ services:
       - Logging__LogLevel__System=Error
     volumes:
       - ./logs:/logs
-      - ./dev-certs/aspnetapp.pfx:/https/aspnetapp.pfx:ro
-      - ./sharedsettings.prod.json:/app/sharedsettings.prod.json:ro
+      - ./Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
+      - ./Resources/Configuration/sharedsettings.prod.json:/app/Resources/Configuration/sharedsettings.prod.json:ro
     networks:
       - xy-prod-network
     profiles: ["https", "all", "ui-https"]

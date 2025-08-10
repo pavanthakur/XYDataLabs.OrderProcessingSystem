@@ -14,7 +14,7 @@ The script now automatically handles these prerequisites:
 - **Manual creation**: `docker network create xynetwork`
 
 ### 2. SSL Certificates (Required for HTTPS)
-- **Location**: `dev-certs/aspnetapp.pfx`
+- **Location**: `Resources/Certificates/aspnetapp.pfx`
 - **Required for**: HTTPS profiles
 - **Note**: Ensure certificates are present before running HTTPS profiles
 
@@ -120,10 +120,10 @@ If ports are already in use:
 Ensure certificates are present:
 ```powershell
 # Check certificate exists
-Test-Path "dev-certs/aspnetapp.pfx"
+Test-Path "Resources/Certificates/aspnetapp.pfx"
 
 # If missing, generate new certificates (example)
-dotnet dev-certs https -ep dev-certs/aspnetapp.pfx -p YourPassword
+dotnet dev-certs https -ep Resources/Certificates/aspnetapp.pfx -p YourPassword
 ```
 
 ## Environment-Specific Features

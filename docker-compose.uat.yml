@@ -18,8 +18,8 @@ services:
       - USE_HTTPS=false
     volumes:
       - ./logs:/logs
-      - ./dev-certs/aspnetapp.pfx:/https/aspnetapp.pfx:ro
-      - ./sharedsettings.uat.json:/app/sharedsettings.uat.json:ro
+      - ./Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
+      - ./Resources/Configuration/sharedsettings.uat.json:/app/Resources/Configuration/sharedsettings.uat.json:ro
     networks:
       - xy-uat-network
     profiles: ["http", "all", "api"]
@@ -45,8 +45,8 @@ services:
       - ASPNETCORE_Kestrel__Certificates__Default__Password=P@ss100
     volumes:
       - ./logs:/logs
-      - ./dev-certs/aspnetapp.pfx:/https/aspnetapp.pfx:ro
-      - ./sharedsettings.uat.json:/app/sharedsettings.uat.json:ro
+      - ./Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
+      - ./Resources/Configuration/sharedsettings.uat.json:/app/Resources/Configuration/sharedsettings.uat.json:ro
     networks:
       - xy-uat-network
     profiles: ["https", "all", "api-https"]
@@ -72,7 +72,7 @@ services:
       - ApiSettings__BaseUrl=http://localhost:${API_HTTP_PORT}
       - USE_HTTPS=false
     volumes:
-      - ./sharedsettings.uat.json:/app/sharedsettings.uat.json:ro
+      - ./Resources/Configuration/sharedsettings.uat.json:/app/Resources/Configuration/sharedsettings.uat.json:ro
       - ./logs:/logs
     networks:
       - xy-uat-network
@@ -102,8 +102,8 @@ services:
       - ASPNETCORE_Kestrel__Certificates__Default__Password=P@ss100
       - ApiSettings__BaseUrl=https://localhost:${API_HTTPS_PORT}
     volumes:
-      - ./dev-certs/aspnetapp.pfx:/https/aspnetapp.pfx:ro
-      - ./sharedsettings.uat.json:/app/sharedsettings.uat.json:ro
+      - ./Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
+      - ./Resources/Configuration/sharedsettings.uat.json:/app/Resources/Configuration/sharedsettings.uat.json:ro
       - ./logs:/logs
     networks:
       - xy-uat-network

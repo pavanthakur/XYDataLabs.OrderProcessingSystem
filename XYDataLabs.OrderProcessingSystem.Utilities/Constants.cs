@@ -41,7 +41,6 @@ namespace XYDataLabs.OrderProcessingSystem.Utilities
         /// </summary>
         public static class Environments
         {
-            public const string Development = "Development";
             public const string Local = "local";
             public const string Dev = "dev";
             public const string Uat = "uat";
@@ -66,7 +65,12 @@ namespace XYDataLabs.OrderProcessingSystem.Utilities
             /// <summary>
             /// Default shared settings file name template.
             /// </summary>
-            public const string SharedSettingsFileTemplate = "sharedsettings.{0}.json";
+            public const string SharedSettingsFileTemplate = "Resources/Configuration/sharedsettings.{0}.json";
+            
+            /// <summary>
+            /// Default certificate path template.
+            /// </summary>
+            public const string CertificatePathTemplate = "Resources/Certificates/{0}";
         }
     }
 }
