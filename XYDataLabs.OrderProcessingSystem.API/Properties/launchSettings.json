@@ -7,10 +7,10 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "USE_HTTPS": "false",
-        "CORS_ALLOWED_ORIGINS": "http://localhost:5000,http://localhost:5002"
+        "CORS_ALLOWED_ORIGINS": "http://localhost:5010,http://localhost:5012"
       },
       "dotnetRunMessages": true,
-      "applicationUrl": "http://localhost:5000"
+      "applicationUrl": "http://localhost:5010"
     },
     "https": {
       "commandName": "Project",
@@ -19,10 +19,10 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "USE_HTTPS": "true",
-        "CORS_ALLOWED_ORIGINS": "https://localhost:5001,https://localhost:5003"
+        "CORS_ALLOWED_ORIGINS": "https://localhost:5011,https://localhost:5013"
       },
       "dotnetRunMessages": true,
-      "applicationUrl": "https://localhost:5001"
+      "applicationUrl": "https://localhost:5011"
     },
     "IIS Express": {
       "commandName": "IISExpress",

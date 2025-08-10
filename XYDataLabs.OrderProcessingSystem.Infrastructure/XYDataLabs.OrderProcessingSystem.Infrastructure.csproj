@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Domain\XYDataLabs.OrderProcessingSystem.Domain.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Utilities\XYDataLabs.OrderProcessingSystem.Utilities.csproj" />
   </ItemGroup>
 
 </Project>

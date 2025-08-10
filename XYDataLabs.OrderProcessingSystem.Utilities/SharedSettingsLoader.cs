@@ -1,96 +1,59 @@
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Configuration.Json; // Ensure this namespace is included
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options; // For IOptions<T>
 
 namespace XYDataLabs.OrderProcessingSystem.Utilities
 {
+    /// <summary>
+    /// Provides helpers for loading shared configuration and binding strongly-typed ApiSettings
+    /// for both API and UI applications across Docker and non-Docker environments.
+    /// </summary>
     public static class SharedSettingsLoader
     {
-        // Loads environment-specific settings with dev as fallback default
+
+        /// <summary>
+        /// Load environment-specific sharedsettings and appsettings JSON files.
+        /// Non-Docker always uses the "local" profile for local development (ports 5010-5013).
+        /// Docker uses the provided environment or falls back to "dev" (ports 5000-5003).
+        /// </summary>
+        /// <param name="builder">The configuration builder to add sources to.</param>
+        /// <param name="environmentName">The ASP.NET Core environment name.</param>
+        /// <param name="isDocker">Whether the app is running inside a Docker container.</param>
+        /// <returns>The same configuration builder for chaining.</returns>
         public static IConfigurationBuilder LoadSharedSettings(this IConfigurationBuilder builder, string environmentName, bool isDocker)
         {
-            Console.WriteLine($"[DEBUG SharedSettingsLoader] environmentName: {environmentName}, isDocker: {isDocker}");
+            // For non-Docker (local development), always use "local" to avoid port conflicts
+            // For Docker, use the provided environment or fall back to "dev"
+            var effectiveEnvironment = isDocker 
+                ? (string.IsNullOrWhiteSpace(environmentName) ? "dev" : environmentName) 
+                : "local";
             
-            // Ensure we have a valid environment name, default to dev
-            if (string.IsNullOrEmpty(environmentName))
-            {
-                environmentName = "dev";
-            }
-
-            if (isDocker)
-            {
-                // Docker scenario: Keep existing behavior - load both shared and local appsettings
-                builder
-                    .SetBasePath(Directory.GetCurrentDirectory())
-                    .AddJsonFile($"sharedsettings.{environmentName}.json", optional: false, reloadOnChange: true)
-                    .AddJsonFile($"appsettings.{environmentName}.json", optional: false);
-                Console.WriteLine($"[DEBUG] Docker: Loading sharedsettings.{environmentName}.json + appsettings.{environmentName}.json");
-                    //.AddEnvironmentVariables();
-            }
-            else
-            {
-                // Non-Docker scenario: Load solution-level sharedsettings first, then project-level (if present) to override
-                var currentDir = Directory.GetCurrentDirectory();
-                var sharedSettingsFileName = $"sharedsettings.{environmentName}.json";
-
-                string? projectSharedPath = null;
-                string? solutionSharedPath = null;
-
-                // Project-level sharedsettings
-                var projectCandidate = Path.Combine(currentDir, sharedSettingsFileName);
-                if (File.Exists(projectCandidate))
-                {
-                    projectSharedPath = projectCandidate;
-                }
-
-                // Discover solution root and solution-level sharedsettings
-                var searchDir = currentDir;
-                while (searchDir != null)
-                {
-                    if (Directory.GetFiles(searchDir, "*.sln").Length > 0)
-                    {
-                        var candidatePath = Path.Combine(searchDir, sharedSettingsFileName);
-                        if (File.Exists(candidatePath))
-                        {
-                            solutionSharedPath = candidatePath;
-                        }
-                        break;
-                    }
-                    searchDir = Directory.GetParent(searchDir)?.FullName;
-                }
-
-                // Decide primary file (must exist)
-                var primaryPath = solutionSharedPath ?? projectSharedPath;
-                if (primaryPath is null)
-                {
-                    throw new FileNotFoundException($"Could not find {sharedSettingsFileName} in project or solution root.");
-                }
-
-                builder.SetBasePath(currentDir)
-                       .AddJsonFile(primaryPath, optional: false, reloadOnChange: true);
-
-                // If both exist and are different, layer project-level on top to allow overrides
-                if (!string.IsNullOrEmpty(solutionSharedPath) && !string.IsNullOrEmpty(projectSharedPath) &&
-                    !Path.GetFullPath(solutionSharedPath!).Equals(Path.GetFullPath(projectSharedPath!), StringComparison.OrdinalIgnoreCase))
-                {
-                    builder.AddJsonFile(projectSharedPath!, optional: true, reloadOnChange: true);
-                    Console.WriteLine($"[DEBUG] Non-Docker: Loaded solution shared settings: {solutionSharedPath}");
-                    Console.WriteLine($"[DEBUG] Non-Docker: Loaded project shared settings overrides: {projectSharedPath}");
-                }
-                else
-                {
-                    Console.WriteLine($"[DEBUG] Non-Docker: Using single shared settings file: {primaryPath}");
-                }
-                Console.WriteLine($"[DEBUG] Non-Docker: Simplified configuration - no local appsettings dependencies");
-                    //.AddEnvironmentVariables();
-            }
-            return builder;
+            // Find the solution root directory for shared settings
+            var currentDirectory = Directory.GetCurrentDirectory();
+            var basePath = GetSolutionRoot(currentDirectory) ?? currentDirectory;
+            
+            Console.WriteLine($"[DEBUG] Loading shared settings: Environment={environmentName}, IsDocker={isDocker}, Effective={effectiveEnvironment}");
+            
+            return builder
+                .SetBasePath(basePath)
+                .AddJsonFile($"sharedsettings.{effectiveEnvironment}.json", optional: false, reloadOnChange: true)
+                .AddJsonFile($"appsettings.{effectiveEnvironment}.json", optional: true, reloadOnChange: true);
         }
 
-        // Combined method for both API and UI settings
+        /// <summary>
+        /// Load configuration, bind ApiSettings, compute the active section (API/UI) based on HTTPS selection,
+        /// and resolve local certificate paths for non-Docker scenarios.
+        /// </summary>
+        /// <param name="services">Optional DI container for binding ApiSettings.</param>
+        /// <param name="builder">Configuration builder (sources will be added and built).</param>
+        /// <param name="environmentName">The ASP.NET Core environment name.</param>
+        /// <param name="isDocker">True when running inside Docker.</param>
+        /// <param name="groupSelector">Selector for API or UI settings group.</param>
+        /// <param name="apiSettings">Outputs the bound ApiSettings.</param>
+        /// <param name="useHttps">Outputs whether HTTPS is active.</param>
+        /// <param name="forceUseHttps">Optional override to force HTTPS selection.</param>
+        /// <returns>The active ApiSettingsSection for the chosen group (API or UI).</returns>
         public static ApiSettingsSection AddAndBindSettings(
-            IServiceCollection? services, // Make nullable
+            IServiceCollection? services,
             IConfigurationBuilder builder,
             string environmentName,
             bool isDocker,
@@ -99,97 +62,71 @@ namespace XYDataLabs.OrderProcessingSystem.Utilities
             out bool useHttps,
             bool? forceUseHttps = null)
         {
+            // Guards
+            ArgumentNullException.ThrowIfNull(builder);
+            ArgumentNullException.ThrowIfNull(groupSelector);
+
+            // Load config and bind
             LoadSharedSettings(builder, environmentName, isDocker);
             var configuration = builder.Build();
 
-            // Warn if DB connection string is missing
-            var conn = configuration.GetConnectionString("OrderProcessingSystemDbConnection");
-            if (string.IsNullOrWhiteSpace(conn))
-            {
-                Console.WriteLine("[WARNING] ConnectionStrings:OrderProcessingSystemDbConnection not found or empty after loading settings.");
-            }
-
-            if (services != null)
-            {
-                services.Configure<ApiSettings>(configuration.GetSection("ApiSettings"));
-            }
+            services?.Configure<ApiSettings>(configuration.GetSection("ApiSettings"));
             apiSettings = configuration.GetSection("ApiSettings").Get<ApiSettings>() ?? new ApiSettings();
 
-            // Default to HTTP unless explicitly overridden
-            useHttps = false;
-            if (forceUseHttps.HasValue)
-                useHttps = forceUseHttps.Value;
-            else if (groupSelector(apiSettings).https.HttpsEnabled)
-                useHttps = true;
-            var envHttps = Environment.GetEnvironmentVariable("USE_HTTPS");
-            if (!string.IsNullOrEmpty(envHttps))
-                useHttps = bool.TryParse(envHttps, out var parsed) ? parsed : useHttps;
+            // Diagnostics for DB connection
+            var connectionString = configuration.GetConnectionString(Constants.Configuration.OrderProcessingSystemDbConnectionString);
+            if (string.IsNullOrWhiteSpace(connectionString))
+                Console.WriteLine($"[WARNING] ConnectionStrings:{Constants.Configuration.OrderProcessingSystemDbConnectionString} not found or empty after loading settings.");
 
-            // Get the active section (API or UI)
+            // Decide HTTPS: force > config > env override
+            useHttps = forceUseHttps ?? groupSelector(apiSettings).https.HttpsEnabled;
+            if (bool.TryParse(Environment.GetEnvironmentVariable("USE_HTTPS"), out var environmentHttpsOverride))
+                useHttps = environmentHttpsOverride;
+
+            // Pick active section
             var activeSettings = groupSelector(apiSettings).GetActive(useHttps);
-            
-            // Resolve certificate path for non-Docker scenarios
-            if (!isDocker && activeSettings.HttpsEnabled && !string.IsNullOrEmpty(activeSettings.CertPath))
+
+            // Resolve local cert path when not in Docker
+            if (!isDocker && activeSettings.HttpsEnabled && !string.IsNullOrWhiteSpace(activeSettings.CertPath)
+                && activeSettings.CertPath.StartsWith("/https/", StringComparison.Ordinal))
             {
-                // Convert Docker certificate path to local path
-                if (activeSettings.CertPath.StartsWith("/https/"))
+                var certificateFileName = Path.GetFileName(activeSettings.CertPath);
+                var currentDirectory = Directory.GetCurrentDirectory();
+
+                var certificateSearchPaths = new[]
                 {
-                    var certFileName = Path.GetFileName(activeSettings.CertPath);
-                    var currentDir = Directory.GetCurrentDirectory();
-                    
-                    // Look for dev-certs folder starting from current directory
-                    string? certPath = null;
-                    
-                    // Check if dev-certs exists in current directory
-                    var localCertPath = Path.Combine(currentDir, "dev-certs", certFileName);
-                    if (File.Exists(localCertPath))
-                    {
-                        certPath = localCertPath;
-                    }
-                    else
-                    {
-                        // Try parent directory
-                        localCertPath = Path.Combine(currentDir, "..", "dev-certs", certFileName);
-                        if (File.Exists(localCertPath))
-                        {
-                            certPath = Path.GetFullPath(localCertPath);
-                        }
-                        else
-                        {
-                            // Find the solution root by looking for .sln file
-                            var searchDir = currentDir;
-                            while (searchDir != null)
-                            {
-                                if (Directory.GetFiles(searchDir, "*.sln").Length > 0)
-                                {
-                                    var candidatePath = Path.Combine(searchDir, "dev-certs", certFileName);
-                                    if (File.Exists(candidatePath))
-                                    {
-                                        certPath = candidatePath;
-                                        break;
-                                    }
-                                }
-                                searchDir = Directory.GetParent(searchDir)?.FullName;
-                            }
-                        }
-                    }
-                    
-                    if (!string.IsNullOrEmpty(certPath))
-                    {
-                        activeSettings.CertPath = certPath;
-                        Console.WriteLine($"[DEBUG] Resolved certificate path for non-Docker: {certPath}");
-                    }
-                    else
-                    {
-                        Console.WriteLine($"[WARNING] Certificate file {certFileName} not found in dev-certs folder");
-                    }
+                    Path.Combine(currentDirectory, "dev-certs", certificateFileName),
+                    Path.GetFullPath(Path.Combine(currentDirectory, "..", "dev-certs", certificateFileName)),
+                    GetSolutionRoot(currentDirectory) is string root ? Path.Combine(root, "dev-certs", certificateFileName) : null
+                };
+
+                string? resolvedCertificatePath = null;
+                foreach (var path in certificateSearchPaths)
+                {
+                    if (!string.IsNullOrWhiteSpace(path) && File.Exists(path)) { resolvedCertificatePath = path; break; }
+                }
+
+                if (!string.IsNullOrWhiteSpace(resolvedCertificatePath))
+                {
+                    activeSettings.CertPath = resolvedCertificatePath;
+                    Console.WriteLine($"[DEBUG] Resolved certificate path for non-Docker: {resolvedCertificatePath}");
+                }
+                else
+                {
+                    Console.WriteLine($"[WARNING] Certificate file {certificateFileName} not found in dev-certs folder(s)");
                 }
             }
-            
+
             return activeSettings;
         }
 
-        // Centralized method to print ApiSettings and active section info
+        /// <summary>
+        /// Centralized method to print ApiSettings and active section info for debugging.
+        /// </summary>
+        /// <param name="apiSettings">The bound ApiSettings instance.</param>
+        /// <param name="activeSettings">The active ApiSettingsSection (API or UI).</param>
+        /// <param name="context">Context string for identifying the settings block.</param>
+        /// <param name="isDocker">True if the application is running in Docker.</param>
         public static void PrintApiSettingsDebug(ApiSettings apiSettings, ApiSettingsSection activeSettings, string context, bool isDocker)
         {
             Console.WriteLine($"[ENV VALIDATION] {context}.Host: {activeSettings.Host}");
@@ -206,6 +143,22 @@ namespace XYDataLabs.OrderProcessingSystem.Utilities
             Console.WriteLine($"[DEBUG] API.Http Port: {apiSettings.API.http.Port}");
             Console.WriteLine($"[DEBUG] API.Https Port: {apiSettings.API.https.Port}");
             Console.WriteLine($"[DEBUG] Active {context} Port: {activeSettings.Port}");
+        }
+
+        /// <summary>
+        /// Finds the solution root directory by looking for .sln files.
+        /// </summary>
+        /// <param name="startPath">The directory to start searching from.</param>
+        /// <returns>The solution root directory path, or null if not found.</returns>
+        private static string? GetSolutionRoot(string startPath)
+        {
+            var dir = new DirectoryInfo(startPath);
+            while (dir != null)
+            {
+                if (dir.GetFiles("*.sln").Length > 0) return dir.FullName;
+                dir = dir.Parent;
+            }
+            return null;
         }
     }
 }

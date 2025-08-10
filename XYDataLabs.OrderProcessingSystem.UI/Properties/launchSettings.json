@@ -7,7 +7,7 @@
         "ASPNETCORE_ENVIRONMENT": "Development",
         "USE_HTTPS": "false"
       },
-      "applicationUrl": "http://localhost:5002"
+      "applicationUrl": "http://localhost:5012"
     },
     "https": {
       "commandName": "Project",
@@ -16,7 +16,7 @@
         "ASPNETCORE_ENVIRONMENT": "Development",
         "USE_HTTPS": "true"
       },
-      "applicationUrl": "https://localhost:5003"
+      "applicationUrl": "https://localhost:5013"
     },
     "XYDataLabs.OrderProcessingSystem.UI": {
       "commandName": "Project",

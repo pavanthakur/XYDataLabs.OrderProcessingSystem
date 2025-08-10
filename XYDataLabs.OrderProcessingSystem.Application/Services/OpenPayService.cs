@@ -13,6 +13,7 @@ using Openpay;
 using Openpay.Entities;
 using Openpay.Entities.Request;
 using static XYDataLabs.OrderProcessingSystem.Application.Utilities.AppMasterConstant;
+using XYDataLabs.OrderProcessingSystem.Utilities;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.Services
 {
@@ -38,7 +39,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Services
             _openPayAdapterService = openPayAdapterService;
             _logger = logger;
             _configuration = configuration;
-            _redirectUrl = configuration["OpenPay:RedirectUrl"]
+            _redirectUrl = configuration[Constants.Configuration.OpenPayRedirectUrl]
                 ?? throw new InvalidOperationException("RedirectUrl is not configured");
             _context = context;
             _mapper = mapper;
@@ -55,7 +56,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Services
             {
                 _logger.LogInformation("Starting combined customer, card, and payment process");
 
-                var deviceSessionId = _configuration["OpenPay:DeviceSessionId"];
+                var deviceSessionId = _configuration[Constants.Configuration.OpenPayDeviceSessionId];
 
                 request.DeviceSessionId = string.IsNullOrWhiteSpace(request.DeviceSessionId) ?
                     deviceSessionId ?? throw new InvalidOperationException("DeviceSessionId is not configured") : request.DeviceSessionId;

@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using XYDataLabs.OrderProcessingSystem.Utilities;
 
 namespace XYDataLabs.OrderProcessingSystem.Infrastructure
 {
@@ -18,7 +19,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure
         {
             builder.Services.AddDbContext<OrderProcessingSystemDbContext>(options =>
             {
-                options.UseSqlServer(builder.Configuration.GetConnectionString("OrderProcessingSystemDbConnection"));
+                options.UseSqlServer(builder.Configuration.GetConnectionString(Constants.Configuration.OrderProcessingSystemDbConnectionString));
             });
 
             // Database initialization will happen automatically through DI when DbContext is first used

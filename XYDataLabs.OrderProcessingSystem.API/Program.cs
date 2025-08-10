@@ -42,10 +42,10 @@ var activeSettings = SharedSettingsLoader.AddAndBindSettings(
 );
 
 // Verify DB connection string presence (mask password before logging)
-var dbConn = builder.Configuration.GetConnectionString("OrderProcessingSystemDbConnection");
+var dbConn = builder.Configuration.GetConnectionString(Constants.Configuration.OrderProcessingSystemDbConnectionString);
 if (string.IsNullOrWhiteSpace(dbConn))
 {
-    Console.WriteLine("[CONFIG ERROR] ConnectionStrings:OrderProcessingSystemDbConnection is missing or empty. Check sharedsettings.dev.json at solution root.");
+    Console.WriteLine($"[CONFIG ERROR] ConnectionStrings:{Constants.Configuration.OrderProcessingSystemDbConnectionString} is missing or empty. Check sharedsettings.dev.json at solution root.");
 }
 else
 {

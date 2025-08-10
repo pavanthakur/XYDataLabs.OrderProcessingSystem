@@ -12,6 +12,19 @@
     <!-- Fix: Remove the .yml extension since Docker SDK adds it automatically -->
     <DockerComposeBaseFilePath>docker-compose.dev</DockerComposeBaseFilePath>
     <DockerComposeOverrideFilePath></DockerComposeOverrideFilePath>
+    <!-- Add properties to prevent Windows Principal functionality -->
+    <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+    <DockerUsePrincipal>false</DockerUsePrincipal>
+    <!-- Force Linux container mode -->
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DockerComposeProjectPath>.</DockerComposeProjectPath>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DockerComposeProjectPath>.</DockerComposeProjectPath>
   </PropertyGroup>
   <ItemGroup>
     <None Include="docker-compose.dev.yml" />

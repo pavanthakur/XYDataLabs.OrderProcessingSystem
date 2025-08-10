@@ -1,0 +1,32 @@
+# Banned APIs for Security and Performance
+# This file contains APIs that should not be used in enterprise applications
+
+# Insecure string handling
+M:System.String.Concat(System.Object);Use StringBuilder or string interpolation for better performance
+M:System.String.Concat(System.Object,System.Object);Use StringBuilder or string interpolation for better performance
+M:System.String.Concat(System.Object,System.Object,System.Object);Use StringBuilder or string interpolation for better performance
+
+# Insecure random number generation
+T:System.Random;Use System.Security.Cryptography.RandomNumberGenerator for cryptographic purposes
+M:System.Guid.NewGuid();Consider using a more secure GUID generation method for security tokens
+
+# File system operations without proper validation
+M:System.IO.File.ReadAllText(System.String);Validate file paths to prevent path traversal attacks
+M:System.IO.File.WriteAllText(System.String,System.String);Validate file paths to prevent path traversal attacks
+M:System.IO.File.Delete(System.String);Validate file paths to prevent unauthorized deletions
+
+# Direct SQL execution - promote parameterized queries
+M:System.Data.SqlClient.SqlCommand.#ctor(System.String);Use parameterized queries to prevent SQL injection
+M:Microsoft.Data.SqlClient.SqlCommand.#ctor(System.String);Use parameterized queries to prevent SQL injection
+
+# Thread-unsafe collections in multi-threaded scenarios
+T:System.Collections.ArrayList;Use List<T> or thread-safe collections
+T:System.Collections.Hashtable;Use Dictionary<TKey,TValue> or ConcurrentDictionary<TKey,TValue>
+
+# Obsolete or deprecated methods
+M:System.Web.HttpUtility.UrlEncode(System.String);Use System.Net.WebUtility.UrlEncode instead
+M:System.Web.HttpUtility.HtmlEncode(System.String);Use System.Net.WebUtility.HtmlEncode instead
+
+# Insecure deserialization
+M:System.Runtime.Serialization.Formatters.Binary.BinaryFormatter.Deserialize(System.IO.Stream);Use secure serialization methods like System.Text.Json
+M:Newtonsoft.Json.JsonConvert.DeserializeObject(System.String);Configure JsonSerializerSettings securely or use System.Text.Json
