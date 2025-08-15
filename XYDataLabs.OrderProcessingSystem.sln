@@ -1,4 +1,4 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.12.35514.174
@@ -30,61 +30,61 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Resources", "Resources", "{
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "TODO", "TODO", "{A2B3C4D5-6E7F-8901-2345-6789ABCDEF01}"
 	ProjectSection(SolutionItems) = preProject
-		TODO\01_MASTER_ROADMAP.md = TODO\01_MASTER_ROADMAP.md
-		TODO\02_AZURE_DEVELOPER_LEARNING_PATH.md = TODO\02_AZURE_DEVELOPER_LEARNING_PATH.md
-		TODO\03_DAILY_PROGRESS_TRACKER.md = TODO\03_DAILY_PROGRESS_TRACKER.md
-		TODO\MIND_MAP.md = TODO\MIND_MAP.md
-		TODO\NEXT_STEPS_GUIDE.md = TODO\NEXT_STEPS_GUIDE.md
-		TODO\ORGANIZATION_SUMMARY.md = TODO\ORGANIZATION_SUMMARY.md
-		TODO\TODO_INDEX.md = TODO\TODO_INDEX.md
+		Self_learning\TODO\01_MASTER_ROADMAP.md = Self_learning\TODO\01_MASTER_ROADMAP.md
+		Self_learning\TODO\02_AZURE_DEVELOPER_LEARNING_PATH.md = Self_learning\TODO\02_AZURE_DEVELOPER_LEARNING_PATH.md
+		Self_learning\TODO\03_DAILY_PROGRESS_TRACKER.md = Self_learning\TODO\03_DAILY_PROGRESS_TRACKER.md
+		Self_learning\TODO\MIND_MAP.md = Self_learning\TODO\MIND_MAP.md
+		Self_learning\TODO\NEXT_STEPS_GUIDE.md = Self_learning\TODO\NEXT_STEPS_GUIDE.md
+		Self_learning\TODO\ORGANIZATION_SUMMARY.md = Self_learning\TODO\ORGANIZATION_SUMMARY.md
+		Self_learning\TODO\TODO_INDEX.md = Self_learning\TODO\TODO_INDEX.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Azure-Migration", "Azure-Migration", "{B3C4D5E6-7F80-9012-3456-789ABCDEF012}"
 	ProjectSection(SolutionItems) = preProject
-		TODO\Azure-Migration\01_AZURE_CLOUD_MIGRATION_STRATEGY.md = TODO\Azure-Migration\01_AZURE_CLOUD_MIGRATION_STRATEGY.md
-		TODO\Azure-Migration\02_DATABASE_CLOUD_MIGRATION.md = TODO\Azure-Migration\02_DATABASE_CLOUD_MIGRATION.md
-		TODO\Azure-Migration\03_EF_CORE_CLOUD_PATTERNS.md = TODO\Azure-Migration\03_EF_CORE_CLOUD_PATTERNS.md
-		TODO\Azure-Migration\04_MULTI_ENVIRONMENT_CLOUD_SETUP.md = TODO\Azure-Migration\04_MULTI_ENVIRONMENT_CLOUD_SETUP.md
-		TODO\Azure-Migration\05_DATABASE_ARCHITECTURE_INSIGHTS.md = TODO\Azure-Migration\05_DATABASE_ARCHITECTURE_INSIGHTS.md
-		TODO\Azure-Migration\06_EF_CORE_STANDARDIZATION.md = TODO\Azure-Migration\06_EF_CORE_STANDARDIZATION.md
-		TODO\Azure-Migration\07_CLOUD_TESTING_STRATEGIES.md = TODO\Azure-Migration\07_CLOUD_TESTING_STRATEGIES.md
-		TODO\Azure-Migration\08_PRODUCTION_CONFIGURATION_PATTERNS.md = TODO\Azure-Migration\08_PRODUCTION_CONFIGURATION_PATTERNS.md
+		Self_learning\TODO\Azure-Migration\01_AZURE_CLOUD_MIGRATION_STRATEGY.md = Self_learning\TODO\Azure-Migration\01_AZURE_CLOUD_MIGRATION_STRATEGY.md
+		Self_learning\TODO\Azure-Migration\02_DATABASE_CLOUD_MIGRATION.md = Self_learning\TODO\Azure-Migration\02_DATABASE_CLOUD_MIGRATION.md
+		Self_learning\TODO\Azure-Migration\03_EF_CORE_CLOUD_PATTERNS.md = Self_learning\TODO\Azure-Migration\03_EF_CORE_CLOUD_PATTERNS.md
+		Self_learning\TODO\Azure-Migration\04_MULTI_ENVIRONMENT_CLOUD_SETUP.md = Self_learning\TODO\Azure-Migration\04_MULTI_ENVIRONMENT_CLOUD_SETUP.md
+		Self_learning\TODO\Azure-Migration\05_DATABASE_ARCHITECTURE_INSIGHTS.md = Self_learning\TODO\Azure-Migration\05_DATABASE_ARCHITECTURE_INSIGHTS.md
+		Self_learning\TODO\Azure-Migration\06_EF_CORE_STANDARDIZATION.md = Self_learning\TODO\Azure-Migration\06_EF_CORE_STANDARDIZATION.md
+		Self_learning\TODO\Azure-Migration\07_CLOUD_TESTING_STRATEGIES.md = Self_learning\TODO\Azure-Migration\07_CLOUD_TESTING_STRATEGIES.md
+		Self_learning\TODO\Azure-Migration\08_PRODUCTION_CONFIGURATION_PATTERNS.md = Self_learning\TODO\Azure-Migration\08_PRODUCTION_CONFIGURATION_PATTERNS.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Microservices-Architecture", "Microservices-Architecture", "{C4D5E6F7-8091-2345-6789-ABCDEF012345}"
 	ProjectSection(SolutionItems) = preProject
-		TODO\Microservices-Architecture\01_MICROSERVICES_ARCHITECTURE_DESIGN.md = TODO\Microservices-Architecture\01_MICROSERVICES_ARCHITECTURE_DESIGN.md
-		TODO\Microservices-Architecture\02_ENTERPRISE_PATTERNS_REFERENCE.md = TODO\Microservices-Architecture\02_ENTERPRISE_PATTERNS_REFERENCE.md
-		TODO\Microservices-Architecture\03_DATABASE_MICROSERVICES_DESIGN.md = TODO\Microservices-Architecture\03_DATABASE_MICROSERVICES_DESIGN.md
-		TODO\Microservices-Architecture\04_FOUNDATION_ARCHITECTURE_PATTERNS.md = TODO\Microservices-Architecture\04_FOUNDATION_ARCHITECTURE_PATTERNS.md
+		Self_learning\TODO\Microservices-Architecture\01_MICROSERVICES_ARCHITECTURE_DESIGN.md = Self_learning\TODO\Microservices-Architecture\01_MICROSERVICES_ARCHITECTURE_DESIGN.md
+		Self_learning\TODO\Microservices-Architecture\02_ENTERPRISE_PATTERNS_REFERENCE.md = Self_learning\TODO\Microservices-Architecture\02_ENTERPRISE_PATTERNS_REFERENCE.md
+		Self_learning\TODO\Microservices-Architecture\03_DATABASE_MICROSERVICES_DESIGN.md = Self_learning\TODO\Microservices-Architecture\03_DATABASE_MICROSERVICES_DESIGN.md
+		Self_learning\TODO\Microservices-Architecture\04_FOUNDATION_ARCHITECTURE_PATTERNS.md = Self_learning\TODO\Microservices-Architecture\04_FOUNDATION_ARCHITECTURE_PATTERNS.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Technical-Enhancements", "Technical-Enhancements", "{D5E6F789-0123-4567-89AB-CDEF01234567}"
 	ProjectSection(SolutionItems) = preProject
-		TODO\Technical-Enhancements\01_TECHNICAL_EXCELLENCE_ROADMAP.md = TODO\Technical-Enhancements\01_TECHNICAL_EXCELLENCE_ROADMAP.md
-		TODO\Technical-Enhancements\02_INFRASTRUCTURE_IMPROVEMENTS.md = TODO\Technical-Enhancements\02_INFRASTRUCTURE_IMPROVEMENTS.md
-		TODO\Technical-Enhancements\03_ENTERPRISE_DOCKER_PATTERNS.md = TODO\Technical-Enhancements\03_ENTERPRISE_DOCKER_PATTERNS.md
-		TODO\Technical-Enhancements\04_DOCKER_STRATEGY_GUIDE.md = TODO\Technical-Enhancements\04_DOCKER_STRATEGY_GUIDE.md
-		TODO\Technical-Enhancements\05_DEVELOPMENT_WORKFLOW_INSIGHTS.md = TODO\Technical-Enhancements\05_DEVELOPMENT_WORKFLOW_INSIGHTS.md
+		Self_learning\TODO\Technical-Enhancements\01_TECHNICAL_EXCELLENCE_ROADMAP.md = Self_learning\TODO\Technical-Enhancements\01_TECHNICAL_EXCELLENCE_ROADMAP.md
+		Self_learning\TODO\Technical-Enhancements\02_INFRASTRUCTURE_IMPROVEMENTS.md = Self_learning\TODO\Technical-Enhancements\02_INFRASTRUCTURE_IMPROVEMENTS.md
+		Self_learning\TODO\Technical-Enhancements\03_ENTERPRISE_DOCKER_PATTERNS.md = Self_learning\TODO\Technical-Enhancements\03_ENTERPRISE_DOCKER_PATTERNS.md
+		Self_learning\TODO\Technical-Enhancements\04_DOCKER_STRATEGY_GUIDE.md = Self_learning\TODO\Technical-Enhancements\04_DOCKER_STRATEGY_GUIDE.md
+		Self_learning\TODO\Technical-Enhancements\05_DEVELOPMENT_WORKFLOW_INSIGHTS.md = Self_learning\TODO\Technical-Enhancements\05_DEVELOPMENT_WORKFLOW_INSIGHTS.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tracker", "Tracker", "{E6F78901-2345-6789-ABCD-EF0123456789}"
 	ProjectSection(SolutionItems) = preProject
-		TODO\Tracker\ACHIEVEMENT_LOG.md = TODO\Tracker\ACHIEVEMENT_LOG.md
-		TODO\Tracker\DOCKER_AZURE_STRATEGY.md = TODO\Tracker\DOCKER_AZURE_STRATEGY.md
-		TODO\Tracker\MICROSERVICES_COMMUNICATION.md = TODO\Tracker\MICROSERVICES_COMMUNICATION.md
-		TODO\Tracker\PROGRESS_TRACKER.md = TODO\Tracker\PROGRESS_TRACKER.md
-		TODO\Tracker\WEEK_01_CHECKLIST.md = TODO\Tracker\WEEK_01_CHECKLIST.md
-		TODO\Tracker\WEEK_01_SUCCESS_CRITERIA.md = TODO\Tracker\WEEK_01_SUCCESS_CRITERIA.md
-		TODO\Tracker\WEEK_02_SUCCESS_CRITERIA.md = TODO\Tracker\WEEK_02_SUCCESS_CRITERIA.md
-		TODO\Tracker\WEEK_03_SUCCESS_CRITERIA.md = TODO\Tracker\WEEK_03_SUCCESS_CRITERIA.md
-		TODO\Tracker\WORKING_PROFESSIONAL_SCHEDULE.md = TODO\Tracker\WORKING_PROFESSIONAL_SCHEDULE.md
+		Self_learning\TODO\Tracker\ACHIEVEMENT_LOG.md = Self_learning\TODO\Tracker\ACHIEVEMENT_LOG.md
+		Self_learning\TODO\Tracker\DOCKER_AZURE_STRATEGY.md = Self_learning\TODO\Tracker\DOCKER_AZURE_STRATEGY.md
+		Self_learning\TODO\Tracker\MICROSERVICES_COMMUNICATION.md = Self_learning\TODO\Tracker\MICROSERVICES_COMMUNICATION.md
+		Self_learning\TODO\Tracker\PROGRESS_TRACKER.md = Self_learning\TODO\Tracker\PROGRESS_TRACKER.md
+		Self_learning\TODO\Tracker\WEEK_01_CHECKLIST.md = Self_learning\TODO\Tracker\WEEK_01_CHECKLIST.md
+		Self_learning\TODO\Tracker\WEEK_01_SUCCESS_CRITERIA.md = Self_learning\TODO\Tracker\WEEK_01_SUCCESS_CRITERIA.md
+		Self_learning\TODO\Tracker\WEEK_02_SUCCESS_CRITERIA.md = Self_learning\TODO\Tracker\WEEK_02_SUCCESS_CRITERIA.md
+		Self_learning\TODO\Tracker\WEEK_03_SUCCESS_CRITERIA.md = Self_learning\TODO\Tracker\WEEK_03_SUCCESS_CRITERIA.md
+		Self_learning\TODO\Tracker\WORKING_PROFESSIONAL_SCHEDULE.md = Self_learning\TODO\Tracker\WORKING_PROFESSIONAL_SCHEDULE.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "LearningHelp", "LearningHelp", "{F7890123-4567-89AB-CDEF-0123456789AB}"
 	ProjectSection(SolutionItems) = preProject
-		LearningHelp\DockerHelp.md = LearningHelp\DockerHelp.md
-		LearningHelp\sharedsettingsHelp.md = LearningHelp\sharedsettingsHelp.md
+		Self_learning\LearningHelp\DockerHelp.md = Self_learning\LearningHelp\DockerHelp.md
+		Self_learning\LearningHelp\sharedsettingsHelp.md = Self_learning\LearningHelp\sharedsettingsHelp.md
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XYDataLabs.OrderProcessingSystem.Utilities", "XYDataLabs.OrderProcessingSystem.Utilities\XYDataLabs.OrderProcessingSystem.Utilities.csproj", "{DFC0BB5F-D671-DE7D-4A5D-D10E77984910}"
@@ -93,7 +93,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Self_learning", "Self_learn
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Temp-Tracker", "Temp-Tracker", "{94540898-5E2E-48D3-8591-A971B7495BD8}"
 	ProjectSection(SolutionItems) = preProject
-		TODO\Tracker\Temp-Tracker\1-15Aug-2025 = TODO\Tracker\Temp-Tracker\1-15Aug-2025
+		Self_learning\TODO\Tracker\Temp-Tracker\1-15Aug-2025 = Self_learning\TODO\Tracker\Temp-Tracker\1-15Aug-2025
 	EndProjectSection
 EndProject
 Global
