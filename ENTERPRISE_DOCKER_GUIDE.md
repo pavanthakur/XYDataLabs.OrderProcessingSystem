@@ -63,6 +63,149 @@ Your Docker startup script has been enhanced with comprehensive enterprise featu
 | `-PreservePersistentData` | Protects volumes marked as persistent | When you need to keep databases/files |
 | `-BackupFirst` | Forces backup before any operations | Production deployments |
 
+## Complete Enterprise Command Reference
+
+### All Enterprise Parameters Available
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `-Environment` | String | `dev` | Target environment: `dev`, `uat`, `prod` |
+| `-Profile` | String | `http` | Service profile: `http`, `https`, `all` |
+| `-EnterpriseMode` | Switch | `false` | Enables enterprise features and logging |
+| `-CleanCache` | Switch | `false` | Performs environment-specific cleanup |
+| `-ConservativeClean` | Switch | `false` | Safe cleanup for UAT (24h+ containers only) |
+| `-PreservePersistentData` | Switch | `false` | Protects persistent volumes during cleanup |
+| `-BackupFirst` | Switch | `false` | Forces backup before any operations |
+| `-Down` | Switch | `false` | Stops and removes containers |
+
+### Enterprise Mode Features by Environment
+
+| Feature | DEV | UAT | PROD |
+|---------|-----|-----|------|
+| **Network** | `xy-dev-network` | `xy-uat-network` | `xy-prod-network` |
+| **Security Level** | `development` | `testing` | `production` |
+| **Cleanup Policy** | `aggressive` | `conservative` | `minimal` |
+| **Auto Backup** | ❌ | ✅ | ✅ |
+| **Port Range** | 5020-5023 | 5030-5033 | 5040-5043 |
+| **Subnet** | 172.20.0.0/16 | 172.21.0.0/16 | 172.22.0.0/16 |
+
+### Tested Enterprise Command Examples
+
+#### Development Environment Commands
+```powershell
+# Basic enterprise development
+.\start-docker.ps1 -Environment dev -Profile https -EnterpriseMode
+
+# Development with aggressive cleanup
+.\start-docker.ps1 -Environment dev -Profile https -EnterpriseMode -CleanCache
+
+# Safe development cleanup (preserves data)
+.\start-docker.ps1 -Environment dev -Profile https -EnterpriseMode -CleanCache -PreservePersistentData
+```
+
+#### UAT Environment Commands
+```powershell
+# UAT with automatic backup and conservative cleanup
+.\start-docker.ps1 -Environment uat -Profile https -EnterpriseMode -ConservativeClean
+
+# UAT with full cleanup (for fresh testing)
+.\start-docker.ps1 -Environment uat -Profile https -EnterpriseMode -CleanCache
+
+# UAT startup (automatic backup included)
+.\start-docker.ps1 -Environment uat -Profile https -EnterpriseMode
+```
+
+#### Production Environment Commands
+```powershell
+# Production with mandatory backup (safest)
+.\start-docker.ps1 -Environment prod -Profile https -EnterpriseMode -BackupFirst
+
+# Production with minimal cleanup only
+.\start-docker.ps1 -Environment prod -Profile https -EnterpriseMode -CleanCache
+
+# Production startup (automatic backup included)
+.\start-docker.ps1 -Environment prod -Profile https -EnterpriseMode
+```
+
+### Enterprise Cleanup Policies Explained
+
+#### Aggressive Cleanup (DEV)
+- ✅ Removes unused containers
+- ✅ Removes application images (for fresh builds)
+- ✅ Cleans dangling images and build cache
+- ✅ Prunes unused networks (except core networks)
+- ✅ Full system prune with volumes
+- ⚠️ **Space reclaimed**: Typically 100MB+ per cleanup
+
+#### Conservative Cleanup (UAT)
+- ✅ Removes containers older than 24 hours
+- ✅ Cleans only dangling images
+- ✅ Preserves recent containers and data
+- ✅ Safe for testing environments
+- ⚠️ **Space reclaimed**: Minimal, focuses on safety
+
+#### Minimal Cleanup (PROD)
+- ✅ Removes only dangling images
+- ✅ Cleans build cache only
+- ✅ Production-safe operations only
+- ❌ No container or volume removal
+- ⚠️ **Space reclaimed**: Very minimal, maximum safety
+
+### Enterprise Logging and Monitoring
+
+#### Log File Location
+```powershell
+# Enterprise logs are written to:
+logs/docker-startup-{YYYY-MM-DD}.log
+
+# View recent enterprise logs:
+Get-Content logs/docker-startup-$(Get-Date -Format 'yyyy-MM-dd').log -Tail 20
+```
+
+#### Backup Locations
+```powershell
+# Backups are stored in:
+backups/docker-backup-{env}-{YYYY-MM-DD-HHMMSS}/
+
+# Example backup contents:
+# ✅ sharedsettings.{env}.json
+# ✅ docker-compose.{env}.yml
+# ✅ Environment-specific configurations
+```
+
+#### Network Inspection Commands
+```powershell
+# Check enterprise networks
+docker network ls | Select-String "xy-"
+
+# Inspect network labels and security
+docker network inspect xy-dev-network --format "{{json .Labels}}"
+docker network inspect xy-uat-network --format "{{json .Labels}}"
+docker network inspect xy-prod-network --format "{{json .Labels}}"
+```
+
+### Enterprise Safety Features
+
+#### Production Warnings
+- **Automatic Warning**: "Production environment should use -BackupFirst flag"
+- **Backup Enforcement**: UAT and PROD environments automatically create backups
+- **Minimal Cleanup**: Production uses safest cleanup policies only
+
+#### Network Security Labels
+```json
+// Example network labels for UAT environment:
+{
+  "environment": "uat",
+  "managed-by": "enterprise-automation", 
+  "security-level": "testing"
+}
+```
+
+#### Data Protection
+- **Persistent Volume Protection**: `-PreservePersistentData` flag protects databases
+- **Configuration Backup**: Automatic backup of environment settings
+- **Core Network Protection**: xy-*-network and xy-database-network preserved during cleanup
+
 ## Environment-Specific Behavior
 
 ### Development Environment
@@ -251,37 +394,94 @@ docker system df
 
 ## Quick Reference
 
-### Essential Commands
+### Essential Enterprise Commands
 ```powershell
 # Development
 .\start-docker.ps1 -Environment dev -Profile https -EnterpriseMode
 
-# UAT Testing
-.\start-docker.ps1 -Environment uat -Profile all -EnterpriseMode -ConservativeClean
+# UAT Testing with Conservative Cleanup
+.\start-docker.ps1 -Environment uat -Profile https -EnterpriseMode -ConservativeClean
 
-# Production Deployment
-.\start-docker.ps1 -Environment prod -Profile all -EnterpriseMode -BackupFirst
+# Production Deployment with Backup
+.\start-docker.ps1 -Environment prod -Profile https -EnterpriseMode -BackupFirst
 
-# Safe Cleanup
-.\start-docker.ps1 -Environment any -Profile any -EnterpriseMode -PreservePersistentData -CleanCache
+# Safe Cleanup with Data Protection
+.\start-docker.ps1 -Environment dev -Profile https -EnterpriseMode -CleanCache -PreservePersistentData
 
 # Stop Services
 .\start-docker.ps1 -Environment any -Profile any -Down
 ```
 
-### Status Monitoring
+### Enterprise Status Monitoring & Validation
 ```powershell
-# View logs
-docker-compose -f docker-compose.{env}.yml logs -f
+# Check all enterprise networks
+docker network ls | Select-String "xy-"
 
-# Check networks
-docker network ls | grep xy-
+# Inspect network security labels
+docker network inspect xy-dev-network --format "{{json .Labels}}"
+docker network inspect xy-uat-network --format "{{json .Labels}}"
+docker network inspect xy-prod-network --format "{{json .Labels}}"
 
-# Verify backups
-ls backups/
+# View enterprise container status
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | Select-String "orderprocessing"
 
-# Check enterprise logs
+# Check for application errors
+docker logs testappxy_orderprocessingsystem-api-https-1 | Select-String -Pattern "(ERROR|Exception|Failed)"
+docker logs testappxy_orderprocessingsystem-ui-https-1 | Select-String -Pattern "(ERROR|Exception|Failed)"
+
+# View enterprise logs
 Get-Content logs/docker-startup-$(Get-Date -Format 'yyyy-MM-dd').log -Tail 20
+
+# Check enterprise backups
+ls backups/ | Select-Object -Last 5
+
+# Verify database connectivity (non-Docker)
+sqlcmd -S localhost,1433 -U sa -P "Admin100@" -Q "SELECT name FROM sys.databases WHERE name LIKE 'OrderProcessingSystem%'"
+
+# Test Entity Framework migrations (non-Docker)
+cd XYDataLabs.OrderProcessingSystem.API
+dotnet ef database update --verbose
 ```
+
+### Enterprise Environment URLs by Mode
+
+| Environment | API URL | UI URL | Network | Security |
+|-------------|---------|--------|---------|----------|
+| **DEV** | https://localhost:5021/swagger | https://localhost:5023 | xy-dev-network | development |
+| **UAT** | https://localhost:5031/swagger | https://localhost:5033 | xy-uat-network | testing |
+| **PROD** | https://localhost:5041/swagger | https://localhost:5043 | xy-prod-network | production |
+| **Local** | https://localhost:5011/swagger | https://localhost:5013 | host | local |
+
+### Troubleshooting Enterprise Mode
+
+#### Common Issues and Solutions
+```powershell
+# Issue: "Cannot index into a null array" warning
+# Solution: Fixed in current version - network cleanup now handles null arrays properly
+
+# Issue: "Image already exists" error
+# Solution: Use -CleanCache flag to remove application images before rebuild
+
+# Issue: Network not found error
+# Solution: Enterprise mode automatically creates networks with proper labels
+
+# Issue: Production backup not created
+# Solution: UAT and PROD automatically create backups, use -BackupFirst for explicit backup
+
+# Issue: Containers not healthy
+# Solution: Check application logs and ensure database connectivity:
+docker logs [container-name] | Select-String -Pattern "(ERROR|Exception|Failed)"
+```
+
+### Enterprise Mode vs Standard Mode Comparison
+
+| Feature | Standard Mode | Enterprise Mode |
+|---------|---------------|-----------------|
+| **Networks** | Default Docker networks | Environment-specific isolated networks |
+| **Cleanup** | Basic system prune | Environment-specific policies |
+| **Backups** | Manual only | Automatic for UAT/PROD |
+| **Logging** | Console only | File-based audit trail |
+| **Security** | Basic | Security level labeling |
+| **Monitoring** | Basic status | Enterprise health checks |
 
 This enterprise enhancement maintains your existing workflow while providing the production-grade features needed for enterprise architecture compliance.

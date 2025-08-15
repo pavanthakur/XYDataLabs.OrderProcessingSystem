@@ -13,37 +13,89 @@ Q:\GIT\TestAppXY_OrderProcessingSystem> dotnet dev-certs https -ep ./Resources/C
 Q:\GIT\TestAppXY_OrderProcessingSystem> dotnet dev-certs https --trust
 
 # 🏃‍♂️ How to Run the Project
-  1. First make sure that you have **.NET 8.0** and **Visual Studio 2022** are installed.
-  2. Now open the solution with VS 2022 and build the solution to make sure that there is no error.
-  3. Now choose either of http or https or Docker profile as startup project and then run it. On startup necessary databases will be created in **MSSQLLocalDB**. Along with seed data.
-     Note : change sql server IP Address, username and password
-  4. Start the project using the PowerShell automation script with environment-specific configurations:
-      # Development environment
-      Q:\GIT\TestAppXY_OrderProcessingSystem> .\start-docker.ps1 -Environment dev -Profile http
-      
-      # UAT environment  
-      Q:\GIT\TestAppXY_OrderProcessingSystem> .\start-docker.ps1 -Environment uat -Profile https
-      
-      # Production environment
-      Q:\GIT\TestAppXY_OrderProcessingSystem> .\start-docker.ps1 -Environment prod -Profile https -CleanCache
-  5. Ensure in Windows Docker Desktop Container "testappxy_orderprocessingsystem" with API and UI Images are loaded. Ensure ports for http and https are correct as below
-     Test the APIs using Swagger for all the business use cases.
-     i) a. For Docker profile to start API with https -> https://localhost:5001/swagger/index.html
-	    b. For Docker profile to start UI with https -> https://localhost:5003/
-	 OR
-	 ii) a. For Docker profile to start API with http -> http://localhost:5000/swagger/index.html
-	     b. For Docker profile to start UI with http -> http://localhost:5002/
-	 
-   6. To Debug  API with Docker from VS2022
-       Debug > AttachToProcess
-	   Connection type : Docker (Linux Container)
-	   Contaier target : testappxy_orderprocessingsystem-api-1
-	   Attach To : XYDataLabs.OrderProcessingSystem.API
-	   Code type : Managed (.Net Core for Unix) code
-	   (Note : Ensure Debug > Windows > Modules - Symbols are loaded for XYDataLabs.OrderProcessingSystem.API)
-   
-   7. Open Q:\GIT\TestAppXY_OrderProcessingSystem in VSCode
-      To Debug UI application :- Use Run and Debug > Launch Chrome (UI 5003)
+
+## 🎯 Quick Start Options
+
+### **Option 1: Visual Studio Non-Docker (Recommended for Development)**
+1. Open solution in **Visual Studio 2022**
+2. Select **API** or **UI** project as startup
+3. Choose **http** or **https** profile (NOT docker-* profiles)
+4. Press **F5** to start debugging
+   - **API**: http://localhost:5010/swagger (or https://localhost:5011/swagger)
+   - **UI**: http://localhost:5012 (or https://localhost:5013)
+   - **Database**: `OrderProcessingSystem_Local` created automatically
+
+### **Option 2: Docker Development**
+```powershell
+# Development environment (ports 5020-5023)
+.\start-docker.ps1 -Environment dev -Profile http
+
+# UAT environment (ports 5030-5033)
+.\start-docker.ps1 -Environment uat -Profile https
+
+# Production environment (ports 5040-5043)
+.\start-docker.ps1 -Environment prod -Profile https -CleanCache
+```
+
+### **Option 3: Enterprise Docker Mode**
+```powershell
+# Enterprise development with enhanced features
+.\start-docker.ps1 -Environment dev -Profile https -EnterpriseMode
+
+# UAT with conservative cleanup and automatic backups
+.\start-docker.ps1 -Environment uat -Profile https -EnterpriseMode -ConservativeClean
+
+# Production with mandatory backup and minimal cleanup
+.\start-docker.ps1 -Environment prod -Profile https -EnterpriseMode -BackupFirst
+```
+
+> **🏢 Enterprise Mode Features**: Network isolation, automatic backups, environment-specific cleanup policies, enhanced logging, and production safety controls. See [Enterprise Docker Guide](ENTERPRISE_DOCKER_GUIDE.md) for complete documentation.
+
+## 🗄️ Database Environment Strategy
+
+| **Mode** | **Database** | **Server** | **Ports** | **Use Case** |
+|----------|-------------|------------|-----------|--------------|
+| **Visual Studio F5** | `OrderProcessingSystem_Local` | localhost:1433 | 5010-5013 | Local development & debugging |
+| **Docker Dev** | `OrderProcessingSystem_Dev` | host.docker.internal:1433 | 5020-5023 | Container development |
+| **Docker UAT** | `OrderProcessingSystem_UAT` | host.docker.internal:1433 | 5030-5033 | Testing environment |
+| **Docker Prod** | `OrderProcessingSystem_Prod` | host.docker.internal:1433 | 5040-5043 | Production simulation |
+
+## 📋 Prerequisites
+1. **.NET 8.0 SDK** and **Visual Studio 2022** installed
+2. **SQL Server** running on localhost:1433  
+3. **Docker Desktop** (for Docker scenarios only)
+4. Build solution to ensure no errors: `dotnet build`
+
+## 🐛 Debugging Options
+
+### **Visual Studio F5 Debugging (Non-Docker)**
+- **API**: Select http/https profile → F5 → Breakpoints work directly
+- **UI**: Select http/https profile → F5 → Breakpoints work directly
+- **Ports**: 5010-5013 series
+- **Database**: OrderProcessingSystem_Local
+
+### **Docker Container Debugging**
+1. **Start Docker environment** first:
+   ```powershell
+   .\start-docker.ps1 -Environment dev -Profile http
+   ```
+
+2. **For API debugging**:
+   - Debug → Attach to Process
+   - Connection type: Docker (Linux Container)
+   - Container target: testappxy_orderprocessingsystem-api-1
+   - Attach To: XYDataLabs.OrderProcessingSystem.API
+   - Code type: Managed (.NET Core for Unix) code
+
+3. **For UI debugging** (VSCode):
+   - Open project in VSCode
+   - Run and Debug → Launch Chrome (UI 5022)
+
+### **Current Port Allocation**
+- **Local (Non-Docker)**: API 5010/5011, UI 5012/5013
+- **Docker Dev**: API 5020/5021, UI 5022/5023  
+- **Docker UAT**: API 5030/5031, UI 5032/5033
+- **Docker Prod**: API 5040/5041, UI 5042/5043
 	  
 # Clean Architecture in ASP.NET Core
 This repository contains the implementation of Domain Driven Design and Clean Architecture in ASP.NET Core.

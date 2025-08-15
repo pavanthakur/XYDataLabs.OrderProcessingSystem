@@ -125,7 +125,10 @@ function Ensure-DockerNetwork {
                     --label "managed-by=enterprise-automation" `
                     --label "security-level=$($EnterpriseConfig[$Environment].SecurityLevel)" 2>&1
             } else {
-                $result = docker network create $NetworkName 2>&1
+                # Standard network creation with basic labeling for safer cleanup
+                $result = docker network create $NetworkName `
+                    --label "environment=$Environment" `
+                    --label "managed-by=orderprocessing-system" 2>&1
             }
             
             if ($LASTEXITCODE -eq 0) {
@@ -167,12 +170,35 @@ function Clean-DockerCache {
             if ($EnterpriseMode -and $config.CleanupPolicy -eq "aggressive" -and $Environment -eq "dev") {
                 Write-ColoredOutput "Development environment: Full cleanup" "Yellow" "INFO"
                 if ($PreservePersistent) {
-                    # Clean but preserve persistent volumes
+                    # Clean but preserve persistent volumes and core networks
                     docker container prune -f --filter "label=environment=$Environment"
                     docker image prune -f --filter "dangling=true"
-                    docker network prune -f --filter "label=environment=$Environment"
+                    
+                    # Remove specific application images to prevent "already exists" errors
+                    $appImages = @("xydatalabs-orderprocessingsystem-api", "xydatalabs-orderprocessingsystem-ui")
+                    foreach ($image in $appImages) {
+                        $existingImage = docker images -q $image 2>$null
+                        if ($existingImage) {
+                            Write-ColoredOutput "Removing existing application image: $image" "Yellow" "INFO"
+                            docker rmi $image -f 2>$null
+                        }
+                    }
+                    
+                    # Only prune networks that are NOT our core networks (xy-*-network)
+                    $coreNetworks = @("xy-dev-network", "xy-uat-network", "xy-prod-network", "xy-database-network")
+                    $allNetworks = docker network ls --filter "label=environment=$Environment" --format "{{.Name}}"
+                    if ($allNetworks -and $allNetworks.Count -gt 0) {
+                        foreach ($network in $allNetworks) {
+                            if ($network -and $network -notin $coreNetworks) {
+                                Write-ColoredOutput "Pruning non-core network: $network" "Yellow" "INFO"
+                                docker network rm $network 2>$null
+                            }
+                        }
+                    } else {
+                        Write-ColoredOutput "No labeled networks found to prune for environment: $Environment" "Gray" "INFO"
+                    }
                     docker builder prune -f
-                    Write-ColoredOutput "Aggressive cleanup completed (persistent data preserved)" "Green" "SUCCESS"
+                    Write-ColoredOutput "Aggressive cleanup completed (persistent data and core networks preserved)" "Green" "SUCCESS"
                 } else {
                     # Full system cleanup
                     $result = docker system prune -f --volumes --filter "label=environment=$Environment" 2>&1
@@ -197,10 +223,21 @@ function Clean-DockerCache {
             else {
                 # Standard cleanup for non-enterprise mode
                 Write-ColoredOutput "Standard cleanup mode" "Gray" "INFO"
+                
+                # Remove specific application images to prevent "already exists" errors
+                $appImages = @("xydatalabs-orderprocessingsystem-api", "xydatalabs-orderprocessingsystem-ui")
+                foreach ($image in $appImages) {
+                    $existingImage = docker images -q $image 2>$null
+                    if ($existingImage) {
+                        Write-ColoredOutput "Removing existing application image: $image" "Yellow" "INFO"
+                        docker rmi $image -f 2>$null
+                    }
+                }
+                
                 $result = docker system prune -f --volumes 2>&1
                 if ($LASTEXITCODE -eq 0) {
                     Write-ColoredOutput "Docker cache cleanup completed" "Green" "SUCCESS"
-                    if ($result -match "Total reclaimed space: (.+)") {
+                    if ($result -and ($result -join "`n") -match "Total reclaimed space: (.+)") {
                         Write-ColoredOutput "Space reclaimed: $($matches[1])" "Cyan" "INFO"
                     }
                 }
@@ -338,6 +375,23 @@ try {
     }
     
     Ensure-DockerNetwork -NetworkName $networkName -Environment $Environment -SettingsPath $SharedSettingsPath
+    
+    # Ensure database network exists for all environments
+    $result = docker network ls --filter "name=xy-database-network" --format "{{.Name}}" | Where-Object { $_ -eq "xy-database-network" }
+    if (-not $result) {
+        Write-ColoredOutput "Creating Docker network: xy-database-network..." "Yellow" "INFO"
+        $createResult = docker network create xy-database-network `
+            --label "environment=shared" `
+            --label "managed-by=orderprocessing-system" 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-ColoredOutput "Network 'xy-database-network' created successfully" "Green" "SUCCESS"
+        } else {
+            Write-ColoredOutput "Warning: Could not create network 'xy-database-network': $createResult" "Yellow" "WARNING"
+        }
+    } else {
+        Write-ColoredOutput "Network 'xy-database-network' already exists" "Green"
+    }
+    
     Write-ColoredOutput "" "White"
     
     Write-ColoredOutput "Extracting ports from $SharedSettingsPath..." "Gray"
