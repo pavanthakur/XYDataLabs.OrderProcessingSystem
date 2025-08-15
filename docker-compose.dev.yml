@@ -22,6 +22,7 @@ services:
       - ./Resources/Configuration/sharedsettings.dev.json:/app/Resources/Configuration/sharedsettings.dev.json:ro
     networks:
       - xy-dev-network
+      - xy-database-network
     profiles: ["http", "all", "api"]
     healthcheck:
       test: curl --fail http://localhost:${API_HTTP_PORT}/swagger --insecure || exit 1
@@ -49,6 +50,7 @@ services:
       - ./Resources/Configuration/sharedsettings.dev.json:/app/Resources/Configuration/sharedsettings.dev.json:ro
     networks:
       - xy-dev-network
+      - xy-database-network
     profiles: ["https", "all", "api-https"]
     healthcheck:
       test: curl --fail https://localhost:${API_HTTPS_PORT}/swagger --insecure || exit 1
@@ -76,6 +78,7 @@ services:
       - ./Resources/Configuration/sharedsettings.dev.json:/app/Resources/Configuration/sharedsettings.dev.json:ro
     networks:
       - xy-dev-network
+      - xy-database-network
     profiles: ["http", "all", "ui"]
     depends_on:
       api:
@@ -107,6 +110,7 @@ services:
       - ./Resources/Configuration/sharedsettings.dev.json:/app/Resources/Configuration/sharedsettings.dev.json:ro
     networks:
       - xy-dev-network
+      - xy-database-network
     profiles: ["https", "all", "ui-https"]
     depends_on:
       api-https:
@@ -121,4 +125,6 @@ services:
 # Development networking
 networks:
   xy-dev-network:
+    external: true
+  xy-database-network:
     external: true

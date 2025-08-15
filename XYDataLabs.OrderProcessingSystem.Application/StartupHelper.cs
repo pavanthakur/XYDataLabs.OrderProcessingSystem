@@ -8,8 +8,9 @@ using Microsoft.AspNetCore.DataProtection.Repositories;
 using XYDataLabs.OrderProcessingSystem.Application.Interfaces;
 using XYDataLabs.OrderProcessingSystem.Application.Services;
 using XYDataLabs.OpenPayAdapter;
-using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
+using XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData;
 using XYDataLabs.OrderProcessingSystem.Application.Utilities;
+using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 
 namespace XYDataLabs.OrderProcessingSystem.Application
 {
@@ -35,6 +36,10 @@ namespace XYDataLabs.OrderProcessingSystem.Application
                 // Create a new scope to resolve scoped dependencies
                 using var scope = serviceProvider.CreateScope();
                 var dbContext = scope.ServiceProvider.GetRequiredService<OrderProcessingSystemDbContext>();
+                
+                // Ensure database is initialized with seed data before loading master data
+                DbInitializer.Initialize(dbContext);
+                
                 return new AppMasterData(dbContext);
             });
 

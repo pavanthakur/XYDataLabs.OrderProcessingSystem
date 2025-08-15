@@ -26,6 +26,7 @@ services:
       - ./Resources/Configuration/sharedsettings.prod.json:/app/Resources/Configuration/sharedsettings.prod.json:ro
     networks:
       - xy-prod-network
+      - xy-database-network
     profiles: ["http", "all", "api"]
     restart: unless-stopped
     mem_limit: 1g
@@ -60,6 +61,7 @@ services:
       - ./Resources/Configuration/sharedsettings.prod.json:/app/Resources/Configuration/sharedsettings.prod.json:ro
     networks:
       - xy-prod-network
+      - xy-database-network
     profiles: ["https", "all", "api-https"]
     restart: unless-stopped
     mem_limit: 1g
@@ -150,3 +152,5 @@ networks:
     external: true
     driver_opts:
       encrypted: "true"
+  xy-database-network:
+    external: true

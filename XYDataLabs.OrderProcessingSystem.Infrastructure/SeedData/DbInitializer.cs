@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Bogus;
+using Microsoft.EntityFrameworkCore;
 
 namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
 {
@@ -13,7 +14,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
     {
         public static void Initialize(OrderProcessingSystemDbContext context)
         {
-            context.Database.EnsureCreated();  // Ensure the DB is created
+            // Apply all pending migrations and create database if it doesn't exist
+            context.Database.Migrate();
 
             SeedOpenpayProvider(context);
 

@@ -9,6 +9,7 @@ using System.Reflection;
 using XYDataLabs.OrderProcessingSystem.Utilities;
 using Microsoft.Extensions.Configuration;
 using System.Text.RegularExpressions;
+using XYDataLabs.OrderProcessingSystem.Application.Utilities;
 
 // Bootstrap Serilog as early as possible so Log.* writes go to console immediately
 Log.Logger = new LoggerConfiguration()
@@ -184,6 +185,21 @@ else
 }
 
 var app = builder.Build();
+
+// Initialize database and AppMasterData during startup
+using (var scope = app.Services.CreateScope())
+{
+    try
+    {
+        var appMasterData = scope.ServiceProvider.GetRequiredService<AppMasterData>();
+        Log.Information("Database initialized and AppMasterData loaded successfully during startup");
+    }
+    catch (Exception ex)
+    {
+        Log.Fatal(ex, "Failed to initialize database during startup");
+        throw;
+    }
+}
 
 SharedSettingsLoader.PrintApiSettingsDebug(apiSettings, activeSettings, "API", isDocker);
 

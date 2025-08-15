@@ -7,7 +7,7 @@
   },
   "AllowedHosts": "*",
   "ConnectionStrings": {
-    "OrderProcessingSystemDbConnection": "Server=192.168.1.9;Database=OrderProcessingSystem;User Id=sa;Password=Admin100@;TrustServerCertificate=True;"
+    "OrderProcessingSystemDbConnection": "Server=localhost,1433;Database=OrderProcessingSystem_Local;User Id=sa;Password=Admin100@;TrustServerCertificate=True;"
   },
   "OpenPay": {
     "MerchantId": "sk_3433941e467c4875b178ce26348b0fac",
@@ -111,7 +111,7 @@
     "Local": {
       "Enabled": true,
       "ConnectionStrings": {
-        "DefaultConnection": "Server=(localdb)\\mssqllocaldb;Database=OrderProcessingDB_Dev;Trusted_Connection=true;MultipleActiveResultSets=true;",
+        "DefaultConnection": "Server=localhost,1433;Database=OrderProcessingDB_Local;User Id=sa;Password=Admin100@;TrustServerCertificate=True;",
         "Redis": "localhost:6379"
       }
     },

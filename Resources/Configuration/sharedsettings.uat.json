@@ -9,7 +9,8 @@
   },
   "AllowedHosts": "*",
   "ConnectionStrings": {
-    "OrderProcessingSystemDbConnection": "Server=192.168.1.9;Database=OrderProcessingSystem_UAT;User Id=sa;Password=Admin100@;TrustServerCertificate=True;"
+    "OrderProcessingSystemDbConnection": "Server=host.docker.internal,1433;Database=OrderProcessingSystem_UAT;User Id=sa;Password=Admin100@;TrustServerCertificate=True;",
+    "OrderProcessingSystemDbConnection_Local": "Server=localhost,1433;Database=OrderProcessingSystem_UAT;User Id=sa;Password=Admin100@;TrustServerCertificate=True;"
   },
   "OpenPay": {
     "MerchantId": "sk_3433941e467c4875b178ce26348b0fac",

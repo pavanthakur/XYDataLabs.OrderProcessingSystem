@@ -1,0 +1,70 @@
+# Database Services - SQL Server Container
+# Purpose: Containerized database solution that eliminates IP dependency
+# Usage: docker-compose -f docker-compose.database.yml up -d
+
+version: '3.8'
+
+services:
+  sql-server:
+    image: mcr.microsoft.com/mssql/server:2019-CU18-ubuntu-20.04
+    container_name: orderprocessing-sqlserver
+    hostname: sql-server
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=Admin100@
+      - MSSQL_PID=Express
+      - MSSQL_TCP_PORT=1433
+      - MSSQL_COLLATION=SQL_Latin1_General_CP1_CI_AS
+    ports:
+      - "1433:1433"
+    volumes:
+      - sql_data:/var/opt/mssql/data
+      - sql_log:/var/opt/mssql/log
+      - sql_backup:/var/opt/mssql/backup
+      - ./Resources/Database/init:/docker-entrypoint-initdb.d
+    networks:
+      - xy-database-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P Admin100@ -Q 'SELECT 1'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # Redis for caching (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: orderprocessing-redis
+    hostname: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - xy-database-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  sql_data:
+    name: orderprocessing_sql_data
+  sql_log:
+    name: orderprocessing_sql_log
+  sql_backup:
+    name: orderprocessing_sql_backup
+  redis_data:
+    name: orderprocessing_redis_data
+
+networks:
+  xy-database-network:
+    name: xy-database-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/16
+          gateway: 172.25.0.1

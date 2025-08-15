@@ -1,79 +1,119 @@
 ﻿{
   "profiles": {
     "http": {
-      "commandName": "Project",
+      "commandName": "Executable",
+      "executablePath": "powershell.exe",
+      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\set-local-env.ps1 -ProjectType API -Profile http; Start-Sleep 2; cd '.\\XYDataLabs.OrderProcessingSystem.API'; dotnet run --launch-profile http-direct\"",
+      "workingDirectory": "$(SolutionDir)",
       "launchBrowser": true,
+      "launchUrl": "http://localhost:5010/swagger",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    },
+    "https": {
+      "commandName": "Executable",
+      "executablePath": "powershell.exe",
+      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\set-local-env.ps1 -ProjectType API -Profile https; Start-Sleep 2; cd '.\\XYDataLabs.OrderProcessingSystem.API'; dotnet run --launch-profile https-direct\"",
+      "workingDirectory": "$(SolutionDir)",
+      "launchBrowser": true,
+      "launchUrl": "https://localhost:5011/swagger",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    },
+    "http-direct": {
+      "commandName": "Project",
+      "launchBrowser": false,
       "launchUrl": "swagger",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "USE_HTTPS": "false",
-        "CORS_ALLOWED_ORIGINS": "http://localhost:5010,http://localhost:5012"
+        "CORS_ALLOWED_ORIGINS": "http://localhost:5010,http://localhost:5012",
+        "SHAREDSETTINGS_PATH": "Resources/Configuration/sharedsettings.local.json"
       },
       "dotnetRunMessages": true,
       "applicationUrl": "http://localhost:5010"
     },
-    "https": {
+    "https-direct": {
       "commandName": "Project",
-      "launchBrowser": true,
+      "launchBrowser": false,
       "launchUrl": "swagger",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "USE_HTTPS": "true",
-        "CORS_ALLOWED_ORIGINS": "https://localhost:5011,https://localhost:5013"
+        "CORS_ALLOWED_ORIGINS": "https://localhost:5011,https://localhost:5013",
+        "SHAREDSETTINGS_PATH": "Resources/Configuration/sharedsettings.local.json"
       },
       "dotnetRunMessages": true,
       "applicationUrl": "https://localhost:5011"
     },
-    "IIS Express": {
-      "commandName": "IISExpress",
+    "docker-dev-http": {
+      "commandName": "Executable",
+      "executablePath": "powershell.exe",
+      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\start-docker.ps1 -Environment dev -Profile http -CleanCache\"",
+      "workingDirectory": "$(SolutionDir)",
       "launchBrowser": true,
-      "launchUrl": "swagger",
+      "launchUrl": "http://localhost:5020/swagger",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development",
-        "CORS_ALLOWED_ORIGINS": "https://localhost:44340"
+        "ASPNETCORE_ENVIRONMENT": "Development"
       }
     },
-    "Container (Dockerfile)": {
-      "commandName": "Docker",
+    "docker-dev-https": {
+      "commandName": "Executable",
+      "executablePath": "powershell.exe",
+      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\start-docker.ps1 -Environment dev -Profile https -CleanCache\"",
+      "workingDirectory": "$(SolutionDir)",
       "launchBrowser": true,
-      "launchUrl": "{Scheme}://{ServiceHost}:{ServicePort}/swagger/index.html",
+      "launchUrl": "https://localhost:5021/swagger",
       "environmentVariables": {
-        "ASPNETCORE_HTTPS_PORTS": "8081",
-        "ASPNETCORE_HTTP_PORTS": "8080",
-        "ASPNETCORE_ENVIRONMENT": "Development",
-        "CORS_ALLOWED_ORIGINS": "http://ui:8080"
-      },
-      "publishAllPorts": false,
-      "useSSL": true
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
     },
-    "Production": {
-      "commandName": "Project",
-      "launchBrowser": false,
-      "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Production",
-        "CORS_ALLOWED_ORIGINS": "https://ui.xydatalabs.com"
-      },
-      "dotnetRunMessages": true,
-      "applicationUrl": "https://localhost:7112;http://localhost:5208"
-    },
-    "Staging": {
-      "commandName": "Project",
+    "docker-uat-http": {
+      "commandName": "Executable",
+      "executablePath": "powershell.exe",
+      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\start-docker.ps1 -Environment uat -Profile http -CleanCache\"",
+      "workingDirectory": "$(SolutionDir)",
       "launchBrowser": true,
+      "launchUrl": "http://localhost:5030/swagger",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Staging",
-        "CORS_ALLOWED_ORIGINS": "https://staging-ui.xydatalabs.com"
-      },
-      "dotnetRunMessages": true,
-      "applicationUrl": "https://localhost:7112;http://localhost:5208"
+        "ASPNETCORE_ENVIRONMENT": "Staging"
+      }
+    },
+    "docker-uat-https": {
+      "commandName": "Executable",
+      "executablePath": "powershell.exe",
+      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\start-docker.ps1 -Environment uat -Profile https -CleanCache\"",
+      "workingDirectory": "$(SolutionDir)",
+      "launchBrowser": true,
+      "launchUrl": "https://localhost:5031/swagger",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Staging"
+      }
+    },
+    "docker-prod-http": {
+      "commandName": "Executable",
+      "executablePath": "powershell.exe",
+      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\start-docker.ps1 -Environment prod -Profile http -CleanCache\"",
+      "workingDirectory": "$(SolutionDir)",
+      "launchBrowser": true,
+      "launchUrl": "http://localhost:5040/swagger",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Production"
+      }
+    },
+    "docker-prod-https": {
+      "commandName": "Executable",
+      "executablePath": "powershell.exe",
+      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\start-docker.ps1 -Environment prod -Profile https -CleanCache\"",
+      "workingDirectory": "$(SolutionDir)",
+      "launchBrowser": true,
+      "launchUrl": "https://localhost:5041/swagger",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Production"
+      }
     }
   },
-  "$schema": "http://json.schemastore.org/launchsettings.json",
-  "iisSettings": {
-    "windowsAuthentication": false,
-    "anonymousAuthentication": true,
-    "iisExpress": {
-      "applicationUrl": "http://localhost:62320/",
-      "sslPort": 44393
-    }
-  }
+  "$schema": "http://json.schemastore.org/launchsettings.json"
 }
