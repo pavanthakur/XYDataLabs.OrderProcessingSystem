@@ -21,22 +21,22 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XYDataLabs.OrderProcessingS
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Resources", "Resources", "{E1A8B2C3-4D5F-6789-ABCD-123456789DEF}"
 	ProjectSection(SolutionItems) = preProject
+		Resources\Certificates\aspnetapp.pfx = Resources\Certificates\aspnetapp.pfx
 		Resources\Configuration\sharedsettings.dev.json = Resources\Configuration\sharedsettings.dev.json
 		Resources\Configuration\sharedsettings.local.json = Resources\Configuration\sharedsettings.local.json
-		Resources\Configuration\sharedsettings.uat.json = Resources\Configuration\sharedsettings.uat.json
 		Resources\Configuration\sharedsettings.prod.json = Resources\Configuration\sharedsettings.prod.json
-		Resources\Certificates\aspnetapp.pfx = Resources\Certificates\aspnetapp.pfx
+		Resources\Configuration\sharedsettings.uat.json = Resources\Configuration\sharedsettings.uat.json
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "TODO", "TODO", "{A2B3C4D5-6E7F-8901-2345-6789ABCDEF01}"
 	ProjectSection(SolutionItems) = preProject
-		TODO\TODO_INDEX.md = TODO\TODO_INDEX.md
-		TODO\NEXT_STEPS_GUIDE.md = TODO\NEXT_STEPS_GUIDE.md
 		TODO\01_MASTER_ROADMAP.md = TODO\01_MASTER_ROADMAP.md
 		TODO\02_AZURE_DEVELOPER_LEARNING_PATH.md = TODO\02_AZURE_DEVELOPER_LEARNING_PATH.md
 		TODO\03_DAILY_PROGRESS_TRACKER.md = TODO\03_DAILY_PROGRESS_TRACKER.md
 		TODO\MIND_MAP.md = TODO\MIND_MAP.md
+		TODO\NEXT_STEPS_GUIDE.md = TODO\NEXT_STEPS_GUIDE.md
 		TODO\ORGANIZATION_SUMMARY.md = TODO\ORGANIZATION_SUMMARY.md
+		TODO\TODO_INDEX.md = TODO\TODO_INDEX.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Azure-Migration", "Azure-Migration", "{B3C4D5E6-7F80-9012-3456-789ABCDEF012}"
@@ -71,15 +71,15 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tracker", "Tracker", "{E6F78901-2345-6789-ABCD-EF0123456789}"
 	ProjectSection(SolutionItems) = preProject
 		TODO\Tracker\1-15Aug-2025 = TODO\Tracker\1-15Aug-2025
+		TODO\Tracker\ACHIEVEMENT_LOG.md = TODO\Tracker\ACHIEVEMENT_LOG.md
+		TODO\Tracker\DOCKER_AZURE_STRATEGY.md = TODO\Tracker\DOCKER_AZURE_STRATEGY.md
+		TODO\Tracker\MICROSERVICES_COMMUNICATION.md = TODO\Tracker\MICROSERVICES_COMMUNICATION.md
 		TODO\Tracker\PROGRESS_TRACKER.md = TODO\Tracker\PROGRESS_TRACKER.md
-		TODO\Tracker\WORKING_PROFESSIONAL_SCHEDULE.md = TODO\Tracker\WORKING_PROFESSIONAL_SCHEDULE.md
 		TODO\Tracker\WEEK_01_CHECKLIST.md = TODO\Tracker\WEEK_01_CHECKLIST.md
 		TODO\Tracker\WEEK_01_SUCCESS_CRITERIA.md = TODO\Tracker\WEEK_01_SUCCESS_CRITERIA.md
 		TODO\Tracker\WEEK_02_SUCCESS_CRITERIA.md = TODO\Tracker\WEEK_02_SUCCESS_CRITERIA.md
 		TODO\Tracker\WEEK_03_SUCCESS_CRITERIA.md = TODO\Tracker\WEEK_03_SUCCESS_CRITERIA.md
-		TODO\Tracker\ACHIEVEMENT_LOG.md = TODO\Tracker\ACHIEVEMENT_LOG.md
-		TODO\Tracker\MICROSERVICES_COMMUNICATION.md = TODO\Tracker\MICROSERVICES_COMMUNICATION.md
-		TODO\Tracker\DOCKER_AZURE_STRATEGY.md = TODO\Tracker\DOCKER_AZURE_STRATEGY.md
+		TODO\Tracker\WORKING_PROFESSIONAL_SCHEDULE.md = TODO\Tracker\WORKING_PROFESSIONAL_SCHEDULE.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "LearningHelp", "LearningHelp", "{F7890123-4567-89AB-CDEF-0123456789AB}"
@@ -89,6 +89,13 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "LearningHelp", "LearningHel
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XYDataLabs.OrderProcessingSystem.Utilities", "XYDataLabs.OrderProcessingSystem.Utilities\XYDataLabs.OrderProcessingSystem.Utilities.csproj", "{DFC0BB5F-D671-DE7D-4A5D-D10E77984910}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Self_learning", "Self_learning", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Temp-Tracker", "Temp-Tracker", "{94540898-5E2E-48D3-8591-A971B7495BD8}"
+	ProjectSection(SolutionItems) = preProject
+		TODO\Tracker\Temp-Tracker\1-15Aug-2025 = TODO\Tracker\Temp-Tracker\1-15Aug-2025
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -134,6 +141,15 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{A2B3C4D5-6E7F-8901-2345-6789ABCDEF01} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{B3C4D5E6-7F80-9012-3456-789ABCDEF012} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{C4D5E6F7-8091-2345-6789-ABCDEF012345} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{D5E6F789-0123-4567-89AB-CDEF01234567} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{E6F78901-2345-6789-ABCD-EF0123456789} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{F7890123-4567-89AB-CDEF-0123456789AB} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{94540898-5E2E-48D3-8591-A971B7495BD8} = {E6F78901-2345-6789-ABCD-EF0123456789}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {E83A7CED-28C5-4597-8180-BDBDD6B27808}
