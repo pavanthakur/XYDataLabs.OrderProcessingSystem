@@ -9,15 +9,15 @@ The Order Processing System workspace has been comprehensively cleaned up and or
 ### **🔧 PowerShell Scripts (ESSENTIAL ONLY)**
 ```
 ✅ start-docker.ps1      - Primary Docker automation with Enterprise Mode
-✅ set-local-env.ps1     - Environment setup for non-Docker development
 ```
 
-**🗑️ REMOVED (5 redundant scripts):**
+**🗑️ REMOVED (6 redundant scripts):**
 - ❌ `manage-database.ps1` - Original version, superseded
 - ❌ `manage-database-fixed.ps1` - Intermediate version
 - ❌ `manage-database-enterprise.ps1` - Functionality moved to start-docker.ps1
 - ❌ `extract-ports.ps1` - Obsolete, ports managed via sharedsettings
 - ❌ `hostname-solution.ps1` - Empty file
+- ❌ `set-local-env.ps1` - Environment setup simplified in Visual Studio profiles
 
 ### **📚 Documentation (CORE REFERENCES)**
 ```

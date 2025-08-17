@@ -3,18 +3,18 @@
 # Purpose: Production-optimized settings, security, performance, monitoring
 
 services:
-  api:
-    image: xydatalabs-orderprocessingsystem-api
+  api-prod-http:
+    image: xydatalabs-orderprocessingsystem-api-http:prod
     build:
       context: .
       dockerfile: XYDataLabs.OrderProcessingSystem.API/Dockerfile
       target: final
     ports:
-      - "${API_HTTP_PORT}:${API_HTTP_PORT}"
+      - "5040:5040"
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - ASPNETCORE_URLS=http://+:${API_HTTP_PORT}
-      - ASPNETCORE_HTTP_PORTS=${API_HTTP_PORT}
+      - ASPNETCORE_URLS=http://+:5040
+      - ASPNETCORE_HTTP_PORTS=5040
       - USE_HTTPS=false
       - Database__ConnectionString=Server=sql-orderprocessing-prod.database.windows.net;Database=OrderProcessingDB;Trusted_Connection=False;MultipleActiveResultSets=true;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;
       - Logging__LogLevel__Default=Warning
@@ -32,24 +32,24 @@ services:
     mem_limit: 1g
     cpus: 1.0
     healthcheck:
-      test: curl --fail http://localhost:${API_HTTP_PORT}/swagger --insecure || exit 1
+      test: curl --fail http://localhost:5040/swagger --insecure || exit 1
       interval: 60s
       timeout: 10s
       retries: 3
       start_period: 60s
 
-  api-https:
-    image: xydatalabs-orderprocessingsystem-api
+  api-prod-https:
+    image: xydatalabs-orderprocessingsystem-api-https:prod
     build:
       context: .
       dockerfile: XYDataLabs.OrderProcessingSystem.API/Dockerfile
       target: final
     ports:
-      - "${API_HTTPS_PORT}:${API_HTTPS_PORT}"
+      - "5041:5041"
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - ASPNETCORE_URLS=https://+:${API_HTTPS_PORT}
-      - ASPNETCORE_HTTPS_PORTS=${API_HTTPS_PORT}
+      - ASPNETCORE_URLS=https://+:5041
+      - ASPNETCORE_HTTPS_PORTS=5041
       - ASPNETCORE_Kestrel__Certificates__Default__Password=P@ss100
       - Database__ConnectionString=Server=sql-orderprocessing-prod.database.windows.net;Database=OrderProcessingDB;Trusted_Connection=False;MultipleActiveResultSets=true;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;
       - Logging__LogLevel__Default=Warning
@@ -67,25 +67,25 @@ services:
     mem_limit: 1g
     cpus: 1.0
     healthcheck:
-      test: curl --fail https://localhost:${API_HTTPS_PORT}/swagger --insecure || exit 1
+      test: curl --fail https://localhost:5041/swagger --insecure || exit 1
       interval: 60s
       timeout: 10s
       retries: 3
       start_period: 60s
 
-  ui:
-    image: xydatalabs-orderprocessingsystem-ui
+  ui-prod-http:
+    image: xydatalabs-orderprocessingsystem-ui-http:prod
     build:
       context: .
       dockerfile: XYDataLabs.OrderProcessingSystem.UI/Dockerfile
       target: final
     ports:
-      - "${UI_HTTP_PORT}:${UI_HTTP_PORT}"
+      - "5042:5042"
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - ASPNETCORE_URLS=http://+:${UI_HTTP_PORT}
-      - ASPNETCORE_HTTP_PORTS=${UI_HTTP_PORT}
-      - ApiSettings__BaseUrl=http://localhost:${API_HTTP_PORT}
+      - ASPNETCORE_URLS=http://+:5042
+      - ASPNETCORE_HTTP_PORTS=5042
+      - ApiSettings__BaseUrl=http://localhost:5040
       - USE_HTTPS=false
       - Logging__LogLevel__Default=Warning
       - Logging__LogLevel__Microsoft=Warning
@@ -97,32 +97,32 @@ services:
       - xy-prod-network
     profiles: ["http", "all", "ui"]
     depends_on:
-      api:
+      api-prod-http:
         condition: service_healthy
     restart: unless-stopped
     mem_limit: 512m
     cpus: 0.5
     healthcheck:
-      test: curl --fail http://localhost:${UI_HTTP_PORT} --insecure || exit 1
+      test: curl --fail http://localhost:5042 --insecure || exit 1
       interval: 60s
       timeout: 10s
       retries: 3
       start_period: 60s
 
-  ui-https:
-    image: xydatalabs-orderprocessingsystem-ui
+  ui-prod-https:
+    image: xydatalabs-orderprocessingsystem-ui-https:prod
     build:
       context: .
       dockerfile: XYDataLabs.OrderProcessingSystem.UI/Dockerfile
       target: final
     ports:
-      - "${UI_HTTPS_PORT}:${UI_HTTPS_PORT}"
+      - "5043:5043"
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - ASPNETCORE_URLS=https://+:${UI_HTTPS_PORT}
-      - ASPNETCORE_HTTPS_PORTS=${UI_HTTPS_PORT}
+      - ASPNETCORE_URLS=https://+:5043
+      - ASPNETCORE_HTTPS_PORTS=5043
       - ASPNETCORE_Kestrel__Certificates__Default__Password=P@ss100
-      - ApiSettings__BaseUrl=https://localhost:${API_HTTPS_PORT}
+      - ApiSettings__BaseUrl=https://localhost:5041
       - Logging__LogLevel__Default=Warning
       - Logging__LogLevel__Microsoft=Warning
       - Logging__LogLevel__System=Error
@@ -134,13 +134,13 @@ services:
       - xy-prod-network
     profiles: ["https", "all", "ui-https"]
     depends_on:
-      api-https:
+      api-prod-https:
         condition: service_healthy
     restart: unless-stopped
     mem_limit: 512m
     cpus: 0.5
     healthcheck:
-      test: curl --fail https://localhost:${UI_HTTPS_PORT} --insecure || exit 1
+      test: curl --fail https://localhost:5043 --insecure || exit 1
       interval: 60s
       timeout: 10s
       retries: 3

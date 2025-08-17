@@ -35,7 +35,7 @@ Your Docker startup script has been enhanced with comprehensive enterprise featu
 ```powershell
 # Your existing commands work exactly as before
 .\start-docker.ps1 -Environment dev -Profile https
-.\start-docker.ps1 -Environment uat -Profile all -CleanCache
+.\start-docker.ps1 -Environment uat -Profile all
 .\start-docker.ps1 -Environment prod -Profile https -Down
 ```
 
@@ -51,7 +51,7 @@ Your Docker startup script has been enhanced with comprehensive enterprise featu
 .\start-docker.ps1 -Environment uat -Profile https -EnterpriseMode -ConservativeClean
 
 # Preserve persistent data during cleanup
-.\start-docker.ps1 -Environment dev -Profile all -EnterpriseMode -CleanCache -PreservePersistentData
+.\start-docker.ps1 -Environment dev -Profile all -EnterpriseMode -PreservePersistentData
 ```
 
 ## New Enterprise Parameters
@@ -72,7 +72,6 @@ Your Docker startup script has been enhanced with comprehensive enterprise featu
 | `-Environment` | String | `dev` | Target environment: `dev`, `uat`, `prod` |
 | `-Profile` | String | `http` | Service profile: `http`, `https`, `all` |
 | `-EnterpriseMode` | Switch | `false` | Enables enterprise features and logging |
-| `-CleanCache` | Switch | `false` | Performs environment-specific cleanup |
 | `-ConservativeClean` | Switch | `false` | Safe cleanup for UAT (24h+ containers only) |
 | `-PreservePersistentData` | Switch | `false` | Protects persistent volumes during cleanup |
 | `-BackupFirst` | Switch | `false` | Forces backup before any operations |
@@ -97,10 +96,10 @@ Your Docker startup script has been enhanced with comprehensive enterprise featu
 .\start-docker.ps1 -Environment dev -Profile https -EnterpriseMode
 
 # Development with aggressive cleanup
-.\start-docker.ps1 -Environment dev -Profile https -EnterpriseMode -CleanCache
+.\start-docker.ps1 -Environment dev -Profile https -EnterpriseMode
 
 # Safe development cleanup (preserves data)
-.\start-docker.ps1 -Environment dev -Profile https -EnterpriseMode -CleanCache -PreservePersistentData
+.\start-docker.ps1 -Environment dev -Profile https -EnterpriseMode -PreservePersistentData
 ```
 
 #### UAT Environment Commands
@@ -109,7 +108,7 @@ Your Docker startup script has been enhanced with comprehensive enterprise featu
 .\start-docker.ps1 -Environment uat -Profile https -EnterpriseMode -ConservativeClean
 
 # UAT with full cleanup (for fresh testing)
-.\start-docker.ps1 -Environment uat -Profile https -EnterpriseMode -CleanCache
+.\start-docker.ps1 -Environment uat -Profile https -EnterpriseMode
 
 # UAT startup (automatic backup included)
 .\start-docker.ps1 -Environment uat -Profile https -EnterpriseMode
@@ -121,7 +120,7 @@ Your Docker startup script has been enhanced with comprehensive enterprise featu
 .\start-docker.ps1 -Environment prod -Profile https -EnterpriseMode -BackupFirst
 
 # Production with minimal cleanup only
-.\start-docker.ps1 -Environment prod -Profile https -EnterpriseMode -CleanCache
+.\start-docker.ps1 -Environment prod -Profile https -EnterpriseMode
 
 # Production startup (automatic backup included)
 .\start-docker.ps1 -Environment prod -Profile https -EnterpriseMode
@@ -211,7 +210,7 @@ docker network inspect xy-prod-network --format "{{json .Labels}}"
 ### Development Environment
 ```powershell
 # Standard aggressive cleanup
-.\start-docker.ps1 -Environment dev -Profile https -EnterpriseMode -CleanCache
+.\start-docker.ps1 -Environment dev -Profile https -EnterpriseMode
 
 # Features:
 # ✅ Aggressive cleanup available
@@ -275,7 +274,7 @@ docker network inspect xy-prod-network --format "{{json .Labels}}"
 ### Volume Protection
 ```powershell
 # Persistent data protection:
-.\start-docker.ps1 -Environment prod -Profile all -EnterpriseMode -PreservePersistentData -CleanCache
+.\start-docker.ps1 -Environment prod -Profile all -EnterpriseMode -PreservePersistentData
 
 # Protects:
 # ✅ Database volumes
@@ -377,7 +376,7 @@ docker system df
 ## Best Practices
 
 ### Development Environment
-- Use `-EnterpriseMode -CleanCache` for clean development iterations
+- Use `-EnterpriseMode` for clean development iterations
 - Enable aggressive cleanup for rapid prototyping
 - No backup requirements for faster development cycles
 
@@ -406,7 +405,7 @@ docker system df
 .\start-docker.ps1 -Environment prod -Profile https -EnterpriseMode -BackupFirst
 
 # Safe Cleanup with Data Protection
-.\start-docker.ps1 -Environment dev -Profile https -EnterpriseMode -CleanCache -PreservePersistentData
+.\start-docker.ps1 -Environment dev -Profile https -EnterpriseMode -PreservePersistentData
 
 # Stop Services
 .\start-docker.ps1 -Environment any -Profile any -Down
@@ -426,8 +425,8 @@ docker network inspect xy-prod-network --format "{{json .Labels}}"
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | Select-String "orderprocessing"
 
 # Check for application errors
-docker logs testappxy_orderprocessingsystem-api-https-1 | Select-String -Pattern "(ERROR|Exception|Failed)"
-docker logs testappxy_orderprocessingsystem-ui-https-1 | Select-String -Pattern "(ERROR|Exception|Failed)"
+docker logs api-dev-https-1 | Select-String -Pattern "(ERROR|Exception|Failed)"
+docker logs ui-dev-https-1 | Select-String -Pattern "(ERROR|Exception|Failed)"
 
 # View enterprise logs
 Get-Content logs/docker-startup-$(Get-Date -Format 'yyyy-MM-dd').log -Tail 20
@@ -460,7 +459,7 @@ dotnet ef database update --verbose
 # Solution: Fixed in current version - network cleanup now handles null arrays properly
 
 # Issue: "Image already exists" error
-# Solution: Use -CleanCache flag to remove application images before rebuild
+# Solution: Use flag to remove application images before rebuild
 
 # Issue: Network not found error
 # Solution: Enterprise mode automatically creates networks with proper labels

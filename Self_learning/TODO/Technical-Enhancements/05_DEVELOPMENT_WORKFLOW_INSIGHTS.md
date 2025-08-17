@@ -94,13 +94,13 @@ using (var scope = app.Services.CreateScope())
 
 ```powershell
 # HTTP Profile
-.\start-docker.ps1 -Environment dev -Profile http -CleanCache
+.\start-docker.ps1 -Environment dev -Profile http
 # ✅ Result: OrderProcessingSystem_Dev database created, 120 customers seeded
 # ✅ API: http://localhost:5020/swagger - responding correctly
 # ✅ UI: http://localhost:5022 - accessible
 
 # HTTPS Profile  
-.\start-docker.ps1 -Environment dev -Profile https -CleanCache
+.\start-docker.ps1 -Environment dev -Profile https
 # ✅ Result: SSL working, same database, ports 5021/5023
 # ✅ F5 debugging in Visual Studio works perfectly
 ```
@@ -109,7 +109,7 @@ using (var scope = app.Services.CreateScope())
 
 ```powershell
 # HTTP Profile
-.\start-docker.ps1 -Environment uat -Profile http -CleanCache
+.\start-docker.ps1 -Environment uat -Profile http
 # ✅ Result: OrderProcessingSystem_UAT database created, 120 customers seeded
 # ✅ API: http://localhost:5030/swagger - responding correctly
 # ✅ UI: http://localhost:5032 - accessible
@@ -119,7 +119,7 @@ using (var scope = app.Services.CreateScope())
 
 ```powershell
 # HTTP Profile
-.\start-docker.ps1 -Environment prod -Profile http -CleanCache  
+.\start-docker.ps1 -Environment prod -Profile http  
 # ✅ Result: OrderProcessingSystem_Prod database created, 120 customers seeded
 # ✅ API: http://localhost:5040/swagger - responding correctly
 # ✅ UI: http://localhost:5042 - accessible
@@ -162,12 +162,12 @@ All Visual Studio docker launch profiles now work seamlessly:
 
 ### **Before Fix**
 - ❌ Visual Studio F5 debugging failed
-- ❌ Docker startup from CleanCache failed  
+- ❌ Docker startup from simplified cache management failed  
 - ❌ Database creation failed
 - ❌ OpenPay service initialization failed
 
 ### **After Fix** 
-- ✅ **100% Success Rate**: All environments start cleanly from CleanCache
+- ✅ **100% Success Rate**: All environments start cleanly from simplified cache management
 - ✅ **100% F5 Debugging**: All Visual Studio docker profiles work  
 - ✅ **100% Database Creation**: All databases auto-created with migrations
 - ✅ **100% Service Integration**: OpenPay and all services initialize correctly
@@ -200,7 +200,7 @@ All Visual Studio docker launch profiles now work seamlessly:
 ### **Troubleshooting** (Rarely Needed Now)
 ```powershell
 # Nuclear option if anything goes wrong
-.\start-docker.ps1 -Environment dev -Profile http -CleanCache
+.\start-docker.ps1 -Environment dev -Profile http
 # This will rebuild everything from scratch and work 100% of the time
 ```
 

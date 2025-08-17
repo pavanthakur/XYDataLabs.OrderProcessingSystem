@@ -1,51 +1,31 @@
 ﻿{
   "profiles": {
     "http": {
-      "commandName": "Executable",
-      "executablePath": "powershell.exe",
-      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\set-local-env.ps1 -ProjectType UI -Profile http; Start-Sleep 2; cd '.\\XYDataLabs.OrderProcessingSystem.UI'; dotnet run --launch-profile http-direct\"",
-      "workingDirectory": "$(SolutionDir)",
-      "launchBrowser": true,
-      "launchUrl": "http://localhost:5012",
-      "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
-      }
-    },
-    "https": {
-      "commandName": "Executable",
-      "executablePath": "powershell.exe",
-      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\set-local-env.ps1 -ProjectType UI -Profile https; Start-Sleep 2; cd '.\\XYDataLabs.OrderProcessingSystem.UI'; dotnet run --launch-profile https-direct\"",
-      "workingDirectory": "$(SolutionDir)",
-      "launchBrowser": true,
-      "launchUrl": "https://localhost:5013",
-      "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
-      }
-    },
-    "http-direct": {
       "commandName": "Project",
-      "launchBrowser": false,
+      "launchBrowser": true,
+      "launchUrl": "",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "USE_HTTPS": "false",
-        "SHAREDSETTINGS_PATH": "Resources/Configuration/sharedsettings.local.json"
+        "SHAREDSETTINGS_PATH": "sharedsettings.local.json"
       },
       "applicationUrl": "http://localhost:5012"
     },
-    "https-direct": {
+    "https": {
       "commandName": "Project",
-      "launchBrowser": false,
+      "launchBrowser": true,
+      "launchUrl": "",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "USE_HTTPS": "true",
-        "SHAREDSETTINGS_PATH": "Resources/Configuration/sharedsettings.local.json"
+        "SHAREDSETTINGS_PATH": "sharedsettings.local.json"
       },
       "applicationUrl": "https://localhost:5013"
     },
     "docker-dev-http": {
       "commandName": "Executable",
       "executablePath": "powershell.exe",
-      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\start-docker.ps1 -Environment dev -Profile http -CleanCache\"",
+      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\start-docker.ps1 -Environment dev -Profile http\"",
       "workingDirectory": "$(SolutionDir)",
       "launchBrowser": true,
       "launchUrl": "http://localhost:5022",
@@ -56,7 +36,7 @@
     "docker-dev-https": {
       "commandName": "Executable",
       "executablePath": "powershell.exe",
-      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\start-docker.ps1 -Environment dev -Profile https -CleanCache\"",
+      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\start-docker.ps1 -Environment dev -Profile https\"",
       "workingDirectory": "$(SolutionDir)",
       "launchBrowser": true,
       "launchUrl": "https://localhost:5023",
@@ -67,7 +47,7 @@
     "docker-uat-http": {
       "commandName": "Executable",
       "executablePath": "powershell.exe",
-      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\start-docker.ps1 -Environment uat -Profile http -CleanCache\"",
+      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\start-docker.ps1 -Environment uat -Profile http\"",
       "workingDirectory": "$(SolutionDir)",
       "launchBrowser": true,
       "launchUrl": "http://localhost:5032",
@@ -78,7 +58,7 @@
     "docker-uat-https": {
       "commandName": "Executable",
       "executablePath": "powershell.exe",
-      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\start-docker.ps1 -Environment uat -Profile https -CleanCache\"",
+      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\start-docker.ps1 -Environment uat -Profile https\"",
       "workingDirectory": "$(SolutionDir)",
       "launchBrowser": true,
       "launchUrl": "https://localhost:5033",
@@ -89,7 +69,7 @@
     "docker-prod-http": {
       "commandName": "Executable",
       "executablePath": "powershell.exe",
-      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\start-docker.ps1 -Environment prod -Profile http -CleanCache\"",
+      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\start-docker.ps1 -Environment prod -Profile http\"",
       "workingDirectory": "$(SolutionDir)",
       "launchBrowser": true,
       "launchUrl": "http://localhost:5042",
@@ -100,7 +80,7 @@
     "docker-prod-https": {
       "commandName": "Executable",
       "executablePath": "powershell.exe",
-      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\start-docker.ps1 -Environment prod -Profile https -CleanCache\"",
+      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\start-docker.ps1 -Environment prod -Profile https\"",
       "workingDirectory": "$(SolutionDir)",
       "launchBrowser": true,
       "launchUrl": "https://localhost:5043",

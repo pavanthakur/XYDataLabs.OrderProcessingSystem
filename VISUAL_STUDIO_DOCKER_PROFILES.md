@@ -99,7 +99,7 @@ Both Docker and Non-Docker profiles use a **two-stage architecture** to ensure p
 **Features:**
 - **Databases**: Environment-specific (`OrderProcessingSystem_Dev`, `OrderProcessingSystem_UAT`, `OrderProcessingSystem_Prod`)
 - **Configuration**: Uses environment-specific `sharedsettings.{env}.json`
-- **Environment Setup**: Automatic via `start-docker.ps1 -Environment {env} -Profile {profile} -CleanCache`
+- **Environment Setup**: Automatic via `start-docker.ps1 -Environment {env} -Profile {profile}`
 - **Container Debugging**: Attach to process debugging available
 
 ## How to Use
@@ -123,7 +123,7 @@ Both Docker and Non-Docker profiles use a **two-stage architecture** to ensure p
 
 Each Docker profile includes:
 - **Executable**: `powershell.exe`
-- **Arguments**: `.\start-docker.ps1 -Environment {env} -Profile {profile} -CleanCache`
+- **Arguments**: `.\start-docker.ps1 -Environment {env} -Profile {profile}`
 - **Working Directory**: Solution root directory
 - **Auto Browser**: Opens to correct URL with proper port
 - **Clean Cache**: Ensures fresh container startup
@@ -281,7 +281,7 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ### Custom Parameters
 To add custom parameters (like `-EnterpriseMode`), modify the `commandLineArgs` in launchSettings.json:
 ```json
-"commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\start-docker.ps1 -Environment dev -Profile http -CleanCache -EnterpriseMode\""
+"commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\start-docker.ps1 -Environment dev -Profile http -EnterpriseMode\""
 ```
 
 ### Debugging

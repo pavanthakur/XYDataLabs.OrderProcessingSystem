@@ -78,13 +78,10 @@ The manual script is **no longer needed** because:
 
 ### **Development Workflow**
 ```powershell
-# 1. Start containerized database (optional)
-.\manage-database-enterprise.ps1 -Action start -Environment dev
-
-# 2. Start application (EF handles the rest)
+# Start application environment (database services included)
 .\start-docker.ps1 -Environment dev -Profile http
 
-# 3. EF automatically:
+# EF automatically:
 #    - Creates database if missing
 #    - Applies pending migrations
 #    - Seeds initial data

@@ -20,14 +20,14 @@ Your current setup uses **hardcoded IP addresses** (192.168.1.x) in connection s
 
 #### 1. Start Database Container
 ```powershell
-# Start the database services
-.\manage-database.ps1 -Action start
+# Start the database services via Docker Compose
+.\start-docker.ps1 -Environment dev -Profile http
 
-# Check status
-.\manage-database.ps1 -Action status
+# Check container status
+docker ps
 
-# View logs
-.\manage-database.ps1 -Action logs
+# View container logs
+docker logs <container_name>
 ```
 
 #### 2. Updated Connection Strings
@@ -49,13 +49,11 @@ Your current setup uses **hardcoded IP addresses** (192.168.1.x) in connection s
 ### **Usage Workflow:**
 
 ```powershell
-# 1. Start database (one-time setup)
-.\manage-database.ps1 -Action start
-
-# 2. Start your application environment
+# Start your application environment with database services
 .\start-docker.ps1 -Environment dev -Profile http
 
-# 3. Database is automatically accessible via hostname 'sql-server'
+# Database is automatically accessible via hostname 'sql-server'
+# No separate database management script needed
 ```
 
 ---
@@ -187,16 +185,11 @@ services:
 ## 🎯 **Quick Start Commands**
 
 ```powershell
-# 1. Start database container
-.\manage-database.ps1 -Action start
-
-# 2. Wait for database to be ready (automatically handled)
-
-# 3. Start your application
+# Start your application with integrated database services
 .\start-docker.ps1 -Environment dev -Profile http
 
-# 4. Verify connectivity
-# Database: http://localhost:1433 (SQL Server)
+# Verify connectivity
+# Database: localhost:1433 (SQL Server via Docker)
 # API: http://localhost:5020/swagger
 # UI: http://localhost:5022
 ```
@@ -219,9 +212,9 @@ services:
 ## 📝 **Migration Steps**
 
 1. **Backup Current Database** (if exists)
-2. **Start Database Container**: `.\manage-database.ps1 -Action start`
+2. **Start Application Environment**: `.\start-docker.ps1 -Environment dev -Profile http`
 3. **Update Connection Strings** (already done in your config files)
-4. **Test Application**: `.\start-docker.ps1 -Environment dev -Profile http`
+4. **Test Application**: Database services start automatically
 5. **Verify Database Connectivity** in application logs
 6. **Update Documentation** for team members
 

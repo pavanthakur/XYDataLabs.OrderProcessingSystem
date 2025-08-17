@@ -1,0 +1,50 @@
+{
+  "ConnectionStrings": {
+    "OrderProcessingSystemDbConnection": "Server=(localdb)\\mssqllocaldb;Database=OrderProcessingSystem_Local;Trusted_Connection=true;MultipleActiveResultSets=true;"
+  },
+  "ApiSettings": {
+    "API": {
+      "http": {
+        "BaseUrl": "http://localhost:5010",
+        "Port": 5010,
+        "HttpsEnabled": false
+      },
+      "https": {
+        "BaseUrl": "https://localhost:5011",
+        "Port": 5011,
+        "HttpsEnabled": true,
+        "CertPath": "/https/aspnetapp.pfx",
+        "CertPassword": "password"
+      }
+    },
+    "UI": {
+      "http": {
+        "BaseUrl": "http://localhost:5012",
+        "Port": 5012,
+        "HttpsEnabled": false
+      },
+      "https": {
+        "BaseUrl": "https://localhost:5013",
+        "Port": 5013,
+        "HttpsEnabled": true,
+        "CertPath": "/https/aspnetapp.pfx",
+        "CertPassword": "password"
+      }
+    }
+  },
+  "OpenPay": {
+    "MerchantId": "sk_3433941e467c4875b178ce26348b0fac",
+    "PrivateKey": "moiep6umtcnanql3jrxp",
+    "DeviceSessionId": "kR1MiQhz2otdIuUlQkbEyitIqVMiI16f",
+    "IsProduction": false,
+    "RedirectUrl": "https://localhost:5013/payment/callback"
+  },
+  "Cors": {
+    "AllowedOrigins": [
+      "http://localhost:5010",
+      "https://localhost:5011", 
+      "http://localhost:5012",
+      "https://localhost:5013"
+    ]
+  }
+}

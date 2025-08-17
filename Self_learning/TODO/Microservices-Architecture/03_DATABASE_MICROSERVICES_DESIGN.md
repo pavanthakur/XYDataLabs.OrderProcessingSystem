@@ -29,11 +29,11 @@ This document outlines the **proper enterprise solution** for eliminating IP dep
 
 #### **1.1 Start Database Services**
 ```powershell
-# Start the enterprise database stack
-.\manage-database-enterprise.ps1 -Action start -Environment dev
+# Start the application environment with integrated database services
+.\start-docker.ps1 -Environment dev -Profile http
 
 # Verify services are running
-.\manage-database-enterprise.ps1 -Action status
+docker ps
 ```
 
 #### **1.2 Connection Configuration**
@@ -186,26 +186,23 @@ public class DatabaseHealthCheck : IHealthCheck
 
 ### **Development Workflow**
 ```powershell
-# 1. Start database infrastructure
-.\manage-database-enterprise.ps1 -Action start -Environment dev
-
-# 2. Start application services
+# Start application services (database services included)
 .\start-docker.ps1 -Environment dev -Profile http
 
-# 3. Verify connectivity
+# Verify connectivity
 # Database accessible at: sql-server:1433 (from containers) or localhost:1433 (from host)
 ```
 
 ### **Environment Management**
 ```powershell
 # Development Environment
-.\manage-database-enterprise.ps1 -Action start -Environment dev
+.\start-docker.ps1 -Environment dev -Profile http
 
 # UAT Environment  
-.\manage-database-enterprise.ps1 -Action start -Environment uat
+.\start-docker.ps1 -Environment uat -Profile http
 
 # Production Environment
-.\manage-database-enterprise.ps1 -Action start -Environment prod
+.\start-docker.ps1 -Environment prod -Profile http
 ```
 
 ### **Backup and Recovery**

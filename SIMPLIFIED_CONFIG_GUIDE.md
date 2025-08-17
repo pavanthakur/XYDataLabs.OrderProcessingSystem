@@ -69,9 +69,6 @@ Each `sharedsettings.{env}.json` now contains:
 
 # With enterprise features
 .\start-docker.ps1 -Environment dev -Profile https -EnterpriseMode
-
-# With cache cleanup
-.\start-docker.ps1 -Environment dev -Profile https -EnterpriseMode -CleanCache
 ```
 
 ### **UAT**

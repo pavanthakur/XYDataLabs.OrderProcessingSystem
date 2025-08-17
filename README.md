@@ -34,7 +34,7 @@ Q:\GIT\TestAppXY_OrderProcessingSystem> dotnet dev-certs https --trust
 .\start-docker.ps1 -Environment uat -Profile https
 
 # Production environment (ports 5040-5043)
-.\start-docker.ps1 -Environment prod -Profile https -CleanCache
+.\start-docker.ps1 -Environment prod -Profile https
 ```
 
 ### **Option 3: Enterprise Docker Mode**
@@ -83,7 +83,7 @@ Q:\GIT\TestAppXY_OrderProcessingSystem> dotnet dev-certs https --trust
 2. **For API debugging**:
    - Debug → Attach to Process
    - Connection type: Docker (Linux Container)
-   - Container target: testappxy_orderprocessingsystem-api-1
+   - Container target: api-dev-http-1 (or api-dev-https-1 for HTTPS)
    - Attach To: XYDataLabs.OrderProcessingSystem.API
    - Code type: Managed (.NET Core for Unix) code
 

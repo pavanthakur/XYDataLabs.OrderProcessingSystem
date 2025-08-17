@@ -12,13 +12,7 @@ param(
     [string]$SharedSettingsPath = "",
     
     [Parameter(Mandatory=$false)]
-    [string]$EnvFilePath = ".env",
-    
-    [Parameter(Mandatory=$false)]
     [switch]$Down,
-    
-    [Parameter(Mandatory=$false)]
-    [switch]$CleanCache,
     
     [Parameter(Mandatory=$false)]
     [switch]$EnterpriseMode,
@@ -30,7 +24,10 @@ param(
     [switch]$PreservePersistentData,
     
     [Parameter(Mandatory=$false)]
-    [switch]$BackupFirst
+    [switch]$BackupFirst,
+    
+    [Parameter(Mandatory=$false)]
+    [switch]$LegacyBuild  # For development speed when needed (uses existing images)
 )
 
 # Enterprise configuration for environment-specific settings
@@ -74,6 +71,42 @@ function Write-ColoredOutput {
             New-Item -Type Directory -Path "logs" -Force | Out-Null 
         }
         Add-Content -Path $logFile -Value $logEntry
+    }
+}
+
+function Show-ImageStatus {
+    param([string]$Environment)
+    
+    Write-ColoredOutput "Current image status:" "Cyan" "INFO"
+    
+    # Check for environment and protocol-specific tagged images
+    $taggedImages = @(
+        "xydatalabs-orderprocessingsystem-api-http:$Environment", 
+        "xydatalabs-orderprocessingsystem-api-https:$Environment",
+        "xydatalabs-orderprocessingsystem-ui-http:$Environment", 
+        "xydatalabs-orderprocessingsystem-ui-https:$Environment"
+    )
+    foreach ($image in $taggedImages) {
+        $existingImage = docker images -q $image 2>$null
+        if ($existingImage) {
+            Write-ColoredOutput "  Found: $image" "Green" "INFO"
+        } else {
+            Write-ColoredOutput "  Missing: $image" "Yellow" "INFO"
+        }
+    }
+    
+    # Check for untagged images (legacy) and old tagged images
+    $legacyImages = @(
+        "xydatalabs-orderprocessingsystem-api", 
+        "xydatalabs-orderprocessingsystem-ui",
+        "xydatalabs-orderprocessingsystem-api:$Environment", 
+        "xydatalabs-orderprocessingsystem-ui:$Environment"
+    )
+    foreach ($image in $legacyImages) {
+        $existingImage = docker images -q $image 2>$null
+        if ($existingImage) {
+            Write-ColoredOutput "  Legacy image: $image" "Yellow" "INFO"
+        }
     }
 }
 
@@ -144,111 +177,6 @@ function Ensure-DockerNetwork {
     catch {
         Write-ColoredOutput "Warning: Could not verify/create network '$NetworkName': $($_.Exception.Message)" "Yellow"
         Write-ColoredOutput "Continuing with startup - network may be created automatically..." "Gray"
-    }
-}
-
-function Clean-DockerCache {
-    param(
-        [bool]$Force = $false,
-        [string]$Environment = "dev",
-        [bool]$Conservative = $false,
-        [bool]$PreservePersistent = $true
-    )
-    
-    if ($Force) {
-        $config = if ($EnterpriseMode -and $EnterpriseConfig.ContainsKey($Environment)) { $EnterpriseConfig[$Environment] } else { @{ CleanupPolicy = "standard" } }
-        
-        Write-ColoredOutput "Performing Docker cache cleanup for $Environment environment..." "Yellow" "INFO"
-        Write-ColoredOutput "Cleanup policy: $($config.CleanupPolicy)" "Gray" "INFO"
-        
-        if ($EnterpriseMode -and $Conservative) {
-            Write-ColoredOutput "Using conservative enterprise cleanup mode" "Cyan" "INFO"
-        }
-        
-        try {
-            # Enterprise-aware cleanup
-            if ($EnterpriseMode -and $config.CleanupPolicy -eq "aggressive" -and $Environment -eq "dev") {
-                Write-ColoredOutput "Development environment: Full cleanup" "Yellow" "INFO"
-                if ($PreservePersistent) {
-                    # Clean but preserve persistent volumes and core networks
-                    docker container prune -f --filter "label=environment=$Environment"
-                    docker image prune -f --filter "dangling=true"
-                    
-                    # Remove specific application images to prevent "already exists" errors
-                    $appImages = @("xydatalabs-orderprocessingsystem-api", "xydatalabs-orderprocessingsystem-ui")
-                    foreach ($image in $appImages) {
-                        $existingImage = docker images -q $image 2>$null
-                        if ($existingImage) {
-                            Write-ColoredOutput "Removing existing application image: $image" "Yellow" "INFO"
-                            docker rmi $image -f 2>$null
-                        }
-                    }
-                    
-                    # Only prune networks that are NOT our core networks (xy-*-network)
-                    $coreNetworks = @("xy-dev-network", "xy-uat-network", "xy-prod-network", "xy-database-network")
-                    $allNetworks = docker network ls --filter "label=environment=$Environment" --format "{{.Name}}"
-                    if ($allNetworks -and $allNetworks.Count -gt 0) {
-                        foreach ($network in $allNetworks) {
-                            if ($network -and $network -notin $coreNetworks) {
-                                Write-ColoredOutput "Pruning non-core network: $network" "Yellow" "INFO"
-                                docker network rm $network 2>$null
-                            }
-                        }
-                    } else {
-                        Write-ColoredOutput "No labeled networks found to prune for environment: $Environment" "Gray" "INFO"
-                    }
-                    docker builder prune -f
-                    Write-ColoredOutput "Aggressive cleanup completed (persistent data and core networks preserved)" "Green" "SUCCESS"
-                } else {
-                    # Full system cleanup
-                    $result = docker system prune -f --volumes --filter "label=environment=$Environment" 2>&1
-                    Write-ColoredOutput "Full aggressive cleanup completed" "Green" "SUCCESS"
-                }
-            }
-            elseif ($EnterpriseMode -and $config.CleanupPolicy -eq "conservative") {
-                Write-ColoredOutput "UAT environment: Conservative cleanup" "Yellow" "INFO"
-                # Only clean old containers and dangling images
-                docker container prune -f --filter "until=24h" --filter "label=environment=$Environment"
-                docker image prune -f --filter "dangling=true"
-                docker builder prune -f
-                Write-ColoredOutput "Conservative cleanup completed" "Green" "SUCCESS"
-            }
-            elseif ($EnterpriseMode -and $config.CleanupPolicy -eq "minimal") {
-                Write-ColoredOutput "Production environment: Minimal cleanup" "Yellow" "INFO"
-                # Only clean dangling images and build cache
-                docker image prune -f --filter "dangling=true"
-                docker builder prune -f
-                Write-ColoredOutput "Minimal cleanup completed (production safe)" "Green" "SUCCESS"
-            }
-            else {
-                # Standard cleanup for non-enterprise mode
-                Write-ColoredOutput "Standard cleanup mode" "Gray" "INFO"
-                
-                # Remove specific application images to prevent "already exists" errors
-                $appImages = @("xydatalabs-orderprocessingsystem-api", "xydatalabs-orderprocessingsystem-ui")
-                foreach ($image in $appImages) {
-                    $existingImage = docker images -q $image 2>$null
-                    if ($existingImage) {
-                        Write-ColoredOutput "Removing existing application image: $image" "Yellow" "INFO"
-                        docker rmi $image -f 2>$null
-                    }
-                }
-                
-                $result = docker system prune -f --volumes 2>&1
-                if ($LASTEXITCODE -eq 0) {
-                    Write-ColoredOutput "Docker cache cleanup completed" "Green" "SUCCESS"
-                    if ($result -and ($result -join "`n") -match "Total reclaimed space: (.+)") {
-                        Write-ColoredOutput "Space reclaimed: $($matches[1])" "Cyan" "INFO"
-                    }
-                }
-            }
-        }
-        catch {
-            Write-ColoredOutput "Warning: Cache cleanup failed: $($_.Exception.Message)" "Yellow" "WARNING"
-        }
-    } else {
-        $cleanupFlag = if ($EnterpriseMode) { "-CleanCache or -ConservativeClean" } else { "-CleanCache" }
-        Write-ColoredOutput "Add $cleanupFlag flag to perform Docker cache cleanup before starting" "Cyan" "INFO"
     }
 }
 
@@ -346,18 +274,6 @@ try {
         Write-ColoredOutput "" "White"
     }
     
-    # Clean Docker cache if requested with enterprise awareness
-    if ($CleanCache -or $ConservativeClean) {
-        $cleanupParams = @{
-            Force = $true
-            Environment = $Environment
-            Conservative = $ConservativeClean
-            PreservePersistent = $PreservePersistentData
-        }
-        Clean-DockerCache @cleanupParams
-        Write-ColoredOutput "" "White"
-    }
-    
     # Ensure required Docker network exists with enterprise configuration
     $networkName = if ($EnterpriseMode) { $EnterpriseConfig[$Environment].NetworkName } else { "xynetwork" }
     
@@ -397,42 +313,13 @@ try {
     Write-ColoredOutput "Extracting ports from $SharedSettingsPath..." "Gray"
     
     # Read and parse sharedsettings.json
+    # Validate sharedsettings file exists for configuration verification
     if (-not (Test-Path $SharedSettingsPath)) {
-        throw "SharedSettings file not found at: $SharedSettingsPath"
+        Write-ColoredOutput "Warning: SharedSettings file not found at: $SharedSettingsPath" "Yellow" "WARNING"
+        Write-ColoredOutput "Docker Compose will use ports defined in docker-compose.$Environment.yml" "Gray"
+    } else {
+        Write-ColoredOutput "SharedSettings file verified: $SharedSettingsPath" "Green"
     }
-    
-    $sharedSettings = Get-Content $SharedSettingsPath -Raw | ConvertFrom-Json
-    
-    # Extract port values
-    $apiHttpPort = $sharedSettings.ApiSettings.API.http.Port
-    $apiHttpsPort = $sharedSettings.ApiSettings.API.https.Port
-    $uiHttpPort = $sharedSettings.ApiSettings.UI.http.Port
-    $uiHttpsPort = $sharedSettings.ApiSettings.UI.https.Port
-    
-    # Validate ports
-    if (-not ($apiHttpPort -and $apiHttpsPort -and $uiHttpPort -and $uiHttpsPort)) {
-        throw "Failed to extract all required ports from sharedsettings.json"
-    }
-    
-    # Create .env content
-    $envContent = @"
-# Port configuration extracted from sharedsettings.json
-# Generated on $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
-# Environment: $Environment
-API_HTTP_PORT=$apiHttpPort
-API_HTTPS_PORT=$apiHttpsPort
-UI_HTTP_PORT=$uiHttpPort
-UI_HTTPS_PORT=$uiHttpsPort
-"@
-    
-    # Write to .env file
-    $envContent | Out-File -FilePath $EnvFilePath -Encoding utf8 -NoNewline
-    
-    Write-ColoredOutput "Updated $EnvFilePath with ports:" "Green"
-    Write-ColoredOutput "   API HTTP: $apiHttpPort" "White"
-    Write-ColoredOutput "   API HTTPS: $apiHttpsPort" "White"
-    Write-ColoredOutput "   UI HTTP: $uiHttpPort" "White"
-    Write-ColoredOutput "   UI HTTPS: $uiHttpsPort" "White"
     
     # Determine compose files to use - environment-specific only
     if (Test-Path "docker-compose.$Environment.yml") {
@@ -442,15 +329,165 @@ UI_HTTPS_PORT=$uiHttpsPort
         throw "Environment-specific compose file docker-compose.$Environment.yml not found. Available environments: dev, uat, prod"
     }
     
-    # Start Docker Compose with the specified environment and profile
-    $dockerCmd = "docker-compose $($composeFiles -join ' ') --profile $Profile up -d"
-    Write-ColoredOutput "Running: $dockerCmd" "Gray"
+    # Display port information from compose file (no .env generation needed)
+    switch ($Environment) {
+        "dev" {
+            Write-ColoredOutput "Development Environment Ports:" "Cyan"
+            Write-ColoredOutput "   API HTTP: 5020" "White"
+            Write-ColoredOutput "   API HTTPS: 5021" "White"
+            Write-ColoredOutput "   UI HTTP: 5022" "White"
+            Write-ColoredOutput "   UI HTTPS: 5023" "White"
+        }
+        "uat" {
+            Write-ColoredOutput "UAT Environment Ports:" "Cyan"
+            Write-ColoredOutput "   API HTTP: 5030" "White"
+            Write-ColoredOutput "   API HTTPS: 5031" "White"
+            Write-ColoredOutput "   UI HTTP: 5032" "White"
+            Write-ColoredOutput "   UI HTTPS: 5033" "White"
+        }
+        "prod" {
+            Write-ColoredOutput "Production Environment Ports:" "Cyan"
+            Write-ColoredOutput "   API HTTP: 5040" "White"
+            Write-ColoredOutput "   API HTTPS: 5041" "White"
+            Write-ColoredOutput "   UI HTTP: 5042" "White"
+            Write-ColoredOutput "   UI HTTPS: 5043" "White"
+        }
+    }
     
-    Invoke-Expression $dockerCmd
+    # Enterprise-grade Docker deployment with clean builds (Azure-ready)
+    if ($LegacyBuild) {
+        Write-ColoredOutput "Using legacy build mode (development speed)..." "Yellow" "WARNING"
+        Write-ColoredOutput "⚠️  Not recommended for UAT/Production environments" "Yellow" "WARNING"
+        
+        # Legacy mode: Use existing images if available
+        $dockerCmd = "docker-compose $($composeFiles -join ' ') --profile $Profile up -d"
+        Write-ColoredOutput "Running: $dockerCmd" "Gray"
+        
+        # Execute Docker Compose with enhanced error handling
+        $dockerOutput = Invoke-Expression $dockerCmd 2>&1
+    } else {
+        Write-ColoredOutput "Building fresh container images (Azure-style deployment)..." "Cyan" "INFO"
+        Write-ColoredOutput "🏢 Enterprise Mode: Ensuring reproducible, secure builds" "Green" "INFO"
+        
+        $buildCmd = "docker-compose $($composeFiles -join ' ') --profile $Profile build --no-cache"
+        Write-ColoredOutput "Running: $buildCmd" "Gray"
+        
+        # Execute clean build with enhanced error handling
+        $buildOutput = Invoke-Expression $buildCmd 2>&1
+        $buildOutputString = $buildOutput -join "`n"
+        
+        # Check build success
+        $buildSucceeded = $LASTEXITCODE -eq 0 -or $buildOutputString -match "Successfully built" -or $buildOutputString -match "naming to.*done"
+        
+        if (-not $buildSucceeded) {
+            Write-ColoredOutput "❌ Build failed. Check build output above." "Red" "ERROR"
+            throw "Docker build failed with exit code: $LASTEXITCODE"
+        }
+        
+        Write-ColoredOutput "✅ Fresh images built successfully (enterprise-ready)" "Green" "SUCCESS"
+        Write-ColoredOutput "Starting containers with fresh images..." "Cyan" "INFO"
+        
+        # Start containers with fresh images
+        $dockerCmd = "docker-compose $($composeFiles -join ' ') --profile $Profile up -d"
+        Write-ColoredOutput "Running: $dockerCmd" "Gray"
+        
+        # Execute Docker Compose with enhanced error handling
+        $dockerOutput = Invoke-Expression $dockerCmd 2>&1
+    }
     
-    if ($LASTEXITCODE -eq 0) {
+    # Check if this is a real error or just Docker build output going to stderr
+    $outputString = $dockerOutput -join "`n"
+    
+    # Enhanced success detection - look for key success indicators
+    $buildSucceeded = $outputString -match "Build succeeded\." -or $outputString -match "0 Error\(s\)"
+    $imagesCreated = $outputString -match "DONE.*done" -and $outputString -match "exporting.*done"
+    $imageTagging = $outputString -match "naming to.*$Environment.*done"
+    $containersRunning = $outputString -match "Container.*Running" -or $outputString -match "Container.*Healthy"
+    $containersStarted = $outputString -match "Started" -or $outputString -match "Recreated"
+    
+    # Real error is when exit code is non-zero AND we don't have success indicators
+    # Also consider it successful if containers are already running or healthy
+    $hasRealError = $LASTEXITCODE -ne 0 -and -not ($buildSucceeded -or ($imagesCreated -and $imageTagging) -or $containersRunning -or $containersStarted)
+    
+    if ($hasRealError) {
+        # Check for common image export errors
+        if ($outputString -match "already exists" -or $outputString -match "failed to solve.*already exists") {
+            Write-ColoredOutput "Image conflict detected. Attempting cleanup and retry..." "Yellow" "WARNING"
+            
+            # Show current image status
+            Show-ImageStatus -Environment $Environment
+            
+            # Remove conflicting images - only for current profile to preserve other protocol images
+            $targetServices = if ($Profile -eq "http") { @("api-http", "ui-http") } else { @("api-https", "ui-https") }
+            $taggedImages = @()
+            foreach ($service in $targetServices) {
+                $taggedImages += "xydatalabs-orderprocessingsystem-$service`:$Environment"
+            }
+            
+            $legacyImages = @(
+                "xydatalabs-orderprocessingsystem-api:$Environment", 
+                "xydatalabs-orderprocessingsystem-ui:$Environment",
+                "xydatalabs-orderprocessingsystem-api", 
+                "xydatalabs-orderprocessingsystem-ui"
+            )
+            
+            # Only remove images for the current profile being started
+            foreach ($image in $taggedImages) {
+                $existingImage = docker images -q $image 2>$null
+                if ($existingImage) {
+                    Write-ColoredOutput "Removing existing $Profile image: $image" "Yellow" "INFO"
+                    docker rmi $image -f 2>$null
+                } else {
+                    Write-ColoredOutput "Target $Profile image not found: $image" "Gray" "INFO"
+                }
+            }
+            
+            # Then, check for any legacy images (cleanup old naming convention)
+            foreach ($image in $legacyImages) {
+                $existingImage = docker images -q $image 2>$null
+                if ($existingImage) {
+                    Write-ColoredOutput "Removing legacy image: $image" "Yellow" "INFO"
+                    docker rmi $image -f 2>$null
+                } else {
+                    Write-ColoredOutput "Legacy image not found: $image (expected with new naming)" "Gray" "INFO"
+                }
+            }
+            
+            # Clear build cache
+            Write-ColoredOutput "Clearing Docker build cache..." "Yellow" "INFO"
+            docker builder prune -f 2>$null
+            
+            # Retry the command
+            Write-ColoredOutput "Retrying Docker Compose startup..." "Yellow" "INFO"
+            $dockerOutput = Invoke-Expression $dockerCmd 2>&1
+            
+            # Check retry result
+            if ($LASTEXITCODE -ne 0) {
+                Write-ColoredOutput "Docker Compose retry failed" "Red" "ERROR"
+                Write-ColoredOutput "Error output:" "Red" "ERROR"
+                $dockerOutput | ForEach-Object { Write-ColoredOutput "  $_" "Red" "ERROR" }
+                throw "Docker Compose failed to start after retry"
+            }
+        } else {
+            # Check initial command result for non-image conflict errors  
+            Write-ColoredOutput "Docker Compose failed to start" "Red" "ERROR"
+            Write-ColoredOutput "Error output:" "Red" "ERROR"
+            $dockerOutput | ForEach-Object { Write-ColoredOutput "  $_" "Red" "ERROR" }
+            throw "Docker Compose failed to start"
+        }
+    }
+    
+    # Success condition: Either exit code is 0 OR we have clear success indicators
+    $isSuccessful = $LASTEXITCODE -eq 0 -or $buildSucceeded -or ($imagesCreated -and $imageTagging) -or $containersRunning -or $containersStarted
+    
+    if ($isSuccessful) {
         $modeInfo = if ($EnterpriseMode) { "Enterprise Docker Management" } else { "Docker Compose" }
         Write-ColoredOutput "$modeInfo started successfully!" "Green" "SUCCESS"
+        
+        # Show container status for confirmation
+        if ($containersRunning) {
+            Write-ColoredOutput "Containers already running and healthy" "Green" "INFO"
+        }
         
         # Enhanced enterprise status information
         if ($EnterpriseMode) {
@@ -469,13 +506,39 @@ UI_HTTPS_PORT=$uiHttpsPort
         
         Write-ColoredOutput "" "White"
         Write-ColoredOutput "Application URLs:" "Yellow" "INFO"
-        if ($Profile -eq "http" -or $Profile -eq "all") {
-            Write-ColoredOutput "   API (HTTP):  http://localhost:$apiHttpPort/swagger" "White" "INFO"
-            Write-ColoredOutput "   UI (HTTP):   http://localhost:$uiHttpPort" "White" "INFO"
-        }
-        if ($Profile -eq "https" -or $Profile -eq "all") {
-            Write-ColoredOutput "   API (HTTPS): https://localhost:$apiHttpsPort/swagger" "White" "INFO"
-            Write-ColoredOutput "   UI (HTTPS):  https://localhost:$uiHttpsPort" "White" "INFO"
+        
+        # Display URLs based on environment and profile
+        switch ($Environment) {
+            "dev" {
+                if ($Profile -eq "http" -or $Profile -eq "all") {
+                    Write-ColoredOutput "   API (HTTP):  http://localhost:5020/swagger" "White" "INFO"
+                    Write-ColoredOutput "   UI (HTTP):   http://localhost:5022" "White" "INFO"
+                }
+                if ($Profile -eq "https" -or $Profile -eq "all") {
+                    Write-ColoredOutput "   API (HTTPS): https://localhost:5021/swagger" "White" "INFO"
+                    Write-ColoredOutput "   UI (HTTPS):  https://localhost:5023" "White" "INFO"
+                }
+            }
+            "uat" {
+                if ($Profile -eq "http" -or $Profile -eq "all") {
+                    Write-ColoredOutput "   API (HTTP):  http://localhost:5030/swagger" "White" "INFO"
+                    Write-ColoredOutput "   UI (HTTP):   http://localhost:5032" "White" "INFO"
+                }
+                if ($Profile -eq "https" -or $Profile -eq "all") {
+                    Write-ColoredOutput "   API (HTTPS): https://localhost:5031/swagger" "White" "INFO"
+                    Write-ColoredOutput "   UI (HTTPS):  https://localhost:5033" "White" "INFO"
+                }
+            }
+            "prod" {
+                if ($Profile -eq "http" -or $Profile -eq "all") {
+                    Write-ColoredOutput "   API (HTTP):  http://localhost:5040/swagger" "White" "INFO"
+                    Write-ColoredOutput "   UI (HTTP):   http://localhost:5042" "White" "INFO"
+                }
+                if ($Profile -eq "https" -or $Profile -eq "all") {
+                    Write-ColoredOutput "   API (HTTPS): https://localhost:5041/swagger" "White" "INFO"
+                    Write-ColoredOutput "   UI (HTTPS):  https://localhost:5043" "White" "INFO"
+                }
+            }
         }
         
         # Environment-specific guidance with enterprise enhancements
@@ -515,14 +578,14 @@ UI_HTTPS_PORT=$uiHttpsPort
         Write-ColoredOutput "Quick Commands:" "Yellow" "INFO"
         Write-ColoredOutput "  View logs:    docker-compose -f docker-compose.$Environment.yml logs -f" "White" "INFO"
         Write-ColoredOutput "  Stop:         .\start-docker.ps1 -Environment $Environment -Profile $Profile -Down" "White" "INFO"
+        Write-ColoredOutput "  Legacy build: .\start-docker.ps1 -Environment $Environment -Profile $Profile -LegacyBuild" "Yellow" "INFO"
         
         if ($EnterpriseMode) {
             Write-ColoredOutput "  Enterprise Commands:" "Cyan" "INFO"
             Write-ColoredOutput "  Conservative clean: .\start-docker.ps1 -Environment $Environment -Profile $Profile -ConservativeClean -EnterpriseMode" "White" "INFO"
-            Write-ColoredOutput "  Backup & start:     .\start-docker.ps1 -Environment $Environment -Profile $Profile -BackupFirst -EnterpriseMode" "White" "INFO"
+            Write-ColoredOutput "  Backup and start:   .\start-docker.ps1 -Environment $Environment -Profile $Profile -BackupFirst -EnterpriseMode" "White" "INFO"
             Write-ColoredOutput "  Safe persistent:    .\start-docker.ps1 -Environment $Environment -Profile $Profile -PreservePersistentData -EnterpriseMode" "White" "INFO"
         } else {
-            Write-ColoredOutput "  Clean start:  .\start-docker.ps1 -Environment $Environment -Profile $Profile -CleanCache" "White" "INFO"
             Write-ColoredOutput "  Enterprise:   .\start-docker.ps1 -Environment $Environment -Profile $Profile -EnterpriseMode" "Cyan" "INFO"
         }
     } else {

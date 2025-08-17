@@ -79,7 +79,7 @@ logs/docker-startup-2025-08-03.log
 ```powershell
 # Your existing commands work exactly as before
 .\start-docker.ps1 -Environment dev -Profile https
-.\start-docker.ps1 -Environment uat -Profile all -CleanCache
+.\start-docker.ps1 -Environment uat -Profile all
 .\start-docker.ps1 -Environment prod -Profile https -Down
 ```
 
@@ -95,7 +95,7 @@ logs/docker-startup-2025-08-03.log
 .\start-docker.ps1 -Environment prod -Profile all -EnterpriseMode -BackupFirst
 
 # Safe cleanup preserving persistent data
-.\start-docker.ps1 -Environment any -Profile any -EnterpriseMode -PreservePersistentData -CleanCache
+.\start-docker.ps1 -Environment any -Profile any -EnterpriseMode -PreservePersistentData
 ```
 
 ## 📊 Enterprise Readiness Score

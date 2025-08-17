@@ -44,7 +44,7 @@ You can test different environments with:
 .\start-docker.ps1 -Environment uat -Profile https
 
 # Production environment
-.\start-docker.ps1 -Environment prod -Profile https -CleanCache
+.\start-docker.ps1 -Environment prod -Profile https
 ```
 - For HTTP, open: http://localhost:5002
 - For HTTPS, open: https://localhost:5003
@@ -73,7 +73,7 @@ The current setup uses dedicated files for each environment instead of a base + 
 **Example Usage:**  
 - Development: `.\start-docker.ps1 -Environment dev -Profile http`
 - UAT Testing: `.\start-docker.ps1 -Environment uat -Profile https`
-- Production: `.\start-docker.ps1 -Environment prod -Profile https -CleanCache`
+- Production: `.\start-docker.ps1 -Environment prod -Profile https`
 
 **Summary:**  
 - Each environment has a dedicated, complete Docker Compose configuration.

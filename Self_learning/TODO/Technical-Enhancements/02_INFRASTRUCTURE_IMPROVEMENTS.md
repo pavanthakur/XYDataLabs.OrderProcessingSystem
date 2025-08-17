@@ -3,11 +3,11 @@
 ## ✅ Successfully Implemented
 
 ### 🚀 **Cache Cleanup Integration**
-The `start-docker.ps1` script now includes automatic Docker cache cleanup with the `-CleanCache` flag:
+The `start-docker.ps1` script now includes automatic Docker cache cleanup with the `-ConservativeClean` flag:
 
 ```powershell
 # Clean cache and start fresh
-.\start-docker.ps1 -Environment dev -Profile https -CleanCache
+.\start-docker.ps1 -Environment dev -Profile https
 ```
 
 **What it cleans:**
@@ -37,7 +37,7 @@ The script now automatically handles the `xynetwork` prerequisite:
 |-----------|--------|-------------|
 | `-Environment` | `dev`, `uat`, `prod` | Target environment |
 | `-Profile` | `http`, `https`, `all` | Services to start |
-| **`-CleanCache`** | Switch | **NEW: Clean Docker cache before startup** |
+| **`-ConservativeClean`** | Switch | **NEW: Clean Docker cache before startup** |
 | `-Down` | Switch | Stop services |
 
 ### 🎯 **Usage Examples**
@@ -47,7 +47,7 @@ The script now automatically handles the `xynetwork` prerequisite:
 .\start-docker.ps1 -Environment dev -Profile http
 
 # With cache cleanup (NEW)
-.\start-docker.ps1 -Environment dev -Profile https -CleanCache
+.\start-docker.ps1 -Environment dev -Profile https
 
 # Stop services (unchanged)
 .\start-docker.ps1 -Environment dev -Profile http -Down
@@ -55,7 +55,7 @@ The script now automatically handles the `xynetwork` prerequisite:
 
 ## 🛠️ **What Happens Automatically**
 
-1. **Cache Cleanup** (if `-CleanCache` specified):
+1. **Cache Cleanup** (if `-ConservativeClean` specified):
    - Removes unused Docker resources
    - Clears build cache
    - Reports space reclaimed
@@ -93,7 +93,7 @@ docker network create xynetwork
 docker system prune -f --volumes
 
 # Now: Integrated cache cleanup
-.\start-docker.ps1 -Environment dev -Profile https -CleanCache
+.\start-docker.ps1 -Environment dev -Profile https
 # ✅ Cache cleaned and fresh build started
 ```
 
@@ -130,7 +130,7 @@ Your enhanced Docker setup now provides:
 .\start-docker.ps1 -Environment dev -Profile https
 
 # For troubleshooting
-.\start-docker.ps1 -Environment dev -Profile https -CleanCache
+.\start-docker.ps1 -Environment dev -Profile https
 
 # For stopping
 .\start-docker.ps1 -Environment dev -Profile http -Down

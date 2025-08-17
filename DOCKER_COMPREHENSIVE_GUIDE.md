@@ -11,19 +11,45 @@
 2. [Developer Quick Reference](#developer-quick-reference)
 3. [Prerequisites](#prerequisites)
 4. [Environment Overview](#environment-overview)
-5. [Database Environment Strategy](#database-environment-strategy)
-6. [Command Reference](#command-reference)
-7. [Standard Mode Operations](#standard-mode-operations)
-8. [Enterprise Mode Operations](#enterprise-mode-operations)
-9. [Docker Testing Checklists](#docker-testing-checklists)
-10. [Troubleshooting](#troubleshooting)
-11. [Configuration Details](#configuration-details)
-12. [Best Practices](#best-practices)
-13. [Related Documentation](#related-documentation)
+5. [Container Naming Convention](#️-container-naming-convention)
+6. [Database Environment Strategy](#️-database-environment-strategy)
+7. [Command Reference](#command-reference)
+8. [Standard Mode Operations](#standard-mode-operations)
+9. [Enterprise Mode Operations](#enterprise-mode-operations)
+10. [Docker Testing Checklists](#docker-testing-checklists)
+11. [Troubleshooting](#troubleshooting)
+12. [Configuration Details](#configuration-details)
+13. [Best Practices](#best-practices)
+14. [Related Documentation](#related-documentation)
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Enterprise Deployment Commands
+
+### Azure-Ready Deployments (Default)
+```powershell
+# Enterprise-grade fresh builds (recommended for all environments)
+.\start-docker.ps1 -Environment dev -Profile http     # Fresh build every time
+.\start-docker.ps1 -Environment uat -Profile https    # UAT with security
+.\start-docker.ps1 -Environment prod -Profile https   # Production deployment
+
+# Enterprise mode with additional safeguards
+.\start-docker.ps1 -Environment prod -Profile https -EnterpriseMode -BackupFirst
+```
+
+### Development Speed Mode (Optional)
+```powershell
+# Legacy mode for rapid development cycles (use sparingly)
+.\start-docker.ps1 -Environment dev -Profile http -LegacyBuild
+```
+
+### 🎯 **Enterprise Recommendations**
+- **Production**: Always use default behavior (fresh builds)
+- **UAT**: Always use default behavior for testing reliability  
+- **Development**: Use default for consistency, `-LegacyBuild` only when needed for speed
+- **CI/CD Pipelines**: Never use `-LegacyBuild` in automated deployments
+
+## 🚀 Quick Start Commands
 
 ### Immediate Startup Commands
 
@@ -65,12 +91,16 @@
 **✅ Verified Working Commands**:
 ```powershell
 # All these commands now work perfectly from clean state:
-.\start-docker.ps1 -Environment dev -Profile http -CleanCache    # ✅ Working
-.\start-docker.ps1 -Environment dev -Profile https -CleanCache   # ✅ Working  
-.\start-docker.ps1 -Environment uat -Profile http -CleanCache    # ✅ Working
-.\start-docker.ps1 -Environment uat -Profile https -CleanCache   # ✅ Working
-.\start-docker.ps1 -Environment prod -Profile http -CleanCache   # ✅ Working
-.\start-docker.ps1 -Environment prod -Profile https -CleanCache  # ✅ Working
+.\start-docker.ps1 -Environment dev -Profile http    # ✅ Working
+.\start-docker.ps1 -Environment dev -Profile https   # ✅ Working  
+.\start-docker.ps1 -Environment uat -Profile http    # ✅ Working
+.\start-docker.ps1 -Environment uat -Profile https   # ✅ Working
+.\start-docker.ps1 -Environment prod -Profile http   # ✅ Working
+.\start-docker.ps1 -Environment prod -Profile https  # ✅ Working
+
+# ✅ Smart Container Detection: Re-running commands is safe
+# Script automatically detects when containers are already running
+# No more "Docker Compose failed to start" errors when containers exist
 
 # Visual Studio Launch Profiles (F5 Debugging):
 # - docker-dev-http     ✅ Working
@@ -100,7 +130,7 @@
 .\start-docker.ps1 -Environment dev -Profile http -Down
 
 # 3. Clean Start (when having issues)
-.\start-docker.ps1 -Environment dev -Profile http -CleanCache
+.\start-docker.ps1 -Environment dev -Profile http
 ```
 
 ### ⭐⭐ **Weekly Commands (Should Know)** ✅ **ALL VERIFIED WORKING**
@@ -126,7 +156,7 @@
 
 ```powershell
 # 9. Nuclear Option (when everything is broken)
-.\start-docker.ps1 -Environment dev -Profile http -CleanCache -EnterpriseMode
+.\start-docker.ps1 -Environment dev -Profile http -EnterpriseMode
 
 # 10. Conservative Cleanup (preserve some data)
 .\start-docker.ps1 -Environment dev -Profile http -ConservativeClean -EnterpriseMode
@@ -153,10 +183,10 @@
 ```powershell
 # Step 1: Try clean restart
 .\start-docker.ps1 -Environment dev -Profile http -Down
-.\start-docker.ps1 -Environment dev -Profile http -CleanCache
+.\start-docker.ps1 -Environment dev -Profile http
 
 # Step 2: If still broken, nuclear option
-.\start-docker.ps1 -Environment dev -Profile http -CleanCache -EnterpriseMode
+.\start-docker.ps1 -Environment dev -Profile http -EnterpriseMode
 ```
 
 ### ✅ **Before Committing Code** ✅ **ALL ENVIRONMENTS TESTED**
@@ -179,9 +209,9 @@
 
 ```powershell
 # Quick Environment Switching (all working from clean state):
-.\start-docker.ps1 -Environment dev -Profile http -CleanCache    # Port 5020/5022
-.\start-docker.ps1 -Environment uat -Profile http -CleanCache    # Port 5030/5032  
-.\start-docker.ps1 -Environment prod -Profile http -CleanCache   # Port 5040/5042
+.\start-docker.ps1 -Environment dev -Profile http    # Port 5020/5022
+.\start-docker.ps1 -Environment uat -Profile http    # Port 5030/5032  
+.\start-docker.ps1 -Environment prod -Profile http   # Port 5040/5042
 
 # Database Verification (all auto-created with 120 customers):
 # - OrderProcessingSystem_Dev   ✅ Working
@@ -272,7 +302,124 @@ The script automatically creates these networks as needed:
 
 ---
 
-## �️ Database Environment Strategy
+### 🏷️ Container Naming Convention
+
+The system uses a standardized naming convention for better organization and management:
+
+**Naming Pattern**: `{service}-{environment}-{protocol}`
+
+#### Container Architecture Summary
+- **6 containers per environment** (total of 18 containers across all environments)
+- **Clear naming**: `api-{env}-{protocol}-1`, `ui-{env}-{protocol}-1`
+- **Proper dependencies**: UI services depend on corresponding API services
+- **Environment isolation**: Each environment operates independently
+- **Protocol separation**: HTTP and HTTPS services clearly distinguished
+
+#### Development Environment Containers
+- `api-dev-http-1` → API HTTP service (port 5020)
+- `api-dev-https-1` → API HTTPS service (port 5021)
+- `ui-dev-http-1` → UI HTTP service (port 5022)
+- `ui-dev-https-1` → UI HTTPS service (port 5023)
+
+#### UAT Environment Containers
+- `api-uat-http-1` → API HTTP service (port 5030)
+- `api-uat-https-1` → API HTTPS service (port 5031)
+- `ui-uat-http-1` → UI HTTP service (port 5032)
+- `ui-uat-https-1` → UI HTTPS service (port 5033)
+
+#### Production Environment Containers
+- `api-prod-http-1` → API HTTP service (port 5040)
+- `api-prod-https-1` → API HTTPS service (port 5041)
+- `ui-prod-http-1` → UI HTTP service (port 5042)
+- `ui-prod-https-1` → UI HTTPS service (port 5043)
+
+#### Container Naming Benefits
+- Clear service identification across environments
+- Protocol distinction for HTTP/HTTPS services
+- Environment separation preventing conflicts
+- Automatic scaling support with numbered containers
+- Simplified monitoring and debugging
+
+### 🖼️ Docker Image Naming Convention
+
+The system uses protocol-specific image naming for complete architectural consistency:
+
+**Naming Pattern**: `xydatalabs-orderprocessingsystem-{service}-{protocol}:{environment}`
+
+#### Image Architecture Examples
+- **Development**: `xydatalabs-orderprocessingsystem-api-http:dev`
+- **Development**: `xydatalabs-orderprocessingsystem-api-https:dev`
+- **Development**: `xydatalabs-orderprocessingsystem-ui-http:dev`
+- **Development**: `xydatalabs-orderprocessingsystem-ui-https:dev`
+- **UAT**: `xydatalabs-orderprocessingsystem-api-http:uat`
+- **Production**: `xydatalabs-orderprocessingsystem-ui-https:prod`
+
+#### Image Naming Benefits
+- Perfect alignment with container naming convention
+- Clear protocol separation in image registry
+- Environment-specific versioning and deployments
+- Simplified CI/CD pipeline automation
+- Enhanced Docker registry organization
+- Improved deployment traceability
+- **Protocol-specific image preservation** - Starting one profile (HTTP/HTTPS) preserves images from other protocols
+
+### 🔧 Enhanced Error Handling
+
+The system includes intelligent error detection and **enterprise-ready build process**:
+
+#### Enterprise Build Strategy (Default - Azure-Ready)
+**Default Behavior**: All deployments use `--no-cache` builds for maximum reliability
+- **Fresh builds every time** - eliminates cache dependencies and stale layers
+- **Reproducible deployments** - identical results across environments
+- **Security compliance** - always downloads latest dependencies
+- **Azure Container Apps compatible** - matches cloud deployment patterns
+
+#### Legacy Build Mode (Development Speed)
+**Optional Flag**: Use `-LegacyBuild` for faster development cycles
+- **Reuses existing images** when available for speed
+- **Development-focused** - faster iteration cycles
+- **⚠️ Not recommended** for UAT/Production environments
+- **Warning messages** clearly indicate non-enterprise mode
+
+#### Smart Image Cleanup Logic
+When image conflicts occur during builds, the system:
+- **Only removes images for the current profile** being started
+- **Preserves images from other protocols** (HTTP images preserved when starting HTTPS)
+- Performs legacy image cleanup for migration support
+- Provides detailed cleanup status information
+
+**Example**: Starting HTTPS profile only removes HTTPS images if conflicts occur, preserving all HTTP images for future use.
+
+#### Container Dependency Management
+All service dependencies are correctly configured:
+```yaml
+# Example: UI waits for API to be healthy
+depends_on:
+  api-dev-http:
+    condition: service_healthy
+```
+
+#### Container Management Commands
+```powershell
+# View all containers with new naming
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+# Check specific environment containers
+docker ps --filter "name=api-dev"
+docker ps --filter "name=ui-uat"
+
+# Debug specific containers
+docker logs api-dev-http-1
+docker logs ui-uat-https-1
+
+# Visual Studio debugging targets
+# Container target: api-dev-http-1 (or api-dev-https-1 for HTTPS)
+# Service: XYDataLabs.OrderProcessingSystem.API
+```
+
+---
+
+## 🗄️ Database Environment Strategy
 
 > **🎯 Critical**: Different environments use completely separate databases to prevent conflicts and ensure proper isolation.
 
@@ -345,7 +492,7 @@ If you encounter database connection issues:
    .\set-local-env.ps1 -ProjectType API -Profile http
    
    # For Docker dev
-   .\start-docker.ps1 -Environment dev -Profile http -CleanCache
+   .\start-docker.ps1 -Environment dev -Profile http
    ```
 
 ---
@@ -361,7 +508,6 @@ If you encounter database connection issues:
 | `-SharedSettingsPath` | File path | `sharedsettings.{env}.json` | Configuration file |
 | `-EnvFilePath` | File path | `.env` | Environment file output |
 | `-Down` | Switch | False | Stop services |
-| `-CleanCache` | Switch | False | Clean Docker cache |
 | `-EnterpriseMode` | Switch | False | Enable enterprise features |
 | `-ConservativeClean` | Switch | False | Conservative cache cleanup |
 | `-PreservePersistentData` | Switch | False | Preserve volumes during cleanup |
@@ -397,7 +543,7 @@ If you encounter database connection issues:
 ### With Cache Management
 ```powershell
 # Clean cache before starting (full cleanup)
-.\start-docker.ps1 -Environment dev -Profile https -CleanCache
+.\start-docker.ps1 -Environment dev -Profile https
 
 # This automatically runs:
 # 1. docker system prune -f --volumes
@@ -407,7 +553,7 @@ If you encounter database connection issues:
 ### Environment-Specific Examples
 ```powershell
 # Development - Fast iteration
-.\start-docker.ps1 -Environment dev -Profile http -CleanCache
+.\start-docker.ps1 -Environment dev -Profile http
 
 # UAT - Production-like testing
 .\start-docker.ps1 -Environment uat -Profile all
@@ -442,7 +588,7 @@ If you encounter database connection issues:
 ### Enterprise Cleanup Options
 ```powershell
 # Development: Aggressive cleanup (safe for dev)
-.\start-docker.ps1 -Environment dev -Profile http -EnterpriseMode -CleanCache
+.\start-docker.ps1 -Environment dev -Profile http -EnterpriseMode
 
 # UAT: Conservative cleanup (preserves recent data)
 .\start-docker.ps1 -Environment uat -Profile https -EnterpriseMode -ConservativeClean
@@ -471,9 +617,9 @@ If you encounter database connection issues:
 After startup, the script displays:
 ```
 Container status:
-NAMES                                   STATUS                    PORTS
-testappxy_orderprocessingsystem-ui-1   Up 30 seconds            0.0.0.0:5002->5002/tcp
-testappxy_orderprocessingsystem-api-1  Up 30 seconds (healthy)  0.0.0.0:5000->5000/tcp
+NAMES                     STATUS                    PORTS
+ui-dev-http-1            Up 30 seconds            0.0.0.0:5022->5022/tcp
+api-dev-http-1           Up 30 seconds (healthy)  0.0.0.0:5020->5020/tcp
 ```
 
 ### Access URLs
@@ -505,7 +651,7 @@ Get-Content "logs/docker-startup-$(Get-Date -Format 'yyyy-MM-dd').log" -Tail 20 
 
 #### **Development HTTP Profile Test**
 ```powershell
-# Command: .\start-docker.ps1 -Environment dev -Profile http -CleanCache
+# Command: .\start-docker.ps1 -Environment dev -Profile http
 ```
 
 **Prerequisites Checklist**:
@@ -538,7 +684,7 @@ Get-Content "logs/docker-startup-$(Get-Date -Format 'yyyy-MM-dd').log" -Tail 20 
 
 #### **Development HTTPS Profile Test**
 ```powershell
-# Command: .\start-docker.ps1 -Environment dev -Profile https -CleanCache
+# Command: .\start-docker.ps1 -Environment dev -Profile https
 ```
 
 **Prerequisites Checklist**:
@@ -578,7 +724,7 @@ Get-Content "logs/docker-startup-$(Get-Date -Format 'yyyy-MM-dd').log" -Tail 20 
 
 #### **UAT HTTP Profile Test**
 ```powershell
-# Command: .\start-docker.ps1 -Environment uat -Profile http -CleanCache
+# Command: .\start-docker.ps1 -Environment uat -Profile http
 ```
 
 **Prerequisites Checklist**:
@@ -605,7 +751,7 @@ Get-Content "logs/docker-startup-$(Get-Date -Format 'yyyy-MM-dd').log" -Tail 20 
 
 #### **UAT HTTPS Profile Test**
 ```powershell
-# Command: .\start-docker.ps1 -Environment uat -Profile https -CleanCache
+# Command: .\start-docker.ps1 -Environment uat -Profile https
 ```
 
 **Verification Checklist**:
@@ -626,7 +772,7 @@ Get-Content "logs/docker-startup-$(Get-Date -Format 'yyyy-MM-dd').log" -Tail 20 
 
 #### **Production HTTP Profile Test**
 ```powershell
-# Command: .\start-docker.ps1 -Environment prod -Profile http -CleanCache
+# Command: .\start-docker.ps1 -Environment prod -Profile http
 ```
 
 **Prerequisites Checklist**:
@@ -654,7 +800,7 @@ Get-Content "logs/docker-startup-$(Get-Date -Format 'yyyy-MM-dd').log" -Tail 20 
 
 #### **Production HTTPS Profile Test**
 ```powershell
-# Command: .\start-docker.ps1 -Environment prod -Profile https -CleanCache
+# Command: .\start-docker.ps1 -Environment prod -Profile https
 ```
 
 **Security Checklist**:
@@ -698,7 +844,7 @@ Get-Content "logs/docker-startup-$(Get-Date -Format 'yyyy-MM-dd').log" -Tail 20 
 ```
 
 **Cleanup Verification**:
-- [ ] ✅ Dev: Aggressive cleanup works (`-CleanCache`)
+- [ ] ✅ Dev: Aggressive cleanup works (ConservativeClean)
 - [ ] ✅ UAT: Conservative cleanup preserves data (`-ConservativeClean`)
 - [ ] ✅ Prod: Minimal cleanup with backup (`-ConservativeClean -PreservePersistentData`)
 
@@ -749,7 +895,7 @@ sqlcmd -S host.docker.internal -U sa -P Admin100@ -Q "SELECT name FROM sys.datab
 ```powershell
 # Nuclear option - complete clean rebuild
 docker system prune -a -f --volumes
-.\start-docker.ps1 -Environment dev -Profile http -CleanCache
+.\start-docker.ps1 -Environment dev -Profile http
 ```
 
 **Recovery Verification**:
@@ -962,7 +1108,7 @@ UI_HTTPS_PORT=5003
 .\start-docker.ps1 -Environment dev -Profile http
 
 # Clean start when needed
-.\start-docker.ps1 -Environment dev -Profile http -CleanCache
+.\start-docker.ps1 -Environment dev -Profile http
 
 # End of day
 .\start-docker.ps1 -Environment dev -Profile http -Down
@@ -995,7 +1141,7 @@ UI_HTTPS_PORT=5003
 docker system df
 
 # Enterprise cleanup by environment
-.\start-docker.ps1 -Environment dev -Profile http -EnterpriseMode -CleanCache    # Aggressive
+.\start-docker.ps1 -Environment dev -Profile http -EnterpriseMode    # Aggressive
 .\start-docker.ps1 -Environment uat -Profile http -EnterpriseMode -ConservativeClean  # Conservative  
 .\start-docker.ps1 -Environment prod -Profile http -EnterpriseMode -ConservativeClean # Minimal
 ```
@@ -1004,8 +1150,17 @@ docker system df
 
 ## 📚 Related Documentation
 
-This comprehensive guide references and consolidates information from:
+This comprehensive guide consolidates all Docker-related information in one place for easy reference:
 
+### 🎯 **Single Source of Truth Approach**
+This document follows the **technology-specific consolidation** strategy where:
+- **All Docker information** → `DOCKER_COMPREHENSIVE_GUIDE.md` (this document)
+- **All Azure information** → `AZURE_COMPREHENSIVE_GUIDE.md` (future)
+- **All Microservices information** → `MICROSERVICES_COMPREHENSIVE_GUIDE.md` (future)
+
+This approach ensures you only need to reference **one document per technology** for complete understanding.
+
+### Information Consolidated From:
 - **README.md** - Basic project setup and requirements
 - **DOCKER_STARTUP_GUIDE.md** - Original startup documentation
 - **ENTERPRISE_DOCKER_GUIDE.md** - Enterprise features overview
@@ -1014,6 +1169,7 @@ This comprehensive guide references and consolidates information from:
 - **LearningHelp/DockerHelp.md** - Docker basics and troubleshooting
 - **VISUAL_STUDIO_DOCKER_PROFILES.md** - Visual Studio launch profiles guide
 - **DOCKER_PORT_ALLOCATION.md** - Port allocation scheme details
+- **CONTAINER_NAMING_GUIDE.md** - Container naming conventions (consolidated above)
 
 ### Quick Reference Links
 - [Docker Official Documentation](https://docs.docker.com/)
@@ -1041,12 +1197,15 @@ The `start-docker.ps1` script is actively maintained and includes:
 
 **📝 Note**: This document serves as the definitive guide for all Docker operations in the XY Order Processing System. All commands and configurations have been verified and tested across dev, uat, and prod environments.
 
-**✅ Complete Verification Status** (Tested August 15, 2025):
+**✅ Complete Verification Status** (Updated August 17, 2025):
 - ✅ All Docker profiles working (dev/uat/prod × http/https)
 - ✅ All Visual Studio launch profiles working with F5 debugging
 - ✅ All databases auto-created with migrations and seeding
 - ✅ All Docker networks auto-created as needed
 - ✅ OpenPay service integration fully functional
-- ✅ CleanCache command working from completely clean state
+- ✅ Clean command working from completely clean state
+- ✅ Container naming convention implemented and tested
+- ✅ **Protocol-specific image naming implemented and validated**
+- ✅ Container dependencies properly configured
 
-**🔄 Last Updated**: August 15, 2025 - Complete verification and testing of all environments with database initialization fixes.
+**🔄 Last Updated**: August 17, 2025 - Implemented protocol-specific Docker image naming convention (xydatalabs-orderprocessingsystem-{service}-{protocol}:{environment}) for complete architectural consistency. All containers, services, and images now follow unified naming standards across all environments.
