@@ -94,7 +94,84 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Temp-Tracker", "Temp-Tracker", "{94540898-5E2E-48D3-8591-A971B7495BD8}"
 	ProjectSection(SolutionItems) = preProject
 		Self_learning\TODO\Tracker\Temp-Tracker\1-15Aug-2025 = Self_learning\TODO\Tracker\Temp-Tracker\1-15Aug-2025
+		Self_learning\TODO\Tracker\Temp-Tracker\1-17Aug-2025 = Self_learning\TODO\Tracker\Temp-Tracker\1-17Aug-2025
 	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Azure-Curriculum", "Azure-Curriculum", "{F1234567-8901-2345-6789-ABCDEF012345}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "00-Foundation", "00-Foundation", "{F2345678-9012-3456-789A-BCDEF0123456}"
+	ProjectSection(SolutionItems) = preProject
+		Self_learning\Azure-Curriculum\00-Foundation\DAILY_PROGRESS_TRACKER.md = Self_learning\Azure-Curriculum\00-Foundation\DAILY_PROGRESS_TRACKER.md
+		Self_learning\Azure-Curriculum\00-Foundation\MASTER_ROADMAP.md = Self_learning\Azure-Curriculum\00-Foundation\MASTER_ROADMAP.md
+		Self_learning\Azure-Curriculum\00-Foundation\MIND_MAP.md = Self_learning\Azure-Curriculum\00-Foundation\MIND_MAP.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "01-Weekly-Trackers", "01-Weekly-Trackers", "{F3456789-0123-4567-89AB-CDEF01234567}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-01-02", "Week-01-02", "{F4567890-1234-5678-9ABC-DEF012345678}"
+	ProjectSection(SolutionItems) = preProject
+		Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-01-02\SUCCESS_CRITERIA.md = Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-01-02\SUCCESS_CRITERIA.md
+		Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-01-02\README.md = Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-01-02\README.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-03-04", "Week-03-04", "{F5678901-2345-6789-ABCD-EF0123456789}"
+	ProjectSection(SolutionItems) = preProject
+		Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-03-04\SUCCESS_CRITERIA.md = Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-03-04\SUCCESS_CRITERIA.md
+		Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-03-04\README.md = Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-03-04\README.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-05-06", "Week-05-06", "{F6789012-3456-789A-BCDE-F0123456789A}"
+	ProjectSection(SolutionItems) = preProject
+		Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-05-06\SUCCESS_CRITERIA.md = Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-05-06\SUCCESS_CRITERIA.md
+		Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-05-06\README.md = Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-05-06\README.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-07-08", "Week-07-08", "{F7890123-4567-89AB-CDEF-0123456789AB}"
+	ProjectSection(SolutionItems) = preProject
+		Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-07-08\SUCCESS_CRITERIA.md = Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-07-08\SUCCESS_CRITERIA.md
+		Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-07-08\README.md = Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-07-08\README.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-09-10", "Week-09-10", "{F8901234-5678-9ABC-DEF0-123456789ABC}"
+	ProjectSection(SolutionItems) = preProject
+		Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-09-10\SUCCESS_CRITERIA.md = Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-09-10\SUCCESS_CRITERIA.md
+		Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-09-10\README.md = Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-09-10\README.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-11-12", "Week-11-12", "{F9012345-6789-ABCD-EF01-23456789ABCD}"
+	ProjectSection(SolutionItems) = preProject
+		Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-11-12\SUCCESS_CRITERIA.md = Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-11-12\SUCCESS_CRITERIA.md
+		Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-11-12\README.md = Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-11-12\README.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-13-14", "Week-13-14", "{FA123456-789A-BCDE-F012-3456789ABCDE}"
+	ProjectSection(SolutionItems) = preProject
+		Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-13-14\SUCCESS_CRITERIA.md = Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-13-14\SUCCESS_CRITERIA.md
+		Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-13-14\README.md = Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-13-14\README.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-15-16", "Week-15-16", "{FB234567-89AB-CDEF-0123-456789ABCDEF}"
+	ProjectSection(SolutionItems) = preProject
+		Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-15-16\SUCCESS_CRITERIA.md = Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-15-16\SUCCESS_CRITERIA.md
+		Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-15-16\README.md = Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-15-16\README.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-17-18", "Week-17-18", "{FC345678-9ABC-DEF0-1234-56789ABCDEF0}"
+	ProjectSection(SolutionItems) = preProject
+		Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-17-18\SUCCESS_CRITERIA.md = Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-17-18\SUCCESS_CRITERIA.md
+		Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-17-18\README.md = Self_learning\Azure-Curriculum\01-Weekly-Trackers\Week-17-18\README.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "02-Daily-Progress", "02-Daily-Progress", "{FD456789-ABCD-EF01-2345-6789ABCDEF01}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "03-Certifications", "03-Certifications", "{FE567890-BCDE-F012-3456-789ABCDEF012}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "04-Resources", "04-Resources", "{FF678901-CDEF-0123-4567-89ABCDEF0123}"
+	ProjectSection(SolutionItems) = preProject
+		Self_learning\Azure-Curriculum\README.md = Self_learning\Azure-Curriculum\README.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "05-Portfolio", "05-Portfolio", "{F0789012-DEF0-1234-5678-9ABCDEF01234}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -149,6 +226,22 @@ Global
 		{E6F78901-2345-6789-ABCD-EF0123456789} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 		{F7890123-4567-89AB-CDEF-0123456789AB} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 		{94540898-5E2E-48D3-8591-A971B7495BD8} = {E6F78901-2345-6789-ABCD-EF0123456789}
+		{F1234567-8901-2345-6789-ABCDEF012345} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{F2345678-9012-3456-789A-BCDEF0123456} = {F1234567-8901-2345-6789-ABCDEF012345}
+		{F3456789-0123-4567-89AB-CDEF01234567} = {F1234567-8901-2345-6789-ABCDEF012345}
+		{F4567890-1234-5678-9ABC-DEF012345678} = {F3456789-0123-4567-89AB-CDEF01234567}
+		{F5678901-2345-6789-ABCD-EF0123456789} = {F3456789-0123-4567-89AB-CDEF01234567}
+		{F6789012-3456-789A-BCDE-F0123456789A} = {F3456789-0123-4567-89AB-CDEF01234567}
+		{F7890123-4567-89AB-CDEF-0123456789AB} = {F3456789-0123-4567-89AB-CDEF01234567}
+		{F8901234-5678-9ABC-DEF0-123456789ABC} = {F3456789-0123-4567-89AB-CDEF01234567}
+		{F9012345-6789-ABCD-EF01-23456789ABCD} = {F3456789-0123-4567-89AB-CDEF01234567}
+		{FA123456-789A-BCDE-F012-3456789ABCDE} = {F3456789-0123-4567-89AB-CDEF01234567}
+		{FB234567-89AB-CDEF-0123-456789ABCDEF} = {F3456789-0123-4567-89AB-CDEF01234567}
+		{FC345678-9ABC-DEF0-1234-56789ABCDEF0} = {F3456789-0123-4567-89AB-CDEF01234567}
+		{FD456789-ABCD-EF01-2345-6789ABCDEF01} = {F1234567-8901-2345-6789-ABCDEF012345}
+		{FE567890-BCDE-F012-3456-789ABCDEF012} = {F1234567-8901-2345-6789-ABCDEF012345}
+		{FF678901-CDEF-0123-4567-89ABCDEF0123} = {F1234567-8901-2345-6789-ABCDEF012345}
+		{F0789012-DEF0-1234-5678-9ABCDEF01234} = {F1234567-8901-2345-6789-ABCDEF012345}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {E83A7CED-28C5-4597-8180-BDBDD6B27808}
