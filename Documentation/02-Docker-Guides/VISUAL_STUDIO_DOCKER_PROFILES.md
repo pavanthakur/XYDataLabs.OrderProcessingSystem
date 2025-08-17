@@ -9,7 +9,7 @@ The API and UI projects include both **Docker** and **Non-Docker** launch profil
 | **Profile Type** | **Purpose** | **Database** | **Ports** | **Setup Script** |
 |-----------------|-------------|--------------|-----------|------------------|
 | **Non-Docker** | Local development | OrderProcessingSystem_Local | 5010-5013 | `set-local-env.ps1` |
-| **Docker** | Containerized environments | OrderProcessingSystem_{Env} | 5020+, 5030+, 5040+ | `start-docker.ps1` |
+| **Docker** | Containerized environments | OrderProcessingSystem_{Env} | 5020+, 5030+, 5040+ | `Resources\Docker\start-docker.ps1` |
 
 ## 🔄 Two-Stage Launch Architecture
 

@@ -20,10 +20,23 @@ This guide shows the simplified approach to centralized configuration without `l
 ## 📁 **Current File Structure**
 
 ```
-sharedsettings.dev.json     # Development configuration
-sharedsettings.uat.json     # UAT configuration
-sharedsettings.prod.json    # Production configuration
-start-docker.ps1            # Single Docker script with enterprise features
+Resources/
+├── Configuration/
+│   ├── sharedsettings.dev.json     # Development configuration
+│   ├── sharedsettings.uat.json     # UAT configuration
+│   ├── sharedsettings.prod.json    # Production configuration
+│   └── sharedsettings.local.json   # Local overrides
+├── Docker/
+│   ├── start-docker.ps1            # Single Docker script with enterprise features
+│   ├── docker-compose.dev.yml      # Development environment
+│   ├── docker-compose.uat.yml      # UAT environment
+│   ├── docker-compose.prod.yml     # Production environment
+│   └── docker-compose.database.yml # Database services
+└── BuildConfiguration/
+    ├── BannedSymbols.txt
+    ├── CodeAnalysis.ruleset
+    ├── Directory.Build.props
+    └── Directory.Packages.props
 ```
 
 ## 🏗️ **Configuration Sections**

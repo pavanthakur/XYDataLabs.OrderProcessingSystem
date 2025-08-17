@@ -32,11 +32,11 @@ environment:
 ```
 
 #### **Files Modified**:
-- ✅ `docker-compose.dev.yml` - Dev environment (5020-5023 ports)
-- ✅ `docker-compose.uat.yml` - UAT environment (5030-5033 ports)  
-- ✅ `docker-compose.prod.yml` - Production environment (5040-5043 ports)
+- ✅ `Resources/Docker/docker-compose.dev.yml` - Dev environment (5020-5023 ports)
+- ✅ `Resources/Docker/docker-compose.uat.yml` - UAT environment (5030-5033 ports)  
+- ✅ `Resources/Docker/docker-compose.prod.yml` - Production environment (5040-5043 ports)
 
-### **2. start-docker.ps1 Script Simplified**
+### **2. Resources/Docker/start-docker.ps1 Script Simplified**
 #### **Removed**:
 - ✅ `.env` file generation logic
 - ✅ Port extraction from sharedsettings.json
@@ -197,6 +197,7 @@ dotnet run --launch-profile http
 
 ### **Docker Profile Testing**:
 ```powershell
+cd Resources\Docker
 .\start-docker.ps1 dev -Profile http
 ```
 **Result**: ✅ **SUCCESS**

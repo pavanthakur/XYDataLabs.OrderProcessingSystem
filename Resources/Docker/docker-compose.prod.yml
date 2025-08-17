@@ -6,7 +6,7 @@ services:
   api-prod-http:
     image: xydatalabs-orderprocessingsystem-api-http:prod
     build:
-      context: .
+      context: ../..
       dockerfile: XYDataLabs.OrderProcessingSystem.API/Dockerfile
       target: final
     ports:
@@ -21,9 +21,9 @@ services:
       - Logging__LogLevel__Microsoft=Warning
       - Logging__LogLevel__System=Error
     volumes:
-      - ./logs:/logs
-      - ./Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
-      - ./Resources/Configuration/sharedsettings.prod.json:/app/Resources/Configuration/sharedsettings.prod.json:ro
+      - ../../logs:/logs
+      - ../../Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
+      - ../../Resources/Configuration/sharedsettings.prod.json:/app/Resources/Configuration/sharedsettings.prod.json:ro
     networks:
       - xy-prod-network
       - xy-database-network
@@ -41,7 +41,7 @@ services:
   api-prod-https:
     image: xydatalabs-orderprocessingsystem-api-https:prod
     build:
-      context: .
+      context: ../..
       dockerfile: XYDataLabs.OrderProcessingSystem.API/Dockerfile
       target: final
     ports:
@@ -56,9 +56,9 @@ services:
       - Logging__LogLevel__Microsoft=Warning
       - Logging__LogLevel__System=Error
     volumes:
-      - ./logs:/logs
-      - ./Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
-      - ./Resources/Configuration/sharedsettings.prod.json:/app/Resources/Configuration/sharedsettings.prod.json:ro
+      - ../../logs:/logs
+      - ../../Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
+      - ../../Resources/Configuration/sharedsettings.prod.json:/app/Resources/Configuration/sharedsettings.prod.json:ro
     networks:
       - xy-prod-network
       - xy-database-network
@@ -76,7 +76,7 @@ services:
   ui-prod-http:
     image: xydatalabs-orderprocessingsystem-ui-http:prod
     build:
-      context: .
+      context: ../..
       dockerfile: XYDataLabs.OrderProcessingSystem.UI/Dockerfile
       target: final
     ports:
@@ -91,8 +91,8 @@ services:
       - Logging__LogLevel__Microsoft=Warning
       - Logging__LogLevel__System=Error
     volumes:
-      - ./logs:/logs
-      - ./Resources/Configuration/sharedsettings.prod.json:/app/Resources/Configuration/sharedsettings.prod.json:ro
+      - ../../logs:/logs
+      - ../../Resources/Configuration/sharedsettings.prod.json:/app/Resources/Configuration/sharedsettings.prod.json:ro
     networks:
       - xy-prod-network
     profiles: ["http", "all", "ui"]
@@ -112,7 +112,7 @@ services:
   ui-prod-https:
     image: xydatalabs-orderprocessingsystem-ui-https:prod
     build:
-      context: .
+      context: ../..
       dockerfile: XYDataLabs.OrderProcessingSystem.UI/Dockerfile
       target: final
     ports:
@@ -127,9 +127,9 @@ services:
       - Logging__LogLevel__Microsoft=Warning
       - Logging__LogLevel__System=Error
     volumes:
-      - ./logs:/logs
-      - ./Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
-      - ./Resources/Configuration/sharedsettings.prod.json:/app/Resources/Configuration/sharedsettings.prod.json:ro
+      - ../../logs:/logs
+      - ../../Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
+      - ../../Resources/Configuration/sharedsettings.prod.json:/app/Resources/Configuration/sharedsettings.prod.json:ro
     networks:
       - xy-prod-network
     profiles: ["https", "all", "ui-https"]

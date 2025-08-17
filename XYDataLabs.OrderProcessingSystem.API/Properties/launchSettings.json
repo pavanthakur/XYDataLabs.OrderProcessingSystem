@@ -8,7 +8,7 @@
         "ASPNETCORE_ENVIRONMENT": "Development",
         "USE_HTTPS": "false",
         "CORS_ALLOWED_ORIGINS": "http://localhost:5010,http://localhost:5012",
-        "SHAREDSETTINGS_PATH": "sharedsettings.local.json"
+        "SHAREDSETTINGS_PATH": "..\\Resources\\Configuration\\sharedsettings.local.json"
       },
       "dotnetRunMessages": true,
       "applicationUrl": "http://localhost:5010"
@@ -21,7 +21,7 @@
         "ASPNETCORE_ENVIRONMENT": "Development",
         "USE_HTTPS": "true",
         "CORS_ALLOWED_ORIGINS": "https://localhost:5011,https://localhost:5013",
-        "SHAREDSETTINGS_PATH": "sharedsettings.local.json"
+        "SHAREDSETTINGS_PATH": "..\\Resources\\Configuration\\sharedsettings.local.json"
       },
       "dotnetRunMessages": true,
       "applicationUrl": "https://localhost:5011"
@@ -29,7 +29,7 @@
     "docker-dev-http": {
       "commandName": "Executable",
       "executablePath": "powershell.exe",
-      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\start-docker.ps1 -Environment dev -Profile http\"",
+      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\Resources\\Docker\\start-docker.ps1 -Environment dev -Profile http\"",
       "workingDirectory": "$(SolutionDir)",
       "launchBrowser": true,
       "launchUrl": "http://localhost:5020/swagger",
@@ -40,7 +40,7 @@
     "docker-dev-https": {
       "commandName": "Executable",
       "executablePath": "powershell.exe",
-      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\start-docker.ps1 -Environment dev -Profile https\"",
+      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\Resources\\Docker\\start-docker.ps1 -Environment dev -Profile https\"",
       "workingDirectory": "$(SolutionDir)",
       "launchBrowser": true,
       "launchUrl": "https://localhost:5021/swagger",
@@ -51,7 +51,7 @@
     "docker-uat-http": {
       "commandName": "Executable",
       "executablePath": "powershell.exe",
-      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\start-docker.ps1 -Environment uat -Profile http\"",
+      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\Resources\\Docker\\start-docker.ps1 -Environment uat -Profile http\"",
       "workingDirectory": "$(SolutionDir)",
       "launchBrowser": true,
       "launchUrl": "http://localhost:5030/swagger",
@@ -62,7 +62,7 @@
     "docker-uat-https": {
       "commandName": "Executable",
       "executablePath": "powershell.exe",
-      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\start-docker.ps1 -Environment uat -Profile https\"",
+      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\Resources\\Docker\\start-docker.ps1 -Environment uat -Profile https\"",
       "workingDirectory": "$(SolutionDir)",
       "launchBrowser": true,
       "launchUrl": "https://localhost:5031/swagger",
@@ -73,7 +73,7 @@
     "docker-prod-http": {
       "commandName": "Executable",
       "executablePath": "powershell.exe",
-      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\start-docker.ps1 -Environment prod -Profile http\"",
+      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\Resources\\Docker\\start-docker.ps1 -Environment prod -Profile http\"",
       "workingDirectory": "$(SolutionDir)",
       "launchBrowser": true,
       "launchUrl": "http://localhost:5040/swagger",
@@ -84,7 +84,7 @@
     "docker-prod-https": {
       "commandName": "Executable",
       "executablePath": "powershell.exe",
-      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\start-docker.ps1 -Environment prod -Profile https\"",
+      "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\Resources\\Docker\\start-docker.ps1 -Environment prod -Profile https\"",
       "workingDirectory": "$(SolutionDir)",
       "launchBrowser": true,
       "launchUrl": "https://localhost:5041/swagger",

@@ -28,6 +28,9 @@
 
 ### Azure-Ready Deployments (Default)
 ```powershell
+# Navigate to Docker folder first
+cd Resources\Docker
+
 # Enterprise-grade fresh builds (recommended for all environments)
 .\start-docker.ps1 -Environment dev -Profile http     # Fresh build every time
 .\start-docker.ps1 -Environment uat -Profile https    # UAT with security
@@ -54,6 +57,9 @@
 ### Immediate Startup Commands
 
 ```powershell
+# Navigate to Docker folder
+cd Resources\Docker
+
 # Development - HTTP (Most Common)
 .\start-docker.ps1 -Environment dev -Profile http
 
@@ -90,6 +96,9 @@
 
 **✅ Verified Working Commands**:
 ```powershell
+# Navigate to Docker scripts folder
+cd Resources\Docker
+
 # All these commands now work perfectly from clean state:
 .\start-docker.ps1 -Environment dev -Profile http    # ✅ Working
 .\start-docker.ps1 -Environment dev -Profile https   # ✅ Working  

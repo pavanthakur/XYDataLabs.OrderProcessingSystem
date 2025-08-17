@@ -21,7 +21,7 @@ services:
       - sql_data:/var/opt/mssql/data
       - sql_log:/var/opt/mssql/log
       - sql_backup:/var/opt/mssql/backup
-      - ./Resources/Database/init:/docker-entrypoint-initdb.d
+      - ../../Resources/Database/init:/docker-entrypoint-initdb.d
     networks:
       - xy-database-network
     restart: unless-stopped

@@ -214,7 +214,7 @@ function Backup-EnterpriseData {
         }
         
         # Backup configuration files
-        $configFiles = @("Resources/Configuration/sharedsettings.$Environment.json", "docker-compose.$Environment.yml")
+        $configFiles = @("../../Resources/Configuration/sharedsettings.$Environment.json", "docker-compose.$Environment.yml")
         foreach ($file in $configFiles) {
             if (Test-Path $file) {
                 Copy-Item $file "$backupDir/" -Force
@@ -263,7 +263,7 @@ try {
     
     # Set default SharedSettingsPath if not provided
     if ([string]::IsNullOrEmpty($SharedSettingsPath)) {
-        $SharedSettingsPath = "Resources/Configuration/sharedsettings.$Environment.json"
+        $SharedSettingsPath = "../Configuration/sharedsettings.$Environment.json"
     }
     
     # Enterprise backup if required

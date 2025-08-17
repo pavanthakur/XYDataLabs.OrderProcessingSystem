@@ -6,7 +6,7 @@ services:
   api-dev-http:
     image: xydatalabs-orderprocessingsystem-api-http:dev
     build:
-      context: .
+      context: ../..
       dockerfile: XYDataLabs.OrderProcessingSystem.API/Dockerfile
       target: final
     ports:
@@ -17,9 +17,9 @@ services:
       - ASPNETCORE_HTTP_PORTS=5020
       - USE_HTTPS=false
     volumes:
-      - ./logs:/logs
-      - ./Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
-      - ./Resources/Configuration/sharedsettings.dev.json:/app/Resources/Configuration/sharedsettings.dev.json:ro
+      - ../../logs:/logs
+      - ../../Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
+      - ../../Resources/Configuration/sharedsettings.dev.json:/app/Resources/Configuration/sharedsettings.dev.json:ro
     networks:
       - xy-dev-network
       - xy-database-network
@@ -34,7 +34,7 @@ services:
   api-dev-https:
     image: xydatalabs-orderprocessingsystem-api-https:dev
     build:
-      context: .
+      context: ../..
       dockerfile: XYDataLabs.OrderProcessingSystem.API/Dockerfile
       target: final
     ports:
@@ -45,9 +45,9 @@ services:
       - ASPNETCORE_HTTPS_PORTS=5021
       - ASPNETCORE_Kestrel__Certificates__Default__Password=P@ss100
     volumes:
-      - ./logs:/logs
-      - ./Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
-      - ./Resources/Configuration/sharedsettings.dev.json:/app/Resources/Configuration/sharedsettings.dev.json:ro
+      - ../../logs:/logs
+      - ../../Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
+      - ../../Resources/Configuration/sharedsettings.dev.json:/app/Resources/Configuration/sharedsettings.dev.json:ro
     networks:
       - xy-dev-network
       - xy-database-network
@@ -62,7 +62,7 @@ services:
   ui-dev-http:
     image: xydatalabs-orderprocessingsystem-ui-http:dev
     build:
-      context: .
+      context: ../..
       dockerfile: XYDataLabs.OrderProcessingSystem.UI/Dockerfile
       target: final
     ports:
@@ -74,8 +74,8 @@ services:
       - ApiSettings__BaseUrl=http://localhost:5020
       - USE_HTTPS=false
     volumes:
-      - ./logs:/logs
-      - ./Resources/Configuration/sharedsettings.dev.json:/app/Resources/Configuration/sharedsettings.dev.json:ro
+      - ../../logs:/logs
+      - ../../Resources/Configuration/sharedsettings.dev.json:/app/Resources/Configuration/sharedsettings.dev.json:ro
     networks:
       - xy-dev-network
       - xy-database-network
@@ -93,7 +93,7 @@ services:
   ui-dev-https:
     image: xydatalabs-orderprocessingsystem-ui-https:dev
     build:
-      context: .
+      context: ../..
       dockerfile: XYDataLabs.OrderProcessingSystem.UI/Dockerfile
       target: final
     ports:
@@ -105,9 +105,9 @@ services:
       - ASPNETCORE_Kestrel__Certificates__Default__Password=P@ss100
       - ApiSettings__BaseUrl=https://localhost:5021
     volumes:
-      - ./logs:/logs
-      - ./Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
-      - ./Resources/Configuration/sharedsettings.dev.json:/app/Resources/Configuration/sharedsettings.dev.json:ro
+      - ../../logs:/logs
+      - ../../Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
+      - ../../Resources/Configuration/sharedsettings.dev.json:/app/Resources/Configuration/sharedsettings.dev.json:ro
     networks:
       - xy-dev-network
       - xy-database-network

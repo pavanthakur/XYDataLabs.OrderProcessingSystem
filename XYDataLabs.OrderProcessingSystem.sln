@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.12.35514.174
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{E53339B2-1760-4266-BCC7-CA923CBCF16C}") = "docker-compose", "docker-compose.dcproj", "{8C5FD138-BE8E-46B8-97BA-F1153D1E6ADF}"
+Project("{E53339B2-1760-4266-BCC7-CA923CBCF16C}") = "docker-compose", "Resources\Docker\docker-compose.dcproj", "{8C5FD138-BE8E-46B8-97BA-F1153D1E6ADF}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XYDataLabs.OrderProcessingSystem.API", "XYDataLabs.OrderProcessingSystem.API\XYDataLabs.OrderProcessingSystem.API.csproj", "{CCDB3479-D2A3-4D83-AF48-A89DBB0A8022}"
 EndProject
@@ -21,11 +21,32 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XYDataLabs.OrderProcessingS
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Resources", "Resources", "{E1A8B2C3-4D5F-6789-ABCD-123456789DEF}"
 	ProjectSection(SolutionItems) = preProject
+		Resources\BuildConfiguration\BannedSymbols.txt = Resources\BuildConfiguration\BannedSymbols.txt
+		Resources\BuildConfiguration\CodeAnalysis.ruleset = Resources\BuildConfiguration\CodeAnalysis.ruleset
+		Directory.Build.props = Directory.Build.props
+		Directory.Packages.props = Directory.Packages.props
 		Resources\Certificates\aspnetapp.pfx = Resources\Certificates\aspnetapp.pfx
 		Resources\Configuration\sharedsettings.dev.json = Resources\Configuration\sharedsettings.dev.json
 		Resources\Configuration\sharedsettings.local.json = Resources\Configuration\sharedsettings.local.json
 		Resources\Configuration\sharedsettings.prod.json = Resources\Configuration\sharedsettings.prod.json
 		Resources\Configuration\sharedsettings.uat.json = Resources\Configuration\sharedsettings.uat.json
+		Resources\Docker\start-docker.ps1 = Resources\Docker\start-docker.ps1
+		Resources\Docker\docker-compose.database.yml = Resources\Docker\docker-compose.database.yml
+		Resources\Docker\docker-compose.dev.yml = Resources\Docker\docker-compose.dev.yml
+		Resources\Docker\docker-compose.prod.yml = Resources\Docker\docker-compose.prod.yml
+		Resources\Docker\docker-compose.uat.yml = Resources\Docker\docker-compose.uat.yml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Documentation", "Documentation", "{D0C1234A-5678-9012-3456-789ABCDEF123}"
+	ProjectSection(SolutionItems) = preProject
+		Documentation\README.md = Documentation\README.md
+		Documentation\01-Project-Overview\README.md = Documentation\01-Project-Overview\README.md
+		Documentation\01-Project-Overview\CLEANUP_SUMMARY.md = Documentation\01-Project-Overview\CLEANUP_SUMMARY.md
+		Documentation\02-Docker-Guides\DOCKER_COMPREHENSIVE_GUIDE.md = Documentation\02-Docker-Guides\DOCKER_COMPREHENSIVE_GUIDE.md
+		Documentation\02-Docker-Guides\ENTERPRISE_DOCKER_GUIDE.md = Documentation\02-Docker-Guides\ENTERPRISE_DOCKER_GUIDE.md
+		Documentation\02-Docker-Guides\VISUAL_STUDIO_DOCKER_PROFILES.md = Documentation\02-Docker-Guides\VISUAL_STUDIO_DOCKER_PROFILES.md
+		Documentation\04-Configuration-Guides\SIMPLIFIED_CONFIG_GUIDE.md = Documentation\04-Configuration-Guides\SIMPLIFIED_CONFIG_GUIDE.md
+		Documentation\04-Configuration-Guides\DOTENV_DEPENDENCY_ELIMINATION_SUMMARY.md = Documentation\04-Configuration-Guides\DOTENV_DEPENDENCY_ELIMINATION_SUMMARY.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "TODO", "TODO", "{A2B3C4D5-6E7F-8901-2345-6789ABCDEF01}"

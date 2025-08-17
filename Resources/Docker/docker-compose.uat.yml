@@ -6,7 +6,7 @@ services:
   api-uat-http:
     image: xydatalabs-orderprocessingsystem-api-http:uat
     build:
-      context: .
+      context: ../..
       dockerfile: XYDataLabs.OrderProcessingSystem.API/Dockerfile
       target: final
     ports:
@@ -17,9 +17,9 @@ services:
       - ASPNETCORE_HTTP_PORTS=5030
       - USE_HTTPS=false
     volumes:
-      - ./logs:/logs
-      - ./Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
-      - ./Resources/Configuration/sharedsettings.uat.json:/app/Resources/Configuration/sharedsettings.uat.json:ro
+      - ../../logs:/logs
+      - ../../Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
+      - ../../Resources/Configuration/sharedsettings.uat.json:/app/Resources/Configuration/sharedsettings.uat.json:ro
     networks:
       - xy-uat-network
       - xy-database-network
@@ -34,7 +34,7 @@ services:
   api-uat-https:
     image: xydatalabs-orderprocessingsystem-api-https:uat
     build:
-      context: .
+      context: ../..
       dockerfile: XYDataLabs.OrderProcessingSystem.API/Dockerfile
       target: final
     ports:
@@ -45,9 +45,9 @@ services:
       - ASPNETCORE_HTTPS_PORTS=5031
       - ASPNETCORE_Kestrel__Certificates__Default__Password=P@ss100
     volumes:
-      - ./logs:/logs
-      - ./Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
-      - ./Resources/Configuration/sharedsettings.uat.json:/app/Resources/Configuration/sharedsettings.uat.json:ro
+      - ../../logs:/logs
+      - ../../Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
+      - ../../Resources/Configuration/sharedsettings.uat.json:/app/Resources/Configuration/sharedsettings.uat.json:ro
     networks:
       - xy-uat-network
       - xy-database-network
@@ -62,7 +62,7 @@ services:
   ui-uat-http:
     image: xydatalabs-orderprocessingsystem-ui-http:uat
     build:
-      context: .
+      context: ../..
       dockerfile: XYDataLabs.OrderProcessingSystem.UI/Dockerfile
       target: final
     ports:
@@ -74,8 +74,8 @@ services:
       - ApiSettings__BaseUrl=http://localhost:5030
       - USE_HTTPS=false
     volumes:
-      - ./Resources/Configuration/sharedsettings.uat.json:/app/Resources/Configuration/sharedsettings.uat.json:ro
-      - ./logs:/logs
+      - ../../Resources/Configuration/sharedsettings.uat.json:/app/Resources/Configuration/sharedsettings.uat.json:ro
+      - ../../logs:/logs
     networks:
       - xy-uat-network
     profiles: ["http", "all", "ui"]
@@ -92,7 +92,7 @@ services:
   ui-uat-https:
     image: xydatalabs-orderprocessingsystem-ui-https:uat
     build:
-      context: .
+      context: ../..
       dockerfile: XYDataLabs.OrderProcessingSystem.UI/Dockerfile
       target: final
     ports:
@@ -104,9 +104,9 @@ services:
       - ASPNETCORE_Kestrel__Certificates__Default__Password=P@ss100
       - ApiSettings__BaseUrl=https://localhost:5031
     volumes:
-      - ./Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
-      - ./Resources/Configuration/sharedsettings.uat.json:/app/Resources/Configuration/sharedsettings.uat.json:ro
-      - ./logs:/logs
+      - ../../Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
+      - ../../Resources/Configuration/sharedsettings.uat.json:/app/Resources/Configuration/sharedsettings.uat.json:ro
+      - ../../logs:/logs
     networks:
       - xy-uat-network
     profiles: ["https", "all", "ui-https"]
