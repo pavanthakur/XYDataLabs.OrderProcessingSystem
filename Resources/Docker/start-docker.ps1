@@ -232,6 +232,14 @@ function Backup-EnterpriseData {
 }
 
 try {
+    # Set working directory to the Docker resources folder
+    $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
+    $dockerPath = $scriptPath
+    $originalLocation = Get-Location
+    Set-Location $dockerPath
+    
+    Write-ColoredOutput "Working directory set to: $dockerPath" "Gray" "INFO"
+    
     # Enterprise mode initialization
     if ($EnterpriseMode) {
         Write-ColoredOutput "Starting Enterprise Docker Management Mode" "Cyan" "INFO"
