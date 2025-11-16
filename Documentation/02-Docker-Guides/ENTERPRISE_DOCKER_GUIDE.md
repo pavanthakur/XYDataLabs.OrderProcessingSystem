@@ -54,6 +54,23 @@ Your Docker startup script has been enhanced with comprehensive enterprise featu
 .\start-docker.ps1 -Environment dev -Profile all -EnterpriseMode -PreservePersistentData
 ```
 
+### Strict Mode (CI/Local)
+
+For CI-friendly runs or local strict checks, use `-Strict`:
+
+```powershell
+# Fast local startup: reuse images, enforce health
+.\start-docker.ps1 -Environment dev -Profile http -LegacyBuild -Strict
+
+# Enforce strict health with fresh builds (e.g., UAT)
+.\start-docker.ps1 -Environment uat -Profile https -Strict
+```
+
+Notes:
+- `-Strict` makes pre-pull errors fatal and enforces health checks.
+- When containers are Healthy/Running, the script exits 0 even if docker-compose prints status on stderr.
+- See the comprehensive guide for details: `Documentation/02-Docker-Guides/DOCKER_COMPREHENSIVE_GUIDE.md` (Strict Mode section).
+
 ## New Enterprise Parameters
 
 | Parameter | Description | Best Used For |

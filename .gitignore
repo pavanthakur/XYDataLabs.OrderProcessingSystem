@@ -13,6 +13,11 @@
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 
+# Project user files (Visual Studio specific)
+*.csproj.user
+*.vbproj.user
+*.vcxproj.user
+
 # Mono auto generated files
 mono_crash.*
 
@@ -40,6 +45,11 @@ bld/
 
 # Visual Studio 2017 auto generated files
 Generated\ Files/
+
+# Docker cache files and directories
+**/obj/Docker/
+**/obj/**/Docker/
+.dockerignore
 
 # MSTest test Results
 [Tt]est[Rr]esult*/

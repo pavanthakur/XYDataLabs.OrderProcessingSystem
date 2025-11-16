@@ -284,6 +284,26 @@ To add custom parameters (like `-EnterpriseMode`), modify the `commandLineArgs` 
 "commandLineArgs": "-Command \"cd '$(SolutionDir)'; .\\start-docker.ps1 -Environment dev -Profile http -EnterpriseMode\""
 ```
 
+### Strict Mode (CI/Local)
+Use `-Strict` for CI-grade health enforcement in Visual Studio profiles or locally:
+
+- Pre-pull errors are fatal; health wait is enforced and failure prints recent logs.
+- When containers are Healthy/Running, the script exits 0 even if docker-compose writes status to stderr.
+- For fast local reuse, pair with `-LegacyBuild` instead of building.
+
+Examples (update `commandLineArgs`):
+```json
+// Fast dev startup, reuse images, require health to pass
+"commandLineArgs": "-NoProfile -ExecutionPolicy Bypass -Command \"cd '$(SolutionDir)Resources\\Docker'; .\\start-docker.ps1 -Environment dev -Profile http -LegacyBuild -Strict\""
+
+// Enforce strict health in UAT with fresh build
+"commandLineArgs": "-NoProfile -ExecutionPolicy Bypass -Command \"cd '$(SolutionDir)Resources\\Docker'; .\\start-docker.ps1 -Environment uat -Profile https -Strict\""
+```
+
+Notes:
+- Don’t enable `-Strict` by default for everyday F5 unless you need health gating.
+- See `DOCKER_COMPREHENSIVE_GUIDE.md` → Strict Mode for full details.
+
 ### Debugging
 - Check Visual Studio Output window for execution details
 - Monitor Docker Desktop for container status

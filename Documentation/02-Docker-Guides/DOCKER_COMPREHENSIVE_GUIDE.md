@@ -41,6 +41,9 @@ cd Resources\Docker
 
 # Enterprise mode with additional safeguards
 .\start-docker.ps1 -Environment prod -Profile https -EnterpriseMode -BackupFirst
+ 
+# CI-friendly strict startup (health enforced, pre-pull errors fatal)
+.\start-docker.ps1 -Environment dev -Profile http -Strict
 ```
 
 ### Development Speed Mode (Optional)
@@ -54,6 +57,12 @@ cd Resources\Docker
 - **UAT**: Always use default behavior for testing reliability  
 - **Development**: Use default for consistency, `-LegacyBuild` only when needed for speed
 - **CI/CD Pipelines**: Never use `-LegacyBuild` in automated deployments
+
+### ⏳ First-Time Setup: Base Image Download
+
+**Important**: The first time you run the `./start-docker.ps1` script on a new machine, it will download the required .NET base images (`mcr.microsoft.com/dotnet/sdk:8.0` and `aspnet:8.0`). This is a **one-time process** that can take **5-15 minutes** depending on your network speed.
+
+The script now provides detailed progress messages, including timers and status updates. Please be patient and do not interrupt the process. Subsequent builds will be much faster as the images will be cached locally.
 
 ## 🚀 Quick Start Commands
 
@@ -74,6 +83,9 @@ cd Resources\Docker
 
 # Production (Enterprise Mode Recommended)
 .\start-docker.ps1 -Environment prod -Profile https -EnterpriseMode -BackupFirst
+
+# CI/local strict startup (require health to pass)
+.\start-docker.ps1 -Environment dev -Profile http -Strict
 ```
 
 ### Stop Services
@@ -913,21 +925,39 @@ If you encounter database connection issues:
 
 ---
 
-## �📖 Command Reference
+## 📖 Command Reference
 
 ### Script Parameters
 
 | Parameter | Values | Default | Description |
 |-----------|--------|---------|-------------|
 | `-Environment` | `dev`, `uat`, `prod` | `dev` | Target environment |
-| `-Profile` | `http`, `https`, `all` | `http` | Services to start |
-| `-SharedSettingsPath` | File path | `sharedsettings.{env}.json` | Configuration file |
-| `-EnvFilePath` | File path | `.env` | Environment file output |
-| `-Down` | Switch | False | Stop services |
-| `-EnterpriseMode` | Switch | False | Enable enterprise features |
-| `-ConservativeClean` | Switch | False | Conservative cache cleanup |
-| `-PreservePersistentData` | Switch | False | Preserve volumes during cleanup |
-| `-BackupFirst` | Switch | False | Create backup before starting |
+| `-Profile` | `http`, `https`, `all` | `http` | Services to start (HTTP only, HTTPS only, or both) |
+| `-Down` | Switch | False | Stop services (teardown for environment/profile) |
+| `-LegacyBuild` | Switch | False | Reuse existing images for speed (dev only recommended) |
+| `-Strict` | Switch | False | CI-grade: retries + fallback warming for base images; enforce health wait (timeout via `-HealthTimeoutSec`) and normalize exit codes |
+| `-HealthTimeoutSec` | Integer | `90` | Health wait timeout (applies when `-Strict` or `-LegacyBuild`) |
+| `-NoPrePull` | Switch | False | Skip base image pre-pull warm step |
+| `-Reset` | Switch | False | Stop stack + remove images for selected profile before start (clean rebuild) |
+| `-EnterpriseMode` | Switch | False | Enable enterprise networks, logging, backup policies |
+| `-ConservativeClean` | Switch | False | Enterprise: reduce cleanup aggressiveness (UAT/Prod) |
+| `-PreservePersistentData` | Switch | False | Enterprise: preserve labeled persistent volumes |
+| `-BackupFirst` | Switch | False | Enterprise: force backup prior to start (recommended for prod) |
+| `-SharedSettingsPath` | File path | Auto | Override path to `sharedsettings.{env}.json` |
+| `-EnvFilePath` | File path | (unused) | Reserved for future environment file generation |
+| `-Help` | Switch | False | Display inline usage/help and exit |
+
+### Parameter Simplification (Migration)
+
+Deprecated (Removed) | Replacement / Behavior Now
+---------------------|---------------------------------------------
+`-PrePullRetryCount` | Automatic retries in `-Strict` (3 attempts)
+`-UseBuildFallbackForPrePull` | Automatic build-based fallback in `-Strict`
+`-FailOnPrePullError` | Implied by `-Strict` (fatal on failure)
+`-WaitForHealthy` | Implied by `-Strict` and `-LegacyBuild`
+`-CleanImages` | Use `-Reset` for clean profile image rebuild
+
+Rationale: These granular resilience flags were consolidated to reduce cognitive load. Strict mode now encapsulates robust base image acquisition (retry + fallback) and health enforcement. For full rebuilds use `-Reset`. To skip initial warm pulls use `-NoPrePull`.
 
 ### Profile Options
 
@@ -976,6 +1006,52 @@ If you encounter database connection issues:
 
 # Production - Stable deployment
 .\start-docker.ps1 -Environment prod -Profile https
+```
+
+### Strict Mode (-Strict)
+
+Use `-Strict` for CI-grade determinism and resilient startup:
+
+* Automatic base image retries (3 attempts) plus build-based fallback warming if pulls fail.
+* Fatal on unresolved base image acquisition (script exits with error if images cannot be obtained).
+* Enforced health wait: containers must reach Running/Healthy within `-HealthTimeoutSec` (default 90s) or the script fails and prints recent logs.
+* Normalizes docker-compose stderr status noise: exit code 0 when services are healthy.
+* Combine with `-LegacyBuild` for faster local strict runs (image reuse + health enforcement).
+
+Examples:
+```powershell
+# Fast local reuse + strict health
+.\start-docker.ps1 -Environment dev -Profile http -LegacyBuild -Strict
+
+# Fresh strict build (recommended for CI/UAT)
+.\start-docker.ps1 -Environment uat -Profile https -Strict
+
+# Production dry run (health gated)
+.\start-docker.ps1 -Environment prod -Profile https -Strict
+```
+
+### Reset vs. NoPrePull
+
+| Scenario | Use |
+|----------|-----|
+| Need clean rebuild for a single profile (HTTP or HTTPS) | `-Reset` |
+| Skipping base image warm step on a fast network or after recent pulls | `-NoPrePull` |
+| Flaky network / CI reliability | `-Strict` (handles retries + fallback) |
+
+### Quick Migration Examples
+
+Old Command | New Command
+------------|------------
+`-PrePullRetryCount 5 -UseBuildFallbackForPrePull` | `-Strict` (built-in resilience)
+`-FailOnPrePullError` | `-Strict`
+`-CleanImages -Down` | `-Reset`
+`-WaitForHealthy` | `-Strict` or implicit with `-LegacyBuild`
+
+### Help Output
+
+Inline usage is available:
+```powershell
+.\start-docker.ps1 -Help
 ```
 
 ---
@@ -1424,6 +1500,22 @@ using (var scope = app.Services.CreateScope())
 - ✅ Visual Studio F5 debugging works with all docker profiles
 
 ### Common Issues
+
+#### ⚠️ Base Image Pull Failures (Critical)
+**Symptom**: The build fails with an error like `Build failed and required images are missing` or `failed to resolve reference "mcr.microsoft.com/..."`.
+
+**Root Cause**: This almost always means your Docker environment cannot download the required base images (e.g., `mcr.microsoft.com/dotnet/sdk:8.0`) from the internet. This can happen if you manually deleted the images and your machine is behind a restrictive firewall or proxy.
+
+**Do NOT manually delete base images unless you are certain you can re-download them.**
+
+**Solution**:
+1.  **Confirm the network issue**: Run `docker pull mcr.microsoft.com/dotnet/sdk:8.0`. If this fails, the problem is your machine's network configuration, not the project scripts.
+2.  **Check Docker Settings**: Investigate `Settings > Proxies` and `Settings > Network` in Docker Desktop.
+3.  **Offline Recovery**: If you cannot fix the network issue, you must manually load the images.
+    - On a machine with internet, run `docker save -o sdk.tar mcr.microsoft.com/dotnet/sdk:8.0`.
+    - Copy the `sdk.tar` file to your machine.
+    - On your machine, run `docker load -i sdk.tar`.
+    - Repeat for `mcr.microsoft.com/dotnet/aspnet:8.0`.
 
 #### 1. Port Already in Use
 ```powershell

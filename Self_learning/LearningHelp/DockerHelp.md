@@ -1,3 +1,141 @@
+## Beginner Quick Start (Windows PowerShell)
+
+Follow these steps to start the dev environment reliably:
+
+> **Note on First-Time Setup:** The initial download of base Docker images (like .NET SDK and ASP.NET runtime) can be time-consuming, especially on slower networks. The script will display a message box to inform you when this one-time download is in progress. Please be patient and allow the process to complete.
+
+1) Navigate to the Docker scripts folder
+```powershell
+Set-Location R:\GitGetPavan\TestAppXY_OrderProcessingSystem\Resources\Docker
+```
+
+2) Fresh rebuild and start (recommended after image deletion)
+```powershell
+./start-docker.ps1 -Environment dev -Profile http
+```
+
+3) Enforce health & resilience (optional, CI-like)
+```powershell
+./start-docker.ps1 -Environment dev -Profile http -Strict
+```
+- Use `-Strict` to: (a) retry + fallback warm base images if pulls fail, (b) enforce health wait (90s default), (c) normalize exit code (0 when containers healthy even with compose stderr status lines).
+- After the first build, for faster strict starts you can reuse images:
+```powershell
+./start-docker.ps1 -Environment dev -Profile http -LegacyBuild -Strict
+```
+
+4) Verify it’s up
+- API (HTTP): `http://localhost:5020/swagger`
+- API (HTTPS): `https://localhost:5021/swagger`
+- UI (HTTP): `http://localhost:5022`
+- UI (HTTPS): `https://localhost:5023`
+
+Check status quickly:
+```powershell
+docker ps --format "table {{.Names}}`t{{.Status}}`t{{.Ports}}"
+```
+
+Stop the stack:
+```powershell
+./start-docker.ps1 -Environment dev -Profile http -Down
+```
+
+Tips for beginners:
+- First run after image deletion: omit `-LegacyBuild` so a fresh build occurs.
+- Flaky network / transient pull failures: just add `-Strict` (automatic retries + fallback warming built-in).
+- Need a totally clean rebuild for ONE profile (http or https) without touching the other protocol's images: use `-Reset`.
+- Want to skip warming base images (already cached): add `-NoPrePull`.
+
+Quick scenarios:
+```powershell
+# Standard dev (fresh build)
+./start-docker.ps1 -Environment dev -Profile http
+
+# Fast reuse, health gated
+./start-docker.ps1 -Environment dev -Profile http -LegacyBuild -Strict
+
+# Clean rebuild for HTTPS only
+./start-docker.ps1 -Environment dev -Profile https -Reset
+
+# Skip base image warm step
+./start-docker.ps1 -Environment dev -Profile http -NoPrePull
+
+# CI-style deterministic start
+./start-docker.ps1 -Environment dev -Profile http -Strict
+```
+
+## Common Errors and Fixes (Quick)
+
+- Port already in use
+  - Symptom: docker-compose fails to bind `5020-5023`.
+  - Fix:
+    ```powershell
+    netstat -ano | findstr :5020
+    taskkill /PID <PID> /F
+    .\start-docker.ps1 -Environment dev -Profile http -Down
+    .\start-docker.ps1 -Environment dev -Profile http
+    ```
+
+- Script execution disabled
+  - Symptom: "Execution of scripts is disabled on this system".
+  - Fix:
+    ```powershell
+    Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+    ```
+
+- Docker engine not running
+  - Symptom: `docker` commands fail or hang.
+  - Fix: Open Docker Desktop and wait until it shows "Running"; verify with:
+    ```powershell
+    docker ps
+    ```
+
+- Network not found: `xy-database-network`
+  - Symptom: "declared as external, but could not be found".
+  - Fix: Re-run the start script (auto-creates). Manual fallback:
+    ```powershell
+    docker network create xy-database-network
+    ```
+
+- Images deleted or fast reuse used too early
+  - Symptom: Services fail to start due to missing images. The build may fail with `Build failed and required images are missing`.
+  - **Warning**: Do not manually delete base images like `mcr.microsoft.com/dotnet/sdk:8.0`. If your network blocks Docker from re-downloading them, your builds will be completely broken.
+  - Fix: Rebuild without `-LegacyBuild` to force a fresh build.
+    ```powershell
+    .\start-docker.ps1 -Environment dev -Profile http
+    ```
+
+- Flaky base image pulls (proxy/corporate networks)
+  - Fix: Use strict mode (automatic retries + fallback warming):
+    ```powershell
+    ./start-docker.ps1 -Environment dev -Profile http -Strict
+    ```
+
+- Containers not healthy
+  - Symptom: Services stay `starting` or `unhealthy`.
+  - Fix: Enforce health and print recent logs:
+    ```powershell
+    .\start-docker.ps1 -Environment dev -Profile http -Strict
+    ```
+  - Manual logs (dev):
+    ```powershell
+    docker-compose -f docker-compose.dev.yml logs --tail 150
+    ```
+
+- HTTPS certificate/trust issues (development)
+  - Fix:
+    ```powershell
+    dotnet dev-certs https -ep .\Resources\Certificates\aspnetapp.pfx -p P@ss100
+    dotnet dev-certs https --trust
+    ```
+
+- File blocked after download
+  - Symptom: Access denied when running script.
+  - Fix:
+    ```powershell
+    Unblock-File .\start-docker.ps1
+    ```
+
 ## Section 1: Environment-Specific Docker Configuration
 
 Here's an evaluation of the environment-specific docker-compose files:
@@ -46,11 +184,14 @@ You can test different environments with:
 # Production environment
 .\start-docker.ps1 -Environment prod -Profile https
 ```
-- For HTTP, open: http://localhost:5002
-- For HTTPS, open: https://localhost:5003
+- Development URLs:
+  - API (HTTP): http://localhost:5020/swagger
+  - API (HTTPS): https://localhost:5021/swagger
+  - UI (HTTP): http://localhost:5022
+  - UI (HTTPS): https://localhost:5023
 
 **Conclusion:**
-Environment-specific Docker Compose files provide better isolation, configuration management, and deployment flexibility. Each environment has its own optimized settings while maintaining consistency in service definitions.
+Environment-specific Docker Compose files provide isolation and clarity. Strict mode centralizes resilience; `-Reset` gives clean profile rebuilds; `-NoPrePull` lets you skip warming when unnecessary—all while keeping commands simple.
 
 ## Section 2: Environment-Specific Docker Compose Architecture
 
@@ -101,7 +242,7 @@ For development environments, hot reload is configured for both API and UI proje
 .\start-docker.ps1 -Environment dev -Profile http
 
 # Make code changes - they will automatically reload
-# View changes at: http://localhost:5002
+# View changes at: http://localhost:5022
 ```
 
 ### Volume Mount Benefits

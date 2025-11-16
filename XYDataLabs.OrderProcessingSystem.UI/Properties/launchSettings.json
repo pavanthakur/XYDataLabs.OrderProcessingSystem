@@ -26,7 +26,7 @@
     "docker-dev-http": {
       "commandName": "Executable",
       "executablePath": "powershell.exe",
-      "commandLineArgs": "-NoProfile -ExecutionPolicy Bypass -Command \"& '$(SolutionDir)Resources\\Docker\\start-docker.ps1' -Environment dev -Profile http\"",
+      "commandLineArgs": "-NoProfile -ExecutionPolicy Bypass -Command \"& '$(SolutionDir)Resources\\Docker\\start-docker.ps1' -Environment dev -Profile http -Reset -NoPrePull\"",
       "workingDirectory": "$(SolutionDir)",
       "launchBrowser": true,
       "launchUrl": "http://localhost:5022",
@@ -37,7 +37,7 @@
     "docker-dev-https": {
       "commandName": "Executable",
       "executablePath": "powershell.exe",
-      "commandLineArgs": "-NoProfile -ExecutionPolicy Bypass -Command \"& '$(SolutionDir)Resources\\Docker\\start-docker.ps1' -Environment dev -Profile https\"",
+      "commandLineArgs": "-NoProfile -ExecutionPolicy Bypass -Command \"& '$(SolutionDir)Resources\\Docker\\start-docker.ps1' -Environment dev -Profile https -Reset -NoPrePull\"",
       "workingDirectory": "$(SolutionDir)",
       "launchBrowser": true,
       "launchUrl": "https://localhost:5023",
@@ -48,7 +48,7 @@
     "docker-uat-http": {
       "commandName": "Executable",
       "executablePath": "powershell.exe",
-      "commandLineArgs": "-NoProfile -ExecutionPolicy Bypass -Command \"& '$(SolutionDir)Resources\\Docker\\start-docker.ps1' -Environment uat -Profile http\"",
+      "commandLineArgs": "-NoProfile -ExecutionPolicy Bypass -Command \"& '$(SolutionDir)Resources\\Docker\\start-docker.ps1' -Environment uat -Profile http -Reset -NoPrePull\"",
       "workingDirectory": "$(SolutionDir)",
       "launchBrowser": true,
       "launchUrl": "http://localhost:5032",
@@ -59,7 +59,7 @@
     "docker-uat-https": {
       "commandName": "Executable",
       "executablePath": "powershell.exe",
-      "commandLineArgs": "-NoProfile -ExecutionPolicy Bypass -Command \"& '$(SolutionDir)Resources\\Docker\\start-docker.ps1' -Environment uat -Profile https\"",
+      "commandLineArgs": "-NoProfile -ExecutionPolicy Bypass -Command \"& '$(SolutionDir)Resources\\Docker\\start-docker.ps1' -Environment uat -Profile https -Reset -NoPrePull\"",
       "workingDirectory": "$(SolutionDir)",
       "launchBrowser": true,
       "launchUrl": "https://localhost:5033",
@@ -70,7 +70,7 @@
     "docker-prod-http": {
       "commandName": "Executable",
       "executablePath": "powershell.exe",
-      "commandLineArgs": "-NoProfile -ExecutionPolicy Bypass -Command \"& '$(SolutionDir)Resources\\Docker\\start-docker.ps1' -Environment prod -Profile http\"",
+      "commandLineArgs": "-NoProfile -ExecutionPolicy Bypass -Command \"& '$(SolutionDir)Resources\\Docker\\start-docker.ps1' -Environment prod -Profile http -Reset -NoPrePull\"",
       "workingDirectory": "$(SolutionDir)",
       "launchBrowser": true,
       "launchUrl": "http://localhost:5042",
@@ -81,7 +81,7 @@
     "docker-prod-https": {
       "commandName": "Executable",
       "executablePath": "powershell.exe",
-      "commandLineArgs": "-NoProfile -ExecutionPolicy Bypass -Command \"& '$(SolutionDir)Resources\\Docker\\start-docker.ps1' -Environment prod -Profile https\"",
+      "commandLineArgs": "-NoProfile -ExecutionPolicy Bypass -Command \"& '$(SolutionDir)Resources\\Docker\\start-docker.ps1' -Environment prod -Profile https -Reset -NoPrePull\"",
       "workingDirectory": "$(SolutionDir)",
       "launchBrowser": true,
       "launchUrl": "https://localhost:5043",

@@ -35,6 +35,21 @@ Q:\GIT\TestAppXY_OrderProcessingSystem> dotnet dev-certs https --trust
 
 # Production environment (ports 5040-5043)
 .\start-docker.ps1 -Environment prod -Profile https
+
+# CI-grade strict startup (health gated, retries + fallback)
+.\start-docker.ps1 -Environment dev -Profile http -Strict
+
+# Fast local reuse with health enforcement
+.\start-docker.ps1 -Environment dev -Profile http -LegacyBuild -Strict
+
+# Clean rebuild of single profile (http or https)
+.\start-docker.ps1 -Environment dev -Profile https -Reset
+
+# Skip base image pre-pull (already cached)
+.\start-docker.ps1 -Environment dev -Profile http -NoPrePull
+
+# Show help and usage
+.\start-docker.ps1 -Help
 ```
 
 ### **Option 3: Enterprise Docker Mode**
@@ -49,7 +64,9 @@ Q:\GIT\TestAppXY_OrderProcessingSystem> dotnet dev-certs https --trust
 .\start-docker.ps1 -Environment prod -Profile https -EnterpriseMode -BackupFirst
 ```
 
-> **🏢 Enterprise Mode Features**: Network isolation, automatic backups, environment-specific cleanup policies, enhanced logging, and production safety controls. See [Enterprise Docker Guide](ENTERPRISE_DOCKER_GUIDE.md) for complete documentation.
+> **🏢 Enterprise Mode Features**: Network isolation, automatic backups, environment-specific cleanup policies, enhanced logging, and production safety controls. See [Enterprise Docker Guide](../02-Docker-Guides/ENTERPRISE_DOCKER_GUIDE.md) for complete documentation.
+
+> **📖 Simplified Interface (Nov 2025)**: Deprecated flags removed (`-PrePullRetryCount`, `-UseBuildFallbackForPrePull`, `-FailOnPrePullError`, `-WaitForHealthy`, `-CleanImages`). Use `-Strict` for resilience + health gating, `-Reset` for clean rebuilds, `-NoPrePull` to skip warming. Full migration guide in [Docker Comprehensive Guide](../02-Docker-Guides/DOCKER_COMPREHENSIVE_GUIDE.md).
 
 ## 🗄️ Database Environment Strategy
 
@@ -119,7 +136,7 @@ This repository contains the implementation of Domain Driven Design and Clean Ar
 
 
 # TODO
-1.	Make Docker launch configurable seperate profile http and https
+1.	~~Make Docker launch configurable separate profile http and https~~ ✅ **COMPLETED** (Multi-environment docker-compose with http/https/all profiles)
 2.	Add another API
 3.	Sql Post Gres
 4.	Redis

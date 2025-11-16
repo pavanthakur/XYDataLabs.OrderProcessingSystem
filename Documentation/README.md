@@ -14,6 +14,7 @@ Contains Docker-related setup and configuration guides:
 - `DOCKER_COMPREHENSIVE_GUIDE.md` - Complete Docker setup guide (46KB)
 - `ENTERPRISE_DOCKER_GUIDE.md` - Enterprise Docker configuration (17KB)
 - `VISUAL_STUDIO_DOCKER_PROFILES.md` - Visual Studio Docker profiles guide (12KB)
+	- Includes new `-Strict` mode docs for CI-friendly startup
 
 ### 03-Database-Guides
 *Currently empty - reserved for database-related documentation*
@@ -92,3 +93,57 @@ Consider:
 2. Creating index files for each category if they grow larger
 3. Adding new documentation files to appropriate categories
 4. Keeping the folder structure aligned with Visual Studio solution
+
+## 🚀 Docker Startup Interface (Nov 16 2025 Simplification)
+
+The `start-docker.ps1` script was simplified to reduce cognitive load while improving resilience.
+
+### New / Core Flags
+| Flag | Purpose |
+|------|---------|
+| `-Strict` | CI-grade startup: base image retry + fallback warming, enforced health wait, normalized exit code. |
+| `-LegacyBuild` | Reuse existing images for faster local cycles (dev only recommended). |
+| `-Reset` | Stop stack + remove images for selected profile (http/https) then rebuild cleanly. |
+| `-NoPrePull` | Skip base image warm pre-pull step (use when images already cached). |
+| `-Help` | Inline usage and migration guidance. |
+
+### Health Behavior
+Health wait is automatic when using `-Strict` or `-LegacyBuild`. Timeout configurable via `-HealthTimeoutSec` (default 90s).
+
+### Deprecated → Replacement
+| Deprecated | Replacement / Now Handled By |
+|------------|------------------------------|
+| `-PrePullRetryCount` | Built-in retries (3) under `-Strict`. |
+| `-UseBuildFallbackForPrePull` | Automatic fallback warming under `-Strict`. |
+| `-FailOnPrePullError` | Implied by `-Strict` (fatal on unresolved base image pulls). |
+| `-WaitForHealthy` | Implied by `-Strict` & `-LegacyBuild`. |
+| `-CleanImages` | Use `-Reset` for per-profile clean rebuild. |
+
+> **Note on First-Time Setup:** The initial download of base Docker images (like .NET SDK and ASP.NET runtime) can be time-consuming, especially on slower networks. The script will display a message box to inform you when this one-time download is in progress. Please be patient and allow the process to complete.
+
+### Quick Examples
+```powershell
+# Standard dev fresh build
+./start-docker.ps1 -Environment dev -Profile http
+
+# Fast strict reuse (image reuse + health gating)
+./start-docker.ps1 -Environment dev -Profile http -LegacyBuild -Strict
+
+# Clean rebuild of HTTPS profile only
+./start-docker.ps1 -Environment dev -Profile https -Reset
+
+# UAT strict with HTTPS
+./start-docker.ps1 -Environment uat -Profile https -Strict
+
+# Skip base warm pull (fast network)
+./start-docker.ps1 -Environment dev -Profile http -NoPrePull
+
+# Show help
+./start-docker.ps1 -Help
+```
+
+### Why Simplify?
+Previous granular resilience flags created friction with little day‑to‑day benefit. Consolidating into `-Strict` gives reliable deterministic startup in pipelines and local health verification without parameter tuning. `-Reset` replaces image clean logic; `-NoPrePull` provides explicit opt‑out when warming is unnecessary.
+
+### Reference
+For full details see `02-Docker-Guides/DOCKER_COMPREHENSIVE_GUIDE.md` (Parameter table + migration section).
