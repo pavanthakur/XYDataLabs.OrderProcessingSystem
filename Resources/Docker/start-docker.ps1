@@ -50,6 +50,44 @@ param(
     [switch]$Help
 )
 
+# Compose command auto-detection (supports Docker Compose v1 'docker-compose' and v2 'docker compose')
+function Get-DockerComposeCommand {
+    # Prefer v2 plugin: docker compose
+    try {
+        docker compose version > $null 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            return { param($args) docker compose @args }
+        }
+    } catch {}
+    # Fallback to legacy docker-compose if present
+    try {
+        if (Get-Command docker-compose -ErrorAction SilentlyContinue) {
+            return { param($args) docker-compose @args }
+        }
+    } catch {}
+    throw "Docker Compose not found (neither 'docker compose' nor 'docker-compose'). Install Docker Compose plugin."
+}
+
+$ComposeCmd = Get-DockerComposeCommand
+
+# Human-friendly display of compose command for logging/help (avoid invalid Get-Command usage with subcommand)
+try {
+    docker compose version > $null 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        $ComposeDisplay = 'docker compose'
+    } elseif (Get-Command docker-compose -ErrorAction SilentlyContinue) {
+        $ComposeDisplay = 'docker-compose'
+    } else {
+        $ComposeDisplay = 'docker compose'
+    }
+} catch {
+    if (Get-Command docker-compose -ErrorAction SilentlyContinue) {
+        $ComposeDisplay = 'docker-compose'
+    } else {
+        $ComposeDisplay = 'docker compose'
+    }
+}
+
 # Enterprise configuration for environment-specific settings
 $EnterpriseConfig = @{
     "dev" = @{
@@ -160,8 +198,7 @@ function Get-ComposeContainerIds {
         [string]$Profile
     )
     try {
-        $psCmd = "docker-compose $($ComposeFiles -join ' ') --profile $Profile ps -q"
-        $ids = Invoke-Expression $psCmd 2>$null
+        $ids = & $ComposeCmd $ComposeFiles --profile $Profile ps -q 2>$null
         return $ids
     } catch {
         return @()
@@ -222,8 +259,7 @@ function Show-ComposeLogs {
     )
     try {
         Write-ColoredOutput "Recent container logs (last $Tail lines):" "Yellow" "INFO"
-        $logCmd = "docker-compose $($ComposeFiles -join ' ') --profile $Profile logs --no-color --tail $Tail"
-        $logs = Invoke-Expression $logCmd 2>&1
+        $logs = & $ComposeCmd $ComposeFiles --profile $Profile logs --no-color --tail $Tail 2>&1
         $logs | ForEach-Object { Write-ColoredOutput "  $_" "Gray" "INFO" }
     } catch {
         Write-ColoredOutput "Failed to fetch compose logs: $($_.Exception.Message)" "Yellow" "WARNING"
@@ -538,8 +574,8 @@ try {
             throw "Environment-specific compose file docker-compose.$Environment.yml not found. Available environments: dev, uat, prod"
         }
         
-        $downCmd = "docker-compose $($composeFiles -join ' ') --profile $Profile down"
-        Invoke-Expression $downCmd
+        Write-ColoredOutput "Running: $ComposeDisplay $($composeFiles -join ' ') --profile $Profile down" "Gray" "INFO"
+        & $ComposeCmd $composeFiles --profile $Profile down
         return
     }
 
@@ -647,8 +683,8 @@ try {
     if ($Reset) {
         try {
             Write-ColoredOutput "Reset requested: stopping existing services..." "Yellow" "INFO"
-            $downCmd = "docker-compose $($composeFiles -join ' ') --profile $Profile down -v"
-            Invoke-Expression $downCmd 2>$null | Out-Null
+            Write-ColoredOutput "Running (reset): $ComposeDisplay $($composeFiles -join ' ') --profile $Profile down -v" "Gray" "INFO"
+            & $ComposeCmd $composeFiles --profile $Profile down -v 2>$null | Out-Null
         } catch {}
         Remove-ProjectImages -Environment $Environment -Profile $Profile
     }
@@ -682,20 +718,15 @@ try {
         Write-ColoredOutput "⚠️  Not recommended for UAT/Production environments" "Yellow" "WARNING"
         
         # Legacy mode: Use existing images if available
-        $dockerCmd = "docker-compose $($composeFiles -join ' ') --profile $Profile up -d"
+        $dockerCmd = "$ComposeDisplay $($composeFiles -join ' ') --profile $Profile up -d"
         Write-ColoredOutput "Running: $dockerCmd" "Gray"
-        
-        # Execute Docker Compose with enhanced error handling
-        $dockerOutput = Invoke-Expression $dockerCmd 2>&1
+        $dockerOutput = & $ComposeCmd $composeFiles --profile $Profile up -d 2>&1
     } else {
         Write-ColoredOutput "Building fresh container images (Azure-style deployment)..." "Cyan" "INFO"
         Write-ColoredOutput "🏢 Enterprise Mode: Ensuring reproducible, secure builds" "Green" "INFO"
-        
-        $buildCmd = "docker-compose $($composeFiles -join ' ') --profile $Profile build --no-cache"
+        $buildCmd = "$ComposeDisplay $($composeFiles -join ' ') --profile $Profile build --no-cache"
         Write-ColoredOutput "Running: $buildCmd" "Gray"
-        
-        # Execute clean build with enhanced error handling
-        $buildOutput = Invoke-Expression $buildCmd 2>&1
+        $buildOutput = & $ComposeCmd $composeFiles --profile $Profile build --no-cache 2>&1
         $buildOutputString = $buildOutput -join "`n"
         $buildExitCode = $LASTEXITCODE
 
@@ -739,11 +770,9 @@ try {
         Write-ColoredOutput "Starting containers..." "Cyan" "INFO"
 
         # Start containers
-        $dockerCmd = "docker-compose $($composeFiles -join ' ') --profile $Profile up -d"
+        $dockerCmd = "$ComposeDisplay $($composeFiles -join ' ') --profile $Profile up -d"
         Write-ColoredOutput "Running: $dockerCmd" "Gray"
-
-        # Execute Docker Compose with enhanced error handling
-        $dockerOutput = Invoke-Expression $dockerCmd 2>&1
+        $dockerOutput = & $ComposeCmd $composeFiles --profile $Profile up -d 2>&1
     }
     
     # Health wait implicit for Strict and LegacyBuild
@@ -832,7 +861,7 @@ try {
             
             # Retry the command
             Write-ColoredOutput "Retrying Docker Compose startup..." "Yellow" "INFO"
-            $dockerOutput = Invoke-Expression $dockerCmd 2>&1
+            $dockerOutput = & $ComposeCmd $composeFiles --profile $Profile up -d 2>&1
             
             # Check retry result
             if ($LASTEXITCODE -ne 0) {
@@ -957,7 +986,7 @@ try {
         
         Write-ColoredOutput "" "White"
         Write-ColoredOutput "Quick Commands:" "Yellow" "INFO"
-        Write-ColoredOutput "  View logs:    docker-compose -f docker-compose.$Environment.yml logs -f" "White" "INFO"
+        Write-ColoredOutput "  View logs:    $ComposeDisplay -f docker-compose.$Environment.yml logs -f" "White" "INFO"
         Write-ColoredOutput "  Stop:         .\start-docker.ps1 -Environment $Environment -Profile $Profile -Down" "White" "INFO"
         Write-ColoredOutput "  Legacy build: .\start-docker.ps1 -Environment $Environment -Profile $Profile -LegacyBuild" "Yellow" "INFO"
         

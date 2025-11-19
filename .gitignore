@@ -371,3 +371,9 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# --- Custom ignores for Azure deployment artifacts ---
+# Generated EF Core migration scripts (do not commit)
+Resources/Azure-Deployment/generated-migrations-*.sql
+# Temp test run logs from orchestration scripts
+Resources/Azure-Deployment/test-run-*.log

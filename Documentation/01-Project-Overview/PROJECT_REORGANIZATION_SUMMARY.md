@@ -101,10 +101,10 @@ cd Resources\Docker
 
 ### **Updated Files:**
 - ✅ `Documentation/README.md` - Resources folder structure documented
-- ✅ `Documentation/02-Docker-Guides/DOCKER_COMPREHENSIVE_GUIDE.md` - All command paths updated
-- ✅ `Documentation/02-Docker-Guides/VISUAL_STUDIO_DOCKER_PROFILES.md` - Script location updated
-- ✅ `Documentation/04-Configuration-Guides/SIMPLIFIED_CONFIG_GUIDE.md` - All references updated
-- ✅ `Documentation/04-Configuration-Guides/DOTENV_DEPENDENCY_ELIMINATION_SUMMARY.md` - Paths updated
+- ✅ `Documentation/02-Azure-Learning-Guides/DOCKER_COMPREHENSIVE_GUIDE.md` - All command paths updated
+- ✅ `Documentation/02-Azure-Learning-Guides/VISUAL_STUDIO_DOCKER_PROFILES.md` - Script location updated
+- ✅ `Documentation/03-Configuration-Guides/SIMPLIFIED_CONFIG_GUIDE.md` - All references updated
+- ✅ `Documentation/03-Configuration-Guides/DOTENV_DEPENDENCY_ELIMINATION_SUMMARY.md` - Paths updated
 
 ### **Command Reference Update:**
 ```powershell

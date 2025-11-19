@@ -64,9 +64,9 @@ Q:\GIT\TestAppXY_OrderProcessingSystem> dotnet dev-certs https --trust
 .\start-docker.ps1 -Environment prod -Profile https -EnterpriseMode -BackupFirst
 ```
 
-> **🏢 Enterprise Mode Features**: Network isolation, automatic backups, environment-specific cleanup policies, enhanced logging, and production safety controls. See [Enterprise Docker Guide](../02-Docker-Guides/ENTERPRISE_DOCKER_GUIDE.md) for complete documentation.
+> **🏢 Enterprise Mode Features**: Network isolation, automatic backups, environment-specific cleanup policies, enhanced logging, and production safety controls. See [Enterprise Docker Guide](../02-Azure-Learning-Guides/ENTERPRISE_DOCKER_GUIDE.md) for complete documentation.
 
-> **📖 Simplified Interface (Nov 2025)**: Deprecated flags removed (`-PrePullRetryCount`, `-UseBuildFallbackForPrePull`, `-FailOnPrePullError`, `-WaitForHealthy`, `-CleanImages`). Use `-Strict` for resilience + health gating, `-Reset` for clean rebuilds, `-NoPrePull` to skip warming. Full migration guide in [Docker Comprehensive Guide](../02-Docker-Guides/DOCKER_COMPREHENSIVE_GUIDE.md).
+> **📖 Simplified Interface (Nov 2025)**: Deprecated flags removed (`-PrePullRetryCount`, `-UseBuildFallbackForPrePull`, `-FailOnPrePullError`, `-WaitForHealthy`, `-CleanImages`). Use `-Strict` for resilience + health gating, `-Reset` for clean rebuilds, `-NoPrePull` to skip warming. Full migration guide in [Docker Comprehensive Guide](../02-Azure-Learning-Guides/DOCKER_COMPREHENSIVE_GUIDE.md).
 
 ## 🗄️ Database Environment Strategy
 

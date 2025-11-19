@@ -9,22 +9,42 @@ Contains main project documentation and overview files:
 - `README.md` - Main project documentation
 - `CLEANUP_SUMMARY.md` - Project cleanup activities summary
 
-### 02-Docker-Guides
-Contains Docker-related setup and configuration guides:
-- `DOCKER_COMPREHENSIVE_GUIDE.md` - Complete Docker setup guide (46KB)
-- `ENTERPRISE_DOCKER_GUIDE.md` - Enterprise Docker configuration (17KB)
-- `VISUAL_STUDIO_DOCKER_PROFILES.md` - Visual Studio Docker profiles guide (12KB)
-	- Includes new `-Strict` mode docs for CI-friendly startup
+### 02-Azure-Learning-Guides
+**Azure deployment, monitoring, and infrastructure automation guides**
+
+📖 **START HERE**: [Azure Documentation Navigation Guide](./02-Azure-Learning-Guides/AZURE_README.md)
+
+| Document | Purpose | Audience | Status |
+|----------|---------|----------|--------|
+| **AZURE_README.md** | Central navigation hub for all Azure documentation | Everyone | ✅ Latest |
+| **AZURE_DEPLOYMENT_GUIDE.md** | Complete deployment strategy and workflow (1300+ lines) | Developers, DevOps | ✅ Nov 2025 |
+| **BOOTSTRAP_SCRIPT_FLOW.md** | Line-by-line execution flow for code review (850+ lines) | Junior Devs, Reviewers | ✅ Nov 2025 |
+| **APPLICATION_INSIGHTS_SETUP.md** | Monitoring setup (legacy/reference) | Operations | ⚠️ Partially superseded |
+| **DEPLOYMENT_EXERCISES.md** | Hands-on tutorials and exercises | Learners | ⚠️ Some legacy content |
+
+**Quick Links by Use Case**:
+- 🚀 **First-time deployment** → [AZURE_README.md - Quick Start](./02-Azure-Learning-Guides/AZURE_README.md#quick-start---where-to-begin)
+- 🔍 **Code review** → [BOOTSTRAP_SCRIPT_FLOW.md](./02-Azure-Learning-Guides/BOOTSTRAP_SCRIPT_FLOW.md)
+- 🏢 **Enterprise setup** → [AZURE_DEPLOYMENT_GUIDE.md - Enterprise Strategy](./02-Azure-Learning-Guides/AZURE_DEPLOYMENT_GUIDE.md#enterprise-production-strategy-multi-environment)
+- 🔧 **Troubleshooting** → [BOOTSTRAP_SCRIPT_FLOW.md - Troubleshooting](./02-Azure-Learning-Guides/BOOTSTRAP_SCRIPT_FLOW.md#troubleshooting-guide)
+
+**Latest Enhancements (Nov 2025)**:
+- ✅ Parallel resource creation (3-4x faster)
+- ✅ Integrated OIDC setup (zero manual steps)
+- ✅ Intelligent 20-minute wait with interval checks
+- ✅ Automatic .NET 8 runtime configuration
+- ✅ Pre-existence checks for safe re-runs
+- ✅ Complete verification checklist
 
 ### 03-Database-Guides
 *Currently empty - reserved for database-related documentation*
 
-### 04-Configuration-Guides
+### 03-Configuration-Guides
 Contains application configuration and settings documentation:
 - `SIMPLIFIED_CONFIG_GUIDE.md` - Simplified configuration guide (7KB)
 - `DOTENV_DEPENDENCY_ELIMINATION_SUMMARY.md` - Environment configuration summary (8KB)
 
-### 05-Enterprise-Architecture
+### 04-Enterprise-Architecture
 *Currently empty - reserved for enterprise architecture documentation*
 
 ### 06-Testing-and-Results
@@ -142,8 +162,27 @@ Health wait is automatic when using `-Strict` or `-LegacyBuild`. Timeout configu
 ./start-docker.ps1 -Help
 ```
 
+### Compose Auto-Detection (Nov 16 2025 Update)
+The Docker startup script now automatically detects which Compose invocation is available:
+
+| Scenario | Detected Form | Action Needed |
+|----------|---------------|---------------|
+| Docker Desktop (modern) | `docker compose` | None – plugin used automatically |
+| Legacy install | `docker-compose` | None – legacy binary used if plugin absent |
+| Both present | `docker compose` | Preferred (v2) |
+| Neither present | (error) | Install Docker Desktop / Compose plugin |
+
+Manual commands in the guides still show `docker-compose` for backward compatibility. You can safely use `docker compose` – the script adapts either way. Prefer `docker compose` going forward (officially maintained v2). No documentation changes required for existing automation or CI; GitHub Actions runners already provide the v2 plugin.
+
+Minimal manual log tail example (dev):
+```powershell
+docker compose -f docker-compose.dev.yml logs -f api
+```
+
+If you see an error like "Docker Compose not found" ensure Docker Desktop is installed and restarted; then re-run `./start-docker.ps1 -Help`.
+
 ### Why Simplify?
 Previous granular resilience flags created friction with little day‑to‑day benefit. Consolidating into `-Strict` gives reliable deterministic startup in pipelines and local health verification without parameter tuning. `-Reset` replaces image clean logic; `-NoPrePull` provides explicit opt‑out when warming is unnecessary.
 
 ### Reference
-For full details see `02-Docker-Guides/DOCKER_COMPREHENSIVE_GUIDE.md` (Parameter table + migration section).
+For full details see `02-Azure-Learning-Guides/DOCKER_COMPREHENSIVE_GUIDE.md` (Parameter table + migration section).

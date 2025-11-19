@@ -12,6 +12,9 @@ using System.Text.RegularExpressions;
 using XYDataLabs.OrderProcessingSystem.Application.Utilities;
 
 // Bootstrap Serilog as early as possible so Log.* writes go to console immediately
+// GitHub Actions deployment test - OIDC validation
+// Testing automated deployment flow: Bootstrap → OIDC Setup → GitHub Secrets → Git Push → CI/CD Trigger
+// This change validates the complete end-to-end deployment pipeline with branch-based OIDC authentication
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Information()
     .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
@@ -274,7 +277,7 @@ Console.WriteLine($"[DEBUG] API is running and listening on https://{activeSetti
 
 try
 {
-    Log.Information("Starting API web host");
+    Log.Information("Starting API web host - Branch-based deployment enabled");
     app.Run();
 }
 catch (Exception ex)

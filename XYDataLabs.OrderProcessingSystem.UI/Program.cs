@@ -6,6 +6,9 @@ using Microsoft.Extensions.Options;
 using XYDataLabs.OrderProcessingSystem.Utilities;
 
 // Bootstrap Serilog as early as possible so Log.* writes go to console immediately
+// UI deployment test - Branch-based OIDC validation
+// Testing automated deployment flow: Bootstrap → OIDC Setup → GitHub Secrets → Git Push → CI/CD Trigger
+// This change validates the complete end-to-end deployment pipeline with branch-based OIDC authentication
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Information()
     .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
