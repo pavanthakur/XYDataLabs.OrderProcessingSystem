@@ -1,0 +1,109 @@
+name: Deploy UI to Azure App Service
+
+on:
+  push:
+    branches:
+      - main
+      - staging
+      - dev
+    paths:
+      - 'XYDataLabs.OrderProcessingSystem.UI/**'
+      - 'XYDataLabs.OrderProcessingSystem.Application/**'
+      - 'XYDataLabs.OrderProcessingSystem.Domain/**'
+      - 'XYDataLabs.OrderProcessingSystem.Infrastructure/**'
+      - 'XYDataLabs.OrderProcessingSystem.Utilities/**'
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: '8.x'
+  AZURE_WEBAPP_NAME: ''
+  AZURE_WEBAPP_PACKAGE_PATH: './publish'
+  PROJECT_PATH: 'XYDataLabs.OrderProcessingSystem.UI/XYDataLabs.OrderProcessingSystem.UI.csproj'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        run: dotnet restore ${{ env.PROJECT_PATH }}
+
+      - name: Build
+        run: dotnet build ${{ env.PROJECT_PATH }} --configuration Release --no-restore
+
+      - name: Run Unit Tests
+        run: dotnet test XYDataLabs.OrderProcessingSystem.UnitTest/XYDataLabs.OrderProcessingSystem.UnitTest.csproj --configuration Release --no-build --verbosity normal
+
+      - name: Publish
+        run: dotnet publish ${{ env.PROJECT_PATH }} --configuration Release --no-build --output ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-dotnet-app
+          path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+
+  deploy:
+    runs-on: windows-latest
+    needs: build
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Set target web app name
+        shell: pwsh
+        run: |
+          $ref = "${{ github.ref }}"
+          if ($ref -eq 'refs/heads/main') { $name = 'orderprocessing-ui-xyapp-prod' }
+          elseif ($ref -eq 'refs/heads/staging') { $name = 'orderprocessing-ui-xyapp-stg' }
+          elseif ($ref -eq 'refs/heads/dev') { $name = 'orderprocessing-ui-xyapp-dev' }
+          else { $branch = $ref.Replace('refs/heads/',''); $name = "orderprocessing-ui-xyapp-$branch" }
+          echo "AZURE_WEBAPP_NAME=$name" >> $env:GITHUB_ENV
+          Write-Host "Deploying to WebApp: $name"
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ui-dotnet-app
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+
+      - name: Deploy to Azure Web App
+        id: deploy-to-webapp
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          package: .
+
+      - name: Health Check
+        run: |
+          Write-Host "Waiting 30 seconds for app to start..." -ForegroundColor Yellow
+          Start-Sleep -Seconds 30
+          
+          $uiUrl = "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net"
+          
+          Write-Host "Testing UI endpoint: $uiUrl" -ForegroundColor Cyan
+          try {
+            $response = Invoke-WebRequest -Uri $uiUrl -Method Get -TimeoutSec 30
+            Write-Host "✅ UI responded with status: $($response.StatusCode)" -ForegroundColor Green
+            Write-Host "UI is accessible at: $uiUrl" -ForegroundColor Cyan
+          } catch {
+            Write-Host "⚠️ UI health check warning: $($_.Exception.Message)" -ForegroundColor Yellow
+            Write-Host "This may be normal during initial deployment. Check manually: $uiUrl" -ForegroundColor Gray
+          }

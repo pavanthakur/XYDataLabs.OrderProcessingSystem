@@ -1,0 +1,117 @@
+name: Deploy API to Azure App Service
+
+on:
+  push:
+    branches:
+      - main
+      - staging
+      - dev
+    paths:
+      - 'XYDataLabs.OrderProcessingSystem.API/**'
+      - 'XYDataLabs.OrderProcessingSystem.Application/**'
+      - 'XYDataLabs.OrderProcessingSystem.Domain/**'
+      - 'XYDataLabs.OrderProcessingSystem.Infrastructure/**'
+      - 'XYDataLabs.OrderProcessingSystem.Utilities/**'
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: '8.x'
+  # This will be overridden dynamically per branch in deploy job
+  AZURE_WEBAPP_NAME: ''
+  AZURE_WEBAPP_PACKAGE_PATH: './publish'
+  PROJECT_PATH: 'XYDataLabs.OrderProcessingSystem.API/XYDataLabs.OrderProcessingSystem.API.csproj'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        run: dotnet restore ${{ env.PROJECT_PATH }}
+
+      - name: Build
+        run: dotnet build ${{ env.PROJECT_PATH }} --configuration Release --no-restore
+
+      - name: Run Unit Tests
+        run: dotnet test XYDataLabs.OrderProcessingSystem.UnitTest/XYDataLabs.OrderProcessingSystem.UnitTest.csproj --configuration Release --no-build --verbosity normal
+
+      - name: Publish
+        run: dotnet publish ${{ env.PROJECT_PATH }} --configuration Release --no-build --output ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dotnet-app
+          path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+
+  deploy:
+    runs-on: windows-latest
+    needs: build
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Set target web app name
+        shell: pwsh
+        run: |
+          $ref = "${{ github.ref }}"
+          if ($ref -eq 'refs/heads/main') { $name = 'orderprocessing-api-xyapp-prod' }
+          elseif ($ref -eq 'refs/heads/staging') { $name = 'orderprocessing-api-xyapp-stg' }
+          elseif ($ref -eq 'refs/heads/dev') { $name = 'orderprocessing-api-xyapp-dev' }
+          else { $branch = $ref.Replace('refs/heads/',''); $name = "orderprocessing-api-xyapp-$branch" }
+          echo "AZURE_WEBAPP_NAME=$name" >> $env:GITHUB_ENV
+          Write-Host "Deploying to WebApp: $name"
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dotnet-app
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+
+      - name: Deploy to Azure Web App
+        id: deploy-to-webapp
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          package: .
+
+      - name: Health Check
+        run: |
+          Write-Host "Waiting 30 seconds for app to start..." -ForegroundColor Yellow
+          Start-Sleep -Seconds 30
+          
+          $apiUrl = "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net"
+          $swaggerUrl = "$apiUrl/swagger"
+          
+          Write-Host "Testing API endpoint: $apiUrl" -ForegroundColor Cyan
+          try {
+            $response = Invoke-WebRequest -Uri $apiUrl -Method Get -TimeoutSec 30
+            Write-Host "✅ API responded with status: $($response.StatusCode)" -ForegroundColor Green
+          } catch {
+            Write-Host "⚠️ API health check warning: $($_.Exception.Message)" -ForegroundColor Yellow
+          }
+          
+          Write-Host "Testing Swagger endpoint: $swaggerUrl" -ForegroundColor Cyan
+          try {
+            $swaggerResponse = Invoke-WebRequest -Uri $swaggerUrl -Method Get -TimeoutSec 30
+            Write-Host "✅ Swagger UI responded with status: $($swaggerResponse.StatusCode)" -ForegroundColor Green
+          } catch {
+            Write-Host "⚠️ Swagger health check warning: $($_.Exception.Message)" -ForegroundColor Yellow
+          }

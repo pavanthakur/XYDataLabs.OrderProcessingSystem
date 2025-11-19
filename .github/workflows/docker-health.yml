@@ -1,0 +1,51 @@
+name: Docker Startup Health (Simplified Interface)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show script help (usage validation only)
+        shell: pwsh
+        run: |
+          ./Resources/Docker/start-docker.ps1 -Help
+
+      # Build scenarios require SQL Server; commented until service container added
+      # - name: Dev strict startup (HTTP)
+      #   shell: pwsh
+      #   run: |
+      #     ./Resources/Docker/start-docker.ps1 -Environment dev -Profile http -Strict
+
+      # - name: Dev legacy+strict (fast reuse + health)
+      #   shell: pwsh
+      #   run: |
+      #     ./Resources/Docker/start-docker.ps1 -Environment dev -Profile http -LegacyBuild -Strict
+
+      # - name: Dev https reset (clean rebuild HTTPS only)
+      #   shell: pwsh
+      #   run: |
+      #     ./Resources/Docker/start-docker.ps1 -Environment dev -Profile https -Reset
+
+      # - name: UAT strict HTTPS
+      #   shell: pwsh
+      #   run: |
+      #     ./Resources/Docker/start-docker.ps1 -Environment uat -Profile https -Strict
+
+      - name: Summary
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host 'Completed Docker startup smoke scenarios (help validation only until SQL service added).'
+
+# Notes:
+# - Build scenarios disabled: Dockerfiles reference SQL Server (host.docker.internal:1433) unavailable in CI.
+# - To enable full smoke tests, add SQL Server service container or mock database connection.
+# - Extend with production profile tests or integration tests after gating reliability.
