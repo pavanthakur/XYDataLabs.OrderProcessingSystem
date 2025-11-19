@@ -21,15 +21,31 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XYDataLabs.OrderProcessingS
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Resources", "Resources", "{E1A8B2C3-4D5F-6789-ABCD-123456789DEF}"
 	ProjectSection(SolutionItems) = preProject
-		Resources\BuildConfiguration\BannedSymbols.txt = Resources\BuildConfiguration\BannedSymbols.txt
-		Resources\BuildConfiguration\CodeAnalysis.ruleset = Resources\BuildConfiguration\CodeAnalysis.ruleset
 		Directory.Build.props = Directory.Build.props
 		Directory.Packages.props = Directory.Packages.props
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "BuildConfiguration", "BuildConfiguration", "{E1A8B2C4-4D5F-6789-ABCD-123456789DE0}"
+	ProjectSection(SolutionItems) = preProject
+		Resources\BuildConfiguration\BannedSymbols.txt = Resources\BuildConfiguration\BannedSymbols.txt
+		Resources\BuildConfiguration\CodeAnalysis.ruleset = Resources\BuildConfiguration\CodeAnalysis.ruleset
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Certificates", "Certificates", "{E1A8B2C5-4D5F-6789-ABCD-123456789DE1}"
+	ProjectSection(SolutionItems) = preProject
 		Resources\Certificates\aspnetapp.pfx = Resources\Certificates\aspnetapp.pfx
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Configuration", "Configuration", "{E1A8B2C6-4D5F-6789-ABCD-123456789DE2}"
+	ProjectSection(SolutionItems) = preProject
 		Resources\Configuration\sharedsettings.dev.json = Resources\Configuration\sharedsettings.dev.json
 		Resources\Configuration\sharedsettings.local.json = Resources\Configuration\sharedsettings.local.json
 		Resources\Configuration\sharedsettings.prod.json = Resources\Configuration\sharedsettings.prod.json
 		Resources\Configuration\sharedsettings.uat.json = Resources\Configuration\sharedsettings.uat.json
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Docker", "Docker", "{E1A8B2C7-4D5F-6789-ABCD-123456789DE3}"
+	ProjectSection(SolutionItems) = preProject
 		Resources\Docker\start-docker.ps1 = Resources\Docker\start-docker.ps1
 		Resources\Docker\docker-compose.database.yml = Resources\Docker\docker-compose.database.yml
 		Resources\Docker\docker-compose.dev.yml = Resources\Docker\docker-compose.dev.yml
@@ -37,16 +53,57 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Resources", "Resources", "{
 		Resources\Docker\docker-compose.uat.yml = Resources\Docker\docker-compose.uat.yml
 	EndProjectSection
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Azure-Deployment", "Azure-Deployment", "{E1A8B2C8-4D5F-6789-ABCD-123456789DE4}"
+	ProjectSection(SolutionItems) = preProject
+		Resources\Azure-Deployment\README.md = Resources\Azure-Deployment\README.md
+		Resources\Azure-Deployment\bootstrap-enterprise-infra.ps1 = Resources\Azure-Deployment\bootstrap-enterprise-infra.ps1
+		Resources\Azure-Deployment\check-app-registration.ps1 = Resources\Azure-Deployment\check-app-registration.ps1
+		Resources\Azure-Deployment\configure-github-secrets.ps1 = Resources\Azure-Deployment\configure-github-secrets.ps1
+		Resources\Azure-Deployment\fix-federated-credential.ps1 = Resources\Azure-Deployment\fix-federated-credential.ps1
+		Resources\Azure-Deployment\inspect-and-cleanup-appinsights-managed-rg.ps1 = Resources\Azure-Deployment\inspect-and-cleanup-appinsights-managed-rg.ps1
+		Resources\Azure-Deployment\manage-appservice-slots.ps1 = Resources\Azure-Deployment\manage-appservice-slots.ps1
+		Resources\Azure-Deployment\provision-azure-sql.ps1 = Resources\Azure-Deployment\provision-azure-sql.ps1
+		Resources\Azure-Deployment\run-database-migrations.ps1 = Resources\Azure-Deployment\run-database-migrations.ps1
+		Resources\Azure-Deployment\setup-appinsights-dev.ps1 = Resources\Azure-Deployment\setup-appinsights-dev.ps1
+		Resources\Azure-Deployment\setup-github-oidc.ps1 = Resources\Azure-Deployment\setup-github-oidc.ps1
+		Resources\Azure-Deployment\test-enterprise-deployment.ps1 = Resources\Azure-Deployment\test-enterprise-deployment.ps1
+		Resources\Azure-Deployment\validate-bootstrap-logic.ps1 = Resources\Azure-Deployment\validate-bootstrap-logic.ps1
+		Resources\Azure-Deployment\wait-appservice-ready.ps1 = Resources\Azure-Deployment\wait-appservice-ready.ps1
+	EndProjectSection
+EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Documentation", "Documentation", "{D0C1234A-5678-9012-3456-789ABCDEF123}"
 	ProjectSection(SolutionItems) = preProject
 		Documentation\README.md = Documentation\README.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "01-Project-Overview", "01-Project-Overview", "{D1C1234A-5678-9012-3456-789ABCDEF124}"
+	ProjectSection(SolutionItems) = preProject
 		Documentation\01-Project-Overview\README.md = Documentation\01-Project-Overview\README.md
 		Documentation\01-Project-Overview\CLEANUP_SUMMARY.md = Documentation\01-Project-Overview\CLEANUP_SUMMARY.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "02-Azure-Learning-Guides", "02-Azure-Learning-Guides", "{D2C1234A-5678-9012-3456-789ABCDEF125}"
+	ProjectSection(SolutionItems) = preProject
+		Documentation\02-Azure-Learning-Guides\APPLICATION_INSIGHTS_SETUP.md = Documentation\02-Azure-Learning-Guides\APPLICATION_INSIGHTS_SETUP.md
+		Documentation\02-Azure-Learning-Guides\AZURE_DEPLOYMENT_GUIDE.md = Documentation\02-Azure-Learning-Guides\AZURE_DEPLOYMENT_GUIDE.md
+		Documentation\02-Azure-Learning-Guides\AZURE_README.md = Documentation\02-Azure-Learning-Guides\AZURE_README.md
+		Documentation\02-Azure-Learning-Guides\BOOTSTRAP_SCRIPT_FLOW.md = Documentation\02-Azure-Learning-Guides\BOOTSTRAP_SCRIPT_FLOW.md
 		Documentation\02-Azure-Learning-Guides\DOCKER_COMPREHENSIVE_GUIDE.md = Documentation\02-Azure-Learning-Guides\DOCKER_COMPREHENSIVE_GUIDE.md
 		Documentation\02-Azure-Learning-Guides\ENTERPRISE_DOCKER_GUIDE.md = Documentation\02-Azure-Learning-Guides\ENTERPRISE_DOCKER_GUIDE.md
+		Documentation\02-Azure-Learning-Guides\SKU_UPGRADE_TESTING_GUIDE.md = Documentation\02-Azure-Learning-Guides\SKU_UPGRADE_TESTING_GUIDE.md
 		Documentation\02-Azure-Learning-Guides\VISUAL_STUDIO_DOCKER_PROFILES.md = Documentation\02-Azure-Learning-Guides\VISUAL_STUDIO_DOCKER_PROFILES.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "03-Configuration-Guides", "03-Configuration-Guides", "{D3C1234A-5678-9012-3456-789ABCDEF126}"
+	ProjectSection(SolutionItems) = preProject
 		Documentation\03-Configuration-Guides\SIMPLIFIED_CONFIG_GUIDE.md = Documentation\03-Configuration-Guides\SIMPLIFIED_CONFIG_GUIDE.md
 		Documentation\03-Configuration-Guides\DOTENV_DEPENDENCY_ELIMINATION_SUMMARY.md = Documentation\03-Configuration-Guides\DOTENV_DEPENDENCY_ELIMINATION_SUMMARY.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "04-Enterprise-Architecture", "04-Enterprise-Architecture", "{D4C1234A-5678-9012-3456-789ABCDEF127}"
+	ProjectSection(SolutionItems) = preProject
+		Documentation\04-Enterprise-Architecture\DOCKER_ENTERPRISE_STANDARDS.md = Documentation\04-Enterprise-Architecture\DOCKER_ENTERPRISE_STANDARDS.md
+		Documentation\04-Enterprise-Architecture\WEEKLY_AZURE_LEARNING_PLAN.md = Documentation\04-Enterprise-Architecture\WEEKLY_AZURE_LEARNING_PLAN.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "TODO", "TODO", "{A2B3C4D5-6E7F-8901-2345-6789ABCDEF01}"
@@ -122,23 +179,25 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Azure-Curriculum", "Azure-C
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "00-Foundation", "00-Foundation", "{F2345678-9012-3456-789A-BCDEF0123456}"
 	ProjectSection(SolutionItems) = preProject
-		Documentation\05-Self-Learning\Azure-Curriculum\00-Foundation\DAILY_PROGRESS_TRACKER.md = Documentation\05-Self-Learning\Azure-Curriculum\00-Foundation\DAILY_PROGRESS_TRACKER.md
-		Documentation\05-Self-Learning\Azure-Curriculum\00-Foundation\MASTER_ROADMAP.md = Documentation\05-Self-Learning\Azure-Curriculum\00-Foundation\MASTER_ROADMAP.md
-		Documentation\05-Self-Learning\Azure-Curriculum\00-Foundation\MIND_MAP.md = Documentation\05-Self-Learning\Azure-Curriculum\00-Foundation\MIND_MAP.md
+		Documentation\05-Self-Learning\Azure-Curriculum\00-Foundation\00_MASTER_PLAN.md = Documentation\05-Self-Learning\Azure-Curriculum\00-Foundation\00_MASTER_PLAN.md
+		Documentation\05-Self-Learning\Azure-Curriculum\00-Foundation\01_LEARNING_MAP.md = Documentation\05-Self-Learning\Azure-Curriculum\00-Foundation\01_LEARNING_MAP.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "01-Weekly-Trackers", "01-Weekly-Trackers", "{F3456789-0123-4567-89AB-CDEF01234567}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-01-02", "Week-01-02", "{F4567890-1234-5678-9ABC-DEF012345678}"
 	ProjectSection(SolutionItems) = preProject
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-01-02\SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-01-02\SUCCESS_CRITERIA.md
+		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-01-02\Pavan_Learning_week1-session1.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-01-02\Pavan_Learning_week1-session1.md
+		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-01-02\Pavan_Learning_week1-session2.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-01-02\Pavan_Learning_week1-session2.md
 		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-01-02\README.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-01-02\README.md
+		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-01-02\SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-01-02\SUCCESS_CRITERIA.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-03-04", "Week-03-04", "{F5678901-2345-6789-ABCD-EF0123456789}"
 	ProjectSection(SolutionItems) = preProject
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-03-04\SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-03-04\SUCCESS_CRITERIA.md
+		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-03-04\DEPLOYMENT_EXERCISES.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-03-04\DEPLOYMENT_EXERCISES.md
 		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-03-04\README.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-03-04\README.md
+		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-03-04\SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-03-04\SUCCESS_CRITERIA.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-05-06", "Week-05-06", "{F6789012-3456-789A-BCDE-F0123456789A}"
@@ -149,50 +208,80 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-05-06", "Week-05-06", 
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-07-08", "Week-07-08", "{A7890123-4567-89AB-CDEF-0123456789AB}"
 	ProjectSection(SolutionItems) = preProject
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-07-08\SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-07-08\SUCCESS_CRITERIA.md
 		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-07-08\README.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-07-08\README.md
+		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-07-08\SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-07-08\SUCCESS_CRITERIA.md
+		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-07-08\WEEK_04_SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-07-08\WEEK_04_SUCCESS_CRITERIA.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-09-10", "Week-09-10", "{F8901234-5678-9ABC-DEF0-123456789ABC}"
 	ProjectSection(SolutionItems) = preProject
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-09-10\SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-09-10\SUCCESS_CRITERIA.md
 		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-09-10\README.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-09-10\README.md
+		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-09-10\SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-09-10\SUCCESS_CRITERIA.md
+		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-09-10\WEEK_05_SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-09-10\WEEK_05_SUCCESS_CRITERIA.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-11-12", "Week-11-12", "{F9012345-6789-ABCD-EF01-23456789ABCD}"
 	ProjectSection(SolutionItems) = preProject
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-11-12\SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-11-12\SUCCESS_CRITERIA.md
 		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-11-12\README.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-11-12\README.md
+		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-11-12\SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-11-12\SUCCESS_CRITERIA.md
+		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-11-12\WEEK_06_SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-11-12\WEEK_06_SUCCESS_CRITERIA.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-13-14", "Week-13-14", "{FA123456-789A-BCDE-F012-3456789ABCDE}"
 	ProjectSection(SolutionItems) = preProject
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-13-14\SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-13-14\SUCCESS_CRITERIA.md
 		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-13-14\README.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-13-14\README.md
+		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-13-14\SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-13-14\SUCCESS_CRITERIA.md
+		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-13-14\WEEK_07_SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-13-14\WEEK_07_SUCCESS_CRITERIA.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-15-16", "Week-15-16", "{FB234567-89AB-CDEF-0123-456789ABCDEF}"
 	ProjectSection(SolutionItems) = preProject
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-15-16\SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-15-16\SUCCESS_CRITERIA.md
 		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-15-16\README.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-15-16\README.md
+		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-15-16\SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-15-16\SUCCESS_CRITERIA.md
+		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-15-16\WEEK_08_SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-15-16\WEEK_08_SUCCESS_CRITERIA.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-17-18", "Week-17-18", "{FC345678-9ABC-DEF0-1234-56789ABCDEF0}"
 	ProjectSection(SolutionItems) = preProject
 		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-17-18\SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-17-18\SUCCESS_CRITERIA.md
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-17-18\README.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-17-18\README.md
+		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-17-18\WEEK_09_SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-17-18\WEEK_09_SUCCESS_CRITERIA.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "02-Daily-Progress", "02-Daily-Progress", "{FD456789-ABCD-EF01-2345-6789ABCDEF01}"
+	ProjectSection(SolutionItems) = preProject
+		Documentation\05-Self-Learning\Azure-Curriculum\02-Daily-Progress\DAILY_PROGRESS_TRACKER.md = Documentation\05-Self-Learning\Azure-Curriculum\02-Daily-Progress\DAILY_PROGRESS_TRACKER.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "August-2025", "August-2025", "{FD456789-ABCD-EF01-2345-6789ABCDEF02}"
+	ProjectSection(SolutionItems) = preProject
+		Documentation\05-Self-Learning\Azure-Curriculum\02-Daily-Progress\August-2025\17-Aug-2025-Planning.md = Documentation\05-Self-Learning\Azure-Curriculum\02-Daily-Progress\August-2025\17-Aug-2025-Planning.md
+		Documentation\05-Self-Learning\Azure-Curriculum\02-Daily-Progress\August-2025\Day-17-Planning-Session.md = Documentation\05-Self-Learning\Azure-Curriculum\02-Daily-Progress\August-2025\Day-17-Planning-Session.md
+		Documentation\05-Self-Learning\Azure-Curriculum\02-Daily-Progress\August-2025\README.md = Documentation\05-Self-Learning\Azure-Curriculum\02-Daily-Progress\August-2025\README.md
+	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "03-Certifications", "03-Certifications", "{FE567890-BCDE-F012-3456-789ABCDEF012}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "AZ-204-Developer", "AZ-204-Developer", "{FE567890-BCDE-F012-3456-789ABCDEF013}"
+	ProjectSection(SolutionItems) = preProject
+		Documentation\05-Self-Learning\Azure-Curriculum\03-Certifications\AZ-204-Developer\README.md = Documentation\05-Self-Learning\Azure-Curriculum\03-Certifications\AZ-204-Developer\README.md
+	EndProjectSection
+EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "04-Resources", "04-Resources", "{FF678901-CDEF-0123-4567-89ABCDEF0123}"
 	ProjectSection(SolutionItems) = preProject
+		Documentation\05-Self-Learning\Azure-Curriculum\CLEANUP_ANALYSIS.md = Documentation\05-Self-Learning\Azure-Curriculum\CLEANUP_ANALYSIS.md
+		Documentation\05-Self-Learning\Azure-Curriculum\CURRICULUM_OVERVIEW.md = Documentation\05-Self-Learning\Azure-Curriculum\CURRICULUM_OVERVIEW.md
+		Documentation\05-Self-Learning\Azure-Curriculum\NAVIGATION_INDEX.md = Documentation\05-Self-Learning\Azure-Curriculum\NAVIGATION_INDEX.md
+		Documentation\05-Self-Learning\Azure-Curriculum\QUICK_START.md = Documentation\05-Self-Learning\Azure-Curriculum\QUICK_START.md
 		Documentation\05-Self-Learning\Azure-Curriculum\README.md = Documentation\05-Self-Learning\Azure-Curriculum\README.md
+		Documentation\05-Self-Learning\Azure-Curriculum\REORGANIZATION_COMPLETION.md = Documentation\05-Self-Learning\Azure-Curriculum\REORGANIZATION_COMPLETION.md
+		Documentation\05-Self-Learning\Azure-Curriculum\STRUCTURE_VERIFICATION.md = Documentation\05-Self-Learning\Azure-Curriculum\STRUCTURE_VERIFICATION.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "05-Portfolio", "05-Portfolio", "{F0789012-DEF0-1234-5678-9ABCDEF01234}"
+	ProjectSection(SolutionItems) = preProject
+		Documentation\05-Self-Learning\Azure-Curriculum\05-Portfolio\ACHIEVEMENT_LOG.md = Documentation\05-Self-Learning\Azure-Curriculum\05-Portfolio\ACHIEVEMENT_LOG.md
+		Documentation\05-Self-Learning\Azure-Curriculum\05-Portfolio\README.md = Documentation\05-Self-Learning\Azure-Curriculum\05-Portfolio\README.md
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -240,6 +329,15 @@ Global
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
+		{D1C1234A-5678-9012-3456-789ABCDEF124} = {D0C1234A-5678-9012-3456-789ABCDEF123}
+		{D2C1234A-5678-9012-3456-789ABCDEF125} = {D0C1234A-5678-9012-3456-789ABCDEF123}
+		{D3C1234A-5678-9012-3456-789ABCDEF126} = {D0C1234A-5678-9012-3456-789ABCDEF123}
+		{D4C1234A-5678-9012-3456-789ABCDEF127} = {D0C1234A-5678-9012-3456-789ABCDEF123}
+		{E1A8B2C4-4D5F-6789-ABCD-123456789DE0} = {E1A8B2C3-4D5F-6789-ABCD-123456789DEF}
+		{E1A8B2C5-4D5F-6789-ABCD-123456789DE1} = {E1A8B2C3-4D5F-6789-ABCD-123456789DEF}
+		{E1A8B2C6-4D5F-6789-ABCD-123456789DE2} = {E1A8B2C3-4D5F-6789-ABCD-123456789DEF}
+		{E1A8B2C7-4D5F-6789-ABCD-123456789DE3} = {E1A8B2C3-4D5F-6789-ABCD-123456789DEF}
+		{E1A8B2C8-4D5F-6789-ABCD-123456789DE4} = {E1A8B2C3-4D5F-6789-ABCD-123456789DEF}
 		{A2B3C4D5-6E7F-8901-2345-6789ABCDEF01} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 		{B3C4D5E6-7F80-9012-3456-789ABCDEF012} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 		{C4D5E6F7-8091-2345-6789-ABCDEF012345} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
@@ -260,9 +358,12 @@ Global
 		{FB234567-89AB-CDEF-0123-456789ABCDEF} = {F3456789-0123-4567-89AB-CDEF01234567}
 		{FC345678-9ABC-DEF0-1234-56789ABCDEF0} = {F3456789-0123-4567-89AB-CDEF01234567}
 		{FD456789-ABCD-EF01-2345-6789ABCDEF01} = {F1234567-8901-2345-6789-ABCDEF012345}
+		{FD456789-ABCD-EF01-2345-6789ABCDEF02} = {FD456789-ABCD-EF01-2345-6789ABCDEF01}
 		{FE567890-BCDE-F012-3456-789ABCDEF012} = {F1234567-8901-2345-6789-ABCDEF012345}
+		{FE567890-BCDE-F012-3456-789ABCDEF013} = {FE567890-BCDE-F012-3456-789ABCDEF012}
 		{FF678901-CDEF-0123-4567-89ABCDEF0123} = {F1234567-8901-2345-6789-ABCDEF012345}
 		{F0789012-DEF0-1234-5678-9ABCDEF01234} = {F1234567-8901-2345-6789-ABCDEF012345}
+		{02EA681E-C7D8-13C7-8484-4AC65E1B71E8} = {D0C1234A-5678-9012-3456-789ABCDEF123}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {E83A7CED-28C5-4597-8180-BDBDD6B27808}
