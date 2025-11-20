@@ -1,0 +1,57 @@
+name: Deploy Azure Infrastructure
+
+on:
+  pull_request:
+    paths:
+      - 'infra/**'
+  push:
+    branches: [ dev, staging, main ]
+    paths:
+      - 'infra/**'
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Azure CLI Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+      - name: What-If (subscription scope)
+        run: |
+          az deployment sub what-if \
+            --location centralindia \
+            --template-file infra/main.bicep \
+            --parameters @infra/parameters/dev.json
+
+  deploy:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Azure CLI Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+      - name: Select parameter file
+        id: params
+        run: |
+          if [ "${{ github.ref_name }}" = "dev" ]; then echo "file=infra/parameters/dev.json" >> $GITHUB_OUTPUT; fi
+          if [ "${{ github.ref_name }}" = "staging" ]; then echo "file=infra/parameters/staging.json" >> $GITHUB_OUTPUT; fi
+          if [ "${{ github.ref_name }}" = "main" ]; then echo "file=infra/parameters/prod.json" >> $GITHUB_OUTPUT; fi
+      - name: Deploy (subscription scope)
+        run: |
+          az deployment sub create \
+            --name infra-${{ github.ref_name }}-$(date +%s) \
+            --location centralindia \
+            --template-file infra/main.bicep \
+            --parameters @${{ steps.params.outputs.file }}
+      - name: Outputs
+        run: |
+          az deployment sub show --name infra-${{ github.ref_name }}-$(date +%s) --query "{rg:properties.outputs.resourceGroupName, api:properties.outputs.apiHostName, ui:properties.outputs.uiHostName}" -o table || true

@@ -1,0 +1,71 @@
+targetScope = 'subscription'
+
+@description('Azure region for all resources')
+param location string = 'centralindia'
+
+@description('Environment code (dev, staging, prod)')
+param environment string
+
+@description('Base application name')
+param baseName string = 'orderprocessing'
+
+@description('GitHub owner / org prefix for global uniqueness')
+param githubOwner string
+
+@description('App Service SKU (F1, B1, P1v3, etc)')
+param appServiceSku string = 'F1'
+
+@description('Boolean to enable identity (OIDC) provisioning via deployment script')
+param enableIdentity bool = true
+
+var rgName = 'rg-${baseName}-${environment}'
+
+// Resource Group (subscription scope deployment creates RG first)
+resource appRg 'Microsoft.Resources/resourceGroups@2022-09-01' = {
+  name: rgName
+  location: location
+  tags: {
+    env: environment
+    app: baseName
+  }
+}
+
+// Hosting (Plan + WebApps)
+module hosting 'modules/hosting.bicep' = {
+  name: 'hosting-${environment}'
+  scope: appRg
+  params: {
+    location: location
+    environment: environment
+    baseName: baseName
+    githubOwner: githubOwner
+    sku: appServiceSku
+  }
+}
+
+// Application Insights
+module insights 'modules/insights.bicep' = {
+  name: 'insights-${environment}'
+  scope: appRg
+  params: {
+    location: location
+    environment: environment
+    baseName: baseName
+  }
+}
+
+// Identity + Federated Credentials (optional)
+module identity 'modules/identity.bicep' = if (enableIdentity) {
+  name: 'identity-${environment}'
+  params: {
+    githubOwner: githubOwner
+    githubRepo: 'TestAppXY_OrderProcessingSystem'
+    environment: environment
+  }
+}
+
+output resourceGroupName string = appRg.name
+output apiHostName string = hosting.outputs.apiHostName
+output uiHostName string = hosting.outputs.uiHostName
+output appInsightsName string = insights.outputs.appInsightsName
+output oidcClientId string = enableIdentity ? identity.outputs.clientId : ''

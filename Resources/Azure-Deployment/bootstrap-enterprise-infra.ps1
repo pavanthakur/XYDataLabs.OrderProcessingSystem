@@ -35,11 +35,48 @@ param(
     [Parameter(Mandatory = $false)] [string]$DevSku = 'F1',
     [Parameter(Mandatory = $false)] [string]$StagingSku = 'B1',
     [Parameter(Mandatory = $false)] [string]$ProductionSku = 'P1v3',
-    [Parameter(Mandatory = $false)] [string]$GitHubOwner = 'pavanthakur'
+    [Parameter(Mandatory = $false)] [string]$GitHubOwner = 'pavanthakur',
+    [Parameter(Mandatory = $false)] [switch]$DryRun,
+    [Parameter(Mandatory = $false)] [ValidateSet('text','json')] [string]$LogFormat = 'text'
 )
 
 # Repository name (fixed for this project)
 $GitHubRepo = 'TestAppXY_OrderProcessingSystem'
+
+# Structured logging support
+$global:BootstrapLog = @()
+function Add-LogEntry {
+    param([string]$Phase,[string]$Action,[string]$Status,[string]$Detail="")
+    if ($LogFormat -eq 'json') {
+        $global:BootstrapLog += [PSCustomObject]@{ timestamp=(Get-Date).ToString('o'); phase=$Phase; action=$Action; status=$Status; detail=$Detail }
+    }
+}
+
+Add-LogEntry -Phase 'init' -Action 'start' -Status 'ok' -Detail "env=$Environment;location=$Location"
+
+# Dry-run mode: compute planned names and exit before changes
+if ($DryRun) {
+    $rg     = "rg-$BaseName-$Environment"
+    $plan   = "asp-$BaseName-$Environment"
+    $apiApp = "$GitHubOwner-$BaseName-$ApiSuffix-$Environment"
+    $uiApp  = "$GitHubOwner-$BaseName-$UiSuffix-$Environment"
+    $aiName = "ai-$BaseName-$Environment"
+    Write-Host "=== DRY RUN PLAN ===" -ForegroundColor Cyan
+    Write-Host "Resource Group : $rg" -ForegroundColor Gray
+    Write-Host "App Service Plan: $plan (SKU: $(switch($Environment){'dev'{$DevSku};'stg'{$StagingSku};'prod'{$ProductionSku}}))" -ForegroundColor Gray
+    Write-Host "API WebApp      : $apiApp" -ForegroundColor Gray
+    Write-Host "UI WebApp       : $uiApp" -ForegroundColor Gray
+    Write-Host "App Insights    : $aiName" -ForegroundColor Gray
+    Write-Host "OIDC App        : GitHub-Actions-OIDC (branches: dev, stg, main)" -ForegroundColor Gray
+    Add-LogEntry -Phase 'plan' -Action 'dry-run' -Status 'ok' -Detail "rg=$rg;plan=$plan;api=$apiApp;ui=$uiApp;ai=$aiName"
+    if ($LogFormat -eq 'json') {
+        $dryLog = Join-Path $PSScriptRoot "logs/bootstrap-dryrun-$(Get-Date -Format 'yyyyMMdd-HHmmss').json"
+        $global:BootstrapLog | ConvertTo-Json -Depth 4 | Out-File $dryLog -Encoding UTF8
+        Write-Host "JSON log written: $dryLog" -ForegroundColor Green
+    }
+    Write-Host "=== DRY RUN COMPLETE ===" -ForegroundColor Cyan
+    return
+}
 
 # Logging directory and file
 $logDir = Join-Path $PSScriptRoot "logs"
@@ -60,31 +97,72 @@ Write-Log "=== Bootstrap started ===" "INFO" "Cyan"
 function New-WebAppWithSuperRetry {
     param([string]$ResourceGroup, [string]$PlanName, [string]$AppName, [int]$MaxAttempts = 5, [int]$InitialWaitMinutes = 2, [int]$RetryDelaySeconds = 60)
     $lastErr = $null
+    # Try Azure CLI first, fallback to PowerShell REST API
     for ($i = 1; $i -le $MaxAttempts; $i++) {
         Write-Log "Creating WebApp '$AppName' (Attempt $i/$MaxAttempts)..." "INFO" "Yellow"
-        $result = az webapp create -g $ResourceGroup -p $PlanName -n $AppName --runtime "dotnet:8" 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            Write-Log "WebApp '$AppName' create command succeeded - waiting ${InitialWaitMinutes} minutes for Azure provisioning..." "INFO" "Cyan"
-            Write-Host "  [WAIT] Allowing Azure time to provision webapp in portal (${InitialWaitMinutes} min)..." -ForegroundColor Yellow
-            $waitSeconds = $InitialWaitMinutes * 60
-            $checkInterval = 30
-            $elapsed = 0
-            Write-Host "  [PROGRESS] [" -NoNewline -ForegroundColor Cyan
-            while ($elapsed -lt $waitSeconds) {
-                Start-Sleep -Seconds $checkInterval
-                $elapsed += $checkInterval
-                Write-Host "#" -NoNewline -ForegroundColor Green
+        
+        if ($i -le 2) {
+            # Try Azure CLI first
+            $result = az webapp create -g $ResourceGroup -p $PlanName -n $AppName --runtime "dotnet:8" 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                Write-Log "WebApp '$AppName' created via Azure CLI - waiting ${InitialWaitMinutes} minutes..." "INFO" "Cyan"
+                Write-Host "  [WAIT] Allowing Azure time to provision webapp (${InitialWaitMinutes} min)..." -ForegroundColor Yellow
+                $waitSeconds = $InitialWaitMinutes * 60
+                $checkInterval = 30
+                $elapsed = 0
+                Write-Host "  [PROGRESS] [" -NoNewline -ForegroundColor Cyan
+                while ($elapsed -lt $waitSeconds) {
+                    Start-Sleep -Seconds $checkInterval
+                    $elapsed += $checkInterval
+                    Write-Host "#" -NoNewline -ForegroundColor Green
+                }
+                Write-Host "]" -ForegroundColor Cyan
+                return @{ Success = $true; Output = $result }
+            } else {
+                $lastErr = $result
+                Write-Log "Attempt $i (Azure CLI) failed: $result" "WARN" "Yellow"
             }
-            Write-Host "]" -ForegroundColor Cyan
-            Write-Log "WebApp '$AppName' provisioning wait complete" "INFO" "Green"
-            return @{ Success = $true; Output = $result }
         } else {
-            $lastErr = $result
-            Write-Log "Attempt $i failed for ${AppName}: $result" "WARN" "Yellow"
-            if ($i -lt $MaxAttempts) {
-                Write-Host "  [RETRY] Waiting $RetryDelaySeconds seconds before retry..." -ForegroundColor Yellow
-                Start-Sleep -Seconds $RetryDelaySeconds
+            # Fallback to PowerShell REST API
+            try {
+                Write-Log "Attempting via PowerShell REST API..." "INFO" "Cyan"
+                $token = az account get-access-token --query accessToken -o tsv
+                $subscription = az account show --query id -o tsv
+                $headers = @{ Authorization = "Bearer $token"; "Content-Type" = "application/json" }
+                $serverFarmId = "/subscriptions/$subscription/resourceGroups/$ResourceGroup/providers/Microsoft.Web/serverfarms/$PlanName"
+                $body = @{
+                    location = "centralindia"
+                    kind = "app"
+                    properties = @{
+                        serverFarmId = $serverFarmId
+                        reserved = $false
+                        siteConfig = @{ netFrameworkVersion = "v8.0" }
+                    }
+                } | ConvertTo-Json -Depth 10
+                $uri = "https://management.azure.com/subscriptions/$subscription/resourceGroups/$ResourceGroup/providers/Microsoft.Web/sites/${AppName}?api-version=2023-12-01"
+                $result = Invoke-RestMethod -Method Put -Uri $uri -Headers $headers -Body $body
+                Write-Log "WebApp '$AppName' created via REST API - waiting ${InitialWaitMinutes} minutes..." "INFO" "Green"
+                Write-Host "  [WAIT] Allowing Azure time to provision webapp (${InitialWaitMinutes} min)..." -ForegroundColor Yellow
+                $waitSeconds = $InitialWaitMinutes * 60
+                $checkInterval = 30
+                $elapsed = 0
+                Write-Host "  [PROGRESS] [" -NoNewline -ForegroundColor Cyan
+                while ($elapsed -lt $waitSeconds) {
+                    Start-Sleep -Seconds $checkInterval
+                    $elapsed += $checkInterval
+                    Write-Host "#" -NoNewline -ForegroundColor Green
+                }
+                Write-Host "]" -ForegroundColor Cyan
+                return @{ Success = $true; Output = $result }
+            } catch {
+                $lastErr = $_.Exception.Message
+                Write-Log "Attempt $i (REST API) failed: $lastErr" "WARN" "Yellow"
             }
+        }
+        
+        if ($i -lt $MaxAttempts) {
+            Write-Host "  [RETRY] Waiting $RetryDelaySeconds seconds before retry..." -ForegroundColor Yellow
+            Start-Sleep -Seconds $RetryDelaySeconds
         }
     }
     return @{ Success = $false; Error = $lastErr }
