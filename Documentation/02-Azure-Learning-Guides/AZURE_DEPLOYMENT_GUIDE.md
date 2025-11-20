@@ -53,9 +53,10 @@ This section provides a complete walkthrough for executing your first manual inf
 
 **Steps:**
 1. Open browser: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions
-2. Click on **"Deploy Azure Infrastructure"** workflow (left sidebar)
-3. Click **"Run workflow"** button (dropdown on right)
-4. Fill in parameters:
+2. **IMPORTANT**: At the top of the page, change the branch filter from "main" to **"dev"**
+3. Click on **"Deploy Azure Infrastructure"** workflow (left sidebar)
+4. Click **"Run workflow"** button (dropdown on right)
+5. Fill in parameters:
    ```
    Use workflow from: Branch: dev
    Environment: dev
@@ -64,10 +65,10 @@ This section provides a complete walkthrough for executing your first manual inf
    Enable Identity: false  ⚠️ Important: Set to false
    Dry Run: true  ✅ Safe mode
    ```
-5. Click green **"Run workflow"** button
-6. Wait 2-3 minutes for completion
-7. Click on the running workflow to see details
-8. Review the **"What-If"** output
+6. Click green **"Run workflow"** button
+7. Wait 2-3 minutes for completion
+8. Click on the running workflow to see details
+9. Review the **"What-If"** output
 
 **Expected outcome:** See list of resources that would be created/modified (5 resources for dev environment)
 
