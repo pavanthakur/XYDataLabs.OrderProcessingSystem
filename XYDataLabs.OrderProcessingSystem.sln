@@ -80,7 +80,9 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Azure-Deployment", "Azure-D
 		Resources\Azure-Deployment\validate-sharedsettings-diff.ps1 = Resources\Azure-Deployment\validate-sharedsettings-diff.ps1
 	EndProjectSection
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "GitHub-Workflows", "GitHub-Workflows", "{E1A8B2C9-4D5F-6789-ABCD-123456789DE5}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".github", ".github", "{E1A8B2C9-4D5F-6789-ABCD-123456789DE5}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{E1A8B2C9-4D5F-6789-ABCD-123456789DE6}"
 	ProjectSection(SolutionItems) = preProject
 		.github\workflows\README.md = .github\workflows\README.md
 		.github\workflows\README-INFRA-DEPLOY.md = .github\workflows\README-INFRA-DEPLOY.md
@@ -92,7 +94,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "GitHub-Workflows", "GitHub-
 		.github\workflows\docker-health.yml = .github\workflows\docker-health.yml
 	EndProjectSection
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Bicep-Infrastructure", "Bicep-Infrastructure", "{E1A8B2CA-4D5F-6789-ABCD-123456789DE6}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "infra", "infra", "{E1A8B2CA-4D5F-6789-ABCD-123456789DE6}"
 	ProjectSection(SolutionItems) = preProject
 		infra\README.md = infra\README.md
 		infra\main.bicep = infra\main.bicep
@@ -258,6 +260,7 @@ Global
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
+		{E1A8B2C9-4D5F-6789-ABCD-123456789DE6} = {E1A8B2C9-4D5F-6789-ABCD-123456789DE5}
 		{E1A8B2CB-4D5F-6789-ABCD-123456789DE7} = {E1A8B2CA-4D5F-6789-ABCD-123456789DE6}
 		{E1A8B2CC-4D5F-6789-ABCD-123456789DE8} = {E1A8B2CA-4D5F-6789-ABCD-123456789DE6}
 		{D1C1234A-5678-9012-3456-789ABCDEF124} = {D0C1234A-5678-9012-3456-789ABCDEF123}
