@@ -55,8 +55,11 @@ module insights 'modules/insights.bicep' = {
 }
 
 // Identity + Federated Credentials (optional)
+// Note: This module requires a User-Assigned Managed Identity with Graph permissions
+// For now, identity provisioning should be done separately via setup-github-oidc.ps1
 module identity 'modules/identity.bicep' = if (enableIdentity) {
   name: 'identity-${environment}'
+  scope: appRg
   params: {
     githubOwner: githubOwner
     githubRepo: 'TestAppXY_OrderProcessingSystem'

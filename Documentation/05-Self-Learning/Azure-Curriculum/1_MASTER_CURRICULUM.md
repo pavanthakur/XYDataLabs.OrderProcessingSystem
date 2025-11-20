@@ -40,6 +40,106 @@
 
 ---
 
+## 📝 TODAY'S STEP-BY-STEP GUIDE
+
+### ✅ Task 1: Read Workflow Documentation (10 mins)
+**File:** `.github/workflows/README-INFRA-DEPLOY.md`
+**What to learn:**
+- How to run manual deployments
+- Parameter options and their meanings
+- Difference between dry run and real deployment
+- Troubleshooting common issues
+
+### ✅ Task 2: Run Dry Run Test (15 mins)
+**Steps:**
+1. Open browser: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions
+2. Click on "Deploy Azure Infrastructure" workflow (left sidebar)
+3. Click "Run workflow" button (dropdown on right)
+4. Fill in parameters:
+   ```
+   Use workflow from: Branch: dev
+   Environment: dev
+   Location: centralindia
+   App Service SKU: F1
+   Enable Identity: false  ⚠️ Important: Set to false
+   Dry Run: true  ✅ Safe mode
+   ```
+5. Click green "Run workflow" button
+6. Wait 2-3 minutes for completion
+7. Click on the running workflow to see details
+8. Review the "What-If" output
+
+**Expected outcome:** See list of resources that would be created/modified
+
+### ✅ Task 3: Analyze What-If Output (10 mins)
+**Look for:**
+- ✅ Resource Group: `rg-orderprocessing-dev`
+- ✅ App Service Plan: `asp-orderprocessing-dev`
+- ✅ Web Apps: API and UI with your naming convention
+- ✅ Application Insights: `ai-orderprocessing-dev`
+- ⚠️ No unexpected deletions
+- ⚠️ No unexpected resource type changes
+
+**Questions to answer:**
+- Does it match what you expect?
+- Are the resource names correct?
+- Is it trying to delete anything important?
+
+### ✅ Task 4: (Optional) Real Deployment (20 mins)
+**Only if dry run looks good!**
+
+**Steps:**
+1. Run workflow again with same parameters
+2. **Change:** Set `Dry Run: false`
+3. Wait 5-10 minutes for deployment
+4. Review deployment summary in workflow output
+5. Open Azure Portal: https://portal.azure.com
+6. Navigate to resource group: `rg-orderprocessing-dev`
+7. Verify all resources exist
+8. Check API URL (click on API App Service)
+9. Check UI URL (click on UI App Service)
+
+**Verification:**
+```powershell
+# Check resources via CLI
+az resource list -g rg-orderprocessing-dev -o table
+
+# Test API endpoint
+curl https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net
+
+# Test UI endpoint
+curl https://pavanthakur-orderprocessing-ui-xyapp-dev.azurewebsites.net
+```
+
+### ✅ Task 5: Document Your Experience (10 mins)
+**Create note with:**
+- ✅ What worked?
+- ❌ What failed? (if anything)
+- 🤔 What was confusing?
+- 💡 What did you learn?
+- 📝 Screenshots of workflow run
+
+**Save to:** Personal learning journal or `Documentation/05-Self-Learning/Azure-Curriculum/02-Daily-Progress/November-2025/21-Nov-2025.md`
+
+---
+
+## 🎓 Learning Outcomes from Today
+
+After completing today's tasks, you will have:
+1. ✅ Hands-on experience with GitHub Actions manual workflows
+2. ✅ Understanding of Azure what-if analysis
+3. ✅ Ability to deploy infrastructure on-demand
+4. ✅ Knowledge of parameter-driven deployments
+5. ✅ Confidence in multi-environment setup
+
+**This prepares you for:**
+- Future infrastructure updates
+- Environment-specific deployments
+- Testing infrastructure changes safely
+- Container infrastructure (ACR, ACA) in Weeks 10-11
+
+---
+
 ## 📚 Document Navigation
 
 **This is your ONE source of truth.** Track all progress here.
@@ -186,12 +286,18 @@
 - [x] Deploy to multiple environments
 - [x] **Time:** 1 hour | **Completed:** ✅ Done
 
-#### Day 31: GitHub Actions - Infra Deployment ✅
-**Reference:** `.github/workflows/infra-deploy.yml`
+#### Day 31: GitHub Actions - Infra Deployment ✅ (Extended)
+**Reference:** `.github/workflows/infra-deploy.yml` + `README-INFRA-DEPLOY.md` + `AZURE_DEPLOYMENT_GUIDE.md` (Manual workflow trigger & dry run parameters section)
 - [x] Add what-if step for PR reviews
 - [x] Deploy on branch push (dev/staging/main)
 - [x] Validate deployments
-- [x] **Time:** 2 hours | **Completed:** ✅ Done
+- [x] **Enhanced:** Added workflow_dispatch for manual runs
+- [x] **Enhanced:** Interactive parameter selection via GitHub UI
+- [x] **Enhanced:** Dry run mode for safe testing
+- [ ] **TODO TODAY:** Test manual workflow with dry run
+- [ ] **TODO TODAY:** Review what-if output
+- [ ] **Optional:** Deploy with dry run = false
+- [x] **Time:** 2 hours | **Completed:** ✅ Code done, testing pending
 
 #### Day 32-56: Continue Azure_Learning_Guide_Complete.md curriculum
 *(Serverless, databases, security, monitoring - follow existing guide)*
@@ -636,8 +742,9 @@
 
 **Current Phase:** Week 5-8: Infrastructure as Code & CI/CD Hardening  
 **Current Week:** Week 5 (Days 29-35)  
-**Last Completed Task:** GitHub Actions OIDC workflows created, Bicep infra scaffold completed  
-**Next Milestone:** Complete Bicep modules and multi-environment deployment (Days 29-31)  
+**Last Completed Task:** Manual workflow deployment added with dry run capability  
+**Today's Focus:** Test manual infra deployment workflow (Day 31 extension)  
+**Next Milestone:** Complete workflow testing, then move to Azure SQL (Day 32)  
 
 ---
 
@@ -700,10 +807,39 @@ Track these weekly:
 
 ## 🚀 QUICK ACTION ITEMS (START HERE)
 
-### This Week's Focus
+### 🔥 TODAY'S PRIORITY (Day 31 Extension - Manual Workflow Testing)
+**Goal:** Test and validate the manual infrastructure deployment workflow
+
+**MUST DO TODAY:**
+1. ⏳ **Read workflow guide:** `.github/workflows/README-INFRA-DEPLOY.md`
+2. ⏳ **Run dry run test:**
+   - Go to: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions
+   - Find: "Deploy Azure Infrastructure" workflow
+   - Click: "Run workflow" button
+   - Set parameters:
+     - Environment: `dev`
+     - Location: `centralindia`
+     - App Service SKU: `F1`
+     - Enable Identity: `false` (avoid identity module issues)
+     - **Dry Run: `TRUE`** ✅ (safe - no actual deployment)
+   - Review: What-if output to understand changes
+3. ⏳ **Optional real deployment:** 
+   - If dry run looks good, run again with `Dry Run: FALSE`
+   - Verify resources created in Azure Portal
+4. ⏳ **Document learnings:** Note any errors or surprises
+
+**Why This Matters:**
+- Validates your Day 29-31 Bicep work
+- Tests manual deployment capability
+- Prepares you for multi-environment deployments
+- Essential skill before moving to containers
+
+---
+
+### This Week's Focus (Days 32-35)
 **Goal:** Strengthen Azure fundamentals before moving to containers
 
-**Day 32-35 (This Week):**
+**After completing today's priority:**
 1. ⏳ Set up Azure SQL Database
 2. ⏳ Configure Entity Framework migrations
 3. ⏳ Deploy database via Bicep
@@ -721,6 +857,6 @@ Track these weekly:
 
 ---
 
-**Last Updated:** November 20, 2025  
+**Last Updated:** November 21, 2025  
 **Next Review:** Weekly on Sundays  
 **Progress:** 31/112 days (28% complete)

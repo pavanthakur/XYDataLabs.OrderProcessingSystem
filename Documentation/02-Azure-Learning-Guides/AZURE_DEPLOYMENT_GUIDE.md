@@ -5,15 +5,134 @@
 This guide documents the complete setup process for deploying the Order Processing System to Azure App Service using GitHub Actions with OIDC authentication.
 
 **Date Completed**: November 16, 2025  
-**Last Updated**: November 17, 2025 (Optimized Bootstrap Script)  
+**Last Updated**: November 21, 2025 (Added Manual Infrastructure Workflow & Dry Run Guide)  
 **Deployment Method**: GitHub Actions CI/CD with OIDC (Passwordless Authentication)  
-**Target Environment**: Production  
-**Azure Region**: Central India
+**Target Environments**: dev, staging, production (branch-mapped)  
+**Azure Region (Primary)**: Central India  
+**Current Focus (Curriculum Day 31)**: Execute manual infrastructure dry run (`infra-deploy.yml`) prior to real deployment
 
 ### 📚 Related Documentation
 
 For detailed step-by-step execution flow of the bootstrap script:
 - **[BOOTSTRAP_SCRIPT_FLOW.md](./BOOTSTRAP_SCRIPT_FLOW.md)** - Complete optimized flow documentation for junior developers and code reviewers
+
+---
+
+## ⚙️ Manual Infrastructure Deployment via GitHub Actions (`infra-deploy.yml`)
+
+### Why This Workflow Exists
+The **`infra-deploy.yml`** workflow enables a controlled, parameterized, and auditable Azure infrastructure deployment using Bicep modules with two modes:
+1. **Dry Run (What-If / Validation)** – Safe preview, no changes applied.
+2. **Real Deployment** – Applies infrastructure changes once validated.
+
+It supports iterative learning (Curriculum Day 31) and prevents accidental production changes by requiring explicit manual triggers and clear inputs.
+
+### Location
+`/.github/workflows/infra-deploy.yml`
+
+### Trigger Methods
+| Method | Use Case | Notes |
+|--------|----------|-------|
+| `workflow_dispatch` (Manual) | Curriculum tasks, Dry Run first | Primary learning path mode |
+| `push` (optional future) | Automated environment sync | Disabled/limited in current plan |
+| `pull_request` (optional future) | Preview changes from feature branches | Pair with dryRun=true for governance |
+
+### Inputs (Manual Trigger Form Fields)
+| Input | Type | Required | Example | Description | Recommendation (Dev Today) |
+|-------|------|----------|---------|-------------|-----------------------------|
+| `environment` | string | ✅ | `dev` | Logical target environment; drives naming & RG selection | `dev` |
+| `location` | string | ✅ | `centralindia` | Azure region for resource group & resources | `centralindia` |
+| `appServiceSku` | string | ✅ | `F1` | App Service Plan SKU (dev: F1, staging: B1, prod: P1v3) | `F1` |
+| `enableIdentity` | boolean | ✅ | `false` | Toggle for managed identity provisioning module | `false` (identity deferred) |
+| `dryRun` | boolean | ✅ | `true` or `false` | Chooses validate-only vs apply deployment path | `true` for first run |
+
+### Recommended Parameter Sets
+| Scenario | environment | location | appServiceSku | enableIdentity | dryRun |
+|----------|------------|----------|---------------|----------------|--------|
+| First Learning Pass (Today) | dev | centralindia | F1 | false | true |
+| Dev Apply After Validation | dev | centralindia | F1 | false | false |
+| Staging Introduction | staging | centralindia | B1 | false | true |
+| Staging Apply | staging | centralindia | B1 | false | false |
+| Production Preview | prod | centralindia | P1v3 | false | true |
+| Production Apply (Later Phase) | prod | centralindia | P1v3 | true (when authorized) | false |
+
+### Dry Run vs Real Deployment
+| Aspect | Dry Run (`dryRun=true`) | Real Deployment (`dryRun=false`) |
+|--------|------------------------|----------------------------------|
+| Bicep Action | `az deployment sub what-if` (no changes) | `az deployment sub create` (applies) |
+| Risk | None | Changes applied to Azure |
+| Duration | Faster (skips provisioning) | Longer (resource creation) |
+| Output | Planned adds/updates/deletes, summary table | Final state, IDs, connection info |
+| Next Step | Review & adjust parameters | Verify resources + proceed to app deploy |
+
+### Execution Steps (Manual Trigger)
+1. Navigate: GitHub Repository → `Actions` tab.
+2. Select workflow: `Infrastructure Deploy (infra-deploy.yml)`.
+3. Click `Run workflow`.
+4. Fill inputs (start with: environment=`dev`, location=`centralindia`, appServiceSku=`F1`, enableIdentity=`false`, dryRun=`true`).
+5. Click `Run workflow` and wait for both jobs:
+    - `validate` job (should succeed and summarize planned changes).
+    - `deploy` job (SKIPPED when dryRun=true).
+6. Review workflow `Summary` (bottom of run) for: resource group name, plan name, app names, status codes.
+7. If acceptable, re-run workflow with `dryRun=false` (same parameters) to apply.
+
+### Output Interpretation (Dry Run)
+Key Sections:
+- What-If Change Set: Shows `Create` vs `Modify` operations per resource.
+- Parameter Echo Block: Confirms the inputs used (audit safety).
+- Resource Naming Table: Predicts final names for RG, Plan, Web Apps, Insights.
+- Identity Notice: If `enableIdentity=false`, an informational message defers identity provisioning.
+
+### Post-Deployment Verification (Real Run)
+After `dryRun=false` execution:
+```powershell
+az group show --name rg-orderprocessing-dev --query "name"
+az appservice plan show --name asp-orderprocessing-dev --resource-group rg-orderprocessing-dev --query "{Sku:sku.name, Tier:sku.tier}" -o table
+az webapp list --resource-group rg-orderprocessing-dev --query "[].{Name:name, State:state}" -o table
+```
+Then test endpoints (API/UI) once code deploy workflow runs.
+
+### Identity Provisioning Guidance
+- Leave `enableIdentity=false` until directory permissions (Graph scope) granted.
+- When switching to `true`, ensure Bicep identity module scope is correct (`scope: appRg`).
+- After creation: add role assignments or Key Vault access policies manually or via follow-up scripts.
+
+### Common Issues & Resolutions
+| Issue | Symptom | Cause | Resolution |
+|-------|---------|-------|-----------|
+| Missing Permissions | `AuthorizationFailed` during subscription deployment | Insufficient role at subscription scope | Assign `Owner` or `Contributor` temporarily; re-run dry run |
+| Identity Failure | Identity module errors | `enableIdentity=true` without Graph permissions | Re-run with `enableIdentity=false`; request directory access |
+| Parameter Typo | Unexpected resource name pattern | Misspelled environment or base name | Re-run dry run with corrected input |
+| Stalled Validate | Long what-if (>10 min) | Large subscription or transient CLI | Cancel run → retry; ensure latest Azure CLI |
+| Unexpected Modify | What-if shows modifications on existing RG | Re-using existing RG with new tags | Confirm tag changes intentional; proceed if ok |
+
+### Re-Run Strategy
+- Always begin new environment with a dry run.
+- Use commit messages referencing run ID (e.g., `chore(infra): applied run #123 dryRun=false`).
+- Capture summary JSON (enhancement idea) for audit—future improvement.
+
+### CLI Alternative (Advanced)
+Replicate validate locally (subscription scope):
+```powershell
+az deployment sub what-if `
+   --name validate-dev-$(Get-Date -Format yyyyMMddHHmmss) `
+   --location centralindia `
+   --template-file infra/main.bicep `
+   --parameters environment=dev sku=F1 enableIdentity=false
+```
+Apply:
+```powershell
+az deployment sub create `
+   --name deploy-dev-$(Get-Date -Format yyyyMMddHHmmss) `
+   --location centralindia `
+   --template-file infra/main.bicep `
+   --parameters environment=dev sku=F1 enableIdentity=false
+```
+
+### Curriculum Alignment
+- This section fulfills Day 31 priority: mastering dry run process.
+- Record findings in `1_MASTER_CURRICULUM.md` after each run.
+- Do not advance to SQL provisioning (Days 32–35) until real infra deployment confirmed stable.
 
 ---
 
