@@ -76,6 +76,77 @@ It supports iterative learning (Curriculum Day 31) and prevents accidental produ
 6. Review workflow `Summary` (bottom of run) for: resource group name, plan name, app names, status codes.
 7. If acceptable, re-run workflow with `dryRun=false` (same parameters) to apply.
 
+### 🔄 Dry Run Quick Reference (GitHub Actions)
+Use this condensed checklist whenever you need to validate changes safely before applying:
+1. Open: Repository → `Actions` → select `Infrastructure Deploy (infra-deploy.yml)`.
+2. Click: `Run workflow` (top-right of workflow page).
+3. Branch: ensure `dev` (or target environment branch when branching strategy evolves).
+4. Parameters:
+    - environment: `dev`
+    - location: `centralindia`
+    - appServiceSku: `F1`
+    - enableIdentity: `false` (until Graph permissions granted)
+    - dryRun: `true`
+5. Run → wait for `validate` job success (deploy job skipped).
+6. Open run → expand `Validate` step → locate What-If summary.
+7. Confirm only expected Creates (RG, Plan, API, UI, Insights) and no Deletes.
+8. Capture notes in `1_MASTER_CURRICULUM.md` (Day 31 section) before proceeding.
+9. Re-run with `dryRun=false` when confident.
+
+### 🖥️ Dry Run Quick Reference (Local CLI What-If)
+Prerequisites: Azure CLI logged in (`az login`), correct subscription selected.
+```powershell
+az account show --query "id" -o tsv   # confirm subscription
+
+# Validate (no changes applied)
+az deployment sub what-if `
+   --name dev-infra-dryrun-$(Get-Date -Format yyyyMMddHHmmss) `
+   --location centralindia `
+   --template-file infra/main.bicep `
+   --parameters environment=dev githubOwner=pavanthakur appServiceSku=F1 enableIdentity=false
+
+# (Optional) Apply after validation
+az deployment sub create `
+   --name dev-infra-deploy-$(Get-Date -Format yyyyMMddHHmmss) `
+   --location centralindia `
+   --template-file infra/main.bicep `
+   --parameters environment=dev githubOwner=pavanthakur appServiceSku=F1 enableIdentity=false
+```
+Verification after apply:
+```powershell
+az group show --name rg-orderprocessing-dev --query name
+az webapp list --resource-group rg-orderprocessing-dev --query "[].{Name:name, State:state}" -o table
+```
+
+### ✅ Dry Run Acceptance Criteria
+- Exactly 5 planned Creates for dev (RG, Plan, 2 WebApps, App Insights)
+- No Deletes or unexpected Modifies
+- Naming follows: `pavanthakur-orderprocessing-<role>-xyapp-dev`
+- SKU matches requested (`F1` for dev)
+- Identity module skipped with clear notice (since `enableIdentity=false`)
+
+### ⏭️ Next After Successful Dry Run
+1. Run real deployment (`dryRun=false`).
+2. Trigger API/UI application workflows if not already deployed.
+3. Proceed to Day 32 (Azure SQL) only after confirming resources exist and endpoints respond (even if 404 initially).
+
+### ⚠️ Common Dry Run Pitfalls
+| Pitfall | Symptom | Fix |
+|---------|---------|-----|
+| Wrong branch | Federated credential mismatch | Re-run selecting `dev` branch in dropdown |
+| Identity errors | What-if fails referencing identity module | Keep `enableIdentity=false` (stub module) |
+| Extra modifies | What-if shows RG tag modifications | Ensure tags intended; proceed if correct |
+| CLI transient error | ConnectionResetError 10054 | Re-run command; usually network hiccup |
+| Unexpected region | Location differs from plan | Verify parameter `location` before apply |
+
+### 🧪 Audit Tip
+Add commit referencing run ID after real deployment:
+```powershell
+git commit -am "chore(infra): applied dev infra run #<GitHubRunId>"
+git push
+```
+This creates a traceable link between infra state and source history.
+
 ### Output Interpretation (Dry Run)
 Key Sections:
 - What-If Change Set: Shows `Create` vs `Modify` operations per resource.
