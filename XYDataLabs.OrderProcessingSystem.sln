@@ -71,6 +71,36 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Azure-Deployment", "Azure-D
 		Resources\Azure-Deployment\wait-appservice-ready.ps1 = Resources\Azure-Deployment\wait-appservice-ready.ps1
 	EndProjectSection
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "GitHub-Workflows", "GitHub-Workflows", "{E1A8B2C9-4D5F-6789-ABCD-123456789DE5}"
+	ProjectSection(SolutionItems) = preProject
+		.github\workflows\README.md = .github\workflows\README.md
+		.github\workflows\README-INFRA-DEPLOY.md = .github\workflows\README-INFRA-DEPLOY.md
+		.github\workflows\infra-deploy.yml = .github\workflows\infra-deploy.yml
+		.github\workflows\deploy-api-to-azure.yml = .github\workflows\deploy-api-to-azure.yml
+		.github\workflows\deploy-ui-to-azure.yml = .github\workflows\deploy-ui-to-azure.yml
+		.github\workflows\docker-health.yml = .github\workflows\docker-health.yml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Bicep-Infrastructure", "Bicep-Infrastructure", "{E1A8B2CA-4D5F-6789-ABCD-123456789DE6}"
+	ProjectSection(SolutionItems) = preProject
+		infra\README.md = infra\README.md
+		infra\main.bicep = infra\main.bicep
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "parameters", "parameters", "{E1A8B2CB-4D5F-6789-ABCD-123456789DE7}"
+	ProjectSection(SolutionItems) = preProject
+		infra\parameters\dev.json = infra\parameters\dev.json
+		infra\parameters\staging.json = infra\parameters\staging.json
+		infra\parameters\prod.json = infra\parameters\prod.json
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "modules", "modules", "{E1A8B2CC-4D5F-6789-ABCD-123456789DE8}"
+	ProjectSection(SolutionItems) = preProject
+		infra\modules\hosting.bicep = infra\modules\hosting.bicep
+		infra\modules\identity.bicep = infra\modules\identity.bicep
+		infra\modules\insights.bicep = infra\modules\insights.bicep
+	EndProjectSection
+EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Documentation", "Documentation", "{D0C1234A-5678-9012-3456-789ABCDEF123}"
 	ProjectSection(SolutionItems) = preProject
 		Documentation\README.md = Documentation\README.md
@@ -334,6 +364,8 @@ Global
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
+		{E1A8B2CB-4D5F-6789-ABCD-123456789DE7} = {E1A8B2CA-4D5F-6789-ABCD-123456789DE6}
+		{E1A8B2CC-4D5F-6789-ABCD-123456789DE8} = {E1A8B2CA-4D5F-6789-ABCD-123456789DE6}
 		{D1C1234A-5678-9012-3456-789ABCDEF124} = {D0C1234A-5678-9012-3456-789ABCDEF123}
 		{D2C1234A-5678-9012-3456-789ABCDEF125} = {D0C1234A-5678-9012-3456-789ABCDEF123}
 		{D3C1234A-5678-9012-3456-789ABCDEF126} = {D0C1234A-5678-9012-3456-789ABCDEF123}
