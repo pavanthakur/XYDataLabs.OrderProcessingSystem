@@ -1,6 +1,43 @@
 name: Deploy Azure Infrastructure
 
 on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      location:
+        description: 'Azure region'
+        required: true
+        default: 'centralindia'
+        type: string
+      appServiceSku:
+        description: 'App Service SKU'
+        required: true
+        default: 'F1'
+        type: choice
+        options:
+          - F1
+          - B1
+          - B2
+          - S1
+          - P1v3
+      enableIdentity:
+        description: 'Enable OIDC identity provisioning'
+        required: true
+        default: true
+        type: boolean
+      dryRun:
+        description: 'Dry run (what-if only)'
+        required: true
+        default: true
+        type: boolean
   pull_request:
     paths:
       - 'infra/**'
@@ -9,49 +46,153 @@ on:
     paths:
       - 'infra/**'
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   validate:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.dryRun)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Azure CLI Login (OIDC)
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
-      - name: What-If (subscription scope)
-        run: |
-          az deployment sub what-if \
-            --location centralindia \
-            --template-file infra/main.bicep \
-            --parameters @infra/parameters/dev.json
-
-  deploy:
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Azure CLI Login (OIDC)
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
-      - name: Select parameter file
+      
+      - name: Determine parameters
         id: params
         run: |
-          if [ "${{ github.ref_name }}" = "dev" ]; then echo "file=infra/parameters/dev.json" >> $GITHUB_OUTPUT; fi
-          if [ "${{ github.ref_name }}" = "staging" ]; then echo "file=infra/parameters/staging.json" >> $GITHUB_OUTPUT; fi
-          if [ "${{ github.ref_name }}" = "main" ]; then echo "file=infra/parameters/prod.json" >> $GITHUB_OUTPUT; fi
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "env=${{ inputs.environment }}" >> $GITHUB_OUTPUT
+            echo "location=${{ inputs.location }}" >> $GITHUB_OUTPUT
+            echo "sku=${{ inputs.appServiceSku }}" >> $GITHUB_OUTPUT
+            echo "identity=${{ inputs.enableIdentity }}" >> $GITHUB_OUTPUT
+          else
+            echo "env=dev" >> $GITHUB_OUTPUT
+            echo "location=centralindia" >> $GITHUB_OUTPUT
+            echo "file=infra/parameters/dev.json" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Azure CLI Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+      
+      - name: What-If (subscription scope)
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual run with custom parameters
+            az deployment sub what-if \
+              --location ${{ steps.params.outputs.location }} \
+              --template-file infra/main.bicep \
+              --parameters location=${{ steps.params.outputs.location }} \
+                           environment=${{ steps.params.outputs.env }} \
+                           baseName=orderprocessing \
+                           githubOwner=pavanthakur \
+                           appServiceSku=${{ steps.params.outputs.sku }} \
+                           enableIdentity=${{ steps.params.outputs.identity }}
+          else
+            # PR validation with parameter file
+            az deployment sub what-if \
+              --location ${{ steps.params.outputs.location }} \
+              --template-file infra/main.bicep \
+              --parameters @${{ steps.params.outputs.file }}
+          fi
+
+  deploy:
+    if: (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && !inputs.dryRun)
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Determine parameters
+        id: params
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "env=${{ inputs.environment }}" >> $GITHUB_OUTPUT
+            echo "location=${{ inputs.location }}" >> $GITHUB_OUTPUT
+            echo "sku=${{ inputs.appServiceSku }}" >> $GITHUB_OUTPUT
+            echo "identity=${{ inputs.enableIdentity }}" >> $GITHUB_OUTPUT
+            echo "deploymentName=infra-manual-$(date +%s)" >> $GITHUB_OUTPUT
+          else
+            # Branch-based deployment
+            BRANCH="${{ github.ref_name }}"
+            echo "env=${BRANCH}" >> $GITHUB_OUTPUT
+            echo "location=centralindia" >> $GITHUB_OUTPUT
+            echo "deploymentName=infra-${BRANCH}-$(date +%s)" >> $GITHUB_OUTPUT
+            
+            if [ "${BRANCH}" = "dev" ]; then 
+              echo "file=infra/parameters/dev.json" >> $GITHUB_OUTPUT
+            elif [ "${BRANCH}" = "staging" ]; then 
+              echo "file=infra/parameters/staging.json" >> $GITHUB_OUTPUT
+            elif [ "${BRANCH}" = "main" ]; then 
+              echo "file=infra/parameters/prod.json" >> $GITHUB_OUTPUT
+            fi
+          fi
+      
+      - name: Azure CLI Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+      
       - name: Deploy (subscription scope)
+        id: deploy
         run: |
-          az deployment sub create \
-            --name infra-${{ github.ref_name }}-$(date +%s) \
-            --location centralindia \
-            --template-file infra/main.bicep \
-            --parameters @${{ steps.params.outputs.file }}
-      - name: Outputs
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual deployment with custom parameters
+            az deployment sub create \
+              --name ${{ steps.params.outputs.deploymentName }} \
+              --location ${{ steps.params.outputs.location }} \
+              --template-file infra/main.bicep \
+              --parameters location=${{ steps.params.outputs.location }} \
+                           environment=${{ steps.params.outputs.env }} \
+                           baseName=orderprocessing \
+                           githubOwner=pavanthakur \
+                           appServiceSku=${{ steps.params.outputs.sku }} \
+                           enableIdentity=${{ steps.params.outputs.identity }}
+          else
+            # Automated deployment with parameter file
+            az deployment sub create \
+              --name ${{ steps.params.outputs.deploymentName }} \
+              --location ${{ steps.params.outputs.location }} \
+              --template-file infra/main.bicep \
+              --parameters @${{ steps.params.outputs.file }}
+          fi
+      
+      - name: Get Deployment Outputs
+        id: outputs
         run: |
-          az deployment sub show --name infra-${{ github.ref_name }}-$(date +%s) --query "{rg:properties.outputs.resourceGroupName, api:properties.outputs.apiHostName, ui:properties.outputs.uiHostName}" -o table || true
+          DEPLOYMENT_NAME="${{ steps.params.outputs.deploymentName }}"
+          echo "Fetching outputs for deployment: ${DEPLOYMENT_NAME}"
+          
+          RG_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.resourceGroupName.value" -o tsv)
+          API_HOST=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.apiHostName.value" -o tsv)
+          UI_HOST=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.uiHostName.value" -o tsv)
+          AI_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.appInsightsName.value" -o tsv)
+          
+          echo "rg=${RG_NAME}" >> $GITHUB_OUTPUT
+          echo "api=${API_HOST}" >> $GITHUB_OUTPUT
+          echo "ui=${UI_HOST}" >> $GITHUB_OUTPUT
+          echo "insights=${AI_NAME}" >> $GITHUB_OUTPUT
+      
+      - name: Deployment Summary
+        run: |
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ steps.params.outputs.env }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Location:** ${{ steps.params.outputs.location }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Deployment:** ${{ steps.params.outputs.deploymentName }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Resources Created" >> $GITHUB_STEP_SUMMARY
+          echo "- **Resource Group:** ${{ steps.outputs.rg }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **API:** https://${{ steps.outputs.api }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **UI:** https://${{ steps.outputs.ui }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **App Insights:** ${{ steps.outputs.insights }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ✅ Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "1. Verify resources in [Azure Portal](https://portal.azure.com/#@/resource/subscriptions/${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}/resourceGroups/${{ steps.outputs.rg }})" >> $GITHUB_STEP_SUMMARY
+          echo "2. Deploy application code using API/UI workflows" >> $GITHUB_STEP_SUMMARY
+          echo "3. Test endpoints above" >> $GITHUB_STEP_SUMMARY

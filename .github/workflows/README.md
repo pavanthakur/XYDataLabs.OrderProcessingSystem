@@ -8,6 +8,7 @@ This directory contains GitHub Actions workflows for automated CI/CD deployment 
 
 | Workflow | Triggers On | Deploys To | Description |
 |----------|-------------|------------|-------------|
+| `infra-deploy.yml` | Infrastructure changes or manual | dev/staging/prod | **[See README-INFRA-DEPLOY.md](./README-INFRA-DEPLOY.md)** - Deploys Bicep infrastructure with manual workflow dispatch |
 | `deploy-api-to-azure.yml` | API/Backend code changes | All branches (dev/staging/main) | Builds and deploys API to environment-specific Azure Web App |
 | `deploy-ui-to-azure.yml` | UI/Frontend code changes | All branches (dev/staging/main) | Builds and deploys UI to environment-specific Azure Web App |
 | `docker-health.yml` | Docker script changes | main branch only | Validates Docker startup scripts |
@@ -321,8 +322,10 @@ act push -W .github/workflows/deploy-dev.yml
 - [Federated Identity Credentials](https://learn.microsoft.com/azure/active-directory/develop/workload-identity-federation)
 
 ### Internal Documentation
+- **[Infrastructure Deployment Guide](./README-INFRA-DEPLOY.md)** ⭐ Manual Bicep deployment with dry run
 - [Bootstrap Workflow Summary](../../Documentation/Bootstrap-Workflow-Summary.md)
 - [Azure Deployment Guide](../../Documentation/02-Azure-Learning-Guides/AZURE_DEPLOYMENT_GUIDE.md)
+- [Master Curriculum](../../Documentation/05-Self-Learning/Azure-Curriculum/1_MASTER_CURRICULUM.md)
 
 ---
 
@@ -336,9 +339,16 @@ act push -W .github/workflows/deploy-dev.yml
 
 ## ✅ Next Steps
 
-After committing these workflows:
+### For Infrastructure Deployment (New!)
+**👉 Start here if testing infrastructure changes:**
+1. **Read the guide**: [README-INFRA-DEPLOY.md](./README-INFRA-DEPLOY.md)
+2. **Run dry run**: Go to Actions → Deploy Azure Infrastructure → Run workflow
+3. **Deploy infrastructure**: Set dry run = false after validation
 
-1. **Verify secrets configured**: https://github.com/getpavanthakur/TestAppXY_OrderProcessingSystem/settings/secrets/actions
+### For Application Deployment
+After infrastructure is deployed:
+
+1. **Verify secrets configured**: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/settings/secrets/actions
 
 2. **Test dev workflow**:
    ```bash
@@ -347,9 +357,9 @@ After committing these workflows:
    git push origin dev
    ```
 
-3. **Monitor workflow**: https://github.com/getpavanthakur/TestAppXY_OrderProcessingSystem/actions
+3. **Monitor workflow**: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions
 
-4. **Verify deployment**: https://orderprocessing-api-xyapp-dev.azurewebsites.net
+4. **Verify deployment**: https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net
 
 5. **Promote to staging** (after dev validation):
    ```bash
@@ -360,4 +370,7 @@ After committing these workflows:
 
 ---
 
-**Questions or Issues?** Check [Bootstrap Workflow Summary](../../Documentation/Bootstrap-Workflow-Summary.md) for comprehensive troubleshooting guide.
+**Questions or Issues?** 
+- Infrastructure: See [README-INFRA-DEPLOY.md](./README-INFRA-DEPLOY.md)
+- Application Deployment: Check [Bootstrap Workflow Summary](../../Documentation/Bootstrap-Workflow-Summary.md)
+- Full Learning Path: [Master Curriculum](../../Documentation/05-Self-Learning/Azure-Curriculum/1_MASTER_CURRICULUM.md)
