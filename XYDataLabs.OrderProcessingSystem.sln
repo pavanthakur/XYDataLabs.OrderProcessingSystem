@@ -109,6 +109,8 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Documentation", "Documentation", "{D0C1234A-5678-9012-3456-789ABCDEF123}"
 	ProjectSection(SolutionItems) = preProject
 		Documentation\README.md = Documentation\README.md
+		Documentation\Bootstrap-Workflow-Summary.md = Documentation\Bootstrap-Workflow-Summary.md
+		Documentation\Operations-Quick-Links-README.md = Documentation\Operations-Quick-Links-README.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "01-Project-Overview", "01-Project-Overview", "{D1C1234A-5678-9012-3456-789ABCDEF124}"
@@ -145,10 +147,14 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "04-Enterprise-Architecture"
 		Documentation\04-Enterprise-Architecture\WEEKLY_AZURE_LEARNING_PLAN.md = Documentation\04-Enterprise-Architecture\WEEKLY_AZURE_LEARNING_PLAN.md
 	EndProjectSection
 EndProject
-
-
-
-
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "05-Self-Learning", "05-Self-Learning", "{D5C1234A-5678-9012-3456-789ABCDEF128}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "LearningHelp", "LearningHelp", "{D5C1234B-5678-9012-3456-789ABCDEF129}"
+	ProjectSection(SolutionItems) = preProject
+		Documentation\05-Self-Learning\LearningHelp\DockerHelp.md = Documentation\05-Self-Learning\LearningHelp\DockerHelp.md
+		Documentation\05-Self-Learning\LearningHelp\sharedsettingsHelp.md = Documentation\05-Self-Learning\LearningHelp\sharedsettingsHelp.md
+	EndProjectSection
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XYDataLabs.OrderProcessingSystem.Utilities", "XYDataLabs.OrderProcessingSystem.Utilities\XYDataLabs.OrderProcessingSystem.Utilities.csproj", "{DFC0BB5F-D671-DE7D-4A5D-D10E77984910}"
 EndProject
 
@@ -252,6 +258,8 @@ Global
 		{D2C1234A-5678-9012-3456-789ABCDEF125} = {D0C1234A-5678-9012-3456-789ABCDEF123}
 		{D3C1234A-5678-9012-3456-789ABCDEF126} = {D0C1234A-5678-9012-3456-789ABCDEF123}
 		{D4C1234A-5678-9012-3456-789ABCDEF127} = {D0C1234A-5678-9012-3456-789ABCDEF123}
+		{D5C1234A-5678-9012-3456-789ABCDEF128} = {D0C1234A-5678-9012-3456-789ABCDEF123}
+		{D5C1234B-5678-9012-3456-789ABCDEF129} = {D5C1234A-5678-9012-3456-789ABCDEF128}
 		{E1A8B2C4-4D5F-6789-ABCD-123456789DE0} = {E1A8B2C3-4D5F-6789-ABCD-123456789DEF}
 		{E1A8B2C5-4D5F-6789-ABCD-123456789DE1} = {E1A8B2C3-4D5F-6789-ABCD-123456789DEF}
 		{E1A8B2C6-4D5F-6789-ABCD-123456789DE2} = {E1A8B2C3-4D5F-6789-ABCD-123456789DEF}
