@@ -10,7 +10,7 @@ param environment string
 // This script is idempotent: re-running will reuse existing resources.
 
 var appDisplayName = 'GitHub-Actions-OIDC'
-var branchList = [ 'dev' 'staging' 'main' ]
+var branchList = [ 'dev', 'staging', 'main' ]
 
 resource oidcScript 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
   name: 'oidc-script-${environment}'
@@ -61,15 +61,15 @@ echo "APP_ID=$appId" >> $AZ_SCRIPTS_OUTPUT_PATH
       {
         name: 'APP_NAME'
         value: appDisplayName
-      }
+      },
       {
         name: 'GITHUB_OWNER'
         value: githubOwner
-      }
+      },
       {
         name: 'GITHUB_REPO'
         value: githubRepo
-      }
+      },
       {
         name: 'BRANCHES'
         value: join(' ', branchList)
