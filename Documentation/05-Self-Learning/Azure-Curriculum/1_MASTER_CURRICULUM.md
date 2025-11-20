@@ -42,62 +42,17 @@
 
 ## 📝 TODAY'S STEP-BY-STEP GUIDE
 
-### ✅ Task 1: Read Workflow Documentation (10 mins)
-**File:** `.github/workflows/README-INFRA-DEPLOY.md`
-**What to learn:**
-- How to run manual deployments
-- Parameter options and their meanings
-- Difference between dry run and real deployment
-- Troubleshooting common issues
+**Operational guide has been moved to:**  
+📄 `Documentation/02-Azure-Learning-Guides/AZURE_DEPLOYMENT_GUIDE.md`
 
-### ✅ Task 2: Run Dry Run Test (15 mins)
-**Steps:**
-1. Open browser: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions
-2. Click on "Deploy Azure Infrastructure" workflow (left sidebar)
-3. Click "Run workflow" button (dropdown on right)
-4. Fill in parameters:
-   ```
-   Use workflow from: Branch: dev
-   Environment: dev
-   Location: centralindia
-   App Service SKU: F1
-   Enable Identity: false  ⚠️ Important: Set to false
-   Dry Run: true  ✅ Safe mode
-   ```
-5. Click green "Run workflow" button
-6. Wait 2-3 minutes for completion
-7. Click on the running workflow to see details
-8. Review the "What-If" output
+The complete step-by-step deployment guide is now maintained in the Azure Deployment Guide for easier regular access. This includes:
+- Task 1: Read workflow documentation
+- Task 2: Run dry run test (with detailed steps)
+- Task 3: Analyze what-if output
+- Task 4: Real deployment (optional)
+- Task 5: Document your experience
 
-**Expected outcome:** See list of resources that would be created/modified
-
-### ✅ Task 3: Analyze What-If Output (10 mins)
-**Look for:**
-- ✅ Resource Group: `rg-orderprocessing-dev`
-- ✅ App Service Plan: `asp-orderprocessing-dev`
-- ✅ Web Apps: API and UI with your naming convention
-- ✅ Application Insights: `ai-orderprocessing-dev`
-- ⚠️ No unexpected deletions
-- ⚠️ No unexpected resource type changes
-
-**Questions to answer:**
-- Does it match what you expect?
-- Are the resource names correct?
-- Is it trying to delete anything important?
-
-### ✅ Task 4: (Optional) Real Deployment (20 mins)
-**Only if dry run looks good!**
-
-**Steps:**
-1. Run workflow again with same parameters
-2. **Change:** Set `Dry Run: false`
-3. Wait 5-10 minutes for deployment
-4. Review deployment summary in workflow output
-5. Open Azure Portal: https://portal.azure.com
-6. Navigate to resource group: `rg-orderprocessing-dev`
-7. Verify all resources exist
-8. Check API URL (click on API App Service)
-9. Check UI URL (click on UI App Service)
+**Quick link:** See section "📋 Manual Infrastructure Deployment - Step-by-Step Guide" in AZURE_DEPLOYMENT_GUIDE.md
 
 **Verification:**
 ```powershell

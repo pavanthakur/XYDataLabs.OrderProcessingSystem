@@ -30,6 +30,143 @@ It supports iterative learning (Curriculum Day 31) and prevents accidental produ
 ### Location
 `/.github/workflows/infra-deploy.yml`
 
+---
+
+## 📋 Manual Infrastructure Deployment - Step-by-Step Guide
+
+This section provides a complete walkthrough for executing your first manual infrastructure deployment. Follow these steps sequentially for a safe and successful deployment.
+
+### Task 1: Read Workflow Documentation (10 mins)
+**File:** `.github/workflows/README-INFRA-DEPLOY.md`
+
+**What to learn:**
+- How to run manual deployments
+- Parameter options and their meanings
+- Difference between dry run and real deployment
+- Troubleshooting common issues
+
+**Action:** Open and read the README-INFRA-DEPLOY.md file before proceeding.
+
+---
+
+### Task 2: Run Dry Run Test (15 mins)
+
+**Steps:**
+1. Open browser: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions
+2. Click on **"Deploy Azure Infrastructure"** workflow (left sidebar)
+3. Click **"Run workflow"** button (dropdown on right)
+4. Fill in parameters:
+   ```
+   Use workflow from: Branch: dev
+   Environment: dev
+   Location: centralindia
+   App Service SKU: F1
+   Enable Identity: false  ⚠️ Important: Set to false
+   Dry Run: true  ✅ Safe mode
+   ```
+5. Click green **"Run workflow"** button
+6. Wait 2-3 minutes for completion
+7. Click on the running workflow to see details
+8. Review the **"What-If"** output
+
+**Expected outcome:** See list of resources that would be created/modified (5 resources for dev environment)
+
+---
+
+### Task 3: Analyze What-If Output (10 mins)
+
+**Look for:**
+- ✅ Resource Group: `rg-orderprocessing-dev`
+- ✅ App Service Plan: `asp-orderprocessing-dev`
+- ✅ Web Apps: `pavanthakur-orderprocessing-api-xyapp-dev` and `pavanthakur-orderprocessing-ui-xyapp-dev`
+- ✅ Application Insights: `ai-orderprocessing-dev`
+- ⚠️ No unexpected deletions
+- ⚠️ No unexpected resource type changes
+
+**Questions to answer:**
+- Does it match what you expect?
+- Are the resource names correct (with `pavanthakur` prefix)?
+- Is it trying to delete anything important?
+- Does the SKU match (F1 for dev)?
+
+**Document your findings** in your learning journal or curriculum progress tracker.
+
+---
+
+### Task 4: Real Deployment (20 mins)
+**⚠️ Only proceed if dry run looks good!**
+
+**Steps:**
+1. Go back to Actions → Infrastructure Deploy
+2. Click **"Run workflow"** again
+3. Use the **same parameters** but change:
+   - **Dry Run: false** ✅
+4. Wait 5-10 minutes for deployment
+5. Review deployment summary in workflow output
+6. Open Azure Portal: https://portal.azure.com
+7. Navigate to resource group: `rg-orderprocessing-dev`
+8. Verify all 5 resources exist:
+   - Resource group
+   - App Service Plan
+   - API Web App
+   - UI Web App
+   - Application Insights
+
+**Verification Commands:**
+```powershell
+# Check resources via CLI
+az resource list -g rg-orderprocessing-dev -o table
+
+# Test API endpoint (may return 404 until code deployed)
+curl https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net
+
+# Test UI endpoint
+curl https://pavanthakur-orderprocessing-ui-xyapp-dev.azurewebsites.net
+```
+
+---
+
+### Task 5: Document Your Experience (10 mins)
+
+**Create note with:**
+- ✅ What worked?
+- ❌ What failed? (if anything)
+- 🤔 What was confusing?
+- 💡 What did you learn?
+- 📝 Screenshots of workflow run (especially What-If output)
+- ⏱️ Actual time taken vs estimated
+
+**Save to:** 
+- Personal learning journal, or
+- `Documentation/05-Self-Learning/Azure-Curriculum/02-Daily-Progress/November-2025/21-Nov-2025.md`
+
+**Commit reference:**
+```powershell
+# After successful deployment, create audit trail
+git commit -am "chore(infra): completed dev infra deployment via workflow run #<RunNumber>"
+git push
+```
+
+---
+
+### 🎓 Learning Outcomes
+
+After completing these tasks, you will have:
+1. ✅ Hands-on experience with GitHub Actions manual workflows
+2. ✅ Understanding of Azure what-if analysis (infrastructure preview)
+3. ✅ Ability to deploy infrastructure on-demand
+4. ✅ Knowledge of parameter-driven deployments
+5. ✅ Confidence in multi-environment setup
+6. ✅ Practical troubleshooting experience
+
+**This prepares you for:**
+- Future infrastructure updates
+- Environment-specific deployments (staging, production)
+- Testing infrastructure changes safely
+- Container infrastructure (ACR, ACA) in later weeks
+
+---
+
 ### Trigger Methods
 | Method | Use Case | Notes |
 |--------|----------|-------|
