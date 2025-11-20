@@ -88,6 +88,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "02-Azure-Learning-Guides", 
 		Documentation\02-Azure-Learning-Guides\AZURE_DEPLOYMENT_GUIDE.md = Documentation\02-Azure-Learning-Guides\AZURE_DEPLOYMENT_GUIDE.md
 		Documentation\02-Azure-Learning-Guides\AZURE_README.md = Documentation\02-Azure-Learning-Guides\AZURE_README.md
 		Documentation\02-Azure-Learning-Guides\BOOTSTRAP_SCRIPT_FLOW.md = Documentation\02-Azure-Learning-Guides\BOOTSTRAP_SCRIPT_FLOW.md
+		Documentation\02-Azure-Learning-Guides\Containerization-ACA-Aspire-Learning-Path.md = Documentation\02-Azure-Learning-Guides\Containerization-ACA-Aspire-Learning-Path.md
 		Documentation\02-Azure-Learning-Guides\DOCKER_COMPREHENSIVE_GUIDE.md = Documentation\02-Azure-Learning-Guides\DOCKER_COMPREHENSIVE_GUIDE.md
 		Documentation\02-Azure-Learning-Guides\ENTERPRISE_DOCKER_GUIDE.md = Documentation\02-Azure-Learning-Guides\ENTERPRISE_DOCKER_GUIDE.md
 		Documentation\02-Azure-Learning-Guides\SKU_UPGRADE_TESTING_GUIDE.md = Documentation\02-Azure-Learning-Guides\SKU_UPGRADE_TESTING_GUIDE.md
@@ -102,6 +103,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "03-Configuration-Guides", "
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "04-Enterprise-Architecture", "04-Enterprise-Architecture", "{D4C1234A-5678-9012-3456-789ABCDEF127}"
 	ProjectSection(SolutionItems) = preProject
+		Documentation\04-Enterprise-Architecture\ACA-Migration-Plan.md = Documentation\04-Enterprise-Architecture\ACA-Migration-Plan.md
+		Documentation\04-Enterprise-Architecture\ACA-Target-Architecture.png = Documentation\04-Enterprise-Architecture\ACA-Target-Architecture.png
 		Documentation\04-Enterprise-Architecture\DOCKER_ENTERPRISE_STANDARDS.md = Documentation\04-Enterprise-Architecture\DOCKER_ENTERPRISE_STANDARDS.md
 		Documentation\04-Enterprise-Architecture\WEEKLY_AZURE_LEARNING_PLAN.md = Documentation\04-Enterprise-Architecture\WEEKLY_AZURE_LEARNING_PLAN.md
 	EndProjectSection
@@ -268,6 +271,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "AZ-204-Developer", "AZ-204-
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "04-Resources", "04-Resources", "{FF678901-CDEF-0123-4567-89ABCDEF0123}"
 	ProjectSection(SolutionItems) = preProject
+		Documentation\05-Self-Learning\Azure-Curriculum\1_MASTER_CURRICULUM.md = Documentation\05-Self-Learning\Azure-Curriculum\1_MASTER_CURRICULUM.md
+		Documentation\05-Self-Learning\Azure-Curriculum\Azure_Learning_Guide_Complete.md = Documentation\05-Self-Learning\Azure-Curriculum\Azure_Learning_Guide_Complete.md
 		Documentation\05-Self-Learning\Azure-Curriculum\CLEANUP_ANALYSIS.md = Documentation\05-Self-Learning\Azure-Curriculum\CLEANUP_ANALYSIS.md
 		Documentation\05-Self-Learning\Azure-Curriculum\CURRICULUM_OVERVIEW.md = Documentation\05-Self-Learning\Azure-Curriculum\CURRICULUM_OVERVIEW.md
 		Documentation\05-Self-Learning\Azure-Curriculum\NAVIGATION_INDEX.md = Documentation\05-Self-Learning\Azure-Curriculum\NAVIGATION_INDEX.md
