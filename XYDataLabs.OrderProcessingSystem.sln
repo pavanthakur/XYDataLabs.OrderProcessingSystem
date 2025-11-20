@@ -165,55 +165,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "LearningHelp", "LearningHel
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XYDataLabs.OrderProcessingSystem.Utilities", "XYDataLabs.OrderProcessingSystem.Utilities\XYDataLabs.OrderProcessingSystem.Utilities.csproj", "{DFC0BB5F-D671-DE7D-4A5D-D10E77984910}"
 EndProject
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Operations-Quick-Links", "Operations-Quick-Links", "{ABCDEF12-3456-7890-ABCD-EF1234567890}"
-	ProjectSection(SolutionItems) = preProject
-		Documentation\02-Azure-Learning-Guides\AZURE_DEPLOYMENT_GUIDE.md = Documentation\02-Azure-Learning-Guides\AZURE_DEPLOYMENT_GUIDE.md
-		Documentation\02-Azure-Learning-Guides\SKU_UPGRADE_TESTING_GUIDE.md = Documentation\02-Azure-Learning-Guides\SKU_UPGRADE_TESTING_GUIDE.md
-		Documentation\02-Azure-Learning-Guides\Telemetry-Quick-Start.md = Documentation\02-Azure-Learning-Guides\Telemetry-Quick-Start.md
-		Documentation\Operations-Quick-Links-README.md = Documentation\Operations-Quick-Links-README.md
-		.github\workflows\infra-deploy.yml = .github\workflows\infra-deploy.yml
-		.github\workflows\README-INFRA-DEPLOY.md = .github\workflows\README-INFRA-DEPLOY.md
-		Resources\Azure-Deployment\bootstrap-enterprise-infra.ps1 = Resources\Azure-Deployment\bootstrap-enterprise-infra.ps1
-		Resources\Azure-Deployment\provision-azure-sql.ps1 = Resources\Azure-Deployment\provision-azure-sql.ps1
-		Resources\Azure-Deployment\run-database-migrations.ps1 = Resources\Azure-Deployment\run-database-migrations.ps1
-		Resources\Azure-Deployment\setup-appinsights-dev.ps1 = Resources\Azure-Deployment\setup-appinsights-dev.ps1
-		Resources\Azure-Deployment\wait-appservice-ready.ps1 = Resources\Azure-Deployment\wait-appservice-ready.ps1
-		Resources\Azure-Deployment\manage-appservice-slots.ps1 = Resources\Azure-Deployment\manage-appservice-slots.ps1
-		Resources\Azure-Deployment\test-enterprise-deployment.ps1 = Resources\Azure-Deployment\test-enterprise-deployment.ps1
-		Resources\Azure-Deployment\validate-parameters-whatif.ps1 = Resources\Azure-Deployment\validate-parameters-whatif.ps1
-		Resources\Azure-Deployment\verify-oidc-credentials.ps1 = Resources\Azure-Deployment\verify-oidc-credentials.ps1
-		Resources\Azure-Deployment\validate-sharedsettings-diff.ps1 = Resources\Azure-Deployment\validate-sharedsettings-diff.ps1
-		Resources\Docker\start-docker.ps1 = Resources\Docker\start-docker.ps1
-		Resources\Docker\docker-compose.dev.yml = Resources\Docker\docker-compose.dev.yml
-		infra\main.bicep = infra\main.bicep
-		infra\modules\identity.bicep = infra\modules\identity.bicep
-		infra\parameters\dev.json = infra\parameters\dev.json
-		infra\parameters\staging.json = infra\parameters\staging.json
-		infra\parameters\prod.json = infra\parameters\prod.json
-		Resources\Configuration\sharedsettings.dev.json = Resources\Configuration\sharedsettings.dev.json
-		Resources\BuildConfiguration\CodeAnalysis.ruleset = Resources\BuildConfiguration\CodeAnalysis.ruleset
-	EndProjectSection
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
