@@ -127,6 +127,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "02-Azure-Learning-Guides", 
 		Documentation\02-Azure-Learning-Guides\DOCKER_COMPREHENSIVE_GUIDE.md = Documentation\02-Azure-Learning-Guides\DOCKER_COMPREHENSIVE_GUIDE.md
 		Documentation\02-Azure-Learning-Guides\ENTERPRISE_DOCKER_GUIDE.md = Documentation\02-Azure-Learning-Guides\ENTERPRISE_DOCKER_GUIDE.md
 		Documentation\02-Azure-Learning-Guides\SKU_UPGRADE_TESTING_GUIDE.md = Documentation\02-Azure-Learning-Guides\SKU_UPGRADE_TESTING_GUIDE.md
+		Documentation\02-Azure-Learning-Guides\Telemetry-Quick-Start.md = Documentation\02-Azure-Learning-Guides\Telemetry-Quick-Start.md
 		Documentation\02-Azure-Learning-Guides\VISUAL_STUDIO_DOCKER_PROFILES.md = Documentation\02-Azure-Learning-Guides\VISUAL_STUDIO_DOCKER_PROFILES.md
 	EndProjectSection
 EndProject
