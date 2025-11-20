@@ -51,7 +51,22 @@ permissions:
   contents: read
 
 jobs:
+  pre-validate:
+    name: Pre-Deployment Validation
+    if: (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && !inputs.dryRun)
+    uses: ./.github/workflows/validate-deployment.yml
+    with:
+      environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || github.ref_name }}
+      run-whatif: true
+      verify-oidc: false
+      check-config: true
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+      AZURE_TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+
   validate:
+    name: Bicep What-If (Dry Run)
     if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.dryRun)
     runs-on: ubuntu-latest
     steps:
@@ -100,7 +115,9 @@ jobs:
           fi
 
   deploy:
+    name: Deploy Infrastructure
     if: (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && !inputs.dryRun)
+    needs: pre-validate
     runs-on: ubuntu-latest
     environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || github.ref_name }}
     steps:

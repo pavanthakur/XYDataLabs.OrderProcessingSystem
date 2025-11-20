@@ -69,13 +69,18 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Azure-Deployment", "Azure-D
 		Resources\Azure-Deployment\test-enterprise-deployment.ps1 = Resources\Azure-Deployment\test-enterprise-deployment.ps1
 		Resources\Azure-Deployment\validate-bootstrap-logic.ps1 = Resources\Azure-Deployment\validate-bootstrap-logic.ps1
 		Resources\Azure-Deployment\wait-appservice-ready.ps1 = Resources\Azure-Deployment\wait-appservice-ready.ps1
+		Resources\Azure-Deployment\validate-parameters-whatif.ps1 = Resources\Azure-Deployment\validate-parameters-whatif.ps1
+		Resources\Azure-Deployment\verify-oidc-credentials.ps1 = Resources\Azure-Deployment\verify-oidc-credentials.ps1
+		Resources\Azure-Deployment\validate-sharedsettings-diff.ps1 = Resources\Azure-Deployment\validate-sharedsettings-diff.ps1
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "GitHub-Workflows", "GitHub-Workflows", "{E1A8B2C9-4D5F-6789-ABCD-123456789DE5}"
 	ProjectSection(SolutionItems) = preProject
 		.github\workflows\README.md = .github\workflows\README.md
 		.github\workflows\README-INFRA-DEPLOY.md = .github\workflows\README-INFRA-DEPLOY.md
+		.github\workflows\README-VALIDATE-DEPLOYMENT.md = .github\workflows\README-VALIDATE-DEPLOYMENT.md
 		.github\workflows\infra-deploy.yml = .github\workflows\infra-deploy.yml
+		.github\workflows\validate-deployment.yml = .github\workflows\validate-deployment.yml
 		.github\workflows\deploy-api-to-azure.yml = .github\workflows\deploy-api-to-azure.yml
 		.github\workflows\deploy-ui-to-azure.yml = .github\workflows\deploy-ui-to-azure.yml
 		.github\workflows\docker-health.yml = .github\workflows\docker-health.yml
@@ -139,189 +144,37 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "04-Enterprise-Architecture"
 		Documentation\04-Enterprise-Architecture\WEEKLY_AZURE_LEARNING_PLAN.md = Documentation\04-Enterprise-Architecture\WEEKLY_AZURE_LEARNING_PLAN.md
 	EndProjectSection
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "TODO", "TODO", "{A2B3C4D5-6E7F-8901-2345-6789ABCDEF01}"
-	ProjectSection(SolutionItems) = preProject
-		Documentation\05-Self-Learning\TODO\01_MASTER_ROADMAP.md = Documentation\05-Self-Learning\TODO\01_MASTER_ROADMAP.md
-		Documentation\05-Self-Learning\TODO\02_AZURE_DEVELOPER_LEARNING_PATH.md = Documentation\05-Self-Learning\TODO\02_AZURE_DEVELOPER_LEARNING_PATH.md
-		Documentation\05-Self-Learning\TODO\03_DAILY_PROGRESS_TRACKER.md = Documentation\05-Self-Learning\TODO\03_DAILY_PROGRESS_TRACKER.md
-		Documentation\05-Self-Learning\TODO\MIND_MAP.md = Documentation\05-Self-Learning\TODO\MIND_MAP.md
-		Documentation\05-Self-Learning\TODO\NEXT_STEPS_GUIDE.md = Documentation\05-Self-Learning\TODO\NEXT_STEPS_GUIDE.md
-		Documentation\05-Self-Learning\TODO\ORGANIZATION_SUMMARY.md = Documentation\05-Self-Learning\TODO\ORGANIZATION_SUMMARY.md
-		Documentation\05-Self-Learning\TODO\TODO_INDEX.md = Documentation\05-Self-Learning\TODO\TODO_INDEX.md
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Azure-Migration", "Azure-Migration", "{B3C4D5E6-7F80-9012-3456-789ABCDEF012}"
-	ProjectSection(SolutionItems) = preProject
-		Documentation\05-Self-Learning\TODO\Azure-Migration\01_AZURE_CLOUD_MIGRATION_STRATEGY.md = Documentation\05-Self-Learning\TODO\Azure-Migration\01_AZURE_CLOUD_MIGRATION_STRATEGY.md
-		Documentation\05-Self-Learning\TODO\Azure-Migration\02_DATABASE_CLOUD_MIGRATION.md = Documentation\05-Self-Learning\TODO\Azure-Migration\02_DATABASE_CLOUD_MIGRATION.md
-		Documentation\05-Self-Learning\TODO\Azure-Migration\03_EF_CORE_CLOUD_PATTERNS.md = Documentation\05-Self-Learning\TODO\Azure-Migration\03_EF_CORE_CLOUD_PATTERNS.md
-		Documentation\05-Self-Learning\TODO\Azure-Migration\04_MULTI_ENVIRONMENT_CLOUD_SETUP.md = Documentation\05-Self-Learning\TODO\Azure-Migration\04_MULTI_ENVIRONMENT_CLOUD_SETUP.md
-		Documentation\05-Self-Learning\TODO\Azure-Migration\05_DATABASE_ARCHITECTURE_INSIGHTS.md = Documentation\05-Self-Learning\TODO\Azure-Migration\05_DATABASE_ARCHITECTURE_INSIGHTS.md
-		Documentation\05-Self-Learning\TODO\Azure-Migration\06_EF_CORE_STANDARDIZATION.md = Documentation\05-Self-Learning\TODO\Azure-Migration\06_EF_CORE_STANDARDIZATION.md
-		Documentation\05-Self-Learning\TODO\Azure-Migration\07_CLOUD_TESTING_STRATEGIES.md = Documentation\05-Self-Learning\TODO\Azure-Migration\07_CLOUD_TESTING_STRATEGIES.md
-		Documentation\05-Self-Learning\TODO\Azure-Migration\08_PRODUCTION_CONFIGURATION_PATTERNS.md = Documentation\05-Self-Learning\TODO\Azure-Migration\08_PRODUCTION_CONFIGURATION_PATTERNS.md
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Microservices-Architecture", "Microservices-Architecture", "{C4D5E6F7-8091-2345-6789-ABCDEF012345}"
-	ProjectSection(SolutionItems) = preProject
-		Documentation\05-Self-Learning\TODO\Microservices-Architecture\01_MICROSERVICES_ARCHITECTURE_DESIGN.md = Documentation\05-Self-Learning\TODO\Microservices-Architecture\01_MICROSERVICES_ARCHITECTURE_DESIGN.md
-		Documentation\05-Self-Learning\TODO\Microservices-Architecture\02_ENTERPRISE_PATTERNS_REFERENCE.md = Documentation\05-Self-Learning\TODO\Microservices-Architecture\02_ENTERPRISE_PATTERNS_REFERENCE.md
-		Documentation\05-Self-Learning\TODO\Microservices-Architecture\03_DATABASE_MICROSERVICES_DESIGN.md = Documentation\05-Self-Learning\TODO\Microservices-Architecture\03_DATABASE_MICROSERVICES_DESIGN.md
-		Documentation\05-Self-Learning\TODO\Microservices-Architecture\04_FOUNDATION_ARCHITECTURE_PATTERNS.md = Documentation\05-Self-Learning\TODO\Microservices-Architecture\04_FOUNDATION_ARCHITECTURE_PATTERNS.md
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Technical-Enhancements", "Technical-Enhancements", "{D5E6F789-0123-4567-89AB-CDEF01234567}"
-	ProjectSection(SolutionItems) = preProject
-		Documentation\05-Self-Learning\TODO\Technical-Enhancements\01_TECHNICAL_EXCELLENCE_ROADMAP.md = Documentation\05-Self-Learning\TODO\Technical-Enhancements\01_TECHNICAL_EXCELLENCE_ROADMAP.md
-		Documentation\05-Self-Learning\TODO\Technical-Enhancements\02_INFRASTRUCTURE_IMPROVEMENTS.md = Documentation\05-Self-Learning\TODO\Technical-Enhancements\02_INFRASTRUCTURE_IMPROVEMENTS.md
-		Documentation\05-Self-Learning\TODO\Technical-Enhancements\03_ENTERPRISE_DOCKER_PATTERNS.md = Documentation\05-Self-Learning\TODO\Technical-Enhancements\03_ENTERPRISE_DOCKER_PATTERNS.md
-		Documentation\05-Self-Learning\TODO\Technical-Enhancements\04_DOCKER_STRATEGY_GUIDE.md = Documentation\05-Self-Learning\TODO\Technical-Enhancements\04_DOCKER_STRATEGY_GUIDE.md
-		Documentation\05-Self-Learning\TODO\Technical-Enhancements\05_DEVELOPMENT_WORKFLOW_INSIGHTS.md = Documentation\05-Self-Learning\TODO\Technical-Enhancements\05_DEVELOPMENT_WORKFLOW_INSIGHTS.md
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tracker", "Tracker", "{E6F78901-2345-6789-ABCD-EF0123456789}"
-	ProjectSection(SolutionItems) = preProject
-		Documentation\05-Self-Learning\TODO\Tracker\ACHIEVEMENT_LOG.md = Documentation\05-Self-Learning\TODO\Tracker\ACHIEVEMENT_LOG.md
-		Documentation\05-Self-Learning\TODO\Tracker\DOCKER_AZURE_STRATEGY.md = Documentation\05-Self-Learning\TODO\Tracker\DOCKER_AZURE_STRATEGY.md
-		Documentation\05-Self-Learning\TODO\Tracker\MICROSERVICES_COMMUNICATION.md = Documentation\05-Self-Learning\TODO\Tracker\MICROSERVICES_COMMUNICATION.md
-		Documentation\05-Self-Learning\TODO\Tracker\PROGRESS_TRACKER.md = Documentation\05-Self-Learning\TODO\Tracker\PROGRESS_TRACKER.md
-		Documentation\05-Self-Learning\TODO\Tracker\WEEK_01_CHECKLIST.md = Documentation\05-Self-Learning\TODO\Tracker\WEEK_01_CHECKLIST.md
-		Documentation\05-Self-Learning\TODO\Tracker\WEEK_01_SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\TODO\Tracker\WEEK_01_SUCCESS_CRITERIA.md
-		Documentation\05-Self-Learning\TODO\Tracker\WEEK_02_SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\TODO\Tracker\WEEK_02_SUCCESS_CRITERIA.md
-		Documentation\05-Self-Learning\TODO\Tracker\WEEK_03_SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\TODO\Tracker\WEEK_03_SUCCESS_CRITERIA.md
-		Documentation\05-Self-Learning\TODO\Tracker\WORKING_PROFESSIONAL_SCHEDULE.md = Documentation\05-Self-Learning\TODO\Tracker\WORKING_PROFESSIONAL_SCHEDULE.md
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "LearningHelp", "LearningHelp", "{F7890123-4567-89AB-CDEF-0123456789AB}"
-	ProjectSection(SolutionItems) = preProject
-		Documentation\05-Self-Learning\LearningHelp\DockerHelp.md = Documentation\05-Self-Learning\LearningHelp\DockerHelp.md
-		Documentation\05-Self-Learning\LearningHelp\sharedsettingsHelp.md = Documentation\05-Self-Learning\LearningHelp\sharedsettingsHelp.md
-	EndProjectSection
-EndProject
+
+
+
+
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XYDataLabs.OrderProcessingSystem.Utilities", "XYDataLabs.OrderProcessingSystem.Utilities\XYDataLabs.OrderProcessingSystem.Utilities.csproj", "{DFC0BB5F-D671-DE7D-4A5D-D10E77984910}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "05-Self-Learning", "05-Self-Learning", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Temp-Tracker", "Temp-Tracker", "{94540898-5E2E-48D3-8591-A971B7495BD8}"
-	ProjectSection(SolutionItems) = preProject
-		Documentation\05-Self-Learning\TODO\Tracker\Temp-Tracker\1-15Aug-2025 = Documentation\05-Self-Learning\TODO\Tracker\Temp-Tracker\1-15Aug-2025
-		Documentation\05-Self-Learning\TODO\Tracker\Temp-Tracker\1-17Aug-2025 = Documentation\05-Self-Learning\TODO\Tracker\Temp-Tracker\1-17Aug-2025
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Azure-Curriculum", "Azure-Curriculum", "{F1234567-8901-2345-6789-ABCDEF012345}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "00-Foundation", "00-Foundation", "{F2345678-9012-3456-789A-BCDEF0123456}"
-	ProjectSection(SolutionItems) = preProject
-		Documentation\05-Self-Learning\Azure-Curriculum\00-Foundation\00_MASTER_PLAN.md = Documentation\05-Self-Learning\Azure-Curriculum\00-Foundation\00_MASTER_PLAN.md
-		Documentation\05-Self-Learning\Azure-Curriculum\00-Foundation\01_LEARNING_MAP.md = Documentation\05-Self-Learning\Azure-Curriculum\00-Foundation\01_LEARNING_MAP.md
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "01-Weekly-Trackers", "01-Weekly-Trackers", "{F3456789-0123-4567-89AB-CDEF01234567}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-01-02", "Week-01-02", "{F4567890-1234-5678-9ABC-DEF012345678}"
-	ProjectSection(SolutionItems) = preProject
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-01-02\Pavan_Learning_week1-session1.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-01-02\Pavan_Learning_week1-session1.md
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-01-02\Pavan_Learning_week1-session2.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-01-02\Pavan_Learning_week1-session2.md
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-01-02\README.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-01-02\README.md
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-01-02\SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-01-02\SUCCESS_CRITERIA.md
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-03-04", "Week-03-04", "{F5678901-2345-6789-ABCD-EF0123456789}"
-	ProjectSection(SolutionItems) = preProject
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-03-04\DEPLOYMENT_EXERCISES.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-03-04\DEPLOYMENT_EXERCISES.md
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-03-04\README.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-03-04\README.md
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-03-04\SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-03-04\SUCCESS_CRITERIA.md
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-05-06", "Week-05-06", "{F6789012-3456-789A-BCDE-F0123456789A}"
-	ProjectSection(SolutionItems) = preProject
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-05-06\SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-05-06\SUCCESS_CRITERIA.md
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-05-06\README.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-05-06\README.md
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-07-08", "Week-07-08", "{A7890123-4567-89AB-CDEF-0123456789AB}"
-	ProjectSection(SolutionItems) = preProject
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-07-08\README.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-07-08\README.md
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-07-08\SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-07-08\SUCCESS_CRITERIA.md
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-07-08\WEEK_04_SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-07-08\WEEK_04_SUCCESS_CRITERIA.md
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-09-10", "Week-09-10", "{F8901234-5678-9ABC-DEF0-123456789ABC}"
-	ProjectSection(SolutionItems) = preProject
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-09-10\README.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-09-10\README.md
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-09-10\SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-09-10\SUCCESS_CRITERIA.md
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-09-10\WEEK_05_SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-09-10\WEEK_05_SUCCESS_CRITERIA.md
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-11-12", "Week-11-12", "{F9012345-6789-ABCD-EF01-23456789ABCD}"
-	ProjectSection(SolutionItems) = preProject
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-11-12\README.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-11-12\README.md
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-11-12\SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-11-12\SUCCESS_CRITERIA.md
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-11-12\WEEK_06_SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-11-12\WEEK_06_SUCCESS_CRITERIA.md
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-13-14", "Week-13-14", "{FA123456-789A-BCDE-F012-3456789ABCDE}"
-	ProjectSection(SolutionItems) = preProject
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-13-14\README.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-13-14\README.md
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-13-14\SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-13-14\SUCCESS_CRITERIA.md
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-13-14\WEEK_07_SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-13-14\WEEK_07_SUCCESS_CRITERIA.md
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-15-16", "Week-15-16", "{FB234567-89AB-CDEF-0123-456789ABCDEF}"
-	ProjectSection(SolutionItems) = preProject
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-15-16\README.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-15-16\README.md
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-15-16\SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-15-16\SUCCESS_CRITERIA.md
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-15-16\WEEK_08_SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-15-16\WEEK_08_SUCCESS_CRITERIA.md
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-17-18", "Week-17-18", "{FC345678-9ABC-DEF0-1234-56789ABCDEF0}"
-	ProjectSection(SolutionItems) = preProject
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-17-18\SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-17-18\SUCCESS_CRITERIA.md
-		Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-17-18\WEEK_09_SUCCESS_CRITERIA.md = Documentation\05-Self-Learning\Azure-Curriculum\01-Weekly-Trackers\Week-17-18\WEEK_09_SUCCESS_CRITERIA.md
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "02-Daily-Progress", "02-Daily-Progress", "{FD456789-ABCD-EF01-2345-6789ABCDEF01}"
-	ProjectSection(SolutionItems) = preProject
-		Documentation\05-Self-Learning\Azure-Curriculum\02-Daily-Progress\DAILY_PROGRESS_TRACKER.md = Documentation\05-Self-Learning\Azure-Curriculum\02-Daily-Progress\DAILY_PROGRESS_TRACKER.md
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "August-2025", "August-2025", "{FD456789-ABCD-EF01-2345-6789ABCDEF02}"
-	ProjectSection(SolutionItems) = preProject
-		Documentation\05-Self-Learning\Azure-Curriculum\02-Daily-Progress\August-2025\17-Aug-2025-Planning.md = Documentation\05-Self-Learning\Azure-Curriculum\02-Daily-Progress\August-2025\17-Aug-2025-Planning.md
-		Documentation\05-Self-Learning\Azure-Curriculum\02-Daily-Progress\August-2025\Day-17-Planning-Session.md = Documentation\05-Self-Learning\Azure-Curriculum\02-Daily-Progress\August-2025\Day-17-Planning-Session.md
-		Documentation\05-Self-Learning\Azure-Curriculum\02-Daily-Progress\August-2025\README.md = Documentation\05-Self-Learning\Azure-Curriculum\02-Daily-Progress\August-2025\README.md
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "03-Certifications", "03-Certifications", "{FE567890-BCDE-F012-3456-789ABCDEF012}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "AZ-204-Developer", "AZ-204-Developer", "{FE567890-BCDE-F012-3456-789ABCDEF013}"
-	ProjectSection(SolutionItems) = preProject
-		Documentation\05-Self-Learning\Azure-Curriculum\03-Certifications\AZ-204-Developer\README.md = Documentation\05-Self-Learning\Azure-Curriculum\03-Certifications\AZ-204-Developer\README.md
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "04-Resources", "04-Resources", "{FF678901-CDEF-0123-4567-89ABCDEF0123}"
-	ProjectSection(SolutionItems) = preProject
-		Documentation\05-Self-Learning\Azure-Curriculum\1_MASTER_CURRICULUM.md = Documentation\05-Self-Learning\Azure-Curriculum\1_MASTER_CURRICULUM.md
-		Documentation\05-Self-Learning\Azure-Curriculum\Azure_Learning_Guide_Complete.md = Documentation\05-Self-Learning\Azure-Curriculum\Azure_Learning_Guide_Complete.md
-		Documentation\05-Self-Learning\Azure-Curriculum\CLEANUP_ANALYSIS.md = Documentation\05-Self-Learning\Azure-Curriculum\CLEANUP_ANALYSIS.md
-		Documentation\05-Self-Learning\Azure-Curriculum\CURRICULUM_OVERVIEW.md = Documentation\05-Self-Learning\Azure-Curriculum\CURRICULUM_OVERVIEW.md
-		Documentation\05-Self-Learning\Azure-Curriculum\NAVIGATION_INDEX.md = Documentation\05-Self-Learning\Azure-Curriculum\NAVIGATION_INDEX.md
-		Documentation\05-Self-Learning\Azure-Curriculum\QUICK_START.md = Documentation\05-Self-Learning\Azure-Curriculum\QUICK_START.md
-		Documentation\05-Self-Learning\Azure-Curriculum\README.md = Documentation\05-Self-Learning\Azure-Curriculum\README.md
-		Documentation\05-Self-Learning\Azure-Curriculum\REORGANIZATION_COMPLETION.md = Documentation\05-Self-Learning\Azure-Curriculum\REORGANIZATION_COMPLETION.md
-		Documentation\05-Self-Learning\Azure-Curriculum\STRUCTURE_VERIFICATION.md = Documentation\05-Self-Learning\Azure-Curriculum\STRUCTURE_VERIFICATION.md
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "05-Portfolio", "05-Portfolio", "{F0789012-DEF0-1234-5678-9ABCDEF01234}"
-	ProjectSection(SolutionItems) = preProject
-		Documentation\05-Self-Learning\Azure-Curriculum\05-Portfolio\ACHIEVEMENT_LOG.md = Documentation\05-Self-Learning\Azure-Curriculum\05-Portfolio\ACHIEVEMENT_LOG.md
-		Documentation\05-Self-Learning\Azure-Curriculum\05-Portfolio\README.md = Documentation\05-Self-Learning\Azure-Curriculum\05-Portfolio\README.md
-	EndProjectSection
-EndProject
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Operations-Quick-Links", "Operations-Quick-Links", "{ABCDEF12-3456-7890-ABCD-EF1234567890}"
 	ProjectSection(SolutionItems) = preProject
 		Documentation\02-Azure-Learning-Guides\AZURE_DEPLOYMENT_GUIDE.md = Documentation\02-Azure-Learning-Guides\AZURE_DEPLOYMENT_GUIDE.md
 		Documentation\02-Azure-Learning-Guides\SKU_UPGRADE_TESTING_GUIDE.md = Documentation\02-Azure-Learning-Guides\SKU_UPGRADE_TESTING_GUIDE.md
+		Documentation\02-Azure-Learning-Guides\Telemetry-Quick-Start.md = Documentation\02-Azure-Learning-Guides\Telemetry-Quick-Start.md
 		Documentation\Operations-Quick-Links-README.md = Documentation\Operations-Quick-Links-README.md
 		.github\workflows\infra-deploy.yml = .github\workflows\infra-deploy.yml
 		.github\workflows\README-INFRA-DEPLOY.md = .github\workflows\README-INFRA-DEPLOY.md
@@ -332,6 +185,9 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Operations-Quick-Links", "O
 		Resources\Azure-Deployment\wait-appservice-ready.ps1 = Resources\Azure-Deployment\wait-appservice-ready.ps1
 		Resources\Azure-Deployment\manage-appservice-slots.ps1 = Resources\Azure-Deployment\manage-appservice-slots.ps1
 		Resources\Azure-Deployment\test-enterprise-deployment.ps1 = Resources\Azure-Deployment\test-enterprise-deployment.ps1
+		Resources\Azure-Deployment\validate-parameters-whatif.ps1 = Resources\Azure-Deployment\validate-parameters-whatif.ps1
+		Resources\Azure-Deployment\verify-oidc-credentials.ps1 = Resources\Azure-Deployment\verify-oidc-credentials.ps1
+		Resources\Azure-Deployment\validate-sharedsettings-diff.ps1 = Resources\Azure-Deployment\validate-sharedsettings-diff.ps1
 		Resources\Docker\start-docker.ps1 = Resources\Docker\start-docker.ps1
 		Resources\Docker\docker-compose.dev.yml = Resources\Docker\docker-compose.dev.yml
 		infra\main.bicep = infra\main.bicep

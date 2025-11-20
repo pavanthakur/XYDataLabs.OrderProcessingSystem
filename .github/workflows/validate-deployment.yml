@@ -1,0 +1,90 @@
+name: Pre-Deployment Validation
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Target environment (dev|staging|prod)'
+        required: true
+        type: string
+      run-whatif:
+        description: 'Run Bicep what-if analysis'
+        required: false
+        type: boolean
+        default: true
+      verify-oidc:
+        description: 'Verify OIDC credentials'
+        required: false
+        type: boolean
+        default: false
+      check-config:
+        description: 'Validate sharedsettings consistency'
+        required: false
+        type: boolean
+        default: true
+    secrets:
+      AZURE_CLIENT_ID:
+        required: true
+      AZURE_TENANT_ID:
+        required: true
+      AZURE_SUBSCRIPTION_ID:
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  validate:
+    name: Run Pre-Deployment Checks
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Bicep What-If Analysis
+        if: inputs.run-whatif
+        shell: pwsh
+        run: |
+          Write-Host "Running what-if for ${{ inputs.environment }}" -ForegroundColor Cyan
+          ./Resources/Azure-Deployment/validate-parameters-whatif.ps1 `
+            -Environment ${{ inputs.environment }} `
+            -ResourceGroupPrefix 'xyorderprocessing'
+        continue-on-error: false
+
+      - name: Verify OIDC Credentials
+        if: inputs.verify-oidc
+        shell: pwsh
+        run: |
+          $appId = az ad app list --display-name "GitHub-Actions-OIDC" --query "[0].id" -o tsv
+          if ($appId) {
+            ./Resources/Azure-Deployment/verify-oidc-credentials.ps1 -AppObjectId $appId
+          } else {
+            Write-Warning "GitHub-Actions-OIDC app not found; skipping OIDC verification"
+          }
+        continue-on-error: true
+
+      - name: Validate SharedSettings Consistency
+        if: inputs.check-config
+        shell: pwsh
+        run: |
+          ./Resources/Azure-Deployment/validate-sharedsettings-diff.ps1
+        continue-on-error: false
+
+      - name: Upload Validation Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-report-${{ inputs.environment }}
+          path: |
+            **/*.log
+          retention-days: 7
