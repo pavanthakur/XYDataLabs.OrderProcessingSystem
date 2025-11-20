@@ -21,6 +21,8 @@
   Plan sku for staging (default 'B1')
 .PARAMETER ProductionSku
   Plan sku for production (default 'P1v3')
+.PARAMETER GitHubOwner
+  GitHub repository owner/organization name (default 'pavanthakur')
 #>
 
 param(
@@ -32,8 +34,12 @@ param(
     [Parameter(Mandatory = $false)] [string]$UiSuffix = 'ui-xyapp',
     [Parameter(Mandatory = $false)] [string]$DevSku = 'F1',
     [Parameter(Mandatory = $false)] [string]$StagingSku = 'B1',
-    [Parameter(Mandatory = $false)] [string]$ProductionSku = 'P1v3'
+    [Parameter(Mandatory = $false)] [string]$ProductionSku = 'P1v3',
+    [Parameter(Mandatory = $false)] [string]$GitHubOwner = 'pavanthakur'
 )
+
+# Repository name (fixed for this project)
+$GitHubRepo = 'TestAppXY_OrderProcessingSystem'
 
 # Logging directory and file
 $logDir = Join-Path $PSScriptRoot "logs"
@@ -52,18 +58,33 @@ Write-Log "=== Bootstrap started ===" "INFO" "Cyan"
 
 # Super retry synchronous webapp creation helper
 function New-WebAppWithSuperRetry {
-    param([string]$ResourceGroup, [string]$PlanName, [string]$AppName, [int]$MaxAttempts = 5, [int]$DelaySeconds = 15)
+    param([string]$ResourceGroup, [string]$PlanName, [string]$AppName, [int]$MaxAttempts = 5, [int]$InitialWaitMinutes = 2, [int]$RetryDelaySeconds = 60)
     $lastErr = $null
     for ($i = 1; $i -le $MaxAttempts; $i++) {
         Write-Log "Creating WebApp '$AppName' (Attempt $i/$MaxAttempts)..." "INFO" "Yellow"
         $result = az webapp create -g $ResourceGroup -p $PlanName -n $AppName --runtime "dotnet:8" 2>&1
         if ($LASTEXITCODE -eq 0) {
-            Write-Log "WebApp '$AppName' create successful" "INFO" "Green"
+            Write-Log "WebApp '$AppName' create command succeeded - waiting ${InitialWaitMinutes} minutes for Azure provisioning..." "INFO" "Cyan"
+            Write-Host "  [WAIT] Allowing Azure time to provision webapp in portal (${InitialWaitMinutes} min)..." -ForegroundColor Yellow
+            $waitSeconds = $InitialWaitMinutes * 60
+            $checkInterval = 30
+            $elapsed = 0
+            Write-Host "  [PROGRESS] [" -NoNewline -ForegroundColor Cyan
+            while ($elapsed -lt $waitSeconds) {
+                Start-Sleep -Seconds $checkInterval
+                $elapsed += $checkInterval
+                Write-Host "#" -NoNewline -ForegroundColor Green
+            }
+            Write-Host "]" -ForegroundColor Cyan
+            Write-Log "WebApp '$AppName' provisioning wait complete" "INFO" "Green"
             return @{ Success = $true; Output = $result }
         } else {
             $lastErr = $result
             Write-Log "Attempt $i failed for ${AppName}: $result" "WARN" "Yellow"
-            Start-Sleep -Seconds $DelaySeconds
+            if ($i -lt $MaxAttempts) {
+                Write-Host "  [RETRY] Waiting $RetryDelaySeconds seconds before retry..." -ForegroundColor Yellow
+                Start-Sleep -Seconds $RetryDelaySeconds
+            }
         }
     }
     return @{ Success = $false; Error = $lastErr }
@@ -257,8 +278,9 @@ foreach ($env in $envList) {
     Write-Host "`n[env:$env] Processing environment resources" -ForegroundColor Yellow
     $rg = "rg-$BaseName-$env"
     $plan = "asp-$BaseName-$env"
-    $apiApp = "$BaseName-$ApiSuffix-$env"
-    $uiApp = "$BaseName-$UiSuffix-$env"
+    # Prepend GitHub owner to webapp names for global uniqueness
+    $apiApp = "$GitHubOwner-$BaseName-$ApiSuffix-$env"
+    $uiApp = "$GitHubOwner-$BaseName-$UiSuffix-$env"
     $sku = Resolve-Sku $env
 
     # Resource Group
@@ -299,6 +321,17 @@ foreach ($env in $envList) {
             continue
         }
         Write-Host "  Plan creation initiated: $plan ($sku)" -ForegroundColor Cyan
+        Write-Host "  [WAIT] Waiting 2 minutes for App Service Plan to be fully ready..." -ForegroundColor Yellow
+        $waitSeconds = 120
+        $checkInterval = 30
+        $elapsed = 0
+        Write-Host "  [PROGRESS] [" -NoNewline -ForegroundColor Cyan
+        while ($elapsed -lt $waitSeconds) {
+            Start-Sleep -Seconds $checkInterval
+            $elapsed += $checkInterval
+            Write-Host "#" -NoNewline -ForegroundColor Green
+        }
+        Write-Host "]" -ForegroundColor Cyan
         Add-StepStatus -Name "Create App Service Plan ($plan, $sku)" -Status "Success" -Details "Created"
     }
     else { Write-Host "  Plan exists: $plan" -ForegroundColor Green; Add-StepStatus -Name "Create App Service Plan ($plan, $sku)" -Status "Success" -Details "Already existed" }
@@ -581,13 +614,11 @@ if ($oidcResult.Success) {
     $existingCreds = az ad app federated-credential list --id $oidcResult.AppObjectId 2>$null | ConvertFrom-Json
     if (-not $existingCreds) { $existingCreds = @() }
     $branches = @('main','staging','dev')
-    $githubOwner = 'getpavanthakur'
-    $repository = 'TestAppXY_OrderProcessingSystem'
     foreach ($branch in $branches) {
         $credName = "github-$branch-oidc"
         $exists = $existingCreds | Where-Object { $_.name -eq $credName }
         if (-not $exists) {
-            $subject = "repo:$githubOwner/$repository:ref:refs/heads/$branch"
+            $subject = "repo:${GitHubOwner}/${GitHubRepo}:ref:refs/heads/$branch"
             $credentialJson = @{ name = $credName; issuer = "https://token.actions.githubusercontent.com"; subject = $subject; audiences = @("api://AzureADTokenExchange") } | ConvertTo-Json
             $tempFile = [System.IO.Path]::GetTempFileName()
             $credentialJson | Out-File -FilePath $tempFile -Encoding UTF8
@@ -610,8 +641,8 @@ if ($oidcResult.Success) {
     }
 
     # GitHub secrets display
-    Write-Host "\n  [GitHub Secrets] Add these to repository secrets:" -ForegroundColor Cyan
-    Write-Host "    https://github.com/$githubOwner/$repository/settings/secrets/actions" -ForegroundColor Gray
+    Write-Host "`n  [GitHub Secrets] Add these to repository secrets:" -ForegroundColor Cyan
+    Write-Host "    https://github.com/$GitHubOwner/$GitHubRepo/settings/secrets/actions" -ForegroundColor Gray
     Write-Host "\n    AZUREAPPSERVICE_CLIENTID:        $($oidcResult.AppId)" -ForegroundColor White
     Write-Host "    AZUREAPPSERVICE_TENANTID:        $($oidcResult.TenantId)" -ForegroundColor White
     Write-Host "    AZUREAPPSERVICE_SUBSCRIPTIONID:  $($oidcResult.SubscriptionId)" -ForegroundColor White
@@ -628,13 +659,13 @@ AZUREAPPSERVICE_SUBSCRIPTIONID:  $($oidcResult.SubscriptionId)
     $secretsOutput | Set-Clipboard -ErrorAction SilentlyContinue
     Write-Host "  [OK] Secrets copied to clipboard!" -ForegroundColor Green
     # Automatic GitHub secrets configuration (if helper script is present)
-    Write-Host "\n  [AUTOMATION] Configuring GitHub secrets automatically..." -ForegroundColor Cyan
+    Write-Host "`n  [AUTOMATION] Configuring GitHub secrets automatically..." -ForegroundColor Cyan
     $configScriptPath = Join-Path $PSScriptRoot "configure-github-secrets.ps1"
     if (Test-Path $configScriptPath) {
         try {
-            & $configScriptPath -Repository "$githubOwner/$repository" -Force -ErrorAction Stop
+            & $configScriptPath -Repository "$GitHubOwner/$GitHubRepo" -Force -ErrorAction Stop
             Write-Host "  [OK] GitHub secrets configured automatically!" -ForegroundColor Green
-            Add-StepStatus -Name "Auto-configure GitHub Secrets" -Status "Success" -Details "Repository=$githubOwner/$repository"
+            Add-StepStatus -Name "Auto-configure GitHub Secrets" -Status "Success" -Details "Repository=$GitHubOwner/$GitHubRepo"
         } catch {
             Write-Host "  [WARN] Automatic secret configuration failed: $($_.Exception.Message)" -ForegroundColor Yellow
             Write-Host "  [ACTION] Configure manually or run: ./configure-github-secrets.ps1" -ForegroundColor Yellow

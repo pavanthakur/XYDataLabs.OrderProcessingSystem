@@ -21,10 +21,13 @@ For detailed step-by-step execution flow of the bootstrap script:
 
 ### Deployed Applications
 
+**Naming Convention**: `{GitHubOwner}-{BaseName}-{Component}-{Environment}`  
+This ensures global uniqueness of Azure Web App names by prefixing with the GitHub owner.
+
 | Application | Azure App Service | URL | Runtime |
 |------------|------------------|-----|---------|
-| **API** | `orderprocessing-api-xyapp` | https://orderprocessing-api-xyapp.azurewebsites.net | .NET 8 |
-| **UI** | `orderprocessing-ui-xyapp` | https://orderprocessing-ui-xyapp.azurewebsites.net | .NET 8 |
+| **API** | `pavanthakur-orderprocessing-api-xyapp` | https://pavanthakur-orderprocessing-api-xyapp.azurewebsites.net | .NET 8 |
+| **UI** | `pavanthakur-orderprocessing-ui-xyapp` | https://pavanthakur-orderprocessing-ui-xyapp.azurewebsites.net | .NET 8 |
 
 ### Azure Resources by Environment
 
@@ -34,8 +37,8 @@ For detailed step-by-step execution flow of the bootstrap script:
 |--------------|---------------|---------------|
 | Resource Group | `rg-orderprocessing-dev` | Central India |
 | App Service Plan | `asp-orderprocessing-dev` | Windows, F1 (Free tier) |
-| API Web App | `orderprocessing-api-xyapp-dev` | .NET 8, Auto-deploy from `dev` branch |
-| UI Web App | `orderprocessing-ui-xyapp-dev` | .NET 8, Auto-deploy from `dev` branch |
+| API Web App | `pavanthakur-orderprocessing-api-xyapp-dev` | .NET 8, Auto-deploy from `dev` branch |
+| UI Web App | `pavanthakur-orderprocessing-ui-xyapp-dev` | .NET 8, Auto-deploy from `dev` branch |
 | Application Insights | `ai-orderprocessing-dev` | Monitoring & diagnostics |
 | Federated Credential | `github-dev-oidc` | Subject: `ref:refs/heads/dev` |
 
@@ -45,8 +48,8 @@ For detailed step-by-step execution flow of the bootstrap script:
 |--------------|---------------|---------------|
 | Resource Group | `rg-orderprocessing-staging` | Central India |
 | App Service Plan | `asp-orderprocessing-staging` | Windows, F1 (Free tier) |
-| API Web App | `orderprocessing-api-xyapp-staging` | .NET 8, Auto-deploy from `staging` branch |
-| UI Web App | `orderprocessing-ui-xyapp-staging` | .NET 8, Auto-deploy from `staging` branch |
+| API Web App | `pavanthakur-orderprocessing-api-xyapp-staging` | .NET 8, Auto-deploy from `staging` branch |
+| UI Web App | `pavanthakur-orderprocessing-ui-xyapp-staging` | .NET 8, Auto-deploy from `staging` branch |
 | Application Insights | `ai-orderprocessing-staging` | Monitoring & diagnostics |
 | Federated Credential | `github-staging-oidc` | Subject: `ref:refs/heads/staging` |
 
@@ -65,8 +68,8 @@ This project uses a **three-branch workflow** that maps directly to Azure enviro
 
 | Branch | Purpose | Azure Resources | Federated Credential | Auto-Deploy |
 |--------|---------|-----------------|---------------------|-------------|
-| `dev` | Testing & Development | `rg-orderprocessing-dev`<br>`orderprocessing-api-xyapp-dev`<br>`orderprocessing-ui-xyapp-dev` | `github-dev-oidc`<br>Subject: `repo:getpavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/dev` | ✅ Yes |
-| `staging` | Pre-production Validation | `rg-orderprocessing-staging`<br>`orderprocessing-api-xyapp-staging`<br>`orderprocessing-ui-xyapp-staging` | `github-staging-oidc`<br>Subject: `repo:getpavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/staging` | ✅ Yes |
+| `dev` | Testing & Development | `rg-orderprocessing-dev`<br>`pavanthakur-orderprocessing-api-xyapp-dev`<br>`pavanthakur-orderprocessing-ui-xyapp-dev` | `github-dev-oidc`<br>Subject: `repo:pavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/dev` | ✅ Yes |
+| `staging` | Pre-production Validation | `rg-orderprocessing-staging`<br>`orderprocessing-api-xyapp-staging`<br>`orderprocessing-ui-xyapp-staging` | `github-staging-oidc`<br>Subject: `repo:pavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/staging` | ✅ Yes |
 | `main` | Production | (Future production resources) | (Not created yet) | ⚠️ Manual approval recommended |
 
 ### Branch Workflow
@@ -197,7 +200,7 @@ Similar credentials created for `staging` and `main` branches.
 
 ```powershell
 # Automatic execution during bootstrap (line 717-726)
-& $configScriptPath -Repository "getpavanthakur/TestAppXY_OrderProcessingSystem" -Force
+& $configScriptPath -Repository "pavanthakur/TestAppXY_OrderProcessingSystem" -Force
 ```
 
 **Secrets Configured:**
@@ -212,7 +215,7 @@ Similar credentials created for `staging` and `main` branches.
 
 ```powershell
 # View configured secrets
-gh secret list --repo getpavanthakur/TestAppXY_OrderProcessingSystem
+gh secret list --repo pavanthakur/TestAppXY_OrderProcessingSystem
 
 # Expected output:
 # AZUREAPPSERVICE_CLIENTID        Updated 2025-11-17
@@ -248,7 +251,7 @@ git push origin dev
 2. **Trigger**: Push to `dev` branch
 3. **Authentication**: Uses OIDC federated credential `github-dev-oidc`
 4. **Secrets**: Retrieved from repository secrets (configured in Phase 3)
-5. **Deployment**: Builds and deploys to `orderprocessing-api-xyapp-dev`
+5. **Deployment**: Builds and deploys to `pavanthakur-orderprocessing-api-xyapp-dev`
 
 **OIDC Authentication Flow in GitHub Actions:**
 
@@ -304,7 +307,7 @@ Bootstrap Start (0 min)
 **Solution**: Verify App Registration exists and Client ID matches secret:
 ```powershell
 az ad app list --display-name "GitHub-Actions-OIDC" --query "[].{name:displayName, clientId:appId}"
-gh secret list --repo getpavanthakur/TestAppXY_OrderProcessingSystem
+gh secret list --repo pavanthakur/TestAppXY_OrderProcessingSystem
 ```
 
 **Issue**: Secrets not configured automatically
@@ -312,7 +315,7 @@ gh secret list --repo getpavanthakur/TestAppXY_OrderProcessingSystem
 **Solution**: Run manual configuration:
 ```powershell
 cd Resources/Azure-Deployment
-./configure-github-secrets.ps1 -Repository "getpavanthakur/TestAppXY_OrderProcessingSystem" -Force
+./configure-github-secrets.ps1 -Repository "pavanthakur/TestAppXY_OrderProcessingSystem" -Force
 ```
 
 ---
@@ -564,7 +567,7 @@ Branch: dev     → Federated Credential: github-dev-oidc     → Deploys to: rg
 **How it works**:
 1. Push to `dev` branch
 2. Workflow uses repository secret `AZUREAPPSERVICE_CLIENTID`
-3. GitHub Actions generates token with subject: `repo:getpavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/dev`
+3. GitHub Actions generates token with subject: `repo:pavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/dev`
 4. Azure validates against `github-dev-oidc` federated credential
 5. Deployment succeeds to dev resources
 
@@ -627,7 +630,10 @@ If you need approval workflows or separate credentials per environment, you can 
 ### 3.3 Updating Secrets After Recreation
 
 If you delete and recreate the app registration:
-1. Re-run `bootstrap-enterprise-infra.ps1` (or `setup-github-oidc.ps1` if using standalone script)
+1. Re-run `bootstrap-enterprise-infra.ps1` with optional `-GitHubOwner` parameter if using different owner:
+   ```powershell
+   .\bootstrap-enterprise-infra.ps1 -Environment dev -GitHubOwner "pavanthakur"
+   ```
 2. Copy new Client ID from script output (auto-copied to clipboard)
 3. Update `AZUREAPPSERVICE_CLIENTID` in GitHub Actions → Repository secrets
 4. Tenant and subscription IDs rarely change – verify only if subscription context changed
@@ -690,13 +696,13 @@ Example (API deploy job excerpt):
                ./Resources/Azure-Deployment/wait-appservice-ready.ps1 `
                   -ResourceGroup rg-orderprocessing-dev `
                   -PlanName asp-orderprocessing-dev `
-                  -WebApps "orderprocessing-api-xyapp-dev,orderprocessing-ui-xyapp-dev" `
+                  -WebApps "pavanthakur-orderprocessing-api-xyapp-dev,pavanthakur-orderprocessing-ui-xyapp-dev" `
                   -TimeoutMinutes 20
 
          - name: Deploy API
             uses: azure/webapps-deploy@v3
             with:
-               app-name: orderprocessing-api-xyapp-dev
+               app-name: pavanthakur-orderprocessing-api-xyapp-dev
                package: ./publish
 ```
 Exit code `1` aborts deployment (infra not ready); exit code `0` proceeds.
@@ -728,7 +734,7 @@ Include optional gating for UI only (shorter timeout):
          - name: Gate UI readiness
             shell: pwsh
             run: |
-               ./Resources/Azure-Deployment/wait-appservice-ready.ps1 -ResourceGroup rg-orderprocessing-dev -PlanName asp-orderprocessing-dev -WebApps "orderprocessing-ui-xyapp-dev" -TimeoutMinutes 10
+               ./Resources/Azure-Deployment/wait-appservice-ready.ps1 -ResourceGroup rg-orderprocessing-dev -PlanName asp-orderprocessing-dev -WebApps "pavanthakur-orderprocessing-ui-xyapp-dev" -TimeoutMinutes 10
 ```
 
 **Triggers**:
@@ -782,7 +788,7 @@ git push
 ### 5.3 Monitor Deployment
 
 1. **GitHub Actions UI**:
-   - Navigate to: https://github.com/getpavanthakur/TestAppXY_OrderProcessingSystem/actions
+   - Navigate to: https://github.com/pavanthakur/TestAppXY_OrderProcessingSystem/actions
    - Click on the running workflow
    - Expand build and deploy jobs to view logs
 
@@ -875,8 +881,8 @@ Resources\Azure-Deployment\setup-appinsights-dev.ps1 `
    -ResourceGroup rg-orderprocessing-dev `
    -Location centralindia `
    -WorkspaceName logs-orderprocessing-dev `
-   -ApiAppName orderprocessing-api-xyapp-dev `
-   -UiAppName orderprocessing-ui-xyapp-dev `
+   -ApiAppName pavanthakur-orderprocessing-api-xyapp-dev `
+   -UiAppName pavanthakur-orderprocessing-ui-xyapp-dev `
    -ApiAppInsights ai-orderprocessing-api-dev `
    -UiAppInsights ai-orderprocessing-ui-dev
 ```
@@ -919,10 +925,10 @@ If the API/UI return HTTP 500.30 (ASP.NET Core startup failure):
 
 ```powershell
 # Tail API logs
-az webapp log tail --name orderprocessing-api-xyapp-dev --resource-group rg-orderprocessing-dev
+az webapp log tail --name pavanthakur-orderprocessing-api-xyapp-dev --resource-group rg-orderprocessing-dev
 
 # Tail UI logs
-az webapp log tail --name orderprocessing-ui-xyapp-dev --resource-group rg-orderprocessing-dev
+az webapp log tail --name pavanthakur-orderprocessing-ui-xyapp-dev --resource-group rg-orderprocessing-dev
 ```
 
 Checklist:
@@ -954,8 +960,8 @@ az ad app federated-credential list --id $appId --query "[].{Name:name, Subject:
 ```
 
 **Look for malformed subjects**:
-- ❌ **INCORRECT**: `repo:getpavanthakur//heads/dev` (missing repo name)
-- ✅ **CORRECT**: `repo:getpavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/dev`
+- ❌ **INCORRECT**: `repo:pavanthakur//heads/dev` (missing repo name)
+- ✅ **CORRECT**: `repo:pavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/dev`
 
 **Solution - Delete and Recreate Credentials**:
 ```powershell
@@ -1003,9 +1009,9 @@ az ad app federated-credential list --id $appId --query "[].{Name:name, Subject:
 ```
 Name                 Subject
 -------------------  ------------------------------------------------------------------
-github-dev-oidc      repo:getpavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/dev
-github-staging-oidc  repo:getpavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/staging
-github-main-oidc     repo:getpavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/main
+github-dev-oidc      repo:pavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/dev
+github-staging-oidc  repo:pavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/staging
+github-main-oidc     repo:pavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/main
 ```
 
 ---
@@ -1117,14 +1123,14 @@ az webapp log download --name orderprocessing-api-xyapp --resource-group rg-orde
 ### Federated Credential Scoping
 
 The federated credential is scoped to:
-- **Repository**: `getpavanthakur/TestAppXY_OrderProcessingSystem`
+- **Repository**: `pavanthakur/TestAppXY_OrderProcessingSystem`
 - **Environment**: `Production`
 - **Branch**: Any (can be restricted further)
 
 **To restrict to specific branch**:
 ```json
 {
-  "subject": "repo:getpavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/main"
+  "subject": "repo:pavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/main"
 }
 ```
 
@@ -1162,7 +1168,7 @@ az role assignment create `
 ### View Deployment History
 
 **GitHub Actions**:
-- https://github.com/getpavanthakur/TestAppXY_OrderProcessingSystem/actions
+- https://github.com/pavanthakur/TestAppXY_OrderProcessingSystem/actions
 
 **Azure Portal**:
 1. Open App Service
@@ -1343,7 +1349,7 @@ Or trigger deployment manually without code changes:
 3. Select **Deploy UI to Azure App Service** → **Run workflow** → **main** → **Run workflow**
 
 **Step 4: Monitor Deployment**
-1. Navigate to: https://github.com/getpavanthakur/TestAppXY_OrderProcessingSystem/actions
+1. Navigate to: https://github.com/pavanthakur/TestAppXY_OrderProcessingSystem/actions
 2. Watch for two workflows to start:
    - **Deploy API to Azure App Service**
    - **Deploy UI to Azure App Service**
@@ -1634,7 +1640,13 @@ For production-grade operations, adopt a multi-environment model (dev, stg, prod
 Use the bootstrap script to create consistent resources per environment:
 
 ```powershell
-./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -SubscriptionId <SUBSCRIPTION_ID> -BaseName orderprocessing -Location eastus -Environments dev,stg,prod
+# Process one environment at a time
+./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment dev -BaseName orderprocessing -Location eastus
+./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment stg -BaseName orderprocessing -Location eastus
+./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment prod -BaseName orderprocessing -Location eastus
+
+# Optional: Use custom GitHub owner if repository is forked/moved
+./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment dev -GitHubOwner "myorg"
 ```
 
 Creates (idempotent):
@@ -1669,10 +1681,10 @@ Flags:
 ### Federated Credential Patterns
 | Type | Example Name | Subject Example |
 |------|--------------|-----------------|
-| Branch | `github-main-oidc` | `repo:getpavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/main` |
-| Branch | `github-staging-oidc` | `repo:getpavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/staging` |
-| Branch | `github-dev-oidc` | `repo:getpavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/dev` |
-| Environment | `github-env-Production-oidc` | `repo:getpavanthakur/TestAppXY_OrderProcessingSystem:environment:Production` |
+| Branch | `github-main-oidc` | `repo:pavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/main` |
+| Branch | `github-staging-oidc` | `repo:pavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/staging` |
+| Branch | `github-dev-oidc` | `repo:pavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/dev` |
+| Environment | `github-env-Production-oidc` | `repo:pavanthakur/TestAppXY_OrderProcessingSystem:environment:Production` |
 
 ### GitHub Workflow Adjustments
 Workflows updated to:
@@ -1887,7 +1899,7 @@ If you need to configure OIDC separately or customize settings:
   ```
 
 5. Deploy environments by pushing to branches:
-  - `dev` branch → dev API/UI apps (`orderprocessing-api-xyapp-dev`, `orderprocessing-ui-xyapp-dev`)
+  - `dev` branch → dev API/UI apps (`pavanthakur-orderprocessing-api-xyapp-dev`, `pavanthakur-orderprocessing-ui-xyapp-dev`)
   - `staging` branch → staging apps
   - `main` branch → production apps
 
