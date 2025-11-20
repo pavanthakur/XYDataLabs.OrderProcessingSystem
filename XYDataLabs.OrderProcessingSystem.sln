@@ -318,6 +318,19 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "05-Portfolio", "05-Portfoli
 		Documentation\05-Self-Learning\Azure-Curriculum\05-Portfolio\README.md = Documentation\05-Self-Learning\Azure-Curriculum\05-Portfolio\README.md
 	EndProjectSection
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Operations-Quick-Links", "Operations-Quick-Links", "{ABCDEF12-3456-7890-ABCD-EF1234567890}"
+	ProjectSection(SolutionItems) = preProject
+		Documentation\02-Azure-Learning-Guides\AZURE_DEPLOYMENT_GUIDE.md = Documentation\02-Azure-Learning-Guides\AZURE_DEPLOYMENT_GUIDE.md
+		.github\workflows\infra-deploy.yml = .github\workflows\infra-deploy.yml
+		.github\workflows\README-INFRA-DEPLOY.md = .github\workflows\README-INFRA-DEPLOY.md
+		Resources\Azure-Deployment\bootstrap-enterprise-infra.ps1 = Resources\Azure-Deployment\bootstrap-enterprise-infra.ps1
+		Resources\Azure-Deployment\provision-azure-sql.ps1 = Resources\Azure-Deployment\provision-azure-sql.ps1
+		Resources\Azure-Deployment\run-database-migrations.ps1 = Resources\Azure-Deployment\run-database-migrations.ps1
+		Resources\Azure-Deployment\setup-appinsights-dev.ps1 = Resources\Azure-Deployment\setup-appinsights-dev.ps1
+		Resources\Docker\start-docker.ps1 = Resources\Docker\start-docker.ps1
+		Resources\Docker\docker-compose.dev.yml = Resources\Docker\docker-compose.dev.yml
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
