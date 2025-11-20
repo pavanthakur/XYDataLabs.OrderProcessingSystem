@@ -7,6 +7,39 @@
 
 ---
 
+## 🎯 WHAT'S NEXT? (Your Current Focus)
+
+**✅ COMPLETED SO FAR (Days 1-31):**
+- ✅ Azure fundamentals (Portal, CLI, resource management)
+- ✅ App Service deployment with OIDC authentication
+- ✅ GitHub Actions CI/CD workflows
+- ✅ Bicep Infrastructure as Code (modules + parameters)
+- ✅ Multi-environment setup (dev/staging/prod)
+
+**🔥 YOUR NEXT 3 PRIORITIES:**
+
+### Priority 1: Complete Azure Fundamentals (Days 32-56)
+**Why:** Build strong foundation before containers  
+**Tasks:**
+- Days 32-40: Azure SQL Database, Entity Framework migrations
+- Days 41-48: Azure Functions, Event Grid, Service Bus
+- Days 49-56: Azure Key Vault, security best practices
+
+### Priority 2: Start Docker Journey (Days 57-63) - Week 9
+**Why:** Core skill for ACA migration  
+**Starting Point:** See "Week 9: Docker & Containerization Fundamentals" below  
+**First Steps:**
+1. Install Docker Desktop
+2. Run your first container: `docker run hello-world`
+3. Dockerize your API with multi-stage Dockerfile
+4. Test locally before Azure deployment
+
+### Priority 3: Create ACA Migration Plan Timeline
+**Why:** Know your full journey ahead  
+**Action:** Review the complete 16-week plan below and set realistic dates
+
+---
+
 ## 📚 Document Navigation
 
 **This is your ONE source of truth.** Track all progress here.
@@ -40,48 +73,48 @@
 ### Week 1-2: Azure Fundamentals
 **Reference:** Azure_Learning_Guide_Complete.md (Days 1-14)
 
-#### Day 1: Azure Portal & Resource Groups
-- [ ] Read Azure Portal overview
-- [ ] Create first resource group via Portal
-- [ ] Explore Portal navigation and dashboards
-- [ ] **Time:** 1 hour | **Completed:** ___/___/___
+#### Day 1: Azure Portal & Resource Groups ✅
+- [x] Read Azure Portal overview
+- [x] Create first resource group via Portal
+- [x] Explore Portal navigation and dashboards
+- [x] **Time:** 1 hour | **Completed:** ✅ Done
 
-#### Day 2: Azure CLI Basics
-- [ ] Verify Azure CLI installation (`az --version`)
-- [ ] Login: `az login`
-- [ ] List subscriptions: `az account list`
-- [ ] Create RG via CLI: `az group create`
-- [ ] **Time:** 1 hour | **Completed:** ___/___/___
+#### Day 2: Azure CLI Basics ✅
+- [x] Verify Azure CLI installation (`az --version`)
+- [x] Login: `az login`
+- [x] List subscriptions: `az account list`
+- [x] Create RG via CLI: `az group create`
+- [x] **Time:** 1 hour | **Completed:** ✅ Done
 
-#### Day 3: Resource Tagging & Organization
-- [ ] Learn tagging strategy (env, app, owner)
-- [ ] Apply tags to existing resources
-- [ ] Query resources by tags
-- [ ] **Time:** 1 hour | **Completed:** ___/___/___
+#### Day 3: Resource Tagging & Organization ✅
+- [x] Learn tagging strategy (env, app, owner)
+- [x] Apply tags to existing resources
+- [x] Query resources by tags
+- [x] **Time:** 1 hour | **Completed:** ✅ Done
 
-#### Day 4: Azure Storage Accounts
-- [ ] Create storage account via Portal
-- [ ] Upload blob, create container
-- [ ] Generate SAS token, test access
-- [ ] **Time:** 1 hour | **Completed:** ___/___/___
+#### Day 4: Azure Storage Accounts ✅
+- [x] Create storage account via Portal
+- [x] Upload blob, create container
+- [x] Generate SAS token, test access
+- [x] **Time:** 1 hour | **Completed:** ✅ Done
 
-#### Day 5: Virtual Networks Basics
-- [ ] Create VNet with subnets
-- [ ] Understand address spaces, NSGs
-- [ ] Deploy VM in VNet (optional)
-- [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
+#### Day 5: Virtual Networks Basics ✅
+- [x] Create VNet with subnets
+- [x] Understand address spaces, NSGs
+- [x] Deploy VM in VNet (optional)
+- [x] **Time:** 1.5 hours | **Completed:** ✅ Done
 
-#### Day 6: Azure Monitor & Application Insights
-- [ ] Enable App Insights on sample app
-- [ ] View metrics, logs, traces
-- [ ] Set up basic alert rule
-- [ ] **Time:** 1 hour | **Completed:** ___/___/___
+#### Day 6: Azure Monitor & Application Insights ✅
+- [x] Enable App Insights on sample app
+- [x] View metrics, logs, traces
+- [x] Set up basic alert rule
+- [x] **Time:** 1 hour | **Completed:** ✅ Done
 
-#### Day 7: Review & Weekend Lab
-- [ ] Complete Week 1-2 exercises
-- [ ] Deploy end-to-end test environment
-- [ ] Document learnings in personal notes
-- [ ] **Time:** 2-3 hours | **Completed:** ___/___/___
+#### Day 7: Review & Weekend Lab ✅
+- [x] Complete Week 1-2 exercises
+- [x] Deploy end-to-end test environment
+- [x] Document learnings in personal notes
+- [x] **Time:** 2-3 hours | **Completed:** ✅ Done
 
 *(Continue Days 8-14 per Azure_Learning_Guide_Complete.md)*
 
@@ -90,48 +123,48 @@
 ### Week 3-4: App Service & OIDC Deployment
 **Reference:** Azure_Learning_Guide_Complete.md (Days 15-28)
 
-#### Day 15: App Service Plans Overview
-- [ ] Understand SKUs (Free, Basic, Standard, Premium)
-- [ ] Create App Service Plan (F1 for dev)
-- [ ] Deploy sample .NET 8 app
-- [ ] **Time:** 1 hour | **Completed:** ___/___/___
+#### Day 15: App Service Plans Overview ✅
+- [x] Understand SKUs (Free, Basic, Standard, Premium)
+- [x] Create App Service Plan (F1 for dev)
+- [x] Deploy sample .NET 8 app
+- [x] **Time:** 1 hour | **Completed:** ✅ Done
 
-#### Day 16: GitHub Actions Basics
-- [ ] Create `.github/workflows` directory
-- [ ] Write first workflow (hello-world)
-- [ ] Trigger workflow on push
-- [ ] **Time:** 1 hour | **Completed:** ___/___/___
+#### Day 16: GitHub Actions Basics ✅
+- [x] Create `.github/workflows` directory
+- [x] Write first workflow (hello-world)
+- [x] Trigger workflow on push
+- [x] **Time:** 1 hour | **Completed:** ✅ Done
 
-#### Day 17: OIDC Setup (Part 1)
+#### Day 17: OIDC Setup (Part 1) ✅
 **Reference:** AZURE_DEPLOYMENT_GUIDE.md
-- [ ] Run `setup-github-oidc.ps1` script
-- [ ] Create App Registration in Entra ID
-- [ ] Add federated credentials for dev/staging/main
-- [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
+- [x] Run `setup-github-oidc.ps1` script
+- [x] Create App Registration in Entra ID
+- [x] Add federated credentials for dev/staging/main
+- [x] **Time:** 1.5 hours | **Completed:** ✅ Done
 
-#### Day 18: OIDC Setup (Part 2) & GitHub Secrets
-- [ ] Assign Contributor role to Service Principal
-- [ ] Add secrets to GitHub (CLIENTID, TENANTID, SUBSCRIPTIONID)
-- [ ] Test OIDC login in workflow
-- [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
+#### Day 18: OIDC Setup (Part 2) & GitHub Secrets ✅
+- [x] Assign Contributor role to Service Principal
+- [x] Add secrets to GitHub (CLIENTID, TENANTID, SUBSCRIPTIONID)
+- [x] Test OIDC login in workflow
+- [x] **Time:** 1.5 hours | **Completed:** ✅ Done
 
-#### Day 19: Deploy API to App Service
-- [ ] Create workflow for API deployment
-- [ ] Build .NET project in CI
-- [ ] Deploy to App Service (staging slot)
-- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+#### Day 19: Deploy API to App Service ✅
+- [x] Create workflow for API deployment
+- [x] Build .NET project in CI
+- [x] Deploy to App Service (staging slot)
+- [x] **Time:** 2 hours | **Completed:** ✅ Done
 
-#### Day 20: Deploy UI to App Service
-- [ ] Create UI deployment workflow
-- [ ] Configure environment variables for API URL
-- [ ] Test end-to-end flow
-- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+#### Day 20: Deploy UI to App Service ✅
+- [x] Create UI deployment workflow
+- [x] Configure environment variables for API URL
+- [x] Test end-to-end flow
+- [x] **Time:** 2 hours | **Completed:** ✅ Done
 
-#### Day 21: Bicep Basics
-- [ ] Install Bicep CLI
-- [ ] Write first Bicep file (storage account)
-- [ ] Deploy via `az deployment group create`
-- [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
+#### Day 21: Bicep Basics ✅
+- [x] Install Bicep CLI
+- [x] Write first Bicep file (storage account)
+- [x] Deploy via `az deployment group create`
+- [x] **Time:** 1.5 hours | **Completed:** ✅ Done
 
 #### Day 22-28: Complete App Service Module
 *(Refer to Azure_Learning_Guide_Complete.md Days 22-28 for serverless functions, event-driven patterns)*
@@ -141,24 +174,24 @@
 ### Week 5-8: Infrastructure as Code & CI/CD Hardening
 **Reference:** Azure_Learning_Guide_Complete.md + infra/ folder
 
-#### Day 29: Bicep Modules
-- [ ] Understand module structure
-- [ ] Create reusable App Service module
-- [ ] Reference module from main.bicep
-- [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
+#### Day 29: Bicep Modules ✅
+- [x] Understand module structure
+- [x] Create reusable App Service module
+- [x] Reference module from main.bicep
+- [x] **Time:** 1.5 hours | **Completed:** ✅ Done
 
-#### Day 30: Parameter Files
-- [ ] Create `dev.json`, `staging.json`, `prod.json`
-- [ ] Parameterize environment-specific values
-- [ ] Deploy to multiple environments
-- [ ] **Time:** 1 hour | **Completed:** ___/___/___
+#### Day 30: Parameter Files ✅
+- [x] Create `dev.json`, `staging.json`, `prod.json`
+- [x] Parameterize environment-specific values
+- [x] Deploy to multiple environments
+- [x] **Time:** 1 hour | **Completed:** ✅ Done
 
-#### Day 31: GitHub Actions - Infra Deployment
+#### Day 31: GitHub Actions - Infra Deployment ✅
 **Reference:** `.github/workflows/infra-deploy.yml`
-- [ ] Add what-if step for PR reviews
-- [ ] Deploy on branch push (dev/staging/main)
-- [ ] Validate deployments
-- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+- [x] Add what-if step for PR reviews
+- [x] Deploy on branch push (dev/staging/main)
+- [x] Validate deployments
+- [x] **Time:** 2 hours | **Completed:** ✅ Done
 
 #### Day 32-56: Continue Azure_Learning_Guide_Complete.md curriculum
 *(Serverless, databases, security, monitoring - follow existing guide)*
@@ -566,45 +599,45 @@
 ## 🎓 Completion Checklist
 
 ### Core Competencies Achieved
-- [ ] Azure Portal and CLI proficiency
-- [ ] App Service deployment with OIDC
-- [ ] Bicep Infrastructure as Code
-- [ ] Docker containerization
-- [ ] Azure Container Registry (ACR)
-- [ ] Azure Container Apps (ACA)
-- [ ] OpenTelemetry observability
-- [ ] Key Vault secrets management
-- [ ] Trivy vulnerability scanning
-- [ ] SBOM generation
-- [ ] Azure Front Door + WAF
-- [ ] Blue/green deployments
-- [ ] SRE practices (SLOs, runbooks)
-- [ ] .NET Aspire (optional)
+- [x] **Azure Portal and CLI proficiency** ✅
+- [x] **App Service deployment with OIDC** ✅
+- [x] **Bicep Infrastructure as Code** ✅
+- [ ] Docker containerization (Next: Week 9)
+- [ ] Azure Container Registry (ACR) (Week 10)
+- [ ] Azure Container Apps (ACA) (Week 11)
+- [ ] OpenTelemetry observability (Week 12)
+- [ ] Key Vault secrets management (Week 13)
+- [ ] Trivy vulnerability scanning (Week 13)
+- [ ] SBOM generation (Week 13)
+- [ ] Azure Front Door + WAF (Week 14)
+- [ ] Blue/green deployments (Week 15)
+- [ ] SRE practices (SLOs, runbooks) (Week 15)
+- [ ] .NET Aspire (optional) (Week 16)
 
 ### Enterprise Practices Mastered
-- [ ] OIDC authentication (no secrets in CI)
-- [ ] Multi-environment deployments (dev/staging/prod)
-- [ ] Infrastructure as Code with Bicep modules
-- [ ] Supply chain security (scan, SBOM, sign)
-- [ ] Centralized secrets with Key Vault
-- [ ] Structured logging and tracing
-- [ ] Alerting and incident response
-- [ ] Cost management and budgets
-- [ ] Azure Policy and governance
-- [ ] Disaster recovery and rollback
+- [x] **OIDC authentication (no secrets in CI)** ✅
+- [x] **Multi-environment deployments (dev/staging/prod)** ✅
+- [x] **Infrastructure as Code with Bicep modules** ✅
+- [ ] Supply chain security (scan, SBOM, sign) (Week 13)
+- [ ] Centralized secrets with Key Vault (Week 13)
+- [ ] Structured logging and tracing (Week 12)
+- [ ] Alerting and incident response (Week 12)
+- [ ] Cost management and budgets (Week 16)
+- [ ] Azure Policy and governance (Week 13)
+- [ ] Disaster recovery and rollback (Week 15)
 
 ---
 
 ## 📈 Progress Summary
 
 **Total Days Planned:** 112 days (~16 weeks)  
-**Days Completed:** ___ / 112  
-**Percentage Complete:** ___%  
+**Days Completed:** 31 / 112  
+**Percentage Complete:** 28%  
 
-**Current Phase:** ________________  
-**Current Week:** ________________  
-**Last Completed Task:** ________________  
-**Next Milestone:** ________________  
+**Current Phase:** Week 5-8: Infrastructure as Code & CI/CD Hardening  
+**Current Week:** Week 5 (Days 29-35)  
+**Last Completed Task:** GitHub Actions OIDC workflows created, Bicep infra scaffold completed  
+**Next Milestone:** Complete Bicep modules and multi-environment deployment (Days 29-31)  
 
 ---
 
@@ -663,5 +696,31 @@ Track these weekly:
 
 ---
 
-**Last Updated:** ___/___/___  
-**Next Review:** ___/___/___
+---
+
+## 🚀 QUICK ACTION ITEMS (START HERE)
+
+### This Week's Focus
+**Goal:** Strengthen Azure fundamentals before moving to containers
+
+**Day 32-35 (This Week):**
+1. ⏳ Set up Azure SQL Database
+2. ⏳ Configure Entity Framework migrations
+3. ⏳ Deploy database via Bicep
+4. ⏳ Test connection from App Service
+
+**Preparation for Docker (Week 9):**
+- 📖 Read: Docker basics in `Containerization-ACA-Aspire-Learning-Path.md`
+- 📥 Install: Docker Desktop for Windows
+- 📝 Review: Your existing Dockerfiles (if any)
+
+### Resources You Have
+✅ **Migration Strategy:** `Documentation/04-Enterprise-Architecture/ACA-Migration-Plan.md`  
+✅ **Hands-on Guide:** `Documentation/02-Azure-Learning-Guides/Containerization-ACA-Aspire-Learning-Path.md`  
+✅ **Current File:** This master curriculum for daily tracking
+
+---
+
+**Last Updated:** November 20, 2025  
+**Next Review:** Weekly on Sundays  
+**Progress:** 31/112 days (28% complete)
