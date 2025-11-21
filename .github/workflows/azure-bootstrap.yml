@@ -491,17 +491,12 @@ jobs:
             
             foreach ($secretName in $secretsToSet.Keys) {
               Write-Host "  Setting $secretName..." -ForegroundColor Gray
-              try {
-                gh secret set $secretName --env $env_name --repo $ownerRepo --body $secretsToSet[$secretName] 2>&1 | Out-Null
-                if ($LASTEXITCODE -ne 0) {
-                  Write-Error "Failed to set $secretName for $env_name"
-                  exit 1
-                }
-                Write-Host "    ✅ $secretName set for $env_name" -ForegroundColor Green
-              } catch {
+              gh secret set $secretName --env $env_name --repo $ownerRepo --body $secretsToSet[$secretName] 2>&1 | Out-Null
+              if ($LASTEXITCODE -ne 0) {
                 Write-Error "Failed to set $secretName for $env_name"
                 exit 1
               }
+              Write-Host "    ✅ $secretName set for $env_name" -ForegroundColor Green
             }
           }
           
