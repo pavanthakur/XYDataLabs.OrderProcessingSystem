@@ -44,6 +44,14 @@ Write-Host "=====================================" -ForegroundColor Cyan
 Write-Host "GitHub Actions OIDC Setup" -ForegroundColor Cyan
 Write-Host "=====================================" -ForegroundColor Cyan
 
+# DEBUG: Log all received parameters
+Write-Host "`n[DEBUG] Parameters received by script:" -ForegroundColor Magenta
+Write-Host "  Branches: '$Branches'" -ForegroundColor Gray
+Write-Host "  Environments: '$Environments'" -ForegroundColor Gray
+Write-Host "  GitHubOwner: '$GitHubOwner'" -ForegroundColor Gray
+Write-Host "  Repository: '$Repository'" -ForegroundColor Gray
+Write-Host "  AppDisplayName: '$AppDisplayName'" -ForegroundColor Gray
+
 # Step 1: Get current Azure context
 Write-Host "`n[1/7] Getting Azure subscription details..." -ForegroundColor Yellow
 $subscription = az account show | ConvertFrom-Json
@@ -108,7 +116,7 @@ foreach ($env in $environmentList) {
 # Only delete credentials that:
 # 1. Have incorrect subjects (missing repository name), AND
 # 2. Are in the list of credentials we're about to manage (selected environments)
-$expectedPattern = "repo:$GitHubOwner/$Repository"
+$expectedPattern = "repo:${GitHubOwner}/${Repository}"
 Write-Host "  Managing credentials for: $($managedCredentials -join ', ')" -ForegroundColor Gray
 Write-Host "  Checking for invalid subjects among managed credentials..." -ForegroundColor Gray
 
@@ -145,7 +153,7 @@ if ($invalidCreds.Count -gt 0) {
 Write-Host "  Creating branch-based credentials (GitHubOwner=$GitHubOwner, Repository=$Repository)..." -ForegroundColor Gray
 foreach ($branch in $branchList) {
     $credName = "github-$($branch)-oidc"
-    $subject = "repo:$GitHubOwner/$Repository:ref:refs/heads/$branch"
+    $subject = "repo:${GitHubOwner}/${Repository}:ref:refs/heads/${branch}"
     Write-Host "    Creating [$credName] with subject: $subject" -ForegroundColor Gray
     $exists = $existingCreds | Where-Object { $_.name -eq $credName -and $_.subject -eq $subject }
     if ($exists) {
@@ -169,7 +177,7 @@ foreach ($branch in $branchList) {
 Write-Host "  Creating environment-based credentials (GitHubOwner=$GitHubOwner, Repository=$Repository)..." -ForegroundColor Gray
 foreach ($env in $environmentList) {
     $credName = "github-env-$($env)-oidc"
-    $subject = "repo:$GitHubOwner/$Repository:environment:$env"
+    $subject = "repo:${GitHubOwner}/${Repository}:environment:${env}"
     Write-Host "    Creating [$credName] with subject: $subject" -ForegroundColor Gray
     $exists = $existingCreds | Where-Object { $_.name -eq $credName -and $_.subject -eq $subject }
     if ($exists) {
