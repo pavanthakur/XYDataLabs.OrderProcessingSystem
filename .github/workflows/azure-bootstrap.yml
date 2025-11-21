@@ -41,22 +41,18 @@ permissions:
 jobs:
   check-trigger:
     name: Check Workflow Trigger
+    if: github.event_name != 'workflow_dispatch'
     runs-on: windows-latest
     steps:
       - name: Workflow trigger check
         run: |
-          if ("${{ github.event_name }}" -ne "workflow_dispatch") {
-            Write-Host "ℹ️  This workflow is designed for manual dispatch only" -ForegroundColor Cyan
-            Write-Host "   Skipping execution for event: ${{ github.event_name }}" -ForegroundColor Yellow
-            Write-Host "   To run this workflow, use: Actions > Azure Bootstrap Setup > Run workflow" -ForegroundColor Gray
-            exit 0
-          }
-          Write-Host "✅ Workflow triggered correctly via manual dispatch" -ForegroundColor Green
+          Write-Host "ℹ️  This workflow is designed for manual dispatch only" -ForegroundColor Cyan
+          Write-Host "   Skipping execution for event: ${{ github.event_name }}" -ForegroundColor Yellow
+          Write-Host "   To run this workflow, use: Actions > Azure Bootstrap Setup > Run workflow" -ForegroundColor Gray
 
   validate-inputs:
     name: Validate Workflow Inputs
     if: github.event_name == 'workflow_dispatch'
-    needs: [check-trigger]
     runs-on: windows-latest
     steps:
       - name: Log Workflow Start
