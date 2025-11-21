@@ -333,8 +333,6 @@ jobs:
     if: inputs.configureSecrets
     needs: [validate-inputs, setup-oidc]
     runs-on: windows-latest
-    permissions:
-      secrets: write
     steps:
       - uses: actions/checkout@v4
       
