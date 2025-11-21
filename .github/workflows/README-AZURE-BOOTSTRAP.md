@@ -101,7 +101,8 @@ To bootstrap a new environment after initial setup:
    - Select scope: `repo` (Full control of private repositories)
    - Generate and copy the token
 2. Add as repository secret:
-   - Go to: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/settings/secrets/actions
+   - Go to: Settings > Secrets and variables > Actions in your repository
+   - Or navigate to: `https://github.com/<owner>/<repo>/settings/secrets/actions`
    - Click "New repository secret"
    - Name: `GH_PAT`
    - Value: Paste your token

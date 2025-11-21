@@ -482,47 +482,26 @@ jobs:
               Write-Host "    (Could not list pre-existing secrets or none present)" -ForegroundColor Gray
             }
             
-            # Set AZUREAPPSERVICE_CLIENTID
-            Write-Host "  Setting AZUREAPPSERVICE_CLIENTID..." -ForegroundColor Gray
-            try {
-              gh secret set AZUREAPPSERVICE_CLIENTID --env $env_name --repo $ownerRepo --body "$env:CLIENT_ID" 2>&1 | Out-Null
-              $result = $?
-              if (-not $result -or $LASTEXITCODE -ne 0) {
-                Write-Error "Failed to set CLIENTID for $env_name"
-                exit 1
-              }
-              Write-Host "    ✅ AZUREAPPSERVICE_CLIENTID set for $env_name" -ForegroundColor Green
-            } catch {
-              Write-Error "Failed to set CLIENTID for $env_name"
-              exit 1
+            # Set environment secrets
+            $secretsToSet = @{
+              "AZUREAPPSERVICE_CLIENTID" = $env:CLIENT_ID
+              "AZUREAPPSERVICE_TENANTID" = $env:TENANT_ID
+              "AZUREAPPSERVICE_SUBSCRIPTIONID" = $env:SUBSCRIPTION_ID
             }
             
-            # Set AZUREAPPSERVICE_TENANTID
-            Write-Host "  Setting AZUREAPPSERVICE_TENANTID..." -ForegroundColor Gray
-            try {
-              gh secret set AZUREAPPSERVICE_TENANTID --env $env_name --repo $ownerRepo --body "$env:TENANT_ID" 2>&1 | Out-Null
-              if (-not $? -or $LASTEXITCODE -ne 0) {
-                Write-Error "Failed to set TENANTID for $env_name"
+            foreach ($secretName in $secretsToSet.Keys) {
+              Write-Host "  Setting $secretName..." -ForegroundColor Gray
+              try {
+                gh secret set $secretName --env $env_name --repo $ownerRepo --body $secretsToSet[$secretName] 2>&1 | Out-Null
+                if ($LASTEXITCODE -ne 0) {
+                  Write-Error "Failed to set $secretName for $env_name"
+                  exit 1
+                }
+                Write-Host "    ✅ $secretName set for $env_name" -ForegroundColor Green
+              } catch {
+                Write-Error "Failed to set $secretName for $env_name"
                 exit 1
               }
-              Write-Host "    ✅ AZUREAPPSERVICE_TENANTID set for $env_name" -ForegroundColor Green
-            } catch {
-              Write-Error "Failed to set TENANTID for $env_name"
-              exit 1
-            }
-            
-            # Set AZUREAPPSERVICE_SUBSCRIPTIONID
-            Write-Host "  Setting AZUREAPPSERVICE_SUBSCRIPTIONID..." -ForegroundColor Gray
-            try {
-              gh secret set AZUREAPPSERVICE_SUBSCRIPTIONID --env $env_name --repo $ownerRepo --body "$env:SUBSCRIPTION_ID" 2>&1 | Out-Null
-              if (-not $? -or $LASTEXITCODE -ne 0) {
-                Write-Error "Failed to set SUBSCRIPTIONID for $env_name"
-                exit 1
-              }
-              Write-Host "    ✅ AZUREAPPSERVICE_SUBSCRIPTIONID set for $env_name" -ForegroundColor Green
-            } catch {
-              Write-Error "Failed to set SUBSCRIPTIONID for $env_name"
-              exit 1
             }
           }
           
