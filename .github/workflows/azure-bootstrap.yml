@@ -435,9 +435,7 @@ jobs:
           Write-Host "🔎 Verifying repository secrets..." -ForegroundColor Cyan
           
           $ownerRepo = "${{ github.repository }}"
-          $parts = $ownerRepo.Split('/')
-          $owner = $parts[0]
-          $repo  = $parts[1]
+          $owner, $repo = $ownerRepo -split '/', 2
 
           $respJson = gh api -H "Accept: application/vnd.github+json" repos/$owner/$repo/actions/secrets 2>$null
           if ($LASTEXITCODE -ne 0 -or -not $respJson) {
@@ -459,10 +457,13 @@ jobs:
             }
           }
 
+          $requiredSecrets = @("AZUREAPPSERVICE_CLIENTID", "AZUREAPPSERVICE_TENANTID", "AZUREAPPSERVICE_SUBSCRIPTIONID")
           $allPresent = $true
-          $allPresent = (Check-Secret -name "AZUREAPPSERVICE_CLIENTID") -and $allPresent
-          $allPresent = (Check-Secret -name "AZUREAPPSERVICE_TENANTID") -and $allPresent
-          $allPresent = (Check-Secret -name "AZUREAPPSERVICE_SUBSCRIPTIONID") -and $allPresent
+          foreach ($secretName in $requiredSecrets) {
+            if (-not (Check-Secret -name $secretName)) {
+              $allPresent = $false
+            }
+          }
 
           # Add to job summary
           "### 🔑 Repository Secrets" >> $env:GITHUB_STEP_SUMMARY
