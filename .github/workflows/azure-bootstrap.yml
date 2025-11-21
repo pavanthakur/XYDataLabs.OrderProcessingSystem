@@ -32,11 +32,6 @@ on:
         required: true
         type: boolean
         default: true
-      replicatePatToEnvironments:
-        description: 'Copy GH_PAT repository secret into each selected environment (NOT RECOMMENDED unless necessary)'
-        required: true
-        type: boolean
-        default: false
 
 permissions:
   contents: write
@@ -362,7 +357,7 @@ jobs:
           }
       
       - name: Set Environment Secrets
-        if: steps.check.outputs.secretsExist == 'false' || inputs.replicatePatToEnvironments
+        if: steps.check.outputs.secretsExist == 'false'
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
           CLIENT_ID: ${{ needs.setup-oidc.outputs.clientId }}
@@ -370,7 +365,7 @@ jobs:
           SUBSCRIPTION_ID: ${{ needs.setup-oidc.outputs.subscriptionId }}
         run: |
           $selectedEnv = "${{ inputs.environment }}"
-          $replicatePat = "${{ inputs.replicatePatToEnvironments }}"
+          $replicationPerformed = @()
           
           if (-not $env:GH_TOKEN) {
             Write-Error "GH_PAT secret not found. Please add GH_PAT to repository secrets."
@@ -395,16 +390,31 @@ jobs:
             gh secret set AZUREAPPSERVICE_SUBSCRIPTIONID --env $targetEnv --repo ${{ github.repository }} --body "$env:SUBSCRIPTION_ID"
             if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set SUBSCRIPTIONID for $targetEnv"; exit 1 }
 
-            if ($replicatePat -eq 'true') {
-              Write-Host "  Replicating GH_PAT into environment '$targetEnv' (scoped secret) ..." -ForegroundColor Gray
-              # Mask length only, never echo token
+            # Replicate GH_PAT only if missing in the environment
+            $respJson = gh api -H "Accept: application/vnd.github+json" repos/${{ github.repository }}/environments/$targetEnv/secrets 2>$null
+            $names = @()
+            if ($LASTEXITCODE -eq 0 -and $respJson) {
+              $resp = $respJson | ConvertFrom-Json
+              if ($resp -and $resp.secrets) { $names = $resp.secrets | ForEach-Object { $_.name } }
+            }
+            if ($names -notcontains 'GH_PAT') {
+              Write-Host "  GH_PAT missing in '$targetEnv' - replicating from repository scope (value will be masked)" -ForegroundColor Yellow
               $patLength = $env:GH_TOKEN.Length
               gh secret set GH_PAT --env $targetEnv --repo ${{ github.repository }} --body "$env:GH_TOKEN"
               if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set GH_PAT for $targetEnv"; exit 1 }
               Write-Host "    ✅ GH_PAT replicated (length: $patLength chars, value hidden)" -ForegroundColor Green
+              $replicationPerformed += $targetEnv
+            } else {
+              Write-Host "  GH_PAT already present for '$targetEnv' - skipping replication" -ForegroundColor Gray
             }
             
             Write-Host "  ✅ Environment secrets set for '$targetEnv'!" -ForegroundColor Green
+          }
+
+          if ($replicationPerformed.Count -gt 0) {
+            Write-Host "⚠️  SECURITY NOTE: GH_PAT was newly added to: $($replicationPerformed -join ', '). Consider replacing with least-privilege tokens." -ForegroundColor Yellow
+          } else {
+            Write-Host "ℹ️  No GH_PAT replication performed (all environments already had GH_PAT or replication not required)." -ForegroundColor Gray
           }
 
       - name: Verify Environment Secrets
@@ -412,7 +422,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           $selectedEnv = "${{ inputs.environment }}"
-          $replicatePat = "${{ inputs.replicatePatToEnvironments }}"
+          $replicated = @()
 
           if (-not $env:GH_TOKEN) {
             Write-Warning "GH_PAT not available. Verification may fail for 'gh api' calls."
@@ -449,7 +459,7 @@ jobs:
             Check-Secret -name "AZUREAPPSERVICE_CLIENTID"
             Check-Secret -name "AZUREAPPSERVICE_TENANTID"
             Check-Secret -name "AZUREAPPSERVICE_SUBSCRIPTIONID"
-            if ($replicatePat -eq 'true') { Check-Secret -name "GH_PAT" }
+            Check-Secret -name "GH_PAT"
 
             # Add to job summary
             "### 🔑 Secrets for '$targetEnv'" >> $env:GITHUB_STEP_SUMMARY
@@ -468,11 +478,7 @@ jobs:
             Write-Host "✅ All required secrets verified for selected environment(s)." -ForegroundColor Green
           }
 
-          if ($replicatePat -eq 'true') {
-            Write-Host "⚠️  SECURITY NOTE: GH_PAT was copied to each environment. Consider using GITHUB_TOKEN or a GitHub App for least privilege." -ForegroundColor Yellow
-          } else {
-            Write-Host "ℹ️  GH_PAT replication disabled (recommended)." -ForegroundColor Gray
-          }
+          Write-Host "ℹ️  GH_PAT verification complete. Ensure token scope is minimal and rotate periodically." -ForegroundColor Gray
 
   bootstrap-dev:
     name: Bootstrap Dev Environment
