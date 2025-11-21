@@ -423,6 +423,113 @@ jobs:
           Write-Host "UTC End: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           Write-Host "---- END REPOSITORY SECRET CONFIGURATION ----" -ForegroundColor Cyan
 
+      - name: Set Environment Secrets
+        if: steps.check.outputs.secretsExist == 'false'
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+          CLIENT_ID: ${{ needs.setup-oidc.outputs.clientId }}
+          TENANT_ID: ${{ needs.setup-oidc.outputs.tenantId }}
+          SUBSCRIPTION_ID: ${{ needs.setup-oidc.outputs.subscriptionId }}
+        run: |
+          $selectedEnv = "${{ inputs.environment }}"
+          
+          Write-Host "---- BEGIN ENVIRONMENT SECRET CONFIGURATION ----" -ForegroundColor Cyan
+          Write-Host "UTC Start: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host "Target selection: $selectedEnv" -ForegroundColor Gray
+          
+          # Check if GH_PAT is available
+          if (-not $env:GH_PAT) {
+            Write-Host "⚠️  GH_PAT secret not configured - skipping environment secrets" -ForegroundColor Yellow
+            Write-Host "    Environment secrets require a Personal Access Token with 'repo' scope" -ForegroundColor Yellow
+            Write-Host "    To configure: Settings > Secrets > Actions > New repository secret" -ForegroundColor Yellow
+            Write-Host "    Name: GH_PAT" -ForegroundColor Yellow
+            Write-Host "    Value: <your PAT token with 'repo' scope>" -ForegroundColor Yellow
+            Write-Host "---- END ENVIRONMENT SECRET CONFIGURATION ----" -ForegroundColor Cyan
+            exit 0
+          }
+          
+          # Set GH_TOKEN to use the PAT for gh CLI commands
+          $env:GH_TOKEN = $env:GH_PAT
+          
+          Write-Host "Using GH_PAT for authentication (PAT token)" -ForegroundColor Green
+          
+          # Determine which environments to configure
+          $environments = @()
+          if ($selectedEnv -eq "all") {
+            $environments = @("dev", "staging", "prod")
+          } else {
+            $environments = @($selectedEnv)
+          }
+          
+          Write-Host "🔑 Setting GitHub environment secrets for '$selectedEnv'..." -ForegroundColor Cyan
+          
+          foreach ($env_name in $environments) {
+            Write-Host "`n  Configuring environment: $env_name" -ForegroundColor Yellow
+            
+            # Check if environment secret already exists (list existing secrets)
+            Write-Host "  Checking existing environment secret set BEFORE changes..." -ForegroundColor Gray
+            $ownerRepo = "${{ github.repository }}"
+            $owner, $repo = $ownerRepo -split '/', 2
+            
+            try {
+              $existingSecrets = gh api -H "Accept: application/vnd.github+json" repos/$owner/$repo/environments/$env_name/secrets 2>$null | ConvertFrom-Json
+              if ($existingSecrets -and $existingSecrets.secrets) {
+                Write-Host "    Existing secrets: $($existingSecrets.secrets.Count)" -ForegroundColor Gray
+              } else {
+                Write-Host "    (Could not list pre-existing secrets or none present)" -ForegroundColor Gray
+              }
+            } catch {
+              Write-Host "    (Could not list pre-existing secrets or none present)" -ForegroundColor Gray
+            }
+            
+            # Set AZUREAPPSERVICE_CLIENTID
+            Write-Host "  Setting AZUREAPPSERVICE_CLIENTID..." -ForegroundColor Gray
+            try {
+              gh secret set AZUREAPPSERVICE_CLIENTID --env $env_name --repo $ownerRepo --body "$env:CLIENT_ID" 2>&1 | Out-Null
+              $result = $?
+              if (-not $result -or $LASTEXITCODE -ne 0) {
+                Write-Error "Failed to set CLIENTID for $env_name"
+                exit 1
+              }
+              Write-Host "    ✅ AZUREAPPSERVICE_CLIENTID set for $env_name" -ForegroundColor Green
+            } catch {
+              Write-Error "Failed to set CLIENTID for $env_name"
+              exit 1
+            }
+            
+            # Set AZUREAPPSERVICE_TENANTID
+            Write-Host "  Setting AZUREAPPSERVICE_TENANTID..." -ForegroundColor Gray
+            try {
+              gh secret set AZUREAPPSERVICE_TENANTID --env $env_name --repo $ownerRepo --body "$env:TENANT_ID" 2>&1 | Out-Null
+              if (-not $? -or $LASTEXITCODE -ne 0) {
+                Write-Error "Failed to set TENANTID for $env_name"
+                exit 1
+              }
+              Write-Host "    ✅ AZUREAPPSERVICE_TENANTID set for $env_name" -ForegroundColor Green
+            } catch {
+              Write-Error "Failed to set TENANTID for $env_name"
+              exit 1
+            }
+            
+            # Set AZUREAPPSERVICE_SUBSCRIPTIONID
+            Write-Host "  Setting AZUREAPPSERVICE_SUBSCRIPTIONID..." -ForegroundColor Gray
+            try {
+              gh secret set AZUREAPPSERVICE_SUBSCRIPTIONID --env $env_name --repo $ownerRepo --body "$env:SUBSCRIPTION_ID" 2>&1 | Out-Null
+              if (-not $? -or $LASTEXITCODE -ne 0) {
+                Write-Error "Failed to set SUBSCRIPTIONID for $env_name"
+                exit 1
+              }
+              Write-Host "    ✅ AZUREAPPSERVICE_SUBSCRIPTIONID set for $env_name" -ForegroundColor Green
+            } catch {
+              Write-Error "Failed to set SUBSCRIPTIONID for $env_name"
+              exit 1
+            }
+          }
+          
+          Write-Host "`n  ✅ Environment secrets configured successfully!" -ForegroundColor Green
+          Write-Host "UTC End: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host "---- END ENVIRONMENT SECRET CONFIGURATION ----" -ForegroundColor Cyan
+
       - name: Verify Repository Secrets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -483,6 +590,92 @@ jobs:
           Write-Host "ℹ️  Using automatically available GITHUB_TOKEN - no manual token management required!" -ForegroundColor Gray
           Write-Host "UTC End: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           Write-Host "---- END REPOSITORY SECRET VERIFICATION ----" -ForegroundColor Cyan
+
+      - name: Verify Environment Secrets
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          Write-Host "---- BEGIN ENVIRONMENT SECRET VERIFICATION ----" -ForegroundColor Cyan
+          Write-Host "UTC Start: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          
+          # Check if GH_PAT is available
+          if (-not $env:GH_PAT) {
+            Write-Host "⚠️  GH_PAT not configured - skipping environment secret verification" -ForegroundColor Yellow
+            Write-Host "    Environment secrets can only be verified with a PAT token" -ForegroundColor Yellow
+            Write-Host "---- END ENVIRONMENT SECRET VERIFICATION ----" -ForegroundColor Cyan
+            exit 0
+          }
+          
+          # Set GH_TOKEN to use the PAT for gh CLI commands
+          $env:GH_TOKEN = $env:GH_PAT
+          
+          Write-Host "Using GH_PAT for verification (PAT token)" -ForegroundColor Green
+          
+          $selectedEnv = "${{ inputs.environment }}"
+          $environments = @()
+          if ($selectedEnv -eq "all") {
+            $environments = @("dev", "staging", "prod")
+          } else {
+            $environments = @($selectedEnv)
+          }
+          
+          Write-Host "🔎 Verifying environment secrets for: $($environments -join ', ')..." -ForegroundColor Cyan
+          
+          $ownerRepo = "${{ github.repository }}"
+          $owner, $repo = $ownerRepo -split '/', 2
+          
+          $allVerified = $true
+          
+          foreach ($env_name in $environments) {
+            Write-Host "`n  Environment: $env_name" -ForegroundColor Yellow
+            
+            try {
+              $respJson = gh api -H "Accept: application/vnd.github+json" repos/$owner/$repo/environments/$env_name/secrets 2>$null
+              
+              if ($LASTEXITCODE -ne 0 -or -not $respJson) {
+                Write-Host "    ⚠️  Could not fetch environment secrets (environment may not exist yet)" -ForegroundColor Yellow
+                continue
+              }
+              
+              $resp = $respJson | ConvertFrom-Json
+              $names = @()
+              if ($resp -and $resp.secrets) { 
+                $names = $resp.secrets | ForEach-Object { $_.name } 
+              }
+              
+              $requiredSecrets = @("AZUREAPPSERVICE_CLIENTID", "AZUREAPPSERVICE_TENANTID", "AZUREAPPSERVICE_SUBSCRIPTIONID")
+              
+              foreach ($secretName in $requiredSecrets) {
+                if ($names -contains $secretName) {
+                  Write-Host "    ✅ $secretName present" -ForegroundColor Green
+                } else {
+                  Write-Host "    ❌ $secretName missing" -ForegroundColor Red
+                  $allVerified = $false
+                }
+              }
+              
+              # Add to job summary
+              "### 🔑 Environment Secrets ($env_name)" >> $env:GITHUB_STEP_SUMMARY
+              if ($names.Count -gt 0) {
+                foreach ($n in $names | Sort-Object) { "- $n" >> $env:GITHUB_STEP_SUMMARY }
+              } else {
+                "- (no secrets found)" >> $env:GITHUB_STEP_SUMMARY
+              }
+              "" >> $env:GITHUB_STEP_SUMMARY
+              
+            } catch {
+              Write-Host "    ⚠️  Error verifying environment secrets: $($_.Exception.Message)" -ForegroundColor Yellow
+            }
+          }
+          
+          if ($allVerified) {
+            Write-Host "`n✅ All environment secrets verified successfully!" -ForegroundColor Green
+          } else {
+            Write-Host "`n⚠️  Some environment secrets may be missing - check logs above" -ForegroundColor Yellow
+          }
+          
+          Write-Host "UTC End: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host "---- END ENVIRONMENT SECRET VERIFICATION ----" -ForegroundColor Cyan
 
   bootstrap-dev:
     name: Bootstrap Dev Environment
