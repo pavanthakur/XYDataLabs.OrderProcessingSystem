@@ -165,9 +165,24 @@ jobs:
           SUBSCRIPTION_ID: ${{ needs.setup-oidc.outputs.subscriptionId }}
         run: |
           Write-Host "🔑 Setting GitHub environment secrets for 'dev'..." -ForegroundColor Cyan
+          
+          if (-not $env:GH_TOKEN) {
+            Write-Error "GH_PAT secret not found. Please add GH_PAT to repository secrets."
+            exit 1
+          }
+          
+          Write-Host "Setting AZUREAPPSERVICE_CLIENTID..." -ForegroundColor Gray
           gh secret set AZUREAPPSERVICE_CLIENTID --env dev --repo ${{ github.repository }} --body "$env:CLIENT_ID"
+          if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set CLIENTID"; exit 1 }
+          
+          Write-Host "Setting AZUREAPPSERVICE_TENANTID..." -ForegroundColor Gray
           gh secret set AZUREAPPSERVICE_TENANTID --env dev --repo ${{ github.repository }} --body "$env:TENANT_ID"
+          if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set TENANTID"; exit 1 }
+          
+          Write-Host "Setting AZUREAPPSERVICE_SUBSCRIPTIONID..." -ForegroundColor Gray
           gh secret set AZUREAPPSERVICE_SUBSCRIPTIONID --env dev --repo ${{ github.repository }} --body "$env:SUBSCRIPTION_ID"
+          if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set SUBSCRIPTIONID"; exit 1 }
+          
           Write-Host "✅ Environment secrets set for 'dev'!" -ForegroundColor Green
 
   bootstrap-dev:
