@@ -94,7 +94,8 @@ $existingCreds = az ad app federated-credential list --id $appObjectId | Convert
 if (-not $existingCreds) { $existingCreds = @() }
 
 # Delete credentials with incorrect subjects (missing repository name)
-$invalidCreds = $existingCreds | Where-Object { $_.subject -notmatch "repo:$GitHubOwner/$Repository:" }
+$expectedPrefix = "repo:$GitHubOwner/${Repository}:"
+$invalidCreds = $existingCreds | Where-Object { $_.subject -notmatch [regex]::Escape($expectedPrefix) }
 if ($invalidCreds.Count -gt 0) {
     Write-Host "  🧹 Cleaning up $($invalidCreds.Count) invalid federated credentials..." -ForegroundColor Yellow
     foreach ($invalidCred in $invalidCreds) {
