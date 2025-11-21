@@ -36,7 +36,7 @@ on:
 permissions:
   contents: write
   id-token: write
-  secrets: write
+  secrets: write  # Required for setting environment-level secrets via GitHub CLI
 
 jobs:
   validate-inputs:
@@ -374,14 +374,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if ($env:GH_TOKEN) {
-            $len = $env:GH_TOKEN.Length
-            Write-Host "✅ GITHUB_TOKEN automatically available (length: $len chars)." -ForegroundColor Green
-            Write-Host "   No manual token configuration required!" -ForegroundColor Green
-          } else {
-            Write-Error "GITHUB_TOKEN not available. This should not happen in GitHub Actions."
-            exit 1
-          }
+          $len = $env:GH_TOKEN.Length
+          Write-Host "✅ GITHUB_TOKEN automatically available (length: $len chars)." -ForegroundColor Green
+          Write-Host "   No manual token configuration required!" -ForegroundColor Green
       
       - name: Set Environment Secrets
         if: steps.check.outputs.secretsExist == 'false'
@@ -392,7 +387,6 @@ jobs:
           SUBSCRIPTION_ID: ${{ needs.setup-oidc.outputs.subscriptionId }}
         run: |
           $selectedEnv = "${{ inputs.environment }}"
-          $replicationPerformed = @()
 
           Write-Host "---- BEGIN ENVIRONMENT SECRET CONFIGURATION ----" -ForegroundColor Cyan
           Write-Host "UTC Start: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
