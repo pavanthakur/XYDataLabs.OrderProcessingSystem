@@ -43,10 +43,10 @@ jobs:
     if: inputs.setupOidc
     runs-on: windows-latest
     outputs:
-      client-id: ${{ steps.oidc.outputs.clientId }}
-      tenant-id: ${{ steps.oidc.outputs.tenantId }}
-      subscription-id: ${{ steps.oidc.outputs.subscriptionId }}
-      app-object-id: ${{ steps.oidc.outputs.appObjectId }}
+      clientId: ${{ steps.oidc.outputs.clientId }}
+      tenantId: ${{ steps.oidc.outputs.tenantId }}
+      subscriptionId: ${{ steps.oidc.outputs.subscriptionId }}
+      appObjectId: ${{ steps.oidc.outputs.appObjectId }}
     steps:
       - uses: actions/checkout@v4
       
@@ -148,24 +148,15 @@ jobs:
           Write-Host "🔑 GitHub Secrets Configuration Required" -ForegroundColor Cyan
           Write-Host "================================================" -ForegroundColor Cyan
           
-          # Get credentials from OIDC job or query Azure
-          $clientId = "${{ needs.setup-oidc.outputs.client-id }}"
-          if (-not $clientId) {
-            $app = az ad app list --display-name "GitHub-Actions-OIDC" | ConvertFrom-Json
-            if (-not $app) {
-              Write-Error "Failed to get OIDC app credentials"
-              exit 1
-            }
-            $clientId = $app[0].appId
-          }
+          # Get credentials from OIDC job outputs
+          $clientId = "${{ needs.setup-oidc.outputs.clientId }}"
+          $tenantId = "${{ needs.setup-oidc.outputs.tenantId }}"
+          $subscriptionId = "${{ needs.setup-oidc.outputs.subscriptionId }}"
           
-          $sub = az account show | ConvertFrom-Json
-          if (-not $sub) {
-            Write-Error "Failed to get Azure subscription"
+          if (-not $clientId -or -not $tenantId -or -not $subscriptionId) {
+            Write-Error "Failed to get credentials from OIDC setup job"
             exit 1
           }
-          $tenantId = $sub.tenantId
-          $subscriptionId = $sub.id
           
           Write-Host ""
           Write-Host "⚠️  GITHUB_TOKEN cannot manage secrets - Manual configuration required" -ForegroundColor Yellow
