@@ -72,9 +72,9 @@ jobs:
       - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
 
       - name: Verify Azure Authentication
         shell: pwsh
@@ -86,7 +86,7 @@ jobs:
           Write-Host "   Tenant ID: $($account.tenantId)" -ForegroundColor White
 
       - name: Test Bicep What-If Analysis
-        if: inputs.run-whatif == true || inputs.run-whatif == null
+        if: inputs.run-whatif != false
         shell: pwsh
         continue-on-error: true
         run: |
@@ -119,7 +119,7 @@ jobs:
           }
 
       - name: Test OIDC Credentials Verification
-        if: inputs.verify-oidc == true || inputs.verify-oidc == null
+        if: inputs.verify-oidc != false
         shell: pwsh
         continue-on-error: true
         run: |
@@ -144,7 +144,7 @@ jobs:
           }
 
       - name: Test SharedSettings Consistency
-        if: inputs.check-config == true || inputs.check-config == null
+        if: inputs.check-config != false
         shell: pwsh
         continue-on-error: true
         run: |
@@ -221,13 +221,13 @@ jobs:
     uses: ./.github/workflows/validate-deployment.yml
     with:
       environment: ${{ inputs.environment || 'dev' }}
-      run-whatif: ${{ inputs.run-whatif || true }}
-      verify-oidc: ${{ inputs.verify-oidc || true }}
-      check-config: ${{ inputs.check-config || true }}
+      run-whatif: ${{ inputs.run-whatif != false }}
+      verify-oidc: ${{ inputs.verify-oidc != false }}
+      check-config: ${{ inputs.check-config != false }}
     secrets:
-      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_CLIENT_ID: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+      AZURE_TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
 
   summary:
     name: Test Summary

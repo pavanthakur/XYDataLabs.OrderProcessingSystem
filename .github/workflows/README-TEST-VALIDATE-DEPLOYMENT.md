@@ -274,9 +274,9 @@ Error: Login failed with Error: AADSTS700016
 
 **Solutions:**
 1. ✅ Verify GitHub secrets are set correctly:
-   - `AZURE_CLIENT_ID`
-   - `AZURE_TENANT_ID`
-   - `AZURE_SUBSCRIPTION_ID`
+   - `AZUREAPPSERVICE_CLIENTID`
+   - `AZUREAPPSERVICE_TENANTID`
+   - `AZUREAPPSERVICE_SUBSCRIPTIONID`
 2. ✅ Check OIDC app registration exists
 3. ✅ Verify federated credentials for the environment
 4. ✅ Ensure service principal has Contributor role
@@ -353,11 +353,11 @@ The test workflow requires the following GitHub secrets to be configured:
 
 | Secret | Description | How to Get |
 |--------|-------------|------------|
-| `AZURE_CLIENT_ID` | Service principal client ID | From Azure AD app registration |
-| `AZURE_TENANT_ID` | Azure AD tenant ID | From Azure portal |
-| `AZURE_SUBSCRIPTION_ID` | Target Azure subscription | From Azure portal |
+| `AZUREAPPSERVICE_CLIENTID` | Service principal client ID | From Azure AD app registration |
+| `AZUREAPPSERVICE_TENANTID` | Azure AD tenant ID | From Azure portal |
+| `AZUREAPPSERVICE_SUBSCRIPTIONID` | Target Azure subscription | From Azure portal |
 
-**Note:** These should be the same OIDC credentials used by deployment workflows.
+**Note:** These are the same OIDC credentials used by deployment workflows (automatically configured by `bootstrap-enterprise-infra.ps1`).
 
 ---
 
