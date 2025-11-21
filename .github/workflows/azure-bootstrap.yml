@@ -63,10 +63,24 @@ jobs:
         run: |
           Write-Host "🚀 Setting up GitHub Actions OIDC..." -ForegroundColor Cyan
           
+          # Determine branches and environments based on input
+          $selectedEnv = "${{ inputs.environment }}"
+          if ($selectedEnv -eq "all") {
+            $branches = "dev,staging,main"
+            $environments = "dev,staging,prod"
+          } else {
+            $branches = $selectedEnv
+            $environments = $selectedEnv
+          }
+          
+          Write-Host "Creating credentials for:" -ForegroundColor Yellow
+          Write-Host "  Branches: $branches" -ForegroundColor Gray
+          Write-Host "  Environments: $environments" -ForegroundColor Gray
+          
           # Run setup script
           ./Resources/Azure-Deployment/setup-github-oidc.ps1 `
-            -Branches "dev,staging,main" `
-            -Environments "dev,staging,prod" `
+            -Branches $branches `
+            -Environments $environments `
             -GitHubOwner "pavanthakur" `
             -Repository "XYDataLabs.OrderProcessingSystem"
           
@@ -110,9 +124,13 @@ jobs:
           
           $appObjectId = "${{ steps.oidc.outputs.appObjectId }}"
           $expectedPattern = "repo:pavanthakur/XYDataLabs.OrderProcessingSystem"
+          $selectedEnv = "${{ inputs.environment }}"
+          $expectedCount = if ($selectedEnv -eq "all") { 6 } else { 2 }
           $maxRetries = 3
           $retryDelay = 20
           $validCreds = $null
+          
+          Write-Host "Expected credentials count: $expectedCount (environment: $selectedEnv)" -ForegroundColor Gray
           
           for ($i = 1; $i -le $maxRetries; $i++) {
             Write-Host "`n[Attempt $i/$maxRetries] Waiting $retryDelay seconds for Azure AD propagation..." -ForegroundColor Gray
@@ -123,9 +141,9 @@ jobs:
             $creds = az ad app federated-credential list --id $appObjectId | ConvertFrom-Json
             
             $validCount = ($creds | Where-Object { $_.subject -like "$expectedPattern*" }).Count
-            Write-Host "Found $validCount/$($creds.Count) credentials with correct format" -ForegroundColor $(if ($validCount -eq 6) { "Green" } else { "Yellow" })
+            Write-Host "Found $validCount/$($creds.Count) credentials with correct format" -ForegroundColor $(if ($validCount -eq $expectedCount) { "Green" } else { "Yellow" })
             
-            if ($validCount -eq 6) {
+            if ($validCount -eq $expectedCount) {
               Write-Host "✅ All credentials have propagated correctly!" -ForegroundColor Green
               $validCreds = $creds
               break
@@ -150,40 +168,40 @@ jobs:
             Write-Host "    Subject: $($cred.subject)" -ForegroundColor Gray
           }
           
-          if ($creds.Count -lt 6) {
-            Write-Warning "Expected 6 federated credentials, found $($creds.Count). OIDC setup may be incomplete."
+          if ($creds.Count -lt $expectedCount) {
+            Write-Warning "Expected $expectedCount federated credentials, found $($creds.Count). OIDC setup may be incomplete."
             Write-Warning "Re-run this workflow with 'Setup OIDC' enabled to create missing credentials."
           } else {
-            Write-Host "`n✅ All 6 federated credentials verified!" -ForegroundColor Green
+            Write-Host "`n✅ All $expectedCount federated credentials verified!" -ForegroundColor Green
           }
           
           Write-Host "`n🔎 Checking for required credentials..." -ForegroundColor Cyan
           
-          # Check dev branch credential
-          Write-Host "Searching for dev branch credential..." -ForegroundColor Gray
-          $expectedDevBranch = "repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev"
-          Write-Host "Expected: $expectedDevBranch" -ForegroundColor Gray
-          $devBranchCred = $creds | Where-Object { $_.subject -eq $expectedDevBranch }
+          # Check branch credential for selected environment
+          Write-Host "Searching for $selectedEnv branch credential..." -ForegroundColor Gray
+          $expectedBranch = "repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/$selectedEnv"
+          Write-Host "Expected: $expectedBranch" -ForegroundColor Gray
+          $devBranchCred = $creds | Where-Object { $_.subject -eq $expectedBranch }
           if ($devBranchCred) {
-            Write-Host "✅ Dev branch credential found: $($devBranchCred.name)" -ForegroundColor Green
+            Write-Host "✅ $selectedEnv branch credential found: $($devBranchCred.name)" -ForegroundColor Green
           } else {
-            Write-Host "❌ Dev branch credential NOT found" -ForegroundColor Red
+            Write-Host "❌ $selectedEnv branch credential NOT found" -ForegroundColor Red
             Write-Host "Actual subjects found:" -ForegroundColor Yellow
             foreach ($cred in $creds) {
               Write-Host "  - $($cred.subject)" -ForegroundColor Yellow
             }
-            Write-Error "⚠️ Dev branch federated credential is missing! Bootstrap will fail."
+            Write-Error "⚠️ $selectedEnv branch federated credential is missing! Bootstrap will fail."
           }
           
-          # Check dev environment credential
-          Write-Host "`nSearching for dev environment credential..." -ForegroundColor Gray
-          $expectedDevEnv = "repo:pavanthakur/XYDataLabs.OrderProcessingSystem:environment:dev"
-          Write-Host "Expected: $expectedDevEnv" -ForegroundColor Gray
-          $devEnvCred = $creds | Where-Object { $_.subject -eq $expectedDevEnv }
+          # Check environment credential for selected environment
+          Write-Host "`nSearching for $selectedEnv environment credential..." -ForegroundColor Gray
+          $expectedEnv = "repo:pavanthakur/XYDataLabs.OrderProcessingSystem:environment:$selectedEnv"
+          Write-Host "Expected: $expectedEnv" -ForegroundColor Gray
+          $devEnvCred = $creds | Where-Object { $_.subject -eq $expectedEnv }
           if ($devEnvCred) {
-            Write-Host "✅ Dev environment credential found: $($devEnvCred.name)" -ForegroundColor Green
+            Write-Host "✅ $selectedEnv environment credential found: $($devEnvCred.name)" -ForegroundColor Green
           } else {
-            Write-Host "❌ Dev environment credential NOT found" -ForegroundColor Red
+            Write-Host "❌ $selectedEnv environment credential NOT found" -ForegroundColor Red
           }
       
       - name: Create Setup Summary
