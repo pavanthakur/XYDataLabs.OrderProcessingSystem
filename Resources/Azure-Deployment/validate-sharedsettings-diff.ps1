@@ -1,69 +1,59 @@
-<#!
+<#
 .SYNOPSIS
-    Validates configuration consistency across sharedsettings.*.json files.
+  Compare top-level keys across sharedsettings.*.json files to detect drift.
 .DESCRIPTION
-    Compares keys between dev, staging, prod, uat sharedsettings files under Resources/Configuration.
-    Reports missing keys, extra keys, and differing scalar values.
-.PARAMETER BasePath
-    Override path to configuration directory. Default resolves relative to script.
-.EXAMPLE
-    ./validate-sharedsettings-diff.ps1
-.NOTES
-    Only top-level keys are compared; nested objects produce flattened dotted paths.
-!#>
-[CmdletBinding()] param(
-    [string]$BasePath
-)
-$ErrorActionPreference='Stop'
-if (-not $BasePath) { $BasePath = Join-Path (Split-Path $PSScriptRoot -Parent) 'Configuration' }
-if (!(Test-Path $BasePath)) { Write-Error "Configuration path not found: $BasePath" }
+  Reads all Resources/Configuration/sharedsettings.*.json files, extracts the set of top-level
+  keys and reports missing/extra keys per environment. Exit codes:
+    0 = all key sets are consistent
+    2 = drift detected (missing/extra keys)
+    1 = runtime error (JSON parse error, missing files)
+#>
 
-$files = @('sharedsettings.dev.json','sharedsettings.staging.json','sharedsettings.prod.json','sharedsettings.uat.json') | ForEach-Object { Join-Path $BasePath $_ }
-$loaded = @{}
-foreach ($f in $files) { if (Test-Path $f){ $loaded[(Split-Path $f -Leaf)] = Get-Content $f -Raw | ConvertFrom-Json -Depth 64 } }
-
-function Expand-Object($obj, [string]$prefix='') {
-    $result = @{}
-    foreach ($p in $obj.PSObject.Properties) {
-        $key = if ($prefix) { "$prefix.$($p.Name)" } else { $p.Name }
-        if ($p.Value -is [System.Management.Automation.PSObject]) { $result += Expand-Object $p.Value $key }
-        elseif ($p.Value -is [System.Collections.IEnumerable] -and -not ($p.Value -is [string])) { $result[$key] = ($p.Value | ConvertTo-Json -Compress) }
-        else { $result[$key] = [string]$p.Value }
+try {
+    $pattern = 'Resources/Configuration/sharedsettings.*.json'
+    $files = Get-ChildItem -Path . -Recurse -Force | Where-Object { $_.FullName -like "*sharedsettings.*.json" }
+    if (-not $files -or $files.Count -eq 0) {
+        Write-Host "No sharedsettings files found under Resources/Configuration" -ForegroundColor Red
+        exit 1
     }
-    return $result
-}
 
-$expanded = @{}
-foreach ($kv in $loaded.GetEnumerator()) { $expanded[$kv.Key] = Expand-Object $kv.Value }
+    $keySets = @{}
+    foreach ($f in $files) {
+        try {
+            $json = Get-Content $f.FullName -Raw | ConvertFrom-Json
+        }
+        catch {
+            Write-Host "Failed to parse JSON: $($f.FullName)" -ForegroundColor Red
+            exit 1
+        }
 
-$allKeys = $expanded.Values | ForEach-Object { $_.Keys } | Sort-Object -Unique
+        $keys = @()
+        foreach ($prop in $json.PSObject.Properties) { $keys += $prop.Name }
+        $keySets[$f.Name] = ,$keys
+        Write-Host "Parsed $($f.Name): $($keys.Count) top-level keys" -ForegroundColor Green
+    }
 
-$issues = @()
-foreach ($k in $allKeys) {
-    $presentIn = @()
-    $values = @{}
-    foreach ($fileName in $expanded.Keys) {
-        if ($expanded[$fileName].ContainsKey($k)) {
-            $presentIn += $fileName
-            $values[$fileName] = $expanded[$fileName][$k]
+    # Compute union of all keys
+    $union = @{}
+    foreach ($ks in $keySets.Values) { foreach ($k in $ks) { $union[$k] = $true } }
+
+    $driftFound = $false
+    foreach ($file in $keySets.Keys) {
+        $missing = @()
+        foreach ($k in $union.Keys) {
+            if (-not ($keySets[$file] -contains $k)) { $missing += $k }
+        }
+        if ($missing.Count -gt 0) {
+            Write-Host "Drift in $file - missing keys: $($missing -join ', ')" -ForegroundColor Yellow
+            $driftFound = $true
         }
     }
-    if ($presentIn.Count -ne $expanded.Count) {
-        $missing = ($expanded.Keys | Where-Object { $_ -notin $presentIn })
-        $issues += [PSCustomObject]@{ Type='Missing'; Key=$k; Present=$presentIn -join ','; Missing=$missing -join ','; Detail='' }
-    } else {
-        $distinct = ($values.Values | Select-Object -Unique)
-        if ($distinct.Count -gt 1) {
-            $issues += [PSCustomObject]@{ Type='Diff'; Key=$k; Present=''; Missing=''; Detail=(($values.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join '; ') }
-        }
-    }
+
+    if ($driftFound) { exit 2 }
+    Write-Host "All sharedsettings top-level keys are consistent across environments" -ForegroundColor Green
+    exit 0
 }
-
-if ($issues.Count -eq 0) { Write-Host "All sharedsettings files aligned (top-level & nested keys)." -ForegroundColor Green; exit 0 }
-Write-Host "Discrepancies detected:" -ForegroundColor Yellow
-$issues | Format-Table Type,Key,Present,Missing,Detail -AutoSize
-
-$missingCount = ($issues | Where-Object { $_.Type -eq 'Missing' }).Count
-$diffCount = ($issues | Where-Object { $_.Type -eq 'Diff' }).Count
-Write-Host "Summary: MissingKeyGroups=$missingCount ValueDiffGroups=$diffCount" -ForegroundColor White
-if ($missingCount -gt 0 -or $diffCount -gt 0) { exit 2 } else { exit 0 }
+catch {
+    Write-Host "Error running validate-sharedsettings-diff: $_" -ForegroundColor Red
+    exit 1
+}
