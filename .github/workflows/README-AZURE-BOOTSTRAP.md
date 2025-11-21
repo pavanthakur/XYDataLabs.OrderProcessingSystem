@@ -8,6 +8,23 @@ This workflow automates the complete Azure setup process, from OIDC configuratio
 
 ## 🚀 Quick Start
 
+### Prerequisites
+
+Before running the workflow, if you plan to use **"Configure GitHub secrets"** option:
+
+1. **Create a GitHub Personal Access Token (PAT)**:
+   - Navigate to: https://github.com/settings/tokens
+   - For Classic token: Select scope `repo` (full control of private repositories)
+   - For Fine-grained token: Select `Secrets` with Read and Write access
+   
+2. **Add the PAT as a repository secret named `GH_PAT`**:
+   - Navigate to: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/settings/secrets/actions
+   - Click "New repository secret"
+   - Name: `GH_PAT`
+   - Value: `<your-personal-access-token>`
+
+> **Note**: The GH_PAT is only required if you enable "Configure GitHub secrets" in the workflow. If you skip this step, you'll need to manually configure the Azure credentials as repository secrets.
+
 ### First-Time Setup (Complete)
 
 1. **Navigate to Actions**: https://github.com/pavanthakur/TestAppXY_OrderProcessingSystem/actions
@@ -205,10 +222,18 @@ To bootstrap a new environment after initial setup:
 #### Issue: "OIDC app already exists"
 **Solution**: This is normal. Workflow will reuse existing app. Ensure federated credentials match expected branches/environments.
 
+#### Issue: "GH_PAT repository secret not found"
+**Solution**: 
+- Create a GitHub Personal Access Token (PAT) at: https://github.com/settings/tokens
+- Add it as a repository secret named `GH_PAT` at: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/settings/secrets/actions
+- Required scopes: `repo` (for Classic tokens) or `Secrets: Read and Write` (for Fine-grained tokens)
+- Re-run the workflow after adding the secret
+
 #### Issue: "GitHub secrets configuration failed"
 **Solution**: 
-- Ensure `GITHUB_TOKEN` has proper permissions
-- Manually add secrets: https://github.com/pavanthakur/TestAppXY_OrderProcessingSystem/settings/secrets/actions
+- Ensure the `GH_PAT` token has proper permissions (see above)
+- Verify the token is not expired
+- Alternatively, manually add secrets: https://github.com/pavanthakur/TestAppXY_OrderProcessingSystem/settings/secrets/actions
 
 #### Issue: "Resource Group creation timeout"
 **Solution**: 
@@ -280,7 +305,10 @@ Check `.github/workflows/infra-deploy.yml` for active `pre-validate` job
 
 **GitHub** (for secret configuration):
 - Repository admin or secrets write permission
-- `GITHUB_TOKEN` with `secrets: write` scope
+- A Personal Access Token (PAT) stored as repository secret `GH_PAT` with:
+  - For Classic tokens: `repo` scope (full control of private repositories)
+  - For Fine-grained tokens: `Secrets` permission with Read and Write access
+- Note: The built-in `GITHUB_TOKEN` cannot be used as it lacks `secrets: write` permission
 
 ### Secret Scope
 
@@ -288,6 +316,11 @@ All secrets are **repository-scoped**:
 - `AZUREAPPSERVICE_CLIENTID`
 - `AZUREAPPSERVICE_TENANTID`
 - `AZUREAPPSERVICE_SUBSCRIPTIONID`
+- `GH_PAT` (required for automated secret configuration)
+
+Additionally, **environment-scoped** secrets are created by the workflow:
+- Each environment (dev/staging/prod) gets its own copy of the Azure credentials
+- `GH_PAT` is replicated to environments only if not already present
 
 No passwords or certificates stored. OIDC uses token exchange.
 
