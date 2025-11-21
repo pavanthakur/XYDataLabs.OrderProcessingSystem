@@ -344,17 +344,14 @@ jobs:
           # Check if GH_PAT is available (required for setting environment secrets)
           if (-not $env:GH_TOKEN -or $env:GH_TOKEN -eq "") {
             Write-Host "" -ForegroundColor Gray
-            Write-Host "=" * 80 -ForegroundColor Yellow
-            Write-Host "⚠️  OPTIONAL PREREQUISITE: GH_PAT Repository Secret" -ForegroundColor Yellow
-            Write-Host "=" * 80 -ForegroundColor Yellow
+            Write-Host "=" * 80 -ForegroundColor Red
+            Write-Host "❌ PREREQUISITE MISSING: GH_PAT Repository Secret" -ForegroundColor Red
+            Write-Host "=" * 80 -ForegroundColor Red
             Write-Host "" -ForegroundColor Gray
             Write-Host "The 'Configure GitHub Secrets' step requires a GitHub Personal Access Token (PAT)" -ForegroundColor Yellow
             Write-Host "to set environment-level secrets via the GitHub CLI." -ForegroundColor Yellow
             Write-Host "" -ForegroundColor Gray
-            Write-Host "Since GH_PAT is not found, environment secret configuration will be skipped." -ForegroundColor Yellow
-            Write-Host "You can manually add secrets to GitHub environments if needed." -ForegroundColor Yellow
-            Write-Host "" -ForegroundColor Gray
-            Write-Host "📋 To enable automatic secret configuration:" -ForegroundColor Cyan
+            Write-Host "📋 Required Steps:" -ForegroundColor Cyan
             Write-Host "" -ForegroundColor Gray
             Write-Host "1. Create a GitHub Personal Access Token (Classic or Fine-grained):" -ForegroundColor White
             Write-Host "   • Navigate to: https://github.com/settings/tokens" -ForegroundColor Gray
@@ -367,16 +364,15 @@ jobs:
             Write-Host "   • Name: GH_PAT" -ForegroundColor Gray
             Write-Host "   • Value: <your-token>" -ForegroundColor Gray
             Write-Host "" -ForegroundColor Gray
-            Write-Host "3. Re-run this workflow with 'Configure GitHub secrets' enabled" -ForegroundColor White
+            Write-Host "3. Re-run this workflow after adding the GH_PAT secret" -ForegroundColor White
             Write-Host "" -ForegroundColor Gray
-            Write-Host "=" * 80 -ForegroundColor Yellow
+            Write-Host "=" * 80 -ForegroundColor Red
             Write-Host "" -ForegroundColor Gray
-            Write-Warning "GH_PAT repository secret not found. Secret configuration will be skipped."
-          } else {
-            Write-Host "✅ GH_PAT found - automatic secret configuration enabled" -ForegroundColor Green
+            Write-Error "GH_PAT repository secret not found. Please follow the steps above."
+            exit 1
           }
           
-          Write-Host "✅ Prerequisites validated" -ForegroundColor Green
+          Write-Host "✅ Prerequisites validated (including GH_PAT)" -ForegroundColor Green
       
       - name: Check Required Secrets
         id: check
