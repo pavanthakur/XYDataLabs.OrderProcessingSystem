@@ -333,6 +333,8 @@ jobs:
     if: inputs.configureSecrets
     needs: [validate-inputs, setup-oidc]
     runs-on: windows-latest
+    permissions:
+      secrets: write
     steps:
       - uses: actions/checkout@v4
       
@@ -389,7 +391,7 @@ jobs:
           Write-Host "✅ GITHUB_TOKEN automatically available (length: $len chars)." -ForegroundColor Green
           Write-Host "   No manual token configuration required!" -ForegroundColor Green
       
-      - name: Set Environment Secrets
+      - name: Set Repository Secrets
         if: steps.check.outputs.secretsExist == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -397,117 +399,92 @@ jobs:
           TENANT_ID: ${{ needs.setup-oidc.outputs.tenantId }}
           SUBSCRIPTION_ID: ${{ needs.setup-oidc.outputs.subscriptionId }}
         run: |
-          $selectedEnv = "${{ inputs.environment }}"
-
-          Write-Host "---- BEGIN ENVIRONMENT SECRET CONFIGURATION ----" -ForegroundColor Cyan
+          Write-Host "---- BEGIN REPOSITORY SECRET CONFIGURATION ----" -ForegroundColor Cyan
           Write-Host "UTC Start: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
-          Write-Host "Target selection: $selectedEnv" -ForegroundColor Gray
           Write-Host "Using GITHUB_TOKEN for authentication (automatic)" -ForegroundColor Green
           
-          # Determine which environments to configure
-          $envList = if ($selectedEnv -eq "all") { @("dev", "staging", "prod") } else { @($selectedEnv) }
+          Write-Host "🔑 Setting GitHub repository secrets..." -ForegroundColor Cyan
           
-          foreach ($targetEnv in $envList) {
-            Write-Host "🔑 Setting GitHub environment secrets for '$targetEnv'..." -ForegroundColor Cyan
-            Write-Host "  Checking existing environment secret set BEFORE changes..." -ForegroundColor Gray
-            $preListJson = gh api -H "Accept: application/vnd.github+json" repos/${{ github.repository }}/environments/$targetEnv/secrets 2>$null
-            if ($LASTEXITCODE -eq 0 -and $preListJson) {
-              ($preListJson | ConvertFrom-Json).secrets | ForEach-Object { Write-Host "    PRE-EXISTING: $($_.name)" -ForegroundColor DarkGray }
-            } else {
-              Write-Host "    (Could not list pre-existing secrets or none present)" -ForegroundColor DarkGray
-            }
-            
-            Write-Host "  Setting AZUREAPPSERVICE_CLIENTID..." -ForegroundColor Gray
-            gh secret set AZUREAPPSERVICE_CLIENTID --env $targetEnv --repo ${{ github.repository }} --body "$env:CLIENT_ID"
-            if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set CLIENTID for $targetEnv"; exit 1 }
-            
-            Write-Host "  Setting AZUREAPPSERVICE_TENANTID..." -ForegroundColor Gray
-            gh secret set AZUREAPPSERVICE_TENANTID --env $targetEnv --repo ${{ github.repository }} --body "$env:TENANT_ID"
-            if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set TENANTID for $targetEnv"; exit 1 }
-            
-            Write-Host "  Setting AZUREAPPSERVICE_SUBSCRIPTIONID..." -ForegroundColor Gray
-            gh secret set AZUREAPPSERVICE_SUBSCRIPTIONID --env $targetEnv --repo ${{ github.repository }} --body "$env:SUBSCRIPTION_ID"
-            if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set SUBSCRIPTIONID for $targetEnv"; exit 1 }
-            
-            Write-Host "  ✅ Environment secrets set for '$targetEnv'!" -ForegroundColor Green
-            Write-Host "  Re-listing environment secrets AFTER changes..." -ForegroundColor Gray
-            $postListJson = gh api -H "Accept: application/vnd.github+json" repos/${{ github.repository }}/environments/$targetEnv/secrets 2>$null
-            if ($LASTEXITCODE -eq 0 -and $postListJson) {
-              ($postListJson | ConvertFrom-Json).secrets | ForEach-Object { Write-Host "    POST-SET: $($_.name)" -ForegroundColor DarkGray }
-            } else {
-              Write-Host "    (Could not list post-change secrets)" -ForegroundColor DarkGray
-            }
-            Write-Host "  ---- Completed environment '$targetEnv' ----" -ForegroundColor Gray
-          }
+          Write-Host "  Setting AZUREAPPSERVICE_CLIENTID..." -ForegroundColor Gray
+          gh secret set AZUREAPPSERVICE_CLIENTID --repo ${{ github.repository }} --body "$env:CLIENT_ID"
+          if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set AZUREAPPSERVICE_CLIENTID"; exit 1 }
+          
+          Write-Host "  Setting AZUREAPPSERVICE_TENANTID..." -ForegroundColor Gray
+          gh secret set AZUREAPPSERVICE_TENANTID --repo ${{ github.repository }} --body "$env:TENANT_ID"
+          if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set AZUREAPPSERVICE_TENANTID"; exit 1 }
+          
+          Write-Host "  Setting AZUREAPPSERVICE_SUBSCRIPTIONID..." -ForegroundColor Gray
+          gh secret set AZUREAPPSERVICE_SUBSCRIPTIONID --repo ${{ github.repository }} --body "$env:SUBSCRIPTION_ID"
+          if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set AZUREAPPSERVICE_SUBSCRIPTIONID"; exit 1 }
+          
+          Write-Host "  ✅ Repository secrets configured successfully!" -ForegroundColor Green
 
           Write-Host "ℹ️  GITHUB_TOKEN is automatically available in all GitHub Actions workflows" -ForegroundColor Gray
           Write-Host "    No manual token configuration required!" -ForegroundColor Green
 
           Write-Host "UTC End: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
-          Write-Host "---- END ENVIRONMENT SECRET CONFIGURATION ----" -ForegroundColor Cyan
+          Write-Host "---- END REPOSITORY SECRET CONFIGURATION ----" -ForegroundColor Cyan
 
-      - name: Verify Environment Secrets
+      - name: Verify Repository Secrets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $selectedEnv = "${{ inputs.environment }}"
-
-          Write-Host "---- BEGIN ENVIRONMENT SECRET VERIFICATION ----" -ForegroundColor Cyan
+          Write-Host "---- BEGIN REPOSITORY SECRET VERIFICATION ----" -ForegroundColor Cyan
           Write-Host "UTC Start: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           Write-Host "Using GITHUB_TOKEN for verification (automatic)" -ForegroundColor Green
 
-          $envList = if ($selectedEnv -eq "all") { @("dev", "staging", "prod") } else { @($selectedEnv) }
+          Write-Host "🔎 Verifying repository secrets..." -ForegroundColor Cyan
+          
           $ownerRepo = "${{ github.repository }}"
-          $parts = $ownerRepo.Split('/')
-          $owner = $parts[0]
-          $repo  = $parts[1]
+          $owner, $repo = $ownerRepo -split '/', 2
 
-          $overallMissing = $false
-          foreach ($targetEnv in $envList) {
-            Write-Host "🔎 Verifying environment secrets for '$targetEnv'..." -ForegroundColor Cyan
-            $respJson = gh api -H "Accept: application/vnd.github+json" repos/$owner/$repo/environments/$targetEnv/secrets 2>$null
-            if ($LASTEXITCODE -ne 0 -or -not $respJson) {
-              Write-Host "  ❌ Failed to fetch secrets for '$targetEnv' via GitHub API" -ForegroundColor Red
-              $overallMissing = $true
-              continue
-            }
-            $resp = $respJson | ConvertFrom-Json
-            $names = @()
-            if ($resp -and $resp.secrets) { $names = $resp.secrets | ForEach-Object { $_.name } }
+          $respJson = gh api -H "Accept: application/vnd.github+json" repos/$owner/$repo/actions/secrets 2>$null
+          if ($LASTEXITCODE -ne 0 -or -not $respJson) {
+            Write-Error "Failed to fetch repository secrets via GitHub API"
+            exit 1
+          }
+          
+          $resp = $respJson | ConvertFrom-Json
+          $names = @()
+          if ($resp -and $resp.secrets) { $names = $resp.secrets | ForEach-Object { $_.name } }
 
-            function Check-Secret([string]$name) {
-              if ($names -contains $name) {
-                Write-Host "  ✅ $name present" -ForegroundColor Green
-              } else {
-                Write-Host "  ❌ $name missing" -ForegroundColor Red
-                $script:overallMissing = $true
-              }
-            }
-
-            Check-Secret -name "AZUREAPPSERVICE_CLIENTID"
-            Check-Secret -name "AZUREAPPSERVICE_TENANTID"
-            Check-Secret -name "AZUREAPPSERVICE_SUBSCRIPTIONID"
-
-            # Add to job summary
-            "### 🔑 Secrets for '$targetEnv'" >> $env:GITHUB_STEP_SUMMARY
-            if ($names.Count -gt 0) {
-              foreach ($n in $names | Sort-Object) { "- $n" >> $env:GITHUB_STEP_SUMMARY }
+          function Check-Secret([string]$name) {
+            if ($names -contains $name) {
+              Write-Host "  ✅ $name present" -ForegroundColor Green
+              return $true
             } else {
-              "- (no secrets found)" >> $env:GITHUB_STEP_SUMMARY
+              Write-Host "  ❌ $name missing" -ForegroundColor Red
+              return $false
             }
-            "" >> $env:GITHUB_STEP_SUMMARY
           }
 
-          if ($overallMissing) {
-            Write-Error "One or more required environment secrets are missing. See logs above and summary for details."
+          $requiredSecrets = @("AZUREAPPSERVICE_CLIENTID", "AZUREAPPSERVICE_TENANTID", "AZUREAPPSERVICE_SUBSCRIPTIONID")
+          $allPresent = $true
+          foreach ($secretName in $requiredSecrets) {
+            if (-not (Check-Secret -name $secretName)) {
+              $allPresent = $false
+            }
+          }
+
+          # Add to job summary
+          "### 🔑 Repository Secrets" >> $env:GITHUB_STEP_SUMMARY
+          if ($names.Count -gt 0) {
+            foreach ($n in $names | Sort-Object) { "- $n" >> $env:GITHUB_STEP_SUMMARY }
+          } else {
+            "- (no secrets found)" >> $env:GITHUB_STEP_SUMMARY
+          }
+          "" >> $env:GITHUB_STEP_SUMMARY
+
+          if (-not $allPresent) {
+            Write-Error "One or more required repository secrets are missing. See logs above and summary for details."
             exit 1
           } else {
-            Write-Host "✅ All required secrets verified for selected environment(s)." -ForegroundColor Green
+            Write-Host "✅ All required repository secrets verified." -ForegroundColor Green
           }
 
           Write-Host "ℹ️  Using automatically available GITHUB_TOKEN - no manual token management required!" -ForegroundColor Gray
           Write-Host "UTC End: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
-          Write-Host "---- END ENVIRONMENT SECRET VERIFICATION ----" -ForegroundColor Cyan
+          Write-Host "---- END REPOSITORY SECRET VERIFICATION ----" -ForegroundColor Cyan
 
   bootstrap-dev:
     name: Bootstrap Dev Environment
