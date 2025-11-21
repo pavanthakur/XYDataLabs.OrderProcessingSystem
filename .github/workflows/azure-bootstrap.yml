@@ -102,6 +102,22 @@ jobs:
           Write-Host "   Tenant ID: $tenantId" -ForegroundColor Gray
           Write-Host "   App Object ID: $appObjectId" -ForegroundColor Gray
       
+      - name: Verify Federated Credentials
+        run: |
+          Write-Host "🔍 Verifying federated credentials..." -ForegroundColor Cyan
+          $appObjectId = "${{ steps.oidc.outputs.appObjectId }}"
+          $creds = az ad app federated-credential list --id $appObjectId | ConvertFrom-Json
+          
+          Write-Host "`nCreated federated credentials:" -ForegroundColor Green
+          foreach ($cred in $creds) {
+            Write-Host "  - Name: $($cred.name)" -ForegroundColor White
+            Write-Host "    Subject: $($cred.subject)" -ForegroundColor Gray
+          }
+          
+          if ($creds.Count -lt 6) {
+            Write-Warning "Expected 6 federated credentials, found $($creds.Count). OIDC setup may be incomplete."
+          }
+      
       - name: Create Setup Summary
         run: |
           "## 🔐 Azure OIDC Setup Complete" >> $env:GITHUB_STEP_SUMMARY
@@ -138,10 +154,6 @@ jobs:
             "secretsExist=false" >> $env:GITHUB_OUTPUT
           }
       
-      - name: Azure Login
-        if: steps.check.outputs.secretsExist == 'false'
-        run: az login --use-device-code
-      
       - name: Set Dev Environment Secrets
         if: steps.check.outputs.secretsExist == 'false'
         env:
@@ -159,7 +171,7 @@ jobs:
   bootstrap-dev:
     name: Bootstrap Dev Environment
     if: inputs.bootstrapInfra && (inputs.environment == 'dev' || inputs.environment == 'all') && !cancelled()
-    needs: [setup-oidc]
+    needs: [setup-oidc, configure-secrets]
     runs-on: windows-latest
     env:
       CLIENT_ID: ${{ needs.setup-oidc.outputs.clientId || secrets.AZUREAPPSERVICE_CLIENTID }}
@@ -198,7 +210,7 @@ jobs:
   bootstrap-staging:
     name: Bootstrap Staging Environment
     if: inputs.bootstrapInfra && (inputs.environment == 'staging' || inputs.environment == 'all') && !cancelled()
-    needs: [setup-oidc]
+    needs: [setup-oidc, configure-secrets]
     runs-on: windows-latest
     env:
       CLIENT_ID: ${{ needs.setup-oidc.outputs.clientId || secrets.AZUREAPPSERVICE_CLIENTID }}
@@ -237,7 +249,7 @@ jobs:
   bootstrap-prod:
     name: Bootstrap Production Environment
     if: inputs.bootstrapInfra && (inputs.environment == 'prod' || inputs.environment == 'all') && !cancelled()
-    needs: [setup-oidc]
+    needs: [setup-oidc, configure-secrets]
     runs-on: windows-latest
     environment: prod
     env:
