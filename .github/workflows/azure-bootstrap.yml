@@ -62,21 +62,27 @@ jobs:
           Write-Host "🚀 Setting up GitHub Actions OIDC..." -ForegroundColor Cyan
           
           # Run setup script
-          $result = & ./Resources/Azure-Deployment/setup-github-oidc.ps1 `
+          ./Resources/Azure-Deployment/setup-github-oidc.ps1 `
             -Branches "dev,staging,main" `
             -Environments "dev,staging,prod" `
             -GitHubOwner "pavanthakur" `
-            -Repository "XYDataLabs.OrderProcessingSystem" `
-            2>&1 | Tee-Object -Variable output
+            -Repository "XYDataLabs.OrderProcessingSystem"
           
-          Write-Host $output
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "OIDC setup failed with exit code $LASTEXITCODE"
+            exit $LASTEXITCODE
+          }
           
           # Extract credentials from Azure
           $sub = az account show | ConvertFrom-Json
-          $app = az ad app list --display-name "GitHub-Actions-OIDC" | ConvertFrom-Json
+          if (-not $sub) {
+            Write-Error "Failed to get Azure subscription"
+            exit 1
+          }
           
-          if ($app.Count -eq 0) {
-            Write-Error "Failed to create OIDC app"
+          $app = az ad app list --display-name "GitHub-Actions-OIDC" | ConvertFrom-Json
+          if (-not $app -or $app.Count -eq 0) {
+            Write-Error "Failed to create or find OIDC app"
             exit 1
           }
           
@@ -159,17 +165,30 @@ jobs:
           $clientId = "${{ needs.setup-oidc.outputs.client-id }}"
           if (-not $clientId) {
             $app = az ad app list --display-name "GitHub-Actions-OIDC" | ConvertFrom-Json
+            if (-not $app) {
+              Write-Error "Failed to get OIDC app credentials"
+              exit 1
+            }
             $clientId = $app[0].appId
           }
           
           $sub = az account show | ConvertFrom-Json
+          if (-not $sub) {
+            Write-Error "Failed to get Azure subscription"
+            exit 1
+          }
           $tenantId = $sub.tenantId
           $subscriptionId = $sub.id
           
           # Set secrets using GitHub CLI
           echo $clientId | gh secret set AZUREAPPSERVICE_CLIENTID --repo pavanthakur/XYDataLabs.OrderProcessingSystem
+          if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set CLIENTID secret"; exit 1 }
+          
           echo $tenantId | gh secret set AZUREAPPSERVICE_TENANTID --repo pavanthakur/XYDataLabs.OrderProcessingSystem
+          if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set TENANTID secret"; exit 1 }
+          
           echo $subscriptionId | gh secret set AZUREAPPSERVICE_SUBSCRIPTIONID --repo pavanthakur/XYDataLabs.OrderProcessingSystem
+          if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set SUBSCRIPTIONID secret"; exit 1 }
           
           Write-Host "✅ Secrets configured successfully" -ForegroundColor Green
 
@@ -192,6 +211,10 @@ jobs:
         run: |
           Write-Host "🚀 Bootstrapping Dev Environment..." -ForegroundColor Cyan
           ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment dev
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Bootstrap failed with exit code $LASTEXITCODE"
+            exit $LASTEXITCODE
+          }
       
       - name: Upload Bootstrap Log
         if: always()
@@ -220,6 +243,10 @@ jobs:
         run: |
           Write-Host "🚀 Bootstrapping Staging Environment..." -ForegroundColor Cyan
           ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment stg
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Bootstrap failed with exit code $LASTEXITCODE"
+            exit $LASTEXITCODE
+          }
       
       - name: Upload Bootstrap Log
         if: always()
@@ -249,6 +276,10 @@ jobs:
         run: |
           Write-Host "🚀 Bootstrapping Production Environment..." -ForegroundColor Cyan
           ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment prod
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Bootstrap failed with exit code $LASTEXITCODE"
+            exit $LASTEXITCODE
+          }
       
       - name: Upload Bootstrap Log
         if: always()
