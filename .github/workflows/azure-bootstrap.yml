@@ -32,6 +32,11 @@ on:
         required: true
         type: boolean
         default: true
+      replicatePatToEnvironments:
+        description: 'Copy GH_PAT repository secret into each selected environment (NOT RECOMMENDED unless necessary)'
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -357,7 +362,7 @@ jobs:
           }
       
       - name: Set Environment Secrets
-        if: steps.check.outputs.secretsExist == 'false'
+        if: steps.check.outputs.secretsExist == 'false' || inputs.replicatePatToEnvironments
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
           CLIENT_ID: ${{ needs.setup-oidc.outputs.clientId }}
@@ -365,6 +370,7 @@ jobs:
           SUBSCRIPTION_ID: ${{ needs.setup-oidc.outputs.subscriptionId }}
         run: |
           $selectedEnv = "${{ inputs.environment }}"
+          $replicatePat = "${{ inputs.replicatePatToEnvironments }}"
           
           if (-not $env:GH_TOKEN) {
             Write-Error "GH_PAT secret not found. Please add GH_PAT to repository secrets."
@@ -388,8 +394,84 @@ jobs:
             Write-Host "  Setting AZUREAPPSERVICE_SUBSCRIPTIONID..." -ForegroundColor Gray
             gh secret set AZUREAPPSERVICE_SUBSCRIPTIONID --env $targetEnv --repo ${{ github.repository }} --body "$env:SUBSCRIPTION_ID"
             if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set SUBSCRIPTIONID for $targetEnv"; exit 1 }
+
+            if ($replicatePat -eq 'true') {
+              Write-Host "  Replicating GH_PAT into environment '$targetEnv' (scoped secret) ..." -ForegroundColor Gray
+              # Mask length only, never echo token
+              $patLength = $env:GH_TOKEN.Length
+              gh secret set GH_PAT --env $targetEnv --repo ${{ github.repository }} --body "$env:GH_TOKEN"
+              if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set GH_PAT for $targetEnv"; exit 1 }
+              Write-Host "    ✅ GH_PAT replicated (length: $patLength chars, value hidden)" -ForegroundColor Green
+            }
             
             Write-Host "  ✅ Environment secrets set for '$targetEnv'!" -ForegroundColor Green
+          }
+
+      - name: Verify Environment Secrets
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          $selectedEnv = "${{ inputs.environment }}"
+          $replicatePat = "${{ inputs.replicatePatToEnvironments }}"
+
+          if (-not $env:GH_TOKEN) {
+            Write-Warning "GH_PAT not available. Verification may fail for 'gh api' calls."
+          }
+
+          $envList = if ($selectedEnv -eq "all") { @("dev", "staging", "prod") } else { @($selectedEnv) }
+          $ownerRepo = "${{ github.repository }}"
+          $parts = $ownerRepo.Split('/')
+          $owner = $parts[0]
+          $repo  = $parts[1]
+
+          $overallMissing = $false
+          foreach ($targetEnv in $envList) {
+            Write-Host "🔎 Verifying environment secrets for '$targetEnv'..." -ForegroundColor Cyan
+            $respJson = gh api -H "Accept: application/vnd.github+json" repos/$owner/$repo/environments/$targetEnv/secrets 2>$null
+            if ($LASTEXITCODE -ne 0 -or -not $respJson) {
+              Write-Host "  ❌ Failed to fetch secrets for '$targetEnv' via GitHub API" -ForegroundColor Red
+              $overallMissing = $true
+              continue
+            }
+            $resp = $respJson | ConvertFrom-Json
+            $names = @()
+            if ($resp -and $resp.secrets) { $names = $resp.secrets | ForEach-Object { $_.name } }
+
+            function Check-Secret([string]$name) {
+              if ($names -contains $name) {
+                Write-Host "  ✅ $name present" -ForegroundColor Green
+              } else {
+                Write-Host "  ❌ $name missing" -ForegroundColor Red
+                $script:overallMissing = $true
+              }
+            }
+
+            Check-Secret -name "AZUREAPPSERVICE_CLIENTID"
+            Check-Secret -name "AZUREAPPSERVICE_TENANTID"
+            Check-Secret -name "AZUREAPPSERVICE_SUBSCRIPTIONID"
+            if ($replicatePat -eq 'true') { Check-Secret -name "GH_PAT" }
+
+            # Add to job summary
+            "### 🔑 Secrets for '$targetEnv'" >> $env:GITHUB_STEP_SUMMARY
+            if ($names.Count -gt 0) {
+              foreach ($n in $names | Sort-Object) { "- $n" >> $env:GITHUB_STEP_SUMMARY }
+            } else {
+              "- (no secrets found)" >> $env:GITHUB_STEP_SUMMARY
+            }
+            "" >> $env:GITHUB_STEP_SUMMARY
+          }
+
+          if ($overallMissing) {
+            Write-Error "One or more required environment secrets are missing. See logs above and summary for details."
+            exit 1
+          } else {
+            Write-Host "✅ All required secrets verified for selected environment(s)." -ForegroundColor Green
+          }
+
+          if ($replicatePat -eq 'true') {
+            Write-Host "⚠️  SECURITY NOTE: GH_PAT was copied to each environment. Consider using GITHUB_TOKEN or a GitHub App for least privilege." -ForegroundColor Yellow
+          } else {
+            Write-Host "ℹ️  GH_PAT replication disabled (recommended)." -ForegroundColor Gray
           }
 
   bootstrap-dev:
