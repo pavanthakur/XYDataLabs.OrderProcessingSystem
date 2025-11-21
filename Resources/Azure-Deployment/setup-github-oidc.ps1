@@ -155,34 +155,39 @@ elseif ($ResourceGroupName) {
     $rgList = @($ResourceGroupName)
 }
 else {
-    Write-Host "  ❌ No resource group specified. Use -ResourceGroupName or -ResourceGroupNames." -ForegroundColor Red
-    exit 1
+    Write-Host "  ⚠️  No resource groups specified - RBAC assignment will be skipped." -ForegroundColor Yellow
+    Write-Host "  💡 Resource groups will be created during bootstrap. RBAC will be assigned then." -ForegroundColor Cyan
+    $rgList = @()
 }
 
 $rbacSummary = @()
-foreach ($rg in $rgList) {
-    Write-Host "  Processing RG: $rg" -ForegroundColor Cyan
-    # Validate RG exists
-    $rgExists = az group exists -n $rg 2>$null
-    if ($rgExists -ne 'true') {
-        Write-Host "    Skipping (RG not found)" -ForegroundColor Yellow
-        $rbacSummary += [PSCustomObject]@{ ResourceGroup=$rg; Status='NotFound'; Role=$RoleName }
-        continue
+if ($rgList.Count -gt 0) {
+    foreach ($rg in $rgList) {
+        Write-Host "  Processing RG: $rg" -ForegroundColor Cyan
+        # Validate RG exists
+        $rgExists = az group exists -n $rg 2>$null
+        if ($rgExists -ne 'true') {
+            Write-Host "    Skipping (RG not found)" -ForegroundColor Yellow
+            $rbacSummary += [PSCustomObject]@{ ResourceGroup=$rg; Status='NotFound'; Role=$RoleName }
+            continue
+        }
+        $scope = "/subscriptions/$subscriptionId/resourceGroups/$rg"
+        $existingAssignment = az role assignment list --assignee $spObjectId --role $RoleName --scope $scope | ConvertFrom-Json
+        if (-not $existingAssignment -or $existingAssignment.Count -eq 0) {
+            az role assignment create --assignee $spObjectId --role $RoleName --scope $scope | Out-Null
+            Write-Host "    Assigned $RoleName" -ForegroundColor Green
+            $rbacSummary += [PSCustomObject]@{ ResourceGroup=$rg; Status='Assigned'; Role=$RoleName }
+        } else {
+            Write-Host "    Already assigned" -ForegroundColor Gray
+            $rbacSummary += [PSCustomObject]@{ ResourceGroup=$rg; Status='Exists'; Role=$RoleName }
+        }
     }
-    $scope = "/subscriptions/$subscriptionId/resourceGroups/$rg"
-    $existingAssignment = az role assignment list --assignee $spObjectId --role $RoleName --scope $scope | ConvertFrom-Json
-    if (-not $existingAssignment -or $existingAssignment.Count -eq 0) {
-        az role assignment create --assignee $spObjectId --role $RoleName --scope $scope | Out-Null
-        Write-Host "    Assigned $RoleName" -ForegroundColor Green
-        $rbacSummary += [PSCustomObject]@{ ResourceGroup=$rg; Status='Assigned'; Role=$RoleName }
-    } else {
-        Write-Host "    Already assigned" -ForegroundColor Gray
-        $rbacSummary += [PSCustomObject]@{ ResourceGroup=$rg; Status='Exists'; Role=$RoleName }
-    }
-}
 
-Write-Host "`n  RBAC Summary:" -ForegroundColor Yellow
-$rbacSummary | Format-Table -AutoSize
+    Write-Host "`n  RBAC Summary:" -ForegroundColor Yellow
+    $rbacSummary | Format-Table -AutoSize
+} else {
+    Write-Host "  No resource groups to process - RBAC assignment skipped." -ForegroundColor Gray
+}
 
 # Step 6: Display GitHub Secrets
 Write-Host "`n[6/7] GitHub Repository Secrets Configuration" -ForegroundColor Yellow
