@@ -36,6 +36,7 @@ on:
 permissions:
   contents: write
   id-token: write
+  secrets: write
 
 jobs:
   validate-inputs:
@@ -326,7 +327,7 @@ jobs:
       
       - name: Validate Prerequisites
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           Write-Host "🔍 Checking if OIDC setup was performed..." -ForegroundColor Cyan
           $setupOidc = "${{ inputs.setupOidc }}"
@@ -341,55 +342,23 @@ jobs:
             Write-Warning "Running without OIDC setup. Ensure Azure app credentials already exist in secrets."
           }
           
-          # Check if GH_PAT is available (required for setting environment secrets)
-          if (-not $env:GH_TOKEN -or $env:GH_TOKEN -eq "") {
-            Write-Host "" -ForegroundColor Gray
-            Write-Host "=" * 80 -ForegroundColor Red
-            Write-Host "❌ PREREQUISITE MISSING: GH_PAT Repository Secret" -ForegroundColor Red
-            Write-Host "=" * 80 -ForegroundColor Red
-            Write-Host "" -ForegroundColor Gray
-            Write-Host "The 'Configure GitHub Secrets' step requires a GitHub Personal Access Token (PAT)" -ForegroundColor Yellow
-            Write-Host "to set environment-level secrets via the GitHub CLI." -ForegroundColor Yellow
-            Write-Host "" -ForegroundColor Gray
-            Write-Host "📋 Required Steps:" -ForegroundColor Cyan
-            Write-Host "" -ForegroundColor Gray
-            Write-Host "1. Create a GitHub Personal Access Token (Classic or Fine-grained):" -ForegroundColor White
-            Write-Host "   • Navigate to: https://github.com/settings/tokens" -ForegroundColor Gray
-            Write-Host "   • For Classic token: Select scope 'repo' (full control of private repositories)" -ForegroundColor Gray
-            Write-Host "   • For Fine-grained token: Select 'Secrets' with Read and Write access" -ForegroundColor Gray
-            Write-Host "" -ForegroundColor Gray
-            Write-Host "2. Add the token as a repository secret named 'GH_PAT':" -ForegroundColor White
-            Write-Host "   • Navigate to: https://github.com/${{ github.repository }}/settings/secrets/actions" -ForegroundColor Gray
-            Write-Host "   • Click 'New repository secret'" -ForegroundColor Gray
-            Write-Host "   • Name: GH_PAT" -ForegroundColor Gray
-            Write-Host "   • Value: <your-token>" -ForegroundColor Gray
-            Write-Host "" -ForegroundColor Gray
-            Write-Host "3. Re-run this workflow after adding the GH_PAT secret" -ForegroundColor White
-            Write-Host "" -ForegroundColor Gray
-            Write-Host "=" * 80 -ForegroundColor Red
-            Write-Host "" -ForegroundColor Gray
-            Write-Error "GH_PAT repository secret not found. Please follow the steps above."
-            exit 1
-          }
-          
-          Write-Host "✅ Prerequisites validated (including GH_PAT)" -ForegroundColor Green
+          Write-Host "" -ForegroundColor Gray
+          Write-Host "✅ All prerequisites validated" -ForegroundColor Green
       
       - name: Check Required Secrets
         id: check
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $hasClientId = "${{ secrets.AZUREAPPSERVICE_CLIENTID }}" -ne ""
           $hasTenantId = "${{ secrets.AZUREAPPSERVICE_TENANTID }}" -ne ""
           $hasSubscriptionId = "${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}" -ne ""
-          $hasRepoPat = $false
-          if ($env:GH_TOKEN) { $hasRepoPat = $true }
 
           Write-Host "---- BEGIN REPOSITORY SECRET BASELINE ----" -ForegroundColor Cyan
           Write-Host "Repo Secret Present?  AZUREAPPSERVICE_CLIENTID    : $hasClientId" -ForegroundColor Gray
           Write-Host "Repo Secret Present?  AZUREAPPSERVICE_TENANTID    : $hasTenantId" -ForegroundColor Gray
           Write-Host "Repo Secret Present?  AZUREAPPSERVICE_SUBSCRIPTIONID : $hasSubscriptionId" -ForegroundColor Gray
-          Write-Host "Repo Secret Present?  GH_PAT                     : $hasRepoPat" -ForegroundColor Gray
+          Write-Host "Using GITHUB_TOKEN for authentication              : ✅" -ForegroundColor Gray
           Write-Host "Timestamp (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           Write-Host "---- END REPOSITORY SECRET BASELINE ----" -ForegroundColor Cyan
           
@@ -401,21 +370,23 @@ jobs:
             "secretsExist=false" >> $env:GITHUB_OUTPUT
           }
 
-      - name: Log GH_PAT Availability (Pre-Set)
+      - name: Log GitHub Token Availability
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if ($env:GH_TOKEN) {
             $len = $env:GH_TOKEN.Length
-            Write-Host "GH_PAT repository secret detected (length: $len chars)." -ForegroundColor Green
+            Write-Host "✅ GITHUB_TOKEN automatically available (length: $len chars)." -ForegroundColor Green
+            Write-Host "   No manual token configuration required!" -ForegroundColor Green
           } else {
-            Write-Warning "GH_PAT repository secret NOT found. Set it before re-running if environment secret configuration is needed."
+            Write-Error "GITHUB_TOKEN not available. This should not happen in GitHub Actions."
+            exit 1
           }
       
       - name: Set Environment Secrets
         if: steps.check.outputs.secretsExist == 'false'
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CLIENT_ID: ${{ needs.setup-oidc.outputs.clientId }}
           TENANT_ID: ${{ needs.setup-oidc.outputs.tenantId }}
           SUBSCRIPTION_ID: ${{ needs.setup-oidc.outputs.subscriptionId }}
@@ -426,21 +397,7 @@ jobs:
           Write-Host "---- BEGIN ENVIRONMENT SECRET CONFIGURATION ----" -ForegroundColor Cyan
           Write-Host "UTC Start: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           Write-Host "Target selection: $selectedEnv" -ForegroundColor Gray
-          
-          if (-not $env:GH_TOKEN) {
-            Write-Warning "GH_PAT secret not found in repository secrets."
-            Write-Warning "Environment secret configuration will be SKIPPED."
-            Write-Host ""
-            Write-Host "To enable automatic environment secret configuration:" -ForegroundColor Yellow
-            Write-Host "  1. Go to: https://github.com/${{ github.repository }}/settings/secrets/actions" -ForegroundColor Yellow
-            Write-Host "  2. Click 'New repository secret'" -ForegroundColor Yellow
-            Write-Host "  3. Name: GH_PAT" -ForegroundColor Yellow
-            Write-Host "  4. Value: Your Personal Access Token with repo and admin:org scopes" -ForegroundColor Yellow
-            Write-Host "  5. Re-run this workflow with 'Configure GitHub secrets' enabled" -ForegroundColor Yellow
-            Write-Host ""
-            Write-Host "---- END ENVIRONMENT SECRET CONFIGURATION (SKIPPED) ----" -ForegroundColor Cyan
-            exit 0
-          }
+          Write-Host "Using GITHUB_TOKEN for authentication (automatic)" -ForegroundColor Green
           
           # Determine which environments to configure
           $envList = if ($selectedEnv -eq "all") { @("dev", "staging", "prod") } else { @($selectedEnv) }
@@ -466,24 +423,6 @@ jobs:
             Write-Host "  Setting AZUREAPPSERVICE_SUBSCRIPTIONID..." -ForegroundColor Gray
             gh secret set AZUREAPPSERVICE_SUBSCRIPTIONID --env $targetEnv --repo ${{ github.repository }} --body "$env:SUBSCRIPTION_ID"
             if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set SUBSCRIPTIONID for $targetEnv"; exit 1 }
-
-            # Replicate GH_PAT only if missing in the environment
-            $respJson = gh api -H "Accept: application/vnd.github+json" repos/${{ github.repository }}/environments/$targetEnv/secrets 2>$null
-            $names = @()
-            if ($LASTEXITCODE -eq 0 -and $respJson) {
-              $resp = $respJson | ConvertFrom-Json
-              if ($resp -and $resp.secrets) { $names = $resp.secrets | ForEach-Object { $_.name } }
-            }
-            if ($names -notcontains 'GH_PAT') {
-              Write-Host "  GH_PAT missing in '$targetEnv' - replicating from repository scope (value will be masked)" -ForegroundColor Yellow
-              $patLength = $env:GH_TOKEN.Length
-              gh secret set GH_PAT --env $targetEnv --repo ${{ github.repository }} --body "$env:GH_TOKEN"
-              if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set GH_PAT for $targetEnv"; exit 1 }
-              Write-Host "    ✅ GH_PAT replicated (length: $patLength chars, value hidden)" -ForegroundColor Green
-              $replicationPerformed += $targetEnv
-            } else {
-              Write-Host "  GH_PAT already present for '$targetEnv' - skipping replication" -ForegroundColor Gray
-            }
             
             Write-Host "  ✅ Environment secrets set for '$targetEnv'!" -ForegroundColor Green
             Write-Host "  Re-listing environment secrets AFTER changes..." -ForegroundColor Gray
@@ -496,28 +435,21 @@ jobs:
             Write-Host "  ---- Completed environment '$targetEnv' ----" -ForegroundColor Gray
           }
 
-          if ($replicationPerformed.Count -gt 0) {
-            Write-Host "⚠️  SECURITY NOTE: GH_PAT was newly added to: $($replicationPerformed -join ', '). Consider replacing with least-privilege tokens." -ForegroundColor Yellow
-          } else {
-            Write-Host "ℹ️  No GH_PAT replication performed (all environments already had GH_PAT or replication not required)." -ForegroundColor Gray
-          }
+          Write-Host "ℹ️  GITHUB_TOKEN is automatically available in all GitHub Actions workflows" -ForegroundColor Gray
+          Write-Host "    No manual token configuration required!" -ForegroundColor Green
 
           Write-Host "UTC End: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           Write-Host "---- END ENVIRONMENT SECRET CONFIGURATION ----" -ForegroundColor Cyan
 
       - name: Verify Environment Secrets
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $selectedEnv = "${{ inputs.environment }}"
-          $replicated = @()
 
           Write-Host "---- BEGIN ENVIRONMENT SECRET VERIFICATION ----" -ForegroundColor Cyan
           Write-Host "UTC Start: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
-
-          if (-not $env:GH_TOKEN) {
-            Write-Warning "GH_PAT not available. Verification may fail for 'gh api' calls."
-          }
+          Write-Host "Using GITHUB_TOKEN for verification (automatic)" -ForegroundColor Green
 
           $envList = if ($selectedEnv -eq "all") { @("dev", "staging", "prod") } else { @($selectedEnv) }
           $ownerRepo = "${{ github.repository }}"
@@ -550,7 +482,6 @@ jobs:
             Check-Secret -name "AZUREAPPSERVICE_CLIENTID"
             Check-Secret -name "AZUREAPPSERVICE_TENANTID"
             Check-Secret -name "AZUREAPPSERVICE_SUBSCRIPTIONID"
-            Check-Secret -name "GH_PAT"
 
             # Add to job summary
             "### 🔑 Secrets for '$targetEnv'" >> $env:GITHUB_STEP_SUMMARY
@@ -569,7 +500,7 @@ jobs:
             Write-Host "✅ All required secrets verified for selected environment(s)." -ForegroundColor Green
           }
 
-          Write-Host "ℹ️  GH_PAT verification complete. Ensure token scope is minimal and rotate periodically." -ForegroundColor Gray
+          Write-Host "ℹ️  Using automatically available GITHUB_TOKEN - no manual token management required!" -ForegroundColor Gray
           Write-Host "UTC End: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           Write-Host "---- END ENVIRONMENT SECRET VERIFICATION ----" -ForegroundColor Cyan
 

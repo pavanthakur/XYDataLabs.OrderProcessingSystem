@@ -10,20 +10,9 @@ This workflow automates the complete Azure setup process, from OIDC configuratio
 
 ### Prerequisites
 
-Before running the workflow, if you plan to use **"Configure GitHub secrets"** option:
+**No manual prerequisites required!** 🎉
 
-1. **Create a GitHub Personal Access Token (PAT)**:
-   - Navigate to: https://github.com/settings/tokens
-   - For Classic token: Select scope `repo` (full control of private repositories)
-   - For Fine-grained token: Select `Secrets` with Read and Write access
-   
-2. **Add the PAT as a repository secret named `GH_PAT`**:
-   - Navigate to: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/settings/secrets/actions
-   - Click "New repository secret"
-   - Name: `GH_PAT`
-   - Value: `<your-personal-access-token>`
-
-> **Note**: The GH_PAT is only required if you enable "Configure GitHub secrets" in the workflow. If you skip this step, you'll need to manually configure the Azure credentials as repository secrets.
+The workflow uses the automatically available `GITHUB_TOKEN` with appropriate permissions to configure secrets. You can run the workflow immediately without any manual token setup.
 
 ### First-Time Setup (Complete)
 
@@ -90,8 +79,8 @@ To bootstrap a new environment after initial setup:
   - `AZUREAPPSERVICE_SUBSCRIPTIONID`
 
 **Requirements**:
-- `GITHUB_TOKEN` with `secrets` write permission
-- GitHub CLI installed on runner
+- Automatically uses `GITHUB_TOKEN` with `secrets: write` permission (configured in workflow)
+- GitHub CLI (pre-installed on GitHub-hosted runners)
 
 ### 3. Bootstrap Environments (`bootstrap-dev`, `bootstrap-staging`, `bootstrap-prod`)
 **Runs when**: `bootstrapInfra` input is `true` AND environment matches
@@ -222,17 +211,11 @@ To bootstrap a new environment after initial setup:
 #### Issue: "OIDC app already exists"
 **Solution**: This is normal. Workflow will reuse existing app. Ensure federated credentials match expected branches/environments.
 
-#### Issue: "GH_PAT repository secret not found"
-**Solution**: 
-- Create a GitHub Personal Access Token (PAT) at: https://github.com/settings/tokens
-- Add it as a repository secret named `GH_PAT` at: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/settings/secrets/actions
-- Required scopes: `repo` (for Classic tokens) or `Secrets: Read and Write` (for Fine-grained tokens)
-- Re-run the workflow after adding the secret
-
 #### Issue: "GitHub secrets configuration failed"
 **Solution**: 
-- Ensure the `GH_PAT` token has proper permissions (see above)
-- Verify the token is not expired
+- Workflow automatically uses `GITHUB_TOKEN` - no manual token setup required
+- Ensure the workflow has `secrets: write` permission (already configured)
+- If still failing, check workflow logs for specific error messages
 - Alternatively, manually add secrets: https://github.com/pavanthakur/TestAppXY_OrderProcessingSystem/settings/secrets/actions
 
 #### Issue: "Resource Group creation timeout"
@@ -304,11 +287,9 @@ Check `.github/workflows/infra-deploy.yml` for active `pre-validate` job
 - Permission to create resource groups and assign RBAC
 
 **GitHub** (for secret configuration):
-- Repository admin or secrets write permission
-- A Personal Access Token (PAT) stored as repository secret `GH_PAT` with:
-  - For Classic tokens: `repo` scope (full control of private repositories)
-  - For Fine-grained tokens: `Secrets` permission with Read and Write access
-- Note: The built-in `GITHUB_TOKEN` cannot be used as it lacks `secrets: write` permission
+- Workflow automatically uses `GITHUB_TOKEN` with `secrets: write` permission
+- No manual token creation or management required
+- The workflow is configured with the necessary permissions
 
 ### Secret Scope
 
@@ -316,11 +297,10 @@ All secrets are **repository-scoped**:
 - `AZUREAPPSERVICE_CLIENTID`
 - `AZUREAPPSERVICE_TENANTID`
 - `AZUREAPPSERVICE_SUBSCRIPTIONID`
-- `GH_PAT` (required for automated secret configuration)
 
 Additionally, **environment-scoped** secrets are created by the workflow:
 - Each environment (dev/staging/prod) gets its own copy of the Azure credentials
-- `GH_PAT` is replicated to environments only if not already present
+- Secrets are automatically configured using the built-in `GITHUB_TOKEN`
 
 No passwords or certificates stored. OIDC uses token exchange.
 
