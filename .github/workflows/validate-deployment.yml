@@ -1,6 +1,32 @@
 name: Pre-Deployment Validation
 
 on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment (dev|staging|prod)'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+        default: dev
+      run-whatif:
+        description: 'Run Bicep what-if analysis'
+        required: false
+        type: boolean
+        default: true
+      verify-oidc:
+        description: 'Verify OIDC credentials'
+        required: false
+        type: boolean
+        default: false
+      check-config:
+        description: 'Validate sharedsettings consistency'
+        required: false
+        type: boolean
+        default: true
   workflow_call:
     inputs:
       environment:
