@@ -427,10 +427,19 @@ jobs:
           Write-Host "UTC Start: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           Write-Host "Target selection: $selectedEnv" -ForegroundColor Gray
           
-          # This should not happen as it's validated in the Prerequisites step, but double-check
-          if (-not $env:GH_TOKEN -or $env:GH_TOKEN -eq "") {
-            Write-Error "GH_PAT secret not found. This should have been caught in prerequisites validation."
-            exit 1
+          if (-not $env:GH_TOKEN) {
+            Write-Warning "GH_PAT secret not found in repository secrets."
+            Write-Warning "Environment secret configuration will be SKIPPED."
+            Write-Host ""
+            Write-Host "To enable automatic environment secret configuration:" -ForegroundColor Yellow
+            Write-Host "  1. Go to: https://github.com/${{ github.repository }}/settings/secrets/actions" -ForegroundColor Yellow
+            Write-Host "  2. Click 'New repository secret'" -ForegroundColor Yellow
+            Write-Host "  3. Name: GH_PAT" -ForegroundColor Yellow
+            Write-Host "  4. Value: Your Personal Access Token with repo and admin:org scopes" -ForegroundColor Yellow
+            Write-Host "  5. Re-run this workflow with 'Configure GitHub secrets' enabled" -ForegroundColor Yellow
+            Write-Host ""
+            Write-Host "---- END ENVIRONMENT SECRET CONFIGURATION (SKIPPED) ----" -ForegroundColor Cyan
+            exit 0
           }
           
           # Determine which environments to configure
