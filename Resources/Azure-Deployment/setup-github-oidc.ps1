@@ -93,12 +93,25 @@ Write-Host "`n[4/7] Configuring federated credentials..." -ForegroundColor Yello
 $existingCreds = az ad app federated-credential list --id $appObjectId | ConvertFrom-Json
 if (-not $existingCreds) { $existingCreds = @() }
 
+# Delete credentials with incorrect subjects (missing repository name)
+$invalidCreds = $existingCreds | Where-Object { $_.subject -notmatch "repo:$GitHubOwner/$Repository:" }
+if ($invalidCreds.Count -gt 0) {
+    Write-Host "  🧹 Cleaning up $($invalidCreds.Count) invalid federated credentials..." -ForegroundColor Yellow
+    foreach ($invalidCred in $invalidCreds) {
+        Write-Host "    Deleting: $($invalidCred.name) (subject: $($invalidCred.subject))" -ForegroundColor Gray
+        az ad app federated-credential delete --id $appObjectId --federated-credential-id $invalidCred.id 2>$null | Out-Null
+    }
+    # Re-fetch after cleanup
+    $existingCreds = az ad app federated-credential list --id $appObjectId | ConvertFrom-Json
+    if (-not $existingCreds) { $existingCreds = @() }
+}
+
 # Branch-based subjects
 $branchList = $Branches.Split(",", [System.StringSplitOptions]::RemoveEmptyEntries) | ForEach-Object { $_.Trim() } | Where-Object { $_ }
 foreach ($branch in $branchList) {
     $credName = "github-$($branch)-oidc"
     $subject = "repo:$GitHubOwner/$Repository:ref:refs/heads/$branch"
-    $exists = $existingCreds | Where-Object { $_.name -eq $credName }
+    $exists = $existingCreds | Where-Object { $_.name -eq $credName -and $_.subject -eq $subject }
     if ($exists) {
         Write-Host "  [$credName] Already exists (branch: $branch)" -ForegroundColor Green
         continue
@@ -121,7 +134,7 @@ $envList = $Environments.Split(",", [System.StringSplitOptions]::RemoveEmptyEntr
 foreach ($env in $envList) {
     $credName = "github-env-$($env)-oidc"
     $subject = "repo:$GitHubOwner/$Repository:environment:$env"
-    $exists = $existingCreds | Where-Object { $_.name -eq $credName }
+    $exists = $existingCreds | Where-Object { $_.name -eq $credName -and $_.subject -eq $subject }
     if ($exists) {
         Write-Host "  [$credName] Already exists (environment: $env)" -ForegroundColor Green
         continue
