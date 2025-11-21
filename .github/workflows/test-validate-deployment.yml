@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Target environment to test (dev|staging|prod)'
+        description: 'Target environment to test (dev|staging|prod|uat)'
         required: true
         default: 'dev'
         type: choice
@@ -12,6 +12,7 @@ on:
           - dev
           - staging
           - prod
+          - uat
       run-whatif:
         description: 'Test Bicep what-if analysis'
         required: false
