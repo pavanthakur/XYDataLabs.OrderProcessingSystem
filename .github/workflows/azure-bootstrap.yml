@@ -118,6 +118,16 @@ jobs:
           
           if ($creds.Count -lt 6) {
             Write-Warning "Expected 6 federated credentials, found $($creds.Count). OIDC setup may be incomplete."
+            Write-Warning "Re-run this workflow with 'Setup OIDC' enabled to create missing credentials."
+          } else {
+            Write-Host "`n✅ All 6 federated credentials verified!" -ForegroundColor Green
+          }
+          
+          # Check specifically for dev branch credential
+          $devBranchCred = $creds | Where-Object { $_.subject -eq "repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev" }
+          if (-not $devBranchCred) {
+            Write-Error "⚠️ Dev branch federated credential is missing! Bootstrap will fail."
+            Write-Host "Expected subject: repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev" -ForegroundColor Yellow
           }
       
       - name: Create Setup Summary
