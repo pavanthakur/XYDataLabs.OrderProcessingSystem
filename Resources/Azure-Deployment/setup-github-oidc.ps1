@@ -116,10 +116,12 @@ if ($invalidCreds.Count -gt 0) {
 }
 
 # Branch-based subjects
+Write-Host "  Creating branch-based credentials (GitHubOwner=$GitHubOwner, Repository=$Repository)..." -ForegroundColor Gray
 $branchList = $Branches.Split(",", [System.StringSplitOptions]::RemoveEmptyEntries) | ForEach-Object { $_.Trim() } | Where-Object { $_ }
 foreach ($branch in $branchList) {
     $credName = "github-$($branch)-oidc"
     $subject = "repo:$GitHubOwner/$Repository:ref:refs/heads/$branch"
+    Write-Host "    Creating [$credName] with subject: $subject" -ForegroundColor Gray
     $exists = $existingCreds | Where-Object { $_.name -eq $credName -and $_.subject -eq $subject }
     if ($exists) {
         Write-Host "  [$credName] Already exists (branch: $branch)" -ForegroundColor Green
@@ -139,10 +141,12 @@ foreach ($branch in $branchList) {
 }
 
 # Environment-based subjects
+Write-Host "  Creating environment-based credentials (GitHubOwner=$GitHubOwner, Repository=$Repository)..." -ForegroundColor Gray
 $envList = $Environments.Split(",", [System.StringSplitOptions]::RemoveEmptyEntries) | ForEach-Object { $_.Trim() } | Where-Object { $_ }
 foreach ($env in $envList) {
     $credName = "github-env-$($env)-oidc"
     $subject = "repo:$GitHubOwner/$Repository:environment:$env"
+    Write-Host "    Creating [$credName] with subject: $subject" -ForegroundColor Gray
     $exists = $existingCreds | Where-Object { $_.name -eq $credName -and $_.subject -eq $subject }
     if ($exists) {
         Write-Host "  [$credName] Already exists (environment: $env)" -ForegroundColor Green

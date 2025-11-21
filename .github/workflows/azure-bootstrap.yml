@@ -107,11 +107,15 @@ jobs:
       - name: Verify Federated Credentials
         run: |
           Write-Host "🔍 Verifying federated credentials..." -ForegroundColor Cyan
-          Write-Host "Waiting 3 seconds for Azure to propagate changes..." -ForegroundColor Gray
-          Start-Sleep -Seconds 3
+          Write-Host "Waiting 10 seconds for Azure AD to propagate changes..." -ForegroundColor Gray
+          Start-Sleep -Seconds 10
           
           $appObjectId = "${{ steps.oidc.outputs.appObjectId }}"
           Write-Host "Querying credentials for app: $appObjectId" -ForegroundColor Gray
+          
+          # Clear any Azure CLI cache
+          az cache purge 2>$null | Out-Null
+          
           $creds = az ad app federated-credential list --id $appObjectId | ConvertFrom-Json
           
           Write-Host "`nCreated federated credentials:" -ForegroundColor Green
@@ -127,11 +131,33 @@ jobs:
             Write-Host "`n✅ All 6 federated credentials verified!" -ForegroundColor Green
           }
           
-          # Check specifically for dev branch credential
-          $devBranchCred = $creds | Where-Object { $_.subject -eq "repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev" }
-          if (-not $devBranchCred) {
+          Write-Host "`n🔎 Checking for required credentials..." -ForegroundColor Cyan
+          
+          # Check dev branch credential
+          Write-Host "Searching for dev branch credential..." -ForegroundColor Gray
+          $expectedDevBranch = "repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev"
+          Write-Host "Expected: $expectedDevBranch" -ForegroundColor Gray
+          $devBranchCred = $creds | Where-Object { $_.subject -eq $expectedDevBranch }
+          if ($devBranchCred) {
+            Write-Host "✅ Dev branch credential found: $($devBranchCred.name)" -ForegroundColor Green
+          } else {
+            Write-Host "❌ Dev branch credential NOT found" -ForegroundColor Red
+            Write-Host "Actual subjects found:" -ForegroundColor Yellow
+            foreach ($cred in $creds) {
+              Write-Host "  - $($cred.subject)" -ForegroundColor Yellow
+            }
             Write-Error "⚠️ Dev branch federated credential is missing! Bootstrap will fail."
-            Write-Host "Expected subject: repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev" -ForegroundColor Yellow
+          }
+          
+          # Check dev environment credential
+          Write-Host "`nSearching for dev environment credential..." -ForegroundColor Gray
+          $expectedDevEnv = "repo:pavanthakur/XYDataLabs.OrderProcessingSystem:environment:dev"
+          Write-Host "Expected: $expectedDevEnv" -ForegroundColor Gray
+          $devEnvCred = $creds | Where-Object { $_.subject -eq $expectedDevEnv }
+          if ($devEnvCred) {
+            Write-Host "✅ Dev environment credential found: $($devEnvCred.name)" -ForegroundColor Green
+          } else {
+            Write-Host "❌ Dev environment credential NOT found" -ForegroundColor Red
           }
       
       - name: Create Setup Summary
