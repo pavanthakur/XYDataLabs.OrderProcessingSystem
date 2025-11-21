@@ -107,7 +107,11 @@ jobs:
       - name: Verify Federated Credentials
         run: |
           Write-Host "🔍 Verifying federated credentials..." -ForegroundColor Cyan
+          Write-Host "Waiting 3 seconds for Azure to propagate changes..." -ForegroundColor Gray
+          Start-Sleep -Seconds 3
+          
           $appObjectId = "${{ steps.oidc.outputs.appObjectId }}"
+          Write-Host "Querying credentials for app: $appObjectId" -ForegroundColor Gray
           $creds = az ad app federated-credential list --id $appObjectId | ConvertFrom-Json
           
           Write-Host "`nCreated federated credentials:" -ForegroundColor Green
