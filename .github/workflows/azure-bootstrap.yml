@@ -142,26 +142,13 @@ jobs:
         if: steps.check.outputs.secretsExist == 'false'
         run: az login --use-device-code
       
-      - name: Setup GitHub CLI
+      - name: Display Secret Values
         if: steps.check.outputs.secretsExist == 'false'
         run: |
-          Write-Host "🔧 Checking GitHub CLI..." -ForegroundColor Cyan
-          $gh = Get-Command gh -ErrorAction SilentlyContinue
-          if (-not $gh) {
-            Write-Host "Installing GitHub CLI..." -ForegroundColor Yellow
-            winget install --id GitHub.cli --silent --accept-package-agreements --accept-source-agreements
-            $env:PATH = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
-          }
-          Write-Host "✅ GitHub CLI ready" -ForegroundColor Green
-      
-      - name: Configure Secrets
-        if: steps.check.outputs.secretsExist == 'false'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          Write-Host "🔑 Configuring GitHub secrets..." -ForegroundColor Cyan
+          Write-Host "🔑 GitHub Secrets Configuration Required" -ForegroundColor Cyan
+          Write-Host "================================================" -ForegroundColor Cyan
           
-          # Use output from OIDC job if available, otherwise query Azure
+          # Get credentials from OIDC job or query Azure
           $clientId = "${{ needs.setup-oidc.outputs.client-id }}"
           if (-not $clientId) {
             $app = az ad app list --display-name "GitHub-Actions-OIDC" | ConvertFrom-Json
@@ -180,17 +167,30 @@ jobs:
           $tenantId = $sub.tenantId
           $subscriptionId = $sub.id
           
-          # Set secrets using GitHub CLI
-          echo $clientId | gh secret set AZUREAPPSERVICE_CLIENTID --repo pavanthakur/XYDataLabs.OrderProcessingSystem
-          if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set CLIENTID secret"; exit 1 }
+          Write-Host ""
+          Write-Host "⚠️  GITHUB_TOKEN cannot manage secrets - Manual configuration required" -ForegroundColor Yellow
+          Write-Host ""
+          Write-Host "Please add these secrets manually:" -ForegroundColor White
+          Write-Host "  URL: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/settings/secrets/actions/new" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Secret 1: AZUREAPPSERVICE_CLIENTID" -ForegroundColor Green
+          Write-Host "  Value: $clientId" -ForegroundColor White
+          Write-Host ""
+          Write-Host "Secret 2: AZUREAPPSERVICE_TENANTID" -ForegroundColor Green
+          Write-Host "  Value: $tenantId" -ForegroundColor White
+          Write-Host ""
+          Write-Host "Secret 3: AZUREAPPSERVICE_SUBSCRIPTIONID" -ForegroundColor Green
+          Write-Host "  Value: $subscriptionId" -ForegroundColor White
+          Write-Host ""
+          Write-Host "================================================" -ForegroundColor Cyan
+          Write-Host "After adding secrets, re-run this workflow with:" -ForegroundColor Yellow
+          Write-Host "  - Setup OIDC: false (already done)" -ForegroundColor Gray
+          Write-Host "  - Configure Secrets: false (manual)" -ForegroundColor Gray
+          Write-Host "  - Bootstrap Infrastructure: true" -ForegroundColor Green
+          Write-Host ""
           
-          echo $tenantId | gh secret set AZUREAPPSERVICE_TENANTID --repo pavanthakur/XYDataLabs.OrderProcessingSystem
-          if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set TENANTID secret"; exit 1 }
-          
-          echo $subscriptionId | gh secret set AZUREAPPSERVICE_SUBSCRIPTIONID --repo pavanthakur/XYDataLabs.OrderProcessingSystem
-          if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set SUBSCRIPTIONID secret"; exit 1 }
-          
-          Write-Host "✅ Secrets configured successfully" -ForegroundColor Green
+          # Don't fail - just provide instructions
+          Write-Host "✅ Secret values prepared for manual entry" -ForegroundColor Green
 
   bootstrap-dev:
     name: Bootstrap Dev Environment
