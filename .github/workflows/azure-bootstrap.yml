@@ -142,46 +142,19 @@ jobs:
         if: steps.check.outputs.secretsExist == 'false'
         run: az login --use-device-code
       
-      - name: Display Secret Values
+      - name: Set Dev Environment Secrets
         if: steps.check.outputs.secretsExist == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+          CLIENT_ID: ${{ needs.setup-oidc.outputs.clientId }}
+          TENANT_ID: ${{ needs.setup-oidc.outputs.tenantId }}
+          SUBSCRIPTION_ID: ${{ needs.setup-oidc.outputs.subscriptionId }}
         run: |
-          Write-Host "🔑 GitHub Secrets Configuration Required" -ForegroundColor Cyan
-          Write-Host "================================================" -ForegroundColor Cyan
-          
-          # Get credentials from OIDC job outputs
-          $clientId = "${{ needs.setup-oidc.outputs.clientId }}"
-          $tenantId = "${{ needs.setup-oidc.outputs.tenantId }}"
-          $subscriptionId = "${{ needs.setup-oidc.outputs.subscriptionId }}"
-          
-          if (-not $clientId -or -not $tenantId -or -not $subscriptionId) {
-            Write-Error "Failed to get credentials from OIDC setup job"
-            exit 1
-          }
-          
-          Write-Host ""
-          Write-Host "⚠️  GITHUB_TOKEN cannot manage secrets - Manual configuration required" -ForegroundColor Yellow
-          Write-Host ""
-          Write-Host "Please add these secrets manually:" -ForegroundColor White
-          Write-Host "  URL: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/settings/secrets/actions/new" -ForegroundColor Cyan
-          Write-Host ""
-          Write-Host "Secret 1: AZUREAPPSERVICE_CLIENTID" -ForegroundColor Green
-          Write-Host "  Value: $clientId" -ForegroundColor White
-          Write-Host ""
-          Write-Host "Secret 2: AZUREAPPSERVICE_TENANTID" -ForegroundColor Green
-          Write-Host "  Value: $tenantId" -ForegroundColor White
-          Write-Host ""
-          Write-Host "Secret 3: AZUREAPPSERVICE_SUBSCRIPTIONID" -ForegroundColor Green
-          Write-Host "  Value: $subscriptionId" -ForegroundColor White
-          Write-Host ""
-          Write-Host "================================================" -ForegroundColor Cyan
-          Write-Host "After adding secrets, re-run this workflow with:" -ForegroundColor Yellow
-          Write-Host "  - Setup OIDC: false (already done)" -ForegroundColor Gray
-          Write-Host "  - Configure Secrets: false (manual)" -ForegroundColor Gray
-          Write-Host "  - Bootstrap Infrastructure: true" -ForegroundColor Green
-          Write-Host ""
-          
-          # Don't fail - just provide instructions
-          Write-Host "✅ Secret values prepared for manual entry" -ForegroundColor Green
+          Write-Host "🔑 Setting GitHub environment secrets for 'dev'..." -ForegroundColor Cyan
+          gh secret set AZUREAPPSERVICE_CLIENTID --env dev --repo ${{ github.repository }} --body "$env:CLIENT_ID"
+          gh secret set AZUREAPPSERVICE_TENANTID --env dev --repo ${{ github.repository }} --body "$env:TENANT_ID"
+          gh secret set AZUREAPPSERVICE_SUBSCRIPTIONID --env dev --repo ${{ github.repository }} --body "$env:SUBSCRIPTION_ID"
+          Write-Host "✅ Environment secrets set for 'dev'!" -ForegroundColor Green
 
   bootstrap-dev:
     name: Bootstrap Dev Environment
@@ -189,12 +162,18 @@ jobs:
     needs: [setup-oidc]
     runs-on: windows-latest
     env:
-      CLIENT_ID: ${{ needs.setup-oidc.outputs.clientId }}
-      TENANT_ID: ${{ needs.setup-oidc.outputs.tenantId }}
-      SUBSCRIPTION_ID: ${{ needs.setup-oidc.outputs.subscriptionId }}
+      CLIENT_ID: ${{ needs.setup-oidc.outputs.clientId || secrets.AZUREAPPSERVICE_CLIENTID }}
+      TENANT_ID: ${{ needs.setup-oidc.outputs.tenantId || secrets.AZUREAPPSERVICE_TENANTID }}
+      SUBSCRIPTION_ID: ${{ needs.setup-oidc.outputs.subscriptionId || secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
     steps:
       - uses: actions/checkout@v4
-      - name: Azure Login (OIDC)
+      - name: Validate Azure Credentials
+        run: |
+          if (-not "$env:CLIENT_ID" -or -not "$env:TENANT_ID" -or -not "$env:SUBSCRIPTION_ID") {
+            Write-Error "Azure credentials not found. Ensure OIDC setup is run or secrets are configured."
+            exit 1
+          }
+      - name: Azure Login (OIDC or Secrets)
         uses: azure/login@v2
         with:
           client-id: ${{ env.CLIENT_ID }}
@@ -222,12 +201,18 @@ jobs:
     needs: [setup-oidc]
     runs-on: windows-latest
     env:
-      CLIENT_ID: ${{ needs.setup-oidc.outputs.clientId }}
-      TENANT_ID: ${{ needs.setup-oidc.outputs.tenantId }}
-      SUBSCRIPTION_ID: ${{ needs.setup-oidc.outputs.subscriptionId }}
+      CLIENT_ID: ${{ needs.setup-oidc.outputs.clientId || secrets.AZUREAPPSERVICE_CLIENTID }}
+      TENANT_ID: ${{ needs.setup-oidc.outputs.tenantId || secrets.AZUREAPPSERVICE_TENANTID }}
+      SUBSCRIPTION_ID: ${{ needs.setup-oidc.outputs.subscriptionId || secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
     steps:
       - uses: actions/checkout@v4
-      - name: Azure Login (OIDC)
+      - name: Validate Azure Credentials
+        run: |
+          if (-not "$env:CLIENT_ID" -or -not "$env:TENANT_ID" -or -not "$env:SUBSCRIPTION_ID") {
+            Write-Error "Azure credentials not found. Ensure OIDC setup is run or secrets are configured."
+            exit 1
+          }
+      - name: Azure Login (OIDC or Secrets)
         uses: azure/login@v2
         with:
           client-id: ${{ env.CLIENT_ID }}
@@ -256,12 +241,18 @@ jobs:
     runs-on: windows-latest
     environment: prod
     env:
-      CLIENT_ID: ${{ needs.setup-oidc.outputs.clientId }}
-      TENANT_ID: ${{ needs.setup-oidc.outputs.tenantId }}
-      SUBSCRIPTION_ID: ${{ needs.setup-oidc.outputs.subscriptionId }}
+      CLIENT_ID: ${{ needs.setup-oidc.outputs.clientId || secrets.AZUREAPPSERVICE_CLIENTID }}
+      TENANT_ID: ${{ needs.setup-oidc.outputs.tenantId || secrets.AZUREAPPSERVICE_TENANTID }}
+      SUBSCRIPTION_ID: ${{ needs.setup-oidc.outputs.subscriptionId || secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
     steps:
       - uses: actions/checkout@v4
-      - name: Azure Login (OIDC)
+      - name: Validate Azure Credentials
+        run: |
+          if (-not "$env:CLIENT_ID" -or -not "$env:TENANT_ID" -or -not "$env:SUBSCRIPTION_ID") {
+            Write-Error "Azure credentials not found. Ensure OIDC setup is run or secrets are configured."
+            exit 1
+          }
+      - name: Azure Login (OIDC or Secrets)
         uses: azure/login@v2
         with:
           client-id: ${{ env.CLIENT_ID }}
