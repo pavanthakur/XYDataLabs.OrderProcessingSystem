@@ -39,8 +39,20 @@ permissions:
   secrets: write  # Required for setting environment-level secrets via GitHub CLI
 
 jobs:
+  check-trigger:
+    name: Check Workflow Trigger
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: windows-latest
+    steps:
+      - name: Workflow trigger check
+        run: |
+          Write-Host "ℹ️  This workflow is designed for manual dispatch only" -ForegroundColor Cyan
+          Write-Host "   Skipping execution for event: ${{ github.event_name }}" -ForegroundColor Yellow
+          Write-Host "   To run this workflow, use: Actions > Azure Bootstrap Setup > Run workflow" -ForegroundColor Gray
+
   validate-inputs:
     name: Validate Workflow Inputs
+    if: github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     steps:
       - name: Log Workflow Start
@@ -696,7 +708,7 @@ jobs:
 
   summary:
     name: Bootstrap Summary
-    if: always()
+    if: always() && github.event_name == 'workflow_dispatch'
     needs: [setup-oidc, configure-secrets, bootstrap-dev, bootstrap-staging, bootstrap-prod, enable-validation]
     runs-on: windows-latest
     steps:
