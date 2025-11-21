@@ -41,6 +41,7 @@ permissions:
 jobs:
   validate-inputs:
     name: Validate Workflow Inputs
+    if: github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     steps:
       - name: Log Workflow Start
@@ -696,7 +697,7 @@ jobs:
 
   summary:
     name: Bootstrap Summary
-    if: always()
+    if: always() && github.event_name == 'workflow_dispatch'
     needs: [setup-oidc, configure-secrets, bootstrap-dev, bootstrap-staging, bootstrap-prod, enable-validation]
     runs-on: windows-latest
     steps:
