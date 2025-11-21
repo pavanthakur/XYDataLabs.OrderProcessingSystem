@@ -1,0 +1,359 @@
+name: Azure Bootstrap Setup
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment to bootstrap'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+          - all
+      setupOidc:
+        description: 'Setup OIDC (first-time only)'
+        required: true
+        type: boolean
+        default: false
+      configureSecrets:
+        description: 'Configure GitHub secrets (requires GitHub token)'
+        required: true
+        type: boolean
+        default: false
+      bootstrapInfra:
+        description: 'Bootstrap infrastructure (App Services, etc.)'
+        required: true
+        type: boolean
+        default: true
+      enableValidation:
+        description: 'Enable pre-deployment validation after bootstrap'
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  setup-oidc:
+    name: Setup Azure OIDC
+    if: inputs.setupOidc
+    runs-on: windows-latest
+    outputs:
+      client-id: ${{ steps.oidc.outputs.clientId }}
+      tenant-id: ${{ steps.oidc.outputs.tenantId }}
+      subscription-id: ${{ steps.oidc.outputs.subscriptionId }}
+      app-object-id: ${{ steps.oidc.outputs.appObjectId }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Azure Login (Device Code)
+        run: |
+          Write-Host "🔐 Azure Login Required" -ForegroundColor Cyan
+          Write-Host "This is a one-time setup. Please authenticate when prompted." -ForegroundColor Yellow
+          az login --use-device-code
+      
+      - name: Setup OIDC App Registration
+        id: oidc
+        run: |
+          Write-Host "🚀 Setting up GitHub Actions OIDC..." -ForegroundColor Cyan
+          
+          # Run setup script
+          $result = & ./Resources/Azure-Deployment/setup-github-oidc.ps1 `
+            -Branches "dev,staging,main" `
+            -Environments "dev,staging,prod" `
+            -GitHubOwner "pavanthakur" `
+            -Repository "TestAppXY_OrderProcessingSystem" `
+            2>&1 | Tee-Object -Variable output
+          
+          Write-Host $output
+          
+          # Extract credentials from Azure
+          $sub = az account show | ConvertFrom-Json
+          $app = az ad app list --display-name "GitHub-Actions-OIDC" | ConvertFrom-Json
+          
+          if ($app.Count -eq 0) {
+            Write-Error "Failed to create OIDC app"
+            exit 1
+          }
+          
+          $clientId = $app[0].appId
+          $appObjectId = $app[0].id
+          $tenantId = $sub.tenantId
+          $subscriptionId = $sub.id
+          
+          # Output for next jobs
+          "clientId=$clientId" >> $env:GITHUB_OUTPUT
+          "tenantId=$tenantId" >> $env:GITHUB_OUTPUT
+          "subscriptionId=$subscriptionId" >> $env:GITHUB_OUTPUT
+          "appObjectId=$appObjectId" >> $env:GITHUB_OUTPUT
+          
+          Write-Host "✅ OIDC Setup Complete" -ForegroundColor Green
+          Write-Host "   Client ID: $clientId" -ForegroundColor Gray
+          Write-Host "   Tenant ID: $tenantId" -ForegroundColor Gray
+          Write-Host "   App Object ID: $appObjectId" -ForegroundColor Gray
+      
+      - name: Create Setup Summary
+        run: |
+          echo "## 🔐 Azure OIDC Setup Complete" >> $env:GITHUB_STEP_SUMMARY
+          echo "" >> $env:GITHUB_STEP_SUMMARY
+          echo "### 📋 Next Steps" >> $env:GITHUB_STEP_SUMMARY
+          echo "1. Add these secrets to GitHub (if not using automated secret configuration):" >> $env:GITHUB_STEP_SUMMARY
+          echo "   - AZUREAPPSERVICE_CLIENTID: \`${{ steps.oidc.outputs.clientId }}\`" >> $env:GITHUB_STEP_SUMMARY
+          echo "   - AZUREAPPSERVICE_TENANTID: \`${{ steps.oidc.outputs.tenantId }}\`" >> $env:GITHUB_STEP_SUMMARY
+          echo "   - AZUREAPPSERVICE_SUBSCRIPTIONID: \`${{ steps.oidc.outputs.subscriptionId }}\`" >> $env:GITHUB_STEP_SUMMARY
+          echo "" >> $env:GITHUB_STEP_SUMMARY
+          echo "2. Re-run this workflow with 'Configure GitHub secrets' enabled" >> $env:GITHUB_STEP_SUMMARY
+          echo "3. Then run with 'Bootstrap infrastructure' enabled" >> $env:GITHUB_STEP_SUMMARY
+
+  configure-secrets:
+    name: Configure GitHub Secrets
+    if: inputs.configureSecrets
+    needs: [setup-oidc]
+    runs-on: windows-latest
+    # Skip if OIDC setup didn't run (secrets should already exist)
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Check Required Secrets
+        id: check
+        run: |
+          $hasClientId = "${{ secrets.AZUREAPPSERVICE_CLIENTID }}" -ne ""
+          $hasTenantId = "${{ secrets.AZUREAPPSERVICE_TENANTID }}" -ne ""
+          $hasSubscriptionId = "${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}" -ne ""
+          
+          if ($hasClientId -and $hasTenantId -and $hasSubscriptionId) {
+            Write-Host "✅ All secrets already configured" -ForegroundColor Green
+            "secretsExist=true" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Host "⚠️ Secrets missing, will attempt configuration" -ForegroundColor Yellow
+            "secretsExist=false" >> $env:GITHUB_OUTPUT
+          }
+      
+      - name: Azure Login
+        if: steps.check.outputs.secretsExist == 'false'
+        run: az login --use-device-code
+      
+      - name: Setup GitHub CLI
+        if: steps.check.outputs.secretsExist == 'false'
+        run: |
+          Write-Host "🔧 Checking GitHub CLI..." -ForegroundColor Cyan
+          $gh = Get-Command gh -ErrorAction SilentlyContinue
+          if (-not $gh) {
+            Write-Host "Installing GitHub CLI..." -ForegroundColor Yellow
+            winget install --id GitHub.cli --silent --accept-package-agreements --accept-source-agreements
+            $env:PATH = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+          }
+          Write-Host "✅ GitHub CLI ready" -ForegroundColor Green
+      
+      - name: Configure Secrets
+        if: steps.check.outputs.secretsExist == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          Write-Host "🔑 Configuring GitHub secrets..." -ForegroundColor Cyan
+          
+          # Use output from OIDC job if available, otherwise query Azure
+          $clientId = "${{ needs.setup-oidc.outputs.client-id }}"
+          if (-not $clientId) {
+            $app = az ad app list --display-name "GitHub-Actions-OIDC" | ConvertFrom-Json
+            $clientId = $app[0].appId
+          }
+          
+          $sub = az account show | ConvertFrom-Json
+          $tenantId = $sub.tenantId
+          $subscriptionId = $sub.id
+          
+          # Set secrets using GitHub CLI
+          echo $clientId | gh secret set AZUREAPPSERVICE_CLIENTID --repo pavanthakur/TestAppXY_OrderProcessingSystem
+          echo $tenantId | gh secret set AZUREAPPSERVICE_TENANTID --repo pavanthakur/TestAppXY_OrderProcessingSystem
+          echo $subscriptionId | gh secret set AZUREAPPSERVICE_SUBSCRIPTIONID --repo pavanthakur/TestAppXY_OrderProcessingSystem
+          
+          Write-Host "✅ Secrets configured successfully" -ForegroundColor Green
+
+  bootstrap-dev:
+    name: Bootstrap Dev Environment
+    if: inputs.bootstrapInfra && (inputs.environment == 'dev' || inputs.environment == 'all')
+    needs: [configure-secrets]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+      
+      - name: Bootstrap Dev Infrastructure
+        run: |
+          Write-Host "🚀 Bootstrapping Dev Environment..." -ForegroundColor Cyan
+          ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment dev
+      
+      - name: Upload Bootstrap Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bootstrap-log-dev
+          path: Resources/Azure-Deployment/logs/bootstrap-*.log
+          retention-days: 30
+
+  bootstrap-staging:
+    name: Bootstrap Staging Environment
+    if: inputs.bootstrapInfra && (inputs.environment == 'staging' || inputs.environment == 'all')
+    needs: [configure-secrets]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+      
+      - name: Bootstrap Staging Infrastructure
+        run: |
+          Write-Host "🚀 Bootstrapping Staging Environment..." -ForegroundColor Cyan
+          ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment stg
+      
+      - name: Upload Bootstrap Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bootstrap-log-staging
+          path: Resources/Azure-Deployment/logs/bootstrap-*.log
+          retention-days: 30
+
+  bootstrap-prod:
+    name: Bootstrap Production Environment
+    if: inputs.bootstrapInfra && (inputs.environment == 'prod' || inputs.environment == 'all')
+    needs: [configure-secrets]
+    runs-on: windows-latest
+    environment: prod
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+      
+      - name: Bootstrap Production Infrastructure
+        run: |
+          Write-Host "🚀 Bootstrapping Production Environment..." -ForegroundColor Cyan
+          ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment prod
+      
+      - name: Upload Bootstrap Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bootstrap-log-prod
+          path: Resources/Azure-Deployment/logs/bootstrap-*.log
+          retention-days: 30
+
+  enable-validation:
+    name: Enable Pre-Deployment Validation
+    if: inputs.enableValidation && inputs.bootstrapInfra
+    needs: [bootstrap-dev, bootstrap-staging, bootstrap-prod]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Enable Validation in Workflow
+        run: |
+          Write-Host "🔧 Enabling pre-deployment validation..." -ForegroundColor Cyan
+          
+          $workflowPath = ".github/workflows/infra-deploy.yml"
+          $content = Get-Content $workflowPath -Raw
+          
+          # Re-enable pre-validate job
+          $content = $content -replace 'if: false  # TODO: Enable after bootstrap - requires Azure OIDC setup', 'if: (github.event_name == ''push'') || (github.event_name == ''workflow_dispatch'' && !inputs.dryRun)'
+          
+          # Re-enable job dependency
+          $content = $content -replace '# needs: pre-validate  # TODO: Uncomment after bootstrap', 'needs: pre-validate'
+          
+          Set-Content $workflowPath -Value $content -NoNewline
+          
+          Write-Host "✅ Validation enabled" -ForegroundColor Green
+      
+      - name: Commit Changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/infra-deploy.yml
+          git diff --staged --quiet || git commit -m "chore(ci): enable pre-deployment validation after bootstrap"
+          git push
+      
+      - name: Create Completion Summary
+        run: |
+          echo "## ✅ Azure Bootstrap Complete!" >> $env:GITHUB_STEP_SUMMARY
+          echo "" >> $env:GITHUB_STEP_SUMMARY
+          echo "### 🎉 What's Ready" >> $env:GITHUB_STEP_SUMMARY
+          echo "- ✅ Azure OIDC configured" >> $env:GITHUB_STEP_SUMMARY
+          echo "- ✅ GitHub secrets configured" >> $env:GITHUB_STEP_SUMMARY
+          echo "- ✅ Infrastructure bootstrapped (${{ inputs.environment }})" >> $env:GITHUB_STEP_SUMMARY
+          echo "- ✅ Pre-deployment validation enabled" >> $env:GITHUB_STEP_SUMMARY
+          echo "" >> $env:GITHUB_STEP_SUMMARY
+          echo "### 🚀 Next Steps" >> $env:GITHUB_STEP_SUMMARY
+          echo "1. Push code changes to trigger deployment workflow" >> $env:GITHUB_STEP_SUMMARY
+          echo "2. Monitor deployments at: [Actions](https://github.com/pavanthakur/TestAppXY_OrderProcessingSystem/actions)" >> $env:GITHUB_STEP_SUMMARY
+          echo "3. View resources in [Azure Portal](https://portal.azure.com)" >> $env:GITHUB_STEP_SUMMARY
+
+  summary:
+    name: Bootstrap Summary
+    if: always()
+    needs: [setup-oidc, configure-secrets, bootstrap-dev, bootstrap-staging, bootstrap-prod, enable-validation]
+    runs-on: windows-latest
+    steps:
+      - name: Generate Summary
+        run: |
+          echo "## 📊 Bootstrap Workflow Summary" >> $env:GITHUB_STEP_SUMMARY
+          echo "" >> $env:GITHUB_STEP_SUMMARY
+          
+          $setupOidc = "${{ needs.setup-oidc.result }}"
+          $configSecrets = "${{ needs.configure-secrets.result }}"
+          $bootstrapDev = "${{ needs.bootstrap-dev.result }}"
+          $bootstrapStaging = "${{ needs.bootstrap-staging.result }}"
+          $bootstrapProd = "${{ needs.bootstrap-prod.result }}"
+          $enableVal = "${{ needs.enable-validation.result }}"
+          
+          echo "| Step | Status |" >> $env:GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $env:GITHUB_STEP_SUMMARY
+          
+          if ($setupOidc -ne "") {
+            $icon = if ($setupOidc -eq "success") { "✅" } else { "❌" }
+            echo "| Setup OIDC | $icon $setupOidc |" >> $env:GITHUB_STEP_SUMMARY
+          }
+          
+          if ($configSecrets -ne "") {
+            $icon = if ($configSecrets -eq "success") { "✅" } else { "❌" }
+            echo "| Configure Secrets | $icon $configSecrets |" >> $env:GITHUB_STEP_SUMMARY
+          }
+          
+          if ($bootstrapDev -ne "") {
+            $icon = if ($bootstrapDev -eq "success") { "✅" } elseif ($bootstrapDev -eq "skipped") { "⏭️" } else { "❌" }
+            echo "| Bootstrap Dev | $icon $bootstrapDev |" >> $env:GITHUB_STEP_SUMMARY
+          }
+          
+          if ($bootstrapStaging -ne "") {
+            $icon = if ($bootstrapStaging -eq "success") { "✅" } elseif ($bootstrapStaging -eq "skipped") { "⏭️" } else { "❌" }
+            echo "| Bootstrap Staging | $icon $bootstrapStaging |" >> $env:GITHUB_STEP_SUMMARY
+          }
+          
+          if ($bootstrapProd -ne "") {
+            $icon = if ($bootstrapProd -eq "success") { "✅" } elseif ($bootstrapProd -eq "skipped") { "⏭️" } else { "❌" }
+            echo "| Bootstrap Prod | $icon $bootstrapProd |" >> $env:GITHUB_STEP_SUMMARY
+          }
+          
+          if ($enableVal -ne "") {
+            $icon = if ($enableVal -eq "success") { "✅" } elseif ($enableVal -eq "skipped") { "⏭️" } else { "❌" }
+            echo "| Enable Validation | $icon $enableVal |" >> $env:GITHUB_STEP_SUMMARY
+          }
