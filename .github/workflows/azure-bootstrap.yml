@@ -188,6 +188,7 @@ jobs:
             exit 1
           }
       - name: Azure Login (OIDC or Secrets)
+        timeout-minutes: 3
         uses: azure/login@v2
         with:
           client-id: ${{ env.CLIENT_ID }}
@@ -227,6 +228,7 @@ jobs:
             exit 1
           }
       - name: Azure Login (OIDC or Secrets)
+        timeout-minutes: 3
         uses: azure/login@v2
         with:
           client-id: ${{ env.CLIENT_ID }}
@@ -267,6 +269,7 @@ jobs:
             exit 1
           }
       - name: Azure Login (OIDC or Secrets)
+        timeout-minutes: 3
         uses: azure/login@v2
         with:
           client-id: ${{ env.CLIENT_ID }}
