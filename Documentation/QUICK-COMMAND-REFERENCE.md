@@ -201,8 +201,7 @@ gh workflow run "Azure Bootstrap Setup" `
 	-f setupOidc=true `
 	-f configureSecrets=true `
 	-f bootstrapInfra=true `
-	-f enableValidation=true `
-	-f replicatePatToEnvironments=false
+	-f enableValidation=true
 
 # Run secrets configuration only (use when OIDC is already set):
 gh workflow run "Azure Bootstrap Setup" `
