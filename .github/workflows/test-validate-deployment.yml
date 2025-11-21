@@ -1,0 +1,255 @@
+name: Test Pre-Deployment Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment to test (dev|staging|prod)'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      run-whatif:
+        description: 'Test Bicep what-if analysis'
+        required: false
+        type: boolean
+        default: true
+      verify-oidc:
+        description: 'Test OIDC credentials verification'
+        required: false
+        type: boolean
+        default: true
+      check-config:
+        description: 'Test SharedSettings consistency validation'
+        required: false
+        type: boolean
+        default: true
+      test-all-environments:
+        description: 'Test validation across all environments'
+        required: false
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - '.github/workflows/validate-deployment.yml'
+      - 'Resources/Azure-Deployment/validate-*.ps1'
+      - 'Resources/Azure-Deployment/verify-*.ps1'
+      - 'Resources/Configuration/sharedsettings.*.json'
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  test-validation:
+    name: Test Validation Workflow
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'dev' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Test Summary Setup
+        id: setup
+        run: |
+          echo "## 🧪 Pre-Deployment Validation Test" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ inputs.environment || 'dev' }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Timestamp:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Test Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "- Bicep What-If: ${{ inputs.run-whatif || 'true' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- OIDC Verification: ${{ inputs.verify-oidc || 'true' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Config Validation: ${{ inputs.check-config || 'true' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Test All Environments: ${{ inputs.test-all-environments || 'false' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Verify Azure Authentication
+        shell: pwsh
+        run: |
+          Write-Host "Verifying Azure authentication..." -ForegroundColor Cyan
+          $account = az account show | ConvertFrom-Json
+          Write-Host "✅ Authenticated to subscription: $($account.name)" -ForegroundColor Green
+          Write-Host "   Subscription ID: $($account.id)" -ForegroundColor White
+          Write-Host "   Tenant ID: $($account.tenantId)" -ForegroundColor White
+
+      - name: Test Bicep What-If Analysis
+        if: inputs.run-whatif == true || inputs.run-whatif == null
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          Write-Host "=== Testing Bicep What-If Analysis ===" -ForegroundColor Cyan
+
+          $env = "${{ inputs.environment || 'dev' }}"
+          $testAllEnvs = "${{ inputs.test-all-environments || 'false' }}" -eq 'true'
+
+          if ($testAllEnvs) {
+            Write-Host "Testing all environments (dev, staging, prod)" -ForegroundColor Yellow
+            ./Resources/Azure-Deployment/validate-parameters-whatif.ps1 `
+              -All `
+              -ResourceGroupPrefix 'xyorderprocessing'
+          } else {
+            Write-Host "Testing environment: $env" -ForegroundColor Yellow
+            ./Resources/Azure-Deployment/validate-parameters-whatif.ps1 `
+              -Environment $env `
+              -ResourceGroupPrefix 'xyorderprocessing'
+          }
+
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "✅ What-If validation passed" -ForegroundColor Green
+            echo "### ✅ What-If Analysis: PASSED" >> $env:GITHUB_STEP_SUMMARY
+          } elseif ($LASTEXITCODE -eq 2) {
+            Write-Host "⚠️ What-If detected high-risk changes" -ForegroundColor Yellow
+            echo "### ⚠️ What-If Analysis: RISKS DETECTED" >> $env:GITHUB_STEP_SUMMARY
+          } else {
+            Write-Host "❌ What-If validation failed" -ForegroundColor Red
+            echo "### ❌ What-If Analysis: FAILED" >> $env:GITHUB_STEP_SUMMARY
+          }
+
+      - name: Test OIDC Credentials Verification
+        if: inputs.verify-oidc == true || inputs.verify-oidc == null
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          Write-Host "=== Testing OIDC Credentials Verification ===" -ForegroundColor Cyan
+
+          $appId = az ad app list --display-name "GitHub-Actions-OIDC" --query "[0].id" -o tsv
+
+          if ($appId) {
+            Write-Host "Found GitHub-Actions-OIDC app: $appId" -ForegroundColor Green
+            ./Resources/Azure-Deployment/verify-oidc-credentials.ps1 -AppObjectId $appId
+
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "✅ OIDC verification passed" -ForegroundColor Green
+              echo "### ✅ OIDC Verification: PASSED" >> $env:GITHUB_STEP_SUMMARY
+            } else {
+              Write-Host "⚠️ OIDC verification found issues" -ForegroundColor Yellow
+              echo "### ⚠️ OIDC Verification: ISSUES FOUND" >> $env:GITHUB_STEP_SUMMARY
+            }
+          } else {
+            Write-Host "⚠️ GitHub-Actions-OIDC app not found; skipping test" -ForegroundColor Yellow
+            echo "### ⚠️ OIDC Verification: APP NOT FOUND" >> $env:GITHUB_STEP_SUMMARY
+          }
+
+      - name: Test SharedSettings Consistency
+        if: inputs.check-config == true || inputs.check-config == null
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          Write-Host "=== Testing SharedSettings Consistency ===" -ForegroundColor Cyan
+
+          ./Resources/Azure-Deployment/validate-sharedsettings-diff.ps1
+
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "✅ Config validation passed" -ForegroundColor Green
+            echo "### ✅ Config Validation: PASSED" >> $env:GITHUB_STEP_SUMMARY
+          } else {
+            Write-Host "⚠️ Config validation found drift" -ForegroundColor Yellow
+            echo "### ⚠️ Config Validation: DRIFT DETECTED" >> $env:GITHUB_STEP_SUMMARY
+          }
+
+      - name: Verify Validation Scripts Exist
+        shell: pwsh
+        run: |
+          Write-Host "=== Verifying Validation Scripts ===" -ForegroundColor Cyan
+
+          $scripts = @(
+            'Resources/Azure-Deployment/validate-parameters-whatif.ps1',
+            'Resources/Azure-Deployment/verify-oidc-credentials.ps1',
+            'Resources/Azure-Deployment/validate-sharedsettings-diff.ps1'
+          )
+
+          $allExist = $true
+          foreach ($script in $scripts) {
+            if (Test-Path $script) {
+              Write-Host "✅ $script" -ForegroundColor Green
+            } else {
+              Write-Host "❌ $script NOT FOUND" -ForegroundColor Red
+              $allExist = $false
+            }
+          }
+
+          if ($allExist) {
+            echo "### ✅ All validation scripts present" >> $env:GITHUB_STEP_SUMMARY
+          } else {
+            echo "### ❌ Some validation scripts missing" >> $env:GITHUB_STEP_SUMMARY
+            exit 1
+          }
+
+      - name: Test Results Summary
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "`n========================================" -ForegroundColor Cyan
+          Write-Host "Pre-Deployment Validation Test Complete" -ForegroundColor Cyan
+          Write-Host "========================================" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Review the test summary above for detailed results." -ForegroundColor White
+          Write-Host ""
+          Write-Host "Next Steps:" -ForegroundColor Yellow
+          Write-Host "  1. Review any warnings or failures" -ForegroundColor White
+          Write-Host "  2. Fix identified issues in configuration or scripts" -ForegroundColor White
+          Write-Host "  3. Re-run this test workflow to verify fixes" -ForegroundColor White
+          Write-Host "  4. Once all tests pass, proceed with actual deployment" -ForegroundColor White
+          Write-Host ""
+
+      - name: Upload Validation Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-test-logs-${{ inputs.environment || 'dev' }}-${{ github.run_number }}
+          path: |
+            **/*.log
+          retention-days: 7
+          if-no-files-found: ignore
+
+  test-reusable-workflow:
+    name: Test Reusable Validation Workflow
+    if: inputs.test-all-environments != true
+    uses: ./.github/workflows/validate-deployment.yml
+    with:
+      environment: ${{ inputs.environment || 'dev' }}
+      run-whatif: ${{ inputs.run-whatif || true }}
+      verify-oidc: ${{ inputs.verify-oidc || true }}
+      check-config: ${{ inputs.check-config || true }}
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  summary:
+    name: Test Summary
+    needs: [test-validation, test-reusable-workflow]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate Summary
+        run: |
+          echo "## 🎯 Test Validation Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Results:" >> $GITHUB_STEP_SUMMARY
+          echo "- **Direct Test Job:** ${{ needs.test-validation.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Reusable Workflow Test:** ${{ needs.test-reusable-workflow.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [[ "${{ needs.test-validation.result }}" == "success" && "${{ needs.test-reusable-workflow.result }}" == "success" ]]; then
+            echo "### ✅ All validation tests passed!" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "The pre-deployment validation workflow is working correctly." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ⚠️ Some tests encountered issues" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Please review the job logs for details." >> $GITHUB_STEP_SUMMARY
+          fi
