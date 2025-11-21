@@ -45,29 +45,67 @@ jobs:
       - name: Validate Configuration
         run: |
           Write-Host "🔍 Validating workflow inputs..." -ForegroundColor Cyan
+          Write-Host "=" * 70 -ForegroundColor Gray
           
           $env = "${{ inputs.environment }}"
           $setupOidc = "${{ inputs.setupOidc }}"
           $configSecrets = "${{ inputs.configureSecrets }}"
           $bootstrap = "${{ inputs.bootstrapInfra }}"
+          $enableValidation = "${{ inputs.enableValidation }}"
           
-          Write-Host "Selected environment: $env" -ForegroundColor Yellow
-          Write-Host "Setup OIDC: $setupOidc" -ForegroundColor Yellow
-          Write-Host "Configure secrets: $configSecrets" -ForegroundColor Yellow
-          Write-Host "Bootstrap infra: $bootstrap" -ForegroundColor Yellow
+          Write-Host "`n📋 Workflow Inputs:" -ForegroundColor Cyan
+          Write-Host "  Environment: $env" -ForegroundColor Yellow
+          Write-Host "  Setup OIDC: $setupOidc" -ForegroundColor Yellow
+          Write-Host "  Configure secrets: $configSecrets" -ForegroundColor Yellow
+          Write-Host "  Bootstrap infra: $bootstrap" -ForegroundColor Yellow
+          Write-Host "  Enable validation: $enableValidation" -ForegroundColor Yellow
+          
+          # Display branch-to-environment mapping
+          Write-Host "`n🗺️  Branch → Environment Mapping:" -ForegroundColor Cyan
+          Write-Host "  dev branch      → dev environment (dev.json)" -ForegroundColor Gray
+          Write-Host "  staging branch  → staging environment (staging.json)" -ForegroundColor Gray
+          Write-Host "  main branch     → prod environment (prod.json)" -ForegroundColor Gray
+          
+          # Show what will be created based on selection
+          Write-Host "`n📦 Resources to be created:" -ForegroundColor Cyan
+          if ($env -eq "all") {
+            Write-Host "  OIDC Credentials:" -ForegroundColor Yellow
+            Write-Host "    - dev branch (repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev)" -ForegroundColor Gray
+            Write-Host "    - staging branch (repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/staging)" -ForegroundColor Gray
+            Write-Host "    - main branch (repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/main)" -ForegroundColor Gray
+            Write-Host "    - dev environment (repo:pavanthakur/XYDataLabs.OrderProcessingSystem:environment:dev)" -ForegroundColor Gray
+            Write-Host "    - staging environment (repo:pavanthakur/XYDataLabs.OrderProcessingSystem:environment:staging)" -ForegroundColor Gray
+            Write-Host "    - prod environment (repo:pavanthakur/XYDataLabs.OrderProcessingSystem:environment:prod)" -ForegroundColor Gray
+            Write-Host "  GitHub Secrets: dev, staging, prod" -ForegroundColor Yellow
+            Write-Host "  Bootstrap: dev, staging, prod resource groups" -ForegroundColor Yellow
+          } else {
+            Write-Host "  OIDC Credentials:" -ForegroundColor Yellow
+            Write-Host "    - $env branch (repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/$env)" -ForegroundColor Gray
+            Write-Host "    - $env environment (repo:pavanthakur/XYDataLabs.OrderProcessingSystem:environment:$env)" -ForegroundColor Gray
+            Write-Host "  GitHub Secrets: $env" -ForegroundColor Yellow
+            Write-Host "  Bootstrap: $env resource group" -ForegroundColor Yellow
+          }
+          
+          Write-Host "`n⚠️  Validation Checks:" -ForegroundColor Cyan
           
           # Validate environment selection
           if ($env -notin @('dev', 'staging', 'prod', 'all')) {
+            Write-Host "  ❌ Invalid environment: $env" -ForegroundColor Red
             Write-Error "Invalid environment: $env. Must be dev, staging, prod, or all."
             exit 1
           }
+          Write-Host "  ✅ Environment selection valid" -ForegroundColor Green
           
           # Warn if bootstrapping without OIDC/secrets
-          if ($bootstrap -and -not $setupOidc -and -not $configSecrets) {
-            Write-Warning "Bootstrapping without OIDC setup or secret config. Ensure credentials exist!"
+          if ($bootstrap -eq "true" -and $setupOidc -eq "false" -and $configSecrets -eq "false") {
+            Write-Host "  ⚠️  Bootstrapping without OIDC/secrets - ensure they exist!" -ForegroundColor Yellow
+          } else {
+            Write-Host "  ✅ Configuration sequence valid" -ForegroundColor Green
           }
           
-          Write-Host "✅ Input validation passed" -ForegroundColor Green
+          Write-Host "`n" -ForegroundColor Gray
+          Write-Host "=" * 70 -ForegroundColor Gray
+          Write-Host "✅ Input validation passed - proceeding..." -ForegroundColor Green
 
   setup-oidc:
     name: Setup Azure OIDC
@@ -358,6 +396,15 @@ jobs:
       - name: Bootstrap Dev Infrastructure
         run: |
           Write-Host "🚀 Bootstrapping Dev Environment..." -ForegroundColor Cyan
+          Write-Host "" -ForegroundColor Gray
+          Write-Host "📋 Configuration:" -ForegroundColor Yellow
+          Write-Host "  Branch: dev" -ForegroundColor Gray
+          Write-Host "  Environment: dev" -ForegroundColor Gray
+          Write-Host "  Parameter File: infra/parameters/dev.json" -ForegroundColor Gray
+          Write-Host "  Resource Group: rg-orderprocessing-dev" -ForegroundColor Gray
+          Write-Host "  OIDC Subject: repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev" -ForegroundColor Gray
+          Write-Host "" -ForegroundColor Gray
+          
           ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment dev
           if ($LASTEXITCODE -ne 0) {
             Write-Error "Bootstrap failed with exit code $LASTEXITCODE"
@@ -398,7 +445,16 @@ jobs:
       - name: Bootstrap Staging Infrastructure
         run: |
           Write-Host "🚀 Bootstrapping Staging Environment..." -ForegroundColor Cyan
-          ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment stg
+          Write-Host "" -ForegroundColor Gray
+          Write-Host "📋 Configuration:" -ForegroundColor Yellow
+          Write-Host "  Branch: staging" -ForegroundColor Gray
+          Write-Host "  Environment: staging" -ForegroundColor Gray
+          Write-Host "  Parameter File: infra/parameters/staging.json" -ForegroundColor Gray
+          Write-Host "  Resource Group: rg-orderprocessing-staging" -ForegroundColor Gray
+          Write-Host "  OIDC Subject: repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/staging" -ForegroundColor Gray
+          Write-Host "" -ForegroundColor Gray
+          
+          ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment staging
           if ($LASTEXITCODE -ne 0) {
             Write-Error "Bootstrap failed with exit code $LASTEXITCODE"
             exit $LASTEXITCODE
@@ -436,9 +492,18 @@ jobs:
           client-id: ${{ env.CLIENT_ID }}
           tenant-id: ${{ env.TENANT_ID }}
           subscription-id: ${{ env.SUBSCRIPTION_ID }}
-      - name: Bootstrap Production Infrastructure
+      - name: Bootstrap Prod Infrastructure
         run: |
-          Write-Host "🚀 Bootstrapping Production Environment..." -ForegroundColor Cyan
+          Write-Host "🚀 Bootstrapping Prod Environment..." -ForegroundColor Cyan
+          Write-Host "" -ForegroundColor Gray
+          Write-Host "📋 Configuration:" -ForegroundColor Yellow
+          Write-Host "  Branch: main" -ForegroundColor Gray
+          Write-Host "  Environment: prod" -ForegroundColor Gray
+          Write-Host "  Parameter File: infra/parameters/prod.json" -ForegroundColor Gray
+          Write-Host "  Resource Group: rg-orderprocessing-prod" -ForegroundColor Gray
+          Write-Host "  OIDC Subject: repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/main" -ForegroundColor Gray
+          Write-Host "" -ForegroundColor Gray
+          
           ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment prod
           if ($LASTEXITCODE -ne 0) {
             Write-Error "Bootstrap failed with exit code $LASTEXITCODE"
