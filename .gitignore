@@ -377,3 +377,5 @@ FodyWeavers.xsd
 Resources/Azure-Deployment/generated-migrations-*.sql
 # Temp test run logs from orchestration scripts
 Resources/Azure-Deployment/test-run-*.log
+# VS Code settings
+.vscode/
