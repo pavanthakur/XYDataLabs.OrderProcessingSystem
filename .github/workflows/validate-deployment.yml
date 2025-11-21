@@ -53,7 +53,7 @@ jobs:
 
       - name: Bicep What-If Analysis
         if: inputs.run-whatif
-        shell: pwsh
+        shell: powershell
         run: |
           Write-Host "Running what-if for ${{ inputs.environment }}" -ForegroundColor Cyan
           ./Resources/Azure-Deployment/validate-parameters-whatif.ps1 `
@@ -63,7 +63,7 @@ jobs:
 
       - name: Verify OIDC Credentials
         if: inputs.verify-oidc
-        shell: pwsh
+        shell: powershell
         run: |
           $appId = az ad app list --display-name "GitHub-Actions-OIDC" --query "[0].id" -o tsv
           if ($appId) {
@@ -75,7 +75,7 @@ jobs:
 
       - name: Validate SharedSettings Consistency
         if: inputs.check-config
-        shell: pwsh
+        shell: powershell
         run: |
           ./Resources/Azure-Deployment/validate-sharedsettings-diff.ps1
         continue-on-error: false
