@@ -38,9 +38,41 @@ permissions:
   id-token: write
 
 jobs:
+  validate-inputs:
+    name: Validate Workflow Inputs
+    runs-on: windows-latest
+    steps:
+      - name: Validate Configuration
+        run: |
+          Write-Host "🔍 Validating workflow inputs..." -ForegroundColor Cyan
+          
+          $env = "${{ inputs.environment }}"
+          $setupOidc = "${{ inputs.setupOidc }}"
+          $configSecrets = "${{ inputs.configureSecrets }}"
+          $bootstrap = "${{ inputs.bootstrapInfra }}"
+          
+          Write-Host "Selected environment: $env" -ForegroundColor Yellow
+          Write-Host "Setup OIDC: $setupOidc" -ForegroundColor Yellow
+          Write-Host "Configure secrets: $configSecrets" -ForegroundColor Yellow
+          Write-Host "Bootstrap infra: $bootstrap" -ForegroundColor Yellow
+          
+          # Validate environment selection
+          if ($env -notin @('dev', 'staging', 'prod', 'all')) {
+            Write-Error "Invalid environment: $env. Must be dev, staging, prod, or all."
+            exit 1
+          }
+          
+          # Warn if bootstrapping without OIDC/secrets
+          if ($bootstrap -and -not $setupOidc -and -not $configSecrets) {
+            Write-Warning "Bootstrapping without OIDC setup or secret config. Ensure credentials exist!"
+          }
+          
+          Write-Host "✅ Input validation passed" -ForegroundColor Green
+
   setup-oidc:
     name: Setup Azure OIDC
     if: inputs.setupOidc
+    needs: [validate-inputs]
     runs-on: windows-latest
     outputs:
       clientId: ${{ steps.oidc.outputs.clientId }}
@@ -76,6 +108,7 @@ jobs:
           Write-Host "Creating credentials for:" -ForegroundColor Yellow
           Write-Host "  Branches: $branches" -ForegroundColor Gray
           Write-Host "  Environments: $environments" -ForegroundColor Gray
+          Write-Host "  Repository: pavanthakur/XYDataLabs.OrderProcessingSystem" -ForegroundColor Gray
           
           # Run setup script
           ./Resources/Azure-Deployment/setup-github-oidc.ps1 `
@@ -83,6 +116,11 @@ jobs:
             -Environments $environments `
             -GitHubOwner "pavanthakur" `
             -Repository "XYDataLabs.OrderProcessingSystem"
+          
+          Write-Host "" -ForegroundColor Gray
+          Write-Host "Script parameters passed:" -ForegroundColor Cyan
+          Write-Host "  -Branches $branches" -ForegroundColor Gray
+          Write-Host "  -Environments $environments" -ForegroundColor Gray
           
           if ($LASTEXITCODE -ne 0) {
             Write-Error "OIDC setup failed with exit code $LASTEXITCODE"
@@ -220,10 +258,27 @@ jobs:
   configure-secrets:
     name: Configure GitHub Secrets
     if: inputs.configureSecrets
-    needs: [setup-oidc]
+    needs: [validate-inputs, setup-oidc]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      
+      - name: Validate Prerequisites
+        run: |
+          Write-Host "🔍 Checking if OIDC setup was performed..." -ForegroundColor Cyan
+          $setupOidc = "${{ inputs.setupOidc }}"
+          $hasClientId = "${{ needs.setup-oidc.outputs.clientId }}" -ne ""
+          
+          if ($setupOidc -eq "true" -and -not $hasClientId) {
+            Write-Error "OIDC setup was enabled but no client ID was output. Check setup-oidc job logs."
+            exit 1
+          }
+          
+          if ($setupOidc -eq "false" -and -not $hasClientId) {
+            Write-Warning "Running without OIDC setup. Ensure Azure app credentials already exist in secrets."
+          }
+          
+          Write-Host "✅ Prerequisites validated" -ForegroundColor Green
       
       - name: Check Required Secrets
         id: check
@@ -240,7 +295,7 @@ jobs:
             "secretsExist=false" >> $env:GITHUB_OUTPUT
           }
       
-      - name: Set Dev Environment Secrets
+      - name: Set Environment Secrets
         if: steps.check.outputs.secretsExist == 'false'
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
@@ -248,26 +303,33 @@ jobs:
           TENANT_ID: ${{ needs.setup-oidc.outputs.tenantId }}
           SUBSCRIPTION_ID: ${{ needs.setup-oidc.outputs.subscriptionId }}
         run: |
-          Write-Host "🔑 Setting GitHub environment secrets for 'dev'..." -ForegroundColor Cyan
+          $selectedEnv = "${{ inputs.environment }}"
           
           if (-not $env:GH_TOKEN) {
             Write-Error "GH_PAT secret not found. Please add GH_PAT to repository secrets."
             exit 1
           }
           
-          Write-Host "Setting AZUREAPPSERVICE_CLIENTID..." -ForegroundColor Gray
-          gh secret set AZUREAPPSERVICE_CLIENTID --env dev --repo ${{ github.repository }} --body "$env:CLIENT_ID"
-          if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set CLIENTID"; exit 1 }
+          # Determine which environments to configure
+          $envList = if ($selectedEnv -eq "all") { @("dev", "staging", "prod") } else { @($selectedEnv) }
           
-          Write-Host "Setting AZUREAPPSERVICE_TENANTID..." -ForegroundColor Gray
-          gh secret set AZUREAPPSERVICE_TENANTID --env dev --repo ${{ github.repository }} --body "$env:TENANT_ID"
-          if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set TENANTID"; exit 1 }
-          
-          Write-Host "Setting AZUREAPPSERVICE_SUBSCRIPTIONID..." -ForegroundColor Gray
-          gh secret set AZUREAPPSERVICE_SUBSCRIPTIONID --env dev --repo ${{ github.repository }} --body "$env:SUBSCRIPTION_ID"
-          if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set SUBSCRIPTIONID"; exit 1 }
-          
-          Write-Host "✅ Environment secrets set for 'dev'!" -ForegroundColor Green
+          foreach ($targetEnv in $envList) {
+            Write-Host "🔑 Setting GitHub environment secrets for '$targetEnv'..." -ForegroundColor Cyan
+            
+            Write-Host "  Setting AZUREAPPSERVICE_CLIENTID..." -ForegroundColor Gray
+            gh secret set AZUREAPPSERVICE_CLIENTID --env $targetEnv --repo ${{ github.repository }} --body "$env:CLIENT_ID"
+            if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set CLIENTID for $targetEnv"; exit 1 }
+            
+            Write-Host "  Setting AZUREAPPSERVICE_TENANTID..." -ForegroundColor Gray
+            gh secret set AZUREAPPSERVICE_TENANTID --env $targetEnv --repo ${{ github.repository }} --body "$env:TENANT_ID"
+            if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set TENANTID for $targetEnv"; exit 1 }
+            
+            Write-Host "  Setting AZUREAPPSERVICE_SUBSCRIPTIONID..." -ForegroundColor Gray
+            gh secret set AZUREAPPSERVICE_SUBSCRIPTIONID --env $targetEnv --repo ${{ github.repository }} --body "$env:SUBSCRIPTION_ID"
+            if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set SUBSCRIPTIONID for $targetEnv"; exit 1 }
+            
+            Write-Host "  ✅ Environment secrets set for '$targetEnv'!" -ForegroundColor Green
+          }
 
   bootstrap-dev:
     name: Bootstrap Dev Environment
