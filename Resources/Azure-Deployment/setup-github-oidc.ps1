@@ -95,16 +95,24 @@ if (-not $existingCreds) { $existingCreds = @() }
 
 # Delete credentials with incorrect subjects (missing repository name)
 $expectedPattern = "repo:$GitHubOwner/$Repository"
+Write-Host "  Checking for credentials that don't start with: $expectedPattern" -ForegroundColor Gray
 $invalidCreds = $existingCreds | Where-Object { -not $_.subject.StartsWith($expectedPattern) }
+
 if ($invalidCreds.Count -gt 0) {
     Write-Host "  🧹 Cleaning up $($invalidCreds.Count) invalid federated credentials..." -ForegroundColor Yellow
     foreach ($invalidCred in $invalidCreds) {
         Write-Host "    Deleting: $($invalidCred.name) (subject: $($invalidCred.subject))" -ForegroundColor Gray
-        az ad app federated-credential delete --id $appObjectId --federated-credential-id $invalidCred.id 2>$null | Out-Null
+        $deleteResult = az ad app federated-credential delete --id $appObjectId --federated-credential-id $invalidCred.id 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "    Failed to delete credential: $deleteResult"
+        }
     }
     # Re-fetch after cleanup
     $existingCreds = az ad app federated-credential list --id $appObjectId | ConvertFrom-Json
     if (-not $existingCreds) { $existingCreds = @() }
+    Write-Host "  ✅ Cleanup complete. Remaining credentials: $($existingCreds.Count)" -ForegroundColor Green
+} else {
+    Write-Host "  ✅ All existing credentials have correct subjects" -ForegroundColor Green
 }
 
 # Branch-based subjects
