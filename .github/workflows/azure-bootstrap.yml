@@ -186,18 +186,20 @@ jobs:
   bootstrap-dev:
     name: Bootstrap Dev Environment
     if: inputs.bootstrapInfra && (inputs.environment == 'dev' || inputs.environment == 'all') && !cancelled()
-    needs: [configure-secrets]
+    needs: [setup-oidc]
     runs-on: windows-latest
+    env:
+      CLIENT_ID: ${{ needs.setup-oidc.outputs.clientId }}
+      TENANT_ID: ${{ needs.setup-oidc.outputs.tenantId }}
+      SUBSCRIPTION_ID: ${{ needs.setup-oidc.outputs.subscriptionId }}
     steps:
       - uses: actions/checkout@v4
-      
       - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
-      
+          client-id: ${{ env.CLIENT_ID }}
+          tenant-id: ${{ env.TENANT_ID }}
+          subscription-id: ${{ env.SUBSCRIPTION_ID }}
       - name: Bootstrap Dev Infrastructure
         run: |
           Write-Host "🚀 Bootstrapping Dev Environment..." -ForegroundColor Cyan
@@ -206,7 +208,6 @@ jobs:
             Write-Error "Bootstrap failed with exit code $LASTEXITCODE"
             exit $LASTEXITCODE
           }
-      
       - name: Upload Bootstrap Log
         if: always()
         uses: actions/upload-artifact@v4
@@ -218,18 +219,20 @@ jobs:
   bootstrap-staging:
     name: Bootstrap Staging Environment
     if: inputs.bootstrapInfra && (inputs.environment == 'staging' || inputs.environment == 'all') && !cancelled()
-    needs: [configure-secrets]
+    needs: [setup-oidc]
     runs-on: windows-latest
+    env:
+      CLIENT_ID: ${{ needs.setup-oidc.outputs.clientId }}
+      TENANT_ID: ${{ needs.setup-oidc.outputs.tenantId }}
+      SUBSCRIPTION_ID: ${{ needs.setup-oidc.outputs.subscriptionId }}
     steps:
       - uses: actions/checkout@v4
-      
       - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
-      
+          client-id: ${{ env.CLIENT_ID }}
+          tenant-id: ${{ env.TENANT_ID }}
+          subscription-id: ${{ env.SUBSCRIPTION_ID }}
       - name: Bootstrap Staging Infrastructure
         run: |
           Write-Host "🚀 Bootstrapping Staging Environment..." -ForegroundColor Cyan
@@ -238,7 +241,6 @@ jobs:
             Write-Error "Bootstrap failed with exit code $LASTEXITCODE"
             exit $LASTEXITCODE
           }
-      
       - name: Upload Bootstrap Log
         if: always()
         uses: actions/upload-artifact@v4
@@ -250,19 +252,21 @@ jobs:
   bootstrap-prod:
     name: Bootstrap Production Environment
     if: inputs.bootstrapInfra && (inputs.environment == 'prod' || inputs.environment == 'all') && !cancelled()
-    needs: [configure-secrets]
+    needs: [setup-oidc]
     runs-on: windows-latest
     environment: prod
+    env:
+      CLIENT_ID: ${{ needs.setup-oidc.outputs.clientId }}
+      TENANT_ID: ${{ needs.setup-oidc.outputs.tenantId }}
+      SUBSCRIPTION_ID: ${{ needs.setup-oidc.outputs.subscriptionId }}
     steps:
       - uses: actions/checkout@v4
-      
       - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
-      
+          client-id: ${{ env.CLIENT_ID }}
+          tenant-id: ${{ env.TENANT_ID }}
+          subscription-id: ${{ env.SUBSCRIPTION_ID }}
       - name: Bootstrap Production Infrastructure
         run: |
           Write-Host "🚀 Bootstrapping Production Environment..." -ForegroundColor Cyan
@@ -271,7 +275,6 @@ jobs:
             Write-Error "Bootstrap failed with exit code $LASTEXITCODE"
             exit $LASTEXITCODE
           }
-      
       - name: Upload Bootstrap Log
         if: always()
         uses: actions/upload-artifact@v4
