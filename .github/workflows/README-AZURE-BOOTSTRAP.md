@@ -298,9 +298,7 @@ All secrets are **repository-scoped**:
 - `AZUREAPPSERVICE_TENANTID`
 - `AZUREAPPSERVICE_SUBSCRIPTIONID`
 
-Additionally, **environment-scoped** secrets are created by the workflow:
-- Each environment (dev/staging/prod) gets its own copy of the Azure credentials
-- Secrets are automatically configured using the built-in `GITHUB_TOKEN`
+These secrets are shared across all environments (dev/staging/prod). The workflow uses OIDC federated credentials with environment-specific subjects to ensure each environment accesses only its own Azure resources.
 
 No passwords or certificates stored. OIDC uses token exchange.
 
