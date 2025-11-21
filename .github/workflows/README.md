@@ -10,7 +10,7 @@ This directory contains GitHub Actions workflows for automated CI/CD deployment 
 |----------|-------------|------------|-------------|
 | `infra-deploy.yml` | Infrastructure changes or manual | dev/staging/prod | **[See README-INFRA-DEPLOY.md](./README-INFRA-DEPLOY.md)** - Deploys Bicep infrastructure with manual workflow dispatch |
 | `validate-deployment.yml` | Called by infra-deploy | Reusable workflow | **[See README-VALIDATE-DEPLOYMENT.md](./README-VALIDATE-DEPLOYMENT.md)** - Pre-deployment validation workflow |
-| `test-validate-deployment.yml` | Manual or PR changes | Test only | **[See README-TEST-VALIDATE-DEPLOYMENT.md](./README-TEST-VALIDATE-DEPLOYMENT.md)** - Tests validation workflow independently |
+| `test-validate-deployment.yml` | Manual or PR changes | Test only | **[Quick Start](./QUICK-START-TEST-VALIDATION.md)** \| **[Full Docs](./README-TEST-VALIDATE-DEPLOYMENT.md)** - Tests validation workflow independently |
 | `deploy-api-to-azure.yml` | API/Backend code changes | All branches (dev/staging/main) | Builds and deploys API to environment-specific Azure Web App |
 | `deploy-ui-to-azure.yml` | UI/Frontend code changes | All branches (dev/staging/main) | Builds and deploys UI to environment-specific Azure Web App |
 | `docker-health.yml` | Docker script changes | main branch only | Validates Docker startup scripts |
