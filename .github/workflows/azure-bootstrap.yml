@@ -341,7 +341,11 @@ jobs:
             Write-Warning "Running without OIDC setup. Ensure Azure app credentials already exist in secrets."
           }
           
+          Write-Host "" -ForegroundColor Gray
+          Write-Host "🔍 Checking GH_PAT repository secret..." -ForegroundColor Cyan
+          
           # Check if GH_PAT is available (required for setting environment secrets)
+          # The secret is read from secrets.GH_PAT and mapped to GH_TOKEN environment variable
           if (-not $env:GH_TOKEN -or $env:GH_TOKEN -eq "") {
             Write-Host "" -ForegroundColor Gray
             Write-Host "=" * 80 -ForegroundColor Red
@@ -370,9 +374,15 @@ jobs:
             Write-Host "" -ForegroundColor Gray
             Write-Error "GH_PAT repository secret not found. Please follow the steps above."
             exit 1
+          } else {
+            # GH_PAT was successfully read from secrets.GH_PAT and is available as GH_TOKEN
+            $tokenLength = $env:GH_TOKEN.Length
+            Write-Host "✅ GH_PAT repository secret found and loaded successfully" -ForegroundColor Green
+            Write-Host "   Token length: $tokenLength characters" -ForegroundColor Gray
+            Write-Host "   Environment variable GH_TOKEN is properly set from secrets.GH_PAT" -ForegroundColor Gray
           }
           
-          Write-Host "✅ Prerequisites validated (including GH_PAT)" -ForegroundColor Green
+          Write-Host "✅ All prerequisites validated" -ForegroundColor Green
       
       - name: Check Required Secrets
         id: check
