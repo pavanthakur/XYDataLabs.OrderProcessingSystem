@@ -66,7 +66,7 @@ jobs:
             -Branches "dev,staging,main" `
             -Environments "dev,staging,prod" `
             -GitHubOwner "pavanthakur" `
-            -Repository "TestAppXY_OrderProcessingSystem" `
+            -Repository "XYDataLabs.OrderProcessingSystem" `
             2>&1 | Tee-Object -Variable output
           
           Write-Host $output
@@ -167,9 +167,9 @@ jobs:
           $subscriptionId = $sub.id
           
           # Set secrets using GitHub CLI
-          echo $clientId | gh secret set AZUREAPPSERVICE_CLIENTID --repo pavanthakur/TestAppXY_OrderProcessingSystem
-          echo $tenantId | gh secret set AZUREAPPSERVICE_TENANTID --repo pavanthakur/TestAppXY_OrderProcessingSystem
-          echo $subscriptionId | gh secret set AZUREAPPSERVICE_SUBSCRIPTIONID --repo pavanthakur/TestAppXY_OrderProcessingSystem
+          echo $clientId | gh secret set AZUREAPPSERVICE_CLIENTID --repo pavanthakur/XYDataLabs.OrderProcessingSystem
+          echo $tenantId | gh secret set AZUREAPPSERVICE_TENANTID --repo pavanthakur/XYDataLabs.OrderProcessingSystem
+          echo $subscriptionId | gh secret set AZUREAPPSERVICE_SUBSCRIPTIONID --repo pavanthakur/XYDataLabs.OrderProcessingSystem
           
           Write-Host "✅ Secrets configured successfully" -ForegroundColor Green
 
@@ -303,7 +303,7 @@ jobs:
           "" >> $env:GITHUB_STEP_SUMMARY
           "### 🚀 Next Steps" >> $env:GITHUB_STEP_SUMMARY
           "1. Push code changes to trigger deployment workflow" >> $env:GITHUB_STEP_SUMMARY
-          "2. Monitor deployments at: [Actions](https://github.com/pavanthakur/TestAppXY_OrderProcessingSystem/actions)" >> $env:GITHUB_STEP_SUMMARY
+          "2. Monitor deployments at: [Actions](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions)" >> $env:GITHUB_STEP_SUMMARY
           "3. View resources in [Azure Portal](https://portal.azure.com)" >> $env:GITHUB_STEP_SUMMARY
 
   summary:
