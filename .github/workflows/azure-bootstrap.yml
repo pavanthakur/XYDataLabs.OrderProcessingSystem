@@ -111,10 +111,9 @@ jobs:
 
   configure-secrets:
     name: Configure GitHub Secrets
-    if: inputs.configureSecrets
+    if: inputs.configureSecrets && !cancelled()
     needs: [setup-oidc]
     runs-on: windows-latest
-    # Skip if OIDC setup didn't run (secrets should already exist)
     steps:
       - uses: actions/checkout@v4
       
@@ -176,7 +175,7 @@ jobs:
 
   bootstrap-dev:
     name: Bootstrap Dev Environment
-    if: inputs.bootstrapInfra && (inputs.environment == 'dev' || inputs.environment == 'all')
+    if: inputs.bootstrapInfra && (inputs.environment == 'dev' || inputs.environment == 'all') && !cancelled()
     needs: [configure-secrets]
     runs-on: windows-latest
     steps:
@@ -204,7 +203,7 @@ jobs:
 
   bootstrap-staging:
     name: Bootstrap Staging Environment
-    if: inputs.bootstrapInfra && (inputs.environment == 'staging' || inputs.environment == 'all')
+    if: inputs.bootstrapInfra && (inputs.environment == 'staging' || inputs.environment == 'all') && !cancelled()
     needs: [configure-secrets]
     runs-on: windows-latest
     steps:
@@ -232,7 +231,7 @@ jobs:
 
   bootstrap-prod:
     name: Bootstrap Production Environment
-    if: inputs.bootstrapInfra && (inputs.environment == 'prod' || inputs.environment == 'all')
+    if: inputs.bootstrapInfra && (inputs.environment == 'prod' || inputs.environment == 'all') && !cancelled()
     needs: [configure-secrets]
     runs-on: windows-latest
     environment: prod
@@ -261,7 +260,7 @@ jobs:
 
   enable-validation:
     name: Enable Pre-Deployment Validation
-    if: inputs.enableValidation && inputs.bootstrapInfra
+    if: inputs.enableValidation && inputs.bootstrapInfra && !cancelled()
     needs: [bootstrap-dev, bootstrap-staging, bootstrap-prod]
     runs-on: windows-latest
     steps:
