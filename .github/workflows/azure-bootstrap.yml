@@ -42,6 +42,29 @@ jobs:
     name: Validate Workflow Inputs
     runs-on: windows-latest
     steps:
+      - name: Log Workflow Start
+        run: |
+          Write-Host "" -ForegroundColor Gray
+          Write-Host "========================================================================" -ForegroundColor Cyan
+          Write-Host "  AZURE BOOTSTRAP WORKFLOW STARTED" -ForegroundColor Cyan
+          Write-Host "========================================================================" -ForegroundColor Cyan
+          Write-Host "" -ForegroundColor Gray
+          Write-Host "⏰ Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host "👤 Triggered by: ${{ github.actor }}" -ForegroundColor Gray
+          Write-Host "🌿 Branch: ${{ github.ref_name }}" -ForegroundColor Gray
+          Write-Host "📦 Repository: ${{ github.repository }}" -ForegroundColor Gray
+          Write-Host "🔗 Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" -ForegroundColor Gray
+          Write-Host "" -ForegroundColor Gray
+          Write-Host "📋 USER SELECTED PARAMETERS:" -ForegroundColor Yellow
+          Write-Host "  ✓ Target environment:           ${{ inputs.environment }}" -ForegroundColor White
+          Write-Host "  ✓ Setup OIDC:                   ${{ inputs.setupOidc }}" -ForegroundColor White
+          Write-Host "  ✓ Configure GitHub secrets:     ${{ inputs.configureSecrets }}" -ForegroundColor White
+          Write-Host "  ✓ Bootstrap infrastructure:     ${{ inputs.bootstrapInfra }}" -ForegroundColor White
+          Write-Host "  ✓ Enable validation:            ${{ inputs.enableValidation }}" -ForegroundColor White
+          Write-Host "" -ForegroundColor Gray
+          Write-Host "========================================================================" -ForegroundColor Cyan
+          Write-Host "" -ForegroundColor Gray
+      
       - name: Validate Configuration
         run: |
           Write-Host "🔍 Validating workflow inputs..." -ForegroundColor Cyan
