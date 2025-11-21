@@ -93,13 +93,36 @@ Write-Host "`n[4/7] Configuring federated credentials..." -ForegroundColor Yello
 $existingCreds = az ad app federated-credential list --id $appObjectId | ConvertFrom-Json
 if (-not $existingCreds) { $existingCreds = @() }
 
-# Delete credentials with incorrect subjects (missing repository name)
+# Build list of credentials we're about to create/manage
+$branchList = $Branches.Split(",", [System.StringSplitOptions]::RemoveEmptyEntries) | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+$environmentList = $Environments.Split(",", [System.StringSplitOptions]::RemoveEmptyEntries) | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+
+$managedCredentials = @()
+foreach ($branch in $branchList) {
+    $managedCredentials += "github-$($branch)-oidc"
+}
+foreach ($env in $environmentList) {
+    $managedCredentials += "github-env-$($env)-oidc"
+}
+
+# Only delete credentials that:
+# 1. Have incorrect subjects (missing repository name), AND
+# 2. Are in the list of credentials we're about to manage (selected environments)
 $expectedPattern = "repo:$GitHubOwner/$Repository"
-Write-Host "  Checking for credentials that don't start with: $expectedPattern" -ForegroundColor Gray
-$invalidCreds = $existingCreds | Where-Object { -not $_.subject.StartsWith($expectedPattern) }
+Write-Host "  Managing credentials for: $($managedCredentials -join ', ')" -ForegroundColor Gray
+Write-Host "  Checking for invalid subjects among managed credentials..." -ForegroundColor Gray
+
+$invalidCreds = $existingCreds | Where-Object { 
+    # Check if this credential is one we're managing
+    $isManagedCred = $managedCredentials -contains $_.name
+    # Check if it has incorrect subject
+    $hasInvalidSubject = -not $_.subject.StartsWith($expectedPattern)
+    # Only delete if BOTH conditions are true
+    return ($isManagedCred -and $hasInvalidSubject)
+}
 
 if ($invalidCreds.Count -gt 0) {
-    Write-Host "  🧹 Cleaning up $($invalidCreds.Count) invalid federated credentials..." -ForegroundColor Yellow
+    Write-Host "  🧹 Cleaning up $($invalidCreds.Count) invalid credential(s) for selected environments..." -ForegroundColor Yellow
     foreach ($invalidCred in $invalidCreds) {
         Write-Host "    Deleting: $($invalidCred.name) (subject: $($invalidCred.subject))" -ForegroundColor Gray
         $deleteResult = az ad app federated-credential delete --id $appObjectId --federated-credential-id $invalidCred.id 2>&1
@@ -110,14 +133,16 @@ if ($invalidCreds.Count -gt 0) {
     # Re-fetch after cleanup
     $existingCreds = az ad app federated-credential list --id $appObjectId | ConvertFrom-Json
     if (-not $existingCreds) { $existingCreds = @() }
-    Write-Host "  ✅ Cleanup complete. Remaining credentials: $($existingCreds.Count)" -ForegroundColor Green
+    Write-Host "  ✅ Cleanup complete. Total remaining credentials: $($existingCreds.Count)" -ForegroundColor Green
 } else {
-    Write-Host "  ✅ All existing credentials have correct subjects" -ForegroundColor Green
+    Write-Host "  ✅ No invalid credentials found for selected environments" -ForegroundColor Green
+    if ($existingCreds.Count -gt 0) {
+        Write-Host "  ℹ️  Preserving $($existingCreds.Count) existing credential(s) for other environments" -ForegroundColor Cyan
+    }
 }
 
-# Branch-based subjects
+# Branch-based subjects (using $branchList from above)
 Write-Host "  Creating branch-based credentials (GitHubOwner=$GitHubOwner, Repository=$Repository)..." -ForegroundColor Gray
-$branchList = $Branches.Split(",", [System.StringSplitOptions]::RemoveEmptyEntries) | ForEach-Object { $_.Trim() } | Where-Object { $_ }
 foreach ($branch in $branchList) {
     $credName = "github-$($branch)-oidc"
     $subject = "repo:$GitHubOwner/$Repository:ref:refs/heads/$branch"
@@ -140,10 +165,9 @@ foreach ($branch in $branchList) {
     Write-Host "  [$credName] Created (branch: $branch)" -ForegroundColor Cyan
 }
 
-# Environment-based subjects
+# Environment-based subjects (using $environmentList from above)
 Write-Host "  Creating environment-based credentials (GitHubOwner=$GitHubOwner, Repository=$Repository)..." -ForegroundColor Gray
-$envList = $Environments.Split(",", [System.StringSplitOptions]::RemoveEmptyEntries) | ForEach-Object { $_.Trim() } | Where-Object { $_ }
-foreach ($env in $envList) {
+foreach ($env in $environmentList) {
     $credName = "github-env-$($env)-oidc"
     $subject = "repo:$GitHubOwner/$Repository:environment:$env"
     Write-Host "    Creating [$credName] with subject: $subject" -ForegroundColor Gray
