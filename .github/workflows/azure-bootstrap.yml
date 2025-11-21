@@ -376,22 +376,7 @@ jobs:
             $len = $env:GH_TOKEN.Length
             Write-Host "GH_PAT repository secret detected (length: $len chars)." -ForegroundColor Green
           } else {
-            Write-Warning "GH_PAT repository secret NOT found."
-            Write-Host ""
-            Write-Host "To set GH_PAT using your manually created PAT:" -ForegroundColor Yellow
-            Write-Host ""
-            Write-Host "Option 1 - Using GitHub CLI:" -ForegroundColor Cyan
-            Write-Host '  gh secret set GH_PAT --repo ${{ github.repository }}' -ForegroundColor White
-            Write-Host "  (You'll be prompted to paste your PAT value)" -ForegroundColor Gray
-            Write-Host ""
-            Write-Host "Option 2 - Using PowerShell:" -ForegroundColor Cyan
-            Write-Host '  $pat = Read-Host "Enter your PAT" -AsSecureString' -ForegroundColor White
-            Write-Host '  $patPlain = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($pat))' -ForegroundColor White
-            Write-Host '  gh secret set GH_PAT --repo ${{ github.repository }} --body $patPlain' -ForegroundColor White
-            Write-Host ""
-            Write-Host "Option 3 - Using GitHub UI:" -ForegroundColor Cyan
-            Write-Host "  https://github.com/${{ github.repository }}/settings/secrets/actions/new" -ForegroundColor White
-            Write-Host ""
+            Write-Warning "GH_PAT repository secret NOT found. Set it before re-running if environment secret configuration is needed."
           }
       
       - name: Set Environment Secrets
