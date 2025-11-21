@@ -29,11 +29,11 @@ param(
 
     # GitHub organization or username owning the repository
     [Parameter(Mandatory=$false)]
-    [string]$GitHubOwner = "getpavanthakur",
+    [string]$GitHubOwner = "pavanthakur",
 
     # Repository name
     [Parameter(Mandatory=$false)]
-    [string]$Repository = "TestAppXY_OrderProcessingSystem",
+    [string]$Repository = "XYDataLabs.OrderProcessingSystem",
 
     # Optional: Role name to assign (default Contributor). Could use Website Contributor for tighter scope.
     [Parameter(Mandatory=$false)]
