@@ -20,7 +20,12 @@ if (!(Test-Path $BasePath)) { Write-Error "Configuration path not found: $BasePa
 
 $files = @('sharedsettings.dev.json','sharedsettings.staging.json','sharedsettings.prod.json','sharedsettings.uat.json') | ForEach-Object { Join-Path $BasePath $_ }
 $loaded = @{}
-foreach ($f in $files) { if (Test-Path $f){ $loaded[(Split-Path $f -Leaf)] = Get-Content $f -Raw | ConvertFrom-Json -Depth 64 } }
+foreach ($f in $files) { 
+    if (Test-Path $f){ 
+        # ConvertFrom-Json -Depth only available in PS Core; omit for PS 5.1 compatibility
+        $loaded[(Split-Path $f -Leaf)] = Get-Content $f -Raw | ConvertFrom-Json
+    } 
+}
 
 function Expand-Object($obj, [string]$prefix='') {
     $result = @{}
