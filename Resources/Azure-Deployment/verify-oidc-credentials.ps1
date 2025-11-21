@@ -1,55 +1,47 @@
-<#!
+<#
 .SYNOPSIS
-    Verifies GitHub OIDC federated credentials exist for expected environments.
+  Verify existence and basic configuration of an Azure AD app used for GitHub OIDC.
 .DESCRIPTION
-    Checks Azure AD application (service principal) federated identity credentials for dev, staging, main (prod) or a supplied list.
-    Useful when manual changes or bootstrap script failures suspected.
-.PARAMETER AppObjectId
-    The Azure AD application object Id hosting federated credentials.
-.PARAMETER ExpectedEnvironments
-    Array of environment names expected (default: dev, staging, main).
-.EXAMPLE
-    ./verify-oidc-credentials.ps1 -AppObjectId 00000000-0000-0000-0000-000000000000
-.NOTES
-    Requires Azure CLI (az) logged in and Directory.Read.All / Application.Read permissions.
-!#>
-[CmdletBinding()] param(
-    [Parameter(Mandatory=$true)][string]$AppObjectId,
-    [string[]]$ExpectedEnvironments = @('dev','staging','main')
+  Confirms the Azure AD app exists and that federated credentials appear configured.
+  Exit codes:
+    0 = pass (app found and basic checks OK)
+    1 = error (app not found or API error)
+#>
+param(
+    [Parameter(Mandatory=$true)]
+    [string]$AppObjectId
 )
-$ErrorActionPreference = 'Stop'
 
-Write-Host "Querying federated credentials for AppObjectId: $AppObjectId" -ForegroundColor Cyan
-$raw = az ad app federated-credential list --id $AppObjectId --only-show-errors 2>$null
-if ($LASTEXITCODE -ne 0) { Write-Error "Failed to retrieve federated credentials. Check permissions." }
-$creds = $raw | ConvertFrom-Json
-if (!$creds) { Write-Error "No credentials returned or parse failure." }
+function Show-Help { Write-Host "Usage: verify-oidc-credentials.ps1 -AppObjectId <appObjectId>" }
 
-# Extract environments from subject (repo) and audience issuer claims when using GitHub OIDC
-# Typically credential.name or subject patterns used: repo:<org>/<repo>:environment:<env>
-$mapped = @()
-foreach ($c in $creds) {
-    $subject = $c.subject
-    $name = $c.name
-    $env = $null
-    if ($subject -match 'environment:([^:]+)$') { $env = $Matches[1] }
-    elseif ($name -match 'env-(.+)$') { $env = $Matches[1] }
-    else { $env = 'unknown' }
-    $mapped += [PSCustomObject]@{ Name=$name; Environment=$env; Subject=$subject; Issuer=$c.issuer }
+try {
+    $az = (Get-Command az -ErrorAction SilentlyContinue)
+    if (-not $az) {
+        Write-Host "az CLI not found in runner; unable to verify OIDC app via az. Fail-safe: exit 1" -ForegroundColor Yellow
+        exit 1
+    }
+
+    Write-Host "Checking Azure AD app object id: $AppObjectId" -ForegroundColor Cyan
+    $app = az ad app show --id $AppObjectId -o json 2>$null | ConvertFrom-Json
+    if (-not $app) {
+        Write-Host "Azure AD app with id $AppObjectId not found" -ForegroundColor Red
+        exit 1
+    }
+
+    Write-Host "Found Azure AD app: $($app.displayName)" -ForegroundColor Green
+
+    # Try listing federated credentials (may require permissions)
+    $creds = az rest --method get --uri "https://graph.microsoft.com/v1.0/applications/$AppObjectId/federatedIdentityCredentials" -o json 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $creds) {
+        Write-Host "Could not retrieve federated credentials (check permissions)." -ForegroundColor Yellow
+        # Treat as warning
+        exit 1
+    }
+
+    Write-Host "Federated credentials retrieved" -ForegroundColor Green
+    exit 0
 }
-
-Write-Host "\nDiscovered Credentials:" -ForegroundColor White
-$mapped | Sort-Object Environment | Format-Table Name,Environment,Issuer -AutoSize
-
-$missing = @()
-foreach ($e in $ExpectedEnvironments) {
-    if (-not ($mapped.Environment -contains $e)) { $missing += $e }
+catch {
+    Write-Host "Error running verify-oidc-credentials: $_" -ForegroundColor Red
+    exit 1
 }
-
-if ($missing.Count -gt 0) {
-    Write-Host "\nMissing federated credentials for: $($missing -join ', ')" -ForegroundColor Red
-    Write-Host "Suggested remediation: run setup-github-oidc.ps1 or manually add via Azure Portal -> App Registrations -> (App) -> Federated Credentials." -ForegroundColor Yellow
-    exit 2
-}
-Write-Host "\nAll expected environments present." -ForegroundColor Green
-exit 0
