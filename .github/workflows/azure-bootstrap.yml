@@ -98,16 +98,16 @@ jobs:
       
       - name: Create Setup Summary
         run: |
-          echo "## 🔐 Azure OIDC Setup Complete" >> $env:GITHUB_STEP_SUMMARY
-          echo "" >> $env:GITHUB_STEP_SUMMARY
-          echo "### 📋 Next Steps" >> $env:GITHUB_STEP_SUMMARY
-          echo "1. Add these secrets to GitHub (if not using automated secret configuration):" >> $env:GITHUB_STEP_SUMMARY
-          echo "   - AZUREAPPSERVICE_CLIENTID: \`${{ steps.oidc.outputs.clientId }}\`" >> $env:GITHUB_STEP_SUMMARY
-          echo "   - AZUREAPPSERVICE_TENANTID: \`${{ steps.oidc.outputs.tenantId }}\`" >> $env:GITHUB_STEP_SUMMARY
-          echo "   - AZUREAPPSERVICE_SUBSCRIPTIONID: \`${{ steps.oidc.outputs.subscriptionId }}\`" >> $env:GITHUB_STEP_SUMMARY
-          echo "" >> $env:GITHUB_STEP_SUMMARY
-          echo "2. Re-run this workflow with 'Configure GitHub secrets' enabled" >> $env:GITHUB_STEP_SUMMARY
-          echo "3. Then run with 'Bootstrap infrastructure' enabled" >> $env:GITHUB_STEP_SUMMARY
+          "## 🔐 Azure OIDC Setup Complete" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "### 📋 Next Steps" >> $env:GITHUB_STEP_SUMMARY
+          "1. Add these secrets to GitHub (if not using automated secret configuration):" >> $env:GITHUB_STEP_SUMMARY
+          "   - AZUREAPPSERVICE_CLIENTID: ``${{ steps.oidc.outputs.clientId }}``" >> $env:GITHUB_STEP_SUMMARY
+          "   - AZUREAPPSERVICE_TENANTID: ``${{ steps.oidc.outputs.tenantId }}``" >> $env:GITHUB_STEP_SUMMARY
+          "   - AZUREAPPSERVICE_SUBSCRIPTIONID: ``${{ steps.oidc.outputs.subscriptionId }}``" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "2. Re-run this workflow with ``Configure GitHub secrets`` enabled" >> $env:GITHUB_STEP_SUMMARY
+          "3. Then run with ``Bootstrap infrastructure`` enabled" >> $env:GITHUB_STEP_SUMMARY
 
   configure-secrets:
     name: Configure GitHub Secrets
@@ -293,18 +293,18 @@ jobs:
       
       - name: Create Completion Summary
         run: |
-          echo "## ✅ Azure Bootstrap Complete!" >> $env:GITHUB_STEP_SUMMARY
-          echo "" >> $env:GITHUB_STEP_SUMMARY
-          echo "### 🎉 What's Ready" >> $env:GITHUB_STEP_SUMMARY
-          echo "- ✅ Azure OIDC configured" >> $env:GITHUB_STEP_SUMMARY
-          echo "- ✅ GitHub secrets configured" >> $env:GITHUB_STEP_SUMMARY
-          echo "- ✅ Infrastructure bootstrapped (${{ inputs.environment }})" >> $env:GITHUB_STEP_SUMMARY
-          echo "- ✅ Pre-deployment validation enabled" >> $env:GITHUB_STEP_SUMMARY
-          echo "" >> $env:GITHUB_STEP_SUMMARY
-          echo "### 🚀 Next Steps" >> $env:GITHUB_STEP_SUMMARY
-          echo "1. Push code changes to trigger deployment workflow" >> $env:GITHUB_STEP_SUMMARY
-          echo "2. Monitor deployments at: [Actions](https://github.com/pavanthakur/TestAppXY_OrderProcessingSystem/actions)" >> $env:GITHUB_STEP_SUMMARY
-          echo "3. View resources in [Azure Portal](https://portal.azure.com)" >> $env:GITHUB_STEP_SUMMARY
+          "## ✅ Azure Bootstrap Complete!" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "### 🎉 What's Ready" >> $env:GITHUB_STEP_SUMMARY
+          "- ✅ Azure OIDC configured" >> $env:GITHUB_STEP_SUMMARY
+          "- ✅ GitHub secrets configured" >> $env:GITHUB_STEP_SUMMARY
+          "- ✅ Infrastructure bootstrapped (${{ inputs.environment }})" >> $env:GITHUB_STEP_SUMMARY
+          "- ✅ Pre-deployment validation enabled" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "### 🚀 Next Steps" >> $env:GITHUB_STEP_SUMMARY
+          "1. Push code changes to trigger deployment workflow" >> $env:GITHUB_STEP_SUMMARY
+          "2. Monitor deployments at: [Actions](https://github.com/pavanthakur/TestAppXY_OrderProcessingSystem/actions)" >> $env:GITHUB_STEP_SUMMARY
+          "3. View resources in [Azure Portal](https://portal.azure.com)" >> $env:GITHUB_STEP_SUMMARY
 
   summary:
     name: Bootstrap Summary
@@ -314,8 +314,8 @@ jobs:
     steps:
       - name: Generate Summary
         run: |
-          echo "## 📊 Bootstrap Workflow Summary" >> $env:GITHUB_STEP_SUMMARY
-          echo "" >> $env:GITHUB_STEP_SUMMARY
+          "## 📊 Bootstrap Workflow Summary" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
           
           $setupOidc = "${{ needs.setup-oidc.result }}"
           $configSecrets = "${{ needs.configure-secrets.result }}"
@@ -324,35 +324,35 @@ jobs:
           $bootstrapProd = "${{ needs.bootstrap-prod.result }}"
           $enableVal = "${{ needs.enable-validation.result }}"
           
-          echo "| Step | Status |" >> $env:GITHUB_STEP_SUMMARY
-          echo "|------|--------|" >> $env:GITHUB_STEP_SUMMARY
+          "| Step | Status |" >> $env:GITHUB_STEP_SUMMARY
+          "|------|--------|" >> $env:GITHUB_STEP_SUMMARY
           
           if ($setupOidc -ne "") {
             $icon = if ($setupOidc -eq "success") { "✅" } else { "❌" }
-            echo "| Setup OIDC | $icon $setupOidc |" >> $env:GITHUB_STEP_SUMMARY
+            "| Setup OIDC | $icon $setupOidc |" >> $env:GITHUB_STEP_SUMMARY
           }
           
           if ($configSecrets -ne "") {
             $icon = if ($configSecrets -eq "success") { "✅" } else { "❌" }
-            echo "| Configure Secrets | $icon $configSecrets |" >> $env:GITHUB_STEP_SUMMARY
+            "| Configure Secrets | $icon $configSecrets |" >> $env:GITHUB_STEP_SUMMARY
           }
           
           if ($bootstrapDev -ne "") {
             $icon = if ($bootstrapDev -eq "success") { "✅" } elseif ($bootstrapDev -eq "skipped") { "⏭️" } else { "❌" }
-            echo "| Bootstrap Dev | $icon $bootstrapDev |" >> $env:GITHUB_STEP_SUMMARY
+            "| Bootstrap Dev | $icon $bootstrapDev |" >> $env:GITHUB_STEP_SUMMARY
           }
           
           if ($bootstrapStaging -ne "") {
             $icon = if ($bootstrapStaging -eq "success") { "✅" } elseif ($bootstrapStaging -eq "skipped") { "⏭️" } else { "❌" }
-            echo "| Bootstrap Staging | $icon $bootstrapStaging |" >> $env:GITHUB_STEP_SUMMARY
+            "| Bootstrap Staging | $icon $bootstrapStaging |" >> $env:GITHUB_STEP_SUMMARY
           }
           
           if ($bootstrapProd -ne "") {
             $icon = if ($bootstrapProd -eq "success") { "✅" } elseif ($bootstrapProd -eq "skipped") { "⏭️" } else { "❌" }
-            echo "| Bootstrap Prod | $icon $bootstrapProd |" >> $env:GITHUB_STEP_SUMMARY
+            "| Bootstrap Prod | $icon $bootstrapProd |" >> $env:GITHUB_STEP_SUMMARY
           }
           
           if ($enableVal -ne "") {
             $icon = if ($enableVal -eq "success") { "✅" } elseif ($enableVal -eq "skipped") { "⏭️" } else { "❌" }
-            echo "| Enable Validation | $icon $enableVal |" >> $env:GITHUB_STEP_SUMMARY
+            "| Enable Validation | $icon $enableVal |" >> $env:GITHUB_STEP_SUMMARY
           }
