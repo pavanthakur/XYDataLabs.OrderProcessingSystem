@@ -376,9 +376,9 @@ jobs:
             exit 1
           } else {
             # GH_PAT was successfully read from secrets.GH_PAT and is available as GH_TOKEN
-            $tokenLength = $env:GH_TOKEN.Length
+            $len = $env:GH_TOKEN.Length
             Write-Host "✅ GH_PAT repository secret found and loaded successfully" -ForegroundColor Green
-            Write-Host "   Token length: $tokenLength characters" -ForegroundColor Gray
+            Write-Host "   Token length: $len chars" -ForegroundColor Gray
             Write-Host "   Environment variable GH_TOKEN is properly set from secrets.GH_PAT" -ForegroundColor Gray
           }
           
