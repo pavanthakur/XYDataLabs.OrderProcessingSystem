@@ -43,14 +43,14 @@ $branchMapping = @{
 # Determine which environments to test
 $envsToTest = if ($Environment -eq 'all') { @('dev', 'staging', 'prod') } else { @($Environment) }
 
-Write-Host "🎯 Testing Environment: $Environment" -ForegroundColor Yellow
+Write-Host "Testing Environment: $Environment" -ForegroundColor Yellow
 Write-Host ""
 
 # Test each environment
 foreach ($env in $envsToTest) {
     $config = $branchMapping[$env]
     
-    Write-Host "📋 Environment: $env" -ForegroundColor Cyan
+    Write-Host "Environment: $env" -ForegroundColor Cyan
     Write-Host "   Branch:              $($config.Branch)" -ForegroundColor Gray
     Write-Host "   Environment:         $($config.Environment)" -ForegroundColor Gray
     Write-Host "   Parameter File:      $($config.ParameterFile)" -ForegroundColor Gray
@@ -61,7 +61,7 @@ foreach ($env in $envsToTest) {
     # Validate parameter file exists
     $paramFilePath = Join-Path $PSScriptRoot "..\..\$($config.ParameterFile)"
     if (Test-Path $paramFilePath) {
-        Write-Host "   ✅ Parameter file exists" -ForegroundColor Green
+        Write-Host "   [OK] Parameter file exists" -ForegroundColor Green
         
         # Read and validate parameter file
         try {
@@ -69,22 +69,22 @@ foreach ($env in $envsToTest) {
             $envParam = $paramContent.parameters.environment.value
             
             if ($envParam -eq $config.Environment) {
-                Write-Host "   ✅ Parameter file environment matches: $envParam" -ForegroundColor Green
+                Write-Host "   [OK] Parameter file environment matches: $envParam" -ForegroundColor Green
             } else {
-                Write-Host "   ❌ Parameter file environment mismatch: expected $($config.Environment), found $envParam" -ForegroundColor Red
+                Write-Host "   [ERROR] Parameter file environment mismatch: expected $($config.Environment), found $envParam" -ForegroundColor Red
             }
         } catch {
-            Write-Host "   ⚠️  Could not parse parameter file: $_" -ForegroundColor Yellow
+            Write-Host "   [WARN] Could not parse parameter file: $_" -ForegroundColor Yellow
         }
     } else {
-        Write-Host "   ⚠️  Parameter file not found: $paramFilePath" -ForegroundColor Yellow
+        Write-Host "   [WARN] Parameter file not found: $paramFilePath" -ForegroundColor Yellow
     }
     
     Write-Host ""
 }
 
 # Test OIDC credential count
-Write-Host "🔐 OIDC Credentials Expected:" -ForegroundColor Cyan
+Write-Host "OIDC Credentials Expected:" -ForegroundColor Cyan
 if ($Environment -eq 'all') {
     Write-Host "   Branch credentials: 3 (dev, staging, main)" -ForegroundColor Gray
     Write-Host "   Environment credentials: 3 (dev, staging, prod)" -ForegroundColor Gray
@@ -96,10 +96,10 @@ if ($Environment -eq 'all') {
 }
 
 Write-Host ""
-Write-Host "✅ Dry run complete - mapping validated!" -ForegroundColor Green
+Write-Host "[OK] Dry run complete - mapping validated!" -ForegroundColor Green
 Write-Host ""
-Write-Host "📝 Summary:" -ForegroundColor Cyan
-Write-Host "   - dev branch → dev environment → dev.json" -ForegroundColor Gray
-Write-Host "   - staging branch → staging environment → staging.json" -ForegroundColor Gray
-Write-Host "   - main branch → prod environment → prod.json" -ForegroundColor Gray
+Write-Host "Summary:" -ForegroundColor Cyan
+Write-Host "   - dev branch -> dev environment -> dev.json" -ForegroundColor Gray
+Write-Host "   - staging branch -> staging environment -> staging.json" -ForegroundColor Gray
+Write-Host "   - main branch -> prod environment -> prod.json" -ForegroundColor Gray
 Write-Host ""

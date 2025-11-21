@@ -182,6 +182,70 @@ gh secret set SECRET_NAME --body "secret-value"
 gh secret set SECRET_NAME --env dev --body "secret-value"
 ```
 
+### **Run Azure Bootstrap (GitHub CLI)**
+```powershell
+# Prerequisites:
+# - GitHub CLI installed: https://cli.github.com/
+# - Authenticated: this uses GH_PAT or your gh auth session
+
+# (Optional) Authenticate gh if not already
+gh auth login
+
+# Verify workflow name exists
+gh workflow list | Select-String "Azure Bootstrap Setup"
+
+# Run on dev with full setup (recommended first-time):
+gh workflow run "Azure Bootstrap Setup" `
+	--ref dev `
+	-f environment=dev `
+	-f setupOidc=true `
+	-f configureSecrets=true `
+	-f bootstrapInfra=true `
+	-f enableValidation=true `
+	-f replicatePatToEnvironments=false
+
+# Run secrets configuration only (use when OIDC is already set):
+gh workflow run "Azure Bootstrap Setup" `
+	--ref dev `
+	-f environment=dev `
+	-f setupOidc=false `
+	-f configureSecrets=true `
+	-f bootstrapInfra=false `
+	-f enableValidation=false
+
+# Run for all environments (advanced; ensure OIDC + secrets ready):
+gh workflow run "Azure Bootstrap Setup" `
+	--ref main `
+	-f environment=all `
+	-f setupOidc=false `
+	-f configureSecrets=true `
+	-f bootstrapInfra=true `
+	-f enableValidation=true
+
+# Check latest runs
+gh run list -L 5
+
+# Watch the most recent run interactively
+gh run watch --exit-status
+
+# View logs for a specific run
+gh run view <run-id> --log
+```
+
+### **GH_PAT Repository Secret (if needed)**
+```powershell
+# Option 1 (UI):
+#   Settings → Secrets and variables → Actions → New repository secret → Name: GH_PAT
+
+# Option 2 (CLI): set GH_PAT at repository scope (value will not echo)
+$owner = "pavanthakur"; $repo = "XYDataLabs.OrderProcessingSystem"
+# Paste the PAT value when prompted (or use --body "<token>" cautiously)
+cmd /c "set /p X=Enter GH_PAT value: & gh secret set GH_PAT --repo %owner%/%repo% --body %X%"
+
+# Verify secret exists
+gh secret list --repo $owner/$repo | Select-String GH_PAT
+```
+
 ---
 
 ## 🧪 Build & Test Commands
