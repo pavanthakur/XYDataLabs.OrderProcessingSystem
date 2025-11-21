@@ -1,0 +1,37 @@
+﻿fix: CRITICAL - Fix PowerShell variable parsing in OIDC subject strings
+
+ISSUE: Federated credentials created with WRONG subjects:
+- Created: repo:pavanthakur/dev (missing repo name!)
+- Created: repo:pavanthakur//heads/dev (missing repo name!)
+- Expected: repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev
+- Expected: repo:pavanthakur/XYDataLabs.OrderProcessingSystem:environment:dev
+
+ROOT CAUSE: PowerShell drive path interpretation bug
+When using variable followed by colon like Repository:ref
+PowerShell treats the colon as a drive separator (like C:)
+Result: Variable name gets parsed as drive path and disappears
+
+EXAMPLE OF BUG:
+Repository = 'XYDataLabs.OrderProcessingSystem'
+subject = "repo:GitHubOwner/Repository:ref:refs/heads/branch"
+Result: "repo:pavanthakur//heads/dev" (Repository vanishes!)
+
+FIX: Use PowerShell braced variable syntax to properly delimit
+- Changed: "repo:GitHubOwner/Repository:ref:refs/heads/branch"
+- To: "repo:GitHubOwnerName/RepositoryName:ref:refs/heads/branchName"
+- Using: curly braces around variable names
+
+AFFECTED CODE:
+- Line 154: Branch credential subject string
+- Line 178: Environment credential subject string  
+- Line 119: Expected pattern for validation
+
+VALIDATION:
+Before: repo:pavanthakur//heads/dev (WRONG)
+After: repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev (CORRECT)
+
+IMPACT:
+This bug caused ALL OIDC authentication to fail because subjects did not match
+GitHub actual subject format. Bootstrap would always fail at Azure login.
+
+ADDED: Debug logging to show received parameters for troubleshooting.
