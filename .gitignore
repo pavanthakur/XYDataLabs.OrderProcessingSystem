@@ -379,3 +379,6 @@ Resources/Azure-Deployment/generated-migrations-*.sql
 Resources/Azure-Deployment/test-run-*.log
 # VS Code settings
 .vscode/
+
+# Tools and binaries
+actionlint
