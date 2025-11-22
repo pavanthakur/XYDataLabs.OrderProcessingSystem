@@ -1,4 +1,4 @@
-name: Generate GitHub App Token
+name: Azure Bootstrap Setup
 
 on:
   workflow_dispatch:
