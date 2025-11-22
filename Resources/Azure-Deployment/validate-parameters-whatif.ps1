@@ -28,8 +28,8 @@
 
 $ErrorActionPreference = 'Stop'
 $script:HadRisk = $false
-$root = Split-Path -Parent $PSScriptRoot
-$infraRoot = Join-Path (Split-Path $PSScriptRoot -Parent) 'infra'
+$root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$infraRoot = Join-Path $root 'infra'
 $paramDir = Join-Path $infraRoot 'parameters'
 $mainFile = Join-Path $infraRoot 'main.bicep'
 
@@ -51,7 +51,7 @@ function Ensure-ResourceGroup($rgName, $location) {
 
 function Run-WhatIf($env) {
     $paramFile = Join-Path $paramDir "$env.json"
-    if (!(Test-Path $paramFile)) { Write-Warning "Skipping $env: parameter file missing ($paramFile)"; return }
+    if (!(Test-Path $paramFile)) { Write-Warning "Skipping ${env}: parameter file missing ($paramFile)"; return }
     $rgName = "$ResourceGroupPrefix-$env-rg"
     Ensure-ResourceGroup $rgName $Location
     Write-Host "\n=== WHAT-IF: $env ($paramFile) ===" -ForegroundColor Cyan
