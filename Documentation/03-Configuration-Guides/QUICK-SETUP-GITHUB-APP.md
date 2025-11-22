@@ -40,12 +40,12 @@ Add these **2 secrets** (not 3!):
 
 | Secret Name | Value | Where to Find |
 |------------|-------|---------------|
-| `GH_APP_ID` | Example: `123456` | App settings page, top of page |
-| `GH_APP_PRIVATE_KEY` | Full `.pem` file contents | Open downloaded file, copy ALL text |
+| `APP_ID` | Example: `123456` | App settings page, top of page |
+| `APP_PRIVATE_KEY` | Full `.pem` file contents | Open downloaded file, copy ALL text |
 
-✨ **No need for `GH_APP_INSTALLATION_ID`** - the workflow automatically discovers it!
+✨ **No need for `APP_INSTALLATION_ID`** - the workflow automatically discovers it!
 
-**For GH_APP_PRIVATE_KEY**, copy entire content including:
+**For APP_PRIVATE_KEY**, copy entire content including:
 ```
 -----BEGIN RSA PRIVATE KEY-----
 [multiple lines of key data]

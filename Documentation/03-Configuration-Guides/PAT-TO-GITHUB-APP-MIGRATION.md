@@ -54,9 +54,9 @@ Or for comprehensive details:
 3. Generate private key
 4. Install app on your repository
 5. Add three repository secrets:
-   - `GH_APP_ID`
-   - `GH_APP_INSTALLATION_ID`
-   - `GH_APP_PRIVATE_KEY`
+   - `APP_ID`
+   - `APP_INSTALLATION_ID`
+   - `APP_PRIVATE_KEY`
 
 ### Step 3: Verify Configuration
 
@@ -83,9 +83,9 @@ Expected output:
 
 **Solution**:
 1. Verify all three secrets exist:
-   - `GH_APP_ID`
-   - `GH_APP_INSTALLATION_ID`
-   - `GH_APP_PRIVATE_KEY`
+   - `APP_ID`
+   - `APP_INSTALLATION_ID`
+   - `APP_PRIVATE_KEY`
 2. Check the private key is in PEM format (includes `-----BEGIN RSA PRIVATE KEY-----`)
 3. Verify the GitHub App is installed on your repository
 
@@ -104,7 +104,7 @@ Expected output:
    - Edit app settings if needed: https://github.com/settings/apps
 
 3. **Verify installation ID**:
-   - The installation ID in the URL should match `GH_APP_INSTALLATION_ID` secret
+   - The installation ID in the URL should match `APP_INSTALLATION_ID` secret
    - Format: `https://github.com/settings/installations/12345678`
    - Installation ID = `12345678`
 
@@ -194,7 +194,7 @@ Expected output:
 **Migration checklist:**
 - [ ] Remove `GH_PAT` secret (if exists)
 - [ ] Create GitHub App
-- [ ] Add three secrets: `GH_APP_ID`, `GH_APP_INSTALLATION_ID`, `GH_APP_PRIVATE_KEY`
+- [ ] Add three secrets: `APP_ID`, `APP_INSTALLATION_ID`, `APP_PRIVATE_KEY`
 - [ ] Run workflow to verify
 - [ ] Confirm automated token generation works
 

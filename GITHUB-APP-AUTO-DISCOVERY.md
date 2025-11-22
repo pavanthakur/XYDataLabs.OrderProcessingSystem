@@ -2,7 +2,7 @@
 
 ## What Changed
 
-The workflow has been updated to **automatically discover the `GH_APP_INSTALLATION_ID`** at runtime, eliminating the need to manually configure it as a repository secret.
+The workflow has been updated to **automatically discover the `APP_INSTALLATION_ID`** at runtime, eliminating the need to manually configure it as a repository secret.
 
 ## Before (Manual Setup - 3 Secrets)
 
@@ -11,9 +11,9 @@ Previously, you needed to:
 2. Install it on your repository
 3. **Manually copy the Installation ID from the URL**
 4. Add **3 repository secrets**:
-   - `GH_APP_ID`
-   - `GH_APP_INSTALLATION_ID` ⬅️ Manual entry required
-   - `GH_APP_PRIVATE_KEY`
+   - `APP_ID`
+   - `APP_INSTALLATION_ID` ⬅️ Manual entry required
+   - `APP_PRIVATE_KEY`
 
 ## After (Automated - 2 Secrets)
 
@@ -21,8 +21,8 @@ Now you only need to:
 1. Create the GitHub App
 2. Install it on your repository (no need to copy ID!)
 3. Add **2 repository secrets**:
-   - `GH_APP_ID`
-   - `GH_APP_PRIVATE_KEY`
+   - `APP_ID`
+   - `APP_PRIVATE_KEY`
 
 ✨ **The workflow automatically discovers the Installation ID using the GitHub API!**
 
@@ -35,8 +35,8 @@ The `actions/create-github-app-token@v1` action now handles installation discove
   id: app-token
   uses: actions/create-github-app-token@v1
   with:
-    app-id: ${{ secrets.GH_APP_ID }}
-    private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+    app-id: ${{ secrets.APP_ID }}
+    private-key: ${{ secrets.APP_PRIVATE_KEY }}
     # Installation ID automatically discovered for this repository!
 ```
 
@@ -56,7 +56,7 @@ The action:
 
 ## Answer to Your Questions
 
-### Question 1: What is GH_APP_INSTALLATION_ID used for?
+### Question 1: What is APP_INSTALLATION_ID used for?
 
 The **Installation ID** identifies the specific installation of your GitHub App on your repository or organization. When you install a GitHub App, GitHub creates a unique installation instance. The workflow uses this ID to generate installation tokens that have permissions to manage secrets.
 
@@ -66,7 +66,7 @@ The **Installation ID** identifies the specific installation of your GitHub App 
 
 ### Question 2: Can environment secrets be automated?
 
-**Yes!** The workflow now fully automates environment-specific secrets. After you add the 2 GitHub App secrets (`GH_APP_ID` and `GH_APP_PRIVATE_KEY`):
+**Yes!** The workflow now fully automates environment-specific secrets. After you add the 2 GitHub App secrets (`APP_ID` and `APP_PRIVATE_KEY`):
 
 1. **Installation ID is auto-discovered** at runtime
 2. **Installation token is auto-generated** (valid for 1 hour)
@@ -77,14 +77,14 @@ No manual configuration needed beyond the initial 2 secrets!
 
 ## Migration Guide
 
-### If You Already Have GH_APP_INSTALLATION_ID Configured
+### If You Already Have APP_INSTALLATION_ID Configured
 
 **No action needed!** The workflow will:
-- Check for `GH_APP_INSTALLATION_ID` secret (backward compatible)
+- Check for `APP_INSTALLATION_ID` secret (backward compatible)
 - If present, use it (legacy mode)
 - If absent, auto-discover it (new mode)
 
-You can optionally delete the `GH_APP_INSTALLATION_ID` secret since it's no longer needed.
+You can optionally delete the `APP_INSTALLATION_ID` secret since it's no longer needed.
 
 ### For New Setup
 
@@ -119,11 +119,11 @@ This is the recommended approach by GitHub and is more secure than manually mana
 ## Commit
 
 ```
-feat: Auto-discover GH_APP_INSTALLATION_ID - only 2 secrets needed
+feat: Auto-discover APP_INSTALLATION_ID - only 2 secrets needed
 
-- Removed requirement for manual GH_APP_INSTALLATION_ID secret
+- Removed requirement for manual APP_INSTALLATION_ID secret
 - Workflow now auto-discovers installation ID using GitHub API
-- Only GH_APP_ID and GH_APP_PRIVATE_KEY secrets required
+- Only APP_ID and APP_PRIVATE_KEY secrets required
 - Reduced setup time from 5 to 4 minutes
 - Updated all error messages and documentation
 - Benefits: simpler setup, less manual work, fully automated
@@ -133,7 +133,7 @@ feat: Auto-discover GH_APP_INSTALLATION_ID - only 2 secrets needed
 
 1. ✅ Changes committed to `dev` branch
 2. Test the workflow with only 2 secrets configured
-3. Delete the old `GH_APP_INSTALLATION_ID` secret (optional)
+3. Delete the old `APP_INSTALLATION_ID` secret (optional)
 4. Re-run the bootstrap workflow with `Configure GitHub secrets` enabled
 
 The workflow will now automatically discover the Installation ID and configure all secrets!

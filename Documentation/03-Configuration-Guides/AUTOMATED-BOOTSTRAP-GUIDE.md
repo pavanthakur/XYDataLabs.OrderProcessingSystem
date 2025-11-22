@@ -92,9 +92,9 @@ Add these **3 secrets**:
 
 | Secret Name | Value | Example |
 |------------|-------|---------|
-| `GH_APP_ID` | App ID from step 2a | `123456` |
-| `GH_APP_INSTALLATION_ID` | Installation ID from step 2c | `12345678` |
-| `GH_APP_PRIVATE_KEY` | **Full contents** of .pem file | Copy entire file including `-----BEGIN...-----` and `-----END...-----` |
+| `APP_ID` | App ID from step 2a | `123456` |
+| `APP_INSTALLATION_ID` | Installation ID from step 2c | `12345678` |
+| `APP_PRIVATE_KEY` | **Full contents** of .pem file | Copy entire file including `-----BEGIN...-----` and `-----END...-----` |
 
 #### Step 3: Configure Secrets (Automated - 1 minute)
 
@@ -260,9 +260,9 @@ Use workflow dispatch for manual deployments:
 **Fix**:
 1. Check secrets exist: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/settings/secrets/actions
 2. Verify all 3 secrets are present:
-   - `GH_APP_ID`
-   - `GH_APP_INSTALLATION_ID`
-   - `GH_APP_PRIVATE_KEY`
+   - `APP_ID`
+   - `APP_INSTALLATION_ID`
+   - `APP_PRIVATE_KEY`
 3. If missing, complete Step 2 above
 
 ### "Failed to generate installation token" Error

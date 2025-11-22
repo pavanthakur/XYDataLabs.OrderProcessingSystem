@@ -58,9 +58,9 @@
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  Workflow Checks:                                               │
-│  • GH_APP_ID secret exists?                                      │
-│  • GH_APP_INSTALLATION_ID secret exists?                         │
-│  • GH_APP_PRIVATE_KEY secret exists?                             │
+│  • APP_ID secret exists?                                      │
+│  • APP_INSTALLATION_ID secret exists?                         │
+│  • APP_PRIVATE_KEY secret exists?                             │
 │                                                                  │
 │  IF ALL EXIST:                                                  │
 │  ✅ "GitHub App already configured"                              │
@@ -98,9 +98,9 @@
 │  │    • Copy Installation ID from URL             │            │
 │  │                                                 │            │
 │  │ 4. Add Secrets                                 │            │
-│  │    • GH_APP_ID                                 │            │
-│  │    • GH_APP_INSTALLATION_ID                    │            │
-│  │    • GH_APP_PRIVATE_KEY                        │            │
+│  │    • APP_ID                                 │            │
+│  │    • APP_INSTALLATION_ID                    │            │
+│  │    • APP_PRIVATE_KEY                        │            │
 │  └────────────────────────────────────────────────┘            │
 │                                                                  │
 │  ✨ After this: NEVER NEEDED AGAIN                               │
@@ -356,9 +356,9 @@ Forever:
 
 | Secret | Set By | Purpose |
 |--------|--------|---------|
-| **GH_APP_ID** | Manual (one-time) | GitHub App authentication |
-| **GH_APP_INSTALLATION_ID** | Manual (one-time) | GitHub App installation |
-| **GH_APP_PRIVATE_KEY** | Manual (one-time) | GitHub App private key |
+| **APP_ID** | Manual (one-time) | GitHub App authentication |
+| **APP_INSTALLATION_ID** | Manual (one-time) | GitHub App installation |
+| **APP_PRIVATE_KEY** | Manual (one-time) | GitHub App private key |
 | **AZUREAPPSERVICE_CLIENTID** | Workflow (automated) | Azure OIDC client ID |
 | **AZUREAPPSERVICE_TENANTID** | Workflow (automated) | Azure AD tenant ID |
 | **AZUREAPPSERVICE_SUBSCRIPTIONID** | Workflow (automated) | Azure subscription ID |

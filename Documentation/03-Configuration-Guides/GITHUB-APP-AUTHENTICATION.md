@@ -88,15 +88,15 @@ sequenceDiagram
 
 Add these three secrets at: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/settings/secrets/actions
 
-1. **GH_APP_ID**:
+1. **APP_ID**:
    - Value: Your App ID (found on app settings page)
    - Example: `123456`
 
-2. **GH_APP_INSTALLATION_ID**:
+2. **APP_INSTALLATION_ID**:
    - Value: Installation ID from Step 3
    - Example: `12345678`
 
-3. **GH_APP_PRIVATE_KEY**:
+3. **APP_PRIVATE_KEY**:
    - Value: Contents of the `.pem` file you downloaded
    - Open the `.pem` file in a text editor and copy **entire contents** including:
      ```
@@ -109,7 +109,7 @@ Add these three secrets at: https://github.com/pavanthakur/XYDataLabs.OrderProce
 ### Step 5: Update Workflow (Done Automatically)
 
 The workflow will now:
-1. Check for GitHub App credentials (`GH_APP_ID`, `GH_APP_INSTALLATION_ID`, `GH_APP_PRIVATE_KEY`)
+1. Check for GitHub App credentials (`APP_ID`, `APP_INSTALLATION_ID`, `APP_PRIVATE_KEY`)
 2. If found, generate a short-lived token automatically
 3. Use that token to set secrets
 4. Token expires after 1 hour (auto-refreshed on next run)
@@ -249,9 +249,9 @@ Instead of adding secrets to each repository:
 
 1. Go to: https://github.com/organizations/[ORG-NAME]/settings/secrets/actions
 2. Create organization secrets:
-   - `GH_APP_ID`
-   - `GH_APP_INSTALLATION_ID`
-   - `GH_APP_PRIVATE_KEY`
+   - `APP_ID`
+   - `APP_INSTALLATION_ID`
+   - `APP_PRIVATE_KEY`
 3. Set **Repository access** to "Selected repositories" or "All repositories"
 4. All repos automatically inherit these secrets
 
