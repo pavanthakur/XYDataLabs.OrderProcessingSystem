@@ -558,6 +558,7 @@ jobs:
     if: inputs.setupGitHubApp
     needs: [validate-inputs, setup-oidc]
     runs-on: windows-latest
+    environment: ${{ inputs.environment != 'all' && inputs.environment || 'dev' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -752,6 +753,7 @@ jobs:
       (needs.setup-github-app.result == 'success' || needs.setup-github-app.result == 'skipped')
     needs: [validate-inputs, setup-oidc, setup-github-app]
     runs-on: windows-latest
+    environment: ${{ inputs.environment != 'all' && inputs.environment || 'dev' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -833,6 +835,8 @@ jobs:
 
           Write-Host ""
           Write-Host "🔍 Checking GitHub App secrets..." -ForegroundColor Cyan
+          Write-Host "  Environment Context: ${{ inputs.environment }}" -ForegroundColor Gray
+          Write-Host ""
           
           # Check if GitHub App secrets are available
           $hasAppId = "${{ secrets.APP_ID }}" -ne ""
