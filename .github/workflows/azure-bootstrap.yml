@@ -1574,22 +1574,99 @@ jobs:
           client-id: ${{ env.CLIENT_ID }}
           tenant-id: ${{ env.TENANT_ID }}
           subscription-id: ${{ env.SUBSCRIPTION_ID }}
+      
+      - name: Verify Azure Login
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║         VERIFY AZURE LOGIN - STAGING                          ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          
+          try {
+            Write-Host "🔍 Verifying Azure login..." -ForegroundColor Cyan
+            $account = az account show | ConvertFrom-Json
+            
+            if ($LASTEXITCODE -ne 0 -or -not $account) {
+              Write-Host "❌ Azure login verification failed" -ForegroundColor Red
+              Write-Error "Failed to verify Azure login"
+              exit 1
+            }
+            
+            Write-Host "✅ Azure login verified successfully" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "Account Details:" -ForegroundColor Yellow
+            Write-Host "  Subscription: $($account.name)" -ForegroundColor Gray
+            Write-Host "  Subscription ID: $($account.id)" -ForegroundColor Gray
+            Write-Host "  Tenant ID: $($account.tenantId)" -ForegroundColor Gray
+            Write-Host ""
+          }
+          catch {
+            Write-Host "❌ Exception during Azure login verification: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Error "Failed to verify Azure login: $($_.Exception.Message)"
+            exit 1
+          }
+      
       - name: Bootstrap Staging Infrastructure
         run: |
-          Write-Host "🚀 Bootstrapping Staging Environment..." -ForegroundColor Cyan
-          Write-Host "" -ForegroundColor Gray
-          Write-Host "📋 Configuration:" -ForegroundColor Yellow
-          Write-Host "  Branch: staging" -ForegroundColor Gray
-          Write-Host "  Environment: staging" -ForegroundColor Gray
-          Write-Host "  Parameter File: infra/parameters/staging.json" -ForegroundColor Gray
-          Write-Host "  Resource Group: rg-orderprocessing-staging" -ForegroundColor Gray
-          Write-Host "  OIDC Subject: repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/staging" -ForegroundColor Gray
-          Write-Host "" -ForegroundColor Gray
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║         BOOTSTRAP STAGING INFRASTRUCTURE                      ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+          
+          try {
+            Write-Host "🚀 Bootstrapping Staging Environment..." -ForegroundColor Cyan
+            Write-Host "" -ForegroundColor Gray
+            Write-Host "📋 Configuration:" -ForegroundColor Yellow
+            Write-Host "  Branch: staging" -ForegroundColor Gray
+            Write-Host "  Environment: staging" -ForegroundColor Gray
+            Write-Host "  Parameter File: infra/parameters/staging.json" -ForegroundColor Gray
+            Write-Host "  Resource Group: rg-orderprocessing-staging" -ForegroundColor Gray
+            Write-Host "  OIDC Subject: repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/staging" -ForegroundColor Gray
+            Write-Host "" -ForegroundColor Gray
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+            Write-Host ""
 
-          ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment staging
-          if ($LASTEXITCODE -ne 0) {
-            Write-Error "Bootstrap failed with exit code $LASTEXITCODE"
-            exit $LASTEXITCODE
+            ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment staging
+            
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host ""
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host "❌ BOOTSTRAP SCRIPT FAILED" -ForegroundColor Red
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Red
+              Write-Host "Script: ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1" -ForegroundColor Gray
+              Write-Host "Environment: staging" -ForegroundColor Gray
+              Write-Host ""
+              Write-Host "Check the bootstrap log artifact for detailed error information." -ForegroundColor Yellow
+              Write-Host ""
+              Write-Error "Bootstrap failed with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+            }
+            
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host "✅ STAGING INFRASTRUCTURE BOOTSTRAP COMPLETE" -ForegroundColor Green
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+            Write-Host ""
+          }
+          catch {
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING BOOTSTRAP" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Stack Trace:" -ForegroundColor Yellow
+            Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
+            Write-Host ""
+            Write-Error "Bootstrap failed with exception: $($_.Exception.Message)"
+            exit 1
           }
       - name: Upload Bootstrap Log
         if: always()
@@ -1672,22 +1749,99 @@ jobs:
           client-id: ${{ env.CLIENT_ID }}
           tenant-id: ${{ env.TENANT_ID }}
           subscription-id: ${{ env.SUBSCRIPTION_ID }}
+      
+      - name: Verify Azure Login
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║         VERIFY AZURE LOGIN - PRODUCTION                       ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          
+          try {
+            Write-Host "🔍 Verifying Azure login..." -ForegroundColor Cyan
+            $account = az account show | ConvertFrom-Json
+            
+            if ($LASTEXITCODE -ne 0 -or -not $account) {
+              Write-Host "❌ Azure login verification failed" -ForegroundColor Red
+              Write-Error "Failed to verify Azure login"
+              exit 1
+            }
+            
+            Write-Host "✅ Azure login verified successfully" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "Account Details:" -ForegroundColor Yellow
+            Write-Host "  Subscription: $($account.name)" -ForegroundColor Gray
+            Write-Host "  Subscription ID: $($account.id)" -ForegroundColor Gray
+            Write-Host "  Tenant ID: $($account.tenantId)" -ForegroundColor Gray
+            Write-Host ""
+          }
+          catch {
+            Write-Host "❌ Exception during Azure login verification: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Error "Failed to verify Azure login: $($_.Exception.Message)"
+            exit 1
+          }
+      
       - name: Bootstrap Prod Infrastructure
         run: |
-          Write-Host "🚀 Bootstrapping Prod Environment..." -ForegroundColor Cyan
-          Write-Host "" -ForegroundColor Gray
-          Write-Host "📋 Configuration:" -ForegroundColor Yellow
-          Write-Host "  Branch: main" -ForegroundColor Gray
-          Write-Host "  Environment: prod" -ForegroundColor Gray
-          Write-Host "  Parameter File: infra/parameters/prod.json" -ForegroundColor Gray
-          Write-Host "  Resource Group: rg-orderprocessing-prod" -ForegroundColor Gray
-          Write-Host "  OIDC Subject: repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/main" -ForegroundColor Gray
-          Write-Host "" -ForegroundColor Gray
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║         BOOTSTRAP PRODUCTION INFRASTRUCTURE                   ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+          
+          try {
+            Write-Host "🚀 Bootstrapping Prod Environment..." -ForegroundColor Cyan
+            Write-Host "" -ForegroundColor Gray
+            Write-Host "📋 Configuration:" -ForegroundColor Yellow
+            Write-Host "  Branch: main" -ForegroundColor Gray
+            Write-Host "  Environment: prod" -ForegroundColor Gray
+            Write-Host "  Parameter File: infra/parameters/prod.json" -ForegroundColor Gray
+            Write-Host "  Resource Group: rg-orderprocessing-prod" -ForegroundColor Gray
+            Write-Host "  OIDC Subject: repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/main" -ForegroundColor Gray
+            Write-Host "" -ForegroundColor Gray
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+            Write-Host ""
 
-          ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment prod
-          if ($LASTEXITCODE -ne 0) {
-            Write-Error "Bootstrap failed with exit code $LASTEXITCODE"
-            exit $LASTEXITCODE
+            ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment prod
+            
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host ""
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host "❌ BOOTSTRAP SCRIPT FAILED" -ForegroundColor Red
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Red
+              Write-Host "Script: ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1" -ForegroundColor Gray
+              Write-Host "Environment: prod" -ForegroundColor Gray
+              Write-Host ""
+              Write-Host "Check the bootstrap log artifact for detailed error information." -ForegroundColor Yellow
+              Write-Host ""
+              Write-Error "Bootstrap failed with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+            }
+            
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host "✅ PRODUCTION INFRASTRUCTURE BOOTSTRAP COMPLETE" -ForegroundColor Green
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+            Write-Host ""
+          }
+          catch {
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING BOOTSTRAP" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Stack Trace:" -ForegroundColor Yellow
+            Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
+            Write-Host ""
+            Write-Error "Bootstrap failed with exception: $($_.Exception.Message)"
+            exit 1
           }
       - name: Upload Bootstrap Log
         if: always()
