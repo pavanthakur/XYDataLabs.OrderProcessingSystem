@@ -82,31 +82,31 @@ jobs:
           Write-Host "" -ForegroundColor Gray
           Write-Host "========================================================================" -ForegroundColor Cyan
           Write-Host "" -ForegroundColor Gray
-      
+
       - name: Validate Configuration
         run: |
           Write-Host "🔍 Validating workflow inputs..." -ForegroundColor Cyan
           Write-Host "=" * 70 -ForegroundColor Gray
-          
+
           $env = "${{ inputs.environment }}"
           $setupOidc = "${{ inputs.setupOidc }}"
           $configSecrets = "${{ inputs.configureSecrets }}"
           $bootstrap = "${{ inputs.bootstrapInfra }}"
           $enableValidation = "${{ inputs.enableValidation }}"
-          
+
           Write-Host "`n📋 Workflow Inputs:" -ForegroundColor Cyan
           Write-Host "  Environment: $env" -ForegroundColor Yellow
           Write-Host "  Setup OIDC: $setupOidc" -ForegroundColor Yellow
           Write-Host "  Configure secrets: $configSecrets" -ForegroundColor Yellow
           Write-Host "  Bootstrap infra: $bootstrap" -ForegroundColor Yellow
           Write-Host "  Enable validation: $enableValidation" -ForegroundColor Yellow
-          
+
           # Display branch-to-environment mapping
           Write-Host "`n🗺️  Branch → Environment Mapping:" -ForegroundColor Cyan
           Write-Host "  dev branch      → dev environment (dev.json)" -ForegroundColor Gray
           Write-Host "  staging branch  → staging environment (staging.json)" -ForegroundColor Gray
           Write-Host "  main branch     → prod environment (prod.json)" -ForegroundColor Gray
-          
+
           # Show what will be created based on selection
           Write-Host "`n📦 Resources to be created:" -ForegroundColor Cyan
           if ($env -eq "all") {
@@ -126,9 +126,9 @@ jobs:
             Write-Host "  GitHub Secrets: $env" -ForegroundColor Yellow
             Write-Host "  Bootstrap: $env resource group" -ForegroundColor Yellow
           }
-          
+
           Write-Host "`n⚠️  Validation Checks:" -ForegroundColor Cyan
-          
+
           # Validate environment selection
           if ($env -notin @('dev', 'staging', 'prod', 'all')) {
             Write-Host "  ❌ Invalid environment: $env" -ForegroundColor Red
@@ -136,14 +136,14 @@ jobs:
             exit 1
           }
           Write-Host "  ✅ Environment selection valid" -ForegroundColor Green
-          
+
           # Warn if bootstrapping without OIDC/secrets
           if ($bootstrap -eq "true" -and $setupOidc -eq "false" -and $configSecrets -eq "false") {
             Write-Host "  ⚠️  Bootstrapping without OIDC/secrets - ensure they exist!" -ForegroundColor Yellow
           } else {
             Write-Host "  ✅ Configuration sequence valid" -ForegroundColor Green
           }
-          
+
           Write-Host "`n" -ForegroundColor Gray
           Write-Host "=" * 70 -ForegroundColor Gray
           Write-Host "✅ Input validation passed - proceeding..." -ForegroundColor Green
@@ -160,7 +160,7 @@ jobs:
       appObjectId: ${{ steps.oidc.outputs.appObjectId }}
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Azure Login (Device Code)
         timeout-minutes: 3
         run: |
@@ -168,12 +168,12 @@ jobs:
           Write-Host "This is a one-time setup. Please authenticate when prompted." -ForegroundColor Yellow
           Write-Host "⏱️  Timeout: 3 minutes" -ForegroundColor Yellow
           az login --use-device-code
-      
+
       - name: Setup OIDC App Registration
         id: oidc
         run: |
           Write-Host "🚀 Setting up GitHub Actions OIDC..." -ForegroundColor Cyan
-          
+
           # Determine branches and environments based on input
           $selectedEnv = "${{ inputs.environment }}"
           if ($selectedEnv -eq "all") {
@@ -183,62 +183,62 @@ jobs:
             $branches = $selectedEnv
             $environments = $selectedEnv
           }
-          
+
           Write-Host "Creating credentials for:" -ForegroundColor Yellow
           Write-Host "  Branches: $branches" -ForegroundColor Gray
           Write-Host "  Environments: $environments" -ForegroundColor Gray
           Write-Host "  Repository: pavanthakur/XYDataLabs.OrderProcessingSystem" -ForegroundColor Gray
-          
+
           # Run setup script
           ./Resources/Azure-Deployment/setup-github-oidc.ps1 `
             -Branches $branches `
             -Environments $environments `
             -GitHubOwner "pavanthakur" `
             -Repository "XYDataLabs.OrderProcessingSystem"
-          
+
           Write-Host "" -ForegroundColor Gray
           Write-Host "Script parameters passed:" -ForegroundColor Cyan
           Write-Host "  -Branches $branches" -ForegroundColor Gray
           Write-Host "  -Environments $environments" -ForegroundColor Gray
-          
+
           if ($LASTEXITCODE -ne 0) {
             Write-Error "OIDC setup failed with exit code $LASTEXITCODE"
             exit $LASTEXITCODE
           }
-          
+
           # Extract credentials from Azure
           $sub = az account show | ConvertFrom-Json
           if (-not $sub) {
             Write-Error "Failed to get Azure subscription"
             exit 1
           }
-          
+
           $app = az ad app list --display-name "GitHub-Actions-OIDC" | ConvertFrom-Json
           if (-not $app -or $app.Count -eq 0) {
             Write-Error "Failed to create or find OIDC app"
             exit 1
           }
-          
+
           $clientId = $app[0].appId
           $appObjectId = $app[0].id
           $tenantId = $sub.tenantId
           $subscriptionId = $sub.id
-          
+
           # Output for next jobs
           "clientId=$clientId" >> $env:GITHUB_OUTPUT
           "tenantId=$tenantId" >> $env:GITHUB_OUTPUT
           "subscriptionId=$subscriptionId" >> $env:GITHUB_OUTPUT
           "appObjectId=$appObjectId" >> $env:GITHUB_OUTPUT
-          
+
           Write-Host "✅ OIDC Setup Complete" -ForegroundColor Green
           Write-Host "   Client ID: $clientId" -ForegroundColor Gray
           Write-Host "   Tenant ID: $tenantId" -ForegroundColor Gray
           Write-Host "   App Object ID: $appObjectId" -ForegroundColor Gray
-      
+
       - name: Verify Federated Credentials
         run: |
           Write-Host "🔍 Verifying federated credentials..." -ForegroundColor Cyan
-          
+
           $appObjectId = "${{ steps.oidc.outputs.appObjectId }}"
           $expectedPattern = "repo:pavanthakur/XYDataLabs.OrderProcessingSystem"
           $selectedEnv = "${{ inputs.environment }}"
@@ -246,31 +246,31 @@ jobs:
           $maxRetries = 3
           $retryDelay = 20
           $validCreds = $null
-          
+
           Write-Host "Expected credentials count: $expectedCount (environment: $selectedEnv)" -ForegroundColor Gray
-          
+
           for ($i = 1; $i -le $maxRetries; $i++) {
             Write-Host "`n[Attempt $i/$maxRetries] Waiting $retryDelay seconds for Azure AD propagation..." -ForegroundColor Gray
             Start-Sleep -Seconds $retryDelay
-            
+
             Write-Host "Purging Azure CLI cache and querying credentials..." -ForegroundColor Gray
             az cache purge 2>$null | Out-Null
             $creds = az ad app federated-credential list --id $appObjectId | ConvertFrom-Json
-            
+
             $validCount = ($creds | Where-Object { $_.subject -like "$expectedPattern*" }).Count
             Write-Host "Found $validCount/$($creds.Count) credentials with correct format" -ForegroundColor $(if ($validCount -eq $expectedCount) { "Green" } else { "Yellow" })
-            
+
             if ($validCount -eq $expectedCount) {
               Write-Host "✅ All credentials have propagated correctly!" -ForegroundColor Green
               $validCreds = $creds
               break
             }
-            
+
             if ($i -lt $maxRetries) {
               Write-Host "⚠️ Still seeing old credentials, retrying..." -ForegroundColor Yellow
             }
           }
-          
+
           if (-not $validCreds) {
             Write-Warning "Azure AD still showing stale credentials after $($maxRetries * $retryDelay) seconds"
             Write-Warning "This is likely an Azure AD caching issue. Proceeding with manual verification..."
@@ -278,22 +278,22 @@ jobs:
           } else {
             $creds = $validCreds
           }
-          
+
           Write-Host "`nCreated federated credentials:" -ForegroundColor Green
           foreach ($cred in $creds) {
             Write-Host "  - Name: $($cred.name)" -ForegroundColor White
             Write-Host "    Subject: $($cred.subject)" -ForegroundColor Gray
           }
-          
+
           if ($creds.Count -lt $expectedCount) {
             Write-Warning "Expected $expectedCount federated credentials, found $($creds.Count). OIDC setup may be incomplete."
             Write-Warning "Re-run this workflow with 'Setup OIDC' enabled to create missing credentials."
           } else {
             Write-Host "`n✅ All $expectedCount federated credentials verified!" -ForegroundColor Green
           }
-          
+
           Write-Host "`n🔎 Checking for required credentials..." -ForegroundColor Cyan
-          
+
           # Check branch credential for selected environment
           Write-Host "Searching for $selectedEnv branch credential..." -ForegroundColor Gray
           $expectedBranch = "repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/$selectedEnv"
@@ -309,7 +309,7 @@ jobs:
             }
             Write-Error "⚠️ $selectedEnv branch federated credential is missing! Bootstrap will fail."
           }
-          
+
           # Check environment credential for selected environment
           Write-Host "`nSearching for $selectedEnv environment credential..." -ForegroundColor Gray
           $expectedEnv = "repo:pavanthakur/XYDataLabs.OrderProcessingSystem:environment:$selectedEnv"
@@ -320,7 +320,7 @@ jobs:
           } else {
             Write-Host "❌ $selectedEnv environment credential NOT found" -ForegroundColor Red
           }
-      
+
       - name: Create Setup Summary
         run: |
           "## 🔐 Azure OIDC Setup Complete" >> $env:GITHUB_STEP_SUMMARY
@@ -371,7 +371,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Explain GitHub App Setup
         run: |
           Write-Host "========================================" -ForegroundColor Cyan
@@ -393,16 +393,16 @@ jobs:
           Write-Host "⏱️  One-time manual setup required (5 minutes)" -ForegroundColor Cyan
           Write-Host "   After this, everything is fully automated!" -ForegroundColor Green
           Write-Host ""
-      
+
       - name: Check Existing GitHub App
         id: check-app
         run: |
           Write-Host "🔍 Checking for existing GitHub App configuration..." -ForegroundColor Cyan
-          
+
           $hasAppId = "${{ secrets.GH_APP_ID }}" -ne ""
           $hasInstallationId = "${{ secrets.GH_APP_INSTALLATION_ID }}" -ne ""
           $hasPrivateKey = "${{ secrets.GH_APP_PRIVATE_KEY }}" -ne ""
-          
+
           if ($hasAppId -and $hasInstallationId -and $hasPrivateKey) {
             Write-Host "  ✅ GitHub App already configured!" -ForegroundColor Green
             Write-Host "     App ID: Present" -ForegroundColor Gray
@@ -420,7 +420,7 @@ jobs:
             Write-Host ""
             "alreadyConfigured=false" >> $env:GITHUB_OUTPUT
           }
-      
+
       - name: Provide Setup Instructions
         if: steps.check-app.outputs.alreadyConfigured != 'true'
         run: |
@@ -491,14 +491,14 @@ jobs:
           Write-Host "📖 Detailed guide:" -ForegroundColor Cyan
           Write-Host "   Documentation/03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md" -ForegroundColor White
           Write-Host ""
-      
+
       - name: Create Setup Summary
         run: |
           "## 🔐 GitHub App Setup" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
-          
+
           $hasApp = "${{ steps.check-app.outputs.alreadyConfigured }}" -eq "true"
-          
+
           if ($hasApp) {
             "### ✅ Already Configured" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
@@ -552,7 +552,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Validate Prerequisites
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -560,19 +560,19 @@ jobs:
           Write-Host "🔍 Checking if OIDC setup was performed..." -ForegroundColor Cyan
           $setupOidc = "${{ inputs.setupOidc }}"
           $hasClientId = "${{ needs.setup-oidc.outputs.clientId }}" -ne ""
-          
+
           if ($setupOidc -eq "true" -and -not $hasClientId) {
             Write-Error "OIDC setup was enabled but no client ID was output. Check setup-oidc job logs."
             exit 1
           }
-          
+
           if ($setupOidc -eq "false" -and -not $hasClientId) {
             Write-Warning "Running without OIDC setup. Ensure Azure app credentials already exist in secrets."
           }
-          
+
           Write-Host "" -ForegroundColor Gray
           Write-Host "✅ All prerequisites validated" -ForegroundColor Green
-      
+
       - name: Generate GitHub App Token
         id: app-token
         if: secrets.GH_APP_ID != '' && secrets.GH_APP_PRIVATE_KEY != '' && secrets.GH_APP_INSTALLATION_ID != ''
@@ -580,7 +580,7 @@ jobs:
         with:
           app-id: ${{ secrets.GH_APP_ID }}
           private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
-      
+
       - name: Check Required Secrets
         id: check
         env:
@@ -597,7 +597,7 @@ jobs:
           Write-Host "Repo Secret Present?  AZUREAPPSERVICE_TENANTID    : $hasTenantId" -ForegroundColor Gray
           Write-Host "Repo Secret Present?  AZUREAPPSERVICE_SUBSCRIPTIONID : $hasSubscriptionId" -ForegroundColor Gray
           Write-Host "" -ForegroundColor Gray
-          
+
           # Check authentication method (prefer GitHub App over PAT)
           if ($env:GH_APP_TOKEN) {
             Write-Host "Authentication method: GitHub App (App ID: $env:GH_APP_ID)" -ForegroundColor Green
@@ -615,11 +615,11 @@ jobs:
             Write-Host "  📖 See Documentation/03-Configuration-Guides/GITHUB-APP-AUTHENTICATION.md" -ForegroundColor Yellow
             "useGitHubApp=false" >> $env:GITHUB_OUTPUT
           }
-          
+
           Write-Host "" -ForegroundColor Gray
           Write-Host "Timestamp (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           Write-Host "---- END REPOSITORY SECRET BASELINE ----" -ForegroundColor Cyan
-          
+
           if ($hasClientId -and $hasTenantId -and $hasSubscriptionId) {
             Write-Host "✅ All secrets already configured" -ForegroundColor Green
             "secretsExist=true" >> $env:GITHUB_OUTPUT
@@ -634,7 +634,7 @@ jobs:
           GH_APP_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           Write-Host "🔑 Authentication Status:" -ForegroundColor Cyan
-          
+
           if ($env:GH_APP_TOKEN) {
             Write-Host "  ✅ GitHub App configured - automatic token generation" -ForegroundColor Green
             Write-Host "     No expiration maintenance required!" -ForegroundColor Green
@@ -653,7 +653,7 @@ jobs:
             Write-Host "       See: Documentation/GITHUB-SECRETS-FIX.md" -ForegroundColor Gray
             Write-Host "    3. Manual setup - set secrets manually" -ForegroundColor Cyan
           }
-      
+
       - name: Set Repository Secrets
         if: steps.check.outputs.secretsExist == 'false'
         env:
@@ -665,11 +665,11 @@ jobs:
         run: |
           Write-Host "---- BEGIN REPOSITORY SECRET CONFIGURATION ----" -ForegroundColor Cyan
           Write-Host "UTC Start: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
-          
+
           # Determine authentication method (prefer GitHub App)
           $token = $null
           $authMethod = "None"
-          
+
           if ($env:GH_APP_TOKEN) {
             $token = $env:GH_APP_TOKEN
             $authMethod = "GitHub App"
@@ -682,7 +682,7 @@ jobs:
             Write-Host "Using PAT authentication (manual token)" -ForegroundColor Yellow
             Write-Host "  ⚠️  Remember to renew before expiration" -ForegroundColor Yellow
           }
-          
+
           if (-not $token) {
             Write-Host "⚠️  No authentication token available - cannot set repository secrets" -ForegroundColor Yellow
             Write-Host "    GITHUB_TOKEN does not have permission to create/update repository secrets" -ForegroundColor Yellow
@@ -718,24 +718,24 @@ jobs:
             Write-Host "---- END REPOSITORY SECRET CONFIGURATION ----" -ForegroundColor Cyan
             exit 0
           }
-          
+
           # Set GH_TOKEN for gh CLI
           $env:GH_TOKEN = $token
-          
+
           Write-Host "🔑 Setting GitHub repository secrets..." -ForegroundColor Cyan
-          
+
           Write-Host "  Setting AZUREAPPSERVICE_CLIENTID..." -ForegroundColor Gray
           gh secret set AZUREAPPSERVICE_CLIENTID --repo ${{ github.repository }} --body "$env:CLIENT_ID"
           if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set AZUREAPPSERVICE_CLIENTID"; exit 1 }
-          
+
           Write-Host "  Setting AZUREAPPSERVICE_TENANTID..." -ForegroundColor Gray
           gh secret set AZUREAPPSERVICE_TENANTID --repo ${{ github.repository }} --body "$env:TENANT_ID"
           if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set AZUREAPPSERVICE_TENANTID"; exit 1 }
-          
+
           Write-Host "  Setting AZUREAPPSERVICE_SUBSCRIPTIONID..." -ForegroundColor Gray
           gh secret set AZUREAPPSERVICE_SUBSCRIPTIONID --repo ${{ github.repository }} --body "$env:SUBSCRIPTION_ID"
           if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set AZUREAPPSERVICE_SUBSCRIPTIONID"; exit 1 }
-          
+
           Write-Host "  ✅ Repository secrets configured successfully using $authMethod!" -ForegroundColor Green
 
           Write-Host "UTC End: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
@@ -751,15 +751,15 @@ jobs:
           SUBSCRIPTION_ID: ${{ needs.setup-oidc.outputs.subscriptionId }}
         run: |
           $selectedEnv = "${{ inputs.environment }}"
-          
+
           Write-Host "---- BEGIN ENVIRONMENT SECRET CONFIGURATION ----" -ForegroundColor Cyan
           Write-Host "UTC Start: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           Write-Host "Target selection: $selectedEnv" -ForegroundColor Gray
-          
+
           # Determine authentication method (prefer GitHub App)
           $token = $null
           $authMethod = "None"
-          
+
           if ($env:GH_APP_TOKEN) {
             $token = $env:GH_APP_TOKEN
             $authMethod = "GitHub App"
@@ -769,7 +769,7 @@ jobs:
             $authMethod = "PAT"
             Write-Host "Using PAT authentication" -ForegroundColor Yellow
           }
-          
+
           # Check if authentication is available
           if (-not $token) {
             Write-Host "⚠️  No authentication configured - skipping environment secrets" -ForegroundColor Yellow
@@ -778,10 +778,10 @@ jobs:
             Write-Host "---- END ENVIRONMENT SECRET CONFIGURATION ----" -ForegroundColor Cyan
             exit 0
           }
-          
+
           # Set GH_TOKEN for gh CLI commands
           $env:GH_TOKEN = $token
-          
+
           # Determine which environments to configure
           $environments = @()
           if ($selectedEnv -eq "all") {
@@ -789,17 +789,17 @@ jobs:
           } else {
             $environments = @($selectedEnv)
           }
-          
+
           Write-Host "🔑 Setting GitHub environment secrets for '$selectedEnv'..." -ForegroundColor Cyan
-          
+
           foreach ($env_name in $environments) {
             Write-Host "`n  Configuring environment: $env_name" -ForegroundColor Yellow
-            
+
             # Check if environment secret already exists (list existing secrets)
             Write-Host "  Checking existing environment secret set BEFORE changes..." -ForegroundColor Gray
             $ownerRepo = "${{ github.repository }}"
             $owner, $repo = $ownerRepo -split '/', 2
-            
+
             try {
               $existingSecrets = gh api -H "Accept: application/vnd.github+json" repos/$owner/$repo/environments/$env_name/secrets 2>$null | ConvertFrom-Json
               if ($existingSecrets -and $existingSecrets.secrets) {
@@ -810,14 +810,14 @@ jobs:
             } catch {
               Write-Host "    (Could not list pre-existing secrets or none present)" -ForegroundColor Gray
             }
-            
+
             # Set environment secrets
             $secretsToSet = @{
               "AZUREAPPSERVICE_CLIENTID" = $env:CLIENT_ID
               "AZUREAPPSERVICE_TENANTID" = $env:TENANT_ID
               "AZUREAPPSERVICE_SUBSCRIPTIONID" = $env:SUBSCRIPTION_ID
             }
-            
+
             foreach ($secretName in $secretsToSet.Keys) {
               Write-Host "  Setting $secretName..." -ForegroundColor Gray
               gh secret set $secretName --env $env_name --repo $ownerRepo --body $secretsToSet[$secretName] 2>&1 | Out-Null
@@ -828,7 +828,7 @@ jobs:
               Write-Host "    ✅ $secretName set for $env_name" -ForegroundColor Green
             }
           }
-          
+
           Write-Host "`n  ✅ Environment secrets configured successfully!" -ForegroundColor Green
           Write-Host "UTC End: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           Write-Host "---- END ENVIRONMENT SECRET CONFIGURATION ----" -ForegroundColor Cyan
@@ -840,7 +840,7 @@ jobs:
         run: |
           Write-Host "---- BEGIN REPOSITORY SECRET VERIFICATION ----" -ForegroundColor Cyan
           Write-Host "UTC Start: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
-          
+
           # Use GitHub App token, PAT, or GITHUB_TOKEN (in order of preference)
           if ($env:GH_APP_TOKEN) {
             $env:GH_TOKEN = $env:GH_APP_TOKEN
@@ -854,7 +854,7 @@ jobs:
           }
 
           Write-Host "🔎 Verifying repository secrets..." -ForegroundColor Cyan
-          
+
           $ownerRepo = "${{ github.repository }}"
           $owner, $repo = $ownerRepo -split '/', 2
 
@@ -863,7 +863,7 @@ jobs:
             Write-Error "Failed to fetch repository secrets via GitHub API"
             exit 1
           }
-          
+
           $resp = $respJson | ConvertFrom-Json
           $names = @()
           if ($resp -and $resp.secrets) { $names = $resp.secrets | ForEach-Object { $_.name } }
@@ -912,7 +912,7 @@ jobs:
         run: |
           Write-Host "---- BEGIN ENVIRONMENT SECRET VERIFICATION ----" -ForegroundColor Cyan
           Write-Host "UTC Start: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
-          
+
           # Determine authentication method
           $token = $null
           if ($env:GH_APP_TOKEN) {
@@ -922,7 +922,7 @@ jobs:
             $token = $env:GH_PAT
             Write-Host "Using PAT for verification" -ForegroundColor Yellow
           }
-          
+
           # Check if authentication is available
           if (-not $token) {
             Write-Host "⚠️  No authentication configured - skipping environment secret verification" -ForegroundColor Yellow
@@ -930,10 +930,10 @@ jobs:
             Write-Host "---- END ENVIRONMENT SECRET VERIFICATION ----" -ForegroundColor Cyan
             exit 0
           }
-          
+
           # Set GH_TOKEN for gh CLI commands
           $env:GH_TOKEN = $token
-          
+
           $selectedEnv = "${{ inputs.environment }}"
           $environments = @()
           if ($selectedEnv -eq "all") {
@@ -941,33 +941,33 @@ jobs:
           } else {
             $environments = @($selectedEnv)
           }
-          
+
           Write-Host "🔎 Verifying environment secrets for: $($environments -join ', ')..." -ForegroundColor Cyan
-          
+
           $ownerRepo = "${{ github.repository }}"
           $owner, $repo = $ownerRepo -split '/', 2
-          
+
           $allVerified = $true
-          
+
           foreach ($env_name in $environments) {
             Write-Host "`n  Environment: $env_name" -ForegroundColor Yellow
-            
+
             try {
               $respJson = gh api -H "Accept: application/vnd.github+json" repos/$owner/$repo/environments/$env_name/secrets 2>$null
-              
+
               if ($LASTEXITCODE -ne 0 -or -not $respJson) {
                 Write-Host "    ⚠️  Could not fetch environment secrets (environment may not exist yet)" -ForegroundColor Yellow
                 continue
               }
-              
+
               $resp = $respJson | ConvertFrom-Json
               $names = @()
-              if ($resp -and $resp.secrets) { 
-                $names = $resp.secrets | ForEach-Object { $_.name } 
+              if ($resp -and $resp.secrets) {
+                $names = $resp.secrets | ForEach-Object { $_.name }
               }
-              
+
               $requiredSecrets = @("AZUREAPPSERVICE_CLIENTID", "AZUREAPPSERVICE_TENANTID", "AZUREAPPSERVICE_SUBSCRIPTIONID")
-              
+
               foreach ($secretName in $requiredSecrets) {
                 if ($names -contains $secretName) {
                   Write-Host "    ✅ $secretName present" -ForegroundColor Green
@@ -976,7 +976,7 @@ jobs:
                   $allVerified = $false
                 }
               }
-              
+
               # Add to job summary
               "### 🔑 Environment Secrets ($env_name)" >> $env:GITHUB_STEP_SUMMARY
               if ($names.Count -gt 0) {
@@ -985,18 +985,18 @@ jobs:
                 "- (no secrets found)" >> $env:GITHUB_STEP_SUMMARY
               }
               "" >> $env:GITHUB_STEP_SUMMARY
-              
+
             } catch {
               Write-Host "    ⚠️  Error verifying environment secrets: $($_.Exception.Message)" -ForegroundColor Yellow
             }
           }
-          
+
           if ($allVerified) {
             Write-Host "`n✅ All environment secrets verified successfully!" -ForegroundColor Green
           } else {
             Write-Host "`n⚠️  Some environment secrets may be missing - check logs above" -ForegroundColor Yellow
           }
-          
+
           Write-Host "UTC End: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           Write-Host "---- END ENVIRONMENT SECRET VERIFICATION ----" -ForegroundColor Cyan
 
@@ -1035,7 +1035,7 @@ jobs:
           Write-Host "  Resource Group: rg-orderprocessing-dev" -ForegroundColor Gray
           Write-Host "  OIDC Subject: repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev" -ForegroundColor Gray
           Write-Host "" -ForegroundColor Gray
-          
+
           ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment dev
           if ($LASTEXITCODE -ne 0) {
             Write-Error "Bootstrap failed with exit code $LASTEXITCODE"
@@ -1084,7 +1084,7 @@ jobs:
           Write-Host "  Resource Group: rg-orderprocessing-staging" -ForegroundColor Gray
           Write-Host "  OIDC Subject: repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/staging" -ForegroundColor Gray
           Write-Host "" -ForegroundColor Gray
-          
+
           ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment staging
           if ($LASTEXITCODE -ne 0) {
             Write-Error "Bootstrap failed with exit code $LASTEXITCODE"
@@ -1134,7 +1134,7 @@ jobs:
           Write-Host "  Resource Group: rg-orderprocessing-prod" -ForegroundColor Gray
           Write-Host "  OIDC Subject: repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/main" -ForegroundColor Gray
           Write-Host "" -ForegroundColor Gray
-          
+
           ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment prod
           if ($LASTEXITCODE -ne 0) {
             Write-Error "Bootstrap failed with exit code $LASTEXITCODE"
@@ -1155,24 +1155,24 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Enable Validation in Workflow
         run: |
           Write-Host "🔧 Enabling pre-deployment validation..." -ForegroundColor Cyan
-          
+
           $workflowPath = ".github/workflows/infra-deploy.yml"
           $content = Get-Content $workflowPath -Raw
-          
+
           # Re-enable pre-validate job
           $content = $content -replace 'if: false  # TODO: Enable after bootstrap - requires Azure OIDC setup', 'if: (github.event_name == ''push'') || (github.event_name == ''workflow_dispatch'' && !inputs.dryRun)'
-          
+
           # Re-enable job dependency
           $content = $content -replace '# needs: pre-validate  # TODO: Uncomment after bootstrap', 'needs: pre-validate'
-          
+
           Set-Content $workflowPath -Value $content -NoNewline
-          
+
           Write-Host "✅ Validation enabled" -ForegroundColor Green
-      
+
       - name: Commit Changes
         run: |
           git config --global user.name "github-actions[bot]"
@@ -1180,7 +1180,7 @@ jobs:
           git add .github/workflows/infra-deploy.yml
           git diff --staged --quiet || git commit -m "chore(ci): enable pre-deployment validation after bootstrap"
           git push
-      
+
       - name: Create Completion Summary
         run: |
           "## ✅ Azure Bootstrap Complete!" >> $env:GITHUB_STEP_SUMMARY
@@ -1206,42 +1206,42 @@ jobs:
         run: |
           "## 📊 Bootstrap Workflow Summary" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
-          
+
           $setupOidc = "${{ needs.setup-oidc.result }}"
           $configSecrets = "${{ needs.configure-secrets.result }}"
           $bootstrapDev = "${{ needs.bootstrap-dev.result }}"
           $bootstrapStaging = "${{ needs.bootstrap-staging.result }}"
           $bootstrapProd = "${{ needs.bootstrap-prod.result }}"
           $enableVal = "${{ needs.enable-validation.result }}"
-          
+
           "| Step | Status |" >> $env:GITHUB_STEP_SUMMARY
           "|------|--------|" >> $env:GITHUB_STEP_SUMMARY
-          
+
           if ($setupOidc -ne "") {
             $icon = if ($setupOidc -eq "success") { "✅" } else { "❌" }
             "| Setup OIDC | $icon $setupOidc |" >> $env:GITHUB_STEP_SUMMARY
           }
-          
+
           if ($configSecrets -ne "") {
             $icon = if ($configSecrets -eq "success") { "✅" } else { "❌" }
             "| Configure Secrets | $icon $configSecrets |" >> $env:GITHUB_STEP_SUMMARY
           }
-          
+
           if ($bootstrapDev -ne "") {
             $icon = if ($bootstrapDev -eq "success") { "✅" } elseif ($bootstrapDev -eq "skipped") { "⏭️" } else { "❌" }
             "| Bootstrap Dev | $icon $bootstrapDev |" >> $env:GITHUB_STEP_SUMMARY
           }
-          
+
           if ($bootstrapStaging -ne "") {
             $icon = if ($bootstrapStaging -eq "success") { "✅" } elseif ($bootstrapStaging -eq "skipped") { "⏭️" } else { "❌" }
             "| Bootstrap Staging | $icon $bootstrapStaging |" >> $env:GITHUB_STEP_SUMMARY
           }
-          
+
           if ($bootstrapProd -ne "") {
             $icon = if ($bootstrapProd -eq "success") { "✅" } elseif ($bootstrapProd -eq "skipped") { "⏭️" } else { "❌" }
             "| Bootstrap Prod | $icon $bootstrapProd |" >> $env:GITHUB_STEP_SUMMARY
           }
-          
+
           if ($enableVal -ne "") {
             $icon = if ($enableVal -eq "success") { "✅" } elseif ($enableVal -eq "skipped") { "⏭️" } else { "❌" }
             "| Enable Validation | $icon $enableVal |" >> $env:GITHUB_STEP_SUMMARY
