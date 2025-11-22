@@ -557,7 +557,9 @@ jobs:
     if: |
       always() &&
       inputs.configureSecrets &&
-      !cancelled()
+      !cancelled() &&
+      (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped') &&
+      (needs.setup-github-app.result == 'success' || needs.setup-github-app.result == 'skipped')
     needs: [validate-inputs, setup-oidc, setup-github-app]
     runs-on: windows-latest
     steps:
@@ -1096,7 +1098,9 @@ jobs:
       always() &&
       inputs.bootstrapInfra &&
       (inputs.environment == 'dev' || inputs.environment == 'all') &&
-      !cancelled()
+      !cancelled() &&
+      (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped') &&
+      (needs.configure-secrets.result == 'success' || needs.configure-secrets.result == 'skipped')
     needs: [setup-oidc, configure-secrets]
     runs-on: windows-latest
     env:
@@ -1149,7 +1153,9 @@ jobs:
       always() &&
       inputs.bootstrapInfra &&
       (inputs.environment == 'staging' || inputs.environment == 'all') &&
-      !cancelled()
+      !cancelled() &&
+      (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped') &&
+      (needs.configure-secrets.result == 'success' || needs.configure-secrets.result == 'skipped')
     needs: [setup-oidc, configure-secrets]
     runs-on: windows-latest
     env:
@@ -1202,7 +1208,9 @@ jobs:
       always() &&
       inputs.bootstrapInfra &&
       (inputs.environment == 'prod' || inputs.environment == 'all') &&
-      !cancelled()
+      !cancelled() &&
+      (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped') &&
+      (needs.configure-secrets.result == 'success' || needs.configure-secrets.result == 'skipped')
     needs: [setup-oidc, configure-secrets]
     runs-on: windows-latest
     environment: prod
@@ -1256,7 +1264,10 @@ jobs:
       always() &&
       inputs.enableValidation &&
       inputs.bootstrapInfra &&
-      !cancelled()
+      !cancelled() &&
+      (needs.bootstrap-dev.result == 'success' || needs.bootstrap-dev.result == 'skipped') &&
+      (needs.bootstrap-staging.result == 'success' || needs.bootstrap-staging.result == 'skipped') &&
+      (needs.bootstrap-prod.result == 'success' || needs.bootstrap-prod.result == 'skipped')
     needs: [bootstrap-dev, bootstrap-staging, bootstrap-prod]
     runs-on: windows-latest
     steps:
