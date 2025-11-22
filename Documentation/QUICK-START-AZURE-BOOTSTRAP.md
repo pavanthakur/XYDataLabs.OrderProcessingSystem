@@ -52,10 +52,35 @@ Check the workflow summary for:
 
 ## 🔄 Common Scenarios
 
-### Scenario A: Dev Only (Quick Test)
+### Scenario A: Dev Profile - All Options Enabled (Recommended)
 ```yaml
 Environment: dev
 Setup OIDC: ✅ true
+Setup GitHub App: ✅ true
+Configure secrets: ✅ true
+Bootstrap infrastructure: ✅ true
+Enable validation: ✅ true
+```
+**Time**: ~5-7 minutes  
+**Use Case**: Complete first-time setup for dev environment with all features enabled
+
+**What this does:**
+- ✅ Creates Azure OIDC credentials for authentication
+- ✅ Guides you through GitHub App setup (eliminates PAT expiration)
+- ✅ Auto-configures all required GitHub secrets
+- ✅ Provisions complete Azure infrastructure (App Services, App Insights)
+- ✅ Enables pre-deployment validation checks
+
+**Prerequisites:**
+- Azure subscription with Contributor role
+- GitHub repository admin access
+- 5 minutes for GitHub App setup (one-time, optional but recommended)
+
+### Scenario B: Dev Only (Quick Test - Skip GitHub App)
+```yaml
+Environment: dev
+Setup OIDC: ✅ true
+Setup GitHub App: ❌ false  # Skip for faster setup
 Configure secrets: ✅ true
 Bootstrap infrastructure: ✅ true
 Enable validation: ❌ false  # Skip for manual testing
@@ -64,7 +89,7 @@ Enable validation: ❌ false  # Skip for manual testing
 
 ---
 
-### Scenario B: Add Staging Later
+### Scenario C: Add Staging Later
 ```yaml
 Environment: staging
 Setup OIDC: ❌ false  # Already done
@@ -76,7 +101,7 @@ Enable validation: ✅ true
 
 ---
 
-### Scenario C: Re-bootstrap Failed Environment
+### Scenario D: Re-bootstrap Failed Environment
 ```yaml
 Environment: dev
 Setup OIDC: ❌ false
