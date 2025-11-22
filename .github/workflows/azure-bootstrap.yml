@@ -529,14 +529,14 @@ jobs:
           "#### Setup GitHub App (Zero Maintenance Authentication)" >> $env:GITHUB_STEP_SUMMARY
           "**Benefits**: ✅ Never expires • ✅ Auto-generated tokens • ✅ Better security" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
-          "1. **Create GitHub App** - Quick 5-minute setup" >> $env:GITHUB_STEP_SUMMARY
+          "1. **Create GitHub App** - Quick 4-minute setup" >> $env:GITHUB_STEP_SUMMARY
           "   - 📖 Step-by-step guide: [QUICK-SETUP-GITHUB-APP.md](../blob/main/Documentation/03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md)" >> $env:GITHUB_STEP_SUMMARY
           "   - 📘 Detailed guide: [GITHUB-APP-AUTHENTICATION.md](../blob/main/Documentation/03-Configuration-Guides/GITHUB-APP-AUTHENTICATION.md)" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
-          "2. **Add Repository Secrets**:" >> $env:GITHUB_STEP_SUMMARY
+          "2. **Add 2 Repository Secrets**:" >> $env:GITHUB_STEP_SUMMARY
           "   - ``GH_APP_ID`` - Your GitHub App ID" >> $env:GITHUB_STEP_SUMMARY
-          "   - ``GH_APP_INSTALLATION_ID`` - Installation ID" >> $env:GITHUB_STEP_SUMMARY
           "   - ``GH_APP_PRIVATE_KEY`` - Private key (PEM format)" >> $env:GITHUB_STEP_SUMMARY
+          "   - ✨ ``GH_APP_INSTALLATION_ID`` - Auto-discovered!" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
           "3. **Re-run Workflow**" >> $env:GITHUB_STEP_SUMMARY
           "   - Enable: ``Configure GitHub secrets`` = true" >> $env:GITHUB_STEP_SUMMARY
@@ -596,18 +596,19 @@ jobs:
           Write-Host "📋 Required Secrets:" -ForegroundColor Yellow
 
           $hasAppId = "${{ secrets.GH_APP_ID }}" -ne ""
-          $hasInstallationId = "${{ secrets.GH_APP_INSTALLATION_ID }}" -ne ""
           $hasPrivateKey = "${{ secrets.GH_APP_PRIVATE_KEY }}" -ne ""
 
           Write-Host "  GH_APP_ID                : $(if ($hasAppId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasAppId) { "Green" } else { "Red" })
-          Write-Host "  GH_APP_INSTALLATION_ID   : $(if ($hasInstallationId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasInstallationId) { "Green" } else { "Red" })
           Write-Host "  GH_APP_PRIVATE_KEY       : $(if ($hasPrivateKey) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasPrivateKey) { "Green" } else { "Red" })
           Write-Host ""
+          Write-Host "ℹ️  Note: GH_APP_INSTALLATION_ID is no longer required - it will be auto-discovered!" -ForegroundColor Cyan
+          Write-Host ""
 
-          if ($hasAppId -and $hasInstallationId -and $hasPrivateKey) {
+          if ($hasAppId -and $hasPrivateKey) {
             Write-Host "✅ GitHub App Configuration Status: COMPLETE" -ForegroundColor Green
             Write-Host ""
             Write-Host "  All required secrets are configured." -ForegroundColor Gray
+            Write-Host "  Installation ID will be auto-discovered at runtime." -ForegroundColor Gray
             Write-Host "  No manual setup needed." -ForegroundColor Gray
             Write-Host "  Workflow will use the configured GitHub App for automation." -ForegroundColor Gray
             Write-Host ""
@@ -657,24 +658,19 @@ jobs:
           Write-Host "  Select: ${{ github.repository }}" -ForegroundColor White
           Write-Host "  Click 'Install'" -ForegroundColor White
           Write-Host ""
-          Write-Host "  📝 Copy Installation ID from URL:" -ForegroundColor White
-          Write-Host "     Format: https://github.com/settings/installations/12345678" -ForegroundColor Gray
-          Write-Host "     Installation ID = 12345678" -ForegroundColor Gray
-          Write-Host ""
           Write-Host "Step 4: Add Repository Secrets (1 minute)" -ForegroundColor Cyan
           Write-Host "  🔗 https://github.com/${{ github.repository }}/settings/secrets/actions" -ForegroundColor Yellow
           Write-Host ""
-          Write-Host "  Add these 3 secrets:" -ForegroundColor White
+          Write-Host "  Add these 2 secrets (Installation ID auto-discovered):" -ForegroundColor White
           Write-Host ""
           Write-Host "    1. GH_APP_ID" -ForegroundColor Cyan
           Write-Host "       Value: [App ID from app settings page]" -ForegroundColor Gray
           Write-Host ""
-          Write-Host "    2. GH_APP_INSTALLATION_ID" -ForegroundColor Cyan
-          Write-Host "       Value: [Installation ID from URL above]" -ForegroundColor Gray
-          Write-Host ""
-          Write-Host "    3. GH_APP_PRIVATE_KEY" -ForegroundColor Cyan
+          Write-Host "    2. GH_APP_PRIVATE_KEY" -ForegroundColor Cyan
           Write-Host "       Value: [Full contents of .pem file]" -ForegroundColor Gray
           Write-Host "       Note: Copy entire file including BEGIN/END lines" -ForegroundColor DarkGray
+          Write-Host ""
+          Write-Host "  ✨ Installation ID is automatically discovered - no manual input needed!" -ForegroundColor Green
           Write-Host ""
           Write-Host "Step 5: Re-run This Workflow" -ForegroundColor Cyan
           Write-Host "  After adding secrets, run this workflow again" -ForegroundColor White
@@ -707,15 +703,15 @@ jobs:
             "" >> $env:GITHUB_STEP_SUMMARY
             "**Configuration detected**:" >> $env:GITHUB_STEP_SUMMARY
             "- ``GH_APP_ID`` ✅" >> $env:GITHUB_STEP_SUMMARY
-            "- ``GH_APP_INSTALLATION_ID`` ✅" >> $env:GITHUB_STEP_SUMMARY
             "- ``GH_APP_PRIVATE_KEY`` ✅" >> $env:GITHUB_STEP_SUMMARY
+            "- ``GH_APP_INSTALLATION_ID`` ✅ (Auto-discovered)" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
             "**Next step**: Re-run workflow with ``Configure GitHub secrets`` enabled" >> $env:GITHUB_STEP_SUMMARY
           } else {
-            "### ⏱️ One-Time Manual Setup Required (5 minutes)" >> $env:GITHUB_STEP_SUMMARY
+            "### ⏱️ One-Time Manual Setup Required (4 minutes)" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
             "GitHub's security model requires interactive authorization for app creation." >> $env:GITHUB_STEP_SUMMARY
-            "This is a one-time setup that takes about 5 minutes." >> $env:GITHUB_STEP_SUMMARY
+            "This is a one-time setup that takes about 4 minutes." >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
             "### 📋 Quick Setup Steps" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
@@ -727,10 +723,10 @@ jobs:
             "" >> $env:GITHUB_STEP_SUMMARY
             "3. **Install App** (30 sec): Install on repository ${{ github.repository }}" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
-            "4. **Add Secrets** (1 min): https://github.com/${{ github.repository }}/settings/secrets/actions" >> $env:GITHUB_STEP_SUMMARY
+            "4. **Add 2 Secrets** (1 min): https://github.com/${{ github.repository }}/settings/secrets/actions" >> $env:GITHUB_STEP_SUMMARY
             "   - ``GH_APP_ID``" >> $env:GITHUB_STEP_SUMMARY
-            "   - ``GH_APP_INSTALLATION_ID``" >> $env:GITHUB_STEP_SUMMARY
             "   - ``GH_APP_PRIVATE_KEY``" >> $env:GITHUB_STEP_SUMMARY
+            "   - ✨ ``GH_APP_INSTALLATION_ID`` is auto-discovered!" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
             "5. **Re-run Workflow**: Enable 'Configure GitHub secrets'" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
@@ -840,16 +836,15 @@ jobs:
           
           # Check if GitHub App secrets are available
           $hasAppId = "${{ secrets.GH_APP_ID }}" -ne ""
-          $hasInstallationId = "${{ secrets.GH_APP_INSTALLATION_ID }}" -ne ""
           $hasPrivateKey = "${{ secrets.GH_APP_PRIVATE_KEY }}" -ne ""
           
           Write-Host "  GH_APP_ID                : $(if ($hasAppId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasAppId) { "Green" } else { "Red" })
-          Write-Host "  GH_APP_INSTALLATION_ID   : $(if ($hasInstallationId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasInstallationId) { "Green" } else { "Red" })
           Write-Host "  GH_APP_PRIVATE_KEY       : $(if ($hasPrivateKey) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasPrivateKey) { "Green" } else { "Red" })
+          Write-Host "  GH_APP_INSTALLATION_ID   : ✨ Auto-discovered at runtime" -ForegroundColor Cyan
           Write-Host ""
           
-          if ($hasAppId -and $hasInstallationId -and $hasPrivateKey) {
-            Write-Host "  ✅ All GitHub App secrets detected" -ForegroundColor Green
+          if ($hasAppId -and $hasPrivateKey) {
+            Write-Host "  ✅ All required GitHub App secrets detected" -ForegroundColor Green
             "hasGitHubAppSecrets=true" >> $env:GITHUB_OUTPUT
           } else {
             Write-Host "  ⚠️  GitHub App secrets not configured" -ForegroundColor Yellow
@@ -909,8 +904,8 @@ jobs:
             Write-Host "  📖 Troubleshooting Steps:" -ForegroundColor Yellow
             Write-Host "     1. Verify GitHub App secrets are configured:" -ForegroundColor White
             Write-Host "        - GH_APP_ID" -ForegroundColor Gray
-            Write-Host "        - GH_APP_INSTALLATION_ID" -ForegroundColor Gray
             Write-Host "        - GH_APP_PRIVATE_KEY" -ForegroundColor Gray
+            Write-Host "        - GH_APP_INSTALLATION_ID (auto-discovered)" -ForegroundColor Gray
             Write-Host ""
             Write-Host "     2. Check secret configuration at:" -ForegroundColor White
             Write-Host "        https://github.com/${{ github.repository }}/settings/secrets/actions" -ForegroundColor Gray
@@ -952,13 +947,13 @@ jobs:
           Write-Host "  1. Follow the setup guide:" -ForegroundColor White
           Write-Host "     Documentation/03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md" -ForegroundColor Gray
           Write-Host ""
-          Write-Host "  2. Create GitHub App (5 minutes):" -ForegroundColor White
+          Write-Host "  2. Create GitHub App (4 minutes):" -ForegroundColor White
           Write-Host "     https://github.com/settings/apps/new" -ForegroundColor Gray
           Write-Host ""
-          Write-Host "  3. Add these repository secrets:" -ForegroundColor White
+          Write-Host "  3. Add these 2 repository secrets:" -ForegroundColor White
           Write-Host "     - GH_APP_ID" -ForegroundColor Gray
-          Write-Host "     - GH_APP_INSTALLATION_ID" -ForegroundColor Gray
           Write-Host "     - GH_APP_PRIVATE_KEY" -ForegroundColor Gray
+          Write-Host "     ✨ GH_APP_INSTALLATION_ID is auto-discovered!" -ForegroundColor Green
           Write-Host ""
           Write-Host "  4. Re-run this workflow" -ForegroundColor White
           Write-Host ""

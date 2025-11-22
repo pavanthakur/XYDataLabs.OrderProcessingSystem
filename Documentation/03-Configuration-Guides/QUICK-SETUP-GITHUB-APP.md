@@ -3,7 +3,7 @@
 ## 🎯 Goal
 Eliminate PAT token expiration by using GitHub App authentication (tokens never expire, auto-generated on each workflow run).
 
-## ⚡ 5-Minute Setup
+## ⚡ 4-Minute Setup (Installation ID Auto-Discovered!)
 
 ### Step 1: Create GitHub App (2 minutes)
 
@@ -30,21 +30,20 @@ Eliminate PAT token expiration by using GitHub App authentication (tokens never 
 2. Select your account
 3. Choose **Only select repositories** → select your repository
 4. Click **Install**
-5. **Copy the Installation ID** from URL:
-   - URL format: `https://github.com/settings/installations/12345678`
-   - Installation ID = `12345678`
+5. ✨ **Installation ID is now auto-discovered - no need to copy it!**
 
 ### Step 4: Add Secrets to Repository (1 minute)
 
 Go to: https://github.com/[your-org]/[your-repo]/settings/secrets/actions
 
-Add these **3 secrets**:
+Add these **2 secrets** (not 3!):
 
 | Secret Name | Value | Where to Find |
 |------------|-------|---------------|
 | `GH_APP_ID` | Example: `123456` | App settings page, top of page |
-| `GH_APP_INSTALLATION_ID` | Example: `12345678` | From URL in Step 3 |
 | `GH_APP_PRIVATE_KEY` | Full `.pem` file contents | Open downloaded file, copy ALL text |
+
+✨ **No need for `GH_APP_INSTALLATION_ID`** - the workflow automatically discovers it!
 
 **For GH_APP_PRIVATE_KEY**, copy entire content including:
 ```
@@ -90,7 +89,9 @@ If you're currently using `GH_PAT`:
 | Token expiration | **Never** (auto-generated) | 1-365 days |
 | Maintenance | **Zero** | Manual renewal |
 | Security | Short-lived (1 hr) | Long-lived |
-| Setup time | 5 minutes | 2 minutes |
+| Setup time | **4 minutes** | 2 minutes |
+| Manual secrets | **2 secrets** | 1 secret |
+| Installation ID | **Auto-discovered** | N/A |
 | Revocation impact | None (auto-regenerated) | Breaks workflows |
 | Best for | **Production/Teams** | Personal projects |
 
@@ -100,8 +101,8 @@ If you're currently using `GH_PAT`:
 
 **Check**:
 1. App ID is correct (no typo)
-2. Installation ID matches the installation URL
-3. Private key includes BEGIN/END lines
+2. Private key includes BEGIN/END lines
+3. App is installed on the repository
 
 **Fix**:
 ```powershell
@@ -110,6 +111,9 @@ gh api /app --jq .id
 
 # Check private key format (should show BEGIN line)
 Get-Content path\to\key.pem | Select-Object -First 1
+
+# Verify app is installed
+gh api /repos/[owner]/[repo]/installation
 ```
 
 ### "Insufficient permissions"
