@@ -44,27 +44,58 @@ jobs:
       - name: Azure Login (Device Code)
         timeout-minutes: 3
         run: |
-          az login --use-device-code
+          try {
+            Write-Host "🔐 Initiating Azure login with device code..." -ForegroundColor Cyan
+            az login --use-device-code
+            if ($LASTEXITCODE -ne 0) {
+              throw "Azure login failed with exit code: $LASTEXITCODE"
+            }
+            Write-Host "✅ Azure login successful" -ForegroundColor Green
+          }
+          catch {
+            Write-Host "❌ ERROR: Azure login failed" -ForegroundColor Red
+            Write-Host "Error details: $_" -ForegroundColor Red
+            Write-Error "Azure login failed. Please check your credentials and try again."
+            exit 1
+          }
 
       - name: Capture Azure OIDC Values
         id: capture
         run: |
-          $sub = az account show | ConvertFrom-Json
-          if (-not $sub) { Write-Error "Failed to read Azure subscription context"; exit 1 }
-          $tenantId = $sub.tenantId
-          $subscriptionId = $sub.id
-          $app = az ad app list --display-name "GitHub-Actions-OIDC" | ConvertFrom-Json
-          if (-not $app -or $app.Count -eq 0) {
-            Write-Error "OIDC App Registration 'GitHub-Actions-OIDC' not found. Run initial bootstrap workflow first."; exit 1
+          try {
+            Write-Host "📋 Retrieving Azure subscription details..." -ForegroundColor Cyan
+            $sub = az account show | ConvertFrom-Json
+            if (-not $sub) { 
+              throw "Failed to read Azure subscription context"
+            }
+            $tenantId = $sub.tenantId
+            $subscriptionId = $sub.id
+            Write-Host "✅ Subscription details retrieved" -ForegroundColor Green
+            
+            Write-Host "🔍 Looking for OIDC App Registration 'GitHub-Actions-OIDC'..." -ForegroundColor Cyan
+            $app = az ad app list --display-name "GitHub-Actions-OIDC" | ConvertFrom-Json
+            if (-not $app -or $app.Count -eq 0) {
+              Write-Host "❌ ERROR: OIDC App Registration not found" -ForegroundColor Red
+              throw "OIDC App Registration 'GitHub-Actions-OIDC' not found. Run initial bootstrap workflow first."
+            }
+            $clientId = $app[0].appId
+            Write-Host "✅ OIDC App Registration found" -ForegroundColor Green
+            
+            "clientId=$clientId" >> $env:GITHUB_OUTPUT
+            "tenantId=$tenantId" >> $env:GITHUB_OUTPUT
+            "subscriptionId=$subscriptionId" >> $env:GITHUB_OUTPUT
+            
+            Write-Host "`n✅ Successfully captured OIDC values:" -ForegroundColor Green
+            Write-Host "  ClientId: $clientId" -ForegroundColor Gray
+            Write-Host "  TenantId: $tenantId" -ForegroundColor Gray
+            Write-Host "  SubscriptionId: $subscriptionId" -ForegroundColor Gray
           }
-          $clientId = $app[0].appId
-          "clientId=$clientId" >> $env:GITHUB_OUTPUT
-          "tenantId=$tenantId" >> $env:GITHUB_OUTPUT
-          "subscriptionId=$subscriptionId" >> $env:GITHUB_OUTPUT
-          Write-Host "✅ Captured OIDC values" -ForegroundColor Green
-          Write-Host "ClientId: $clientId" -ForegroundColor Gray
-          Write-Host "TenantId: $tenantId" -ForegroundColor Gray
-          Write-Host "SubscriptionId: $subscriptionId" -ForegroundColor Gray
+          catch {
+            Write-Host "❌ ERROR: Failed to capture Azure OIDC values" -ForegroundColor Red
+            Write-Host "Error details: $_" -ForegroundColor Red
+            Write-Error "OIDC setup failed. $_"
+            exit 1
+          }
 
       - name: Complete OIDC Step
         run: |
@@ -74,7 +105,7 @@ jobs:
 
   github-app-token:
     name: Step 2 - Generate GitHub App Token
-    if: inputs.generateAppToken
+    if: inputs.generateAppToken && (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped')
     needs: [setup-oidc]
     runs-on: windows-latest
     env:
@@ -123,42 +154,74 @@ jobs:
         if: steps.check.outputs.ready == 'true'
         id: generate
         run: |
-          Write-Host "🔐 Generating GitHub App installation access token..." -ForegroundColor Cyan
-          # Private key needs normalization (handle literal \n sequences if supplied that way)
-          $rawKey = $env:GH_APP_PRIVATE_KEY
-          if ($rawKey -match '\\n') { $rawKey = ($rawKey -replace '\\n',"`n") }
-          $pemPath = "$env:RUNNER_TEMP\app_private_key.pem"
-          Set-Content -Path $pemPath -Value $rawKey -NoNewline
-          # Build JWT
-          $appId = $env:GH_APP_ID
-          $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-          $payload = @{ iat = $now; exp = $now + 540; iss = $appId }
-          $header = @{ alg = 'RS256'; typ='JWT' }
-          function ToBase64Url($obj) {
-            $json = ($obj | ConvertTo-Json -Compress)
-            $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
-            $b64 = [Convert]::ToBase64String($bytes).TrimEnd('=') -replace '\+','-' -replace '/','_'
-            return $b64
+          try {
+            Write-Host "🔐 Generating GitHub App installation access token..." -ForegroundColor Cyan
+            
+            # Private key needs normalization (handle literal \n sequences if supplied that way)
+            $rawKey = $env:GH_APP_PRIVATE_KEY
+            if ($rawKey -match '\\n') { $rawKey = ($rawKey -replace '\\n',"`n") }
+            $pemPath = "$env:RUNNER_TEMP\app_private_key.pem"
+            Set-Content -Path $pemPath -Value $rawKey -NoNewline
+            Write-Host "✅ Private key loaded" -ForegroundColor Green
+            
+            # Build JWT
+            Write-Host "🔧 Building JWT..." -ForegroundColor Cyan
+            $appId = $env:GH_APP_ID
+            $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+            $payload = @{ iat = $now; exp = $now + 540; iss = $appId }
+            $header = @{ alg = 'RS256'; typ='JWT' }
+            
+            function ToBase64Url($obj) {
+              $json = ($obj | ConvertTo-Json -Compress)
+              $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+              $b64 = [Convert]::ToBase64String($bytes).TrimEnd('=') -replace '\+','-' -replace '/','_'
+              return $b64
+            }
+            
+            $segments = @()
+            $segments += ToBase64Url $header
+            $segments += ToBase64Url $payload
+            $unsigned = ($segments -join '.')
+            
+            $rsa = [System.Security.Cryptography.RSA]::Create()
+            $pem = Get-Content $pemPath -Raw
+            $pem = $pem -replace '-----BEGIN PRIVATE KEY-----','' -replace '-----END PRIVATE KEY-----','' -replace '\s',''
+            $pkBytes = [Convert]::FromBase64String($pem)
+            $rsa.ImportPkcs8PrivateKey($pkBytes,[ref]0) | Out-Null
+            
+            $sig = $rsa.SignData([System.Text.Encoding]::UTF8.GetBytes($unsigned),[System.Security.Cryptography.HashAlgorithmName]::SHA256,[System.Security.Cryptography.RSASignaturePadding]::Pkcs1)
+            $sigB64 = [Convert]::ToBase64String($sig).TrimEnd('=') -replace '\+','-' -replace '/','_'
+            $jwt = "$unsigned.$sigB64"
+            Write-Host "✅ JWT generated (length: $($jwt.Length) chars)" -ForegroundColor Green
+            
+            # Request installation token
+            Write-Host "📡 Requesting installation token from GitHub API..." -ForegroundColor Cyan
+            $instId = $env:GH_APP_INSTALLATION_ID
+            $resp = Invoke-RestMethod -Method Post -Uri "https://api.github.com/app/installations/$instId/access_tokens" -Headers @{ Authorization = "Bearer $jwt"; Accept = 'application/vnd.github+json' } -Body '{}' -ErrorAction Stop
+            
+            $token = $resp.token
+            if (-not $token) { 
+              throw "Failed to obtain installation token from GitHub API response"
+            }
+            
+            Write-Host "✅ Installation token acquired successfully" -ForegroundColor Green
+            Write-Host "  Expires: $($resp.expires_at)" -ForegroundColor Gray
+            "installationToken=$token" >> $env:GITHUB_OUTPUT
           }
-          $segments = @()
-          $segments += ToBase64Url $header
-          $segments += ToBase64Url $payload
-          $unsigned = ($segments -join '.')
-          $rsa = [System.Security.Cryptography.RSA]::Create()
-          $pem = Get-Content $pemPath -Raw
-          $pem = $pem -replace '-----BEGIN PRIVATE KEY-----','' -replace '-----END PRIVATE KEY-----','' -replace '\s',''
-          $pkBytes = [Convert]::FromBase64String($pem)
-          $rsa.ImportPkcs8PrivateKey($pkBytes,[ref]0) | Out-Null
-          $sig = $rsa.SignData([System.Text.Encoding]::UTF8.GetBytes($unsigned),[System.Security.Cryptography.HashAlgorithmName]::SHA256,[System.Security.Cryptography.RSASignaturePadding]::Pkcs1)
-          $sigB64 = [Convert]::ToBase64String($sig).TrimEnd('=') -replace '\+','-' -replace '/','_'
-          $jwt = "$unsigned.$sigB64"
-          Write-Host "✅ JWT generated (length: $($jwt.Length) chars)" -ForegroundColor Green
-          $instId = $env:GH_APP_INSTALLATION_ID
-          $resp = Invoke-RestMethod -Method Post -Uri "https://api.github.com/app/installations/$instId/access_tokens" -Headers @{ Authorization = "Bearer $jwt"; Accept = 'application/vnd.github+json' } -Body '{}' -ErrorAction Stop
-          $token = $resp.token
-          if (-not $token) { Write-Error "Failed to obtain installation token"; exit 1 }
-          Write-Host "✅ Installation token acquired (expires: $resp.expires_at)" -ForegroundColor Green
-          "installationToken=$token" >> $env:GITHUB_OUTPUT
+          catch {
+            Write-Host "❌ ERROR: Failed to generate GitHub App installation token" -ForegroundColor Red
+            Write-Host "Error details: $_" -ForegroundColor Red
+            
+            if ($_.Exception.Message -match "401") {
+              Write-Host "Hint: Check that GH_APP_ID and GH_APP_PRIVATE_KEY are correct" -ForegroundColor Yellow
+            }
+            elseif ($_.Exception.Message -match "404") {
+              Write-Host "Hint: Check that GH_APP_INSTALLATION_ID is correct" -ForegroundColor Yellow
+            }
+            
+            Write-Error "GitHub App token generation failed. $_"
+            exit 1
+          }
 
       - name: Summary
         if: steps.generate.outputs.installationToken != ''
@@ -176,7 +239,62 @@ jobs:
       - name: Final Status
         run: |
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
-          Write-Host "📊 WORKFLOW SUMMARY" -ForegroundColor Cyan
-          Write-Host "OIDC Job Result: ${{ needs.setup-oidc.result }}" -ForegroundColor Gray
-          Write-Host "GitHub App Token Job Result: ${{ needs.github-app-token.result }}" -ForegroundColor Gray
+          Write-Host "📊 WORKFLOW EXECUTION SUMMARY" -ForegroundColor Cyan
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+          
+          $oidcResult = "${{ needs.setup-oidc.result }}"
+          $githubAppResult = "${{ needs.github-app-token.result }}"
+          
+          Write-Host "`nJob Results:" -ForegroundColor White
+          
+          # OIDC Setup Status
+          Write-Host "  1. Setup Azure OIDC: " -NoNewline
+          switch ($oidcResult) {
+            "success" { Write-Host "✅ SUCCESS" -ForegroundColor Green }
+            "failure" { Write-Host "❌ FAILED" -ForegroundColor Red }
+            "cancelled" { Write-Host "⚠️ CANCELLED" -ForegroundColor Yellow }
+            "skipped" { Write-Host "⏭️ SKIPPED" -ForegroundColor Gray }
+            default { Write-Host "❓ $oidcResult" -ForegroundColor Gray }
+          }
+          
+          # GitHub App Token Status
+          Write-Host "  2. Generate GitHub App Token: " -NoNewline
+          switch ($githubAppResult) {
+            "success" { Write-Host "✅ SUCCESS" -ForegroundColor Green }
+            "failure" { Write-Host "❌ FAILED" -ForegroundColor Red }
+            "cancelled" { Write-Host "⚠️ CANCELLED" -ForegroundColor Yellow }
+            "skipped" { Write-Host "⏭️ SKIPPED" -ForegroundColor Gray }
+            default { Write-Host "❓ $githubAppResult" -ForegroundColor Gray }
+          }
+          
+          Write-Host "`n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+          
+          # Overall workflow status
+          $hasFailure = ($oidcResult -eq "failure") -or ($githubAppResult -eq "failure")
+          
+          if ($hasFailure) {
+            Write-Host "⚠️ WORKFLOW COMPLETED WITH FAILURES" -ForegroundColor Red
+            Write-Host "`nFailure Analysis:" -ForegroundColor Yellow
+            
+            if ($oidcResult -eq "failure") {
+              Write-Host "  • OIDC Setup Failed:" -ForegroundColor Red
+              Write-Host "    - Check Azure login credentials" -ForegroundColor Gray
+              Write-Host "    - Verify OIDC app registration exists" -ForegroundColor Gray
+              Write-Host "    - Review job logs for detailed error messages" -ForegroundColor Gray
+            }
+            
+            if ($githubAppResult -eq "failure") {
+              Write-Host "  • GitHub App Token Generation Failed:" -ForegroundColor Red
+              Write-Host "    - Verify GitHub App secrets are configured" -ForegroundColor Gray
+              Write-Host "    - Check GH_APP_ID, GH_APP_INSTALLATION_ID, GH_APP_PRIVATE_KEY" -ForegroundColor Gray
+              Write-Host "    - Review job logs for detailed error messages" -ForegroundColor Gray
+            }
+            
+            Write-Host "`n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+            Write-Error "Workflow failed. See failure analysis above."
+            exit 1
+          }
+          else {
+            Write-Host "✅ WORKFLOW COMPLETED SUCCESSFULLY" -ForegroundColor Green
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+          }
