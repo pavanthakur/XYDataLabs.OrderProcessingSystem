@@ -419,86 +419,86 @@ jobs:
             Write-Host ""
 
             for ($i = 1; $i -le $maxRetries; $i++) {
-            Write-Host "`n[Attempt $i/$maxRetries] Waiting $retryDelay seconds for Azure AD propagation..." -ForegroundColor Gray
-            Start-Sleep -Seconds $retryDelay
+              Write-Host "`n[Attempt $i/$maxRetries] Waiting $retryDelay seconds for Azure AD propagation..." -ForegroundColor Gray
+              Start-Sleep -Seconds $retryDelay
 
-            Write-Host "Purging Azure CLI cache and querying credentials..." -ForegroundColor Gray
-            az cache purge 2>$null | Out-Null
-            $creds = az ad app federated-credential list --id $appObjectId | ConvertFrom-Json
+              Write-Host "Purging Azure CLI cache and querying credentials..." -ForegroundColor Gray
+              az cache purge 2>$null | Out-Null
+              $creds = az ad app federated-credential list --id $appObjectId | ConvertFrom-Json
 
-            $validCount = ($creds | Where-Object { $_.subject -like "$expectedPattern*" }).Count
-            Write-Host "Found $validCount/$($creds.Count) credentials with correct format" -ForegroundColor $(if ($validCount -eq $expectedCount) { "Green" } else { "Yellow" })
+              $validCount = ($creds | Where-Object { $_.subject -like "$expectedPattern*" }).Count
+              Write-Host "Found $validCount/$($creds.Count) credentials with correct format" -ForegroundColor $(if ($validCount -eq $expectedCount) { "Green" } else { "Yellow" })
 
-            if ($validCount -eq $expectedCount) {
-              Write-Host "✅ All credentials have propagated correctly!" -ForegroundColor Green
-              $validCreds = $creds
-              break
+              if ($validCount -eq $expectedCount) {
+                Write-Host "✅ All credentials have propagated correctly!" -ForegroundColor Green
+                $validCreds = $creds
+                break
+              }
+
+              if ($i -lt $maxRetries) {
+                Write-Host "⚠️ Still seeing old credentials, retrying..." -ForegroundColor Yellow
+              }
+              }
+
+            if (-not $validCreds) {
+              Write-Warning "Azure AD still showing stale credentials after $($maxRetries * $retryDelay) seconds"
+              Write-Warning "This is likely an Azure AD caching issue. Proceeding with manual verification..."
+              $creds = az ad app federated-credential list --id $appObjectId | ConvertFrom-Json
+            } else {
+              $creds = $validCreds
             }
 
-            if ($i -lt $maxRetries) {
-              Write-Host "⚠️ Still seeing old credentials, retrying..." -ForegroundColor Yellow
-            }
-          }
-
-          if (-not $validCreds) {
-            Write-Warning "Azure AD still showing stale credentials after $($maxRetries * $retryDelay) seconds"
-            Write-Warning "This is likely an Azure AD caching issue. Proceeding with manual verification..."
-            $creds = az ad app federated-credential list --id $appObjectId | ConvertFrom-Json
-          } else {
-            $creds = $validCreds
-          }
-
-          Write-Host "`nCreated federated credentials:" -ForegroundColor Green
-          foreach ($cred in $creds) {
-            Write-Host "  - Name: $($cred.name)" -ForegroundColor White
-            Write-Host "    Subject: $($cred.subject)" -ForegroundColor Gray
-          }
-
-          if ($creds.Count -lt $expectedCount) {
-            Write-Warning "Expected $expectedCount federated credentials, found $($creds.Count). OIDC setup may be incomplete."
-            Write-Warning "Re-run this workflow with 'Setup OIDC' enabled to create missing credentials."
-          } else {
-            Write-Host "`n✅ All $expectedCount federated credentials verified!" -ForegroundColor Green
-          }
-
-          Write-Host "`n🔎 Checking for required credentials..." -ForegroundColor Cyan
-
-          # Check branch credential for selected environment
-          Write-Host "Searching for $selectedEnv branch credential..." -ForegroundColor Gray
-          $expectedBranch = "repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/$selectedEnv"
-          Write-Host "Expected: $expectedBranch" -ForegroundColor Gray
-          $devBranchCred = $creds | Where-Object { $_.subject -eq $expectedBranch }
-          if ($devBranchCred) {
-            Write-Host "✅ $selectedEnv branch credential found: $($devBranchCred.name)" -ForegroundColor Green
-          } else {
-            Write-Host "❌ $selectedEnv branch credential NOT found" -ForegroundColor Red
-            Write-Host "Actual subjects found:" -ForegroundColor Yellow
+            Write-Host "`nCreated federated credentials:" -ForegroundColor Green
             foreach ($cred in $creds) {
-              Write-Host "  - $($cred.subject)" -ForegroundColor Yellow
+              Write-Host "  - Name: $($cred.name)" -ForegroundColor White
+              Write-Host "    Subject: $($cred.subject)" -ForegroundColor Gray
             }
-            Write-Error "⚠️ $selectedEnv branch federated credential is missing! Bootstrap will fail."
-          }
 
-          # Check environment credential for selected environment
-          Write-Host "`nSearching for $selectedEnv environment credential..." -ForegroundColor Gray
-          $expectedEnv = "repo:pavanthakur/XYDataLabs.OrderProcessingSystem:environment:$selectedEnv"
-          Write-Host "Expected: $expectedEnv" -ForegroundColor Gray
-          $devEnvCred = $creds | Where-Object { $_.subject -eq $expectedEnv }
-          if ($devEnvCred) {
-            Write-Host "✅ $selectedEnv environment credential found: $($devEnvCred.name)" -ForegroundColor Green
-          } else {
-            Write-Host "❌ $selectedEnv environment credential NOT found" -ForegroundColor Red
+            if ($creds.Count -lt $expectedCount) {
+              Write-Warning "Expected $expectedCount federated credentials, found $($creds.Count). OIDC setup may be incomplete."
+              Write-Warning "Re-run this workflow with 'Setup OIDC' enabled to create missing credentials."
+            } else {
+              Write-Host "`n✅ All $expectedCount federated credentials verified!" -ForegroundColor Green
+            }
+
+            Write-Host "`n🔎 Checking for required credentials..." -ForegroundColor Cyan
+
+            # Check branch credential for selected environment
+            Write-Host "Searching for $selectedEnv branch credential..." -ForegroundColor Gray
+            $expectedBranch = "repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/$selectedEnv"
+            Write-Host "Expected: $expectedBranch" -ForegroundColor Gray
+            $devBranchCred = $creds | Where-Object { $_.subject -eq $expectedBranch }
+            if ($devBranchCred) {
+              Write-Host "✅ $selectedEnv branch credential found: $($devBranchCred.name)" -ForegroundColor Green
+            } else {
+              Write-Host "❌ $selectedEnv branch credential NOT found" -ForegroundColor Red
+              Write-Host "Actual subjects found:" -ForegroundColor Yellow
+              foreach ($cred in $creds) {
+                Write-Host "  - $($cred.subject)" -ForegroundColor Yellow
+              }
+              Write-Error "⚠️ $selectedEnv branch federated credential is missing! Bootstrap will fail."
+            }
+
+            # Check environment credential for selected environment
+            Write-Host "`nSearching for $selectedEnv environment credential..." -ForegroundColor Gray
+            $expectedEnv = "repo:pavanthakur/XYDataLabs.OrderProcessingSystem:environment:$selectedEnv"
+            Write-Host "Expected: $expectedEnv" -ForegroundColor Gray
+            $devEnvCred = $creds | Where-Object { $_.subject -eq $expectedEnv }
+            if ($devEnvCred) {
+              Write-Host "✅ $selectedEnv environment credential found: $($devEnvCred.name)" -ForegroundColor Green
+            } else {
+              Write-Host "❌ $selectedEnv environment credential NOT found" -ForegroundColor Red
+            }
+            
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host "✅ FEDERATED CREDENTIALS VERIFICATION COMPLETE" -ForegroundColor Green
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+            Write-Host ""
           }
-          
-          Write-Host ""
-          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
-          Write-Host "✅ FEDERATED CREDENTIALS VERIFICATION COMPLETE" -ForegroundColor Green
-          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
-          Write-Host ""
-          Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
-          Write-Host ""
-        }
-        catch {
+          catch {
           Write-Host ""
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
           Write-Host "❌ EXCEPTION DURING CREDENTIAL VERIFICATION" -ForegroundColor Red
