@@ -499,21 +499,21 @@ jobs:
             Write-Host ""
           }
           catch {
-          Write-Host ""
-          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-          Write-Host "❌ EXCEPTION DURING CREDENTIAL VERIFICATION" -ForegroundColor Red
-          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-          Write-Host ""
-          Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
-          Write-Host ""
-          Write-Host "Stack Trace:" -ForegroundColor Yellow
-          Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
-          Write-Host ""
-          Write-Host "Timestamp (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
-          Write-Host ""
-          Write-Error "Credential verification failed with exception: $($_.Exception.Message)"
-          exit 1
-        }
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING CREDENTIAL VERIFICATION" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Stack Trace:" -ForegroundColor Yellow
+            Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
+            Write-Host ""
+            Write-Host "Timestamp (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+            Write-Host ""
+            Write-Error "Credential verification failed with exception: $($_.Exception.Message)"
+            exit 1
+          }
 
       - name: Create Setup Summary
         run: |
@@ -1490,21 +1490,21 @@ jobs:
           Write-Host ""
           Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           Write-Host ""
-        }
-        catch {
-          Write-Host ""
-          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-          Write-Host "❌ EXCEPTION DURING BOOTSTRAP" -ForegroundColor Red
-          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-          Write-Host ""
-          Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
-          Write-Host ""
-          Write-Host "Stack Trace:" -ForegroundColor Yellow
-          Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
-          Write-Host ""
-          Write-Error "Bootstrap failed with exception: $($_.Exception.Message)"
-          exit 1
-        }
+          }
+          catch {
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING BOOTSTRAP" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Stack Trace:" -ForegroundColor Yellow
+            Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
+            Write-Host ""
+            Write-Error "Bootstrap failed with exception: $($_.Exception.Message)"
+            exit 1
+          }
       - name: Upload Bootstrap Log
         if: always()
         uses: actions/upload-artifact@v4
