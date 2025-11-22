@@ -13,12 +13,17 @@ on:
           - prod
           - all
       setupOidc:
-        description: 'Setup OIDC (first-time only)'
+        description: 'Setup Azure OIDC (first-time only)'
+        required: true
+        type: boolean
+        default: false
+      setupGitHubApp:
+        description: 'Setup GitHub App (one-time, eliminates PAT expiration)'
         required: true
         type: boolean
         default: false
       configureSecrets:
-        description: 'Configure GitHub secrets (requires GitHub token)'
+        description: 'Configure GitHub secrets (auto if GitHub App configured)'
         required: true
         type: boolean
         default: false
@@ -69,7 +74,8 @@ jobs:
           Write-Host "" -ForegroundColor Gray
           Write-Host "📋 USER SELECTED PARAMETERS:" -ForegroundColor Yellow
           Write-Host "  ✓ Target environment:           ${{ inputs.environment }}" -ForegroundColor White
-          Write-Host "  ✓ Setup OIDC:                   ${{ inputs.setupOidc }}" -ForegroundColor White
+          Write-Host "  ✓ Setup Azure OIDC:             ${{ inputs.setupOidc }}" -ForegroundColor White
+          Write-Host "  ✓ Setup GitHub App:             ${{ inputs.setupGitHubApp }}" -ForegroundColor White
           Write-Host "  ✓ Configure GitHub secrets:     ${{ inputs.configureSecrets }}" -ForegroundColor White
           Write-Host "  ✓ Bootstrap infrastructure:     ${{ inputs.bootstrapInfra }}" -ForegroundColor White
           Write-Host "  ✓ Enable validation:            ${{ inputs.enableValidation }}" -ForegroundColor White
@@ -319,19 +325,230 @@ jobs:
         run: |
           "## 🔐 Azure OIDC Setup Complete" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
-          "### 📋 Next Steps" >> $env:GITHUB_STEP_SUMMARY
-          "1. Add these secrets to GitHub (if not using automated secret configuration):" >> $env:GITHUB_STEP_SUMMARY
-          "   - AZUREAPPSERVICE_CLIENTID: ``${{ steps.oidc.outputs.clientId }}``" >> $env:GITHUB_STEP_SUMMARY
-          "   - AZUREAPPSERVICE_TENANTID: ``${{ steps.oidc.outputs.tenantId }}``" >> $env:GITHUB_STEP_SUMMARY
-          "   - AZUREAPPSERVICE_SUBSCRIPTIONID: ``${{ steps.oidc.outputs.subscriptionId }}``" >> $env:GITHUB_STEP_SUMMARY
+          "### 📋 Azure Credentials" >> $env:GITHUB_STEP_SUMMARY
+          "- **Client ID**: ``${{ steps.oidc.outputs.clientId }}``" >> $env:GITHUB_STEP_SUMMARY
+          "- **Tenant ID**: ``${{ steps.oidc.outputs.tenantId }}``" >> $env:GITHUB_STEP_SUMMARY
+          "- **Subscription ID**: ``${{ steps.oidc.outputs.subscriptionId }}``" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
-          "2. Re-run this workflow with ``Configure GitHub secrets`` enabled" >> $env:GITHUB_STEP_SUMMARY
-          "3. Then run with ``Bootstrap infrastructure`` enabled" >> $env:GITHUB_STEP_SUMMARY
+          "### 🔑 Next Steps - Choose One Option" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "#### Option 1: GitHub App ⭐ RECOMMENDED - Zero Maintenance" >> $env:GITHUB_STEP_SUMMARY
+          "**Benefits**: ✅ Never expires • ✅ Auto-generated tokens • ✅ Better security" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "1. Create GitHub App: [Documentation/03-Configuration-Guides/GITHUB-APP-AUTHENTICATION.md](../blob/main/Documentation/03-Configuration-Guides/GITHUB-APP-AUTHENTICATION.md)" >> $env:GITHUB_STEP_SUMMARY
+          "2. Add these secrets:" >> $env:GITHUB_STEP_SUMMARY
+          "   - ``GH_APP_ID`` - Your GitHub App ID" >> $env:GITHUB_STEP_SUMMARY
+          "   - ``GH_APP_INSTALLATION_ID`` - Installation ID" >> $env:GITHUB_STEP_SUMMARY
+          "   - ``GH_APP_PRIVATE_KEY`` - Private key (PEM format)" >> $env:GITHUB_STEP_SUMMARY
+          "3. Re-run this workflow with ``Configure GitHub secrets`` enabled" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "#### Option 2: Personal Access Token (Requires Renewal)" >> $env:GITHUB_STEP_SUMMARY
+          "**Drawback**: ⚠️ Expires (max 1 year) • ⚠️ Manual renewal required" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "1. Create fine-grained PAT: https://github.com/settings/tokens?type=beta" >> $env:GITHUB_STEP_SUMMARY
+          "   - Grant **Secrets** permission (read/write)" >> $env:GITHUB_STEP_SUMMARY
+          "   - Set expiration (max 1 year)" >> $env:GITHUB_STEP_SUMMARY
+          "2. Add PAT as repository secret:" >> $env:GITHUB_STEP_SUMMARY
+          "   - Go to: https://github.com/${{ github.repository }}/settings/secrets/actions/new" >> $env:GITHUB_STEP_SUMMARY
+          "   - Name: ``GH_PAT``" >> $env:GITHUB_STEP_SUMMARY
+          "   - Value: Your PAT token" >> $env:GITHUB_STEP_SUMMARY
+          "3. **Set calendar reminder** to renew before expiration" >> $env:GITHUB_STEP_SUMMARY
+          "4. Re-run this workflow with ``Configure GitHub secrets`` enabled" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "#### Option 3: Manual Configuration (No Automation)" >> $env:GITHUB_STEP_SUMMARY
+          "Add these secrets manually at: https://github.com/${{ github.repository }}/settings/secrets/actions" >> $env:GITHUB_STEP_SUMMARY
+          "- ``AZUREAPPSERVICE_CLIENTID``: ``${{ steps.oidc.outputs.clientId }}``" >> $env:GITHUB_STEP_SUMMARY
+          "- ``AZUREAPPSERVICE_TENANTID``: ``${{ steps.oidc.outputs.tenantId }}``" >> $env:GITHUB_STEP_SUMMARY
+          "- ``AZUREAPPSERVICE_SUBSCRIPTIONID``: ``${{ steps.oidc.outputs.subscriptionId }}``" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "### 📦 After Secrets Are Configured" >> $env:GITHUB_STEP_SUMMARY
+          "Run this workflow again with ``Bootstrap infrastructure`` enabled" >> $env:GITHUB_STEP_SUMMARY
+
+  setup-github-app:
+    name: Setup GitHub App
+    if: inputs.setupGitHubApp
+    needs: [validate-inputs]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Explain GitHub App Setup
+        run: |
+          Write-Host "========================================" -ForegroundColor Cyan
+          Write-Host "GitHub App Setup - One-Time Configuration" -ForegroundColor White
+          Write-Host "========================================" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "🎯 Goal: Eliminate PAT token expiration forever" -ForegroundColor Yellow
+          Write-Host ""
+          Write-Host "Benefits:" -ForegroundColor Cyan
+          Write-Host "  ✅ Tokens auto-generated (never expire)" -ForegroundColor Green
+          Write-Host "  ✅ No manual renewal needed" -ForegroundColor Green
+          Write-Host "  ✅ Better security (short-lived tokens)" -ForegroundColor Green
+          Write-Host "  ✅ Full automation after initial setup" -ForegroundColor Green
+          Write-Host ""
+          Write-Host "⚠️  GitHub Security Requirement:" -ForegroundColor Yellow
+          Write-Host "   For security, GitHub requires interactive authorization" -ForegroundColor Gray
+          Write-Host "   for first-time app creation. This is by design." -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "⏱️  One-time manual setup required (5 minutes)" -ForegroundColor Cyan
+          Write-Host "   After this, everything is fully automated!" -ForegroundColor Green
+          Write-Host ""
+      
+      - name: Check Existing GitHub App
+        id: check-app
+        run: |
+          Write-Host "🔍 Checking for existing GitHub App configuration..." -ForegroundColor Cyan
+          
+          $hasAppId = "${{ secrets.GH_APP_ID }}" -ne ""
+          $hasInstallationId = "${{ secrets.GH_APP_INSTALLATION_ID }}" -ne ""
+          $hasPrivateKey = "${{ secrets.GH_APP_PRIVATE_KEY }}" -ne ""
+          
+          if ($hasAppId -and $hasInstallationId -and $hasPrivateKey) {
+            Write-Host "  ✅ GitHub App already configured!" -ForegroundColor Green
+            Write-Host "     App ID: Present" -ForegroundColor Gray
+            Write-Host "     Installation ID: Present" -ForegroundColor Gray
+            Write-Host "     Private Key: Present" -ForegroundColor Gray
+            Write-Host ""
+            Write-Host "  No setup needed. Workflow will use existing app." -ForegroundColor Green
+            "alreadyConfigured=true" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Host "  ℹ️  GitHub App not configured" -ForegroundColor Yellow
+            Write-Host "     Missing: " -NoNewline -ForegroundColor Gray
+            if (-not $hasAppId) { Write-Host "GH_APP_ID " -NoNewline -ForegroundColor Yellow }
+            if (-not $hasInstallationId) { Write-Host "GH_APP_INSTALLATION_ID " -NoNewline -ForegroundColor Yellow }
+            if (-not $hasPrivateKey) { Write-Host "GH_APP_PRIVATE_KEY" -ForegroundColor Yellow }
+            Write-Host ""
+            "alreadyConfigured=false" >> $env:GITHUB_OUTPUT
+          }
+      
+      - name: Provide Setup Instructions
+        if: steps.check-app.outputs.alreadyConfigured != 'true'
+        run: |
+          Write-Host ""
+          Write-Host "========================================" -ForegroundColor Cyan
+          Write-Host "📋 SETUP INSTRUCTIONS" -ForegroundColor White
+          Write-Host "========================================" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "⏱️  Estimated time: 5 minutes" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "Step 1: Create GitHub App (2 minutes)" -ForegroundColor Cyan
+          Write-Host "  🔗 https://github.com/settings/apps/new" -ForegroundColor Yellow
+          Write-Host ""
+          Write-Host "  Fill in:" -ForegroundColor White
+          Write-Host "    Name: OrderProcessingSystem-SecretManager" -ForegroundColor Gray
+          Write-Host "    Homepage: https://github.com/${{ github.repository }}" -ForegroundColor Gray
+          Write-Host "    Webhook: UNCHECK 'Active'" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "  Permissions → Repository permissions:" -ForegroundColor White
+          Write-Host "    Secrets: Read and write ✅" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "  Click 'Create GitHub App'" -ForegroundColor White
+          Write-Host ""
+          Write-Host "Step 2: Generate Private Key (30 seconds)" -ForegroundColor Cyan
+          Write-Host "  After creation, scroll to 'Private keys' section" -ForegroundColor White
+          Write-Host "  Click 'Generate a private key'" -ForegroundColor White
+          Write-Host "  Save the downloaded .pem file" -ForegroundColor White
+          Write-Host ""
+          Write-Host "Step 3: Install App (30 seconds)" -ForegroundColor Cyan
+          Write-Host "  Click 'Install App' in left sidebar" -ForegroundColor White
+          Write-Host "  Select your account" -ForegroundColor White
+          Write-Host "  Choose 'Only select repositories'" -ForegroundColor White
+          Write-Host "  Select: ${{ github.repository }}" -ForegroundColor White
+          Write-Host "  Click 'Install'" -ForegroundColor White
+          Write-Host ""
+          Write-Host "  📝 Copy Installation ID from URL:" -ForegroundColor White
+          Write-Host "     Format: https://github.com/settings/installations/12345678" -ForegroundColor Gray
+          Write-Host "     Installation ID = 12345678" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "Step 4: Add Repository Secrets (1 minute)" -ForegroundColor Cyan
+          Write-Host "  🔗 https://github.com/${{ github.repository }}/settings/secrets/actions" -ForegroundColor Yellow
+          Write-Host ""
+          Write-Host "  Add these 3 secrets:" -ForegroundColor White
+          Write-Host ""
+          Write-Host "    1. GH_APP_ID" -ForegroundColor Cyan
+          Write-Host "       Value: [App ID from app settings page]" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "    2. GH_APP_INSTALLATION_ID" -ForegroundColor Cyan
+          Write-Host "       Value: [Installation ID from URL above]" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "    3. GH_APP_PRIVATE_KEY" -ForegroundColor Cyan
+          Write-Host "       Value: [Full contents of .pem file]" -ForegroundColor Gray
+          Write-Host "       Note: Copy entire file including BEGIN/END lines" -ForegroundColor DarkGray
+          Write-Host ""
+          Write-Host "Step 5: Re-run This Workflow" -ForegroundColor Cyan
+          Write-Host "  After adding secrets, run this workflow again" -ForegroundColor White
+          Write-Host "  Enable: 'Configure GitHub secrets' = true" -ForegroundColor White
+          Write-Host "  The workflow will automatically use GitHub App" -ForegroundColor White
+          Write-Host ""
+          Write-Host "========================================" -ForegroundColor Green
+          Write-Host "✨ After this one-time setup:" -ForegroundColor White
+          Write-Host "========================================" -ForegroundColor Green
+          Write-Host "  ✅ Tokens auto-generate on every run" -ForegroundColor Green
+          Write-Host "  ✅ No expiration to track" -ForegroundColor Green
+          Write-Host "  ✅ No maintenance needed" -ForegroundColor Green
+          Write-Host "  ✅ Fully automated forever!" -ForegroundColor Green
+          Write-Host ""
+          Write-Host "📖 Detailed guide:" -ForegroundColor Cyan
+          Write-Host "   Documentation/03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md" -ForegroundColor White
+          Write-Host ""
+      
+      - name: Create Setup Summary
+        run: |
+          "## 🔐 GitHub App Setup" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          
+          $hasApp = "${{ steps.check-app.outputs.alreadyConfigured }}" -eq "true"
+          
+          if ($hasApp) {
+            "### ✅ Already Configured" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "GitHub App is already set up and ready to use." >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "**Configuration detected**:" >> $env:GITHUB_STEP_SUMMARY
+            "- ``GH_APP_ID`` ✅" >> $env:GITHUB_STEP_SUMMARY
+            "- ``GH_APP_INSTALLATION_ID`` ✅" >> $env:GITHUB_STEP_SUMMARY
+            "- ``GH_APP_PRIVATE_KEY`` ✅" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "**Next step**: Re-run workflow with ``Configure GitHub secrets`` enabled" >> $env:GITHUB_STEP_SUMMARY
+          } else {
+            "### ⏱️ One-Time Manual Setup Required (5 minutes)" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "GitHub's security model requires interactive authorization for app creation." >> $env:GITHUB_STEP_SUMMARY
+            "This is a one-time setup that takes about 5 minutes." >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "### 📋 Quick Setup Steps" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "1. **Create App** (2 min): https://github.com/settings/apps/new" >> $env:GITHUB_STEP_SUMMARY
+            "   - Name: ``OrderProcessingSystem-SecretManager``" >> $env:GITHUB_STEP_SUMMARY
+            "   - Permissions → Secrets: Read and write" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "2. **Generate Key** (30 sec): Click 'Generate a private key', save .pem file" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "3. **Install App** (30 sec): Install on repository ${{ github.repository }}" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "4. **Add Secrets** (1 min): https://github.com/${{ github.repository }}/settings/secrets/actions" >> $env:GITHUB_STEP_SUMMARY
+            "   - ``GH_APP_ID``" >> $env:GITHUB_STEP_SUMMARY
+            "   - ``GH_APP_INSTALLATION_ID``" >> $env:GITHUB_STEP_SUMMARY
+            "   - ``GH_APP_PRIVATE_KEY``" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "5. **Re-run Workflow**: Enable 'Configure GitHub secrets'" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "### 📖 Detailed Guide" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "[Quick Setup Guide](../blob/main/Documentation/03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md)" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "### ✨ After Setup" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "- ✅ Tokens auto-generate forever" >> $env:GITHUB_STEP_SUMMARY
+            "- ✅ No expiration" >> $env:GITHUB_STEP_SUMMARY
+            "- ✅ No maintenance" >> $env:GITHUB_STEP_SUMMARY
+            "- ✅ Fully automated" >> $env:GITHUB_STEP_SUMMARY
+          }
 
   configure-secrets:
     name: Configure GitHub Secrets
     if: inputs.configureSecrets
-    needs: [validate-inputs, setup-oidc]
+    needs: [validate-inputs, setup-oidc, setup-github-app]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -356,10 +573,20 @@ jobs:
           Write-Host "" -ForegroundColor Gray
           Write-Host "✅ All prerequisites validated" -ForegroundColor Green
       
+      - name: Generate GitHub App Token
+        id: app-token
+        if: secrets.GH_APP_ID != '' && secrets.GH_APP_PRIVATE_KEY != '' && secrets.GH_APP_INSTALLATION_ID != ''
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+      
       - name: Check Required Secrets
         id: check
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+          GH_APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_APP_ID: ${{ secrets.GH_APP_ID }}
         run: |
           $hasClientId = "${{ secrets.AZUREAPPSERVICE_CLIENTID }}" -ne ""
           $hasTenantId = "${{ secrets.AZUREAPPSERVICE_TENANTID }}" -ne ""
@@ -369,7 +596,27 @@ jobs:
           Write-Host "Repo Secret Present?  AZUREAPPSERVICE_CLIENTID    : $hasClientId" -ForegroundColor Gray
           Write-Host "Repo Secret Present?  AZUREAPPSERVICE_TENANTID    : $hasTenantId" -ForegroundColor Gray
           Write-Host "Repo Secret Present?  AZUREAPPSERVICE_SUBSCRIPTIONID : $hasSubscriptionId" -ForegroundColor Gray
-          Write-Host "Using GITHUB_TOKEN for authentication              : ✅" -ForegroundColor Gray
+          Write-Host "" -ForegroundColor Gray
+          
+          # Check authentication method (prefer GitHub App over PAT)
+          if ($env:GH_APP_TOKEN) {
+            Write-Host "Authentication method: GitHub App (App ID: $env:GH_APP_ID)" -ForegroundColor Green
+            Write-Host "  ✅ Auto-generated token (expires in 1 hour, auto-renewed)" -ForegroundColor Green
+            Write-Host "  ✅ No token expiration maintenance required!" -ForegroundColor Green
+            "useGitHubApp=true" >> $env:GITHUB_OUTPUT
+          } elseif ($env:GH_PAT) {
+            Write-Host "Authentication method: PAT (Personal Access Token)" -ForegroundColor Yellow
+            Write-Host "  ⚠️  Requires manual renewal on expiration" -ForegroundColor Yellow
+            Write-Host "  💡 Consider migrating to GitHub App for zero maintenance" -ForegroundColor Cyan
+            "useGitHubApp=false" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Host "Authentication method: None" -ForegroundColor Red
+            Write-Host "  ❌ Cannot set secrets automatically" -ForegroundColor Red
+            Write-Host "  📖 See Documentation/03-Configuration-Guides/GITHUB-APP-AUTHENTICATION.md" -ForegroundColor Yellow
+            "useGitHubApp=false" >> $env:GITHUB_OUTPUT
+          }
+          
+          Write-Host "" -ForegroundColor Gray
           Write-Host "Timestamp (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           Write-Host "---- END REPOSITORY SECRET BASELINE ----" -ForegroundColor Cyan
           
@@ -381,25 +628,99 @@ jobs:
             "secretsExist=false" >> $env:GITHUB_OUTPUT
           }
 
-      - name: Log GitHub Token Availability
+      - name: Log Token Availability
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+          GH_APP_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          $len = $env:GH_TOKEN.Length
-          Write-Host "✅ GITHUB_TOKEN automatically available (length: $len chars)." -ForegroundColor Green
-          Write-Host "   No manual token configuration required!" -ForegroundColor Green
+          Write-Host "🔑 Authentication Status:" -ForegroundColor Cyan
+          
+          if ($env:GH_APP_TOKEN) {
+            Write-Host "  ✅ GitHub App configured - automatic token generation" -ForegroundColor Green
+            Write-Host "     No expiration maintenance required!" -ForegroundColor Green
+          } elseif ($env:GH_PAT) {
+            Write-Host "  ✅ PAT configured - can set secrets" -ForegroundColor Yellow
+            Write-Host "     ⚠️  Remember to renew PAT before expiration" -ForegroundColor Yellow
+            Write-Host "     💡 Migrate to GitHub App: Documentation/03-Configuration-Guides/GITHUB-APP-AUTHENTICATION.md" -ForegroundColor Cyan
+          } else {
+            Write-Host "  ❌ No authentication configured" -ForegroundColor Red
+            Write-Host "     Repository secrets must be set manually" -ForegroundColor Red
+            Write-Host "" -ForegroundColor Gray
+            Write-Host "  Choose one option:" -ForegroundColor Yellow
+            Write-Host "    1. GitHub App (recommended) - zero maintenance" -ForegroundColor Cyan
+            Write-Host "       See: Documentation/03-Configuration-Guides/GITHUB-APP-AUTHENTICATION.md" -ForegroundColor Gray
+            Write-Host "    2. PAT (requires renewal) - add GH_PAT secret" -ForegroundColor Cyan
+            Write-Host "       See: Documentation/GITHUB-SECRETS-FIX.md" -ForegroundColor Gray
+            Write-Host "    3. Manual setup - set secrets manually" -ForegroundColor Cyan
+          }
       
       - name: Set Repository Secrets
         if: steps.check.outputs.secretsExist == 'false'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+          GH_APP_TOKEN: ${{ steps.app-token.outputs.token }}
           CLIENT_ID: ${{ needs.setup-oidc.outputs.clientId }}
           TENANT_ID: ${{ needs.setup-oidc.outputs.tenantId }}
           SUBSCRIPTION_ID: ${{ needs.setup-oidc.outputs.subscriptionId }}
         run: |
           Write-Host "---- BEGIN REPOSITORY SECRET CONFIGURATION ----" -ForegroundColor Cyan
           Write-Host "UTC Start: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
-          Write-Host "Using GITHUB_TOKEN for authentication (automatic)" -ForegroundColor Green
+          
+          # Determine authentication method (prefer GitHub App)
+          $token = $null
+          $authMethod = "None"
+          
+          if ($env:GH_APP_TOKEN) {
+            $token = $env:GH_APP_TOKEN
+            $authMethod = "GitHub App"
+            Write-Host "Using GitHub App authentication (auto-generated token)" -ForegroundColor Green
+            Write-Host "  ✅ Token expires in 1 hour (auto-renewed on next run)" -ForegroundColor Green
+            Write-Host "  ✅ No maintenance required!" -ForegroundColor Green
+          } elseif ($env:GH_PAT) {
+            $token = $env:GH_PAT
+            $authMethod = "PAT"
+            Write-Host "Using PAT authentication (manual token)" -ForegroundColor Yellow
+            Write-Host "  ⚠️  Remember to renew before expiration" -ForegroundColor Yellow
+          }
+          
+          if (-not $token) {
+            Write-Host "⚠️  No authentication token available - cannot set repository secrets" -ForegroundColor Yellow
+            Write-Host "    GITHUB_TOKEN does not have permission to create/update repository secrets" -ForegroundColor Yellow
+            Write-Host "" -ForegroundColor Gray
+            Write-Host "📋 REQUIRED ACTION: Choose one option" -ForegroundColor Yellow
+            Write-Host "" -ForegroundColor Gray
+            Write-Host "Option 1: GitHub App (Recommended - Zero Maintenance)" -ForegroundColor Cyan
+            Write-Host "  Benefits:" -ForegroundColor Green
+            Write-Host "    ✅ Tokens auto-generated (never expire)" -ForegroundColor Green
+            Write-Host "    ✅ No manual renewal needed" -ForegroundColor Green
+            Write-Host "    ✅ Better security (short-lived tokens)" -ForegroundColor Green
+            Write-Host "  Setup:" -ForegroundColor White
+            Write-Host "    1. See: Documentation/03-Configuration-Guides/GITHUB-APP-AUTHENTICATION.md" -ForegroundColor Gray
+            Write-Host "    2. Create GitHub App and add these secrets:" -ForegroundColor Gray
+            Write-Host "       - GH_APP_ID" -ForegroundColor Gray
+            Write-Host "       - GH_APP_INSTALLATION_ID" -ForegroundColor Gray
+            Write-Host "       - GH_APP_PRIVATE_KEY" -ForegroundColor Gray
+            Write-Host "" -ForegroundColor Gray
+            Write-Host "Option 2: PAT (Requires Manual Renewal)" -ForegroundColor Cyan
+            Write-Host "  Setup:" -ForegroundColor White
+            Write-Host "    1. Create PAT: https://github.com/settings/tokens?type=beta" -ForegroundColor Gray
+            Write-Host "    2. Grant 'Secrets' permission (read/write)" -ForegroundColor Gray
+            Write-Host "    3. Set expiration (max 1 year)" -ForegroundColor Gray
+            Write-Host "    4. Add as GH_PAT secret" -ForegroundColor Gray
+            Write-Host "" -ForegroundColor Gray
+            Write-Host "Option 3: Manual Configuration (No Automation)" -ForegroundColor Cyan
+            Write-Host "  Go to: https://github.com/${{ github.repository }}/settings/secrets/actions" -ForegroundColor Gray
+            Write-Host "  Add these secrets:" -ForegroundColor White
+            Write-Host "    - AZUREAPPSERVICE_CLIENTID = $env:CLIENT_ID" -ForegroundColor Gray
+            Write-Host "    - AZUREAPPSERVICE_TENANTID = $env:TENANT_ID" -ForegroundColor Gray
+            Write-Host "    - AZUREAPPSERVICE_SUBSCRIPTIONID = $env:SUBSCRIPTION_ID" -ForegroundColor Gray
+            Write-Host "" -ForegroundColor Gray
+            Write-Host "---- END REPOSITORY SECRET CONFIGURATION ----" -ForegroundColor Cyan
+            exit 0
+          }
+          
+          # Set GH_TOKEN for gh CLI
+          $env:GH_TOKEN = $token
           
           Write-Host "🔑 Setting GitHub repository secrets..." -ForegroundColor Cyan
           
@@ -415,10 +736,7 @@ jobs:
           gh secret set AZUREAPPSERVICE_SUBSCRIPTIONID --repo ${{ github.repository }} --body "$env:SUBSCRIPTION_ID"
           if ($LASTEXITCODE -ne 0) { Write-Error "Failed to set AZUREAPPSERVICE_SUBSCRIPTIONID"; exit 1 }
           
-          Write-Host "  ✅ Repository secrets configured successfully!" -ForegroundColor Green
-
-          Write-Host "ℹ️  GITHUB_TOKEN is automatically available in all GitHub Actions workflows" -ForegroundColor Gray
-          Write-Host "    No manual token configuration required!" -ForegroundColor Green
+          Write-Host "  ✅ Repository secrets configured successfully using $authMethod!" -ForegroundColor Green
 
           Write-Host "UTC End: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           Write-Host "---- END REPOSITORY SECRET CONFIGURATION ----" -ForegroundColor Cyan
@@ -427,6 +745,7 @@ jobs:
         if: steps.check.outputs.secretsExist == 'false'
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
+          GH_APP_TOKEN: ${{ steps.app-token.outputs.token }}
           CLIENT_ID: ${{ needs.setup-oidc.outputs.clientId }}
           TENANT_ID: ${{ needs.setup-oidc.outputs.tenantId }}
           SUBSCRIPTION_ID: ${{ needs.setup-oidc.outputs.subscriptionId }}
@@ -437,21 +756,31 @@ jobs:
           Write-Host "UTC Start: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           Write-Host "Target selection: $selectedEnv" -ForegroundColor Gray
           
-          # Check if GH_PAT is available
-          if (-not $env:GH_PAT) {
-            Write-Host "⚠️  GH_PAT secret not configured - skipping environment secrets" -ForegroundColor Yellow
-            Write-Host "    Environment secrets require a Personal Access Token with 'repo' scope" -ForegroundColor Yellow
-            Write-Host "    To configure: Settings > Secrets > Actions > New repository secret" -ForegroundColor Yellow
-            Write-Host "    Name: GH_PAT" -ForegroundColor Yellow
-            Write-Host "    Value: <your PAT token with 'repo' scope>" -ForegroundColor Yellow
+          # Determine authentication method (prefer GitHub App)
+          $token = $null
+          $authMethod = "None"
+          
+          if ($env:GH_APP_TOKEN) {
+            $token = $env:GH_APP_TOKEN
+            $authMethod = "GitHub App"
+            Write-Host "Using GitHub App authentication" -ForegroundColor Green
+          } elseif ($env:GH_PAT) {
+            $token = $env:GH_PAT
+            $authMethod = "PAT"
+            Write-Host "Using PAT authentication" -ForegroundColor Yellow
+          }
+          
+          # Check if authentication is available
+          if (-not $token) {
+            Write-Host "⚠️  No authentication configured - skipping environment secrets" -ForegroundColor Yellow
+            Write-Host "    Environment secrets require GitHub App or PAT" -ForegroundColor Yellow
+            Write-Host "    See: Documentation/03-Configuration-Guides/GITHUB-APP-AUTHENTICATION.md" -ForegroundColor Yellow
             Write-Host "---- END ENVIRONMENT SECRET CONFIGURATION ----" -ForegroundColor Cyan
             exit 0
           }
           
-          # Set GH_TOKEN to use the PAT for gh CLI commands
-          $env:GH_TOKEN = $env:GH_PAT
-          
-          Write-Host "Using GH_PAT for authentication (PAT token)" -ForegroundColor Green
+          # Set GH_TOKEN for gh CLI commands
+          $env:GH_TOKEN = $token
           
           # Determine which environments to configure
           $environments = @()
@@ -506,11 +835,23 @@ jobs:
 
       - name: Verify Repository Secrets
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+          GH_APP_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           Write-Host "---- BEGIN REPOSITORY SECRET VERIFICATION ----" -ForegroundColor Cyan
           Write-Host "UTC Start: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
-          Write-Host "Using GITHUB_TOKEN for verification (automatic)" -ForegroundColor Green
+          
+          # Use GitHub App token, PAT, or GITHUB_TOKEN (in order of preference)
+          if ($env:GH_APP_TOKEN) {
+            $env:GH_TOKEN = $env:GH_APP_TOKEN
+            Write-Host "Using GitHub App token for verification" -ForegroundColor Green
+          } elseif ($env:GH_PAT) {
+            $env:GH_TOKEN = $env:GH_PAT
+            Write-Host "Using PAT for verification" -ForegroundColor Yellow
+          } else {
+            $env:GH_TOKEN = "${{ secrets.GITHUB_TOKEN }}"
+            Write-Host "Using GITHUB_TOKEN for verification (read-only)" -ForegroundColor Yellow
+          }
 
           Write-Host "🔎 Verifying repository secrets..." -ForegroundColor Cyan
           
@@ -561,29 +902,37 @@ jobs:
             Write-Host "✅ All required repository secrets verified." -ForegroundColor Green
           }
 
-          Write-Host "ℹ️  Using automatically available GITHUB_TOKEN - no manual token management required!" -ForegroundColor Gray
           Write-Host "UTC End: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           Write-Host "---- END REPOSITORY SECRET VERIFICATION ----" -ForegroundColor Cyan
 
       - name: Verify Environment Secrets
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
+          GH_APP_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           Write-Host "---- BEGIN ENVIRONMENT SECRET VERIFICATION ----" -ForegroundColor Cyan
           Write-Host "UTC Start: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           
-          # Check if GH_PAT is available
-          if (-not $env:GH_PAT) {
-            Write-Host "⚠️  GH_PAT not configured - skipping environment secret verification" -ForegroundColor Yellow
-            Write-Host "    Environment secrets can only be verified with a PAT token" -ForegroundColor Yellow
+          # Determine authentication method
+          $token = $null
+          if ($env:GH_APP_TOKEN) {
+            $token = $env:GH_APP_TOKEN
+            Write-Host "Using GitHub App token for verification" -ForegroundColor Green
+          } elseif ($env:GH_PAT) {
+            $token = $env:GH_PAT
+            Write-Host "Using PAT for verification" -ForegroundColor Yellow
+          }
+          
+          # Check if authentication is available
+          if (-not $token) {
+            Write-Host "⚠️  No authentication configured - skipping environment secret verification" -ForegroundColor Yellow
+            Write-Host "    Environment secrets can only be verified with GitHub App or PAT" -ForegroundColor Yellow
             Write-Host "---- END ENVIRONMENT SECRET VERIFICATION ----" -ForegroundColor Cyan
             exit 0
           }
           
-          # Set GH_TOKEN to use the PAT for gh CLI commands
-          $env:GH_TOKEN = $env:GH_PAT
-          
-          Write-Host "Using GH_PAT for verification (PAT token)" -ForegroundColor Green
+          # Set GH_TOKEN for gh CLI commands
+          $env:GH_TOKEN = $token
           
           $selectedEnv = "${{ inputs.environment }}"
           $environments = @()

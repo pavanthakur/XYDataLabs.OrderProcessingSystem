@@ -16,6 +16,13 @@ This guide documents the complete setup process for deploying the Order Processi
 For detailed step-by-step execution flow of the bootstrap script:
 - **[BOOTSTRAP_SCRIPT_FLOW.md](./BOOTSTRAP_SCRIPT_FLOW.md)** - Complete optimized flow documentation for junior developers and code reviewers
 
+For GitHub Actions automation and secret management:
+- **[AUTOMATED-BOOTSTRAP-GUIDE.md](../03-Configuration-Guides/AUTOMATED-BOOTSTRAP-GUIDE.md)** - Complete end-to-end automation setup (Azure OIDC + GitHub App)
+- **[QUICK-SETUP-GITHUB-APP.md](../03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md)** - 5-minute GitHub App setup guide (eliminates PAT expiration)
+- **[GITHUB-APP-AUTHENTICATION.md](../03-Configuration-Guides/GITHUB-APP-AUTHENTICATION.md)** - Technical deep-dive on GitHub App authentication
+- **[GITHUB-SECRETS-FIX.md](../03-Configuration-Guides/GITHUB-SECRETS-FIX.md)** - GitHub secrets configuration troubleshooting
+- **[WORKFLOW-AUTOMATION-VISUAL-GUIDE.md](../03-Configuration-Guides/WORKFLOW-AUTOMATION-VISUAL-GUIDE.md)** - Visual workflow automation flow diagrams
+
 ---
 
 ## ⚙️ Manual Infrastructure Deployment via GitHub Actions (`infra-deploy.yml`)
