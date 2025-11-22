@@ -369,9 +369,12 @@ jobs:
 
       - name: Explain GitHub App Setup
         run: |
-          Write-Host "========================================" -ForegroundColor Cyan
-          Write-Host "GitHub App Setup - One-Time Configuration" -ForegroundColor White
-          Write-Host "========================================" -ForegroundColor Cyan
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║         SETUP GITHUB APP - One-Time Configuration              ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Timestamp (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host "Repository: ${{ github.repository }}" -ForegroundColor Gray
           Write-Host ""
           Write-Host "🎯 Goal: Automated secret management with zero maintenance" -ForegroundColor Yellow
           Write-Host ""
@@ -392,37 +395,46 @@ jobs:
       - name: Check Existing GitHub App
         id: check-app
         run: |
-          Write-Host "🔍 Checking for existing GitHub App configuration..." -ForegroundColor Cyan
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+          Write-Host "🔍 CHECKING GITHUB APP CONFIGURATION STATUS" -ForegroundColor Cyan
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "📋 Required Secrets:" -ForegroundColor Yellow
 
           $hasAppId = "${{ secrets.GH_APP_ID }}" -ne ""
           $hasInstallationId = "${{ secrets.GH_APP_INSTALLATION_ID }}" -ne ""
           $hasPrivateKey = "${{ secrets.GH_APP_PRIVATE_KEY }}" -ne ""
 
+          Write-Host "  GH_APP_ID                : $(if ($hasAppId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasAppId) { "Green" } else { "Red" })
+          Write-Host "  GH_APP_INSTALLATION_ID   : $(if ($hasInstallationId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasInstallationId) { "Green" } else { "Red" })
+          Write-Host "  GH_APP_PRIVATE_KEY       : $(if ($hasPrivateKey) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasPrivateKey) { "Green" } else { "Red" })
+          Write-Host ""
+
           if ($hasAppId -and $hasInstallationId -and $hasPrivateKey) {
-            Write-Host "  ✅ GitHub App already configured!" -ForegroundColor Green
-            Write-Host "     App ID: Present" -ForegroundColor Gray
-            Write-Host "     Installation ID: Present" -ForegroundColor Gray
-            Write-Host "     Private Key: Present" -ForegroundColor Gray
+            Write-Host "✅ GitHub App Configuration Status: COMPLETE" -ForegroundColor Green
             Write-Host ""
-            Write-Host "  No setup needed. Workflow will use existing app." -ForegroundColor Green
+            Write-Host "  All required secrets are configured." -ForegroundColor Gray
+            Write-Host "  No manual setup needed." -ForegroundColor Gray
+            Write-Host "  Workflow will use the configured GitHub App for automation." -ForegroundColor Gray
+            Write-Host ""
             "alreadyConfigured=true" >> $env:GITHUB_OUTPUT
           } else {
-            Write-Host "  ℹ️  GitHub App not configured" -ForegroundColor Yellow
-            Write-Host "     Missing: " -NoNewline -ForegroundColor Gray
-            if (-not $hasAppId) { Write-Host "GH_APP_ID " -NoNewline -ForegroundColor Yellow }
-            if (-not $hasInstallationId) { Write-Host "GH_APP_INSTALLATION_ID " -NoNewline -ForegroundColor Yellow }
-            if (-not $hasPrivateKey) { Write-Host "GH_APP_PRIVATE_KEY" -ForegroundColor Yellow }
+            Write-Host "❌ GitHub App Configuration Status: INCOMPLETE" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "  One or more required secrets are missing." -ForegroundColor Gray
+            Write-Host "  Manual setup is required to enable automation." -ForegroundColor Gray
             Write-Host ""
             "alreadyConfigured=false" >> $env:GITHUB_OUTPUT
           }
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+          Write-Host ""
 
       - name: Provide Setup Instructions
         if: steps.check-app.outputs.alreadyConfigured != 'true'
         run: |
-          Write-Host ""
-          Write-Host "========================================" -ForegroundColor Cyan
-          Write-Host "📋 SETUP INSTRUCTIONS" -ForegroundColor White
-          Write-Host "========================================" -ForegroundColor Cyan
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Yellow
+          Write-Host "║         📋 GITHUB APP SETUP INSTRUCTIONS                       ║" -ForegroundColor Yellow
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Yellow
           Write-Host ""
           Write-Host "⏱️  Estimated time: 5 minutes" -ForegroundColor Gray
           Write-Host ""
@@ -475,9 +487,9 @@ jobs:
           Write-Host "  Enable: 'Configure GitHub secrets' = true" -ForegroundColor White
           Write-Host "  The workflow will automatically use GitHub App" -ForegroundColor White
           Write-Host ""
-          Write-Host "========================================" -ForegroundColor Green
-          Write-Host "✨ After this one-time setup:" -ForegroundColor White
-          Write-Host "========================================" -ForegroundColor Green
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+          Write-Host "✨ After this one-time setup:" -ForegroundColor Green
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
           Write-Host "  ✅ Tokens auto-generate on every run" -ForegroundColor Green
           Write-Host "  ✅ No expiration to track" -ForegroundColor Green
           Write-Host "  ✅ No maintenance needed" -ForegroundColor Green
@@ -553,35 +565,55 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          Write-Host "🔍 Checking if OIDC setup was performed..." -ForegroundColor Cyan
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║         VALIDATING PREREQUISITES                               ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Timestamp (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+          
+          Write-Host "🔍 Checking OIDC setup status..." -ForegroundColor Cyan
           $setupOidc = "${{ inputs.setupOidc }}"
           $hasClientId = "${{ needs.setup-oidc.outputs.clientId }}" -ne ""
 
           if ($setupOidc -eq "true" -and -not $hasClientId) {
+            Write-Host "  ❌ OIDC setup was enabled but no client ID was output" -ForegroundColor Red
             Write-Error "OIDC setup was enabled but no client ID was output. Check setup-oidc job logs."
             exit 1
           }
 
           if ($setupOidc -eq "false" -and -not $hasClientId) {
-            Write-Warning "Running without OIDC setup. Ensure Azure app credentials already exist in secrets."
+            Write-Host "  ⚠️  Running without OIDC setup" -ForegroundColor Yellow
+            Write-Host "     Ensure Azure app credentials already exist in secrets." -ForegroundColor Gray
+          } else {
+            Write-Host "  ✅ OIDC credentials available" -ForegroundColor Green
           }
 
-          Write-Host "" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "🔍 Checking GitHub App secrets..." -ForegroundColor Cyan
           
           # Check if GitHub App secrets are available
           $hasAppId = "${{ secrets.GH_APP_ID }}" -ne ""
           $hasInstallationId = "${{ secrets.GH_APP_INSTALLATION_ID }}" -ne ""
           $hasPrivateKey = "${{ secrets.GH_APP_PRIVATE_KEY }}" -ne ""
           
+          Write-Host "  GH_APP_ID                : $(if ($hasAppId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasAppId) { "Green" } else { "Red" })
+          Write-Host "  GH_APP_INSTALLATION_ID   : $(if ($hasInstallationId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasInstallationId) { "Green" } else { "Red" })
+          Write-Host "  GH_APP_PRIVATE_KEY       : $(if ($hasPrivateKey) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasPrivateKey) { "Green" } else { "Red" })
+          Write-Host ""
+          
           if ($hasAppId -and $hasInstallationId -and $hasPrivateKey) {
-            Write-Host "✅ GitHub App secrets detected" -ForegroundColor Green
+            Write-Host "  ✅ All GitHub App secrets detected" -ForegroundColor Green
             "hasGitHubAppSecrets=true" >> $env:GITHUB_OUTPUT
           } else {
-            Write-Host "ℹ️  GitHub App secrets not configured" -ForegroundColor Yellow
+            Write-Host "  ⚠️  GitHub App secrets not configured" -ForegroundColor Yellow
+            Write-Host "     GitHub App setup is required for automated secret management." -ForegroundColor Gray
             "hasGitHubAppSecrets=false" >> $env:GITHUB_OUTPUT
           }
-          
-          Write-Host "✅ All prerequisites validated" -ForegroundColor Green
+          Write-Host ""
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+          Write-Host "✅ Prerequisite validation complete" -ForegroundColor Green
+          Write-Host ""
 
       - name: Generate GitHub App Token
         id: app-token
@@ -615,7 +647,7 @@ jobs:
           Write-Host "  AZUREAPPSERVICE_SUBSCRIPTIONID : $(if ($hasSubscriptionId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasSubscriptionId) { "Green" } else { "Red" })
           Write-Host ""
           
-          # Check GitHub App authentication (REQUIRED - no PAT fallback)
+          # Check GitHub App authentication (REQUIRED for automated secret management)
           Write-Host "🔐 GitHub App Authentication:" -ForegroundColor Yellow
           if ($env:GH_APP_TOKEN) {
             Write-Host "  ✅ Status: AUTHENTICATED" -ForegroundColor Green
@@ -668,7 +700,6 @@ jobs:
           Write-Host ""
           Write-Host "❌ GitHub App authentication is REQUIRED for this workflow" -ForegroundColor Red
           Write-Host ""
-          Write-Host "This workflow no longer supports Personal Access Tokens (PAT)." -ForegroundColor Yellow
           Write-Host "GitHub Apps provide better security and zero maintenance." -ForegroundColor Yellow
           Write-Host ""
           Write-Host "📋 Required Action:" -ForegroundColor Cyan
