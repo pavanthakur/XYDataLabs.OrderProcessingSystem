@@ -164,162 +164,356 @@ jobs:
       - name: Azure Login (Device Code)
         timeout-minutes: 3
         run: |
-          Write-Host "🔐 Azure Login Required" -ForegroundColor Cyan
-          Write-Host "This is a one-time setup. Please authenticate when prompted." -ForegroundColor Yellow
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║         AZURE LOGIN - DEVICE CODE AUTHENTICATION              ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Timestamp (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "🔐 Azure Login Required" -ForegroundColor Yellow
+          Write-Host ""
+          Write-Host "This is a one-time setup. Please authenticate when prompted." -ForegroundColor White
           Write-Host "⏱️  Timeout: 3 minutes" -ForegroundColor Yellow
-          az login --use-device-code
+          Write-Host ""
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+          Write-Host "Starting Azure CLI login..." -ForegroundColor Cyan
+          Write-Host ""
+          
+          try {
+            az login --use-device-code
+            
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host ""
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host "❌ AZURE LOGIN FAILED" -ForegroundColor Red
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Possible reasons:" -ForegroundColor Yellow
+              Write-Host "  1. Authentication timeout (3 minutes)" -ForegroundColor Gray
+              Write-Host "  2. Device code not entered" -ForegroundColor Gray
+              Write-Host "  3. Azure CLI not configured properly" -ForegroundColor Gray
+              Write-Host "  4. Network connectivity issues" -ForegroundColor Gray
+              Write-Host ""
+              Write-Host "To resolve:" -ForegroundColor Cyan
+              Write-Host "  - Re-run this workflow" -ForegroundColor White
+              Write-Host "  - Complete the device code authentication within 3 minutes" -ForegroundColor White
+              Write-Host "  - Ensure you have proper Azure permissions" -ForegroundColor White
+              Write-Host ""
+              Write-Error "Azure login failed with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+            }
+            
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host "✅ AZURE LOGIN SUCCESSFUL" -ForegroundColor Green
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "Timestamp (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+            Write-Host ""
+          }
+          catch {
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING AZURE LOGIN" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Exception: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Stack Trace:" -ForegroundColor Yellow
+            Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
+            Write-Host ""
+            Write-Error "Azure login failed with exception: $($_.Exception.Message)"
+            exit 1
+          }
 
       - name: Setup OIDC App Registration
         id: oidc
         run: |
-          Write-Host "🚀 Setting up GitHub Actions OIDC..." -ForegroundColor Cyan
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║         SETUP GITHUB ACTIONS OIDC                             ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
 
-          # Determine branches and environments based on input
-          $selectedEnv = "${{ inputs.environment }}"
-          if ($selectedEnv -eq "all") {
-            $branches = "dev,staging,main"
-            $environments = "dev,staging,prod"
-          } else {
-            $branches = $selectedEnv
-            $environments = $selectedEnv
+          try {
+            # Determine branches and environments based on input
+            $selectedEnv = "${{ inputs.environment }}"
+            if ($selectedEnv -eq "all") {
+              $branches = "dev,staging,main"
+              $environments = "dev,staging,prod"
+            } else {
+              $branches = $selectedEnv
+              $environments = $selectedEnv
+            }
+
+            Write-Host "📋 Configuration:" -ForegroundColor Yellow
+            Write-Host "  Branches: $branches" -ForegroundColor Gray
+            Write-Host "  Environments: $environments" -ForegroundColor Gray
+            Write-Host "  Repository: pavanthakur/XYDataLabs.OrderProcessingSystem" -ForegroundColor Gray
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+            Write-Host "🚀 Running OIDC setup script..." -ForegroundColor Cyan
+            Write-Host ""
+
+            # Run setup script
+            ./Resources/Azure-Deployment/setup-github-oidc.ps1 `
+              -Branches $branches `
+              -Environments $environments `
+              -GitHubOwner "pavanthakur" `
+              -Repository "XYDataLabs.OrderProcessingSystem"
+
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host ""
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host "❌ OIDC SETUP SCRIPT FAILED" -ForegroundColor Red
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Red
+              Write-Host "Script: ./Resources/Azure-Deployment/setup-github-oidc.ps1" -ForegroundColor Gray
+              Write-Host ""
+              Write-Host "Parameters used:" -ForegroundColor Yellow
+              Write-Host "  -Branches: $branches" -ForegroundColor Gray
+              Write-Host "  -Environments: $environments" -ForegroundColor Gray
+              Write-Host "  -GitHubOwner: pavanthakur" -ForegroundColor Gray
+              Write-Host "  -Repository: XYDataLabs.OrderProcessingSystem" -ForegroundColor Gray
+              Write-Host ""
+              Write-Error "OIDC setup script failed with exit code $LASTEXITCODE. Check the script output above for details."
+              exit $LASTEXITCODE
+            }
+
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host "🔍 Extracting Azure credentials..." -ForegroundColor Cyan
+            Write-Host ""
+
+            # Extract credentials from Azure
+            Write-Host "Fetching Azure subscription information..." -ForegroundColor Gray
+            $sub = az account show | ConvertFrom-Json
+            if (-not $sub) {
+              Write-Host ""
+              Write-Host "❌ Failed to get Azure subscription" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Possible reasons:" -ForegroundColor Yellow
+              Write-Host "  1. Azure CLI session expired" -ForegroundColor Gray
+              Write-Host "  2. No active subscription" -ForegroundColor Gray
+              Write-Host "  3. Network connectivity issues" -ForegroundColor Gray
+              Write-Host ""
+              Write-Error "Failed to get Azure subscription information"
+              exit 1
+            }
+            Write-Host "  ✅ Subscription retrieved" -ForegroundColor Green
+
+            Write-Host "Fetching OIDC app registration..." -ForegroundColor Gray
+            $app = az ad app list --display-name "GitHub-Actions-OIDC" | ConvertFrom-Json
+            if (-not $app -or $app.Count -eq 0) {
+              Write-Host ""
+              Write-Host "❌ Failed to create or find OIDC app" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "App Name: GitHub-Actions-OIDC" -ForegroundColor Gray
+              Write-Host ""
+              Write-Host "Possible reasons:" -ForegroundColor Yellow
+              Write-Host "  1. App creation failed in setup script" -ForegroundColor Gray
+              Write-Host "  2. Insufficient Azure AD permissions" -ForegroundColor Gray
+              Write-Host "  3. App name conflict" -ForegroundColor Gray
+              Write-Host ""
+              Write-Error "Failed to create or find OIDC app 'GitHub-Actions-OIDC'"
+              exit 1
+            }
+            Write-Host "  ✅ OIDC app found" -ForegroundColor Green
+
+            $clientId = $app[0].appId
+            $appObjectId = $app[0].id
+            $tenantId = $sub.tenantId
+            $subscriptionId = $sub.id
+
+            Write-Host ""
+            Write-Host "📝 Validating extracted credentials..." -ForegroundColor Cyan
+            if (-not $clientId) {
+              Write-Error "Client ID is null or empty"
+              exit 1
+            }
+            if (-not $appObjectId) {
+              Write-Error "App Object ID is null or empty"
+              exit 1
+            }
+            if (-not $tenantId) {
+              Write-Error "Tenant ID is null or empty"
+              exit 1
+            }
+            if (-not $subscriptionId) {
+              Write-Error "Subscription ID is null or empty"
+              exit 1
+            }
+            Write-Host "  ✅ All credentials validated" -ForegroundColor Green
+
+            # Output for next jobs
+            Write-Host ""
+            Write-Host "📤 Setting job outputs..." -ForegroundColor Cyan
+            "clientId=$clientId" >> $env:GITHUB_OUTPUT
+            "tenantId=$tenantId" >> $env:GITHUB_OUTPUT
+            "subscriptionId=$subscriptionId" >> $env:GITHUB_OUTPUT
+            "appObjectId=$appObjectId" >> $env:GITHUB_OUTPUT
+
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host "✅ OIDC SETUP COMPLETE" -ForegroundColor Green
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "Credentials Summary:" -ForegroundColor Yellow
+            Write-Host "  Client ID: $clientId" -ForegroundColor Gray
+            Write-Host "  Tenant ID: $tenantId" -ForegroundColor Gray
+            Write-Host "  Subscription ID: $subscriptionId" -ForegroundColor Gray
+            Write-Host "  App Object ID: $appObjectId" -ForegroundColor Gray
+            Write-Host ""
+            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+            Write-Host ""
           }
-
-          Write-Host "Creating credentials for:" -ForegroundColor Yellow
-          Write-Host "  Branches: $branches" -ForegroundColor Gray
-          Write-Host "  Environments: $environments" -ForegroundColor Gray
-          Write-Host "  Repository: pavanthakur/XYDataLabs.OrderProcessingSystem" -ForegroundColor Gray
-
-          # Run setup script
-          ./Resources/Azure-Deployment/setup-github-oidc.ps1 `
-            -Branches $branches `
-            -Environments $environments `
-            -GitHubOwner "pavanthakur" `
-            -Repository "XYDataLabs.OrderProcessingSystem"
-
-          Write-Host "" -ForegroundColor Gray
-          Write-Host "Script parameters passed:" -ForegroundColor Cyan
-          Write-Host "  -Branches $branches" -ForegroundColor Gray
-          Write-Host "  -Environments $environments" -ForegroundColor Gray
-
-          if ($LASTEXITCODE -ne 0) {
-            Write-Error "OIDC setup failed with exit code $LASTEXITCODE"
-            exit $LASTEXITCODE
-          }
-
-          # Extract credentials from Azure
-          $sub = az account show | ConvertFrom-Json
-          if (-not $sub) {
-            Write-Error "Failed to get Azure subscription"
+          catch {
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING OIDC SETUP" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Stack Trace:" -ForegroundColor Yellow
+            Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
+            Write-Host ""
+            Write-Host "Timestamp (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+            Write-Host ""
+            Write-Error "OIDC setup failed with exception: $($_.Exception.Message)"
             exit 1
           }
-
-          $app = az ad app list --display-name "GitHub-Actions-OIDC" | ConvertFrom-Json
-          if (-not $app -or $app.Count -eq 0) {
-            Write-Error "Failed to create or find OIDC app"
-            exit 1
-          }
-
-          $clientId = $app[0].appId
-          $appObjectId = $app[0].id
-          $tenantId = $sub.tenantId
-          $subscriptionId = $sub.id
-
-          # Output for next jobs
-          "clientId=$clientId" >> $env:GITHUB_OUTPUT
-          "tenantId=$tenantId" >> $env:GITHUB_OUTPUT
-          "subscriptionId=$subscriptionId" >> $env:GITHUB_OUTPUT
-          "appObjectId=$appObjectId" >> $env:GITHUB_OUTPUT
-
-          Write-Host "✅ OIDC Setup Complete" -ForegroundColor Green
-          Write-Host "   Client ID: $clientId" -ForegroundColor Gray
-          Write-Host "   Tenant ID: $tenantId" -ForegroundColor Gray
-          Write-Host "   App Object ID: $appObjectId" -ForegroundColor Gray
 
       - name: Verify Federated Credentials
         run: |
-          Write-Host "🔍 Verifying federated credentials..." -ForegroundColor Cyan
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║         VERIFY FEDERATED CREDENTIALS                          ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
 
-          $appObjectId = "${{ steps.oidc.outputs.appObjectId }}"
-          $expectedPattern = "repo:pavanthakur/XYDataLabs.OrderProcessingSystem"
-          $selectedEnv = "${{ inputs.environment }}"
-          $expectedCount = if ($selectedEnv -eq "all") { 6 } else { 2 }
-          $maxRetries = 3
-          $retryDelay = 20
-          $validCreds = $null
+          try {
+            $appObjectId = "${{ steps.oidc.outputs.appObjectId }}"
+            $expectedPattern = "repo:pavanthakur/XYDataLabs.OrderProcessingSystem"
+            $selectedEnv = "${{ inputs.environment }}"
+            $expectedCount = if ($selectedEnv -eq "all") { 6 } else { 2 }
+            $maxRetries = 3
+            $retryDelay = 20
+            $validCreds = $null
 
-          Write-Host "Expected credentials count: $expectedCount (environment: $selectedEnv)" -ForegroundColor Gray
+            Write-Host "📋 Verification Configuration:" -ForegroundColor Yellow
+            Write-Host "  App Object ID: $appObjectId" -ForegroundColor Gray
+            Write-Host "  Expected Pattern: $expectedPattern" -ForegroundColor Gray
+            Write-Host "  Target Environment: $selectedEnv" -ForegroundColor Gray
+            Write-Host "  Expected Credential Count: $expectedCount" -ForegroundColor Gray
+            Write-Host "  Max Retries: $maxRetries" -ForegroundColor Gray
+            Write-Host "  Retry Delay: $retryDelay seconds" -ForegroundColor Gray
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+            Write-Host "🔍 Verifying federated credentials..." -ForegroundColor Cyan
+            Write-Host ""
 
-          for ($i = 1; $i -le $maxRetries; $i++) {
-            Write-Host "`n[Attempt $i/$maxRetries] Waiting $retryDelay seconds for Azure AD propagation..." -ForegroundColor Gray
-            Start-Sleep -Seconds $retryDelay
+            for ($i = 1; $i -le $maxRetries; $i++) {
+              Write-Host "`n[Attempt $i/$maxRetries] Waiting $retryDelay seconds for Azure AD propagation..." -ForegroundColor Gray
+              Start-Sleep -Seconds $retryDelay
 
-            Write-Host "Purging Azure CLI cache and querying credentials..." -ForegroundColor Gray
-            az cache purge 2>$null | Out-Null
-            $creds = az ad app federated-credential list --id $appObjectId | ConvertFrom-Json
+              Write-Host "Purging Azure CLI cache and querying credentials..." -ForegroundColor Gray
+              az cache purge 2>$null | Out-Null
+              $creds = az ad app federated-credential list --id $appObjectId | ConvertFrom-Json
 
-            $validCount = ($creds | Where-Object { $_.subject -like "$expectedPattern*" }).Count
-            Write-Host "Found $validCount/$($creds.Count) credentials with correct format" -ForegroundColor $(if ($validCount -eq $expectedCount) { "Green" } else { "Yellow" })
+              $validCount = ($creds | Where-Object { $_.subject -like "$expectedPattern*" }).Count
+              Write-Host "Found $validCount/$($creds.Count) credentials with correct format" -ForegroundColor $(if ($validCount -eq $expectedCount) { "Green" } else { "Yellow" })
 
-            if ($validCount -eq $expectedCount) {
-              Write-Host "✅ All credentials have propagated correctly!" -ForegroundColor Green
-              $validCreds = $creds
-              break
+              if ($validCount -eq $expectedCount) {
+                Write-Host "✅ All credentials have propagated correctly!" -ForegroundColor Green
+                $validCreds = $creds
+                break
+              }
+
+              if ($i -lt $maxRetries) {
+                Write-Host "⚠️ Still seeing old credentials, retrying..." -ForegroundColor Yellow
+              }
+              }
+
+            if (-not $validCreds) {
+              Write-Warning "Azure AD still showing stale credentials after $($maxRetries * $retryDelay) seconds"
+              Write-Warning "This is likely an Azure AD caching issue. Proceeding with manual verification..."
+              $creds = az ad app federated-credential list --id $appObjectId | ConvertFrom-Json
+            } else {
+              $creds = $validCreds
             }
 
-            if ($i -lt $maxRetries) {
-              Write-Host "⚠️ Still seeing old credentials, retrying..." -ForegroundColor Yellow
-            }
-          }
-
-          if (-not $validCreds) {
-            Write-Warning "Azure AD still showing stale credentials after $($maxRetries * $retryDelay) seconds"
-            Write-Warning "This is likely an Azure AD caching issue. Proceeding with manual verification..."
-            $creds = az ad app federated-credential list --id $appObjectId | ConvertFrom-Json
-          } else {
-            $creds = $validCreds
-          }
-
-          Write-Host "`nCreated federated credentials:" -ForegroundColor Green
-          foreach ($cred in $creds) {
-            Write-Host "  - Name: $($cred.name)" -ForegroundColor White
-            Write-Host "    Subject: $($cred.subject)" -ForegroundColor Gray
-          }
-
-          if ($creds.Count -lt $expectedCount) {
-            Write-Warning "Expected $expectedCount federated credentials, found $($creds.Count). OIDC setup may be incomplete."
-            Write-Warning "Re-run this workflow with 'Setup OIDC' enabled to create missing credentials."
-          } else {
-            Write-Host "`n✅ All $expectedCount federated credentials verified!" -ForegroundColor Green
-          }
-
-          Write-Host "`n🔎 Checking for required credentials..." -ForegroundColor Cyan
-
-          # Check branch credential for selected environment
-          Write-Host "Searching for $selectedEnv branch credential..." -ForegroundColor Gray
-          $expectedBranch = "repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/$selectedEnv"
-          Write-Host "Expected: $expectedBranch" -ForegroundColor Gray
-          $devBranchCred = $creds | Where-Object { $_.subject -eq $expectedBranch }
-          if ($devBranchCred) {
-            Write-Host "✅ $selectedEnv branch credential found: $($devBranchCred.name)" -ForegroundColor Green
-          } else {
-            Write-Host "❌ $selectedEnv branch credential NOT found" -ForegroundColor Red
-            Write-Host "Actual subjects found:" -ForegroundColor Yellow
+            Write-Host "`nCreated federated credentials:" -ForegroundColor Green
             foreach ($cred in $creds) {
-              Write-Host "  - $($cred.subject)" -ForegroundColor Yellow
+              Write-Host "  - Name: $($cred.name)" -ForegroundColor White
+              Write-Host "    Subject: $($cred.subject)" -ForegroundColor Gray
             }
-            Write-Error "⚠️ $selectedEnv branch federated credential is missing! Bootstrap will fail."
-          }
 
-          # Check environment credential for selected environment
-          Write-Host "`nSearching for $selectedEnv environment credential..." -ForegroundColor Gray
-          $expectedEnv = "repo:pavanthakur/XYDataLabs.OrderProcessingSystem:environment:$selectedEnv"
-          Write-Host "Expected: $expectedEnv" -ForegroundColor Gray
-          $devEnvCred = $creds | Where-Object { $_.subject -eq $expectedEnv }
-          if ($devEnvCred) {
-            Write-Host "✅ $selectedEnv environment credential found: $($devEnvCred.name)" -ForegroundColor Green
-          } else {
-            Write-Host "❌ $selectedEnv environment credential NOT found" -ForegroundColor Red
+            if ($creds.Count -lt $expectedCount) {
+              Write-Warning "Expected $expectedCount federated credentials, found $($creds.Count). OIDC setup may be incomplete."
+              Write-Warning "Re-run this workflow with 'Setup OIDC' enabled to create missing credentials."
+            } else {
+              Write-Host "`n✅ All $expectedCount federated credentials verified!" -ForegroundColor Green
+            }
+
+            Write-Host "`n🔎 Checking for required credentials..." -ForegroundColor Cyan
+
+            # Check branch credential for selected environment
+            Write-Host "Searching for $selectedEnv branch credential..." -ForegroundColor Gray
+            $expectedBranch = "repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/$selectedEnv"
+            Write-Host "Expected: $expectedBranch" -ForegroundColor Gray
+            $devBranchCred = $creds | Where-Object { $_.subject -eq $expectedBranch }
+            if ($devBranchCred) {
+              Write-Host "✅ $selectedEnv branch credential found: $($devBranchCred.name)" -ForegroundColor Green
+            } else {
+              Write-Host "❌ $selectedEnv branch credential NOT found" -ForegroundColor Red
+              Write-Host "Actual subjects found:" -ForegroundColor Yellow
+              foreach ($cred in $creds) {
+                Write-Host "  - $($cred.subject)" -ForegroundColor Yellow
+              }
+              Write-Error "⚠️ $selectedEnv branch federated credential is missing! Bootstrap will fail."
+            }
+
+            # Check environment credential for selected environment
+            Write-Host "`nSearching for $selectedEnv environment credential..." -ForegroundColor Gray
+            $expectedEnv = "repo:pavanthakur/XYDataLabs.OrderProcessingSystem:environment:$selectedEnv"
+            Write-Host "Expected: $expectedEnv" -ForegroundColor Gray
+            $devEnvCred = $creds | Where-Object { $_.subject -eq $expectedEnv }
+            if ($devEnvCred) {
+              Write-Host "✅ $selectedEnv environment credential found: $($devEnvCred.name)" -ForegroundColor Green
+            } else {
+              Write-Host "❌ $selectedEnv environment credential NOT found" -ForegroundColor Red
+            }
+            
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host "✅ FEDERATED CREDENTIALS VERIFICATION COMPLETE" -ForegroundColor Green
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+            Write-Host ""
           }
+          catch {
+          Write-Host ""
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+          Write-Host "❌ EXCEPTION DURING CREDENTIAL VERIFICATION" -ForegroundColor Red
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+          Write-Host ""
+          Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+          Write-Host ""
+          Write-Host "Stack Trace:" -ForegroundColor Yellow
+          Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "Timestamp (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+          Write-Error "Credential verification failed with exception: $($_.Exception.Message)"
+          exit 1
+        }
 
       - name: Create Setup Summary
         run: |
@@ -362,7 +556,7 @@ jobs:
   setup-github-app:
     name: Setup GitHub App
     if: inputs.setupGitHubApp
-    needs: [validate-inputs]
+    needs: [validate-inputs, setup-oidc]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -572,21 +766,68 @@ jobs:
           Write-Host "Timestamp (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           Write-Host ""
           
-          Write-Host "🔍 Checking OIDC setup status..." -ForegroundColor Cyan
-          $setupOidc = "${{ inputs.setupOidc }}"
-          $hasClientId = "${{ needs.setup-oidc.outputs.clientId }}" -ne ""
+          try {
+            Write-Host "🔍 Checking OIDC setup status..." -ForegroundColor Cyan
+            $setupOidc = "${{ inputs.setupOidc }}"
+            $oidcJobResult = "${{ needs.setup-oidc.result }}"
+            $hasClientId = "${{ needs.setup-oidc.outputs.clientId }}" -ne ""
 
-          if ($setupOidc -eq "true" -and -not $hasClientId) {
-            Write-Host "  ❌ OIDC setup was enabled but no client ID was output" -ForegroundColor Red
-            Write-Error "OIDC setup was enabled but no client ID was output. Check setup-oidc job logs."
-            exit 1
+            Write-Host "  OIDC Setup Enabled: $setupOidc" -ForegroundColor Gray
+            Write-Host "  OIDC Job Result: $oidcJobResult" -ForegroundColor Gray
+            Write-Host "  Client ID Present: $hasClientId" -ForegroundColor Gray
+            Write-Host ""
+
+            # Check if OIDC job failed or was cancelled
+            if ($setupOidc -eq "true" -and $oidcJobResult -notin @("success", "skipped")) {
+              Write-Host "  ❌ OIDC setup job did not complete successfully" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "  Job Result: $oidcJobResult" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "  Troubleshooting:" -ForegroundColor Yellow
+              Write-Host "    1. Check the 'Setup Azure OIDC' job logs for errors" -ForegroundColor Gray
+              Write-Host "    2. Ensure you completed the Azure device code authentication" -ForegroundColor Gray
+              Write-Host "    3. Verify you have proper Azure permissions" -ForegroundColor Gray
+              Write-Host "    4. Re-run the workflow with 'Setup Azure OIDC' enabled" -ForegroundColor Gray
+              Write-Host ""
+              Write-Error "OIDC setup job failed or was cancelled. Cannot proceed without OIDC credentials."
+              exit 1
+            }
+
+            if ($setupOidc -eq "true" -and -not $hasClientId) {
+              Write-Host "  ❌ OIDC setup was enabled but no client ID was output" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "  This indicates the OIDC setup job completed but did not produce outputs." -ForegroundColor Red
+              Write-Host ""
+              Write-Host "  Troubleshooting:" -ForegroundColor Yellow
+              Write-Host "    1. Review the 'Setup Azure OIDC' job logs" -ForegroundColor Gray
+              Write-Host "    2. Verify the setup script ran successfully" -ForegroundColor Gray
+              Write-Host "    3. Check if Azure app was created: 'GitHub-Actions-OIDC'" -ForegroundColor Gray
+              Write-Host "    4. Re-run the workflow with 'Setup Azure OIDC' enabled" -ForegroundColor Gray
+              Write-Host ""
+              Write-Error "OIDC setup was enabled but no client ID was output. Check setup-oidc job logs."
+              exit 1
+            }
+
+            if ($setupOidc -eq "false" -and -not $hasClientId) {
+              Write-Host "  ⚠️  Running without OIDC setup" -ForegroundColor Yellow
+              Write-Host "     Ensure Azure app credentials already exist in secrets." -ForegroundColor Gray
+            } else {
+              Write-Host "  ✅ OIDC credentials available" -ForegroundColor Green
+            }
           }
-
-          if ($setupOidc -eq "false" -and -not $hasClientId) {
-            Write-Host "  ⚠️  Running without OIDC setup" -ForegroundColor Yellow
-            Write-Host "     Ensure Azure app credentials already exist in secrets." -ForegroundColor Gray
-          } else {
-            Write-Host "  ✅ OIDC credentials available" -ForegroundColor Green
+          catch {
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING PREREQUISITE VALIDATION" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Stack Trace:" -ForegroundColor Yellow
+            Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
+            Write-Host ""
+            Write-Error "Prerequisite validation failed: $($_.Exception.Message)"
+            exit 1
           }
 
           Write-Host ""
@@ -1100,8 +1341,56 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate Azure Credentials
         run: |
-          if (-not "$env:CLIENT_ID" -or -not "$env:TENANT_ID" -or -not "$env:SUBSCRIPTION_ID") {
-            Write-Error "Azure credentials not found. Ensure OIDC setup is run or secrets are configured."
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║         VALIDATE AZURE CREDENTIALS - DEV                      ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Timestamp (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+          
+          try {
+            Write-Host "🔍 Checking Azure credentials..." -ForegroundColor Cyan
+            
+            $hasClientId = -not [string]::IsNullOrWhiteSpace($env:CLIENT_ID)
+            $hasTenantId = -not [string]::IsNullOrWhiteSpace($env:TENANT_ID)
+            $hasSubscriptionId = -not [string]::IsNullOrWhiteSpace($env:SUBSCRIPTION_ID)
+            
+            Write-Host "  CLIENT_ID:         $(if ($hasClientId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasClientId) { "Green" } else { "Red" })
+            Write-Host "  TENANT_ID:         $(if ($hasTenantId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasTenantId) { "Green" } else { "Red" })
+            Write-Host "  SUBSCRIPTION_ID:   $(if ($hasSubscriptionId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasSubscriptionId) { "Green" } else { "Red" })
+            Write-Host ""
+            
+            if (-not $hasClientId -or -not $hasTenantId -or -not $hasSubscriptionId) {
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host "❌ AZURE CREDENTIALS MISSING" -ForegroundColor Red
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Required credentials are not available." -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Troubleshooting:" -ForegroundColor Yellow
+              Write-Host "  1. Ensure 'Setup Azure OIDC' job completed successfully" -ForegroundColor Gray
+              Write-Host "  2. OR ensure secrets are configured:" -ForegroundColor Gray
+              Write-Host "     - AZUREAPPSERVICE_CLIENTID" -ForegroundColor Gray
+              Write-Host "     - AZUREAPPSERVICE_TENANTID" -ForegroundColor Gray
+              Write-Host "     - AZUREAPPSERVICE_SUBSCRIPTIONID" -ForegroundColor Gray
+              Write-Host "  3. Re-run workflow with 'Setup Azure OIDC' = true" -ForegroundColor Gray
+              Write-Host ""
+              Write-Error "Azure credentials not found. Ensure OIDC setup is run or secrets are configured."
+              exit 1
+            }
+            
+            Write-Host "✅ All Azure credentials validated successfully" -ForegroundColor Green
+            Write-Host ""
+          }
+          catch {
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING CREDENTIAL VALIDATION" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ""
+            Write-Error "Credential validation failed: $($_.Exception.Message)"
             exit 1
           }
       - name: Azure Login (OIDC or Secrets)
@@ -1111,9 +1400,49 @@ jobs:
           client-id: ${{ env.CLIENT_ID }}
           tenant-id: ${{ env.TENANT_ID }}
           subscription-id: ${{ env.SUBSCRIPTION_ID }}
+      
+      - name: Verify Azure Login
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║         VERIFY AZURE LOGIN - DEV                              ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          
+          try {
+            Write-Host "🔍 Verifying Azure login..." -ForegroundColor Cyan
+            $account = az account show | ConvertFrom-Json
+            
+            if ($LASTEXITCODE -ne 0 -or -not $account) {
+              Write-Host "❌ Azure login verification failed" -ForegroundColor Red
+              Write-Error "Failed to verify Azure login"
+              exit 1
+            }
+            
+            Write-Host "✅ Azure login verified successfully" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "Account Details:" -ForegroundColor Yellow
+            Write-Host "  Subscription: $($account.name)" -ForegroundColor Gray
+            Write-Host "  Subscription ID: $($account.id)" -ForegroundColor Gray
+            Write-Host "  Tenant ID: $($account.tenantId)" -ForegroundColor Gray
+            Write-Host ""
+          }
+          catch {
+            Write-Host "❌ Exception during Azure login verification: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Error "Failed to verify Azure login: $($_.Exception.Message)"
+            exit 1
+          }
+      
       - name: Bootstrap Dev Infrastructure
         run: |
-          Write-Host "🚀 Bootstrapping Dev Environment..." -ForegroundColor Cyan
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║         BOOTSTRAP DEV INFRASTRUCTURE                          ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+          
+          try {
+            Write-Host "🚀 Bootstrapping Dev Environment..." -ForegroundColor Cyan
           Write-Host "" -ForegroundColor Gray
           Write-Host "📋 Configuration:" -ForegroundColor Yellow
           Write-Host "  Branch: dev" -ForegroundColor Gray
@@ -1122,12 +1451,49 @@ jobs:
           Write-Host "  Resource Group: rg-orderprocessing-dev" -ForegroundColor Gray
           Write-Host "  OIDC Subject: repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev" -ForegroundColor Gray
           Write-Host "" -ForegroundColor Gray
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+          Write-Host ""
 
           ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment dev
+          
           if ($LASTEXITCODE -ne 0) {
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ BOOTSTRAP SCRIPT FAILED" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Red
+            Write-Host "Script: ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1" -ForegroundColor Gray
+            Write-Host "Environment: dev" -ForegroundColor Gray
+            Write-Host ""
+            Write-Host "Check the bootstrap log artifact for detailed error information." -ForegroundColor Yellow
+            Write-Host ""
             Write-Error "Bootstrap failed with exit code $LASTEXITCODE"
             exit $LASTEXITCODE
           }
+          
+          Write-Host ""
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+          Write-Host "✅ DEV INFRASTRUCTURE BOOTSTRAP COMPLETE" -ForegroundColor Green
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+          Write-Host ""
+          Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+        }
+        catch {
+          Write-Host ""
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+          Write-Host "❌ EXCEPTION DURING BOOTSTRAP" -ForegroundColor Red
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+          Write-Host ""
+          Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+          Write-Host ""
+          Write-Host "Stack Trace:" -ForegroundColor Yellow
+          Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
+          Write-Host ""
+          Write-Error "Bootstrap failed with exception: $($_.Exception.Message)"
+          exit 1
+        }
       - name: Upload Bootstrap Log
         if: always()
         uses: actions/upload-artifact@v4
@@ -1149,8 +1515,56 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate Azure Credentials
         run: |
-          if (-not "$env:CLIENT_ID" -or -not "$env:TENANT_ID" -or -not "$env:SUBSCRIPTION_ID") {
-            Write-Error "Azure credentials not found. Ensure OIDC setup is run or secrets are configured."
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║         VALIDATE AZURE CREDENTIALS - STAGING                  ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Timestamp (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+          
+          try {
+            Write-Host "🔍 Checking Azure credentials..." -ForegroundColor Cyan
+            
+            $hasClientId = -not [string]::IsNullOrWhiteSpace($env:CLIENT_ID)
+            $hasTenantId = -not [string]::IsNullOrWhiteSpace($env:TENANT_ID)
+            $hasSubscriptionId = -not [string]::IsNullOrWhiteSpace($env:SUBSCRIPTION_ID)
+            
+            Write-Host "  CLIENT_ID:         $(if ($hasClientId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasClientId) { "Green" } else { "Red" })
+            Write-Host "  TENANT_ID:         $(if ($hasTenantId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasTenantId) { "Green" } else { "Red" })
+            Write-Host "  SUBSCRIPTION_ID:   $(if ($hasSubscriptionId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasSubscriptionId) { "Green" } else { "Red" })
+            Write-Host ""
+            
+            if (-not $hasClientId -or -not $hasTenantId -or -not $hasSubscriptionId) {
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host "❌ AZURE CREDENTIALS MISSING" -ForegroundColor Red
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Required credentials are not available." -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Troubleshooting:" -ForegroundColor Yellow
+              Write-Host "  1. Ensure 'Setup Azure OIDC' job completed successfully" -ForegroundColor Gray
+              Write-Host "  2. OR ensure secrets are configured:" -ForegroundColor Gray
+              Write-Host "     - AZUREAPPSERVICE_CLIENTID" -ForegroundColor Gray
+              Write-Host "     - AZUREAPPSERVICE_TENANTID" -ForegroundColor Gray
+              Write-Host "     - AZUREAPPSERVICE_SUBSCRIPTIONID" -ForegroundColor Gray
+              Write-Host "  3. Re-run workflow with 'Setup Azure OIDC' = true" -ForegroundColor Gray
+              Write-Host ""
+              Write-Error "Azure credentials not found. Ensure OIDC setup is run or secrets are configured."
+              exit 1
+            }
+            
+            Write-Host "✅ All Azure credentials validated successfully" -ForegroundColor Green
+            Write-Host ""
+          }
+          catch {
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING CREDENTIAL VALIDATION" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ""
+            Write-Error "Credential validation failed: $($_.Exception.Message)"
             exit 1
           }
       - name: Azure Login (OIDC or Secrets)
@@ -1160,22 +1574,99 @@ jobs:
           client-id: ${{ env.CLIENT_ID }}
           tenant-id: ${{ env.TENANT_ID }}
           subscription-id: ${{ env.SUBSCRIPTION_ID }}
+      
+      - name: Verify Azure Login
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║         VERIFY AZURE LOGIN - STAGING                          ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          
+          try {
+            Write-Host "🔍 Verifying Azure login..." -ForegroundColor Cyan
+            $account = az account show | ConvertFrom-Json
+            
+            if ($LASTEXITCODE -ne 0 -or -not $account) {
+              Write-Host "❌ Azure login verification failed" -ForegroundColor Red
+              Write-Error "Failed to verify Azure login"
+              exit 1
+            }
+            
+            Write-Host "✅ Azure login verified successfully" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "Account Details:" -ForegroundColor Yellow
+            Write-Host "  Subscription: $($account.name)" -ForegroundColor Gray
+            Write-Host "  Subscription ID: $($account.id)" -ForegroundColor Gray
+            Write-Host "  Tenant ID: $($account.tenantId)" -ForegroundColor Gray
+            Write-Host ""
+          }
+          catch {
+            Write-Host "❌ Exception during Azure login verification: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Error "Failed to verify Azure login: $($_.Exception.Message)"
+            exit 1
+          }
+      
       - name: Bootstrap Staging Infrastructure
         run: |
-          Write-Host "🚀 Bootstrapping Staging Environment..." -ForegroundColor Cyan
-          Write-Host "" -ForegroundColor Gray
-          Write-Host "📋 Configuration:" -ForegroundColor Yellow
-          Write-Host "  Branch: staging" -ForegroundColor Gray
-          Write-Host "  Environment: staging" -ForegroundColor Gray
-          Write-Host "  Parameter File: infra/parameters/staging.json" -ForegroundColor Gray
-          Write-Host "  Resource Group: rg-orderprocessing-staging" -ForegroundColor Gray
-          Write-Host "  OIDC Subject: repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/staging" -ForegroundColor Gray
-          Write-Host "" -ForegroundColor Gray
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║         BOOTSTRAP STAGING INFRASTRUCTURE                      ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+          
+          try {
+            Write-Host "🚀 Bootstrapping Staging Environment..." -ForegroundColor Cyan
+            Write-Host "" -ForegroundColor Gray
+            Write-Host "📋 Configuration:" -ForegroundColor Yellow
+            Write-Host "  Branch: staging" -ForegroundColor Gray
+            Write-Host "  Environment: staging" -ForegroundColor Gray
+            Write-Host "  Parameter File: infra/parameters/staging.json" -ForegroundColor Gray
+            Write-Host "  Resource Group: rg-orderprocessing-staging" -ForegroundColor Gray
+            Write-Host "  OIDC Subject: repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/staging" -ForegroundColor Gray
+            Write-Host "" -ForegroundColor Gray
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+            Write-Host ""
 
-          ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment staging
-          if ($LASTEXITCODE -ne 0) {
-            Write-Error "Bootstrap failed with exit code $LASTEXITCODE"
-            exit $LASTEXITCODE
+            ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment staging
+            
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host ""
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host "❌ BOOTSTRAP SCRIPT FAILED" -ForegroundColor Red
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Red
+              Write-Host "Script: ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1" -ForegroundColor Gray
+              Write-Host "Environment: staging" -ForegroundColor Gray
+              Write-Host ""
+              Write-Host "Check the bootstrap log artifact for detailed error information." -ForegroundColor Yellow
+              Write-Host ""
+              Write-Error "Bootstrap failed with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+            }
+            
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host "✅ STAGING INFRASTRUCTURE BOOTSTRAP COMPLETE" -ForegroundColor Green
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+            Write-Host ""
+          }
+          catch {
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING BOOTSTRAP" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Stack Trace:" -ForegroundColor Yellow
+            Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
+            Write-Host ""
+            Write-Error "Bootstrap failed with exception: $($_.Exception.Message)"
+            exit 1
           }
       - name: Upload Bootstrap Log
         if: always()
@@ -1199,8 +1690,56 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate Azure Credentials
         run: |
-          if (-not "$env:CLIENT_ID" -or -not "$env:TENANT_ID" -or -not "$env:SUBSCRIPTION_ID") {
-            Write-Error "Azure credentials not found. Ensure OIDC setup is run or secrets are configured."
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║         VALIDATE AZURE CREDENTIALS - PRODUCTION              ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Timestamp (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+          
+          try {
+            Write-Host "🔍 Checking Azure credentials..." -ForegroundColor Cyan
+            
+            $hasClientId = -not [string]::IsNullOrWhiteSpace($env:CLIENT_ID)
+            $hasTenantId = -not [string]::IsNullOrWhiteSpace($env:TENANT_ID)
+            $hasSubscriptionId = -not [string]::IsNullOrWhiteSpace($env:SUBSCRIPTION_ID)
+            
+            Write-Host "  CLIENT_ID:         $(if ($hasClientId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasClientId) { "Green" } else { "Red" })
+            Write-Host "  TENANT_ID:         $(if ($hasTenantId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasTenantId) { "Green" } else { "Red" })
+            Write-Host "  SUBSCRIPTION_ID:   $(if ($hasSubscriptionId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasSubscriptionId) { "Green" } else { "Red" })
+            Write-Host ""
+            
+            if (-not $hasClientId -or -not $hasTenantId -or -not $hasSubscriptionId) {
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host "❌ AZURE CREDENTIALS MISSING" -ForegroundColor Red
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Required credentials are not available." -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Troubleshooting:" -ForegroundColor Yellow
+              Write-Host "  1. Ensure 'Setup Azure OIDC' job completed successfully" -ForegroundColor Gray
+              Write-Host "  2. OR ensure secrets are configured:" -ForegroundColor Gray
+              Write-Host "     - AZUREAPPSERVICE_CLIENTID" -ForegroundColor Gray
+              Write-Host "     - AZUREAPPSERVICE_TENANTID" -ForegroundColor Gray
+              Write-Host "     - AZUREAPPSERVICE_SUBSCRIPTIONID" -ForegroundColor Gray
+              Write-Host "  3. Re-run workflow with 'Setup Azure OIDC' = true" -ForegroundColor Gray
+              Write-Host ""
+              Write-Error "Azure credentials not found. Ensure OIDC setup is run or secrets are configured."
+              exit 1
+            }
+            
+            Write-Host "✅ All Azure credentials validated successfully" -ForegroundColor Green
+            Write-Host ""
+          }
+          catch {
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING CREDENTIAL VALIDATION" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ""
+            Write-Error "Credential validation failed: $($_.Exception.Message)"
             exit 1
           }
       - name: Azure Login (OIDC or Secrets)
@@ -1210,22 +1749,99 @@ jobs:
           client-id: ${{ env.CLIENT_ID }}
           tenant-id: ${{ env.TENANT_ID }}
           subscription-id: ${{ env.SUBSCRIPTION_ID }}
+      
+      - name: Verify Azure Login
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║         VERIFY AZURE LOGIN - PRODUCTION                       ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          
+          try {
+            Write-Host "🔍 Verifying Azure login..." -ForegroundColor Cyan
+            $account = az account show | ConvertFrom-Json
+            
+            if ($LASTEXITCODE -ne 0 -or -not $account) {
+              Write-Host "❌ Azure login verification failed" -ForegroundColor Red
+              Write-Error "Failed to verify Azure login"
+              exit 1
+            }
+            
+            Write-Host "✅ Azure login verified successfully" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "Account Details:" -ForegroundColor Yellow
+            Write-Host "  Subscription: $($account.name)" -ForegroundColor Gray
+            Write-Host "  Subscription ID: $($account.id)" -ForegroundColor Gray
+            Write-Host "  Tenant ID: $($account.tenantId)" -ForegroundColor Gray
+            Write-Host ""
+          }
+          catch {
+            Write-Host "❌ Exception during Azure login verification: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Error "Failed to verify Azure login: $($_.Exception.Message)"
+            exit 1
+          }
+      
       - name: Bootstrap Prod Infrastructure
         run: |
-          Write-Host "🚀 Bootstrapping Prod Environment..." -ForegroundColor Cyan
-          Write-Host "" -ForegroundColor Gray
-          Write-Host "📋 Configuration:" -ForegroundColor Yellow
-          Write-Host "  Branch: main" -ForegroundColor Gray
-          Write-Host "  Environment: prod" -ForegroundColor Gray
-          Write-Host "  Parameter File: infra/parameters/prod.json" -ForegroundColor Gray
-          Write-Host "  Resource Group: rg-orderprocessing-prod" -ForegroundColor Gray
-          Write-Host "  OIDC Subject: repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/main" -ForegroundColor Gray
-          Write-Host "" -ForegroundColor Gray
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║         BOOTSTRAP PRODUCTION INFRASTRUCTURE                   ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+          
+          try {
+            Write-Host "🚀 Bootstrapping Prod Environment..." -ForegroundColor Cyan
+            Write-Host "" -ForegroundColor Gray
+            Write-Host "📋 Configuration:" -ForegroundColor Yellow
+            Write-Host "  Branch: main" -ForegroundColor Gray
+            Write-Host "  Environment: prod" -ForegroundColor Gray
+            Write-Host "  Parameter File: infra/parameters/prod.json" -ForegroundColor Gray
+            Write-Host "  Resource Group: rg-orderprocessing-prod" -ForegroundColor Gray
+            Write-Host "  OIDC Subject: repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/main" -ForegroundColor Gray
+            Write-Host "" -ForegroundColor Gray
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+            Write-Host ""
 
-          ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment prod
-          if ($LASTEXITCODE -ne 0) {
-            Write-Error "Bootstrap failed with exit code $LASTEXITCODE"
-            exit $LASTEXITCODE
+            ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment prod
+            
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host ""
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host "❌ BOOTSTRAP SCRIPT FAILED" -ForegroundColor Red
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Red
+              Write-Host "Script: ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1" -ForegroundColor Gray
+              Write-Host "Environment: prod" -ForegroundColor Gray
+              Write-Host ""
+              Write-Host "Check the bootstrap log artifact for detailed error information." -ForegroundColor Yellow
+              Write-Host ""
+              Write-Error "Bootstrap failed with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+            }
+            
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host "✅ PRODUCTION INFRASTRUCTURE BOOTSTRAP COMPLETE" -ForegroundColor Green
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+            Write-Host ""
+          }
+          catch {
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING BOOTSTRAP" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Stack Trace:" -ForegroundColor Yellow
+            Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
+            Write-Host ""
+            Write-Error "Bootstrap failed with exception: $($_.Exception.Message)"
+            exit 1
           }
       - name: Upload Bootstrap Log
         if: always()
