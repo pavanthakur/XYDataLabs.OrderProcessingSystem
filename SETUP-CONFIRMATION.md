@@ -76,7 +76,7 @@ If you're curious, you can see your installation at:
 2. Click **"Run workflow"**
 
 3. Select:
-   - **Target environment**: `dev` (or `staging`, or `all`)
+   - **Target environment**: `dev` (or `staging`, or `prod`) ⚠️ **IMPORTANT: Do NOT select "all" yet**
    - **Setup Azure OIDC**: `true` (first time) or `false` (if already done)
    - **Setup GitHub App**: `false` (you already did this!)
    - **Configure GitHub secrets**: `true` ✅
@@ -85,10 +85,17 @@ If you're curious, you can see your installation at:
 
 4. Click **"Run workflow"**
 
+### ⚠️ Important: Select Specific Environment
+
+Since you configured secrets at the **environment level** (not repository level), you must select a specific environment (`dev`, `staging`, or `prod`) when running the workflow. 
+
+If you select `all`, the workflow will default to `dev` environment secrets.
+
 ### What the Workflow Will Do
 
 ```
 🔍 Checking GitHub App Configuration
+  Environment Context: dev
   ✅ APP_ID: Present (from dev environment)
   ✅ APP_PRIVATE_KEY: Present (from dev environment)
   ✨ APP_INSTALLATION_ID: Auto-discovered at runtime
