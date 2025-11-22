@@ -57,6 +57,7 @@ jobs:
   deploy:
     runs-on: windows-latest
     needs: build
+    environment: ${{ github.ref == 'refs/heads/main' && 'prod' || github.ref == 'refs/heads/staging' && 'staging' || 'dev' }}
     permissions:
       id-token: write
       contents: read

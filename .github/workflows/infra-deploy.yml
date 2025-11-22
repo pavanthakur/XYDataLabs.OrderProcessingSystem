@@ -70,6 +70,7 @@ jobs:
     name: Bicep What-If (Dry Run)
     if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.dryRun)
     runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'dev' }}
     steps:
       - uses: actions/checkout@v4
       

@@ -1344,6 +1344,7 @@ jobs:
       (needs.configure-secrets.result == 'success' || needs.configure-secrets.result == 'skipped')
     needs: [setup-oidc, configure-secrets]
     runs-on: windows-latest
+    environment: dev
     env:
       CLIENT_ID: ${{ needs.setup-oidc.outputs.clientId || secrets.AZUREAPPSERVICE_CLIENTID }}
       TENANT_ID: ${{ needs.setup-oidc.outputs.tenantId || secrets.AZUREAPPSERVICE_TENANTID }}
@@ -1524,6 +1525,7 @@ jobs:
       (needs.configure-secrets.result == 'success' || needs.configure-secrets.result == 'skipped')
     needs: [setup-oidc, configure-secrets]
     runs-on: windows-latest
+    environment: staging
     env:
       CLIENT_ID: ${{ needs.setup-oidc.outputs.clientId || secrets.AZUREAPPSERVICE_CLIENTID }}
       TENANT_ID: ${{ needs.setup-oidc.outputs.tenantId || secrets.AZUREAPPSERVICE_TENANTID }}
