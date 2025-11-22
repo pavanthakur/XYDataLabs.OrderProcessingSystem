@@ -6,7 +6,7 @@ This workflow automates everything from OIDC setup to infrastructure provisionin
 
 ### 📍 Access the Workflow
 
-**Direct Link**: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/azure-bootstrap.yml
+**Direct Link (New App Token Workflow)**: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/generate-github-app-token.yml
 
 Or navigate: **GitHub → Actions → Azure Bootstrap Setup**
 
@@ -258,7 +258,7 @@ Follow: `Documentation/02-Azure-Learning-Guides/Telemetry-Quick-Start.md`
 ## 📚 Documentation
 
 - **Full Documentation**: `.github/workflows/README-AZURE-BOOTSTRAP.md`
-- **Workflow File**: `.github/workflows/azure-bootstrap.yml`
+- **Workflow File (Renamed)**: `.github/workflows/generate-github-app-token.yml`
 - **Setup Script**: `Resources/Azure-Deployment/setup-github-oidc.ps1`
 - **Bootstrap Script**: `Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1`
 
@@ -276,6 +276,6 @@ Follow: `Documentation/02-Azure-Learning-Guides/Telemetry-Quick-Start.md`
 
 **Ready to start?** 
 
-👉 **Click here**: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/azure-bootstrap.yml
+👉 **Click here (New Workflow)**: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/generate-github-app-token.yml
 
 Then click **"Run workflow"** button (top-right, green button)

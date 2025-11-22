@@ -2,7 +2,7 @@
 
 ## Overview
 
-The **Azure Bootstrap Setup** workflow (`azure-bootstrap.yml`) is a comprehensive automation that handles the complete setup of Azure infrastructure and GitHub integrations for the Order Processing System.
+The **Generate GitHub App Token** workflow (`generate-github-app-token.yml`) replaces the previous `azure-bootstrap.yml` file for focused GitHub App token generation after Azure OIDC is confirmed.
 
 ## Workflow Name
 
@@ -12,7 +12,7 @@ This workflow is designed for manual execution via GitHub Actions UI.
 
 ## Quick Access
 
-**Direct Link:** https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/azure-bootstrap.yml
+**Direct Link:** https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/generate-github-app-token.yml
 
 ## Running for Dev Profile with All Options Enabled
 
@@ -183,7 +183,7 @@ az ad app federated-credential list --id <app-object-id> --query "[].{Name:name,
 ### Issue: YAML Syntax Errors
 **Solution:** The workflow has been validated and trailing spaces removed. If you encounter issues, run:
 ```bash
-yamllint -d relaxed .github/workflows/azure-bootstrap.yml
+yamllint -d relaxed .github/workflows/generate-github-app-token.yml
 ```
 
 ### Issue: Device Code Timeout

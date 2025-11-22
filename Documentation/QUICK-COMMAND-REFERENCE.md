@@ -72,11 +72,11 @@ git status
 # 2. Review specific changes
 git diff                                    # All changes
 git diff .github/workflows/                 # Specific folder
-git diff azure-bootstrap.yml                # Specific file
+git diff generate-github-app-token.yml      # Specific file
 
 # 3. Stage changes
 git add .                                   # All files
-git add .github/workflows/azure-bootstrap.yml  # Specific file
+git add .github/workflows/generate-github-app-token.yml  # Specific file
 
 # 4. Review staged changes
 git diff --staged
@@ -665,7 +665,7 @@ git diff
 ### **Documentation Files**
 - `Documentation/HOW-TO-AVOID-CONFIG-ERRORS.md` - Error prevention guide
 - `Documentation/README.md` - Project overview
-- `.github/workflows/azure-bootstrap.yml` - Bootstrap workflow
+- `.github/workflows/generate-github-app-token.yml` - GitHub App token + OIDC workflow
 - `.github/workflows/infra-deploy.yml` - Infrastructure deployment
 
 ### **Scripts Location**

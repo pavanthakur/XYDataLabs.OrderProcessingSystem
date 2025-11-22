@@ -130,7 +130,7 @@ To verify the fix works:
 
 ## Related Files
 
-- `.github/workflows/azure-bootstrap.yml` - Main bootstrap workflow
+- `.github/workflows/generate-github-app-token.yml` - OIDC + GitHub App token workflow (renamed)
 - `.github/workflows/deploy-api-to-azure.yml` - Uses AZUREAPPSERVICE_* secrets
 - `.github/workflows/deploy-ui-to-azure.yml` - Uses AZUREAPPSERVICE_* secrets
 - `.github/workflows/infra-deploy.yml` - Uses AZUREAPPSERVICE_* secrets

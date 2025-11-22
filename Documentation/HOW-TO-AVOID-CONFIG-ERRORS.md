@@ -66,7 +66,7 @@ When copying similar blocks:
 
 ```powershell
 # Good: Use explicit search to verify each section
-Select-String -Path .github/workflows/azure-bootstrap.yml -Pattern 'Bootstrap.*Infrastructure' -Context 5,10
+Select-String -Path .github/workflows/generate-github-app-token.yml -Pattern 'Generate.*GitHub' -Context 5,10
 ```
 
 Verify each match shows correct environment before committing.
@@ -82,7 +82,7 @@ git commit -m "Update all bootstrap jobs"
 # Good: Individual commits with validation
 # After changing dev:
 ./Resources/Azure-Deployment/validate-workflow-config.ps1
-git add .github/workflows/azure-bootstrap.yml
+git add .github/workflows/generate-github-app-token.yml
 git commit -m "fix: Update bootstrap-dev configuration"
 
 # After changing staging:

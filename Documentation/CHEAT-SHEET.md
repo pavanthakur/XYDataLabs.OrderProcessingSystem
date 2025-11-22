@@ -139,7 +139,7 @@ git checkout HEAD -- filename                   # Undo file changes
 | Workflow validator | `Resources/Azure-Deployment/validate-workflow-config.ps1` |
 | Branch-env mapper | `Resources/Azure-Deployment/test-branch-env-mapping.ps1` |
 | Config validator | `Resources/Azure-Deployment/validate-sharedsettings-diff.ps1` |
-| Bootstrap workflow | `.github/workflows/azure-bootstrap.yml` |
+| GitHub App Token workflow | `.github/workflows/generate-github-app-token.yml` |
 | Prevention guide | `Documentation/HOW-TO-AVOID-CONFIG-ERRORS.md` |
 | Full reference | `QUICK-COMMAND-REFERENCE.md` |
 

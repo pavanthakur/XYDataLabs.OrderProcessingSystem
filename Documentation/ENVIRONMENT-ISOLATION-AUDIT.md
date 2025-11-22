@@ -17,12 +17,12 @@ invalid credentials including staging and prod.
 **Status:**  FIXED - Commit e4815dd
 
 ### 2. Configure-Secrets Job
-**File:** .github/workflows/azure-bootstrap.yml
+**File (Renamed):** .github/workflows/generate-github-app-token.yml
 **Lines:** 333-370
 **Status:**  SAFE - Uses dynamic environment list based on inputs.environment
 
 ### 3. Bootstrap Jobs
-**Files:** .github/workflows/azure-bootstrap.yml
+**Files (Renamed):** .github/workflows/generate-github-app-token.yml
 **Jobs:** bootstrap-dev, bootstrap-staging, bootstrap-prod
 **Status:**  SAFE - Each job:
   - Has conditional: inputs.environment == 'X' || inputs.environment == 'all'
@@ -44,7 +44,7 @@ invalid credentials including staging and prod.
   - No automatic environment detection
 
 ### 6. Enable-Validation Job
-**File:** .github/workflows/azure-bootstrap.yml
+**File (Renamed):** .github/workflows/generate-github-app-token.yml
 **Lines:** 520-570
 **Status:**  ACCEPTABLE - Modifies workflow file globally
   - This is one-time setup, not environment-specific
@@ -52,7 +52,7 @@ invalid credentials including staging and prod.
   - No environment isolation concern
 
 ### 7. GitHub Secrets Management
-**File:** .github/workflows/azure-bootstrap.yml
+**File (Renamed):** .github/workflows/generate-github-app-token.yml
 **Lines:** 337-370
 **Status:**  SAFE - Dynamic environment list
   - Uses: \ = if (\ -eq 'all') { ... } else { @(\) }
