@@ -647,7 +647,7 @@ jobs:
           Write-Host "  AZUREAPPSERVICE_SUBSCRIPTIONID : $(if ($hasSubscriptionId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasSubscriptionId) { "Green" } else { "Red" })
           Write-Host ""
           
-          # Check GitHub App authentication (REQUIRED - no PAT fallback)
+          # Check GitHub App authentication (REQUIRED for automated secret management)
           Write-Host "🔐 GitHub App Authentication:" -ForegroundColor Yellow
           if ($env:GH_APP_TOKEN) {
             Write-Host "  ✅ Status: AUTHENTICATED" -ForegroundColor Green
