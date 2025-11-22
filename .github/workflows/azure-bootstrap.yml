@@ -549,6 +549,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Validate Prerequisites
+        id: prereqs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -566,11 +567,25 @@ jobs:
           }
 
           Write-Host "" -ForegroundColor Gray
+          
+          # Check if GitHub App secrets are available
+          $hasAppId = "${{ secrets.GH_APP_ID }}" -ne ""
+          $hasInstallationId = "${{ secrets.GH_APP_INSTALLATION_ID }}" -ne ""
+          $hasPrivateKey = "${{ secrets.GH_APP_PRIVATE_KEY }}" -ne ""
+          
+          if ($hasAppId -and $hasInstallationId -and $hasPrivateKey) {
+            Write-Host "✅ GitHub App secrets detected" -ForegroundColor Green
+            "hasGitHubAppSecrets=true" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Host "ℹ️  GitHub App secrets not configured" -ForegroundColor Yellow
+            "hasGitHubAppSecrets=false" >> $env:GITHUB_OUTPUT
+          }
+          
           Write-Host "✅ All prerequisites validated" -ForegroundColor Green
 
       - name: Generate GitHub App Token
         id: app-token
-        continue-on-error: true
+        if: steps.prereqs.outputs.hasGitHubAppSecrets == 'true'
         uses: actions/create-github-app-token@v1
         with:
           app-id: ${{ secrets.GH_APP_ID }}
