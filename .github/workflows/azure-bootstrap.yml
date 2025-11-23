@@ -950,15 +950,7 @@ jobs:
           Write-Host "   If YES → Check APP_ID and APP_PRIVATE_KEY secrets are correct" -ForegroundColor White
           Write-Host ""
           
-          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
-          Write-Host "⚠️  WORKFLOW WILL CONTINUE WITHOUT GITHUB APP AUTOMATION" -ForegroundColor Yellow
-          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
-          Write-Host ""
-          Write-Host "Secret configuration steps will be skipped. After installing the GitHub App," -ForegroundColor White
-          Write-Host "re-run this workflow with 'Configure GitHub secrets' enabled to complete setup." -ForegroundColor White
-          Write-Host ""
-          
-          Write-Warning "GitHub App token generation failed. Please install the GitHub App on this repository and re-run with 'Configure GitHub secrets' enabled."
+          Write-Error "GitHub App token generation failed. Please install the GitHub App on this repository and try again."
 
       - name: Check Required Secrets
         id: check
@@ -1056,15 +1048,9 @@ jobs:
           Write-Host "For troubleshooting, see:" -ForegroundColor Cyan
           Write-Host "  Documentation/03-Configuration-Guides/GITHUB-APP-AUTHENTICATION.md" -ForegroundColor Gray
           Write-Host ""
-          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
-          Write-Host "⚠️  SECRET CONFIGURATION WILL BE SKIPPED" -ForegroundColor Yellow
-          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
-          Write-Host ""
-          Write-Host "Steps requiring GitHub App authentication will be skipped." -ForegroundColor White
-          Write-Host "After setting up the GitHub App, re-run this workflow to complete configuration." -ForegroundColor White
-          Write-Host ""
           
-          Write-Warning "GitHub App authentication not available. Secret configuration steps will be skipped."
+          Write-Error "GitHub App authentication required. Cannot proceed without proper authentication."
+          exit 1
 
       - name: Set Repository Secrets
         if: steps.check.outputs.secretsExist == 'false' && steps.check.outputs.useGitHubApp == 'true'
