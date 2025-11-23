@@ -2367,3 +2367,336 @@ az group delete --name rg-orderprocessing-prod --yes --no-wait
 ```
 
 ---
+
+## 🗄️ Azure SQL Database Provisioning & Migrations
+
+**Last Updated**: November 23, 2025  
+**Status**: ✅ Fully Automated in Bootstrap Workflow  
+
+### Overview
+
+As of November 23, 2025, the Azure Bootstrap workflow (`azure-bootstrap.yml`) now includes **automated SQL Database provisioning** for all environments. Additionally, the API deployment workflow (`deploy-api-to-azure.yml`) automatically runs **EF Core database migrations** after each deployment.
+
+This ensures that:
+- ✅ SQL Database infrastructure is created during bootstrap
+- ✅ Database schema is automatically created and kept up-to-date
+- ✅ Apps can connect to the database immediately after deployment
+- ✅ Zero manual database setup required
+
+### Environment Parameter Consistency
+
+**Branch-to-Environment Mapping** (Standardized):
+
+| Git Branch | Environment Parameter | SQL Server Name | Database Name |
+|------------|---------------------|----------------|---------------|
+| `dev` | `dev` | `orderprocessing-sql-dev` | `OrderProcessingSystem_Dev` |
+| `staging` | `staging` | `orderprocessing-sql-staging` | `OrderProcessingSystem_Staging` |
+| `main` | `prod` | `orderprocessing-sql-prod` | `OrderProcessingSystem_Prod` |
+
+**Important Notes**:
+- ✅ Use `staging` (NOT `stg`) for consistency across all scripts
+- ✅ The `main` branch maps to `prod` environment (NOT a `prod` branch)
+- ✅ All scripts use the full environment name: `dev`, `staging`, `prod`
+
+### SQL Resources Created
+
+#### 1. SQL Server (per environment)
+```
+Name Pattern: orderprocessing-sql-{environment}
+Location: centralindia
+Admin User: sqladmin
+Admin Password: Configured via script (default: Admin100@)
+```
+
+**Created Resources**:
+- **Dev**: `orderprocessing-sql-dev`
+- **Staging**: `orderprocessing-sql-staging`
+- **Prod**: `orderprocessing-sql-prod`
+
+#### 2. SQL Database (per environment)
+```
+Name Pattern: OrderProcessingSystem_{Environment}
+Collation: SQL_Latin1_General_CP1_CI_AS
+Max Size: Standard default
+```
+
+**Created Databases**:
+- **Dev**: `OrderProcessingSystem_Dev`
+- **Staging**: `OrderProcessingSystem_Staging`
+- **Prod**: `OrderProcessingSystem_Prod`
+
+#### 3. Firewall Rules
+- **Azure Services**: Allows Azure services and resources to access the server (IP: 0.0.0.0)
+- **Additional Rules**: Can be configured for specific IP ranges if needed
+
+#### 4. Connection Strings
+Automatically configured in App Service application settings:
+```
+Server=tcp:orderprocessing-sql-{env}.database.windows.net,1433;
+Initial Catalog=OrderProcessingSystem_{Env};
+User ID=sqladmin;
+Password=******;
+Encrypt=True;
+TrustServerCertificate=False;
+Connection Timeout=30;
+```
+
+### Automated SQL Provisioning (Bootstrap Workflow)
+
+#### When It Runs
+The SQL provisioning step runs automatically as part of the bootstrap workflow for each environment **after** the infrastructure and App Insights configuration steps complete.
+
+#### Bootstrap Workflow Location
+`.github/workflows/azure-bootstrap.yml`
+
+#### SQL Provisioning Step (Example for dev)
+```yaml
+- name: Provision Azure SQL Database
+  if: success()
+  run: |
+    ./Resources/Azure-Deployment/provision-azure-sql.ps1 `
+      -Environment dev `
+      -BaseName orderprocessing `
+      -Location centralindia
+```
+
+#### What the Script Does
+1. ✅ Verifies resource group exists and is ready
+2. ✅ Creates SQL Server if it doesn't exist
+3. ✅ Waits for SQL Server to be fully provisioned
+4. ✅ Creates database if it doesn't exist
+5. ✅ Configures firewall rules for Azure services
+6. ✅ Sets up connection strings in App Service application settings
+7. ✅ Idempotent - safe to re-run multiple times
+
+#### Manual SQL Provisioning (If Needed)
+
+If you need to provision SQL Database manually or for troubleshooting:
+
+```powershell
+# For dev environment
+./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment dev -BaseName orderprocessing -Location centralindia
+
+# For staging environment
+./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment staging -BaseName orderprocessing -Location centralindia
+
+# For prod environment
+./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment prod -BaseName orderprocessing -Location centralindia
+```
+
+**Parameters**:
+- `-Environment`: dev, staging, or prod
+- `-BaseName`: orderprocessing (default)
+- `-Location`: centralindia (default)
+- `-AdminUsername`: sqladmin (default)
+- `-AdminPassword`: Admin100@ (default, should be changed for production)
+- `-SkipAppServiceConfig`: Skip connection string configuration (optional)
+
+### Automated Database Migrations (Deployment Workflow)
+
+#### When It Runs
+Database migrations run automatically **after each API deployment** for the respective environment based on the branch.
+
+#### API Deployment Workflow Location
+`.github/workflows/deploy-api-to-azure.yml`
+
+#### Migration Step
+```yaml
+- name: Run Database Migrations
+  shell: pwsh
+  run: |
+    # Determine environment from branch
+    $ref = "${{ github.ref }}"
+    if ($ref -eq 'refs/heads/main') { $env = 'prod' }
+    elseif ($ref -eq 'refs/heads/staging') { $env = 'staging' }
+    elseif ($ref -eq 'refs/heads/dev') { $env = 'dev' }
+    
+    ./Resources/Azure-Deployment/run-database-migrations.ps1 -Environment $env -BaseName orderprocessing
+```
+
+#### What the Migration Script Does
+1. ✅ Verifies EF Core tools are installed
+2. ✅ Builds connection string for the target environment
+3. ✅ Runs `dotnet ef database update` to apply migrations
+4. ✅ Fallback: Generates idempotent SQL script if EF CLI fails
+5. ✅ Applies migrations using sqlcmd if needed
+6. ✅ Non-blocking: Warns if migrations fail but continues deployment
+
+#### Manual Migration Execution (If Needed)
+
+If you need to run migrations manually or for troubleshooting:
+
+```powershell
+# For dev environment
+./Resources/Azure-Deployment/run-database-migrations.ps1 -Environment dev -BaseName orderprocessing
+
+# For staging environment
+./Resources/Azure-Deployment/run-database-migrations.ps1 -Environment staging -BaseName orderprocessing
+
+# For prod environment
+./Resources/Azure-Deployment/run-database-migrations.ps1 -Environment prod -BaseName orderprocessing
+```
+
+**Parameters**:
+- `-Environment`: dev, staging, or prod
+- `-BaseName`: orderprocessing (default)
+- `-AdminUsername`: sqladmin (default)
+- `-AdminPassword`: Admin100@ (default)
+
+### Verification Steps
+
+#### 1. Verify SQL Server Exists
+```powershell
+# Check dev SQL Server
+az sql server show --name orderprocessing-sql-dev --resource-group rg-orderprocessing-dev --output table
+
+# Check staging SQL Server
+az sql server show --name orderprocessing-sql-staging --resource-group rg-orderprocessing-staging --output table
+
+# Check prod SQL Server
+az sql server show --name orderprocessing-sql-prod --resource-group rg-orderprocessing-prod --output table
+```
+
+#### 2. Verify Database Exists
+```powershell
+# Check dev database
+az sql db show --name OrderProcessingSystem_Dev --server orderprocessing-sql-dev --resource-group rg-orderprocessing-dev --output table
+
+# Check staging database
+az sql db show --name OrderProcessingSystem_Staging --server orderprocessing-sql-staging --resource-group rg-orderprocessing-staging --output table
+
+# Check prod database
+az sql db show --name OrderProcessingSystem_Prod --server orderprocessing-sql-prod --resource-group rg-orderprocessing-prod --output table
+```
+
+#### 3. Verify Connection String in App Service
+```powershell
+# Check dev connection string
+az webapp config connection-string list --name orderprocessing-api-xyapp-dev --resource-group rg-orderprocessing-dev --output table
+
+# Check staging connection string
+az webapp config connection-string list --name orderprocessing-api-xyapp-staging --resource-group rg-orderprocessing-staging --output table
+
+# Check prod connection string
+az webapp config connection-string list --name orderprocessing-api-xyapp-prod --resource-group rg-orderprocessing-prod --output table
+```
+
+#### 4. Verify Migrations Applied
+```powershell
+# Connect to database and check migrations table
+# (Requires SQL client installed)
+sqlcmd -S orderprocessing-sql-dev.database.windows.net -d OrderProcessingSystem_Dev -U sqladmin -P Admin100@ -Q "SELECT * FROM __EFMigrationsHistory"
+```
+
+### Complete Bootstrap Flow (Updated)
+
+The complete bootstrap flow now includes SQL provisioning:
+
+1. ✅ **Setup OIDC** - Create/configure Azure AD app registration
+2. ✅ **Configure Secrets** - Set GitHub repository secrets
+3. ✅ **Bootstrap Infrastructure** - Create resource groups, app service plans, web apps
+4. ✅ **Configure App Insights** - Set up Application Insights and secrets
+5. ✅ **Provision SQL Database** ⭐ NEW - Create SQL Server and database
+6. ✅ **Deploy API/UI** - Deploy application code
+7. ✅ **Run Migrations** ⭐ NEW - Apply EF Core database migrations
+
+### Troubleshooting
+
+#### SQL Server Creation Fails
+**Symptom**: SQL provisioning step fails with server creation error
+
+**Solutions**:
+1. Check if server name is unique globally (Azure SQL server names must be globally unique)
+2. Verify you have permissions to create SQL servers in the subscription
+3. Check if there's a quota limit on SQL servers in your subscription
+4. Review firewall rules if connection fails
+
+#### Database Connection Fails
+**Symptom**: App can't connect to database
+
+**Solutions**:
+1. Verify connection string is configured in App Service settings
+2. Check firewall rules allow Azure services
+3. Verify SQL admin credentials are correct
+4. Ensure database exists and is in "Online" state
+
+#### Migrations Fail
+**Symptom**: Migration step fails or reports errors
+
+**Solutions**:
+1. Check if EF Core tools are installed (`dotnet tool list -g`)
+2. Verify connection string has correct database name
+3. Check SQL admin password is correct
+4. Review migration scripts for syntax errors
+5. Ensure database is accessible (not paused or offline)
+
+#### Connection String Not Found
+**Symptom**: App Service doesn't have connection string configured
+
+**Solutions**:
+1. Re-run SQL provisioning script without `-SkipAppServiceConfig` flag
+2. Manually configure connection string in Azure Portal
+3. Check if App Service name matches expected pattern
+
+### Security Considerations
+
+#### Current Implementation
+- ✅ SQL admin password: Default value (`Admin100@`)
+- ✅ Connection strings: Encrypted at rest in App Service settings
+- ✅ Firewall: Allows Azure services (required for App Service)
+- ⚠️ Admin password: Consider storing in GitHub Secrets for production
+
+#### Recommended Production Enhancements
+1. **Use GitHub Secrets for SQL Password**:
+   ```yaml
+   env:
+     SQL_ADMIN_PASSWORD: ${{ secrets.SQL_ADMIN_PASSWORD }}
+   ```
+   Then pass to script: `-AdminPassword $env:SQL_ADMIN_PASSWORD`
+
+2. **Use Managed Identity** (Future enhancement):
+   - Configure App Service with system-assigned managed identity
+   - Grant identity access to SQL Database
+   - Use passwordless authentication in connection string
+
+3. **Configure Automated Backups**:
+   ```powershell
+   az sql db show --name OrderProcessingSystem_Dev --server orderprocessing-sql-dev --resource-group rg-orderprocessing-dev --query 'backupPolicy'
+   ```
+
+4. **Enable Auditing and Threat Detection**:
+   ```powershell
+   az sql db audit-policy update --name OrderProcessingSystem_Dev --resource-group rg-orderprocessing-dev --server orderprocessing-sql-dev --state Enabled
+   ```
+
+### Related Scripts
+
+| Script | Purpose | Location |
+|--------|---------|----------|
+| `provision-azure-sql.ps1` | Creates SQL Server and Database | `Resources/Azure-Deployment/` |
+| `run-database-migrations.ps1` | Applies EF Core migrations | `Resources/Azure-Deployment/` |
+| `azure-bootstrap.yml` | Automated bootstrap workflow | `.github/workflows/` |
+| `deploy-api-to-azure.yml` | API deployment with migrations | `.github/workflows/` |
+
+### Quick Reference Commands
+
+```powershell
+# Provision SQL for all environments (manual)
+./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment dev -BaseName orderprocessing -Location centralindia
+./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment staging -BaseName orderprocessing -Location centralindia
+./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment prod -BaseName orderprocessing -Location centralindia
+
+# Run migrations for all environments (manual)
+./Resources/Azure-Deployment/run-database-migrations.ps1 -Environment dev -BaseName orderprocessing
+./Resources/Azure-Deployment/run-database-migrations.ps1 -Environment staging -BaseName orderprocessing
+./Resources/Azure-Deployment/run-database-migrations.ps1 -Environment prod -BaseName orderprocessing
+
+# Verify SQL resources
+az sql server list --resource-group rg-orderprocessing-dev --output table
+az sql db list --resource-group rg-orderprocessing-dev --server orderprocessing-sql-dev --output table
+
+# Check connection strings
+az webapp config connection-string list --name orderprocessing-api-xyapp-dev --resource-group rg-orderprocessing-dev
+```
+
+---
