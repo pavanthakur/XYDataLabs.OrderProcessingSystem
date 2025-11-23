@@ -350,24 +350,40 @@ $appDisplayName = "GitHub-Actions-OIDC"
 $oidcJob = Start-Job -ScriptBlock {
     param($appName, $tenantId, $subscriptionId)
     try {
-        $existingApp = az ad app list --display-name $appName 2>&1 | ConvertFrom-Json
+        $existingAppOutput = az ad app list --display-name $appName 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            return @{ Success = $false; AppId = $null; AppObjectId = $null; SpObjectId = $null; TenantId = $tenantId; SubscriptionId = $subscriptionId; AppCreated = $false; SpCreated = $false; Error = "Failed to list existing apps: $existingAppOutput" }
+        }
+        $existingApp = $existingAppOutput | ConvertFrom-Json
         if ($existingApp -and $existingApp.Count -gt 0) {
             $appId = $existingApp[0].appId
             $appObjectId = $existingApp[0].id
             $appCreated = $false
         } else {
-            $newApp = az ad app create --display-name $appName 2>&1 | ConvertFrom-Json
+            $newAppOutput = az ad app create --display-name $appName 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                return @{ Success = $false; AppId = $null; AppObjectId = $null; SpObjectId = $null; TenantId = $tenantId; SubscriptionId = $subscriptionId; AppCreated = $false; SpCreated = $false; Error = "Failed to create app: $newAppOutput" }
+            }
+            $newApp = $newAppOutput | ConvertFrom-Json
             $appId = $newApp.appId
             $appObjectId = $newApp.id
             $appCreated = $true
         }
 
-        $existingSp = az ad sp list --filter "appId eq '$appId'" 2>&1 | ConvertFrom-Json
+        $existingSpOutput = az ad sp list --filter "appId eq '$appId'" 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            return @{ Success = $false; AppId = $appId; AppObjectId = $appObjectId; SpObjectId = $null; TenantId = $tenantId; SubscriptionId = $subscriptionId; AppCreated = $appCreated; SpCreated = $false; Error = "Failed to list existing service principals: $existingSpOutput" }
+        }
+        $existingSp = $existingSpOutput | ConvertFrom-Json
         if ($existingSp -and $existingSp.Count -gt 0) {
             $spObjectId = $existingSp[0].id
             $spCreated = $false
         } else {
-            $sp = az ad sp create --id $appId 2>&1 | ConvertFrom-Json
+            $spOutput = az ad sp create --id $appId 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                return @{ Success = $false; AppId = $appId; AppObjectId = $appObjectId; SpObjectId = $null; TenantId = $tenantId; SubscriptionId = $subscriptionId; AppCreated = $appCreated; SpCreated = $false; Error = "Failed to create service principal: $spOutput" }
+            }
+            $sp = $spOutput | ConvertFrom-Json
             $spObjectId = $sp.id
             $spCreated = $true
         }
@@ -391,7 +407,6 @@ foreach ($env in $envList) {
     $sku = Resolve-Sku $env
 
     # Resource Group
-    Add-StepStatus -Name "Create Resource Group ($rg)" -Status "Pending"
     $rgExists = az group exists -n $rg
     if ($rgExists -eq 'false') {
         Write-Host "  Creating resource group: $rg ..." -ForegroundColor Yellow
@@ -417,7 +432,6 @@ foreach ($env in $envList) {
 
     # App Service Plan
     Write-Host "  [STEP] Creating App Service Plan..." -ForegroundColor Cyan
-    Add-StepStatus -Name "Create App Service Plan ($plan, $sku)" -Status "Pending"
     $planExists = az appservice plan list --resource-group $rg --query "[?name=='$plan']" -o tsv
     if (-not $planExists) {
         Write-Host "  Creating plan: $plan ($sku)..." -ForegroundColor Yellow
@@ -447,7 +461,6 @@ foreach ($env in $envList) {
     $apiExists = $null
     $apiCreateCmd = "az webapp create -g $rg -p $plan -n $apiApp --runtime 'dotnet:8'"
     try { $apiExists = az webapp show -g $rg -n $apiApp --query "name" -o tsv 2>$null; if ($LASTEXITCODE -ne 0) { $apiExists = $null } } catch { $apiExists = $null }
-    Add-StepStatus -Name "Create API Web App ($apiApp)" -Status "Pending"
     if ($apiExists -eq $apiApp) { Write-Host "  API WebApp already exists: $apiApp" -ForegroundColor Green; Add-StepStatus -Name "Create API Web App ($apiApp)" -Status "Success" -Details "Already existed" }
     else {
         Write-Host "  Starting API webapp creation: $apiApp..." -ForegroundColor Yellow
@@ -460,7 +473,6 @@ foreach ($env in $envList) {
     $uiExists = $null
     $uiCreateCmd = "az webapp create -g $rg -p $plan -n $uiApp --runtime 'dotnet:8'"
     try { $uiExists = az webapp show -g $rg -n $uiApp --query "name" -o tsv 2>$null; if ($LASTEXITCODE -ne 0) { $uiExists = $null } } catch { $uiExists = $null }
-    Add-StepStatus -Name "Create UI Web App ($uiApp)" -Status "Pending"
     if ($uiExists -eq $uiApp) { Write-Host "  UI WebApp already exists: $uiApp" -ForegroundColor Green; Add-StepStatus -Name "Create UI Web App ($uiApp)" -Status "Success" -Details "Already existed" }
     else {
         Write-Host "  Starting UI webapp creation: $uiApp..." -ForegroundColor Yellow
@@ -474,7 +486,6 @@ foreach ($env in $envList) {
     $aiExists = $null
     try { $aiExists = az monitor app-insights component show -a $aiName -g $rg --query "name" -o tsv 2>$null; if ($LASTEXITCODE -ne 0) { $aiExists = $null } } catch { $aiExists = $null }
     $aiJob = $null
-    Add-StepStatus -Name "Create Application Insights ($aiName)" -Status "Pending"
     if (-not $aiExists) {
         Write-Host "  Starting Application Insights creation: $aiName..." -ForegroundColor Yellow
         $aiJob = Start-Job -ScriptBlock { param($rg, $aiName, $Location); try { $result = az monitor app-insights component create -a $aiName -g $rg -l $Location --application-type web 2>&1; if ($LASTEXITCODE -eq 0) { return @{ Success = $true; Output = $result; Error = $null; ResourceName = $aiName } }; return @{ Success = $false; Output = $null; Error = $result; ResourceName = $aiName } } catch { return @{ Success = $false; Output = $null; Error = $_.Exception.Message; ResourceName = $aiName } } } -ArgumentList $rg, $aiName, $Location
