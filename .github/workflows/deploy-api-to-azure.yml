@@ -93,6 +93,60 @@ jobs:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           package: .
 
+      - name: Checkout code for migrations
+        uses: actions/checkout@v4
+
+      - name: Run Database Migrations
+        shell: pwsh
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║              RUN DATABASE MIGRATIONS                           ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          
+          # Determine environment from branch
+          $ref = "${{ github.ref }}"
+          if ($ref -eq 'refs/heads/main') { $env = 'prod' }
+          elseif ($ref -eq 'refs/heads/staging') { $env = 'staging' }
+          elseif ($ref -eq 'refs/heads/dev') { $env = 'dev' }
+          else { $branch = $ref.Replace('refs/heads/',''); $env = $branch }
+          
+          Write-Host "🔄 Running database migrations for $env environment..." -ForegroundColor Cyan
+          Write-Host ""
+          
+          try {
+            ./Resources/Azure-Deployment/run-database-migrations.ps1 -Environment $env -BaseName orderprocessing
+            
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host ""
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host "❌ DATABASE MIGRATIONS FAILED" -ForegroundColor Red
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "⚠️  Warning: Migrations failed but deployment completed." -ForegroundColor Yellow
+              Write-Host "   Database schema may be out of date." -ForegroundColor Yellow
+              Write-Host "   Run migrations manually or re-run deployment." -ForegroundColor Yellow
+              Write-Host ""
+            } else {
+              Write-Host ""
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+              Write-Host "✅ DATABASE MIGRATIONS COMPLETED SUCCESSFULLY" -ForegroundColor Green
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+              Write-Host ""
+            }
+          }
+          catch {
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING MIGRATIONS" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Exception: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "⚠️  Warning: Continuing with health check..." -ForegroundColor Yellow
+            Write-Host ""
+          }
+
       - name: Health Check
         run: |
           Write-Host "Waiting 30 seconds for app to start..." -ForegroundColor Yellow

@@ -64,18 +64,77 @@ Write-Host "  Subscription ID: $subscriptionId" -ForegroundColor Green
 
 # Step 2: Check if app registration exists
 Write-Host "`n[2/7] Checking for existing app registration..." -ForegroundColor Yellow
-$existingApp = az ad app list --display-name $AppDisplayName | ConvertFrom-Json
 
-if ($existingApp.Count -gt 0) {
+# Try to list existing apps, but handle permission errors gracefully
+$listOutput = az ad app list --display-name $AppDisplayName 2>&1
+$listExitCode = $LASTEXITCODE
+$existingApp = $null
+
+# Check if the command failed due to insufficient privileges
+if ($listExitCode -ne 0) {
+    $errorMessage = $listOutput -join "`n"
+    if ($errorMessage -match "Insufficient privileges|insufficient|Forbidden|403") {
+        Write-Host "  ⚠️  Insufficient privileges to list existing apps" -ForegroundColor Yellow
+        Write-Host "  Attempting to create/retrieve app directly..." -ForegroundColor Yellow
+        # $existingApp remains $null, will attempt creation below
+    } else {
+        Write-Host "  ❌ Error listing apps: $errorMessage" -ForegroundColor Red
+        Write-Error "Failed to list existing apps: $errorMessage"
+        exit 1
+    }
+} else {
+    # Parse the successful output as JSON
+    $existingApp = $listOutput | ConvertFrom-Json
+}
+
+if ($existingApp -and $existingApp.Count -gt 0) {
     Write-Host "  Found existing app: $AppDisplayName" -ForegroundColor Green
     $appId = $existingApp[0].appId
     $appObjectId = $existingApp[0].id
 } else {
     Write-Host "  Creating new app registration..." -ForegroundColor Yellow
-    $newApp = az ad app create --display-name $AppDisplayName | ConvertFrom-Json
-    $appId = $newApp.appId
-    $appObjectId = $newApp.id
-    Write-Host "  Created app: $AppDisplayName" -ForegroundColor Green
+    $createOutput = az ad app create --display-name $AppDisplayName 2>&1
+    $createExitCode = $LASTEXITCODE
+    
+    if ($createExitCode -ne 0) {
+        $errorMessage = $createOutput -join "`n"
+        # Check if app already exists (conflict error)
+        if ($errorMessage -match "already exists|conflicts with|Another object") {
+            Write-Host "  ⚠️  App appears to exist but couldn't be listed" -ForegroundColor Yellow
+            Write-Host "  Attempting to retrieve app by name using filter..." -ForegroundColor Yellow
+            
+            # Try to get the app directly using filter (more reliable than URI identifier)
+            # Escape single quotes in display name to prevent OData filter syntax errors
+            $escapedAppName = $AppDisplayName -replace "'", "''"
+            $getOutput = az ad app list --filter "displayName eq '$escapedAppName'" 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                $apps = $getOutput | ConvertFrom-Json
+                if ($apps -and $apps.Count -gt 0) {
+                    $newApp = $apps[0]
+                    $appId = $newApp.appId
+                    $appObjectId = $newApp.id
+                    Write-Host "  Retrieved existing app: $AppDisplayName" -ForegroundColor Green
+                } else {
+                    Write-Host "  ❌ App exists but couldn't be retrieved" -ForegroundColor Red
+                    Write-Error "Failed to retrieve app registration. App may exist but is not accessible with current permissions."
+                    exit 1
+                }
+            } else {
+                Write-Host "  ❌ Failed to create or retrieve app" -ForegroundColor Red
+                Write-Error "Failed to create or retrieve app registration. Error: $errorMessage"
+                exit 1
+            }
+        } else {
+            Write-Host "  ❌ Failed to create app: $errorMessage" -ForegroundColor Red
+            Write-Error "Failed to create app registration: $errorMessage"
+            exit 1
+        }
+    } else {
+        $newApp = $createOutput | ConvertFrom-Json
+        $appId = $newApp.appId
+        $appObjectId = $newApp.id
+        Write-Host "  Created app: $AppDisplayName" -ForegroundColor Green
+    }
 }
 
 Write-Host "  App (Client) ID: $appId" -ForegroundColor Green
