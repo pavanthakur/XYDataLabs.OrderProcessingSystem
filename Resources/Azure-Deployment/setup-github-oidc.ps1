@@ -66,9 +66,9 @@ Write-Host "  Subscription ID: $subscriptionId" -ForegroundColor Green
 Write-Host "`n[2/7] Checking for existing app registration..." -ForegroundColor Yellow
 
 # Try to list existing apps, but handle permission errors gracefully
-$listError = $null
-$existingApp = az ad app list --display-name $AppDisplayName 2>&1 | Tee-Object -Variable listOutput
+$listOutput = az ad app list --display-name $AppDisplayName 2>&1
 $listExitCode = $LASTEXITCODE
+$existingApp = $null
 
 # Check if the command failed due to insufficient privileges
 if ($listExitCode -ne 0) {
@@ -76,13 +76,14 @@ if ($listExitCode -ne 0) {
     if ($errorMessage -match "Insufficient privileges|insufficient|Forbidden|403") {
         Write-Host "  ⚠️  Insufficient privileges to list existing apps" -ForegroundColor Yellow
         Write-Host "  Attempting to create/retrieve app directly..." -ForegroundColor Yellow
-        $existingApp = $null
+        # $existingApp remains $null, will attempt creation below
     } else {
         Write-Host "  ❌ Error listing apps: $errorMessage" -ForegroundColor Red
         Write-Error "Failed to list existing apps: $errorMessage"
         exit 1
     }
 } else {
+    # Parse the successful output as JSON
     $existingApp = $listOutput | ConvertFrom-Json
 }
 
