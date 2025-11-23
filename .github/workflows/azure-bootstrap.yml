@@ -863,6 +863,8 @@ jobs:
       - name: Generate GitHub App Token
         id: app-token
         if: steps.prereqs.outputs.hasGitHubAppSecrets == 'true'
+        # Allow this step to fail so we can provide helpful troubleshooting guidance
+        # Most common cause of failure is GitHub App not installed on repository (404 error)
         continue-on-error: true
         uses: actions/create-github-app-token@v1
         with:
@@ -949,7 +951,6 @@ jobs:
           Write-Host ""
           
           Write-Error "GitHub App token generation failed. Please install the GitHub App on this repository and try again."
-          exit 1
 
       - name: Check Required Secrets
         id: check
@@ -1992,6 +1993,8 @@ jobs:
 
       - name: Commit Changes
         id: commit
+        # Allow git push to fail - GITHUB_TOKEN lacks 'workflows' permission to modify workflow files
+        # This is a security feature. We handle the failure gracefully in the next step
         continue-on-error: true
         run: |
           git config --global user.name "github-actions[bot]"
