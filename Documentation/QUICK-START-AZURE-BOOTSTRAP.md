@@ -69,6 +69,7 @@ Enable validation: ✅ true
 - ✅ Guides you through GitHub App setup (eliminates PAT expiration)
 - ✅ Auto-configures all required GitHub secrets
 - ✅ Provisions complete Azure infrastructure (App Services, App Insights)
+- ✅ **NEW**: Automatically configures App Insights connection strings per environment
 - ✅ Enables pre-deployment validation checks
 
 **Prerequisites:**
@@ -261,6 +262,7 @@ Follow: `Documentation/02-Azure-Learning-Guides/Telemetry-Quick-Start.md`
 - **Workflow File (Renamed)**: `.github/workflows/generate-github-app-token.yml`
 - **Setup Script**: `Resources/Azure-Deployment/setup-github-oidc.ps1`
 - **Bootstrap Script**: `Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1`
+- **App Insights Automation**: `Documentation/02-Azure-Learning-Guides/APP_INSIGHTS_AUTOMATED_SETUP.md` ⭐ NEW
 
 ---
 
