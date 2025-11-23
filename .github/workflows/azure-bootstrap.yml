@@ -1653,6 +1653,67 @@ jobs:
             exit 1
           }
       
+      - name: Provision Azure SQL Database
+        if: success()
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║      PROVISION AZURE SQL DATABASE FOR DEV                     ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+          
+          try {
+            Write-Host "🗄️  Provisioning SQL Database for dev environment..." -ForegroundColor Cyan
+            Write-Host ""
+            Write-Host "📋 Configuration:" -ForegroundColor Yellow
+            Write-Host "  Environment: dev" -ForegroundColor Gray
+            Write-Host "  Resource Group: rg-orderprocessing-dev" -ForegroundColor Gray
+            Write-Host "  SQL Server: orderprocessing-sql-dev" -ForegroundColor Gray
+            Write-Host "  Database: OrderProcessingSystem_Dev" -ForegroundColor Gray
+            Write-Host "  Location: centralindia" -ForegroundColor Gray
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+            Write-Host ""
+            
+            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment dev -BaseName orderprocessing -Location centralindia
+            
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host ""
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host "❌ SQL PROVISIONING FAILED" -ForegroundColor Red
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Red
+              Write-Host "Script: ./Resources/Azure-Deployment/provision-azure-sql.ps1" -ForegroundColor Gray
+              Write-Host ""
+              Write-Error "SQL provisioning failed with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+            }
+            
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host "✅ AZURE SQL DATABASE PROVISIONED SUCCESSFULLY" -ForegroundColor Green
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+            Write-Host ""
+          }
+          catch {
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING SQL PROVISIONING" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Stack Trace:" -ForegroundColor Yellow
+            Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
+            Write-Host ""
+            Write-Error "SQL provisioning failed with exception: $($_.Exception.Message)"
+            exit 1
+          }
+      
       - name: Configure App Insights Connection String
         id: appinsights
         if: success()
@@ -1745,11 +1806,7 @@ jobs:
               Write-Host "    Error output: $secretOutput" -ForegroundColor Red
               Write-Host "" -ForegroundColor Gray
               Write-Host "    🔍 Troubleshooting:" -ForegroundColor Yellow
-              Write-Host "      1. Verify GitHub App has correct permissions:" -ForegroundColor White
-              Write-Host "         a) Go to: https://github.com/settings/apps → Your App → Permissions" -ForegroundColor Gray
-              Write-Host "         b) Under 'Repository permissions', set 'Secrets' to 'Read and write'" -ForegroundColor Gray
-              Write-Host "         c) Under 'Repository permissions', set 'Environments' to 'Read and write'" -ForegroundColor Gray
-              Write-Host "         d) Save changes and accept the new permissions in your repository" -ForegroundColor Gray
+              Write-Host "      1. Verify GitHub App has 'Secrets: Read and write' permission" -ForegroundColor White
               Write-Host "      2. Ensure GitHub App is installed on this repository" -ForegroundColor White
               Write-Host "      3. Check if 'dev' environment exists and doesn't require approval" -ForegroundColor White
               Write-Host "      4. Verify APP_ID and APP_PRIVATE_KEY secrets are correct" -ForegroundColor White
@@ -1757,8 +1814,8 @@ jobs:
               Write-Host "    📖 GitHub App Setup:" -ForegroundColor Cyan
               Write-Host "      Documentation/03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md" -ForegroundColor Gray
               Write-Host "" -ForegroundColor Gray
-              Write-Host "    ⚠️  App Insights secret configuration will be skipped - you can configure it manually later" -ForegroundColor Yellow
-              Write-Warning "Failed to configure App Insights connection string. Possible permission issue - see troubleshooting above."
+              Write-Error "Failed to configure App Insights connection string. GitHub App is configured but secret setting failed."
+              exit 1
             }
             
             Write-Host ""
@@ -1778,67 +1835,6 @@ jobs:
           
           Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           Write-Host ""
-      
-      - name: Provision Azure SQL Database
-        if: always() && !cancelled()
-        run: |
-          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-          Write-Host "║      PROVISION AZURE SQL DATABASE FOR DEV                     ║" -ForegroundColor Cyan
-          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
-          Write-Host ""
-          Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
-          Write-Host ""
-          
-          try {
-            Write-Host "🗄️  Provisioning SQL Database for dev environment..." -ForegroundColor Cyan
-            Write-Host ""
-            Write-Host "📋 Configuration:" -ForegroundColor Yellow
-            Write-Host "  Environment: dev" -ForegroundColor Gray
-            Write-Host "  Resource Group: rg-orderprocessing-dev" -ForegroundColor Gray
-            Write-Host "  SQL Server: orderprocessing-sql-dev" -ForegroundColor Gray
-            Write-Host "  Database: OrderProcessingSystem_Dev" -ForegroundColor Gray
-            Write-Host "  Location: centralindia" -ForegroundColor Gray
-            Write-Host ""
-            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
-            Write-Host ""
-            
-            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment dev -BaseName orderprocessing -Location centralindia
-            
-            if ($LASTEXITCODE -ne 0) {
-              Write-Host ""
-              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-              Write-Host "❌ SQL PROVISIONING FAILED" -ForegroundColor Red
-              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-              Write-Host ""
-              Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Red
-              Write-Host "Script: ./Resources/Azure-Deployment/provision-azure-sql.ps1" -ForegroundColor Gray
-              Write-Host ""
-              Write-Error "SQL provisioning failed with exit code $LASTEXITCODE"
-              exit $LASTEXITCODE
-            }
-            
-            Write-Host ""
-            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
-            Write-Host "✅ AZURE SQL DATABASE PROVISIONED SUCCESSFULLY" -ForegroundColor Green
-            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
-            Write-Host ""
-            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
-            Write-Host ""
-          }
-          catch {
-            Write-Host ""
-            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-            Write-Host "❌ EXCEPTION DURING SQL PROVISIONING" -ForegroundColor Red
-            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-            Write-Host ""
-            Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
-            Write-Host ""
-            Write-Host "Stack Trace:" -ForegroundColor Yellow
-            Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
-            Write-Host ""
-            Write-Error "SQL provisioning failed with exception: $($_.Exception.Message)"
-            exit 1
-          }
       
       - name: Upload Bootstrap Log
         if: always()
@@ -2034,6 +2030,67 @@ jobs:
             exit 1
           }
       
+      - name: Provision Azure SQL Database
+        if: success()
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║      PROVISION AZURE SQL DATABASE FOR STAGING                 ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+          
+          try {
+            Write-Host "🗄️  Provisioning SQL Database for staging environment..." -ForegroundColor Cyan
+            Write-Host ""
+            Write-Host "📋 Configuration:" -ForegroundColor Yellow
+            Write-Host "  Environment: staging" -ForegroundColor Gray
+            Write-Host "  Resource Group: rg-orderprocessing-staging" -ForegroundColor Gray
+            Write-Host "  SQL Server: orderprocessing-sql-staging" -ForegroundColor Gray
+            Write-Host "  Database: OrderProcessingSystem_Staging" -ForegroundColor Gray
+            Write-Host "  Location: centralindia" -ForegroundColor Gray
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+            Write-Host ""
+            
+            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment staging -BaseName orderprocessing -Location centralindia
+            
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host ""
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host "❌ SQL PROVISIONING FAILED" -ForegroundColor Red
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Red
+              Write-Host "Script: ./Resources/Azure-Deployment/provision-azure-sql.ps1" -ForegroundColor Gray
+              Write-Host ""
+              Write-Error "SQL provisioning failed with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+            }
+            
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host "✅ AZURE SQL DATABASE PROVISIONED SUCCESSFULLY" -ForegroundColor Green
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+            Write-Host ""
+          }
+          catch {
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING SQL PROVISIONING" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Stack Trace:" -ForegroundColor Yellow
+            Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
+            Write-Host ""
+            Write-Error "SQL provisioning failed with exception: $($_.Exception.Message)"
+            exit 1
+          }
+      
       - name: Configure App Insights Connection String
         id: appinsights
         if: success()
@@ -2126,11 +2183,7 @@ jobs:
               Write-Host "    Error output: $secretOutput" -ForegroundColor Red
               Write-Host "" -ForegroundColor Gray
               Write-Host "    🔍 Troubleshooting:" -ForegroundColor Yellow
-              Write-Host "      1. Verify GitHub App has correct permissions:" -ForegroundColor White
-              Write-Host "         a) Go to: https://github.com/settings/apps → Your App → Permissions" -ForegroundColor Gray
-              Write-Host "         b) Under 'Repository permissions', set 'Secrets' to 'Read and write'" -ForegroundColor Gray
-              Write-Host "         c) Under 'Repository permissions', set 'Environments' to 'Read and write'" -ForegroundColor Gray
-              Write-Host "         d) Save changes and accept the new permissions in your repository" -ForegroundColor Gray
+              Write-Host "      1. Verify GitHub App has 'Secrets: Read and write' permission" -ForegroundColor White
               Write-Host "      2. Ensure GitHub App is installed on this repository" -ForegroundColor White
               Write-Host "      3. Check if 'staging' environment exists and doesn't require approval" -ForegroundColor White
               Write-Host "      4. Verify APP_ID and APP_PRIVATE_KEY secrets are correct" -ForegroundColor White
@@ -2138,8 +2191,8 @@ jobs:
               Write-Host "    📖 GitHub App Setup:" -ForegroundColor Cyan
               Write-Host "      Documentation/03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md" -ForegroundColor Gray
               Write-Host "" -ForegroundColor Gray
-              Write-Host "    ⚠️  App Insights secret configuration will be skipped - you can configure it manually later" -ForegroundColor Yellow
-              Write-Warning "Failed to configure App Insights connection string. Possible permission issue - see troubleshooting above."
+              Write-Error "Failed to configure App Insights connection string. GitHub App is configured but secret setting failed."
+              exit 1
             }
             
             Write-Host ""
@@ -2159,67 +2212,6 @@ jobs:
           
           Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           Write-Host ""
-      
-      - name: Provision Azure SQL Database
-        if: always() && !cancelled()
-        run: |
-          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-          Write-Host "║      PROVISION AZURE SQL DATABASE FOR STAGING                 ║" -ForegroundColor Cyan
-          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
-          Write-Host ""
-          Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
-          Write-Host ""
-          
-          try {
-            Write-Host "🗄️  Provisioning SQL Database for staging environment..." -ForegroundColor Cyan
-            Write-Host ""
-            Write-Host "📋 Configuration:" -ForegroundColor Yellow
-            Write-Host "  Environment: staging" -ForegroundColor Gray
-            Write-Host "  Resource Group: rg-orderprocessing-staging" -ForegroundColor Gray
-            Write-Host "  SQL Server: orderprocessing-sql-staging" -ForegroundColor Gray
-            Write-Host "  Database: OrderProcessingSystem_Staging" -ForegroundColor Gray
-            Write-Host "  Location: centralindia" -ForegroundColor Gray
-            Write-Host ""
-            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
-            Write-Host ""
-            
-            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment staging -BaseName orderprocessing -Location centralindia
-            
-            if ($LASTEXITCODE -ne 0) {
-              Write-Host ""
-              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-              Write-Host "❌ SQL PROVISIONING FAILED" -ForegroundColor Red
-              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-              Write-Host ""
-              Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Red
-              Write-Host "Script: ./Resources/Azure-Deployment/provision-azure-sql.ps1" -ForegroundColor Gray
-              Write-Host ""
-              Write-Error "SQL provisioning failed with exit code $LASTEXITCODE"
-              exit $LASTEXITCODE
-            }
-            
-            Write-Host ""
-            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
-            Write-Host "✅ AZURE SQL DATABASE PROVISIONED SUCCESSFULLY" -ForegroundColor Green
-            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
-            Write-Host ""
-            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
-            Write-Host ""
-          }
-          catch {
-            Write-Host ""
-            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-            Write-Host "❌ EXCEPTION DURING SQL PROVISIONING" -ForegroundColor Red
-            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-            Write-Host ""
-            Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
-            Write-Host ""
-            Write-Host "Stack Trace:" -ForegroundColor Yellow
-            Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
-            Write-Host ""
-            Write-Error "SQL provisioning failed with exception: $($_.Exception.Message)"
-            exit 1
-          }
       
       - name: Upload Bootstrap Log
         if: always()
@@ -2415,6 +2407,67 @@ jobs:
             exit 1
           }
       
+      - name: Provision Azure SQL Database
+        if: success()
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║      PROVISION AZURE SQL DATABASE FOR PRODUCTION              ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+          
+          try {
+            Write-Host "🗄️  Provisioning SQL Database for production environment..." -ForegroundColor Cyan
+            Write-Host ""
+            Write-Host "📋 Configuration:" -ForegroundColor Yellow
+            Write-Host "  Environment: prod" -ForegroundColor Gray
+            Write-Host "  Resource Group: rg-orderprocessing-prod" -ForegroundColor Gray
+            Write-Host "  SQL Server: orderprocessing-sql-prod" -ForegroundColor Gray
+            Write-Host "  Database: OrderProcessingSystem_Prod" -ForegroundColor Gray
+            Write-Host "  Location: centralindia" -ForegroundColor Gray
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+            Write-Host ""
+            
+            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment prod -BaseName orderprocessing -Location centralindia
+            
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host ""
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host "❌ SQL PROVISIONING FAILED" -ForegroundColor Red
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Red
+              Write-Host "Script: ./Resources/Azure-Deployment/provision-azure-sql.ps1" -ForegroundColor Gray
+              Write-Host ""
+              Write-Error "SQL provisioning failed with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+            }
+            
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host "✅ AZURE SQL DATABASE PROVISIONED SUCCESSFULLY" -ForegroundColor Green
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+            Write-Host ""
+          }
+          catch {
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING SQL PROVISIONING" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Stack Trace:" -ForegroundColor Yellow
+            Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
+            Write-Host ""
+            Write-Error "SQL provisioning failed with exception: $($_.Exception.Message)"
+            exit 1
+          }
+      
       - name: Configure App Insights Connection String
         id: appinsights
         if: success()
@@ -2507,11 +2560,7 @@ jobs:
               Write-Host "    Error output: $secretOutput" -ForegroundColor Red
               Write-Host "" -ForegroundColor Gray
               Write-Host "    🔍 Troubleshooting:" -ForegroundColor Yellow
-              Write-Host "      1. Verify GitHub App has correct permissions:" -ForegroundColor White
-              Write-Host "         a) Go to: https://github.com/settings/apps → Your App → Permissions" -ForegroundColor Gray
-              Write-Host "         b) Under 'Repository permissions', set 'Secrets' to 'Read and write'" -ForegroundColor Gray
-              Write-Host "         c) Under 'Repository permissions', set 'Environments' to 'Read and write'" -ForegroundColor Gray
-              Write-Host "         d) Save changes and accept the new permissions in your repository" -ForegroundColor Gray
+              Write-Host "      1. Verify GitHub App has 'Secrets: Read and write' permission" -ForegroundColor White
               Write-Host "      2. Ensure GitHub App is installed on this repository" -ForegroundColor White
               Write-Host "      3. Check if 'prod' environment exists and doesn't require approval" -ForegroundColor White
               Write-Host "      4. Verify APP_ID and APP_PRIVATE_KEY secrets are correct" -ForegroundColor White
@@ -2519,8 +2568,8 @@ jobs:
               Write-Host "    📖 GitHub App Setup:" -ForegroundColor Cyan
               Write-Host "      Documentation/03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md" -ForegroundColor Gray
               Write-Host "" -ForegroundColor Gray
-              Write-Host "    ⚠️  App Insights secret configuration will be skipped - you can configure it manually later" -ForegroundColor Yellow
-              Write-Warning "Failed to configure App Insights connection string. Possible permission issue - see troubleshooting above."
+              Write-Error "Failed to configure App Insights connection string. GitHub App is configured but secret setting failed."
+              exit 1
             }
             
             Write-Host ""
@@ -2540,67 +2589,6 @@ jobs:
           
           Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           Write-Host ""
-      
-      - name: Provision Azure SQL Database
-        if: always() && !cancelled()
-        run: |
-          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-          Write-Host "║      PROVISION AZURE SQL DATABASE FOR PRODUCTION              ║" -ForegroundColor Cyan
-          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
-          Write-Host ""
-          Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
-          Write-Host ""
-          
-          try {
-            Write-Host "🗄️  Provisioning SQL Database for production environment..." -ForegroundColor Cyan
-            Write-Host ""
-            Write-Host "📋 Configuration:" -ForegroundColor Yellow
-            Write-Host "  Environment: prod" -ForegroundColor Gray
-            Write-Host "  Resource Group: rg-orderprocessing-prod" -ForegroundColor Gray
-            Write-Host "  SQL Server: orderprocessing-sql-prod" -ForegroundColor Gray
-            Write-Host "  Database: OrderProcessingSystem_Prod" -ForegroundColor Gray
-            Write-Host "  Location: centralindia" -ForegroundColor Gray
-            Write-Host ""
-            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
-            Write-Host ""
-            
-            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment prod -BaseName orderprocessing -Location centralindia
-            
-            if ($LASTEXITCODE -ne 0) {
-              Write-Host ""
-              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-              Write-Host "❌ SQL PROVISIONING FAILED" -ForegroundColor Red
-              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-              Write-Host ""
-              Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Red
-              Write-Host "Script: ./Resources/Azure-Deployment/provision-azure-sql.ps1" -ForegroundColor Gray
-              Write-Host ""
-              Write-Error "SQL provisioning failed with exit code $LASTEXITCODE"
-              exit $LASTEXITCODE
-            }
-            
-            Write-Host ""
-            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
-            Write-Host "✅ AZURE SQL DATABASE PROVISIONED SUCCESSFULLY" -ForegroundColor Green
-            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
-            Write-Host ""
-            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
-            Write-Host ""
-          }
-          catch {
-            Write-Host ""
-            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-            Write-Host "❌ EXCEPTION DURING SQL PROVISIONING" -ForegroundColor Red
-            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-            Write-Host ""
-            Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
-            Write-Host ""
-            Write-Host "Stack Trace:" -ForegroundColor Yellow
-            Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
-            Write-Host ""
-            Write-Error "SQL provisioning failed with exception: $($_.Exception.Message)"
-            exit 1
-          }
       
       - name: Upload Bootstrap Log
         if: always()
