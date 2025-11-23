@@ -104,7 +104,9 @@ if ($existingApp -and $existingApp.Count -gt 0) {
             Write-Host "  Attempting to retrieve app by name using filter..." -ForegroundColor Yellow
             
             # Try to get the app directly using filter (more reliable than URI identifier)
-            $getOutput = az ad app list --filter "displayName eq '$AppDisplayName'" 2>&1
+            # Escape single quotes in display name to prevent OData filter syntax errors
+            $escapedAppName = $AppDisplayName -replace "'", "''"
+            $getOutput = az ad app list --filter "displayName eq '$escapedAppName'" 2>&1
             if ($LASTEXITCODE -eq 0) {
                 $apps = $getOutput | ConvertFrom-Json
                 if ($apps -and $apps.Count -gt 0) {
