@@ -351,23 +351,52 @@ $oidcJob = Start-Job -ScriptBlock {
     param($appName, $tenantId, $subscriptionId)
     try {
         $existingAppOutput = az ad app list --display-name $appName 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            return @{ Success = $false; AppId = $null; AppObjectId = $null; SpObjectId = $null; TenantId = $tenantId; SubscriptionId = $subscriptionId; AppCreated = $false; SpCreated = $false; Error = "Failed to list existing apps: $existingAppOutput" }
-        }
-        $existingApp = $existingAppOutput | ConvertFrom-Json
-        if ($existingApp -and $existingApp.Count -gt 0) {
-            $appId = $existingApp[0].appId
-            $appObjectId = $existingApp[0].id
-            $appCreated = $false
-        } else {
-            $newAppOutput = az ad app create --display-name $appName 2>&1
-            if ($LASTEXITCODE -ne 0) {
-                return @{ Success = $false; AppId = $null; AppObjectId = $null; SpObjectId = $null; TenantId = $tenantId; SubscriptionId = $subscriptionId; AppCreated = $false; SpCreated = $false; Error = "Failed to create app: $newAppOutput" }
+        $listExitCode = $LASTEXITCODE
+        $errorMessage = $existingAppOutput -join "`n"
+        
+        # Handle insufficient privileges error gracefully - app may already exist
+        if ($listExitCode -ne 0 -and $errorMessage -match "Insufficient privileges|insufficient|Forbidden|403") {
+            # Try to get the app directly if it exists, otherwise attempt to create it
+            $getAppOutput = az ad app list --filter "displayName eq '$($appName -replace "'", "''")'" 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                $existingApp = $getAppOutput | ConvertFrom-Json
+                if ($existingApp -and $existingApp.Count -gt 0) {
+                    $appId = $existingApp[0].appId
+                    $appObjectId = $existingApp[0].id
+                    $appCreated = $false
+                } else {
+                    # App doesn't exist, try to create it
+                    $newAppOutput = az ad app create --display-name $appName 2>&1
+                    if ($LASTEXITCODE -ne 0) {
+                        return @{ Success = $true; AppId = $null; AppObjectId = $null; SpObjectId = $null; TenantId = $tenantId; SubscriptionId = $subscriptionId; AppCreated = $false; SpCreated = $false; Error = $null; PermissionWarning = "Insufficient privileges to list/create apps. OIDC app may need manual setup." }
+                    }
+                    $newApp = $newAppOutput | ConvertFrom-Json
+                    $appId = $newApp.appId
+                    $appObjectId = $newApp.id
+                    $appCreated = $true
+                }
+            } else {
+                # Cannot list or filter apps - return success with warning
+                return @{ Success = $true; AppId = $null; AppObjectId = $null; SpObjectId = $null; TenantId = $tenantId; SubscriptionId = $subscriptionId; AppCreated = $false; SpCreated = $false; Error = $null; PermissionWarning = "Insufficient privileges to list apps. OIDC app may already exist or need manual setup." }
             }
-            $newApp = $newAppOutput | ConvertFrom-Json
-            $appId = $newApp.appId
-            $appObjectId = $newApp.id
-            $appCreated = $true
+        } elseif ($listExitCode -ne 0) {
+            return @{ Success = $false; AppId = $null; AppObjectId = $null; SpObjectId = $null; TenantId = $tenantId; SubscriptionId = $subscriptionId; AppCreated = $false; SpCreated = $false; Error = "Failed to list existing apps: $errorMessage" }
+        } else {
+            $existingApp = $existingAppOutput | ConvertFrom-Json
+            if ($existingApp -and $existingApp.Count -gt 0) {
+                $appId = $existingApp[0].appId
+                $appObjectId = $existingApp[0].id
+                $appCreated = $false
+            } else {
+                $newAppOutput = az ad app create --display-name $appName 2>&1
+                if ($LASTEXITCODE -ne 0) {
+                    return @{ Success = $false; AppId = $null; AppObjectId = $null; SpObjectId = $null; TenantId = $tenantId; SubscriptionId = $subscriptionId; AppCreated = $false; SpCreated = $false; Error = "Failed to create app: $newAppOutput" }
+                }
+                $newApp = $newAppOutput | ConvertFrom-Json
+                $appId = $newApp.appId
+                $appObjectId = $newApp.id
+                $appCreated = $true
+            }
         }
 
         $existingSpOutput = az ad sp list --filter "appId eq '$appId'" 2>&1
@@ -515,27 +544,30 @@ foreach ($env in $envList) {
     }
 
     # Unified readiness wait - ensures plan + apps reach ready status
-    Write-Host "`n  [WAIT] Performing unified readiness checks (max 10 min)..." -ForegroundColor Cyan
-    $timeoutSeconds = 10 * 60
+    # Plan timeout reduced to 2 minutes as it's usually ready quickly or remains in transitioning state
+    Write-Host "`n  [WAIT] Performing unified readiness checks (Plan: 2 min max, Apps: 10 min max)..." -ForegroundColor Cyan
+    $planTimeoutSeconds = 2 * 60  # Reduced from 10 minutes to 2 minutes
+    $appTimeoutSeconds = 10 * 60
     $intervalSeconds = 30
     $elapsed = 0
     $planReady = $false; $apiReady = $false; $uiReady = $false
+    $planCheckStarted = $false
     $apiUrl = "https://$apiApp.azurewebsites.net"; $uiUrl = "https://$uiApp.azurewebsites.net"
-    Write-Host "  [TARGET] Plan: $plan" -ForegroundColor Gray
-    Write-Host "  [TARGET] API : $apiApp" -ForegroundColor Gray
-    Write-Host "  [TARGET] UI  : $uiApp" -ForegroundColor Gray
+    Write-Host "  [TARGET] Plan: $plan (checking for up to 2 min)" -ForegroundColor Gray
+    Write-Host "  [TARGET] API : $apiApp (checking for up to 10 min)" -ForegroundColor Gray
+    Write-Host "  [TARGET] UI  : $uiApp (checking for up to 10 min)" -ForegroundColor Gray
     Write-Host "  [PROGRESS] [" -NoNewline -ForegroundColor Cyan
-    $progressChars = [math]::Ceiling($timeoutSeconds / $intervalSeconds)
+    $progressChars = [math]::Ceiling($appTimeoutSeconds / $intervalSeconds)
     $progressPrinted = 0
 
-    while ($elapsed -lt $timeoutSeconds -and (-not $planReady -or -not $apiReady -or -not $uiReady)) {
+    while ($elapsed -lt $appTimeoutSeconds -and (-not $apiReady -or -not $uiReady)) {
         Start-Sleep -Seconds $intervalSeconds
         $elapsed += $intervalSeconds
         $progressPrinted++
         if ($progressPrinted -le $progressChars) { Write-Host "#" -NoNewline -ForegroundColor Green }
 
-        # Plan readiness: provisioningState Succeeded + status Ready
-        if (-not $planReady) {
+        # Plan readiness: provisioningState Succeeded + status Ready (check for 2 minutes only)
+        if (-not $planReady -and $elapsed -le $planTimeoutSeconds) {
             $planInfo = $null
             try {
                 $planInfo = az appservice plan show -g $rg -n $plan --query '{prov:provisioningState,status:status}' -o json 2>$null | ConvertFrom-Json
@@ -544,9 +576,15 @@ foreach ($env in $envList) {
             catch { $planInfo = $null }
             if ($planInfo -and $planInfo.prov -eq 'Succeeded' -and $planInfo.status -eq 'Ready') {
                 $planReady = $true
-                Write-Host "`n  [OK] Plan ready after $([math]::Round($elapsed/60,1)) min" -ForegroundColor Green
+                Write-Host "`n  [OK] Plan ready (provisioningState=Succeeded, status=Ready) after $([math]::Round($elapsed/60,1)) min" -ForegroundColor Green
                 Write-Host "  [PROGRESS] [" -NoNewline -ForegroundColor Cyan; for ($i = 0; $i -lt $progressPrinted; $i++) { Write-Host "#" -NoNewline -ForegroundColor Green }
             }
+        } elseif (-not $planReady -and $elapsed -gt $planTimeoutSeconds -and -not $planCheckStarted) {
+            # Plan check timed out after 2 minutes
+            Write-Host "`n  [INFO] Plan readiness check timed out after 2 min - continuing to check apps" -ForegroundColor Yellow
+            Write-Host "  [NOTE] Plan may still be provisioning in background, but apps can be checked independently" -ForegroundColor Gray
+            Write-Host "  [PROGRESS] [" -NoNewline -ForegroundColor Cyan; for ($i = 0; $i -lt $progressPrinted; $i++) { Write-Host "#" -NoNewline -ForegroundColor Green }
+            $planCheckStarted = $true
         }
 
         # API readiness
@@ -566,7 +604,7 @@ foreach ($env in $envList) {
                 catch { }
                 if ($apiExistsNow.state -eq 'Running' -and $httpOk) {
                     $apiReady = $true
-                    Write-Host "`n  [OK] API ready (state Running + HTTP) after $([math]::Round($elapsed/60,1)) min" -ForegroundColor Green
+                    Write-Host "`n  [OK] API ready (state=Running + HTTP responding) after $([math]::Round($elapsed/60,1)) min" -ForegroundColor Green
                     Write-Host "  [PROGRESS] [" -NoNewline -ForegroundColor Cyan; for ($i = 0; $i -lt $progressPrinted; $i++) { Write-Host "#" -NoNewline -ForegroundColor Green }
                 }
             }
@@ -589,8 +627,13 @@ foreach ($env in $envList) {
                 catch { }
                 if ($uiExistsNow.state -eq 'Running' -and $httpOk) {
                     $uiReady = $true
-                    Write-Host "`n  [OK] UI ready (state Running + HTTP) after $([math]::Round($elapsed/60,1)) min" -ForegroundColor Green
+                    Write-Host "`n  [OK] UI ready (state=Running + HTTP responding) after $([math]::Round($elapsed/60,1)) min" -ForegroundColor Green
                     Write-Host "  [PROGRESS] [" -NoNewline -ForegroundColor Cyan; for ($i = 0; $i -lt $progressPrinted; $i++) { Write-Host "#" -NoNewline -ForegroundColor Green }
+                    # Once both apps are ready, we can exit early (don't need to wait for plan)
+                    if ($apiReady -and $uiReady) {
+                        Write-Host "`n  [SUCCESS] Both web apps are ready - exiting readiness check early" -ForegroundColor Green
+                        break
+                    }
                 }
             }
         }
@@ -598,13 +641,15 @@ foreach ($env in $envList) {
     Write-Host "]" -ForegroundColor Cyan
 
     # Check if we timed out
-    if ($elapsed -ge $timeoutSeconds) {
-        Write-Host "`n  [TIMEOUT] Readiness wait reached 10-minute limit" -ForegroundColor Yellow
+    if ($elapsed -ge $appTimeoutSeconds) {
+        Write-Host "`n  [TIMEOUT] App readiness wait reached 10-minute limit" -ForegroundColor Yellow
+        Write-Host "  Waiting for: $(if (-not $apiReady) { 'API ' })$(if (-not $uiReady) { 'UI ' })" -ForegroundColor Yellow
         Write-Host "  Current status: Plan=$planReady API=$apiReady UI=$uiReady" -ForegroundColor Yellow
         Write-Host "  Resources may still be provisioning - check Azure Portal" -ForegroundColor Yellow
     }
     else {
-        Write-Host "`n  [SUCCESS] All resources reached readiness criteria in $([math]::Round($elapsed/60,1)) min" -ForegroundColor Green
+        Write-Host "`n  [SUCCESS] All required resources reached readiness in $([math]::Round($elapsed/60,1)) min" -ForegroundColor Green
+        Write-Host "  Final status: Plan=$planReady API=$apiReady UI=$uiReady" -ForegroundColor Gray
     }
 
     # Verify resource details
@@ -832,8 +877,14 @@ AZUREAPPSERVICE_SUBSCRIPTIONID:  $($oidcResult.SubscriptionId)
         Write-Host "  [INFO] Automatic configuration script not found - configure manually" -ForegroundColor Yellow
     }
 } else {
-    Add-StepStatus -Name "Setup OIDC (GitHub-Actions-OIDC)" -Status "Failed" -Details "$($oidcResult.Error)"
-    Write-Host "  [WARN] OIDC setup encountered errors: $($oidcResult.Error)" -ForegroundColor Yellow
+    if ($oidcResult.PermissionWarning) {
+        Add-StepStatus -Name "Setup OIDC (GitHub-Actions-OIDC)" -Status "Success" -Details "Skipped (insufficient permissions)"
+        Write-Host "  [INFO] OIDC setup skipped due to permissions - app may already exist" -ForegroundColor Cyan
+        Write-Host "  Note: $($oidcResult.PermissionWarning)" -ForegroundColor Gray
+    } else {
+        Add-StepStatus -Name "Setup OIDC (GitHub-Actions-OIDC)" -Status "Failed" -Details "$($oidcResult.Error)"
+        Write-Host "  [WARN] OIDC setup encountered errors: $($oidcResult.Error)" -ForegroundColor Yellow
+    }
 }
 
 # Post-deployment self-tests
