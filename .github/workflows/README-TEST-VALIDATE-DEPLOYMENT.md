@@ -26,11 +26,12 @@ The `test-validate-deployment.yml` workflow is a **standalone testing workflow**
 
    | Parameter | Description | Default | Options |
    |-----------|-------------|---------|---------|
-   | **environment** | Target environment to test | dev | dev, staging, prod |
+   | **environment** | Target environment to test | dev | dev, staging, prod, uat |
    | **run-whatif** | Test Bicep what-if analysis | true | true, false |
    | **verify-oidc** | Test OIDC credentials verification | true | true, false |
    | **check-config** | Test SharedSettings consistency | true | true, false |
    | **test-all-environments** | Test across all environments | false | true, false |
+   | **oidc-app-name** | Azure AD App Registration name | GitHub-Actions-OIDC | Any app name |
 
 4. **Click "Run workflow"**
 
@@ -322,10 +323,16 @@ GitHub-Actions-OIDC app not found; skipping test
 ```
 
 **Solutions:**
-1. ✅ Run OIDC setup: `setup-github-oidc.ps1`
-2. ✅ Check Azure AD app registrations manually
-3. ✅ Verify script has correct display name
-4. ✅ Ensure Azure AD permissions granted
+1. ✅ **If using a different app name**: Set the `oidc-app-name` parameter
+   ```yaml
+   oidc-app-name: 'xydatalabsgithubapp'  # or your custom app name
+   ```
+2. ✅ Run OIDC setup: `setup-github-oidc.ps1`
+3. ✅ Check Azure AD app registrations manually
+4. ✅ Verify script has correct display name
+5. ✅ Ensure Azure AD permissions granted
+
+**Note:** If you created your Azure AD app with a custom name (e.g., `xydatalabsgithubapp`), you must specify it using the `oidc-app-name` parameter when running the workflow.
 
 ---
 

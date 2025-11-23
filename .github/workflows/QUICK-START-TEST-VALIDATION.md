@@ -76,6 +76,11 @@ verify-oidc: false     # Skip OIDC check
 check-config: false    # Skip config validation
 ```
 
+### Use Custom Azure AD App Name
+```yaml
+oidc-app-name: xydatalabsgithubapp  # If you named your app differently
+```
+
 ---
 
 ## 🆘 Common Issues
@@ -96,6 +101,12 @@ check-config: false    # Skip config validation
 - Check what resources would be deleted
 - Verify it's intentional before deploying
 - If unexpected, check your Bicep template changes
+
+### "OIDC App Not Found"
+**Fix:** Specify your custom app name
+- If you named your Azure AD app differently (e.g., `xydatalabsgithubapp`)
+- Add parameter: `oidc-app-name: xydatalabsgithubapp`
+- Default expects: `GitHub-Actions-OIDC`
 
 ---
 

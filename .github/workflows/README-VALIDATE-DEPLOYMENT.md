@@ -36,6 +36,7 @@ jobs:
       run-whatif: true
       verify-oidc: false
       check-config: true
+      oidc-app-name: 'GitHub-Actions-OIDC'  # Optional: use custom app name if needed
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
       AZURE_TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
@@ -50,6 +51,7 @@ jobs:
 | `run-whatif` | boolean | No | true | Execute Bicep what-if analysis |
 | `verify-oidc` | boolean | No | false | Verify OIDC federated credentials |
 | `check-config` | boolean | No | true | Validate sharedsettings consistency |
+| `oidc-app-name` | string | No | GitHub-Actions-OIDC | Azure AD App Registration name for OIDC |
 
 ## Secrets
 

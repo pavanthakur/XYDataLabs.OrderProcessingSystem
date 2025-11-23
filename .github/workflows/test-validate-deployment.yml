@@ -33,6 +33,11 @@ on:
         required: false
         type: boolean
         default: false
+      oidc-app-name:
+        description: 'Azure AD App Registration name for OIDC'
+        required: false
+        type: string
+        default: 'GitHub-Actions-OIDC'
   pull_request:
     paths:
       - '.github/workflows/validate-deployment.yml'
@@ -126,10 +131,12 @@ jobs:
         run: |
           Write-Host "=== Testing OIDC Credentials Verification ===" -ForegroundColor Cyan
 
-          $appId = az ad app list --display-name "GitHub-Actions-OIDC" --query "[0].id" -o tsv
+          $appName = "${{ inputs.oidc-app-name || 'GitHub-Actions-OIDC' }}"
+          Write-Host "Looking for Azure AD app: $appName" -ForegroundColor Yellow
+          $appId = az ad app list --display-name "$appName" --query "[0].id" -o tsv
 
           if ($appId) {
-            Write-Host "Found GitHub-Actions-OIDC app: $appId" -ForegroundColor Green
+            Write-Host "Found $appName app: $appId" -ForegroundColor Green
             ./Resources/Azure-Deployment/verify-oidc-credentials.ps1 -AppObjectId $appId
 
             if ($LASTEXITCODE -eq 0) {
@@ -140,8 +147,8 @@ jobs:
               echo "### ⚠️ OIDC Verification: ISSUES FOUND" >> $env:GITHUB_STEP_SUMMARY
             }
           } else {
-            Write-Host "⚠️ GitHub-Actions-OIDC app not found; skipping test" -ForegroundColor Yellow
-            echo "### ⚠️ OIDC Verification: APP NOT FOUND" >> $env:GITHUB_STEP_SUMMARY
+            Write-Host "⚠️ $appName app not found; skipping test" -ForegroundColor Yellow
+            echo "### ⚠️ OIDC Verification: APP NOT FOUND ($appName)" >> $env:GITHUB_STEP_SUMMARY
           }
 
       - name: Test SharedSettings Consistency
@@ -225,6 +232,7 @@ jobs:
       run-whatif: ${{ inputs.run-whatif != false }}
       verify-oidc: ${{ inputs.verify-oidc != false }}
       check-config: ${{ inputs.check-config != false }}
+      oidc-app-name: ${{ inputs.oidc-app-name || 'GitHub-Actions-OIDC' }}
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
       AZURE_TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
