@@ -566,6 +566,7 @@ jobs:
       always() &&
       inputs.setupGitHubApp &&
       !cancelled() &&
+      needs.validate-inputs.result == 'success' &&
       (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped')
     needs: [validate-inputs, setup-oidc]
     runs-on: windows-latest
