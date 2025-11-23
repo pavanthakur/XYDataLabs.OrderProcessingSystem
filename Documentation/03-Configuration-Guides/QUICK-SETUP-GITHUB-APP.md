@@ -79,9 +79,21 @@ On the same installation page, scroll to **"Permissions"** section and verify:
 2. Repository permissions → **Secrets** → Change to **"Read and write"**
 3. Save changes → Accept new permissions when prompted
 
+#### 4c. Ignore "Danger zone" Section ✅
+
+At the bottom of the installation page, you'll see a red **"Danger zone"** section with "Suspend" and "Uninstall" buttons.
+
+> **ℹ️ This is NORMAL** - Every GitHub App installation shows this section. **No action required.**
+
+- **Suspend** - Temporarily blocks app access (only use if you suspect a security issue)
+- **Uninstall** - Permanently removes the app (only use if switching authentication methods)
+
+**For normal operation, ignore this section completely.** Your app is properly configured.
+
 > **Why this matters**: 
 > - Without repository installation → Workflow cannot authenticate
 > - Without Secrets permission → Workflow cannot read/write secrets (authentication will fail)
+> - "Danger zone" is just a safety feature - you don't need to interact with it
 
 ### Step 5: Add Secrets to Repository (1 minute)
 
