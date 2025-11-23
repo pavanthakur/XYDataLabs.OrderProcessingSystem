@@ -77,7 +77,16 @@ On the same installation page, scroll to **"Permissions"** section and verify:
 **If "Secrets" permission is missing:**
 1. Go to: https://github.com/settings/apps/[your-app-name]/permissions
 2. Repository permissions → **Secrets** → Change to **"Read and write"**
-3. Save changes → Accept new permissions when prompted
+3. Save changes. You will need to approve the updated permissions for your repository again.
+4. Revisit the app installation link to complete approval: https://github.com/settings/apps/[your-app-name]/installations
+
+---
+### Quick Troubleshooting Checklist
+
+1. **Check GitHub App permissions** (Secrets: Read and write)
+2. **Verify app is installed on repository**: https://github.com/settings/installations
+3. **Review GitHub App configuration**: Documentation/03-Configuration-Guides/GITHUB-APP-AUTHENTICATION.md
+---
 
 #### 4c. Ignore "Danger zone" Section ✅
 
