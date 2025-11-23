@@ -10,12 +10,25 @@ Eliminate PAT token expiration by using GitHub App authentication (tokens never 
 1. Go to: https://github.com/settings/apps/new
 2. Fill in:
    ```
-   Name: YourRepo-SecretManager
+   Name: YourRepo-SecretManager (e.g., XYDataLabsGitHubApp)
    Homepage URL: https://github.com/[your-username]/[your-repo]
    Webhook: UNCHECK "Active"
    ```
-3. **Permissions** → Repository permissions:
-   - Secrets: **Read and write** ✅
+3. **Permissions** → Repository permissions (⚠️ CRITICAL - Set all 4):
+   
+   | Permission | Access Level | Required For |
+   |------------|--------------|--------------|
+   | **Actions** | Read and write ✅ | Trigger workflows, manage workflow runs |
+   | **Pull requests** | Read and write ✅ | Create/update PRs in workflows |
+   | **Secrets** | Read and write ✅ | **CRITICAL** - Read/write repository & environment secrets |
+   | **Workflows** | Read and write ✅ | Modify workflow files, dispatch workflow runs |
+
+   **To set permissions:**
+   - Scroll to "Repository permissions" section
+   - Find each permission above
+   - Click dropdown → Select **"Read and write"**
+   - Leave all other permissions as "No access" (unless needed for your specific use case)
+
 4. Click **Create GitHub App**
 
 ### Step 2: Generate Private Key (30 seconds)
@@ -31,9 +44,11 @@ Eliminate PAT token expiration by using GitHub App authentication (tokens never 
 3. Choose **Only select repositories** → select your repository
 4. Click **Install**
 
-### Step 4: Verify Installation (IMPORTANT - 15 seconds)
+### Step 4: Verify Installation & Permissions (IMPORTANT - 30 seconds)
 
-After installation completes, you MUST verify the app is properly installed:
+After installation completes, you MUST verify both installation and permissions:
+
+#### 4a. Verify Repository Installation
 
 1. Go to: https://github.com/settings/apps/[your-app-name]/installations
    - Example: https://github.com/settings/apps/xydatalabsgithubapp/installations
@@ -49,7 +64,24 @@ After installation completes, you MUST verify the app is properly installed:
                                          Installation ID
    ```
 
-> **Why this matters**: The workflow cannot authenticate without a valid installation. This step confirms the app has access to your repository.
+#### 4b. Verify Permissions (CRITICAL ⚠️)
+
+On the same installation page, scroll to **"Permissions"** section and verify:
+
+| Permission | Should Show | If Missing |
+|------------|-------------|------------|
+| ✅ Read and write access to actions, pull requests, and workflows | Present | Go to app settings → Permissions & events |
+| ✅ Read and write access to secrets | **CRITICAL** | Add this permission immediately |
+| ✅ Read access to metadata | Present (automatic) | N/A |
+
+**If "Secrets" permission is missing:**
+1. Go to: https://github.com/settings/apps/[your-app-name]/permissions
+2. Repository permissions → **Secrets** → Change to **"Read and write"**
+3. Save changes → Accept new permissions when prompted
+
+> **Why this matters**: 
+> - Without repository installation → Workflow cannot authenticate
+> - Without Secrets permission → Workflow cannot read/write secrets (authentication will fail)
 
 ### Step 5: Add Secrets to Repository (1 minute)
 
