@@ -515,27 +515,30 @@ foreach ($env in $envList) {
     }
 
     # Unified readiness wait - ensures plan + apps reach ready status
-    Write-Host "`n  [WAIT] Performing unified readiness checks (max 10 min)..." -ForegroundColor Cyan
-    $timeoutSeconds = 10 * 60
+    # Plan timeout reduced to 2 minutes as F1 tier plans rarely reach fully Ready state
+    Write-Host "`n  [WAIT] Performing unified readiness checks (Plan: 2 min, Apps: 10 min)..." -ForegroundColor Cyan
+    $planTimeoutSeconds = 2 * 60  # Reduced from 10 minutes to 2 minutes for Plan
+    $appTimeoutSeconds = 10 * 60
     $intervalSeconds = 30
     $elapsed = 0
     $planReady = $false; $apiReady = $false; $uiReady = $false
+    $planTimeoutMessageShown = $false
     $apiUrl = "https://$apiApp.azurewebsites.net"; $uiUrl = "https://$uiApp.azurewebsites.net"
-    Write-Host "  [TARGET] Plan: $plan" -ForegroundColor Gray
-    Write-Host "  [TARGET] API : $apiApp" -ForegroundColor Gray
-    Write-Host "  [TARGET] UI  : $uiApp" -ForegroundColor Gray
+    Write-Host "  [TARGET] Plan: $plan (checking provisioningState and status)" -ForegroundColor Gray
+    Write-Host "  [TARGET] API : $apiApp (checking state and HTTP response)" -ForegroundColor Gray
+    Write-Host "  [TARGET] UI  : $uiApp (checking state and HTTP response)" -ForegroundColor Gray
     Write-Host "  [PROGRESS] [" -NoNewline -ForegroundColor Cyan
-    $progressChars = [math]::Ceiling($timeoutSeconds / $intervalSeconds)
+    $progressChars = [math]::Ceiling($appTimeoutSeconds / $intervalSeconds)
     $progressPrinted = 0
 
-    while ($elapsed -lt $timeoutSeconds -and (-not $planReady -or -not $apiReady -or -not $uiReady)) {
+    while ($elapsed -lt $appTimeoutSeconds -and (-not $apiReady -or -not $uiReady)) {
         Start-Sleep -Seconds $intervalSeconds
         $elapsed += $intervalSeconds
         $progressPrinted++
         if ($progressPrinted -le $progressChars) { Write-Host "#" -NoNewline -ForegroundColor Green }
 
-        # Plan readiness: provisioningState Succeeded + status Ready
-        if (-not $planReady) {
+        # Plan readiness: provisioningState Succeeded + status Ready (check for 2 minutes only)
+        if (-not $planReady -and $elapsed -le $planTimeoutSeconds) {
             $planInfo = $null
             try {
                 $planInfo = az appservice plan show -g $rg -n $plan --query '{prov:provisioningState,status:status}' -o json 2>$null | ConvertFrom-Json
@@ -544,9 +547,15 @@ foreach ($env in $envList) {
             catch { $planInfo = $null }
             if ($planInfo -and $planInfo.prov -eq 'Succeeded' -and $planInfo.status -eq 'Ready') {
                 $planReady = $true
-                Write-Host "`n  [OK] Plan ready after $([math]::Round($elapsed/60,1)) min" -ForegroundColor Green
+                Write-Host "`n  [OK] Plan ready (provisioningState=Succeeded, status=Ready) after $([math]::Round($elapsed/60,1)) min" -ForegroundColor Green
                 Write-Host "  [PROGRESS] [" -NoNewline -ForegroundColor Cyan; for ($i = 0; $i -lt $progressPrinted; $i++) { Write-Host "#" -NoNewline -ForegroundColor Green }
             }
+        } elseif (-not $planReady -and $elapsed -gt $planTimeoutSeconds -and -not $planTimeoutMessageShown) {
+            # Plan check timed out after 2 minutes - show message once
+            Write-Host "`n  [INFO] Plan readiness check timed out after 2 min - continuing with app checks" -ForegroundColor Yellow
+            Write-Host "  [NOTE] Plan may still be provisioning in background (F1 tier plans rarely reach fully Ready state)" -ForegroundColor Gray
+            Write-Host "  [PROGRESS] [" -NoNewline -ForegroundColor Cyan; for ($i = 0; $i -lt $progressPrinted; $i++) { Write-Host "#" -NoNewline -ForegroundColor Green }
+            $planTimeoutMessageShown = $true
         }
 
         # API readiness
@@ -566,7 +575,7 @@ foreach ($env in $envList) {
                 catch { }
                 if ($apiExistsNow.state -eq 'Running' -and $httpOk) {
                     $apiReady = $true
-                    Write-Host "`n  [OK] API ready (state Running + HTTP) after $([math]::Round($elapsed/60,1)) min" -ForegroundColor Green
+                    Write-Host "`n  [OK] API ready (state=Running + HTTP responding) after $([math]::Round($elapsed/60,1)) min" -ForegroundColor Green
                     Write-Host "  [PROGRESS] [" -NoNewline -ForegroundColor Cyan; for ($i = 0; $i -lt $progressPrinted; $i++) { Write-Host "#" -NoNewline -ForegroundColor Green }
                 }
             }
@@ -589,8 +598,13 @@ foreach ($env in $envList) {
                 catch { }
                 if ($uiExistsNow.state -eq 'Running' -and $httpOk) {
                     $uiReady = $true
-                    Write-Host "`n  [OK] UI ready (state Running + HTTP) after $([math]::Round($elapsed/60,1)) min" -ForegroundColor Green
+                    Write-Host "`n  [OK] UI ready (state=Running + HTTP responding) after $([math]::Round($elapsed/60,1)) min" -ForegroundColor Green
                     Write-Host "  [PROGRESS] [" -NoNewline -ForegroundColor Cyan; for ($i = 0; $i -lt $progressPrinted; $i++) { Write-Host "#" -NoNewline -ForegroundColor Green }
+                    # Both apps are ready - exit early
+                    if ($apiReady -and $uiReady) {
+                        Write-Host "`n  [SUCCESS] Both web apps are ready - exiting readiness check early" -ForegroundColor Green
+                        break
+                    }
                 }
             }
         }
@@ -598,13 +612,15 @@ foreach ($env in $envList) {
     Write-Host "]" -ForegroundColor Cyan
 
     # Check if we timed out
-    if ($elapsed -ge $timeoutSeconds) {
-        Write-Host "`n  [TIMEOUT] Readiness wait reached 10-minute limit" -ForegroundColor Yellow
+    if ($elapsed -ge $appTimeoutSeconds) {
+        Write-Host "`n  [TIMEOUT] App readiness wait reached 10-minute limit" -ForegroundColor Yellow
+        Write-Host "  Waiting for: $(if (-not $apiReady) { 'API ' })$(if (-not $uiReady) { 'UI ' })" -ForegroundColor Yellow
         Write-Host "  Current status: Plan=$planReady API=$apiReady UI=$uiReady" -ForegroundColor Yellow
         Write-Host "  Resources may still be provisioning - check Azure Portal" -ForegroundColor Yellow
     }
     else {
-        Write-Host "`n  [SUCCESS] All resources reached readiness criteria in $([math]::Round($elapsed/60,1)) min" -ForegroundColor Green
+        Write-Host "`n  [SUCCESS] All required resources reached readiness in $([math]::Round($elapsed/60,1)) min" -ForegroundColor Green
+        Write-Host "  Final status: Plan=$planReady API=$apiReady UI=$uiReady" -ForegroundColor Gray
     }
 
     # Verify resource details
