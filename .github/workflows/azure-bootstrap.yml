@@ -1457,6 +1457,10 @@ jobs:
           
           Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           Write-Host ""
+          
+          # Exit with 0 to ensure script success even if gh commands had non-zero exit codes
+          # Environment secret verification is informational; missing environments are expected during initial setup
+          exit 0
   
   bootstrap-dev:
     name: Bootstrap Dev Environment
