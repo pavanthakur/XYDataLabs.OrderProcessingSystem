@@ -1740,25 +1740,25 @@ jobs:
             if ($secretExitCode -eq 0) {
               Write-Host "    ✅ App Insights connection string configured" -ForegroundColor Green
             } else {
-              Write-Host "    ⚠️  Failed to set secret (exit code: $secretExitCode)" -ForegroundColor Yellow
-              Write-Host "    Error output: $secretOutput" -ForegroundColor Gray
               Write-Host "" -ForegroundColor Gray
-              Write-Host "    Possible reasons:" -ForegroundColor Yellow
-              Write-Host "      - GitHub App token lacks 'Secrets' write permission" -ForegroundColor Gray
-              Write-Host "      - Environment 'dev' doesn't exist or requires approval" -ForegroundColor Gray
-              Write-Host "      - GitHub App not installed on this repository" -ForegroundColor Gray
+              Write-Host "    ❌ Failed to set secret (exit code: $secretExitCode)" -ForegroundColor Red
+              Write-Host "    Error output: $secretOutput" -ForegroundColor Red
               Write-Host "" -ForegroundColor Gray
-              Write-Host "    📋 Manual Configuration:" -ForegroundColor Cyan
-              Write-Host "      1. Go to: https://github.com/${{ github.repository }}/settings/environments" -ForegroundColor White
-              Write-Host "      2. Click on 'dev' environment (or create it)" -ForegroundColor White
-              Write-Host "      3. Add secret: APPLICATIONINSIGHTS_CONNECTION_STRING" -ForegroundColor White
-              Write-Host "      4. Paste the connection string from Azure Portal" -ForegroundColor White
-              Write-Host ""
+              Write-Host "    🔍 Troubleshooting:" -ForegroundColor Yellow
+              Write-Host "      1. Verify GitHub App has 'Secrets: Read and write' permission" -ForegroundColor White
+              Write-Host "      2. Ensure GitHub App is installed on this repository" -ForegroundColor White
+              Write-Host "      3. Check if 'dev' environment exists and doesn't require approval" -ForegroundColor White
+              Write-Host "      4. Verify APP_ID and APP_PRIVATE_KEY secrets are correct" -ForegroundColor White
+              Write-Host "" -ForegroundColor Gray
+              Write-Host "    📖 GitHub App Setup:" -ForegroundColor Cyan
+              Write-Host "      Documentation/03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md" -ForegroundColor Gray
+              Write-Host "" -ForegroundColor Gray
+              Write-Error "Failed to configure App Insights connection string. GitHub App is configured but secret setting failed."
+              exit 1
             }
             
             Write-Host ""
-            Write-Host "✅ App Insights configuration complete" -ForegroundColor Green
-            Write-Host "   (Secret setting: $(if ($secretExitCode -eq 0) { 'Success' } else { 'Requires manual action' }))" -ForegroundColor $(if ($secretExitCode -eq 0) { "Green" } else { "Yellow" })
+            Write-Host "✅ App Insights connection string configured successfully" -ForegroundColor Green
             Write-Host ""
             
           } catch {
@@ -2056,25 +2056,25 @@ jobs:
             if ($secretExitCode -eq 0) {
               Write-Host "    ✅ App Insights connection string configured" -ForegroundColor Green
             } else {
-              Write-Host "    ⚠️  Failed to set secret (exit code: $secretExitCode)" -ForegroundColor Yellow
-              Write-Host "    Error output: $secretOutput" -ForegroundColor Gray
               Write-Host "" -ForegroundColor Gray
-              Write-Host "    Possible reasons:" -ForegroundColor Yellow
-              Write-Host "      - GitHub App token lacks 'Secrets' write permission" -ForegroundColor Gray
-              Write-Host "      - Environment 'staging' doesn't exist or requires approval" -ForegroundColor Gray
-              Write-Host "      - GitHub App not installed on this repository" -ForegroundColor Gray
+              Write-Host "    ❌ Failed to set secret (exit code: $secretExitCode)" -ForegroundColor Red
+              Write-Host "    Error output: $secretOutput" -ForegroundColor Red
               Write-Host "" -ForegroundColor Gray
-              Write-Host "    📋 Manual Configuration:" -ForegroundColor Cyan
-              Write-Host "      1. Go to: https://github.com/${{ github.repository }}/settings/environments" -ForegroundColor White
-              Write-Host "      2. Click on 'staging' environment (or create it)" -ForegroundColor White
-              Write-Host "      3. Add secret: APPLICATIONINSIGHTS_CONNECTION_STRING" -ForegroundColor White
-              Write-Host "      4. Paste the connection string from Azure Portal" -ForegroundColor White
-              Write-Host ""
+              Write-Host "    🔍 Troubleshooting:" -ForegroundColor Yellow
+              Write-Host "      1. Verify GitHub App has 'Secrets: Read and write' permission" -ForegroundColor White
+              Write-Host "      2. Ensure GitHub App is installed on this repository" -ForegroundColor White
+              Write-Host "      3. Check if 'staging' environment exists and doesn't require approval" -ForegroundColor White
+              Write-Host "      4. Verify APP_ID and APP_PRIVATE_KEY secrets are correct" -ForegroundColor White
+              Write-Host "" -ForegroundColor Gray
+              Write-Host "    📖 GitHub App Setup:" -ForegroundColor Cyan
+              Write-Host "      Documentation/03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md" -ForegroundColor Gray
+              Write-Host "" -ForegroundColor Gray
+              Write-Error "Failed to configure App Insights connection string. GitHub App is configured but secret setting failed."
+              exit 1
             }
             
             Write-Host ""
-            Write-Host "✅ App Insights configuration complete" -ForegroundColor Green
-            Write-Host "   (Secret setting: $(if ($secretExitCode -eq 0) { 'Success' } else { 'Requires manual action' }))" -ForegroundColor $(if ($secretExitCode -eq 0) { "Green" } else { "Yellow" })
+            Write-Host "✅ App Insights connection string configured successfully" -ForegroundColor Green
             Write-Host ""
             
           } catch {
@@ -2372,25 +2372,25 @@ jobs:
             if ($secretExitCode -eq 0) {
               Write-Host "    ✅ App Insights connection string configured" -ForegroundColor Green
             } else {
-              Write-Host "    ⚠️  Failed to set secret (exit code: $secretExitCode)" -ForegroundColor Yellow
-              Write-Host "    Error output: $secretOutput" -ForegroundColor Gray
               Write-Host "" -ForegroundColor Gray
-              Write-Host "    Possible reasons:" -ForegroundColor Yellow
-              Write-Host "      - GitHub App token lacks 'Secrets' write permission" -ForegroundColor Gray
-              Write-Host "      - Environment 'prod' doesn't exist or requires approval" -ForegroundColor Gray
-              Write-Host "      - GitHub App not installed on this repository" -ForegroundColor Gray
+              Write-Host "    ❌ Failed to set secret (exit code: $secretExitCode)" -ForegroundColor Red
+              Write-Host "    Error output: $secretOutput" -ForegroundColor Red
               Write-Host "" -ForegroundColor Gray
-              Write-Host "    📋 Manual Configuration:" -ForegroundColor Cyan
-              Write-Host "      1. Go to: https://github.com/${{ github.repository }}/settings/environments" -ForegroundColor White
-              Write-Host "      2. Click on 'prod' environment (or create it)" -ForegroundColor White
-              Write-Host "      3. Add secret: APPLICATIONINSIGHTS_CONNECTION_STRING" -ForegroundColor White
-              Write-Host "      4. Paste the connection string from Azure Portal" -ForegroundColor White
-              Write-Host ""
+              Write-Host "    🔍 Troubleshooting:" -ForegroundColor Yellow
+              Write-Host "      1. Verify GitHub App has 'Secrets: Read and write' permission" -ForegroundColor White
+              Write-Host "      2. Ensure GitHub App is installed on this repository" -ForegroundColor White
+              Write-Host "      3. Check if 'prod' environment exists and doesn't require approval" -ForegroundColor White
+              Write-Host "      4. Verify APP_ID and APP_PRIVATE_KEY secrets are correct" -ForegroundColor White
+              Write-Host "" -ForegroundColor Gray
+              Write-Host "    📖 GitHub App Setup:" -ForegroundColor Cyan
+              Write-Host "      Documentation/03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md" -ForegroundColor Gray
+              Write-Host "" -ForegroundColor Gray
+              Write-Error "Failed to configure App Insights connection string. GitHub App is configured but secret setting failed."
+              exit 1
             }
             
             Write-Host ""
-            Write-Host "✅ App Insights configuration complete" -ForegroundColor Green
-            Write-Host "   (Secret setting: $(if ($secretExitCode -eq 0) { 'Success' } else { 'Requires manual action' }))" -ForegroundColor $(if ($secretExitCode -eq 0) { "Green" } else { "Yellow" })
+            Write-Host "✅ App Insights connection string configured successfully" -ForegroundColor Green
             Write-Host ""
             
           } catch {
