@@ -17,6 +17,26 @@ var planName = 'asp-${baseName}-${environment}'
 var apiName = '${githubOwner}-${baseName}-api-xyapp-${environment}'
 var uiName  = '${githubOwner}-${baseName}-ui-xyapp-${environment}'
 
+// App Insights configuration for App Services
+var appInsightsSettings = !empty(appInsightsConnectionString) ? [
+  {
+    name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+    value: appInsightsConnectionString
+  }
+  {
+    name: 'ApplicationInsightsAgent_EXTENSION_VERSION'
+    value: '~3'
+  }
+  {
+    name: 'APPINSIGHTS_INSTRUMENTATIONKEY'
+    value: appInsightsInstrumentationKey
+  }
+  {
+    name: 'XDT_MicrosoftApplicationInsights_Mode'
+    value: 'recommended'
+  }
+] : []
+
 resource plan 'Microsoft.Web/serverfarms@2023-12-01' = {
   name: planName
   location: location
@@ -41,24 +61,7 @@ resource apiApp 'Microsoft.Web/sites@2023-12-01' = {
     serverFarmId: plan.id
     siteConfig: {
       netFrameworkVersion: 'v8.0'
-      appSettings: !empty(appInsightsConnectionString) ? [
-        {
-          name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
-          value: appInsightsConnectionString
-        }
-        {
-          name: 'ApplicationInsightsAgent_EXTENSION_VERSION'
-          value: '~3'
-        }
-        {
-          name: 'APPINSIGHTS_INSTRUMENTATIONKEY'
-          value: appInsightsInstrumentationKey
-        }
-        {
-          name: 'XDT_MicrosoftApplicationInsights_Mode'
-          value: 'recommended'
-        }
-      ] : []
+      appSettings: appInsightsSettings
     }
     httpsOnly: true
   }
@@ -76,24 +79,7 @@ resource uiApp 'Microsoft.Web/sites@2023-12-01' = {
     serverFarmId: plan.id
     siteConfig: {
       netFrameworkVersion: 'v8.0'
-      appSettings: !empty(appInsightsConnectionString) ? [
-        {
-          name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
-          value: appInsightsConnectionString
-        }
-        {
-          name: 'ApplicationInsightsAgent_EXTENSION_VERSION'
-          value: '~3'
-        }
-        {
-          name: 'APPINSIGHTS_INSTRUMENTATIONKEY'
-          value: appInsightsInstrumentationKey
-        }
-        {
-          name: 'XDT_MicrosoftApplicationInsights_Mode'
-          value: 'recommended'
-        }
-      ] : []
+      appSettings: appInsightsSettings
     }
     httpsOnly: true
   }

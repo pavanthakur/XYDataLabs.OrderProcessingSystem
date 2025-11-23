@@ -71,13 +71,11 @@ if (!string.IsNullOrWhiteSpace(appInsightsConnectionString))
         options.EnableAdaptiveSampling = true;
         options.EnableQuickPulseMetricStream = true;
     });
-    Console.WriteLine($"[CONFIG] Application Insights enabled for {environmentName} environment");
-    Log.Information("Application Insights configured for {Environment} environment", environmentName);
+    Log.Information("[CONFIG] Application Insights enabled for {Environment} environment", environmentName);
 }
 else
 {
-    Console.WriteLine($"[CONFIG] Application Insights NOT configured - connection string missing");
-    Log.Warning("Application Insights connection string not found. Telemetry will not be collected.");
+    Log.Warning("[CONFIG] Application Insights NOT configured - connection string missing for {Environment} environment", environmentName);
 }
 
 builder.Services.AddCors(options =>
