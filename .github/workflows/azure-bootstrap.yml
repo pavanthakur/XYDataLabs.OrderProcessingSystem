@@ -37,6 +37,11 @@ on:
         required: true
         type: boolean
         default: true
+      oidcAppName:
+        description: 'Azure AD App Registration name for OIDC'
+        required: false
+        type: string
+        default: 'GitHub-Actions-OIDC'
 
 permissions:
   contents: write
@@ -263,7 +268,8 @@ jobs:
               -Branches $branches `
               -Environments $environments `
               -GitHubOwner "pavanthakur" `
-              -Repository "XYDataLabs.OrderProcessingSystem"
+              -Repository "XYDataLabs.OrderProcessingSystem" `
+              -AppDisplayName "${{ inputs.oidcAppName }}"
 
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
@@ -307,19 +313,20 @@ jobs:
             Write-Host "  ✅ Subscription retrieved" -ForegroundColor Green
 
             Write-Host "Fetching OIDC app registration..." -ForegroundColor Gray
-            $app = az ad app list --display-name "GitHub-Actions-OIDC" | ConvertFrom-Json
+            $oidcAppName = "${{ inputs.oidcAppName }}"
+            $app = az ad app list --display-name $oidcAppName | ConvertFrom-Json
             if (-not $app -or $app.Count -eq 0) {
               Write-Host ""
               Write-Host "❌ Failed to create or find OIDC app" -ForegroundColor Red
               Write-Host ""
-              Write-Host "App Name: GitHub-Actions-OIDC" -ForegroundColor Gray
+              Write-Host "App Name: $oidcAppName" -ForegroundColor Gray
               Write-Host ""
               Write-Host "Possible reasons:" -ForegroundColor Yellow
               Write-Host "  1. App creation failed in setup script" -ForegroundColor Gray
               Write-Host "  2. Insufficient Azure AD permissions" -ForegroundColor Gray
               Write-Host "  3. App name conflict" -ForegroundColor Gray
               Write-Host ""
-              Write-Error "Failed to create or find OIDC app 'GitHub-Actions-OIDC'"
+              Write-Error "Failed to create or find OIDC app '$oidcAppName'"
               exit 1
             }
             Write-Host "  ✅ OIDC app found" -ForegroundColor Green
@@ -804,7 +811,7 @@ jobs:
               Write-Host "  Troubleshooting:" -ForegroundColor Yellow
               Write-Host "    1. Review the 'Setup Azure OIDC' job logs" -ForegroundColor Gray
               Write-Host "    2. Verify the setup script ran successfully" -ForegroundColor Gray
-              Write-Host "    3. Check if Azure app was created: 'GitHub-Actions-OIDC'" -ForegroundColor Gray
+              Write-Host "    3. Check if Azure app was created: '${{ inputs.oidcAppName }}'" -ForegroundColor Gray
               Write-Host "    4. Re-run the workflow with 'Setup Azure OIDC' enabled" -ForegroundColor Gray
               Write-Host ""
               Write-Error "OIDC setup was enabled but no client ID was output. Check setup-oidc job logs."
