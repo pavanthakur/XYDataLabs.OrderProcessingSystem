@@ -8,6 +8,10 @@ param baseName string
 param githubOwner string
 @description('App Service Plan SKU')
 param sku string
+@description('App Insights Connection String (optional)')
+param appInsightsConnectionString string = ''
+@description('App Insights Instrumentation Key (optional)')
+param appInsightsInstrumentationKey string = ''
 
 var planName = 'asp-${baseName}-${environment}'
 var apiName = '${githubOwner}-${baseName}-api-xyapp-${environment}'
@@ -37,6 +41,24 @@ resource apiApp 'Microsoft.Web/sites@2023-12-01' = {
     serverFarmId: plan.id
     siteConfig: {
       netFrameworkVersion: 'v8.0'
+      appSettings: !empty(appInsightsConnectionString) ? [
+        {
+          name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+          value: appInsightsConnectionString
+        }
+        {
+          name: 'ApplicationInsightsAgent_EXTENSION_VERSION'
+          value: '~3'
+        }
+        {
+          name: 'APPINSIGHTS_INSTRUMENTATIONKEY'
+          value: appInsightsInstrumentationKey
+        }
+        {
+          name: 'XDT_MicrosoftApplicationInsights_Mode'
+          value: 'recommended'
+        }
+      ] : []
     }
     httpsOnly: true
   }
@@ -54,6 +76,24 @@ resource uiApp 'Microsoft.Web/sites@2023-12-01' = {
     serverFarmId: plan.id
     siteConfig: {
       netFrameworkVersion: 'v8.0'
+      appSettings: !empty(appInsightsConnectionString) ? [
+        {
+          name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+          value: appInsightsConnectionString
+        }
+        {
+          name: 'ApplicationInsightsAgent_EXTENSION_VERSION'
+          value: '~3'
+        }
+        {
+          name: 'APPINSIGHTS_INSTRUMENTATIONKEY'
+          value: appInsightsInstrumentationKey
+        }
+        {
+          name: 'XDT_MicrosoftApplicationInsights_Mode'
+          value: 'recommended'
+        }
+      ] : []
     }
     httpsOnly: true
   }

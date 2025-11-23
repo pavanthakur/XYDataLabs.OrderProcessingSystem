@@ -59,6 +59,27 @@ else
 
 builder.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>(); // Required for LoggingMiddleware
 
+// Configure Application Insights for environment-wise telemetry and logging
+var appInsightsConnectionString = builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"] 
+    ?? Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CONNECTION_STRING");
+
+if (!string.IsNullOrWhiteSpace(appInsightsConnectionString))
+{
+    builder.Services.AddApplicationInsightsTelemetry(options =>
+    {
+        options.ConnectionString = appInsightsConnectionString;
+        options.EnableAdaptiveSampling = true;
+        options.EnableQuickPulseMetricStream = true;
+    });
+    Console.WriteLine($"[CONFIG] Application Insights enabled for {environmentName} environment");
+    Log.Information("Application Insights configured for {Environment} environment", environmentName);
+}
+else
+{
+    Console.WriteLine($"[CONFIG] Application Insights NOT configured - connection string missing");
+    Log.Warning("Application Insights connection string not found. Telemetry will not be collected.");
+}
+
 builder.Services.AddCors(options =>
 {
     //options.AddPolicy("AllowPaymentUI", policy =>
