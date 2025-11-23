@@ -311,6 +311,35 @@ if ($SubscriptionId) { az account set --subscription $SubscriptionId | Out-Null 
 $sub = az account show | ConvertFrom-Json
 Write-Host "  Using Subscription: $($sub.name) ($($sub.id))" -ForegroundColor Green
 
+# Register required resource providers for Application Insights
+Write-Host "`n[1/7] Registering required Azure resource providers..." -ForegroundColor Yellow
+$requiredProviders = @('Microsoft.OperationalInsights', 'Microsoft.Insights')
+foreach ($provider in $requiredProviders) {
+    try {
+        Write-Host "  Checking provider: $provider..." -ForegroundColor Gray
+        $providerState = az provider show --namespace $provider --query "registrationState" -o tsv 2>$null
+        
+        if ($providerState -eq 'Registered') {
+            Write-Host "  [OK] Provider already registered: $provider" -ForegroundColor Green
+        } else {
+            Write-Host "  Registering provider: $provider..." -ForegroundColor Cyan
+            az provider register --namespace $provider --wait 2>&1 | Out-Null
+            
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "  [OK] Provider registered successfully: $provider" -ForegroundColor Green
+                Add-LogEntry -Phase 'providers' -Action "register-$provider" -Status 'ok'
+            } else {
+                Write-Host "  [WARN] Failed to register provider: $provider (may require subscription permissions)" -ForegroundColor Yellow
+                Add-LogEntry -Phase 'providers' -Action "register-$provider" -Status 'warning' -Detail 'Registration failed'
+            }
+        }
+    } catch {
+        Write-Host "  [WARN] Error checking/registering provider $provider : $($_.Exception.Message)" -ForegroundColor Yellow
+        Add-LogEntry -Phase 'providers' -Action "register-$provider" -Status 'error' -Detail $_.Exception.Message
+    }
+}
+Write-Host "  Provider registration check complete" -ForegroundColor Green
+
 $envList = @($Environment)
 if (-not $envList) { Write-Error "No environments specified."; exit 1 }
 Write-Host "[DEBUG] Processing environment: $Environment" -ForegroundColor Magenta
