@@ -334,7 +334,7 @@ foreach ($provider in $requiredProviders) {
             }
         }
     } catch {
-        Write-Host "  [WARN] Error checking/registering provider ${provider}: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "  [WARN] Error checking/registering provider $provider : $($_.Exception.Message)" -ForegroundColor Yellow
         Add-LogEntry -Phase 'providers' -Action "register-$provider" -Status 'error' -Detail $_.Exception.Message
     }
 }
