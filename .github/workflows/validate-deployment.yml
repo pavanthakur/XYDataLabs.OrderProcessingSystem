@@ -48,6 +48,11 @@ on:
         required: false
         type: boolean
         default: true
+      oidc-app-name:
+        description: 'Azure AD App Registration name for OIDC'
+        required: false
+        type: string
+        default: 'GitHub-Actions-OIDC'
     secrets:
       AZURE_CLIENT_ID:
         required: true
@@ -91,11 +96,14 @@ jobs:
         if: inputs.verify-oidc
         shell: powershell
         run: |
-          $appId = az ad app list --display-name "GitHub-Actions-OIDC" --query "[0].id" -o tsv
+          $appName = "${{ inputs.oidc-app-name || 'GitHub-Actions-OIDC' }}"
+          Write-Host "Looking for Azure AD app: $appName" -ForegroundColor Yellow
+          $appId = az ad app list --display-name "$appName" --query "[0].id" -o tsv
           if ($appId) {
+            Write-Host "Found app: $appName ($appId)" -ForegroundColor Green
             ./Resources/Azure-Deployment/verify-oidc-credentials.ps1 -AppObjectId $appId
           } else {
-            Write-Warning "GitHub-Actions-OIDC app not found; skipping OIDC verification"
+            Write-Warning "$appName app not found; skipping OIDC verification"
           }
         continue-on-error: true
 

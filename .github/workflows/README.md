@@ -9,6 +9,8 @@ This directory contains GitHub Actions workflows for automated CI/CD deployment 
 | Workflow | Triggers On | Deploys To | Description |
 |----------|-------------|------------|-------------|
 | `infra-deploy.yml` | Infrastructure changes or manual | dev/staging/prod | **[See README-INFRA-DEPLOY.md](./README-INFRA-DEPLOY.md)** - Deploys Bicep infrastructure with manual workflow dispatch |
+| `validate-deployment.yml` | Called by infra-deploy | Reusable workflow | **[See README-VALIDATE-DEPLOYMENT.md](./README-VALIDATE-DEPLOYMENT.md)** - Pre-deployment validation workflow |
+| `test-validate-deployment.yml` | Manual or PR changes | Test only | **[Quick Start](./QUICK-START-TEST-VALIDATION.md)** \| **[Full Docs](./README-TEST-VALIDATE-DEPLOYMENT.md)** - Tests validation workflow independently |
 | `deploy-api-to-azure.yml` | API/Backend code changes | All branches (dev/staging/main) | Builds and deploys API to environment-specific Azure Web App |
 | `deploy-ui-to-azure.yml` | UI/Frontend code changes | All branches (dev/staging/main) | Builds and deploys UI to environment-specific Azure Web App |
 | `docker-health.yml` | Docker script changes | main branch only | Validates Docker startup scripts |
@@ -333,14 +335,21 @@ act push -W .github/workflows/deploy-dev.yml
 
 | Date | Workflow | Change | Author |
 |------|----------|--------|--------|
+| 2025-11-21 | test-validate-deployment.yml | Added test workflow for pre-deployment validation | GitHub Copilot |
 | 2025-11-20 | All | Initial creation with OIDC authentication | GitHub Copilot |
 
 ---
 
 ## ✅ Next Steps
 
-### For Infrastructure Deployment (New!)
-**👉 Start here if testing infrastructure changes:**
+### For Testing Validation Workflow (New!)
+**👉 Start here to test pre-deployment validation:**
+1. **Read the guide**: [README-TEST-VALIDATE-DEPLOYMENT.md](./README-TEST-VALIDATE-DEPLOYMENT.md)
+2. **Run validation test**: Go to Actions → Test Pre-Deployment Validation → Run workflow
+3. **Review test results**: Check for configuration drift or issues
+
+### For Infrastructure Deployment
+**👉 After validation tests pass:**
 1. **Read the guide**: [README-INFRA-DEPLOY.md](./README-INFRA-DEPLOY.md)
 2. **Run dry run**: Go to Actions → Deploy Azure Infrastructure → Run workflow
 3. **Deploy infrastructure**: Set dry run = false after validation
@@ -371,6 +380,8 @@ After infrastructure is deployed:
 ---
 
 **Questions or Issues?** 
+- Validation Testing: See [README-TEST-VALIDATE-DEPLOYMENT.md](./README-TEST-VALIDATE-DEPLOYMENT.md)
+- Pre-Deployment Validation: See [README-VALIDATE-DEPLOYMENT.md](./README-VALIDATE-DEPLOYMENT.md)
 - Infrastructure: See [README-INFRA-DEPLOY.md](./README-INFRA-DEPLOY.md)
 - Application Deployment: Check [Bootstrap Workflow Summary](../../Documentation/Bootstrap-Workflow-Summary.md)
 - Full Learning Path: [Master Curriculum](../../Documentation/05-Self-Learning/Azure-Curriculum/1_MASTER_CURRICULUM.md)
