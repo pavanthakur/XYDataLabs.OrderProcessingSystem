@@ -1210,13 +1210,13 @@ jobs:
             # First, ensure the environment exists - create it if it doesn't
             Write-Host "    Checking if environment exists..." -ForegroundColor Gray
             try {
-              $envCheckResult = gh api -H "Accept: application/vnd.github+json" "repos/$owner/$repo/environments/$env_name" 2>&1
+              gh api -H "Accept: application/vnd.github+json" "repos/$owner/$repo/environments/$env_name" 2>&1 | Out-Null
               if ($LASTEXITCODE -eq 0) {
                 Write-Host "      ✅ Environment exists" -ForegroundColor Green
               } else {
                 Write-Host "      ⚠️  Environment doesn't exist, creating it..." -ForegroundColor Yellow
                 # Create the environment using GitHub API
-                $createResult = gh api --method PUT -H "Accept: application/vnd.github+json" "repos/$owner/$repo/environments/$env_name" 2>&1
+                gh api --method PUT -H "Accept: application/vnd.github+json" "repos/$owner/$repo/environments/$env_name" 2>&1 | Out-Null
                 if ($LASTEXITCODE -eq 0) {
                   Write-Host "      ✅ Environment created successfully" -ForegroundColor Green
                 } else {
@@ -1277,7 +1277,7 @@ jobs:
             Write-Host "secrets which are available to all environments." -ForegroundColor Gray
             Write-Host ""
             Write-Host "If you need environment-specific secrets:" -ForegroundColor Cyan
-            Write-Host "  1. Verify environments exist: https://github.com/${{ github.repository }}/settings/environments" -ForegroundColor Gray
+            Write-Host "  1. Verify environments exist: https://github.com/$owner/$repo/settings/environments" -ForegroundColor Gray
             Write-Host "  2. Check GitHub App has admin permission to create environments" -ForegroundColor Gray
             Write-Host "  3. Or manually create environments and re-run this workflow" -ForegroundColor Gray
             Write-Host ""
