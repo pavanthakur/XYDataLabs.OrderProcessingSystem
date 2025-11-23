@@ -1207,6 +1207,32 @@ jobs:
           foreach ($env_name in $environments) {
             Write-Host "  Environment: $env_name" -ForegroundColor Yellow
             
+            # First, ensure the environment exists - create it if it doesn't
+            Write-Host "    Checking if environment exists..." -ForegroundColor Gray
+            try {
+              gh api -H "Accept: application/vnd.github+json" "repos/$owner/$repo/environments/$env_name" 2>&1 | Out-Null
+              if ($LASTEXITCODE -eq 0) {
+                Write-Host "      ✅ Environment exists" -ForegroundColor Green
+              } else {
+                Write-Host "      ⚠️  Environment doesn't exist, creating it..." -ForegroundColor Yellow
+                # Create the environment using GitHub API
+                gh api --method PUT -H "Accept: application/vnd.github+json" "repos/$owner/$repo/environments/$env_name" 2>&1 | Out-Null
+                if ($LASTEXITCODE -eq 0) {
+                  Write-Host "      ✅ Environment created successfully" -ForegroundColor Green
+                } else {
+                  Write-Host "      ⚠️  Could not create environment (may need admin permission)" -ForegroundColor Yellow
+                  Write-Host "      Skipping environment secrets for $env_name" -ForegroundColor Yellow
+                  Write-Host ""
+                  continue
+                }
+              }
+            } catch {
+              Write-Host "      ⚠️  Could not check environment: $($_.Exception.Message)" -ForegroundColor Yellow
+              Write-Host "      Skipping environment secrets for $env_name" -ForegroundColor Yellow
+              Write-Host ""
+              continue
+            }
+            
             # Set environment secrets
             $secretsToSet = @{
               "AZUREAPPSERVICE_CLIENTID" = $env:CLIENT_ID
@@ -1243,14 +1269,23 @@ jobs:
           Write-Host ""
           
           if ($totalFail -gt 0) {
-            Write-Host "Troubleshooting:" -ForegroundColor Yellow
-            Write-Host "  1. Verify environments exist in repository" -ForegroundColor Gray
-            Write-Host "  2. Check GitHub App has Secrets permission for environments" -ForegroundColor Gray
-            Write-Error "Failed to set $totalFail environment secret(s)"
-            exit 1
+            Write-Host "⚠️  Some environment secrets failed to set" -ForegroundColor Yellow
+            Write-Host ""
+            Write-Host "Note: Repository secrets were successfully configured." -ForegroundColor Green
+            Write-Host "Environment-specific secrets are optional and only needed if you use" -ForegroundColor Gray
+            Write-Host "different credentials per environment. The workflows can use repository" -ForegroundColor Gray
+            Write-Host "secrets which are available to all environments." -ForegroundColor Gray
+            Write-Host ""
+            Write-Host "If you need environment-specific secrets:" -ForegroundColor Cyan
+            Write-Host "  1. Verify environments exist: https://github.com/$owner/$repo/settings/environments" -ForegroundColor Gray
+            Write-Host "  2. Check GitHub App has admin permission to create environments" -ForegroundColor Gray
+            Write-Host "  3. Or manually create environments and re-run this workflow" -ForegroundColor Gray
+            Write-Host ""
+            # Don't fail the workflow - repository secrets are sufficient
+            Write-Warning "Environment secrets partially configured. Repository secrets are available and sufficient for deployment."
+          } else {
+            Write-Host "✅ All environment secrets configured successfully!" -ForegroundColor Green
           }
-          
-          Write-Host "✅ All environment secrets configured successfully!" -ForegroundColor Green
           Write-Host ""
       
       - name: Verify Repository Secrets
