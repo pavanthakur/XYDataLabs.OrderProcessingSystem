@@ -5,7 +5,7 @@
 This guide documents the complete setup process for deploying the Order Processing System to Azure App Service using GitHub Actions with OIDC authentication.
 
 **Date Completed**: November 16, 2025  
-**Last Updated**: November 21, 2025 (Added Manual Infrastructure Workflow & Dry Run Guide)  
+**Last Updated**: November 23, 2025 (Added Automated App Insights Setup - Enterprise Approach)  
 **Deployment Method**: GitHub Actions CI/CD with OIDC (Passwordless Authentication)  
 **Target Environments**: dev, staging, production (branch-mapped)  
 **Azure Region (Primary)**: Central India  
@@ -22,6 +22,10 @@ For GitHub Actions automation and secret management:
 - **[GITHUB-APP-AUTHENTICATION.md](../03-Configuration-Guides/GITHUB-APP-AUTHENTICATION.md)** - Technical deep-dive on GitHub App authentication
 - **[GITHUB-SECRETS-FIX.md](../03-Configuration-Guides/GITHUB-SECRETS-FIX.md)** - GitHub secrets configuration troubleshooting
 - **[WORKFLOW-AUTOMATION-VISUAL-GUIDE.md](../03-Configuration-Guides/WORKFLOW-AUTOMATION-VISUAL-GUIDE.md)** - Visual workflow automation flow diagrams
+
+For Application Insights monitoring and observability:
+- **[APP_INSIGHTS_AUTOMATED_SETUP.md](./APP_INSIGHTS_AUTOMATED_SETUP.md)** ⭐ **NEW** - Automated environment-wise App Insights configuration (enterprise approach)
+- **[APPLICATION_INSIGHTS_SETUP.md](./APPLICATION_INSIGHTS_SETUP.md)** - Manual setup reference (legacy)
 
 ---
 
@@ -1206,11 +1210,39 @@ Notes:
 
 ## Step 7: Application Insights (Enterprise)
 
-We use per-app Application Insights components (API + UI) linked to a central Log Analytics workspace for shared analytics, plus App Service auto-instrumentation and Diagnostics settings.
+### Automated Setup (Recommended - Enterprise Approach) ⭐ NEW
 
-Run the idempotent setup script:
+**As of November 2025**, Application Insights is now automatically configured per environment during the Azure Bootstrap workflow. This is the recommended approach for enterprise deployments.
+
+**See**: **[APP_INSIGHTS_AUTOMATED_SETUP.md](./APP_INSIGHTS_AUTOMATED_SETUP.md)** for complete documentation on the automated approach.
+
+**What happens automatically:**
+1. App Insights resource created per environment via Bicep (IaC)
+2. Connection string retrieved from Azure automatically
+3. Stored as GitHub environment secret (`APPLICATIONINSIGHTS_CONNECTION_STRING`)
+4. App Services configured with App Insights settings at deployment time
+5. .NET SDK integrated and configured at application startup
+
+**Benefits:**
+- ✅ Environment isolation (separate App Insights per dev/staging/prod)
+- ✅ Zero manual configuration required
+- ✅ Automatic secret management via GitHub App
+- ✅ Infrastructure as Code (Bicep templates)
+- ✅ Follows Azure Well-Architected Framework
+
+**To use automated setup:**
+Simply run the Azure Bootstrap workflow with `bootstrapInfra = true`. App Insights is configured automatically.
+
+---
+
+### Manual Setup (Legacy - For Reference Only)
+
+> ⚠️ **Note**: Manual setup is no longer recommended. Use the automated approach above for new deployments.
+
+For legacy reference or troubleshooting, the manual setup script is still available:
 
 ```powershell
+# Legacy manual setup (not recommended for new deployments)
 .
 Resources\Azure-Deployment\setup-appinsights-dev.ps1 `
    -ResourceGroup rg-orderprocessing-dev `
@@ -1222,15 +1254,33 @@ Resources\Azure-Deployment\setup-appinsights-dev.ps1 `
    -UiAppInsights ai-orderprocessing-ui-dev
 ```
 
-What it does:
+What the manual script does:
 - Ensures Log Analytics workspace and AI components exist
 - Sets `APPLICATIONINSIGHTS_CONNECTION_STRING` on API/UI
 - Enables App Service auto-instrumentation settings
 - Configures Diagnostics (HTTP/App/Console/Platform logs + AllMetrics) to workspace
 
-Verify telemetry (allow a few minutes after first traffic):
-- KQL (requests): `requests | where timestamp > ago(30m) | summarize count() by cloud_RoleName`
-- KQL (App Service HTTP logs): `AppServiceHTTPLogs | where TimeGenerated > ago(30m) | summarize count()`
+---
+
+### Verify Telemetry (Both Approaches)
+
+Allow 2-5 minutes after first traffic, then run KQL queries in Azure Portal:
+
+**Requests:**
+```kql
+requests 
+| where timestamp > ago(30m) 
+| summarize count() by cloud_RoleName
+```
+
+**App Service HTTP logs:**
+```kql
+AppServiceHTTPLogs 
+| where TimeGenerated > ago(30m) 
+| summarize count()
+```
+
+**For more KQL examples and troubleshooting**, see [APP_INSIGHTS_AUTOMATED_SETUP.md](./APP_INSIGHTS_AUTOMATED_SETUP.md#kql-query-examples)
 
 ---
 

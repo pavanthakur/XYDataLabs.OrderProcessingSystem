@@ -201,8 +201,28 @@ if ($branchList.Count -eq 0 -and $envList.Count -eq 0) {
     Write-Host "  No federated credentials requested (Branches/Environments empty)." -ForegroundColor Yellow
 }
 
-# Step 5: Assign Contributor role to resource group
+# Step 5: Assign Contributor role to subscription (required for OIDC login)
 Write-Host "`n[5/7] Assigning $RoleName role..." -ForegroundColor Yellow
+
+# First, assign role at subscription level (required for Azure login to work)
+Write-Host "  Assigning $RoleName at subscription level..." -ForegroundColor Cyan
+$subscriptionScope = "/subscriptions/$subscriptionId"
+$existingSubAssignment = az role assignment list --assignee $spObjectId --role $RoleName --scope $subscriptionScope | ConvertFrom-Json
+if (-not $existingSubAssignment -or $existingSubAssignment.Count -eq 0) {
+    try {
+        az role assignment create --assignee $spObjectId --role $RoleName --scope $subscriptionScope 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "    ✅ Assigned $RoleName at subscription level" -ForegroundColor Green
+        } else {
+            Write-Host "    ⚠️  Failed to assign $RoleName at subscription level" -ForegroundColor Yellow
+            Write-Host "    You may need higher permissions. Service principal may not be able to login until this is fixed." -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "    ⚠️  Exception assigning subscription role: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "    ✅ $RoleName already assigned at subscription level" -ForegroundColor Green
+}
 
 # Resolve RG list
 $rgList = @()
@@ -213,19 +233,20 @@ elseif ($ResourceGroupName) {
     $rgList = @($ResourceGroupName)
 }
 else {
-    Write-Host "  ⚠️  No resource groups specified - RBAC assignment will be skipped." -ForegroundColor Yellow
-    Write-Host "  💡 Resource groups will be created during bootstrap. RBAC will be assigned then." -ForegroundColor Cyan
+    Write-Host "  ℹ️  No resource groups specified - only subscription-level RBAC assigned." -ForegroundColor Cyan
+    Write-Host "  💡 Resource groups will be created during bootstrap with inherited permissions." -ForegroundColor Cyan
     $rgList = @()
 }
 
 $rbacSummary = @()
 if ($rgList.Count -gt 0) {
+    Write-Host "`n  Assigning $RoleName to specific resource groups..." -ForegroundColor Cyan
     foreach ($rg in $rgList) {
-        Write-Host "  Processing RG: $rg" -ForegroundColor Cyan
+        Write-Host "    Processing RG: $rg" -ForegroundColor Gray
         # Validate RG exists
         $rgExists = az group exists -n $rg 2>$null
         if ($rgExists -ne 'true') {
-            Write-Host "    Skipping (RG not found)" -ForegroundColor Yellow
+            Write-Host "      Skipping (RG not found)" -ForegroundColor Yellow
             $rbacSummary += [PSCustomObject]@{ ResourceGroup=$rg; Status='NotFound'; Role=$RoleName }
             continue
         }
@@ -233,18 +254,16 @@ if ($rgList.Count -gt 0) {
         $existingAssignment = az role assignment list --assignee $spObjectId --role $RoleName --scope $scope | ConvertFrom-Json
         if (-not $existingAssignment -or $existingAssignment.Count -eq 0) {
             az role assignment create --assignee $spObjectId --role $RoleName --scope $scope | Out-Null
-            Write-Host "    Assigned $RoleName" -ForegroundColor Green
+            Write-Host "      ✅ Assigned $RoleName" -ForegroundColor Green
             $rbacSummary += [PSCustomObject]@{ ResourceGroup=$rg; Status='Assigned'; Role=$RoleName }
         } else {
-            Write-Host "    Already assigned" -ForegroundColor Gray
+            Write-Host "      Already assigned" -ForegroundColor Gray
             $rbacSummary += [PSCustomObject]@{ ResourceGroup=$rg; Status='Exists'; Role=$RoleName }
         }
     }
 
-    Write-Host "`n  RBAC Summary:" -ForegroundColor Yellow
+    Write-Host "`n  Resource Group RBAC Summary:" -ForegroundColor Yellow
     $rbacSummary | Format-Table -AutoSize
-} else {
-    Write-Host "  No resource groups to process - RBAC assignment skipped." -ForegroundColor Gray
 }
 
 # Step 6: Display GitHub Secrets

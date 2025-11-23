@@ -19,6 +19,7 @@ Contains main project documentation and overview files:
 | **AZURE_README.md** | Central navigation hub for all Azure documentation | Everyone | ✅ Latest |
 | **AZURE_DEPLOYMENT_GUIDE.md** | Complete deployment strategy and workflow (1300+ lines) | Developers, DevOps | ✅ Nov 2025 |
 | **BOOTSTRAP_SCRIPT_FLOW.md** | Line-by-line execution flow for code review (850+ lines) | Junior Devs, Reviewers | ✅ Nov 2025 |
+| **APP_INSIGHTS_AUTOMATED_SETUP.md** | Automated App Insights setup per environment (enterprise) | DevOps, Architects | ✅ Nov 2025 ⭐ NEW |
 | **APPLICATION_INSIGHTS_SETUP.md** | Monitoring setup (legacy/reference) | Operations | ⚠️ Partially superseded |
 | **DEPLOYMENT_EXERCISES.md** | Hands-on tutorials and exercises | Learners | ⚠️ Some legacy content |
 
@@ -35,6 +36,8 @@ Contains main project documentation and overview files:
 - ✅ Automatic .NET 8 runtime configuration
 - ✅ Pre-existence checks for safe re-runs
 - ✅ Complete verification checklist
+- ✅ **Automated App Insights configuration per environment** ⭐ NEW
+- ✅ **Enterprise-grade observability with SDK integration** ⭐ NEW
 
 ### 03-Database-Guides
 *Currently empty - reserved for database-related documentation*

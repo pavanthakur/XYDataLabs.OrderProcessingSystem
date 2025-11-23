@@ -40,6 +40,8 @@ module hosting 'modules/hosting.bicep' = {
     baseName: baseName
     githubOwner: githubOwner
     sku: appServiceSku
+    appInsightsConnectionString: insights.outputs.appInsightsConnectionString
+    appInsightsInstrumentationKey: insights.outputs.appInsightsInstrumentationKey
   }
 }
 
@@ -71,4 +73,6 @@ output resourceGroupName string = appRg.name
 output apiHostName string = hosting.outputs.apiHostName
 output uiHostName string = hosting.outputs.uiHostName
 output appInsightsName string = insights.outputs.appInsightsName
+output appInsightsConnectionString string = insights.outputs.appInsightsConnectionString
+output appInsightsInstrumentationKey string = insights.outputs.appInsightsInstrumentationKey
 output oidcClientId string = enableIdentity ? identity.outputs.clientId : ''
