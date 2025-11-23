@@ -24,15 +24,34 @@ Eliminate PAT token expiration by using GitHub App authentication (tokens never 
 2. Click **Generate a private key**
 3. Save the downloaded `.pem` file securely
 
-### Step 3: Install App (30 seconds)
+### Step 3: Install App on Repository (30 seconds)
 
 1. Click **Install App** in left sidebar
 2. Select your account
 3. Choose **Only select repositories** → select your repository
 4. Click **Install**
-5. ✨ **Installation ID is now auto-discovered - no need to copy it!**
 
-### Step 4: Add Secrets to Repository (1 minute)
+### Step 4: Verify Installation (IMPORTANT - 15 seconds)
+
+After installation completes, you MUST verify the app is properly installed:
+
+1. Go to: https://github.com/settings/apps/[your-app-name]/installations
+   - Example: https://github.com/settings/apps/xydatalabsgithubapp/installations
+
+2. **Verify** you see your repository listed under "Repository access"
+   - ✅ Should show: `pavanthakur/XYDataLabs.OrderProcessingSystem` (or your repo name)
+   - ❌ If empty or missing: Click **Configure** → Add the repository
+
+3. **Note the Installation ID** from the URL (optional, auto-discovered by workflow):
+   ```
+   https://github.com/settings/installations/12345678
+                                              ^^^^^^^^
+                                         Installation ID
+   ```
+
+> **Why this matters**: The workflow cannot authenticate without a valid installation. This step confirms the app has access to your repository.
+
+### Step 5: Add Secrets to Repository (1 minute)
 
 Go to: https://github.com/[your-org]/[your-repo]/settings/secrets/actions
 
@@ -52,7 +71,7 @@ Add these **2 secrets** (not 3!):
 -----END RSA PRIVATE KEY-----
 ```
 
-### Step 5: Run Workflow ✨
+### Step 6: Run Workflow ✨
 
 1. Go to Actions → Azure Bootstrap Setup
 2. Click **Run workflow**
@@ -97,24 +116,34 @@ If you're currently using `GH_PAT`:
 
 ## 🚨 Troubleshooting
 
-### "Failed to generate installation token"
+### "Failed to generate installation token" or "App not found"
 
-**Check**:
-1. App ID is correct (no typo)
-2. Private key includes BEGIN/END lines
-3. App is installed on the repository
+**Most Common Cause**: App not properly installed on repository
 
 **Fix**:
-```powershell
-# Verify App ID
-gh api /app --jq .id
+1. **Verify installation** (CRITICAL):
+   - Go to: https://github.com/settings/apps/[your-app-name]/installations
+   - Check your repository is listed under "Repository access"
+   - If missing: Click **Configure** → Add your repository → Save
 
-# Check private key format (should show BEGIN line)
-Get-Content path\to\key.pem | Select-Object -First 1
+2. **Check App ID** (no typo):
+   ```powershell
+   # Verify from app settings page
+   # Should match the GH_APP_ID secret
+   ```
 
-# Verify app is installed
-gh api /repos/[owner]/[repo]/installation
-```
+3. **Verify Private Key format**:
+   ```powershell
+   # Should show BEGIN line
+   Get-Content path\to\key.pem | Select-Object -First 1
+   # Expected: -----BEGIN RSA PRIVATE KEY-----
+   ```
+
+4. **Test with GitHub CLI** (if authenticated):
+   ```powershell
+   gh api /repos/[owner]/[repo]/installation
+   # Should return installation details without errors
+   ```
 
 ### "Insufficient permissions"
 
