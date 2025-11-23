@@ -100,15 +100,22 @@ if ($existingApp -and $existingApp.Count -gt 0) {
         # Check if app already exists (conflict error)
         if ($errorMessage -match "already exists|conflicts with|Another object") {
             Write-Host "  ⚠️  App appears to exist but couldn't be listed" -ForegroundColor Yellow
-            Write-Host "  Attempting to retrieve app by name..." -ForegroundColor Yellow
+            Write-Host "  Attempting to retrieve app by name using filter..." -ForegroundColor Yellow
             
-            # Try to get the app directly
-            $getOutput = az ad app show --id "http://$AppDisplayName" 2>&1
+            # Try to get the app directly using filter (more reliable than URI identifier)
+            $getOutput = az ad app list --filter "displayName eq '$AppDisplayName'" 2>&1
             if ($LASTEXITCODE -eq 0) {
-                $newApp = $getOutput | ConvertFrom-Json
-                $appId = $newApp.appId
-                $appObjectId = $newApp.id
-                Write-Host "  Retrieved existing app: $AppDisplayName" -ForegroundColor Green
+                $apps = $getOutput | ConvertFrom-Json
+                if ($apps -and $apps.Count -gt 0) {
+                    $newApp = $apps[0]
+                    $appId = $newApp.appId
+                    $appObjectId = $newApp.id
+                    Write-Host "  Retrieved existing app: $AppDisplayName" -ForegroundColor Green
+                } else {
+                    Write-Host "  ❌ App exists but couldn't be retrieved" -ForegroundColor Red
+                    Write-Error "Failed to retrieve app registration. App may exist but is not accessible with current permissions."
+                    exit 1
+                }
             } else {
                 Write-Host "  ❌ Failed to create or retrieve app" -ForegroundColor Red
                 Write-Error "Failed to create or retrieve app registration. Error: $errorMessage"
