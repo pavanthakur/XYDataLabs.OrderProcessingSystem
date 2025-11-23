@@ -1745,9 +1745,11 @@ jobs:
               Write-Host "    Error output: $secretOutput" -ForegroundColor Red
               Write-Host "" -ForegroundColor Gray
               Write-Host "    🔍 Troubleshooting:" -ForegroundColor Yellow
-              Write-Host "      1. Verify GitHub App has 'Secrets: Read and write' permission for Environments" -ForegroundColor White
-              Write-Host "         Go to: https://github.com/settings/apps → Your App → Permissions → Repository permissions" -ForegroundColor Gray
-              Write-Host "         Set 'Secrets' to 'Read and write' (this covers both repository and environment secrets)" -ForegroundColor Gray
+              Write-Host "      1. Verify GitHub App has correct permissions:" -ForegroundColor White
+              Write-Host "         a) Go to: https://github.com/settings/apps → Your App → Permissions" -ForegroundColor Gray
+              Write-Host "         b) Under 'Repository permissions', set 'Secrets' to 'Read and write'" -ForegroundColor Gray
+              Write-Host "         c) Under 'Repository permissions', set 'Environments' to 'Read and write'" -ForegroundColor Gray
+              Write-Host "         d) Save changes and accept the new permissions in your repository" -ForegroundColor Gray
               Write-Host "      2. Ensure GitHub App is installed on this repository" -ForegroundColor White
               Write-Host "      3. Check if 'dev' environment exists and doesn't require approval" -ForegroundColor White
               Write-Host "      4. Verify APP_ID and APP_PRIVATE_KEY secrets are correct" -ForegroundColor White
@@ -1756,7 +1758,7 @@ jobs:
               Write-Host "      Documentation/03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md" -ForegroundColor Gray
               Write-Host "" -ForegroundColor Gray
               Write-Host "    ⚠️  App Insights secret configuration will be skipped - you can configure it manually later" -ForegroundColor Yellow
-              Write-Warning "Failed to configure App Insights connection string. GitHub App lacks environment secrets permission."
+              Write-Warning "Failed to configure App Insights connection string. Possible permission issue - see troubleshooting above."
             }
             
             Write-Host ""
@@ -2124,9 +2126,11 @@ jobs:
               Write-Host "    Error output: $secretOutput" -ForegroundColor Red
               Write-Host "" -ForegroundColor Gray
               Write-Host "    🔍 Troubleshooting:" -ForegroundColor Yellow
-              Write-Host "      1. Verify GitHub App has 'Secrets: Read and write' permission for Environments" -ForegroundColor White
-              Write-Host "         Go to: https://github.com/settings/apps → Your App → Permissions → Repository permissions" -ForegroundColor Gray
-              Write-Host "         Set 'Secrets' to 'Read and write' (this covers both repository and environment secrets)" -ForegroundColor Gray
+              Write-Host "      1. Verify GitHub App has correct permissions:" -ForegroundColor White
+              Write-Host "         a) Go to: https://github.com/settings/apps → Your App → Permissions" -ForegroundColor Gray
+              Write-Host "         b) Under 'Repository permissions', set 'Secrets' to 'Read and write'" -ForegroundColor Gray
+              Write-Host "         c) Under 'Repository permissions', set 'Environments' to 'Read and write'" -ForegroundColor Gray
+              Write-Host "         d) Save changes and accept the new permissions in your repository" -ForegroundColor Gray
               Write-Host "      2. Ensure GitHub App is installed on this repository" -ForegroundColor White
               Write-Host "      3. Check if 'staging' environment exists and doesn't require approval" -ForegroundColor White
               Write-Host "      4. Verify APP_ID and APP_PRIVATE_KEY secrets are correct" -ForegroundColor White
@@ -2135,7 +2139,7 @@ jobs:
               Write-Host "      Documentation/03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md" -ForegroundColor Gray
               Write-Host "" -ForegroundColor Gray
               Write-Host "    ⚠️  App Insights secret configuration will be skipped - you can configure it manually later" -ForegroundColor Yellow
-              Write-Warning "Failed to configure App Insights connection string. GitHub App lacks environment secrets permission."
+              Write-Warning "Failed to configure App Insights connection string. Possible permission issue - see troubleshooting above."
             }
             
             Write-Host ""
@@ -2503,9 +2507,11 @@ jobs:
               Write-Host "    Error output: $secretOutput" -ForegroundColor Red
               Write-Host "" -ForegroundColor Gray
               Write-Host "    🔍 Troubleshooting:" -ForegroundColor Yellow
-              Write-Host "      1. Verify GitHub App has 'Secrets: Read and write' permission for Environments" -ForegroundColor White
-              Write-Host "         Go to: https://github.com/settings/apps → Your App → Permissions → Repository permissions" -ForegroundColor Gray
-              Write-Host "         Set 'Secrets' to 'Read and write' (this covers both repository and environment secrets)" -ForegroundColor Gray
+              Write-Host "      1. Verify GitHub App has correct permissions:" -ForegroundColor White
+              Write-Host "         a) Go to: https://github.com/settings/apps → Your App → Permissions" -ForegroundColor Gray
+              Write-Host "         b) Under 'Repository permissions', set 'Secrets' to 'Read and write'" -ForegroundColor Gray
+              Write-Host "         c) Under 'Repository permissions', set 'Environments' to 'Read and write'" -ForegroundColor Gray
+              Write-Host "         d) Save changes and accept the new permissions in your repository" -ForegroundColor Gray
               Write-Host "      2. Ensure GitHub App is installed on this repository" -ForegroundColor White
               Write-Host "      3. Check if 'prod' environment exists and doesn't require approval" -ForegroundColor White
               Write-Host "      4. Verify APP_ID and APP_PRIVATE_KEY secrets are correct" -ForegroundColor White
@@ -2514,7 +2520,7 @@ jobs:
               Write-Host "      Documentation/03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md" -ForegroundColor Gray
               Write-Host "" -ForegroundColor Gray
               Write-Host "    ⚠️  App Insights secret configuration will be skipped - you can configure it manually later" -ForegroundColor Yellow
-              Write-Warning "Failed to configure App Insights connection string. GitHub App lacks environment secrets permission."
+              Write-Warning "Failed to configure App Insights connection string. Possible permission issue - see troubleshooting above."
             }
             
             Write-Host ""

@@ -551,7 +551,7 @@ foreach ($env in $envList) {
     $intervalSeconds = 30
     $elapsed = 0
     $planReady = $false; $apiReady = $false; $uiReady = $false
-    $planCheckStarted = $false
+    $planTimeoutMessageShown = $false
     $apiUrl = "https://$apiApp.azurewebsites.net"; $uiUrl = "https://$uiApp.azurewebsites.net"
     Write-Host "  [TARGET] Plan: $plan (checking for up to 2 min)" -ForegroundColor Gray
     Write-Host "  [TARGET] API : $apiApp (checking for up to 10 min)" -ForegroundColor Gray
@@ -579,12 +579,12 @@ foreach ($env in $envList) {
                 Write-Host "`n  [OK] Plan ready (provisioningState=Succeeded, status=Ready) after $([math]::Round($elapsed/60,1)) min" -ForegroundColor Green
                 Write-Host "  [PROGRESS] [" -NoNewline -ForegroundColor Cyan; for ($i = 0; $i -lt $progressPrinted; $i++) { Write-Host "#" -NoNewline -ForegroundColor Green }
             }
-        } elseif (-not $planReady -and $elapsed -gt $planTimeoutSeconds -and -not $planCheckStarted) {
-            # Plan check timed out after 2 minutes
+        } elseif (-not $planReady -and $elapsed -gt $planTimeoutSeconds -and -not $planTimeoutMessageShown) {
+            # Plan check timed out after 2 minutes - show message once
             Write-Host "`n  [INFO] Plan readiness check timed out after 2 min - continuing to check apps" -ForegroundColor Yellow
             Write-Host "  [NOTE] Plan may still be provisioning in background, but apps can be checked independently" -ForegroundColor Gray
             Write-Host "  [PROGRESS] [" -NoNewline -ForegroundColor Cyan; for ($i = 0; $i -lt $progressPrinted; $i++) { Write-Host "#" -NoNewline -ForegroundColor Green }
-            $planCheckStarted = $true
+            $planTimeoutMessageShown = $true
         }
 
         # API readiness
