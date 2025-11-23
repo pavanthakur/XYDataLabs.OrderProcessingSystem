@@ -863,10 +863,94 @@ jobs:
       - name: Generate GitHub App Token
         id: app-token
         if: steps.prereqs.outputs.hasGitHubAppSecrets == 'true'
+        # Allow this step to fail so we can provide helpful troubleshooting guidance
+        # Most common cause of failure is GitHub App not installed on repository (404 error)
+        continue-on-error: true
         uses: actions/create-github-app-token@v1
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      
+      - name: Handle GitHub App Token Failure
+        if: steps.prereqs.outputs.hasGitHubAppSecrets == 'true' && steps.app-token.outcome == 'failure'
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Red
+          Write-Host "║         GITHUB APP TOKEN GENERATION FAILED                    ║" -ForegroundColor Red
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Red
+          Write-Host ""
+          Write-Host "❌ Failed to generate GitHub App installation token" -ForegroundColor Red
+          Write-Host ""
+          Write-Host "Timestamp (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+          Write-Host "🔍 MOST LIKELY CAUSE: GitHub App Not Installed on Repository" -ForegroundColor Yellow
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+          Write-Host ""
+          Write-Host "The workflow detected APP_ID and APP_PRIVATE_KEY secrets, but failed" -ForegroundColor White
+          Write-Host "to generate an installation token. This typically means:" -ForegroundColor White
+          Write-Host ""
+          Write-Host "  ❌ The GitHub App is created but NOT installed on this repository" -ForegroundColor Red
+          Write-Host ""
+          Write-Host "📋 SOLUTION: Install GitHub App on Repository" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Step 1: Verify GitHub App exists" -ForegroundColor Yellow
+          Write-Host "  1. Go to: https://github.com/settings/apps" -ForegroundColor Gray
+          Write-Host "  2. Find your app (e.g., 'OrderProcessingSystem-SecretManager')" -ForegroundColor Gray
+          Write-Host "  3. If app doesn't exist, create it first (see setup guide below)" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "Step 2: Install the App on THIS Repository" -ForegroundColor Yellow
+          Write-Host "  1. Go to: https://github.com/settings/installations" -ForegroundColor Gray
+          Write-Host "  2. Find your app installation" -ForegroundColor Gray
+          Write-Host "  3. Click 'Configure' next to the app" -ForegroundColor Gray
+          Write-Host "  4. Under 'Repository access':" -ForegroundColor Gray
+          Write-Host "     - Select 'Only select repositories'" -ForegroundColor Gray
+          Write-Host "     - Add: ${{ github.repository }}" -ForegroundColor Gray
+          Write-Host "  5. Click 'Save'" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "Step 3: Re-run This Workflow" -ForegroundColor Yellow
+          Write-Host "  After installing the app, re-run this workflow with the same settings" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
+          Write-Host "📖 OTHER POSSIBLE CAUSES (if app IS installed):" -ForegroundColor Cyan
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
+          Write-Host ""
+          Write-Host "1. Wrong APP_ID Secret" -ForegroundColor White
+          Write-Host "   - Current APP_ID: ${{ secrets.APP_ID }}" -ForegroundColor Gray
+          Write-Host "   - Verify this matches your GitHub App ID" -ForegroundColor Gray
+          Write-Host "   - Check at: https://github.com/settings/apps" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "2. Invalid APP_PRIVATE_KEY Format" -ForegroundColor White
+          Write-Host "   - Must include BEGIN/END PRIVATE KEY lines" -ForegroundColor Gray
+          Write-Host "   - Must be complete .pem file contents" -ForegroundColor Gray
+          Write-Host "   - No extra spaces or line breaks" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "3. App Permissions Missing" -ForegroundColor White
+          Write-Host "   - Required: Repository permissions → Secrets: Read and write" -ForegroundColor Gray
+          Write-Host "   - Check at: https://github.com/settings/apps → Your App → Permissions" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+          Write-Host "📚 SETUP GUIDES:" -ForegroundColor Cyan
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Quick Setup (4 minutes):" -ForegroundColor White
+          Write-Host "  Documentation/03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "Detailed Guide:" -ForegroundColor White
+          Write-Host "  Documentation/03-Configuration-Guides/GITHUB-APP-AUTHENTICATION.md" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "Installation ID Explained:" -ForegroundColor White
+          Write-Host "  APP_INSTALLATION_ID_EXPLAINED.md" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "💡 Quick Check:" -ForegroundColor Yellow
+          Write-Host "   Visit: https://github.com/settings/installations" -ForegroundColor White
+          Write-Host "   Does your app show '${{ github.repository }}' in its repository list?" -ForegroundColor White
+          Write-Host "   If NO → Install the app on this repository (steps above)" -ForegroundColor White
+          Write-Host "   If YES → Check APP_ID and APP_PRIVATE_KEY secrets are correct" -ForegroundColor White
+          Write-Host ""
+          
+          Write-Error "GitHub App token generation failed. Please install the GitHub App on this repository and try again."
 
       - name: Check Required Secrets
         id: check
@@ -1908,23 +1992,125 @@ jobs:
           Write-Host "✅ Validation enabled" -ForegroundColor Green
 
       - name: Commit Changes
+        id: commit
+        # Allow git push to fail - GITHUB_TOKEN lacks 'workflows' permission to modify workflow files
+        # This is a security feature. We handle the failure gracefully in the next step
+        continue-on-error: true
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add .github/workflows/infra-deploy.yml
-          git diff --staged --quiet || git commit -m "chore(ci): enable pre-deployment validation after bootstrap"
+          
+          # Check if there are changes to commit
+          if (git diff --staged --quiet) {
+            Write-Host "ℹ️  No changes detected - validation may already be enabled" -ForegroundColor Yellow
+            exit 0
+          }
+          
+          git commit -m "chore(ci): enable pre-deployment validation after bootstrap"
           git push
+      
+      - name: Handle Push Failure
+        if: steps.commit.outcome == 'failure'
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Yellow
+          Write-Host "║    WORKFLOW UPDATE REQUIRES MANUAL ACTION                     ║" -ForegroundColor Yellow
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Yellow
+          Write-Host ""
+          Write-Host "⚠️  Unable to automatically update workflow file" -ForegroundColor Yellow
+          Write-Host ""
+          Write-Host "GitHub's security model prevents workflows from modifying other workflow" -ForegroundColor White
+          Write-Host "files using the default GITHUB_TOKEN for security reasons." -ForegroundColor White
+          Write-Host ""
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+          Write-Host "📋 MANUAL STEP REQUIRED (One-time, 2 minutes)" -ForegroundColor Cyan
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "To enable pre-deployment validation, make this one-line change:" -ForegroundColor White
+          Write-Host ""
+          Write-Host "File: .github/workflows/infra-deploy.yml" -ForegroundColor Yellow
+          Write-Host ""
+          Write-Host "Find and replace:" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "OLD:" -ForegroundColor Red
+          Write-Host "  if: false  # TODO: Enable after bootstrap - requires Azure OIDC setup" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "NEW:" -ForegroundColor Green
+          Write-Host "  if: (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && !inputs.dryRun)" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "Also find and uncomment:" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "OLD:" -ForegroundColor Red
+          Write-Host "  # needs: pre-validate  # TODO: Uncomment after bootstrap" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "NEW:" -ForegroundColor Green
+          Write-Host "  needs: pre-validate" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+          Write-Host "🚀 HOW TO MAKE THE CHANGE:" -ForegroundColor Cyan
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "Option 1: Via GitHub Web UI (Easiest)" -ForegroundColor Yellow
+          Write-Host "  1. Go to: https://github.com/${{ github.repository }}/edit/${{ github.ref_name }}/.github/workflows/infra-deploy.yml" -ForegroundColor Gray
+          Write-Host "  2. Make the changes shown above" -ForegroundColor Gray
+          Write-Host "  3. Commit directly to ${{ github.ref_name }} branch" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "Option 2: Via Command Line" -ForegroundColor Yellow
+          Write-Host "  1. Clone the repository: git clone https://github.com/${{ github.repository }}.git" -ForegroundColor Gray
+          Write-Host "  2. Switch to branch: git checkout ${{ github.ref_name }}" -ForegroundColor Gray
+          Write-Host "  3. Edit file: .github/workflows/infra-deploy.yml" -ForegroundColor Gray
+          Write-Host "  4. Make the changes shown above" -ForegroundColor Gray
+          Write-Host "  5. Commit: git commit -am 'chore(ci): enable pre-deployment validation'" -ForegroundColor Gray
+          Write-Host "  6. Push: git push origin ${{ github.ref_name }}" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "Option 3: Use GitHub App with Workflows Permission (Advanced)" -ForegroundColor Yellow
+          Write-Host "  If you want to automate this, configure your GitHub App with:" -ForegroundColor Gray
+          Write-Host "  - Repository permissions → Workflows: Read and write" -ForegroundColor Gray
+          Write-Host "  Then re-run this workflow" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+          Write-Host "✅ AFTER MAKING THE CHANGE:" -ForegroundColor Cyan
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "Pre-deployment validation will be enabled, and your CI/CD pipeline" -ForegroundColor White
+          Write-Host "will automatically validate Azure resources before each deployment!" -ForegroundColor White
+          Write-Host ""
+          Write-Host "⚠️  This is a one-time manual step due to GitHub security policies." -ForegroundColor Yellow
+          Write-Host ""
+          
+          Write-Warning "Automatic workflow update failed. Please manually enable validation using the instructions above."
 
       - name: Create Completion Summary
         run: |
+          $commitSuccess = "${{ steps.commit.outcome }}" -eq "success"
+          
           "## ✅ Azure Bootstrap Complete!" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
           "### 🎉 What's Ready" >> $env:GITHUB_STEP_SUMMARY
           "- ✅ Azure OIDC configured" >> $env:GITHUB_STEP_SUMMARY
           "- ✅ GitHub secrets configured" >> $env:GITHUB_STEP_SUMMARY
           "- ✅ Infrastructure bootstrapped (${{ inputs.environment }})" >> $env:GITHUB_STEP_SUMMARY
-          "- ✅ Pre-deployment validation enabled" >> $env:GITHUB_STEP_SUMMARY
+          
+          if ($commitSuccess) {
+            "- ✅ Pre-deployment validation enabled" >> $env:GITHUB_STEP_SUMMARY
+          } else {
+            "- ⚠️ Pre-deployment validation - **Manual step required** (see above)" >> $env:GITHUB_STEP_SUMMARY
+          }
+          
           "" >> $env:GITHUB_STEP_SUMMARY
+          
+          if (-not $commitSuccess) {
+            "### ⚠️ Manual Step Required" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "To enable pre-deployment validation, edit ```.github/workflows/infra-deploy.yml```:" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "1. Change ``if: false  # TODO: Enable after bootstrap`` to ``if: (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && !inputs.dryRun)``" >> $env:GITHUB_STEP_SUMMARY
+            "2. Uncomment ``needs: pre-validate``" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "See detailed instructions in the logs above." >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+          }
+          
           "### 🚀 Next Steps" >> $env:GITHUB_STEP_SUMMARY
           "1. Push code changes to trigger deployment workflow" >> $env:GITHUB_STEP_SUMMARY
           "2. Monitor deployments at: [Actions](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions)" >> $env:GITHUB_STEP_SUMMARY
