@@ -32,11 +32,6 @@ on:
         required: true
         type: boolean
         default: true
-      enableValidation:
-        description: 'Enable pre-deployment validation after bootstrap'
-        required: true
-        type: boolean
-        default: true
       oidcAppName:
         description: 'Azure AD App Registration name for OIDC'
         required: false
@@ -83,7 +78,6 @@ jobs:
           Write-Host "  ✓ Setup GitHub App:             ${{ inputs.setupGitHubApp }}" -ForegroundColor White
           Write-Host "  ✓ Configure GitHub secrets:     ${{ inputs.configureSecrets }}" -ForegroundColor White
           Write-Host "  ✓ Bootstrap infrastructure:     ${{ inputs.bootstrapInfra }}" -ForegroundColor White
-          Write-Host "  ✓ Enable validation:            ${{ inputs.enableValidation }}" -ForegroundColor White
           Write-Host "" -ForegroundColor Gray
           Write-Host "========================================================================" -ForegroundColor Cyan
           Write-Host "" -ForegroundColor Gray
@@ -97,14 +91,12 @@ jobs:
           $setupOidc = "${{ inputs.setupOidc }}"
           $configSecrets = "${{ inputs.configureSecrets }}"
           $bootstrap = "${{ inputs.bootstrapInfra }}"
-          $enableValidation = "${{ inputs.enableValidation }}"
 
           Write-Host "`n📋 Workflow Inputs:" -ForegroundColor Cyan
           Write-Host "  Environment: $env" -ForegroundColor Yellow
           Write-Host "  Setup OIDC: $setupOidc" -ForegroundColor Yellow
           Write-Host "  Configure secrets: $configSecrets" -ForegroundColor Yellow
           Write-Host "  Bootstrap infra: $bootstrap" -ForegroundColor Yellow
-          Write-Host "  Enable validation: $enableValidation" -ForegroundColor Yellow
 
           # Display branch-to-environment mapping
           Write-Host "`n🗺️  Branch → Environment Mapping:" -ForegroundColor Cyan
@@ -2232,167 +2224,12 @@ jobs:
           path: Resources/Azure-Deployment/logs/bootstrap-*.log
           retention-days: 30
 
-  enable-validation:
-    name: Enable Pre-Deployment Validation
-    if: |
-      always() &&
-      inputs.enableValidation &&
-      inputs.bootstrapInfra &&
-      !cancelled() &&
-      (needs.bootstrap-dev.result == 'success' || needs.bootstrap-dev.result == 'skipped') &&
-      (needs.bootstrap-staging.result == 'success' || needs.bootstrap-staging.result == 'skipped') &&
-      (needs.bootstrap-prod.result == 'success' || needs.bootstrap-prod.result == 'skipped')
-    needs: [bootstrap-dev, bootstrap-staging, bootstrap-prod]
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - name: Enable Validation in Workflow
-        run: |
-          Write-Host "🔧 Enabling pre-deployment validation..." -ForegroundColor Cyan
-
-          $workflowPath = ".github/workflows/infra-deploy.yml"
-          $content = Get-Content $workflowPath -Raw
-
-          # Re-enable pre-validate job
-          $content = $content -replace 'if: false  # TODO: Enable after bootstrap - requires Azure OIDC setup', 'if: (github.event_name == ''push'') || (github.event_name == ''workflow_dispatch'' && !inputs.dryRun)'
-
-          # Re-enable job dependency
-          $content = $content -replace '# needs: pre-validate  # TODO: Uncomment after bootstrap', 'needs: pre-validate'
-
-          Set-Content $workflowPath -Value $content -NoNewline
-
-          Write-Host "✅ Validation enabled" -ForegroundColor Green
-
-      - name: Commit Changes
-        id: commit
-        # Allow git push to fail - GITHUB_TOKEN lacks 'workflows' permission to modify workflow files
-        # This is a security feature. We handle the failure gracefully in the next step
-        continue-on-error: true
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add .github/workflows/infra-deploy.yml
-          
-          # Check if there are changes to commit
-          if (git diff --staged --quiet) {
-            Write-Host "ℹ️  No changes detected - validation may already be enabled" -ForegroundColor Yellow
-            exit 0
-          }
-          
-          git commit -m "chore(ci): enable pre-deployment validation after bootstrap"
-          git push
-      
-      - name: Handle Push Failure
-        if: steps.commit.outcome == 'failure'
-        run: |
-          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Yellow
-          Write-Host "║    WORKFLOW UPDATE REQUIRES MANUAL ACTION                     ║" -ForegroundColor Yellow
-          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Yellow
-          Write-Host ""
-          Write-Host "⚠️  Unable to automatically update workflow file" -ForegroundColor Yellow
-          Write-Host ""
-          Write-Host "GitHub's security model prevents workflows from modifying other workflow" -ForegroundColor White
-          Write-Host "files using the default GITHUB_TOKEN for security reasons." -ForegroundColor White
-          Write-Host ""
-          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
-          Write-Host "📋 MANUAL STEP REQUIRED (One-time, 2 minutes)" -ForegroundColor Cyan
-          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
-          Write-Host ""
-          Write-Host "To enable pre-deployment validation, make this one-line change:" -ForegroundColor White
-          Write-Host ""
-          Write-Host "File: .github/workflows/infra-deploy.yml" -ForegroundColor Yellow
-          Write-Host ""
-          Write-Host "Find and replace:" -ForegroundColor Cyan
-          Write-Host ""
-          Write-Host "OLD:" -ForegroundColor Red
-          Write-Host "  if: false  # TODO: Enable after bootstrap - requires Azure OIDC setup" -ForegroundColor Gray
-          Write-Host ""
-          Write-Host "NEW:" -ForegroundColor Green
-          Write-Host "  if: (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && !inputs.dryRun)" -ForegroundColor Gray
-          Write-Host ""
-          Write-Host "Also find and uncomment:" -ForegroundColor Cyan
-          Write-Host ""
-          Write-Host "OLD:" -ForegroundColor Red
-          Write-Host "  # needs: pre-validate  # TODO: Uncomment after bootstrap" -ForegroundColor Gray
-          Write-Host ""
-          Write-Host "NEW:" -ForegroundColor Green
-          Write-Host "  needs: pre-validate" -ForegroundColor Gray
-          Write-Host ""
-          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
-          Write-Host "🚀 HOW TO MAKE THE CHANGE:" -ForegroundColor Cyan
-          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
-          Write-Host ""
-          Write-Host "Option 1: Via GitHub Web UI (Easiest)" -ForegroundColor Yellow
-          Write-Host "  1. Go to: https://github.com/${{ github.repository }}/edit/${{ github.ref_name }}/.github/workflows/infra-deploy.yml" -ForegroundColor Gray
-          Write-Host "  2. Make the changes shown above" -ForegroundColor Gray
-          Write-Host "  3. Commit directly to ${{ github.ref_name }} branch" -ForegroundColor Gray
-          Write-Host ""
-          Write-Host "Option 2: Via Command Line" -ForegroundColor Yellow
-          Write-Host "  1. Clone the repository: git clone https://github.com/${{ github.repository }}.git" -ForegroundColor Gray
-          Write-Host "  2. Switch to branch: git checkout ${{ github.ref_name }}" -ForegroundColor Gray
-          Write-Host "  3. Edit file: .github/workflows/infra-deploy.yml" -ForegroundColor Gray
-          Write-Host "  4. Make the changes shown above" -ForegroundColor Gray
-          Write-Host "  5. Commit: git commit -am 'chore(ci): enable pre-deployment validation'" -ForegroundColor Gray
-          Write-Host "  6. Push: git push origin ${{ github.ref_name }}" -ForegroundColor Gray
-          Write-Host ""
-          Write-Host "Option 3: Use GitHub App with Workflows Permission (Advanced)" -ForegroundColor Yellow
-          Write-Host "  If you want to automate this, configure your GitHub App with:" -ForegroundColor Gray
-          Write-Host "  - Repository permissions → Workflows: Read and write" -ForegroundColor Gray
-          Write-Host "  Then re-run this workflow" -ForegroundColor Gray
-          Write-Host ""
-          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
-          Write-Host "✅ AFTER MAKING THE CHANGE:" -ForegroundColor Cyan
-          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
-          Write-Host ""
-          Write-Host "Pre-deployment validation will be enabled, and your CI/CD pipeline" -ForegroundColor White
-          Write-Host "will automatically validate Azure resources before each deployment!" -ForegroundColor White
-          Write-Host ""
-          Write-Host "⚠️  This is a one-time manual step due to GitHub security policies." -ForegroundColor Yellow
-          Write-Host ""
-          
-          Write-Warning "Automatic workflow update failed. Please manually enable validation using the instructions above."
-
-      - name: Create Completion Summary
-        run: |
-          $commitSuccess = "${{ steps.commit.outcome }}" -eq "success"
-          
-          "## ✅ Azure Bootstrap Complete!" >> $env:GITHUB_STEP_SUMMARY
-          "" >> $env:GITHUB_STEP_SUMMARY
-          "### 🎉 What's Ready" >> $env:GITHUB_STEP_SUMMARY
-          "- ✅ Azure OIDC configured" >> $env:GITHUB_STEP_SUMMARY
-          "- ✅ GitHub secrets configured" >> $env:GITHUB_STEP_SUMMARY
-          "- ✅ Infrastructure bootstrapped (${{ inputs.environment }})" >> $env:GITHUB_STEP_SUMMARY
-          
-          if ($commitSuccess) {
-            "- ✅ Pre-deployment validation enabled" >> $env:GITHUB_STEP_SUMMARY
-          } else {
-            "- ⚠️ Pre-deployment validation - **Manual step required** (see above)" >> $env:GITHUB_STEP_SUMMARY
-          }
-          
-          "" >> $env:GITHUB_STEP_SUMMARY
-          
-          if (-not $commitSuccess) {
-            "### ⚠️ Manual Step Required" >> $env:GITHUB_STEP_SUMMARY
-            "" >> $env:GITHUB_STEP_SUMMARY
-            "To enable pre-deployment validation, edit ```.github/workflows/infra-deploy.yml```:" >> $env:GITHUB_STEP_SUMMARY
-            "" >> $env:GITHUB_STEP_SUMMARY
-            "1. Change ``if: false  # TODO: Enable after bootstrap`` to ``if: (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && !inputs.dryRun)``" >> $env:GITHUB_STEP_SUMMARY
-            "2. Uncomment ``needs: pre-validate``" >> $env:GITHUB_STEP_SUMMARY
-            "" >> $env:GITHUB_STEP_SUMMARY
-            "See detailed instructions in the logs above." >> $env:GITHUB_STEP_SUMMARY
-            "" >> $env:GITHUB_STEP_SUMMARY
-          }
-          
-          "### 🚀 Next Steps" >> $env:GITHUB_STEP_SUMMARY
-          "1. Push code changes to trigger deployment workflow" >> $env:GITHUB_STEP_SUMMARY
-          "2. Monitor deployments at: [Actions](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions)" >> $env:GITHUB_STEP_SUMMARY
-          "3. View resources in [Azure Portal](https://portal.azure.com)" >> $env:GITHUB_STEP_SUMMARY
 
   summary:
     name: Bootstrap Summary
     if: always() && github.event_name == 'workflow_dispatch'
-    needs: [setup-oidc, configure-secrets, bootstrap-dev, bootstrap-staging, bootstrap-prod, enable-validation]
+    needs: [setup-oidc, configure-secrets, bootstrap-dev, bootstrap-staging, bootstrap-prod]
     runs-on: windows-latest
     steps:
       - name: Generate Summary
@@ -2405,7 +2242,6 @@ jobs:
           $bootstrapDev = "${{ needs.bootstrap-dev.result }}"
           $bootstrapStaging = "${{ needs.bootstrap-staging.result }}"
           $bootstrapProd = "${{ needs.bootstrap-prod.result }}"
-          $enableVal = "${{ needs.enable-validation.result }}"
 
           "| Step | Status |" >> $env:GITHUB_STEP_SUMMARY
           "|------|--------|" >> $env:GITHUB_STEP_SUMMARY
@@ -2434,8 +2270,14 @@ jobs:
             $icon = if ($bootstrapProd -eq "success") { "✅" } elseif ($bootstrapProd -eq "skipped") { "⏭️" } else { "❌" }
             "| Bootstrap Prod | $icon $bootstrapProd |" >> $env:GITHUB_STEP_SUMMARY
           }
-
-          if ($enableVal -ne "") {
-            $icon = if ($enableVal -eq "success") { "✅" } elseif ($enableVal -eq "skipped") { "⏭️" } else { "❌" }
-            "| Enable Validation | $icon $enableVal |" >> $env:GITHUB_STEP_SUMMARY
-          }
+          
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "### 📝 Optional: Enable Pre-Deployment Validation" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "To enable automatic validation before future infrastructure deployments:" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "1. Edit ```.github/workflows/infra-deploy.yml```" >> $env:GITHUB_STEP_SUMMARY
+          "2. Change line 56: ``if: false`` to ``if: (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && !inputs.dryRun)``" >> $env:GITHUB_STEP_SUMMARY
+          "3. Uncomment line 122: ``needs: pre-validate``" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "This will run validation checks before each deployment." >> $env:GITHUB_STEP_SUMMARY

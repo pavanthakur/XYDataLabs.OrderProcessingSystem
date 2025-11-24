@@ -28,9 +28,9 @@ The workflow uses the automatically available `GITHUB_TOKEN` with appropriate pe
    - ✅ Setup OIDC: `true`
    - ✅ Configure GitHub secrets: `true`
    - ✅ Bootstrap infrastructure: `true`
-   - ✅ Enable pre-deployment validation: `true`
 4. **Authenticate** when prompted for Azure login (device code flow)
 5. **Wait** for completion (~10-15 minutes for all environments)
+6. **Optional**: Manually enable pre-deployment validation in `infra-deploy.yml` (see workflow summary)
 
 ### Add New Environment
 
@@ -41,7 +41,6 @@ To bootstrap a new environment after initial setup:
    - ❌ Setup OIDC: `false` (already done)
    - ❌ Configure GitHub secrets: `false` (already done)
    - ✅ Bootstrap infrastructure: `true`
-   - ✅ Enable pre-deployment validation: `true`
 
 ## 📋 Workflow Inputs
 
@@ -51,7 +50,6 @@ To bootstrap a new environment after initial setup:
 | `setupOidc` | boolean | `false` | Create Azure AD app registration with federated credentials (first-time only) |
 | `configureSecrets` | boolean | `false` | Automatically configure GitHub repository secrets |
 | `bootstrapInfra` | boolean | `true` | Provision Azure resources (Resource Groups, App Services, App Insights) |
-| `enableValidation` | boolean | `true` | Enable pre-deployment validation workflow after bootstrap |
 
 ## 🔄 Workflow Jobs
 
@@ -126,23 +124,14 @@ To bootstrap a new environment after initial setup:
 **Parallelization**:
 - Dev, Staging, and Prod jobs run in parallel when `environment=all`
 
-### 4. Enable Validation (`enable-validation`)
-**Runs when**: `enableValidation` input is `true` AND bootstrap completed
-
-**Actions**:
-- Modifies `.github/workflows/infra-deploy.yml`
-- Re-enables `pre-validate` job condition
-- Restores `needs: pre-validate` dependency
-- Commits changes to repository
-- Triggers validation on next deployment
-
-### 5. Summary (`summary`)
+### 4. Summary (`summary`)
 **Runs**: Always (after all jobs)
 
 **Actions**:
 - Aggregates results from all jobs
 - Displays status table in workflow summary
 - Shows success/failure for each step
+- Provides optional instructions for enabling pre-deployment validation
 
 ## 🎬 Usage Scenarios
 
@@ -156,13 +145,13 @@ To bootstrap a new environment after initial setup:
    setupOidc: true
    configureSecrets: true
    bootstrapInfra: true
-   enableValidation: true
    ```
 2. Authenticate to Azure when prompted
 3. Wait for completion (~15 minutes)
 4. Verify in Azure Portal
+5. (Optional) Enable pre-deployment validation as instructed in workflow summary
 
-**Result**: OIDC configured, secrets set, all environments provisioned, validation enabled
+**Result**: OIDC configured, secrets set, all environments provisioned
 
 ---
 
@@ -176,7 +165,6 @@ To bootstrap a new environment after initial setup:
    setupOidc: true
    configureSecrets: true
    bootstrapInfra: true
-   enableValidation: false
    ```
 2. Authenticate when prompted
 3. Wait for completion (~5 minutes)
@@ -195,11 +183,10 @@ To bootstrap a new environment after initial setup:
    setupOidc: false  # Already done
    configureSecrets: false  # Already done
    bootstrapInfra: true
-   enableValidation: true
    ```
 2. Wait for completion (~5 minutes)
 
-**Result**: Staging environment added, validation enabled
+**Result**: Staging environment added
 
 ---
 
@@ -214,11 +201,10 @@ To bootstrap a new environment after initial setup:
    setupOidc: false
    configureSecrets: false
    bootstrapInfra: true
-   enableValidation: false
    ```
 3. Wait for completion
 
-**Result**: Resources recreated, validation unchanged
+**Result**: Resources recreated
 
 ## 🔍 Monitoring & Troubleshooting
 
@@ -407,7 +393,6 @@ environment: dev
 setupOidc: true
 configureSecrets: false
 bootstrapInfra: false
-enableValidation: false
 ```
 
 Or manually run:

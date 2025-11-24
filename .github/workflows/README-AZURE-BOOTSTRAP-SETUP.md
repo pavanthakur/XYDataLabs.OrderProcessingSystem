@@ -129,12 +129,6 @@ After successful completion, you will have:
 - **Description:** Bootstrap infrastructure (App Services, etc.)
 - **When to use:** Always enabled unless only updating credentials
 
-#### enableValidation
-- **Type:** Boolean
-- **Default:** `true`
-- **Description:** Enable pre-deployment validation after bootstrap
-- **When to use:** After infrastructure is ready for deployments
-
 ## Workflow Jobs
 
 1. **validate-inputs** - Validates all parameters and displays summary
