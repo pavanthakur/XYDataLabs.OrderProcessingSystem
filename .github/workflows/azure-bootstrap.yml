@@ -2277,7 +2277,7 @@ jobs:
           "To enable automatic validation before future infrastructure deployments:" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
           "1. Edit ```.github/workflows/infra-deploy.yml```" >> $env:GITHUB_STEP_SUMMARY
-          "2. Change line 56: ``if: false`` to ``if: (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && !inputs.dryRun)``" >> $env:GITHUB_STEP_SUMMARY
-          "3. Uncomment line 122: ``needs: pre-validate``" >> $env:GITHUB_STEP_SUMMARY
+          "2. In the ``pre-validate`` job, change ``if: false`` to ``if: (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && !inputs.dryRun)``" >> $env:GITHUB_STEP_SUMMARY
+          "3. In the ``deploy`` job, uncomment the line ``needs: pre-validate``" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
           "This will run validation checks before each deployment." >> $env:GITHUB_STEP_SUMMARY
