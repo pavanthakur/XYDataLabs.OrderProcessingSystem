@@ -49,26 +49,56 @@ Write-Host "  Database:       $dbName"
 Write-Host "  Location:       $Location"
 Write-Host ""
 
-# Ensure Resource Group is present and ready before proceeding
-Write-Host "[0/6] Verifying resource group readiness..." -ForegroundColor Cyan
-$rgTimeout = 10 * 60
-$rgInterval = 120
+# Ensure Resource Group exists and is ready before proceeding
+Write-Host "[0/6] Checking resource group..." -ForegroundColor Cyan
+
+# Check if resource group exists
+$rgExists = az group exists --name $rgName 2>$null
+if ($rgExists -eq 'false') {
+    Write-Host "  [CREATE] Resource group does not exist, creating: $rgName" -ForegroundColor Yellow
+    Write-Host "  [INFO] Location: $Location" -ForegroundColor Gray
+    
+    az group create --name $rgName --location $Location --tags env=$Environment app=$BaseName | Out-Null
+    
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  [ERROR] Failed to create resource group: $rgName" -ForegroundColor Red
+        exit 1
+    }
+    
+    Write-Host "  [OK] Resource group created: $rgName" -ForegroundColor Green
+} else {
+    Write-Host "  [EXISTS] Resource group already exists: $rgName" -ForegroundColor Green
+}
+
+# Wait for resource group to be fully ready
+Write-Host "  [WAIT] Verifying resource group readiness..." -ForegroundColor Cyan
+$rgTimeout = 5 * 60  # Reduced from 10 to 5 minutes since we just created it
+$rgInterval = 30      # Check more frequently (every 30 seconds instead of 120)
 $rgElapsed = 0
 $rgReady = $false
+
 while ($rgElapsed -lt $rgTimeout -and -not $rgReady) {
     $rgInfoRaw = az group show --name $rgName --query "{name:name, state:properties.provisioningState}" -o json 2>$null
     if ($LASTEXITCODE -eq 0 -and $rgInfoRaw) {
         $rgInfo = $rgInfoRaw | ConvertFrom-Json
-        if ($rgInfo -and $rgInfo.name -eq $rgName -and $rgInfo.state -eq 'Succeeded') { $rgReady = $true; break }
+        if ($rgInfo -and $rgInfo.name -eq $rgName -and $rgInfo.state -eq 'Succeeded') { 
+            $rgReady = $true
+            break 
+        }
     }
-    if (-not $rgReady) { Start-Sleep -Seconds $rgInterval; $rgElapsed += $rgInterval }
+    if (-not $rgReady) { 
+        Start-Sleep -Seconds $rgInterval
+        $rgElapsed += $rgInterval 
+    }
 }
+
 if (-not $rgReady) {
-    Write-Host "  [ERROR] Resource group not found or not ready after 10 minutes: $rgName" -ForegroundColor Red
-    Write-Host "  [HINT] Ensure infrastructure bootstrap completed successfully before SQL provisioning." -ForegroundColor Yellow
+    Write-Host "  [ERROR] Resource group not ready after waiting $($rgTimeout/60) minutes: $rgName" -ForegroundColor Red
+    Write-Host "  [HINT] Resource group may be in a transitioning state. Check Azure Portal." -ForegroundColor Yellow
     exit 1
 }
-Write-Host "  [OK] Resource group ready: $rgName" -ForegroundColor Green
+
+Write-Host "  [OK] Resource group is ready: $rgName (state: Succeeded)" -ForegroundColor Green
 
 # Auto-generate secure password if not provided
 if (-not $AdminPassword) {
