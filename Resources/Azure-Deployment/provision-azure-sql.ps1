@@ -78,7 +78,7 @@ if ($rgExists -eq 'false') {
     Write-Host "  [INFO] Location: $Location" -ForegroundColor Gray
     Write-Host "  [INFO] Tags: env=$Environment, app=$BaseName" -ForegroundColor Gray
     
-    az group create -n $rgName -l $Location --tags env=$Environment app=$BaseName | Out-Null
+    az group create -n $rgName -l $Location --tags "env=$Environment" "app=$BaseName" | Out-Null
     
     if ($LASTEXITCODE -ne 0) {
         Write-Host "  [ERROR] Failed to create resource group: $rgName" -ForegroundColor Red
@@ -99,6 +99,7 @@ $rgElapsed = 0
 $rgReady = $false
 
 while ($rgElapsed -lt $rgTimeout -and -not $rgReady) {
+    # Suppress errors during polling - RG may not be ready yet (expected during provisioning)
     $rgInfoRaw = az group show -n $rgName --query "{name:name, state:properties.provisioningState}" -o json 2>$null
     if ($LASTEXITCODE -eq 0 -and $rgInfoRaw) {
         $rgInfo = $rgInfoRaw | ConvertFrom-Json
