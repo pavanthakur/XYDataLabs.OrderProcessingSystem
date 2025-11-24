@@ -26,22 +26,11 @@ namespace XYDataLabs.OrderProcessingSystem.Utilities
             var isAzure = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME"));
             
             // Determine effective environment:
-            // - Azure: Use the provided environment (dev/uat/prod based on ASPNETCORE_ENVIRONMENT)
-            // - Docker: Use the provided environment or fall back to "dev"
+            // - Azure/Docker: Use the provided environment or fall back to "dev"
             // - Local (non-Docker, non-Azure): Always use "local" to avoid port conflicts
-            string effectiveEnvironment;
-            if (isAzure)
-            {
-                effectiveEnvironment = string.IsNullOrWhiteSpace(environmentName) ? "dev" : environmentName;
-            }
-            else if (isDocker)
-            {
-                effectiveEnvironment = string.IsNullOrWhiteSpace(environmentName) ? "dev" : environmentName;
-            }
-            else
-            {
-                effectiveEnvironment = "local";
-            }
+            var effectiveEnvironment = (isAzure || isDocker)
+                ? (string.IsNullOrWhiteSpace(environmentName) ? "dev" : environmentName)
+                : "local";
             
             // Find the solution root directory for shared settings
             var currentDirectory = Directory.GetCurrentDirectory();

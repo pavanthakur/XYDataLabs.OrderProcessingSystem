@@ -43,7 +43,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="..\Resources\Configuration\*.json" Link="Resources\Configuration\%(Filename)%(Extension)">
+    <Content Include="..\Resources\Configuration\sharedsettings.*.json" Link="Resources\Configuration\%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
