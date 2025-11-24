@@ -38,4 +38,11 @@
     <Watch Remove="bin\**\*;obj\**\*" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="..\Resources\Configuration\*.json" Link="Resources\Configuration\%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>
