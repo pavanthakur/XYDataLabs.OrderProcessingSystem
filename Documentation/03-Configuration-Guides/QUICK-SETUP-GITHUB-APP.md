@@ -20,21 +20,8 @@ Eliminate PAT token expiration by using GitHub App authentication (tokens never 
    |------------|--------------|--------------|
    | **Actions** | Read and write ✅ | Trigger workflows, manage workflow runs |
    | **Pull requests** | Read and write ✅ | Create/update PRs in workflows |
-   | **Secrets** | Read and write ✅ | **CRITICAL** - Read/write repository secrets (for Azure credentials) |
+   | **Secrets** | Read and write ✅ | **CRITICAL** - Read/write repository & environment secrets |
    | **Workflows** | Read and write ✅ | Modify workflow files, dispatch workflow runs |
-
-   **Optional (for App Insights GitHub secrets):**
-   
-   | Permission | Access Level | Required For |
-   |------------|--------------|--------------|
-   | **Environment secrets** | Read and write 🔵 | **OPTIONAL** - Set App Insights connection string as GitHub environment secret |
-
-   > **Note**: "Secrets" and "Environment secrets" are separate permissions in GitHub Apps.
-   > - **Secrets** = Repository-level secrets (Azure credentials) - **REQUIRED**
-   > - **Environment secrets** = Environment-level secrets (App Insights) - **OPTIONAL**
-   > 
-   > The bootstrap workflow sets App Insights connection string directly in Azure App Service.
-   > GitHub environment secrets are only needed if you want workflows to reference the connection string.
 
    **To set permissions:**
    - Scroll to "Repository permissions" section
@@ -85,7 +72,6 @@ On the same installation page, scroll to **"Permissions"** section and verify:
 |------------|-------------|------------|
 | ✅ Read and write access to actions, pull requests, and workflows | Present | Go to app settings → Permissions & events |
 | ✅ Read and write access to secrets | **CRITICAL** | Add this permission immediately |
-| 🔵 Read and write access to environment secrets | **OPTIONAL** | Only needed for App Insights GitHub secrets |
 | ✅ Read access to metadata | Present (automatic) | N/A |
 
 **If "Secrets" permission is missing:**
@@ -93,11 +79,6 @@ On the same installation page, scroll to **"Permissions"** section and verify:
 2. Repository permissions → **Secrets** → Change to **"Read and write"**
 3. Save changes. You will need to approve the updated permissions for your repository again.
 4. Revisit the app installation link to complete approval: https://github.com/settings/apps/[your-app-name]/installations
-
-**If "Environment secrets" permission is missing (optional):**
-- The bootstrap workflow will show a warning but continue successfully
-- App Insights is already configured in Azure App Service (this is sufficient)
-- Only add this permission if you want App Insights connection string in GitHub environment secrets
 
 ---
 ### Quick Troubleshooting Checklist
@@ -224,24 +205,6 @@ If you're currently using `GH_PAT`:
 2. Click your app → **Permissions**
 3. Repository permissions → Secrets → **Read and write**
 4. Save changes
-
-### "HTTP 403: Resource not accessible by integration" - Environment secrets
-
-**Symptom**: Bootstrap workflow shows warning about failing to set App Insights connection string as GitHub environment secret
-
-**This is expected and not critical!** The workflow continues successfully because:
-- App Insights connection string is already configured in Azure App Service
-- GitHub environment secrets are optional (only needed if workflows reference them)
-
-**To enable GitHub environment secrets (optional):**
-1. Go to app settings: https://github.com/settings/apps
-2. Click your app → **Permissions**  
-3. Repository permissions → **Environment secrets** → **Read and write**
-4. Save changes and approve updated permissions
-
-**Note**: "Secrets" and "Environment secrets" are separate permissions:
-- **Secrets** = Repository-level secrets (required for Azure credentials)
-- **Environment secrets** = Environment-level secrets (optional for App Insights)
 
 ### Still using PAT after setup?
 
