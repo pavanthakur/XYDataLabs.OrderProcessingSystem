@@ -12,6 +12,9 @@ param sku string
 param appInsightsConnectionString string = ''
 @description('App Insights Instrumentation Key (optional)')
 param appInsightsInstrumentationKey string = ''
+@description('SQL Database Connection String (optional)')
+@secure()
+param sqlConnectionString string = ''
 
 var planName = 'asp-${baseName}-${environment}'
 var apiName = '${githubOwner}-${baseName}-api-xyapp-${environment}'
@@ -62,6 +65,13 @@ resource apiApp 'Microsoft.Web/sites@2023-12-01' = {
     siteConfig: {
       netFrameworkVersion: 'v8.0'
       appSettings: appInsightsSettings
+      connectionStrings: !empty(sqlConnectionString) ? [
+        {
+          name: 'OrderProcessingSystemDbConnection'
+          connectionString: sqlConnectionString
+          type: 'SQLAzure'
+        }
+      ] : []
     }
     httpsOnly: true
   }
@@ -80,6 +90,13 @@ resource uiApp 'Microsoft.Web/sites@2023-12-01' = {
     siteConfig: {
       netFrameworkVersion: 'v8.0'
       appSettings: appInsightsSettings
+      connectionStrings: !empty(sqlConnectionString) ? [
+        {
+          name: 'OrderProcessingSystemDbConnection'
+          connectionString: sqlConnectionString
+          type: 'SQLAzure'
+        }
+      ] : []
     }
     httpsOnly: true
   }

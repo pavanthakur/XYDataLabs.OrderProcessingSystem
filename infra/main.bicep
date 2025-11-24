@@ -18,6 +18,16 @@ param appServiceSku string = 'F1'
 @description('Boolean to enable identity (OIDC) provisioning via deployment script')
 param enableIdentity bool = true
 
+@description('SQL Server admin username')
+param sqlAdminUsername string = 'sqladmin'
+
+@description('SQL Server admin password')
+@secure()
+param sqlAdminPassword string
+
+@description('Database service objective (Basic, S0, S1, etc)')
+param databaseServiceObjective string = 'Basic'
+
 var rgName = 'rg-${baseName}-${environment}'
 
 // Resource Group (subscription scope deployment creates RG first)
@@ -27,6 +37,20 @@ resource appRg 'Microsoft.Resources/resourceGroups@2022-09-01' = {
   tags: {
     env: environment
     app: baseName
+  }
+}
+
+// SQL Database
+module sql 'modules/sql.bicep' = {
+  name: 'sql-${environment}'
+  scope: appRg
+  params: {
+    location: location
+    environment: environment
+    baseName: baseName
+    sqlAdminUsername: sqlAdminUsername
+    sqlAdminPassword: sqlAdminPassword
+    databaseServiceObjective: databaseServiceObjective
   }
 }
 
@@ -42,6 +66,7 @@ module hosting 'modules/hosting.bicep' = {
     sku: appServiceSku
     appInsightsConnectionString: insights.outputs.appInsightsConnectionString
     appInsightsInstrumentationKey: insights.outputs.appInsightsInstrumentationKey
+    sqlConnectionString: sql.outputs.connectionString
   }
 }
 
@@ -75,4 +100,7 @@ output uiHostName string = hosting.outputs.uiHostName
 output appInsightsName string = insights.outputs.appInsightsName
 output appInsightsConnectionString string = insights.outputs.appInsightsConnectionString
 output appInsightsInstrumentationKey string = insights.outputs.appInsightsInstrumentationKey
+output sqlServerName string = sql.outputs.sqlServerName
+output sqlServerFqdn string = sql.outputs.sqlServerFqdn
+output databaseName string = sql.outputs.databaseName
 output oidcClientId string = enableIdentity ? identity.outputs.clientId : ''

@@ -5,8 +5,9 @@ This directory contains the production-ready Azure infrastructure definition for
 ## Modules
 
 - `main.bicep` – Subscription-scope entrypoint; creates Resource Group and deploys modules.
-- `modules/hosting.bicep` – App Service Plan + API and UI Web Apps.
+- `modules/hosting.bicep` – App Service Plan + API and UI Web Apps with connection string configuration.
 - `modules/insights.bicep` – Application Insights instance.
+- `modules/sql.bicep` – Azure SQL Server and Database with firewall rules.
 - `modules/identity.bicep` – (Optional) Creates GitHub OIDC App Registration + federated credentials using an Azure CLI deploymentScript.
 
 ## Naming Convention
@@ -54,12 +55,28 @@ Original PowerShell bootstrap (`Resources/Azure-Deployment/bootstrap-enterprise-
 - `-LogFormat json` for structured logs
 Use Bicep for actual infra provisioning going forward.
 
+## Database Configuration
+
+The SQL module provisions:
+- Azure SQL Server with admin credentials
+- SQL Database (configurable service objective)
+- Firewall rule to allow Azure services
+- Connection string automatically configured in App Services
+
+**Security Note**: SQL admin credentials are stored as secure parameters. In production, consider using:
+- Azure Key Vault for credential management
+- Managed Identity for SQL authentication
+- More restrictive firewall rules
+
 ## Next Hardening Steps
-1. Introduce user-assigned managed identity reference in `identity.bicep`.
-2. Add diagnostic settings (App Service + Insights) modules.
-3. Add alert rules (availability / errors).
-4. Parameterize runtime stacks if needed.
-5. Add staging/prod traffic slot support.
+1. Move SQL credentials to Azure Key Vault
+2. Implement Managed Identity for SQL connections
+3. Introduce user-assigned managed identity reference in `identity.bicep`.
+4. Add diagnostic settings (App Service + Insights + SQL) modules.
+5. Add alert rules (availability / errors / database performance).
+6. Parameterize runtime stacks if needed.
+7. Add staging/prod traffic slot support.
+8. Add more restrictive SQL firewall rules for production.
 
 ---
 Status: Initial migration complete.
