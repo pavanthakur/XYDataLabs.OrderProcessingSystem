@@ -1802,11 +1802,14 @@ jobs:
               Write-Host "    ✅ App Insights connection string configured" -ForegroundColor Green
             } else {
               Write-Host "" -ForegroundColor Gray
-              Write-Host "    ❌ Failed to set secret (exit code: $secretExitCode)" -ForegroundColor Red
-              Write-Host "    Error output: $secretOutput" -ForegroundColor Red
+              Write-Host "    ⚠️  Failed to set GitHub environment secret (exit code: $secretExitCode)" -ForegroundColor Yellow
+              Write-Host "    Error output: $secretOutput" -ForegroundColor Yellow
               Write-Host "" -ForegroundColor Gray
-              Write-Host "    🔍 Troubleshooting:" -ForegroundColor Yellow
-              Write-Host "      1. Verify GitHub App has 'Secrets: Read and write' permission" -ForegroundColor White
+              Write-Host "    ℹ️  This is not critical - App Insights is already configured in Azure App Service" -ForegroundColor Cyan
+              Write-Host "" -ForegroundColor Gray
+              Write-Host "    🔍 To enable GitHub environment secrets (optional):" -ForegroundColor Yellow
+              Write-Host "      1. Verify GitHub App has 'Environment secrets: Read and write' permission" -ForegroundColor White
+              Write-Host "         (Note: This is different from 'Repository secrets: Read and write')" -ForegroundColor Gray
               Write-Host "      2. Ensure GitHub App is installed on this repository" -ForegroundColor White
               Write-Host "      3. Check if 'dev' environment exists and doesn't require approval" -ForegroundColor White
               Write-Host "      4. Verify APP_ID and APP_PRIVATE_KEY secrets are correct" -ForegroundColor White
@@ -1814,8 +1817,8 @@ jobs:
               Write-Host "    📖 GitHub App Setup:" -ForegroundColor Cyan
               Write-Host "      Documentation/03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md" -ForegroundColor Gray
               Write-Host "" -ForegroundColor Gray
-              Write-Error "Failed to configure App Insights connection string. GitHub App is configured but secret setting failed."
-              exit 1
+              Write-Host "    Continuing without GitHub secret - Azure App Service configuration is sufficient." -ForegroundColor Cyan
+              Write-Host "" -ForegroundColor Gray
             }
             
             Write-Host ""
@@ -2179,11 +2182,14 @@ jobs:
               Write-Host "    ✅ App Insights connection string configured" -ForegroundColor Green
             } else {
               Write-Host "" -ForegroundColor Gray
-              Write-Host "    ❌ Failed to set secret (exit code: $secretExitCode)" -ForegroundColor Red
-              Write-Host "    Error output: $secretOutput" -ForegroundColor Red
+              Write-Host "    ⚠️  Failed to set GitHub environment secret (exit code: $secretExitCode)" -ForegroundColor Yellow
+              Write-Host "    Error output: $secretOutput" -ForegroundColor Yellow
               Write-Host "" -ForegroundColor Gray
-              Write-Host "    🔍 Troubleshooting:" -ForegroundColor Yellow
-              Write-Host "      1. Verify GitHub App has 'Secrets: Read and write' permission" -ForegroundColor White
+              Write-Host "    ℹ️  This is not critical - App Insights is already configured in Azure App Service" -ForegroundColor Cyan
+              Write-Host "" -ForegroundColor Gray
+              Write-Host "    🔍 To enable GitHub environment secrets (optional):" -ForegroundColor Yellow
+              Write-Host "      1. Verify GitHub App has 'Environment secrets: Read and write' permission" -ForegroundColor White
+              Write-Host "         (Note: This is different from 'Repository secrets: Read and write')" -ForegroundColor Gray
               Write-Host "      2. Ensure GitHub App is installed on this repository" -ForegroundColor White
               Write-Host "      3. Check if 'staging' environment exists and doesn't require approval" -ForegroundColor White
               Write-Host "      4. Verify APP_ID and APP_PRIVATE_KEY secrets are correct" -ForegroundColor White
@@ -2191,8 +2197,8 @@ jobs:
               Write-Host "    📖 GitHub App Setup:" -ForegroundColor Cyan
               Write-Host "      Documentation/03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md" -ForegroundColor Gray
               Write-Host "" -ForegroundColor Gray
-              Write-Error "Failed to configure App Insights connection string. GitHub App is configured but secret setting failed."
-              exit 1
+              Write-Host "    Continuing without GitHub secret - Azure App Service configuration is sufficient." -ForegroundColor Cyan
+              Write-Host "" -ForegroundColor Gray
             }
             
             Write-Host ""
@@ -2556,11 +2562,14 @@ jobs:
               Write-Host "    ✅ App Insights connection string configured" -ForegroundColor Green
             } else {
               Write-Host "" -ForegroundColor Gray
-              Write-Host "    ❌ Failed to set secret (exit code: $secretExitCode)" -ForegroundColor Red
-              Write-Host "    Error output: $secretOutput" -ForegroundColor Red
+              Write-Host "    ⚠️  Failed to set GitHub environment secret (exit code: $secretExitCode)" -ForegroundColor Yellow
+              Write-Host "    Error output: $secretOutput" -ForegroundColor Yellow
               Write-Host "" -ForegroundColor Gray
-              Write-Host "    🔍 Troubleshooting:" -ForegroundColor Yellow
-              Write-Host "      1. Verify GitHub App has 'Secrets: Read and write' permission" -ForegroundColor White
+              Write-Host "    ℹ️  This is not critical - App Insights is already configured in Azure App Service" -ForegroundColor Cyan
+              Write-Host "" -ForegroundColor Gray
+              Write-Host "    🔍 To enable GitHub environment secrets (optional):" -ForegroundColor Yellow
+              Write-Host "      1. Verify GitHub App has 'Environment secrets: Read and write' permission" -ForegroundColor White
+              Write-Host "         (Note: This is different from 'Repository secrets: Read and write')" -ForegroundColor Gray
               Write-Host "      2. Ensure GitHub App is installed on this repository" -ForegroundColor White
               Write-Host "      3. Check if 'prod' environment exists and doesn't require approval" -ForegroundColor White
               Write-Host "      4. Verify APP_ID and APP_PRIVATE_KEY secrets are correct" -ForegroundColor White
@@ -2568,8 +2577,8 @@ jobs:
               Write-Host "    📖 GitHub App Setup:" -ForegroundColor Cyan
               Write-Host "      Documentation/03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md" -ForegroundColor Gray
               Write-Host "" -ForegroundColor Gray
-              Write-Error "Failed to configure App Insights connection string. GitHub App is configured but secret setting failed."
-              exit 1
+              Write-Host "    Continuing without GitHub secret - Azure App Service configuration is sufficient." -ForegroundColor Cyan
+              Write-Host "" -ForegroundColor Gray
             }
             
             Write-Host ""
