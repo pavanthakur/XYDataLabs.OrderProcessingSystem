@@ -19,7 +19,6 @@ param appServiceSku string = 'F1'
 param enableIdentity bool = true
 
 @description('SQL Server admin username')
-@secure()
 param sqlAdminUsername string = 'sqladmin'
 
 @description('SQL Server admin password')
@@ -69,9 +68,6 @@ module hosting 'modules/hosting.bicep' = {
     appInsightsInstrumentationKey: insights.outputs.appInsightsInstrumentationKey
     sqlConnectionString: sql.outputs.connectionString
   }
-  dependsOn: [
-    sql
-  ]
 }
 
 // Application Insights

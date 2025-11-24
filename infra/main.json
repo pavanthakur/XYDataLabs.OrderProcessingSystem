@@ -1,0 +1,648 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.38.33.27573",
+      "templateHash": "3640157605174294041"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "centralindia",
+      "metadata": {
+        "description": "Azure region for all resources"
+      }
+    },
+    "environment": {
+      "type": "string",
+      "metadata": {
+        "description": "Environment code (dev, staging, prod)"
+      }
+    },
+    "baseName": {
+      "type": "string",
+      "defaultValue": "orderprocessing",
+      "metadata": {
+        "description": "Base application name"
+      }
+    },
+    "githubOwner": {
+      "type": "string",
+      "metadata": {
+        "description": "GitHub owner / org prefix for global uniqueness"
+      }
+    },
+    "appServiceSku": {
+      "type": "string",
+      "defaultValue": "F1",
+      "metadata": {
+        "description": "App Service SKU (F1, B1, P1v3, etc)"
+      }
+    },
+    "enableIdentity": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Boolean to enable identity (OIDC) provisioning via deployment script"
+      }
+    },
+    "sqlAdminUsername": {
+      "type": "string",
+      "defaultValue": "sqladmin",
+      "metadata": {
+        "description": "SQL Server admin username"
+      }
+    },
+    "sqlAdminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "SQL Server admin password"
+      }
+    },
+    "databaseServiceObjective": {
+      "type": "string",
+      "defaultValue": "Basic",
+      "metadata": {
+        "description": "Database service objective (Basic, S0, S1, etc)"
+      }
+    }
+  },
+  "variables": {
+    "rgName": "[format('rg-{0}-{1}', parameters('baseName'), parameters('environment'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/resourceGroups",
+      "apiVersion": "2022-09-01",
+      "name": "[variables('rgName')]",
+      "location": "[parameters('location')]",
+      "tags": {
+        "env": "[parameters('environment')]",
+        "app": "[parameters('baseName')]"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('sql-{0}', parameters('environment'))]",
+      "resourceGroup": "[variables('rgName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "environment": {
+            "value": "[parameters('environment')]"
+          },
+          "baseName": {
+            "value": "[parameters('baseName')]"
+          },
+          "sqlAdminUsername": {
+            "value": "[parameters('sqlAdminUsername')]"
+          },
+          "sqlAdminPassword": {
+            "value": "[parameters('sqlAdminPassword')]"
+          },
+          "databaseServiceObjective": {
+            "value": "[parameters('databaseServiceObjective')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.38.33.27573",
+              "templateHash": "6626478082134379691"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Region"
+              }
+            },
+            "environment": {
+              "type": "string",
+              "metadata": {
+                "description": "Environment code"
+              }
+            },
+            "baseName": {
+              "type": "string",
+              "metadata": {
+                "description": "Base application name"
+              }
+            },
+            "sqlAdminUsername": {
+              "type": "string",
+              "defaultValue": "sqladmin",
+              "metadata": {
+                "description": "SQL Server admin username"
+              }
+            },
+            "sqlAdminPassword": {
+              "type": "securestring",
+              "metadata": {
+                "description": "SQL Server admin password"
+              }
+            },
+            "databaseServiceObjective": {
+              "type": "string",
+              "defaultValue": "Basic",
+              "metadata": {
+                "description": "Database service objective (Basic, S0, S1, etc)"
+              }
+            },
+            "maxSizeGB": {
+              "type": "int",
+              "defaultValue": 2,
+              "metadata": {
+                "description": "Maximum database size in GB"
+              }
+            }
+          },
+          "variables": {
+            "sqlServerName": "[format('{0}-sql-{1}', parameters('baseName'), parameters('environment'))]",
+            "databaseName": "[format('OrderProcessingSystem_{0}{1}', toUpper(substring(parameters('environment'), 0, 1)), substring(parameters('environment'), 1))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Sql/servers",
+              "apiVersion": "2023-08-01-preview",
+              "name": "[variables('sqlServerName')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "administratorLogin": "[parameters('sqlAdminUsername')]",
+                "administratorLoginPassword": "[parameters('sqlAdminPassword')]",
+                "version": "12.0",
+                "minimalTlsVersion": "1.2",
+                "publicNetworkAccess": "Enabled"
+              },
+              "tags": {
+                "env": "[parameters('environment')]",
+                "app": "[parameters('baseName')]",
+                "component": "database"
+              }
+            },
+            {
+              "type": "Microsoft.Sql/servers/firewallRules",
+              "apiVersion": "2023-08-01-preview",
+              "name": "[format('{0}/{1}', variables('sqlServerName'), 'AllowAzureServices')]",
+              "properties": {
+                "startIpAddress": "0.0.0.0",
+                "endIpAddress": "0.0.0.0"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Sql/servers', variables('sqlServerName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Sql/servers/databases",
+              "apiVersion": "2023-08-01-preview",
+              "name": "[format('{0}/{1}', variables('sqlServerName'), variables('databaseName'))]",
+              "location": "[parameters('location')]",
+              "sku": {
+                "name": "[parameters('databaseServiceObjective')]",
+                "tier": "[if(equals(parameters('databaseServiceObjective'), 'Basic'), 'Basic', 'Standard')]"
+              },
+              "properties": {
+                "collation": "SQL_Latin1_General_CP1_CI_AS",
+                "maxSizeBytes": "[mul(mul(mul(parameters('maxSizeGB'), 1024), 1024), 1024)]",
+                "catalogCollation": "SQL_Latin1_General_CP1_CI_AS",
+                "zoneRedundant": false,
+                "readScale": "Disabled",
+                "requestedBackupStorageRedundancy": "Local"
+              },
+              "tags": {
+                "env": "[parameters('environment')]",
+                "app": "[parameters('baseName')]",
+                "component": "database"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Sql/servers', variables('sqlServerName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "sqlServerName": {
+              "type": "string",
+              "value": "[variables('sqlServerName')]"
+            },
+            "sqlServerFqdn": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Sql/servers', variables('sqlServerName')), '2023-08-01-preview').fullyQualifiedDomainName]"
+            },
+            "databaseName": {
+              "type": "string",
+              "value": "[variables('databaseName')]"
+            },
+            "connectionString": {
+              "type": "string",
+              "value": "[format('Server=tcp:{0},1433;Initial Catalog={1};User ID={2};Password={3};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;', reference(resourceId('Microsoft.Sql/servers', variables('sqlServerName')), '2023-08-01-preview').fullyQualifiedDomainName, variables('databaseName'), parameters('sqlAdminUsername'), parameters('sqlAdminPassword'))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('rgName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('hosting-{0}', parameters('environment'))]",
+      "resourceGroup": "[variables('rgName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "environment": {
+            "value": "[parameters('environment')]"
+          },
+          "baseName": {
+            "value": "[parameters('baseName')]"
+          },
+          "githubOwner": {
+            "value": "[parameters('githubOwner')]"
+          },
+          "sku": {
+            "value": "[parameters('appServiceSku')]"
+          },
+          "appInsightsConnectionString": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('insights-{0}', parameters('environment'))), '2025-04-01').outputs.appInsightsConnectionString.value]"
+          },
+          "appInsightsInstrumentationKey": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('insights-{0}', parameters('environment'))), '2025-04-01').outputs.appInsightsInstrumentationKey.value]"
+          },
+          "sqlConnectionString": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('sql-{0}', parameters('environment'))), '2025-04-01').outputs.connectionString.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.38.33.27573",
+              "templateHash": "8999219420191064964"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Region"
+              }
+            },
+            "environment": {
+              "type": "string",
+              "metadata": {
+                "description": "Environment code"
+              }
+            },
+            "baseName": {
+              "type": "string",
+              "metadata": {
+                "description": "Base application name"
+              }
+            },
+            "githubOwner": {
+              "type": "string",
+              "metadata": {
+                "description": "GitHub owner prefix for uniqueness"
+              }
+            },
+            "sku": {
+              "type": "string",
+              "metadata": {
+                "description": "App Service Plan SKU"
+              }
+            },
+            "appInsightsConnectionString": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "App Insights Connection String (optional)"
+              }
+            },
+            "appInsightsInstrumentationKey": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "App Insights Instrumentation Key (optional)"
+              }
+            },
+            "sqlConnectionString": {
+              "type": "securestring",
+              "defaultValue": "",
+              "metadata": {
+                "description": "SQL Database Connection String (optional)"
+              }
+            }
+          },
+          "variables": {
+            "planName": "[format('asp-{0}-{1}', parameters('baseName'), parameters('environment'))]",
+            "apiName": "[format('{0}-{1}-api-xyapp-{2}', parameters('githubOwner'), parameters('baseName'), parameters('environment'))]",
+            "uiName": "[format('{0}-{1}-ui-xyapp-{2}', parameters('githubOwner'), parameters('baseName'), parameters('environment'))]",
+            "appInsightsSettings": "[if(not(empty(parameters('appInsightsConnectionString'))), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', parameters('appInsightsConnectionString')), createObject('name', 'ApplicationInsightsAgent_EXTENSION_VERSION', 'value', '~3'), createObject('name', 'APPINSIGHTS_INSTRUMENTATIONKEY', 'value', parameters('appInsightsInstrumentationKey')), createObject('name', 'XDT_MicrosoftApplicationInsights_Mode', 'value', 'recommended')), createArray())]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Web/serverfarms",
+              "apiVersion": "2023-12-01",
+              "name": "[variables('planName')]",
+              "location": "[parameters('location')]",
+              "sku": {
+                "name": "[parameters('sku')]",
+                "tier": "[if(equals(parameters('sku'), 'F1'), 'Free', parameters('sku'))]"
+              },
+              "properties": {
+                "reserved": false
+              },
+              "tags": {
+                "env": "[parameters('environment')]",
+                "app": "[parameters('baseName')]",
+                "component": "hosting"
+              }
+            },
+            {
+              "type": "Microsoft.Web/sites",
+              "apiVersion": "2023-12-01",
+              "name": "[variables('apiName')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('planName'))]",
+                "siteConfig": {
+                  "netFrameworkVersion": "v8.0",
+                  "appSettings": "[variables('appInsightsSettings')]",
+                  "connectionStrings": "[if(not(empty(parameters('sqlConnectionString'))), createArray(createObject('name', 'OrderProcessingSystemDbConnection', 'connectionString', parameters('sqlConnectionString'), 'type', 'SQLAzure')), createArray())]"
+                },
+                "httpsOnly": true
+              },
+              "tags": {
+                "env": "[parameters('environment')]",
+                "app": "[parameters('baseName')]",
+                "role": "api"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('planName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Web/sites",
+              "apiVersion": "2023-12-01",
+              "name": "[variables('uiName')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('planName'))]",
+                "siteConfig": {
+                  "netFrameworkVersion": "v8.0",
+                  "appSettings": "[variables('appInsightsSettings')]",
+                  "connectionStrings": "[if(not(empty(parameters('sqlConnectionString'))), createArray(createObject('name', 'OrderProcessingSystemDbConnection', 'connectionString', parameters('sqlConnectionString'), 'type', 'SQLAzure')), createArray())]"
+                },
+                "httpsOnly": true
+              },
+              "tags": {
+                "env": "[parameters('environment')]",
+                "app": "[parameters('baseName')]",
+                "role": "ui"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('planName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "apiHostName": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Web/sites', variables('apiName')), '2023-12-01').defaultHostName]"
+            },
+            "uiHostName": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Web/sites', variables('uiName')), '2023-12-01').defaultHostName]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('rgName'))]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('insights-{0}', parameters('environment')))]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('sql-{0}', parameters('environment')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('insights-{0}', parameters('environment'))]",
+      "resourceGroup": "[variables('rgName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "environment": {
+            "value": "[parameters('environment')]"
+          },
+          "baseName": {
+            "value": "[parameters('baseName')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.38.33.27573",
+              "templateHash": "17321997595337719821"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Region"
+              }
+            },
+            "environment": {
+              "type": "string",
+              "metadata": {
+                "description": "Environment"
+              }
+            },
+            "baseName": {
+              "type": "string",
+              "metadata": {
+                "description": "Base application name"
+              }
+            }
+          },
+          "variables": {
+            "aiName": "[format('ai-{0}-{1}', parameters('baseName'), parameters('environment'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Insights/components",
+              "apiVersion": "2020-02-02",
+              "name": "[variables('aiName')]",
+              "location": "[parameters('location')]",
+              "kind": "web",
+              "properties": {
+                "Application_Type": "web"
+              },
+              "tags": {
+                "env": "[parameters('environment')]",
+                "app": "[parameters('baseName')]",
+                "component": "monitoring"
+              }
+            }
+          ],
+          "outputs": {
+            "appInsightsName": {
+              "type": "string",
+              "value": "[variables('aiName')]"
+            },
+            "appInsightsConnectionString": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Insights/components', variables('aiName')), '2020-02-02').ConnectionString]"
+            },
+            "appInsightsInstrumentationKey": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Insights/components', variables('aiName')), '2020-02-02').InstrumentationKey]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('rgName'))]"
+      ]
+    },
+    {
+      "condition": "[parameters('enableIdentity')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('identity-{0}', parameters('environment'))]",
+      "resourceGroup": "[variables('rgName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "githubOwner": {
+            "value": "[parameters('githubOwner')]"
+          },
+          "githubRepo": {
+            "value": "TestAppXY_OrderProcessingSystem"
+          },
+          "environment": {
+            "value": "[parameters('environment')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.38.33.27573",
+              "templateHash": "9620412990395767126"
+            }
+          },
+          "parameters": {
+            "githubOwner": {
+              "type": "string",
+              "metadata": {
+                "description": "GitHub owner/org (placeholder)"
+              }
+            },
+            "githubRepo": {
+              "type": "string",
+              "metadata": {
+                "description": "GitHub repository name (placeholder)"
+              }
+            },
+            "environment": {
+              "type": "string",
+              "metadata": {
+                "description": "Environment code"
+              }
+            }
+          },
+          "resources": [],
+          "outputs": {
+            "clientId": {
+              "type": "string",
+              "value": ""
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('rgName'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "resourceGroupName": {
+      "type": "string",
+      "value": "[variables('rgName')]"
+    },
+    "apiHostName": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('hosting-{0}', parameters('environment'))), '2025-04-01').outputs.apiHostName.value]"
+    },
+    "uiHostName": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('hosting-{0}', parameters('environment'))), '2025-04-01').outputs.uiHostName.value]"
+    },
+    "appInsightsName": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('insights-{0}', parameters('environment'))), '2025-04-01').outputs.appInsightsName.value]"
+    },
+    "appInsightsConnectionString": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('insights-{0}', parameters('environment'))), '2025-04-01').outputs.appInsightsConnectionString.value]"
+    },
+    "appInsightsInstrumentationKey": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('insights-{0}', parameters('environment'))), '2025-04-01').outputs.appInsightsInstrumentationKey.value]"
+    },
+    "sqlServerName": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('sql-{0}', parameters('environment'))), '2025-04-01').outputs.sqlServerName.value]"
+    },
+    "sqlServerFqdn": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('sql-{0}', parameters('environment'))), '2025-04-01').outputs.sqlServerFqdn.value]"
+    },
+    "databaseName": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('sql-{0}', parameters('environment'))), '2025-04-01').outputs.databaseName.value]"
+    },
+    "oidcClientId": {
+      "type": "string",
+      "value": "[if(parameters('enableIdentity'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('identity-{0}', parameters('environment'))), '2025-04-01').outputs.clientId.value, '')]"
+    }
+  }
+}

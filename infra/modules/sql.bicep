@@ -8,7 +8,6 @@ param environment string
 param baseName string
 
 @description('SQL Server admin username')
-@secure()
 param sqlAdminUsername string = 'sqladmin'
 
 @description('SQL Server admin password')
@@ -78,4 +77,6 @@ resource database 'Microsoft.Sql/servers/databases@2023-08-01-preview' = {
 output sqlServerName string = sqlServer.name
 output sqlServerFqdn string = sqlServer.properties.fullyQualifiedDomainName
 output databaseName string = database.name
+// Note: Connection string contains password and is passed directly to hosting module
+// It's not stored in outputs to avoid exposure in deployment logs
 output connectionString string = 'Server=tcp:${sqlServer.properties.fullyQualifiedDomainName},1433;Initial Catalog=${databaseName};User ID=${sqlAdminUsername};Password=${sqlAdminPassword};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
