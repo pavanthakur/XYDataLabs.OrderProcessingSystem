@@ -12,9 +12,9 @@ using System.Text.RegularExpressions;
 using XYDataLabs.OrderProcessingSystem.Application.Utilities;
 
 // Bootstrap Serilog as early as possible so Log.* writes go to console immediately
-// GitHub Actions deployment test - OIDC validation
-// Testing automated deployment flow: Bootstrap → OIDC Setup → GitHub Secrets → Git Push → CI/CD Trigger
-// This change validates the complete end-to-end deployment pipeline with branch-based OIDC authentication
+// Azure App Service Deployment - Fix for Application Not Starting
+// Deployment Fix: Trigger API deployment to Azure App Service (dev environment)
+// This deployment ensures the API application is properly deployed with Application Insights telemetry
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Information()
     .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
