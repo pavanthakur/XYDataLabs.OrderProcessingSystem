@@ -14,6 +14,11 @@ param sqlAdminUsername string = 'sqladmin'
 @secure()
 param sqlAdminPassword string
 
+// SECURITY NOTE: For production, consider:
+// 1. Use Azure Key Vault to store and reference credentials
+// 2. Implement Managed Identity for SQL authentication (removes need for passwords)
+// 3. Use private endpoints instead of public network access
+
 @description('Database service objective (Basic, S0, S1, etc)')
 param databaseServiceObjective string = 'Basic'
 
@@ -31,7 +36,7 @@ resource sqlServer 'Microsoft.Sql/servers@2023-08-01-preview' = {
     administratorLoginPassword: sqlAdminPassword
     version: '12.0'
     minimalTlsVersion: '1.2'
-    publicNetworkAccess: 'Enabled'
+    publicNetworkAccess: 'Enabled' // SECURITY: Consider 'Disabled' with Private Endpoint for production
   }
   tags: {
     env: environment
@@ -77,6 +82,10 @@ resource database 'Microsoft.Sql/servers/databases@2023-08-01-preview' = {
 output sqlServerName string = sqlServer.name
 output sqlServerFqdn string = sqlServer.properties.fullyQualifiedDomainName
 output databaseName string = database.name
-// Note: Connection string contains password and is passed directly to hosting module
-// It's not stored in outputs to avoid exposure in deployment logs
+// SECURITY WARNING: Connection string contains password and may appear in deployment logs
+// This is used only to pass to hosting module for App Service configuration
+// For production, consider:
+// 1. Using Managed Identity authentication (no password needed)
+// 2. Storing credentials in Key Vault and referencing them
+// 3. Enabling Azure AD authentication only
 output connectionString string = 'Server=tcp:${sqlServer.properties.fullyQualifiedDomainName},1433;Initial Catalog=${databaseName};User ID=${sqlAdminUsername};Password=${sqlAdminPassword};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
