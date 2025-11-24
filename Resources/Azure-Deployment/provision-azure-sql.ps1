@@ -320,3 +320,6 @@ Write-Host ""
 
 Write-Host "[SUCCESS] Azure SQL Database provisioned and configured" -ForegroundColor Green
 Write-Host ""
+
+# Exit with success code even if app service configuration warnings occurred
+exit 0
