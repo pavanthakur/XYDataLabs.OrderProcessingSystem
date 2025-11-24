@@ -35,6 +35,25 @@ var environmentName = builder.Environment.EnvironmentName switch
 
 Console.WriteLine("[EARLIEST DEBUG] Environment name mapping completed...");
 
+// Configure Application Insights for environment-wise telemetry and logging
+var appInsightsConnectionString = builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"] 
+    ?? Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CONNECTION_STRING");
+
+if (!string.IsNullOrWhiteSpace(appInsightsConnectionString))
+{
+    builder.Services.AddApplicationInsightsTelemetry(options =>
+    {
+        options.ConnectionString = appInsightsConnectionString;
+        options.EnableAdaptiveSampling = true;
+        options.EnableQuickPulseMetricStream = true;
+    });
+    Log.Information("[CONFIG] Application Insights enabled for {Environment} environment", environmentName);
+}
+else
+{
+    Log.Warning("[CONFIG] Application Insights NOT configured - connection string missing for {Environment} environment", environmentName);
+}
+
 // Configure Serilog with environment-aware paths
 builder.Host.UseSerilog((context, services, loggerConfiguration) =>
 {

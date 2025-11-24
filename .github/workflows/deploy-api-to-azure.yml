@@ -123,10 +123,10 @@ jobs:
               Write-Host "❌ DATABASE MIGRATIONS FAILED" -ForegroundColor Red
               Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
               Write-Host ""
-              Write-Host "⚠️  Warning: Migrations failed but deployment completed." -ForegroundColor Yellow
               Write-Host "   Database schema may be out of date." -ForegroundColor Yellow
-              Write-Host "   Run migrations manually or re-run deployment." -ForegroundColor Yellow
+              Write-Host "   Check the logs above for specific error details." -ForegroundColor Yellow
               Write-Host ""
+              exit 1
             } else {
               Write-Host ""
               Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
@@ -143,8 +143,7 @@ jobs:
             Write-Host ""
             Write-Host "Exception: $($_.Exception.Message)" -ForegroundColor Red
             Write-Host ""
-            Write-Host "⚠️  Warning: Continuing with health check..." -ForegroundColor Yellow
-            Write-Host ""
+            throw
           }
 
       - name: Health Check

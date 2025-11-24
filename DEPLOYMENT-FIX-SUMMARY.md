@@ -32,13 +32,17 @@ The main issue was that **Azure SQL Database was not included in the Bicep infra
 
 ### 2. Application Insights Configuration
 
-**Status:** ✅ **Already Correctly Configured**
+**Status:** ✅ **Now Fully Configured for Both API and UI**
 
-Application Insights was already properly set up:
+Application Insights configuration:
 - `infra/modules/insights.bicep` creates Application Insights resource
 - `infra/modules/hosting.bicep` configures App Insights connection string in App Services
-- Both API and UI `Program.cs` files check for `APPLICATIONINSIGHTS_CONNECTION_STRING` environment variable
+- **API `Program.cs`**: Already had Application Insights telemetry configured
+- **UI `Program.cs`**: ✅ **ADDED** Application Insights telemetry configuration (now matches API)
+- Both applications check for `APPLICATIONINSIGHTS_CONNECTION_STRING` environment variable
 - Telemetry and logging are enabled when connection string is present
+- **Local Development**: Both API and UI use Serilog for logging (file + console)
+- **Azure Deployment**: Both API and UI use Application Insights + Serilog for comprehensive logging
 
 ## Solution Implemented
 
@@ -86,7 +90,57 @@ Application Insights was already properly set up:
 - Passed SQL connection string to hosting module
 - Added SQL outputs: `sqlServerName`, `sqlServerFqdn`, `databaseName`
 
-#### 4. Updated Parameter Files
+#### 4. Enhanced Application Insights Configuration
+
+**UI Application (`XYDataLabs.OrderProcessingSystem.UI`):**
+- ✅ **ADDED** `Microsoft.ApplicationInsights.AspNetCore` package (version 2.22.0)
+- ✅ **ADDED** Application Insights configuration in `Program.cs`
+- ✅ Checks for `APPLICATIONINSIGHTS_CONNECTION_STRING` environment variable
+- ✅ Logs configuration status (enabled/disabled) for each environment
+- ✅ Uses Serilog for local development, App Insights for Azure deployment
+
+**Configuration Pattern (Both API and UI):**
+```csharp
+var appInsightsConnectionString = builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"] 
+    ?? Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CONNECTION_STRING");
+
+if (!string.IsNullOrWhiteSpace(appInsightsConnectionString))
+{
+    builder.Services.AddApplicationInsightsTelemetry(options =>
+    {
+        options.ConnectionString = appInsightsConnectionString;
+        options.EnableAdaptiveSampling = true;
+        options.EnableQuickPulseMetricStream = true;
+    });
+    Log.Information("[CONFIG] Application Insights enabled for {Environment} environment", environmentName);
+}
+else
+{
+    Log.Warning("[CONFIG] Application Insights NOT configured - connection string missing for {Environment} environment", environmentName);
+}
+```
+
+**Dual Logging Strategy:**
+- **Local Development**: Serilog writes to console and file (`../logs/api-.log`, `../logs/ui-.log`)
+- **Azure Deployment**: Both Serilog (container logs) AND Application Insights (structured telemetry)
+- **Benefit**: Comprehensive logging in all environments, easy local debugging, powerful cloud analytics
+
+#### 5. Updated Parameter Files
+
+**API Deployment Workflow (`deploy-api-to-azure.yml`):**
+- ✅ **CHANGED** Migration failures now **fail the workflow** (previously only warned)
+- ✅ Exit code 1 on migration failure stops deployment
+- ✅ Exceptions are thrown instead of suppressed
+- ✅ Clear error messages in logs
+- ✅ Deployment won't proceed if database schema is incorrect
+
+**Benefits:**
+- Prevents deploying API with incorrect database schema
+- Forces immediate attention to migration issues
+- Logs captured in GitHub Actions for troubleshooting
+- Deployment status accurately reflects success/failure
+
+#### 6. Enhanced Workflow Error Handling
 
 Updated all environment parameter files (`infra/parameters/*.json`):
 
@@ -111,12 +165,18 @@ Updated all environment parameter files (`infra/parameters/*.json`):
 "databaseServiceObjective": { "value": "S0" }
 ```
 
-#### 5. Updated Documentation
+#### 7. Updated Documentation
 
-Updated `infra/README.md` with:
-- SQL module documentation
-- Security notes about credential management
-- Hardening recommendations (Key Vault, Managed Identity)
+**Created:**
+- `DEPLOYMENT-FIX-SUMMARY.md` - This comprehensive guide
+- `infra/SECURITY-NOTES.md` - Security hardening roadmap
+
+**Updated:**
+- `infra/README.md` - SQL module documentation and security notes
+- `Documentation/02-Azure-Learning-Guides/AZURE_DEPLOYMENT_GUIDE.md` - Added references to new documentation
+
+**Added References to Azure Deployment Guide:**
+The central Azure Deployment Guide now includes references to all new documentation for easy navigation.
 
 ## How It Works Now
 

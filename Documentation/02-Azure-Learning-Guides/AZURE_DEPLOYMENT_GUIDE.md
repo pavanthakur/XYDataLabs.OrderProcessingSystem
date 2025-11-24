@@ -59,6 +59,11 @@ For Application Insights monitoring and observability:
 - **[APP_INSIGHTS_AUTOMATED_SETUP.md](./APP_INSIGHTS_AUTOMATED_SETUP.md)** ⭐ **NEW** - Automated environment-wise App Insights configuration (enterprise approach)
 - **[APPLICATION_INSIGHTS_SETUP.md](./APPLICATION_INSIGHTS_SETUP.md)** - Manual setup reference (legacy)
 
+For Infrastructure and Database deployment:
+- **[/DEPLOYMENT-FIX-SUMMARY.md](../../DEPLOYMENT-FIX-SUMMARY.md)** ⭐ **NEW** - Complete deployment fix guide including SQL Database provisioning, Application Insights verification, and troubleshooting
+- **[/infra/README.md](../../infra/README.md)** - Bicep infrastructure modules documentation
+- **[/infra/SECURITY-NOTES.md](../../infra/SECURITY-NOTES.md)** ⭐ **NEW** - Security considerations, hardening roadmap, and production best practices
+
 ---
 
 ## ⚙️ Manual Infrastructure Deployment via GitHub Actions (`infra-deploy.yml`)
