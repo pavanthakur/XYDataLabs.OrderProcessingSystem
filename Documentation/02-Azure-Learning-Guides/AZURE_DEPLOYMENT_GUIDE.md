@@ -5,11 +5,32 @@
 This guide documents the complete setup process for deploying the Order Processing System to Azure App Service using GitHub Actions with OIDC authentication.
 
 **Date Completed**: November 16, 2025  
-**Last Updated**: November 23, 2025 (Added Automated App Insights Setup - Enterprise Approach)  
+**Last Updated**: November 24, 2025 (Added Pre-Validation and Enhanced Bootstrap Workflow)  
 **Deployment Method**: GitHub Actions CI/CD with OIDC (Passwordless Authentication)  
 **Target Environments**: dev, staging, production (branch-mapped)  
 **Azure Region (Primary)**: Central India  
 **Current Focus (Curriculum Day 31)**: Execute manual infrastructure dry run (`infra-deploy.yml`) prior to real deployment
+
+### 🆕 Recent Enhancements (November 24, 2025)
+
+**Bootstrap Workflow (`azure-bootstrap.yml`) now includes:**
+- ✅ **Pre-Validation Job**: Validates OIDC and GitHub App credentials BEFORE bootstrap starts
+  - Checks AZUREAPPSERVICE_CLIENTID, TENANTID, SUBSCRIPTIONID exist
+  - Checks APP_ID and APP_PRIVATE_KEY exist
+  - **Fails immediately** if prerequisites are missing (blocks bootstrap execution)
+- ✅ **Reordered Workflow Inputs**: Logical setup sequence for better UX
+  1. Setup Azure OIDC (first-time only)
+  2. Setup GitHub App (first-time only) 
+  3. OIDC App Name (requires GitHub App setup)
+  4. Configure GitHub secrets
+  5. Enable pre-deployment validation (default: ✅ true)
+  6. Bootstrap infrastructure (default: ✅ true)
+- ✅ **Enable-Validation Job**: Automatically enables validation for future deployments
+  - Runs AFTER bootstrap completes
+  - Modifies `infra-deploy.yml` to enable pre-validate checks
+  - Enables what-if analysis before every future deployment
+
+**Key Benefit**: Prerequisites are now validated upfront, preventing bootstrap failures and providing clear error messages.
 
 ### 📚 Related Documentation
 

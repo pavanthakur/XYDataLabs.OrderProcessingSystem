@@ -18,30 +18,30 @@ on:
         type: boolean
         default: false
       setupGitHubApp:
-        description: 'Setup GitHub App (required for automated secret management)'
+        description: 'Setup GitHub App (required for automated secret management - first-time only)'
         required: true
         type: boolean
         default: false
+      oidcAppName:
+        description: 'OIDC App Name (requires GitHub App setup)'
+        required: false
+        type: string
+        default: 'GitHub-Actions-OIDC'
       configureSecrets:
         description: 'Configure GitHub secrets (auto if GitHub App configured)'
         required: true
         type: boolean
         default: false
+      enableValidation:
+        description: 'Enable pre-deployment validation'
+        required: true
+        type: boolean
+        default: true
       bootstrapInfra:
         description: 'Bootstrap infrastructure (App Services, etc.)'
         required: true
         type: boolean
         default: true
-      enableValidation:
-        description: 'Enable pre-deployment validation after bootstrap'
-        required: true
-        type: boolean
-        default: true
-      oidcAppName:
-        description: 'Azure AD App Registration name for OIDC'
-        required: false
-        type: string
-        default: 'GitHub-Actions-OIDC'
 
 permissions:
   contents: write
@@ -81,9 +81,10 @@ jobs:
           Write-Host "  ✓ Target environment:           ${{ inputs.environment }}" -ForegroundColor White
           Write-Host "  ✓ Setup Azure OIDC:             ${{ inputs.setupOidc }}" -ForegroundColor White
           Write-Host "  ✓ Setup GitHub App:             ${{ inputs.setupGitHubApp }}" -ForegroundColor White
-          Write-Host "  ✓ Configure GitHub secrets:     ${{ inputs.configureSecrets }}" -ForegroundColor White
-          Write-Host "  ✓ Bootstrap infrastructure:     ${{ inputs.bootstrapInfra }}" -ForegroundColor White
+          Write-Host "  ✓ OIDC App Name:                ${{ inputs.oidcAppName }}" -ForegroundColor White
           Write-Host "  ✓ Enable validation:            ${{ inputs.enableValidation }}" -ForegroundColor White
+          Write-Host "  ✓ Bootstrap infrastructure:     ${{ inputs.bootstrapInfra }}" -ForegroundColor White
+          Write-Host "  ✓ Configure GitHub secrets:     ${{ inputs.configureSecrets }}" -ForegroundColor White
           Write-Host "" -ForegroundColor Gray
           Write-Host "========================================================================" -ForegroundColor Cyan
           Write-Host "" -ForegroundColor Gray
@@ -95,16 +96,18 @@ jobs:
 
           $env = "${{ inputs.environment }}"
           $setupOidc = "${{ inputs.setupOidc }}"
-          $configSecrets = "${{ inputs.configureSecrets }}"
-          $bootstrap = "${{ inputs.bootstrapInfra }}"
+          $setupGitHubApp = "${{ inputs.setupGitHubApp }}"
           $enableValidation = "${{ inputs.enableValidation }}"
+          $bootstrap = "${{ inputs.bootstrapInfra }}"
+          $configSecrets = "${{ inputs.configureSecrets }}"
 
           Write-Host "`n📋 Workflow Inputs:" -ForegroundColor Cyan
           Write-Host "  Environment: $env" -ForegroundColor Yellow
           Write-Host "  Setup OIDC: $setupOidc" -ForegroundColor Yellow
-          Write-Host "  Configure secrets: $configSecrets" -ForegroundColor Yellow
-          Write-Host "  Bootstrap infra: $bootstrap" -ForegroundColor Yellow
+          Write-Host "  Setup GitHub App: $setupGitHubApp" -ForegroundColor Yellow
           Write-Host "  Enable validation: $enableValidation" -ForegroundColor Yellow
+          Write-Host "  Bootstrap infra: $bootstrap" -ForegroundColor Yellow
+          Write-Host "  Configure secrets: $configSecrets" -ForegroundColor Yellow
 
           # Display branch-to-environment mapping
           Write-Host "`n🗺️  Branch → Environment Mapping:" -ForegroundColor Cyan
@@ -1467,6 +1470,140 @@ jobs:
           # Environment secret verification is informational; missing environments are expected during initial setup
           exit 0
   
+  pre-validate-prerequisites:
+    name: Pre-Validate Prerequisites
+    if: |
+      always() &&
+      !cancelled() &&
+      (inputs.bootstrapInfra || inputs.enableValidation) &&
+      needs.validate-inputs.result == 'success'
+    needs: [validate-inputs, setup-oidc, setup-github-app, configure-secrets]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Prerequisites
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║         PRE-VALIDATE PREREQUISITES                             ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Timestamp (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+          
+          $hasErrors = $false
+          
+          Write-Host "🔍 Validating OIDC App Configuration..." -ForegroundColor Cyan
+          Write-Host ""
+          
+          # Check if OIDC secrets exist
+          $hasClientId = "${{ secrets.AZUREAPPSERVICE_CLIENTID }}" -ne ""
+          $hasTenantId = "${{ secrets.AZUREAPPSERVICE_TENANTID }}" -ne ""
+          $hasSubscriptionId = "${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}" -ne ""
+          
+          if ($hasClientId -and $hasTenantId -and $hasSubscriptionId) {
+            Write-Host "  ✅ OIDC credentials are configured" -ForegroundColor Green
+          } else {
+            Write-Host "  ❌ OIDC credentials are missing or incomplete" -ForegroundColor Red
+            Write-Host "     Missing:" -ForegroundColor Yellow
+            if (-not $hasClientId) { Write-Host "       - AZUREAPPSERVICE_CLIENTID" -ForegroundColor Red }
+            if (-not $hasTenantId) { Write-Host "       - AZUREAPPSERVICE_TENANTID" -ForegroundColor Red }
+            if (-not $hasSubscriptionId) { Write-Host "       - AZUREAPPSERVICE_SUBSCRIPTIONID" -ForegroundColor Red }
+            Write-Host ""
+            Write-Host "  💡 Solution: Run this workflow with 'Setup Azure OIDC' enabled" -ForegroundColor Yellow
+            $hasErrors = $true
+          }
+          
+          Write-Host ""
+          Write-Host "🔍 Validating GitHub App Configuration..." -ForegroundColor Cyan
+          Write-Host ""
+          
+          # Check if GitHub App secrets exist
+          $hasAppId = "${{ secrets.APP_ID }}" -ne ""
+          $hasPrivateKey = "${{ secrets.APP_PRIVATE_KEY }}" -ne ""
+          
+          if ($hasAppId -and $hasPrivateKey) {
+            Write-Host "  ✅ GitHub App credentials are configured" -ForegroundColor Green
+            Write-Host "     - APP_ID: Present" -ForegroundColor Gray
+            Write-Host "     - APP_PRIVATE_KEY: Present" -ForegroundColor Gray
+            Write-Host "     - APP_INSTALLATION_ID: Auto-discovered at runtime" -ForegroundColor Gray
+          } else {
+            Write-Host "  ❌ GitHub App credentials are missing or incomplete" -ForegroundColor Red
+            Write-Host "     Missing:" -ForegroundColor Yellow
+            if (-not $hasAppId) { Write-Host "       - APP_ID" -ForegroundColor Red }
+            if (-not $hasPrivateKey) { Write-Host "       - APP_PRIVATE_KEY" -ForegroundColor Red }
+            Write-Host ""
+            Write-Host "  💡 Solution: Run this workflow with 'Setup GitHub App' enabled" -ForegroundColor Yellow
+            Write-Host "     Or manually configure GitHub App secrets" -ForegroundColor Yellow
+            $hasErrors = $true
+          }
+          
+          Write-Host ""
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+          
+          if ($hasErrors) {
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ VALIDATION FAILED: Prerequisites are not met" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Bootstrap cannot proceed without the required prerequisites." -ForegroundColor Red
+            Write-Host "Please review the validation results above." -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Required Actions:" -ForegroundColor Cyan
+            Write-Host "  1. Ensure OIDC credentials are configured" -ForegroundColor White
+            Write-Host "     - Run this workflow with 'Setup Azure OIDC' enabled" -ForegroundColor White
+            Write-Host "  2. Ensure GitHub App credentials are configured" -ForegroundColor White
+            Write-Host "     - Run this workflow with 'Setup GitHub App' enabled" -ForegroundColor White
+            Write-Host "     - Or manually configure APP_ID and APP_PRIVATE_KEY secrets" -ForegroundColor White
+            Write-Host ""
+            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+            Write-Host ""
+            Write-Error "Prerequisites validation failed. Cannot proceed with bootstrap."
+            exit 1
+          } else {
+            Write-Host "✅ All prerequisites validated successfully" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+            Write-Host ""
+          }
+
+      - name: Create Validation Summary
+        if: always()
+        run: |
+          "## 🔍 Pre-Validation Results" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          
+          $hasClientId = "${{ secrets.AZUREAPPSERVICE_CLIENTID }}" -ne ""
+          $hasTenantId = "${{ secrets.AZUREAPPSERVICE_TENANTID }}" -ne ""
+          $hasSubscriptionId = "${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}" -ne ""
+          $hasAppId = "${{ secrets.APP_ID }}" -ne ""
+          $hasPrivateKey = "${{ secrets.APP_PRIVATE_KEY }}" -ne ""
+          
+          $allValid = ($hasClientId -and $hasTenantId -and $hasSubscriptionId) -and ($hasAppId -and $hasPrivateKey)
+          
+          if (-not $allValid) {
+            "### ❌ Validation Failed" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "Prerequisites are missing. Bootstrap cannot proceed." >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+          }
+          
+          "### Azure OIDC Configuration" >> $env:GITHUB_STEP_SUMMARY
+          if ($hasClientId -and $hasTenantId -and $hasSubscriptionId) {
+            "✅ **Status**: Configured" >> $env:GITHUB_STEP_SUMMARY
+          } else {
+            "❌ **Status**: Missing or incomplete - **REQUIRED**" >> $env:GITHUB_STEP_SUMMARY
+          }
+          "" >> $env:GITHUB_STEP_SUMMARY
+          
+          "### GitHub App Configuration" >> $env:GITHUB_STEP_SUMMARY
+          if ($hasAppId -and $hasPrivateKey) {
+            "✅ **Status**: Configured" >> $env:GITHUB_STEP_SUMMARY
+          } else {
+            "❌ **Status**: Missing or incomplete - **REQUIRED**" >> $env:GITHUB_STEP_SUMMARY
+          }
+  
   bootstrap-dev:
     name: Bootstrap Dev Environment
     if: |
@@ -1475,8 +1612,9 @@ jobs:
       (inputs.environment == 'dev' || inputs.environment == 'all') &&
       !cancelled() &&
       (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped') &&
-      (needs.configure-secrets.result == 'success' || needs.configure-secrets.result == 'skipped')
-    needs: [setup-oidc, configure-secrets]
+      (needs.configure-secrets.result == 'success' || needs.configure-secrets.result == 'skipped') &&
+      (needs.pre-validate-prerequisites.result == 'success' || needs.pre-validate-prerequisites.result == 'skipped')
+    needs: [setup-oidc, configure-secrets, pre-validate-prerequisites]
     runs-on: windows-latest
     environment: dev
     env:
@@ -1730,8 +1868,9 @@ jobs:
       (inputs.environment == 'staging' || inputs.environment == 'all') &&
       !cancelled() &&
       (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped') &&
-      (needs.configure-secrets.result == 'success' || needs.configure-secrets.result == 'skipped')
-    needs: [setup-oidc, configure-secrets]
+      (needs.configure-secrets.result == 'success' || needs.configure-secrets.result == 'skipped') &&
+      (needs.pre-validate-prerequisites.result == 'success' || needs.pre-validate-prerequisites.result == 'skipped')
+    needs: [setup-oidc, configure-secrets, pre-validate-prerequisites]
     runs-on: windows-latest
     environment: staging
     env:
@@ -1985,8 +2124,9 @@ jobs:
       (inputs.environment == 'prod' || inputs.environment == 'all') &&
       !cancelled() &&
       (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped') &&
-      (needs.configure-secrets.result == 'success' || needs.configure-secrets.result == 'skipped')
-    needs: [setup-oidc, configure-secrets]
+      (needs.configure-secrets.result == 'success' || needs.configure-secrets.result == 'skipped') &&
+      (needs.pre-validate-prerequisites.result == 'success' || needs.pre-validate-prerequisites.result == 'skipped')
+    needs: [setup-oidc, configure-secrets, pre-validate-prerequisites]
     runs-on: windows-latest
     environment: prod
     env:
@@ -2266,15 +2406,12 @@ jobs:
 
       - name: Commit Changes
         id: commit
-        # Allow git push to fail - GITHUB_TOKEN lacks 'workflows' permission to modify workflow files
-        # This is a security feature. We handle the failure gracefully in the next step
         continue-on-error: true
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add .github/workflows/infra-deploy.yml
           
-          # Check if there are changes to commit
           if (git diff --staged --quiet) {
             Write-Host "ℹ️  No changes detected - validation may already be enabled" -ForegroundColor Yellow
             exit 0
@@ -2299,56 +2436,17 @@ jobs:
           Write-Host "📋 MANUAL STEP REQUIRED (One-time, 2 minutes)" -ForegroundColor Cyan
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
           Write-Host ""
-          Write-Host "To enable pre-deployment validation, make this one-line change:" -ForegroundColor White
+          Write-Host "To enable pre-deployment validation, make this change:" -ForegroundColor White
           Write-Host ""
           Write-Host "File: .github/workflows/infra-deploy.yml" -ForegroundColor Yellow
           Write-Host ""
-          Write-Host "Find and replace:" -ForegroundColor Cyan
+          Write-Host "In the pre-validate job, change:" -ForegroundColor Cyan
+          Write-Host "  if: false  # TODO: Enable after bootstrap" -ForegroundColor Red
+          Write-Host "to:" -ForegroundColor Cyan
+          Write-Host "  if: (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && !inputs.dryRun)" -ForegroundColor Green
           Write-Host ""
-          Write-Host "OLD:" -ForegroundColor Red
-          Write-Host "  if: false  # TODO: Enable after bootstrap - requires Azure OIDC setup" -ForegroundColor Gray
-          Write-Host ""
-          Write-Host "NEW:" -ForegroundColor Green
-          Write-Host "  if: (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && !inputs.dryRun)" -ForegroundColor Gray
-          Write-Host ""
-          Write-Host "Also find and uncomment:" -ForegroundColor Cyan
-          Write-Host ""
-          Write-Host "OLD:" -ForegroundColor Red
-          Write-Host "  # needs: pre-validate  # TODO: Uncomment after bootstrap" -ForegroundColor Gray
-          Write-Host ""
-          Write-Host "NEW:" -ForegroundColor Green
-          Write-Host "  needs: pre-validate" -ForegroundColor Gray
-          Write-Host ""
-          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
-          Write-Host "🚀 HOW TO MAKE THE CHANGE:" -ForegroundColor Cyan
-          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
-          Write-Host ""
-          Write-Host "Option 1: Via GitHub Web UI (Easiest)" -ForegroundColor Yellow
-          Write-Host "  1. Go to: https://github.com/${{ github.repository }}/edit/${{ github.ref_name }}/.github/workflows/infra-deploy.yml" -ForegroundColor Gray
-          Write-Host "  2. Make the changes shown above" -ForegroundColor Gray
-          Write-Host "  3. Commit directly to ${{ github.ref_name }} branch" -ForegroundColor Gray
-          Write-Host ""
-          Write-Host "Option 2: Via Command Line" -ForegroundColor Yellow
-          Write-Host "  1. Clone the repository: git clone https://github.com/${{ github.repository }}.git" -ForegroundColor Gray
-          Write-Host "  2. Switch to branch: git checkout ${{ github.ref_name }}" -ForegroundColor Gray
-          Write-Host "  3. Edit file: .github/workflows/infra-deploy.yml" -ForegroundColor Gray
-          Write-Host "  4. Make the changes shown above" -ForegroundColor Gray
-          Write-Host "  5. Commit: git commit -am 'chore(ci): enable pre-deployment validation'" -ForegroundColor Gray
-          Write-Host "  6. Push: git push origin ${{ github.ref_name }}" -ForegroundColor Gray
-          Write-Host ""
-          Write-Host "Option 3: Use GitHub App with Workflows Permission (Advanced)" -ForegroundColor Yellow
-          Write-Host "  If you want to automate this, configure your GitHub App with:" -ForegroundColor Gray
-          Write-Host "  - Repository permissions → Workflows: Read and write" -ForegroundColor Gray
-          Write-Host "  Then re-run this workflow" -ForegroundColor Gray
-          Write-Host ""
-          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
-          Write-Host "✅ AFTER MAKING THE CHANGE:" -ForegroundColor Cyan
-          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
-          Write-Host ""
-          Write-Host "Pre-deployment validation will be enabled, and your CI/CD pipeline" -ForegroundColor White
-          Write-Host "will automatically validate Azure resources before each deployment!" -ForegroundColor White
-          Write-Host ""
-          Write-Host "⚠️  This is a one-time manual step due to GitHub security policies." -ForegroundColor Yellow
+          Write-Host "Also in the deploy job, uncomment:" -ForegroundColor Cyan
+          Write-Host "  needs: pre-validate" -ForegroundColor Green
           Write-Host ""
           
           Write-Warning "Automatic workflow update failed. Please manually enable validation using the instructions above."
@@ -2377,8 +2475,8 @@ jobs:
             "" >> $env:GITHUB_STEP_SUMMARY
             "To enable pre-deployment validation, edit ```.github/workflows/infra-deploy.yml```:" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
-            "1. Change ``if: false  # TODO: Enable after bootstrap`` to ``if: (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && !inputs.dryRun)``" >> $env:GITHUB_STEP_SUMMARY
-            "2. Uncomment ``needs: pre-validate``" >> $env:GITHUB_STEP_SUMMARY
+            "1. In the ``pre-validate`` job, change ``if: false`` to ``if: (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && !inputs.dryRun)``" >> $env:GITHUB_STEP_SUMMARY
+            "2. In the ``deploy`` job, uncomment the line ``needs: pre-validate``" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
             "See detailed instructions in the logs above." >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
@@ -2392,7 +2490,7 @@ jobs:
   summary:
     name: Bootstrap Summary
     if: always() && github.event_name == 'workflow_dispatch'
-    needs: [setup-oidc, configure-secrets, bootstrap-dev, bootstrap-staging, bootstrap-prod, enable-validation]
+    needs: [setup-oidc, configure-secrets, pre-validate-prerequisites, bootstrap-dev, bootstrap-staging, bootstrap-prod, enable-validation]
     runs-on: windows-latest
     steps:
       - name: Generate Summary
@@ -2402,6 +2500,7 @@ jobs:
 
           $setupOidc = "${{ needs.setup-oidc.result }}"
           $configSecrets = "${{ needs.configure-secrets.result }}"
+          $preValidate = "${{ needs.pre-validate-prerequisites.result }}"
           $bootstrapDev = "${{ needs.bootstrap-dev.result }}"
           $bootstrapStaging = "${{ needs.bootstrap-staging.result }}"
           $bootstrapProd = "${{ needs.bootstrap-prod.result }}"
@@ -2418,6 +2517,11 @@ jobs:
           if ($configSecrets -ne "") {
             $icon = if ($configSecrets -eq "success") { "✅" } else { "❌" }
             "| Configure Secrets | $icon $configSecrets |" >> $env:GITHUB_STEP_SUMMARY
+          }
+
+          if ($preValidate -ne "") {
+            $icon = if ($preValidate -eq "success") { "✅" } elseif ($preValidate -eq "skipped") { "⏭️" } else { "❌" }
+            "| Pre-Validate Prerequisites | $icon $preValidate |" >> $env:GITHUB_STEP_SUMMARY
           }
 
           if ($bootstrapDev -ne "") {
