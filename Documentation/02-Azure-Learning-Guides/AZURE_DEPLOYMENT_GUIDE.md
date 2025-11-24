@@ -32,6 +32,17 @@ This guide documents the complete setup process for deploying the Order Processi
 
 **Key Benefit**: Prerequisites are now validated upfront, preventing bootstrap failures and providing clear error messages.
 
+**Job Execution Chain**:
+```
+setup-oidc → setup-github-app → configure-secrets 
+    ↓
+pre-validate-prerequisites (fails if credentials missing)
+    ↓ (blocked if failed)
+bootstrap-dev, bootstrap-staging, bootstrap-prod
+    ↓
+enable-validation → summary
+```
+
 ### 📚 Related Documentation
 
 For detailed step-by-step execution flow of the bootstrap script:
