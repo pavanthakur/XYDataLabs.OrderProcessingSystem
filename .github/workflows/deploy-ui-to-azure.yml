@@ -66,10 +66,11 @@ jobs:
         shell: pwsh
         run: |
           $ref = "${{ github.ref }}"
-          if ($ref -eq 'refs/heads/main') { $name = 'orderprocessing-ui-xyapp-prod' }
-          elseif ($ref -eq 'refs/heads/staging') { $name = 'orderprocessing-ui-xyapp-stg' }
-          elseif ($ref -eq 'refs/heads/dev') { $name = 'orderprocessing-ui-xyapp-dev' }
-          else { $branch = $ref.Replace('refs/heads/',''); $name = "orderprocessing-ui-xyapp-$branch" }
+          $owner = "${{ github.repository_owner }}"
+          if ($ref -eq 'refs/heads/main') { $name = "$owner-orderprocessing-ui-xyapp-prod" }
+          elseif ($ref -eq 'refs/heads/staging') { $name = "$owner-orderprocessing-ui-xyapp-stg" }
+          elseif ($ref -eq 'refs/heads/dev') { $name = "$owner-orderprocessing-ui-xyapp-dev" }
+          else { $branch = $ref.Replace('refs/heads/',''); $name = "$owner-orderprocessing-ui-xyapp-$branch" }
           echo "AZURE_WEBAPP_NAME=$name" >> $env:GITHUB_ENV
           Write-Host "Deploying to WebApp: $name"
 
