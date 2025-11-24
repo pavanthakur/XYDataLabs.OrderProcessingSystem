@@ -93,6 +93,18 @@ function Write-Log {
 
 Write-Log "=== Bootstrap started ===" "INFO" "Cyan"
 
+# Helper function to map environment to ASPNETCORE_ENVIRONMENT value
+function Get-AspNetCoreEnvironment {
+    param([string]$Environment)
+    
+    switch ($Environment) {
+        "dev" { return "Development" }
+        "stg" { return "Staging" }
+        "prod" { return "Production" }
+        default { return "Development" }
+    }
+}
+
 # Super retry synchronous webapp creation helper
 function New-WebAppWithSuperRetry {
     param([string]$ResourceGroup, [string]$PlanName, [string]$AppName, [int]$MaxAttempts = 5, [int]$InitialWaitMinutes = 2, [int]$RetryDelaySeconds = 60)
@@ -697,12 +709,7 @@ foreach ($env in $envList) {
                 if ($apiVerified -eq $apiApp) {
                     Write-Host "    [PROCESSING] Configuring API app settings..." -ForegroundColor Gray
                     # Determine ASPNETCORE_ENVIRONMENT value based on environment
-                    $aspnetEnv = switch ($Environment) {
-                        "dev" { "Development" }
-                        "staging" { "Staging" }
-                        "prod" { "Production" }
-                        default { "Development" }
-                    }
+                    $aspnetEnv = Get-AspNetCoreEnvironment -Environment $Environment
                     $job = Start-Job -ScriptBlock {
                         param($rg, $apiApp, $connString, $aspnetEnv)
                         az webapp config appsettings set -g $rg -n $apiApp --settings "APPLICATIONINSIGHTS_CONNECTION_STRING=$connString" "ASPNETCORE_ENVIRONMENT=$aspnetEnv" 2>$null
@@ -725,12 +732,7 @@ foreach ($env in $envList) {
                 if ($uiVerified -eq $uiApp) {
                     Write-Host "    [PROCESSING] Configuring UI app settings..." -ForegroundColor Gray
                     # Determine ASPNETCORE_ENVIRONMENT value based on environment
-                    $aspnetEnv = switch ($Environment) {
-                        "dev" { "Development" }
-                        "staging" { "Staging" }
-                        "prod" { "Production" }
-                        default { "Development" }
-                    }
+                    $aspnetEnv = Get-AspNetCoreEnvironment -Environment $Environment
                     $job = Start-Job -ScriptBlock {
                         param($rg, $uiApp, $connString, $aspnetEnv)
                         az webapp config appsettings set -g $rg -n $uiApp --settings "APPLICATIONINSIGHTS_CONNECTION_STRING=$connString" "ASPNETCORE_ENVIRONMENT=$aspnetEnv" 2>$null

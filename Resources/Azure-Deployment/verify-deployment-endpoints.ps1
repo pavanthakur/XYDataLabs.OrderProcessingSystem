@@ -14,7 +14,7 @@ param(
     [string]$GitHubOwner = 'pavanthakur'
 )
 
-$ErrorActionPreference = 'Continue'  # Continue on errors to test all endpoints
+$ErrorActionPreference = 'Stop'  # Stop on unexpected errors
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "Deployment Endpoint Verification" -ForegroundColor White

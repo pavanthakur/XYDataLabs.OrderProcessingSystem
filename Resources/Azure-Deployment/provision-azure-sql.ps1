@@ -245,14 +245,17 @@ try {
         Write-Host "  [EXISTS] Firewall rule '$ruleName' already exists for IP $myIp" -ForegroundColor Green
     }
     
-    # Clean up old IP rules (keep only the 10 most recent to avoid accumulation)
+    # Clean up old IP rules to avoid accumulation
+    # Keep the 10 most recent rules to handle IP changes across multiple runs
+    # while preventing unlimited growth of firewall rules
+    $maxIpRules = 10
     try {
         $allRules = az sql server firewall-rule list `
             --server $sqlServerName `
             --resource-group $rgName --output json 2>$null | ConvertFrom-Json
         
         $ipRules = $allRules | Where-Object { $_.name -like "AllowIP-*" } | Sort-Object name -Descending
-        $rulesToDelete = $ipRules | Select-Object -Skip 10
+        $rulesToDelete = $ipRules | Select-Object -Skip $maxIpRules
         
         foreach ($rule in $rulesToDelete) {
             Write-Host "  [CLEANUP] Removing old firewall rule: $($rule.name)" -ForegroundColor Gray

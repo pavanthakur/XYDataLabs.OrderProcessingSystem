@@ -75,10 +75,14 @@ try {
         $exceptionData = $exceptions | ConvertFrom-Json
         if ($exceptionData.Count -gt 0) {
             Write-Host "  [FOUND] $($exceptionData.Count) exception types:" -ForegroundColor Yellow
+            # Query returns: [type, problemId, Count, outerMessage]
             foreach ($ex in $exceptionData) {
-                Write-Host "    • Type: $($ex[0])" -ForegroundColor Red
-                Write-Host "      Count: $($ex[2])" -ForegroundColor Gray
-                Write-Host "      Message: $($ex[3])" -ForegroundColor Gray
+                $exType = $ex[0]
+                $exCount = $ex[2]
+                $exMessage = $ex[3]
+                Write-Host "    • Type: $exType" -ForegroundColor Red
+                Write-Host "      Count: $exCount" -ForegroundColor Gray
+                Write-Host "      Message: $exMessage" -ForegroundColor Gray
                 Write-Host ""
             }
         } else {
@@ -111,10 +115,14 @@ try {
         $failedData = $failedRequests | ConvertFrom-Json
         if ($failedData.Count -gt 0) {
             Write-Host "  [FOUND] $($failedData.Count) failed request types:" -ForegroundColor Yellow
+            # Query returns: [Count, resultCode, name]
             foreach ($req in $failedData) {
-                Write-Host "    • Status Code: $($req[1])" -ForegroundColor Red
-                Write-Host "      Count: $($req[0])" -ForegroundColor Gray
-                Write-Host "      Endpoint: $($req[2])" -ForegroundColor Gray
+                $reqCount = $req[0]
+                $reqStatusCode = $req[1]
+                $reqEndpoint = $req[2]
+                Write-Host "    • Status Code: $reqStatusCode" -ForegroundColor Red
+                Write-Host "      Count: $reqCount" -ForegroundColor Gray
+                Write-Host "      Endpoint: $reqEndpoint" -ForegroundColor Gray
                 Write-Host ""
             }
         } else {
