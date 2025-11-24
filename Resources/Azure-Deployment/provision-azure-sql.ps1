@@ -53,12 +53,12 @@ Write-Host ""
 Write-Host "[0/6] Checking resource group..." -ForegroundColor Cyan
 
 # Check if resource group exists
-$rgExists = az group exists --name $rgName 2>$null
+$rgExists = az group exists -n $rgName 2>$null
 if ($rgExists -eq 'false') {
     Write-Host "  [CREATE] Resource group does not exist, creating: $rgName" -ForegroundColor Yellow
     Write-Host "  [INFO] Location: $Location" -ForegroundColor Gray
     
-    az group create --name $rgName --location $Location --tags env=$Environment app=$BaseName | Out-Null
+    az group create -n $rgName -l $Location --tags env=$Environment app=$BaseName | Out-Null
     
     if ($LASTEXITCODE -ne 0) {
         Write-Host "  [ERROR] Failed to create resource group: $rgName" -ForegroundColor Red
@@ -72,13 +72,13 @@ if ($rgExists -eq 'false') {
 
 # Wait for resource group to be fully ready
 Write-Host "  [WAIT] Verifying resource group readiness..." -ForegroundColor Cyan
-$rgTimeout = 5 * 60  # Reduced from 10 to 5 minutes since we just created it
+$rgTimeout = 5 * 60  # Reduced from 10 to 5 minutes for faster feedback
 $rgInterval = 30      # Check more frequently (every 30 seconds instead of 120)
 $rgElapsed = 0
 $rgReady = $false
 
 while ($rgElapsed -lt $rgTimeout -and -not $rgReady) {
-    $rgInfoRaw = az group show --name $rgName --query "{name:name, state:properties.provisioningState}" -o json 2>$null
+    $rgInfoRaw = az group show -n $rgName --query "{name:name, state:properties.provisioningState}" -o json 2>$null
     if ($LASTEXITCODE -eq 0 -and $rgInfoRaw) {
         $rgInfo = $rgInfoRaw | ConvertFrom-Json
         if ($rgInfo -and $rgInfo.name -eq $rgName -and $rgInfo.state -eq 'Succeeded') { 
