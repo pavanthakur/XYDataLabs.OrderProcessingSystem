@@ -23,7 +23,7 @@ on:
         type: boolean
         default: false
       oidcAppName:
-        description: 'Azure AD App Registration name for OIDC (first-time only)'
+        description: 'OIDC App Name (requires GitHub App setup)'
         required: false
         type: string
         default: 'GitHub-Actions-OIDC'

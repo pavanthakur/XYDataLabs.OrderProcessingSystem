@@ -27,7 +27,7 @@ The workflow uses the automatically available `GITHUB_TOKEN` with appropriate pe
    - Environment: `all` (or specific environment)
    - ✅ Setup Azure OIDC: `true`
    - ✅ Setup GitHub App: `true` (follow manual setup instructions)
-   - Azure AD App Registration name: `GitHub-Actions-OIDC` (default)
+   - OIDC App Name: `GitHub-Actions-OIDC` (default)
    - ✅ Enable pre-deployment validation: `true` (default, recommended)
    - ✅ Bootstrap infrastructure: `true` (default)
    - ✅ Configure GitHub secrets: `true`
@@ -54,7 +54,7 @@ To bootstrap a new environment after initial setup:
 | `environment` | choice | - | Target environment (`dev`, `staging`, `prod`, `all`) |
 | `setupOidc` | boolean | `false` | Create Azure AD app registration with federated credentials (first-time only) |
 | `setupGitHubApp` | boolean | `false` | Setup GitHub App (required for automated secret management - first-time only) |
-| `oidcAppName` | string | `GitHub-Actions-OIDC` | Azure AD App Registration name for OIDC (first-time only) |
+| `oidcAppName` | string | `GitHub-Actions-OIDC` | OIDC App Name (requires GitHub App setup) |
 | `enableValidation` | boolean | `true` | Enable pre-deployment validation for future infrastructure deployments |
 | `bootstrapInfra` | boolean | `true` | Provision Azure resources (Resource Groups, App Services, App Insights) |
 | `configureSecrets` | boolean | `false` | Automatically configure GitHub repository secrets |

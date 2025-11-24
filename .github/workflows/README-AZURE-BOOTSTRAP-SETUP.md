@@ -120,8 +120,8 @@ After successful completion, you will have:
 #### oidcAppName
 - **Type:** String
 - **Default:** `GitHub-Actions-OIDC`
-- **Description:** Azure AD App Registration name for OIDC (first-time only)
-- **When to use:** Customize OIDC app name if needed
+- **Description:** OIDC App Name (requires GitHub App setup)
+- **When to use:** Customize OIDC app name if needed; appears after GitHub App setup
 
 #### enableValidation
 - **Type:** Boolean
