@@ -147,7 +147,7 @@ After successful completion, you will have:
 2. **setup-oidc** - Creates Azure AD app and federated credentials
 3. **setup-github-app** - Guides GitHub App setup (manual steps)
 4. **configure-secrets** - Sets repository and environment secrets
-5. **pre-validate-prerequisites** - Validates OIDC and GitHub App credentials before bootstrap
+5. **pre-validate-prerequisites** - Validates OIDC and GitHub App credentials before bootstrap (fails if missing)
 6. **bootstrap-dev** - Provisions dev environment infrastructure
 7. **bootstrap-staging** - Provisions staging environment infrastructure
 8. **bootstrap-prod** - Provisions production environment infrastructure

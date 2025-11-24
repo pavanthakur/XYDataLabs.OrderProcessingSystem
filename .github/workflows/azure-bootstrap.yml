@@ -1542,24 +1542,34 @@ jobs:
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
           
           if ($hasErrors) {
-            Write-Host "⚠️  VALIDATION FAILED: Prerequisites are not met" -ForegroundColor Yellow
             Write-Host ""
-            Write-Host "This workflow will continue, but some steps may fail if prerequisites" -ForegroundColor Yellow
-            Write-Host "are not configured. Please review the validation results above." -ForegroundColor Yellow
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ VALIDATION FAILED: Prerequisites are not met" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
             Write-Host ""
-            Write-Host "Recommended Actions:" -ForegroundColor Cyan
-            Write-Host "  1. Cancel this workflow run if you haven't set up prerequisites" -ForegroundColor White
-            Write-Host "  2. Re-run with the appropriate setup options enabled" -ForegroundColor White
+            Write-Host "Bootstrap cannot proceed without the required prerequisites." -ForegroundColor Red
+            Write-Host "Please review the validation results above." -ForegroundColor Red
             Write-Host ""
+            Write-Host "Required Actions:" -ForegroundColor Cyan
+            Write-Host "  1. Ensure OIDC credentials are configured" -ForegroundColor White
+            Write-Host "     - Run this workflow with 'Setup Azure OIDC' enabled" -ForegroundColor White
+            Write-Host "  2. Ensure GitHub App credentials are configured" -ForegroundColor White
+            Write-Host "     - Run this workflow with 'Setup GitHub App' enabled" -ForegroundColor White
+            Write-Host "     - Or manually configure APP_ID and APP_PRIVATE_KEY secrets" -ForegroundColor White
+            Write-Host ""
+            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+            Write-Host ""
+            Write-Error "Prerequisites validation failed. Cannot proceed with bootstrap."
+            exit 1
           } else {
             Write-Host "✅ All prerequisites validated successfully" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+            Write-Host ""
           }
-          
-          Write-Host ""
-          Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
-          Write-Host ""
 
       - name: Create Validation Summary
+        if: always()
         run: |
           "## 🔍 Pre-Validation Results" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
@@ -1570,11 +1580,20 @@ jobs:
           $hasAppId = "${{ secrets.APP_ID }}" -ne ""
           $hasPrivateKey = "${{ secrets.APP_PRIVATE_KEY }}" -ne ""
           
+          $allValid = ($hasClientId -and $hasTenantId -and $hasSubscriptionId) -and ($hasAppId -and $hasPrivateKey)
+          
+          if (-not $allValid) {
+            "### ❌ Validation Failed" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "Prerequisites are missing. Bootstrap cannot proceed." >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+          }
+          
           "### Azure OIDC Configuration" >> $env:GITHUB_STEP_SUMMARY
           if ($hasClientId -and $hasTenantId -and $hasSubscriptionId) {
             "✅ **Status**: Configured" >> $env:GITHUB_STEP_SUMMARY
           } else {
-            "❌ **Status**: Missing or incomplete" >> $env:GITHUB_STEP_SUMMARY
+            "❌ **Status**: Missing or incomplete - **REQUIRED**" >> $env:GITHUB_STEP_SUMMARY
           }
           "" >> $env:GITHUB_STEP_SUMMARY
           
@@ -1582,7 +1601,7 @@ jobs:
           if ($hasAppId -and $hasPrivateKey) {
             "✅ **Status**: Configured" >> $env:GITHUB_STEP_SUMMARY
           } else {
-            "❌ **Status**: Missing or incomplete" >> $env:GITHUB_STEP_SUMMARY
+            "❌ **Status**: Missing or incomplete - **REQUIRED**" >> $env:GITHUB_STEP_SUMMARY
           }
   
   bootstrap-dev:

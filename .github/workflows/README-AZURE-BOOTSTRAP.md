@@ -139,10 +139,10 @@ To bootstrap a new environment after initial setup:
 - Validates OIDC credentials (AZUREAPPSERVICE_CLIENTID, TENANTID, SUBSCRIPTIONID)
 - Validates GitHub App credentials (APP_ID, APP_PRIVATE_KEY)
 - Provides clear error messages if prerequisites are missing
-- Continues workflow with warnings (doesn't block execution)
+- **Fails with error if prerequisites are not configured** (blocks bootstrap execution)
 - Creates validation summary
 
-**Purpose**: Ensures prerequisites are configured before bootstrap runs
+**Purpose**: Ensures prerequisites are configured before bootstrap runs - **Required for bootstrap to proceed**
 
 ### 5. Enable Validation (`enable-validation`)
 **Runs when**: `enableValidation` input is `true` AND bootstrap completed
