@@ -41,13 +41,20 @@ var appInsightsConnectionString = builder.Configuration["APPLICATIONINSIGHTS_CON
 
 if (!string.IsNullOrWhiteSpace(appInsightsConnectionString))
 {
-    builder.Services.AddApplicationInsightsTelemetry(options =>
+    try
     {
-        options.ConnectionString = appInsightsConnectionString;
-        options.EnableAdaptiveSampling = true;
-        options.EnableQuickPulseMetricStream = true;
-    });
-    Log.Information("[CONFIG] Application Insights enabled for {Environment} environment", environmentName);
+        builder.Services.AddApplicationInsightsTelemetry(options =>
+        {
+            options.ConnectionString = appInsightsConnectionString;
+            options.EnableAdaptiveSampling = true;
+            options.EnableQuickPulseMetricStream = true;
+        });
+        Log.Information("[CONFIG] Application Insights enabled for {Environment} environment", environmentName);
+    }
+    catch (Exception ex)
+    {
+        Log.Error(ex, "[CONFIG] Failed to configure Application Insights for {Environment} environment - application will continue without telemetry", environmentName);
+    }
 }
 else
 {
