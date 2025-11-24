@@ -1502,7 +1502,6 @@ jobs:
           # Check if setup steps were executed or skipped
           $oidcSetupRan = "${{ needs.setup-oidc.result }}" -eq "success"
           $githubAppSetupRan = "${{ needs.setup-github-app.result }}" -eq "success"
-          $secretsConfigured = "${{ needs.configure-secrets.result }}" -eq "success"
           
           Write-Host "📋 Previous Step Results:" -ForegroundColor Cyan
           Write-Host "  Setup OIDC: ${{ needs.setup-oidc.result }}" -ForegroundColor Gray
