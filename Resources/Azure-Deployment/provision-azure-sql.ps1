@@ -28,6 +28,16 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Validate required parameters
+if ([string]::IsNullOrWhiteSpace($BaseName)) {
+    Write-Host "ERROR: BaseName parameter is required and cannot be empty" -ForegroundColor Red
+    exit 1
+}
+if ([string]::IsNullOrWhiteSpace($Location)) {
+    Write-Host "ERROR: Location parameter is required and cannot be empty" -ForegroundColor Red
+    exit 1
+}
+
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "Azure SQL Database Provisioning" -ForegroundColor White
 Write-Host "========================================" -ForegroundColor Cyan
@@ -53,15 +63,26 @@ Write-Host ""
 Write-Host "[0/6] Checking resource group..." -ForegroundColor Cyan
 
 # Check if resource group exists
-$rgExists = az group exists -n $rgName 2>$null
+$rgExists = az group exists -n $rgName 2>&1
+$existsCheckExitCode = $LASTEXITCODE
+
+if ($existsCheckExitCode -ne 0) {
+    Write-Host "  [ERROR] Failed to check resource group existence: $rgName" -ForegroundColor Red
+    Write-Host "  [HINT] Verify Azure CLI authentication and subscription access" -ForegroundColor Yellow
+    Write-Host "  [DETAIL] Exit code: $existsCheckExitCode, Output: $rgExists" -ForegroundColor Gray
+    exit 1
+}
+
 if ($rgExists -eq 'false') {
     Write-Host "  [CREATE] Resource group does not exist, creating: $rgName" -ForegroundColor Yellow
     Write-Host "  [INFO] Location: $Location" -ForegroundColor Gray
+    Write-Host "  [INFO] Tags: env=$Environment, app=$BaseName" -ForegroundColor Gray
     
     az group create -n $rgName -l $Location --tags env=$Environment app=$BaseName | Out-Null
     
     if ($LASTEXITCODE -ne 0) {
         Write-Host "  [ERROR] Failed to create resource group: $rgName" -ForegroundColor Red
+        Write-Host "  [HINT] Check Azure subscription permissions and quotas" -ForegroundColor Yellow
         exit 1
     }
     
