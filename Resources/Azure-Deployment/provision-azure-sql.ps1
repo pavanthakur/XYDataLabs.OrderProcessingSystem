@@ -20,7 +20,10 @@ param(
     [string]$AdminPassword = 'Admin100@',
     
     [Parameter(Mandatory=$false)]
-    [switch]$SkipAppServiceConfig
+    [switch]$SkipAppServiceConfig,
+    
+    [Parameter(Mandatory=$false)]
+    [string]$GitHubOwner = 'pavanthakur'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -29,12 +32,13 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "Azure SQL Database Provisioning" -ForegroundColor White
 Write-Host "========================================" -ForegroundColor Cyan
 
-# Generate resource names
+# Generate resource names (must match bootstrap-enterprise-infra.ps1)
 $rgName = "rg-$BaseName-$Environment"
 $sqlServerName = "$BaseName-sql-$Environment"
 $dbName = "OrderProcessingSystem_" + (Get-Culture).TextInfo.ToTitleCase($Environment)
-$apiAppName = "$BaseName-api-xyapp-$Environment"
-$uiAppName = "$BaseName-ui-xyapp-$Environment"
+# Prepend GitHub owner to webapp names for global uniqueness (matches bootstrap script)
+$apiAppName = "$GitHubOwner-$BaseName-api-xyapp-$Environment"
+$uiAppName = "$GitHubOwner-$BaseName-ui-xyapp-$Environment"
 
 Write-Host ""
 Write-Host "Configuration:" -ForegroundColor Yellow
@@ -232,7 +236,26 @@ Write-Host "  [OK] Connection string generated" -ForegroundColor Green
 # Step 5: Configure API App Service
 if (-not $SkipAppServiceConfig) {
     Write-Host "[5/6] Configuring API App Service..." -ForegroundColor Cyan
+    
+    # First verify the app exists
+    $apiAppExists = $null
     try {
+        $apiAppExists = az webapp show --name $apiAppName --resource-group $rgName --query "name" -o tsv 2>$null
+    } catch { }
+    
+    if (-not $apiAppExists -or $apiAppExists -ne $apiAppName) {
+        Write-Host "  [ERROR] API App Service not found: $apiAppName" -ForegroundColor Red
+        Write-Host "  [ERROR] Expected app name: $apiAppName" -ForegroundColor Red
+        Write-Host "  [ERROR] Resource group: $rgName" -ForegroundColor Red
+        Write-Host "  [CRITICAL] Connection string configuration is REQUIRED for the application to function" -ForegroundColor Red
+        Write-Host "" -ForegroundColor Red
+        Write-Host "  [HINT] Ensure bootstrap-enterprise-infra.ps1 has completed successfully" -ForegroundColor Yellow
+        Write-Host "  [HINT] Verify the app was created with the correct name (should include GitHub owner prefix)" -ForegroundColor Yellow
+        exit 1
+    }
+    
+    try {
+        # Suppress output to avoid logging sensitive connection string
         az webapp config connection-string set `
             --name $apiAppName `
             --resource-group $rgName `
@@ -241,17 +264,41 @@ if (-not $SkipAppServiceConfig) {
             --output none 2>$null
         
         if ($LASTEXITCODE -eq 0) {
-            Write-Host "  [OK] API connection string configured" -ForegroundColor Green
+            Write-Host "  [OK] API connection string configured successfully" -ForegroundColor Green
         } else {
-            Write-Host "  [WARN] Could not configure API connection string" -ForegroundColor Yellow
+            Write-Host "  [ERROR] Failed to configure API connection string (exit code: $LASTEXITCODE)" -ForegroundColor Red
+            Write-Host "  [ERROR] Command failed - check app name and permissions" -ForegroundColor Red
+            Write-Host "  [CRITICAL] Connection string configuration is REQUIRED for the application to function" -ForegroundColor Red
+            exit 1
         }
     } catch {
-        Write-Host "  [WARN] API App Service not found or inaccessible" -ForegroundColor Yellow
+        Write-Host "  [ERROR] Exception while configuring API connection string: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "  [CRITICAL] Connection string configuration is REQUIRED for the application to function" -ForegroundColor Red
+        exit 1
     }
 
     # Step 6: Configure UI App Service
     Write-Host "[6/6] Configuring UI App Service..." -ForegroundColor Cyan
+    
+    # First verify the app exists
+    $uiAppExists = $null
     try {
+        $uiAppExists = az webapp show --name $uiAppName --resource-group $rgName --query "name" -o tsv 2>$null
+    } catch { }
+    
+    if (-not $uiAppExists -or $uiAppExists -ne $uiAppName) {
+        Write-Host "  [ERROR] UI App Service not found: $uiAppName" -ForegroundColor Red
+        Write-Host "  [ERROR] Expected app name: $uiAppName" -ForegroundColor Red
+        Write-Host "  [ERROR] Resource group: $rgName" -ForegroundColor Red
+        Write-Host "  [CRITICAL] Connection string configuration is REQUIRED for the application to function" -ForegroundColor Red
+        Write-Host "" -ForegroundColor Red
+        Write-Host "  [HINT] Ensure bootstrap-enterprise-infra.ps1 has completed successfully" -ForegroundColor Yellow
+        Write-Host "  [HINT] Verify the app was created with the correct name (should include GitHub owner prefix)" -ForegroundColor Yellow
+        exit 1
+    }
+    
+    try {
+        # Suppress output to avoid logging sensitive connection string
         az webapp config connection-string set `
             --name $uiAppName `
             --resource-group $rgName `
@@ -260,12 +307,17 @@ if (-not $SkipAppServiceConfig) {
             --output none 2>$null
         
         if ($LASTEXITCODE -eq 0) {
-            Write-Host "  [OK] UI connection string configured" -ForegroundColor Green
+            Write-Host "  [OK] UI connection string configured successfully" -ForegroundColor Green
         } else {
-            Write-Host "  [WARN] Could not configure UI connection string" -ForegroundColor Yellow
+            Write-Host "  [ERROR] Failed to configure UI connection string (exit code: $LASTEXITCODE)" -ForegroundColor Red
+            Write-Host "  [ERROR] Command failed - check app name and permissions" -ForegroundColor Red
+            Write-Host "  [CRITICAL] Connection string configuration is REQUIRED for the application to function" -ForegroundColor Red
+            exit 1
         }
     } catch {
-        Write-Host "  [WARN] UI App Service not found or inaccessible" -ForegroundColor Yellow
+        Write-Host "  [ERROR] Exception while configuring UI connection string: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "  [CRITICAL] Connection string configuration is REQUIRED for the application to function" -ForegroundColor Red
+        exit 1
     }
 
     # Restart apps to apply configuration
@@ -321,5 +373,4 @@ Write-Host ""
 Write-Host "[SUCCESS] Azure SQL Database provisioned and configured" -ForegroundColor Green
 Write-Host ""
 
-# Exit with success code even if app service configuration warnings occurred
 exit 0
