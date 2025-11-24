@@ -1756,6 +1756,68 @@ jobs:
             exit 1
           }
       
+      - name: Provision Azure SQL Database
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║      PROVISION AZURE SQL DATABASE FOR DEV                     ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+          
+          try {
+            Write-Host "🗄️  Provisioning SQL Database for dev environment..." -ForegroundColor Cyan
+            Write-Host ""
+            Write-Host "📋 Configuration:" -ForegroundColor Yellow
+            Write-Host "  Environment: dev" -ForegroundColor Gray
+            Write-Host "  Resource Group: rg-orderprocessing-dev" -ForegroundColor Gray
+            Write-Host "  SQL Server: orderprocessing-sql-dev" -ForegroundColor Gray
+            Write-Host "  Database: OrderProcessingSystem_Dev" -ForegroundColor Gray
+            Write-Host "  Location: centralindia" -ForegroundColor Gray
+            Write-Host "  Skip App Config: Yes (apps not created yet)" -ForegroundColor Gray
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+            Write-Host ""
+            
+            # Provision SQL Server and Database first, skip app configuration since apps don't exist yet
+            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment dev -BaseName orderprocessing -Location centralindia -SkipAppServiceConfig
+            
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host ""
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host "❌ SQL PROVISIONING FAILED" -ForegroundColor Red
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Red
+              Write-Host "Script: ./Resources/Azure-Deployment/provision-azure-sql.ps1" -ForegroundColor Gray
+              Write-Host ""
+              Write-Error "SQL provisioning failed with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+            }
+            
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host "✅ AZURE SQL SERVER AND DATABASE PROVISIONED SUCCESSFULLY" -ForegroundColor Green
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+            Write-Host ""
+          }
+          catch {
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING SQL PROVISIONING" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Stack Trace:" -ForegroundColor Yellow
+            Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
+            Write-Host ""
+            Write-Error "SQL provisioning failed with exception: $($_.Exception.Message)"
+            exit 1
+          }
+      
       - name: Bootstrap Dev Infrastructure
         run: |
           Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
@@ -1819,47 +1881,50 @@ jobs:
             exit 1
           }
       
-      - name: Provision Azure SQL Database
+      - name: Configure SQL Connection Strings
         if: success()
         run: |
           Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-          Write-Host "║      PROVISION AZURE SQL DATABASE FOR DEV                     ║" -ForegroundColor Cyan
+          Write-Host "║      CONFIGURE SQL CONNECTION STRINGS FOR DEV                 ║" -ForegroundColor Cyan
           Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
           Write-Host ""
           Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           Write-Host ""
           
           try {
-            Write-Host "🗄️  Provisioning SQL Database for dev environment..." -ForegroundColor Cyan
+            Write-Host "🔗 Configuring SQL connection strings for dev environment..." -ForegroundColor Cyan
             Write-Host ""
             Write-Host "📋 Configuration:" -ForegroundColor Yellow
             Write-Host "  Environment: dev" -ForegroundColor Gray
             Write-Host "  Resource Group: rg-orderprocessing-dev" -ForegroundColor Gray
-            Write-Host "  SQL Server: orderprocessing-sql-dev" -ForegroundColor Gray
-            Write-Host "  Database: OrderProcessingSystem_Dev" -ForegroundColor Gray
-            Write-Host "  Location: centralindia" -ForegroundColor Gray
+            Write-Host "  API App: pavanthakur-orderprocessing-api-xyapp-dev" -ForegroundColor Gray
+            Write-Host "  UI App: pavanthakur-orderprocessing-ui-xyapp-dev" -ForegroundColor Gray
             Write-Host ""
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
             Write-Host ""
             
-            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment dev -BaseName orderprocessing -Location centralindia
+            # Now configure connection strings on the apps (which exist after bootstrap)
+            # Note: This re-runs the provision script but SQL server/DB already exist, so it will skip those steps
+            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment dev -BaseName orderprocessing -Location centralindia -GitHubOwner pavanthakur
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
               Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-              Write-Host "❌ SQL PROVISIONING FAILED" -ForegroundColor Red
+              Write-Host "❌ CONNECTION STRING CONFIGURATION FAILED" -ForegroundColor Red
               Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
               Write-Host ""
               Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Red
               Write-Host "Script: ./Resources/Azure-Deployment/provision-azure-sql.ps1" -ForegroundColor Gray
               Write-Host ""
-              Write-Error "SQL provisioning failed with exit code $LASTEXITCODE"
+              Write-Host "⚠️  CRITICAL: Connection strings are required for the application to function" -ForegroundColor Yellow
+              Write-Host ""
+              Write-Error "Connection string configuration failed with exit code $LASTEXITCODE"
               exit $LASTEXITCODE
             }
             
             Write-Host ""
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
-            Write-Host "✅ AZURE SQL DATABASE PROVISIONED SUCCESSFULLY" -ForegroundColor Green
+            Write-Host "✅ SQL CONNECTION STRINGS CONFIGURED SUCCESSFULLY" -ForegroundColor Green
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
             Write-Host ""
             Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
@@ -1868,7 +1933,7 @@ jobs:
           catch {
             Write-Host ""
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-            Write-Host "❌ EXCEPTION DURING SQL PROVISIONING" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING CONNECTION STRING CONFIGURATION" -ForegroundColor Red
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
             Write-Host ""
             Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
@@ -1876,7 +1941,7 @@ jobs:
             Write-Host "Stack Trace:" -ForegroundColor Yellow
             Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
             Write-Host ""
-            Write-Error "SQL provisioning failed with exception: $($_.Exception.Message)"
+            Write-Error "Connection string configuration failed with exception: $($_.Exception.Message)"
             exit 1
           }
       
@@ -2012,6 +2077,68 @@ jobs:
             exit 1
           }
       
+      - name: Provision Azure SQL Database
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║      PROVISION AZURE SQL DATABASE FOR STAGING                 ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+          
+          try {
+            Write-Host "🗄️  Provisioning SQL Database for staging environment..." -ForegroundColor Cyan
+            Write-Host ""
+            Write-Host "📋 Configuration:" -ForegroundColor Yellow
+            Write-Host "  Environment: staging" -ForegroundColor Gray
+            Write-Host "  Resource Group: rg-orderprocessing-staging" -ForegroundColor Gray
+            Write-Host "  SQL Server: orderprocessing-sql-staging" -ForegroundColor Gray
+            Write-Host "  Database: OrderProcessingSystem_Staging" -ForegroundColor Gray
+            Write-Host "  Location: centralindia" -ForegroundColor Gray
+            Write-Host "  Skip App Config: Yes (apps not created yet)" -ForegroundColor Gray
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+            Write-Host ""
+            
+            # Provision SQL Server and Database first, skip app configuration since apps don't exist yet
+            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment staging -BaseName orderprocessing -Location centralindia -SkipAppServiceConfig
+            
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host ""
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host "❌ SQL PROVISIONING FAILED" -ForegroundColor Red
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Red
+              Write-Host "Script: ./Resources/Azure-Deployment/provision-azure-sql.ps1" -ForegroundColor Gray
+              Write-Host ""
+              Write-Error "SQL provisioning failed with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+            }
+            
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host "✅ AZURE SQL SERVER AND DATABASE PROVISIONED SUCCESSFULLY" -ForegroundColor Green
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+            Write-Host ""
+          }
+          catch {
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING SQL PROVISIONING" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Stack Trace:" -ForegroundColor Yellow
+            Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
+            Write-Host ""
+            Write-Error "SQL provisioning failed with exception: $($_.Exception.Message)"
+            exit 1
+          }
+      
       - name: Bootstrap Staging Infrastructure
         run: |
           Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
@@ -2075,47 +2202,49 @@ jobs:
             exit 1
           }
       
-      - name: Provision Azure SQL Database
+      - name: Configure SQL Connection Strings
         if: success()
         run: |
           Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-          Write-Host "║      PROVISION AZURE SQL DATABASE FOR STAGING                 ║" -ForegroundColor Cyan
+          Write-Host "║      CONFIGURE SQL CONNECTION STRINGS FOR STAGING             ║" -ForegroundColor Cyan
           Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
           Write-Host ""
           Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           Write-Host ""
           
           try {
-            Write-Host "🗄️  Provisioning SQL Database for staging environment..." -ForegroundColor Cyan
+            Write-Host "🔗 Configuring SQL connection strings for staging environment..." -ForegroundColor Cyan
             Write-Host ""
             Write-Host "📋 Configuration:" -ForegroundColor Yellow
             Write-Host "  Environment: staging" -ForegroundColor Gray
             Write-Host "  Resource Group: rg-orderprocessing-staging" -ForegroundColor Gray
-            Write-Host "  SQL Server: orderprocessing-sql-staging" -ForegroundColor Gray
-            Write-Host "  Database: OrderProcessingSystem_Staging" -ForegroundColor Gray
-            Write-Host "  Location: centralindia" -ForegroundColor Gray
+            Write-Host "  API App: pavanthakur-orderprocessing-api-xyapp-staging" -ForegroundColor Gray
+            Write-Host "  UI App: pavanthakur-orderprocessing-ui-xyapp-staging" -ForegroundColor Gray
             Write-Host ""
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
             Write-Host ""
             
-            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment staging -BaseName orderprocessing -Location centralindia
+            # Now configure connection strings on the apps (which exist after bootstrap)
+            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment staging -BaseName orderprocessing -Location centralindia -GitHubOwner pavanthakur
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
               Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-              Write-Host "❌ SQL PROVISIONING FAILED" -ForegroundColor Red
+              Write-Host "❌ CONNECTION STRING CONFIGURATION FAILED" -ForegroundColor Red
               Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
               Write-Host ""
               Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Red
               Write-Host "Script: ./Resources/Azure-Deployment/provision-azure-sql.ps1" -ForegroundColor Gray
               Write-Host ""
-              Write-Error "SQL provisioning failed with exit code $LASTEXITCODE"
+              Write-Host "⚠️  CRITICAL: Connection strings are required for the application to function" -ForegroundColor Yellow
+              Write-Host ""
+              Write-Error "Connection string configuration failed with exit code $LASTEXITCODE"
               exit $LASTEXITCODE
             }
             
             Write-Host ""
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
-            Write-Host "✅ AZURE SQL DATABASE PROVISIONED SUCCESSFULLY" -ForegroundColor Green
+            Write-Host "✅ SQL CONNECTION STRINGS CONFIGURED SUCCESSFULLY" -ForegroundColor Green
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
             Write-Host ""
             Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
@@ -2124,7 +2253,7 @@ jobs:
           catch {
             Write-Host ""
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-            Write-Host "❌ EXCEPTION DURING SQL PROVISIONING" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING CONNECTION STRING CONFIGURATION" -ForegroundColor Red
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
             Write-Host ""
             Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
@@ -2132,7 +2261,7 @@ jobs:
             Write-Host "Stack Trace:" -ForegroundColor Yellow
             Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
             Write-Host ""
-            Write-Error "SQL provisioning failed with exception: $($_.Exception.Message)"
+            Write-Error "Connection string configuration failed with exception: $($_.Exception.Message)"
             exit 1
           }
       
@@ -2268,6 +2397,68 @@ jobs:
             exit 1
           }
       
+      - name: Provision Azure SQL Database
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║      PROVISION AZURE SQL DATABASE FOR PRODUCTION              ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+          
+          try {
+            Write-Host "🗄️  Provisioning SQL Database for production environment..." -ForegroundColor Cyan
+            Write-Host ""
+            Write-Host "📋 Configuration:" -ForegroundColor Yellow
+            Write-Host "  Environment: prod" -ForegroundColor Gray
+            Write-Host "  Resource Group: rg-orderprocessing-prod" -ForegroundColor Gray
+            Write-Host "  SQL Server: orderprocessing-sql-prod" -ForegroundColor Gray
+            Write-Host "  Database: OrderProcessingSystem_Prod" -ForegroundColor Gray
+            Write-Host "  Location: centralindia" -ForegroundColor Gray
+            Write-Host "  Skip App Config: Yes (apps not created yet)" -ForegroundColor Gray
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+            Write-Host ""
+            
+            # Provision SQL Server and Database first, skip app configuration since apps don't exist yet
+            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment prod -BaseName orderprocessing -Location centralindia -SkipAppServiceConfig
+            
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host ""
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host "❌ SQL PROVISIONING FAILED" -ForegroundColor Red
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Red
+              Write-Host "Script: ./Resources/Azure-Deployment/provision-azure-sql.ps1" -ForegroundColor Gray
+              Write-Host ""
+              Write-Error "SQL provisioning failed with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+            }
+            
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host "✅ AZURE SQL SERVER AND DATABASE PROVISIONED SUCCESSFULLY" -ForegroundColor Green
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+            Write-Host ""
+          }
+          catch {
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING SQL PROVISIONING" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Stack Trace:" -ForegroundColor Yellow
+            Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
+            Write-Host ""
+            Write-Error "SQL provisioning failed with exception: $($_.Exception.Message)"
+            exit 1
+          }
+      
       - name: Bootstrap Prod Infrastructure
         run: |
           Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
@@ -2331,47 +2522,49 @@ jobs:
             exit 1
           }
       
-      - name: Provision Azure SQL Database
+      - name: Configure SQL Connection Strings
         if: success()
         run: |
           Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-          Write-Host "║      PROVISION AZURE SQL DATABASE FOR PRODUCTION              ║" -ForegroundColor Cyan
+          Write-Host "║      CONFIGURE SQL CONNECTION STRINGS FOR PRODUCTION          ║" -ForegroundColor Cyan
           Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
           Write-Host ""
           Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           Write-Host ""
           
           try {
-            Write-Host "🗄️  Provisioning SQL Database for production environment..." -ForegroundColor Cyan
+            Write-Host "🔗 Configuring SQL connection strings for production environment..." -ForegroundColor Cyan
             Write-Host ""
             Write-Host "📋 Configuration:" -ForegroundColor Yellow
             Write-Host "  Environment: prod" -ForegroundColor Gray
             Write-Host "  Resource Group: rg-orderprocessing-prod" -ForegroundColor Gray
-            Write-Host "  SQL Server: orderprocessing-sql-prod" -ForegroundColor Gray
-            Write-Host "  Database: OrderProcessingSystem_Prod" -ForegroundColor Gray
-            Write-Host "  Location: centralindia" -ForegroundColor Gray
+            Write-Host "  API App: pavanthakur-orderprocessing-api-xyapp-prod" -ForegroundColor Gray
+            Write-Host "  UI App: pavanthakur-orderprocessing-ui-xyapp-prod" -ForegroundColor Gray
             Write-Host ""
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
             Write-Host ""
             
-            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment prod -BaseName orderprocessing -Location centralindia
+            # Now configure connection strings on the apps (which exist after bootstrap)
+            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment prod -BaseName orderprocessing -Location centralindia -GitHubOwner pavanthakur
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
               Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-              Write-Host "❌ SQL PROVISIONING FAILED" -ForegroundColor Red
+              Write-Host "❌ CONNECTION STRING CONFIGURATION FAILED" -ForegroundColor Red
               Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
               Write-Host ""
               Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Red
               Write-Host "Script: ./Resources/Azure-Deployment/provision-azure-sql.ps1" -ForegroundColor Gray
               Write-Host ""
-              Write-Error "SQL provisioning failed with exit code $LASTEXITCODE"
+              Write-Host "⚠️  CRITICAL: Connection strings are required for the application to function" -ForegroundColor Yellow
+              Write-Host ""
+              Write-Error "Connection string configuration failed with exit code $LASTEXITCODE"
               exit $LASTEXITCODE
             }
             
             Write-Host ""
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
-            Write-Host "✅ AZURE SQL DATABASE PROVISIONED SUCCESSFULLY" -ForegroundColor Green
+            Write-Host "✅ SQL CONNECTION STRINGS CONFIGURED SUCCESSFULLY" -ForegroundColor Green
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
             Write-Host ""
             Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
@@ -2380,7 +2573,7 @@ jobs:
           catch {
             Write-Host ""
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-            Write-Host "❌ EXCEPTION DURING SQL PROVISIONING" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING CONNECTION STRING CONFIGURATION" -ForegroundColor Red
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
             Write-Host ""
             Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
@@ -2388,7 +2581,7 @@ jobs:
             Write-Host "Stack Trace:" -ForegroundColor Yellow
             Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
             Write-Host ""
-            Write-Error "SQL provisioning failed with exception: $($_.Exception.Message)"
+            Write-Error "Connection string configuration failed with exception: $($_.Exception.Message)"
             exit 1
           }
       
