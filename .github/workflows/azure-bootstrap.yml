@@ -1479,6 +1479,7 @@ jobs:
       needs.validate-inputs.result == 'success'
     needs: [validate-inputs, setup-oidc, setup-github-app, configure-secrets]
     runs-on: windows-latest
+    environment: ${{ inputs.environment != 'all' && inputs.environment || 'dev' }}
     steps:
       - uses: actions/checkout@v4
 
