@@ -12,8 +12,9 @@ namespace XYDataLabs.OrderProcessingSystem.Utilities
 
         /// <summary>
         /// Load environment-specific sharedsettings and appsettings JSON files.
-        /// Non-Docker always uses the "local" profile for local development (ports 5010-5013).
+        /// Non-Docker local development uses the "local" profile (ports 5010-5013).
         /// Docker uses the provided environment or falls back to "dev" (ports 5000-5003).
+        /// Azure App Service uses the provided environment based on ASPNETCORE_ENVIRONMENT.
         /// </summary>
         /// <param name="builder">The configuration builder to add sources to.</param>
         /// <param name="environmentName">The ASP.NET Core environment name.</param>
@@ -21,17 +22,21 @@ namespace XYDataLabs.OrderProcessingSystem.Utilities
         /// <returns>The same configuration builder for chaining.</returns>
         public static IConfigurationBuilder LoadSharedSettings(this IConfigurationBuilder builder, string environmentName, bool isDocker)
         {
-            // For non-Docker (local development), always use "local" to avoid port conflicts
-            // For Docker, use the provided environment or fall back to "dev"
-            var effectiveEnvironment = isDocker 
-                ? (string.IsNullOrWhiteSpace(environmentName) ? "dev" : environmentName) 
+            // Detect Azure App Service using WEBSITE_SITE_NAME environment variable
+            var isAzure = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME"));
+            
+            // Determine effective environment:
+            // - Azure/Docker: Use the provided environment or fall back to "dev"
+            // - Local (non-Docker, non-Azure): Always use "local" to avoid port conflicts
+            var effectiveEnvironment = (isAzure || isDocker)
+                ? (string.IsNullOrWhiteSpace(environmentName) ? "dev" : environmentName)
                 : "local";
             
             // Find the solution root directory for shared settings
             var currentDirectory = Directory.GetCurrentDirectory();
-            var basePath = isDocker ? currentDirectory : (GetSolutionRoot(currentDirectory) ?? currentDirectory);
+            var basePath = (isDocker || isAzure) ? currentDirectory : (GetSolutionRoot(currentDirectory) ?? currentDirectory);
             
-            Console.WriteLine($"[DEBUG] Loading shared settings: Environment={environmentName}, IsDocker={isDocker}, Effective={effectiveEnvironment}");
+            Console.WriteLine($"[DEBUG] Loading shared settings: Environment={environmentName}, IsDocker={isDocker}, IsAzure={isAzure}, Effective={effectiveEnvironment}");
             Console.WriteLine($"[DEBUG] Base path: {basePath}");
             
             return builder
