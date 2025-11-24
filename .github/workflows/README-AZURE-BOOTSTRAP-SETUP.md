@@ -114,14 +114,20 @@ After successful completion, you will have:
 #### setupGitHubApp
 - **Type:** Boolean
 - **Default:** `false`
-- **Description:** Setup GitHub App (one-time, eliminates PAT expiration)
+- **Description:** Setup GitHub App (required for automated secret management - first-time only)
 - **When to use:** First run for zero-maintenance token management
 
-#### configureSecrets
+#### oidcAppName
+- **Type:** String
+- **Default:** `GitHub-Actions-OIDC`
+- **Description:** Azure AD App Registration name for OIDC (first-time only)
+- **When to use:** Customize OIDC app name if needed
+
+#### enableValidation
 - **Type:** Boolean
-- **Default:** `false`
-- **Description:** Configure GitHub secrets (auto if GitHub App configured)
-- **When to use:** After OIDC setup or when secrets are missing
+- **Default:** `true`
+- **Description:** Enable pre-deployment validation for future infrastructure deployments
+- **When to use:** Enabled by default; disable only if you want to skip validation setup
 
 #### bootstrapInfra
 - **Type:** Boolean
@@ -129,17 +135,24 @@ After successful completion, you will have:
 - **Description:** Bootstrap infrastructure (App Services, etc.)
 - **When to use:** Always enabled unless only updating credentials
 
+#### configureSecrets
+- **Type:** Boolean
+- **Default:** `false`
+- **Description:** Configure GitHub secrets (auto if GitHub App configured)
+- **When to use:** After OIDC setup or when secrets are missing
+
 ## Workflow Jobs
 
 1. **validate-inputs** - Validates all parameters and displays summary
 2. **setup-oidc** - Creates Azure AD app and federated credentials
 3. **setup-github-app** - Guides GitHub App setup (manual steps)
 4. **configure-secrets** - Sets repository and environment secrets
-5. **bootstrap-dev** - Provisions dev environment infrastructure
-6. **bootstrap-staging** - Provisions staging environment infrastructure
-7. **bootstrap-prod** - Provisions production environment infrastructure
-8. **enable-validation** - Enables pre-deployment validation
-9. **summary** - Generates final workflow summary
+5. **pre-validate-prerequisites** - Validates OIDC and GitHub App credentials before bootstrap
+6. **bootstrap-dev** - Provisions dev environment infrastructure
+7. **bootstrap-staging** - Provisions staging environment infrastructure
+8. **bootstrap-prod** - Provisions production environment infrastructure
+9. **enable-validation** - Enables pre-deployment validation for future deployments
+10. **summary** - Generates final workflow summary
 
 ## Verification
 

@@ -25,12 +25,15 @@ The workflow uses the automatically available `GITHUB_TOKEN` with appropriate pe
 2. **Select Workflow**: Click "Azure Bootstrap Setup"
 3. **Run Workflow** with these settings:
    - Environment: `all` (or specific environment)
-   - ✅ Setup OIDC: `true`
+   - ✅ Setup Azure OIDC: `true`
+   - ✅ Setup GitHub App: `true` (follow manual setup instructions)
+   - Azure AD App Registration name: `GitHub-Actions-OIDC` (default)
+   - ✅ Enable pre-deployment validation: `true` (default, recommended)
+   - ✅ Bootstrap infrastructure: `true` (default)
    - ✅ Configure GitHub secrets: `true`
-   - ✅ Bootstrap infrastructure: `true`
 4. **Authenticate** when prompted for Azure login (device code flow)
 5. **Wait** for completion (~10-15 minutes for all environments)
-6. **Optional**: Manually enable pre-deployment validation in `infra-deploy.yml` (see workflow summary)
+6. **Note**: Pre-deployment validation will be automatically enabled (may require manual step due to permissions)
 
 ### Add New Environment
 
@@ -38,9 +41,11 @@ To bootstrap a new environment after initial setup:
 
 1. Run workflow with:
    - Environment: `dev` (or `staging`/`prod`)
-   - ❌ Setup OIDC: `false` (already done)
-   - ❌ Configure GitHub secrets: `false` (already done)
+   - ❌ Setup Azure OIDC: `false` (already done)
+   - ❌ Setup GitHub App: `false` (already done)
+   - ✅ Enable pre-deployment validation: `true` (recommended)
    - ✅ Bootstrap infrastructure: `true`
+   - ❌ Configure GitHub secrets: `false` (already done)
 
 ## 📋 Workflow Inputs
 
@@ -48,8 +53,11 @@ To bootstrap a new environment after initial setup:
 |-------|------|---------|-------------|
 | `environment` | choice | - | Target environment (`dev`, `staging`, `prod`, `all`) |
 | `setupOidc` | boolean | `false` | Create Azure AD app registration with federated credentials (first-time only) |
-| `configureSecrets` | boolean | `false` | Automatically configure GitHub repository secrets |
+| `setupGitHubApp` | boolean | `false` | Setup GitHub App (required for automated secret management - first-time only) |
+| `oidcAppName` | string | `GitHub-Actions-OIDC` | Azure AD App Registration name for OIDC (first-time only) |
+| `enableValidation` | boolean | `true` | Enable pre-deployment validation for future infrastructure deployments |
 | `bootstrapInfra` | boolean | `true` | Provision Azure resources (Resource Groups, App Services, App Insights) |
+| `configureSecrets` | boolean | `false` | Automatically configure GitHub repository secrets |
 
 ## 🔄 Workflow Jobs
 
@@ -124,14 +132,37 @@ To bootstrap a new environment after initial setup:
 **Parallelization**:
 - Dev, Staging, and Prod jobs run in parallel when `environment=all`
 
-### 4. Summary (`summary`)
+### 4. Pre-Validate Prerequisites (`pre-validate-prerequisites`)
+**Runs when**: Bootstrap or validation is enabled
+
+**Actions**:
+- Validates OIDC credentials (AZUREAPPSERVICE_CLIENTID, TENANTID, SUBSCRIPTIONID)
+- Validates GitHub App credentials (APP_ID, APP_PRIVATE_KEY)
+- Provides clear error messages if prerequisites are missing
+- Continues workflow with warnings (doesn't block execution)
+- Creates validation summary
+
+**Purpose**: Ensures prerequisites are configured before bootstrap runs
+
+### 5. Enable Validation (`enable-validation`)
+**Runs when**: `enableValidation` input is `true` AND bootstrap completed
+
+**Actions**:
+- Modifies `.github/workflows/infra-deploy.yml`
+- Re-enables `pre-validate` job condition
+- Restores `needs: pre-validate` dependency
+- Attempts to commit changes to repository
+- May require manual intervention due to GitHub token permissions
+
+**Purpose**: Enables pre-deployment validation for future infrastructure deployments
+
+### 6. Summary (`summary`)
 **Runs**: Always (after all jobs)
 
 **Actions**:
 - Aggregates results from all jobs
 - Displays status table in workflow summary
-- Shows success/failure for each step
-- Provides optional instructions for enabling pre-deployment validation
+- Shows success/failure for each step including pre-validation and enable-validation
 
 ## 🎬 Usage Scenarios
 
@@ -143,15 +174,18 @@ To bootstrap a new environment after initial setup:
    ```yaml
    environment: all
    setupOidc: true
-   configureSecrets: true
+   setupGitHubApp: true
+   enableValidation: true
    bootstrapInfra: true
+   configureSecrets: true
    ```
 2. Authenticate to Azure when prompted
-3. Wait for completion (~15 minutes)
-4. Verify in Azure Portal
-5. (Optional) Enable pre-deployment validation as instructed in workflow summary
+3. Follow GitHub App setup instructions if needed
+4. Wait for completion (~15 minutes)
+5. Verify in Azure Portal
+6. Check if pre-deployment validation was enabled (may require manual step)
 
-**Result**: OIDC configured, secrets set, all environments provisioned
+**Result**: OIDC configured, secrets set, all environments provisioned, validation enabled
 
 ---
 
@@ -163,13 +197,15 @@ To bootstrap a new environment after initial setup:
    ```yaml
    environment: dev
    setupOidc: true
-   configureSecrets: true
+   setupGitHubApp: true
+   enableValidation: true
    bootstrapInfra: true
+   configureSecrets: true
    ```
 2. Authenticate when prompted
 3. Wait for completion (~5 minutes)
 
-**Result**: Dev environment ready, validation disabled (manual testing mode)
+**Result**: Dev environment ready, validation enabled
 
 ---
 
@@ -181,12 +217,14 @@ To bootstrap a new environment after initial setup:
    ```yaml
    environment: staging
    setupOidc: false  # Already done
-   configureSecrets: false  # Already done
+   setupGitHubApp: false  # Already done
+   enableValidation: true
    bootstrapInfra: true
+   configureSecrets: false  # Already done
    ```
 2. Wait for completion (~5 minutes)
 
-**Result**: Staging environment added
+**Result**: Staging environment added, validation enabled
 
 ---
 
@@ -199,8 +237,10 @@ To bootstrap a new environment after initial setup:
    ```yaml
    environment: dev
    setupOidc: false
-   configureSecrets: false
+   setupGitHubApp: false
+   enableValidation: false  # Skip if only re-bootstrapping
    bootstrapInfra: true
+   configureSecrets: false
    ```
 3. Wait for completion
 
