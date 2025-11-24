@@ -1846,6 +1846,7 @@ jobs:
             
             # The provision script is idempotent - it creates SQL Server/Database if they don't exist
             # and configures connection strings on the App Services
+            # Note: Script includes 5-minute wait for firewall rule propagation when creating new IP rules
             ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment dev -BaseName orderprocessing -Location centralindia -GitHubOwner pavanthakur
             
             if ($LASTEXITCODE -ne 0) {
@@ -1907,7 +1908,8 @@ jobs:
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
             Write-Host ""
             
-            # Run migrations script
+            # Run migrations script using Entity Framework Core CLI commands
+            # This runs AFTER firewall rules are configured and propagated (5-minute wait included in provision step)
             ./Resources/Azure-Deployment/run-database-migrations.ps1 -Environment dev -BaseName orderprocessing
             
             if ($LASTEXITCODE -ne 0) {
@@ -2225,6 +2227,7 @@ jobs:
             
             # The provision script is idempotent - it creates SQL Server/Database if they don't exist
             # and configures connection strings on the App Services
+            # Note: Script includes 5-minute wait for firewall rule propagation when creating new IP rules
             ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment staging -BaseName orderprocessing -Location centralindia -GitHubOwner pavanthakur
             
             if ($LASTEXITCODE -ne 0) {
@@ -2286,7 +2289,8 @@ jobs:
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
             Write-Host ""
             
-            # Run migrations script
+            # Run migrations script using Entity Framework Core CLI commands
+            # This runs AFTER firewall rules are configured and propagated (5-minute wait included in provision step)
             ./Resources/Azure-Deployment/run-database-migrations.ps1 -Environment staging -BaseName orderprocessing
             
             if ($LASTEXITCODE -ne 0) {
@@ -2604,6 +2608,7 @@ jobs:
             
             # The provision script is idempotent - it creates SQL Server/Database if they don't exist
             # and configures connection strings on the App Services
+            # Note: Script includes 5-minute wait for firewall rule propagation when creating new IP rules
             ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment prod -BaseName orderprocessing -Location centralindia -GitHubOwner pavanthakur
             
             if ($LASTEXITCODE -ne 0) {
@@ -2665,7 +2670,8 @@ jobs:
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
             Write-Host ""
             
-            # Run migrations script
+            # Run migrations script using Entity Framework Core CLI commands
+            # This runs AFTER firewall rules are configured and propagated (5-minute wait included in provision step)
             ./Resources/Azure-Deployment/run-database-migrations.ps1 -Environment prod -BaseName orderprocessing
             
             if ($LASTEXITCODE -ne 0) {

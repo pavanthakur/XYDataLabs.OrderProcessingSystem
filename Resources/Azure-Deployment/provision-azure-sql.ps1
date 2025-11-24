@@ -238,11 +238,28 @@ try {
         
         if ($LASTEXITCODE -eq 0) {
             Write-Host "  [OK] Firewall rule '$ruleName' created for IP $myIp" -ForegroundColor Green
+            
+            # Wait for Azure to propagate the firewall rule (can take 2-5 minutes)
+            Write-Host "  [WAIT] Waiting 5 minutes for firewall rule to propagate..." -ForegroundColor Yellow
+            Write-Host "  [INFO] Azure SQL firewall changes can take up to 5 minutes to become active" -ForegroundColor Gray
+            $waitSeconds = 300
+            $checkInterval = 30
+            $elapsed = 0
+            Write-Host "  [PROGRESS] [" -NoNewline -ForegroundColor Cyan
+            while ($elapsed -lt $waitSeconds) {
+                Start-Sleep -Seconds $checkInterval
+                $elapsed += $checkInterval
+                $percent = [math]::Round(($elapsed / $waitSeconds) * 100)
+                Write-Host "#" -NoNewline -ForegroundColor Green
+            }
+            Write-Host "] 100%" -ForegroundColor Cyan
+            Write-Host "  [OK] Firewall rule propagation wait complete" -ForegroundColor Green
         } else {
             Write-Host "  [WARN] Failed to create firewall rule (exit code: $LASTEXITCODE)" -ForegroundColor Yellow
         }
     } else {
         Write-Host "  [EXISTS] Firewall rule '$ruleName' already exists for IP $myIp" -ForegroundColor Green
+        Write-Host "  [INFO] Skipping wait time as rule already exists" -ForegroundColor Gray
     }
     
     # Clean up old IP rules to avoid accumulation

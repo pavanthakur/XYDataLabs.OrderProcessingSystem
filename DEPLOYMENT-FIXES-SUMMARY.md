@@ -12,14 +12,16 @@ This document summarizes all the fixes implemented to address the issues identif
 - Enhanced `provision-azure-sql.ps1` with intelligent dynamic IP detection
 - Uses `ipify.org` API to detect current runner IP at runtime
 - Creates unique firewall rules per IP address (format: `AllowIP-xxx-xxx-xxx-xxx`)
+- **Includes 5-minute wait for Azure firewall rule propagation** (Azure can take 2-5 minutes)
 - Automatically cleans up old IP rules (keeps 10 most recent)
 - Handles IP changes across different workflow runs
 
 **Code Changes**:
 ```powershell
-# provision-azure-sql.ps1 (lines 208-235)
+# provision-azure-sql.ps1 (lines 208-270)
 - Detects IP: $myIp = (Invoke-WebRequest -Uri "https://api.ipify.org").Content.Trim()
 - Creates rule: AllowIP-{IP}
+- Waits 5 minutes for propagation (with progress indicator)
 - Cleans up old rules automatically
 ```
 
@@ -50,7 +52,8 @@ This document summarizes all the fixes implemented to address the issues identif
 
 **Solution Implemented**:
 - Added "Run Database Migrations" step in `azure-bootstrap.yml` for all environments
-- Migrations run automatically after SQL provisioning
+- **Uses Entity Framework Core CLI commands** (`dotnet ef database update`)
+- Migrations run automatically **AFTER** SQL provisioning and firewall propagation (5-minute wait included)
 - Proper error handling and logging included
 
 **Code Changes**:
@@ -59,7 +62,18 @@ This document summarizes all the fixes implemented to address the issues identif
 - name: Run Database Migrations
   if: success()
   run: |
+    # Runs AFTER firewall rules are configured and propagated
     ./Resources/Azure-Deployment/run-database-migrations.ps1 -Environment dev -BaseName orderprocessing
+```
+
+**Migration Script Details**:
+```powershell
+# run-database-migrations.ps1 uses EF Core CLI
+dotnet ef database update \
+    --project XYDataLabs.OrderProcessingSystem.Infrastructure \
+    --startup-project XYDataLabs.OrderProcessingSystem.API \
+    --connection "$connectionString" \
+    --verbose
 ```
 
 **Added for**:
