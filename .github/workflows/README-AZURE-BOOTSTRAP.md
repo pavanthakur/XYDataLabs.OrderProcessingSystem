@@ -28,9 +28,9 @@ The workflow uses the automatically available `GITHUB_TOKEN` with appropriate pe
    - ✅ Setup Azure OIDC: `true`
    - ✅ Setup GitHub App: `true` (follow manual setup instructions)
    - OIDC App Name: `GitHub-Actions-OIDC` (default)
+   - ✅ Configure GitHub secrets: `true`
    - ✅ Enable pre-deployment validation: `true` (default, recommended)
    - ✅ Bootstrap infrastructure: `true` (default)
-   - ✅ Configure GitHub secrets: `true`
 4. **Authenticate** when prompted for Azure login (device code flow)
 5. **Wait** for completion (~10-15 minutes for all environments)
 6. **Note**: Pre-deployment validation will be automatically enabled (may require manual step due to permissions)
@@ -43,9 +43,9 @@ To bootstrap a new environment after initial setup:
    - Environment: `dev` (or `staging`/`prod`)
    - ❌ Setup Azure OIDC: `false` (already done)
    - ❌ Setup GitHub App: `false` (already done)
+   - ❌ Configure GitHub secrets: `false` (already done)
    - ✅ Enable pre-deployment validation: `true` (recommended)
    - ✅ Bootstrap infrastructure: `true`
-   - ❌ Configure GitHub secrets: `false` (already done)
 
 ## 📋 Workflow Inputs
 
@@ -55,9 +55,9 @@ To bootstrap a new environment after initial setup:
 | `setupOidc` | boolean | `false` | Create Azure AD app registration with federated credentials (first-time only) |
 | `setupGitHubApp` | boolean | `false` | Setup GitHub App (required for automated secret management - first-time only) |
 | `oidcAppName` | string | `GitHub-Actions-OIDC` | OIDC App Name (requires GitHub App setup) |
+| `configureSecrets` | boolean | `false` | Automatically configure GitHub repository secrets |
 | `enableValidation` | boolean | `true` | Enable pre-deployment validation for future infrastructure deployments |
 | `bootstrapInfra` | boolean | `true` | Provision Azure resources (Resource Groups, App Services, App Insights) |
-| `configureSecrets` | boolean | `false` | Automatically configure GitHub repository secrets |
 
 ## 🔄 Workflow Jobs
 
@@ -175,9 +175,9 @@ To bootstrap a new environment after initial setup:
    environment: all
    setupOidc: true
    setupGitHubApp: true
+   configureSecrets: true
    enableValidation: true
    bootstrapInfra: true
-   configureSecrets: true
    ```
 2. Authenticate to Azure when prompted
 3. Follow GitHub App setup instructions if needed
@@ -198,9 +198,9 @@ To bootstrap a new environment after initial setup:
    environment: dev
    setupOidc: true
    setupGitHubApp: true
+   configureSecrets: true
    enableValidation: true
    bootstrapInfra: true
-   configureSecrets: true
    ```
 2. Authenticate when prompted
 3. Wait for completion (~5 minutes)
@@ -218,9 +218,9 @@ To bootstrap a new environment after initial setup:
    environment: staging
    setupOidc: false  # Already done
    setupGitHubApp: false  # Already done
+   configureSecrets: false  # Already done
    enableValidation: true
    bootstrapInfra: true
-   configureSecrets: false  # Already done
    ```
 2. Wait for completion (~5 minutes)
 
@@ -238,9 +238,9 @@ To bootstrap a new environment after initial setup:
    environment: dev
    setupOidc: false
    setupGitHubApp: false
+   configureSecrets: false
    enableValidation: false  # Skip if only re-bootstrapping
    bootstrapInfra: true
-   configureSecrets: false
    ```
 3. Wait for completion
 

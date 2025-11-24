@@ -22,9 +22,9 @@ This guide documents the complete setup process for deploying the Order Processi
   1. Setup Azure OIDC (first-time only)
   2. Setup GitHub App (first-time only) 
   3. OIDC App Name (requires GitHub App setup)
-  4. Enable pre-deployment validation (default: ✅ true)
-  5. Bootstrap infrastructure (default: ✅ true)
-  6. Configure GitHub secrets
+  4. Configure GitHub secrets
+  5. Enable pre-deployment validation (default: ✅ true)
+  6. Bootstrap infrastructure (default: ✅ true)
 - ✅ **Enable-Validation Job**: Automatically enables validation for future deployments
   - Runs AFTER bootstrap completes
   - Modifies `infra-deploy.yml` to enable pre-validate checks
