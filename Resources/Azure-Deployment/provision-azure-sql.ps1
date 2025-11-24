@@ -255,17 +255,19 @@ if (-not $SkipAppServiceConfig) {
     }
     
     try {
-        $configOutput = az webapp config connection-string set `
+        # Suppress output to avoid logging sensitive connection string
+        az webapp config connection-string set `
             --name $apiAppName `
             --resource-group $rgName `
             --connection-string-type SQLAzure `
-            --settings OrderProcessingSystemDbConnection="$connectionString" 2>&1
+            --settings OrderProcessingSystemDbConnection="$connectionString" `
+            --output none 2>$null
         
         if ($LASTEXITCODE -eq 0) {
             Write-Host "  [OK] API connection string configured successfully" -ForegroundColor Green
         } else {
             Write-Host "  [ERROR] Failed to configure API connection string (exit code: $LASTEXITCODE)" -ForegroundColor Red
-            Write-Host "  [ERROR] Command output: $configOutput" -ForegroundColor Red
+            Write-Host "  [ERROR] Command failed - check app name and permissions" -ForegroundColor Red
             Write-Host "  [CRITICAL] Connection string configuration is REQUIRED for the application to function" -ForegroundColor Red
             exit 1
         }
@@ -296,17 +298,19 @@ if (-not $SkipAppServiceConfig) {
     }
     
     try {
-        $configOutput = az webapp config connection-string set `
+        # Suppress output to avoid logging sensitive connection string
+        az webapp config connection-string set `
             --name $uiAppName `
             --resource-group $rgName `
             --connection-string-type SQLAzure `
-            --settings OrderProcessingSystemDbConnection="$connectionString" 2>&1
+            --settings OrderProcessingSystemDbConnection="$connectionString" `
+            --output none 2>$null
         
         if ($LASTEXITCODE -eq 0) {
             Write-Host "  [OK] UI connection string configured successfully" -ForegroundColor Green
         } else {
             Write-Host "  [ERROR] Failed to configure UI connection string (exit code: $LASTEXITCODE)" -ForegroundColor Red
-            Write-Host "  [ERROR] Command output: $configOutput" -ForegroundColor Red
+            Write-Host "  [ERROR] Command failed - check app name and permissions" -ForegroundColor Red
             Write-Host "  [CRITICAL] Connection string configuration is REQUIRED for the application to function" -ForegroundColor Red
             exit 1
         }

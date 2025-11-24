@@ -50,7 +50,7 @@ try {
     if ($aiResource -and $aiResource.provisioningState -eq 'Succeeded') {
         Write-Host "  ✅ Application Insights exists and is provisioned" -ForegroundColor Green
         Write-Host "     Name: $($aiResource.name)" -ForegroundColor Gray
-        Write-Host "     Instrumentation Key: $($aiResource.instrumentationKey.Substring(0,8))..." -ForegroundColor Gray
+        Write-Host "     Instrumentation Key: (configured)" -ForegroundColor Gray
         $instrumentationKey = $aiResource.instrumentationKey
         $connectionString = $aiResource.connectionString
     } else {
@@ -84,8 +84,7 @@ try {
             Write-Host "  ✅ Connection string matches App Insights resource" -ForegroundColor Green
         } elseif ($connectionString) {
             Write-Host "  ⚠️  Connection string doesn't match App Insights resource" -ForegroundColor Yellow
-            Write-Host "     Expected: $($connectionString.Substring(0,50))..." -ForegroundColor Gray
-            Write-Host "     Actual: $($apiSettings.Substring(0,50))..." -ForegroundColor Gray
+            Write-Host "     Connection string mismatch detected - manual verification required" -ForegroundColor Gray
         }
     } else {
         Write-Host "  ❌ App Insights connection string NOT configured on API app" -ForegroundColor Red
@@ -116,8 +115,7 @@ try {
             Write-Host "  ✅ Connection string matches App Insights resource" -ForegroundColor Green
         } elseif ($connectionString) {
             Write-Host "  ⚠️  Connection string doesn't match App Insights resource" -ForegroundColor Yellow
-            Write-Host "     Expected: $($connectionString.Substring(0,50))..." -ForegroundColor Gray
-            Write-Host "     Actual: $($uiSettings.Substring(0,50))..." -ForegroundColor Gray
+            Write-Host "     Connection string mismatch detected - manual verification required" -ForegroundColor Gray
         }
     } else {
         Write-Host "  ❌ App Insights connection string NOT configured on UI app" -ForegroundColor Red
