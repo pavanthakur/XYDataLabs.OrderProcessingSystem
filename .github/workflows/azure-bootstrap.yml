@@ -1886,6 +1886,69 @@ jobs:
             exit 1
           }
       
+      - name: Run Database Migrations
+        if: success()
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║         RUN DATABASE MIGRATIONS FOR DEV                       ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+          
+          try {
+            Write-Host "🔄 Running Entity Framework migrations for dev environment..." -ForegroundColor Cyan
+            Write-Host ""
+            Write-Host "📋 Configuration:" -ForegroundColor Yellow
+            Write-Host "  Environment: dev" -ForegroundColor Gray
+            Write-Host "  SQL Server: orderprocessing-sql-dev.database.windows.net" -ForegroundColor Gray
+            Write-Host "  Database: OrderProcessingSystem_Dev" -ForegroundColor Gray
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+            Write-Host ""
+            
+            # Run migrations script
+            ./Resources/Azure-Deployment/run-database-migrations.ps1 -Environment dev -BaseName orderprocessing
+            
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host ""
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host "❌ DATABASE MIGRATIONS FAILED" -ForegroundColor Red
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Red
+              Write-Host "Script: ./Resources/Azure-Deployment/run-database-migrations.ps1" -ForegroundColor Gray
+              Write-Host ""
+              Write-Host "⚠️  WARNING: Database schema may not be initialized" -ForegroundColor Yellow
+              Write-Host "⚠️  The application may fail to start without the database schema" -ForegroundColor Yellow
+              Write-Host ""
+              Write-Error "Database migrations failed with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+            }
+            
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host "✅ DATABASE MIGRATIONS COMPLETED SUCCESSFULLY" -ForegroundColor Green
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+            Write-Host ""
+          }
+          catch {
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING DATABASE MIGRATIONS" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Stack Trace:" -ForegroundColor Yellow
+            Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
+            Write-Host ""
+            Write-Error "Database migrations failed with exception: $($_.Exception.Message)"
+            exit 1
+          }
+      
       - name: Verify Application Insights
         if: success()
         run: |
@@ -2202,6 +2265,69 @@ jobs:
             exit 1
           }
       
+      - name: Run Database Migrations
+        if: success()
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║         RUN DATABASE MIGRATIONS FOR STAGING                   ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+          
+          try {
+            Write-Host "🔄 Running Entity Framework migrations for staging environment..." -ForegroundColor Cyan
+            Write-Host ""
+            Write-Host "📋 Configuration:" -ForegroundColor Yellow
+            Write-Host "  Environment: staging" -ForegroundColor Gray
+            Write-Host "  SQL Server: orderprocessing-sql-staging.database.windows.net" -ForegroundColor Gray
+            Write-Host "  Database: OrderProcessingSystem_Staging" -ForegroundColor Gray
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+            Write-Host ""
+            
+            # Run migrations script
+            ./Resources/Azure-Deployment/run-database-migrations.ps1 -Environment staging -BaseName orderprocessing
+            
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host ""
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host "❌ DATABASE MIGRATIONS FAILED" -ForegroundColor Red
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Red
+              Write-Host "Script: ./Resources/Azure-Deployment/run-database-migrations.ps1" -ForegroundColor Gray
+              Write-Host ""
+              Write-Host "⚠️  WARNING: Database schema may not be initialized" -ForegroundColor Yellow
+              Write-Host "⚠️  The application may fail to start without the database schema" -ForegroundColor Yellow
+              Write-Host ""
+              Write-Error "Database migrations failed with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+            }
+            
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host "✅ DATABASE MIGRATIONS COMPLETED SUCCESSFULLY" -ForegroundColor Green
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+            Write-Host ""
+          }
+          catch {
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING DATABASE MIGRATIONS" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Stack Trace:" -ForegroundColor Yellow
+            Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
+            Write-Host ""
+            Write-Error "Database migrations failed with exception: $($_.Exception.Message)"
+            exit 1
+          }
+      
       - name: Verify Application Insights
         if: success()
         run: |
@@ -2515,6 +2641,69 @@ jobs:
             Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
             Write-Host ""
             Write-Error "Connection string configuration failed with exception: $($_.Exception.Message)"
+            exit 1
+          }
+      
+      - name: Run Database Migrations
+        if: success()
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║         RUN DATABASE MIGRATIONS FOR PRODUCTION                ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+          
+          try {
+            Write-Host "🔄 Running Entity Framework migrations for production environment..." -ForegroundColor Cyan
+            Write-Host ""
+            Write-Host "📋 Configuration:" -ForegroundColor Yellow
+            Write-Host "  Environment: prod" -ForegroundColor Gray
+            Write-Host "  SQL Server: orderprocessing-sql-prod.database.windows.net" -ForegroundColor Gray
+            Write-Host "  Database: OrderProcessingSystem_Prod" -ForegroundColor Gray
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+            Write-Host ""
+            
+            # Run migrations script
+            ./Resources/Azure-Deployment/run-database-migrations.ps1 -Environment prod -BaseName orderprocessing
+            
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host ""
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host "❌ DATABASE MIGRATIONS FAILED" -ForegroundColor Red
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Red
+              Write-Host "Script: ./Resources/Azure-Deployment/run-database-migrations.ps1" -ForegroundColor Gray
+              Write-Host ""
+              Write-Host "⚠️  WARNING: Database schema may not be initialized" -ForegroundColor Yellow
+              Write-Host "⚠️  The application may fail to start without the database schema" -ForegroundColor Yellow
+              Write-Host ""
+              Write-Error "Database migrations failed with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+            }
+            
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host "✅ DATABASE MIGRATIONS COMPLETED SUCCESSFULLY" -ForegroundColor Green
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+            Write-Host ""
+          }
+          catch {
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING DATABASE MIGRATIONS" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Stack Trace:" -ForegroundColor Yellow
+            Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
+            Write-Host ""
+            Write-Error "Database migrations failed with exception: $($_.Exception.Message)"
             exit 1
           }
       
