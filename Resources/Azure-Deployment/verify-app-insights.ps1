@@ -142,7 +142,7 @@ if ($CheckTelemetry) {
             --analytics-query $query `
             -o json 2>$null | ConvertFrom-Json
         
-        if ($result -and $result.tables -and $result.tables[0].rows) {
+        if ($result -and $result.tables -and $result.tables.Count -gt 0 -and $result.tables[0].rows -and $result.tables[0].rows.Count -gt 0) {
             $count = $result.tables[0].rows[0][0]
             if ($count -gt 0) {
                 Write-Host "  ✅ Telemetry data is being collected" -ForegroundColor Green

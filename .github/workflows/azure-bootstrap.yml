@@ -1779,7 +1779,9 @@ jobs:
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
             Write-Host ""
             
-            # Provision SQL Server and Database first, skip app configuration since apps don't exist yet
+            # ISSUE FIX: Provision SQL Server and Database BEFORE bootstrap infrastructure
+            # This ensures the database is ready before apps are created
+            # Using -SkipAppServiceConfig since apps don't exist yet
             ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment dev -BaseName orderprocessing -Location centralindia -SkipAppServiceConfig
             
             if ($LASTEXITCODE -ne 0) {
@@ -1904,7 +1906,7 @@ jobs:
             Write-Host ""
             
             # Now configure connection strings on the apps (which exist after bootstrap)
-            # Note: This re-runs the provision script but SQL server/DB already exist, so it will skip those steps
+            # The provision script is idempotent - it detects existing SQL server/DB and only configures app settings
             ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment dev -BaseName orderprocessing -Location centralindia -GitHubOwner pavanthakur
             
             if ($LASTEXITCODE -ne 0) {
@@ -2154,7 +2156,9 @@ jobs:
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
             Write-Host ""
             
-            # Provision SQL Server and Database first, skip app configuration since apps don't exist yet
+            # ISSUE FIX: Provision SQL Server and Database BEFORE bootstrap infrastructure
+            # This ensures the database is ready before apps are created
+            # Using -SkipAppServiceConfig since apps don't exist yet
             ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment staging -BaseName orderprocessing -Location centralindia -SkipAppServiceConfig
             
             if ($LASTEXITCODE -ne 0) {
@@ -2279,6 +2283,7 @@ jobs:
             Write-Host ""
             
             # Now configure connection strings on the apps (which exist after bootstrap)
+            # The provision script is idempotent - it detects existing SQL server/DB and only configures app settings
             ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment staging -BaseName orderprocessing -Location centralindia -GitHubOwner pavanthakur
             
             if ($LASTEXITCODE -ne 0) {
@@ -2528,7 +2533,9 @@ jobs:
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
             Write-Host ""
             
-            # Provision SQL Server and Database first, skip app configuration since apps don't exist yet
+            # ISSUE FIX: Provision SQL Server and Database BEFORE bootstrap infrastructure
+            # This ensures the database is ready before apps are created
+            # Using -SkipAppServiceConfig since apps don't exist yet
             ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment prod -BaseName orderprocessing -Location centralindia -SkipAppServiceConfig
             
             if ($LASTEXITCODE -ne 0) {
@@ -2653,6 +2660,7 @@ jobs:
             Write-Host ""
             
             # Now configure connection strings on the apps (which exist after bootstrap)
+            # The provision script is idempotent - it detects existing SQL server/DB and only configures app settings
             ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment prod -BaseName orderprocessing -Location centralindia -GitHubOwner pavanthakur
             
             if ($LASTEXITCODE -ne 0) {
