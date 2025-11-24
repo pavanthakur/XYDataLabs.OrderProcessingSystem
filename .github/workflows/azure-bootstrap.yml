@@ -1479,6 +1479,7 @@ jobs:
       needs.validate-inputs.result == 'success'
     needs: [validate-inputs, setup-oidc, setup-github-app, configure-secrets]
     runs-on: windows-latest
+    environment: ${{ inputs.environment != 'all' && inputs.environment || 'dev' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -1489,6 +1490,23 @@ jobs:
           Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
           Write-Host ""
           Write-Host "Timestamp (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "ℹ️  Environment: ${{ inputs.environment }}" -ForegroundColor Cyan
+          Write-Host "ℹ️  Validation Context: ${{ inputs.environment != 'all' && inputs.environment || 'dev' }}" -ForegroundColor Cyan
+          if ("${{ inputs.environment }}" -eq "all") {
+            Write-Host "⚠️  Note: Validating with 'dev' environment context" -ForegroundColor Yellow
+            Write-Host "   Ensure secrets are available in repository or all target environments" -ForegroundColor Gray
+          }
+          Write-Host ""
+          
+          # Check if setup steps were executed or skipped
+          $oidcSetupRan = "${{ needs.setup-oidc.result }}" -eq "success"
+          $githubAppSetupRan = "${{ needs.setup-github-app.result }}" -eq "success"
+          
+          Write-Host "📋 Previous Step Results:" -ForegroundColor Cyan
+          Write-Host "  Setup OIDC: ${{ needs.setup-oidc.result }}" -ForegroundColor Gray
+          Write-Host "  Setup GitHub App: ${{ needs.setup-github-app.result }}" -ForegroundColor Gray
+          Write-Host "  Configure Secrets: ${{ needs.configure-secrets.result }}" -ForegroundColor Gray
           Write-Host ""
           
           $hasErrors = $false
@@ -1510,7 +1528,12 @@ jobs:
             if (-not $hasTenantId) { Write-Host "       - AZUREAPPSERVICE_TENANTID" -ForegroundColor Red }
             if (-not $hasSubscriptionId) { Write-Host "       - AZUREAPPSERVICE_SUBSCRIPTIONID" -ForegroundColor Red }
             Write-Host ""
-            Write-Host "  💡 Solution: Run this workflow with 'Setup Azure OIDC' enabled" -ForegroundColor Yellow
+            if ($oidcSetupRan) {
+              Write-Host "  ⚠️  OIDC setup ran but secrets are not accessible in this environment" -ForegroundColor Yellow
+              Write-Host "     This may indicate secrets were configured in a different environment" -ForegroundColor Gray
+            } else {
+              Write-Host "  💡 Solution: Run this workflow with 'Setup Azure OIDC' enabled" -ForegroundColor Yellow
+            }
             $hasErrors = $true
           }
           
@@ -1533,8 +1556,13 @@ jobs:
             if (-not $hasAppId) { Write-Host "       - APP_ID" -ForegroundColor Red }
             if (-not $hasPrivateKey) { Write-Host "       - APP_PRIVATE_KEY" -ForegroundColor Red }
             Write-Host ""
-            Write-Host "  💡 Solution: Run this workflow with 'Setup GitHub App' enabled" -ForegroundColor Yellow
-            Write-Host "     Or manually configure GitHub App secrets" -ForegroundColor Yellow
+            if ($githubAppSetupRan) {
+              Write-Host "  ⚠️  GitHub App setup completed but secrets are not accessible" -ForegroundColor Yellow
+              Write-Host "     This may indicate secrets were configured in a different environment" -ForegroundColor Gray
+            } else {
+              Write-Host "  💡 Solution: Run this workflow with 'Setup GitHub App' enabled" -ForegroundColor Yellow
+              Write-Host "     Or manually configure GitHub App secrets" -ForegroundColor Yellow
+            }
             $hasErrors = $true
           }
           
