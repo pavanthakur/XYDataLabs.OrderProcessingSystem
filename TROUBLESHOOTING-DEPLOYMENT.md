@@ -3,8 +3,10 @@
 ## Problem Summary
 
 After running the Azure Bootstrap workflow, the API and UI applications were not accessible at their Azure App Service URLs:
-- **API**: https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net/swagger
-- **UI**: https://pavanthakur-orderprocessing-ui-xyapp-dev.azurewebsites.net/
+- **API**: https://{github-owner}-orderprocessing-api-xyapp-dev.azurewebsites.net/swagger
+- **UI**: https://{github-owner}-orderprocessing-ui-xyapp-dev.azurewebsites.net/
+
+> **Note**: Replace `{github-owner}` with your GitHub username (e.g., `pavanthakur`)
 
 Additionally, no logs were appearing in Application Insights.
 
@@ -110,8 +112,8 @@ These changes will trigger the GitHub Actions workflows when merged to the `dev`
 2. **Monitor workflows**: Check GitHub Actions for deployment status
 
 3. **Verify applications**:
-   - API: https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net/swagger
-   - UI: https://pavanthakur-orderprocessing-ui-xyapp-dev.azurewebsites.net/
+   - API: https://{github-owner}-orderprocessing-api-xyapp-dev.azurewebsites.net/swagger
+   - UI: https://{github-owner}-orderprocessing-ui-xyapp-dev.azurewebsites.net/
 
 ### Manual Deployment (Alternative)
 If automatic deployment doesn't work, manually trigger the workflows:
@@ -125,25 +127,25 @@ If automatic deployment doesn't work, manually trigger the workflows:
 
 ### 1. Check App Service Status
 ```powershell
-# Check if apps are running
-az webapp show --resource-group rg-orderprocessing-dev --name pavanthakur-orderprocessing-api-xyapp-dev --query "state"
-az webapp show --resource-group rg-orderprocessing-dev --name pavanthakur-orderprocessing-ui-xyapp-dev --query "state"
+# Check if apps are running (replace {github-owner} with your username)
+az webapp show --resource-group rg-orderprocessing-dev --name {github-owner}-orderprocessing-api-xyapp-dev --query "state"
+az webapp show --resource-group rg-orderprocessing-dev --name {github-owner}-orderprocessing-ui-xyapp-dev --query "state"
 ```
 
 ### 2. Verify Environment Variables
 ```powershell
-# Check environment variables
-az webapp config appsettings list --resource-group rg-orderprocessing-dev --name pavanthakur-orderprocessing-api-xyapp-dev --query "[?name=='ASPNETCORE_ENVIRONMENT']"
-az webapp config appsettings list --resource-group rg-orderprocessing-dev --name pavanthakur-orderprocessing-ui-xyapp-dev --query "[?name=='ASPNETCORE_ENVIRONMENT']"
+# Check environment variables (replace {github-owner} with your username)
+az webapp config appsettings list --resource-group rg-orderprocessing-dev --name {github-owner}-orderprocessing-api-xyapp-dev --query "[?name=='ASPNETCORE_ENVIRONMENT']"
+az webapp config appsettings list --resource-group rg-orderprocessing-dev --name {github-owner}-orderprocessing-ui-xyapp-dev --query "[?name=='ASPNETCORE_ENVIRONMENT']"
 ```
 
 ### 3. Test Endpoints
 ```powershell
-# Test API
-Invoke-WebRequest -Uri "https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net/swagger" -Method Get
+# Test API (replace {github-owner} with your username)
+Invoke-WebRequest -Uri "https://{github-owner}-orderprocessing-api-xyapp-dev.azurewebsites.net/swagger" -Method Get
 
-# Test UI
-Invoke-WebRequest -Uri "https://pavanthakur-orderprocessing-ui-xyapp-dev.azurewebsites.net/" -Method Get
+# Test UI (replace {github-owner} with your username)
+Invoke-WebRequest -Uri "https://{github-owner}-orderprocessing-ui-xyapp-dev.azurewebsites.net/" -Method Get
 ```
 
 ### 4. Check Application Insights
@@ -223,8 +225,10 @@ Create a scheduled task to verify application health:
 
 ```powershell
 # health-check.ps1
-$apiUrl = "https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net/swagger"
-$uiUrl = "https://pavanthakur-orderprocessing-ui-xyapp-dev.azurewebsites.net/"
+# Replace {github-owner} with your GitHub username
+$githubOwner = "{github-owner}"
+$apiUrl = "https://$githubOwner-orderprocessing-api-xyapp-dev.azurewebsites.net/swagger"
+$uiUrl = "https://$githubOwner-orderprocessing-ui-xyapp-dev.azurewebsites.net/"
 
 $apiResponse = Invoke-WebRequest -Uri $apiUrl -Method Get -TimeoutSec 30
 $uiResponse = Invoke-WebRequest -Uri $uiUrl -Method Get -TimeoutSec 30

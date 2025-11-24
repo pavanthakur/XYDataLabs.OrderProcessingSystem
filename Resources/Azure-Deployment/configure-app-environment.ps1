@@ -82,11 +82,16 @@ Write-Host ""
 try {
     # Verify Azure CLI is logged in
     Write-Host "[1/5] Verifying Azure CLI login..." -ForegroundColor Cyan
-    $account = az account show 2>&1 | ConvertFrom-Json
-    if ($LASTEXITCODE -ne 0 -or -not $account) {
+    $accountJson = az account show 2>&1
+    if ($LASTEXITCODE -ne 0) {
         throw "Not logged in to Azure CLI. Please run 'az login' first."
     }
-    Write-Host "  ✅ Logged in as: $($account.user.name)" -ForegroundColor Green
+    try {
+        $account = $accountJson | ConvertFrom-Json
+        Write-Host "  ✅ Logged in as: $($account.user.name)" -ForegroundColor Green
+    } catch {
+        throw "Failed to parse Azure account information. Error: $($_.Exception.Message)"
+    }
     Write-Host ""
     
     # Verify resource group exists
@@ -102,14 +107,14 @@ try {
     Write-Host "[3/5] Configuring API App Service environment..." -ForegroundColor Cyan
     Write-Host "  Setting ASPNETCORE_ENVIRONMENT=$($config.AspNetCoreEnvironment) on $($config.ApiApp)..." -ForegroundColor Gray
     
-    $apiResult = az webapp config appsettings set `
+    $null = az webapp config appsettings set `
         --resource-group $config.ResourceGroup `
         --name $config.ApiApp `
         --settings "ASPNETCORE_ENVIRONMENT=$($config.AspNetCoreEnvironment)" `
         2>&1
     
     if ($LASTEXITCODE -ne 0) {
-        throw "Failed to configure API app settings: $apiResult"
+        throw "Failed to configure API app settings. Check that the app exists and you have permissions."
     }
     
     Write-Host "  ✅ API App environment configured" -ForegroundColor Green
@@ -119,14 +124,14 @@ try {
     Write-Host "[4/5] Configuring UI App Service environment..." -ForegroundColor Cyan
     Write-Host "  Setting ASPNETCORE_ENVIRONMENT=$($config.AspNetCoreEnvironment) on $($config.UiApp)..." -ForegroundColor Gray
     
-    $uiResult = az webapp config appsettings set `
+    $null = az webapp config appsettings set `
         --resource-group $config.ResourceGroup `
         --name $config.UiApp `
         --settings "ASPNETCORE_ENVIRONMENT=$($config.AspNetCoreEnvironment)" `
         2>&1
     
     if ($LASTEXITCODE -ne 0) {
-        throw "Failed to configure UI app settings: $uiResult"
+        throw "Failed to configure UI app settings. Check that the app exists and you have permissions."
     }
     
     Write-Host "  ✅ UI App environment configured" -ForegroundColor Green
@@ -137,30 +142,48 @@ try {
     
     # Get API app settings
     Write-Host "  Checking API app settings..." -ForegroundColor Gray
-    $apiSettings = az webapp config appsettings list `
+    $apiSettingsJson = az webapp config appsettings list `
         --resource-group $config.ResourceGroup `
         --name $config.ApiApp `
-        2>&1 | ConvertFrom-Json
+        2>&1
     
-    $apiEnv = $apiSettings | Where-Object { $_.name -eq 'ASPNETCORE_ENVIRONMENT' }
-    if ($apiEnv.value -eq $config.AspNetCoreEnvironment) {
-        Write-Host "  ✅ API: ASPNETCORE_ENVIRONMENT = $($apiEnv.value)" -ForegroundColor Green
+    if ($LASTEXITCODE -eq 0) {
+        try {
+            $apiSettings = $apiSettingsJson | ConvertFrom-Json
+            $apiEnv = $apiSettings | Where-Object { $_.name -eq 'ASPNETCORE_ENVIRONMENT' }
+            if ($apiEnv.value -eq $config.AspNetCoreEnvironment) {
+                Write-Host "  ✅ API: ASPNETCORE_ENVIRONMENT = $($apiEnv.value)" -ForegroundColor Green
+            } else {
+                Write-Host "  ⚠️  API: ASPNETCORE_ENVIRONMENT = $($apiEnv.value) (expected: $($config.AspNetCoreEnvironment))" -ForegroundColor Yellow
+            }
+        } catch {
+            Write-Host "  ⚠️  API: Failed to parse settings" -ForegroundColor Yellow
+        }
     } else {
-        Write-Host "  ⚠️  API: ASPNETCORE_ENVIRONMENT verification failed" -ForegroundColor Yellow
+        Write-Host "  ⚠️  API: Failed to retrieve settings" -ForegroundColor Yellow
     }
     
     # Get UI app settings
     Write-Host "  Checking UI app settings..." -ForegroundColor Gray
-    $uiSettings = az webapp config appsettings list `
+    $uiSettingsJson = az webapp config appsettings list `
         --resource-group $config.ResourceGroup `
         --name $config.UiApp `
-        2>&1 | ConvertFrom-Json
+        2>&1
     
-    $uiEnv = $uiSettings | Where-Object { $_.name -eq 'ASPNETCORE_ENVIRONMENT' }
-    if ($uiEnv.value -eq $config.AspNetCoreEnvironment) {
-        Write-Host "  ✅ UI: ASPNETCORE_ENVIRONMENT = $($uiEnv.value)" -ForegroundColor Green
+    if ($LASTEXITCODE -eq 0) {
+        try {
+            $uiSettings = $uiSettingsJson | ConvertFrom-Json
+            $uiEnv = $uiSettings | Where-Object { $_.name -eq 'ASPNETCORE_ENVIRONMENT' }
+            if ($uiEnv.value -eq $config.AspNetCoreEnvironment) {
+                Write-Host "  ✅ UI: ASPNETCORE_ENVIRONMENT = $($uiEnv.value)" -ForegroundColor Green
+            } else {
+                Write-Host "  ⚠️  UI: ASPNETCORE_ENVIRONMENT = $($uiEnv.value) (expected: $($config.AspNetCoreEnvironment))" -ForegroundColor Yellow
+            }
+        } catch {
+            Write-Host "  ⚠️  UI: Failed to parse settings" -ForegroundColor Yellow
+        }
     } else {
-        Write-Host "  ⚠️  UI: ASPNETCORE_ENVIRONMENT verification failed" -ForegroundColor Yellow
+        Write-Host "  ⚠️  UI: Failed to retrieve settings" -ForegroundColor Yellow
     }
     
     Write-Host ""

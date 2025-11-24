@@ -2019,7 +2019,7 @@ jobs:
             Write-Host "⚙️  Configuring ASPNETCORE_ENVIRONMENT for dev environment..." -ForegroundColor Cyan
             Write-Host ""
             
-            ./Resources/Azure-Deployment/configure-app-environment.ps1 -Environment dev -BaseName orderprocessing -GitHubOwner pavanthakur
+            ./Resources/Azure-Deployment/configure-app-environment.ps1 -Environment dev -BaseName orderprocessing -GitHubOwner ${{ github.repository_owner }}
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
