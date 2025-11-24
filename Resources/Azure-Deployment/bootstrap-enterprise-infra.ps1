@@ -93,6 +93,18 @@ function Write-Log {
 
 Write-Log "=== Bootstrap started ===" "INFO" "Cyan"
 
+# Helper function to map environment to ASPNETCORE_ENVIRONMENT value
+function Get-AspNetCoreEnvironment {
+    param([string]$Environment)
+    
+    switch ($Environment) {
+        "dev" { return "Development" }
+        "stg" { return "Staging" }
+        "prod" { return "Production" }
+        default { return "Development" }
+    }
+}
+
 # Super retry synchronous webapp creation helper
 function New-WebAppWithSuperRetry {
     param([string]$ResourceGroup, [string]$PlanName, [string]$AppName, [int]$MaxAttempts = 5, [int]$InitialWaitMinutes = 2, [int]$RetryDelaySeconds = 60)
@@ -696,10 +708,12 @@ foreach ($env in $envList) {
                 $apiVerified = az webapp show -g $rg -n $apiApp --query "name" -o tsv 2>$null
                 if ($apiVerified -eq $apiApp) {
                     Write-Host "    [PROCESSING] Configuring API app settings..." -ForegroundColor Gray
+                    # Determine ASPNETCORE_ENVIRONMENT value based on environment
+                    $aspnetEnv = Get-AspNetCoreEnvironment -Environment $Environment
                     $job = Start-Job -ScriptBlock {
-                        param($rg, $apiApp, $connString)
-                        az webapp config appsettings set -g $rg -n $apiApp --settings "APPLICATIONINSIGHTS_CONNECTION_STRING=$connString" 2>$null
-                    } -ArgumentList $rg, $apiApp, $connString
+                        param($rg, $apiApp, $connString, $aspnetEnv)
+                        az webapp config appsettings set -g $rg -n $apiApp --settings "APPLICATIONINSIGHTS_CONNECTION_STRING=$connString" "ASPNETCORE_ENVIRONMENT=$aspnetEnv" 2>$null
+                    } -ArgumentList $rg, $apiApp, $connString, $aspnetEnv
                     
                     $timeout = 90
                     $completed = Wait-Job -Job $job -Timeout $timeout
@@ -717,10 +731,12 @@ foreach ($env in $envList) {
                 $uiVerified = az webapp show -g $rg -n $uiApp --query "name" -o tsv 2>$null
                 if ($uiVerified -eq $uiApp) {
                     Write-Host "    [PROCESSING] Configuring UI app settings..." -ForegroundColor Gray
+                    # Determine ASPNETCORE_ENVIRONMENT value based on environment
+                    $aspnetEnv = Get-AspNetCoreEnvironment -Environment $Environment
                     $job = Start-Job -ScriptBlock {
-                        param($rg, $uiApp, $connString)
-                        az webapp config appsettings set -g $rg -n $uiApp --settings "APPLICATIONINSIGHTS_CONNECTION_STRING=$connString" 2>$null
-                    } -ArgumentList $rg, $uiApp, $connString
+                        param($rg, $uiApp, $connString, $aspnetEnv)
+                        az webapp config appsettings set -g $rg -n $uiApp --settings "APPLICATIONINSIGHTS_CONNECTION_STRING=$connString" "ASPNETCORE_ENVIRONMENT=$aspnetEnv" 2>$null
+                    } -ArgumentList $rg, $uiApp, $connString, $aspnetEnv
                     
                     $timeout = 90
                     $completed = Wait-Job -Job $job -Timeout $timeout

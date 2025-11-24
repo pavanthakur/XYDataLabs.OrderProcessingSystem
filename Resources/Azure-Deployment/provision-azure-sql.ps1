@@ -206,32 +206,88 @@ if (-not $azureServicesRule) {
 }
 
 # Allow current IP for management (best effort)
+# This handles dynamic IPs for GitHub Actions runners and local execution
 try {
     $myIp = (Invoke-WebRequest -Uri "https://api.ipify.org" -UseBasicParsing -TimeoutSec 5).Content.Trim()
+    Write-Host "  [INFO] Detected current IP: $myIp" -ForegroundColor Gray
+    
+    # Use a timestamped rule name to handle dynamic IPs better
+    # This allows multiple rules if IP changes across different runs
+    $ruleName = "AllowIP-" + $myIp.Replace(".", "-")
     
     $myIpRule = $null
     try {
         $checkResult = az sql server firewall-rule show `
-            --name AllowMyIP `
+            --name $ruleName `
             --server $sqlServerName `
             --resource-group $rgName --output json 2>$null
         if ($LASTEXITCODE -eq 0 -and $checkResult) {
-            $myIpRule = $checkResult
+            $myIpRule = $checkResult | ConvertFrom-Json
         }
     } catch { }
     
     if (-not $myIpRule) {
+        Write-Host "  [CREATE] Adding firewall rule for IP: $myIp" -ForegroundColor Yellow
         az sql server firewall-rule create `
             --resource-group $rgName `
             --server $sqlServerName `
-            --name AllowMyIP `
+            --name $ruleName `
             --start-ip-address $myIp `
             --end-ip-address $myIp `
             --output none 2>$null
-        Write-Host "  [OK] Your IP ($myIp) added to firewall" -ForegroundColor Green
+        
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "  [OK] Firewall rule '$ruleName' created for IP $myIp" -ForegroundColor Green
+            
+            # Wait for Azure to propagate the firewall rule (can take 2-5 minutes)
+            Write-Host "  [WAIT] Waiting 5 minutes for firewall rule to propagate..." -ForegroundColor Yellow
+            Write-Host "  [INFO] Azure SQL firewall changes can take up to 5 minutes to become active" -ForegroundColor Gray
+            $waitSeconds = 300
+            $checkInterval = 30
+            $elapsed = 0
+            Write-Host "  [PROGRESS] [" -NoNewline -ForegroundColor Cyan
+            while ($elapsed -lt $waitSeconds) {
+                Start-Sleep -Seconds $checkInterval
+                $elapsed += $checkInterval
+                $percent = [math]::Round(($elapsed / $waitSeconds) * 100)
+                Write-Host "#" -NoNewline -ForegroundColor Green
+            }
+            Write-Host "] 100%" -ForegroundColor Cyan
+            Write-Host "  [OK] Firewall rule propagation wait complete" -ForegroundColor Green
+        } else {
+            Write-Host "  [WARN] Failed to create firewall rule (exit code: $LASTEXITCODE)" -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "  [EXISTS] Firewall rule '$ruleName' already exists for IP $myIp" -ForegroundColor Green
+        Write-Host "  [INFO] Skipping wait time as rule already exists" -ForegroundColor Gray
+    }
+    
+    # Clean up old IP rules to avoid accumulation
+    # Keep the 10 most recent rules to handle IP changes across multiple runs
+    # while preventing unlimited growth of firewall rules
+    $maxIpRules = 10
+    try {
+        $allRules = az sql server firewall-rule list `
+            --server $sqlServerName `
+            --resource-group $rgName --output json 2>$null | ConvertFrom-Json
+        
+        $ipRules = $allRules | Where-Object { $_.name -like "AllowIP-*" } | Sort-Object name -Descending
+        $rulesToDelete = $ipRules | Select-Object -Skip $maxIpRules
+        
+        foreach ($rule in $rulesToDelete) {
+            Write-Host "  [CLEANUP] Removing old firewall rule: $($rule.name)" -ForegroundColor Gray
+            az sql server firewall-rule delete `
+                --name $rule.name `
+                --server $sqlServerName `
+                --resource-group $rgName --output none 2>$null
+        }
+    } catch {
+        # Cleanup is best effort, don't fail if it doesn't work
+        Write-Host "  [INFO] Firewall rule cleanup skipped" -ForegroundColor Gray
     }
 } catch {
-    Write-Host "  [SKIP] Could not detect public IP - firewall rule skipped" -ForegroundColor Yellow
+    Write-Host "  [WARN] Could not detect or configure firewall for current IP" -ForegroundColor Yellow
+    Write-Host "  [INFO] Connection may fail if not running from Azure services" -ForegroundColor Gray
 }
 
 # Step 3: Create database
