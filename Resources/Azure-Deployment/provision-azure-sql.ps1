@@ -72,7 +72,7 @@ if ($rgExists -eq 'false') {
 
 # Wait for resource group to be fully ready
 Write-Host "  [WAIT] Verifying resource group readiness..." -ForegroundColor Cyan
-$rgTimeout = 5 * 60  # Reduced from 10 to 5 minutes for faster feedback
+$rgTimeout = 7 * 60  # Allow sufficient time for RG provisioning (reduced from 10 min)
 $rgInterval = 30      # Check more frequently (every 30 seconds instead of 120)
 $rgElapsed = 0
 $rgReady = $false
