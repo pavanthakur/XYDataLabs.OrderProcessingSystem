@@ -127,6 +127,13 @@ jobs:
             Write-Host "    - prod environment (repo:pavanthakur/XYDataLabs.OrderProcessingSystem:environment:prod)" -ForegroundColor Gray
             Write-Host "  GitHub Secrets: dev, staging, prod" -ForegroundColor Yellow
             Write-Host "  Bootstrap: dev, staging, prod resource groups" -ForegroundColor Yellow
+          } elseif ($env -eq "prod") {
+            # Production environment uses main branch
+            Write-Host "  OIDC Credentials:" -ForegroundColor Yellow
+            Write-Host "    - main branch (repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/main)" -ForegroundColor Gray
+            Write-Host "    - prod environment (repo:pavanthakur/XYDataLabs.OrderProcessingSystem:environment:prod)" -ForegroundColor Gray
+            Write-Host "  GitHub Secrets: prod" -ForegroundColor Yellow
+            Write-Host "  Bootstrap: prod resource group" -ForegroundColor Yellow
           } else {
             Write-Host "  OIDC Credentials:" -ForegroundColor Yellow
             Write-Host "    - $env branch (repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/$env)" -ForegroundColor Gray
@@ -252,6 +259,10 @@ jobs:
             if ($selectedEnv -eq "all") {
               $branches = "dev,staging,main"
               $environments = "dev,staging,prod"
+            } elseif ($selectedEnv -eq "prod") {
+              # Production environment uses main branch
+              $branches = "main"
+              $environments = "prod"
             } else {
               $branches = $selectedEnv
               $environments = $selectedEnv
@@ -473,20 +484,23 @@ jobs:
 
             Write-Host "`n🔎 Checking for required credentials..." -ForegroundColor Cyan
 
+            # Determine the actual branch name for the selected environment
+            $branchForEnv = if ($selectedEnv -eq "prod") { "main" } else { $selectedEnv }
+
             # Check branch credential for selected environment
-            Write-Host "Searching for $selectedEnv branch credential..." -ForegroundColor Gray
-            $expectedBranch = "repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/$selectedEnv"
+            Write-Host "Searching for $branchForEnv branch credential (for $selectedEnv environment)..." -ForegroundColor Gray
+            $expectedBranch = "repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/$branchForEnv"
             Write-Host "Expected: $expectedBranch" -ForegroundColor Gray
             $devBranchCred = $creds | Where-Object { $_.subject -eq $expectedBranch }
             if ($devBranchCred) {
-              Write-Host "✅ $selectedEnv branch credential found: $($devBranchCred.name)" -ForegroundColor Green
+              Write-Host "✅ $branchForEnv branch credential found: $($devBranchCred.name)" -ForegroundColor Green
             } else {
-              Write-Host "❌ $selectedEnv branch credential NOT found" -ForegroundColor Red
+              Write-Host "❌ $branchForEnv branch credential NOT found" -ForegroundColor Red
               Write-Host "Actual subjects found:" -ForegroundColor Yellow
               foreach ($cred in $creds) {
                 Write-Host "  - $($cred.subject)" -ForegroundColor Yellow
               }
-              Write-Error "⚠️ $selectedEnv branch federated credential is missing! Bootstrap will fail."
+              Write-Error "⚠️ $branchForEnv branch federated credential is missing! Bootstrap will fail."
             }
 
             # Check environment credential for selected environment
