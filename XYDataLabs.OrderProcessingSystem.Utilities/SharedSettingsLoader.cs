@@ -39,11 +39,24 @@ namespace XYDataLabs.OrderProcessingSystem.Utilities
             Console.WriteLine($"[DEBUG] Loading shared settings: Environment={environmentName}, IsDocker={isDocker}, IsAzure={isAzure}, Effective={effectiveEnvironment}");
             Console.WriteLine($"[DEBUG] Base path: {basePath}");
             
-            return builder
+            // Build configuration with JSON file first, then environment variables override
+            // This allows Azure App Service connection strings to take precedence over local JSON settings
+            builder
                 .SetBasePath(basePath)
                 .AddJsonFile($"Resources/Configuration/sharedsettings.{effectiveEnvironment}.json", optional: false, reloadOnChange: true);
-                // REMOVED: .AddJsonFile($"appsettings.{effectiveEnvironment}.json", optional: true, reloadOnChange: true);
-                // All configuration now consolidated in sharedsettings files for Azure Key Vault readiness
+            
+            // Add environment variables AFTER JSON file so they can override
+            // Azure App Service sets connection strings as environment variables with specific prefixes:
+            // - SQLAZURECONNSTR_<name> for SQL Azure connection strings
+            // - CUSTOMCONNSTR_<name> for custom connection strings
+            // ASP.NET Core automatically maps these to ConnectionStrings:<name> in configuration
+            if (isAzure)
+            {
+                Console.WriteLine("[DEBUG] Azure environment detected - adding environment variables for connection string override");
+                builder.AddEnvironmentVariables();
+            }
+            
+            return builder;
         }
 
         /// <summary>
