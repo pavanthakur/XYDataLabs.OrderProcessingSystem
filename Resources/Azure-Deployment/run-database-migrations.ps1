@@ -14,7 +14,10 @@ param(
     [string]$AdminUsername = 'sqladmin',
     
     [Parameter(Mandatory=$false)]
-    [string]$AdminPassword = 'Admin100@'
+    [string]$AdminPassword = 'Admin100@',
+    
+    [Parameter(Mandatory=$false)]
+    [string]$Owner = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -169,8 +172,9 @@ Write-Host "  Status:   Schema created with sample data"
 Write-Host ""
 
 Write-Host "Next Steps:" -ForegroundColor Yellow
-Write-Host "  1. Test API: https://$BaseName-api-xyapp-$Environment.azurewebsites.net/swagger"
-Write-Host "  2. Test UI:  https://$BaseName-ui-xyapp-$Environment.azurewebsites.net"
+$appPrefix = if ($Owner) { "$Owner-$BaseName" } else { $BaseName }
+Write-Host "  1. Test API: https://$appPrefix-api-xyapp-$Environment.azurewebsites.net/swagger"
+Write-Host "  2. Test UI:  https://$appPrefix-ui-xyapp-$Environment.azurewebsites.net"
 Write-Host "  3. Query database in Azure Portal -> Query editor"
 Write-Host ""
 
