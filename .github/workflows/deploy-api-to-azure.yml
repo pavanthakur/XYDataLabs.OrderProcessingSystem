@@ -117,8 +117,10 @@ jobs:
           Write-Host "🔄 Running database migrations for $env environment..." -ForegroundColor Cyan
           Write-Host ""
           
+          $owner = "${{ github.repository_owner }}"
+          
           try {
-            ./Resources/Azure-Deployment/run-database-migrations.ps1 -Environment $env -BaseName orderprocessing
+            ./Resources/Azure-Deployment/run-database-migrations.ps1 -Environment $env -BaseName orderprocessing -Owner $owner
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
