@@ -19,6 +19,10 @@ namespace XYDataLabs.OrderProcessingSystem.UI.Controllers
             // Determine environment and Docker context
             var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
             var isDocker = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true";
+            
+            // Detect Azure App Service using WEBSITE_SITE_NAME environment variable
+            var azureSiteName = Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME");
+            var isAzure = !string.IsNullOrWhiteSpace(azureSiteName);
 
             // Map .NET environment names to our simplified profile names
             var environmentName = environment switch
@@ -32,21 +36,51 @@ namespace XYDataLabs.OrderProcessingSystem.UI.Controllers
             // Log home page access (business event)
             _logger.LogInformation("User accessed home page in {Environment} environment", environmentName);
 
-            // Load shared settings and get API base URL
-            var builder = new ConfigurationBuilder();
-            bool useHttps;
-            XYDataLabs.OrderProcessingSystem.Utilities.ApiSettings apiSettings;
-            var apiSection = SharedSettingsLoader.AddAndBindSettings(
-                services: null, // Now allowed
-                builder: builder,
-                environmentName: environmentName,
-                isDocker: isDocker,
-                groupSelector: s => s.API,
-                apiSettings: out apiSettings,
-                useHttps: out useHttps
-            );
-            var scheme = useHttps ? "https" : "http";
-            var apiBaseUrl = $"{scheme}://{apiSection.Host}:{apiSection.Port}";
+            // Determine API base URL
+            string apiBaseUrl;
+            
+            // First, check for explicit API_BASE_URL environment variable (allows Azure App Service override)
+            var apiBaseUrlEnv = Environment.GetEnvironmentVariable("API_BASE_URL");
+            if (!string.IsNullOrWhiteSpace(apiBaseUrlEnv))
+            {
+                apiBaseUrl = apiBaseUrlEnv.TrimEnd('/');
+                _logger.LogInformation("Using API_BASE_URL from environment variable: {ApiBaseUrl}", apiBaseUrl);
+            }
+            else if (isAzure)
+            {
+                // On Azure, derive API URL from UI site name by replacing '-ui-' with '-api-'
+                var apiSiteName = azureSiteName!.Replace("-ui-", "-api-");
+                if (apiSiteName != azureSiteName)
+                {
+                    apiBaseUrl = $"https://{apiSiteName}.azurewebsites.net";
+                    _logger.LogInformation("Using derived Azure API URL: {ApiBaseUrl}", apiBaseUrl);
+                }
+                else
+                {
+                    // Fallback if UI site name doesn't contain '-ui-' pattern - use site name directly with '-api' suffix
+                    _logger.LogWarning("Could not derive API site name from UI site name '{UiSiteName}'. Using fallback.", azureSiteName);
+                    apiBaseUrl = $"https://{azureSiteName}-api.azurewebsites.net";
+                }
+            }
+            else
+            {
+                // Load shared settings and get API base URL for local/Docker environments
+                var builder = new ConfigurationBuilder();
+                bool useHttps;
+                XYDataLabs.OrderProcessingSystem.Utilities.ApiSettings apiSettings;
+                var apiSection = SharedSettingsLoader.AddAndBindSettings(
+                    services: null, // Now allowed
+                    builder: builder,
+                    environmentName: environmentName,
+                    isDocker: isDocker,
+                    groupSelector: s => s.API,
+                    apiSettings: out apiSettings,
+                    useHttps: out useHttps
+                );
+                var scheme = useHttps ? "https" : "http";
+                apiBaseUrl = $"{scheme}://{apiSection.Host}:{apiSection.Port}";
+            }
+            
             ViewData["ApiBaseUrl"] = apiBaseUrl;
 
             // Pass environment information to the view
