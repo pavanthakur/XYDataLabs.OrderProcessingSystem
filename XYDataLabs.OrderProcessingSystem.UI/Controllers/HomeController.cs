@@ -46,12 +46,21 @@ namespace XYDataLabs.OrderProcessingSystem.UI.Controllers
                 apiBaseUrl = apiBaseUrlEnv.TrimEnd('/');
                 _logger.LogInformation("Using API_BASE_URL from environment variable: {ApiBaseUrl}", apiBaseUrl);
             }
-            else if (isAzure && !string.IsNullOrWhiteSpace(azureSiteName))
+            else if (isAzure)
             {
                 // On Azure, derive API URL from UI site name by replacing '-ui-' with '-api-'
-                var apiSiteName = azureSiteName.Replace("-ui-", "-api-");
-                apiBaseUrl = $"https://{apiSiteName}.azurewebsites.net";
-                _logger.LogInformation("Using derived Azure API URL: {ApiBaseUrl}", apiBaseUrl);
+                var apiSiteName = azureSiteName!.Replace("-ui-", "-api-");
+                if (apiSiteName != azureSiteName)
+                {
+                    apiBaseUrl = $"https://{apiSiteName}.azurewebsites.net";
+                    _logger.LogInformation("Using derived Azure API URL: {ApiBaseUrl}", apiBaseUrl);
+                }
+                else
+                {
+                    // Fallback if UI site name doesn't contain '-ui-' pattern - use site name directly with '-api' suffix
+                    _logger.LogWarning("Could not derive API site name from UI site name '{UiSiteName}'. Using fallback.", azureSiteName);
+                    apiBaseUrl = $"https://{azureSiteName}-api.azurewebsites.net";
+                }
             }
             else
             {
