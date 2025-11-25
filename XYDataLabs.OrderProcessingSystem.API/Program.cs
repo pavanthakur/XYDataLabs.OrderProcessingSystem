@@ -25,8 +25,8 @@ var builder = WebApplication.CreateBuilder(args);
 var isDocker = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true";
 
 // Detect Azure App Service using WEBSITE_SITE_NAME environment variable
-var isAzure = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME"));
 var azureSiteName = Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME");
+var isAzure = !string.IsNullOrWhiteSpace(azureSiteName);
 
 // Map .NET environment names to our simplified profile names
 var environmentName = builder.Environment.EnvironmentName switch
@@ -145,7 +145,7 @@ builder.Services.AddSwaggerGen(options =>
     
     // Add server configuration for proper Swagger API calls
     // When running on Azure App Service, use the Azure domain; otherwise use configured settings
-    var serverUrl = isAzure && !string.IsNullOrWhiteSpace(azureSiteName)
+    var serverUrl = isAzure
         ? $"https://{azureSiteName}.azurewebsites.net"
         : activeSettings.GetBaseUrl();
     options.AddServer(new OpenApiServer 
@@ -307,7 +307,7 @@ app.UseMiddleware<ErrorHandlingMiddleware>();
 
 app.MapControllers();
 
-if (isAzure && !string.IsNullOrWhiteSpace(azureSiteName))
+if (isAzure)
 {
     Console.WriteLine($"[DEBUG] API is running on Azure App Service: https://{azureSiteName}.azurewebsites.net");
 }
