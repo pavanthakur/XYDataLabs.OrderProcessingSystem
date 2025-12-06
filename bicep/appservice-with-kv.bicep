@@ -41,9 +41,28 @@ var skuTierMap = {
   P3v3: 'PremiumV3'
 }
 
-// Reference to existing Key Vault (must be created separately)
-resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
+// Create Key Vault with access policies
+resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: keyVaultName
+  location: location
+  properties: {
+    sku: {
+      family: 'A'
+      name: 'standard'
+    }
+    tenantId: subscription().tenantId
+    enableRbacAuthorization: false
+    enabledForDeployment: false
+    enabledForDiskEncryption: false
+    enabledForTemplateDeployment: false
+    enableSoftDelete: true
+    softDeleteRetentionInDays: 90
+    accessPolicies: []
+  }
+  tags: {
+    environment: environment
+    app: 'orderprocessing'
+  }
 }
 
 // App Service Plan
