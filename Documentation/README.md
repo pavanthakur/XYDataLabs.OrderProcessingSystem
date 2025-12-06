@@ -52,7 +52,8 @@ Contains application configuration and settings documentation:
 
 | Document | Purpose | When to Use |
 |----------|---------|-------------|
-| **KEY-VAULT-VERIFICATION-GUIDE.md** | Comprehensive guide for verifying Key Vault setup | After PR#54 deployment, production checklist |
+| **PR-54-AND-PR-5-SUMMARY.md** | Direct answers to verification questions for PR#54 and PR#5 | **START HERE** - Quick answers and overview |
+| **KEY-VAULT-VERIFICATION-GUIDE.md** | Comprehensive guide for verifying Key Vault setup | Detailed verification, troubleshooting |
 | **KEY-VAULT-QUICK-CHECKLIST.md** | Quick reference checklist for Key Vault verification | Daily operations, quick validation |
 
 **Automated Verification Scripts** (in `Scripts/`):
