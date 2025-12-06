@@ -9,6 +9,7 @@ This directory contains Azure Bicep templates for deploying the Order Processing
 ### Templates
 
 - **appservice-with-kv.bicep**: Main Bicep template that deploys:
+  - Azure Key Vault with soft delete enabled
   - App Service Plan
   - App Service with System-Assigned Managed Identity
   - Key Vault access policy for the Managed Identity
@@ -24,8 +25,8 @@ This directory contains Azure Bicep templates for deploying the Order Processing
 
 ### Prerequisites
 
-1. Azure Key Vault must be created before deploying this template
-2. Secrets must be populated in Key Vault with these names:
+1. Azure subscription with permissions to create resources
+2. After deployment, populate the Key Vault with these secrets:
    - `OpenPayAdapter--ApiKey`
    - `ApplicationInsights--ConnectionString`
 
@@ -76,7 +77,7 @@ curl https://<app-name>.azurewebsites.net/api/info/environment
 | Parameter | Description | Required | Default |
 |-----------|-------------|----------|---------|
 | `appName` | Name of the App Service | Yes | - |
-| `keyVaultName` | Name of the existing Key Vault | Yes | - |
+| `keyVaultName` | Name of the Key Vault to create | Yes | - |
 | `appServicePlanName` | Name of the App Service Plan | Yes | - |
 | `location` | Azure region | No | Resource Group location |
 | `appServiceSku` | App Service Plan SKU (F1, B1, P1v3) | No | F1 |
@@ -103,7 +104,7 @@ The template enables System-Assigned Managed Identity on the App Service and gra
 
 ## Security Considerations
 
-1. **Key Vault Soft Delete**: Consider enabling soft delete on Key Vault to protect against accidental deletion
+1. **Key Vault Soft Delete**: Soft delete is enabled with 90-day retention to protect against accidental deletion
 2. **Network Restrictions**: For production, consider restricting Key Vault access to specific virtual networks
 3. **Audit Logging**: Enable diagnostic logs on Key Vault to track secret access
 4. **Secret Rotation**: Implement a secret rotation strategy for production secrets
@@ -123,7 +124,7 @@ If app settings show `@Microsoft.KeyVault(...)` but secrets aren't resolved:
 ### Deployment Errors
 
 Common issues:
-- **Key Vault not found**: Create the Key Vault before deploying this template
+- **Key Vault name conflict**: If deployment fails because Key Vault name is taken, choose a different name or wait for soft delete retention period
 - **Insufficient permissions**: Ensure you have Contributor access to the resource group
 - **Invalid SKU**: Verify the App Service Plan SKU is valid for your subscription
 
