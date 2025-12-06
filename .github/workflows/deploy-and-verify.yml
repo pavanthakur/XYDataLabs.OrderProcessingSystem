@@ -157,14 +157,20 @@ jobs:
         id: deploy-bicep
         run: |
           PARAM_FILE="${{ needs.determine-environment.outputs.parameter-file }}"
+          ENV="${{ needs.determine-environment.outputs.environment }}"
           
           # Check if parameter file exists
           if [ ! -f "$PARAM_FILE" ]; then
-            echo "Warning: Parameter file $PARAM_FILE not found. This is expected for uat/prod until they are configured."
-            echo "Skipping Bicep deployment for now."
-            echo "appServiceName=${{ needs.determine-environment.outputs.app-name }}" >> $GITHUB_OUTPUT
-            echo "appServiceHostName=${{ needs.determine-environment.outputs.app-name }}.azurewebsites.net" >> $GITHUB_OUTPUT
-            exit 0
+            echo "ERROR: Parameter file not found: $PARAM_FILE"
+            echo ""
+            echo "Before deploying to '$ENV' environment, you must:"
+            echo "1. Create the parameter file: $PARAM_FILE"
+            echo "2. Configure environment-specific values"
+            echo "3. Create the Key Vault for this environment"
+            echo "4. Populate secrets in the Key Vault"
+            echo ""
+            echo "See docs/runbooks/keyvault-managed-identity-deploy.md for instructions"
+            exit 1
           fi
           
           # Deploy Bicep template

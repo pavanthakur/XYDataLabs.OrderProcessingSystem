@@ -24,6 +24,23 @@ param openPayAdapterBaseUrl string = 'https://api.openpay.example.com'
 // Determine ASPNETCORE_ENVIRONMENT based on environment parameter
 var aspNetCoreEnvironment = environment == 'dev' ? 'Development' : (environment == 'uat' ? 'Staging' : 'Production')
 
+// Map SKU name to tier
+var skuTierMap = {
+  F1: 'Free'
+  B1: 'Basic'
+  B2: 'Basic'
+  B3: 'Basic'
+  S1: 'Standard'
+  S2: 'Standard'
+  S3: 'Standard'
+  P1v2: 'PremiumV2'
+  P2v2: 'PremiumV2'
+  P3v2: 'PremiumV2'
+  P1v3: 'PremiumV3'
+  P2v3: 'PremiumV3'
+  P3v3: 'PremiumV3'
+}
+
 // Reference to existing Key Vault (must be created separately)
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
   name: keyVaultName
@@ -35,7 +52,7 @@ resource appServicePlan 'Microsoft.Web/serverfarms@2023-12-01' = {
   location: location
   sku: {
     name: appServiceSku
-    tier: appServiceSku == 'F1' ? 'Free' : (appServiceSku == 'B1' ? 'Basic' : 'Standard')
+    tier: skuTierMap[appServiceSku]
   }
   properties: {
     reserved: false

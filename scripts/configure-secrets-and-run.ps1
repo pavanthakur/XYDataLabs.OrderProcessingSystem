@@ -163,6 +163,8 @@ if ($SkipHealthCheck) {
     Write-Host ""
     
     # Construct app URL based on environment
+    # Note: This naming convention matches configure-app-environment.ps1 and GitHub workflows
+    # Format: {owner}-{basename}-api-xyapp-{env} where staging uses 'stg' abbreviation
     $appName = "$GitHubOwner-$BaseName-api-xyapp-$Environment"
     if ($Environment -eq 'staging') {
         $appName = "$GitHubOwner-$BaseName-api-xyapp-stg"

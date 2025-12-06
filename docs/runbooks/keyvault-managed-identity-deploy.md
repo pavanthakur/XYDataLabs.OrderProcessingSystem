@@ -89,7 +89,7 @@ az keyvault secret set \
 az keyvault secret list --vault-name $KV_NAME --query "[].name" -o table
 ```
 
-**Note**: The secret names use `--` (double hyphens) because Azure Key Vault doesn't support `:` in secret names, but the Bicep template maps them correctly to the app setting format (e.g., `OpenPayAdapter:ApiKey`).
+**Note**: The secret names use `--` (double hyphens) because Azure Key Vault doesn't support `:` in secret names. App Service automatically resolves Key Vault references and the app settings will use `__` (double underscores) format (e.g., `OpenPayAdapter__ApiKey`).
 
 #### 1.3 Configure GitHub Environment Secrets
 
