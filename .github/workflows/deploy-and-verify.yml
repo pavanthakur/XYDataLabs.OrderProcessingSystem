@@ -165,11 +165,14 @@ jobs:
             echo ""
             echo "Before deploying to '$ENV' environment, you must:"
             echo "1. Create the parameter file: $PARAM_FILE"
-            echo "2. Configure environment-specific values"
-            echo "3. Create the Key Vault for this environment"
-            echo "4. Populate secrets in the Key Vault"
+            echo "2. Configure environment-specific values (Key Vault name, App Service name, etc.)"
             echo ""
-            echo "See docs/runbooks/keyvault-managed-identity-deploy.md for instructions"
+            echo "Note: The deployment will create the Key Vault automatically."
+            echo "After deployment, populate the Key Vault with required secrets:"
+            echo "  - OpenPayAdapter--ApiKey"
+            echo "  - ApplicationInsights--ConnectionString"
+            echo ""
+            echo "See bicep/README.md for detailed instructions"
             exit 1
           fi
           
