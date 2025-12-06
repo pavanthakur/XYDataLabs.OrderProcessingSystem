@@ -1,0 +1,27 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "appName": {
+      "value": "pavanthakur-orderprocessing-api-xyapp-dev"
+    },
+    "keyVaultName": {
+      "value": "kv-orderproc-dev"
+    },
+    "appServicePlanName": {
+      "value": "asp-orderprocessing-dev"
+    },
+    "location": {
+      "value": "centralindia"
+    },
+    "appServiceSku": {
+      "value": "F1"
+    },
+    "environment": {
+      "value": "dev"
+    },
+    "openPayAdapterBaseUrl": {
+      "value": "https://api.openpay.example.com"
+    }
+  }
+}
