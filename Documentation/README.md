@@ -47,32 +47,6 @@ Contains application configuration and settings documentation:
 - `SIMPLIFIED_CONFIG_GUIDE.md` - Simplified configuration guide (7KB)
 - `DOTENV_DEPENDENCY_ELIMINATION_SUMMARY.md` - Environment configuration summary (8KB)
 
-### Security & Key Vault Documentation
-**Azure Key Vault verification and configuration guides**
-
-| Document | Purpose | When to Use |
-|----------|---------|-------------|
-| **PR-54-AND-PR-5-SUMMARY.md** | Direct answers to verification questions for PR#54 and PR#5 | **START HERE** - Quick answers and overview |
-| **KEY-VAULT-VERIFICATION-GUIDE.md** | Comprehensive guide for verifying Key Vault setup | Detailed verification, troubleshooting |
-| **KEY-VAULT-QUICK-CHECKLIST.md** | Quick reference checklist for Key Vault verification | Daily operations, quick validation |
-
-**Automated Verification Scripts** (in `Scripts/`):
-- `Verify-KeyVaultSetup.ps1` - PowerShell verification script with detailed reporting
-- `verify-keyvault-setup.sh` - Bash/Azure CLI verification script
-
-**Key Changes Verified**:
-- ✅ PR#54: Key Vault automatic creation with soft delete enabled (90-day retention)
-- ✅ PR#5: GitHub workflow automation using GITHUB_TOKEN (no manual PAT required)
-
-**Quick Start**:
-```powershell
-# PowerShell verification
-.\Scripts\Verify-KeyVaultSetup.ps1 -ResourceGroupName "rg-orderprocessing-dev" -Environment "dev"
-
-# Bash verification
-./Scripts/verify-keyvault-setup.sh rg-orderprocessing-dev dev
-```
-
 ### 04-Enterprise-Architecture
 *Currently empty - reserved for enterprise architecture documentation*
 
