@@ -25,7 +25,9 @@ This directory contains Azure Bicep templates for deploying the Order Processing
 
 ### Prerequisites
 
-1. Azure subscription with permissions to create resources
+1. Azure subscription with the following permissions:
+   - **Contributor** role on the resource group (to create resources)
+   - **User Access Administrator** role (to assign access policies) or sufficient permissions to manage Key Vault access
 2. After deployment, populate the Key Vault with these secrets:
    - `OpenPayAdapter--ApiKey`
    - `ApplicationInsights--ConnectionString`
