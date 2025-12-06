@@ -161,6 +161,7 @@ else
     echo -e "${GREEN}   Found $APP_COUNT App Service(s)${NC}"
     
     while IFS= read -r WEBAPP_NAME; do
+        [ -z "$WEBAPP_NAME" ] && continue
         echo ""
         echo -e "${CYAN}   📱 App Service: $WEBAPP_NAME${NC}"
         
@@ -240,7 +241,7 @@ else
             ((CHECKS_WARNING++))
         fi
         
-    done <<< "$WEBAPPS"
+    done < <(echo "$WEBAPPS")
 fi
 
 # 5. Check Access Policies Summary

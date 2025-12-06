@@ -233,15 +233,17 @@ try {
             Write-Host "      Checking App Settings for Key Vault references..." -ForegroundColor Gray
             
             try {
-                $config = Get-AzWebApp -Name $webapp.Name -ResourceGroupName $ResourceGroupName
-                $settings = $config.SiteConfig.AppSettings
+                $settings = $webapp.SiteConfig.AppSettings
                 $kvRefs = $settings | Where-Object { $_.Value -like "*@Microsoft.KeyVault*" }
                 
                 if ($kvRefs.Count -gt 0) {
                     Write-Host "      ✅ Found $($kvRefs.Count) Key Vault reference(s):" -ForegroundColor Green
                     foreach ($ref in $kvRefs) {
                         Write-Host "         - $($ref.Name)" -ForegroundColor Gray
-                        Write-Host "           $($ref.Value.Substring(0, [Math]::Min(80, $ref.Value.Length)))..." -ForegroundColor DarkGray
+                        if ($ref.Value) {
+                            $previewLength = [Math]::Min(80, $ref.Value.Length)
+                            Write-Host "           $($ref.Value.Substring(0, $previewLength))..." -ForegroundColor DarkGray
+                        }
                     }
                     
                     # Verify expected references

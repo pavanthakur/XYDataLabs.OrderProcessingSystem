@@ -60,8 +60,10 @@ Install-Module -Name Az -Repository PSGallery -Force
 curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
 
 # Install jq
-sudo apt-get install jq  # Ubuntu/Debian
-brew install jq          # macOS
+sudo apt-get install jq      # Ubuntu/Debian
+sudo yum install jq          # CentOS/RHEL
+sudo dnf install jq          # Fedora
+brew install jq              # macOS
 ```
 
 **Usage**:
