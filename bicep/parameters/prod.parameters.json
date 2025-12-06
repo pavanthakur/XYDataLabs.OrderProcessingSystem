@@ -1,0 +1,24 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "appName": {
+      "value": "pavanthakur-orderprocessing-api-xyapp-prod"
+    },
+    "location": {
+      "value": "centralindia"
+    },
+    "appServicePlanName": {
+      "value": "asp-orderprocessing-prod"
+    },
+    "keyVaultName": {
+      "value": "kv-orderprocessing-prod"
+    },
+    "openPayBaseUrl": {
+      "value": "https://api.openpay.mx/v1"
+    },
+    "aspnetcoreEnvironment": {
+      "value": "Production"
+    }
+  }
+}
