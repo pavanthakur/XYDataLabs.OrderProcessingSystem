@@ -39,10 +39,15 @@ resource webApp 'Microsoft.Web/sites@2023-01-01' = {
     httpsOnly: true
     siteConfig: {
       alwaysOn: false
-      netFrameworkVersion: 'v8.0'
       ftpsState: 'Disabled'
       minTlsVersion: '1.2'
       http20Enabled: true
+      metadata: [
+        {
+          name: 'CURRENT_STACK'
+          value: 'dotnet'
+        }
+      ]
       appSettings: [
         {
           name: 'ASPNETCORE_ENVIRONMENT'

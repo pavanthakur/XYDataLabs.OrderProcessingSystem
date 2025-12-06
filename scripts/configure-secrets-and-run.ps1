@@ -161,7 +161,10 @@ try {
             
             if ($response.StatusCode -eq 200) {
                 Write-Host "✅ Health check passed (HTTP $($response.StatusCode))" -ForegroundColor Green
-                Write-Host "   Response: $($response.Content.Substring(0, [Math]::Min(100, $response.Content.Length)))..." -ForegroundColor Gray
+                if ($response.Content) {
+                    $contentPreview = $response.Content.Substring(0, [Math]::Min(100, $response.Content.Length))
+                    Write-Host "   Response: ${contentPreview}..." -ForegroundColor Gray
+                }
                 $success = $true
                 break
             } else {
