@@ -385,3 +385,7 @@ Resources/Azure-Deployment/test-run-*.log
 
 # Tools and binaries
 actionlint
+
+# Bicep build artifacts
+bicep/**/*.json
+!bicep/parameters/*.json
