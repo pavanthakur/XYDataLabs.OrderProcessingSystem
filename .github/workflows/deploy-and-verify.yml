@@ -1,0 +1,355 @@
+name: Deploy and Verify - Secure Configuration
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+      - uat
+    paths:
+      - 'bicep/**'
+      - 'XYDataLabs.OrderProcessingSystem.API/**'
+      - 'XYDataLabs.OrderProcessingSystem.Application/**'
+      - 'XYDataLabs.OrderProcessingSystem.Domain/**'
+      - 'XYDataLabs.OrderProcessingSystem.Infrastructure/**'
+      - '.github/workflows/deploy-and-verify.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - uat
+          - prod
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  DOTNET_VERSION: '8.x'
+  AZURE_WEBAPP_PACKAGE_PATH: './publish'
+  PROJECT_PATH: 'XYDataLabs.OrderProcessingSystem.API/XYDataLabs.OrderProcessingSystem.API.csproj'
+
+jobs:
+  determine-environment:
+    name: Determine Environment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.set-env.outputs.environment }}
+      resource-group: ${{ steps.set-env.outputs.resource-group }}
+      app-name: ${{ steps.set-env.outputs.app-name }}
+      parameter-file: ${{ steps.set-env.outputs.parameter-file }}
+    steps:
+      - name: Set environment based on branch or input
+        id: set-env
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ENV="${{ inputs.environment }}"
+          else
+            BRANCH="${{ github.ref_name }}"
+            if [ "$BRANCH" = "main" ]; then
+              ENV="prod"
+            elif [ "$BRANCH" = "uat" ]; then
+              ENV="uat"
+            else
+              ENV="dev"
+            fi
+          fi
+          
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
+          echo "resource-group=rg-orderprocessing-$ENV" >> $GITHUB_OUTPUT
+          
+          # Map environment to app name suffix
+          if [ "$ENV" = "prod" ]; then
+            echo "app-name=pavanthakur-orderprocessing-api-xyapp-prod" >> $GITHUB_OUTPUT
+          elif [ "$ENV" = "uat" ]; then
+            echo "app-name=pavanthakur-orderprocessing-api-xyapp-uat" >> $GITHUB_OUTPUT
+          else
+            echo "app-name=pavanthakur-orderprocessing-api-xyapp-dev" >> $GITHUB_OUTPUT
+          fi
+          
+          # Determine parameter file
+          if [ "$ENV" = "prod" ]; then
+            echo "parameter-file=bicep/parameters/prod.parameters.json" >> $GITHUB_OUTPUT
+          elif [ "$ENV" = "uat" ]; then
+            echo "parameter-file=bicep/parameters/uat.parameters.json" >> $GITHUB_OUTPUT
+          else
+            echo "parameter-file=bicep/parameters/dev.parameters.json" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "Determined environment: $ENV"
+
+  build:
+    name: Build Application
+    runs-on: windows-latest
+    needs: determine-environment
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        run: dotnet restore ${{ env.PROJECT_PATH }}
+
+      - name: Build
+        run: dotnet build ${{ env.PROJECT_PATH }} --configuration Release --no-restore
+
+      - name: Run Unit Tests
+        run: dotnet test XYDataLabs.OrderProcessingSystem.UnitTest/XYDataLabs.OrderProcessingSystem.UnitTest.csproj --configuration Release --no-build --verbosity normal
+
+      - name: Publish
+        run: dotnet publish ${{ env.PROJECT_PATH }} --configuration Release --no-build --output ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dotnet-app
+          path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+
+  deploy-infrastructure:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+    needs: [determine-environment, build]
+    environment: ${{ needs.determine-environment.outputs.environment }}
+    outputs:
+      app-service-name: ${{ steps.deploy-bicep.outputs.appServiceName }}
+      app-service-hostname: ${{ steps.deploy-bicep.outputs.appServiceHostName }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure CLI Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+
+      - name: Check if resource group exists
+        id: check-rg
+        run: |
+          RG_NAME="${{ needs.determine-environment.outputs.resource-group }}"
+          if az group exists --name $RG_NAME | grep -q 'true'; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Resource group $RG_NAME exists"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Resource group $RG_NAME does not exist, will be created"
+          fi
+
+      - name: Create resource group if needed
+        if: steps.check-rg.outputs.exists == 'false'
+        run: |
+          az group create \
+            --name ${{ needs.determine-environment.outputs.resource-group }} \
+            --location centralindia \
+            --tags environment=${{ needs.determine-environment.outputs.environment }} app=orderprocessing
+
+      - name: Deploy Bicep template
+        id: deploy-bicep
+        run: |
+          PARAM_FILE="${{ needs.determine-environment.outputs.parameter-file }}"
+          ENV="${{ needs.determine-environment.outputs.environment }}"
+          
+          # Check if parameter file exists
+          if [ ! -f "$PARAM_FILE" ]; then
+            echo "ERROR: Parameter file not found: $PARAM_FILE"
+            echo ""
+            echo "Before deploying to '$ENV' environment, you must:"
+            echo "1. Create the parameter file: $PARAM_FILE"
+            echo "2. Configure environment-specific values"
+            echo "3. Create the Key Vault for this environment"
+            echo "4. Populate secrets in the Key Vault"
+            echo ""
+            echo "See docs/runbooks/keyvault-managed-identity-deploy.md for instructions"
+            exit 1
+          fi
+          
+          # Deploy Bicep template
+          DEPLOYMENT_NAME="deploy-kv-$(date +%s)"
+          
+          az deployment group create \
+            --name $DEPLOYMENT_NAME \
+            --resource-group ${{ needs.determine-environment.outputs.resource-group }} \
+            --template-file bicep/appservice-with-kv.bicep \
+            --parameters @$PARAM_FILE \
+            --query 'properties.outputs' \
+            --output json > deployment-outputs.json
+          
+          # Extract outputs
+          APP_NAME=$(jq -r '.appServiceName.value' deployment-outputs.json)
+          APP_HOSTNAME=$(jq -r '.appServiceHostName.value' deployment-outputs.json)
+          
+          echo "appServiceName=$APP_NAME" >> $GITHUB_OUTPUT
+          echo "appServiceHostName=$APP_HOSTNAME" >> $GITHUB_OUTPUT
+          
+          echo "Deployed App Service: $APP_NAME"
+          echo "Hostname: $APP_HOSTNAME"
+
+  deploy-application:
+    name: Deploy Application
+    runs-on: windows-latest
+    needs: [determine-environment, deploy-infrastructure]
+    environment: ${{ needs.determine-environment.outputs.environment }}
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dotnet-app
+
+      - name: Azure CLI Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ needs.determine-environment.outputs.app-name }}
+          package: .
+
+      - name: Deployment Summary
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
+          Write-Host "║              DEPLOYMENT SUMMARY                                ║" -ForegroundColor Green
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+          Write-Host ""
+          Write-Host "Environment:  ${{ needs.determine-environment.outputs.environment }}" -ForegroundColor Cyan
+          Write-Host "App Service:  ${{ needs.determine-environment.outputs.app-name }}" -ForegroundColor Cyan
+          Write-Host "URL:          https://${{ needs.determine-environment.outputs.app-name }}.azurewebsites.net" -ForegroundColor Cyan
+          Write-Host ""
+
+  post-deploy-verification:
+    name: Post-Deploy Verification
+    runs-on: ubuntu-latest
+    needs: [determine-environment, deploy-infrastructure, deploy-application]
+    environment: ${{ needs.determine-environment.outputs.environment }}
+    steps:
+      - name: Azure CLI Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+
+      - name: Wait for app to stabilize
+        run: |
+          echo "Waiting 60 seconds for app to start..."
+          sleep 60
+
+      - name: Verify App Settings
+        id: verify-settings
+        run: |
+          APP_NAME="${{ needs.determine-environment.outputs.app-name }}"
+          RG_NAME="${{ needs.determine-environment.outputs.resource-group }}"
+          
+          echo "Checking app settings for $APP_NAME in $RG_NAME..."
+          
+          # Get app settings
+          SETTINGS=$(az webapp config appsettings list \
+            --name $APP_NAME \
+            --resource-group $RG_NAME \
+            --output json)
+          
+          # Check for required settings
+          ASPNETCORE_ENV=$(echo "$SETTINGS" | jq -r '.[] | select(.name=="ASPNETCORE_ENVIRONMENT") | .value')
+          OPENPAY_BASE=$(echo "$SETTINGS" | jq -r '.[] | select(.name=="OpenPayAdapter__BaseUrl") | .value')
+          OPENPAY_KEY=$(echo "$SETTINGS" | jq -r '.[] | select(.name=="OpenPayAdapter__ApiKey") | .value')
+          APP_INSIGHTS=$(echo "$SETTINGS" | jq -r '.[] | select(.name=="APPLICATIONINSIGHTS_CONNECTION_STRING") | .value')
+          
+          echo "App Settings Check:"
+          echo "  ASPNETCORE_ENVIRONMENT: $ASPNETCORE_ENV"
+          echo "  OpenPayAdapter__BaseUrl: $OPENPAY_BASE"
+          echo "  OpenPayAdapter__ApiKey: ${OPENPAY_KEY:0:30}..." # Mask secret
+          echo "  APPLICATIONINSIGHTS_CONNECTION_STRING: ${APP_INSIGHTS:0:30}..." # Mask secret
+          
+          # Verify required settings exist
+          MISSING=0
+          if [ -z "$ASPNETCORE_ENV" ] || [ "$ASPNETCORE_ENV" = "null" ]; then
+            echo "ERROR: ASPNETCORE_ENVIRONMENT is missing"
+            MISSING=1
+          fi
+          if [ -z "$OPENPAY_BASE" ] || [ "$OPENPAY_BASE" = "null" ]; then
+            echo "ERROR: OpenPayAdapter__BaseUrl is missing"
+            MISSING=1
+          fi
+          if [ -z "$OPENPAY_KEY" ] || [ "$OPENPAY_KEY" = "null" ]; then
+            echo "WARNING: OpenPayAdapter__ApiKey is missing (Key Vault reference may not be configured)"
+          fi
+          if [ -z "$APP_INSIGHTS" ] || [ "$APP_INSIGHTS" = "null" ]; then
+            echo "WARNING: APPLICATIONINSIGHTS_CONNECTION_STRING is missing (Key Vault reference may not be configured)"
+          fi
+          
+          if [ $MISSING -eq 1 ]; then
+            echo "App settings verification failed"
+            exit 1
+          fi
+          
+          echo "App settings verification passed"
+
+      - name: Health Check - API Endpoint
+        id: health-check
+        run: |
+          APP_NAME="${{ needs.determine-environment.outputs.app-name }}"
+          API_URL="https://$APP_NAME.azurewebsites.net"
+          HEALTH_URL="$API_URL/api/info/environment"
+          
+          echo "Testing health endpoint: $HEALTH_URL"
+          
+          # Try health check with retries
+          MAX_RETRIES=3
+          RETRY=0
+          SUCCESS=0
+          
+          while [ $RETRY -lt $MAX_RETRIES ]; do
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" || echo "000")
+            
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "Health check passed (HTTP $HTTP_CODE)"
+              SUCCESS=1
+              break
+            else
+              echo "Health check attempt $((RETRY+1)) failed (HTTP $HTTP_CODE)"
+              RETRY=$((RETRY+1))
+              if [ $RETRY -lt $MAX_RETRIES ]; then
+                echo "Waiting 30 seconds before retry..."
+                sleep 30
+              fi
+            fi
+          done
+          
+          if [ $SUCCESS -eq 0 ]; then
+            echo "ERROR: Health check failed after $MAX_RETRIES attempts"
+            exit 1
+          fi
+          
+          echo "Health check successful"
+
+      - name: Verification Summary
+        if: always()
+        run: |
+          echo "## 🔍 Post-Deploy Verification Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ needs.determine-environment.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**App Service:** ${{ needs.determine-environment.outputs.app-name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** https://${{ needs.determine-environment.outputs.app-name }}.azurewebsites.net" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Verification Results" >> $GITHUB_STEP_SUMMARY
+          echo "- App Settings: ${{ steps.verify-settings.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Health Check: ${{ steps.health-check.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.verify-settings.outcome }}" = "success" ] && [ "${{ steps.health-check.outcome }}" = "success" ]; then
+            echo "✅ **All verification checks passed**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Some verification checks failed**" >> $GITHUB_STEP_SUMMARY
+          fi
