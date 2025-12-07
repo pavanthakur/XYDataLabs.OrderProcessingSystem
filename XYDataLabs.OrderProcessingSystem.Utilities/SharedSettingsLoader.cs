@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Azure.Identity;
+using System;
 
 namespace XYDataLabs.OrderProcessingSystem.Utilities
 {
@@ -7,14 +9,14 @@ namespace XYDataLabs.OrderProcessingSystem.Utilities
     /// Provides helpers for loading shared configuration and binding strongly-typed ApiSettings
     /// for both API and UI applications across Docker and non-Docker environments.
     /// </summary>
-    public static class SharedSettingsLoader
+    public static partial class SharedSettingsLoader
     {
 
         /// <summary>
         /// Load environment-specific sharedsettings and appsettings JSON files.
         /// Non-Docker local development uses the "local" profile (ports 5010-5013).
         /// Docker uses the provided environment or falls back to "dev" (ports 5000-5003).
-        /// Azure App Service uses the provided environment based on ASPNETCORE_ENVIRONMENT.
+        /// Azure App Service uses the provided environment based on ASPNETCORE_ENVIRONMENT and loads secrets from Key Vault.
         /// </summary>
         /// <param name="builder">The configuration builder to add sources to.</param>
         /// <param name="environmentName">The ASP.NET Core environment name.</param>
@@ -54,6 +56,43 @@ namespace XYDataLabs.OrderProcessingSystem.Utilities
             {
                 Console.WriteLine("[DEBUG] Azure environment detected - adding environment variables for connection string override");
                 builder.AddEnvironmentVariables();
+                
+                // Add Azure Key Vault configuration using Managed Identity
+                try
+                {
+                    // Get Key Vault name from environment variable (set by bootstrap/deployment)
+                    var keyVaultName = Environment.GetEnvironmentVariable("KEY_VAULT_NAME");
+                    if (string.IsNullOrWhiteSpace(keyVaultName))
+                    {
+                        // Fallback: Construct Key Vault name (assumes standard naming: kv-{baseName}-{env})
+                        // Bootstrap script sets KEY_VAULT_NAME, so this fallback is rarely used
+                        keyVaultName = $"kv-orderprocessing-{effectiveEnvironment}";
+                    }
+                    
+                    // Validate Key Vault name format (alphanumeric and hyphens only, 3-24 chars)
+                    // Using static readonly regex for performance
+                    if (!IsValidKeyVaultName(keyVaultName))
+                    {
+                        Console.WriteLine($"[WARN] Invalid Key Vault name format: {keyVaultName}");
+                        Console.WriteLine("[WARN] Continuing with file-based configuration only");
+                        return builder;
+                    }
+                    
+                    var keyVaultUri = $"https://{keyVaultName}.vault.azure.net/";
+                    Console.WriteLine($"[DEBUG] Attempting to load secrets from Key Vault: {keyVaultUri}");
+                    
+                    // Use DefaultAzureCredential which supports Managed Identity in Azure
+                    builder.AddAzureKeyVault(
+                        new Uri(keyVaultUri),
+                        new DefaultAzureCredential());
+                    
+                    Console.WriteLine("[DEBUG] Azure Key Vault configuration added successfully");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[WARN] Failed to add Azure Key Vault configuration: {ex.Message}");
+                    Console.WriteLine("[WARN] Continuing with file-based configuration only");
+                }
             }
             
             return builder;
@@ -164,6 +203,23 @@ namespace XYDataLabs.OrderProcessingSystem.Utilities
             Console.WriteLine($"[DEBUG] API.Https Port: {apiSettings.API.https.Port}");
             Console.WriteLine($"[DEBUG] Active {context} Port: {activeSettings.Port}");
         }
+
+        /// <summary>
+        /// Validates Key Vault name format.
+        /// </summary>
+        /// <param name="name">The Key Vault name to validate.</param>
+        /// <returns>True if valid, false otherwise.</returns>
+        private static bool IsValidKeyVaultName(string name)
+        {
+            // Key Vault names: alphanumeric and hyphens only, 3-24 chars, globally unique
+            return !string.IsNullOrWhiteSpace(name) 
+                && name.Length >= 3 
+                && name.Length <= 24 
+                && KeyVaultNameRegex().IsMatch(name);
+        }
+
+        [System.Text.RegularExpressions.GeneratedRegex(@"^[a-zA-Z0-9\-]+$", System.Text.RegularExpressions.RegexOptions.Compiled)]
+        private static partial System.Text.RegularExpressions.Regex KeyVaultNameRegex();
 
         /// <summary>
         /// Finds the solution root directory by looking for .sln files.

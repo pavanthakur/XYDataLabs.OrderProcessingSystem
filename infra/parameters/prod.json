@@ -7,7 +7,7 @@
     "baseName": { "value": "orderprocessing" },
     "githubOwner": { "value": "pavanthakur" },
     "appServiceSku": { "value": "B1" },
-    "enableIdentity": { "value": "true" },
+    "enableIdentity": { "value": true },
     "sqlAdminUsername": { "value": "sqladmin" },
     "sqlAdminPassword": { "value": "Admin100@" },
     "databaseServiceObjective": { "value": "S0" }

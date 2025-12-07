@@ -54,7 +54,7 @@ module sql 'modules/sql.bicep' = {
   }
 }
 
-// Hosting (Plan + WebApps)
+// Hosting (Plan + WebApps with Managed Identity)
 module hosting 'modules/hosting.bicep' = {
   name: 'hosting-${environment}'
   scope: appRg
