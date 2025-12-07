@@ -104,9 +104,12 @@ The token refresh fix has been verified to be present in all environments:
 
 ## Related Documentation
 
-- GitHub Actions OIDC Token Lifespan: 5 minutes
-- Azure AD Token Expiration: [Microsoft Documentation](https://learn.microsoft.com/entra/identity-platform/certificate-credentials)
+- GitHub Actions OIDC: [About security hardening with OpenID Connect](https://docs.github.com/en/actions/security-for-github-actions/security-hardening-your-deployments/about-security-hardening-with-openid-connect)
+- Azure Workload Identity Federation: [Configure an app to trust an external identity provider](https://learn.microsoft.com/entra/workload-id/workload-identity-federation-create-trust)
+- Token Validation: [Microsoft identity platform access tokens](https://learn.microsoft.com/entra/identity-platform/access-tokens#token-lifetime)
 - Workflow File: `.github/workflows/azure-bootstrap.yml`
+
+**Note**: GitHub Actions OIDC tokens have a 5-minute expiration time by design for security purposes. Long-running workflows must refresh tokens as demonstrated in this fix.
 
 ## Impact
 
