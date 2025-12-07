@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.38.33.27573",
-      "templateHash": "3640157605174294041"
+      "version": "0.39.26.7824",
+      "templateHash": "5849371589253668825"
     }
   },
   "parameters": {
@@ -120,8 +120,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.38.33.27573",
-              "templateHash": "6626478082134379691"
+              "version": "0.39.26.7824",
+              "templateHash": "13279115937796133682"
             }
           },
           "parameters": {
@@ -299,8 +299,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.38.33.27573",
-              "templateHash": "8999219420191064964"
+              "version": "0.39.26.7824",
+              "templateHash": "14822221201913869570"
             }
           },
           "parameters": {
@@ -386,6 +386,9 @@
               "apiVersion": "2023-12-01",
               "name": "[variables('apiName')]",
               "location": "[parameters('location')]",
+              "identity": {
+                "type": "SystemAssigned"
+              },
               "properties": {
                 "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('planName'))]",
                 "siteConfig": {
@@ -409,6 +412,9 @@
               "apiVersion": "2023-12-01",
               "name": "[variables('uiName')]",
               "location": "[parameters('location')]",
+              "identity": {
+                "type": "SystemAssigned"
+              },
               "properties": {
                 "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('planName'))]",
                 "siteConfig": {
@@ -436,6 +442,22 @@
             "uiHostName": {
               "type": "string",
               "value": "[reference(resourceId('Microsoft.Web/sites', variables('uiName')), '2023-12-01').defaultHostName]"
+            },
+            "apiPrincipalId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Web/sites', variables('apiName')), '2023-12-01', 'full').identity.principalId]"
+            },
+            "uiPrincipalId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Web/sites', variables('uiName')), '2023-12-01', 'full').identity.principalId]"
+            },
+            "apiAppName": {
+              "type": "string",
+              "value": "[variables('apiName')]"
+            },
+            "uiAppName": {
+              "type": "string",
+              "value": "[variables('uiName')]"
             }
           }
         }
@@ -444,6 +466,181 @@
         "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('rgName'))]",
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('insights-{0}', parameters('environment')))]",
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('sql-{0}', parameters('environment')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('keyvault-{0}', parameters('environment'))]",
+      "resourceGroup": "[variables('rgName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "environment": {
+            "value": "[parameters('environment')]"
+          },
+          "baseName": {
+            "value": "[parameters('baseName')]"
+          },
+          "apiAppPrincipalId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('hosting-{0}', parameters('environment'))), '2025-04-01').outputs.apiPrincipalId.value]"
+          },
+          "uiAppPrincipalId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('hosting-{0}', parameters('environment'))), '2025-04-01').outputs.uiPrincipalId.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.39.26.7824",
+              "templateHash": "11423647443936035960"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region for the Key Vault"
+              }
+            },
+            "environment": {
+              "type": "string",
+              "metadata": {
+                "description": "Environment name (dev, uat, prod)"
+              }
+            },
+            "baseName": {
+              "type": "string",
+              "metadata": {
+                "description": "Base application name"
+              }
+            },
+            "apiAppPrincipalId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Object ID of the API App Service managed identity (for access policy)"
+              }
+            },
+            "uiAppPrincipalId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Object ID of the UI App Service managed identity (for access policy)"
+              }
+            },
+            "tenantId": {
+              "type": "string",
+              "defaultValue": "[subscription().tenantId]",
+              "metadata": {
+                "description": "Tenant ID"
+              }
+            }
+          },
+          "variables": {
+            "shortBaseName": "[take(parameters('baseName'), 15)]",
+            "keyVaultName": "[format('kv-{0}-{1}', variables('shortBaseName'), parameters('environment'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.KeyVault/vaults",
+              "apiVersion": "2023-07-01",
+              "name": "[variables('keyVaultName')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "sku": {
+                  "family": "A",
+                  "name": "standard"
+                },
+                "tenantId": "[parameters('tenantId')]",
+                "enableRbacAuthorization": false,
+                "enabledForDeployment": false,
+                "enabledForDiskEncryption": false,
+                "enabledForTemplateDeployment": true,
+                "enableSoftDelete": true,
+                "softDeleteRetentionInDays": 90,
+                "accessPolicies": []
+              },
+              "tags": {
+                "environment": "[parameters('environment')]",
+                "app": "[parameters('baseName')]"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('apiAppPrincipalId')))]",
+              "type": "Microsoft.KeyVault/vaults/accessPolicies",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', variables('keyVaultName'), 'add')]",
+              "properties": {
+                "accessPolicies": [
+                  {
+                    "tenantId": "[parameters('tenantId')]",
+                    "objectId": "[parameters('apiAppPrincipalId')]",
+                    "permissions": {
+                      "secrets": [
+                        "get",
+                        "list"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+              ]
+            },
+            {
+              "condition": "[not(empty(parameters('uiAppPrincipalId')))]",
+              "type": "Microsoft.KeyVault/vaults/accessPolicies",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', variables('keyVaultName'), 'add')]",
+              "properties": {
+                "accessPolicies": [
+                  {
+                    "tenantId": "[parameters('tenantId')]",
+                    "objectId": "[parameters('uiAppPrincipalId')]",
+                    "permissions": {
+                      "secrets": [
+                        "get",
+                        "list"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "keyVaultName": {
+              "type": "string",
+              "value": "[variables('keyVaultName')]"
+            },
+            "keyVaultUri": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), '2023-07-01').vaultUri]"
+            },
+            "keyVaultId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('rgName'))]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('hosting-{0}', parameters('environment')))]"
       ]
     },
     {
@@ -473,8 +670,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.38.33.27573",
-              "templateHash": "17321997595337719821"
+              "version": "0.39.26.7824",
+              "templateHash": "13008418613882004774"
             }
           },
           "parameters": {
@@ -565,8 +762,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.38.33.27573",
-              "templateHash": "9620412990395767126"
+              "version": "0.39.26.7824",
+              "templateHash": "8799097058778707402"
             }
           },
           "parameters": {
@@ -616,6 +813,14 @@
       "type": "string",
       "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('hosting-{0}', parameters('environment'))), '2025-04-01').outputs.uiHostName.value]"
     },
+    "apiAppName": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('hosting-{0}', parameters('environment'))), '2025-04-01').outputs.apiAppName.value]"
+    },
+    "uiAppName": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('hosting-{0}', parameters('environment'))), '2025-04-01').outputs.uiAppName.value]"
+    },
     "appInsightsName": {
       "type": "string",
       "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('insights-{0}', parameters('environment'))), '2025-04-01').outputs.appInsightsName.value]"
@@ -639,6 +844,14 @@
     "databaseName": {
       "type": "string",
       "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('sql-{0}', parameters('environment'))), '2025-04-01').outputs.databaseName.value]"
+    },
+    "keyVaultName": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('keyvault-{0}', parameters('environment'))), '2025-04-01').outputs.keyVaultName.value]"
+    },
+    "keyVaultUri": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('keyvault-{0}', parameters('environment'))), '2025-04-01').outputs.keyVaultUri.value]"
     },
     "oidcClientId": {
       "type": "string",
