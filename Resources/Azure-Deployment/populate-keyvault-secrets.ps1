@@ -35,8 +35,10 @@ $aiName = "ai-$BaseName-$Environment"
 
 Write-Host "📋 Configuration:" -ForegroundColor Yellow
 Write-Host "  Environment: $Environment" -ForegroundColor Gray
+Write-Host "  Base Name: $BaseName (length: $($BaseName.Length))" -ForegroundColor Gray
+Write-Host "  Short Base Name: $shortBaseName (length: $($shortBaseName.Length))" -ForegroundColor Gray
 Write-Host "  Resource Group: $rgName" -ForegroundColor Gray
-Write-Host "  Key Vault: $kvName" -ForegroundColor Gray
+Write-Host "  Key Vault: $kvName (length: $($kvName.Length))" -ForegroundColor Gray
 Write-Host "  App Insights: $aiName" -ForegroundColor Gray
 Write-Host ""
 Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
@@ -48,14 +50,36 @@ $secretsFailed = 0
 try {
     # Verify Key Vault exists
     Write-Host "🔍 Verifying Key Vault exists..." -ForegroundColor Cyan
-    $kv = az keyvault show --name $kvName --resource-group $rgName 2>$null | ConvertFrom-Json
+    $kvError = $null
+    $kv = az keyvault show --name $kvName --resource-group $rgName 2>&1 | Out-String
     
-    if (-not $kv) {
+    if ($LASTEXITCODE -ne 0) {
         Write-Host "  ❌ Key Vault not found: $kvName" -ForegroundColor Red
+        Write-Host "  Error details: $kv" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "Checking if Key Vault exists with different name..." -ForegroundColor Yellow
+        $allKvs = az keyvault list --resource-group $rgName --query "[].name" -o tsv 2>&1
+        if ($LASTEXITCODE -eq 0 -and $allKvs) {
+            Write-Host "  Found Key Vaults in $rgName`:" -ForegroundColor Yellow
+            $allKvs -split "`n" | ForEach-Object { Write-Host "    - $_" -ForegroundColor Gray }
+        } else {
+            Write-Host "  No Key Vaults found in resource group $rgName" -ForegroundColor Yellow
+        }
+        Write-Host ""
         Write-Error "Key Vault '$kvName' does not exist in resource group '$rgName'"
     }
     
-    Write-Host "  ✅ Key Vault found" -ForegroundColor Green
+    # Parse the JSON to get Key Vault properties
+    try {
+        $kvObj = $kv | ConvertFrom-Json
+        Write-Host "  ✅ Key Vault found: $kvName" -ForegroundColor Green
+        Write-Host "     Location: $($kvObj.location)" -ForegroundColor Gray
+        Write-Host "     Provisioning State: $($kvObj.properties.provisioningState)" -ForegroundColor Gray
+        Write-Host "     RBAC Authorization: $($kvObj.properties.enableRbacAuthorization)" -ForegroundColor Gray
+        Write-Host "     Vault URI: $($kvObj.properties.vaultUri)" -ForegroundColor Gray
+    } catch {
+        Write-Host "  ✅ Key Vault found (unable to parse details)" -ForegroundColor Green
+    }
     Write-Host ""
     
     # 1. Add OpenPayAdapter API Key
@@ -69,17 +93,18 @@ try {
     }
     
     try {
-        az keyvault secret set `
+        $output = az keyvault secret set `
             --vault-name $kvName `
             --name "OpenPayAdapter--ApiKey" `
             --value $OpenPayApiKey `
-            --output none 2>&1 | Out-Null
+            --output json 2>&1
         
         if ($LASTEXITCODE -eq 0) {
             Write-Host "  ✅ OpenPayAdapter--ApiKey added successfully" -ForegroundColor Green
             $secretsAdded++
         } else {
             Write-Host "  ❌ Failed to add OpenPayAdapter--ApiKey (exit code: $LASTEXITCODE)" -ForegroundColor Red
+            Write-Host "  Error details: $output" -ForegroundColor Red
             $secretsFailed++
         }
     } catch {
@@ -119,17 +144,18 @@ try {
     
     if (-not [string]::IsNullOrWhiteSpace($ApplicationInsightsConnectionString)) {
         try {
-            az keyvault secret set `
+            $output = az keyvault secret set `
                 --vault-name $kvName `
                 --name "ApplicationInsights--ConnectionString" `
                 --value $ApplicationInsightsConnectionString `
-                --output none 2>&1 | Out-Null
+                --output json 2>&1
             
             if ($LASTEXITCODE -eq 0) {
                 Write-Host "  ✅ ApplicationInsights--ConnectionString added successfully" -ForegroundColor Green
                 $secretsAdded++
             } else {
                 Write-Host "  ❌ Failed to add ApplicationInsights--ConnectionString (exit code: $LASTEXITCODE)" -ForegroundColor Red
+                Write-Host "  Error details: $output" -ForegroundColor Red
                 $secretsFailed++
             }
         } catch {
@@ -173,9 +199,16 @@ try {
         Write-Host "⚠️  Some secrets failed to add. Review errors above." -ForegroundColor Yellow
         Write-Host ""
         Write-Host "Troubleshooting:" -ForegroundColor Cyan
-        Write-Host "  1. Verify you have 'Key Vault Secrets Officer' role" -ForegroundColor Gray
-        Write-Host "  2. Check Key Vault access policies" -ForegroundColor Gray
-        Write-Host "  3. Ensure Key Vault firewall allows your IP" -ForegroundColor Gray
+        Write-Host "  1. Key Vault Name: Check if '$kvName' is the correct name" -ForegroundColor Gray
+        Write-Host "     Run: az keyvault list -g $rgName --query '[].name' -o tsv" -ForegroundColor DarkGray
+        Write-Host "  2. RBAC Authorization: Verify you have 'Key Vault Secrets Officer' role" -ForegroundColor Gray
+        Write-Host "     Run: az role assignment list --scope /subscriptions/<sub-id>/resourceGroups/$rgName/providers/Microsoft.KeyVault/vaults/$kvName" -ForegroundColor DarkGray
+        Write-Host "  3. Access Policies: Check Key Vault access policies (if not using RBAC)" -ForegroundColor Gray
+        Write-Host "     Run: az keyvault show -n $kvName -g $rgName --query properties.accessPolicies" -ForegroundColor DarkGray
+        Write-Host "  4. Network Access: Ensure Key Vault firewall allows your IP" -ForegroundColor Gray
+        Write-Host "     Run: az keyvault show -n $kvName -g $rgName --query properties.networkAcls" -ForegroundColor DarkGray
+        Write-Host "  5. Key Vault Status: Verify Key Vault is not in soft-deleted state" -ForegroundColor Gray
+        Write-Host "     Run: az keyvault list-deleted --query ""[?name=='$kvName']""" -ForegroundColor DarkGray
         Write-Host ""
         exit 1
     }
