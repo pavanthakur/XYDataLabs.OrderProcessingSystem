@@ -532,6 +532,7 @@ foreach ($env in $envList) {
     $kvName = "kv-$shortBaseName-$env"
     Write-Host "`n  [KEY VAULT] Processing Key Vault: $kvName..." -ForegroundColor Cyan
     $kvExists = $null
+    $kvResult = $null
     try { $kvExists = az keyvault show -n $kvName --query "name" -o tsv 2>$null; if ($LASTEXITCODE -ne 0) { $kvExists = $null } } catch { $kvExists = $null }
     
     if (-not $kvExists) {
@@ -544,7 +545,7 @@ foreach ($env in $envList) {
         } else {
             # Check if the error is due to a soft-deleted Key Vault
             $errorMsg = $kvResult.Error
-            if ($errorMsg -match "ConflictError.*exists in deleted state" -or $errorMsg -match "soft.*delete") {
+            if ($errorMsg -match "ConflictError.*exists in deleted state" -or $errorMsg -match "soft-?delete") {
                 Write-Host "  [WARN] Key Vault exists in deleted state. Attempting recovery..." -ForegroundColor Yellow
                 
                 # Try to recover the soft-deleted Key Vault
@@ -572,7 +573,7 @@ foreach ($env in $envList) {
     }
 
     # Grant Key Vault access to API and UI web apps (using managed identity)
-    if ($kvExists -or $kvResult.Success) {
+    if ($kvExists -or ($kvResult -and $kvResult.Success)) {
         Write-Host "  [ACCESS POLICY] Configuring Key Vault access policies..." -ForegroundColor Cyan
         
         # Get API app principal ID
