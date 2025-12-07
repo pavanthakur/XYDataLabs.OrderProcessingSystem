@@ -1970,9 +1970,22 @@ jobs:
       - name: Clear Azure CLI Token Cache
         run: |
           Write-Host "🔄 Clearing Azure CLI token cache to force fresh authentication..." -ForegroundColor Cyan
-          az account clear 2>$null | Out-Null
-          az cache purge 2>$null | Out-Null
-          Write-Host "✅ Token cache cleared" -ForegroundColor Green
+          try {
+            # Clear Azure account to force re-authentication
+            az account clear 2>&1 | Out-Null
+            Write-Host "  ✓ Azure account cleared" -ForegroundColor Gray
+            
+            # Purge Azure CLI cache
+            az cache purge 2>&1 | Out-Null
+            Write-Host "  ✓ Azure CLI cache purged" -ForegroundColor Gray
+            
+            Write-Host "✅ Token cache cleared successfully" -ForegroundColor Green
+          }
+          catch {
+            # Cache clearing failure is not critical - log and continue
+            Write-Host "  ⚠️  Cache clearing encountered an issue (non-critical): $($_.Exception.Message)" -ForegroundColor Yellow
+            Write-Host "  Proceeding with Azure login refresh..." -ForegroundColor Gray
+          }
       
       - name: Refresh Azure Login for Key Vault Operations
         timeout-minutes: 3
