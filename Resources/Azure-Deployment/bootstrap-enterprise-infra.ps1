@@ -526,6 +526,99 @@ foreach ($env in $envList) {
         elseif ($aiExists) { Write-Host "  Application Insights exists: $aiName" -ForegroundColor Green }
     }
 
+    # Key Vault - Create and populate with OpenPay secrets
+    # Shorten base name for Key Vault (max 24 chars total: "kv-" + 15 + "-" + env)
+    $shortBaseName = $BaseName.Substring(0, [Math]::Min(15, $BaseName.Length))
+    $kvName = "kv-$shortBaseName-$env"
+    Write-Host "`n  [KEY VAULT] Processing Key Vault: $kvName..." -ForegroundColor Cyan
+    $kvExists = $null
+    try { $kvExists = az keyvault show -n $kvName --query "name" -o tsv 2>$null; if ($LASTEXITCODE -ne 0) { $kvExists = $null } } catch { $kvExists = $null }
+    
+    if (-not $kvExists) {
+        Write-Host "  Creating Key Vault: $kvName..." -ForegroundColor Yellow
+        $kvResult = Invoke-AzCommandWithRetry -Command { az keyvault create -n $kvName -g $rg -l $Location --enable-rbac-authorization false }
+        if ($kvResult.Success) {
+            Write-Host "  [OK] Key Vault created: $kvName" -ForegroundColor Green
+            Add-StepStatus -Name "Create Key Vault ($kvName)" -Status "Success" -Details "Created"
+        } else {
+            Write-Host "  [WARN] Key Vault creation failed: $($kvResult.Error)" -ForegroundColor Yellow
+            Add-StepStatus -Name "Create Key Vault ($kvName)" -Status "Failed" -Details "$($kvResult.Error)"
+        }
+    } else {
+        Write-Host "  Key Vault already exists: $kvName" -ForegroundColor Green
+        Add-StepStatus -Name "Create Key Vault ($kvName)" -Status "Success" -Details "Already existed"
+    }
+
+    # Grant Key Vault access to API and UI web apps (using managed identity)
+    if ($kvExists -or $kvResult.Success) {
+        Write-Host "  [ACCESS POLICY] Configuring Key Vault access policies..." -ForegroundColor Cyan
+        
+        # Get API app principal ID
+        $apiPrincipalId = $null
+        try {
+            $apiPrincipalId = az webapp identity show -g $rg -n $apiApp --query "principalId" -o tsv 2>$null
+            if ($LASTEXITCODE -ne 0) { $apiPrincipalId = $null }
+        } catch { $apiPrincipalId = $null }
+        
+        # Enable managed identity for API if not enabled
+        if (-not $apiPrincipalId) {
+            Write-Host "    [CONFIG] Enabling system-assigned managed identity for API..." -ForegroundColor Yellow
+            try {
+                az webapp identity assign -g $rg -n $apiApp 2>$null | Out-Null
+                Start-Sleep -Seconds 5
+                $apiPrincipalId = az webapp identity show -g $rg -n $apiApp --query "principalId" -o tsv 2>$null
+            } catch {
+                Write-Host "    [WARN] Failed to enable managed identity for API" -ForegroundColor Yellow
+            }
+        }
+        
+        if ($apiPrincipalId) {
+            Write-Host "    [OK] API managed identity: $apiPrincipalId" -ForegroundColor Green
+            # Set access policy for API
+            $accessResult = Invoke-AzCommandWithRetry -Command { az keyvault set-policy -n $kvName --object-id $apiPrincipalId --secret-permissions get list }
+            if ($accessResult.Success) {
+                Write-Host "    [OK] Access policy set for API" -ForegroundColor Green
+            } else {
+                Write-Host "    [WARN] Failed to set access policy for API: $($accessResult.Error)" -ForegroundColor Yellow
+            }
+        }
+        
+        # Get UI app principal ID
+        $uiPrincipalId = $null
+        try {
+            $uiPrincipalId = az webapp identity show -g $rg -n $uiApp --query "principalId" -o tsv 2>$null
+            if ($LASTEXITCODE -ne 0) { $uiPrincipalId = $null }
+        } catch { $uiPrincipalId = $null }
+        
+        # Enable managed identity for UI if not enabled
+        if (-not $uiPrincipalId) {
+            Write-Host "    [CONFIG] Enabling system-assigned managed identity for UI..." -ForegroundColor Yellow
+            try {
+                az webapp identity assign -g $rg -n $uiApp 2>$null | Out-Null
+                Start-Sleep -Seconds 5
+                $uiPrincipalId = az webapp identity show -g $rg -n $uiApp --query "principalId" -o tsv 2>$null
+            } catch {
+                Write-Host "    [WARN] Failed to enable managed identity for UI" -ForegroundColor Yellow
+            }
+        }
+        
+        if ($uiPrincipalId) {
+            Write-Host "    [OK] UI managed identity: $uiPrincipalId" -ForegroundColor Green
+            # Set access policy for UI
+            $accessResult = Invoke-AzCommandWithRetry -Command { az keyvault set-policy -n $kvName --object-id $uiPrincipalId --secret-permissions get list }
+            if ($accessResult.Success) {
+                Write-Host "    [OK] Access policy set for UI" -ForegroundColor Green
+            } else {
+                Write-Host "    [WARN] Failed to set access policy for UI: $($accessResult.Error)" -ForegroundColor Yellow
+            }
+        }
+
+        # Note: Key Vault secrets are populated by a separate script
+        # Run populate-keyvault-secrets.ps1 after bootstrap to add application secrets
+        Write-Host "  [INFO] Key Vault created and configured" -ForegroundColor Cyan
+        Write-Host "  [INFO] Run populate-keyvault-secrets.ps1 to add application secrets" -ForegroundColor Gray
+    }
+
     # Unified readiness wait - ensures plan + apps reach ready status
     # Plan timeout reduced to 2 minutes as F1 tier plans rarely reach fully Ready state
     Write-Host "`n  [WAIT] Performing unified readiness checks (Plan: 2 min, Apps: 10 min)..." -ForegroundColor Cyan
@@ -694,7 +787,7 @@ foreach ($env in $envList) {
         Write-Host "  [WARN] UI WebApp not found: $uiApp" -ForegroundColor Yellow
     }
 
-    # Configure App Insights connection strings (if AI exists & webapps exist)
+    # Configure App Insights connection strings and Key Vault name (if AI exists & webapps exist)
     try {
         Write-Host "`n  [CONFIG] Checking App Insights availability..." -ForegroundColor Cyan
         $aiCheck = az monitor app-insights component show -a $aiName -g $rg 2>$null
@@ -702,7 +795,7 @@ foreach ($env in $envList) {
             Write-Host "    [OK] App Insights found: $aiName" -ForegroundColor Green
             $connString = az monitor app-insights component show -a $aiName -g $rg --query "connectionString" -o tsv 2>$null
             if ($connString) {
-                Write-Host "  [CONFIG] Configuring App Insights connection strings..." -ForegroundColor Cyan
+                Write-Host "  [CONFIG] Configuring App Insights connection strings and Key Vault..." -ForegroundColor Cyan
                 Write-Host "    [INFO] Note: This may take 30-60 seconds as it triggers app restart" -ForegroundColor Yellow
                 
                 $apiVerified = az webapp show -g $rg -n $apiApp --query "name" -o tsv 2>$null
@@ -711,16 +804,16 @@ foreach ($env in $envList) {
                     # Determine ASPNETCORE_ENVIRONMENT value based on environment
                     $aspnetEnv = Get-AspNetCoreEnvironment -Environment $Environment
                     $job = Start-Job -ScriptBlock {
-                        param($rg, $apiApp, $connString, $aspnetEnv)
-                        az webapp config appsettings set -g $rg -n $apiApp --settings "APPLICATIONINSIGHTS_CONNECTION_STRING=$connString" "ASPNETCORE_ENVIRONMENT=$aspnetEnv" 2>$null
-                    } -ArgumentList $rg, $apiApp, $connString, $aspnetEnv
+                        param($rg, $apiApp, $connString, $aspnetEnv, $kvName)
+                        az webapp config appsettings set -g $rg -n $apiApp --settings "APPLICATIONINSIGHTS_CONNECTION_STRING=$connString" "ASPNETCORE_ENVIRONMENT=$aspnetEnv" "KEY_VAULT_NAME=$kvName" 2>$null
+                    } -ArgumentList $rg, $apiApp, $connString, $aspnetEnv, $kvName
                     
                     $timeout = 90
                     $completed = Wait-Job -Job $job -Timeout $timeout
                     if ($completed) {
                         $result = Receive-Job -Job $job
                         Remove-Job -Job $job
-                        Write-Host "    [OK] App Insights configured for API: $apiApp" -ForegroundColor Green
+                        Write-Host "    [OK] App Insights and Key Vault configured for API: $apiApp" -ForegroundColor Green
                     } else {
                         Stop-Job -Job $job
                         Remove-Job -Job $job
@@ -734,16 +827,16 @@ foreach ($env in $envList) {
                     # Determine ASPNETCORE_ENVIRONMENT value based on environment
                     $aspnetEnv = Get-AspNetCoreEnvironment -Environment $Environment
                     $job = Start-Job -ScriptBlock {
-                        param($rg, $uiApp, $connString, $aspnetEnv)
-                        az webapp config appsettings set -g $rg -n $uiApp --settings "APPLICATIONINSIGHTS_CONNECTION_STRING=$connString" "ASPNETCORE_ENVIRONMENT=$aspnetEnv" 2>$null
-                    } -ArgumentList $rg, $uiApp, $connString, $aspnetEnv
+                        param($rg, $uiApp, $connString, $aspnetEnv, $kvName)
+                        az webapp config appsettings set -g $rg -n $uiApp --settings "APPLICATIONINSIGHTS_CONNECTION_STRING=$connString" "ASPNETCORE_ENVIRONMENT=$aspnetEnv" "KEY_VAULT_NAME=$kvName" 2>$null
+                    } -ArgumentList $rg, $uiApp, $connString, $aspnetEnv, $kvName
                     
                     $timeout = 90
                     $completed = Wait-Job -Job $job -Timeout $timeout
                     if ($completed) {
                         $result = Receive-Job -Job $job
                         Remove-Job -Job $job
-                        Write-Host "    [OK] App Insights configured for UI: $uiApp" -ForegroundColor Green
+                        Write-Host "    [OK] App Insights and Key Vault configured for UI: $uiApp" -ForegroundColor Green
                     } else {
                         Stop-Job -Job $job
                         Remove-Job -Job $job

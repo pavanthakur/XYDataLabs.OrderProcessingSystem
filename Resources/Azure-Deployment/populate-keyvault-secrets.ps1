@@ -28,7 +28,9 @@ Write-Host ""
 
 # Resource names
 $rgName = "rg-$BaseName-$Environment"
-$kvName = "kv-orderproc-$Environment"
+# Shorten base name for Key Vault (max 24 chars total)
+$shortBaseName = $BaseName.Substring(0, [Math]::Min(15, $BaseName.Length))
+$kvName = "kv-$shortBaseName-$Environment"
 $aiName = "ai-$BaseName-$Environment"
 
 Write-Host "📋 Configuration:" -ForegroundColor Yellow

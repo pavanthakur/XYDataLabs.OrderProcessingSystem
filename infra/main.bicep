@@ -54,7 +54,7 @@ module sql 'modules/sql.bicep' = {
   }
 }
 
-// Hosting (Plan + WebApps)
+// Hosting (Plan + WebApps with Managed Identity)
 module hosting 'modules/hosting.bicep' = {
   name: 'hosting-${environment}'
   scope: appRg
@@ -68,6 +68,22 @@ module hosting 'modules/hosting.bicep' = {
     appInsightsInstrumentationKey: insights.outputs.appInsightsInstrumentationKey
     sqlConnectionString: sql.outputs.connectionString
   }
+}
+
+// Key Vault (with access policies for App Service managed identities)
+module keyVault 'modules/keyvault.bicep' = {
+  name: 'keyvault-${environment}'
+  scope: appRg
+  params: {
+    location: location
+    environment: environment
+    baseName: baseName
+    apiAppPrincipalId: hosting.outputs.apiPrincipalId
+    uiAppPrincipalId: hosting.outputs.uiPrincipalId
+  }
+  dependsOn: [
+    hosting
+  ]
 }
 
 // Application Insights
@@ -97,10 +113,14 @@ module identity 'modules/identity.bicep' = if (enableIdentity) {
 output resourceGroupName string = appRg.name
 output apiHostName string = hosting.outputs.apiHostName
 output uiHostName string = hosting.outputs.uiHostName
+output apiAppName string = hosting.outputs.apiAppName
+output uiAppName string = hosting.outputs.uiAppName
 output appInsightsName string = insights.outputs.appInsightsName
 output appInsightsConnectionString string = insights.outputs.appInsightsConnectionString
 output appInsightsInstrumentationKey string = insights.outputs.appInsightsInstrumentationKey
 output sqlServerName string = sql.outputs.sqlServerName
 output sqlServerFqdn string = sql.outputs.sqlServerFqdn
 output databaseName string = sql.outputs.databaseName
+output keyVaultName string = keyVault.outputs.keyVaultName
+output keyVaultUri string = keyVault.outputs.keyVaultUri
 output oidcClientId string = enableIdentity ? identity.outputs.clientId : ''
