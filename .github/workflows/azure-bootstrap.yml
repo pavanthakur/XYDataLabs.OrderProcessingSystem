@@ -1965,6 +1965,16 @@ jobs:
             exit 1
           }
       
+      # Refresh Azure authentication token before Key Vault operations
+      # Token from initial login may have expired after long-running migration steps
+      - name: Refresh Azure Login for Key Vault Operations
+        timeout-minutes: 3
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.CLIENT_ID }}
+          tenant-id: ${{ env.TENANT_ID }}
+          subscription-id: ${{ env.SUBSCRIPTION_ID }}
+      
       - name: Populate Key Vault Secrets
         if: success()
         run: |
@@ -2390,6 +2400,16 @@ jobs:
             Write-Error "Connection string configuration failed with exception: $($_.Exception.Message)"
             exit 1
           }
+      
+      # Refresh Azure authentication token before Key Vault operations
+      # Token from initial login may have expired after long-running migration steps
+      - name: Refresh Azure Login for Key Vault Operations
+        timeout-minutes: 3
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.CLIENT_ID }}
+          tenant-id: ${{ env.TENANT_ID }}
+          subscription-id: ${{ env.SUBSCRIPTION_ID }}
       
       - name: Populate Key Vault Secrets
         if: success()
@@ -2880,6 +2900,16 @@ jobs:
             Write-Error "Connection string configuration failed with exception: $($_.Exception.Message)"
             exit 1
           }
+      
+      # Refresh Azure authentication token before Key Vault operations
+      # Token from initial login may have expired after long-running migration steps
+      - name: Refresh Azure Login for Key Vault Operations
+        timeout-minutes: 3
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.CLIENT_ID }}
+          tenant-id: ${{ env.TENANT_ID }}
+          subscription-id: ${{ env.SUBSCRIPTION_ID }}
       
       - name: Populate Key Vault Secrets
         if: success()
