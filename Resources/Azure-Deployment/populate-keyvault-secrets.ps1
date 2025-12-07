@@ -60,7 +60,7 @@ try {
         Write-Host "Checking if Key Vault exists with different name..." -ForegroundColor Yellow
         $allKvs = az keyvault list --resource-group $rgName --query "[].name" -o tsv 2>&1
         if ($LASTEXITCODE -eq 0 -and $allKvs) {
-            Write-Host "  Found Key Vaults in $rgName" ":" -ForegroundColor Yellow
+            Write-Host "  Found Key Vaults in $rgName`:" -ForegroundColor Yellow
             $allKvs -split "`n" | ForEach-Object { Write-Host "    - $_" -ForegroundColor Gray }
         } else {
             Write-Host "  No Key Vaults found in resource group $rgName" -ForegroundColor Yellow
@@ -208,7 +208,7 @@ try {
         Write-Host "  4. Network Access: Ensure Key Vault firewall allows your IP" -ForegroundColor Gray
         Write-Host "     Run: az keyvault show -n $kvName -g $rgName --query properties.networkAcls" -ForegroundColor DarkGray
         Write-Host "  5. Key Vault Status: Verify Key Vault is not in soft-deleted state" -ForegroundColor Gray
-        Write-Host "     Run: az keyvault list-deleted --query '[?name==``$kvName``]'" -ForegroundColor DarkGray
+        Write-Host "     Run: az keyvault list-deleted --query ""[?name=='$kvName']""" -ForegroundColor DarkGray
         Write-Host ""
         exit 1
     }

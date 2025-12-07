@@ -639,13 +639,20 @@ foreach ($env in $envList) {
         # Grant current service principal permission to manage secrets (for populate-keyvault-secrets.ps1)
         Write-Host "    [CONFIG] Granting current service principal permission to manage secrets..." -ForegroundColor Yellow
         try {
-            # Get the current signed-in service principal or user object ID
-            $currentObjectId = az ad signed-in-user show --query id -o tsv 2>$null
-            if ($LASTEXITCODE -ne 0 -or -not $currentObjectId) {
-                # If not a user, try to get the service principal
-                $accountInfo = az account show 2>$null | ConvertFrom-Json
-                if ($accountInfo -and $accountInfo.user -and $accountInfo.user.name) {
-                    # For service principal, the name is the client ID
+            # Determine if current identity is a user or service principal
+            $accountInfo = az account show 2>$null | ConvertFrom-Json
+            $currentObjectId = $null
+            
+            if ($accountInfo -and $accountInfo.user) {
+                $userType = $accountInfo.user.type
+                Write-Host "    [INFO] Current identity type: $userType" -ForegroundColor Gray
+                
+                if ($userType -eq 'user') {
+                    # For regular user accounts
+                    $currentObjectId = az ad signed-in-user show --query id -o tsv 2>$null
+                    if ($LASTEXITCODE -ne 0) { $currentObjectId = $null }
+                } elseif ($userType -eq 'servicePrincipal') {
+                    # For service principal (OIDC, etc.), the name is the client ID
                     $spInfo = az ad sp show --id $accountInfo.user.name 2>$null | ConvertFrom-Json
                     if ($spInfo -and $spInfo.id) {
                         $currentObjectId = $spInfo.id
