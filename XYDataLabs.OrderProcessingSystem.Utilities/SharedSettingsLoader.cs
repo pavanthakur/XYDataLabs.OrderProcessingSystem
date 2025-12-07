@@ -68,6 +68,14 @@ namespace XYDataLabs.OrderProcessingSystem.Utilities
                         keyVaultName = $"kv-orderprocessing-{effectiveEnvironment}";
                     }
                     
+                    // Validate Key Vault name format (alphanumeric and hyphens only, 3-24 chars)
+                    if (!System.Text.RegularExpressions.Regex.IsMatch(keyVaultName, @"^[a-zA-Z0-9\-]{3,24}$"))
+                    {
+                        Console.WriteLine($"[WARN] Invalid Key Vault name format: {keyVaultName}");
+                        Console.WriteLine("[WARN] Continuing with file-based configuration only");
+                        return builder;
+                    }
+                    
                     var keyVaultUri = $"https://{keyVaultName}.vault.azure.net/";
                     Console.WriteLine($"[DEBUG] Attempting to load secrets from Key Vault: {keyVaultUri}");
                     

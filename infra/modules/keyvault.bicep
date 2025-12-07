@@ -83,9 +83,6 @@ resource uiAccessPolicy 'Microsoft.KeyVault/vaults/accessPolicies@2023-07-01' = 
       }
     ]
   }
-  dependsOn: [
-    apiAccessPolicy
-  ]
 }
 
 // Outputs
