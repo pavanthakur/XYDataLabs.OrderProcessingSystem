@@ -1966,7 +1966,14 @@ jobs:
           }
       
       # Refresh Azure authentication token before Key Vault operations
-      # Token from initial login may have expired after long-running migration steps
+      # Token from initial login may have expired after long-running migration steps  
+      - name: Clear Azure CLI Token Cache
+        run: |
+          Write-Host "🔄 Clearing Azure CLI token cache to force fresh authentication..." -ForegroundColor Cyan
+          az account clear 2>$null | Out-Null
+          az cache purge 2>$null | Out-Null
+          Write-Host "✅ Token cache cleared" -ForegroundColor Green
+      
       - name: Refresh Azure Login for Key Vault Operations
         timeout-minutes: 3
         uses: azure/login@v2
@@ -1974,17 +1981,6 @@ jobs:
           client-id: ${{ env.CLIENT_ID }}
           tenant-id: ${{ env.TENANT_ID }}
           subscription-id: ${{ env.SUBSCRIPTION_ID }}
-      
-      # Regenerate GitHub App token before Key Vault operations
-      # GitHub App tokens expire after 5-10 minutes, and SQL/migration steps can take longer
-      - name: Regenerate GitHub App Token for Key Vault Operations
-        id: app-token-keyvault
-        if: ${{ secrets.APP_ID != '' }}
-        continue-on-error: true
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
       
       - name: Populate Key Vault Secrets
         if: success()
@@ -2421,17 +2417,6 @@ jobs:
           client-id: ${{ env.CLIENT_ID }}
           tenant-id: ${{ env.TENANT_ID }}
           subscription-id: ${{ env.SUBSCRIPTION_ID }}
-      
-      # Regenerate GitHub App token before Key Vault operations
-      # GitHub App tokens expire after 5-10 minutes, and SQL/migration steps can take longer
-      - name: Regenerate GitHub App Token for Key Vault Operations
-        id: app-token-keyvault
-        if: ${{ secrets.APP_ID != '' }}
-        continue-on-error: true
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
       
       - name: Populate Key Vault Secrets
         if: success()
@@ -2932,17 +2917,6 @@ jobs:
           client-id: ${{ env.CLIENT_ID }}
           tenant-id: ${{ env.TENANT_ID }}
           subscription-id: ${{ env.SUBSCRIPTION_ID }}
-      
-      # Regenerate GitHub App token before Key Vault operations
-      # GitHub App tokens expire after 5-10 minutes, and SQL/migration steps can take longer
-      - name: Regenerate GitHub App Token for Key Vault Operations
-        id: app-token-keyvault
-        if: ${{ secrets.APP_ID != '' }}
-        continue-on-error: true
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
       
       - name: Populate Key Vault Secrets
         if: success()
