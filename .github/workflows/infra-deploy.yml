@@ -53,8 +53,7 @@ permissions:
 jobs:
   pre-validate:
     name: Pre-Deployment Validation
-    if: false  # TODO: Enable after bootstrap - requires Azure OIDC setup
-    # if: (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && !inputs.dryRun)
+    if: (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && !inputs.dryRun)
     uses: ./.github/workflows/validate-deployment.yml
     with:
       environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || github.ref_name }}
@@ -119,7 +118,7 @@ jobs:
   deploy:
     name: Deploy Infrastructure
     if: (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && !inputs.dryRun)
-    # needs: pre-validate  # TODO: Uncomment after bootstrap
+    needs: pre-validate
     runs-on: ubuntu-latest
     environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || github.ref_name }}
     steps:
