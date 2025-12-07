@@ -526,6 +526,135 @@ foreach ($env in $envList) {
         elseif ($aiExists) { Write-Host "  Application Insights exists: $aiName" -ForegroundColor Green }
     }
 
+    # Key Vault - Create and populate with OpenPay secrets
+    $kvName = "kv-$BaseName-$env"
+    Write-Host "`n  [KEY VAULT] Processing Key Vault: $kvName..." -ForegroundColor Cyan
+    $kvExists = $null
+    try { $kvExists = az keyvault show -n $kvName --query "name" -o tsv 2>$null; if ($LASTEXITCODE -ne 0) { $kvExists = $null } } catch { $kvExists = $null }
+    
+    if (-not $kvExists) {
+        Write-Host "  Creating Key Vault: $kvName..." -ForegroundColor Yellow
+        $kvResult = Invoke-AzCommandWithRetry -Command { az keyvault create -n $kvName -g $rg -l $Location --enable-rbac-authorization false }
+        if ($kvResult.Success) {
+            Write-Host "  [OK] Key Vault created: $kvName" -ForegroundColor Green
+            Add-StepStatus -Name "Create Key Vault ($kvName)" -Status "Success" -Details "Created"
+        } else {
+            Write-Host "  [WARN] Key Vault creation failed: $($kvResult.Error)" -ForegroundColor Yellow
+            Add-StepStatus -Name "Create Key Vault ($kvName)" -Status "Failed" -Details "$($kvResult.Error)"
+        }
+    } else {
+        Write-Host "  Key Vault already exists: $kvName" -ForegroundColor Green
+        Add-StepStatus -Name "Create Key Vault ($kvName)" -Status "Success" -Details "Already existed"
+    }
+
+    # Grant Key Vault access to API and UI web apps (using managed identity)
+    if ($kvExists -or $kvResult.Success) {
+        Write-Host "  [ACCESS POLICY] Configuring Key Vault access policies..." -ForegroundColor Cyan
+        
+        # Get API app principal ID
+        $apiPrincipalId = $null
+        try {
+            $apiPrincipalId = az webapp identity show -g $rg -n $apiApp --query "principalId" -o tsv 2>$null
+            if ($LASTEXITCODE -ne 0) { $apiPrincipalId = $null }
+        } catch { $apiPrincipalId = $null }
+        
+        # Enable managed identity for API if not enabled
+        if (-not $apiPrincipalId) {
+            Write-Host "    [CONFIG] Enabling system-assigned managed identity for API..." -ForegroundColor Yellow
+            try {
+                az webapp identity assign -g $rg -n $apiApp 2>$null | Out-Null
+                Start-Sleep -Seconds 5
+                $apiPrincipalId = az webapp identity show -g $rg -n $apiApp --query "principalId" -o tsv 2>$null
+            } catch {
+                Write-Host "    [WARN] Failed to enable managed identity for API" -ForegroundColor Yellow
+            }
+        }
+        
+        if ($apiPrincipalId) {
+            Write-Host "    [OK] API managed identity: $apiPrincipalId" -ForegroundColor Green
+            # Set access policy for API
+            $accessResult = Invoke-AzCommandWithRetry -Command { az keyvault set-policy -n $kvName --object-id $apiPrincipalId --secret-permissions get list }
+            if ($accessResult.Success) {
+                Write-Host "    [OK] Access policy set for API" -ForegroundColor Green
+            } else {
+                Write-Host "    [WARN] Failed to set access policy for API: $($accessResult.Error)" -ForegroundColor Yellow
+            }
+        }
+        
+        # Get UI app principal ID
+        $uiPrincipalId = $null
+        try {
+            $uiPrincipalId = az webapp identity show -g $rg -n $uiApp --query "principalId" -o tsv 2>$null
+            if ($LASTEXITCODE -ne 0) { $uiPrincipalId = $null }
+        } catch { $uiPrincipalId = $null }
+        
+        # Enable managed identity for UI if not enabled
+        if (-not $uiPrincipalId) {
+            Write-Host "    [CONFIG] Enabling system-assigned managed identity for UI..." -ForegroundColor Yellow
+            try {
+                az webapp identity assign -g $rg -n $uiApp 2>$null | Out-Null
+                Start-Sleep -Seconds 5
+                $uiPrincipalId = az webapp identity show -g $rg -n $uiApp --query "principalId" -o tsv 2>$null
+            } catch {
+                Write-Host "    [WARN] Failed to enable managed identity for UI" -ForegroundColor Yellow
+            }
+        }
+        
+        if ($uiPrincipalId) {
+            Write-Host "    [OK] UI managed identity: $uiPrincipalId" -ForegroundColor Green
+            # Set access policy for UI
+            $accessResult = Invoke-AzCommandWithRetry -Command { az keyvault set-policy -n $kvName --object-id $uiPrincipalId --secret-permissions get list }
+            if ($accessResult.Success) {
+                Write-Host "    [OK] Access policy set for UI" -ForegroundColor Green
+            } else {
+                Write-Host "    [WARN] Failed to set access policy for UI: $($accessResult.Error)" -ForegroundColor Yellow
+            }
+        }
+
+        # Populate OpenPay secrets in Key Vault (hierarchical naming using double-dash separator)
+        Write-Host "  [SECRETS] Populating OpenPay secrets in Key Vault..." -ForegroundColor Cyan
+        
+        # Load OpenPay configuration from sharedsettings file
+        $settingsPath = Join-Path $PSScriptRoot ".." "Configuration" "sharedsettings.$env.json"
+        if (Test-Path $settingsPath) {
+            try {
+                $settings = Get-Content $settingsPath -Raw | ConvertFrom-Json
+                if ($settings.OpenPay) {
+                    $openPayConfig = $settings.OpenPay
+                    
+                    # Define secrets with hierarchical naming (using -- as separator for Azure Key Vault)
+                    $secrets = @{
+                        "OpenPay--MerchantId" = $openPayConfig.MerchantId
+                        "OpenPay--PrivateKey" = $openPayConfig.PrivateKey
+                        "OpenPay--DeviceSessionId" = $openPayConfig.DeviceSessionId
+                        "OpenPay--IsProduction" = $openPayConfig.IsProduction.ToString().ToLower()
+                        "OpenPay--RedirectUrl" = $openPayConfig.RedirectUrl
+                    }
+                    
+                    foreach ($secretName in $secrets.Keys) {
+                        $secretValue = $secrets[$secretName]
+                        if (-not [string]::IsNullOrWhiteSpace($secretValue)) {
+                            try {
+                                az keyvault secret set --vault-name $kvName --name $secretName --value $secretValue 2>$null | Out-Null
+                                Write-Host "    [OK] Secret set: $secretName" -ForegroundColor Green
+                            } catch {
+                                Write-Host "    [WARN] Failed to set secret: $secretName - $($_.Exception.Message)" -ForegroundColor Yellow
+                            }
+                        }
+                    }
+                    Write-Host "  [OK] OpenPay secrets populated in Key Vault" -ForegroundColor Green
+                    Add-StepStatus -Name "Populate Key Vault Secrets ($kvName)" -Status "Success" -Details "OpenPay secrets added"
+                } else {
+                    Write-Host "  [WARN] OpenPay configuration not found in settings file" -ForegroundColor Yellow
+                }
+            } catch {
+                Write-Host "  [WARN] Failed to load settings file: $($_.Exception.Message)" -ForegroundColor Yellow
+            }
+        } else {
+            Write-Host "  [WARN] Settings file not found: $settingsPath" -ForegroundColor Yellow
+        }
+    }
+
     # Unified readiness wait - ensures plan + apps reach ready status
     # Plan timeout reduced to 2 minutes as F1 tier plans rarely reach fully Ready state
     Write-Host "`n  [WAIT] Performing unified readiness checks (Plan: 2 min, Apps: 10 min)..." -ForegroundColor Cyan

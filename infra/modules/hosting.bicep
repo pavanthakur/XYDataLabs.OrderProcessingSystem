@@ -60,6 +60,9 @@ resource plan 'Microsoft.Web/serverfarms@2023-12-01' = {
 resource apiApp 'Microsoft.Web/sites@2023-12-01' = {
   name: apiName
   location: location
+  identity: {
+    type: 'SystemAssigned'
+  }
   properties: {
     serverFarmId: plan.id
     siteConfig: {
@@ -85,6 +88,9 @@ resource apiApp 'Microsoft.Web/sites@2023-12-01' = {
 resource uiApp 'Microsoft.Web/sites@2023-12-01' = {
   name: uiName
   location: location
+  identity: {
+    type: 'SystemAssigned'
+  }
   properties: {
     serverFarmId: plan.id
     siteConfig: {
@@ -109,3 +115,7 @@ resource uiApp 'Microsoft.Web/sites@2023-12-01' = {
 
 output apiHostName string = apiApp.properties.defaultHostName
 output uiHostName string = uiApp.properties.defaultHostName
+output apiPrincipalId string = apiApp.identity.principalId
+output uiPrincipalId string = uiApp.identity.principalId
+output apiAppName string = apiApp.name
+output uiAppName string = uiApp.name

@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Azure.Identity;
+using System;
 
 namespace XYDataLabs.OrderProcessingSystem.Utilities
 {
@@ -14,7 +16,7 @@ namespace XYDataLabs.OrderProcessingSystem.Utilities
         /// Load environment-specific sharedsettings and appsettings JSON files.
         /// Non-Docker local development uses the "local" profile (ports 5010-5013).
         /// Docker uses the provided environment or falls back to "dev" (ports 5000-5003).
-        /// Azure App Service uses the provided environment based on ASPNETCORE_ENVIRONMENT.
+        /// Azure App Service uses the provided environment based on ASPNETCORE_ENVIRONMENT and loads secrets from Key Vault.
         /// </summary>
         /// <param name="builder">The configuration builder to add sources to.</param>
         /// <param name="environmentName">The ASP.NET Core environment name.</param>
@@ -54,6 +56,33 @@ namespace XYDataLabs.OrderProcessingSystem.Utilities
             {
                 Console.WriteLine("[DEBUG] Azure environment detected - adding environment variables for connection string override");
                 builder.AddEnvironmentVariables();
+                
+                // Add Azure Key Vault configuration using Managed Identity
+                try
+                {
+                    // Get Key Vault name from environment variable or construct it
+                    var keyVaultName = Environment.GetEnvironmentVariable("KEY_VAULT_NAME");
+                    if (string.IsNullOrWhiteSpace(keyVaultName))
+                    {
+                        // Construct Key Vault name based on environment: kv-orderprocessing-{env}
+                        keyVaultName = $"kv-orderprocessing-{effectiveEnvironment}";
+                    }
+                    
+                    var keyVaultUri = $"https://{keyVaultName}.vault.azure.net/";
+                    Console.WriteLine($"[DEBUG] Attempting to load secrets from Key Vault: {keyVaultUri}");
+                    
+                    // Use DefaultAzureCredential which supports Managed Identity in Azure
+                    builder.AddAzureKeyVault(
+                        new Uri(keyVaultUri),
+                        new DefaultAzureCredential());
+                    
+                    Console.WriteLine("[DEBUG] Azure Key Vault configuration added successfully");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[WARN] Failed to add Azure Key Vault configuration: {ex.Message}");
+                    Console.WriteLine("[WARN] Continuing with file-based configuration only");
+                }
             }
             
             return builder;
