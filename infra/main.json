@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.38.33.27573",
-      "templateHash": "3640157605174294041"
+      "version": "0.39.26.7824",
+      "templateHash": "10144475362105411827"
     }
   },
   "parameters": {
@@ -120,8 +120,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.38.33.27573",
-              "templateHash": "6626478082134379691"
+              "version": "0.39.26.7824",
+              "templateHash": "9535579242643362870"
             }
           },
           "parameters": {
@@ -246,9 +246,9 @@
               "type": "string",
               "value": "[variables('databaseName')]"
             },
-            "connectionString": {
+            "sqlAdminUsername": {
               "type": "string",
-              "value": "[format('Server=tcp:{0},1433;Initial Catalog={1};User ID={2};Password={3};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;', reference(resourceId('Microsoft.Sql/servers', variables('sqlServerName')), '2023-08-01-preview').fullyQualifiedDomainName, variables('databaseName'), parameters('sqlAdminUsername'), parameters('sqlAdminPassword'))]"
+              "value": "[parameters('sqlAdminUsername')]"
             }
           }
         }
@@ -289,8 +289,17 @@
           "appInsightsInstrumentationKey": {
             "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('insights-{0}', parameters('environment'))), '2025-04-01').outputs.appInsightsInstrumentationKey.value]"
           },
-          "sqlConnectionString": {
-            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('sql-{0}', parameters('environment'))), '2025-04-01').outputs.connectionString.value]"
+          "sqlServerFqdn": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('sql-{0}', parameters('environment'))), '2025-04-01').outputs.sqlServerFqdn.value]"
+          },
+          "sqlDatabaseName": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('sql-{0}', parameters('environment'))), '2025-04-01').outputs.databaseName.value]"
+          },
+          "sqlAdminUsername": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('sql-{0}', parameters('environment'))), '2025-04-01').outputs.sqlAdminUsername.value]"
+          },
+          "sqlAdminPassword": {
+            "value": "[parameters('sqlAdminPassword')]"
           }
         },
         "template": {
@@ -299,8 +308,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.38.33.27573",
-              "templateHash": "8999219420191064964"
+              "version": "0.39.26.7824",
+              "templateHash": "8802794271446609534"
             }
           },
           "parameters": {
@@ -348,11 +357,32 @@
                 "description": "App Insights Instrumentation Key (optional)"
               }
             },
-            "sqlConnectionString": {
+            "sqlServerFqdn": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "SQL Server FQDN (optional)"
+              }
+            },
+            "sqlDatabaseName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "SQL Database Name (optional)"
+              }
+            },
+            "sqlAdminUsername": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "SQL Admin Username (optional)"
+              }
+            },
+            "sqlAdminPassword": {
               "type": "securestring",
               "defaultValue": "",
               "metadata": {
-                "description": "SQL Database Connection String (optional)"
+                "description": "SQL Admin Password (optional)"
               }
             }
           },
@@ -360,6 +390,7 @@
             "planName": "[format('asp-{0}-{1}', parameters('baseName'), parameters('environment'))]",
             "apiName": "[format('{0}-{1}-api-xyapp-{2}', parameters('githubOwner'), parameters('baseName'), parameters('environment'))]",
             "uiName": "[format('{0}-{1}-ui-xyapp-{2}', parameters('githubOwner'), parameters('baseName'), parameters('environment'))]",
+            "sqlConnectionString": "[if(and(and(and(not(empty(parameters('sqlServerFqdn'))), not(empty(parameters('sqlDatabaseName')))), not(empty(parameters('sqlAdminUsername')))), not(empty(parameters('sqlAdminPassword')))), format('Server=tcp:{0},1433;Initial Catalog={1};User ID={2};Password={3};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;', parameters('sqlServerFqdn'), parameters('sqlDatabaseName'), parameters('sqlAdminUsername'), parameters('sqlAdminPassword')), '')]",
             "appInsightsSettings": "[if(not(empty(parameters('appInsightsConnectionString'))), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', parameters('appInsightsConnectionString')), createObject('name', 'ApplicationInsightsAgent_EXTENSION_VERSION', 'value', '~3'), createObject('name', 'APPINSIGHTS_INSTRUMENTATIONKEY', 'value', parameters('appInsightsInstrumentationKey')), createObject('name', 'XDT_MicrosoftApplicationInsights_Mode', 'value', 'recommended')), createArray())]"
           },
           "resources": [
@@ -391,7 +422,7 @@
                 "siteConfig": {
                   "netFrameworkVersion": "v8.0",
                   "appSettings": "[variables('appInsightsSettings')]",
-                  "connectionStrings": "[if(not(empty(parameters('sqlConnectionString'))), createArray(createObject('name', 'OrderProcessingSystemDbConnection', 'connectionString', parameters('sqlConnectionString'), 'type', 'SQLAzure')), createArray())]"
+                  "connectionStrings": "[if(not(empty(variables('sqlConnectionString'))), createArray(createObject('name', 'OrderProcessingSystemDbConnection', 'connectionString', variables('sqlConnectionString'), 'type', 'SQLAzure')), createArray())]"
                 },
                 "httpsOnly": true
               },
@@ -414,7 +445,7 @@
                 "siteConfig": {
                   "netFrameworkVersion": "v8.0",
                   "appSettings": "[variables('appInsightsSettings')]",
-                  "connectionStrings": "[if(not(empty(parameters('sqlConnectionString'))), createArray(createObject('name', 'OrderProcessingSystemDbConnection', 'connectionString', parameters('sqlConnectionString'), 'type', 'SQLAzure')), createArray())]"
+                  "connectionStrings": "[if(not(empty(variables('sqlConnectionString'))), createArray(createObject('name', 'OrderProcessingSystemDbConnection', 'connectionString', variables('sqlConnectionString'), 'type', 'SQLAzure')), createArray())]"
                 },
                 "httpsOnly": true
               },
@@ -473,8 +504,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.38.33.27573",
-              "templateHash": "17321997595337719821"
+              "version": "0.39.26.7824",
+              "templateHash": "13008418613882004774"
             }
           },
           "parameters": {
@@ -565,8 +596,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.38.33.27573",
-              "templateHash": "9620412990395767126"
+              "version": "0.39.26.7824",
+              "templateHash": "8799097058778707402"
             }
           },
           "parameters": {
