@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "5849371589253668825"
+      "templateHash": "10539941081180926278"
     }
   },
   "parameters": {
@@ -502,7 +502,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "11423647443936035960"
+              "templateHash": "10255448938114117545"
             }
           },
           "parameters": {
@@ -576,46 +576,12 @@
               }
             },
             {
-              "condition": "[not(empty(parameters('apiAppPrincipalId')))]",
+              "condition": "[or(not(empty(parameters('apiAppPrincipalId'))), not(empty(parameters('uiAppPrincipalId'))))]",
               "type": "Microsoft.KeyVault/vaults/accessPolicies",
               "apiVersion": "2023-07-01",
               "name": "[format('{0}/{1}', variables('keyVaultName'), 'add')]",
               "properties": {
-                "accessPolicies": [
-                  {
-                    "tenantId": "[parameters('tenantId')]",
-                    "objectId": "[parameters('apiAppPrincipalId')]",
-                    "permissions": {
-                      "secrets": [
-                        "get",
-                        "list"
-                      ]
-                    }
-                  }
-                ]
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
-              ]
-            },
-            {
-              "condition": "[not(empty(parameters('uiAppPrincipalId')))]",
-              "type": "Microsoft.KeyVault/vaults/accessPolicies",
-              "apiVersion": "2023-07-01",
-              "name": "[format('{0}/{1}', variables('keyVaultName'), 'add')]",
-              "properties": {
-                "accessPolicies": [
-                  {
-                    "tenantId": "[parameters('tenantId')]",
-                    "objectId": "[parameters('uiAppPrincipalId')]",
-                    "permissions": {
-                      "secrets": [
-                        "get",
-                        "list"
-                      ]
-                    }
-                  }
-                ]
+                "accessPolicies": "[concat(if(not(empty(parameters('apiAppPrincipalId'))), createArray(createObject('tenantId', parameters('tenantId'), 'objectId', parameters('apiAppPrincipalId'), 'permissions', createObject('secrets', createArray('get', 'list')))), createArray()), if(not(empty(parameters('uiAppPrincipalId'))), createArray(createObject('tenantId', parameters('tenantId'), 'objectId', parameters('uiAppPrincipalId'), 'permissions', createObject('secrets', createArray('get', 'list')))), createArray()))]"
               },
               "dependsOn": [
                 "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
@@ -745,17 +711,6 @@
           "scope": "inner"
         },
         "mode": "Incremental",
-        "parameters": {
-          "githubOwner": {
-            "value": "[parameters('githubOwner')]"
-          },
-          "githubRepo": {
-            "value": "TestAppXY_OrderProcessingSystem"
-          },
-          "environment": {
-            "value": "[parameters('environment')]"
-          }
-        },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "1.0.0.0",
@@ -763,27 +718,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "8799097058778707402"
-            }
-          },
-          "parameters": {
-            "githubOwner": {
-              "type": "string",
-              "metadata": {
-                "description": "GitHub owner/org (placeholder)"
-              }
-            },
-            "githubRepo": {
-              "type": "string",
-              "metadata": {
-                "description": "GitHub repository name (placeholder)"
-              }
-            },
-            "environment": {
-              "type": "string",
-              "metadata": {
-                "description": "Environment code"
-              }
+              "templateHash": "8043163046735672401"
             }
           },
           "resources": [],

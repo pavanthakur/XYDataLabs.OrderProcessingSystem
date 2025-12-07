@@ -47,43 +47,40 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   }
 }
 
-// Grant API App Service Managed Identity access to Key Vault secrets
-resource apiAccessPolicy 'Microsoft.KeyVault/vaults/accessPolicies@2023-07-01' = if (!empty(apiAppPrincipalId)) {
+// Grant App Service Managed Identities access to Key Vault secrets
+// Combine both access policies into a single resource to avoid duplicate 'add' resources
+resource accessPolicies 'Microsoft.KeyVault/vaults/accessPolicies@2023-07-01' = if (!empty(apiAppPrincipalId) || !empty(uiAppPrincipalId)) {
   name: 'add'
   parent: keyVault
   properties: {
-    accessPolicies: [
-      {
-        tenantId: tenantId
-        objectId: apiAppPrincipalId
-        permissions: {
-          secrets: [
-            'get'
-            'list'
-          ]
+    accessPolicies: concat(
+      // Add API access policy if principal ID is provided
+      !empty(apiAppPrincipalId) ? [
+        {
+          tenantId: tenantId
+          objectId: apiAppPrincipalId
+          permissions: {
+            secrets: [
+              'get'
+              'list'
+            ]
+          }
         }
-      }
-    ]
-  }
-}
-
-// Grant UI App Service Managed Identity access to Key Vault secrets
-resource uiAccessPolicy 'Microsoft.KeyVault/vaults/accessPolicies@2023-07-01' = if (!empty(uiAppPrincipalId)) {
-  name: 'add'
-  parent: keyVault
-  properties: {
-    accessPolicies: [
-      {
-        tenantId: tenantId
-        objectId: uiAppPrincipalId
-        permissions: {
-          secrets: [
-            'get'
-            'list'
-          ]
+      ] : [],
+      // Add UI access policy if principal ID is provided
+      !empty(uiAppPrincipalId) ? [
+        {
+          tenantId: tenantId
+          objectId: uiAppPrincipalId
+          permissions: {
+            secrets: [
+              'get'
+              'list'
+            ]
+          }
         }
-      }
-    ]
+      ] : []
+    )
   }
 }
 

@@ -81,9 +81,6 @@ module keyVault 'modules/keyvault.bicep' = {
     apiAppPrincipalId: hosting.outputs.apiPrincipalId
     uiAppPrincipalId: hosting.outputs.uiPrincipalId
   }
-  dependsOn: [
-    hosting
-  ]
 }
 
 // Application Insights
@@ -103,11 +100,6 @@ module insights 'modules/insights.bicep' = {
 module identity 'modules/identity.bicep' = if (enableIdentity) {
   name: 'identity-${environment}'
   scope: appRg
-  params: {
-    githubOwner: githubOwner
-    githubRepo: 'TestAppXY_OrderProcessingSystem'
-    environment: environment
-  }
 }
 
 output resourceGroupName string = appRg.name
@@ -123,4 +115,4 @@ output sqlServerFqdn string = sql.outputs.sqlServerFqdn
 output databaseName string = sql.outputs.databaseName
 output keyVaultName string = keyVault.outputs.keyVaultName
 output keyVaultUri string = keyVault.outputs.keyVaultUri
-output oidcClientId string = enableIdentity ? identity.outputs.clientId : ''
+output oidcClientId string = enableIdentity ? identity!.outputs.clientId : ''
