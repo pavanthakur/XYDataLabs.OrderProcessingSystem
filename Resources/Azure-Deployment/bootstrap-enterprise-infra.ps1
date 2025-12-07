@@ -532,6 +532,7 @@ foreach ($env in $envList) {
     $kvName = "kv-$shortBaseName-$env"
     Write-Host "`n  [KEY VAULT] Processing Key Vault: $kvName..." -ForegroundColor Cyan
     $kvExists = $null
+    $kvResult = $null
     try { $kvExists = az keyvault show -n $kvName --query "name" -o tsv 2>$null; if ($LASTEXITCODE -ne 0) { $kvExists = $null } } catch { $kvExists = $null }
     
     if (-not $kvExists) {
@@ -540,9 +541,31 @@ foreach ($env in $envList) {
         if ($kvResult.Success) {
             Write-Host "  [OK] Key Vault created: $kvName" -ForegroundColor Green
             Add-StepStatus -Name "Create Key Vault ($kvName)" -Status "Success" -Details "Created"
+            $kvExists = $kvName
         } else {
-            Write-Host "  [WARN] Key Vault creation failed: $($kvResult.Error)" -ForegroundColor Yellow
-            Add-StepStatus -Name "Create Key Vault ($kvName)" -Status "Failed" -Details "$($kvResult.Error)"
+            # Check if the error is due to a soft-deleted Key Vault
+            $errorMsg = $kvResult.Error
+            if ($errorMsg -match "ConflictError.*exists in deleted state" -or $errorMsg -match "soft-?delete") {
+                Write-Host "  [WARN] Key Vault exists in deleted state. Attempting recovery..." -ForegroundColor Yellow
+                
+                # Try to recover the soft-deleted Key Vault
+                Write-Host "  [RECOVERY] Recovering deleted Key Vault: $kvName..." -ForegroundColor Cyan
+                $recoverResult = Invoke-AzCommandWithRetry -Command { az keyvault recover -n $kvName -l $Location }
+                
+                if ($recoverResult.Success) {
+                    Write-Host "  [OK] Key Vault recovered successfully: $kvName" -ForegroundColor Green
+                    Add-StepStatus -Name "Create Key Vault ($kvName)" -Status "Success" -Details "Recovered from deleted state"
+                    $kvExists = $kvName
+                } else {
+                    Write-Host "  [ERROR] Failed to recover Key Vault: $($recoverResult.Error)" -ForegroundColor Red
+                    Write-Host "  [INFO] Manual action required: Purge deleted Key Vault '$kvName' or wait 90 days" -ForegroundColor Yellow
+                    Write-Host "  [INFO] To purge: az keyvault purge -n $kvName -l $Location" -ForegroundColor Gray
+                    Add-StepStatus -Name "Create Key Vault ($kvName)" -Status "Failed" -Details "Soft-deleted, recovery failed: $($recoverResult.Error)"
+                }
+            } else {
+                Write-Host "  [WARN] Key Vault creation failed: $errorMsg" -ForegroundColor Yellow
+                Add-StepStatus -Name "Create Key Vault ($kvName)" -Status "Failed" -Details "$errorMsg"
+            }
         }
     } else {
         Write-Host "  Key Vault already exists: $kvName" -ForegroundColor Green
@@ -550,7 +573,7 @@ foreach ($env in $envList) {
     }
 
     # Grant Key Vault access to API and UI web apps (using managed identity)
-    if ($kvExists -or $kvResult.Success) {
+    if ($kvExists -or ($kvResult -and $kvResult.Success)) {
         Write-Host "  [ACCESS POLICY] Configuring Key Vault access policies..." -ForegroundColor Cyan
         
         # Get API app principal ID
