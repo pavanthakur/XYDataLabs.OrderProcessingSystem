@@ -76,17 +76,25 @@ Added two steps before the "Populate Key Vault Secrets" step in the dev environm
 ### Why This Works
 
 1. **Token Refresh**: Generates a fresh OIDC token just before Key Vault operations
-2. **Cache Clearing**: Ensures Azure CLI doesn't use stale cached tokens
-3. **Consistent Pattern**: Matches the approach already used in staging and prod environments
-4. **Safety Net**: Includes error handling for non-critical cache clearing failures
+2. **Cache Clearing** (Dev Only): Ensures Azure CLI doesn't use stale cached tokens in the dev environment
+3. **Consistent Pattern**: All three environments now have token refresh before Key Vault operations
+4. **Safety Net**: Dev environment includes error handling for non-critical cache clearing failures
+
+**Note**: The dev environment has an additional "Clear Azure CLI Token Cache" step that staging and prod do not have. This extra step provides additional robustness but is not strictly required - the token refresh alone is sufficient to resolve the issue.
 
 ## Verification
 
-The fix has been verified to be present in:
+The token refresh fix has been verified to be present in all environments:
 
-- **Dev Environment**: Line 1990 of `.github/workflows/azure-bootstrap.yml`
-- **Staging Environment**: Line 2426 of `.github/workflows/azure-bootstrap.yml`
-- **Production Environment**: Line 2926 of `.github/workflows/azure-bootstrap.yml`
+- **Dev Environment**: 
+  - Cache Clear: Line 1970 of `.github/workflows/azure-bootstrap.yml`
+  - Token Refresh: Line 1990 of `.github/workflows/azure-bootstrap.yml`
+- **Staging Environment**: 
+  - Token Refresh: Line 2426 of `.github/workflows/azure-bootstrap.yml`
+- **Production Environment**: 
+  - Token Refresh: Line 2926 of `.github/workflows/azure-bootstrap.yml`
+
+**Note**: Only the dev environment includes the cache clearing step. Staging and prod environments only have the token refresh step, which is sufficient to resolve the token expiration issue.
 
 ## Timeline
 
