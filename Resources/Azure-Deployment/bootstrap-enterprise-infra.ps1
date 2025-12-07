@@ -823,7 +823,7 @@ foreach ($env in $envList) {
         Write-Host "  [WARN] UI WebApp not found: $uiApp" -ForegroundColor Yellow
     }
 
-    # Configure App Insights connection strings (if AI exists & webapps exist)
+    # Configure App Insights connection strings and Key Vault name (if AI exists & webapps exist)
     try {
         Write-Host "`n  [CONFIG] Checking App Insights availability..." -ForegroundColor Cyan
         $aiCheck = az monitor app-insights component show -a $aiName -g $rg 2>$null
@@ -831,7 +831,7 @@ foreach ($env in $envList) {
             Write-Host "    [OK] App Insights found: $aiName" -ForegroundColor Green
             $connString = az monitor app-insights component show -a $aiName -g $rg --query "connectionString" -o tsv 2>$null
             if ($connString) {
-                Write-Host "  [CONFIG] Configuring App Insights connection strings..." -ForegroundColor Cyan
+                Write-Host "  [CONFIG] Configuring App Insights connection strings and Key Vault..." -ForegroundColor Cyan
                 Write-Host "    [INFO] Note: This may take 30-60 seconds as it triggers app restart" -ForegroundColor Yellow
                 
                 $apiVerified = az webapp show -g $rg -n $apiApp --query "name" -o tsv 2>$null
@@ -840,16 +840,16 @@ foreach ($env in $envList) {
                     # Determine ASPNETCORE_ENVIRONMENT value based on environment
                     $aspnetEnv = Get-AspNetCoreEnvironment -Environment $Environment
                     $job = Start-Job -ScriptBlock {
-                        param($rg, $apiApp, $connString, $aspnetEnv)
-                        az webapp config appsettings set -g $rg -n $apiApp --settings "APPLICATIONINSIGHTS_CONNECTION_STRING=$connString" "ASPNETCORE_ENVIRONMENT=$aspnetEnv" 2>$null
-                    } -ArgumentList $rg, $apiApp, $connString, $aspnetEnv
+                        param($rg, $apiApp, $connString, $aspnetEnv, $kvName)
+                        az webapp config appsettings set -g $rg -n $apiApp --settings "APPLICATIONINSIGHTS_CONNECTION_STRING=$connString" "ASPNETCORE_ENVIRONMENT=$aspnetEnv" "KEY_VAULT_NAME=$kvName" 2>$null
+                    } -ArgumentList $rg, $apiApp, $connString, $aspnetEnv, $kvName
                     
                     $timeout = 90
                     $completed = Wait-Job -Job $job -Timeout $timeout
                     if ($completed) {
                         $result = Receive-Job -Job $job
                         Remove-Job -Job $job
-                        Write-Host "    [OK] App Insights configured for API: $apiApp" -ForegroundColor Green
+                        Write-Host "    [OK] App Insights and Key Vault configured for API: $apiApp" -ForegroundColor Green
                     } else {
                         Stop-Job -Job $job
                         Remove-Job -Job $job
@@ -863,16 +863,16 @@ foreach ($env in $envList) {
                     # Determine ASPNETCORE_ENVIRONMENT value based on environment
                     $aspnetEnv = Get-AspNetCoreEnvironment -Environment $Environment
                     $job = Start-Job -ScriptBlock {
-                        param($rg, $uiApp, $connString, $aspnetEnv)
-                        az webapp config appsettings set -g $rg -n $uiApp --settings "APPLICATIONINSIGHTS_CONNECTION_STRING=$connString" "ASPNETCORE_ENVIRONMENT=$aspnetEnv" 2>$null
-                    } -ArgumentList $rg, $uiApp, $connString, $aspnetEnv
+                        param($rg, $uiApp, $connString, $aspnetEnv, $kvName)
+                        az webapp config appsettings set -g $rg -n $uiApp --settings "APPLICATIONINSIGHTS_CONNECTION_STRING=$connString" "ASPNETCORE_ENVIRONMENT=$aspnetEnv" "KEY_VAULT_NAME=$kvName" 2>$null
+                    } -ArgumentList $rg, $uiApp, $connString, $aspnetEnv, $kvName
                     
                     $timeout = 90
                     $completed = Wait-Job -Job $job -Timeout $timeout
                     if ($completed) {
                         $result = Receive-Job -Job $job
                         Remove-Job -Job $job
-                        Write-Host "    [OK] App Insights configured for UI: $uiApp" -ForegroundColor Green
+                        Write-Host "    [OK] App Insights and Key Vault configured for UI: $uiApp" -ForegroundColor Green
                     } else {
                         Stop-Job -Job $job
                         Remove-Job -Job $job
