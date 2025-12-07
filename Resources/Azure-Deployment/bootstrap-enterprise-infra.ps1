@@ -635,6 +635,42 @@ foreach ($env in $envList) {
                 Write-Host "    [WARN] Failed to set access policy for UI: $($accessResult.Error)" -ForegroundColor Yellow
             }
         }
+        
+        # Grant current service principal permission to manage secrets (for populate-keyvault-secrets.ps1)
+        Write-Host "    [CONFIG] Granting current service principal permission to manage secrets..." -ForegroundColor Yellow
+        try {
+            # Get the current signed-in service principal or user object ID
+            $currentObjectId = az ad signed-in-user show --query id -o tsv 2>$null
+            if ($LASTEXITCODE -ne 0 -or -not $currentObjectId) {
+                # If not a user, try to get the service principal
+                $accountInfo = az account show 2>$null | ConvertFrom-Json
+                if ($accountInfo -and $accountInfo.user -and $accountInfo.user.name) {
+                    # For service principal, the name is the client ID
+                    $spInfo = az ad sp show --id $accountInfo.user.name 2>$null | ConvertFrom-Json
+                    if ($spInfo -and $spInfo.id) {
+                        $currentObjectId = $spInfo.id
+                    }
+                }
+            }
+            
+            if ($currentObjectId) {
+                Write-Host "    [INFO] Current identity object ID: $currentObjectId" -ForegroundColor Gray
+                # Grant full secret permissions to current identity for secret management
+                $accessResult = Invoke-AzCommandWithRetry -Command { az keyvault set-policy -n $kvName --object-id $currentObjectId --secret-permissions get list set delete }
+                if ($accessResult.Success) {
+                    Write-Host "    [OK] Access policy set for current identity (secret management)" -ForegroundColor Green
+                } else {
+                    Write-Host "    [WARN] Failed to set access policy for current identity: $($accessResult.Error)" -ForegroundColor Yellow
+                    Write-Host "    [WARN] You may need to manually grant yourself Key Vault Secrets Officer role" -ForegroundColor Yellow
+                }
+            } else {
+                Write-Host "    [WARN] Could not determine current identity object ID" -ForegroundColor Yellow
+                Write-Host "    [WARN] You may need to manually grant Key Vault access for secret population" -ForegroundColor Yellow
+            }
+        } catch {
+            Write-Host "    [WARN] Exception while granting current identity access: $($_.Exception.Message)" -ForegroundColor Yellow
+            Write-Host "    [WARN] You may need to manually grant yourself Key Vault Secrets Officer role" -ForegroundColor Yellow
+        }
 
         # Note: Key Vault secrets are populated by a separate script
         # Run populate-keyvault-secrets.ps1 after bootstrap to add application secrets
