@@ -19,7 +19,9 @@ param uiAppPrincipalId string = ''
 param tenantId string = subscription().tenantId
 
 // Key Vault name (must be globally unique, max 24 chars)
-var keyVaultName = 'kv-${baseName}-${environment}'
+// Using shortened base name and environment to stay within limits
+var shortBaseName = take(baseName, 15) // Limit base name to 15 chars
+var keyVaultName = 'kv-${shortBaseName}-${environment}'
 
 // Create Key Vault
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {

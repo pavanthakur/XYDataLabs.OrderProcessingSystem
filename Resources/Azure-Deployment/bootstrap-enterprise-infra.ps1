@@ -635,8 +635,11 @@ foreach ($env in $envList) {
                         $secretValue = $secrets[$secretName]
                         if (-not [string]::IsNullOrWhiteSpace($secretValue)) {
                             try {
-                                # Use stdin to pass secret value securely (avoiding command line exposure)
-                                $secretValue | az keyvault secret set --vault-name $kvName --name $secretName --file - 2>$null | Out-Null
+                                # Use temporary file to pass secret value securely (avoiding command line exposure)
+                                $tempFile = [System.IO.Path]::GetTempFileName()
+                                $secretValue | Out-File -FilePath $tempFile -Encoding UTF8 -NoNewline
+                                az keyvault secret set --vault-name $kvName --name $secretName --file $tempFile --encoding utf-8 2>$null | Out-Null
+                                Remove-Item $tempFile -ErrorAction SilentlyContinue
                                 Write-Host "    [OK] Secret set: $secretName" -ForegroundColor Green
                             } catch {
                                 Write-Host "    [WARN] Failed to set secret: $secretName - $($_.Exception.Message)" -ForegroundColor Yellow

@@ -9,7 +9,7 @@ namespace XYDataLabs.OrderProcessingSystem.Utilities
     /// Provides helpers for loading shared configuration and binding strongly-typed ApiSettings
     /// for both API and UI applications across Docker and non-Docker environments.
     /// </summary>
-    public static class SharedSettingsLoader
+    public static partial class SharedSettingsLoader
     {
 
         /// <summary>
@@ -69,7 +69,8 @@ namespace XYDataLabs.OrderProcessingSystem.Utilities
                     }
                     
                     // Validate Key Vault name format (alphanumeric and hyphens only, 3-24 chars)
-                    if (!System.Text.RegularExpressions.Regex.IsMatch(keyVaultName, @"^[a-zA-Z0-9\-]{3,24}$"))
+                    // Using static readonly regex for performance
+                    if (!IsValidKeyVaultName(keyVaultName))
                     {
                         Console.WriteLine($"[WARN] Invalid Key Vault name format: {keyVaultName}");
                         Console.WriteLine("[WARN] Continuing with file-based configuration only");
@@ -201,6 +202,23 @@ namespace XYDataLabs.OrderProcessingSystem.Utilities
             Console.WriteLine($"[DEBUG] API.Https Port: {apiSettings.API.https.Port}");
             Console.WriteLine($"[DEBUG] Active {context} Port: {activeSettings.Port}");
         }
+
+        /// <summary>
+        /// Validates Key Vault name format.
+        /// </summary>
+        /// <param name="name">The Key Vault name to validate.</param>
+        /// <returns>True if valid, false otherwise.</returns>
+        private static bool IsValidKeyVaultName(string name)
+        {
+            // Key Vault names: alphanumeric and hyphens only, 3-24 chars, globally unique
+            return !string.IsNullOrWhiteSpace(name) 
+                && name.Length >= 3 
+                && name.Length <= 24 
+                && KeyVaultNameRegex().IsMatch(name);
+        }
+
+        [System.Text.RegularExpressions.GeneratedRegex(@"^[a-zA-Z0-9\-]+$", System.Text.RegularExpressions.RegexOptions.Compiled)]
+        private static partial System.Text.RegularExpressions.Regex KeyVaultNameRegex();
 
         /// <summary>
         /// Finds the solution root directory by looking for .sln files.
