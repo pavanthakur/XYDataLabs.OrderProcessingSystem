@@ -1965,6 +1965,61 @@ jobs:
             exit 1
           }
       
+      - name: Populate Key Vault Secrets
+        if: success()
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║      POPULATE KEY VAULT SECRETS FOR DEV                       ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+          
+          try {
+            Write-Host "🔑 Populating Key Vault with application secrets..." -ForegroundColor Cyan
+            Write-Host ""
+            
+            # Populate secrets - script will auto-retrieve App Insights connection string
+            ./Resources/Azure-Deployment/populate-keyvault-secrets.ps1 -Environment dev -BaseName orderprocessing
+            
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host ""
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host "❌ KEY VAULT SECRET POPULATION FAILED" -ForegroundColor Red
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Red
+              Write-Host "Script: ./Resources/Azure-Deployment/populate-keyvault-secrets.ps1" -ForegroundColor Gray
+              Write-Host ""
+              Write-Host "⚠️  WARNING: Application may not be able to access required secrets" -ForegroundColor Yellow
+              Write-Host ""
+              Write-Error "Key Vault secret population failed with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+            }
+            
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host "✅ KEY VAULT SECRETS POPULATED SUCCESSFULLY" -ForegroundColor Green
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+            Write-Host ""
+          }
+          catch {
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING KEY VAULT SECRET POPULATION" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Stack Trace:" -ForegroundColor Yellow
+            Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
+            Write-Host ""
+            Write-Error "Key Vault secret population failed with exception: $($_.Exception.Message)"
+            exit 1
+          }
+      
       - name: Verify Application Insights
         if: success()
         run: |
@@ -2333,6 +2388,61 @@ jobs:
             Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
             Write-Host ""
             Write-Error "Connection string configuration failed with exception: $($_.Exception.Message)"
+            exit 1
+          }
+      
+      - name: Populate Key Vault Secrets
+        if: success()
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║      POPULATE KEY VAULT SECRETS FOR STAGING                   ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+          
+          try {
+            Write-Host "🔑 Populating Key Vault with application secrets..." -ForegroundColor Cyan
+            Write-Host ""
+            
+            # Populate secrets - script will auto-retrieve App Insights connection string
+            ./Resources/Azure-Deployment/populate-keyvault-secrets.ps1 -Environment staging -BaseName orderprocessing -OpenPayApiKey "${{ secrets.OPENPAY_API_KEY }}"
+            
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host ""
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host "❌ KEY VAULT SECRET POPULATION FAILED" -ForegroundColor Red
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Red
+              Write-Host "Script: ./Resources/Azure-Deployment/populate-keyvault-secrets.ps1" -ForegroundColor Gray
+              Write-Host ""
+              Write-Host "⚠️  WARNING: Application may not be able to access required secrets" -ForegroundColor Yellow
+              Write-Host ""
+              Write-Error "Key Vault secret population failed with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+            }
+            
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host "✅ KEY VAULT SECRETS POPULATED SUCCESSFULLY" -ForegroundColor Green
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+            Write-Host ""
+          }
+          catch {
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING KEY VAULT SECRET POPULATION" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Stack Trace:" -ForegroundColor Yellow
+            Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
+            Write-Host ""
+            Write-Error "Key Vault secret population failed with exception: $($_.Exception.Message)"
             exit 1
           }
       
@@ -2768,6 +2878,61 @@ jobs:
             Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
             Write-Host ""
             Write-Error "Connection string configuration failed with exception: $($_.Exception.Message)"
+            exit 1
+          }
+      
+      - name: Populate Key Vault Secrets
+        if: success()
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║      POPULATE KEY VAULT SECRETS FOR PRODUCTION                ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+          
+          try {
+            Write-Host "🔑 Populating Key Vault with application secrets..." -ForegroundColor Cyan
+            Write-Host ""
+            
+            # Populate secrets - script will auto-retrieve App Insights connection string
+            ./Resources/Azure-Deployment/populate-keyvault-secrets.ps1 -Environment prod -BaseName orderprocessing -OpenPayApiKey "${{ secrets.OPENPAY_API_KEY }}"
+            
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host ""
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host "❌ KEY VAULT SECRET POPULATION FAILED" -ForegroundColor Red
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Red
+              Write-Host "Script: ./Resources/Azure-Deployment/populate-keyvault-secrets.ps1" -ForegroundColor Gray
+              Write-Host ""
+              Write-Host "⚠️  WARNING: Application may not be able to access required secrets" -ForegroundColor Yellow
+              Write-Host ""
+              Write-Error "Key Vault secret population failed with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+            }
+            
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host "✅ KEY VAULT SECRETS POPULATED SUCCESSFULLY" -ForegroundColor Green
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+            Write-Host ""
+          }
+          catch {
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING KEY VAULT SECRET POPULATION" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Stack Trace:" -ForegroundColor Yellow
+            Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
+            Write-Host ""
+            Write-Error "Key Vault secret population failed with exception: $($_.Exception.Message)"
             exit 1
           }
       

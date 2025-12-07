@@ -4,12 +4,5 @@
 // This stub allows the main template to compile with `enableIdentity=false`.
 // Future Enhancement: Replace with deploymentScript or native resources once supported/authorized.
 
-@description('GitHub owner/org (placeholder)')
-param githubOwner string
-@description('GitHub repository name (placeholder)')
-param githubRepo string
-@description('Environment code')
-param environment string
-
 // Output empty clientId so main template conditional output remains valid.
 output clientId string = ''
