@@ -28,9 +28,7 @@ var uiName  = '${githubOwner}-${baseName}-ui-xyapp-${environment}'
 
 // Construct SQL connection string from components
 // Only create connection string if all required SQL parameters are provided
-var sqlConnectionString = !empty(sqlServerFqdn) && !empty(sqlDatabaseName) && !empty(sqlAdminUsername) && !empty(sqlAdminPassword) 
-  ? 'Server=tcp:${sqlServerFqdn},1433;Initial Catalog=${sqlDatabaseName};User ID=${sqlAdminUsername};Password=${sqlAdminPassword};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;' 
-  : ''
+var sqlConnectionString = !empty(sqlServerFqdn) && !empty(sqlDatabaseName) && !empty(sqlAdminUsername) && !empty(sqlAdminPassword) ? 'Server=tcp:${sqlServerFqdn},1433;Initial Catalog=${sqlDatabaseName};User ID=${sqlAdminUsername};Password=${sqlAdminPassword};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;' : ''
 
 // App Insights configuration for App Services
 var appInsightsSettings = !empty(appInsightsConnectionString) ? [
