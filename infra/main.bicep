@@ -70,6 +70,19 @@ module hosting 'modules/hosting.bicep' = {
   }
 }
 
+// Key Vault (with access policies for App Service managed identities)
+module keyVault 'modules/keyvault.bicep' = {
+  name: 'keyvault-${environment}'
+  scope: appRg
+  params: {
+    location: location
+    environment: environment
+    baseName: baseName
+    apiAppPrincipalId: hosting.outputs.apiPrincipalId
+    uiAppPrincipalId: hosting.outputs.uiPrincipalId
+  }
+}
+
 // Application Insights
 module insights 'modules/insights.bicep' = {
   name: 'insights-${environment}'
@@ -92,10 +105,14 @@ module identity 'modules/identity.bicep' = if (enableIdentity) {
 output resourceGroupName string = appRg.name
 output apiHostName string = hosting.outputs.apiHostName
 output uiHostName string = hosting.outputs.uiHostName
+output apiAppName string = hosting.outputs.apiAppName
+output uiAppName string = hosting.outputs.uiAppName
 output appInsightsName string = insights.outputs.appInsightsName
 output appInsightsConnectionString string = insights.outputs.appInsightsConnectionString
 output appInsightsInstrumentationKey string = insights.outputs.appInsightsInstrumentationKey
 output sqlServerName string = sql.outputs.sqlServerName
 output sqlServerFqdn string = sql.outputs.sqlServerFqdn
 output databaseName string = sql.outputs.databaseName
+output keyVaultName string = keyVault.outputs.keyVaultName
+output keyVaultUri string = keyVault.outputs.keyVaultUri
 output oidcClientId string = enableIdentity ? identity!.outputs.clientId : ''
