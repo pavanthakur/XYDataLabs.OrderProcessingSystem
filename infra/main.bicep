@@ -87,11 +87,6 @@ module insights 'modules/insights.bicep' = {
 module identity 'modules/identity.bicep' = if (enableIdentity) {
   name: 'identity-${environment}'
   scope: appRg
-  params: {
-    githubOwner: githubOwner
-    githubRepo: 'TestAppXY_OrderProcessingSystem'
-    environment: environment
-  }
 }
 
 output resourceGroupName string = appRg.name
@@ -103,4 +98,4 @@ output appInsightsInstrumentationKey string = insights.outputs.appInsightsInstru
 output sqlServerName string = sql.outputs.sqlServerName
 output sqlServerFqdn string = sql.outputs.sqlServerFqdn
 output databaseName string = sql.outputs.databaseName
-output oidcClientId string = enableIdentity ? identity.outputs.clientId : ''
+output oidcClientId string = enableIdentity ? identity!.outputs.clientId : ''

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "13998831087978102314"
+      "templateHash": "12147439998226926281"
     }
   },
   "parameters": {
@@ -548,17 +548,6 @@
           "scope": "inner"
         },
         "mode": "Incremental",
-        "parameters": {
-          "githubOwner": {
-            "value": "[parameters('githubOwner')]"
-          },
-          "githubRepo": {
-            "value": "TestAppXY_OrderProcessingSystem"
-          },
-          "environment": {
-            "value": "[parameters('environment')]"
-          }
-        },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "1.0.0.0",
@@ -566,27 +555,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "8799097058778707402"
-            }
-          },
-          "parameters": {
-            "githubOwner": {
-              "type": "string",
-              "metadata": {
-                "description": "GitHub owner/org (placeholder)"
-              }
-            },
-            "githubRepo": {
-              "type": "string",
-              "metadata": {
-                "description": "GitHub repository name (placeholder)"
-              }
-            },
-            "environment": {
-              "type": "string",
-              "metadata": {
-                "description": "Environment code"
-              }
+              "templateHash": "8043163046735672401"
             }
           },
           "resources": [],
