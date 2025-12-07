@@ -12,13 +12,23 @@ param sku string
 param appInsightsConnectionString string = ''
 @description('App Insights Instrumentation Key (optional)')
 param appInsightsInstrumentationKey string = ''
-@description('SQL Database Connection String (optional)')
+@description('SQL Server FQDN (optional)')
+param sqlServerFqdn string = ''
+@description('SQL Database Name (optional)')
+param sqlDatabaseName string = ''
+@description('SQL Admin Username (optional)')
+param sqlAdminUsername string = ''
+@description('SQL Admin Password (optional)')
 @secure()
-param sqlConnectionString string = ''
+param sqlAdminPassword string = ''
 
 var planName = 'asp-${baseName}-${environment}'
 var apiName = '${githubOwner}-${baseName}-api-xyapp-${environment}'
 var uiName  = '${githubOwner}-${baseName}-ui-xyapp-${environment}'
+
+// Construct SQL connection string from components
+// Only create connection string if all required SQL parameters are provided
+var sqlConnectionString = !empty(sqlServerFqdn) && !empty(sqlDatabaseName) && !empty(sqlAdminUsername) && !empty(sqlAdminPassword) ? 'Server=tcp:${sqlServerFqdn},1433;Initial Catalog=${sqlDatabaseName};User ID=${sqlAdminUsername};Password=${sqlAdminPassword};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;' : ''
 
 // App Insights configuration for App Services
 var appInsightsSettings = !empty(appInsightsConnectionString) ? [

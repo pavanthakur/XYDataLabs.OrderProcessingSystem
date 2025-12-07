@@ -1,0 +1,138 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.39.26.7824",
+      "templateHash": "9535579242643362870"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "metadata": {
+        "description": "Region"
+      }
+    },
+    "environment": {
+      "type": "string",
+      "metadata": {
+        "description": "Environment code"
+      }
+    },
+    "baseName": {
+      "type": "string",
+      "metadata": {
+        "description": "Base application name"
+      }
+    },
+    "sqlAdminUsername": {
+      "type": "string",
+      "defaultValue": "sqladmin",
+      "metadata": {
+        "description": "SQL Server admin username"
+      }
+    },
+    "sqlAdminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "SQL Server admin password"
+      }
+    },
+    "databaseServiceObjective": {
+      "type": "string",
+      "defaultValue": "Basic",
+      "metadata": {
+        "description": "Database service objective (Basic, S0, S1, etc)"
+      }
+    },
+    "maxSizeGB": {
+      "type": "int",
+      "defaultValue": 2,
+      "metadata": {
+        "description": "Maximum database size in GB"
+      }
+    }
+  },
+  "variables": {
+    "sqlServerName": "[format('{0}-sql-{1}', parameters('baseName'), parameters('environment'))]",
+    "databaseName": "[format('OrderProcessingSystem_{0}{1}', toUpper(substring(parameters('environment'), 0, 1)), substring(parameters('environment'), 1))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Sql/servers",
+      "apiVersion": "2023-08-01-preview",
+      "name": "[variables('sqlServerName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "administratorLogin": "[parameters('sqlAdminUsername')]",
+        "administratorLoginPassword": "[parameters('sqlAdminPassword')]",
+        "version": "12.0",
+        "minimalTlsVersion": "1.2",
+        "publicNetworkAccess": "Enabled"
+      },
+      "tags": {
+        "env": "[parameters('environment')]",
+        "app": "[parameters('baseName')]",
+        "component": "database"
+      }
+    },
+    {
+      "type": "Microsoft.Sql/servers/firewallRules",
+      "apiVersion": "2023-08-01-preview",
+      "name": "[format('{0}/{1}', variables('sqlServerName'), 'AllowAzureServices')]",
+      "properties": {
+        "startIpAddress": "0.0.0.0",
+        "endIpAddress": "0.0.0.0"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', variables('sqlServerName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Sql/servers/databases",
+      "apiVersion": "2023-08-01-preview",
+      "name": "[format('{0}/{1}', variables('sqlServerName'), variables('databaseName'))]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "[parameters('databaseServiceObjective')]",
+        "tier": "[if(equals(parameters('databaseServiceObjective'), 'Basic'), 'Basic', 'Standard')]"
+      },
+      "properties": {
+        "collation": "SQL_Latin1_General_CP1_CI_AS",
+        "maxSizeBytes": "[mul(mul(mul(parameters('maxSizeGB'), 1024), 1024), 1024)]",
+        "catalogCollation": "SQL_Latin1_General_CP1_CI_AS",
+        "zoneRedundant": false,
+        "readScale": "Disabled",
+        "requestedBackupStorageRedundancy": "Local"
+      },
+      "tags": {
+        "env": "[parameters('environment')]",
+        "app": "[parameters('baseName')]",
+        "component": "database"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', variables('sqlServerName'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "sqlServerName": {
+      "type": "string",
+      "value": "[variables('sqlServerName')]"
+    },
+    "sqlServerFqdn": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Sql/servers', variables('sqlServerName')), '2023-08-01-preview').fullyQualifiedDomainName]"
+    },
+    "databaseName": {
+      "type": "string",
+      "value": "[variables('databaseName')]"
+    },
+    "sqlAdminUsername": {
+      "type": "string",
+      "value": "[parameters('sqlAdminUsername')]"
+    }
+  }
+}

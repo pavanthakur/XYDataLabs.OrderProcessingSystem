@@ -66,7 +66,10 @@ module hosting 'modules/hosting.bicep' = {
     sku: appServiceSku
     appInsightsConnectionString: insights.outputs.appInsightsConnectionString
     appInsightsInstrumentationKey: insights.outputs.appInsightsInstrumentationKey
-    sqlConnectionString: sql.outputs.connectionString
+    sqlServerFqdn: sql.outputs.sqlServerFqdn
+    sqlDatabaseName: sql.outputs.databaseName
+    sqlAdminUsername: sql.outputs.sqlAdminUsername
+    sqlAdminPassword: sqlAdminPassword
   }
 }
 

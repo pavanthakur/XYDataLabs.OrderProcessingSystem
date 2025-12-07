@@ -1,0 +1,168 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.39.26.7824",
+      "templateHash": "8802794271446609534"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "metadata": {
+        "description": "Region"
+      }
+    },
+    "environment": {
+      "type": "string",
+      "metadata": {
+        "description": "Environment code"
+      }
+    },
+    "baseName": {
+      "type": "string",
+      "metadata": {
+        "description": "Base application name"
+      }
+    },
+    "githubOwner": {
+      "type": "string",
+      "metadata": {
+        "description": "GitHub owner prefix for uniqueness"
+      }
+    },
+    "sku": {
+      "type": "string",
+      "metadata": {
+        "description": "App Service Plan SKU"
+      }
+    },
+    "appInsightsConnectionString": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "App Insights Connection String (optional)"
+      }
+    },
+    "appInsightsInstrumentationKey": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "App Insights Instrumentation Key (optional)"
+      }
+    },
+    "sqlServerFqdn": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "SQL Server FQDN (optional)"
+      }
+    },
+    "sqlDatabaseName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "SQL Database Name (optional)"
+      }
+    },
+    "sqlAdminUsername": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "SQL Admin Username (optional)"
+      }
+    },
+    "sqlAdminPassword": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "SQL Admin Password (optional)"
+      }
+    }
+  },
+  "variables": {
+    "planName": "[format('asp-{0}-{1}', parameters('baseName'), parameters('environment'))]",
+    "apiName": "[format('{0}-{1}-api-xyapp-{2}', parameters('githubOwner'), parameters('baseName'), parameters('environment'))]",
+    "uiName": "[format('{0}-{1}-ui-xyapp-{2}', parameters('githubOwner'), parameters('baseName'), parameters('environment'))]",
+    "sqlConnectionString": "[if(and(and(and(not(empty(parameters('sqlServerFqdn'))), not(empty(parameters('sqlDatabaseName')))), not(empty(parameters('sqlAdminUsername')))), not(empty(parameters('sqlAdminPassword')))), format('Server=tcp:{0},1433;Initial Catalog={1};User ID={2};Password={3};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;', parameters('sqlServerFqdn'), parameters('sqlDatabaseName'), parameters('sqlAdminUsername'), parameters('sqlAdminPassword')), '')]",
+    "appInsightsSettings": "[if(not(empty(parameters('appInsightsConnectionString'))), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', parameters('appInsightsConnectionString')), createObject('name', 'ApplicationInsightsAgent_EXTENSION_VERSION', 'value', '~3'), createObject('name', 'APPINSIGHTS_INSTRUMENTATIONKEY', 'value', parameters('appInsightsInstrumentationKey')), createObject('name', 'XDT_MicrosoftApplicationInsights_Mode', 'value', 'recommended')), createArray())]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2023-12-01",
+      "name": "[variables('planName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "[parameters('sku')]",
+        "tier": "[if(equals(parameters('sku'), 'F1'), 'Free', parameters('sku'))]"
+      },
+      "properties": {
+        "reserved": false
+      },
+      "tags": {
+        "env": "[parameters('environment')]",
+        "app": "[parameters('baseName')]",
+        "component": "hosting"
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2023-12-01",
+      "name": "[variables('apiName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('planName'))]",
+        "siteConfig": {
+          "netFrameworkVersion": "v8.0",
+          "appSettings": "[variables('appInsightsSettings')]",
+          "connectionStrings": "[if(not(empty(variables('sqlConnectionString'))), createArray(createObject('name', 'OrderProcessingSystemDbConnection', 'connectionString', variables('sqlConnectionString'), 'type', 'SQLAzure')), createArray())]"
+        },
+        "httpsOnly": true
+      },
+      "tags": {
+        "env": "[parameters('environment')]",
+        "app": "[parameters('baseName')]",
+        "role": "api"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('planName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2023-12-01",
+      "name": "[variables('uiName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('planName'))]",
+        "siteConfig": {
+          "netFrameworkVersion": "v8.0",
+          "appSettings": "[variables('appInsightsSettings')]",
+          "connectionStrings": "[if(not(empty(variables('sqlConnectionString'))), createArray(createObject('name', 'OrderProcessingSystemDbConnection', 'connectionString', variables('sqlConnectionString'), 'type', 'SQLAzure')), createArray())]"
+        },
+        "httpsOnly": true
+      },
+      "tags": {
+        "env": "[parameters('environment')]",
+        "app": "[parameters('baseName')]",
+        "role": "ui"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('planName'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "apiHostName": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Web/sites', variables('apiName')), '2023-12-01').defaultHostName]"
+    },
+    "uiHostName": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Web/sites', variables('uiName')), '2023-12-01').defaultHostName]"
+    }
+  }
+}

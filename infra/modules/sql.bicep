@@ -82,10 +82,4 @@ resource database 'Microsoft.Sql/servers/databases@2023-08-01-preview' = {
 output sqlServerName string = sqlServer.name
 output sqlServerFqdn string = sqlServer.properties.fullyQualifiedDomainName
 output databaseName string = database.name
-// SECURITY WARNING: Connection string contains password and may appear in deployment logs
-// This is used only to pass to hosting module for App Service configuration
-// For production, consider:
-// 1. Using Managed Identity authentication (no password needed)
-// 2. Storing credentials in Key Vault and referencing them
-// 3. Enabling Azure AD authentication only
-output connectionString string = 'Server=tcp:${sqlServer.properties.fullyQualifiedDomainName},1433;Initial Catalog=${databaseName};User ID=${sqlAdminUsername};Password=${sqlAdminPassword};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
+output sqlAdminUsername string = sqlAdminUsername
