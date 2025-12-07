@@ -60,11 +60,12 @@ namespace XYDataLabs.OrderProcessingSystem.Utilities
                 // Add Azure Key Vault configuration using Managed Identity
                 try
                 {
-                    // Get Key Vault name from environment variable or construct it
+                    // Get Key Vault name from environment variable (set by bootstrap/deployment)
                     var keyVaultName = Environment.GetEnvironmentVariable("KEY_VAULT_NAME");
                     if (string.IsNullOrWhiteSpace(keyVaultName))
                     {
-                        // Construct Key Vault name based on environment: kv-orderprocessing-{env}
+                        // Fallback: Construct Key Vault name (assumes standard naming: kv-{baseName}-{env})
+                        // Bootstrap script sets KEY_VAULT_NAME, so this fallback is rarely used
                         keyVaultName = $"kv-orderprocessing-{effectiveEnvironment}";
                     }
                     

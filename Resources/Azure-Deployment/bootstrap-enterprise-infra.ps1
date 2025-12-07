@@ -611,52 +611,10 @@ foreach ($env in $envList) {
             }
         }
 
-        # Populate OpenPay secrets in Key Vault (hierarchical naming using double-dash separator)
-        Write-Host "  [SECRETS] Populating OpenPay secrets in Key Vault..." -ForegroundColor Cyan
-        
-        # Load OpenPay configuration from sharedsettings file
-        $settingsPath = Join-Path $PSScriptRoot ".." "Configuration" "sharedsettings.$env.json"
-        if (Test-Path $settingsPath) {
-            try {
-                $settings = Get-Content $settingsPath -Raw | ConvertFrom-Json
-                if ($settings.OpenPay) {
-                    $openPayConfig = $settings.OpenPay
-                    
-                    # Define secrets with hierarchical naming (using -- as separator for Azure Key Vault)
-                    $secrets = @{
-                        "OpenPay--MerchantId" = $openPayConfig.MerchantId
-                        "OpenPay--PrivateKey" = $openPayConfig.PrivateKey
-                        "OpenPay--DeviceSessionId" = $openPayConfig.DeviceSessionId
-                        "OpenPay--IsProduction" = $openPayConfig.IsProduction.ToString().ToLower()
-                        "OpenPay--RedirectUrl" = $openPayConfig.RedirectUrl
-                    }
-                    
-                    foreach ($secretName in $secrets.Keys) {
-                        $secretValue = $secrets[$secretName]
-                        if (-not [string]::IsNullOrWhiteSpace($secretValue)) {
-                            try {
-                                # Use temporary file to pass secret value securely (avoiding command line exposure)
-                                $tempFile = [System.IO.Path]::GetTempFileName()
-                                $secretValue | Out-File -FilePath $tempFile -Encoding UTF8 -NoNewline
-                                az keyvault secret set --vault-name $kvName --name $secretName --file $tempFile --encoding utf-8 2>$null | Out-Null
-                                Remove-Item $tempFile -ErrorAction SilentlyContinue
-                                Write-Host "    [OK] Secret set: $secretName" -ForegroundColor Green
-                            } catch {
-                                Write-Host "    [WARN] Failed to set secret: $secretName - $($_.Exception.Message)" -ForegroundColor Yellow
-                            }
-                        }
-                    }
-                    Write-Host "  [OK] OpenPay secrets populated in Key Vault" -ForegroundColor Green
-                    Add-StepStatus -Name "Populate Key Vault Secrets ($kvName)" -Status "Success" -Details "OpenPay secrets added"
-                } else {
-                    Write-Host "  [WARN] OpenPay configuration not found in settings file" -ForegroundColor Yellow
-                }
-            } catch {
-                Write-Host "  [WARN] Failed to load settings file: $($_.Exception.Message)" -ForegroundColor Yellow
-            }
-        } else {
-            Write-Host "  [WARN] Settings file not found: $settingsPath" -ForegroundColor Yellow
-        }
+        # Note: Key Vault secrets are populated by a separate script
+        # Run populate-keyvault-secrets.ps1 after bootstrap to add application secrets
+        Write-Host "  [INFO] Key Vault created and configured" -ForegroundColor Cyan
+        Write-Host "  [INFO] Run populate-keyvault-secrets.ps1 to add application secrets" -ForegroundColor Gray
     }
 
     # Unified readiness wait - ensures plan + apps reach ready status

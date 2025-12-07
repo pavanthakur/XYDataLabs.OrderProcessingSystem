@@ -4,13 +4,15 @@
 
 This guide explains how OpenPay secrets are securely stored and accessed using Azure Key Vault across different environments (dev, uat, prod).
 
+> **Note**: Key Vault secrets are **automatically populated** during CI/CD deployment. See [KEYVAULT-SECRET-AUTOMATION.md](../../KEYVAULT-SECRET-AUTOMATION.md) for automation details.
+
 ## Architecture
 
 ### Key Vault Structure
 
 Each environment has its own dedicated Key Vault:
 - **Dev**: `kv-orderprocessing-dev`
-- **UAT**: `kv-orderprocessing-uat`
+- **Staging**: `kv-orderprocessing-staging`
 - **Prod**: `kv-orderprocessing-prod`
 
 ### Secret Naming Convention
@@ -23,26 +25,43 @@ OpenPay--PrivateKey
 OpenPay--DeviceSessionId
 OpenPay--IsProduction
 OpenPay--RedirectUrl
+OpenPayAdapter--ApiKey
+ApplicationInsights--ConnectionString
 ```
 
-This naming convention allows ASP.NET Core to automatically bind these secrets to the `OpenPay` configuration section.
+This naming convention allows ASP.NET Core to automatically bind these secrets to their respective configuration sections.
 
 ## Deployment
 
-### Automated Setup via Bootstrap Script
+### Infrastructure Setup (Automated)
 
-The Key Vault is automatically created and configured during the bootstrap deployment:
+The Key Vault infrastructure is automatically created during bootstrap deployment:
 
 ```powershell
 ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment dev
 ```
 
-The script performs the following:
+The bootstrap script performs:
 1. Creates the Key Vault for the specified environment
 2. Enables system-assigned managed identity for API and UI web apps
 3. Grants Key Vault access policies to the web app managed identities
-4. Populates OpenPay secrets from `sharedsettings.{env}.json` files
-5. Sets the `KEY_VAULT_NAME` environment variable for web apps
+4. Sets the `KEY_VAULT_NAME` environment variable for web apps
+
+### Secrets Population (Automated)
+
+Secrets are automatically populated by the CI/CD workflow using a dedicated script:
+
+```powershell
+./Resources/Azure-Deployment/populate-keyvault-secrets.ps1 -Environment dev
+```
+
+This script:
+1. Adds `OpenPayAdapter--ApiKey` (placeholder for dev/staging, actual key for prod)
+2. Auto-retrieves and adds `ApplicationInsights--ConnectionString`
+3. Validates Key Vault exists before adding secrets
+4. Provides comprehensive logging and error handling
+
+See [KEYVAULT-SECRET-AUTOMATION.md](../../KEYVAULT-SECRET-AUTOMATION.md) for complete automation details.
 
 ### Manual Key Vault Operations
 
@@ -143,17 +162,21 @@ if (isAzure)
 
 ## Migration Notes
 
-### Updating OpenPay Configuration
+### Updating Secrets
 
-To update OpenPay secrets:
+To update Key Vault secrets:
 
-1. Update the `sharedsettings.{env}.json` file
-2. Re-run the bootstrap script for the environment:
-   ```powershell
-   ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment {env}
-   ```
-3. The script will update existing secrets in Key Vault
-4. Web apps will automatically pick up new values (no restart required)
+**Option 1: Run the populate script**
+```powershell
+./Resources/Azure-Deployment/populate-keyvault-secrets.ps1 -Environment {env} -OpenPayApiKey "new-key"
+```
+
+**Option 2: Use Azure CLI directly**
+```bash
+az keyvault secret set --vault-name kv-orderprocessing-{env} --name OpenPayAdapter--ApiKey --value "new-key"
+```
+
+Web apps will automatically pick up new values (no restart required).
 
 ### Adding New Secrets
 
