@@ -527,7 +527,9 @@ foreach ($env in $envList) {
     }
 
     # Key Vault - Create and populate with OpenPay secrets
-    $kvName = "kv-$BaseName-$env"
+    # Shorten base name for Key Vault (max 24 chars total: "kv-" + 15 + "-" + env)
+    $shortBaseName = $BaseName.Substring(0, [Math]::Min(15, $BaseName.Length))
+    $kvName = "kv-$shortBaseName-$env"
     Write-Host "`n  [KEY VAULT] Processing Key Vault: $kvName..." -ForegroundColor Cyan
     $kvExists = $null
     try { $kvExists = az keyvault show -n $kvName --query "name" -o tsv 2>$null; if ($LASTEXITCODE -ne 0) { $kvExists = $null } } catch { $kvExists = $null }
