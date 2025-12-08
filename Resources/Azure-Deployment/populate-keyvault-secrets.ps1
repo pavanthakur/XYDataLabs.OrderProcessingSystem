@@ -1,4 +1,4 @@
-# populate-keyvault-secrets.ps1
+﻿# populate-keyvault-secrets.ps1
 # Populate Azure Key Vault with application secrets
 # This script adds all required secrets to Key Vault after infrastructure provisioning
 

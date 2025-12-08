@@ -1,4 +1,4 @@
-# verify-azure-setup.ps1
+﻿# verify-azure-setup.ps1
 # Verify Azure resources and configuration for Order Processing System
 
 param(
@@ -122,7 +122,7 @@ try {
         Write-Host "     ./Resources/Azure-Deployment/enable-managed-identity.ps1 -Environment $Environment" -ForegroundColor Cyan
         Write-Host "  📝 Or manually:" -ForegroundColor Gray
         Write-Host "     az webapp identity assign -g $rg -n $apiApp" -ForegroundColor DarkGray
-        Write-Host "     az keyvault set-policy -n <kv-name> --object-id <principalId> --secret-permissions get list" -ForegroundColor DarkGray
+        Write-Host "     az keyvault set-policy -n {kv-name} --object-id {principalId} --secret-permissions get list" -ForegroundColor DarkGray
     }
 } catch {
     Write-Host "  ⚠️  Managed Identity not assigned - Will enable" -ForegroundColor Yellow
