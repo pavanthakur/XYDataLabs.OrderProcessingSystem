@@ -1144,7 +1144,7 @@ jobs:
           foreach ($secretName in $secrets.Keys) {
             Write-Host "  Setting: $secretName" -ForegroundColor Gray
             try {
-              # Capture both stdout and stderr to display error messages
+              # Capture output (stderr contains error messages from gh CLI)
               $output = gh secret set $secretName --repo ${{ github.repository }} --body $secrets[$secretName] 2>&1
               if ($LASTEXITCODE -eq 0) {
                 Write-Host "    ✅ Success" -ForegroundColor Green
@@ -1269,7 +1269,7 @@ jobs:
             foreach ($secretName in $secretsToSet.Keys) {
               Write-Host "    Setting: $secretName" -ForegroundColor Gray
               try {
-                # Capture both stdout and stderr to display error messages
+                # Capture output (stderr contains error messages from gh CLI)
                 $output = gh secret set $secretName --env $env_name --repo $ownerRepo --body $secretsToSet[$secretName] 2>&1
                 if ($LASTEXITCODE -eq 0) {
                   Write-Host "      ✅ Success" -ForegroundColor Green
