@@ -64,7 +64,55 @@ jobs:
       contents: read
 
     steps:
+      - name: Check Azure Credentials
+        id: check-credentials
+        shell: pwsh
+        run: |
+          $hasClientId = "${{ secrets.AZUREAPPSERVICE_CLIENTID }}" -ne ""
+          $hasTenantId = "${{ secrets.AZUREAPPSERVICE_TENANTID }}" -ne ""
+          $hasSubscriptionId = "${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}" -ne ""
+          
+          if (-not $hasClientId -or -not $hasTenantId -or -not $hasSubscriptionId) {
+            Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Yellow
+            Write-Host "║         AZURE CREDENTIALS NOT CONFIGURED                      ║" -ForegroundColor Yellow
+            Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Yellow
+            Write-Host ""
+            Write-Host "⚠️  Deployment cannot proceed - Azure credentials are missing" -ForegroundColor Yellow
+            Write-Host ""
+            Write-Host "Required secrets for the '${{ github.ref }}' environment:" -ForegroundColor Cyan
+            Write-Host "  AZUREAPPSERVICE_CLIENTID       : $(if ($hasClientId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasClientId) { "Green" } else { "Red" })
+            Write-Host "  AZUREAPPSERVICE_TENANTID       : $(if ($hasTenantId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasTenantId) { "Green" } else { "Red" })
+            Write-Host "  AZUREAPPSERVICE_SUBSCRIPTIONID : $(if ($hasSubscriptionId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasSubscriptionId) { "Green" } else { "Red" })
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+            Write-Host "📋 TO FIX THIS:" -ForegroundColor Cyan
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+            Write-Host ""
+            Write-Host "1. Run the Azure Bootstrap workflow to set up infrastructure:" -ForegroundColor White
+            Write-Host "   https://github.com/${{ github.repository }}/actions/workflows/azure-bootstrap.yml" -ForegroundColor Gray
+            Write-Host ""
+            Write-Host "2. Select 'Run workflow' and configure:" -ForegroundColor White
+            Write-Host "   - Environment: dev (or staging/prod as needed)" -ForegroundColor Gray
+            Write-Host "   - Setup Azure OIDC: true (first time)" -ForegroundColor Gray
+            Write-Host "   - Setup GitHub App: true (first time)" -ForegroundColor Gray
+            Write-Host "   - Configure secrets: true" -ForegroundColor Gray
+            Write-Host "   - Bootstrap infrastructure: true" -ForegroundColor Gray
+            Write-Host ""
+            Write-Host "3. After bootstrap completes, re-run this deployment" -ForegroundColor White
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+            Write-Host ""
+            Write-Host "ℹ️  Skipping deployment (credentials not configured)" -ForegroundColor Yellow
+            Write-Host ""
+            "credentialsConfigured=false" >> $env:GITHUB_OUTPUT
+            exit 0
+          } else {
+            Write-Host "✅ Azure credentials validated" -ForegroundColor Green
+            "credentialsConfigured=true" >> $env:GITHUB_OUTPUT
+          }
+      
       - name: Set target web app name
+        if: steps.check-credentials.outputs.credentialsConfigured == 'true'
         shell: pwsh
         run: |
           $ref = "${{ github.ref }}"
@@ -77,11 +125,13 @@ jobs:
           Write-Host "Deploying to WebApp: $name"
 
       - name: Download artifact
+        if: steps.check-credentials.outputs.credentialsConfigured == 'true'
         uses: actions/download-artifact@v4
         with:
           name: ui-dotnet-app
 
       - name: Login to Azure
+        if: steps.check-credentials.outputs.credentialsConfigured == 'true'
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
@@ -89,6 +139,7 @@ jobs:
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
 
       - name: Deploy to Azure Web App
+        if: steps.check-credentials.outputs.credentialsConfigured == 'true'
         id: deploy-to-webapp
         uses: azure/webapps-deploy@v3
         with:
@@ -96,6 +147,7 @@ jobs:
           package: .
 
       - name: Health Check
+        if: steps.check-credentials.outputs.credentialsConfigured == 'true'
         run: |
           Write-Host "Waiting 30 seconds for app to start..." -ForegroundColor Yellow
           Start-Sleep -Seconds 30
