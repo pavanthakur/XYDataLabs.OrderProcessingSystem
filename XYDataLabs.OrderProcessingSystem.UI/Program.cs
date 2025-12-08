@@ -9,6 +9,7 @@ using XYDataLabs.OrderProcessingSystem.Utilities;
 // Azure App Service Deployment - Fix for Application Not Starting
 // Deployment Fix: Trigger UI deployment to Azure App Service (dev environment)
 // This deployment ensures the UI application is properly deployed with Application Insights telemetry
+// Deployment timestamp: 2025-12-08T05:21:00Z - Triggering deployment after bootstrap
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Information()
     .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
