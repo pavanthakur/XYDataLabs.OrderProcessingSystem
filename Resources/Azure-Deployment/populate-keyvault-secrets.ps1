@@ -22,6 +22,60 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Retry function for Azure CLI commands with exponential backoff
+function Invoke-AzCommandWithRetry {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Command,
+        
+        [Parameter(Mandatory=$false)]
+        [int]$MaxRetries = 3,
+        
+        [Parameter(Mandatory=$false)]
+        [int]$InitialDelaySeconds = 2
+    )
+    
+    $attempt = 0
+    $delay = $InitialDelaySeconds
+    
+    while ($attempt -lt $MaxRetries) {
+        $attempt++
+        try {
+            # Execute the command
+            $result = Invoke-Expression $Command 2>&1
+            $exitCode = $LASTEXITCODE
+            
+            # Check for connection reset error in the output
+            $resultStr = $result | Out-String
+            if ($resultStr -match "ConnectionResetError|Connection aborted|forcibly closed") {
+                throw "Connection error detected in output"
+            }
+            
+            # Return result with exit code
+            return @{
+                Success = ($exitCode -eq 0)
+                Output = $result
+                ExitCode = $exitCode
+            }
+        }
+        catch {
+            $errorMsg = $_.Exception.Message
+            if ($errorMsg -match "ConnectionResetError|Connection aborted|forcibly closed" -and $attempt -lt $MaxRetries) {
+                Write-Host "  ⚠️  Connection error on attempt $attempt/$MaxRetries, retrying in $delay seconds..." -ForegroundColor Yellow
+                Start-Sleep -Seconds $delay
+                $delay = $delay * 2  # Exponential backoff
+            }
+            else {
+                # Re-throw if it's not a connection error or we've exhausted retries
+                throw
+            }
+        }
+    }
+    
+    # If we get here, all retries failed
+    throw "Command failed after $MaxRetries attempts: $Command"
+}
+
 Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
 Write-Host "║         POPULATE KEY VAULT SECRETS                            ║" -ForegroundColor Cyan
 Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
@@ -64,18 +118,20 @@ $secretsFailed = 0
 try {
     # Verify Key Vault exists
     Write-Host "🔍 Verifying Key Vault exists..." -ForegroundColor Cyan
-    $kvError = $null
-    $kv = az keyvault show --name $kvName --resource-group $rgName 2>&1 | Out-String
+    $kvCmd = "az keyvault show --name $kvName --resource-group $rgName"
+    $kvResult = Invoke-AzCommandWithRetry -Command $kvCmd
     
-    if ($LASTEXITCODE -ne 0) {
+    if (-not $kvResult.Success) {
         Write-Host "  ❌ Key Vault not found: $kvName" -ForegroundColor Red
-        Write-Host "  Error details: $kv" -ForegroundColor Red
+        Write-Host "  Error details: $($kvResult.Output)" -ForegroundColor Red
         Write-Host ""
         Write-Host "Checking if Key Vault exists with different name..." -ForegroundColor Yellow
-        $allKvs = az keyvault list --resource-group $rgName --query "[].name" -o tsv 2>&1
-        if ($LASTEXITCODE -eq 0 -and $allKvs) {
+        $listKvCmd = "az keyvault list --resource-group $rgName --query '[].name' -o tsv"
+        $listKvResult = Invoke-AzCommandWithRetry -Command $listKvCmd
+        
+        if ($listKvResult.Success -and $listKvResult.Output) {
             Write-Host "  Found Key Vaults in $rgName`:" -ForegroundColor Yellow
-            $allKvs -split "`n" | ForEach-Object { Write-Host "    - $_" -ForegroundColor Gray }
+            $listKvResult.Output -split "`n" | ForEach-Object { Write-Host "    - $_" -ForegroundColor Gray }
         } else {
             Write-Host "  No Key Vaults found in resource group $rgName" -ForegroundColor Yellow
         }
@@ -85,7 +141,7 @@ try {
     
     # Parse the JSON to get Key Vault properties
     try {
-        $kvObj = $kv | ConvertFrom-Json
+        $kvObj = $kvResult.Output | ConvertFrom-Json
         Write-Host "  ✅ Key Vault found: $kvName" -ForegroundColor Green
         Write-Host "     Location: $($kvObj.location)" -ForegroundColor Gray
         Write-Host "     Provisioning State: $($kvObj.properties.provisioningState)" -ForegroundColor Gray
@@ -107,18 +163,15 @@ try {
     }
     
     try {
-        $output = az keyvault secret set `
-            --vault-name $kvName `
-            --name "OpenPayAdapter--ApiKey" `
-            --value $OpenPayApiKey `
-            --output json 2>&1
+        $secretCmd = "az keyvault secret set --vault-name $kvName --name 'OpenPayAdapter--ApiKey' --value '$OpenPayApiKey' --output json"
+        $secretResult = Invoke-AzCommandWithRetry -Command $secretCmd
         
-        if ($LASTEXITCODE -eq 0) {
+        if ($secretResult.Success) {
             Write-Host "  ✅ OpenPayAdapter--ApiKey added successfully" -ForegroundColor Green
             $secretsAdded++
         } else {
-            Write-Host "  ❌ Failed to add OpenPayAdapter--ApiKey (exit code: $LASTEXITCODE)" -ForegroundColor Red
-            Write-Host "  Error details: $output" -ForegroundColor Red
+            Write-Host "  ❌ Failed to add OpenPayAdapter--ApiKey" -ForegroundColor Red
+            Write-Host "  Error details: $($secretResult.Output)" -ForegroundColor Red
             $secretsFailed++
         }
     } catch {
@@ -136,14 +189,11 @@ try {
         Write-Host "  🔍 Retrieving connection string from Application Insights..." -ForegroundColor Gray
         
         try {
-            $aiConnString = az monitor app-insights component show `
-                --app $aiName `
-                --resource-group $rgName `
-                --query connectionString `
-                -o tsv 2>$null
+            $aiCmd = "az monitor app-insights component show --app $aiName --resource-group $rgName --query connectionString -o tsv"
+            $aiResult = Invoke-AzCommandWithRetry -Command $aiCmd
             
-            if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($aiConnString)) {
-                $ApplicationInsightsConnectionString = $aiConnString
+            if ($aiResult.Success -and -not [string]::IsNullOrWhiteSpace($aiResult.Output)) {
+                $ApplicationInsightsConnectionString = $aiResult.Output.Trim()
                 Write-Host "  ✅ Retrieved connection string from App Insights" -ForegroundColor Green
             } else {
                 Write-Host "  ⚠️  Could not retrieve App Insights connection string" -ForegroundColor Yellow
@@ -158,18 +208,15 @@ try {
     
     if (-not [string]::IsNullOrWhiteSpace($ApplicationInsightsConnectionString)) {
         try {
-            $output = az keyvault secret set `
-                --vault-name $kvName `
-                --name "ApplicationInsights--ConnectionString" `
-                --value $ApplicationInsightsConnectionString `
-                --output json 2>&1
+            $secretCmd = "az keyvault secret set --vault-name $kvName --name 'ApplicationInsights--ConnectionString' --value '$ApplicationInsightsConnectionString' --output json"
+            $secretResult = Invoke-AzCommandWithRetry -Command $secretCmd
             
-            if ($LASTEXITCODE -eq 0) {
+            if ($secretResult.Success) {
                 Write-Host "  ✅ ApplicationInsights--ConnectionString added successfully" -ForegroundColor Green
                 $secretsAdded++
             } else {
-                Write-Host "  ❌ Failed to add ApplicationInsights--ConnectionString (exit code: $LASTEXITCODE)" -ForegroundColor Red
-                Write-Host "  Error details: $output" -ForegroundColor Red
+                Write-Host "  ❌ Failed to add ApplicationInsights--ConnectionString" -ForegroundColor Red
+                Write-Host "  Error details: $($secretResult.Output)" -ForegroundColor Red
                 $secretsFailed++
             }
         } catch {
@@ -189,10 +236,11 @@ try {
     
     # Verify secrets were added
     Write-Host "🔍 Verifying secrets in Key Vault..." -ForegroundColor Cyan
-    $secrets = az keyvault secret list --vault-name $kvName --query "[].name" -o tsv 2>$null
+    $listSecretsCmd = "az keyvault secret list --vault-name $kvName --query '[].name' -o tsv"
+    $listSecretsResult = Invoke-AzCommandWithRetry -Command $listSecretsCmd
     
-    if ($secrets) {
-        $secretList = $secrets -split "`n" | Where-Object { $_ }
+    if ($listSecretsResult.Success -and $listSecretsResult.Output) {
+        $secretList = $listSecretsResult.Output -split "`n" | Where-Object { $_ }
         Write-Host "  Secrets in Key Vault ($($secretList.Count)):" -ForegroundColor Yellow
         foreach ($secret in $secretList) {
             Write-Host "    - $secret" -ForegroundColor Gray
@@ -210,10 +258,14 @@ try {
     
     # Set on API App
     try {
-        $apiExists = az webapp show -g $rgName -n $apiAppName --query "name" -o tsv 2>$null
-        if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($apiExists)) {
-            $result = az webapp config appsettings set -g $rgName -n $apiAppName --settings KEY_VAULT_NAME=$kvName -o none 2>&1
-            if ($LASTEXITCODE -eq 0) {
+        $checkApiCmd = "az webapp show -g $rgName -n $apiAppName --query 'name' -o tsv"
+        $checkApiResult = Invoke-AzCommandWithRetry -Command $checkApiCmd
+        
+        if ($checkApiResult.Success -and -not [string]::IsNullOrWhiteSpace($checkApiResult.Output)) {
+            $setApiEnvCmd = "az webapp config appsettings set -g $rgName -n $apiAppName --settings KEY_VAULT_NAME=$kvName -o none"
+            $setApiEnvResult = Invoke-AzCommandWithRetry -Command $setApiEnvCmd
+            
+            if ($setApiEnvResult.Success) {
                 Write-Host "  ✅ KEY_VAULT_NAME set on API App" -ForegroundColor Green
             } else {
                 Write-Host "  ⚠️  Failed to set KEY_VAULT_NAME on API App" -ForegroundColor Yellow
@@ -225,10 +277,14 @@ try {
     
     # Set on UI App
     try {
-        $uiExists = az webapp show -g $rgName -n $uiAppName --query "name" -o tsv 2>$null
-        if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($uiExists)) {
-            $result = az webapp config appsettings set -g $rgName -n $uiAppName --settings KEY_VAULT_NAME=$kvName -o none 2>&1
-            if ($LASTEXITCODE -eq 0) {
+        $checkUiCmd = "az webapp show -g $rgName -n $uiAppName --query 'name' -o tsv"
+        $checkUiResult = Invoke-AzCommandWithRetry -Command $checkUiCmd
+        
+        if ($checkUiResult.Success -and -not [string]::IsNullOrWhiteSpace($checkUiResult.Output)) {
+            $setUiEnvCmd = "az webapp config appsettings set -g $rgName -n $uiAppName --settings KEY_VAULT_NAME=$kvName -o none"
+            $setUiEnvResult = Invoke-AzCommandWithRetry -Command $setUiEnvCmd
+            
+            if ($setUiEnvResult.Success) {
                 Write-Host "  ✅ KEY_VAULT_NAME set on UI App" -ForegroundColor Green
             } else {
                 Write-Host "  ⚠️  Failed to set KEY_VAULT_NAME on UI App" -ForegroundColor Yellow
