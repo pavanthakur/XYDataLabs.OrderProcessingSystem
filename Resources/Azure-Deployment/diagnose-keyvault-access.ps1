@@ -55,8 +55,25 @@ if ($kvName -match '^[a-zA-Z0-9\-]{3,24}$') {
 
 # Step 4: Check KEY_VAULT_NAME environment variable on App Services
 Write-Host "`n[Step 4] Checking KEY_VAULT_NAME environment variable..." -ForegroundColor Yellow
-$apiKvEnv = az webapp config appsettings list -g $rg -n $apiApp --query "[?name=='KEY_VAULT_NAME'].value" -o tsv 2>$null
-$uiKvEnv = az webapp config appsettings list -g $rg -n $uiApp --query "[?name=='KEY_VAULT_NAME'].value" -o tsv 2>$null
+
+# Check if App Services exist first
+$apiAppExists = az webapp show -g $rg -n $apiApp --query "name" -o tsv 2>$null
+$uiAppExists = az webapp show -g $rg -n $uiApp --query "name" -o tsv 2>$null
+
+$apiKvEnv = $null
+$uiKvEnv = $null
+
+if ($apiAppExists) {
+    $apiKvEnv = az webapp config appsettings list -g $rg -n $apiApp --query "[?name=='KEY_VAULT_NAME'].value" -o tsv 2>$null
+} else {
+    Write-Host "  ⚠️  API App Service not found: $apiApp" -ForegroundColor Yellow
+}
+
+if ($uiAppExists) {
+    $uiKvEnv = az webapp config appsettings list -g $rg -n $uiApp --query "[?name=='KEY_VAULT_NAME'].value" -o tsv 2>$null
+} else {
+    Write-Host "  ⚠️  UI App Service not found: $uiApp" -ForegroundColor Yellow
+}
 
 if ($apiKvEnv -eq $kvName) {
     Write-Host "  ✅ API App has correct KEY_VAULT_NAME: $apiKvEnv" -ForegroundColor Green
@@ -97,6 +114,11 @@ if ($uiIdentity) {
 
 # Step 6: Check Key Vault access policies
 Write-Host "`n[Step 6] Checking Key Vault access policies..." -ForegroundColor Yellow
+
+# Initialize policy variables
+$apiPolicy = $null
+$uiPolicy = $null
+
 if ($apiIdentity) {
     $apiPolicy = az keyvault show -n $kvName -g $rg --query "properties.accessPolicies[?objectId=='$apiIdentity']" -o json 2>$null | ConvertFrom-Json
     if ($apiPolicy -and $apiPolicy.Count -gt 0) {
@@ -121,6 +143,10 @@ if ($uiIdentity) {
 
 # Step 7: Check Key Vault secrets
 Write-Host "`n[Step 7] Checking Key Vault secrets..." -ForegroundColor Yellow
+
+# Initialize secrets variable
+$secrets = $null
+
 try {
     $secrets = az keyvault secret list --vault-name $kvName --query "[].name" -o json 2>$null | ConvertFrom-Json
     if ($secrets -and $secrets.Count -gt 0) {
@@ -164,7 +190,7 @@ Write-Host "  🔍 Key Vault URI: $kvUri" -ForegroundColor Gray
 
 # Try to ping the Key Vault endpoint
 try {
-    $response = Invoke-WebRequest -Uri $kvUri -Method Head -UseBasicParsing -TimeoutSec 5 2>$null
+    $response = Invoke-WebRequest -Uri $kvUri -Method Head -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
     Write-Host "  ✅ Key Vault endpoint is reachable" -ForegroundColor Green
 } catch {
     if ($_.Exception.Response.StatusCode -eq 'Unauthorized' -or $_.Exception.Response.StatusCode -eq 401) {
