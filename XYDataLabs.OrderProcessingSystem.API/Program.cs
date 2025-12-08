@@ -45,7 +45,7 @@ Console.WriteLine($"[CONFIG] Azure App Service: {(isAzure ? "YES" : "NO")}");
 Console.WriteLine($"[CONFIG] Docker Container: {(isDocker ? "YES" : "NO")}");
 if (isAzure)
 {
-    Console.WriteLine($"[CONFIG] Key Vault is REQUIRED for Azure deployments (enterprise security policy)");
+    Console.WriteLine($"[CONFIG] Key Vault is RECOMMENDED for Azure deployments (will fall back to sharedsettings.json if unavailable)");
 }
 Console.WriteLine("═══════════════════════════════════════════════════════════════");
 
@@ -67,7 +67,7 @@ try
     
     if (isAzure)
     {
-        Console.WriteLine("[CONFIG] ✅ Configuration loaded successfully from Azure Key Vault");
+        Console.WriteLine("[CONFIG] ✅ Configuration loaded successfully (Azure Key Vault or sharedsettings.json)");
     }
 }
 catch (Exception ex)
