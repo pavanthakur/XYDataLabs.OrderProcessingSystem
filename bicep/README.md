@@ -79,12 +79,14 @@ curl https://<app-name>.azurewebsites.net/api/info/environment
 | Parameter | Description | Required | Default |
 |-----------|-------------|----------|---------|
 | `appName` | Name of the App Service | Yes | - |
-| `keyVaultName` | Name of the Key Vault to create | Yes | - |
+| `baseName` | Base application name (used to construct Key Vault name) | No | orderprocessing |
 | `appServicePlanName` | Name of the App Service Plan | Yes | - |
 | `location` | Azure region | No | Resource Group location |
 | `appServiceSku` | App Service Plan SKU (F1, B1, P1v3) | No | F1 |
 | `environment` | Environment name (dev, uat, prod) | No | dev |
 | `openPayAdapterBaseUrl` | OpenPay Adapter base URL (non-secret) | No | https://api.openpay.example.com |
+
+**Note**: The Key Vault name is automatically computed as `kv-{shortBaseName}-{environment}` where `shortBaseName` is the first 15 characters of `baseName`. This ensures the name stays within Azure's 24-character limit and matches the naming convention used in `infra/modules/keyvault.bicep`.
 
 ## App Settings
 

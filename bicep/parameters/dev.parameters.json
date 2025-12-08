@@ -5,8 +5,8 @@
     "appName": {
       "value": "pavanthakur-orderprocessing-api-xyapp-dev"
     },
-    "keyVaultName": {
-      "value": "kv-orderproc-dev"
+    "baseName": {
+      "value": "orderprocessing"
     },
     "appServicePlanName": {
       "value": "asp-orderprocessing-dev"
