@@ -97,11 +97,11 @@ namespace XYDataLabs.OrderProcessingSystem.Utilities
                 {
                     // WARNING: Key Vault configuration failed - application will fall back to sharedsettings.json
                     // For production deployments, Key Vault should be properly configured
-                    var errorMsg = $"[WARNING] Failed to configure Azure Key Vault in Azure environment. " +
-                                  $"Application will fall back to configuration from sharedsettings.json. " +
-                                  $"Error: {ex.Message}";
-                    Console.WriteLine(errorMsg);
-                    Console.WriteLine("[ERROR DETAILS] Possible causes:");
+                    var warningMsg = $"[WARNING] Failed to configure Azure Key Vault in Azure environment. " +
+                                    $"Application will fall back to configuration from sharedsettings.json. " +
+                                    $"Error: {ex.Message}";
+                    Console.WriteLine(warningMsg);
+                    Console.WriteLine("[TROUBLESHOOTING] Possible causes:");
                     Console.WriteLine("  1. Managed Identity is not enabled on the App Service");
                     Console.WriteLine("  2. Managed Identity does not have access policies for Key Vault");
                     Console.WriteLine("  3. KEY_VAULT_NAME environment variable is not set or incorrect");
