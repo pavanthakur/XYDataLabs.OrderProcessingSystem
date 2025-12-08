@@ -29,6 +29,17 @@ Write-Host ""
 Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
 Write-Host ""
 
+# Validate parameters
+if ([string]::IsNullOrWhiteSpace($BaseName)) {
+    Write-Error "BaseName parameter cannot be null or empty"
+    exit 1
+}
+
+if ([string]::IsNullOrWhiteSpace($GitHubOwner)) {
+    Write-Error "GitHubOwner parameter cannot be null or empty"
+    exit 1
+}
+
 # Resource names
 $rgName = "rg-$BaseName-$Environment"
 # Shorten base name for Key Vault (max 24 chars total)
