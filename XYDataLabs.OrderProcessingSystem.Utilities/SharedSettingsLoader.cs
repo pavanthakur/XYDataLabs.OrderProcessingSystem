@@ -95,22 +95,23 @@ namespace XYDataLabs.OrderProcessingSystem.Utilities
                 }
                 catch (Exception ex)
                 {
-                    // WARNING: Key Vault configuration failed - application will fall back to sharedsettings.json
-                    // For production deployments, Key Vault should be properly configured
-                    var warningMsg = $"[WARNING] Failed to configure Azure Key Vault in Azure environment. " +
-                                    $"Application will fall back to configuration from sharedsettings.json. " +
-                                    $"Error: {ex.Message}";
-                    Console.WriteLine(warningMsg);
-                    Console.WriteLine("[TROUBLESHOOTING] Possible causes:");
+                    // ENTERPRISE REQUIREMENT: Fail fast if Key Vault is not accessible in Azure
+                    var errorMsg = $"[CRITICAL ERROR] Failed to configure Azure Key Vault in Azure environment. " +
+                                  $"This is a mandatory requirement for production deployments. " +
+                                  $"Error: {ex.Message}";
+                    Console.WriteLine(errorMsg);
+                    Console.WriteLine("[ERROR DETAILS] Possible causes:");
                     Console.WriteLine("  1. Managed Identity is not enabled on the App Service");
                     Console.WriteLine("  2. Managed Identity does not have access policies for Key Vault");
                     Console.WriteLine("  3. KEY_VAULT_NAME environment variable is not set or incorrect");
                     Console.WriteLine("  4. Key Vault does not exist or is not accessible");
                     Console.WriteLine($"[REMEDIATION] Run: ./Resources/Azure-Deployment/enable-managed-identity.ps1 -Environment {effectiveEnvironment}");
-                    Console.WriteLine("[IMPORTANT] For production environments, Key Vault should be properly configured for secure secret management.");
                     
-                    // Log warning but allow application to continue with sharedsettings.json fallback
-                    // This allows the application to start even when Key Vault is not accessible
+                    // Throw exception to fail application startup - this enforces enterprise security practices
+                    throw new InvalidOperationException(
+                        "Azure Key Vault configuration is mandatory for Azure deployments. " +
+                        "Application cannot start without secure secret management. " +
+                        "Enable Managed Identity and configure Key Vault access.", ex);
                 }
             }
             
