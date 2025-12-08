@@ -16,6 +16,60 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Retry function for Azure CLI commands with exponential backoff
+function Invoke-AzCommandWithRetry {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Command,
+        
+        [Parameter(Mandatory=$false)]
+        [int]$MaxRetries = 3,
+        
+        [Parameter(Mandatory=$false)]
+        [int]$InitialDelaySeconds = 2
+    )
+    
+    $attempt = 0
+    $delay = $InitialDelaySeconds
+    
+    while ($attempt -lt $MaxRetries) {
+        $attempt++
+        try {
+            # Execute the command
+            $result = Invoke-Expression $Command 2>&1
+            $exitCode = $LASTEXITCODE
+            
+            # Check for connection reset error in the output
+            $resultStr = $result | Out-String
+            if ($resultStr -match "ConnectionResetError|Connection aborted|forcibly closed") {
+                throw "Connection error detected in output"
+            }
+            
+            # Return result with exit code
+            return @{
+                Success = ($exitCode -eq 0)
+                Output = $result
+                ExitCode = $exitCode
+            }
+        }
+        catch {
+            $errorMsg = $_.Exception.Message
+            if ($errorMsg -match "ConnectionResetError|Connection aborted|forcibly closed" -and $attempt -lt $MaxRetries) {
+                Write-Host "  ⚠️  Connection error on attempt $attempt/$MaxRetries, retrying in $delay seconds..." -ForegroundColor Yellow
+                Start-Sleep -Seconds $delay
+                $delay = $delay * 2  # Exponential backoff
+            }
+            else {
+                # Re-throw if it's not a connection error or we've exhausted retries
+                throw
+            }
+        }
+    }
+    
+    # If we get here, all retries failed
+    throw "Command failed after $MaxRetries attempts: $Command"
+}
+
 Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
 Write-Host "║         ENABLE MANAGED IDENTITY & KEY VAULT ACCESS            ║" -ForegroundColor Cyan
 Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
@@ -59,8 +113,10 @@ $errors = 0
 try {
     # Verify resource group exists
     Write-Host "🔍 Verifying resource group exists..." -ForegroundColor Cyan
-    $rg = az group show --name $rgName 2>&1
-    if ($LASTEXITCODE -ne 0) {
+    $rgCmd = "az group show --name $rgName"
+    $rgResult = Invoke-AzCommandWithRetry -Command $rgCmd
+    
+    if (-not $rgResult.Success) {
         Write-Host "  ❌ Resource group not found: $rgName" -ForegroundColor Red
         Write-Error "Resource group '$rgName' does not exist. Please deploy infrastructure first."
     }
@@ -69,15 +125,19 @@ try {
     
     # Verify Key Vault exists
     Write-Host "🔍 Verifying Key Vault exists..." -ForegroundColor Cyan
-    $kv = az keyvault show --name $kvName --resource-group $rgName 2>&1
-    if ($LASTEXITCODE -ne 0) {
+    $kvCmd = "az keyvault show --name $kvName --resource-group $rgName"
+    $kvResult = Invoke-AzCommandWithRetry -Command $kvCmd
+    
+    if (-not $kvResult.Success) {
         Write-Host "  ❌ Key Vault not found: $kvName" -ForegroundColor Red
         Write-Host ""
         Write-Host "Checking for Key Vaults in resource group..." -ForegroundColor Yellow
-        $allKvs = az keyvault list --resource-group $rgName --query "[].name" -o tsv 2>&1
-        if ($LASTEXITCODE -eq 0 -and $allKvs) {
+        $listKvCmd = "az keyvault list --resource-group $rgName --query '[].name' -o tsv"
+        $listKvResult = Invoke-AzCommandWithRetry -Command $listKvCmd
+        
+        if ($listKvResult.Success -and $listKvResult.Output) {
             Write-Host "  Found Key Vaults:" -ForegroundColor Yellow
-            $allKvs -split "`n" | ForEach-Object { Write-Host "    - $_" -ForegroundColor Gray }
+            $listKvResult.Output -split "`n" | ForEach-Object { Write-Host "    - $_" -ForegroundColor Gray }
             Write-Host "  Update the script parameter if Key Vault has a different name" -ForegroundColor Yellow
         }
         Write-Error "Key Vault '$kvName' does not exist in resource group '$rgName'"
@@ -89,25 +149,32 @@ try {
     Write-Host "🔑 [1/4] Enabling Managed Identity for API App..." -ForegroundColor Cyan
     try {
         # Check if App Service exists
-        $apiExists = az webapp show -g $rgName -n $apiAppName --query "name" -o tsv 2>$null
-        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($apiExists)) {
+        $checkCmd = "az webapp show -g $rgName -n $apiAppName --query 'name' -o tsv"
+        $checkResult = Invoke-AzCommandWithRetry -Command $checkCmd
+        
+        if (-not $checkResult.Success -or [string]::IsNullOrWhiteSpace($checkResult.Output)) {
             Write-Host "  ⚠️  API App '$apiAppName' not found - skipping" -ForegroundColor Yellow
         } else {
+            $apiExists = $checkResult.Output
             # Check if identity already exists
-            $apiIdentity = az webapp identity show -g $rgName -n $apiAppName --query principalId -o tsv 2>$null
+            $identityCmd = "az webapp identity show -g $rgName -n $apiAppName --query principalId -o tsv"
+            $identityResult = Invoke-AzCommandWithRetry -Command $identityCmd
             
-            if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($apiIdentity)) {
+            if ($identityResult.Success -and -not [string]::IsNullOrWhiteSpace($identityResult.Output)) {
+                $apiIdentity = $identityResult.Output.Trim()
                 Write-Host "  ℹ️  Managed Identity already exists: $apiIdentity" -ForegroundColor Gray
             } else {
                 # Enable system-assigned identity
-                $result = az webapp identity assign -g $rgName -n $apiAppName --query principalId -o tsv 2>&1
-                if ($LASTEXITCODE -eq 0) {
-                    $apiIdentity = $result
+                $assignCmd = "az webapp identity assign -g $rgName -n $apiAppName --query principalId -o tsv"
+                $assignResult = Invoke-AzCommandWithRetry -Command $assignCmd
+                
+                if ($assignResult.Success) {
+                    $apiIdentity = $assignResult.Output.Trim()
                     Write-Host "  ✅ Managed Identity enabled: $apiIdentity" -ForegroundColor Green
                     $identitiesEnabled++
                 } else {
                     Write-Host "  ❌ Failed to enable Managed Identity" -ForegroundColor Red
-                    Write-Host "  Error: $result" -ForegroundColor Red
+                    Write-Host "  Error: $($assignResult.Output)" -ForegroundColor Red
                     $errors++
                 }
             }
@@ -122,25 +189,32 @@ try {
     Write-Host "🔑 [2/4] Enabling Managed Identity for UI App..." -ForegroundColor Cyan
     try {
         # Check if App Service exists
-        $uiExists = az webapp show -g $rgName -n $uiAppName --query "name" -o tsv 2>$null
-        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($uiExists)) {
+        $checkCmd = "az webapp show -g $rgName -n $uiAppName --query 'name' -o tsv"
+        $checkResult = Invoke-AzCommandWithRetry -Command $checkCmd
+        
+        if (-not $checkResult.Success -or [string]::IsNullOrWhiteSpace($checkResult.Output)) {
             Write-Host "  ⚠️  UI App '$uiAppName' not found - skipping" -ForegroundColor Yellow
         } else {
+            $uiExists = $checkResult.Output
             # Check if identity already exists
-            $uiIdentity = az webapp identity show -g $rgName -n $uiAppName --query principalId -o tsv 2>$null
+            $identityCmd = "az webapp identity show -g $rgName -n $uiAppName --query principalId -o tsv"
+            $identityResult = Invoke-AzCommandWithRetry -Command $identityCmd
             
-            if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($uiIdentity)) {
+            if ($identityResult.Success -and -not [string]::IsNullOrWhiteSpace($identityResult.Output)) {
+                $uiIdentity = $identityResult.Output.Trim()
                 Write-Host "  ℹ️  Managed Identity already exists: $uiIdentity" -ForegroundColor Gray
             } else {
                 # Enable system-assigned identity
-                $result = az webapp identity assign -g $rgName -n $uiAppName --query principalId -o tsv 2>&1
-                if ($LASTEXITCODE -eq 0) {
-                    $uiIdentity = $result
+                $assignCmd = "az webapp identity assign -g $rgName -n $uiAppName --query principalId -o tsv"
+                $assignResult = Invoke-AzCommandWithRetry -Command $assignCmd
+                
+                if ($assignResult.Success) {
+                    $uiIdentity = $assignResult.Output.Trim()
                     Write-Host "  ✅ Managed Identity enabled: $uiIdentity" -ForegroundColor Green
                     $identitiesEnabled++
                 } else {
                     Write-Host "  ❌ Failed to enable Managed Identity" -ForegroundColor Red
-                    Write-Host "  Error: $result" -ForegroundColor Red
+                    Write-Host "  Error: $($assignResult.Output)" -ForegroundColor Red
                     $errors++
                 }
             }
@@ -156,37 +230,46 @@ try {
     if (-not [string]::IsNullOrWhiteSpace($apiIdentity)) {
         try {
             # Check if access policy already exists
-            $existingPolicy = az keyvault show -n $kvName -g $rgName --query "properties.accessPolicies[?objectId=='$apiIdentity']" -o json 2>$null | ConvertFrom-Json
+            $policyCmd = "az keyvault show -n $kvName -g $rgName --query ""properties.accessPolicies[?objectId=='$apiIdentity']"" -o json"
+            $policyResult = Invoke-AzCommandWithRetry -Command $policyCmd
             
-            if ($existingPolicy -and $existingPolicy.Count -gt 0) {
-                Write-Host "  ℹ️  Access policy already exists for API App" -ForegroundColor Gray
-                # Check permissions
-                $hasGetSecret = $existingPolicy[0].permissions.secrets -contains 'get'
-                $hasListSecret = $existingPolicy[0].permissions.secrets -contains 'list'
-                if ($hasGetSecret -and $hasListSecret) {
-                    Write-Host "  ✅ API App has required permissions (get, list)" -ForegroundColor Green
+            if ($policyResult.Success) {
+                $existingPolicy = $policyResult.Output | ConvertFrom-Json
+                
+                if ($existingPolicy -and $existingPolicy.Count -gt 0) {
+                    Write-Host "  ℹ️  Access policy already exists for API App" -ForegroundColor Gray
+                    # Check permissions
+                    $hasGetSecret = $existingPolicy[0].permissions.secrets -contains 'get'
+                    $hasListSecret = $existingPolicy[0].permissions.secrets -contains 'list'
+                    if ($hasGetSecret -and $hasListSecret) {
+                        Write-Host "  ✅ API App has required permissions (get, list)" -ForegroundColor Green
+                    } else {
+                        Write-Host "  ⚠️  API App missing some permissions, updating..." -ForegroundColor Yellow
+                        $setPolicyCmd = "az keyvault set-policy -n $kvName --object-id $apiIdentity --secret-permissions get list"
+                        $setPolicyResult = Invoke-AzCommandWithRetry -Command $setPolicyCmd
+                        
+                        if ($setPolicyResult.Success) {
+                            Write-Host "  ✅ Access policy updated" -ForegroundColor Green
+                            $accessPoliciesGranted++
+                        } else {
+                            Write-Host "  ❌ Failed to update access policy" -ForegroundColor Red
+                            Write-Host "  Error: $($setPolicyResult.Output)" -ForegroundColor Red
+                            $errors++
+                        }
+                    }
                 } else {
-                    Write-Host "  ⚠️  API App missing some permissions, updating..." -ForegroundColor Yellow
-                    $result = az keyvault set-policy -n $kvName --object-id $apiIdentity --secret-permissions get list 2>&1
-                    if ($LASTEXITCODE -eq 0) {
-                        Write-Host "  ✅ Access policy updated" -ForegroundColor Green
+                    # Grant access
+                    $setPolicyCmd = "az keyvault set-policy -n $kvName --object-id $apiIdentity --secret-permissions get list"
+                    $setPolicyResult = Invoke-AzCommandWithRetry -Command $setPolicyCmd
+                    
+                    if ($setPolicyResult.Success) {
+                        Write-Host "  ✅ Access policy granted to API App" -ForegroundColor Green
                         $accessPoliciesGranted++
                     } else {
-                        Write-Host "  ❌ Failed to update access policy" -ForegroundColor Red
-                        Write-Host "  Error: $result" -ForegroundColor Red
+                        Write-Host "  ❌ Failed to grant access policy" -ForegroundColor Red
+                        Write-Host "  Error: $($setPolicyResult.Output)" -ForegroundColor Red
                         $errors++
                     }
-                }
-            } else {
-                # Grant access
-                $result = az keyvault set-policy -n $kvName --object-id $apiIdentity --secret-permissions get list 2>&1
-                if ($LASTEXITCODE -eq 0) {
-                    Write-Host "  ✅ Access policy granted to API App" -ForegroundColor Green
-                    $accessPoliciesGranted++
-                } else {
-                    Write-Host "  ❌ Failed to grant access policy" -ForegroundColor Red
-                    Write-Host "  Error: $result" -ForegroundColor Red
-                    $errors++
                 }
             }
         } catch {
@@ -203,37 +286,46 @@ try {
     if (-not [string]::IsNullOrWhiteSpace($uiIdentity)) {
         try {
             # Check if access policy already exists
-            $existingPolicy = az keyvault show -n $kvName -g $rgName --query "properties.accessPolicies[?objectId=='$uiIdentity']" -o json 2>$null | ConvertFrom-Json
+            $policyCmd = "az keyvault show -n $kvName -g $rgName --query ""properties.accessPolicies[?objectId=='$uiIdentity']"" -o json"
+            $policyResult = Invoke-AzCommandWithRetry -Command $policyCmd
             
-            if ($existingPolicy -and $existingPolicy.Count -gt 0) {
-                Write-Host "  ℹ️  Access policy already exists for UI App" -ForegroundColor Gray
-                # Check permissions
-                $hasGetSecret = $existingPolicy[0].permissions.secrets -contains 'get'
-                $hasListSecret = $existingPolicy[0].permissions.secrets -contains 'list'
-                if ($hasGetSecret -and $hasListSecret) {
-                    Write-Host "  ✅ UI App has required permissions (get, list)" -ForegroundColor Green
+            if ($policyResult.Success) {
+                $existingPolicy = $policyResult.Output | ConvertFrom-Json
+                
+                if ($existingPolicy -and $existingPolicy.Count -gt 0) {
+                    Write-Host "  ℹ️  Access policy already exists for UI App" -ForegroundColor Gray
+                    # Check permissions
+                    $hasGetSecret = $existingPolicy[0].permissions.secrets -contains 'get'
+                    $hasListSecret = $existingPolicy[0].permissions.secrets -contains 'list'
+                    if ($hasGetSecret -and $hasListSecret) {
+                        Write-Host "  ✅ UI App has required permissions (get, list)" -ForegroundColor Green
+                    } else {
+                        Write-Host "  ⚠️  UI App missing some permissions, updating..." -ForegroundColor Yellow
+                        $setPolicyCmd = "az keyvault set-policy -n $kvName --object-id $uiIdentity --secret-permissions get list"
+                        $setPolicyResult = Invoke-AzCommandWithRetry -Command $setPolicyCmd
+                        
+                        if ($setPolicyResult.Success) {
+                            Write-Host "  ✅ Access policy updated" -ForegroundColor Green
+                            $accessPoliciesGranted++
+                        } else {
+                            Write-Host "  ❌ Failed to update access policy" -ForegroundColor Red
+                            Write-Host "  Error: $($setPolicyResult.Output)" -ForegroundColor Red
+                            $errors++
+                        }
+                    }
                 } else {
-                    Write-Host "  ⚠️  UI App missing some permissions, updating..." -ForegroundColor Yellow
-                    $result = az keyvault set-policy -n $kvName --object-id $uiIdentity --secret-permissions get list 2>&1
-                    if ($LASTEXITCODE -eq 0) {
-                        Write-Host "  ✅ Access policy updated" -ForegroundColor Green
+                    # Grant access
+                    $setPolicyCmd = "az keyvault set-policy -n $kvName --object-id $uiIdentity --secret-permissions get list"
+                    $setPolicyResult = Invoke-AzCommandWithRetry -Command $setPolicyCmd
+                    
+                    if ($setPolicyResult.Success) {
+                        Write-Host "  ✅ Access policy granted to UI App" -ForegroundColor Green
                         $accessPoliciesGranted++
                     } else {
-                        Write-Host "  ❌ Failed to update access policy" -ForegroundColor Red
-                        Write-Host "  Error: $result" -ForegroundColor Red
+                        Write-Host "  ❌ Failed to grant access policy" -ForegroundColor Red
+                        Write-Host "  Error: $($setPolicyResult.Output)" -ForegroundColor Red
                         $errors++
                     }
-                }
-            } else {
-                # Grant access
-                $result = az keyvault set-policy -n $kvName --object-id $uiIdentity --secret-permissions get list 2>&1
-                if ($LASTEXITCODE -eq 0) {
-                    Write-Host "  ✅ Access policy granted to UI App" -ForegroundColor Green
-                    $accessPoliciesGranted++
-                } else {
-                    Write-Host "  ❌ Failed to grant access policy" -ForegroundColor Red
-                    Write-Host "  Error: $result" -ForegroundColor Red
-                    $errors++
                 }
             }
         } catch {
@@ -250,8 +342,10 @@ try {
     
     if (-not [string]::IsNullOrWhiteSpace($apiExists)) {
         try {
-            $result = az webapp config appsettings set -g $rgName -n $apiAppName --settings KEY_VAULT_NAME=$kvName -o none 2>&1
-            if ($LASTEXITCODE -eq 0) {
+            $setEnvCmd = "az webapp config appsettings set -g $rgName -n $apiAppName --settings KEY_VAULT_NAME=$kvName -o none"
+            $setEnvResult = Invoke-AzCommandWithRetry -Command $setEnvCmd
+            
+            if ($setEnvResult.Success) {
                 Write-Host "  ✅ KEY_VAULT_NAME set on API App" -ForegroundColor Green
             } else {
                 Write-Host "  ⚠️  Failed to set KEY_VAULT_NAME on API App" -ForegroundColor Yellow
@@ -263,8 +357,10 @@ try {
     
     if (-not [string]::IsNullOrWhiteSpace($uiExists)) {
         try {
-            $result = az webapp config appsettings set -g $rgName -n $uiAppName --settings KEY_VAULT_NAME=$kvName -o none 2>&1
-            if ($LASTEXITCODE -eq 0) {
+            $setEnvCmd = "az webapp config appsettings set -g $rgName -n $uiAppName --settings KEY_VAULT_NAME=$kvName -o none"
+            $setEnvResult = Invoke-AzCommandWithRetry -Command $setEnvCmd
+            
+            if ($setEnvResult.Success) {
                 Write-Host "  ✅ KEY_VAULT_NAME set on UI App" -ForegroundColor Green
             } else {
                 Write-Host "  ⚠️  Failed to set KEY_VAULT_NAME on UI App" -ForegroundColor Yellow
