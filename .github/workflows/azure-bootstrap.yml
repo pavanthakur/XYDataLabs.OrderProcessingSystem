@@ -1144,12 +1144,16 @@ jobs:
           foreach ($secretName in $secrets.Keys) {
             Write-Host "  Setting: $secretName" -ForegroundColor Gray
             try {
-              gh secret set $secretName --repo ${{ github.repository }} --body $secrets[$secretName] 2>&1 | Out-Null
+              # Capture output (stderr contains error messages from gh CLI)
+              $output = gh secret set $secretName --repo ${{ github.repository }} --body $secrets[$secretName] 2>&1
               if ($LASTEXITCODE -eq 0) {
                 Write-Host "    ✅ Success" -ForegroundColor Green
                 $successCount++
               } else {
                 Write-Host "    ❌ Failed (exit code: $LASTEXITCODE)" -ForegroundColor Red
+                if ($output) {
+                  Write-Host "    Error details: $output" -ForegroundColor Red
+                }
                 $failCount++
               }
             } catch {
@@ -1265,12 +1269,16 @@ jobs:
             foreach ($secretName in $secretsToSet.Keys) {
               Write-Host "    Setting: $secretName" -ForegroundColor Gray
               try {
-                gh secret set $secretName --env $env_name --repo $ownerRepo --body $secretsToSet[$secretName] 2>&1 | Out-Null
+                # Capture output (stderr contains error messages from gh CLI)
+                $output = gh secret set $secretName --env $env_name --repo $ownerRepo --body $secretsToSet[$secretName] 2>&1
                 if ($LASTEXITCODE -eq 0) {
                   Write-Host "      ✅ Success" -ForegroundColor Green
                   $totalSuccess++
                 } else {
                   Write-Host "      ❌ Failed (exit code: $LASTEXITCODE)" -ForegroundColor Red
+                  if ($output) {
+                    Write-Host "      Error details: $output" -ForegroundColor Red
+                  }
                   $totalFail++
                 }
               } catch {
@@ -1300,11 +1308,16 @@ jobs:
             Write-Host ""
             Write-Host "If you need environment-specific secrets:" -ForegroundColor Cyan
             Write-Host "  1. Verify environments exist: https://github.com/$owner/$repo/settings/environments" -ForegroundColor Gray
-            Write-Host "  2. Check GitHub App has admin permission to create environments" -ForegroundColor Gray
-            Write-Host "  3. Or manually create environments and re-run this workflow" -ForegroundColor Gray
+            Write-Host "  2. Check GitHub App has admin permission to set environment secrets" -ForegroundColor Gray
+            Write-Host "  3. GitHub App needs 'Administration: Read & Write' permission for environment secrets" -ForegroundColor Gray
+            Write-Host "  4. Alternatively, you can manually set environment secrets at:" -ForegroundColor Gray
+            Write-Host "     https://github.com/$owner/$repo/settings/environments" -ForegroundColor Gray
             Write-Host ""
             # Don't fail the workflow - repository secrets are sufficient
-            Write-Warning "Environment secrets partially configured. Repository secrets are available and sufficient for deployment."
+            Write-Host "⚠️  Environment secrets partially configured. Repository secrets are available and sufficient for deployment." -ForegroundColor Yellow
+            Write-Host ""
+            # Exit successfully since repository secrets work and environment secrets are optional
+            exit 0
           } else {
             Write-Host "✅ All environment secrets configured successfully!" -ForegroundColor Green
           }
