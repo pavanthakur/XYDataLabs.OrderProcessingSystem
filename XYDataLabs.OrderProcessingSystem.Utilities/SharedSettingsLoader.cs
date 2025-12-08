@@ -86,10 +86,9 @@ namespace XYDataLabs.OrderProcessingSystem.Utilities
                     Console.WriteLine($"[INFO] Attempting to load secrets from Key Vault: {keyVaultUri}");
                     
                     // Use DefaultAzureCredential which supports Managed Identity in Azure
-                    var credential = new DefaultAzureCredential();
                     builder.AddAzureKeyVault(
                         new Uri(keyVaultUri),
-                        credential);
+                        new DefaultAzureCredential());
                     
                     Console.WriteLine($"[SUCCESS] Azure Key Vault configuration added successfully: {keyVaultUri}");
                     Console.WriteLine("[INFO] Application will use Key Vault for secure secret management");
@@ -106,7 +105,7 @@ namespace XYDataLabs.OrderProcessingSystem.Utilities
                     Console.WriteLine("  2. Managed Identity does not have access policies for Key Vault");
                     Console.WriteLine("  3. KEY_VAULT_NAME environment variable is not set or incorrect");
                     Console.WriteLine("  4. Key Vault does not exist or is not accessible");
-                    Console.WriteLine("[REMEDIATION] Run: ./Resources/Azure-Deployment/enable-managed-identity.ps1 -Environment " + effectiveEnvironment);
+                    Console.WriteLine($"[REMEDIATION] Run: ./Resources/Azure-Deployment/enable-managed-identity.ps1 -Environment {effectiveEnvironment}");
                     
                     // Throw exception to fail application startup - this enforces enterprise security practices
                     throw new InvalidOperationException(
