@@ -11,6 +11,9 @@ param(
     [string]$BaseName = 'orderprocessing',
     
     [Parameter(Mandatory=$false)]
+    [string]$GitHubOwner = 'pavanthakur',
+    
+    [Parameter(Mandatory=$false)]
     [string]$OpenPayApiKey,
     
     [Parameter(Mandatory=$false)]
@@ -185,6 +188,43 @@ try {
         }
     } else {
         Write-Host "  ⚠️  No secrets found in Key Vault (may indicate verification issue)" -ForegroundColor Yellow
+    }
+    
+    Write-Host ""
+    
+    # Set KEY_VAULT_NAME environment variable on App Services
+    Write-Host "⚙️  Setting KEY_VAULT_NAME environment variable on App Services..." -ForegroundColor Cyan
+    $apiAppName = "$GitHubOwner-$BaseName-api-xyapp-$Environment"
+    $uiAppName = "$GitHubOwner-$BaseName-ui-xyapp-$Environment"
+    
+    # Set on API App
+    try {
+        $apiExists = az webapp show -g $rgName -n $apiAppName --query "name" -o tsv 2>$null
+        if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($apiExists)) {
+            $result = az webapp config appsettings set -g $rgName -n $apiAppName --settings KEY_VAULT_NAME=$kvName -o none 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "  ✅ KEY_VAULT_NAME set on API App" -ForegroundColor Green
+            } else {
+                Write-Host "  ⚠️  Failed to set KEY_VAULT_NAME on API App" -ForegroundColor Yellow
+            }
+        }
+    } catch {
+        Write-Host "  ⚠️  Exception setting KEY_VAULT_NAME on API App: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+    
+    # Set on UI App
+    try {
+        $uiExists = az webapp show -g $rgName -n $uiAppName --query "name" -o tsv 2>$null
+        if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($uiExists)) {
+            $result = az webapp config appsettings set -g $rgName -n $uiAppName --settings KEY_VAULT_NAME=$kvName -o none 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "  ✅ KEY_VAULT_NAME set on UI App" -ForegroundColor Green
+            } else {
+                Write-Host "  ⚠️  Failed to set KEY_VAULT_NAME on UI App" -ForegroundColor Yellow
+            }
+        }
+    } catch {
+        Write-Host "  ⚠️  Exception setting KEY_VAULT_NAME on UI App: $($_.Exception.Message)" -ForegroundColor Yellow
     }
     
     Write-Host ""
