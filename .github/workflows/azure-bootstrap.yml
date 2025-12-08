@@ -1181,7 +1181,7 @@ jobs:
           Write-Host ""
 
       - name: Set Environment Secrets
-        if: steps.check.outputs.secretsExist == 'false' && steps.check.outputs.useGitHubApp == 'true'
+        if: steps.check.outputs.useGitHubApp == 'true'
         env:
           GH_APP_TOKEN: ${{ steps.app-token.outputs.token }}
           CLIENT_ID: ${{ needs.setup-oidc.outputs.clientId }}
