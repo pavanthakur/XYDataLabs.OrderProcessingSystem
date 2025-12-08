@@ -1,4 +1,4 @@
-# diagnose-keyvault-access.ps1
+﻿# diagnose-keyvault-access.ps1
 # Comprehensive diagnostic script to identify Key Vault access issues
 
 param(

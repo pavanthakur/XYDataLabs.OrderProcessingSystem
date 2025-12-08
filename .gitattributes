@@ -4,6 +4,12 @@
 * text=auto
 
 ###############################################################################
+# PowerShell files should use CRLF line endings and UTF-8 with BOM
+# This ensures compatibility with Windows PowerShell 5.1
+###############################################################################
+*.ps1 text eol=crlf working-tree-encoding=UTF-8
+
+###############################################################################
 # Set default behavior for command prompt diff.
 #
 # This is need for earlier builds of msysgit that does not have it on by

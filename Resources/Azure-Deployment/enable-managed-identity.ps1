@@ -1,4 +1,4 @@
-# enable-managed-identity.ps1
+﻿# enable-managed-identity.ps1
 # Enable System-Assigned Managed Identity for App Services and grant Key Vault access
 # This script addresses the issue where Managed Identity is not assigned or doesn't have Key Vault access
 
