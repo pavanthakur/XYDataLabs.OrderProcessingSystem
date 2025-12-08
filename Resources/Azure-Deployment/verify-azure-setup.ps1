@@ -1,9 +1,24 @@
+# verify-azure-setup.ps1
+# Verify Azure resources and configuration for Order Processing System
+
+param(
+    [Parameter(Mandatory=$false)]
+    [ValidateSet('dev', 'staging', 'prod')]
+    [string]$Environment = 'dev',
+    
+    [Parameter(Mandatory=$false)]
+    [string]$BaseName = 'orderprocessing',
+    
+    [Parameter(Mandatory=$false)]
+    [string]$GitHubOwner = 'pavanthakur'
+)
+
 Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "║        AZURE LEARNING PROGRESS VERIFICATION - DEV              ║" -ForegroundColor Cyan
+Write-Host "║        AZURE LEARNING PROGRESS VERIFICATION - $($Environment.ToUpper().PadRight(19))║" -ForegroundColor Cyan
 Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
 
-$rg = "rg-orderprocessing-dev"
-$apiApp = "pavanthakur-orderprocessing-api-xyapp-dev"
+$rg = "rg-$BaseName-$Environment"
+$apiApp = "$GitHubOwner-$BaseName-api-xyapp-$Environment"
 
 Write-Host "`n[1/8] App Services..." -ForegroundColor Yellow
 try {
@@ -67,9 +82,13 @@ try {
                 $secrets = az keyvault secret list --vault-name $_ --query "[].name" -o json 2>$null | ConvertFrom-Json
                 if ($secrets -and $secrets.Count -gt 0) {
                     Write-Host "    └─ Secrets: $($secrets.Count) found" -ForegroundColor Green
+                } else {
+                    Write-Host "    └─ ⚠️  Secrets: None found (Key Vault is empty)" -ForegroundColor Yellow
+                    Write-Host "    └─ 💡 Run: ./Resources/Azure-Deployment/populate-keyvault-secrets.ps1 -Environment $Environment" -ForegroundColor Cyan
                 }
             } catch {
                 # Silently continue if secrets can't be listed
+                Write-Host "    └─ ⚠️  Unable to list secrets (check permissions)" -ForegroundColor Yellow
             }
         }
     } else {
@@ -84,8 +103,26 @@ try {
     $identity = az webapp identity show -g $rg -n $apiApp --query principalId -o tsv 2>$null
     if ($identity) {
         Write-Host "  ✅ API App Managed Identity: $identity" -ForegroundColor Green
+        
+        # Check if Managed Identity has Key Vault access
+        if ($kvs -and $kvs.Count -gt 0) {
+            $kvName = $kvs[0]
+            Write-Host "  🔍 Checking Key Vault access policies..." -ForegroundColor Gray
+            $accessPolicies = az keyvault show -n $kvName -g $rg --query "properties.accessPolicies[?objectId=='$identity']" -o json 2>$null | ConvertFrom-Json
+            if ($accessPolicies -and $accessPolicies.Count -gt 0) {
+                Write-Host "  ✅ Managed Identity has Key Vault access" -ForegroundColor Green
+            } else {
+                Write-Host "  ⚠️  Managed Identity exists but NO Key Vault access" -ForegroundColor Yellow
+                Write-Host "  💡 Run: ./Resources/Azure-Deployment/enable-managed-identity.ps1 -Environment $Environment" -ForegroundColor Cyan
+            }
+        }
     } else {
-        Write-Host "  ⚠️  Managed Identity not assigned - Will enable" -ForegroundColor Yellow
+        Write-Host "  ⚠️  Managed Identity not assigned" -ForegroundColor Yellow
+        Write-Host "  💡 To enable Managed Identity and grant Key Vault access, run:" -ForegroundColor Cyan
+        Write-Host "     ./Resources/Azure-Deployment/enable-managed-identity.ps1 -Environment $Environment" -ForegroundColor Cyan
+        Write-Host "  📝 Or manually:" -ForegroundColor Gray
+        Write-Host "     az webapp identity assign -g $rg -n $apiApp" -ForegroundColor DarkGray
+        Write-Host "     az keyvault set-policy -n <kv-name> --object-id <principalId> --secret-permissions get list" -ForegroundColor DarkGray
     }
 } catch {
     Write-Host "  ⚠️  Managed Identity not assigned - Will enable" -ForegroundColor Yellow

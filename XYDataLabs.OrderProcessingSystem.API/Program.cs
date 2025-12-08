@@ -38,17 +38,43 @@ var environmentName = builder.Environment.EnvironmentName switch
     _ => Constants.Environments.Dev // Default to dev for any other environment
 };
 
+// Log configuration initialization
+Console.WriteLine("═══════════════════════════════════════════════════════════════");
+Console.WriteLine($"[CONFIG] API Initialization - Environment: {environmentName}");
+Console.WriteLine($"[CONFIG] Azure App Service: {(isAzure ? "YES" : "NO")}");
+Console.WriteLine($"[CONFIG] Docker Container: {(isDocker ? "YES" : "NO")}");
+if (isAzure)
+{
+    Console.WriteLine($"[CONFIG] Key Vault is REQUIRED for Azure deployments (enterprise security policy)");
+}
+Console.WriteLine("═══════════════════════════════════════════════════════════════");
+
 // Centralized loading, binding, and active ApiSettings selection
+// IMPORTANT: For Azure deployments, this will fail if Key Vault is not properly configured
 ApiSettings apiSettings;
-var activeSettings = SharedSettingsLoader.AddAndBindSettings(
-    builder.Services,
-    builder.Configuration,
-    environmentName,
-    isDocker,
-    s => s.API,
-    out apiSettings,
-    out _ // ignore useHttps
-);
+ApiSettingsSection activeSettings;
+try
+{
+    activeSettings = SharedSettingsLoader.AddAndBindSettings(
+        builder.Services,
+        builder.Configuration,
+        environmentName,
+        isDocker,
+        s => s.API,
+        out apiSettings,
+        out _ // ignore useHttps
+    );
+    
+    if (isAzure)
+    {
+        Console.WriteLine("[CONFIG] ✅ Configuration loaded successfully from Azure Key Vault");
+    }
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"[FATAL] Configuration initialization failed: {ex.Message}");
+    throw; // Re-throw to stop application startup
+}
 
 // Verify DB connection string presence (mask password before logging)
 var dbConn = builder.Configuration.GetConnectionString(Constants.Configuration.OrderProcessingSystemDbConnectionString);

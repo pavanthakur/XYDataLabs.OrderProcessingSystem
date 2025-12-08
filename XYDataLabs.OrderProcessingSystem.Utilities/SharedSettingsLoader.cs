@@ -58,6 +58,7 @@ namespace XYDataLabs.OrderProcessingSystem.Utilities
                 builder.AddEnvironmentVariables();
                 
                 // Add Azure Key Vault configuration using Managed Identity
+                // ENTERPRISE REQUIREMENT: Key Vault is mandatory for Azure deployments
                 try
                 {
                     // Get Key Vault name from environment variable (set by bootstrap/deployment)
@@ -67,31 +68,50 @@ namespace XYDataLabs.OrderProcessingSystem.Utilities
                         // Fallback: Construct Key Vault name (assumes standard naming: kv-{baseName}-{env})
                         // Bootstrap script sets KEY_VAULT_NAME, so this fallback is rarely used
                         keyVaultName = $"kv-orderprocessing-{effectiveEnvironment}";
+                        Console.WriteLine($"[WARN] KEY_VAULT_NAME environment variable not set. Using constructed name: {keyVaultName}");
                     }
                     
                     // Validate Key Vault name format (alphanumeric and hyphens only, 3-24 chars)
                     // Using static readonly regex for performance
                     if (!IsValidKeyVaultName(keyVaultName))
                     {
-                        Console.WriteLine($"[WARN] Invalid Key Vault name format: {keyVaultName}");
-                        Console.WriteLine("[WARN] Continuing with file-based configuration only");
-                        return builder;
+                        var errorMsg = $"[ERROR] Invalid Key Vault name format: {keyVaultName}. " +
+                                      "Key Vault names must be 3-24 characters, alphanumeric and hyphens only. " +
+                                      "Set KEY_VAULT_NAME environment variable or fix naming convention.";
+                        Console.WriteLine(errorMsg);
+                        throw new InvalidOperationException(errorMsg);
                     }
                     
                     var keyVaultUri = $"https://{keyVaultName}.vault.azure.net/";
-                    Console.WriteLine($"[DEBUG] Attempting to load secrets from Key Vault: {keyVaultUri}");
+                    Console.WriteLine($"[INFO] Attempting to load secrets from Key Vault: {keyVaultUri}");
                     
                     // Use DefaultAzureCredential which supports Managed Identity in Azure
                     builder.AddAzureKeyVault(
                         new Uri(keyVaultUri),
                         new DefaultAzureCredential());
                     
-                    Console.WriteLine("[DEBUG] Azure Key Vault configuration added successfully");
+                    Console.WriteLine($"[SUCCESS] Azure Key Vault configuration added successfully: {keyVaultUri}");
+                    Console.WriteLine("[INFO] Application will use Key Vault for secure secret management");
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[WARN] Failed to add Azure Key Vault configuration: {ex.Message}");
-                    Console.WriteLine("[WARN] Continuing with file-based configuration only");
+                    // ENTERPRISE REQUIREMENT: Fail fast if Key Vault is not accessible in Azure
+                    var errorMsg = $"[CRITICAL ERROR] Failed to configure Azure Key Vault in Azure environment. " +
+                                  $"This is a mandatory requirement for production deployments. " +
+                                  $"Error: {ex.Message}";
+                    Console.WriteLine(errorMsg);
+                    Console.WriteLine("[ERROR DETAILS] Possible causes:");
+                    Console.WriteLine("  1. Managed Identity is not enabled on the App Service");
+                    Console.WriteLine("  2. Managed Identity does not have access policies for Key Vault");
+                    Console.WriteLine("  3. KEY_VAULT_NAME environment variable is not set or incorrect");
+                    Console.WriteLine("  4. Key Vault does not exist or is not accessible");
+                    Console.WriteLine($"[REMEDIATION] Run: ./Resources/Azure-Deployment/enable-managed-identity.ps1 -Environment {effectiveEnvironment}");
+                    
+                    // Throw exception to fail application startup - this enforces enterprise security practices
+                    throw new InvalidOperationException(
+                        "Azure Key Vault configuration is mandatory for Azure deployments. " +
+                        "Application cannot start without secure secret management. " +
+                        "Enable Managed Identity and configure Key Vault access.", ex);
                 }
             }
             
