@@ -3,8 +3,8 @@ targetScope = 'resourceGroup'
 @description('Name of the App Service')
 param appName string
 
-@description('Name of the Key Vault')
-param keyVaultName string
+@description('Base application name (for constructing Key Vault name)')
+param baseName string = 'orderprocessing'
 
 @description('Name of the App Service Plan')
 param appServicePlanName string
@@ -20,6 +20,13 @@ param environment string = 'dev'
 
 @description('Non-secret OpenPayAdapter base URL')
 param openPayAdapterBaseUrl string = 'https://api.openpay.example.com'
+
+// Key Vault name (must be globally unique, max 24 chars)
+// Using shortened base name and environment to stay within limits
+// Calculation: 'kv-' (3) + baseName (max 15) + '-' (1) + environment (max 5) = 24 chars max
+// This matches the naming convention in infra/modules/keyvault.bicep
+var shortBaseName = take(baseName, 15) // Limit base name to 15 chars
+var keyVaultName = 'kv-${shortBaseName}-${environment}'
 
 // Determine ASPNETCORE_ENVIRONMENT based on environment parameter
 var aspNetCoreEnvironment = environment == 'dev' ? 'Development' : (environment == 'uat' ? 'Staging' : 'Production')

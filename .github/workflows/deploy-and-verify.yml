@@ -155,16 +155,23 @@ jobs:
 
       - name: Handle soft-deleted Key Vault
         run: |
-          # Extract Key Vault name from parameter file
+          # Extract base name and environment from parameter file to compute Key Vault name
           PARAM_FILE="${{ needs.determine-environment.outputs.parameter-file }}"
           
           if [ -f "$PARAM_FILE" ]; then
-            KV_NAME=$(jq -r '.parameters.keyVaultName.value // empty' "$PARAM_FILE")
+            BASE_NAME=$(jq -r '.parameters.baseName.value // empty' "$PARAM_FILE")
+            ENV=$(jq -r '.parameters.environment.value // empty' "$PARAM_FILE")
             
-            if [ -z "$KV_NAME" ]; then
-              echo "Key Vault name not found in parameter file, skipping soft-delete check"
+            if [ -z "$BASE_NAME" ] || [ -z "$ENV" ]; then
+              echo "Base name or environment not found in parameter file, skipping soft-delete check"
               exit 0
             fi
+            
+            # Compute Key Vault name using same logic as Bicep template
+            # Take first 15 characters of base name to match enterprise standard
+            # If base name is shorter than 15 chars, it will remain unchanged
+            SHORT_BASE_NAME=$(echo "$BASE_NAME" | cut -c1-15)
+            KV_NAME="kv-${SHORT_BASE_NAME}-${ENV}"
             
             echo "Checking for soft-deleted Key Vault: $KV_NAME"
             
