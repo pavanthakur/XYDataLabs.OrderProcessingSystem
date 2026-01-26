@@ -67,17 +67,20 @@ jobs:
       - name: Check Azure Credentials
         id: check-credentials
         shell: pwsh
+        env:
+          CLIENT_ID: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
         run: |
-          # Check environment secrets first, fall back to repository secrets
-          $hasClientId = "${{ secrets.AZUREAPPSERVICE_CLIENTID }}" -ne ""
-          $hasTenantId = "${{ secrets.AZUREAPPSERVICE_TENANTID }}" -ne ""
-          $hasSubscriptionId = "${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}" -ne ""
+          # Check if credentials are available via environment variables
+          $hasClientId = -not [string]::IsNullOrWhiteSpace($env:CLIENT_ID)
+          $hasTenantId = -not [string]::IsNullOrWhiteSpace($env:TENANT_ID)
+          $hasSubscriptionId = -not [string]::IsNullOrWhiteSpace($env:SUBSCRIPTION_ID)
           
           if ($hasClientId -and $hasTenantId -and $hasSubscriptionId) {
-            Write-Host "✅ Azure credentials available" -ForegroundColor Green
-          }
-          
-          if (-not $hasClientId -or -not $hasTenantId -or -not $hasSubscriptionId) {
+            Write-Host "✅ Azure credentials found" -ForegroundColor Green
+            "credentialsConfigured=true" >> $env:GITHUB_OUTPUT
+          } else {
             Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Yellow
             Write-Host "║         AZURE CREDENTIALS NOT CONFIGURED                      ║" -ForegroundColor Yellow
             Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Yellow
@@ -111,9 +114,6 @@ jobs:
             Write-Host ""
             "credentialsConfigured=false" >> $env:GITHUB_OUTPUT
             exit 0
-          } else {
-            Write-Host "✅ Azure credentials validated" -ForegroundColor Green
-            "credentialsConfigured=true" >> $env:GITHUB_OUTPUT
           }
       
       - name: Set target web app name

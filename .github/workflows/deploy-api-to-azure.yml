@@ -69,23 +69,19 @@ jobs:
         id: check-credentials
         shell: pwsh
         env:
-          ENV_CLIENT_ID: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
-          REPO_CLIENT_ID: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          CLIENT_ID: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
         run: |
-          # Check environment secrets first, fall back to repository secrets
-          $envClientId = "${{ secrets.AZUREAPPSERVICE_CLIENTID }}" -ne ""
-          $envTenantId = "${{ secrets.AZUREAPPSERVICE_TENANTID }}" -ne ""
-          $envSubscriptionId = "${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}" -ne ""
-          
-          $hasClientId = $envClientId
-          $hasTenantId = $envTenantId
-          $hasSubscriptionId = $envSubscriptionId
+          # Check if credentials are available via environment variables
+          $hasClientId = -not [string]::IsNullOrWhiteSpace($env:CLIENT_ID)
+          $hasTenantId = -not [string]::IsNullOrWhiteSpace($env:TENANT_ID)
+          $hasSubscriptionId = -not [string]::IsNullOrWhiteSpace($env:SUBSCRIPTION_ID)
           
           if ($hasClientId -and $hasTenantId -and $hasSubscriptionId) {
-            Write-Host "✅ Using environment secrets" -ForegroundColor Green
-          }
-          
-          if (-not $hasClientId -or -not $hasTenantId -or -not $hasSubscriptionId) {
+            Write-Host "✅ Azure credentials found" -ForegroundColor Green
+            "credentialsConfigured=true" >> $env:GITHUB_OUTPUT
+          } else {
             Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Yellow
             Write-Host "║         AZURE CREDENTIALS NOT CONFIGURED                      ║" -ForegroundColor Yellow
             Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Yellow
@@ -119,9 +115,6 @@ jobs:
             Write-Host ""
             "credentialsConfigured=false" >> $env:GITHUB_OUTPUT
             exit 0
-          } else {
-            Write-Host "✅ Azure credentials validated" -ForegroundColor Green
-            "credentialsConfigured=true" >> $env:GITHUB_OUTPUT
           }
       
       - name: Set target web app name
