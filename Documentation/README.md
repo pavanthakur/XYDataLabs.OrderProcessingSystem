@@ -50,6 +50,41 @@ Contains application configuration and settings documentation:
 ### 04-Enterprise-Architecture
 *Currently empty - reserved for enterprise architecture documentation*
 
+### 05-Self-Learning
+**Azure learning curriculum and progress tracking**
+
+📖 **LEARNING HUB**: [Azure Curriculum README](./05-Self-Learning/Azure-Curriculum/README.md)
+
+| Document | Purpose | Audience | Status |
+|----------|---------|----------|--------|
+| **1_MASTER_CURRICULUM.md** | 18-week comprehensive Azure learning plan (Days 1-126) | Learners, Junior Devs | ✅ Active |
+| **AZURE_PROGRESS_EVALUATION.md** (Root) | Current progress tracker & next steps (Weeks 1-10) | Everyone | ✅ Updated Dec 2025 ⭐ |
+| **00_MASTER_PLAN.md** | Strategic 18-week microservices migration roadmap | Architects, Senior Devs | ✅ Complete |
+| **WEEKLY_AZURE_LEARNING_PLAN.md** | Week-by-week breakdown with daily tasks | Daily learners | ✅ Active |
+
+**Current Status (December 2025)**:
+- ✅ **Weeks 1-4 Complete**: Azure fundamentals, App Service, OIDC, IaC with Bicep
+- ⏳ **Week 5-6 (Days 41-56)**: 🆕 **YARP Microservices Architecture** ⭐ HIGH PRIORITY
+  - YARP Gateway implementation
+  - Inventory API (new microservice)
+  - Notifications API (new microservice)
+  - Docker Compose integration
+  - Service-to-service communication patterns
+- 📅 **Week 7-10**: Azure Functions, Security, Container Apps migration
+
+**Quick Links by Learning Stage**:
+- 🎓 **Start learning** → [1_MASTER_CURRICULUM.md](./05-Self-Learning/Azure-Curriculum/1_MASTER_CURRICULUM.md)
+- 📊 **Check progress** → [AZURE_PROGRESS_EVALUATION.md](../AZURE-PROGRESS-EVALUATION.md)
+- 🏗️ **YARP implementation** → [AZURE_PROGRESS_EVALUATION.md - APPENDIX](../AZURE-PROGRESS-EVALUATION.md#appendix-yarp-implementation-guide-days-41-56)
+- 🎯 **Weekly tasks** → [WEEKLY_AZURE_LEARNING_PLAN.md](./04-Enterprise-Architecture/WEEKLY_AZURE_LEARNING_PLAN.md)
+
+**Latest Updates (December 2025)**:
+- ✅ Prioritized YARP microservices architecture (Week 5-6)
+- ✅ Added detailed Day 41-56 implementation guide
+- ✅ Repositioned Azure Functions to Week 7 (integrates with YARP)
+- ✅ Updated 10-week roadmap with Container Apps migration
+- ✅ Complete code examples for Gateway, APIs, and Docker Compose
+
 ### 06-Testing-and-Results
 *Currently empty - reserved for testing documentation and results*
 
