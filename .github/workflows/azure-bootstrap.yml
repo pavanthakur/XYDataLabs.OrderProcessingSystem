@@ -1129,20 +1129,29 @@ jobs:
             $owner, $repo = $ownerRepo -split '/', 2
             
             try {
-              $respJson = gh api -H "Accept: application/vnd.github+json" repos/$owner/$repo/actions/secrets 2>$null
-              if ($LASTEXITCODE -eq 0 -and $respJson) {
-                $resp = $respJson | ConvertFrom-Json
-                $names = @()
-                if ($resp -and $resp.secrets) { 
-                  $names = $resp.secrets | ForEach-Object { $_.name } 
+              $output = gh api -H "Accept: application/vnd.github+json" repos/$owner/$repo/actions/secrets 2>&1
+              if ($LASTEXITCODE -eq 0 -and $output) {
+                try {
+                  $resp = $output | ConvertFrom-Json -ErrorAction Stop
+                  $names = @()
+                  if ($resp -and $resp.secrets) { 
+                    $names = $resp.secrets | ForEach-Object { $_.name } 
+                  }
+                  
+                  $hasClientId = $names -contains "AZUREAPPSERVICE_CLIENTID"
+                  $hasTenantId = $names -contains "AZUREAPPSERVICE_TENANTID"
+                  $hasSubscriptionId = $names -contains "AZUREAPPSERVICE_SUBSCRIPTIONID"
+                } catch {
+                  Write-Host "  ⚠️  Could not parse API response: $($_.Exception.Message)" -ForegroundColor Yellow
                 }
-                
-                $hasClientId = $names -contains "AZUREAPPSERVICE_CLIENTID"
-                $hasTenantId = $names -contains "AZUREAPPSERVICE_TENANTID"
-                $hasSubscriptionId = $names -contains "AZUREAPPSERVICE_SUBSCRIPTIONID"
+              } else {
+                Write-Host "  ⚠️  Could not fetch repository secrets (exit code: $LASTEXITCODE)" -ForegroundColor Yellow
+                if ($output -and $LASTEXITCODE -ne 0) {
+                  Write-Host "  Details: $output" -ForegroundColor Gray
+                }
               }
             } catch {
-              Write-Host "  ⚠️  Could not check repository secrets via API: $($_.Exception.Message)" -ForegroundColor Yellow
+              Write-Host "  ⚠️  Exception checking repository secrets: $($_.Exception.Message)" -ForegroundColor Yellow
             }
           }
           
