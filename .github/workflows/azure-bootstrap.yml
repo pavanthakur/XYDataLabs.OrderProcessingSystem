@@ -152,6 +152,31 @@ jobs:
           }
           Write-Host "  ✅ Environment selection valid" -ForegroundColor Green
 
+          # Validate branch matches target environment
+          $currentBranch = "${{ github.ref_name }}"
+          $expectedBranch = if ($env -eq "prod") { "main" } elseif ($env -eq "all") { "any" } else { $env }
+          
+          Write-Host "`n  Branch/Environment Match Check:" -ForegroundColor Cyan
+          Write-Host "    Current branch: $currentBranch" -ForegroundColor Gray
+          Write-Host "    Target environment: $env" -ForegroundColor Gray
+          Write-Host "    Expected branch: $expectedBranch" -ForegroundColor Gray
+          
+          if ($env -ne "all" -and $currentBranch -ne $expectedBranch) {
+            Write-Host "`n  ❌ BRANCH MISMATCH ERROR" -ForegroundColor Red
+            Write-Host "     You are running from branch '$currentBranch' but targeting environment '$env'" -ForegroundColor Red
+            Write-Host "     Expected branch: '$expectedBranch'" -ForegroundColor Yellow
+            Write-Host "" -ForegroundColor Gray
+            Write-Host "  📋 Correct Branch → Environment Mapping:" -ForegroundColor Yellow
+            Write-Host "     dev branch      → dev environment" -ForegroundColor White
+            Write-Host "     staging branch  → staging environment" -ForegroundColor White
+            Write-Host "     main branch     → prod environment" -ForegroundColor White
+            Write-Host "" -ForegroundColor Gray
+            Write-Host "  💡 Solution: Change 'Use workflow from' to branch '$expectedBranch'" -ForegroundColor Yellow
+            Write-Error "Branch/environment mismatch. Cannot proceed."
+            exit 1
+          }
+          Write-Host "  ✅ Branch matches target environment" -ForegroundColor Green
+
           # Warn if bootstrapping without OIDC/secrets
           if ($bootstrap -eq "true" -and $setupOidc -eq "false" -and $configSecrets -eq "false") {
             Write-Host "  ⚠️  Bootstrapping without OIDC/secrets - ensure they exist!" -ForegroundColor Yellow
