@@ -387,16 +387,32 @@ This establishes the architectural foundation that makes all future work easier:
 - Better testing and debugging
 
 ### Week 7 (Days 57-64): Azure Functions & Event-Driven Architecture
-**Goal:** Build async processing with Azure Functions (now integrates with YARP services)
+**Goal:** Build async processing with Azure Functions and master messaging patterns
 **Success Criteria:**
-- ✅ First Azure Function deployed
+- ✅ First Azure Function deployed (HTTP and Timer triggers)
 - ✅ Storage Queues vs Service Bus comparison completed 🆕
 - ✅ Queue-triggered Functions implemented 🆕
-- ✅ Service Bus or Event Grid configured
+- ✅ Service Bus deep dive (Queues + Topics/Subscriptions)
+- ✅ **Event Grid vs Service Bus comparison** 🆕 (interview critical)
+- ✅ Event Grid Topic created with webhook subscriptions
+- ✅ Understand when to use commands (Service Bus) vs events (Event Grid)
 - ✅ Event-driven order processing calling Inventory API
 - ✅ Notifications API triggered from Functions
-- ✅ Durable functions for workflows
+- ✅ Durable Functions for long-running workflows (saga pattern)
 - ✅ End-to-end async flow tested
+
+**Deliverables:**
+- Azure Functions project with multiple trigger types
+- Service Bus Queue and Topic configurations
+- Event Grid Topic with Function subscriptions
+- Architectural decision matrix: Service Bus vs Event Grid
+- Durable Functions orchestration for order approval workflow
+
+**Why This Matters:**
+- **Interview critical:** Interviewers love asking "Service Bus vs Event Grid"
+- **Commands vs Events:** Service Bus for "do this", Event Grid for "this happened"
+- **Real-world pattern:** Most enterprises use Service Bus heavily, Event Grid selectively
+- **Azure integrations:** Event Grid connects to Storage, Key Vault, Resource events
 
 ### Week 8 (Days 65-70): 🆕 Azure Cosmos DB (NoSQL) ⭐ NEW
 **Goal:** Master NoSQL database for high-scale microservices scenarios

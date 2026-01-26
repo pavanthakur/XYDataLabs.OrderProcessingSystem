@@ -284,12 +284,32 @@ After completing today's tasks, you will have:
 - [ ] Implement dead-letter queue handling
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
-#### Day 60-64: Azure Functions Advanced
-- [ ] Integrate Functions with Service Bus
-- [ ] Call Inventory API from Functions
-- [ ] Implement Durable Functions for workflows
+#### Day 60: Service Bus Deep Dive
+- [ ] Create Service Bus namespace (Standard tier)
+- [ ] Create Queue for critical order processing
+- [ ] Create Topic + Subscriptions for event broadcasting
+- [ ] Implement Service Bus-triggered Function
+- [ ] Test message ordering with sessions
+- [ ] Implement dead-letter queue handling
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+
+#### Day 61: Event Grid vs Service Bus (Interview Critical)
+- [ ] Create Event Grid Topic
+- [ ] Subscribe Azure Function to Event Grid events
+- [ ] Publish order events to Event Grid (webhook push)
+- [ ] Compare: Service Bus Queue vs Event Grid Topic
+- [ ] Understand when to use each (commands vs events)
+- [ ] Implement Azure Storage Blob trigger (Event Grid integration)
+- [ ] Document architectural decision matrix
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+
+#### Day 62-64: Azure Functions Advanced
+- [ ] Implement Durable Functions for long-running workflows
+- [ ] Call Inventory API from Functions (service-to-service)
 - [ ] Trigger Notifications API from Functions
-- [ ] **Time:** 10 hours (5 days × 2 hours) | **Completed:** ___/___/___
+- [ ] Implement saga pattern with Durable Functions
+- [ ] Test orchestration with approvals and timeouts
+- [ ] **Time:** 6 hours (3 days × 2 hours) | **Completed:** ___/___/___
 
 ---
 
