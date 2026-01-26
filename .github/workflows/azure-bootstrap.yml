@@ -1079,17 +1079,6 @@ jobs:
           Write-Host "Timestamp (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           Write-Host ""
           
-          # Check existing Azure secrets
-          $hasClientId = "${{ secrets.AZUREAPPSERVICE_CLIENTID }}" -ne ""
-          $hasTenantId = "${{ secrets.AZUREAPPSERVICE_TENANTID }}" -ne ""
-          $hasSubscriptionId = "${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}" -ne ""
-          
-          Write-Host "📋 Azure Secret Status:" -ForegroundColor Yellow
-          Write-Host "  AZUREAPPSERVICE_CLIENTID       : $(if ($hasClientId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasClientId) { "Green" } else { "Red" })
-          Write-Host "  AZUREAPPSERVICE_TENANTID       : $(if ($hasTenantId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasTenantId) { "Green" } else { "Red" })
-          Write-Host "  AZUREAPPSERVICE_SUBSCRIPTIONID : $(if ($hasSubscriptionId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasSubscriptionId) { "Green" } else { "Red" })
-          Write-Host ""
-          
           # Check GitHub App authentication (REQUIRED for automated secret management)
           Write-Host "🔐 GitHub App Authentication:" -ForegroundColor Yellow
           if ($env:GH_APP_TOKEN) {
@@ -1122,12 +1111,52 @@ jobs:
           }
           Write-Host ""
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+          Write-Host ""
+          
+          # Check REPOSITORY-level secrets via GitHub API
+          # Note: We must check via API, not ${{ secrets.* }}, because this job runs in an
+          # environment context and ${{ secrets.* }} will return environment secrets, not repository secrets
+          Write-Host "🔍 Checking repository-level secrets via API..." -ForegroundColor Cyan
+          Write-Host ""
+          
+          $hasClientId = $false
+          $hasTenantId = $false
+          $hasSubscriptionId = $false
+          
+          if ($env:GH_APP_TOKEN) {
+            $env:GH_TOKEN = $env:GH_APP_TOKEN
+            $ownerRepo = "${{ github.repository }}"
+            $owner, $repo = $ownerRepo -split '/', 2
+            
+            try {
+              $respJson = gh api -H "Accept: application/vnd.github+json" repos/$owner/$repo/actions/secrets 2>$null
+              if ($LASTEXITCODE -eq 0 -and $respJson) {
+                $resp = $respJson | ConvertFrom-Json
+                $names = @()
+                if ($resp -and $resp.secrets) { 
+                  $names = $resp.secrets | ForEach-Object { $_.name } 
+                }
+                
+                $hasClientId = $names -contains "AZUREAPPSERVICE_CLIENTID"
+                $hasTenantId = $names -contains "AZUREAPPSERVICE_TENANTID"
+                $hasSubscriptionId = $names -contains "AZUREAPPSERVICE_SUBSCRIPTIONID"
+              }
+            } catch {
+              Write-Host "  ⚠️  Could not check repository secrets via API: $($_.Exception.Message)" -ForegroundColor Yellow
+            }
+          }
+          
+          Write-Host "📋 Repository-Level Azure Secret Status:" -ForegroundColor Yellow
+          Write-Host "  AZUREAPPSERVICE_CLIENTID       : $(if ($hasClientId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasClientId) { "Green" } else { "Red" })
+          Write-Host "  AZUREAPPSERVICE_TENANTID       : $(if ($hasTenantId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasTenantId) { "Green" } else { "Red" })
+          Write-Host "  AZUREAPPSERVICE_SUBSCRIPTIONID : $(if ($hasSubscriptionId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasSubscriptionId) { "Green" } else { "Red" })
+          Write-Host ""
           
           if ($hasClientId -and $hasTenantId -and $hasSubscriptionId) {
-            Write-Host "✅ All Azure secrets already configured - skipping secret setup" -ForegroundColor Green
+            Write-Host "✅ All Azure secrets already configured at repository level" -ForegroundColor Green
             "secretsExist=true" >> $env:GITHUB_OUTPUT
           } else {
-            Write-Host "⚠️  Azure secrets missing - will attempt configuration" -ForegroundColor Yellow
+            Write-Host "⚠️  Azure secrets missing at repository level - will attempt configuration" -ForegroundColor Yellow
             "secretsExist=false" >> $env:GITHUB_OUTPUT
           }
           Write-Host ""
