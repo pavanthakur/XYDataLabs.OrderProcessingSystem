@@ -1,204 +1,137 @@
-# 🎯 Azure Enterprise Developer Curriculum - Folder Structure Guide
+# 🎯 Azure Learning Curriculum - Navigation Guide
 
-## **📁 LOGICAL FOLDER ORGANIZATION**
+**Your Single Source of Truth:** `1_MASTER_CURRICULUM.md`
 
-### **🗂️ MAIN STRUCTURE OVERVIEW:**
+---
+
+## 📚 **Quick Start**
+
+### **For Daily Learning:**
+1. Open `1_MASTER_CURRICULUM.md` (this folder)
+2. Find your current day (e.g., Day 32)
+3. Complete tasks and check them off: `- [x]`
+4. Fill in completion date
+
+### **For Weekly Tracking:**
+- Check `AZURE-PROGRESS-EVALUATION.md` (project root)
+- Review weekly milestones and achievements
+
+---
+
+## 📁 **Current Folder Structure**
+
 ```
 Azure-Curriculum/
-├── 00-Foundation/              # Master planning & core documents
-├── 01-Weekly-Trackers/        # Organized by week pairs
-├── 02-Daily-Progress/         # Monthly progress logs
-├── 03-Certifications/         # Certification preparation
-├── 04-Resources/              # Documentation & templates
-├── 05-Portfolio/              # Final portfolio & showcase
-└── README.md                  # This navigation guide
+├── 1_MASTER_CURRICULUM.md      # ⭐ MAIN: Day-by-day learning (Days 1-114)
+├── README.md                   # This navigation guide
+├── 02-Daily-Progress/          # Your daily learning logs
+├── 03-Certifications/          # Certification preparation
+├── 04-Resources/               # Templates and references
+└── 05-Portfolio/               # Project showcase
 ```
 
 ---
 
-## **📋 DETAILED FOLDER DESCRIPTIONS:**
+## 📋 **Folder Descriptions**
 
-### **📁 00-Foundation/**
-**Purpose**: Core curriculum documents and master planning
-**Contents**:
-- `MASTER_ROADMAP.md` - 18-week comprehensive overview
-- `DAILY_PROGRESS_TRACKER.md` - Complete 125-day breakdown
-- `MIND_MAP.md` - Visual learning navigation system
-- `LEARNING_OBJECTIVES.md` - Skills and competency framework
-- `SUCCESS_METRICS.md` - Assessment and milestone tracking
+### **📄 1_MASTER_CURRICULUM.md** ⭐
+**Purpose:** Your complete 15-week learning plan (114 days)
+**Coverage:**
+- Week 1-4: Azure fundamentals, App Service, Bicep, CI/CD
+- Week 5-6: YARP microservices architecture
+- Week 7: Azure Functions, Service Bus, Event Grid
+- Week 8: Cosmos DB (NoSQL)
+- Week 9: Redis caching
+- Week 10: .NET Aspire orchestration
+- Week 11-12: Container Apps deployment
+- Week 13-14: Security, observability
+- Week 15: API Management
 
-**Usage**: Reference these documents for overall curriculum context and navigation
-
----
-
-### **📁 01-Weekly-Trackers/**
-**Purpose**: Detailed weekly progress tracking organized by 2-week phases
-**Structure**:
-```
-01-Weekly-Trackers/
-├── Week-01-02/    # Weeks 1-2: Azure Fundamentals & Core Services
-├── Week-03-04/    # Weeks 3-4: Serverless & Functions
-├── Week-05-06/    # Weeks 5-6: DevOps & CI/CD
-├── Week-07-08/    # Weeks 7-8: Containers & Orchestration
-├── Week-09-10/    # Weeks 9-10: API Management & Security
-├── Week-11-12/    # Weeks 11-12: Data Services & Analytics
-├── Week-13-14/    # Weeks 13-14: Microservices & Architecture
-├── Week-15-16/    # Weeks 15-16: Cloud-Native & Enterprise Integration
-└── Week-17-18/    # Weeks 17-18: Emerging Technologies & Certification
-```
-
-**Contents per folder**:
-- `SUCCESS_CRITERIA.md` - 2-week detailed objectives and daily breakdowns
-- `ACHIEVEMENTS.md` - Completed milestones and learning outcomes
-- `RESOURCES.md` - Links, documentation, and learning materials
-- `PROJECTS.md` - Hands-on implementations and practice exercises
-
-**Usage**: Navigate to current week folder for daily learning objectives
+**Usage:** Open this file daily and follow day-by-day tasks
 
 ---
 
 ### **📁 02-Daily-Progress/**
-**Purpose**: Monthly organized daily progress logs and reflections
-**Structure**:
-```
-02-Daily-Progress/
-├── August-2025/     # Week 1 start (Aug 20-31)
-├── September-2025/  # Weeks 2-5
-├── October-2025/    # Weeks 6-9
-├── November-2025/   # Weeks 10-13
-└── December-2025/   # Weeks 14-18 completion (Dec 23)
-```
-
-**Contents per month**:
-- Daily learning logs (e.g., `2025-08-20-Day01.md`)
-- Weekly reflection summaries
-- Monthly achievement reviews
-- Problem-solving documentation
-
-**Usage**: Daily documentation of learning progress and insights
+**Purpose:** Document your daily learning and reflections
+### **📁 02-Daily-Progress/**
+**Purpose:** Document your daily learning and reflections
+**Structure:** Organized by month (e.g., `January-2026/`, `February-2026/`)
+**Usage:** Create daily notes to track what you learned
 
 ---
 
 ### **📁 03-Certifications/**
-**Purpose**: Certification preparation and tracking
-**Structure**:
-```
-03-Certifications/
-├── AZ-204-Developer/
-│   ├── study-guides/
-│   ├── practice-exams/
-│   ├── preparation-notes/
-│   └── certification-tracker.md
-├── AZ-400-DevOps/
-└── AZ-305-Architect/
-```
-
-**Contents per certification**:
-- Study guides and exam objectives
-- Practice exam results and analysis
-- Preparation schedules and milestones
-- Certification achievement documentation
-
-**Usage**: Focused certification preparation and tracking
+**Purpose:** Azure certification preparation materials
+**Planned Certifications:**
+- AZ-204: Azure Developer Associate
+- AZ-400: DevOps Engineer Expert
+- AZ-305: Azure Solutions Architect Expert
 
 ---
 
 ### **📁 04-Resources/**
-**Purpose**: Documentation, templates, and reference materials
-**Structure**:
-```
-04-Resources/
-├── Documentation/
-│   ├── azure-services-reference/
-│   ├── architecture-patterns/
-│   ├── best-practices/
-│   └── troubleshooting-guides/
-└── Templates/
-    ├── daily-log-template.md
-    ├── weekly-review-template.md
-    ├── project-documentation-template.md
-    └── learning-reflection-template.md
-```
-
-**Usage**: Reference documentation and templates for consistent tracking
+**Purpose:** Templates, references, and learning materials
+**Contents:**
+- Documentation templates
+- Code snippets and examples
+- Reference links and guides
 
 ---
 
 ### **📁 05-Portfolio/**
-**Purpose**: Final portfolio development and career showcase
-**Contents**:
-- `portfolio-overview.md` - Complete project showcase
-- `technical-achievements.md` - Skills and competency demonstration
-- `career-readiness.md` - Interview preparation and professional materials
-- `project-implementations/` - Code and deployment examples
-- `presentations/` - Technical presentations and demonstrations
-
-**Usage**: Career preparation and professional portfolio development
+**Purpose:** Showcase your completed projects and achievements
+**Contents:**
+- Project demonstrations
+- Architecture diagrams
+- Technical presentations
 
 ---
 
-## **🚀 NAVIGATION WORKFLOW:**
+## 🚀 **Your Learning Workflow**
 
-### **📅 Daily Learning Process:**
-1. **Start**: Check `00-Foundation/DAILY_PROGRESS_TRACKER.md` for today's objectives
-2. **Weekly Context**: Navigate to current week in `01-Weekly-Trackers/Week-XX-XX/`
-3. **Daily Execution**: Follow SUCCESS_CRITERIA.md for detailed daily breakdown
-4. **Progress Logging**: Document progress in `02-Daily-Progress/[Current-Month]/`
-5. **Weekly Review**: Update achievements in weekly tracker folder
+### **Daily Routine:**
+1. **Morning:** Open `1_MASTER_CURRICULUM.md` → Find today's day number
+2. **Learning:** Execute 1-2 hour learning session
+3. **Evening:** Check off completed tasks in `1_MASTER_CURRICULUM.md`
+4. **Optional:** Create daily log in `02-Daily-Progress/`
 
-### **📊 Weekly Review Process:**
-1. **Milestone Assessment**: Review week's SUCCESS_CRITERIA achievements
-2. **Progress Update**: Update `01-Weekly-Trackers/Week-XX-XX/ACHIEVEMENTS.md`
-3. **Monthly Summary**: Compile weekly progress in monthly folder
-4. **Next Week Prep**: Preview next week's objectives and prepare resources
-
-### **🎯 Monthly Planning Process:**
-1. **Achievement Review**: Assess monthly learning outcomes
-2. **Certification Progress**: Update certification preparation status
-3. **Portfolio Development**: Add monthly achievements to portfolio
-4. **Course Correction**: Adjust learning pace and focus areas if needed
+### **Weekly Review:**
+1. Check `AZURE-PROGRESS-EVALUATION.md` (project root)
+2. Mark week as complete in roadmap table
+3. Prepare for next week's tasks
 
 ---
 
-## **💡 BENEFITS OF THIS STRUCTURE:**
+## 📊 **Current Learning Status**
 
-### **✅ ORGANIZED LEARNING:**
-- **Clear Navigation**: Easy to find current and past learning materials
-- **Progressive Structure**: Logical flow from foundation to advanced topics
-- **Scalable Organization**: Supports 18-week comprehensive curriculum
-
-### **✅ EFFICIENT TRACKING:**
-- **Daily Granularity**: Detailed daily progress without overwhelming structure
-- **Weekly Milestones**: Clear 2-week achievement cycles
-- **Monthly Reviews**: Strategic progress assessment and planning
-
-### **✅ PROFESSIONAL DEVELOPMENT:**
-- **Portfolio Ready**: Organized structure supports career showcase
-- **Certification Focused**: Dedicated preparation and tracking
-- **Resource Management**: Centralized documentation and templates
-
-### **✅ FUTURE SCALABILITY:**
-- **Easy Expansion**: Structure supports additional weeks or specializations
-- **Archive Friendly**: Historical progress preserved in organized manner
-- **Knowledge Base**: Becomes personal Azure expertise repository
+**Week 4 Checkpoint (January 26, 2026)**
+- ✅ **Completed:** Weeks 1-4 (Days 1-31)
+- 📍 **Current:** Day 32 - Key Vault Access Configuration
+- 📅 **Next:** Days 33-40 - SQL Database & Key Vault mastery
+- 🎯 **Future:** Week 5-6 - YARP microservices (Days 41-56)
 
 ---
 
-## **🎯 QUICK START GUIDE:**
+## 🔗 **Related Documentation**
 
-### **📍 Starting Your Learning Journey (August 20, 2025):**
-1. **Read This Guide**: Understand the complete folder structure
-2. **Review Foundation**: Check `00-Foundation/` for master planning
-3. **Navigate to Week 1**: Go to `01-Weekly-Trackers/Week-01-02/`
-4. **Create Daily Log**: Start first entry in `02-Daily-Progress/August-2025/`
-5. **Begin Learning**: Follow SUCCESS_CRITERIA.md for Day 1 objectives
-
-### **📊 Daily Learning Routine:**
-- **Morning**: Review daily objectives from weekly tracker
-- **Learning**: Execute 2-hour learning session
-- **Evening**: Document progress in daily log
-- **Weekly**: Update achievements and prepare for next week
+| Document | Location | Purpose |
+|----------|----------|---------|
+| **Weekly Roadmap** | `AZURE-PROGRESS-EVALUATION.md` (root) | 15-week milestone tracker |
+| **Architecture Guide** | `ARCHITECTURE-EVOLUTION.md` (root) | Phase 1/2/3 comparison |
+| **Service Coverage** | `AZURE-TOP-7-SERVICES-ANALYSIS.md` (root) | Azure services analysis |
+| **Main Documentation** | `Documentation/README.md` | Project documentation hub |
 
 ---
 
-**🚀 This structure supports your complete 18-week Azure learning journey from foundation to enterprise expertise!** 🎯
+## ✅ **Success Tips**
+
+1. ✅ **Follow 1_MASTER_CURRICULUM.md sequentially** - Don't skip ahead
+2. ✅ **Check off tasks daily** - Visual progress motivation
+3. ✅ **Review weekly summaries** - Understand the big picture
+4. ✅ **Document learnings** - Create daily notes when helpful
+5. ✅ **Stay consistent** - 1-2 hours daily builds expertise
+
+---
+
+**Last Updated:** January 26, 2026  
+**Current Focus:** Week 4 - Key Vault & SQL Database Mastery
