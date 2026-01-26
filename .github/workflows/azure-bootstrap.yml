@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Target environment to bootstrap'
+        description: '🎯 Environment | Select target environment (dev recommended for first run)'
         required: true
         type: choice
         options:
@@ -13,42 +13,42 @@ on:
           - prod
           - all
       setupOidc:
-        description: 'Setup Azure OIDC (first-time only)'
+        description: '1️⃣ Setup Azure OIDC [REQUIRED for first-time setup] | Creates passwordless authentication'
         required: true
         type: boolean
         default: true
       setupGitHubApp:
-        description: 'Setup GitHub App (required for automated secret management - first-time only)'
+        description: '2️⃣ Setup GitHub App [One-time only] | Required ONLY if APP_ID and APP_PRIVATE_KEY secrets missing'
         required: true
         type: boolean
         default: false
       oidcAppName:
-        description: 'OIDC App Name (requires GitHub App setup)'
+        description: 'OIDC App Name | Default: GitHub-Actions-OIDC (only change if using custom name)'
         required: false
         type: string
         default: 'GitHub-Actions-OIDC'
       configureSecrets:
-        description: 'Configure GitHub secrets (auto if GitHub App configured)'
+        description: '3️⃣ Configure Secrets [REQUIRED] | Auto-creates CLIENTID, TENANTID, SUBSCRIPTIONID in GitHub'
         required: true
         type: boolean
-        default: false
+        default: true
       enableValidation:
-        description: 'Enable pre-deployment validation'
+        description: '🔍 Pre-Flight Validation [Optional] | Checks branch/env alignment and prerequisites'
         required: true
         type: boolean
         default: false
       bootstrapInfra:
-        description: 'Bootstrap infrastructure (App Services, etc.)'
+        description: '4️⃣ Bootstrap Infrastructure [REQUIRED] | Creates Resource Group, App Services, SQL, Key Vault'
         required: true
         type: boolean
         default: true
       deployApi:
-        description: 'Deploy API after bootstrap (optional)'
+        description: '5️⃣ Deploy API [Optional] | Automatically deploys API code after infrastructure is ready'
         required: true
         type: boolean
         default: false
       deployUi:
-        description: 'Deploy UI after bootstrap (optional)'
+        description: '6️⃣ Deploy UI [Optional] | Automatically deploys UI code after infrastructure is ready'
         required: true
         type: boolean
         default: false
