@@ -42,6 +42,16 @@ on:
         required: true
         type: boolean
         default: true
+      deployApi:
+        description: 'Deploy API after bootstrap (optional)'
+        required: true
+        type: boolean
+        default: false
+      deployUi:
+        description: 'Deploy UI after bootstrap (optional)'
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -3450,3 +3460,68 @@ jobs:
             $icon = if ($enableVal -eq "success") { "✅" } elseif ($enableVal -eq "skipped") { "⏭️" } else { "❌" }
             "| Enable Validation | $icon $enableVal |" >> $env:GITHUB_STEP_SUMMARY
           }
+
+  # Optional: Trigger deployment workflows after successful bootstrap
+  trigger-deployments:
+    name: Trigger Deployments
+    runs-on: ubuntu-latest
+    needs: [bootstrap-summary]
+    if: |
+      (inputs.deployApi == true || inputs.deployUi == true) && 
+      needs.bootstrap-summary.result == 'success'
+    steps:
+      - name: Trigger API Deployment
+        if: inputs.deployApi == true
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const result = await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'deploy-api-to-azure.yml',
+              ref: context.ref
+            });
+            
+            core.notice(`🚀 API deployment triggered for branch: ${context.ref.replace('refs/heads/', '')}`);
+            core.notice(`📋 View workflow: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/workflows/deploy-api-to-azure.yml`);
+
+      - name: Trigger UI Deployment
+        if: inputs.deployUi == true
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const result = await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'deploy-ui-to-azure.yml',
+              ref: context.ref
+            });
+            
+            core.notice(`🚀 UI deployment triggered for branch: ${context.ref.replace('refs/heads/', '')}`);
+            core.notice(`📋 View workflow: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/workflows/deploy-ui-to-azure.yml`);
+
+      - name: Add Deployment Summary
+        if: always()
+        run: |
+          echo "## 🚀 Deployment Triggers" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Workflow | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ inputs.deployApi }}" == "true" ]; then
+            echo "| API Deployment | ✅ Triggered |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "🔗 [View API Deployment Runs](https://github.com/${{ github.repository }}/actions/workflows/deploy-api-to-azure.yml)" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ inputs.deployUi }}" == "true" ]; then
+            echo "| UI Deployment | ✅ Triggered |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "🔗 [View UI Deployment Runs](https://github.com/${{ github.repository }}/actions/workflows/deploy-ui-to-azure.yml)" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "_Deployments are running on branch: \`${{ github.ref_name }}\`_" >> $GITHUB_STEP_SUMMARY
+
