@@ -166,16 +166,72 @@ az webapp restart --name pavanthakur-orderprocessing-ui-xyapp-dev --resource-gro
 - Entity Framework Core migrations guide
 - SQL Database security best practices
 
-### Phase 3: Azure Functions & Event-Driven Patterns (Days 41-48)
-**Reference:** `1_MASTER_CURRICULUM.md` Days 41-48
+### Phase 3: YARP Reverse Proxy & Microservices Architecture (Days 41-56) 🆕 HIGH PRIORITY
+**Reference:** YARP implementation guide (see detailed plan below)
+
+**Why This First:**
+- ✅ Establishes clean microservices architecture early
+- ✅ Simplifies local development (no port management)
+- ✅ Production-ready pattern from day one
+- ✅ Enables independent service scaling
+- ✅ Natural fit for Azure Container Apps migration
 
 **Tasks:**
-1. Create Azure Function for order processing
-2. Integrate with Azure Service Bus or Event Grid
-3. Build async processing patterns
-4. Connect Functions to existing API
-5. Implement durable functions for long-running workflows
+1. **Days 41-42:** Setup YARP Gateway project
+   - Create `XYDataLabs.OrderProcessingSystem.Gateway` project
+   - Configure YARP routing for existing API and UI
+   - Test local routing with `orders.localhost` and `ui.localhost`
+
+2. **Days 43-46:** Build Inventory API (New Microservice)
+   - Create `XYDataLabs.OrderProcessingSystem.InventoryAPI` project
+   - Implement stock management endpoints (get, reserve, release)
+   - Add to YARP routing as `inventory.localhost`
+   - Integrate with Orders API for stock checks
+
+3. **Days 47-50:** Build Notifications API (New Microservice)
+   - Create `XYDataLabs.OrderProcessingSystem.NotificationsAPI` project
+   - Implement email/SMS notification endpoints
+   - Add to YARP routing as `notifications.localhost`
+   - Integrate with Orders API for order confirmations
+
+4. **Days 51-53:** Docker Compose Integration
+   - Create `docker-compose.yml` for all services
+   - Configure service networking and dependencies
+   - Test complete system with `docker compose up`
+   - Verify inter-service communication through YARP
+
+5. **Days 54-56:** Service-to-Service Communication Patterns
+   - Implement resilient HTTP calls (Polly for retries)
+   - Add circuit breakers between services
+   - Test failure scenarios and graceful degradation
+   - Document service dependencies
+
+**Expected Outcomes:**
+- ✅ Clean URLs: `orders.localhost`, `inventory.localhost`, `notifications.localhost`, `ui.localhost`
+- ✅ Production-like architecture in local environment
+- ✅ Three independent microservices communicating via YARP
+- ✅ Docker Compose setup for one-command startup
+- ✅ Foundation for Azure Container Apps deployment
+
+**Learning Resources:**
+- YARP Official Documentation: https://microsoft.github.io/reverse-proxy/
+- Microservices Patterns: https://microservices.io/patterns/
+- Docker Networking: https://docs.docker.com/network/
+
+---
+
+### Phase 4: Azure Functions & Event-Driven Patterns (Days 57-64)
+**Reference:** `1_MASTER_CURRICULUM.md` Days 57-64
+
+**Tasks:**
+1. Create Azure Function for async order processing
+2. Integrate with Azure Service Bus for message queuing
+3. Connect Functions to Inventory API for stock updates
+4. Implement durable functions for long-running workflows
+5. Use Notifications API from Functions for event-driven alerts
 6. Set up monitoring and Application Insights for Functions
+
+**Note:** This phase now integrates with the YARP microservices architecture
 
 ---
 
@@ -205,7 +261,7 @@ az webapp restart --name pavanthakur-orderprocessing-ui-xyapp-dev --resource-gro
 
 ---
 
-## 🎯 Weekly Goals (Next 4 Weeks)
+## 🎯 Weekly Goals (Next 8 Weeks) - UPDATED ROADMAP
 
 ### Week 4 (Days 32-40): Key Vault & SQL Database Mastery
 **Goal:** Complete Key Vault integration and master Azure SQL Database
@@ -216,16 +272,44 @@ az webapp restart --name pavanthakur-orderprocessing-ui-xyapp-dev --resource-gro
 - ✅ Connection strings secured via Key Vault
 - ✅ Database backup and restore tested
 
-### Week 5 (Days 41-48): Azure Functions & Event-Driven Architecture
-**Goal:** Build async processing with Azure Functions
+### Week 5-6 (Days 41-56): 🆕 YARP Reverse Proxy & Microservices Architecture ⭐ HIGH PRIORITY
+**Goal:** Establish clean microservices architecture with YARP gateway
+**Success Criteria:**
+- ✅ YARP Gateway project created and configured
+- ✅ Inventory API built and integrated (stock management)
+- ✅ Notifications API built and integrated (email/SMS)
+- ✅ Clean URLs working: `orders.localhost`, `inventory.localhost`, `notifications.localhost`, `ui.localhost`
+- ✅ Docker Compose setup for all services
+- ✅ Service-to-service communication via YARP validated
+- ✅ Resilient communication patterns (retries, circuit breakers) implemented
+
+**Deliverables:**
+- New project: `XYDataLabs.OrderProcessingSystem.Gateway`
+- New project: `XYDataLabs.OrderProcessingSystem.InventoryAPI`
+- New project: `XYDataLabs.OrderProcessingSystem.NotificationsAPI`
+- `docker-compose.yml` for complete system
+- YARP routing configuration (`appsettings.json`)
+- Service integration documentation
+
+**Why This Priority:**
+This establishes the architectural foundation that makes all future work easier:
+- Cleaner local development
+- Production-ready service isolation
+- Easier Azure Container Apps migration
+- Independent service scaling
+- Better testing and debugging
+
+### Week 7 (Days 57-64): Azure Functions & Event-Driven Architecture
+**Goal:** Build async processing with Azure Functions (now integrates with YARP services)
 **Success Criteria:**
 - ✅ First Azure Function deployed
 - ✅ Service Bus or Event Grid configured
-- ✅ Event-driven order processing implemented
+- ✅ Event-driven order processing calling Inventory API
+- ✅ Notifications API triggered from Functions
 - ✅ Durable functions for workflows
 - ✅ End-to-end async flow tested
 
-### Week 6 (Days 49-56): Security Best Practices
+### Week 8 (Days 65-70): Security Best Practices
 **Goal:** Harden security posture across all services
 **Success Criteria:**
 - ✅ Azure AD authentication implemented
@@ -234,10 +318,14 @@ az webapp restart --name pavanthakur-orderprocessing-ui-xyapp-dev --resource-gro
 - ✅ Private endpoints for SQL and Storage
 - ✅ Security Center recommendations addressed
 
-### Week 7-8 (Days 57-70): Docker & Container Preparation
-**Goal:** Prepare for migration to Azure Container Apps
+### Week 9-10 (Days 71-84): Docker & Azure Container Apps Migration
+**Goal:** Migrate from App Service to Azure Container Apps
 **Success Criteria:**
-- ✅ Docker Desktop installed and configured
+- ✅ All services containerized (already done with docker-compose)
+- ✅ Azure Container Registry configured
+- ✅ Container Apps deployed (Gateway, Orders, Inventory, Notifications, UI)
+- ✅ Auto-scaling configured
+- ✅ Blue-green deployments tested
 - ✅ API and UI Dockerized with multi-stage builds
 - ✅ Local Docker Compose testing complete
 - ✅ Azure Container Registry provisioned
@@ -293,3 +381,476 @@ You are **cleared to proceed** with Day 32+ tasks. All documentation is in place
 4. Follow the Key Vault runbook for UAT/Prod setup (when ready)
 
 **No documentation updates needed** - proceed with technical execution!
+
+---
+
+## 📘 APPENDIX: YARP Implementation Guide (Days 41-56)
+
+### Overview
+This guide provides step-by-step instructions for implementing YARP (Yet Another Reverse Proxy) to establish a clean microservices architecture.
+
+### Architecture Goals
+```
+Current State:
+- Single API project handling all logic
+- Direct port-based access (localhost:5001, localhost:5173)
+- Monolithic deployment
+
+Target State (with YARP):
+- YARP Gateway (Port 8080) as single entry point
+  ├── orders.localhost → Orders API (internal, no exposed port)
+  ├── inventory.localhost → Inventory API (internal)
+  ├── notifications.localhost → Notifications API (internal)
+  └── ui.localhost → UI (internal)
+```
+
+### Benefits
+- ✅ **Clean URLs:** No port management
+- ✅ **Service Isolation:** Independent scaling and deployment
+- ✅ **Production-Ready:** Same pattern for Azure Container Apps
+- ✅ **Centralized Auth:** JWT validation once in gateway
+- ✅ **Easy Monitoring:** Single entry point for tracing
+
+---
+
+### Day 41-42: Setup YARP Gateway
+
+#### Step 1: Create Gateway Project
+```powershell
+# Navigate to solution root
+cd Q:\GIT\TestAppXY_OrderProcessingSystem
+
+# Create YARP Gateway project
+dotnet new web -n XYDataLabs.OrderProcessingSystem.Gateway
+dotnet sln add XYDataLabs.OrderProcessingSystem.Gateway
+
+# Add YARP package
+cd XYDataLabs.OrderProcessingSystem.Gateway
+dotnet add package Yarp.ReverseProxy
+```
+
+#### Step 2: Configure Program.cs
+```csharp
+using Microsoft.AspNetCore.HttpOverrides;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add YARP
+builder.Services.AddReverseProxy()
+    .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
+
+// Forwarded headers (required behind load balancer)
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.All;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
+var app = builder.Build();
+
+app.UseForwardedHeaders();
+
+// Health check
+app.MapGet("/health", () => Results.Ok(new { 
+    service = "YARP Gateway", 
+    status = "healthy" 
+}));
+
+// YARP routing
+app.MapReverseProxy();
+
+app.Run();
+```
+
+#### Step 3: Configure appsettings.json
+```json
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning",
+      "Yarp": "Information"
+    }
+  },
+  "ReverseProxy": {
+    "Routes": {
+      "orders-route": {
+        "ClusterId": "orders-cluster",
+        "Match": {
+          "Hosts": ["orders.localhost"]
+        }
+      },
+      "ui-route": {
+        "ClusterId": "ui-cluster",
+        "Match": {
+          "Hosts": ["ui.localhost"]
+        }
+      }
+    },
+    "Clusters": {
+      "orders-cluster": {
+        "Destinations": {
+          "orders-api": {
+            "Address": "http://localhost:5001"
+          }
+        }
+      },
+      "ui-cluster": {
+        "Destinations": {
+          "ui-app": {
+            "Address": "http://localhost:5173"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+#### Step 4: Test Gateway
+```powershell
+# Start Gateway
+cd XYDataLabs.OrderProcessingSystem.Gateway
+dotnet run
+
+# Test in another terminal
+curl http://orders.localhost:8080/health
+curl http://ui.localhost:8080
+```
+
+---
+
+### Day 43-46: Build Inventory API
+
+#### Step 1: Create Project
+```powershell
+cd Q:\GIT\TestAppXY_OrderProcessingSystem
+
+dotnet new webapi -n XYDataLabs.OrderProcessingSystem.InventoryAPI
+dotnet sln add XYDataLabs.OrderProcessingSystem.InventoryAPI
+```
+
+#### Step 2: Implement Controllers
+```csharp
+// Controllers/InventoryController.cs
+using Microsoft.AspNetCore.Mvc;
+
+namespace XYDataLabs.OrderProcessingSystem.InventoryAPI.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class InventoryController : ControllerBase
+{
+    [HttpGet("products/{productId}/stock")]
+    public IActionResult GetStock(int productId)
+    {
+        // TODO: Query from database
+        return Ok(new { 
+            productId, 
+            stock = 50, 
+            reserved = 5, 
+            available = 45 
+        });
+    }
+
+    [HttpPost("reserve")]
+    public IActionResult ReserveStock([FromBody] ReserveRequest request)
+    {
+        // TODO: Database transaction to reserve stock
+        return Ok(new { 
+            reservationId = Guid.NewGuid(), 
+            success = true 
+        });
+    }
+
+    [HttpPost("release")]
+    public IActionResult ReleaseStock([FromBody] ReleaseRequest request)
+    {
+        // TODO: Release reservation in database
+        return Ok(new { success = true });
+    }
+
+    [HttpGet("low-stock")]
+    public IActionResult GetLowStock([FromQuery] int threshold = 10)
+    {
+        // TODO: Query database for low stock
+        return Ok(new[]
+        {
+            new { productId = 1, name = "Product A", stock = 5 },
+            new { productId = 2, name = "Product B", stock = 8 }
+        });
+    }
+}
+
+public record ReserveRequest(int ProductId, int Quantity, string OrderId);
+public record ReleaseRequest(string ReservationId);
+```
+
+#### Step 3: Update Gateway Configuration
+```json
+{
+  "ReverseProxy": {
+    "Routes": {
+      "inventory-route": {
+        "ClusterId": "inventory-cluster",
+        "Match": {
+          "Hosts": ["inventory.localhost"]
+        }
+      }
+    },
+    "Clusters": {
+      "inventory-cluster": {
+        "Destinations": {
+          "inventory-api": {
+            "Address": "http://localhost:5002"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+#### Step 4: Test Inventory API
+```powershell
+# Start Inventory API
+cd XYDataLabs.OrderProcessingSystem.InventoryAPI
+dotnet run --urls http://localhost:5002
+
+# Test via YARP
+curl http://inventory.localhost:8080/api/inventory/products/1/stock
+```
+
+---
+
+### Day 47-50: Build Notifications API
+
+#### Step 1: Create Project
+```powershell
+cd Q:\GIT\TestAppXY_OrderProcessingSystem
+
+dotnet new webapi -n XYDataLabs.OrderProcessingSystem.NotificationsAPI
+dotnet sln add XYDataLabs.OrderProcessingSystem.NotificationsAPI
+```
+
+#### Step 2: Implement Controllers
+```csharp
+// Controllers/NotificationsController.cs
+using Microsoft.AspNetCore.Mvc;
+
+namespace XYDataLabs.OrderProcessingSystem.NotificationsAPI.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class NotificationsController : ControllerBase
+{
+    [HttpPost("email")]
+    public IActionResult SendEmail([FromBody] EmailRequest request)
+    {
+        // TODO: Integrate with SendGrid/SMTP
+        return Ok(new { 
+            messageId = Guid.NewGuid(), 
+            status = "sent" 
+        });
+    }
+
+    [HttpPost("sms")]
+    public IActionResult SendSms([FromBody] SmsRequest request)
+    {
+        // TODO: Integrate with Twilio/SMS provider
+        return Ok(new { 
+            messageId = Guid.NewGuid(), 
+            status = "sent" 
+        });
+    }
+
+    [HttpGet("history/{userId}")]
+    public IActionResult GetHistory(string userId)
+    {
+        // TODO: Query notification history from database
+        return Ok(new[]
+        {
+            new { type = "email", sentAt = DateTime.UtcNow.AddHours(-2) },
+            new { type = "sms", sentAt = DateTime.UtcNow.AddDays(-1) }
+        });
+    }
+}
+
+public record EmailRequest(string To, string Subject, string Body);
+public record SmsRequest(string PhoneNumber, string Message);
+```
+
+#### Step 3: Update Gateway Configuration
+Add to `appsettings.json`:
+```json
+{
+  "notifications-route": {
+    "ClusterId": "notifications-cluster",
+    "Match": {
+      "Hosts": ["notifications.localhost"]
+    }
+  }
+}
+```
+
+---
+
+### Day 51-53: Docker Compose Integration
+
+#### docker-compose.yml
+```yaml
+version: '3.8'
+
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: XYDataLabs.OrderProcessingSystem.Gateway/Dockerfile
+    container_name: yarp-gateway
+    ports:
+      - "8080:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+    depends_on:
+      - orders-api
+      - inventory-api
+      - notifications-api
+
+  orders-api:
+    build:
+      context: .
+      dockerfile: XYDataLabs.OrderProcessingSystem.API/Dockerfile
+    container_name: orders-api
+    environment:
+      - ASPNETCORE_URLS=http://+:8080
+    expose:
+      - "8080"
+
+  inventory-api:
+    build:
+      context: .
+      dockerfile: XYDataLabs.OrderProcessingSystem.InventoryAPI/Dockerfile
+    container_name: inventory-api
+    environment:
+      - ASPNETCORE_URLS=http://+:8080
+    expose:
+      - "8080"
+
+  notifications-api:
+    build:
+      context: .
+      dockerfile: XYDataLabs.OrderProcessingSystem.NotificationsAPI/Dockerfile
+    container_name: notifications-api
+    environment:
+      - ASPNETCORE_URLS=http://+:8080
+    expose:
+      - "8080"
+
+  ui:
+    build:
+      context: .
+      dockerfile: XYDataLabs.OrderProcessingSystem.UI/Dockerfile
+    container_name: ui
+    environment:
+      - ASPNETCORE_URLS=http://+:8080
+    expose:
+      - "8080"
+```
+
+#### Test Complete System
+```powershell
+# Build and start all services
+docker compose up --build
+
+# Test all endpoints
+curl http://orders.localhost:8080/health
+curl http://inventory.localhost:8080/api/inventory/low-stock
+curl http://notifications.localhost:8080/api/notifications/history/user123
+curl http://ui.localhost:8080
+```
+
+---
+
+### Day 54-56: Service-to-Service Communication
+
+#### Add Resilient HTTP Client (Polly)
+```powershell
+# In Orders API project
+cd XYDataLabs.OrderProcessingSystem.API
+dotnet add package Microsoft.Extensions.Http.Polly
+```
+
+#### Configure in Program.cs
+```csharp
+builder.Services.AddHttpClient("InventoryAPI", client =>
+{
+    client.BaseAddress = new Uri("http://inventory-api:8080");
+})
+.AddTransientHttpErrorPolicy(policy => 
+    policy.WaitAndRetryAsync(3, retryAttempt => 
+        TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))))
+.AddTransientHttpErrorPolicy(policy =>
+    policy.CircuitBreakerAsync(5, TimeSpan.FromSeconds(30)));
+```
+
+#### Use in Order Processing
+```csharp
+public class OrderService
+{
+    private readonly IHttpClientFactory _httpClientFactory;
+
+    public OrderService(IHttpClientFactory httpClientFactory)
+    {
+        _httpClientFactory = httpClientFactory;
+    }
+
+    public async Task<bool> CreateOrder(OrderRequest order)
+    {
+        var client = _httpClientFactory.CreateClient("InventoryAPI");
+        
+        // Check stock via Inventory API
+        var stockResponse = await client.GetAsync(
+            $"/api/inventory/products/{order.ProductId}/stock");
+        
+        if (!stockResponse.IsSuccessStatusCode)
+            return false;
+        
+        // Reserve stock
+        var reserveResponse = await client.PostAsJsonAsync(
+            "/api/inventory/reserve",
+            new { order.ProductId, order.Quantity, OrderId = order.Id });
+        
+        return reserveResponse.IsSuccessStatusCode;
+    }
+}
+```
+
+---
+
+### Success Criteria Checklist
+
+#### Week 5-6 Completion ✅
+- [ ] YARP Gateway running on port 8080
+- [ ] All services accessible via clean URLs (`.localhost` domains)
+- [ ] Inventory API created with stock management
+- [ ] Notifications API created with email/SMS endpoints
+- [ ] Docker Compose starts all services with one command
+- [ ] Orders API successfully calls Inventory API through YARP
+- [ ] Circuit breaker and retry policies tested
+- [ ] All services have health check endpoints
+- [ ] Documentation updated with architecture diagrams
+
+---
+
+### Next Steps After YARP
+Once YARP implementation is complete (Day 56), you'll be ready for:
+1. **Azure Functions** (Days 57-64): Event-driven processing with Service Bus
+2. **Security Hardening** (Days 65-70): Azure AD, RBAC, network isolation
+3. **Container Apps Migration** (Days 71-84): Deploy YARP architecture to Azure
+
+The YARP foundation makes all subsequent work significantly easier and more production-ready.
+
+---
+
