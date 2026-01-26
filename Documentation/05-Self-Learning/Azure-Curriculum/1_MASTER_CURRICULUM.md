@@ -346,46 +346,71 @@ After completing today's tasks, you will have:
 
 ---
 
-### Week 9: Docker & Containerization Fundamentals
+### Week 9: 🆕 Azure Cache for Redis
+**Reference:** AZURE-TOP-7-SERVICES-ANALYSIS.md
+
+#### Day 71: Redis Fundamentals & Integration
+- [ ] Provision Azure Cache for Redis (Basic tier)
+- [ ] Understand caching patterns (Cache-Aside, Write-Through, Write-Behind)
+- [ ] Add StackExchange.Redis NuGet package to Orders API
+- [ ] Implement connection multiplexer singleton
+- [ ] Cache product catalog data with 5-minute TTL
+- [ ] Test cache hit/miss scenarios
+- [ ] Monitor Redis metrics in Azure Portal
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+
+#### Day 72: Advanced Redis Patterns
+- [ ] Implement distributed session state across microservices
+- [ ] Build rate limiting with sliding window (10 req/min per user)
+- [ ] Use Redis Pub/Sub for real-time order notifications
+- [ ] Implement cache invalidation on Order updates
+- [ ] Add cache warming on application startup
+- [ ] Performance comparison: API with/without Redis
+- [ ] Document caching strategy and TTL decisions
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+
+---
+
+### Week 10: Docker & Containerization Fundamentals
 **Reference:** Containerization-ACA-Aspire-Learning-Path.md → Module 1
 
-#### Day 71: Docker Installation & Hello World
+#### Day 73: Docker Installation & Hello World
 - [ ] Verify Docker Desktop running
 - [ ] Run `docker run hello-world`
 - [ ] Understand images, containers, registries
 - [ ] **Time:** 1 hour | **Completed:** ___/___/___
 
-#### Day 72: Multi-Stage Dockerfiles
+#### Day 74: Multi-Stage Dockerfiles
 - [ ] Study multi-stage build pattern
 - [ ] Create Dockerfile for API (Task 1.1)
 - [ ] Build image: `docker build -t orderprocessing-api:local`
 - [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
 
-#### Day 73: Run API Container Locally
+#### Day 75: Run API Container Locally
 - [ ] Run API container: `docker run -p 8080:8080`
 - [ ] Test health endpoint: `curl localhost:8080/health`
 - [ ] View logs: `docker logs <container>`
 - [ ] **Time:** 1 hour | **Completed:** ___/___/___
 
-#### Day 74: Dockerize UI
+#### Day 76: Dockerize UI
 - [ ] Create Dockerfile for UI (Task 1.2)
 - [ ] Build and run UI container on port 8081
 - [ ] Configure API_BASE_URL env var
 - [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
 
-#### Day 75: Docker Compose
+#### Day 77: Docker Compose
 - [ ] Create `docker-compose.yml` (Task 1.3)
 - [ ] Run full stack: `docker-compose up`
 - [ ] Test API → UI integration
 - [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
 
-#### Day 76: Docker Best Practices
+#### Day 78: Docker Best Practices
 - [ ] Add `.dockerignore`
 - [ ] Optimize layer caching
 - [ ] Add health checks to Dockerfiles
 - [ ] **Time:** 1 hour | **Completed:** ___/___/___
 
-#### Day 77: Review & Lab
+#### Day 79: Review & Lab
 - [ ] Rebuild all images from scratch
 - [ ] Document image sizes and build times
 - [ ] Weekend deep dive: explore Docker networking
@@ -393,47 +418,47 @@ After completing today's tasks, you will have:
 
 ---
 
-### Week 10: Azure Container Registry (ACR)
+### Week 11: Azure Container Registry (ACR)
 **Reference:** Containerization-ACA-Aspire-Learning-Path.md → Module 2
 
-#### Day 64: Provision ACR via Bicep
+#### Day 80: Provision ACR via Bicep
 - [ ] Create `infra/modules/acr.bicep` (Task 2.1)
 - [ ] Add ACR to `infra/main.bicep`
 - [ ] Deploy: `az deployment sub create`
 - [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
 
-#### Day 65: ACR Authentication
+#### Day 81: ACR Authentication
 - [ ] Login to ACR: `az acr login --name <acr>`
 - [ ] Tag image: `docker tag <image> <acr>.azurecr.io/<image>:v1`
 - [ ] Push image: `docker push <acr>.azurecr.io/<image>:v1`
 - [ ] **Time:** 1 hour | **Completed:** ___/___/___
 
-#### Day 66: CI/CD - Build & Push Containers
+#### Day 82: CI/CD - Build & Push Containers
 **Reference:** Task 2.2
 - [ ] Create `.github/workflows/container-build.yml`
 - [ ] Add OIDC login step
 - [ ] Build and push API image on commit
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
-#### Day 67: Push UI Image via CI
+#### Day 83: Push UI Image via CI
 - [ ] Extend workflow to build UI
 - [ ] Tag images with `:sha` and `:latest`
 - [ ] Verify images in ACR Portal
 - [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
 
-#### Day 68: Image Tagging Strategy
+#### Day 84: Image Tagging Strategy
 - [ ] Implement semantic versioning tags
 - [ ] Add branch-based tags (dev, staging, prod)
 - [ ] Document tagging conventions
 - [ ] **Time:** 1 hour | **Completed:** ___/___/___
 
-#### Day 69: ACR Security & Access
+#### Day 85: ACR Security & Access
 - [ ] Disable admin account (already done in Bicep)
 - [ ] Assign AcrPull role to Managed Identity
 - [ ] Test pull without admin credentials
 - [ ] **Time:** 1 hour | **Completed:** ___/___/___
 
-#### Day 70: Review & Lab
+#### Day 86: Review & Lab
 - [ ] Clean up old images in ACR
 - [ ] Set up ACR retention policy
 - [ ] Weekend: Explore ACR tasks and geo-replication
@@ -441,7 +466,7 @@ After completing today's tasks, you will have:
 
 ---
 
-### Week 11: Azure Container Apps (ACA) Environment
+### Week 12: Azure Container Apps (ACA) Environment
 **Reference:** Containerization-ACA-Aspire-Learning-Path.md → Module 3
 
 #### Day 71: Log Analytics Workspace

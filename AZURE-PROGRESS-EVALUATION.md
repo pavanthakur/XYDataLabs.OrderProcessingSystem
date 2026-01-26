@@ -422,7 +422,32 @@ This establishes the architectural foundation that makes all future work easier:
 - Global distribution and low-latency requirements
 - Event-driven architecture with change feed
 
-### Week 9 (Days 71-77): Security Best Practices
+### Week 9 (Days 71-72): 🆕 Azure Cache for Redis ⭐ NEW
+**Goal:** Master distributed caching for high-performance microservices
+**Success Criteria:**
+- ✅ Azure Cache for Redis provisioned (Basic tier)
+- ✅ StackExchange.Redis SDK integrated
+- ✅ Cache-Aside pattern implemented in Orders API
+- ✅ API response caching with TTL
+- ✅ Distributed session state configured
+- ✅ Rate limiting with sliding window
+- ✅ Cache invalidation strategies tested
+
+**Deliverables:**
+- Redis Bicep deployment template
+- Caching middleware for API
+- Rate limiting implementation
+- Session state management across microservices
+- Performance benchmarks (before/after caching)
+
+**Why This Matters:**
+- **Performance:** 10-100x faster than database queries
+- **Scalability:** Reduces database load and enables horizontal scaling
+- **Real-world necessity:** Every production app uses caching
+- **Microservices essential:** Distributed session state, rate limiting
+- **Cost optimization:** Lower database RU/DTU consumption
+
+### Week 10 (Days 73-79): Security Best Practices
 **Goal:** Harden security posture across all services
 **Success Criteria:**
 - ✅ Azure AD authentication implemented
@@ -431,7 +456,7 @@ This establishes the architectural foundation that makes all future work easier:
 - ✅ Private endpoints for SQL and Storage
 - ✅ Security Center recommendations addressed
 
-### Week 10-11 (Days 78-91): Docker & Azure Container Apps Migration
+### Week 11-12 (Days 80-93): Docker & Azure Container Apps Migration
 **Goal:** Migrate from App Service to Azure Container Apps
 **Success Criteria:**
 - ✅ All services containerized (already done with docker-compose)
@@ -444,7 +469,7 @@ This establishes the architectural foundation that makes all future work easier:
 - ✅ Azure Container Registry provisioned
 - ✅ Images pushed to ACR
 
-### Week 14 (Days 106-112): 🆕 Azure API Management (APIM) ⭐ NEW
+### Week 15 (Days 108-114): 🆕 Azure API Management (APIM) ⭐ NEW
 **Goal:** Master production-grade API Gateway for enterprise microservices
 **Success Criteria:**
 - ✅ APIM service provisioned (Developer tier)
@@ -530,7 +555,7 @@ You are **cleared to proceed** with Day 32+ tasks. All documentation is in place
 
 ---
 
-## 📊 Complete Learning Roadmap Summary (18 Weeks)
+## 📊 Complete Learning Roadmap Summary (15 Weeks)
 
 | Week | Days | Focus Area | Key Services | Status |
 |------|------|------------|--------------|--------|
@@ -539,20 +564,24 @@ You are **cleared to proceed** with Day 32+ tasks. All documentation is in place
 | 5-6 | 41-56 | YARP Microservices | YARP Gateway, Docker Compose | 📅 Planned |
 | 7 | 57-64 | Azure Functions & Messaging | Functions, Service Bus, Storage Queues 🆕 | 📅 Planned |
 | 8 | 65-70 | Azure Cosmos DB (NoSQL) 🆕 | Cosmos DB, Change Feed, Multi-region | 📅 Planned |
-| 9 | 71-77 | Security Best Practices | Azure AD, RBAC, Private Endpoints | 📅 Planned |
-| 10-11 | 78-91 | Docker & Container Apps | Docker, ACR, Container Apps | 📅 Planned |
-| 12 | 92-98 | Observability | OpenTelemetry, Log Analytics, Alerts | 📅 Planned |
-| 13 | 99-105 | Security & Supply Chain | Key Vault, Trivy, SBOM, Defender | 📅 Planned |
-| 14 | 106-112 | Azure API Management 🆕 | APIM, Policies, Developer Portal | 📅 Planned |
+| 9 | 71-72 | Azure Cache for Redis 🆕 | Redis, Caching, Rate Limiting | 📅 Planned |
+| 10 | 73-79 | Security Best Practices | Azure AD, RBAC, Private Endpoints | 📅 Planned |
+| 11-12 | 80-93 | Docker & Container Apps | Docker, ACR, Container Apps | 📅 Planned |
+| 13 | 94-100 | Observability | OpenTelemetry, Log Analytics, Alerts | 📅 Planned |
+| 14 | 101-107 | Security & Supply Chain | Key Vault, Trivy, SBOM, Defender | 📅 Planned |
+| 15 | 108-114 | Azure API Management 🆕 | APIM, Policies, Developer Portal | 📅 Planned |
 
-**Total Duration:** 14 weeks (98 days) for complete Azure microservices mastery
+**Total Duration:** 15 weeks (114 days) for complete Azure microservices mastery
 
-**Essential Services Covered (Top 7 for Azure Developers):**
+**Essential Services Covered (Top 8 for Azure Developers):**
 1. ✅ Azure App Service / Container Apps
 2. ✅ Azure Key Vault
 3. ✅ Azure Functions
 4. ✅ Azure Service Bus + Storage Queues 🆕
 5. ✅ Azure SQL Database
+6. ✅ Azure Cosmos DB (NoSQL) 🆕
+7. ✅ Azure API Management 🆕
+8. ✅ Azure Cache for Redis 🆕
 6. ✅ Azure Cosmos DB (NoSQL) 🆕
 7. ✅ Azure API Management 🆕
 
