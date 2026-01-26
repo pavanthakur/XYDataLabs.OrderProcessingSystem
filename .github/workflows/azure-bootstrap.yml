@@ -1536,9 +1536,15 @@ jobs:
           Write-Host "  Configure Secrets: ${{ needs.configure-secrets.result }}" -ForegroundColor Gray
           Write-Host ""
           
+          Write-Host "📋 Requested Operations:" -ForegroundColor Cyan
+          Write-Host "  Bootstrap Infrastructure: ${{ inputs.bootstrapInfra }}" -ForegroundColor Gray
+          Write-Host "  Configure Secrets: ${{ inputs.configureSecrets }}" -ForegroundColor Gray
+          Write-Host ""
+          
           $hasErrors = $false
           $oidcRequired = "${{ inputs.bootstrapInfra }}" -eq "true"
           $githubAppRequired = "${{ inputs.configureSecrets }}" -eq "true"
+
           
           Write-Host "🔍 Validating OIDC App Configuration..." -ForegroundColor Cyan
           Write-Host ""
