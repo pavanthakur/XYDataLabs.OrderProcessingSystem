@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: '🎯 Environment | Select target environment (dev recommended for first run)'
+        description: '🎯 Environment | IMPORTANT: Set "Use workflow from" branch to match (dev→dev, staging→staging, main→prod)'
         required: true
         type: choice
         options:
