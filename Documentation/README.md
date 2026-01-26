@@ -2,6 +2,71 @@
 
 This folder contains all project documentation files that were previously scattered in the root directory. The files have been organized into logical categories for better navigation and maintenance.
 
+## 🏗️ Current Architecture vs Learning Plan
+
+### Current Production Architecture (Week 4 - Deployed ✅)
+```
+Azure App Service Deployment (Monolith)
+├── API (Single Service)
+│   ├── Orders Management
+│   ├── Customer Management
+│   ├── Payment Processing (OpenPay)
+│   └── Swagger Documentation
+├── UI (MVC Web App)
+├── Azure SQL Database
+├── Application Insights (Monitoring)
+└── Key Vault (Created, needs configuration)
+```
+
+**Projects in Solution (7 projects):**
+- `XYDataLabs.OrderProcessingSystem.API` - Single API handling all business logic
+- `XYDataLabs.OrderProcessingSystem.UI` - MVC presentation layer
+- `XYDataLabs.OrderProcessingSystem.Application` - Use cases and DTOs
+- `XYDataLabs.OrderProcessingSystem.Domain` - Core entities
+- `XYDataLabs.OrderProcessingSystem.Infrastructure` - Data access
+- `XYDataLabs.OrderProcessingSystem.Utilities` - Shared utilities
+- `XYDataLabs.OpenPayAdapter` - Payment integration
+
+**Status:** ✅ Working, deployed, monitored
+
+---
+
+### Target Architecture (Week 5-6 Learning Goal 📅)
+```
+YARP Microservices Architecture (Planned)
+├── YARP Gateway (Port 8080) - NEW ⭐
+│   └── Single entry point for all services
+├── Orders API (orders.localhost) - Refactored from existing
+│   └── Order processing logic only
+├── Inventory API (inventory.localhost) - NEW ⭐
+│   └── Stock management and reservations
+├── Notifications API (notifications.localhost) - NEW ⭐
+│   └── Email/SMS notifications
+├── UI (ui.localhost) - Existing
+└── Docker Compose (5 services) - Enhanced
+```
+
+**New Projects to Create (3 projects):**
+- `XYDataLabs.OrderProcessingSystem.Gateway` - YARP reverse proxy
+- `XYDataLabs.OrderProcessingSystem.InventoryAPI` - Stock management microservice
+- `XYDataLabs.OrderProcessingSystem.NotificationsAPI` - Notification microservice
+
+**Status:** 📅 Planned for Days 41-56 (detailed guide in AZURE-PROGRESS-EVALUATION.md)
+
+---
+
+### Learning Path Timeline
+
+| Phase | Weeks | Architecture | Status |
+|-------|-------|--------------|--------|
+| **Phase 1** | Week 1-4 (Days 1-31) | Monolith on Azure App Service | ✅ **Complete** |
+| **Phase 2** | Week 5-6 (Days 41-56) | YARP Microservices (local) | 📅 Next Goal |
+| **Phase 3** | Week 7-10 (Days 57-70) | Azure Functions + Container Apps | 📅 Future |
+
+**Current Position:** Completed Phase 1, ready to start Phase 2
+
+---
+
 ## 📁 Folder Structure
 
 ### 01-Project-Overview
@@ -62,15 +127,20 @@ Contains application configuration and settings documentation:
 | **00_MASTER_PLAN.md** | Strategic 18-week microservices migration roadmap | Architects, Senior Devs | ✅ Complete |
 | **WEEKLY_AZURE_LEARNING_PLAN.md** | Week-by-week breakdown with daily tasks | Daily learners | ✅ Active |
 
-**Current Status (December 2025)**:
-- ✅ **Weeks 1-4 Complete**: Azure fundamentals, App Service, OIDC, IaC with Bicep
-- ⏳ **Week 5-6 (Days 41-56)**: 🆕 **YARP Microservices Architecture** ⭐ HIGH PRIORITY
-  - YARP Gateway implementation
+**Current Status (January 2026)**:
+- ✅ **Weeks 1-4 Complete (Days 1-31)**: Azure fundamentals, App Service, OIDC, IaC with Bicep
+  - **Architecture Achieved:** Monolithic API + UI deployed to Azure App Service
+  - **Infrastructure:** SQL Database, Key Vault, Application Insights, CI/CD with GitHub Actions
+  - **Status:** Production-ready monolith working successfully
+- 📅 **Week 5-6 (Days 41-56) - NEXT GOAL**: 🆕 **YARP Microservices Architecture** ⭐ HIGH PRIORITY
+  - Split monolith into microservices
+  - YARP Gateway implementation (new project)
   - Inventory API (new microservice)
   - Notifications API (new microservice)
-  - Docker Compose integration
+  - Docker Compose integration (5 services)
   - Service-to-service communication patterns
-- 📅 **Week 7-10**: Azure Functions, Security, Container Apps migration
+  - **Note:** This is a learning exercise, not replacing production deployment
+- 📅 **Week 7-10 (Days 57-70)**: Azure Functions, Security, Container Apps migration
 
 **Quick Links by Learning Stage**:
 - 🎓 **Start learning** → [1_MASTER_CURRICULUM.md](./05-Self-Learning/Azure-Curriculum/1_MASTER_CURRICULUM.md)

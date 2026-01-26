@@ -262,43 +262,130 @@ After completing today's tasks, you will have:
 ### Week 9: Docker & Containerization Fundamentals
 **Reference:** Containerization-ACA-Aspire-Learning-Path.md → Module 1
 
-#### Day 57: Docker Installation & Hello World
+#### Day 57: Azure Functions Basics
+- [ ] Create first HTTP-triggered Function
+- [ ] Deploy Function to Azure
+- [ ] Monitor with Application Insights
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+
+#### Day 58: 🆕 Azure Storage Queues vs Service Bus
+- [ ] Create Storage Account with Queue service
+- [ ] Implement queue producer (add messages)
+- [ ] Implement queue consumer (process messages)
+- [ ] Compare Storage Queues vs Service Bus features
+- [ ] Understand when to use each service
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+
+#### Day 59: 🆕 Queue-Triggered Functions
+- [ ] Create Queue-triggered Azure Function
+- [ ] Handle poison messages with retry logic
+- [ ] Monitor queue metrics in Application Insights
+- [ ] Test at-least-once delivery semantics
+- [ ] Implement dead-letter queue handling
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+
+#### Day 60-64: Azure Functions Advanced
+- [ ] Integrate Functions with Service Bus
+- [ ] Call Inventory API from Functions
+- [ ] Implement Durable Functions for workflows
+- [ ] Trigger Notifications API from Functions
+- [ ] **Time:** 10 hours (5 days × 2 hours) | **Completed:** ___/___/___
+
+---
+
+### Week 8: 🆕 Azure Cosmos DB (NoSQL Database)
+**Reference:** AZURE-TOP-7-SERVICES-ANALYSIS.md
+
+#### Day 65: Cosmos DB Fundamentals
+- [ ] Provision Cosmos DB account (Core SQL API)
+- [ ] Create database and container
+- [ ] Understand partition keys and Request Units (RUs)
+- [ ] Insert first document via Azure Portal
+- [ ] Query data with Data Explorer
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+
+#### Day 66: Cosmos DB SDK Integration
+- [ ] Add Microsoft.Azure.Cosmos NuGet package
+- [ ] Create repository pattern for Cosmos DB
+- [ ] Implement CRUD operations (Create, Read, Update, Delete)
+- [ ] Query with LINQ and SQL syntax
+- [ ] Handle partition key in operations
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+
+#### Day 67: Product Catalog Microservice
+- [ ] Create new project: `XYDataLabs.OrderProcessingSystem.ProductCatalogAPI`
+- [ ] Use Cosmos DB for product storage
+- [ ] Implement search and filtering endpoints
+- [ ] Add pagination for large result sets
+- [ ] Add to YARP Gateway routing (`products.localhost`)
+- [ ] **Time:** 3 hours | **Completed:** ___/___/___
+
+#### Day 68: Cosmos DB Performance Optimization
+- [ ] Optimize queries with partition keys
+- [ ] Implement indexing policies
+- [ ] Use change feed for event-driven patterns
+- [ ] Monitor RU consumption and optimize
+- [ ] Implement caching strategy
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+
+#### Day 69: Multi-Region & Consistency Levels
+- [ ] Configure geo-replication (secondary region)
+- [ ] Understand 5 consistency levels (Strong, Bounded Staleness, Session, Consistent Prefix, Eventual)
+- [ ] Test failover scenarios
+- [ ] Compare costs vs benefits of multi-region
+- [ ] Implement conflict resolution
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+
+#### Day 70: Cosmos DB + Functions Integration
+- [ ] Create Cosmos DB-triggered Azure Function
+- [ ] Process change feed events
+- [ ] Sync data between SQL and Cosmos DB
+- [ ] Implement event-driven inventory updates
+- [ ] Monitor change feed lag
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+
+---
+
+### Week 9: Docker & Containerization Fundamentals
+**Reference:** Containerization-ACA-Aspire-Learning-Path.md → Module 1
+
+#### Day 71: Docker Installation & Hello World
 - [ ] Verify Docker Desktop running
 - [ ] Run `docker run hello-world`
 - [ ] Understand images, containers, registries
 - [ ] **Time:** 1 hour | **Completed:** ___/___/___
 
-#### Day 58: Multi-Stage Dockerfiles
+#### Day 72: Multi-Stage Dockerfiles
 - [ ] Study multi-stage build pattern
 - [ ] Create Dockerfile for API (Task 1.1)
 - [ ] Build image: `docker build -t orderprocessing-api:local`
 - [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
 
-#### Day 59: Run API Container Locally
+#### Day 73: Run API Container Locally
 - [ ] Run API container: `docker run -p 8080:8080`
 - [ ] Test health endpoint: `curl localhost:8080/health`
 - [ ] View logs: `docker logs <container>`
 - [ ] **Time:** 1 hour | **Completed:** ___/___/___
 
-#### Day 60: Dockerize UI
+#### Day 74: Dockerize UI
 - [ ] Create Dockerfile for UI (Task 1.2)
 - [ ] Build and run UI container on port 8081
 - [ ] Configure API_BASE_URL env var
 - [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
 
-#### Day 61: Docker Compose
+#### Day 75: Docker Compose
 - [ ] Create `docker-compose.yml` (Task 1.3)
 - [ ] Run full stack: `docker-compose up`
 - [ ] Test API → UI integration
 - [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
 
-#### Day 62: Docker Best Practices
+#### Day 76: Docker Best Practices
 - [ ] Add `.dockerignore`
 - [ ] Optimize layer caching
 - [ ] Add health checks to Dockerfiles
 - [ ] **Time:** 1 hour | **Completed:** ___/___/___
 
-#### Day 63: Review & Lab
+#### Day 77: Review & Lab
 - [ ] Rebuild all images from scratch
 - [ ] Document image sizes and build times
 - [ ] Weekend deep dive: explore Docker networking
@@ -498,6 +585,68 @@ After completing today's tasks, you will have:
 - [ ] Review Defender recommendations
 - [ ] Assign Azure Policy for required tags
 - [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
+
+---
+
+### Week 14: 🆕 Azure API Management (APIM)
+**Reference:** AZURE-TOP-7-SERVICES-ANALYSIS.md
+
+#### Day 91: APIM Fundamentals
+- [ ] Provision API Management service (Developer tier)
+- [ ] Understand APIM components: Gateway, Portal, Management API
+- [ ] Import OpenAPI definition from Orders API
+- [ ] Test API via APIM gateway URL
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+
+#### Day 92: APIM Policies
+- [ ] Implement rate limiting policy (10 requests/minute)
+- [ ] Add CORS policy for UI domain
+- [ ] Configure request/response transformation
+- [ ] Test policies with Postman
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+
+#### Day 93: Authentication & Authorization
+- [ ] Configure OAuth2 with Azure AD
+- [ ] Implement JWT validation policy
+- [ ] Set up subscription keys
+- [ ] Test authenticated requests
+- [ ] **Time:** 2.5 hours | **Completed:** ___/___/___
+
+#### Day 94: API Versioning
+- [ ] Create v1 and v2 of Orders API
+- [ ] Configure version sets in APIM
+- [ ] Implement header-based versioning
+- [ ] Test version routing
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+
+#### Day 95: Developer Portal
+- [ ] Customize developer portal branding
+- [ ] Publish API documentation
+- [ ] Create products and user groups
+- [ ] Test self-service subscription workflow
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+
+#### Day 96: APIM + Container Apps Integration
+- [ ] Configure APIM backend to point to Container Apps
+- [ ] Set up private VNet integration
+- [ ] Implement circuit breaker policy
+- [ ] Monitor API analytics in APIM
+- [ ] **Time:** 2.5 hours | **Completed:** ___/___/___
+
+#### Day 97: Advanced Monitoring
+- [ ] Enable Application Insights for APIM
+- [ ] Create custom dashboards for API metrics
+- [ ] Set up alerts for API failures and high latency
+- [ ] Analyze API usage patterns and trends
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+
+#### Day 98: Review & Production Readiness
+- [ ] Document APIM architecture and routing
+- [ ] Compare APIM vs YARP Gateway use cases
+- [ ] Calculate cost implications for production
+- [ ] Create APIM deployment Bicep template
+- [ ] Weekend: Explore APIM self-hosted gateway
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 #### Day 91: Review & Lab
 - [ ] Remediate vulnerabilities found by Trivy
