@@ -1537,6 +1537,8 @@ jobs:
           Write-Host ""
           
           $hasErrors = $false
+          $oidcRequired = "${{ inputs.bootstrapInfra }}" -eq "true"
+          $githubAppRequired = "${{ inputs.configureSecrets }}" -eq "true"
           
           Write-Host "🔍 Validating OIDC App Configuration..." -ForegroundColor Cyan
           Write-Host ""
@@ -1561,7 +1563,12 @@ jobs:
             } else {
               Write-Host "  💡 Solution: Run this workflow with 'Setup Azure OIDC' enabled" -ForegroundColor Yellow
             }
-            $hasErrors = $true
+            if ($oidcRequired) {
+              Write-Host "  ⚠️  OIDC credentials are REQUIRED for infrastructure bootstrap" -ForegroundColor Yellow
+              $hasErrors = $true
+            } else {
+              Write-Host "  ℹ️  OIDC credentials not required for current operation" -ForegroundColor Cyan
+            }
           }
           
           Write-Host ""
@@ -1590,7 +1597,12 @@ jobs:
               Write-Host "  💡 Solution: Run this workflow with 'Setup GitHub App' enabled" -ForegroundColor Yellow
               Write-Host "     Or manually configure GitHub App secrets" -ForegroundColor Yellow
             }
-            $hasErrors = $true
+            if ($githubAppRequired) {
+              Write-Host "  ⚠️  GitHub App credentials are REQUIRED for automated secret configuration" -ForegroundColor Yellow
+              $hasErrors = $true
+            } else {
+              Write-Host "  ℹ️  GitHub App credentials not required for current operation" -ForegroundColor Cyan
+            }
           }
           
           Write-Host ""
@@ -1602,22 +1614,26 @@ jobs:
             Write-Host "❌ VALIDATION FAILED: Prerequisites are not met" -ForegroundColor Red
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
             Write-Host ""
-            Write-Host "Bootstrap cannot proceed without the required prerequisites." -ForegroundColor Red
+            Write-Host "Required prerequisites are missing for the requested operations." -ForegroundColor Red
             Write-Host "Please review the validation results above." -ForegroundColor Red
             Write-Host ""
             Write-Host "Required Actions:" -ForegroundColor Cyan
-            Write-Host "  1. Ensure OIDC credentials are configured" -ForegroundColor White
-            Write-Host "     - Run this workflow with 'Setup Azure OIDC' enabled" -ForegroundColor White
-            Write-Host "  2. Ensure GitHub App credentials are configured" -ForegroundColor White
-            Write-Host "     - Run this workflow with 'Setup GitHub App' enabled" -ForegroundColor White
-            Write-Host "     - Or manually configure APP_ID and APP_PRIVATE_KEY secrets" -ForegroundColor White
+            if ($oidcRequired -and -not ($hasClientId -and $hasTenantId -and $hasSubscriptionId)) {
+              Write-Host "  1. Ensure OIDC credentials are configured (required for bootstrap)" -ForegroundColor White
+              Write-Host "     - Run this workflow with 'Setup Azure OIDC' enabled" -ForegroundColor White
+            }
+            if ($githubAppRequired -and -not ($hasAppId -and $hasPrivateKey)) {
+              Write-Host "  2. Ensure GitHub App credentials are configured (required for secret configuration)" -ForegroundColor White
+              Write-Host "     - Run this workflow with 'Setup GitHub App' enabled" -ForegroundColor White
+              Write-Host "     - Or manually configure APP_ID and APP_PRIVATE_KEY secrets" -ForegroundColor White
+            }
             Write-Host ""
             Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
             Write-Host ""
-            Write-Error "Prerequisites validation failed. Cannot proceed with bootstrap."
+            Write-Error "Prerequisites validation failed. Cannot proceed with requested operations."
             exit 1
           } else {
-            Write-Host "✅ All prerequisites validated successfully" -ForegroundColor Green
+            Write-Host "✅ All required prerequisites validated successfully" -ForegroundColor Green
             Write-Host ""
             Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
             Write-Host ""
@@ -1635,28 +1651,42 @@ jobs:
           $hasAppId = "${{ secrets.APP_ID }}" -ne ""
           $hasPrivateKey = "${{ secrets.APP_PRIVATE_KEY }}" -ne ""
           
-          $allValid = ($hasClientId -and $hasTenantId -and $hasSubscriptionId) -and ($hasAppId -and $hasPrivateKey)
+          $oidcRequired = "${{ inputs.bootstrapInfra }}" -eq "true"
+          $githubAppRequired = "${{ inputs.configureSecrets }}" -eq "true"
+          
+          $oidcValid = $hasClientId -and $hasTenantId -and $hasSubscriptionId
+          $githubAppValid = $hasAppId -and $hasPrivateKey
+          
+          $allValid = (-not $oidcRequired -or $oidcValid) -and (-not $githubAppRequired -or $githubAppValid)
           
           if (-not $allValid) {
             "### ❌ Validation Failed" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
-            "Prerequisites are missing. Bootstrap cannot proceed." >> $env:GITHUB_STEP_SUMMARY
+            "Required prerequisites are missing for the requested operations." >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
           }
           
           "### Azure OIDC Configuration" >> $env:GITHUB_STEP_SUMMARY
-          if ($hasClientId -and $hasTenantId -and $hasSubscriptionId) {
+          if ($oidcValid) {
             "✅ **Status**: Configured" >> $env:GITHUB_STEP_SUMMARY
           } else {
-            "❌ **Status**: Missing or incomplete - **REQUIRED**" >> $env:GITHUB_STEP_SUMMARY
+            if ($oidcRequired) {
+              "❌ **Status**: Missing or incomplete - **REQUIRED for bootstrap**" >> $env:GITHUB_STEP_SUMMARY
+            } else {
+              "⚠️ **Status**: Missing or incomplete - Not required for current operation" >> $env:GITHUB_STEP_SUMMARY
+            }
           }
           "" >> $env:GITHUB_STEP_SUMMARY
           
           "### GitHub App Configuration" >> $env:GITHUB_STEP_SUMMARY
-          if ($hasAppId -and $hasPrivateKey) {
+          if ($githubAppValid) {
             "✅ **Status**: Configured" >> $env:GITHUB_STEP_SUMMARY
           } else {
-            "❌ **Status**: Missing or incomplete - **REQUIRED**" >> $env:GITHUB_STEP_SUMMARY
+            if ($githubAppRequired) {
+              "❌ **Status**: Missing or incomplete - **REQUIRED for secret configuration**" >> $env:GITHUB_STEP_SUMMARY
+            } else {
+              "⚠️ **Status**: Missing or incomplete - Not required for current operation" >> $env:GITHUB_STEP_SUMMARY
+            }
           }
   
   bootstrap-dev:
