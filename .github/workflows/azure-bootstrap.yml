@@ -1384,25 +1384,18 @@ jobs:
           Write-Host ""
           
           if ($totalFail -gt 0) {
-            Write-Host "⚠️  Some environment secrets failed to set" -ForegroundColor Yellow
+            Write-Host "❌ Environment secrets configuration FAILED" -ForegroundColor Red
             Write-Host ""
-            Write-Host "Note: Repository secrets were successfully configured." -ForegroundColor Green
-            Write-Host "Environment-specific secrets are optional and only needed if you use" -ForegroundColor Gray
-            Write-Host "different credentials per environment. The workflows can use repository" -ForegroundColor Gray
-            Write-Host "secrets which are available to all environments." -ForegroundColor Gray
+            Write-Host "Failed to set $totalFail secret(s). Environment secrets are required." -ForegroundColor Red
             Write-Host ""
-            Write-Host "If you need environment-specific secrets:" -ForegroundColor Cyan
+            Write-Host "Troubleshooting steps:" -ForegroundColor Cyan
             Write-Host "  1. Verify environments exist: https://github.com/$owner/$repo/settings/environments" -ForegroundColor Gray
-            Write-Host "  2. Check GitHub App has admin permission to set environment secrets" -ForegroundColor Gray
-            Write-Host "  3. GitHub App needs 'Administration: Read & Write' permission for environment secrets" -ForegroundColor Gray
-            Write-Host "  4. Alternatively, you can manually set environment secrets at:" -ForegroundColor Gray
-            Write-Host "     https://github.com/$owner/$repo/settings/environments" -ForegroundColor Gray
+            Write-Host "  2. Check GitHub App has 'Administration: Read & Write' permission" -ForegroundColor Gray
+            Write-Host "  3. Verify GitHub App is installed with proper repository access" -ForegroundColor Gray
+            Write-Host "  4. Ensure 'Setup GitHub App' checkbox was selected in workflow inputs" -ForegroundColor Gray
             Write-Host ""
-            # Don't fail the workflow - repository secrets are sufficient
-            Write-Host "⚠️  Environment secrets partially configured. Repository secrets are available and sufficient for deployment." -ForegroundColor Yellow
-            Write-Host ""
-            # Exit successfully since repository secrets work and environment secrets are optional
-            exit 0
+            Write-Error "Environment secrets configuration failed. Workflow cannot proceed."
+            exit 1
           } else {
             Write-Host "✅ All environment secrets configured successfully!" -ForegroundColor Green
           }
@@ -1572,15 +1565,14 @@ jobs:
           if ($allVerified) {
             Write-Host "✅ All environment secrets verified successfully" -ForegroundColor Green
           } else {
-            Write-Host "⚠️  Some environment secrets may be missing - review logs above" -ForegroundColor Yellow
+            Write-Host "❌ Environment secrets verification FAILED" -ForegroundColor Red
+            Write-Host "Some required environment secrets are missing. Review logs above." -ForegroundColor Red
+            Write-Error "Environment secrets verification failed."
+            exit 1
           }
           
           Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           Write-Host ""
-          
-          # Exit with 0 to ensure script success even if gh commands had non-zero exit codes
-          # Environment secret verification is informational; missing environments are expected during initial setup
-          exit 0
   
   pre-validate-prerequisites:
     name: Pre-Validate Prerequisites
