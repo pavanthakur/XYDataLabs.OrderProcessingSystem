@@ -68,9 +68,14 @@ jobs:
         id: check-credentials
         shell: pwsh
         run: |
+          # Check environment secrets first, fall back to repository secrets
           $hasClientId = "${{ secrets.AZUREAPPSERVICE_CLIENTID }}" -ne ""
           $hasTenantId = "${{ secrets.AZUREAPPSERVICE_TENANTID }}" -ne ""
           $hasSubscriptionId = "${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}" -ne ""
+          
+          if ($hasClientId -and $hasTenantId -and $hasSubscriptionId) {
+            Write-Host "✅ Azure credentials available" -ForegroundColor Green
+          }
           
           if (-not $hasClientId -or -not $hasTenantId -or -not $hasSubscriptionId) {
             Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Yellow

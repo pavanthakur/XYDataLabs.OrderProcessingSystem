@@ -68,10 +68,22 @@ jobs:
       - name: Check Azure Credentials
         id: check-credentials
         shell: pwsh
+        env:
+          ENV_CLIENT_ID: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          REPO_CLIENT_ID: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
         run: |
-          $hasClientId = "${{ secrets.AZUREAPPSERVICE_CLIENTID }}" -ne ""
-          $hasTenantId = "${{ secrets.AZUREAPPSERVICE_TENANTID }}" -ne ""
-          $hasSubscriptionId = "${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}" -ne ""
+          # Check environment secrets first, fall back to repository secrets
+          $envClientId = "${{ secrets.AZUREAPPSERVICE_CLIENTID }}" -ne ""
+          $envTenantId = "${{ secrets.AZUREAPPSERVICE_TENANTID }}" -ne ""
+          $envSubscriptionId = "${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}" -ne ""
+          
+          $hasClientId = $envClientId
+          $hasTenantId = $envTenantId
+          $hasSubscriptionId = $envSubscriptionId
+          
+          if ($hasClientId -and $hasTenantId -and $hasSubscriptionId) {
+            Write-Host "✅ Using environment secrets" -ForegroundColor Green
+          }
           
           if (-not $hasClientId -or -not $hasTenantId -or -not $hasSubscriptionId) {
             Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Yellow
