@@ -1489,12 +1489,16 @@ jobs:
           Write-Host ""
       
       - name: Verify Environment Secrets
+        continue-on-error: true
         env:
           GH_APP_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-          Write-Host "║        ENVIRONMENT SECRET VERIFICATION                        ║" -ForegroundColor Cyan
+          Write-Host "║        ENVIRONMENT SECRET VERIFICATION (Optional)             ║" -ForegroundColor Cyan
           Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "ℹ️  Note: Deployment workflows use repository secrets, not environment secrets" -ForegroundColor Cyan
+          Write-Host "   This verification is optional and will not block the workflow" -ForegroundColor Cyan
           Write-Host ""
           Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           
@@ -1572,7 +1576,8 @@ jobs:
           if ($allVerified) {
             Write-Host "✅ All environment secrets verified successfully" -ForegroundColor Green
           } else {
-            Write-Host "⚠️  Some environment secrets may be missing - review logs above" -ForegroundColor Yellow
+            Write-Host "⚠️  Some environment secrets may be missing" -ForegroundColor Yellow
+            Write-Host "   This is OK - deployment workflows use repository secrets" -ForegroundColor Cyan
           }
           
           Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
