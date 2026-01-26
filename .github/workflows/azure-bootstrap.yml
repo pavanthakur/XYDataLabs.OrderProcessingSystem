@@ -177,11 +177,45 @@ jobs:
           }
           Write-Host "  ✅ Branch matches target environment" -ForegroundColor Green
 
-          # Warn if bootstrapping without OIDC/secrets
-          if ($bootstrap -eq "true" -and $setupOidc -eq "false" -and $configSecrets -eq "false") {
-            Write-Host "  ⚠️  Bootstrapping without OIDC/secrets - ensure they exist!" -ForegroundColor Yellow
+          # Check if repository secrets exist when setup is skipped
+          Write-Host "`n  🔐 Repository Secrets Check:" -ForegroundColor Cyan
+          if ($setupOidc -eq "false") {
+            Write-Host "    Setup OIDC: Skipped" -ForegroundColor Yellow
+            Write-Host "    Checking if OIDC secrets already exist in repository..." -ForegroundColor Gray
+            
+            # Use GitHub CLI to check if secrets exist (requires GITHUB_TOKEN which is automatic)
+            try {
+              $secretsCheck = gh secret list --repo ${{ github.repository }} 2>&1 | Out-String
+              $hasClientId = $secretsCheck -match "AZUREAPPSERVICE_CLIENTID"
+              $hasTenantId = $secretsCheck -match "AZUREAPPSERVICE_TENANTID"
+              $hasSubscriptionId = $secretsCheck -match "AZUREAPPSERVICE_SUBSCRIPTIONID"
+              
+              if ($hasClientId -and $hasTenantId -and $hasSubscriptionId) {
+                Write-Host "    ✅ OIDC repository secrets exist" -ForegroundColor Green
+              } else {
+                Write-Host "    ❌ OIDC repository secrets are MISSING!" -ForegroundColor Red
+                Write-Host "" -ForegroundColor Gray
+                Write-Host "    Required secrets not found:" -ForegroundColor Yellow
+                if (-not $hasClientId) { Write-Host "      - AZUREAPPSERVICE_CLIENTID" -ForegroundColor Red }
+                if (-not $hasTenantId) { Write-Host "      - AZUREAPPSERVICE_TENANTID" -ForegroundColor Red }
+                if (-not $hasSubscriptionId) { Write-Host "      - AZUREAPPSERVICE_SUBSCRIPTIONID" -ForegroundColor Red }
+                Write-Host "" -ForegroundColor Gray
+                Write-Host "    ⚠️  WARNING: You need to run this workflow with 'Setup Azure OIDC' checked first!" -ForegroundColor Yellow
+                Write-Host "    Deployment workflows will fail without these secrets." -ForegroundColor Yellow
+                
+                if ($bootstrap -eq "true") {
+                  Write-Host "" -ForegroundColor Gray
+                  Write-Host "    ❌ ERROR: Cannot bootstrap infrastructure without OIDC credentials" -ForegroundColor Red
+                  Write-Error "OIDC secrets not found and setup is disabled. Enable 'Setup Azure OIDC' or configure secrets manually."
+                  exit 1
+                }
+              }
+            } catch {
+              Write-Host "    ⚠️  Could not check repository secrets: $($_.Exception.Message)" -ForegroundColor Yellow
+              Write-Host "    Proceeding with caution..." -ForegroundColor Gray
+            }
           } else {
-            Write-Host "  ✅ Configuration sequence valid" -ForegroundColor Green
+            Write-Host "    ✅ OIDC setup enabled - secrets will be created" -ForegroundColor Green
           }
 
           Write-Host "`n" -ForegroundColor Gray
