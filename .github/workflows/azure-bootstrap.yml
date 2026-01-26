@@ -16,7 +16,7 @@ on:
         description: 'Setup Azure OIDC (first-time only)'
         required: true
         type: boolean
-        default: false
+        default: true
       setupGitHubApp:
         description: 'Setup GitHub App (required for automated secret management - first-time only)'
         required: true
@@ -36,7 +36,7 @@ on:
         description: 'Enable pre-deployment validation'
         required: true
         type: boolean
-        default: true
+        default: false
       bootstrapInfra:
         description: 'Bootstrap infrastructure (App Services, etc.)'
         required: true
