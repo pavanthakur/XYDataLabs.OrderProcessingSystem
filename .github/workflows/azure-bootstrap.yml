@@ -666,10 +666,9 @@ jobs:
   setup-github-app:
     name: Setup GitHub App
     if: |
-      always() &&
-      inputs.setupGitHubApp &&
       !cancelled() &&
       needs.validate-inputs.result == 'success' &&
+      inputs.setupGitHubApp &&
       (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped')
     needs: [validate-inputs, setup-oidc]
     runs-on: windows-latest
@@ -861,9 +860,9 @@ jobs:
   configure-secrets:
     name: Configure GitHub Secrets
     if: |
-      always() &&
-      inputs.configureSecrets &&
       !cancelled() &&
+      needs.validate-inputs.result == 'success' &&
+      inputs.configureSecrets &&
       (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped') &&
       (needs.setup-github-app.result == 'success' || needs.setup-github-app.result == 'skipped')
     needs: [validate-inputs, setup-oidc, setup-github-app]
@@ -1586,10 +1585,9 @@ jobs:
   pre-validate-prerequisites:
     name: Pre-Validate Prerequisites
     if: |
-      always() &&
       !cancelled() &&
-      inputs.enableValidation &&
-      needs.validate-inputs.result == 'success'
+      needs.validate-inputs.result == 'success' &&
+      inputs.enableValidation
     needs: [validate-inputs, setup-oidc, setup-github-app, configure-secrets]
     runs-on: windows-latest
     environment: ${{ inputs.environment != 'all' && inputs.environment || 'dev' }}
@@ -1784,14 +1782,14 @@ jobs:
   bootstrap-dev:
     name: Bootstrap Dev Environment
     if: |
-      always() &&
+      !cancelled() &&
+      needs.validate-inputs.result == 'success' &&
       inputs.bootstrapInfra &&
       (inputs.environment == 'dev' || inputs.environment == 'all') &&
-      !cancelled() &&
       (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped') &&
       (needs.configure-secrets.result == 'success' || needs.configure-secrets.result == 'skipped') &&
       (needs.pre-validate-prerequisites.result == 'success' || needs.pre-validate-prerequisites.result == 'skipped')
-    needs: [setup-oidc, configure-secrets, pre-validate-prerequisites]
+    needs: [validate-inputs, setup-oidc, configure-secrets, pre-validate-prerequisites]
     runs-on: windows-latest
     environment: dev
     env:
@@ -2304,14 +2302,14 @@ jobs:
   bootstrap-staging:
     name: Bootstrap Staging Environment
     if: |
-      always() &&
+      !cancelled() &&
+      needs.validate-inputs.result == 'success' &&
       inputs.bootstrapInfra &&
       (inputs.environment == 'staging' || inputs.environment == 'all') &&
-      !cancelled() &&
       (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped') &&
       (needs.configure-secrets.result == 'success' || needs.configure-secrets.result == 'skipped') &&
       (needs.pre-validate-prerequisites.result == 'success' || needs.pre-validate-prerequisites.result == 'skipped')
-    needs: [setup-oidc, configure-secrets, pre-validate-prerequisites]
+    needs: [validate-inputs, setup-oidc, configure-secrets, pre-validate-prerequisites]
     runs-on: windows-latest
     environment: staging
     env:
@@ -2804,14 +2802,14 @@ jobs:
   bootstrap-prod:
     name: Bootstrap Production Environment
     if: |
-      always() &&
+      !cancelled() &&
+      needs.validate-inputs.result == 'success' &&
       inputs.bootstrapInfra &&
       (inputs.environment == 'prod' || inputs.environment == 'all') &&
-      !cancelled() &&
       (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped') &&
       (needs.configure-secrets.result == 'success' || needs.configure-secrets.result == 'skipped') &&
       (needs.pre-validate-prerequisites.result == 'success' || needs.pre-validate-prerequisites.result == 'skipped')
-    needs: [setup-oidc, configure-secrets, pre-validate-prerequisites]
+    needs: [validate-inputs, setup-oidc, configure-secrets, pre-validate-prerequisites]
     runs-on: windows-latest
     environment: prod
     env:
@@ -3304,14 +3302,15 @@ jobs:
   enable-validation:
     name: Enable Pre-Deployment Validation
     if: |
-      always() &&
+      !cancelled() &&
+      needs.validate-inputs.result == 'success' &&
       inputs.enableValidation &&
       inputs.bootstrapInfra &&
       !cancelled() &&
       (needs.bootstrap-dev.result == 'success' || needs.bootstrap-dev.result == 'skipped') &&
       (needs.bootstrap-staging.result == 'success' || needs.bootstrap-staging.result == 'skipped') &&
       (needs.bootstrap-prod.result == 'success' || needs.bootstrap-prod.result == 'skipped')
-    needs: [bootstrap-dev, bootstrap-staging, bootstrap-prod]
+    needs: [validate-inputs, bootstrap-dev, bootstrap-staging, bootstrap-prod]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
