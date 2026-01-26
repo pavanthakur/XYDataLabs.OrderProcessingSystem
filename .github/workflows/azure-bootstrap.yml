@@ -88,13 +88,25 @@ jobs:
           Write-Host "🔗 Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" -ForegroundColor Gray
           Write-Host "" -ForegroundColor Gray
           Write-Host "📋 USER SELECTED PARAMETERS:" -ForegroundColor Yellow
-          Write-Host "  ✓ Target environment:           ${{ inputs.environment }}" -ForegroundColor White
-          Write-Host "  ✓ Setup Azure OIDC:             ${{ inputs.setupOidc }}" -ForegroundColor White
-          Write-Host "  ✓ Setup GitHub App:             ${{ inputs.setupGitHubApp }}" -ForegroundColor White
-          Write-Host "  ✓ OIDC App Name:                ${{ inputs.oidcAppName }}" -ForegroundColor White
-          Write-Host "  ✓ Enable validation:            ${{ inputs.enableValidation }}" -ForegroundColor White
-          Write-Host "  ✓ Bootstrap infrastructure:     ${{ inputs.bootstrapInfra }}" -ForegroundColor White
-          Write-Host "  ✓ Configure GitHub secrets:     ${{ inputs.configureSecrets }}" -ForegroundColor White
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+          Write-Host "" -ForegroundColor Gray
+          Write-Host "  🎯 Target Environment:          ${{ inputs.environment }}" -ForegroundColor White
+          Write-Host "" -ForegroundColor Gray
+          Write-Host "  AZURE SETUP:" -ForegroundColor Cyan
+          Write-Host "    1️⃣  Setup Azure OIDC:          ${{ inputs.setupOidc }}" -ForegroundColor $(if ('${{ inputs.setupOidc }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "    2️⃣  Setup GitHub App:          ${{ inputs.setupGitHubApp }}" -ForegroundColor $(if ('${{ inputs.setupGitHubApp }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "        OIDC App Name:            ${{ inputs.oidcAppName }}" -ForegroundColor DarkGray
+          Write-Host "    3️⃣  Configure Secrets:         ${{ inputs.configureSecrets }}" -ForegroundColor $(if ('${{ inputs.configureSecrets }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "" -ForegroundColor Gray
+          Write-Host "  INFRASTRUCTURE:" -ForegroundColor Cyan
+          Write-Host "    🔍 Pre-Flight Validation:      ${{ inputs.enableValidation }}" -ForegroundColor $(if ('${{ inputs.enableValidation }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "    4️⃣  Bootstrap Infrastructure:  ${{ inputs.bootstrapInfra }}" -ForegroundColor $(if ('${{ inputs.bootstrapInfra }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "" -ForegroundColor Gray
+          Write-Host "  DEPLOYMENT:" -ForegroundColor Cyan
+          Write-Host "    5️⃣  Deploy API:                ${{ inputs.deployApi }}" -ForegroundColor $(if ('${{ inputs.deployApi }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "    6️⃣  Deploy UI:                 ${{ inputs.deployUi }}" -ForegroundColor $(if ('${{ inputs.deployUi }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "" -ForegroundColor Gray
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
           Write-Host "" -ForegroundColor Gray
           Write-Host "========================================================================" -ForegroundColor Cyan
           Write-Host "" -ForegroundColor Gray
@@ -3414,6 +3426,25 @@ jobs:
         run: |
           "## 📊 Bootstrap Workflow Summary" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
+          
+          "### 📋 User Configuration" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "| Parameter | Value |" >> $env:GITHUB_STEP_SUMMARY
+          "|-----------|-------|" >> $env:GITHUB_STEP_SUMMARY
+          "| 🎯 Environment | ``${{ inputs.environment }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| 1️⃣ Setup OIDC | ``${{ inputs.setupOidc }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| 2️⃣ Setup GitHub App | ``${{ inputs.setupGitHubApp }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| 3️⃣ Configure Secrets | ``${{ inputs.configureSecrets }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| 🔍 Pre-Flight Validation | ``${{ inputs.enableValidation }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| 4️⃣ Bootstrap Infrastructure | ``${{ inputs.bootstrapInfra }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| 5️⃣ Deploy API | ``${{ inputs.deployApi }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| 6️⃣ Deploy UI | ``${{ inputs.deployUi }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          
+          "### ✅ Job Execution Results" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "| Job | Status |" >> $env:GITHUB_STEP_SUMMARY
+          "|-----|--------|" >> $env:GITHUB_STEP_SUMMARY
 
           $setupOidc = "${{ needs.setup-oidc.result }}"
           $configSecrets = "${{ needs.configure-secrets.result }}"
