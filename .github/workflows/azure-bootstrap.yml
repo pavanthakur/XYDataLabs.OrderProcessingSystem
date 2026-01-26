@@ -3465,10 +3465,10 @@ jobs:
   trigger-deployments:
     name: Trigger Deployments
     runs-on: ubuntu-latest
-    needs: [bootstrap-summary]
+    needs: [summary]
     if: |
       (inputs.deployApi == true || inputs.deployUi == true) && 
-      needs.bootstrap-summary.result == 'success'
+      needs.summary.result == 'success'
     steps:
       - name: Trigger API Deployment
         if: inputs.deployApi == true
