@@ -391,57 +391,82 @@ After completing today's tasks, you will have:
 
 ---
 
-### Week 10: Docker & Containerization Fundamentals
-**Reference:** Containerization-ACA-Aspire-Learning-Path.md → Module 1
+### Week 10: 🆕 .NET Aspire - Cloud-Native Orchestration ⭐ NEW
+**Reference:** Official .NET Aspire documentation
 
-#### Day 73: Docker Installation & Hello World
-- [ ] Verify Docker Desktop running
-- [ ] Run `docker run hello-world`
-- [ ] Understand images, containers, registries
-- [ ] **Time:** 1 hour | **Completed:** ___/___/___
+#### Day 73: .NET Aspire Fundamentals
+- [ ] Install .NET Aspire workload: `dotnet workload install aspire`
+- [ ] Understand Aspire architecture (App Host, Service Defaults)
+- [ ] Create Aspire App Host project: `XYDataLabs.OrderProcessingSystem.AppHost`
+- [ ] Add Service Defaults project: `XYDataLabs.OrderProcessingSystem.ServiceDefaults`
+- [ ] Run Aspire dashboard: explore built-in observability
+- [ ] Understand service discovery and configuration
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
-#### Day 74: Multi-Stage Dockerfiles
-- [ ] Study multi-stage build pattern
-- [ ] Create Dockerfile for API (Task 1.1)
-- [ ] Build image: `docker build -t orderprocessing-api:local`
-- [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
+#### Day 74: Migrate Orders API to Aspire
+- [ ] Add Aspire service defaults to Orders API
+- [ ] Register Orders API in App Host
+- [ ] Configure environment variables via Aspire
+- [ ] Test service discovery: Orders API → SQL Database
+- [ ] View telemetry in Aspire dashboard (traces, logs, metrics)
+- [ ] Remove manual Docker Compose configuration
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
-#### Day 75: Run API Container Locally
-- [ ] Run API container: `docker run -p 8080:8080`
-- [ ] Test health endpoint: `curl localhost:8080/health`
-- [ ] View logs: `docker logs <container>`
-- [ ] **Time:** 1 hour | **Completed:** ___/___/___
+#### Day 75: Add All Microservices to Aspire
+- [ ] Register Inventory API in App Host
+- [ ] Register Notifications API in App Host
+- [ ] Register UI in App Host
+- [ ] Configure service-to-service communication
+- [ ] Test end-to-end flow through Aspire orchestration
+- [ ] Verify distributed tracing across all services
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
-#### Day 76: Dockerize UI
-- [ ] Create Dockerfile for UI (Task 1.2)
-- [ ] Build and run UI container on port 8081
-- [ ] Configure API_BASE_URL env var
-- [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
+#### Day 76: Aspire + SQL Database Integration
+- [ ] Add `Aspire.Hosting.SqlServer` package to App Host
+- [ ] Register SQL Server container in App Host
+- [ ] Connect Orders API to Aspire-managed SQL
+- [ ] Use Aspire connection strings (no manual config)
+- [ ] Test database connectivity through service discovery
+- [ ] View SQL queries in Aspire dashboard
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
-#### Day 77: Docker Compose
-- [ ] Create `docker-compose.yml` (Task 1.3)
-- [ ] Run full stack: `docker-compose up`
-- [ ] Test API → UI integration
-- [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
+#### Day 77: Aspire + Redis Integration
+- [ ] Add `Aspire.Hosting.Redis` package to App Host
+- [ ] Register Redis container in App Host
+- [ ] Connect Orders API to Aspire-managed Redis
+- [ ] Test caching through Aspire orchestration
+- [ ] View Redis operations in dashboard
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
-#### Day 78: Docker Best Practices
-- [ ] Add `.dockerignore`
-- [ ] Optimize layer caching
-- [ ] Add health checks to Dockerfiles
-- [ ] **Time:** 1 hour | **Completed:** ___/___/___
+#### Day 78: Aspire Observability Deep Dive
+- [ ] Explore OpenTelemetry integration (automatic)
+- [ ] View distributed traces across microservices
+- [ ] Analyze logs aggregation from all services
+- [ ] Monitor metrics (HTTP requests, database calls)
+- [ ] Export telemetry to Application Insights
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
-#### Day 79: Review & Lab
-- [ ] Rebuild all images from scratch
-- [ ] Document image sizes and build times
-- [ ] Weekend deep dive: explore Docker networking
-- [ ] **Time:** 2-3 hours | **Completed:** ___/___/___
+#### Day 79: Aspire Deployment Preparation
+- [ ] Generate deployment manifests: `dotnet run --publisher manifest`
+- [ ] Understand Aspire → Azure Container Apps deployment
+- [ ] Review generated Bicep/YAML files
+- [ ] Compare Aspire vs manual Docker Compose
+- [ ] Document Aspire benefits (service discovery, observability, config)
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 ---
 
-### Week 11: Azure Container Registry (ACR)
+### Week 11: Azure Container Registry (ACR) + Aspire Deployment
 **Reference:** Containerization-ACA-Aspire-Learning-Path.md → Module 2
 
-#### Day 80: Provision ACR via Bicep
+#### Day 80: Docker Basics (Quick Refresher)
+- [ ] Verify Docker Desktop running
+- [ ] Create multi-stage Dockerfile for Orders API
+- [ ] Build image: `docker build -t orderprocessing-api:local`
+- [ ] Understand Aspire uses Docker under the hood
+- [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
+
+#### Day 81: Provision ACR via Bicep
 - [ ] Create `infra/modules/acr.bicep` (Task 2.1)
 - [ ] Add ACR to `infra/main.bicep`
 - [ ] Deploy: `az deployment sub create`
@@ -478,61 +503,68 @@ After completing today's tasks, you will have:
 - [ ] Test pull without admin credentials
 - [ ] **Time:** 1 hour | **Completed:** ___/___/___
 
-#### Day 86: Review & Lab
-- [ ] Clean up old images in ACR
-- [ ] Set up ACR retention policy
-- [ ] Weekend: Explore ACR tasks and geo-replication
+#### Day 86: Aspire to ACR Integration
+- [ ] Build Aspire-managed services as container images
+- [ ] Push Aspire-generated images to ACR
+- [ ] Prepare for Container Apps deployment with Aspire manifests
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 ---
 
-### Week 12: Azure Container Apps (ACA) Environment
+### Week 12: Azure Container Apps (ACA) with Aspire Deployment
 **Reference:** Containerization-ACA-Aspire-Learning-Path.md → Module 3
 
-#### Day 71: Log Analytics Workspace
+#### Day 87: Log Analytics Workspace
 **Reference:** ACA-Migration-Plan.md → Phase 3
 - [ ] Create LAW via CLI or Bicep
 - [ ] Understand workspace structure and queries
 - [ ] Write first KQL query
 - [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
 
-#### Day 72: ACA Environment Bicep Module
-**Reference:** Task 3.1
-- [ ] Create `infra/modules/aca/managedEnvironment.bicep`
-- [ ] Wire LAW to ACA environment
-- [ ] Deploy ACA environment
+#### Day 88: Deploy Aspire to ACA (Automated)
+**Reference:** .NET Aspire Azure deployment
+- [ ] Use `azd init` to initialize Azure Developer CLI
+- [ ] Run `azd up` to deploy entire Aspire app to Container Apps
+- [ ] Aspire automatically creates: ACA Environment, Container Apps, LAW
+- [ ] Verify all microservices deployed (Orders, Inventory, Notifications, UI)
+- [ ] Test service discovery in Azure Container Apps
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
-#### Day 73: Container App Module
-**Reference:** Task 3.2
-- [ ] Create `infra/modules/aca/containerApp.bicep`
-- [ ] Define ingress, scaling, resources
-- [ ] Understand revision modes
-- [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
-
-#### Day 74: Deploy API to ACA
-**Reference:** Task 3.3
-- [ ] Update `infra/main.bicep` to include API Container App
-- [ ] Set minReplicas=1, maxReplicas=5
-- [ ] Deploy and get FQDN output
+#### Day 89: Aspire Manifest to Bicep
+**Reference:** Aspire deployment manifests
+- [ ] Generate deployment manifest: `dotnet run --publisher manifest`
+- [ ] Convert manifest to Bicep (manual or tool-assisted)
+- [ ] Understand Aspire-generated resource definitions
+- [ ] Compare `azd up` (automated) vs manual Bicep deployment
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
-#### Day 75: Test API on ACA
-- [ ] Access API via HTTPS FQDN
-- [ ] View logs in Log Analytics
-- [ ] Test autoscaling under load (optional)
-- [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
-
-#### Day 76: Deploy UI to ACA
-- [ ] Add UI Container App module to Bicep
-- [ ] Configure API_BASE_URL env var pointing to API FQDN
-- [ ] Deploy UI, test end-to-end
+#### Day 90: ACA Ingress & Networking
+- [ ] Configure external ingress for UI and API
+- [ ] Configure internal ingress for Inventory/Notifications APIs
+- [ ] Test service-to-service communication in ACA
+- [ ] View distributed traces in Application Insights
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
-#### Day 77: Review & Lab
-- [ ] Compare App Service vs ACA (cost, performance, features)
-- [ ] Document ACA ingress patterns
-- [ ] Weekend: Experiment with internal ingress and VNET integration
+#### Day 91: ACA Scaling & Performance
+- [ ] Configure autoscaling rules (CPU, HTTP requests)
+- [ ] Set minReplicas=1, maxReplicas=5 for each service
+- [ ] Test scale-out under load (optional: use Azure Load Testing)
+- [ ] Monitor scaling events in Log Analytics
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+
+#### Day 92: Aspire + Azure Resources Integration
+- [ ] Connect to Azure SQL Database (not Aspire-managed)
+- [ ] Connect to Azure Cache for Redis (not Aspire-managed)
+- [ ] Use Azure Key Vault for secrets in ACA
+- [ ] Test production-ready configuration
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+
+#### Day 93: Review & Compare
+- [ ] Compare App Service vs ACA vs Aspire local
+- [ ] Document Aspire benefits (observability, service discovery, config)
+- [ ] Cost analysis: ACA pricing model
+- [ ] Decide: Aspire for development, ACA for production
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
 - [ ] **Time:** 2-3 hours | **Completed:** ___/___/___
 
 ---

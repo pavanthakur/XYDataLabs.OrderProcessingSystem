@@ -463,7 +463,64 @@ This establishes the architectural foundation that makes all future work easier:
 - **Microservices essential:** Distributed session state, rate limiting
 - **Cost optimization:** Lower database RU/DTU consumption
 
-### Week 10 (Days 73-79): Security Best Practices
+### Week 10 (Days 73-79): 🆕 .NET Aspire - Cloud-Native Orchestration ⭐ NEW
+**Goal:** Master .NET Aspire for modern microservices development
+**Success Criteria:**
+- ✅ .NET Aspire workload installed (`dotnet workload install aspire`)
+- ✅ App Host and Service Defaults projects created
+- ✅ All microservices migrated to Aspire orchestration
+- ✅ Service discovery configured (no manual URLs)
+- ✅ SQL Database and Redis integrated via Aspire
+- ✅ Built-in observability dashboard explored
+- ✅ Distributed tracing across all services verified
+- ✅ Deployment manifests generated for Azure
+
+**Deliverables:**
+- `XYDataLabs.OrderProcessingSystem.AppHost` project
+- `XYDataLabs.OrderProcessingSystem.ServiceDefaults` project
+- Aspire-managed SQL Server and Redis containers
+- OpenTelemetry automatic instrumentation
+- Deployment manifests (Bicep/YAML) for Container Apps
+
+**Why This Matters:**
+- **Modern .NET standard:** Microsoft's recommended approach for cloud-native apps
+- **Built-in observability:** OpenTelemetry, distributed tracing, logs, metrics (automatic)
+- **Service discovery:** No hardcoded URLs, dynamic configuration
+- **Developer experience:** Single command to run entire distributed system
+- **Production deployment:** Direct integration with Azure Container Apps
+- **Industry adoption:** Becoming the standard for .NET microservices (2024+)
+
+### Week 11-12 (Days 80-93): Azure Container Apps + Aspire Deployment
+**Goal:** Deploy Aspire-managed microservices to Azure Container Apps
+**Success Criteria:**
+- ✅ Docker basics refresher (multi-stage Dockerfiles)
+- ✅ Azure Container Registry provisioned and configured
+- ✅ Container images built and pushed to ACR
+- ✅ Aspire app deployed to ACA using `azd up` (automated)
+- ✅ All microservices running in Container Apps
+- ✅ Service discovery working in Azure (Aspire-managed)
+- ✅ Distributed tracing with Application Insights
+- ✅ External ingress (UI, API) and internal ingress (Inventory, Notifications)
+- ✅ Auto-scaling configured (CPU, HTTP requests)
+- ✅ Azure SQL Database and Redis integration
+- ✅ Key Vault secrets management
+
+**Deliverables:**
+- Dockerfiles for all microservices
+- ACR with all container images
+- Azure Container Apps Environment (Aspire-managed)
+- Container Apps for each microservice (5 apps)
+- Aspire deployment manifests and Bicep templates
+- Production-ready configuration with Azure resources
+
+**Why This Matters:**
+- **Aspire simplifies deployment:** `azd up` automates ACA provisioning
+- **Production-grade:** Auto-scaling, zero-downtime deployments, observability
+- **Cost-efficient:** Pay-per-request, scale to zero when idle
+- **Modern architecture:** Microservices, service mesh, distributed tracing
+- **Career-ready:** Aspire + ACA is the modern .NET deployment target
+
+### Week 13 (Days 94-100): Security Best Practices
 **Goal:** Harden security posture across all services
 **Success Criteria:**
 - ✅ Azure AD authentication implemented
@@ -472,18 +529,14 @@ This establishes the architectural foundation that makes all future work easier:
 - ✅ Private endpoints for SQL and Storage
 - ✅ Security Center recommendations addressed
 
-### Week 11-12 (Days 80-93): Docker & Azure Container Apps Migration
-**Goal:** Migrate from App Service to Azure Container Apps
+### Week 14 (Days 101-107): Observability & Supply Chain Security
+**Goal:** Production monitoring and security scanning
 **Success Criteria:**
-- ✅ All services containerized (already done with docker-compose)
-- ✅ Azure Container Registry configured
-- ✅ Container Apps deployed (Gateway, Orders, Inventory, Notifications, UI)
-- ✅ Auto-scaling configured
-- ✅ Blue-green deployments tested
-- ✅ API and UI Dockerized with multi-stage builds
-- ✅ Local Docker Compose testing complete
-- ✅ Azure Container Registry provisioned
-- ✅ Images pushed to ACR
+- ✅ OpenTelemetry (already via Aspire)
+- ✅ Log Analytics queries and alerts
+- ✅ Trivy container scanning
+- ✅ SBOM generation
+- ✅ Azure Defender integration
 
 ### Week 15 (Days 108-114): 🆕 Azure API Management (APIM) ⭐ NEW
 **Goal:** Master production-grade API Gateway for enterprise microservices
@@ -578,26 +631,27 @@ You are **cleared to proceed** with Day 32+ tasks. All documentation is in place
 | 1-4 | 1-31 | Azure Fundamentals & App Service | App Service, SQL, Key Vault, CI/CD | ✅ Complete |
 | 4 | 32-40 | Key Vault & SQL Mastery | Key Vault, SQL Database, EF Migrations | 📅 Days 32-35 Next |
 | 5-6 | 41-56 | YARP Microservices | YARP Gateway, Docker Compose | 📅 Planned |
-| 7 | 57-64 | Azure Functions & Messaging | Functions, Service Bus, Storage Queues 🆕 | 📅 Planned |
+| 7 | 57-64 | Azure Functions & Messaging | Functions, Service Bus, Storage Queues, Event Grid 🆕 | 📅 Planned |
 | 8 | 65-70 | Azure Cosmos DB (NoSQL) 🆕 | Cosmos DB, Change Feed, Multi-region | 📅 Planned |
 | 9 | 71-72 | Azure Cache for Redis 🆕 | Redis, Caching, Rate Limiting | 📅 Planned |
-| 10 | 73-79 | Security Best Practices | Azure AD, RBAC, Private Endpoints | 📅 Planned |
-| 11-12 | 80-93 | Docker & Container Apps | Docker, ACR, Container Apps | 📅 Planned |
-| 13 | 94-100 | Observability | OpenTelemetry, Log Analytics, Alerts | 📅 Planned |
-| 14 | 101-107 | Security & Supply Chain | Key Vault, Trivy, SBOM, Defender | 📅 Planned |
+| 10 | 73-79 | .NET Aspire 🆕⭐ | Aspire App Host, Service Discovery, Observability | 📅 Planned |
+| 11-12 | 80-93 | ACR + Container Apps (Aspire) 🆕 | Docker, ACR, ACA, Aspire Deployment | 📅 Planned |
+| 13 | 94-100 | Security Best Practices | Azure AD, RBAC, Private Endpoints | 📅 Planned |
+| 14 | 101-107 | Observability & Supply Chain | OpenTelemetry, Trivy, SBOM, Defender | 📅 Planned |
 | 15 | 108-114 | Azure API Management 🆕 | APIM, Policies, Developer Portal | 📅 Planned |
 
-**Total Duration:** 15 weeks (114 days) for complete Azure microservices mastery
+**Total Duration:** 15 weeks (114 days) - Complete cloud-native .NET mastery
 
-**Essential Services Covered (Top 8 for Azure Developers):**
+**Essential Services + Technologies Covered:**
 1. ✅ Azure App Service / Container Apps
 2. ✅ Azure Key Vault
 3. ✅ Azure Functions
-4. ✅ Azure Service Bus + Storage Queues 🆕
+4. ✅ Azure Service Bus + Storage Queues + Event Grid 🆕
 5. ✅ Azure SQL Database
 6. ✅ Azure Cosmos DB (NoSQL) 🆕
 7. ✅ Azure API Management 🆕
 8. ✅ Azure Cache for Redis 🆕
+9. ✅ .NET Aspire (Modern Orchestration) 🆕⭐
 6. ✅ Azure Cosmos DB (NoSQL) 🆕
 7. ✅ Azure API Management 🆕
 
