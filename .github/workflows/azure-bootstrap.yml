@@ -1167,7 +1167,7 @@ jobs:
           exit 1
 
       - name: Set Repository Secrets
-        if: steps.check.outputs.secretsExist == 'false' && steps.check.outputs.useGitHubApp == 'true'
+        if: steps.check.outputs.secretsExist == 'false'
         env:
           GH_APP_TOKEN: ${{ steps.app-token.outputs.token }}
           CLIENT_ID: ${{ needs.setup-oidc.outputs.clientId }}
@@ -1177,6 +1177,17 @@ jobs:
           Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
           Write-Host "║           REPOSITORY SECRET CONFIGURATION                     ║" -ForegroundColor Cyan
           Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          
+          # Use GitHub App token if available, otherwise fall back to GITHUB_TOKEN
+          if ($env:GH_APP_TOKEN) {
+            $env:GH_TOKEN = $env:GH_APP_TOKEN
+            Write-Host "Authentication: GitHub App" -ForegroundColor Green
+          } else {
+            $env:GH_TOKEN = "${{ secrets.GITHUB_TOKEN }}"
+            Write-Host "Authentication: GITHUB_TOKEN (automatic)" -ForegroundColor Yellow
+          }
           Write-Host ""
           Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           Write-Host "Authentication: GitHub App" -ForegroundColor Green
