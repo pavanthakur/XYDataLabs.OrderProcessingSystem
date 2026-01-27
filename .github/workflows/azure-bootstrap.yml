@@ -3488,11 +3488,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: [summary]
     if: |
-      (inputs.deployApi == true || inputs.deployUi == true) && 
+      (inputs.deployApi || inputs.deployUi) && 
       needs.summary.result == 'success'
     steps:
       - name: Trigger API Deployment
-        if: inputs.deployApi == true
+        if: inputs.deployApi
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -3504,11 +3504,12 @@ jobs:
               ref: context.ref
             });
             
-            core.notice(`🚀 API deployment triggered for branch: ${context.ref.replace('refs/heads/', '')}`);
-            core.notice(`📋 View workflow: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/workflows/deploy-api-to-azure.yml`);
+            core.notice(`🚀 API deployment triggered for environment: ${{ inputs.environment }}`);
+            core.notice(`📋 Branch: ${context.ref.replace('refs/heads/', '')}`);
+            core.notice(`🔗 View workflow: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/workflows/deploy-api-to-azure.yml`);
 
       - name: Trigger UI Deployment
-        if: inputs.deployUi == true
+        if: inputs.deployUi
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -3520,13 +3521,17 @@ jobs:
               ref: context.ref
             });
             
-            core.notice(`🚀 UI deployment triggered for branch: ${context.ref.replace('refs/heads/', '')}`);
-            core.notice(`📋 View workflow: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/workflows/deploy-ui-to-azure.yml`);
+            core.notice(`🚀 UI deployment triggered for environment: ${{ inputs.environment }}`);
+            core.notice(`📋 Branch: ${context.ref.replace('refs/heads/', '')}`);
+            core.notice(`🔗 View workflow: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/workflows/deploy-ui-to-azure.yml`);
 
       - name: Add Deployment Summary
         if: always()
         run: |
           echo "## 🚀 Deployment Triggers" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Target Environment:** \`${{ inputs.environment }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Workflow | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
@@ -3544,5 +3549,6 @@ jobs:
           fi
           
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "_Deployments are running on branch: \`${{ github.ref_name }}\`_" >> $GITHUB_STEP_SUMMARY
+          echo "> **Note:** Deployments determine their target environment from the branch name." >> $GITHUB_STEP_SUMMARY
+          echo "> The branch \`${{ github.ref_name }}\` corresponds to the \`${{ inputs.environment }}\` environment." >> $GITHUB_STEP_SUMMARY
 
