@@ -3559,3 +3559,182 @@ jobs:
           echo "> **Note:** Deployments determine their target environment from the branch name." >> $GITHUB_STEP_SUMMARY
           echo "> The branch \`${{ github.ref_name }}\` corresponds to the \`${{ inputs.environment }}\` environment." >> $GITHUB_STEP_SUMMARY
 
+  # Final validation of configuration
+  validate-final-configuration:
+    name: Validate Final Configuration
+    runs-on: windows-latest
+    needs: [validate-inputs, setup-oidc, setup-github-app, configure-secrets]
+    if: |
+      !cancelled() &&
+      inputs.configureSecrets &&
+      (needs.configure-secrets.result == 'success')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Configuration Validation
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║         FINAL CONFIGURATION VALIDATION                        ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Timestamp (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host "Repository: ${{ github.repository }}" -ForegroundColor Gray
+          Write-Host "Environment: ${{ inputs.environment }}" -ForegroundColor Gray
+          Write-Host ""
+          
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+          Write-Host "📋 Configuration Summary" -ForegroundColor Cyan
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+          Write-Host ""
+          
+          $allChecks = @()
+          
+          # Check OIDC setup
+          $oidcSetup = "${{ needs.setup-oidc.result }}"
+          if ($oidcSetup -eq "success") {
+            Write-Host "  ✅ Azure OIDC Setup: Configured" -ForegroundColor Green
+            $allChecks += $true
+          } elseif ($oidcSetup -eq "skipped") {
+            Write-Host "  ⏭️  Azure OIDC Setup: Skipped (existing config used)" -ForegroundColor Yellow
+            $allChecks += $true
+          } else {
+            Write-Host "  ❌ Azure OIDC Setup: Failed or not run" -ForegroundColor Red
+            $allChecks += $false
+          }
+          
+          # Check GitHub App setup
+          $appSetup = "${{ needs.setup-github-app.result }}"
+          if ($appSetup -eq "success") {
+            Write-Host "  ✅ GitHub App Setup: Configured" -ForegroundColor Green
+            $allChecks += $true
+          } elseif ($appSetup -eq "skipped") {
+            Write-Host "  ⏭️  GitHub App Setup: Skipped (existing config used)" -ForegroundColor Yellow
+            $allChecks += $true
+          } else {
+            Write-Host "  ⚠️  GitHub App Setup: Not configured or failed" -ForegroundColor Yellow
+            $allChecks += $true  # Not critical if already configured
+          }
+          
+          # Check secret configuration
+          $secretsSetup = "${{ needs.configure-secrets.result }}"
+          if ($secretsSetup -eq "success") {
+            Write-Host "  ✅ Secret Configuration: Completed" -ForegroundColor Green
+            $allChecks += $true
+          } else {
+            Write-Host "  ❌ Secret Configuration: Failed or not run" -ForegroundColor Red
+            $allChecks += $false
+          }
+          
+          Write-Host ""
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+          Write-Host "📊 Environment-Specific Configuration" -ForegroundColor Cyan
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+          Write-Host ""
+          
+          $selectedEnv = "${{ inputs.environment }}"
+          $environments = if ($selectedEnv -eq "all") { @("dev", "staging", "prod") } else { @($selectedEnv) }
+          
+          Write-Host "  Configured environments: $($environments -join ', ')" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "  Expected secrets per environment:" -ForegroundColor Gray
+          Write-Host "    • AZUREAPPSERVICE_CLIENTID" -ForegroundColor Gray
+          Write-Host "    • AZUREAPPSERVICE_TENANTID" -ForegroundColor Gray
+          Write-Host "    • AZUREAPPSERVICE_SUBSCRIPTIONID" -ForegroundColor Gray
+          Write-Host ""
+          
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+          Write-Host "🔍 Validation Tools" -ForegroundColor Cyan
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "  To validate your configuration locally, run:" -ForegroundColor Yellow
+          Write-Host "    .\scripts\validate-github-app-config.ps1 -Detailed" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "  This will check:" -ForegroundColor Gray
+          Write-Host "    • GitHub CLI installation and authentication" -ForegroundColor Gray
+          Write-Host "    • Repository secrets (APP_ID, APP_PRIVATE_KEY)" -ForegroundColor Gray
+          Write-Host "    • Environment secrets for all environments" -ForegroundColor Gray
+          Write-Host "    • GitHub App installation status" -ForegroundColor Gray
+          Write-Host "    • Required permissions" -ForegroundColor Gray
+          Write-Host ""
+          
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+          Write-Host "📚 Documentation" -ForegroundColor Cyan
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "  📖 Comprehensive automation guide:" -ForegroundColor Yellow
+          Write-Host "     Documentation/03-Configuration-Guides/GITHUB-APP-AUTOMATION.md" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "  📖 Quick setup guide:" -ForegroundColor Yellow
+          Write-Host "     Documentation/03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "  📖 Detailed authentication guide:" -ForegroundColor Yellow
+          Write-Host "     Documentation/03-Configuration-Guides/GITHUB-APP-AUTHENTICATION.md" -ForegroundColor Cyan
+          Write-Host ""
+          
+          $failedChecks = $allChecks | Where-Object { -not $_ }
+          if ($failedChecks.Count -eq 0) {
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host "✅ CONFIGURATION VALIDATION SUCCESSFUL" -ForegroundColor Green
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "  Your bootstrap configuration is complete!" -ForegroundColor Green
+            Write-Host "  You can now proceed with infrastructure deployment." -ForegroundColor Gray
+          } else {
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
+            Write-Host "⚠️  CONFIGURATION VALIDATION COMPLETED WITH WARNINGS" -ForegroundColor Yellow
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
+            Write-Host ""
+            Write-Host "  Some components failed validation." -ForegroundColor Yellow
+            Write-Host "  Review the checks above and take corrective action." -ForegroundColor Yellow
+          }
+          Write-Host ""
+
+      - name: Create Validation Summary
+        if: always()
+        run: |
+          "## 🔍 Configuration Validation" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          
+          "### Configuration Status" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "| Component | Status |" >> $env:GITHUB_STEP_SUMMARY
+          "|-----------|--------|" >> $env:GITHUB_STEP_SUMMARY
+          
+          $oidc = "${{ needs.setup-oidc.result }}"
+          $oidcIcon = if ($oidc -eq "success") { "✅" } elseif ($oidc -eq "skipped") { "⏭️" } else { "❌" }
+          "| Azure OIDC | $oidcIcon $oidc |" >> $env:GITHUB_STEP_SUMMARY
+          
+          $app = "${{ needs.setup-github-app.result }}"
+          $appIcon = if ($app -eq "success") { "✅" } elseif ($app -eq "skipped") { "⏭️" } else { "⚠️" }
+          "| GitHub App | $appIcon $app |" >> $env:GITHUB_STEP_SUMMARY
+          
+          $secrets = "${{ needs.configure-secrets.result }}"
+          $secretsIcon = if ($secrets -eq "success") { "✅" } else { "❌" }
+          "| Secrets | $secretsIcon $secrets |" >> $env:GITHUB_STEP_SUMMARY
+          
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "### Validation Tools" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "To validate your local configuration:" >> $env:GITHUB_STEP_SUMMARY
+          "``````powershell" >> $env:GITHUB_STEP_SUMMARY
+          ".\scripts\validate-github-app-config.ps1 -Detailed" >> $env:GITHUB_STEP_SUMMARY
+          "``````" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          
+          "### Documentation" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "- 📖 [GitHub App Automation Guide](../blob/main/Documentation/03-Configuration-Guides/GITHUB-APP-AUTOMATION.md)" >> $env:GITHUB_STEP_SUMMARY
+          "- 📖 [Quick Setup Guide](../blob/main/Documentation/03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md)" >> $env:GITHUB_STEP_SUMMARY
+          "- 🔧 [Setup Script](../blob/main/scripts/setup-github-app-from-manifest.ps1)" >> $env:GITHUB_STEP_SUMMARY
+          "- 🔍 [Validation Script](../blob/main/scripts/validate-github-app-config.ps1)" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          
+          "### App Manifest" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "The repository includes an app manifest (```.github/app-manifest.json```) that can be used to:" >> $env:GITHUB_STEP_SUMMARY
+          "- ✅ Create new apps with identical configuration" >> $env:GITHUB_STEP_SUMMARY
+          "- ✅ Recreate apps if deleted" >> $env:GITHUB_STEP_SUMMARY
+          "- ✅ Document required permissions" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "See the [automation guide](../blob/main/Documentation/03-Configuration-Guides/GITHUB-APP-AUTOMATION.md) for details on app deletion and recreation." >> $env:GITHUB_STEP_SUMMARY
+

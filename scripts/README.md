@@ -1,10 +1,119 @@
-# Deployment Scripts
+# Deployment and Configuration Scripts
 
 ## Overview
 
-This directory contains automation scripts for configuring and deploying the Order Processing System with secure configuration management.
+This directory contains automation scripts for configuring and deploying the Order Processing System with secure configuration management, including GitHub App automation tools.
 
-## Scripts
+## 🆕 GitHub App Automation Scripts
+
+### setup-github-app-from-manifest.ps1
+
+**NEW** - Streamlines GitHub App creation using a declarative manifest configuration.
+
+**Purpose**: 
+- Simplifies GitHub App creation process
+- Ensures consistent configuration across recreations
+- Provides step-by-step guided setup
+- Validates configuration
+
+**Usage**:
+```powershell
+# Standard setup with manifest
+./scripts/setup-github-app-from-manifest.ps1
+
+# Validate only (no creation)
+./scripts/setup-github-app-from-manifest.ps1 -ValidateOnly
+
+# Custom repository and app name
+./scripts/setup-github-app-from-manifest.ps1 `
+  -Repository myorg/myrepo `
+  -AppName MyCustomApp
+```
+
+**Parameters**:
+- `Repository` (optional): GitHub repository in format owner/repo (default: pavanthakur/XYDataLabs.OrderProcessingSystem)
+- `AppName` (optional): Custom name for the GitHub App (overrides manifest default)
+- `ValidateOnly` (switch): Only validate existing app configuration
+
+**What It Does**:
+1. ✅ Reads and validates the app manifest (`.github/app-manifest.json`)
+2. ✅ Displays required configuration
+3. ✅ Provides guided instructions for app creation
+4. ✅ Shows exact permissions needed
+5. ✅ Guides through private key generation
+6. ✅ Guides through app installation
+
+**Prerequisites**:
+- PowerShell 7+ (for proper JSON handling)
+- GitHub account with admin access to repository
+
+**Related Files**:
+- `.github/app-manifest.json` - Declarative app configuration
+
+---
+
+### validate-github-app-config.ps1
+
+**NEW** - Comprehensive validation tool for GitHub App configuration.
+
+**Purpose**:
+- Validates GitHub App setup
+- Checks repository and environment secrets
+- Verifies app installation
+- Diagnoses configuration issues
+- Provides actionable troubleshooting guidance
+
+**Usage**:
+```powershell
+# Basic validation
+./scripts/validate-github-app-config.ps1
+
+# Detailed validation with verbose output
+./scripts/validate-github-app-config.ps1 -Detailed
+
+# Validate specific repository
+./scripts/validate-github-app-config.ps1 `
+  -Repository pavanthakur/XYDataLabs.OrderProcessingSystem `
+  -Detailed
+
+# Validate with specific App ID
+./scripts/validate-github-app-config.ps1 -AppId 12345 -Detailed
+```
+
+**Parameters**:
+- `Repository` (optional): GitHub repository in format owner/repo (default: pavanthakur/XYDataLabs.OrderProcessingSystem)
+- `AppId` (optional): GitHub App ID (uses APP_ID environment variable if not provided)
+- `Detailed` (switch): Show detailed validation output
+
+**What It Validates**:
+1. ✅ GitHub CLI installation and authentication
+2. ✅ Repository secrets (APP_ID, APP_PRIVATE_KEY)
+3. ✅ Environment secrets (dev, staging, prod)
+   - AZUREAPPSERVICE_CLIENTID
+   - AZUREAPPSERVICE_TENANTID
+   - AZUREAPPSERVICE_SUBSCRIPTIONID
+4. ✅ GitHub App installation status
+5. ✅ App accessibility via API
+6. ⚠️ Manual verification checklist for permissions
+
+**Exit Codes**:
+- `0`: All automated checks passed
+- `1`: One or more checks failed
+
+**When to Use**:
+- 🔍 Before running bootstrap workflow
+- 🔍 After creating/recreating GitHub App
+- 🔍 When troubleshooting authentication issues
+- 🔍 After modifying app permissions
+- 🔍 As part of regular maintenance
+
+**Prerequisites**:
+- GitHub CLI installed and authenticated (`gh auth login`)
+- Admin access to repository
+
+---
+
+## Deployment Scripts
 
 ### configure-secrets-and-run.ps1
 
@@ -219,3 +328,104 @@ The wrapper script:
 - [Bicep Templates](../bicep/README.md) - Infrastructure as Code
 - [Runbook](../docs/runbooks/keyvault-managed-identity-deploy.md) - Deployment runbook
 - [GitHub Workflow](../.github/workflows/deploy-and-verify.yml) - CI/CD pipeline
+
+---
+
+## 📚 GitHub App Automation Documentation
+
+For comprehensive information about GitHub App automation, including:
+- ✅ How to delete and recreate apps
+- ✅ Understanding automation limitations
+- ✅ Step-by-step recreation guide
+- ✅ Secret management best practices
+- ✅ Troubleshooting guide
+
+See: [Documentation/03-Configuration-Guides/GITHUB-APP-AUTOMATION.md](../Documentation/03-Configuration-Guides/GITHUB-APP-AUTOMATION.md)
+
+### Quick Reference
+
+#### App Manifest Location
+`.github/app-manifest.json` - Declarative configuration for GitHub App
+
+#### To Create New App
+```powershell
+./scripts/setup-github-app-from-manifest.ps1
+```
+
+#### To Validate Configuration
+```powershell
+./scripts/validate-github-app-config.ps1 -Detailed
+```
+
+#### To Delete and Recreate App
+1. Document current config: `./scripts/validate-github-app-config.ps1 -Detailed > backup.txt`
+2. Delete app at: https://github.com/settings/apps
+3. Recreate with manifest: `./scripts/setup-github-app-from-manifest.ps1`
+4. Update secrets (APP_ID, APP_PRIVATE_KEY)
+5. Reinstall app on repository
+6. Run bootstrap workflow with "Configure Secrets" enabled
+
+---
+
+## Workflow Integration
+
+These scripts integrate with the Azure Bootstrap workflow:
+
+### Bootstrap Workflow Flow
+```
+azure-bootstrap.yml
+  ├── setup-oidc (creates Azure OIDC app)
+  ├── setup-github-app (guides GitHub App creation)
+  ├── configure-secrets (automated secret management)
+  │   ├── Repository secrets via GitHub App
+  │   └── Environment secrets (dev, staging, prod)
+  └── validate-final-configuration (NEW - validates setup)
+```
+
+### Running Full Bootstrap
+1. Navigate to Actions → Azure Bootstrap Setup
+2. Select workflow options:
+   - ✅ Setup Azure OIDC
+   - ✅ Setup GitHub App (first time only)
+   - ✅ Configure Secrets
+   - ✅ Bootstrap Infrastructure
+3. Follow on-screen instructions for any manual steps
+4. Review validation output
+
+---
+
+## Script Dependencies
+
+### External Tools Required
+- PowerShell 7+
+- Azure CLI (`az`)
+- GitHub CLI (`gh`)
+
+### Internal Script Dependencies
+- `configure-secrets-and-run.ps1` → `configure-github-secrets.ps1`
+- `configure-secrets-and-run.ps1` → `configure-app-environment.ps1`
+- `setup-github-app-from-manifest.ps1` → `.github/app-manifest.json`
+
+---
+
+## Best Practices
+
+### Before Running Scripts
+1. ✅ Authenticate to Azure: `az login`
+2. ✅ Authenticate to GitHub: `gh auth login`
+3. ✅ Set correct subscription: `az account set --subscription <id>`
+4. ✅ Verify repository access
+5. ✅ Review script parameters
+
+### After Running Scripts
+1. ✅ Validate configuration: `./scripts/validate-github-app-config.ps1 -Detailed`
+2. ✅ Check Azure Portal for resources
+3. ✅ Verify secrets in GitHub
+4. ✅ Test deployments
+5. ✅ Review workflow logs
+
+### Regular Maintenance
+1. 🔄 Monthly: Run validation script
+2. 🔄 Quarterly: Review app permissions
+3. 🔄 As needed: Rotate private keys
+4. 🔄 Always: Keep documentation updated
