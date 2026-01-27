@@ -1079,17 +1079,6 @@ jobs:
           Write-Host "Timestamp (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           Write-Host ""
           
-          # Check existing Azure secrets
-          $hasClientId = "${{ secrets.AZUREAPPSERVICE_CLIENTID }}" -ne ""
-          $hasTenantId = "${{ secrets.AZUREAPPSERVICE_TENANTID }}" -ne ""
-          $hasSubscriptionId = "${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}" -ne ""
-          
-          Write-Host "📋 Azure Secret Status:" -ForegroundColor Yellow
-          Write-Host "  AZUREAPPSERVICE_CLIENTID       : $(if ($hasClientId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasClientId) { "Green" } else { "Red" })
-          Write-Host "  AZUREAPPSERVICE_TENANTID       : $(if ($hasTenantId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasTenantId) { "Green" } else { "Red" })
-          Write-Host "  AZUREAPPSERVICE_SUBSCRIPTIONID : $(if ($hasSubscriptionId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasSubscriptionId) { "Green" } else { "Red" })
-          Write-Host ""
-          
           # Check GitHub App authentication (REQUIRED for automated secret management)
           Write-Host "🔐 GitHub App Authentication:" -ForegroundColor Yellow
           if ($env:GH_APP_TOKEN) {
@@ -1123,13 +1112,12 @@ jobs:
           Write-Host ""
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
           
-          if ($hasClientId -and $hasTenantId -and $hasSubscriptionId) {
-            Write-Host "✅ All Azure secrets already configured - skipping secret setup" -ForegroundColor Green
-            "secretsExist=true" >> $env:GITHUB_OUTPUT
-          } else {
-            Write-Host "⚠️  Azure secrets missing - will attempt configuration" -ForegroundColor Yellow
-            "secretsExist=false" >> $env:GITHUB_OUTPUT
-          }
+          # Note: We cannot reliably detect if secrets exist using ${{ secrets.NAME }} syntax
+          # because GitHub Actions treats missing secrets as empty strings, which can lead to 
+          # false positives. Instead, we'll always attempt to configure secrets (idempotent operation)
+          # and verify them afterwards using the GitHub API.
+          Write-Host "ℹ️  Azure secrets will be configured (existing secrets will be updated)" -ForegroundColor Cyan
+          "secretsExist=false" >> $env:GITHUB_OUTPUT
           Write-Host ""
       
       - name: Validate GitHub App Token
