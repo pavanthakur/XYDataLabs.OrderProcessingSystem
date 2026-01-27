@@ -161,34 +161,23 @@ Write-Host "Due to GitHub security requirements, app creation requires interacti
 Write-Host "This script will guide you through the streamlined process." -ForegroundColor $colors.Info
 Write-Host ""
 
-# Generate manifest URL
-$manifestJson = $manifest | ConvertTo-Json -Depth 10 -Compress
-$manifestEncoded = [System.Web.HttpUtility]::UrlEncode($manifestJson)
-$state = [Guid]::NewGuid().ToString()
+# Note: GitHub's app creation from manifest requires a web-based flow
+# The manifest needs to be posted to GitHub's endpoint, which requires interactive approval
+# We'll provide the manifest in readable form for the user to use
 
-# Create manifest URL
-$manifestUrl = "https://github.com/settings/apps/new?state=$state"
-
-Write-Host "📋 AUTOMATED SETUP STEPS" -ForegroundColor $colors.Header
-Write-Host ""
 Write-Host "Step 1: Create App from Manifest" -ForegroundColor $colors.Header
 Write-Host "  The manifest file contains all required configuration." -ForegroundColor $colors.Info
 Write-Host "  Follow these steps:" -ForegroundColor $colors.Info
 Write-Host ""
-Write-Host "  1. Copy the manifest JSON below:" -ForegroundColor $colors.Prompt
+Write-Host "  Option A: Use GitHub's manifest flow (recommended):" -ForegroundColor $colors.Prompt
+Write-Host "    1. Go to: https://github.com/settings/apps/new" -ForegroundColor Cyan
+Write-Host "    2. Fill in the form using the manifest configuration shown below" -ForegroundColor $colors.Info
 Write-Host ""
-Write-Host "═══════════════ START MANIFEST ═══════════════" -ForegroundColor DarkGray
+Write-Host "  Option B: Create manually and match manifest settings" -ForegroundColor $colors.Prompt
+Write-Host ""
+Write-Host "═══════════════ APP CONFIGURATION (MANIFEST) ═══════════════" -ForegroundColor DarkGray
 Write-Host ($manifest | ConvertTo-Json -Depth 10) -ForegroundColor Yellow
-Write-Host "═══════════════  END MANIFEST  ═══════════════" -ForegroundColor DarkGray
-Write-Host ""
-Write-Host "  2. Open GitHub App creation page:" -ForegroundColor $colors.Prompt
-Write-Host "     $manifestUrl" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "  3. Or use the QUICK METHOD:" -ForegroundColor $colors.Header
-Write-Host "     a. Go to: https://github.com/settings/apps/new" -ForegroundColor $colors.Info
-Write-Host "     b. Fill in the form fields from manifest above" -ForegroundColor $colors.Info
-Write-Host "     c. Set all permissions as shown in manifest" -ForegroundColor $colors.Info
-Write-Host "     d. Click 'Create GitHub App'" -ForegroundColor $colors.Info
+Write-Host "═══════════════  END CONFIGURATION  ═══════════════" -ForegroundColor DarkGray
 Write-Host ""
 
 Write-Host "Step 2: Generate Private Key" -ForegroundColor $colors.Header

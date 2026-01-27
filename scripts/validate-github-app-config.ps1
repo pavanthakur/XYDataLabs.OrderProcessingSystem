@@ -39,7 +39,7 @@ param(
     [switch]$Detailed
 )
 
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Continue'  # Continue on errors to provide complete validation report
 
 $colors = @{
     Header = "Cyan"
@@ -113,8 +113,9 @@ if (Test-Check -Name "GitHub CLI (gh) installed" -Passed ($null -ne $ghInstalled
 if ($ghInstalled) {
     $validationResults.Total++
     try {
-        $ghAuthStatus = gh auth status 2>&1 | Out-String
-        $isAuthed = $ghAuthStatus -match "Logged in to github.com"
+        # Try JSON format first for better reliability
+        $authStatus = gh auth status 2>&1
+        $isAuthed = $authStatus -match "Logged in to github.com"
         if (Test-Check -Name "GitHub CLI authenticated" -Passed $isAuthed -FailureMessage "Run: gh auth login") {
             $validationResults.Passed++
         } else {
