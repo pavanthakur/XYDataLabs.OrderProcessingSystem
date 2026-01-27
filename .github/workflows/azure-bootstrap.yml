@@ -3494,6 +3494,8 @@ jobs:
       - name: Trigger API Deployment
         if: inputs.deployApi
         uses: actions/github-script@v7
+        env:
+          TARGET_ENV: ${{ inputs.environment }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -3504,13 +3506,15 @@ jobs:
               ref: context.ref
             });
             
-            core.notice(`🚀 API deployment triggered for environment: ${{ inputs.environment }}`);
+            core.notice(`🚀 API deployment triggered for environment: ${process.env.TARGET_ENV}`);
             core.notice(`📋 Branch: ${context.ref.replace('refs/heads/', '')}`);
             core.notice(`🔗 View workflow: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/workflows/deploy-api-to-azure.yml`);
 
       - name: Trigger UI Deployment
         if: inputs.deployUi
         uses: actions/github-script@v7
+        env:
+          TARGET_ENV: ${{ inputs.environment }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -3521,7 +3525,7 @@ jobs:
               ref: context.ref
             });
             
-            core.notice(`🚀 UI deployment triggered for environment: ${{ inputs.environment }}`);
+            core.notice(`🚀 UI deployment triggered for environment: ${process.env.TARGET_ENV}`);
             core.notice(`📋 Branch: ${context.ref.replace('refs/heads/', '')}`);
             core.notice(`🔗 View workflow: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/workflows/deploy-ui-to-azure.yml`);
 
