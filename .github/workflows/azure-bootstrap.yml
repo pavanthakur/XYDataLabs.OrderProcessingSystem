@@ -3488,8 +3488,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: [summary]
     if: |
-      (inputs.deployApi || inputs.deployUi) && 
-      needs.summary.result == 'success'
+      !cancelled() &&
+      (inputs.deployApi || inputs.deployUi) &&
+      needs.summary.result != 'failure' &&
+      needs.summary.result != 'cancelled'
     steps:
       - name: Trigger API Deployment
         if: inputs.deployApi
