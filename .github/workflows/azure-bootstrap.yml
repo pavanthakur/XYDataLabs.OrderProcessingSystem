@@ -888,6 +888,8 @@ jobs:
       (needs.configure-github-secrets.result == 'success' || needs.configure-github-secrets.result == 'skipped') &&
       (needs.pre-validate-prerequisites.result == 'success' || needs.pre-validate-prerequisites.result == 'skipped')
     needs: [validate-inputs, setup-oidc, configure-github-secrets, pre-validate-prerequisites]
+    runs-on: windows-latest
+    environment: dev
     env:
       CLIENT_ID: ${{ needs.setup-oidc.outputs.clientId || secrets.AZUREAPPSERVICE_CLIENTID }}
       TENANT_ID: ${{ needs.setup-oidc.outputs.tenantId || secrets.AZUREAPPSERVICE_TENANTID }}
