@@ -77,6 +77,7 @@ The manifest file is located at `.github/app-manifest.json`:
     "workflows": "write",
     "pull_requests": "write",
     "administration": "write",
+    "environments": "write",
     "contents": "read",
     "metadata": "read"
   },
@@ -135,14 +136,16 @@ The GitHub App **must** have these permissions:
 | **Secrets** | Read and write | ⚠️ **CRITICAL** - Configure repository & environment secrets |
 | **Workflows** | Read and write | Modify workflow files, dispatch workflow runs |
 | **Pull requests** | Read and write | Create/update PRs in workflows |
-| **Administration** | Read and write | Create/manage environments |
+| **Administration** | Read and write | Repository settings, teams, and collaborators |
+| **Environments** | Read and write | **CRITICAL** - Create/manage environments, configure protection rules |
 | **Contents** | Read | Access repository files |
 | **Metadata** | Read | Basic repository information (automatic) |
 
 ### Important Notes on Permissions
 
 1. **Secrets Permission is Critical**: Without this, secret automation will fail
-2. **Administration Permission**: Required for creating environments
+2. **Environments Permission is Critical**: Required for creating and managing environments
+3. **Administration Permission**: Provides additional repository management capabilities
 3. **No Webhook Required**: The app doesn't need to receive events
 
 ### Repository vs Environment Secrets
@@ -323,10 +326,10 @@ This checks:
 
 #### Issue: "Environment secrets configuration failed"
 
-**Cause**: Missing "Administration: Read and write" permission
+**Cause**: Missing "Environments: Read and write" permission
 
 **Solution**:
-1. Add "Administration: Read and write" permission to app
+1. Add "Environments: Read and write" permission to app
 2. Re-approve permissions
 3. Re-run bootstrap workflow
 

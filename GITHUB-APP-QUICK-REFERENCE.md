@@ -64,7 +64,8 @@ GitHub App must have these permissions:
 | **Secrets** | **Read and write** | **⚠️ CRITICAL** |
 | Workflows | Read and write | Yes |
 | Pull requests | Read and write | Yes |
-| Administration | Read and write | Yes (for environments) |
+| Administration | Read and write | Yes |
+| **Environments** | **Read and write** | **⚠️ CRITICAL** |
 | Contents | Read | Yes |
 | Metadata | Read | Automatic |
 

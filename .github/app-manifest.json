@@ -13,6 +13,7 @@
     "workflows": "write",
     "pull_requests": "write",
     "administration": "write",
+    "environments": "write",
     "contents": "read",
     "metadata": "read"
   },
