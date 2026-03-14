@@ -673,6 +673,7 @@ jobs:
       (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped')
     needs: [validate-inputs, setup-oidc]
     uses: ./.github/workflows/configure-github-secrets.yml
+    secrets: inherit
     with:
       environment: ${{ inputs.environment }}
       setupGitHubApp: ${{ inputs.setupGitHubApp }}
