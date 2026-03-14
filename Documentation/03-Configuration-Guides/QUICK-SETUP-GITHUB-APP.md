@@ -14,7 +14,7 @@ Eliminate PAT token expiration by using GitHub App authentication (tokens never 
    Homepage URL: https://github.com/[your-username]/[your-repo]
    Webhook: UNCHECK "Active"
    ```
-3. **Permissions** → Repository permissions (⚠️ CRITICAL - Set all 4):
+3. **Permissions** → Repository permissions (⚠️ CRITICAL - Set all 5):
    
    | Permission | Access Level | Required For |
    |------------|--------------|--------------|
@@ -22,6 +22,7 @@ Eliminate PAT token expiration by using GitHub App authentication (tokens never 
    | **Pull requests** | Read and write ✅ | Create/update PRs in workflows |
    | **Secrets** | Read and write ✅ | **CRITICAL** - Read/write repository & environment secrets |
    | **Workflows** | Read and write ✅ | Modify workflow files, dispatch workflow runs |
+   | **Environments** | Read and write ✅ | **CRITICAL** - Create/manage environments and protection rules |
 
    **To set permissions:**
    - Scroll to "Repository permissions" section
