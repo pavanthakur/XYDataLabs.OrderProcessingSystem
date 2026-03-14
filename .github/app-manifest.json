@@ -1,0 +1,21 @@
+{
+  "name": "XYDataLabs-OrderProcessing-Automation",
+  "url": "https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem",
+  "hook_attributes": {
+    "active": false
+  },
+  "redirect_url": "https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem",
+  "description": "Automated secret management and workflow automation for XYDataLabs Order Processing System. This app enables passwordless authentication and automated secret configuration across all environments.",
+  "public": false,
+  "default_permissions": {
+    "actions": "write",
+    "secrets": "write",
+    "workflows": "write",
+    "pull_requests": "write",
+    "administration": "write",
+    "environments": "write",
+    "contents": "read",
+    "metadata": "read"
+  },
+  "default_events": []
+}

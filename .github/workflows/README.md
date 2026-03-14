@@ -8,6 +8,8 @@ This directory contains GitHub Actions workflows for automated CI/CD deployment 
 
 | Workflow | Triggers On | Deploys To | Description |
 |----------|-------------|------------|-------------|
+| `azure-bootstrap.yml` | Manual | One-time setup | **[See README-AZURE-BOOTSTRAP.md](./README-AZURE-BOOTSTRAP.md)** - Complete Azure and GitHub setup orchestration |
+| `configure-github-secrets.yml` | Manual or called by bootstrap | Secret configuration | **[See README-CONFIGURE-GITHUB-SECRETS.md](./README-CONFIGURE-GITHUB-SECRETS.md)** - GitHub App setup and secret management (can run independently) |
 | `infra-deploy.yml` | Infrastructure changes or manual | dev/staging/prod | **[See README-INFRA-DEPLOY.md](./README-INFRA-DEPLOY.md)** - Deploys Bicep infrastructure with manual workflow dispatch |
 | `validate-deployment.yml` | Called by infra-deploy | Reusable workflow | **[See README-VALIDATE-DEPLOYMENT.md](./README-VALIDATE-DEPLOYMENT.md)** - Pre-deployment validation workflow |
 | `test-validate-deployment.yml` | Manual or PR changes | Test only | **[Quick Start](./QUICK-START-TEST-VALIDATION.md)** \| **[Full Docs](./README-TEST-VALIDATE-DEPLOYMENT.md)** - Tests validation workflow independently |
