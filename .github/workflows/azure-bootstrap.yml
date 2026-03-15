@@ -74,6 +74,10 @@ jobs:
     name: Validate Workflow Inputs
     if: github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
+    permissions:
+      contents: read
+      actions: read
+      secrets: read
     steps:
       - name: Log Workflow Start
         run: |
@@ -115,7 +119,7 @@ jobs:
       - name: Validate Configuration
         run: |
           Write-Host "🔍 Validating workflow inputs..." -ForegroundColor Cyan
-          Write-Host "=" * 70 -ForegroundColor Gray
+          Write-Host ("=" * 70) -ForegroundColor Gray
 
           $env = "${{ inputs.environment }}"
           $setupOidc = "${{ inputs.setupOidc }}"
@@ -202,40 +206,59 @@ jobs:
 
           # Check if repository secrets exist when setup is skipped
           Write-Host "`n  🔐 Repository Secrets Check:" -ForegroundColor Cyan
-          if ($setupOidc -eq "false") {
+
+          # Detect Phase 0-only run: setupGitHubApp=true with no OIDC/bootstrap/configSecrets
+          $isPhase0Only = ($setupGitHubApp -eq "true") -and ($configSecrets -eq "false") -and ($bootstrap -eq "false") -and ($setupOidc -eq "false")
+
+          if ($isPhase0Only) {
+            Write-Host "    ℹ️  Phase 0 run detected — OIDC secrets check skipped" -ForegroundColor Cyan
+            Write-Host "    ✅ OIDC secrets are not required yet (Phase 1 task)" -ForegroundColor Green
+            Write-Host "    💡 Next step: After completing GitHub App setup, run Phase 1:" -ForegroundColor Yellow
+            Write-Host "       ✅ Setup Azure OIDC" -ForegroundColor White
+            Write-Host "       ✅ Configure Secrets" -ForegroundColor White
+          } elseif ($setupOidc -eq "false") {
             Write-Host "    Setup OIDC: Unchecked (skipped)" -ForegroundColor Yellow
             Write-Host "    Checking if OIDC secrets already exist in repository..." -ForegroundColor Gray
             
-            # Use GitHub CLI to check if secrets exist (requires GITHUB_TOKEN which is automatic)
+            # Use GitHub CLI to check if secrets exist (requires secrets:read permission on GITHUB_TOKEN)
             try {
               $secretsCheck = gh secret list --repo ${{ github.repository }} 2>&1 | Out-String
-              $hasClientId = $secretsCheck -match "AZUREAPPSERVICE_CLIENTID"
-              $hasTenantId = $secretsCheck -match "AZUREAPPSERVICE_TENANTID"
-              $hasSubscriptionId = $secretsCheck -match "AZUREAPPSERVICE_SUBSCRIPTIONID"
+              $checkExitCode = $LASTEXITCODE
               
-              if ($hasClientId -and $hasTenantId -and $hasSubscriptionId) {
-                Write-Host "    ✅ OIDC repository secrets exist" -ForegroundColor Green
+              if ($checkExitCode -ne 0) {
+                Write-Host "    ⚠️  Could not list repository secrets (exit code: $checkExitCode)" -ForegroundColor Yellow
+                Write-Host "    Proceeding with caution — verify OIDC secrets manually if needed" -ForegroundColor Gray
               } else {
-                Write-Host "    ❌ OIDC repository secrets are MISSING!" -ForegroundColor Red
-                Write-Host "" -ForegroundColor Gray
-                Write-Host "    Required secrets not found:" -ForegroundColor Yellow
-                if (-not $hasClientId) { Write-Host "      - AZUREAPPSERVICE_CLIENTID" -ForegroundColor Red }
-                if (-not $hasTenantId) { Write-Host "      - AZUREAPPSERVICE_TENANTID" -ForegroundColor Red }
-                if (-not $hasSubscriptionId) { Write-Host "      - AZUREAPPSERVICE_SUBSCRIPTIONID" -ForegroundColor Red }
-                Write-Host "" -ForegroundColor Gray
-                Write-Host "    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-                Write-Host "    💡 SOLUTION: Re-run this workflow with these checkboxes SELECTED:" -ForegroundColor Yellow
-                Write-Host "       ✅ Setup Azure OIDC (REQUIRED)" -ForegroundColor White
-                Write-Host "       ✅ Bootstrap infrastructure" -ForegroundColor White
-                Write-Host "    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-                Write-Host "" -ForegroundColor Gray
-                Write-Host "    ⚠️  Deployment workflows will fail without these secrets." -ForegroundColor Yellow
+                $hasClientId = $secretsCheck -match "AZUREAPPSERVICE_CLIENTID"
+                $hasTenantId = $secretsCheck -match "AZUREAPPSERVICE_TENANTID"
+                $hasSubscriptionId = $secretsCheck -match "AZUREAPPSERVICE_SUBSCRIPTIONID"
                 
-                if ($bootstrap -eq "true") {
+                if ($hasClientId -and $hasTenantId -and $hasSubscriptionId) {
+                  Write-Host "    ✅ OIDC repository secrets exist" -ForegroundColor Green
+                } else {
+                  Write-Host "    ❌ OIDC repository secrets are MISSING!" -ForegroundColor Red
                   Write-Host "" -ForegroundColor Gray
-                  Write-Host "    ❌ ERROR: Cannot bootstrap infrastructure without OIDC credentials!" -ForegroundColor Red
-                  Write-Error "OIDC secrets not found. You must check 'Setup Azure OIDC' checkbox to create them."
-                  exit 1
+                  Write-Host "    Required secrets not found:" -ForegroundColor Yellow
+                  if (-not $hasClientId) { Write-Host "      - AZUREAPPSERVICE_CLIENTID" -ForegroundColor Red }
+                  if (-not $hasTenantId) { Write-Host "      - AZUREAPPSERVICE_TENANTID" -ForegroundColor Red }
+                  if (-not $hasSubscriptionId) { Write-Host "      - AZUREAPPSERVICE_SUBSCRIPTIONID" -ForegroundColor Red }
+                  Write-Host "" -ForegroundColor Gray
+                  Write-Host "    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+                  Write-Host "    💡 SOLUTION: Re-run this workflow with these checkboxes SELECTED:" -ForegroundColor Yellow
+                  Write-Host "       ✅ Setup Azure OIDC (REQUIRED)" -ForegroundColor White
+                  if ($bootstrap -eq "true") {
+                    Write-Host "       ✅ Bootstrap infrastructure" -ForegroundColor White
+                  }
+                  Write-Host "    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+                  Write-Host "" -ForegroundColor Gray
+                  Write-Host "    ⚠️  Deployment workflows will fail without these secrets." -ForegroundColor Yellow
+                  
+                  if ($bootstrap -eq "true") {
+                    Write-Host "" -ForegroundColor Gray
+                    Write-Host "    ❌ ERROR: Cannot bootstrap infrastructure without OIDC credentials!" -ForegroundColor Red
+                    Write-Error "OIDC secrets not found. You must check 'Setup Azure OIDC' checkbox to create them."
+                    exit 1
+                  }
                 }
               }
             } catch {
@@ -251,33 +274,39 @@ jobs:
             Write-Host "`n  🤖 GitHub App Check (required for 'Configure Secrets' step):" -ForegroundColor Cyan
             try {
               $secretsCheck = gh secret list --repo ${{ github.repository }} 2>&1 | Out-String
-              $hasAppId = $secretsCheck -match "(?m)^\s*APP_ID\b"
-              $hasPrivateKey = $secretsCheck -match "(?m)^\s*APP_PRIVATE_KEY\b"
-
-              if ($hasAppId -and $hasPrivateKey) {
-                Write-Host "    ✅ GitHub App secrets exist (APP_ID, APP_PRIVATE_KEY)" -ForegroundColor Green
-                Write-Host "    ℹ️  APP_INSTALLATION_ID: auto-discovered at runtime" -ForegroundColor Cyan
+              $checkExitCode = $LASTEXITCODE
+              if ($checkExitCode -ne 0) {
+                Write-Host "    ⚠️  Could not list repository secrets (exit code: $checkExitCode)" -ForegroundColor Yellow
+                Write-Host "    Proceeding with caution..." -ForegroundColor Gray
               } else {
-                Write-Host "    ⚠️  GitHub App secrets MISSING - 'Configure Secrets' step will fail!" -ForegroundColor Red
-                Write-Host "" -ForegroundColor Gray
-                Write-Host "    Missing:" -ForegroundColor Yellow
-                if (-not $hasAppId) { Write-Host "      ❌ APP_ID" -ForegroundColor Red }
-                if (-not $hasPrivateKey) { Write-Host "      ❌ APP_PRIVATE_KEY" -ForegroundColor Red }
-                Write-Host "" -ForegroundColor Gray
-                Write-Host "    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
-                Write-Host "    💡 SOLUTION: Configure GitHub App before running 'Configure Secrets':" -ForegroundColor Yellow
-                Write-Host "       1. Run: .\scripts\setup-github-app-from-manifest.ps1" -ForegroundColor White
-                Write-Host "          (or create app manually at https://github.com/${{ github.repository_owner }}/settings/apps/new)" -ForegroundColor Gray
-                Write-Host "       2. Install the app on this repository" -ForegroundColor White
-                Write-Host "          (https://github.com/settings/installations)" -ForegroundColor Gray
-                Write-Host "       3. Add secrets to this repository:" -ForegroundColor White
-                Write-Host "          - APP_ID (your GitHub App's numeric ID)" -ForegroundColor Gray
-                Write-Host "          - APP_PRIVATE_KEY (contents of downloaded .pem file)" -ForegroundColor Gray
-                Write-Host "       4. Re-run this workflow" -ForegroundColor White
-                Write-Host "    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
-                Write-Host "" -ForegroundColor Gray
-                Write-Host "    ℹ️  Note: GitHub requires manual app creation (security requirement)." -ForegroundColor Gray
-                Write-Host "    ℹ️  After initial setup, the workflow is fully automated." -ForegroundColor Gray
+                $hasAppId = $secretsCheck -match "(?m)^\s*APP_ID\b"
+                $hasPrivateKey = $secretsCheck -match "(?m)^\s*APP_PRIVATE_KEY\b"
+
+                if ($hasAppId -and $hasPrivateKey) {
+                  Write-Host "    ✅ GitHub App secrets exist (APP_ID, APP_PRIVATE_KEY)" -ForegroundColor Green
+                  Write-Host "    ℹ️  APP_INSTALLATION_ID: auto-discovered at runtime" -ForegroundColor Cyan
+                } else {
+                  Write-Host "    ⚠️  GitHub App secrets MISSING - 'Configure Secrets' step will fail!" -ForegroundColor Red
+                  Write-Host "" -ForegroundColor Gray
+                  Write-Host "    Missing:" -ForegroundColor Yellow
+                  if (-not $hasAppId) { Write-Host "      ❌ APP_ID" -ForegroundColor Red }
+                  if (-not $hasPrivateKey) { Write-Host "      ❌ APP_PRIVATE_KEY" -ForegroundColor Red }
+                  Write-Host "" -ForegroundColor Gray
+                  Write-Host "    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
+                  Write-Host "    💡 SOLUTION: Configure GitHub App before running 'Configure Secrets':" -ForegroundColor Yellow
+                  Write-Host "       1. Run: .\scripts\setup-github-app-from-manifest.ps1" -ForegroundColor White
+                  Write-Host "          (or create app manually at https://github.com/${{ github.repository_owner }}/settings/apps/new)" -ForegroundColor Gray
+                  Write-Host "       2. Install the app on this repository" -ForegroundColor White
+                  Write-Host "          (https://github.com/settings/installations)" -ForegroundColor Gray
+                  Write-Host "       3. Add secrets to this repository:" -ForegroundColor White
+                  Write-Host "          - APP_ID (your GitHub App's numeric ID)" -ForegroundColor Gray
+                  Write-Host "          - APP_PRIVATE_KEY (contents of downloaded .pem file)" -ForegroundColor Gray
+                  Write-Host "       4. Re-run this workflow" -ForegroundColor White
+                  Write-Host "    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
+                  Write-Host "" -ForegroundColor Gray
+                  Write-Host "    ℹ️  Note: GitHub requires manual app creation (security requirement)." -ForegroundColor Gray
+                  Write-Host "    ℹ️  After initial setup, the workflow is fully automated." -ForegroundColor Gray
+                }
               }
             } catch {
               Write-Host "    ⚠️  Could not check GitHub App secrets: $($_.Exception.Message)" -ForegroundColor Yellow
@@ -286,7 +315,7 @@ jobs:
           }
 
           Write-Host "`n" -ForegroundColor Gray
-          Write-Host "=" * 70 -ForegroundColor Gray
+          Write-Host ("=" * 70) -ForegroundColor Gray
           Write-Host "✅ Input validation passed - proceeding..." -ForegroundColor Green
 
   setup-oidc:
@@ -718,7 +747,7 @@ jobs:
     if: |
       !cancelled() &&
       needs.validate-inputs.result == 'success' &&
-      inputs.configureSecrets &&
+      (inputs.configureSecrets || inputs.setupGitHubApp) &&
       (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped')
     needs: [validate-inputs, setup-oidc]
     uses: ./.github/workflows/configure-github-secrets.yml
