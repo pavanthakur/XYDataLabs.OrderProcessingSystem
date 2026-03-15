@@ -77,7 +77,6 @@ jobs:
     permissions:
       contents: read
       actions: read
-      secrets: read
     steps:
       - name: Log Workflow Start
         run: |
