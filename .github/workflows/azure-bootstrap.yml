@@ -2689,6 +2689,52 @@ jobs:
           "| APP_ID + APP_PRIVATE_KEY secrets | ⚠️ Caution | Must re-run setup-github-app-from-manifest.ps1 after deletion |" >> $env:GITHUB_STEP_SUMMARY
           "| GitHub App Installation (settings/installations) | ⚠️ Caution | Must re-install app after deletion, then update APP_ID + APP_PRIVATE_KEY |" >> $env:GITHUB_STEP_SUMMARY
 
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "---" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+
+          # Determine next steps based on current state
+          $ranPhase0     = "${{ inputs.setupGitHubApp }}" -eq "true"
+          $hasAppId      = "${{ secrets.APP_ID }}" -ne ""
+          $hasPrivateKey = "${{ secrets.APP_PRIVATE_KEY }}" -ne ""
+          $appSecretsOk  = $hasAppId -and $hasPrivateKey
+
+          if ($ranPhase0 -and -not $appSecretsOk) {
+            "## 🔴 Action Required — Phase 0 Complete, Manual Step Needed" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "> **Phase 0 instructions have been shown. Before Phase 1 can run you must manually add two repository secrets.**" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "### Step 1 — Add Repository Secrets" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "Go to **[Settings → Secrets and variables → Actions](https://github.com/${{ github.repository }}/settings/secrets/actions)** and add:" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "| Secret name | Where to find the value |" >> $env:GITHUB_STEP_SUMMARY
+            "|-------------|------------------------|" >> $env:GITHUB_STEP_SUMMARY
+            "| ``APP_ID`` | Your GitHub App's numeric ID (shown on the app's **General** settings page) |" >> $env:GITHUB_STEP_SUMMARY
+            "| ``APP_PRIVATE_KEY`` | Contents of the ``.pem`` file you downloaded when generating the private key |" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "> 📖 **Not created a GitHub App yet?** Follow the 4-minute guide: [QUICK-SETUP-GITHUB-APP.md](../blob/${{ github.ref_name }}/Documentation/03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md)" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "### Step 2 — Re-run This Workflow (Phase 1)" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "Once the two secrets are saved, **[run this workflow again](https://github.com/${{ github.repository }}/actions/workflows/azure-bootstrap.yml)** with:" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "| Input | Value |" >> $env:GITHUB_STEP_SUMMARY
+            "|-------|-------|" >> $env:GITHUB_STEP_SUMMARY
+            "| 🎯 Environment | ``${{ inputs.environment }}`` |" >> $env:GITHUB_STEP_SUMMARY
+            "| 🔑 Setup Azure OIDC | ``true`` |" >> $env:GITHUB_STEP_SUMMARY
+            "| ℹ️ Setup GitHub App | ``false`` (already done) |" >> $env:GITHUB_STEP_SUMMARY
+            "| 🔑 Configure GitHub Secrets | ``true`` |" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "> ✅ The workflow will then automatically configure all ``AZUREAPPSERVICE_*`` environment secrets — **no further manual steps are needed**." >> $env:GITHUB_STEP_SUMMARY
+          } elseif ($appSecretsOk) {
+            "## ✅ GitHub App Secrets Configured" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "``APP_ID`` and ``APP_PRIVATE_KEY`` are present. The workflow can use the GitHub App for automated secret management." >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "**Next:** Run this workflow with ``Setup Azure OIDC = true`` and ``Configure GitHub Secrets = true`` to set up Azure credentials." >> $env:GITHUB_STEP_SUMMARY
+          }
+
   # Optional: Trigger deployment workflows after successful bootstrap
   trigger-deployments:
     name: Trigger Deployments
