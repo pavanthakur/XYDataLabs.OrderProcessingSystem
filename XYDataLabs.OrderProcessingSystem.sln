@@ -236,6 +236,123 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "2026-03-Cleanup", "2026-03-
 		Documentation\Archive\2026-03-Cleanup\Telemetry-Quick-Start.md = Documentation\Archive\2026-03-Cleanup\Telemetry-Quick-Start.md
 	EndProjectSection
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Future-Ideas", "Future-Ideas", "{AA000001-0001-0001-0001-000000000001}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "00-Foundation", "00-Foundation", "{AA000002-0001-0001-0001-000000000001}"
+	ProjectSection(SolutionItems) = preProject
+		Documentation\Archive\Future-Ideas\00-Foundation\00_MASTER_PLAN.md = Documentation\Archive\Future-Ideas\00-Foundation\00_MASTER_PLAN.md
+		Documentation\Archive\Future-Ideas\00-Foundation\01_LEARNING_MAP.md = Documentation\Archive\Future-Ideas\00-Foundation\01_LEARNING_MAP.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "01-Weekly-Trackers-Original", "01-Weekly-Trackers-Original", "{AA000003-0001-0001-0001-000000000001}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-01-02", "Week-01-02", "{AA000004-0001-0001-0001-000000000001}"
+	ProjectSection(SolutionItems) = preProject
+		Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-01-02\Pavan_Learning_week1-session1.md = Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-01-02\Pavan_Learning_week1-session1.md
+		Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-01-02\Pavan_Learning_week1-session2.md = Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-01-02\Pavan_Learning_week1-session2.md
+		Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-01-02\README.md = Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-01-02\README.md
+		Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-01-02\SUCCESS_CRITERIA.md = Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-01-02\SUCCESS_CRITERIA.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-03-04", "Week-03-04", "{AA000005-0001-0001-0001-000000000001}"
+	ProjectSection(SolutionItems) = preProject
+		Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-03-04\DEPLOYMENT_EXERCISES.docx = Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-03-04\DEPLOYMENT_EXERCISES.docx
+		Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-03-04\DEPLOYMENT_EXERCISES.md = Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-03-04\DEPLOYMENT_EXERCISES.md
+		Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-03-04\Pavan_Learning_week1-session3.docx = Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-03-04\Pavan_Learning_week1-session3.docx
+		Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-03-04\README.md = Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-03-04\README.md
+		Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-03-04\SUCCESS_CRITERIA.docx = Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-03-04\SUCCESS_CRITERIA.docx
+		Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-03-04\SUCCESS_CRITERIA.md = Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-03-04\SUCCESS_CRITERIA.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-05-06", "Week-05-06", "{AA000006-0001-0001-0001-000000000001}"
+	ProjectSection(SolutionItems) = preProject
+		Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-05-06\README.md = Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-05-06\README.md
+		Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-05-06\SUCCESS_CRITERIA.md = Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-05-06\SUCCESS_CRITERIA.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-07-08", "Week-07-08", "{AA000007-0001-0001-0001-000000000001}"
+	ProjectSection(SolutionItems) = preProject
+		Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-07-08\README.md = Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-07-08\README.md
+		Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-07-08\SUCCESS_CRITERIA.md = Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-07-08\SUCCESS_CRITERIA.md
+		Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-07-08\WEEK_04_SUCCESS_CRITERIA.md = Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-07-08\WEEK_04_SUCCESS_CRITERIA.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-09-10", "Week-09-10", "{AA000008-0001-0001-0001-000000000001}"
+	ProjectSection(SolutionItems) = preProject
+		Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-09-10\README.md = Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-09-10\README.md
+		Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-09-10\SUCCESS_CRITERIA.md = Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-09-10\SUCCESS_CRITERIA.md
+		Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-09-10\WEEK_05_SUCCESS_CRITERIA.md = Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-09-10\WEEK_05_SUCCESS_CRITERIA.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-11-12", "Week-11-12", "{AA000009-0001-0001-0001-000000000001}"
+	ProjectSection(SolutionItems) = preProject
+		Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-11-12\README.md = Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-11-12\README.md
+		Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-11-12\SUCCESS_CRITERIA.md = Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-11-12\SUCCESS_CRITERIA.md
+		Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-11-12\WEEK_06_SUCCESS_CRITERIA.md = Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-11-12\WEEK_06_SUCCESS_CRITERIA.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-13-14", "Week-13-14", "{AA00000A-0001-0001-0001-000000000001}"
+	ProjectSection(SolutionItems) = preProject
+		Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-13-14\README.md = Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-13-14\README.md
+		Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-13-14\SUCCESS_CRITERIA.md = Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-13-14\SUCCESS_CRITERIA.md
+		Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-13-14\WEEK_07_SUCCESS_CRITERIA.md = Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-13-14\WEEK_07_SUCCESS_CRITERIA.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-15-16", "Week-15-16", "{AA00000B-0001-0001-0001-000000000001}"
+	ProjectSection(SolutionItems) = preProject
+		Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-15-16\README.md = Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-15-16\README.md
+		Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-15-16\SUCCESS_CRITERIA.md = Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-15-16\SUCCESS_CRITERIA.md
+		Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-15-16\WEEK_08_SUCCESS_CRITERIA.md = Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-15-16\WEEK_08_SUCCESS_CRITERIA.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Week-17-18", "Week-17-18", "{AA00000C-0001-0001-0001-000000000001}"
+	ProjectSection(SolutionItems) = preProject
+		Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-17-18\README.md = Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-17-18\README.md
+		Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-17-18\SUCCESS_CRITERIA.md = Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-17-18\SUCCESS_CRITERIA.md
+		Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-17-18\WEEK_09_SUCCESS_CRITERIA.md = Documentation\Archive\Future-Ideas\01-Weekly-Trackers-Original\Week-17-18\WEEK_09_SUCCESS_CRITERIA.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Historical-Sessions", "Historical-Sessions", "{AA00000D-0001-0001-0001-000000000001}"
+	ProjectSection(SolutionItems) = preProject
+		Documentation\Archive\Historical-Sessions\APP_INSTALLATION_ID_EXPLAINED.md = Documentation\Archive\Historical-Sessions\APP_INSTALLATION_ID_EXPLAINED.md
+		Documentation\Archive\Historical-Sessions\Azure_Learning_Guide_Complete.docx = Documentation\Archive\Historical-Sessions\Azure_Learning_Guide_Complete.docx
+		Documentation\Archive\Historical-Sessions\Azure_Learning_Guide_Complete.md = Documentation\Archive\Historical-Sessions\Azure_Learning_Guide_Complete.md
+		Documentation\Archive\Historical-Sessions\CHANGES-SUMMARY.md = Documentation\Archive\Historical-Sessions\CHANGES-SUMMARY.md
+		Documentation\Archive\Historical-Sessions\CLEANUP_ANALYSIS.md = Documentation\Archive\Historical-Sessions\CLEANUP_ANALYSIS.md
+		Documentation\Archive\Historical-Sessions\CURRICULUM_OVERVIEW.docx = Documentation\Archive\Historical-Sessions\CURRICULUM_OVERVIEW.docx
+		Documentation\Archive\Historical-Sessions\CURRICULUM_OVERVIEW.md = Documentation\Archive\Historical-Sessions\CURRICULUM_OVERVIEW.md
+		Documentation\Archive\Historical-Sessions\DEPLOYMENT-ANALYSIS-SUMMARY.md = Documentation\Archive\Historical-Sessions\DEPLOYMENT-ANALYSIS-SUMMARY.md
+		Documentation\Archive\Historical-Sessions\DEPLOYMENT-FIXES-SUMMARY.md = Documentation\Archive\Historical-Sessions\DEPLOYMENT-FIXES-SUMMARY.md
+		Documentation\Archive\Historical-Sessions\EVALUATION-AZURE-BOOTSTRAP-RESTORATION.md = Documentation\Archive\Historical-Sessions\EVALUATION-AZURE-BOOTSTRAP-RESTORATION.md
+		Documentation\Archive\Historical-Sessions\FIX-SUMMARY-GITHUB-APP-404.md = Documentation\Archive\Historical-Sessions\FIX-SUMMARY-GITHUB-APP-404.md
+		Documentation\Archive\Historical-Sessions\GITHUB-APP-AUTO-DISCOVERY.md = Documentation\Archive\Historical-Sessions\GITHUB-APP-AUTO-DISCOVERY.md
+		Documentation\Archive\Historical-Sessions\KEYVAULT-ACCESS-INVESTIGATION.md = Documentation\Archive\Historical-Sessions\KEYVAULT-ACCESS-INVESTIGATION.md
+		Documentation\Archive\Historical-Sessions\KEYVAULT-CONFIGURATION-FIX-SUMMARY.md = Documentation\Archive\Historical-Sessions\KEYVAULT-CONFIGURATION-FIX-SUMMARY.md
+		Documentation\Archive\Historical-Sessions\KEYVAULT-SECRET-AUTOMATION.md = Documentation\Archive\Historical-Sessions\KEYVAULT-SECRET-AUTOMATION.md
+		Documentation\Archive\Historical-Sessions\NAVIGATION_INDEX.md = Documentation\Archive\Historical-Sessions\NAVIGATION_INDEX.md
+		Documentation\Archive\Historical-Sessions\QUICK_START.docx = Documentation\Archive\Historical-Sessions\QUICK_START.docx
+		Documentation\Archive\Historical-Sessions\QUICK_START.md = Documentation\Archive\Historical-Sessions\QUICK_START.md
+		Documentation\Archive\Historical-Sessions\QUICK-ANSWER-AZURE-SECRETS.md = Documentation\Archive\Historical-Sessions\QUICK-ANSWER-AZURE-SECRETS.md
+		Documentation\Archive\Historical-Sessions\README.docx = Documentation\Archive\Historical-Sessions\README.docx
+		Documentation\Archive\Historical-Sessions\REORGANIZATION_COMPLETION.md = Documentation\Archive\Historical-Sessions\REORGANIZATION_COMPLETION.md
+		Documentation\Archive\Historical-Sessions\RESOLUTION-SUMMARY-API-UI-NOT-STARTING.md = Documentation\Archive\Historical-Sessions\RESOLUTION-SUMMARY-API-UI-NOT-STARTING.md
+		Documentation\Archive\Historical-Sessions\RESOLUTION-SUMMARY.md = Documentation\Archive\Historical-Sessions\RESOLUTION-SUMMARY.md
+		Documentation\Archive\Historical-Sessions\SECURITY-SUMMARY.md = Documentation\Archive\Historical-Sessions\SECURITY-SUMMARY.md
+		Documentation\Archive\Historical-Sessions\SETUP-CONFIRMATION.md = Documentation\Archive\Historical-Sessions\SETUP-CONFIRMATION.md
+		Documentation\Archive\Historical-Sessions\STRUCTURE_VERIFICATION.md = Documentation\Archive\Historical-Sessions\STRUCTURE_VERIFICATION.md
+		Documentation\Archive\Historical-Sessions\TROUBLESHOOTING-APP-SECRETS-MISSING.md = Documentation\Archive\Historical-Sessions\TROUBLESHOOTING-APP-SECRETS-MISSING.md
+		Documentation\Archive\Historical-Sessions\TROUBLESHOOTING-DEPLOYMENT.md = Documentation\Archive\Historical-Sessions\TROUBLESHOOTING-DEPLOYMENT.md
+		Documentation\Archive\Historical-Sessions\TROUBLESHOOTING-GITHUB-APP-404.md = Documentation\Archive\Historical-Sessions\TROUBLESHOOTING-GITHUB-APP-404.md
+		Documentation\Archive\Historical-Sessions\WORKFLOW-FAILURE-RESOLUTION.md = Documentation\Archive\Historical-Sessions\WORKFLOW-FAILURE-RESOLUTION.md
+		Documentation\Archive\Historical-Sessions\WORKFLOW-FIX-ENVIRONMENT-SECRETS.md = Documentation\Archive\Historical-Sessions\WORKFLOW-FIX-ENVIRONMENT-SECRETS.md
+		Documentation\Archive\Historical-Sessions\WORKFLOW-REVIEW-SUMMARY.md = Documentation\Archive\Historical-Sessions\WORKFLOW-REVIEW-SUMMARY.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "PR-Sessions", "PR-Sessions", "{AA00000E-0001-0001-0001-000000000001}"
+	ProjectSection(SolutionItems) = preProject
+		Documentation\Archive\PR-Sessions\PR-SUMMARY.md = Documentation\Archive\PR-Sessions\PR-SUMMARY.md
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -327,6 +444,20 @@ Global
 		{F0789012-DEF0-1234-5678-9ABCDEF01234} = {F1234567-8901-2345-6789-ABCDEF012345}
 		{02EA681E-C7D8-13C7-8484-4AC65E1B71E8} = {D0C1234A-5678-9012-3456-789ABCDEF123}
 		{A1B2C3D4-0001-0001-0001-000000000001} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{AA000001-0001-0001-0001-000000000001} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{AA000002-0001-0001-0001-000000000001} = {AA000001-0001-0001-0001-000000000001}
+		{AA000003-0001-0001-0001-000000000001} = {AA000001-0001-0001-0001-000000000001}
+		{AA000004-0001-0001-0001-000000000001} = {AA000003-0001-0001-0001-000000000001}
+		{AA000005-0001-0001-0001-000000000001} = {AA000003-0001-0001-0001-000000000001}
+		{AA000006-0001-0001-0001-000000000001} = {AA000003-0001-0001-0001-000000000001}
+		{AA000007-0001-0001-0001-000000000001} = {AA000003-0001-0001-0001-000000000001}
+		{AA000008-0001-0001-0001-000000000001} = {AA000003-0001-0001-0001-000000000001}
+		{AA000009-0001-0001-0001-000000000001} = {AA000003-0001-0001-0001-000000000001}
+		{AA00000A-0001-0001-0001-000000000001} = {AA000003-0001-0001-0001-000000000001}
+		{AA00000B-0001-0001-0001-000000000001} = {AA000003-0001-0001-0001-000000000001}
+		{AA00000C-0001-0001-0001-000000000001} = {AA000003-0001-0001-0001-000000000001}
+		{AA00000D-0001-0001-0001-000000000001} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{AA00000E-0001-0001-0001-000000000001} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {E83A7CED-28C5-4597-8180-BDBDD6B27808}
