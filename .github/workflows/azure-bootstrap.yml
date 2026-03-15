@@ -2746,7 +2746,7 @@ jobs:
             "" >> $env:GITHUB_STEP_SUMMARY
             "> **Phase 0 instructions have been shown. Before Phase 1 can run you must complete the two steps below.**" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
-            "**GitHub App Name configured**: \`$appName\`" >> $env:GITHUB_STEP_SUMMARY
+            "**GitHub App Name configured**: ``$appName``" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
             "---" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
@@ -2754,7 +2754,7 @@ jobs:
             "" >> $env:GITHUB_STEP_SUMMARY
             "Create a GitHub App named **\`$appName\`** with the required permissions:" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
-            "- **Option A** (Recommended): \`.\scripts\setup-github-app-from-manifest.ps1\`" >> $env:GITHUB_STEP_SUMMARY
+            "- **Option A** (Recommended): ``.\scripts\setup-github-app-from-manifest.ps1``" >> $env:GITHUB_STEP_SUMMARY
             "- **Option B** (Manual): [Create at github.com/settings/apps/new](https://github.com/settings/apps/new)" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
             "> 📖 **Detailed guide**: [QUICK-SETUP-GITHUB-APP.md](../blob/${{ github.ref_name }}/Documentation/03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md)" >> $env:GITHUB_STEP_SUMMARY
@@ -2789,7 +2789,7 @@ jobs:
           } elseif ($appSecretsOk) {
             "## ✅ Phase 0 Complete — GitHub App Secrets Configured" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
-            "**GitHub App Name**: \`$appName\`" >> $env:GITHUB_STEP_SUMMARY
+            "**GitHub App Name**: ``$appName``" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
             "\`APP_ID\` and \`APP_PRIVATE_KEY\` are present. The workflow can use the GitHub App for automated secret management." >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
