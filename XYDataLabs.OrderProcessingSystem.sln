@@ -211,6 +211,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Technical-Enhancements", "T
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XYDataLabs.OrderProcessingSystem.Utilities", "XYDataLabs.OrderProcessingSystem.Utilities\XYDataLabs.OrderProcessingSystem.Utilities.csproj", "{DFC0BB5F-D671-DE7D-4A5D-D10E77984910}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Archive", "Archive", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
+EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "2026-03-Cleanup", "2026-03-Cleanup", "{A1B2C3D4-0001-0001-0001-000000000001}"
 	ProjectSection(SolutionItems) = preProject
 		Documentation\Archive\2026-03-Cleanup\APPLICATION_INSIGHTS_SETUP.md = Documentation\Archive\2026-03-Cleanup\APPLICATION_INSIGHTS_SETUP.md
