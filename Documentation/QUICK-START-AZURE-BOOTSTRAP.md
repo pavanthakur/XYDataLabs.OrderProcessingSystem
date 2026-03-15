@@ -74,6 +74,15 @@ Each parameter is numbered in the order it should first be enabled.
 
 ---
 
+### `oidcAppName` — OIDC App Name (advanced)
+| | |
+|---|---|
+| **Type** | String (default: `GitHub-Actions-OIDC`) |
+| **When to change** | Only if you use a custom name for the Entra ID App Registration. Leave blank for default. |
+| **Belongs to** | Used by `setupOidc` — leave at default unless you have a specific naming requirement. |
+
+---
+
 ### 2️⃣ `setupGitHubApp` — Setup GitHub App (instructions only)
 | | |
 |---|---|
@@ -82,14 +91,6 @@ Each parameter is numbered in the order it should first be enabled.
 | **What it does** | Checks whether `APP_ID` and `APP_PRIVATE_KEY` secrets already exist and prints step-by-step instructions if they are missing. **It does not create the app.** |
 | **Why not automated?** | GitHub's security model requires interactive user approval to create an OAuth/GitHub App. This is by design and cannot be bypassed. |
 | **⚠️ Action required** | See [GitHub App Manual Setup](#-github-app-manual-setup-required-before-first-run) below — this one-time manual step must be completed **before** `configureSecrets` can succeed. |
-
----
-
-### `oidcAppName` — OIDC App Name (advanced)
-| | |
-|---|---|
-| **Type** | String (default: `GitHub-Actions-OIDC`) |
-| **When to change** | Only if you use a custom name for the Entra ID App Registration. Leave blank for default. |
 
 ---
 
@@ -155,10 +156,22 @@ Each parameter is numbered in the order it should first be enabled.
    - **App name**: `XYDataLabs-OrderProcessing-Automation` (or any name you choose)
    - **Homepage URL**: `https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem`
    - **Webhook**: Uncheck "Active" (not needed)
-3. Under **Repository permissions**, set:
-   - **Secrets**: `Read and write` ✅ *(critical — without this, secret configuration fails)*
-   - **Environments**: `Read and write` ✅ *(required for environment creation)*
-   - **Administration**: `Read and write` ✅
+3. Under **Repository permissions**, set all of the following:
+
+   | Permission | Level | Purpose |
+   |------------|-------|---------|
+   | **Actions** | `Read and write` | Trigger and manage workflow runs |
+   | **Secrets** | `Read and write` ✅ | Create/update repository secrets *(critical)* |
+   | **Workflows** | `Read and write` | Update workflow files |
+   | **Pull requests** | `Read and write` | Create PRs for config changes |
+   | **Administration** | `Read and write` | Manage repository settings |
+   | **Environments** | `Read and write` ✅ | Create/update deployment environments *(critical)* |
+   | **Contents** | `Read-only` | Read repository files |
+   | **Metadata** | `Read-only` | Read repository metadata |
+
+   > ⚠️ **Permissions are NOT set automatically** — they must be configured at app creation (use `app-manifest.json`) or verified manually for an existing app.  
+   > 📍 To verify/update permissions on an existing app: `https://github.com/settings/apps/{your-app-slug}/permissions`
+
 4. Click **Create GitHub App**
 5. **Copy the App ID** shown at the top of the settings page
 
@@ -216,6 +229,7 @@ Add `APP_ID` and `APP_PRIVATE_KEY` to repository secrets before proceeding.
 |-----------|-------|--------|
 | `environment` | `dev` | Start with dev to validate cheaply |
 | `setupOidc` | ✅ `true` | Creates Entra ID app + OIDC credentials |
+| `oidcAppName` | *(default)* | Leave blank unless using a custom Entra app name |
 | `setupGitHubApp` | ❌ `false` | Already done manually in Phase 0 |
 | `configureSecrets` | ❌ `false` | Do this in Phase 2 after OIDC succeeds |
 | `enableValidation` | ❌ `false` | Skip for first run |
@@ -246,6 +260,7 @@ Add `APP_ID` and `APP_PRIVATE_KEY` to repository secrets before proceeding.
 |-----------|-------|--------|
 | `environment` | `dev` | |
 | `setupOidc` | ❌ `false` | Already done in Phase 1 |
+| `oidcAppName` | *(default)* | |
 | `setupGitHubApp` | ❌ `false` | Already done manually |
 | `configureSecrets` | ✅ `true` | Writes `AZUREAPPSERVICE_*` secrets |
 | `enableValidation` | ❌ `false` | |
@@ -273,6 +288,7 @@ Add `APP_ID` and `APP_PRIVATE_KEY` to repository secrets before proceeding.
 |-----------|-------|--------|
 | `environment` | `dev` | |
 | `setupOidc` | ❌ `false` | Already done |
+| `oidcAppName` | *(default)* | |
 | `setupGitHubApp` | ❌ `false` | Already done |
 | `configureSecrets` | ❌ `false` | Already done |
 | `enableValidation` | ✅ `true` | Run validation now that setup is complete |
@@ -303,6 +319,7 @@ Once the GitHub App is set up (Phase 0), you can complete Phases 1–3 in a sing
 |-----------|-------|
 | `environment` | `dev` |
 | `setupOidc` | ✅ `true` |
+| `oidcAppName` | *(default)* |
 | `setupGitHubApp` | ❌ `false` |
 | `configureSecrets` | ✅ `true` |
 | `enableValidation` | ✅ `true` |
@@ -318,6 +335,7 @@ Once the GitHub App is set up (Phase 0), you can complete Phases 1–3 in a sing
 ```yaml
 environment: dev
 setupOidc: true          # 1️⃣ Create Entra ID app + OIDC
+oidcAppName: ""          # Use default (GitHub-Actions-OIDC) — only change if custom name needed
 setupGitHubApp: false    # 2️⃣ Already done manually
 configureSecrets: true   # 3️⃣ Write Azure creds to GitHub secrets
 enableValidation: true   # 🔍 Validate everything
@@ -333,6 +351,7 @@ deployUi: false          # 6️⃣ Enable once infra is confirmed healthy
 ```yaml
 environment: staging      # Switch to staging branch first!
 setupOidc: false         # Skip — already done
+oidcAppName: ""          # N/A (setupOidc is false)
 setupGitHubApp: false    # Skip — already done
 configureSecrets: false  # Skip — already done (or re-run with true if you want staging secrets)
 enableValidation: true
@@ -348,6 +367,7 @@ deployUi: false
 ```yaml
 environment: dev
 setupOidc: false         # Skip — credentials still valid
+oidcAppName: ""          # N/A (setupOidc is false)
 setupGitHubApp: false    # Skip
 configureSecrets: false  # Skip — secrets still valid
 enableValidation: false  # Skip for speed
@@ -363,6 +383,7 @@ deployUi: false
 ```yaml
 environment: dev
 setupOidc: true          # 1️⃣ Re-create OIDC credentials
+oidcAppName: ""          # Use default unless your app uses a custom name
 setupGitHubApp: false
 configureSecrets: true   # 3️⃣ Update GitHub secrets with new values
 enableValidation: false
@@ -378,6 +399,7 @@ deployUi: false
 ```yaml
 environment: all          # Use any branch
 setupOidc: true          # Creates credentials for dev + staging + prod
+oidcAppName: ""          # Use default unless using a custom Entra app name
 setupGitHubApp: false    # Already done
 configureSecrets: true   # Secrets for all three environments
 enableValidation: false  # Skip for initial setup

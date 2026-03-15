@@ -17,16 +17,16 @@ on:
         required: true
         type: boolean
         default: true
-      setupGitHubApp:
-        description: '2️⃣ Setup GitHub App [One-time only] | Shows instructions if APP_ID + APP_PRIVATE_KEY secrets are missing'
-        required: true
-        type: boolean
-        default: false
       oidcAppName:
         description: 'OIDC App Name | Default: GitHub-Actions-OIDC (only change if using custom name)'
         required: false
         type: string
         default: 'GitHub-Actions-OIDC'
+      setupGitHubApp:
+        description: '2️⃣ Setup GitHub App [One-time only] | Shows instructions if APP_ID + APP_PRIVATE_KEY secrets are missing'
+        required: true
+        type: boolean
+        default: false
       configureSecrets:
         description: '3️⃣ Configure Secrets [REQUIRED] | Sets CLIENTID, TENANTID, SUBSCRIPTIONID in GitHub (needs APP_ID + APP_PRIVATE_KEY pre-configured)'
         required: true
