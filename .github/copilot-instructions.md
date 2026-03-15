@@ -39,7 +39,7 @@ practice Azure cloud deployment, CI/CD automation, and enterprise DevOps pattern
 ├── .github/
 │   ├── app-manifest.json          # GitHub App manifest (permissions config)
 │   ├── copilot-instructions.md    # ← THIS FILE (Copilot context)
-│   └── workflows/                 # 9 GitHub Actions workflows + 7 README docs
+│   └── workflows/                 # 9 GitHub Actions workflows + 8 README docs
 │
 ├── Documentation/                 # All markdown documentation (organised)
 │   ├── README.md                  # Main documentation hub
@@ -48,10 +48,14 @@ practice Azure cloud deployment, CI/CD automation, and enterprise DevOps pattern
 │   ├── 03-Configuration-Guides/   # GitHub App, Key Vault, secrets setup
 │   ├── 04-Enterprise-Architecture/# ACA migration plan, weekly learning plan
 │   ├── 05-Self-Learning/          # 18-week Azure curriculum + progress tracking
+│   ├── GITHUB-WORKFLOW-SEPARATION-ARCHITECTURE.md  # Workflow separation rationale
+│   ├── Operations-Quick-Links-README.md             # Quick operations reference links
+│   ├── QUICK-COMMAND-REFERENCE.md                  # Command cheat sheet
+│   ├── QUICK-START-AZURE-BOOTSTRAP.md              # Quick-start bootstrap guide
 │   └── Archive/                   # Historical / superseded documentation
 │
 ├── Resources/
-│   ├── Azure-Deployment/          # 29 PowerShell automation scripts (see §6)
+│   ├── Azure-Deployment/          # 27 PowerShell automation scripts (see §6)
 │   ├── BuildConfiguration/        # BannedSymbols, CodeAnalysis.ruleset, MSBuild props
 │   ├── Configuration/             # sharedsettings.{dev,uat,prod,local}.json
 │   └── Docker/                    # start-docker.ps1 + docker-compose.{dev,uat,prod}.yml
@@ -75,7 +79,13 @@ practice Azure cloud deployment, CI/CD automation, and enterprise DevOps pattern
 ├── TROUBLESHOOTING-INDEX.md       # ← Quick troubleshooting guide with links
 ├── ARCHITECTURE-EVOLUTION.md      # Monolith → Microservices roadmap
 ├── AZURE-PROGRESS-EVALUATION.md   # Learning progress tracker (weeks 1–10)
+├── AZURE-TOP-7-SERVICES-ANALYSIS.md  # Analysis of 7 key Azure services
+├── GITHUB-APP-DELETION-SUMMARY.md    # GitHub App automation and deletion procedures
 ├── GITHUB-APP-QUICK-REFERENCE.md  # GitHub App commands quick reference
+├── IMPLEMENTATION-COMPLETE.md     # GitHub App implementation summary
+├── test-bootstrap-dry-run.ps1     # Dry-run test for bootstrap workflow
+├── test-pre-deployment-validation.ps1  # Local test for pre-deployment validation
+├── test-recommended-next-steps.ps1     # Test recommended next steps after bootstrap
 └── XYDataLabs.OrderProcessingSystem.sln
 ```
 
@@ -164,6 +174,7 @@ Parameter files follow the pattern `{environment}.json` / `{environment}.paramet
 | `verify-azure-setup.ps1` | Verify all Azure resources are configured correctly |
 | `verify-app-insights.ps1` | Verify Application Insights configuration |
 | `verify-deployment-endpoints.ps1` | Health-check API and UI endpoints |
+| `verify-oidc-credentials.ps1` | Verify GitHub OIDC federated credentials exist for all environments |
 | `check-app-registration.ps1` | Verify Azure AD app registration exists |
 | `fix-federated-credential.ps1` | Fix/recreate OIDC federated credentials |
 | `diagnose-keyvault-access.ps1` | Diagnose Key Vault access issues |
@@ -233,11 +244,17 @@ Port allocations: Local VS (5010–5013) · Docker dev (5020–5023) · UAT (503
 | `TROUBLESHOOTING-INDEX.md` | Root | Quick links for common GitHub App / OIDC / workflow errors |
 | `ARCHITECTURE-EVOLUTION.md` | Root | Phase 1 (monolith ✅) → Phase 2 (YARP microservices 📅) |
 | `AZURE-PROGRESS-EVALUATION.md` | Root | Learning progress weeks 1–10, next-step guides |
+| `AZURE-TOP-7-SERVICES-ANALYSIS.md` | Root | Analysis of 7 key Azure services used in this project |
+| `GITHUB-APP-DELETION-SUMMARY.md` | Root | GitHub App automation and deletion procedures |
 | `GITHUB-APP-QUICK-REFERENCE.md` | Root | GitHub App CLI commands cheat sheet |
+| `IMPLEMENTATION-COMPLETE.md` | Root | GitHub App implementation summary |
 | `.github/workflows/README.md` | Workflows | Workflow overview, secrets, path triggers |
 | `.github/workflows/README-AZURE-BOOTSTRAP.md` | Workflows | Bootstrap workflow deep-dive |
 | `.github/workflows/README-CONFIGURE-GITHUB-SECRETS.md` | Workflows | Secrets workflow detail |
 | `Documentation/README.md` | Documentation/ | Documentation hub with links to all guides |
+| `Documentation/Operations-Quick-Links-README.md` | Documentation/ | Quick reference links for operations tasks |
+| `Documentation/QUICK-COMMAND-REFERENCE.md` | Documentation/ | Command cheat sheet for Azure, Git, Docker |
+| `Documentation/QUICK-START-AZURE-BOOTSTRAP.md` | Documentation/ | Quick-start guide for Azure bootstrap process |
 | `Documentation/02-Azure-Learning-Guides/AZURE_DEPLOYMENT_GUIDE.md` | Documentation/ | Complete Azure deployment strategy |
 | `Documentation/03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md` | Documentation/ | GitHub App quick setup guide |
 | `Documentation/GITHUB-WORKFLOW-SEPARATION-ARCHITECTURE.md` | Documentation/ | Why bootstrap is split into separate workflows |
