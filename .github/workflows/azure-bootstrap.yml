@@ -95,8 +95,8 @@ jobs:
           Write-Host "" -ForegroundColor Gray
           Write-Host "  AZURE SETUP:" -ForegroundColor Cyan
           Write-Host "    1️⃣  Setup Azure OIDC:          ${{ inputs.setupOidc }}" -ForegroundColor $(if ('${{ inputs.setupOidc }}' -eq 'true') { 'Green' } else { 'DarkGray' })
-          Write-Host "    2️⃣  Setup GitHub App:          ${{ inputs.setupGitHubApp }}" -ForegroundColor $(if ('${{ inputs.setupGitHubApp }}' -eq 'true') { 'Green' } else { 'DarkGray' })
           Write-Host "        OIDC App Name:            ${{ inputs.oidcAppName }}" -ForegroundColor DarkGray
+          Write-Host "    2️⃣  Setup GitHub App:          ${{ inputs.setupGitHubApp }}" -ForegroundColor $(if ('${{ inputs.setupGitHubApp }}' -eq 'true') { 'Green' } else { 'DarkGray' })
           Write-Host "    3️⃣  Configure Secrets:         ${{ inputs.configureSecrets }}" -ForegroundColor $(if ('${{ inputs.configureSecrets }}' -eq 'true') { 'Green' } else { 'DarkGray' })
           Write-Host "" -ForegroundColor Gray
           Write-Host "  INFRASTRUCTURE:" -ForegroundColor Cyan
