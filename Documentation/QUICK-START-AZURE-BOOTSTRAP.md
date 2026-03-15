@@ -7,40 +7,45 @@ It handles everything — Azure authentication, GitHub secrets, cloud infrastruc
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                     BOOTSTRAP OVERVIEW (first-time setup)                   │
+│                     BOOTSTRAP OVERVIEW                                      │
 │                                                                             │
-│  PRE-REQUISITE (manual, ~5 min)                                             │
+│  PHASE 0 — Manual Prerequisite (~5 min, done ONCE)                         │
 │  └── Create GitHub App → Install on repo → Add APP_ID + APP_PRIVATE_KEY    │
 │                                ↓                                            │
-│  PHASE 1 — Azure Identity (automated, ~3 min)                               │
-│  └── Setup OIDC → Creates Microsoft Entra ID App Registration               │
-│                   + Federated credentials for passwordless auth             │
+│  PHASE 1 — One-Time Azure Setup (~4 min, done ONCE after Phase 0)          │
+│  ├── setupOidc       → Creates Microsoft Entra ID App Registration          │
+│  │                     + Federated credentials for passwordless auth        │
+│  └── configureSecrets → Writes AZUREAPPSERVICE_* to GitHub repo + envs     │
 │                                ↓                                            │
-│  PHASE 2 — GitHub Secrets (automated, ~1 min)                               │
-│  └── Configure Secrets → Writes AZUREAPPSERVICE_* to repo + environments   │
-│                                ↓                                            │
-│  PHASE 3 — Azure Infrastructure (automated, ~10 min)                        │
-│  └── Bootstrap Infra → Resource Groups, App Services, SQL, Key Vault        │
-│                                ↓                                            │
-│  PHASE 4 — Deploy Application (optional, ~5 min each)                       │
-│  └── Deploy API + Deploy UI → Live endpoints on Azure App Service           │
+│  PHASE 2 — Day-to-Day Operations (run as needed)                            │
+│  ├── bootstrapInfra  → Resource Groups, App Services, SQL, Key Vault        │
+│  ├── deployApi       → API code deployed to Azure App Service               │
+│  └── deployUi        → UI code deployed to Azure App Service                │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-> **Key rule**: The GitHub App (`APP_ID` + `APP_PRIVATE_KEY`) must be configured **before** you run the workflow for the first time. Everything else is automated.
+> **Key rule**: Complete the phases in order. Phase 0 and Phase 1 are each done **once** — after they are complete, day-to-day operations only use Phase 2.
+
+### When do I run each phase?
+
+| Phase | When to Run | Parameters |
+|-------|-------------|------------|
+| **Phase 0** | Once — before anything else | Manual only (no workflow run) |
+| **Phase 1** | Once — after Phase 0 is complete | `setupOidc` + `configureSecrets` |
+| **Phase 2** | Any time — infrastructure and deployments | `bootstrapInfra` + `deployApi` / `deployUi` |
 
 ### What gets created automatically vs. what needs manual work
 
-| Resource | Automated? | When |
-|----------|-----------|------|
-| Microsoft Entra ID App Registration | ✅ Fully automated | `setupOidc = true` |
-| Azure Federated OIDC Credentials | ✅ Fully automated | `setupOidc = true` |
-| GitHub Environments (dev / staging / prod) | ✅ Fully automated | `configureSecrets = true` |
-| GitHub OIDC Secrets (`AZUREAPPSERVICE_*`) | ✅ Fully automated | `configureSecrets = true` |
-| Azure Resource Groups, App Services, SQL | ✅ Fully automated | `bootstrapInfra = true` |
-| Deploy API code to Azure App Service | ✅ Fully automated | `deployApi = true` |
-| Deploy UI code to Azure App Service | ✅ Fully automated | `deployUi = true` |
-| **GitHub App** (`APP_ID` + `APP_PRIVATE_KEY`) | ⚠️ **Manual one-time** | Before first workflow run |
+| Resource | Automated? | Phase |
+|----------|-----------|-------|
+| Microsoft Entra ID App Registration | ✅ Fully automated | Phase 1 (`setupOidc`) |
+| Azure Federated OIDC Credentials | ✅ Fully automated | Phase 1 (`setupOidc`) |
+| GitHub Environments (dev / staging / prod) | ✅ Fully automated | Phase 1 (`configureSecrets`) |
+| GitHub OIDC Secrets (`AZUREAPPSERVICE_*`) | ✅ Fully automated | Phase 1 (`configureSecrets`) |
+| Azure Resource Groups, App Services, SQL | ✅ Fully automated | Phase 2 (`bootstrapInfra`) |
+| Deploy API code to Azure App Service | ✅ Fully automated | Phase 2 (`deployApi`) |
+| Deploy UI code to Azure App Service | ✅ Fully automated | Phase 2 (`deployUi`) |
+| **GitHub App** (`APP_ID` + `APP_PRIVATE_KEY`) | ⚠️ **Manual one-time** | Phase 0 |
 
 ---
 
@@ -48,105 +53,117 @@ It handles everything — Azure authentication, GitHub secrets, cloud infrastruc
 
 Navigate to: **GitHub → Actions → Azure Bootstrap Setup → Run workflow**
 
-Each parameter is numbered in the order it should first be enabled.
+Parameters are grouped by the phase they belong to. Enable only the parameters for the phase you are currently running.
 
-### 🎯 `environment` — Target Environment
+---
+
+### 🎯 `environment` — Target Environment *(always required)*
 | | |
 |---|---|
 | **Type** | Choice: `dev` / `staging` / `prod` / `all` |
-| **Required** | Yes |
+| **Required** | Yes — every run |
 | **Description** | Which Azure environment to provision. `all` provisions dev, staging, and prod in parallel. |
 | **Branch rule** | The **"Use workflow from"** branch must match the environment: `dev`→`dev`, `staging`→`staging`, `main`→`prod`. Use any branch for `all`. |
 | **Example** | Start with `dev` to validate the setup cheaply before committing to staging/prod. |
 
 ---
 
-### 1️⃣ `setupOidc` — Setup Azure OIDC
+## 🔑 Phase 1 Parameters — One-Time Setup
+> Enable these **once** when setting up a new environment. After Phase 1 is complete, you will not need to run these again unless credentials are lost or rotated.
+
+### `setupOidc` — Setup Azure OIDC
 | | |
 |---|---|
 | **Type** | Boolean (default: `true`) |
+| **Phase** | 🔑 Phase 1 — one-time setup |
 | **When to enable** | **First time only.** Also re-run if federated credentials are corrupted or deleted. |
 | **What it does** | Logs in to Azure via interactive device code, then creates (or updates) the **`GitHub-Actions-OIDC`** App Registration in Microsoft Entra ID. Creates a Service Principal and configures federated credentials so GitHub Actions can authenticate to Azure without passwords. |
-| **Output** | `clientId`, `tenantId`, `subscriptionId` — passed automatically to the next steps. |
+| **Output** | `clientId`, `tenantId`, `subscriptionId` — passed automatically to `configureSecrets`. |
 | **Requires** | Azure account with permission to create App Registrations (Application Administrator or Owner). |
 | **Skip when** | Secrets `AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID` already exist and are valid. |
 | **Idempotent** | ✅ Yes — re-running adds missing federated credentials without removing existing ones. |
 
----
-
-### `oidcAppName` — OIDC App Name (advanced)
+### `oidcAppName` — OIDC App Name *(advanced, optional)*
 | | |
 |---|---|
 | **Type** | String (default: `GitHub-Actions-OIDC`) |
-| **When to change** | Only if you use a custom name for the Entra ID App Registration. Leave blank for default. |
-| **Belongs to** | Used by `setupOidc` — leave at default unless you have a specific naming requirement. |
+| **Phase** | 🔑 Phase 1 — used only when `setupOidc = true` |
+| **When to change** | Only if you need a custom name for the Entra ID App Registration. Leave blank for the default. |
 
----
-
-### 2️⃣ `setupGitHubApp` — Setup GitHub App (instructions only)
-| | |
-|---|---|
-| **Type** | Boolean (default: `false`) |
-| **When to enable** | Enable when `APP_ID` or `APP_PRIVATE_KEY` repository secrets are missing and you need a reminder of the setup steps. |
-| **What it does** | Checks whether `APP_ID` and `APP_PRIVATE_KEY` secrets already exist and prints step-by-step instructions if they are missing. **It does not create the app.** |
-| **Why not automated?** | GitHub's security model requires interactive user approval to create an OAuth/GitHub App. This is by design and cannot be bypassed. |
-| **⚠️ Action required** | See [GitHub App Manual Setup](#-github-app-manual-setup-required-before-first-run) below — this one-time manual step must be completed **before** `configureSecrets` can succeed. |
-
----
-
-### 3️⃣ `configureSecrets` — Configure GitHub Secrets
+### `configureSecrets` — Configure GitHub Secrets
 | | |
 |---|---|
 | **Type** | Boolean (default: `true`) |
+| **Phase** | 🔑 Phase 1 — one-time setup |
 | **When to enable** | After `setupOidc` has run (or OIDC credentials already exist) **and** the GitHub App is installed with `APP_ID` + `APP_PRIVATE_KEY` secrets present. |
 | **What it does** | Uses the GitHub App token to write `AZUREAPPSERVICE_CLIENTID`, `AZUREAPPSERVICE_TENANTID`, and `AZUREAPPSERVICE_SUBSCRIPTIONID` as both repository secrets and per-environment secrets (auto-creates the GitHub environments if missing). |
-| **Prerequisite** | `APP_ID` and `APP_PRIVATE_KEY` repository secrets **must already exist**. See the manual setup section below. |
+| **Prerequisite** | `APP_ID` and `APP_PRIVATE_KEY` repository secrets **must already exist**. See [Phase 0 Setup](#phase-0--manual-prerequisite-5-min-done-once) below. |
 | **Idempotent** | ✅ Yes — overwrites existing secrets with current values. |
 
----
-
-### 🔍 `enableValidation` — Pre-Flight Validation (optional)
-| | |
-|---|---|
-| **Type** | Boolean (default: `false`) |
-| **When to enable** | Optional. Enable once the environment is stable to run pre-deployment checks before infrastructure runs. |
-| **What it does** | Validates that branch/environment alignment is correct and that OIDC credentials and GitHub App secrets are all present before proceeding. |
-| **Tip** | Disable during the very first run to reduce friction; enable for all subsequent runs. |
+> 💡 **Tip**: Run `setupOidc` and `configureSecrets` **together in a single workflow execution** — they are designed to chain: OIDC outputs feed directly into secret configuration.
 
 ---
 
-### 4️⃣ `bootstrapInfra` — Bootstrap Infrastructure
+## 🔄 Phase 2 Parameters — Day-to-Day Operations
+> Enable these whenever you need to provision or update infrastructure and deployments. Safe to run repeatedly.
+
+### `bootstrapInfra` — Bootstrap Infrastructure
 | | |
 |---|---|
 | **Type** | Boolean (default: `true`) |
-| **When to enable** | After secrets are configured (or already exist). Can also be used standalone to re-provision infrastructure. |
+| **Phase** | 🔄 Phase 2 — day-to-day |
+| **When to enable** | After Phase 1 is complete (or secrets already exist). Re-run any time to reprovision or add resources. |
 | **What it creates** | Azure Resource Group, App Service Plan, API Web App, UI Web App, Application Insights, Azure SQL Server + Database, Key Vault, and connection string configuration. |
-| **Requires** | `AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID` secrets (or `setupOidc` must run in the same workflow execution). |
+| **Requires** | `AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID` secrets (from Phase 1). |
 | **Idempotent** | ✅ Yes — skips resources that already exist. Safe to re-run to add missing pieces. |
 
----
-
-### 5️⃣ `deployApi` — Deploy API (optional)
+### `deployApi` — Deploy API
 | | |
 |---|---|
 | **Type** | Boolean (default: `false`) |
-| **When to enable** | After infrastructure is bootstrapped and you want to immediately deploy the API application code. |
+| **Phase** | 🔄 Phase 2 — day-to-day |
+| **When to enable** | After infrastructure is bootstrapped. Enable to deploy the latest API code. |
 | **What it does** | Triggers the `deploy-api-to-azure.yml` workflow for the selected environment after bootstrap completes. |
 
----
-
-### 6️⃣ `deployUi` — Deploy UI (optional)
+### `deployUi` — Deploy UI
 | | |
 |---|---|
 | **Type** | Boolean (default: `false`) |
-| **When to enable** | After infrastructure is bootstrapped and you want to immediately deploy the UI application code. |
+| **Phase** | 🔄 Phase 2 — day-to-day |
+| **When to enable** | After infrastructure is bootstrapped. Enable to deploy the latest UI code. |
 | **What it does** | Triggers the `deploy-ui-to-azure.yml` workflow for the selected environment after bootstrap completes. |
 
 ---
 
-## 🔐 GitHub App Manual Setup (required before first run)
+## 🔍 Optional Parameter
 
-> **This is the only step that cannot be automated.** GitHub requires interactive user authorization to create an app. It takes approximately 5 minutes and only needs to be done once.
+### `enableValidation` — Pre-Flight Validation
+| | |
+|---|---|
+| **Type** | Boolean (default: `false`) |
+| **When to enable** | Recommended for all Phase 2 runs. Validates branch/environment alignment and checks that all Phase 1 secrets are present before proceeding. |
+| **What it does** | Validates that branch/environment alignment is correct and that OIDC credentials and GitHub App secrets are all present before proceeding. |
+| **Tip** | Disable for the very first Phase 1 run to reduce friction; enable for all Phase 2 runs and beyond. |
+
+---
+
+## ℹ️ Phase 0 Helper Parameter
+
+### `setupGitHubApp` — GitHub App Instructions
+| | |
+|---|---|
+| **Type** | Boolean (default: `false`) |
+| **When to enable** | Enable if `APP_ID` or `APP_PRIVATE_KEY` secrets are missing and you need step-by-step guidance. |
+| **What it does** | Checks whether `APP_ID` and `APP_PRIVATE_KEY` secrets already exist and prints setup instructions if they are missing. **It does not create the app.** |
+| **Why not automated?** | GitHub's security model requires interactive user approval to create an OAuth/GitHub App. This is by design and cannot be bypassed. |
+| **⚠️ Action required** | See [Phase 0 Setup](#phase-0--manual-prerequisite-5-min-done-once) below — this one-time manual step must be completed **before** Phase 1 can succeed. |
+
+---
+
+## 🔐 Phase 0 — Manual Prerequisite: GitHub App Setup
+
+> **This is the only step that cannot be automated.** GitHub requires interactive user authorization to create an app. It takes approximately 5 minutes and only needs to be done **once**.  
+> Once complete, you never need to do this again unless the GitHub App or its secrets are lost.
 
 ### Step 1: Create the GitHub App
 
@@ -210,152 +227,133 @@ Add these **2 secrets**:
 
 Follow this sequence for a brand-new deployment. Each phase builds on the previous one.
 
+---
+
 ### Phase 0 — Manual Prerequisite (~5 min, done once)
 
-Complete the [GitHub App Manual Setup](#-github-app-manual-setup-required-before-first-run) above.  
+Complete the [GitHub App setup](#-phase-0--manual-prerequisite-github-app-setup) above.  
 Add `APP_ID` and `APP_PRIVATE_KEY` to repository secrets before proceeding.
+
+✅ **Done when**: Both `APP_ID` and `APP_PRIVATE_KEY` secrets exist at `settings/secrets/actions`.  
+🚫 **Do not proceed to Phase 1 until Phase 0 is complete.**
 
 ---
 
-### Phase 1 — Azure Identity Setup (~3 min)
+### Phase 1 — One-Time Azure Setup (~4 min, done once after Phase 0)
 
-**Goal**: Create the Microsoft Entra ID App Registration and OIDC federated credentials.
+**Goal**: Create the Azure OIDC identity and push credentials into GitHub. This runs **once per environment** — after this, you never need to run `setupOidc` or `configureSecrets` again unless credentials are rotated or lost.
 
 1. Go to **Actions → Azure Bootstrap Setup → Run workflow**
 2. Set **"Use workflow from"** to `dev`
-3. Configure parameters:
+3. Configure parameters — check **only** the Phase 1 boxes:
 
-| Parameter | Value | Reason |
-|-----------|-------|--------|
+| Parameter | Value | Notes |
+|-----------|-------|-------|
 | `environment` | `dev` | Start with dev to validate cheaply |
-| `setupOidc` | ✅ `true` | Creates Entra ID app + OIDC credentials |
-| `oidcAppName` | *(default)* | Leave blank unless using a custom Entra app name |
-| `setupGitHubApp` | ❌ `false` | Already done manually in Phase 0 |
-| `configureSecrets` | ❌ `false` | Do this in Phase 2 after OIDC succeeds |
-| `enableValidation` | ❌ `false` | Skip for first run |
-| `bootstrapInfra` | ❌ `false` | Do this in Phase 3 |
-| `deployApi` | ❌ `false` | |
-| `deployUi` | ❌ `false` | |
+| `setupOidc` ✅ | `true` | 🔑 Phase 1 — creates Entra ID app + OIDC credentials |
+| `oidcAppName` | *(default)* | Leave blank (uses `GitHub-Actions-OIDC`) |
+| `setupGitHubApp` | `false` | Already done in Phase 0 |
+| `configureSecrets` ✅ | `true` | 🔑 Phase 1 — writes `AZUREAPPSERVICE_*` secrets to GitHub |
+| `enableValidation` | `false` | Skip for first run |
+| `bootstrapInfra` | `false` | 🔄 Phase 2 — do this separately |
+| `deployApi` | `false` | 🔄 Phase 2 |
+| `deployUi` | `false` | 🔄 Phase 2 |
 
 4. Click **Run workflow**
-5. When the workflow pauses for **device code authentication**:
+5. When the workflow pauses for **device code authentication** (during `setupOidc`):
    - Open https://microsoft.com/devicelogin
    - Enter the code shown in the workflow logs
    - Sign in with your Azure account (must have App Registration permissions)
-6. Wait for the job to complete — note the `clientId`, `tenantId`, `subscriptionId` in the summary
+6. Wait for the job to complete
 
-**What gets created**: `GitHub-Actions-OIDC` App Registration in Azure, federated credentials for dev branch and dev environment.
+**What gets created**:
+- `GitHub-Actions-OIDC` App Registration in Azure with federated credentials
+- GitHub repository secrets: `AZUREAPPSERVICE_CLIENTID`, `AZUREAPPSERVICE_TENANTID`, `AZUREAPPSERVICE_SUBSCRIPTIONID`
+- GitHub environment `dev` with matching environment secrets
 
----
-
-### Phase 2 — GitHub Secrets Configuration (~1 min)
-
-**Goal**: Write Azure credentials into GitHub repository and environment secrets.
-
-1. Go to **Actions → Azure Bootstrap Setup → Run workflow**
-2. Set **"Use workflow from"** to `dev`
-3. Configure parameters:
-
-| Parameter | Value | Reason |
-|-----------|-------|--------|
-| `environment` | `dev` | |
-| `setupOidc` | ❌ `false` | Already done in Phase 1 |
-| `oidcAppName` | *(default)* | |
-| `setupGitHubApp` | ❌ `false` | Already done manually |
-| `configureSecrets` | ✅ `true` | Writes `AZUREAPPSERVICE_*` secrets |
-| `enableValidation` | ❌ `false` | |
-| `bootstrapInfra` | ❌ `false` | Do this in Phase 3 |
-| `deployApi` | ❌ `false` | |
-| `deployUi` | ❌ `false` | |
-
-4. Click **Run workflow**
-
-**What gets created**: Repository secrets `AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID`, GitHub environment `dev` with matching environment secrets.
-
-> **Tip**: You can combine Phases 1 + 2 in one run by enabling both `setupOidc` and `configureSecrets` together, as long as the GitHub App is already configured (Phase 0 complete).
+✅ **Done when**: All three `AZUREAPPSERVICE_*` secrets appear at `settings/secrets/actions`.  
+🚫 **Do not re-run Phase 1 unless credentials are lost or rotated.**
 
 ---
 
-### Phase 3 — Azure Infrastructure Bootstrap (~10 min)
+### Phase 2 — Day-to-Day Operations (run as needed)
 
-**Goal**: Provision all Azure resources for the dev environment.
+**Goal**: Provision Azure infrastructure and deploy application code. This is what you run regularly — safe to re-run at any time.
 
 1. Go to **Actions → Azure Bootstrap Setup → Run workflow**
 2. Set **"Use workflow from"** to `dev`
-3. Configure parameters:
+3. Configure parameters — check **only** the Phase 2 boxes:
 
-| Parameter | Value | Reason |
-|-----------|-------|--------|
+| Parameter | Value | Notes |
+|-----------|-------|-------|
 | `environment` | `dev` | |
-| `setupOidc` | ❌ `false` | Already done |
+| `setupOidc` | `false` | 🔑 Phase 1 — already done, skip |
 | `oidcAppName` | *(default)* | |
-| `setupGitHubApp` | ❌ `false` | Already done |
-| `configureSecrets` | ❌ `false` | Already done |
-| `enableValidation` | ✅ `true` | Run validation now that setup is complete |
-| `bootstrapInfra` | ✅ `true` | Creates Azure resources |
-| `deployApi` | ❌ `false` | Optional: enable if you want to deploy immediately |
-| `deployUi` | ❌ `false` | Optional: enable if you want to deploy immediately |
+| `setupGitHubApp` | `false` | Phase 0 — already done, skip |
+| `configureSecrets` | `false` | 🔑 Phase 1 — already done, skip |
+| `enableValidation` ✅ | `true` | Recommended — validates Phase 1 is complete before proceeding |
+| `bootstrapInfra` ✅ | `true` | 🔄 Phase 2 — creates/updates Azure resources |
+| `deployApi` | `false` (or `true`) | 🔄 Phase 2 — enable to deploy API code immediately |
+| `deployUi` | `false` (or `true`) | 🔄 Phase 2 — enable to deploy UI code immediately |
 
 4. Click **Run workflow**
 
 **What gets created**: `rg-orderprocessing-dev` resource group with App Service Plan, API + UI Web Apps, Application Insights, Azure SQL Server & Database, Key Vault.
 
+> 💡 **Re-running Phase 2 is safe**: Every resource is idempotent — existing resources are skipped, missing ones are created. Run it any time infrastructure needs to be refreshed.
+
 ---
 
-### Phase 4 — Deploy Application (optional, ~5 min each)
+### Phase 2 — Deploying Application Code
 
-After infrastructure is ready, deploy the application code either:
-- **Via bootstrap**: Re-run bootstrap with `deployApi = true` and/or `deployUi = true`
+After infrastructure is ready, deploy application code:
+- **Via Phase 2 bootstrap**: Run workflow with `deployApi = true` and/or `deployUi = true`
 - **Via push**: Push to the `dev` branch — deployment workflows trigger automatically
 - **Via manual dispatch**: Run `deploy-api-to-azure.yml` or `deploy-ui-to-azure.yml` directly
 
 ---
 
-### Combined Single-Run (After Phase 0)
+### Quick Reference: What to check for each run
 
-Once the GitHub App is set up (Phase 0), you can complete Phases 1–3 in a single workflow run:
-
-| Parameter | Value |
-|-----------|-------|
-| `environment` | `dev` |
-| `setupOidc` | ✅ `true` |
-| `oidcAppName` | *(default)* |
-| `setupGitHubApp` | ❌ `false` |
-| `configureSecrets` | ✅ `true` |
-| `enableValidation` | ✅ `true` |
-| `bootstrapInfra` | ✅ `true` |
-| `deployApi` | ❌ `false` (or `true` if ready) |
-| `deployUi` | ❌ `false` (or `true` if ready) |
+| Goal | `setupOidc` | `configureSecrets` | `bootstrapInfra` | `deployApi` | `deployUi` |
+|------|-------------|---------------------|------------------|-------------|------------|
+| First-time full setup (Phase 1 + 2) | ✅ | ✅ | ✅ | optional | optional |
+| Phase 1 only (OIDC + secrets) | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Phase 2 only (infra + deploy) | ❌ | ❌ | ✅ | optional | optional |
+| Redeploy code only | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Rotate credentials | ✅ | ✅ | ❌ | ❌ | ❌ |
 
 ---
 
 ## 🔄 Common Scenarios
 
-### Scenario A: Full Dev Setup (first time, all-in-one after GitHub App is configured)
+### Scenario A: Brand-New Dev Environment (Phase 0 already done)
 ```yaml
+# Phase 1 (one-time) + Phase 2 combined in a single run
 environment: dev
-setupOidc: true          # 1️⃣ Create Entra ID app + OIDC
+setupOidc: true          # 🔑 Phase 1 — Create Entra ID app + OIDC
 oidcAppName: ""          # Use default (GitHub-Actions-OIDC) — only change if custom name needed
-setupGitHubApp: false    # 2️⃣ Already done manually
-configureSecrets: true   # 3️⃣ Write Azure creds to GitHub secrets
-enableValidation: true   # 🔍 Validate everything
-bootstrapInfra: true     # 4️⃣ Provision Azure resources
-deployApi: false         # 5️⃣ Enable once infra is confirmed healthy
-deployUi: false          # 6️⃣ Enable once infra is confirmed healthy
+setupGitHubApp: false    # Phase 0 done — skip
+configureSecrets: true   # 🔑 Phase 1 — Write Azure creds to GitHub secrets
+enableValidation: true   # Validate everything
+bootstrapInfra: true     # 🔄 Phase 2 — Provision Azure resources
+deployApi: false         # 🔄 Phase 2 — Enable once infra is confirmed healthy
+deployUi: false          # 🔄 Phase 2 — Enable once infra is confirmed healthy
 ```
-**Time**: ~15 min | **Use case**: Complete first-time dev environment
+**Time**: ~15 min | **Use case**: Complete first-time dev environment setup in one go
 
 ---
 
-### Scenario B: Add Staging (OIDC + secrets already exist)
+### Scenario B: Add Staging (Phase 1 already done for dev)
 ```yaml
+# Phase 2 only — OIDC and secrets already exist from dev setup
 environment: staging      # Switch to staging branch first!
-setupOidc: false         # Skip — already done
+setupOidc: false         # 🔑 Phase 1 done — skip
 oidcAppName: ""          # N/A (setupOidc is false)
-setupGitHubApp: false    # Skip — already done
-configureSecrets: false  # Skip — already done (or re-run with true if you want staging secrets)
+setupGitHubApp: false    # Phase 0 done — skip
+configureSecrets: false  # 🔑 Phase 1 done — skip (or set true to create staging secrets)
 enableValidation: true
-bootstrapInfra: true     # 4️⃣ Provision staging resources
+bootstrapInfra: true     # 🔄 Phase 2 — Provision staging resources
 deployApi: false
 deployUi: false
 ```
@@ -363,47 +361,50 @@ deployUi: false
 
 ---
 
-### Scenario C: Re-bootstrap Failed/Deleted Infrastructure
+### Scenario C: Re-provision Infrastructure (Phase 1 already done)
 ```yaml
+# Phase 2 only — credentials are fine, just re-create Azure resources
 environment: dev
-setupOidc: false         # Skip — credentials still valid
+setupOidc: false         # 🔑 Phase 1 done — credentials still valid
 oidcAppName: ""          # N/A (setupOidc is false)
-setupGitHubApp: false    # Skip
-configureSecrets: false  # Skip — secrets still valid
+setupGitHubApp: false    # Phase 0 done — skip
+configureSecrets: false  # 🔑 Phase 1 done — secrets still valid
 enableValidation: false  # Skip for speed
-bootstrapInfra: true     # 4️⃣ Re-provision
+bootstrapInfra: true     # 🔄 Phase 2 — Re-provision Azure resources
 deployApi: false
 deployUi: false
 ```
-**Time**: ~10 min | **Use case**: Infrastructure was accidentally deleted; OIDC and secrets are fine
+**Time**: ~10 min | **Use case**: Infrastructure was accidentally deleted; OIDC and secrets are intact
 
 ---
 
-### Scenario D: Refresh Secrets Only (after rotating Azure credentials)
+### Scenario D: Rotate Azure Credentials
 ```yaml
+# Re-run Phase 1 to refresh credentials and secrets
 environment: dev
-setupOidc: true          # 1️⃣ Re-create OIDC credentials
+setupOidc: true          # 🔑 Phase 1 — Re-create OIDC credentials
 oidcAppName: ""          # Use default unless your app uses a custom name
 setupGitHubApp: false
-configureSecrets: true   # 3️⃣ Update GitHub secrets with new values
+configureSecrets: true   # 🔑 Phase 1 — Update GitHub secrets with new values
 enableValidation: false
-bootstrapInfra: false    # Skip — infra untouched
+bootstrapInfra: false    # 🔄 Phase 2 — Skip, infra untouched
 deployApi: false
 deployUi: false
 ```
-**Time**: ~4 min | **Use case**: Azure credentials rotated, GitHub secrets need updating
+**Time**: ~4 min | **Use case**: Azure credentials rotated; GitHub secrets need updating
 
 ---
 
 ### Scenario E: Bootstrap All Environments at Once
 ```yaml
+# Phase 1 + Phase 2 for all environments simultaneously
 environment: all          # Use any branch
-setupOidc: true          # Creates credentials for dev + staging + prod
+setupOidc: true          # 🔑 Phase 1 — Creates credentials for dev + staging + prod
 oidcAppName: ""          # Use default unless using a custom Entra app name
-setupGitHubApp: false    # Already done
-configureSecrets: true   # Secrets for all three environments
+setupGitHubApp: false    # Phase 0 already done
+configureSecrets: true   # 🔑 Phase 1 — Secrets for all three environments
 enableValidation: false  # Skip for initial setup
-bootstrapInfra: true     # Provisions dev + staging + prod in parallel
+bootstrapInfra: true     # 🔄 Phase 2 — Provisions dev + staging + prod in parallel
 deployApi: false
 deployUi: false
 ```
@@ -443,12 +444,12 @@ deployUi: false
 
 | Resource | Safe to Delete? | How to Re-Create |
 |----------|----------------|------------------|
-| GitHub Environments (`settings/environments`) | ✅ Yes | Re-run with `configureSecrets = true` |
-| `AZUREAPPSERVICE_*` secrets | ✅ Yes | Re-run with `setupOidc = true` + `configureSecrets = true` |
-| `APP_ID` + `APP_PRIVATE_KEY` secrets | ⚠️ Caution | Must redo [GitHub App Manual Setup](#-github-app-manual-setup-required-before-first-run) |
+| GitHub Environments (`settings/environments`) | ✅ Yes | Re-run Phase 1 with `configureSecrets = true` |
+| `AZUREAPPSERVICE_*` secrets | ✅ Yes | Re-run Phase 1 with `setupOidc = true` + `configureSecrets = true` |
+| `APP_ID` + `APP_PRIVATE_KEY` secrets | ⚠️ Caution | Must redo [Phase 0 Setup](#-phase-0--manual-prerequisite-github-app-setup) |
 | GitHub App Installation (`settings/installations`) | ⚠️ Caution | Must re-install app + update `APP_ID` + `APP_PRIVATE_KEY` |
-| Azure Resource Groups / App Services | ✅ Yes | Re-run with `bootstrapInfra = true` |
-| Entra ID App Registration | ✅ Yes | Re-run with `setupOidc = true` |
+| Azure Resource Groups / App Services | ✅ Yes | Re-run Phase 2 with `bootstrapInfra = true` |
+| Entra ID App Registration | ✅ Yes | Re-run Phase 1 with `setupOidc = true` |
 
 ---
 
@@ -488,7 +489,7 @@ Watch Actions → the `deploy-api-to-azure.yml` workflow should trigger and succ
 
 ### Issue: "APP_ID / APP_PRIVATE_KEY secrets MISSING" warning in validate-inputs
 **Cause**: GitHub App has not been configured yet.  
-**Fix**: Complete [Phase 0 — GitHub App Manual Setup](#-github-app-manual-setup-required-before-first-run) and add the two secrets before re-running.
+**Fix**: Complete [Phase 0 — GitHub App Setup](#-phase-0--manual-prerequisite-github-app-setup) and add the two secrets before re-running.
 
 ### Issue: `configureSecrets` step fails with "GitHub App token generation failed"
 **Cause**: The app is not installed on the repository, or `APP_ID`/`APP_PRIVATE_KEY` are wrong.  
@@ -541,10 +542,10 @@ Watch Actions → the `deploy-api-to-azure.yml` workflow should trigger and succ
 
 ## 💡 Pro Tips
 
-1. **Do Phase 0 first**: The GitHub App manual setup is the only blocker — complete it before anything else.
-2. **Start with `dev`**: Validate the full flow on dev (F1 Free tier, no cost) before extending to staging/prod.
-3. **Combine phases**: Once GitHub App is configured, you can run `setupOidc + configureSecrets + bootstrapInfra` all in one workflow execution.
-4. **Idempotent**: Every phase is safe to re-run — existing resources are skipped, missing ones are created.
+1. **Phase 0 is a true one-time step**: Once the GitHub App is created, installed, and its secrets are in place, you never touch Phase 0 again.
+2. **Phase 1 is also one-time per environment**: Run `setupOidc + configureSecrets` once, then only use Phase 2 for all ongoing work.
+3. **Phase 2 is idempotent**: Every `bootstrapInfra` run is safe to re-run — existing resources are skipped, missing ones are created. Run it whenever needed.
+4. **Start with `dev`**: Validate the full flow on dev (F1 Free tier, no cost) before extending to staging/prod.
 5. **Use `all`**: Select `environment: all` to provision dev/staging/prod simultaneously once you're confident.
 6. **Save the `.pem` file**: Store the GitHub App private key securely offline — if lost, generate a new one in app settings and update `APP_PRIVATE_KEY`.
 

@@ -13,7 +13,7 @@ on:
           - prod
           - all
       setupOidc:
-        description: '1️⃣ Setup Azure OIDC [REQUIRED for first-time] | Creates Microsoft Entra ID App Registration + passwordless auth'
+        description: '🔑 Phase 1 (one-time) — Setup Azure OIDC | Creates Microsoft Entra ID App Registration + passwordless auth'
         required: true
         type: boolean
         default: true
@@ -23,12 +23,12 @@ on:
         type: string
         default: 'GitHub-Actions-OIDC'
       setupGitHubApp:
-        description: '2️⃣ Setup GitHub App [One-time only] | Shows instructions if APP_ID + APP_PRIVATE_KEY secrets are missing'
+        description: 'ℹ️ Phase 0 helper — GitHub App Instructions | Shows setup steps if APP_ID + APP_PRIVATE_KEY secrets are missing'
         required: true
         type: boolean
         default: false
       configureSecrets:
-        description: '3️⃣ Configure Secrets [REQUIRED] | Sets CLIENTID, TENANTID, SUBSCRIPTIONID in GitHub (needs APP_ID + APP_PRIVATE_KEY pre-configured)'
+        description: '🔑 Phase 1 (one-time) — Configure GitHub Secrets | Sets CLIENTID, TENANTID, SUBSCRIPTIONID (needs APP_ID + APP_PRIVATE_KEY)'
         required: true
         type: boolean
         default: true
@@ -38,17 +38,17 @@ on:
         type: boolean
         default: false
       bootstrapInfra:
-        description: '4️⃣ Bootstrap Infrastructure [REQUIRED] | Creates Resource Group, App Services, SQL, Key Vault'
+        description: '🔄 Phase 2 (day-to-day) — Bootstrap Infrastructure | Creates Resource Group, App Services, SQL, Key Vault'
         required: true
         type: boolean
         default: true
       deployApi:
-        description: '5️⃣ Deploy API [Optional] | Automatically deploys API code after infrastructure is ready'
+        description: '🔄 Phase 2 (day-to-day) — Deploy API [Optional] | Deploys API code after infrastructure is ready'
         required: true
         type: boolean
         default: false
       deployUi:
-        description: '6️⃣ Deploy UI [Optional] | Automatically deploys UI code after infrastructure is ready'
+        description: '🔄 Phase 2 (day-to-day) — Deploy UI [Optional] | Deploys UI code after infrastructure is ready'
         required: true
         type: boolean
         default: false
@@ -94,18 +94,18 @@ jobs:
           Write-Host "  🎯 Target Environment:          ${{ inputs.environment }}" -ForegroundColor White
           Write-Host "" -ForegroundColor Gray
           Write-Host "  AZURE SETUP:" -ForegroundColor Cyan
-          Write-Host "    1️⃣  Setup Azure OIDC:          ${{ inputs.setupOidc }}" -ForegroundColor $(if ('${{ inputs.setupOidc }}' -eq 'true') { 'Green' } else { 'DarkGray' })
-          Write-Host "        OIDC App Name:            ${{ inputs.oidcAppName }}" -ForegroundColor DarkGray
-          Write-Host "    2️⃣  Setup GitHub App:          ${{ inputs.setupGitHubApp }}" -ForegroundColor $(if ('${{ inputs.setupGitHubApp }}' -eq 'true') { 'Green' } else { 'DarkGray' })
-          Write-Host "    3️⃣  Configure Secrets:         ${{ inputs.configureSecrets }}" -ForegroundColor $(if ('${{ inputs.configureSecrets }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "    🔑 [Phase 1] Setup Azure OIDC:    ${{ inputs.setupOidc }}" -ForegroundColor $(if ('${{ inputs.setupOidc }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "        OIDC App Name:               ${{ inputs.oidcAppName }}" -ForegroundColor DarkGray
+          Write-Host "    ℹ️  [Phase 0] Setup GitHub App:   ${{ inputs.setupGitHubApp }}" -ForegroundColor $(if ('${{ inputs.setupGitHubApp }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "    🔑 [Phase 1] Configure Secrets:   ${{ inputs.configureSecrets }}" -ForegroundColor $(if ('${{ inputs.configureSecrets }}' -eq 'true') { 'Green' } else { 'DarkGray' })
           Write-Host "" -ForegroundColor Gray
           Write-Host "  INFRASTRUCTURE:" -ForegroundColor Cyan
-          Write-Host "    🔍 Pre-Flight Validation:      ${{ inputs.enableValidation }}" -ForegroundColor $(if ('${{ inputs.enableValidation }}' -eq 'true') { 'Green' } else { 'DarkGray' })
-          Write-Host "    4️⃣  Bootstrap Infrastructure:  ${{ inputs.bootstrapInfra }}" -ForegroundColor $(if ('${{ inputs.bootstrapInfra }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "    🔍 Pre-Flight Validation:         ${{ inputs.enableValidation }}" -ForegroundColor $(if ('${{ inputs.enableValidation }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "    🔄 [Phase 2] Bootstrap Infra:     ${{ inputs.bootstrapInfra }}" -ForegroundColor $(if ('${{ inputs.bootstrapInfra }}' -eq 'true') { 'Green' } else { 'DarkGray' })
           Write-Host "" -ForegroundColor Gray
           Write-Host "  DEPLOYMENT:" -ForegroundColor Cyan
-          Write-Host "    5️⃣  Deploy API:                ${{ inputs.deployApi }}" -ForegroundColor $(if ('${{ inputs.deployApi }}' -eq 'true') { 'Green' } else { 'DarkGray' })
-          Write-Host "    6️⃣  Deploy UI:                 ${{ inputs.deployUi }}" -ForegroundColor $(if ('${{ inputs.deployUi }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "    🔄 [Phase 2] Deploy API:          ${{ inputs.deployApi }}" -ForegroundColor $(if ('${{ inputs.deployApi }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "    🔄 [Phase 2] Deploy UI:           ${{ inputs.deployUi }}" -ForegroundColor $(if ('${{ inputs.deployUi }}' -eq 'true') { 'Green' } else { 'DarkGray' })
           Write-Host "" -ForegroundColor Gray
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
           Write-Host "" -ForegroundColor Gray
@@ -2579,13 +2579,13 @@ jobs:
           "| Parameter | Value |" >> $env:GITHUB_STEP_SUMMARY
           "|-----------|-------|" >> $env:GITHUB_STEP_SUMMARY
           "| 🎯 Environment | ``${{ inputs.environment }}`` |" >> $env:GITHUB_STEP_SUMMARY
-          "| 1️⃣ Setup OIDC | ``${{ inputs.setupOidc }}`` |" >> $env:GITHUB_STEP_SUMMARY
-          "| 2️⃣ Setup GitHub App | ``${{ inputs.setupGitHubApp }}`` |" >> $env:GITHUB_STEP_SUMMARY
-          "| 3️⃣ Configure Secrets | ``${{ inputs.configureSecrets }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| 🔑 [Phase 1] Setup OIDC | ``${{ inputs.setupOidc }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| ℹ️ [Phase 0] Setup GitHub App | ``${{ inputs.setupGitHubApp }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| 🔑 [Phase 1] Configure Secrets | ``${{ inputs.configureSecrets }}`` |" >> $env:GITHUB_STEP_SUMMARY
           "| 🔍 Pre-Flight Validation | ``${{ inputs.enableValidation }}`` |" >> $env:GITHUB_STEP_SUMMARY
-          "| 4️⃣ Bootstrap Infrastructure | ``${{ inputs.bootstrapInfra }}`` |" >> $env:GITHUB_STEP_SUMMARY
-          "| 5️⃣ Deploy API | ``${{ inputs.deployApi }}`` |" >> $env:GITHUB_STEP_SUMMARY
-          "| 6️⃣ Deploy UI | ``${{ inputs.deployUi }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| 🔄 [Phase 2] Bootstrap Infrastructure | ``${{ inputs.bootstrapInfra }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| 🔄 [Phase 2] Deploy API | ``${{ inputs.deployApi }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| 🔄 [Phase 2] Deploy UI | ``${{ inputs.deployUi }}`` |" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
           
           "### ✅ Job Execution Results" >> $env:GITHUB_STEP_SUMMARY
