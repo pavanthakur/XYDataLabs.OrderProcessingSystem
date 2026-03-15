@@ -13,12 +13,12 @@ on:
           - prod
           - all
       setupOidc:
-        description: '1️⃣ Setup Azure OIDC [REQUIRED for first-time setup] | Creates passwordless authentication'
+        description: '1️⃣ Setup Azure OIDC [REQUIRED for first-time] | Creates Microsoft Entra ID App Registration + passwordless auth'
         required: true
         type: boolean
         default: true
       setupGitHubApp:
-        description: '2️⃣ Setup GitHub App [One-time only] | Required ONLY if APP_ID and APP_PRIVATE_KEY secrets missing'
+        description: '2️⃣ Setup GitHub App [One-time only] | Shows instructions if APP_ID + APP_PRIVATE_KEY secrets are missing'
         required: true
         type: boolean
         default: false
@@ -28,7 +28,7 @@ on:
         type: string
         default: 'GitHub-Actions-OIDC'
       configureSecrets:
-        description: '3️⃣ Configure Secrets [REQUIRED] | Auto-creates CLIENTID, TENANTID, SUBSCRIPTIONID in GitHub'
+        description: '3️⃣ Configure Secrets [REQUIRED] | Sets CLIENTID, TENANTID, SUBSCRIPTIONID in GitHub (needs APP_ID + APP_PRIVATE_KEY pre-configured)'
         required: true
         type: boolean
         default: true
@@ -244,6 +244,45 @@ jobs:
             }
           } else {
             Write-Host "    ✅ Setup Azure OIDC: Checked - secrets will be created" -ForegroundColor Green
+          }
+
+          # Check GitHub App secrets when configureSecrets is requested
+          if ($configSecrets -eq "true") {
+            Write-Host "`n  🤖 GitHub App Check (required for 'Configure Secrets' step):" -ForegroundColor Cyan
+            try {
+              $secretsCheck = gh secret list --repo ${{ github.repository }} 2>&1 | Out-String
+              $hasAppId = $secretsCheck -match "(?m)^\s*APP_ID\b"
+              $hasPrivateKey = $secretsCheck -match "(?m)^\s*APP_PRIVATE_KEY\b"
+
+              if ($hasAppId -and $hasPrivateKey) {
+                Write-Host "    ✅ GitHub App secrets exist (APP_ID, APP_PRIVATE_KEY)" -ForegroundColor Green
+                Write-Host "    ℹ️  APP_INSTALLATION_ID: auto-discovered at runtime" -ForegroundColor Cyan
+              } else {
+                Write-Host "    ⚠️  GitHub App secrets MISSING - 'Configure Secrets' step will fail!" -ForegroundColor Red
+                Write-Host "" -ForegroundColor Gray
+                Write-Host "    Missing:" -ForegroundColor Yellow
+                if (-not $hasAppId) { Write-Host "      ❌ APP_ID" -ForegroundColor Red }
+                if (-not $hasPrivateKey) { Write-Host "      ❌ APP_PRIVATE_KEY" -ForegroundColor Red }
+                Write-Host "" -ForegroundColor Gray
+                Write-Host "    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
+                Write-Host "    💡 SOLUTION: Configure GitHub App before running 'Configure Secrets':" -ForegroundColor Yellow
+                Write-Host "       1. Run: .\scripts\setup-github-app-from-manifest.ps1" -ForegroundColor White
+                Write-Host "          (or create app manually at https://github.com/${{ github.repository_owner }}/settings/apps/new)" -ForegroundColor Gray
+                Write-Host "       2. Install the app on this repository" -ForegroundColor White
+                Write-Host "          (https://github.com/settings/installations)" -ForegroundColor Gray
+                Write-Host "       3. Add secrets to this repository:" -ForegroundColor White
+                Write-Host "          - APP_ID (your GitHub App's numeric ID)" -ForegroundColor Gray
+                Write-Host "          - APP_PRIVATE_KEY (contents of downloaded .pem file)" -ForegroundColor Gray
+                Write-Host "       4. Re-run this workflow" -ForegroundColor White
+                Write-Host "    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
+                Write-Host "" -ForegroundColor Gray
+                Write-Host "    ℹ️  Note: GitHub requires manual app creation (security requirement)." -ForegroundColor Gray
+                Write-Host "    ℹ️  After initial setup, the workflow is fully automated." -ForegroundColor Gray
+              }
+            } catch {
+              Write-Host "    ⚠️  Could not check GitHub App secrets: $($_.Exception.Message)" -ForegroundColor Yellow
+              Write-Host "    Proceeding with caution..." -ForegroundColor Gray
+            }
           }
 
           Write-Host "`n" -ForegroundColor Gray
@@ -629,6 +668,16 @@ jobs:
       - name: Create Setup Summary
         run: |
           "## 🔐 Azure OIDC Setup Complete" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "### 🏢 Microsoft Entra ID Application (Azure AD App Registration)" >> $env:GITHUB_STEP_SUMMARY
+          "| Field | Value |" >> $env:GITHUB_STEP_SUMMARY
+          "|-------|-------|" >> $env:GITHUB_STEP_SUMMARY
+          "| **App Name** | ``${{ inputs.oidcAppName }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| **Application (Client) ID** | ``${{ steps.oidc.outputs.clientId }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| **Object ID** | ``${{ steps.oidc.outputs.appObjectId }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| **Status** | ✅ Created/Updated in Azure Portal |" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "> 📍 **View in Azure Portal**: Azure Portal → Microsoft Entra ID → App registrations → ``${{ inputs.oidcAppName }}``" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
           "### 📋 Azure Credentials" >> $env:GITHUB_STEP_SUMMARY
           "- **Client ID**: ``${{ steps.oidc.outputs.clientId }}``" >> $env:GITHUB_STEP_SUMMARY
@@ -2589,6 +2638,28 @@ jobs:
             $icon = if ($enableVal -eq "success") { "✅" } elseif ($enableVal -eq "skipped") { "⏭️" } else { "❌" }
             "| Enable Validation | $icon $enableVal |" >> $env:GITHUB_STEP_SUMMARY
           }
+
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "### 🏗️ What Gets Created Automatically" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "| Resource | Automated? | Trigger |" >> $env:GITHUB_STEP_SUMMARY
+          "|----------|-----------|---------|" >> $env:GITHUB_STEP_SUMMARY
+          "| 🏢 Microsoft Entra ID App Registration | ✅ Yes | Setup OIDC = true |" >> $env:GITHUB_STEP_SUMMARY
+          "| 🔑 Azure Federated Credentials (OIDC) | ✅ Yes | Setup OIDC = true |" >> $env:GITHUB_STEP_SUMMARY
+          "| 🌐 GitHub Environments (dev/staging/prod) | ✅ Yes | Configure Secrets = true |" >> $env:GITHUB_STEP_SUMMARY
+          "| 🔐 GitHub OIDC Secrets (AZUREAPPSERVICE_*) | ✅ Yes | Configure Secrets = true |" >> $env:GITHUB_STEP_SUMMARY
+          "| ☁️ Azure Resource Groups + App Services | ✅ Yes | Bootstrap Infrastructure = true |" >> $env:GITHUB_STEP_SUMMARY
+          "| 🗄️ Azure SQL Database | ✅ Yes | Bootstrap Infrastructure = true |" >> $env:GITHUB_STEP_SUMMARY
+          "| 🤖 GitHub App (APP_ID + APP_PRIVATE_KEY) | ⚠️ Manual | One-time setup required |" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "### 🗑️ What Can Be Safely Deleted and Re-Created" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "| Resource | Can Delete? | Notes |" >> $env:GITHUB_STEP_SUMMARY
+          "|----------|------------|-------|" >> $env:GITHUB_STEP_SUMMARY
+          "| GitHub Environments (settings/environments) | ✅ Yes | Re-created by Configure Secrets |" >> $env:GITHUB_STEP_SUMMARY
+          "| OIDC Secrets (AZUREAPPSERVICE_*) | ✅ Yes | Re-created by Setup OIDC + Configure Secrets |" >> $env:GITHUB_STEP_SUMMARY
+          "| APP_ID + APP_PRIVATE_KEY secrets | ⚠️ Caution | Must re-run setup-github-app-from-manifest.ps1 after deletion |" >> $env:GITHUB_STEP_SUMMARY
+          "| GitHub App Installation (settings/installations) | ⚠️ Caution | Must re-install app after deletion, then update APP_ID + APP_PRIVATE_KEY |" >> $env:GITHUB_STEP_SUMMARY
 
   # Optional: Trigger deployment workflows after successful bootstrap
   trigger-deployments:
