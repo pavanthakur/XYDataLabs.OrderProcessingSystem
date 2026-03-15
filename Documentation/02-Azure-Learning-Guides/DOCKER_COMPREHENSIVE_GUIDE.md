@@ -1736,3 +1736,71 @@ The `start-docker.ps1` script is actively maintained and includes:
 - ✅ Container dependencies properly configured
 
 **🔄 Last Updated**: August 17, 2025 - Implemented protocol-specific Docker image naming convention (xydatalabs-orderprocessingsystem-{service}-{protocol}:{environment}) for complete architectural consistency. All containers, services, and images now follow unified naming standards across all environments.
+
+---
+
+## 🏢 Enterprise Mode & Cleanup Policies
+
+The `start-docker.ps1` script supports an enterprise mode with environment-specific cleanup and safety features.
+
+### Enterprise Parameters
+
+| Parameter | Purpose |
+|-----------|---------|
+| `-Enterprise` | Enable enterprise features (network isolation, backup, logging) |
+| `-Strict` | Policy-based enforcement (no user prompts) |
+| `-CleanupPolicy` | `aggressive` / `conservative` / `minimal` |
+| `-BackupData` | Backup volumes before cleanup |
+
+### Cleanup Policy by Environment
+
+| Environment | Policy | Behavior |
+|-------------|--------|---------|
+| DEV | `aggressive` | Removes stopped containers, unused images, volumes |
+| UAT | `conservative` | Removes stopped containers, keeps images |
+| PROD | `minimal` | Only removes explicitly stopped containers |
+
+### Example Enterprise Commands
+
+```powershell
+# Development - enterprise mode with aggressive cleanup
+.\Resources\Docker\start-docker.ps1 -Environment dev -Enterprise -CleanupPolicy aggressive
+
+# UAT - conservative cleanup with backup
+.\Resources\Docker\start-docker.ps1 -Environment uat -Enterprise -CleanupPolicy conservative -BackupData
+
+# Production - strict mode, minimal cleanup
+.\Resources\Docker\start-docker.ps1 -Environment prod -Enterprise -Strict -CleanupPolicy minimal
+```
+
+### Enterprise Safety Features
+- **Production warnings**: Prompts confirmation before prod changes (unless `-Strict`)
+- **Network security labels**: Containers labelled with `env=dev|uat|prod` for isolation
+- **Data protection**: Volume backups before destructive operations
+- **Audit logging**: All enterprise operations logged to `logs/enterprise-standards-log.csv`
+
+---
+
+## 📋 Enterprise Standards Checklist
+
+### Pre-Development
+- [ ] Docker Desktop running
+- [ ] Correct environment selected
+- [ ] No conflicting containers from previous sessions
+
+### Development Standards
+- [ ] Multi-stage Dockerfile (build → runtime)
+- [ ] Non-root user in container
+- [ ] Health checks defined
+- [ ] Environment variables via `--env-file` or compose
+
+### CI/CD Readiness
+- [ ] Images tagged with semantic version + git SHA
+- [ ] No secrets baked into images
+- [ ] Registry authentication via managed identity (not admin account)
+
+### Production Standards
+- [ ] Container resource limits set (`memory`, `cpus`)
+- [ ] Read-only filesystem where possible
+- [ ] Minimal base image (use `mcr.microsoft.com/dotnet/aspnet` not `sdk`)
+- [ ] Vulnerability scanning enabled in ACR

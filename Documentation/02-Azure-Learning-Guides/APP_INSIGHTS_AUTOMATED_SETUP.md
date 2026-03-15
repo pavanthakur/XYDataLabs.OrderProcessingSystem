@@ -357,3 +357,52 @@ The automated App Insights setup provides:
 - ✅ **Audit trail and reproducibility** via Infrastructure as Code
 
 This approach follows Microsoft Azure Well-Architected Framework principles for monitoring, security, and operational excellence.
+
+---
+
+## ⚡ Quick SDK Setup Reference
+
+For manual or local App Insights integration (outside the bootstrap workflow):
+
+### 1. Get Connection String
+```bash
+az monitor app-insights component show -g <rg> -a <name>-appi --query connectionString -o tsv
+```
+
+### 2. App Service Settings
+```
+APPLICATIONINSIGHTS_CONNECTION_STRING = <connection string>
+ASPNETCORE_HOSTINGSTARTUPASSEMBLIES   = Microsoft.AspNetCore.ApplicationInsights.HostingStartup
+```
+
+### 3. SDK in Program.cs
+```csharp
+builder.Services.AddApplicationInsightsTelemetry();
+builder.Logging.AddApplicationInsights();
+builder.Logging.AddFilter<ApplicationInsightsLoggerProvider>("", LogLevel.Information);
+```
+
+### 4. Distributed Tracing
+```csharp
+using (var op = telemetry.StartOperation<RequestTelemetry>("ProcessOrder")) {
+    // work
+    telemetry.TrackMetric("ItemsProcessed", itemCount);
+}
+```
+
+### 5. Baseline Alerts
+
+| Metric | Condition | Threshold | Window |
+|--------|-----------|----------|--------|
+| Server response time | P95 > | 1500 ms | 15 min |
+| Failed requests | Rate > | 2% | 15 min |
+| Exceptions | Count > | dynamic | 15 min |
+| Availability test | Failure rate > | 1 | 5 min |
+
+### 6. Validation Checklist
+- [ ] App Insights resource exists in Azure Portal
+- [ ] Connection string set in App Service Configuration
+- [ ] SDK package referenced in `.csproj`
+- [ ] `AddApplicationInsightsTelemetry()` called in `Program.cs`
+- [ ] Live Metrics visible under App Insights → Live Metrics
+- [ ] Sample requests appear in Transaction Search

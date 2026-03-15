@@ -200,4 +200,58 @@ After successful run:
 
 ---
 
+## 🛡️ Preventing Configuration Copy-Paste Errors
+
+### The Problem
+A critical copy-paste error on this project resulted in `bootstrap-dev` being accidentally configured with prod environment settings — it would have deployed prod resources when dev was selected.
+
+### Manual Verification Checklist (After Any Workflow Edit)
+- [ ] `bootstrap-dev` calls `-Environment dev` and logs show `dev.json`
+- [ ] `bootstrap-staging` calls `-Environment staging` and logs show `staging.json`
+- [ ] `bootstrap-prod` calls `-Environment prod` and logs show `prod.json`
+- [ ] OIDC setup uses `${{ inputs.environment }}` (dynamic, not hardcoded)
+- [ ] Configure-secrets uses `${{ inputs.environment }}`
+
+### Automated Fix
+```powershell
+# Run EVERY TIME before committing workflow changes
+./Resources/Azure-Deployment/validate-workflow-config.ps1
+# Exit Code 0 = ✅ Safe to commit | Exit Code 1 = ❌ Fix first
+```
+
+### Safe Commit Pattern
+```powershell
+# After each environment change (don't batch):
+./Resources/Azure-Deployment/validate-workflow-config.ps1
+git add .github/workflows/
+git commit -m "fix: Update bootstrap-dev configuration"
+```
+
+---
+
+## ❌ GitHub Secrets 403 Error (GITHUB_TOKEN Limitation)
+
+### Error
+```
+failed to fetch public key: HTTP 403: Resource not accessible by integration
+Error: Failed to set AZUREAPPSERVICE_CLIENTID
+```
+
+### Root Cause
+`GITHUB_TOKEN` is read-only for secrets — it **cannot** write repository secrets. This is a GitHub security design. The workflow must use a **Personal Access Token (PAT)** with `repo` scope instead.
+
+### Solution
+1. Create a PAT at https://github.com/settings/tokens/new (scope: `repo`)
+2. Add it as repository secret named `GH_PAT`
+3. Re-run bootstrap workflow — it will use `GH_PAT` for `gh secret set` commands
+
+### Secrets That Require PAT
+- `AZUREAPPSERVICE_CLIENTID`
+- `AZUREAPPSERVICE_TENANTID`
+- `AZUREAPPSERVICE_SUBSCRIPTIONID`
+
+These are required by `deploy-api-to-azure.yml`, `deploy-ui-to-azure.yml`, and `infra-deploy.yml` for Azure login.
+
+---
+
 **Last Updated**: Based on fix for GitHub App installation detection and workflow update handling.

@@ -363,3 +363,27 @@ OR (independent execution):
 **Document Version**: 1.0
 **Last Updated**: 2026-01-27
 **Migration Completed**: ✅ Yes
+
+---
+
+## 🗂️ Branch → Environment Mapping Reference
+
+| Branch    | Environment | Azure Resource Group          | OIDC Subject                                        |
+|-----------|-------------|-------------------------------|-----------------------------------------------------|
+| `dev`     | `dev`       | `rg-orderprocessing-dev`      | `repo:pavanthakur/.../ref:refs/heads/dev`           |
+| `staging` | `staging`   | `rg-orderprocessing-staging`  | `repo:pavanthakur/.../ref:refs/heads/staging`       |
+| `main`    | `prod`      | `rg-orderprocessing-prod`     | `repo:pavanthakur/.../ref:refs/heads/main`          |
+
+### Environment Secrets Per Environment
+
+Each environment (`dev`, `staging`, `prod`) holds its own isolated set:
+- `GH_APP_ID` / `GH_APP_PRIVATE_KEY`
+- `AZUREAPPSERVICE_CLIENTID`
+- `AZUREAPPSERVICE_TENANTID`
+- `AZUREAPPSERVICE_SUBSCRIPTIONID`
+
+### Workflow Environment Selection Pattern
+```yaml
+environment: ${{ github.ref == 'refs/heads/main' && 'prod' || github.ref == 'refs/heads/staging' && 'staging' || 'dev' }}
+```
+This pattern is used in `deploy-api-to-azure.yml` and `deploy-ui-to-azure.yml` to automatically select the correct environment based on branch.

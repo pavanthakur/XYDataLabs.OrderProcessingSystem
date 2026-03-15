@@ -556,6 +556,49 @@ az account show
 # 5. Run "Azure Bootstrap Setup" workflow
 # - Select branch: dev
 # - Select environment: dev
+
+---
+
+## ⚡ Pre-Commit Checklist (Quick Reference)
+
+### Code Changes
+- [ ] `git status` — review changed files
+- [ ] `dotnet build` — build passes
+- [ ] `dotnet test` — tests pass
+- [ ] `git diff` — review changes
+
+### Workflow Changes (MANDATORY)
+- [ ] `./Resources/Azure-Deployment/validate-workflow-config.ps1` — exit code 0
+- [ ] Verify `bootstrap-dev` uses `dev` environment / `dev.json`
+- [ ] Verify `bootstrap-staging` uses `staging` environment / `staging.json`
+- [ ] Verify `bootstrap-prod` uses `prod` environment / `prod.json`
+- [ ] DO NOT COMMIT if validator fails
+
+### Before Azure Bootstrap
+- [ ] `./Resources/Azure-Deployment/test-branch-env-mapping.ps1 -Environment dev` — dry run
+- [ ] `az account show` — verify correct subscription
+- [ ] Review workflow inputs carefully in GitHub UI
+
+---
+
+## 💰 Cost-Saving Rules
+
+1. ✅ Always validate before committing workflow changes
+2. ✅ Always dry-run before Azure deployments
+3. ✅ Test locally before cloud deployment
+4. ✅ Use dev environment for all experimentation
+5. ✅ Prevention > Debugging — 2 seconds validation saves hours of debugging
+
+---
+
+## ⚠️ Red Flags to Watch For
+
+When editing workflow files, these patterns indicate a misconfiguration:
+- ❌ `prod` mentioned inside `bootstrap-dev` job
+- ❌ `dev` mentioned inside `bootstrap-prod` job
+- ❌ Logging messages don't match script parameters
+- ❌ Parameter file (`dev.json`) doesn't match environment name
+- ❌ Branch name (`main`) doesn't match job name `bootstrap-dev`
 # - Check: Setup OIDC ✅
 # - Check: Configure Secrets ✅
 # - Check: Bootstrap Infrastructure ✅

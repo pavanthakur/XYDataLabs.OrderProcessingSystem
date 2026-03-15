@@ -217,11 +217,32 @@ If you're currently using `GH_PAT`:
 ## 📚 Full Documentation
 
 - Detailed guide: [Documentation/GITHUB-APP-AUTHENTICATION.md](./GITHUB-APP-AUTHENTICATION.md)
-- PAT alternative: [Documentation/GITHUB-SECRETS-FIX.md](./GITHUB-SECRETS-FIX.md)
 
 ## 💡 Tips
 
 - **Organization-wide**: Create app at org level for multiple repos
 - **Shared secrets**: Use organization secrets for `GH_APP_*` values
-- **Security**: Private key is like a password - keep it secret!
+- **Security**: Private key is like a password — keep it secret!
 - **Audit**: All actions logged in GitHub audit log
+
+---
+
+## 🤖 Automation Capabilities Reference
+
+Understanding what can and cannot be automated when setting up GitHub Apps:
+
+| Task | Status | Reason |
+|------|--------|--------|
+| Secret configuration (bootstrap workflow) | ✅ Fully automated | Uses GitHub App token |
+| Environment secret setup | ✅ Fully automated | Via `configure-github-secrets.yml` |
+| Token generation | ✅ Fully automated | Auto-generated each workflow run |
+| Installation validation | ✅ Fully automated | Checked at workflow start |
+| Initial app creation | ⚠️ Manual (one-time) | GitHub requires interactive OAuth approval |
+| Private key generation | ⚠️ Manual (one-time) | Security best practice — user must download |
+| Initial app installation | ⚠️ Manual (one-time) | Repository owner must approve |
+| First-time authorization | ❌ Cannot automate | GitHub security requirement by design |
+
+### Why This Is The Right Approach
+- **Token expiration: solved** — GitHub App tokens are generated fresh on every run (no PAT renewal needed)
+- **Zero maintenance** — Once configured, the app runs indefinitely
+- **One-time setup** — ~5 minutes of manual work, then fully automated forever

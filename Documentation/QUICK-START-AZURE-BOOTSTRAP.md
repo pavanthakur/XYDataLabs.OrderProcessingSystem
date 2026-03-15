@@ -528,6 +528,19 @@ Watch Actions → the `deploy-api-to-azure.yml` workflow should trigger and succ
 
 ---
 
+## 🔑 Why GitHub App (Not PAT)?
+
+| Feature | PAT Token | GitHub App |
+|---------|-----------|------------|
+| Expiry | Max 1 year (manual renewal) | Never — generated fresh each run |
+| Maintenance | Manual renewal required | Zero maintenance |
+| Scope | User-level | App-level (more secure) |
+| Automation | Can expire mid-pipeline | Fully automated forever |
+
+**Bottom line**: The one-time 5-minute GitHub App setup eliminates all token expiration issues permanently.
+
+---
+
 **Ready to start?**
 
 👉 **Run Workflow**: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/azure-bootstrap.yml
