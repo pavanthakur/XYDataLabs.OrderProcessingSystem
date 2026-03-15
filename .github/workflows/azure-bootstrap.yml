@@ -99,24 +99,25 @@ jobs:
           Write-Host "📋 USER SELECTED PARAMETERS:" -ForegroundColor Yellow
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
           Write-Host "" -ForegroundColor Gray
-          Write-Host "  🎯 Target Environment:          ${{ inputs.environment }}" -ForegroundColor White
+          Write-Host "  Parameter              Value    Checkbox" -ForegroundColor DarkGray
+          Write-Host "  ──────────────────────────────────────────────────────────────────────" -ForegroundColor DarkGray
+          Write-Host "  environment          = ${{ inputs.environment }}" -ForegroundColor White
           Write-Host "" -ForegroundColor Gray
           Write-Host "  AZURE SETUP:" -ForegroundColor Cyan
-          Write-Host "    🔑 [Phase 1] Setup Azure OIDC:    ${{ inputs.setupOidc }}" -ForegroundColor $(if ('${{ inputs.setupOidc }}' -eq 'true') { 'Green' } else { 'DarkGray' })
-          Write-Host "        OIDC App Name:               ${{ inputs.oidcAppName }}" -ForegroundColor DarkGray
-          Write-Host "    ℹ️  [Phase 0] Setup GitHub App:   ${{ inputs.setupGitHubApp }}" -ForegroundColor $(if ('${{ inputs.setupGitHubApp }}' -eq 'true') { 'Green' } else { 'DarkGray' })
-          Write-Host "        GitHub App Name:            ${{ inputs.githubAppName }}" -ForegroundColor DarkGray
-          Write-Host "    🔑 [Phase 1] Configure Secrets:   ${{ inputs.configureSecrets }}" -ForegroundColor $(if ('${{ inputs.configureSecrets }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "  setupOidc            = ${{ inputs.setupOidc }}  $(if ('${{ inputs.setupOidc }}' -eq 'true') { '[✅ checked]   — Phase 1: Setup Azure OIDC' } else { '[☐  unchecked] — Phase 1: Setup Azure OIDC' })" -ForegroundColor $(if ('${{ inputs.setupOidc }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "  oidcAppName          = ${{ inputs.oidcAppName }}" -ForegroundColor DarkGray
+          Write-Host "  setupGitHubApp       = ${{ inputs.setupGitHubApp }}  $(if ('${{ inputs.setupGitHubApp }}' -eq 'true') { '[✅ checked]   — Phase 0: Setup GitHub App' } else { '[☐  unchecked] — Phase 0: Setup GitHub App' })" -ForegroundColor $(if ('${{ inputs.setupGitHubApp }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "  githubAppName        = ${{ inputs.githubAppName }}" -ForegroundColor DarkGray
+          Write-Host "  configureSecrets     = ${{ inputs.configureSecrets }}  $(if ('${{ inputs.configureSecrets }}' -eq 'true') { '[✅ checked]   — Phase 1: Configure Secrets' } else { '[☐  unchecked] — Phase 1: Configure Secrets' })" -ForegroundColor $(if ('${{ inputs.configureSecrets }}' -eq 'true') { 'Green' } else { 'DarkGray' })
           Write-Host "" -ForegroundColor Gray
           Write-Host "  INFRASTRUCTURE:" -ForegroundColor Cyan
-          Write-Host "    🔍 Pre-Flight Validation:         ${{ inputs.enableValidation }}" -ForegroundColor $(if ('${{ inputs.enableValidation }}' -eq 'true') { 'Green' } else { 'DarkGray' })
-          Write-Host "    🔄 [Phase 2] Bootstrap Infra:     ${{ inputs.bootstrapInfra }}" -ForegroundColor $(if ('${{ inputs.bootstrapInfra }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "  enableValidation     = ${{ inputs.enableValidation }}  $(if ('${{ inputs.enableValidation }}' -eq 'true') { '[✅ checked]   — Pre-Flight Validation' } else { '[☐  unchecked] — Pre-Flight Validation' })" -ForegroundColor $(if ('${{ inputs.enableValidation }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "  bootstrapInfra       = ${{ inputs.bootstrapInfra }}  $(if ('${{ inputs.bootstrapInfra }}' -eq 'true') { '[✅ checked]   — Phase 2: Bootstrap Infrastructure' } else { '[☐  unchecked] — Phase 2: Bootstrap Infrastructure' })" -ForegroundColor $(if ('${{ inputs.bootstrapInfra }}' -eq 'true') { 'Green' } else { 'DarkGray' })
           Write-Host "" -ForegroundColor Gray
           Write-Host "  DEPLOYMENT:" -ForegroundColor Cyan
-          Write-Host "    🔄 [Phase 2] Deploy API:          ${{ inputs.deployApi }}" -ForegroundColor $(if ('${{ inputs.deployApi }}' -eq 'true') { 'Green' } else { 'DarkGray' })
-          Write-Host "    🔄 [Phase 2] Deploy UI:           ${{ inputs.deployUi }}" -ForegroundColor $(if ('${{ inputs.deployUi }}' -eq 'true') { 'Green' } else { 'DarkGray' })
-          Write-Host "" -ForegroundColor Gray
-          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+          Write-Host "  deployApi            = ${{ inputs.deployApi }}  $(if ('${{ inputs.deployApi }}' -eq 'true') { '[✅ checked]   — Phase 2: Deploy API' } else { '[☐  unchecked] — Phase 2: Deploy API' })" -ForegroundColor $(if ('${{ inputs.deployApi }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "  deployUi             = ${{ inputs.deployUi }}  $(if ('${{ inputs.deployUi }}' -eq 'true') { '[✅ checked]   — Phase 2: Deploy UI' } else { '[☐  unchecked] — Phase 2: Deploy UI' })" -ForegroundColor $(if ('${{ inputs.deployUi }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "  ──────────────────────────────────────────────────────────────────────" -ForegroundColor DarkGray
           Write-Host "" -ForegroundColor Gray
           Write-Host "========================================================================" -ForegroundColor Cyan
           Write-Host "" -ForegroundColor Gray
@@ -295,6 +296,10 @@ jobs:
               Write-Host "    ✅ Phase 0 complete — GitHub App secrets are configured" -ForegroundColor Green
               Write-Host "       GitHub App Name (configured): $appName" -ForegroundColor Cyan
               Write-Host "    ℹ️  APP_INSTALLATION_ID: auto-discovered at runtime" -ForegroundColor Cyan
+              Write-Host ""
+              Write-Host "    ════════════════════════════════════════════════════════════" -ForegroundColor Green
+              Write-Host "    ✅ PHASE 0 IS CONFIGURED CORRECTLY — OK TO PROCEED WITH PHASE 1" -ForegroundColor Green
+              Write-Host "    ════════════════════════════════════════════════════════════" -ForegroundColor Green
             } else {
               Write-Host "    ❌ PHASE 0 INCOMPLETE — Phase 1 cannot proceed!" -ForegroundColor Red
               Write-Host "" -ForegroundColor Gray

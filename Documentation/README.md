@@ -1,6 +1,8 @@
 # Documentation Organization
 
-This folder contains all project documentation files that were previously scattered in the root directory. The files have been organized into logical categories for better navigation and maintenance.
+This folder contains all project documentation files organized into logical categories for better navigation and maintenance.
+
+> 🤖 **Copilot / AI Reference**: For a single-page overview of the entire repository (structure, workflows, scripts, patterns, common issues), see [`.github/copilot-instructions.md`](../.github/copilot-instructions.md).
 
 ## 🏗️ Current Architecture vs Learning Plan
 
@@ -79,41 +81,40 @@ Contains main project documentation and overview files:
 
 📖 **START HERE**: [Azure Documentation Navigation Guide](./02-Azure-Learning-Guides/AZURE_README.md)
 
-| Document | Purpose | Audience | Status |
-|----------|---------|----------|--------|
-| **AZURE_README.md** | Central navigation hub for all Azure documentation | Everyone | ✅ Latest |
-| **AZURE_DEPLOYMENT_GUIDE.md** | Complete deployment strategy and workflow (1300+ lines) | Developers, DevOps | ✅ Nov 2025 |
-| **BOOTSTRAP_SCRIPT_FLOW.md** | Line-by-line execution flow for code review (850+ lines) | Junior Devs, Reviewers | ✅ Nov 2025 |
-| **APP_INSIGHTS_AUTOMATED_SETUP.md** | Automated App Insights setup per environment (enterprise) | DevOps, Architects | ✅ Nov 2025 ⭐ NEW |
-| **APPLICATION_INSIGHTS_SETUP.md** | Monitoring setup (legacy/reference) | Operations | ⚠️ Partially superseded |
-| **DEPLOYMENT_EXERCISES.md** | Hands-on tutorials and exercises | Learners | ⚠️ Some legacy content |
+| Document | Purpose | Audience |
+|----------|---------|----------|
+| **AZURE_README.md** | Central navigation hub for all Azure documentation | Everyone |
+| **AZURE_DEPLOYMENT_GUIDE.md** | Complete deployment strategy and workflow (1300+ lines) | Developers, DevOps |
+| **BOOTSTRAP_SCRIPT_FLOW.md** | Line-by-line execution flow for code review (850+ lines) | Junior Devs, Reviewers |
+| **APP_INSIGHTS_AUTOMATED_SETUP.md** | Automated App Insights setup per environment (enterprise) | DevOps, Architects |
+| **DOCKER_COMPREHENSIVE_GUIDE.md** | Full Docker startup script reference + migration guide | Developers |
+| **VISUAL_STUDIO_DOCKER_PROFILES.md** | VS Docker launch profiles and debugging setup | Developers |
+| **Containerization-ACA-Aspire-Learning-Path.md** | Learning path: Docker → ACA → .NET Aspire | Learners |
 
 **Quick Links by Use Case**:
 - 🚀 **First-time deployment** → [AZURE_README.md - Quick Start](./02-Azure-Learning-Guides/AZURE_README.md#quick-start---where-to-begin)
 - 🔍 **Code review** → [BOOTSTRAP_SCRIPT_FLOW.md](./02-Azure-Learning-Guides/BOOTSTRAP_SCRIPT_FLOW.md)
 - 🏢 **Enterprise setup** → [AZURE_DEPLOYMENT_GUIDE.md - Enterprise Strategy](./02-Azure-Learning-Guides/AZURE_DEPLOYMENT_GUIDE.md#enterprise-production-strategy-multi-environment)
-- 🔧 **Troubleshooting** → [BOOTSTRAP_SCRIPT_FLOW.md - Troubleshooting](./02-Azure-Learning-Guides/BOOTSTRAP_SCRIPT_FLOW.md#troubleshooting-guide)
-
-**Latest Enhancements (Nov 2025)**:
-- ✅ Parallel resource creation (3-4x faster)
-- ✅ Integrated OIDC setup (zero manual steps)
-- ✅ Intelligent 20-minute wait with interval checks
-- ✅ Automatic .NET 8 runtime configuration
-- ✅ Pre-existence checks for safe re-runs
-- ✅ Complete verification checklist
-- ✅ **Automated App Insights configuration per environment** ⭐ NEW
-- ✅ **Enterprise-grade observability with SDK integration** ⭐ NEW
-
-### 03-Database-Guides
-*Currently empty - reserved for database-related documentation*
+- 🐳 **Docker reference** → [DOCKER_COMPREHENSIVE_GUIDE.md](./02-Azure-Learning-Guides/DOCKER_COMPREHENSIVE_GUIDE.md)
 
 ### 03-Configuration-Guides
-Contains application configuration and settings documentation:
-- `SIMPLIFIED_CONFIG_GUIDE.md` - Simplified configuration guide (7KB)
-- `DOTENV_DEPENDENCY_ELIMINATION_SUMMARY.md` - Environment configuration summary (8KB)
+**GitHub App, Key Vault, secrets, and workflow configuration guides**
+
+| Document | Purpose |
+|----------|---------|
+| **QUICK-SETUP-GITHUB-APP.md** | 5-minute GitHub App creation and secret configuration |
+| **GITHUB-APP-AUTHENTICATION.md** | GitHub App token generation and authentication deep-dive |
+| **AZURE-APPSERVICE-SECRETS-GUIDE.md** | Azure App Service secrets and environment variable setup |
+| **KEY-VAULT-INTEGRATION.md** | Key Vault managed identity integration guide |
+| **WORKFLOW-AUTOMATION-VISUAL-GUIDE.md** | Visual guide to workflow parameter selection and execution |
 
 ### 04-Enterprise-Architecture
-*Currently empty - reserved for enterprise architecture documentation*
+**Architecture plans and weekly learning schedule**
+
+| Document | Purpose |
+|----------|---------|
+| **ACA-Migration-Plan.md** | Migration plan from App Service to Azure Container Apps |
+| **WEEKLY_AZURE_LEARNING_PLAN.md** | Week-by-week breakdown with daily tasks |
 
 ### 05-Self-Learning
 **Azure learning curriculum and progress tracking**
