@@ -344,7 +344,7 @@ jobs:
               Write-Host "    APP_ID + APP_PRIVATE_KEY secrets are added at:" -ForegroundColor Red
               Write-Host "    $secretsUrl" -ForegroundColor Yellow
               Write-Host "" -ForegroundColor Gray
-              Write-Error "Phase 0 prerequisites missing: APP_ID and/or APP_PRIVATE_KEY secrets not configured. Add them at $secretsUrl and re-run."
+              Write-Error "Phase 0 incomplete: GitHub App secrets (APP_ID, APP_PRIVATE_KEY) are required. See instructions above."
               exit 1
             }
             Write-Host "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
