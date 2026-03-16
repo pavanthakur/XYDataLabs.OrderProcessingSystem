@@ -33,7 +33,7 @@ on:
         type: string
         default: 'XYDataLabsGitHubApp'
       configureSecrets:
-        description: '🔑 Phase 1b — Configure GitHub Secrets | Run with 1a (first-time setup) or standalone to verify existing AZUREAPPSERVICE_* secrets'
+        description: '🔑 Phase 1b — Configure GitHub Secrets | Requires Phase 0 (APP_ID+APP_PRIVATE_KEY). Run with 1a (first-time) or standalone to verify existing AZUREAPPSERVICE_* secrets'
         required: true
         type: boolean
         default: true
