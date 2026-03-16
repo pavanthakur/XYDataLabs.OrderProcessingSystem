@@ -92,10 +92,16 @@ See [Phase 0 in the Quick Start Guide](../../Documentation/QUICK-START-AZURE-BOO
 **Runs when**: always (workflow_dispatch only)
 
 - Validates `environment` selection and branch/environment match
-- Checks OIDC secrets if `setupOidc=false` (Phase 1a skipped)
+- **Checks OIDC secrets directly** (`${{ secrets.AZUREAPPSERVICE_* }}`) when `setupOidc=false`  
+  > ⚠️ Previously used `gh secret list` which silently failed due to missing `secrets:read` scope on `GITHUB_TOKEN`. Now uses workflow context secrets directly — the same approach as the Phase Readiness Pre-Flight Summary step.
 - Checks GitHub App credentials if `configureSecrets=true` (Phase 1b)
 - Prints a **Phase Readiness Pre-Flight Summary** showing what will run and whether prerequisites are met
-- **Fails fast** if OIDC secrets are missing and Phase 1b is requested without Phase 1a
+- **Fails fast** (enforced, not just a warning) when OIDC secrets are missing and any Azure phase is requested:
+  - Phase 1b (`configureSecrets=true`)
+  - Phase 2 (`bootstrapInfra=true`)
+  - Deploy (`deployApi=true` or `deployUi=true`)
+
+> **Azure OIDC is mandatory for all phases that interact with Azure.** If `setupOidc=false` and `AZUREAPPSERVICE_*` secrets don't exist, `validate-inputs` will fail immediately with a clear error — before any other job runs.
 
 ### 2. `setup-oidc` (Phase 1a)
 **Runs when**: `setupOidc=true`  
