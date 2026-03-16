@@ -296,11 +296,37 @@ configure-github-secrets.yml:
 
 **Symptom:**
 ```
-❌ Missing required OIDC credentials
+❌ OIDC secrets are missing and no new credentials were provided!
 ```
 
-**Solution:**
-Run bootstrap workflow with `setupOidc: true` first, or provide credentials as inputs when running manually.
+**Root Cause:**  
+Phase 1b (`configureSecrets`) was run without Phase 1a (`setupOidc`), and no `AZUREAPPSERVICE_*` secrets exist in the repository yet (first-time setup).
+
+**Solution:**  
+Re-run the bootstrap workflow with **both** Phase 1 checkboxes selected:
+
+| Parameter | Value |
+|-----------|-------|
+| 🔑 Setup Azure OIDC (Phase 1a) | `true` ✅ |
+| 🔑 Configure GitHub Secrets (Phase 1b) | `true` ✅ |
+
+**After the first successful run**, Phase 1a does not need to be repeated. The `AZUREAPPSERVICE_*` secrets are stored persistently and used automatically by Phase 1b on subsequent runs.
+
+---
+
+### ℹ️ Is Azure OIDC Required for Phase 1b, 2, and 3?
+
+**Short answer: Yes for all three phases — but Phase 1a only needs to run ONCE.**
+
+| Phase | Requires Azure OIDC? | Notes |
+|-------|---------------------|-------|
+| Phase 0 — GitHub App | ❌ No | Only manages GitHub secrets; no Azure access |
+| **Phase 1a — Setup Azure OIDC** | N/A — this IS the setup | Run once to create the Azure identity (`GitHub-Actions-OIDC` app registration) |
+| **Phase 1b — Configure Secrets** | ✅ Yes (first run only) | Needs `clientId`/`tenantId`/`subscriptionId` from Phase 1a to store as `AZUREAPPSERVICE_*` secrets. On re-runs: uses existing secrets if present — no Phase 1a needed. |
+| Phase 2 — Bootstrap Infrastructure | ✅ Yes | Uses `AZUREAPPSERVICE_*` secrets set by Phase 1b |
+| Phase 3 — Deploy API/UI | ✅ Yes | Uses `AZUREAPPSERVICE_*` secrets set by Phase 1b |
+
+> **Phase 0 (GitHub App) is NOT a substitute for OIDC.** The GitHub App is only for managing GitHub repository secrets (writing `AZUREAPPSERVICE_*` to GitHub). It does NOT grant any Azure permissions. Phase 2 and Phase 3 always authenticate to Azure via OIDC — the stored `AZUREAPPSERVICE_*` secrets are the mechanism.
 
 ## Validation
 
