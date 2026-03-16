@@ -234,6 +234,7 @@ jobs:
               if ($checkExitCode -ne 0) {
                 Write-Host "    ⚠️  Could not list repository secrets (exit code: $checkExitCode)" -ForegroundColor Yellow
                 Write-Host "    Proceeding with caution — verify OIDC secrets manually if needed" -ForegroundColor Gray
+                $global:LASTEXITCODE = 0  # gh failure was handled gracefully; reset so step does not fail
               } else {
                 $hasClientId = $secretsCheck -match "AZUREAPPSERVICE_CLIENTID"
                 $hasTenantId = $secretsCheck -match "AZUREAPPSERVICE_TENANTID"
@@ -270,6 +271,7 @@ jobs:
             } catch {
               Write-Host "    ⚠️  Could not check repository secrets: $($_.Exception.Message)" -ForegroundColor Yellow
               Write-Host "    Proceeding with caution..." -ForegroundColor Gray
+              $global:LASTEXITCODE = 0  # exception was handled gracefully; reset so step does not fail
             }
           } else {
             Write-Host "    ✅ Setup Azure OIDC: Checked - secrets will be created" -ForegroundColor Green
@@ -358,6 +360,7 @@ jobs:
           Write-Host "`n" -ForegroundColor Gray
           Write-Host ("=" * 70) -ForegroundColor Gray
           Write-Host "✅ Input validation passed - proceeding..." -ForegroundColor Green
+          exit 0
 
   setup-oidc:
     name: Setup Azure OIDC
