@@ -452,10 +452,12 @@ Add `APP_ID` and `APP_PRIVATE_KEY` to repository secrets before proceeding.
 | `deployUi` | `false` | 🔄 Phase 2 |
 
 4. Click **Run workflow**
-5. When the workflow pauses for **device code authentication** (during `setupOidc`):
-   - Open https://microsoft.com/devicelogin
+5. When the `setupOidc` step prompts for **device code authentication**:
+   - The step prints a code and URL in the workflow logs (visible in real time)
+   - Open https://microsoft.com/devicelogin in your browser
    - Enter the code shown in the workflow logs
    - Sign in with your Azure account (must have App Registration permissions)
+   - The step continues automatically once authentication completes
 6. Wait for the job to complete
 
 **What gets created**:

@@ -253,9 +253,7 @@ jobs:
                   Write-Host "    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
                   Write-Host "    💡 SOLUTION: Re-run this workflow with these checkboxes SELECTED:" -ForegroundColor Yellow
                   Write-Host "       ✅ Setup Azure OIDC (Phase 1a) — REQUIRED" -ForegroundColor White
-                  if ($configSecrets -eq "true") {
-                    Write-Host "       ✅ Configure GitHub Secrets (Phase 1b)" -ForegroundColor White
-                  }
+                  Write-Host "       ✅ Configure GitHub Secrets (Phase 1b)" -ForegroundColor White
                   if ($bootstrap -eq "true") {
                     Write-Host "       ✅ Bootstrap infrastructure" -ForegroundColor White
                   }
