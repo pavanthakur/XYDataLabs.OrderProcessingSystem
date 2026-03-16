@@ -4,6 +4,32 @@
 
 This workflow handles GitHub App setup and secret configuration. It was separated from the main bootstrap workflow to improve modularity, readability, and independent execution tracking.
 
+## 🔑 Key Concept: Two Authentication Systems
+
+This workflow is the intersection of two completely independent authentication systems. Understanding the difference is essential for troubleshooting.
+
+### GitHub App Token — writes GitHub secrets
+
+The GitHub App (`APP_ID` + `APP_PRIVATE_KEY`) is used **only to write `AZUREAPPSERVICE_*` secrets into GitHub**. 
+
+- `GITHUB_TOKEN` (the built-in workflow token) does **not** have permission to write repository secrets — this is a GitHub security constraint.
+- A GitHub App installation token (generated from `APP_ID` + `APP_PRIVATE_KEY`) **does** have `Secrets: write` permission.
+- The token is short-lived (1 hour), auto-rotates, and never expires like a PAT would.
+- **The GitHub App token never touches Azure.** It is purely a GitHub API credential.
+
+### Azure OIDC — authenticates to Azure
+
+The `AZUREAPPSERVICE_*` secrets (`CLIENTID`, `TENANTID`, `SUBSCRIPTIONID`) are the output of Phase 1a. They represent an Azure identity (Entra ID App Registration with federated credentials).
+
+- **This workflow (Phase 1b) does NOT use these to authenticate to Azure.** It only stores their values as GitHub secrets.
+- Phase 2 (bootstrap infra) and Phase 3 (deploy) use `azure/login@v2` with these secrets to authenticate to Azure.
+
+### Why Phase 1b "depends on" OIDC credentials
+
+Phase 1b needs the OIDC credential **values** to store them — not to authenticate with them. Those values come from:
+- **First run**: Phase 1a outputs `clientId`/`tenantId`/`subscriptionId` and passes them to this workflow.
+- **Re-runs**: The `AZUREAPPSERVICE_*` secrets already exist in GitHub; this workflow reads them via `gh secret list` (using the GitHub App token) and skips writing if they're unchanged.
+
 ## Purpose
 
 Automates:

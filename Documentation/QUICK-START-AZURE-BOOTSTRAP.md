@@ -49,6 +49,103 @@ It handles everything — Azure authentication, GitHub secrets, cloud infrastruc
 
 ---
 
+## 🏗️ Architecture Explained: Two Authentication Systems
+
+> **Read this section if you're confused about why there are two sets of credentials (GitHub App vs. Azure OIDC) and what each one does.**
+
+The bootstrap setup uses **two completely separate authentication systems** that serve entirely different purposes. Mixing them up is the most common source of confusion.
+
+---
+
+### System 1 — GitHub App (`APP_ID` + `APP_PRIVATE_KEY`)
+
+| | |
+|---|---|
+| **Phase** | Phase 0 prerequisite |
+| **What it is** | A GitHub App you create once and install on your repository |
+| **Credentials stored** | `APP_ID` + `APP_PRIVATE_KEY` — stored manually as GitHub repository secrets |
+| **How it works at runtime** | `actions/create-github-app-token@v1` uses these to generate a **short-lived installation token** (auto-rotated, valid 1 hour) |
+| **What it can do** | Write GitHub repository and environment secrets via the GitHub API |
+| **What it CANNOT do** | Authenticate to Azure or interact with Azure resources in any way |
+| **Used in** | **Phase 1b only** — to call `gh secret set AZUREAPPSERVICE_*` and write Azure credentials into GitHub |
+| **NOT used in** | Phase 2 or Phase 3 — those phases authenticate directly to Azure, not to GitHub |
+
+#### ❓ Why can't `GITHUB_TOKEN` do this?
+
+`GITHUB_TOKEN` is the built-in token every GitHub Actions run gets automatically. It **does not have permission to write repository secrets** — this is a GitHub security design decision. Only a GitHub App installation token (or a PAT with `repo` scope) can call `gh secret set`. A PAT is tied to a user account and expires; a GitHub App is tied to the repository, auto-rotates, and never expires.
+
+---
+
+### System 2 — Azure OIDC (`AZUREAPPSERVICE_CLIENTID` + `TENANTID` + `SUBSCRIPTIONID`)
+
+| | |
+|---|---|
+| **Phase** | Phase 1a creates, Phase 1b stores, Phase 2/3 use |
+| **What it is** | A Microsoft Entra ID App Registration with federated credentials configured for GitHub Actions |
+| **Credentials stored** | `AZUREAPPSERVICE_CLIENTID` + `AZUREAPPSERVICE_TENANTID` + `AZUREAPPSERVICE_SUBSCRIPTIONID` (written automatically by Phase 1b) |
+| **How it works at runtime** | `azure/login@v2` exchanges a GitHub-issued JWT for an Azure access token (passwordless, no stored passwords) |
+| **What it can do** | Authenticate to Azure and interact with Azure resources (create App Services, deploy code, etc.) |
+| **What it CANNOT do** | Write GitHub secrets or interact with the GitHub API |
+| **Used in** | **Phase 2** (bootstrap infrastructure) + **Phase 3** (deploy API/UI) — any step that connects to Azure |
+| **NOT used in** | Phase 0 or Phase 1b — those phases don't interact with Azure resources |
+
+---
+
+### ❓ Why does Phase 1b appear to "depend on" OIDC?
+
+Phase 1b does **NOT authenticate to Azure**. It only needs the OIDC credential **values** (clientId, tenantId, subscriptionId) so it can store them as `AZUREAPPSERVICE_*` GitHub secrets. Those values come from:
+
+- **First run**: Phase 1a outputs them (after logging into Azure and creating the Entra ID App Registration)
+- **Re-runs**: Already stored as `AZUREAPPSERVICE_*` secrets from the previous run — Phase 1a can be skipped
+
+So Phase 1b's "OIDC dependency" is simply needing the **values to write** — not actual Azure authentication.
+
+---
+
+### Complete Token Flow (All Phases)
+
+```
+Phase 0:  ──── (Manual, one-time) ───────────────────────────────────────────
+           User creates GitHub App + stores APP_ID + APP_PRIVATE_KEY
+           in GitHub repository secrets.
+
+Phase 1a: ──── Azure login (device code, first-time only) ───────────────────
+           az login → Create Entra ID App Registration + federated credentials
+           OUTPUT: clientId, tenantId, subscriptionId
+
+Phase 1b: ──── GitHub App token ─────────────────────────────────────────────
+           APP_ID + APP_PRIVATE_KEY
+             → actions/create-github-app-token@v1 → short-lived GitHub token
+             → gh secret set AZUREAPPSERVICE_CLIENTID  ← stores Phase 1a output
+             → gh secret set AZUREAPPSERVICE_TENANTID  ← stores Phase 1a output
+             → gh secret set AZUREAPPSERVICE_SUBSCRIPTIONID ← stores Phase 1a output
+           ❌ Does NOT talk to Azure at all.
+
+Phase 2:  ──── Azure OIDC ───────────────────────────────────────────────────
+           AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID (from Phase 1b)
+             → azure/login@v2 → Authenticate to Azure (passwordless)
+             → Provision: Resource Groups, App Services, SQL, Key Vault
+           ❌ Does NOT use GitHub App token at all.
+
+Phase 3:  ──── Azure OIDC ───────────────────────────────────────────────────
+           AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID (from Phase 1b)
+             → azure/login@v2 → Authenticate to Azure (passwordless)
+             → Deploy API and UI applications
+           ❌ Does NOT use GitHub App token at all.
+```
+
+### Summary Table
+
+| Phase | Uses GitHub App Token? | Uses Azure OIDC to auth? | Purpose |
+|-------|----------------------|--------------------------|---------|
+| Phase 0 | N/A — this IS the GitHub App creation | ❌ No | Create the app + store APP_ID/APP_PRIVATE_KEY |
+| Phase 1a | ❌ No | First-time: device code login | Create Entra ID App Registration + output credentials |
+| **Phase 1b** | ✅ **Yes — writes GitHub secrets** | ❌ **No — only stores credential VALUES** | Store `AZUREAPPSERVICE_*` secrets in GitHub |
+| Phase 2 | ❌ No | ✅ **Yes — authenticates to Azure** | Provision Azure infrastructure |
+| Phase 3 | ❌ No | ✅ **Yes — authenticates to Azure** | Deploy applications to Azure |
+
+---
+
 ## 📋 Workflow Parameter Reference
 
 Navigate to: **GitHub → Actions → Azure Bootstrap Setup → Run workflow**

@@ -118,6 +118,49 @@ APP_PRIVATE_KEY       : ❌ Missing
 
 ## 📖 Understanding the Workflow
 
+### ❓ FAQ: What Is the GitHub App For? (Why APP_ID + APP_PRIVATE_KEY?)
+
+**Question**: We store `APP_ID` and `APP_PRIVATE_KEY` in GitHub secrets. The GitHub App is also in GitHub. So what does the GitHub App actually DO?
+
+**Answer**: The GitHub App is a **privileged GitHub API client** used to write secrets from inside a workflow.
+
+| Credential | Can write GitHub secrets? | Can authenticate to Azure? |
+|------------|--------------------------|---------------------------|
+| `GITHUB_TOKEN` (built-in) | ❌ No — security restriction | ❌ No |
+| **GitHub App installation token** | ✅ **Yes — `Secrets: write`** | ❌ No |
+| Azure OIDC (`AZUREAPPSERVICE_*`) | ❌ No | ✅ **Yes — `azure/login@v2`** |
+
+`GITHUB_TOKEN` (the automatic token every workflow run gets) does **not** have permission to write repository secrets. The GitHub App installation token — generated at runtime from `APP_ID` + `APP_PRIVATE_KEY` using `actions/create-github-app-token@v1` — **does** have `Secrets: write` permission.
+
+So: `APP_ID` + `APP_PRIVATE_KEY` are stored so the workflow can generate a short-lived token to call `gh secret set AZUREAPPSERVICE_*`. That is their only purpose.
+
+---
+
+### ❓ FAQ: Why Do Phases 1b, 2, and 3 Depend on Azure OIDC?
+
+**Question**: Why does Azure OIDC appear as a dependency in Phase 1b, 2, and 3? Can Phase 0 + 1a alone be used as prerequisites?
+
+**Answer**: The dependency is different for each phase, and Phase 1b's "dependency" is NOT the same as Phase 2 and 3.
+
+| Phase | Azure OIDC dependency | What actually happens |
+|-------|----------------------|----------------------|
+| **Phase 1b** | Needs credential **values** only | Stores clientId/tenantId/subscriptionId as `AZUREAPPSERVICE_*` GitHub secrets. Does NOT authenticate to Azure. |
+| **Phase 2** | Needs credentials to **authenticate** | Uses `azure/login@v2` with `AZUREAPPSERVICE_*` to log in to Azure and provision infrastructure. |
+| **Phase 3** | Needs credentials to **authenticate** | Uses `azure/login@v2` with `AZUREAPPSERVICE_*` to log in to Azure and deploy applications. |
+
+**Phase 0 alone is NOT sufficient for Phase 1b, 2, or 3:**
+- Phase 0 only creates the GitHub App (for writing GitHub secrets).
+- Phase 1a creates the Azure identity and produces the `clientId`/`tenantId`/`subscriptionId` values that Phase 1b stores, and that Phase 2/3 use to authenticate to Azure.
+- Phase 2 and 3 will always fail without `AZUREAPPSERVICE_*` secrets (which Phase 1b writes).
+
+**Sequence required**: Phase 0 → Phase 1a → Phase 1b → Phase 2 → Phase 3
+
+> **After Phase 1a + 1b run once**, Phase 1a does not need to run again. The `AZUREAPPSERVICE_*` secrets persist in GitHub and are reused by Phase 1b (re-runs), Phase 2, and Phase 3 automatically.
+
+See: [Documentation/QUICK-START-AZURE-BOOTSTRAP.md — Architecture Explained section](./Documentation/QUICK-START-AZURE-BOOTSTRAP.md)
+
+---
+
 ### Workflow Steps
 1. **Validate Inputs** - Check configuration
 2. **Setup Azure OIDC** (optional) - First-time Azure authentication setup
