@@ -33,7 +33,7 @@ on:
         type: string
         default: 'XYDataLabsGitHubApp'
       configureSecrets:
-        description: '🔑 Phase 1b (one-time, sequential after 1a) — Configure GitHub Secrets | Uses OIDC outputs from Phase 1a + APP_ID + APP_PRIVATE_KEY'
+        description: '🔑 Phase 1b — Configure GitHub Secrets | Run with 1a (first-time setup) or standalone to verify existing AZUREAPPSERVICE_* secrets'
         required: true
         type: boolean
         default: true
@@ -108,7 +108,7 @@ jobs:
           Write-Host "  oidcAppName          = ${{ inputs.oidcAppName }}" -ForegroundColor DarkGray
           Write-Host "  setupGitHubApp       = ${{ inputs.setupGitHubApp }}  $(if ('${{ inputs.setupGitHubApp }}' -eq 'true') { '[✅ checked]   — Phase 0: Setup GitHub App' } else { '[☐  unchecked] — Phase 0: Setup GitHub App' })" -ForegroundColor $(if ('${{ inputs.setupGitHubApp }}' -eq 'true') { 'Green' } else { 'DarkGray' })
           Write-Host "  githubAppName        = ${{ inputs.githubAppName }}" -ForegroundColor DarkGray
-          Write-Host "  configureSecrets     = ${{ inputs.configureSecrets }}  $(if ('${{ inputs.configureSecrets }}' -eq 'true') { '[✅ checked]   — Phase 1b: Configure Secrets (sequential after 1a)' } else { '[☐  unchecked] — Phase 1b: Configure Secrets (sequential after 1a)' })" -ForegroundColor $(if ('${{ inputs.configureSecrets }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "  configureSecrets     = ${{ inputs.configureSecrets }}  $(if ('${{ inputs.configureSecrets }}' -eq 'true') { '[✅ checked]   — Phase 1b: Configure Secrets (with 1a or standalone)' } else { '[☐  unchecked] — Phase 1b: Configure Secrets (with 1a or standalone)' })" -ForegroundColor $(if ('${{ inputs.configureSecrets }}' -eq 'true') { 'Green' } else { 'DarkGray' })
           Write-Host "" -ForegroundColor Gray
           Write-Host "  INFRASTRUCTURE:" -ForegroundColor Cyan
           Write-Host "  enableValidation     = ${{ inputs.enableValidation }}  $(if ('${{ inputs.enableValidation }}' -eq 'true') { '[✅ checked]   — Phase 3: Enable Pre-Deployment Validation' } else { '[☐  unchecked] — Phase 3: Enable Pre-Deployment Validation' })" -ForegroundColor $(if ('${{ inputs.enableValidation }}' -eq 'true') { 'Green' } else { 'DarkGray' })
