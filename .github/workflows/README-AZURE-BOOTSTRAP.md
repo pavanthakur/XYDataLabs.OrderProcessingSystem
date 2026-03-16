@@ -31,7 +31,7 @@ The workflow uses the automatically available `GITHUB_TOKEN` with appropriate pe
    - ✅ Configure GitHub secrets: `true`
    - ✅ Enable pre-deployment validation: `true` (default, recommended)
    - ✅ Bootstrap infrastructure: `true` (default)
-4. **Authenticate** when prompted for Azure login (device code flow)
+4. **Authenticate** when prompted for Azure login (device code flow — **first-time only**; subsequent re-runs use existing OIDC credentials non-interactively)
 5. **Wait** for completion (~10-15 minutes for all environments)
 6. **Note**: Pre-deployment validation will be automatically enabled (may require manual step due to permissions)
 
@@ -52,7 +52,7 @@ To bootstrap a new environment after initial setup:
 | Input | Type | Default | Description |
 |-------|------|---------|-------------|
 | `environment` | choice | - | Target environment (`dev`, `staging`, `prod`, `all`) |
-| `setupOidc` | boolean | `false` | **Phase 1a** — Create Azure AD app registration with federated credentials (first-time only) |
+| `setupOidc` | boolean | `false` | **Phase 1a** — Create Azure AD app registration with federated credentials. First run uses device code; re-runs use existing `AZUREAPPSERVICE_*` credentials automatically |
 | `setupGitHubApp` | boolean | `false` | **Phase 0** — Setup GitHub App (required for automated secret management - first-time only) |
 | `oidcAppName` | string | `GitHub-Actions-OIDC` | OIDC App Name (requires GitHub App setup) |
 | `configureSecrets` | boolean | `false` | **Phase 1b** — Automatically configure GitHub repository secrets (sequential after Phase 1a) |
@@ -64,8 +64,12 @@ To bootstrap a new environment after initial setup:
 ### 1. Setup OIDC (`setup-oidc`)
 **Runs when**: `setupOidc` input is `true`
 
+**Authentication (smart, automatic)**:
+- **Re-run / credential rotation**: If `AZUREAPPSERVICE_CLIENTID`, `AZUREAPPSERVICE_TENANTID`, and `AZUREAPPSERVICE_SUBSCRIPTIONID` are already present as secrets (Phase 1a was previously run), the job uses `azure/login@v2` with those existing OIDC credentials — **no interactive prompt, fully automated**.
+- **First-time setup**: If no existing credentials are found, falls back to `az login --use-device-code` so the operator can authenticate manually.
+
 **Actions**:
-- Authenticates to Azure (device code flow)
+- Detects whether to use existing OIDC credentials or device-code (see above)
 - Creates `GitHub-Actions-OIDC` Azure AD app registration
 - Configures federated credentials for:
   - **Branches**: dev, staging, main
@@ -334,9 +338,9 @@ Check `.github/workflows/infra-deploy.yml` for active `pre-validate` job
 ### Authentication Methods
 
 **Initial OIDC Setup** (setup-oidc job):
-- Uses **device code flow** (interactive)
-- Requires user with Azure AD app creation permissions
-- One-time authentication per workflow run
+- **First time**: Uses **device code flow** (interactive) — requires user with Azure AD app creation permissions
+- **Re-runs / credential rotation**: Uses **existing `AZUREAPPSERVICE_*` credentials** via `azure/login@v2` (non-interactive, passwordless) — no operator action needed
+- Falls back to device code automatically if existing credentials are absent
 
 **Infrastructure Bootstrap** (bootstrap jobs):
 - Uses **OIDC federated credentials** (passwordless)

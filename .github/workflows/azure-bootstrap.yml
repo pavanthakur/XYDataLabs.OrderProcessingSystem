@@ -13,7 +13,7 @@ on:
           - prod
           - all
       setupOidc:
-        description: '🔑 Phase 1a (one-time) — Setup Azure OIDC | Creates Microsoft Entra ID App Registration + passwordless auth'
+        description: '🔑 Phase 1a — Setup Azure OIDC | First run: uses device code. Re-runs: uses existing AZUREAPPSERVICE_* credentials (no interactive login)'
         required: true
         type: boolean
         default: true
@@ -33,7 +33,7 @@ on:
         type: string
         default: 'XYDataLabsGitHubApp'
       configureSecrets:
-        description: '🔑 Phase 1b (one-time, sequential after 1a) — Configure GitHub Secrets | Uses OIDC outputs from Phase 1a + APP_ID + APP_PRIVATE_KEY'
+        description: '🔑 Phase 1b — Configure GitHub Secrets | Run with 1a (first-time setup) or standalone to verify existing AZUREAPPSERVICE_* secrets'
         required: true
         type: boolean
         default: true
@@ -108,7 +108,7 @@ jobs:
           Write-Host "  oidcAppName          = ${{ inputs.oidcAppName }}" -ForegroundColor DarkGray
           Write-Host "  setupGitHubApp       = ${{ inputs.setupGitHubApp }}  $(if ('${{ inputs.setupGitHubApp }}' -eq 'true') { '[✅ checked]   — Phase 0: Setup GitHub App' } else { '[☐  unchecked] — Phase 0: Setup GitHub App' })" -ForegroundColor $(if ('${{ inputs.setupGitHubApp }}' -eq 'true') { 'Green' } else { 'DarkGray' })
           Write-Host "  githubAppName        = ${{ inputs.githubAppName }}" -ForegroundColor DarkGray
-          Write-Host "  configureSecrets     = ${{ inputs.configureSecrets }}  $(if ('${{ inputs.configureSecrets }}' -eq 'true') { '[✅ checked]   — Phase 1b: Configure Secrets (sequential after 1a)' } else { '[☐  unchecked] — Phase 1b: Configure Secrets (sequential after 1a)' })" -ForegroundColor $(if ('${{ inputs.configureSecrets }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "  configureSecrets     = ${{ inputs.configureSecrets }}  $(if ('${{ inputs.configureSecrets }}' -eq 'true') { '[✅ checked]   — Phase 1b: Configure Secrets (with 1a or standalone)' } else { '[☐  unchecked] — Phase 1b: Configure Secrets (with 1a or standalone)' })" -ForegroundColor $(if ('${{ inputs.configureSecrets }}' -eq 'true') { 'Green' } else { 'DarkGray' })
           Write-Host "" -ForegroundColor Gray
           Write-Host "  INFRASTRUCTURE:" -ForegroundColor Cyan
           Write-Host "  enableValidation     = ${{ inputs.enableValidation }}  $(if ('${{ inputs.enableValidation }}' -eq 'true') { '[✅ checked]   — Phase 3: Enable Pre-Deployment Validation' } else { '[☐  unchecked] — Phase 3: Enable Pre-Deployment Validation' })" -ForegroundColor $(if ('${{ inputs.enableValidation }}' -eq 'true') { 'Green' } else { 'DarkGray' })
@@ -228,7 +228,7 @@ jobs:
             
             # Use GitHub CLI to check if secrets exist (requires secrets:read permission on GITHUB_TOKEN)
             try {
-              $secretsCheck = gh secret list --repo ${{ github.repository }} 2>&1 | Out-String
+              $secretsCheck = gh secret list --repo '${{ github.repository }}' 2>&1 | Out-String
               $checkExitCode = $LASTEXITCODE
               
               if ($checkExitCode -ne 0) {
@@ -362,11 +362,164 @@ jobs:
           Write-Host "✅ Input validation passed - proceeding..." -ForegroundColor Green
           exit 0
 
+      - name: Phase Readiness Pre-Flight Summary
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║      PHASE READINESS PRE-FLIGHT SUMMARY (DRY-RUN CHECK)       ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "This step shows what will run and whether prerequisites are met." -ForegroundColor Gray
+          Write-Host "All phases can run independently, provided Phase 1a is pre-configured." -ForegroundColor Gray
+          Write-Host ""
+
+          # ── Detect credential availability ────────────────────────────────
+          $hasClientId     = "${{ secrets.AZUREAPPSERVICE_CLIENTID }}"   -ne ""
+          $hasTenantId     = "${{ secrets.AZUREAPPSERVICE_TENANTID }}"   -ne ""
+          $hasSubscriptionId = "${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}" -ne ""
+          $oidcConfigured  = $hasClientId -and $hasTenantId -and $hasSubscriptionId
+
+          $hasAppId        = "${{ secrets.APP_ID }}"          -ne ""
+          $hasPrivateKey   = "${{ secrets.APP_PRIVATE_KEY }}" -ne ""
+          $appConfigured   = $hasAppId -and $hasPrivateKey
+
+          # ── Read selected inputs ────────────────────────────────────────
+          $doSetupOidc     = "${{ inputs.setupOidc }}"        -eq "true"
+          $doSetupGhApp    = "${{ inputs.setupGitHubApp }}"   -eq "true"
+          $doConfigSecrets = "${{ inputs.configureSecrets }}" -eq "true"
+          $doBootstrap     = "${{ inputs.bootstrapInfra }}"   -eq "true"
+          $doEnableVal     = "${{ inputs.enableValidation }}" -eq "true"
+          $doDeployApi     = "${{ inputs.deployApi }}"        -eq "true"
+          $doDeployUi      = "${{ inputs.deployUi }}"         -eq "true"
+
+          # ── Credential summary ───────────────────────────────────────────
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+          Write-Host "🔐 CREDENTIAL STATUS" -ForegroundColor Yellow
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+          Write-Host ""
+          Write-Host "  Azure OIDC (AZUREAPPSERVICE_*):" -ForegroundColor Cyan
+          Write-Host "    CLIENTID      : $(if ($hasClientId)       { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasClientId) { 'Green' } else { 'Red' })
+          Write-Host "    TENANTID      : $(if ($hasTenantId)       { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasTenantId) { 'Green' } else { 'Red' })
+          Write-Host "    SUBSCRIPTIONID: $(if ($hasSubscriptionId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasSubscriptionId) { 'Green' } else { 'Red' })
+          Write-Host ""
+          Write-Host "  GitHub App (Phase 0 credentials):" -ForegroundColor Cyan
+          Write-Host "    APP_ID        : $(if ($hasAppId)      { '✅ Present' } else { '⬜ Missing' })" -ForegroundColor $(if ($hasAppId) { 'Green' } else { 'Yellow' })
+          Write-Host "    APP_PRIVATE_KEY: $(if ($hasPrivateKey) { '✅ Present' } else { '⬜ Missing' })" -ForegroundColor $(if ($hasPrivateKey) { 'Green' } else { 'Yellow' })
+          Write-Host ""
+
+          # ── Phase readiness table ───────────────────────────────────────
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+          Write-Host "📋 PHASE EXECUTION PLAN" -ForegroundColor Yellow
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+          Write-Host ""
+
+          # Phase 0: GitHub App instructions
+          $phase0Icon  = if ($doSetupGhApp) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }
+          $phase0Ready = $true  # Phase 0 is informational only; no credential prereq
+          Write-Host "  Phase 0 — GitHub App Instructions  : $phase0Icon" -ForegroundColor $(if ($doSetupGhApp) { 'Cyan' } else { 'DarkGray' })
+
+          # Phase 1a: Setup OIDC
+          $phase1aPrereq = $true  # Prereqs checked at auth-check step (falls back to device code if no existing creds)
+          $phase1aIcon   = if ($doSetupOidc) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }
+          $phase1aAuth   = if ($oidcConfigured) { 'non-interactive (OIDC)' } else { 'interactive (device code — first-time)' }
+          Write-Host "  Phase 1a — Setup Azure OIDC        : $phase1aIcon" -ForegroundColor $(if ($doSetupOidc) { 'Cyan' } else { 'DarkGray' })
+          if ($doSetupOidc) {
+            Write-Host "             └─ Login method: $phase1aAuth" -ForegroundColor Gray
+          }
+
+          # Phase 1b: Configure GitHub Secrets
+          $phase1bPrereq  = $appConfigured  # GitHub App (APP_ID + APP_PRIVATE_KEY) required to write secrets
+          $phase1bEnabled = $doConfigSecrets -or $doSetupGhApp
+          $phase1bIcon    = if ($phase1bEnabled) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }
+          # phase1bReady is true in any of these three cases:
+          #   (1) Phase 1b not selected — nothing to validate
+          #   (2) GitHub App credentials are already present (APP_ID + APP_PRIVATE_KEY) — standalone run OK
+          #   (3) Phase 1a (setupOidc) is also running — fresh OIDC creds will be available
+          $phase1bReady   = (-not $phase1bEnabled) -or $phase1bPrereq -or $doSetupOidc
+          Write-Host "  Phase 1b — Configure GitHub Secrets: $phase1bIcon" -ForegroundColor $(if ($phase1bEnabled) { 'Cyan' } else { 'DarkGray' })
+          if ($phase1bEnabled) {
+            if ($doSetupOidc) {
+              Write-Host "             └─ OIDC source: fresh credentials from Phase 1a" -ForegroundColor Gray
+            } elseif ($oidcConfigured) {
+              Write-Host "             └─ OIDC source: existing AZUREAPPSERVICE_* secrets ✅" -ForegroundColor Green
+            } else {
+              Write-Host "             └─ ⚠️  OIDC source: none found — Phase 1a must have run previously" -ForegroundColor Yellow
+            }
+            Write-Host "             └─ GitHub App token: $(if ($appConfigured) { '✅ APP_ID + APP_PRIVATE_KEY present' } else { '❌ Missing — Phase 0 required' })" `
+              -ForegroundColor $(if ($appConfigured) { 'Green' } else { 'Red' })
+          }
+
+          # Phase 2: Bootstrap Infrastructure
+          $phase2Prereq = $doSetupOidc -or $oidcConfigured  # Needs OIDC (either fresh from 1a or pre-existing)
+          $phase2Icon   = if ($doBootstrap) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }
+          $phase2Ready  = -not $doBootstrap -or $phase2Prereq
+          Write-Host "  Phase 2 — Bootstrap Infrastructure : $phase2Icon" -ForegroundColor $(if ($doBootstrap) { 'Cyan' } else { 'DarkGray' })
+          if ($doBootstrap) {
+            if ($doSetupOidc) {
+              Write-Host "             └─ Azure auth: fresh OIDC from Phase 1a" -ForegroundColor Gray
+            } elseif ($oidcConfigured) {
+              Write-Host "             └─ Azure auth: AZUREAPPSERVICE_* secrets → azure/login@v2 (OIDC) ✅" -ForegroundColor Green
+            } else {
+              Write-Host "             └─ ❌ Azure auth: AZUREAPPSERVICE_* secrets missing — Phase 1a required first" -ForegroundColor Red
+            }
+            Write-Host "             └─ Deploys API: $(if ($doDeployApi) { '✅ Yes' } else { 'No' })" -ForegroundColor Gray
+            Write-Host "             └─ Deploys UI : $(if ($doDeployUi)  { '✅ Yes' } else { 'No' })" -ForegroundColor Gray
+          }
+
+          # Phase 3: Enable Pre-Deployment Validation
+          # No Azure or GitHub App credentials needed — just file edit + git push
+          $phase3Icon  = if ($doEnableVal) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }
+          $phase3Ready = $true  # No credentials required; standalone-safe
+          Write-Host "  Phase 3 — Enable Validation        : $phase3Icon" -ForegroundColor $(if ($doEnableVal) { 'Cyan' } else { 'DarkGray' })
+          if ($doEnableVal) {
+            Write-Host "             └─ No Azure credentials required (file edit + git commit)" -ForegroundColor Gray
+            Write-Host "             └─ Can run independently after bootstrap is complete ✅" -ForegroundColor Green
+          }
+
+          Write-Host ""
+
+          # ── Overall readiness gate ──────────────────────────────────────
+          $allReady = $phase1bReady -and $phase2Ready -and $phase3Ready
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+
+          if ($allReady) {
+            Write-Host ""
+            Write-Host "✅ PRE-FLIGHT CHECK PASSED — All selected phases have prerequisites met." -ForegroundColor Green
+            Write-Host ""
+          } else {
+            Write-Host ""
+            Write-Host "⚠️  PRE-FLIGHT CHECK — One or more phases have unmet prerequisites:" -ForegroundColor Yellow
+            if (-not $phase2Ready) {
+              Write-Host "  ❌ Phase 2 needs Azure OIDC credentials." -ForegroundColor Red
+              Write-Host "     → Run Phase 1a first (setupOidc=true + configureSecrets=true)" -ForegroundColor Yellow
+              Write-Host "     → OR ensure AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID secrets are set" -ForegroundColor Yellow
+            }
+            if (-not $phase1bReady) {
+              Write-Host "  ❌ Phase 1b needs GitHub App credentials." -ForegroundColor Red
+              Write-Host "     → Complete Phase 0 (APP_ID + APP_PRIVATE_KEY must be set)" -ForegroundColor Yellow
+            }
+            Write-Host ""
+            Write-Host "  NOTE: Validation errors above are warnings at this stage." -ForegroundColor Gray
+            Write-Host "  Each job validates its own prerequisites before execution." -ForegroundColor Gray
+            Write-Host ""
+          }
+
   setup-oidc:
     name: Setup Azure OIDC
     if: inputs.setupOidc
     needs: [validate-inputs]
     runs-on: windows-latest
+    # Use environment context so both repo-level and environment-level AZUREAPPSERVICE_* secrets
+    # are accessible (stored by configure-github-secrets / Phase 1b from a previous run).
+    # Note: when environment='all', we use 'dev' as the context. This is intentional:
+    # configure-github-secrets writes the same clientId/tenantId/subscriptionId values to
+    # ALL environments (they all point to the same Azure Entra ID App Registration — see
+    # configure-github-secrets.yml Configure Secrets step). Reading from any single environment
+    # context therefore gives the same credentials as reading from any other environment.
+    environment: ${{ inputs.environment != 'all' && inputs.environment || 'dev' }}
+    env:
+      EXISTING_CLIENT_ID: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+      EXISTING_TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+      EXISTING_SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
     outputs:
       clientId: ${{ steps.oidc.outputs.clientId }}
       tenantId: ${{ steps.oidc.outputs.tenantId }}
@@ -375,7 +528,62 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Azure Login (Device Code)
+      # ──────────────────────────────────────────────────────────────────────────
+      # AUTHENTICATION — smart login that prefers existing Phase 1a credentials.
+      #
+      # • If AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID are already stored
+      #   as secrets (Phase 1a was run previously), use azure/login@v2 (OIDC,
+      #   non-interactive). This avoids the device-code prompt for re-runs and
+      #   credential-rotation runs.
+      #
+      # • If no existing credentials are found (true first-time setup), fall back
+      #   to az login --use-device-code so the operator can authenticate manually.
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: Check Azure Authentication Method
+        id: auth-check
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║         AZURE AUTHENTICATION METHOD CHECK                     ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Timestamp (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "🔍 Checking for existing Phase 1a OIDC credentials..." -ForegroundColor Cyan
+          Write-Host ""
+
+          $hasClientId     = -not [string]::IsNullOrWhiteSpace($env:EXISTING_CLIENT_ID)
+          $hasTenantId     = -not [string]::IsNullOrWhiteSpace($env:EXISTING_TENANT_ID)
+          $hasSubscriptionId = -not [string]::IsNullOrWhiteSpace($env:EXISTING_SUBSCRIPTION_ID)
+
+          Write-Host "  AZUREAPPSERVICE_CLIENTID      : $(if ($hasClientId)     { '✅ Found' } else { '⬜ Not set' })" -ForegroundColor $(if ($hasClientId)     { 'Green' } else { 'Gray' })
+          Write-Host "  AZUREAPPSERVICE_TENANTID      : $(if ($hasTenantId)     { '✅ Found' } else { '⬜ Not set' })" -ForegroundColor $(if ($hasTenantId)     { 'Green' } else { 'Gray' })
+          Write-Host "  AZUREAPPSERVICE_SUBSCRIPTIONID: $(if ($hasSubscriptionId) { '✅ Found' } else { '⬜ Not set' })" -ForegroundColor $(if ($hasSubscriptionId) { 'Green' } else { 'Gray' })
+          Write-Host ""
+
+          if ($hasClientId -and $hasTenantId -and $hasSubscriptionId) {
+            Write-Host "  ✅ Existing OIDC credentials found (Phase 1a previously configured)" -ForegroundColor Green
+            Write-Host "     → Using azure/login@v2 (non-interactive, passwordless)" -ForegroundColor Gray
+            Write-Host "     → No device-code prompt will appear" -ForegroundColor Gray
+            "useOidc=true" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Host "  ⬜ Existing OIDC credentials not available" -ForegroundColor Yellow
+            Write-Host "     → This appears to be a first-time setup" -ForegroundColor Gray
+            Write-Host "     → Interactive device-code Azure login is required" -ForegroundColor Gray
+            "useOidc=false" >> $env:GITHUB_OUTPUT
+          }
+          Write-Host ""
+
+      - name: Azure Login (Existing OIDC Credentials)
+        if: steps.auth-check.outputs.useOidc == 'true'
+        timeout-minutes: 2
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.EXISTING_CLIENT_ID }}
+          tenant-id: ${{ env.EXISTING_TENANT_ID }}
+          subscription-id: ${{ env.EXISTING_SUBSCRIPTION_ID }}
+
+      - name: Azure Login (Device Code — First-Time Setup Only)
+        if: steps.auth-check.outputs.useOidc == 'false'
         timeout-minutes: 3
         run: |
           Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
@@ -2527,8 +2735,6 @@ jobs:
       !cancelled() &&
       needs.validate-inputs.result == 'success' &&
       inputs.enableValidation &&
-      inputs.bootstrapInfra &&
-      !cancelled() &&
       (needs.bootstrap-dev.result == 'success' || needs.bootstrap-dev.result == 'skipped') &&
       (needs.bootstrap-staging.result == 'success' || needs.bootstrap-staging.result == 'skipped') &&
       (needs.bootstrap-prod.result == 'success' || needs.bootstrap-prod.result == 'skipped')
