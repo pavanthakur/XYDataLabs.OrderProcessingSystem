@@ -71,14 +71,16 @@ Parameters are grouped by the phase they belong to. Enable only the parameters f
 ## 🔑 Phase 1 Parameters — One-Time Setup
 > Enable these **once** when setting up a new environment. After Phase 1 is complete, you will not need to run these again unless credentials are lost or rotated.
 
-### `setupOidc` — Setup Azure OIDC
+> ⚠️ **Phase 1a → Phase 1b must run sequentially (not in parallel).** `configureSecrets` (Phase 1b) uses the OIDC outputs (`clientId`, `tenantId`, `subscriptionId`) produced by `setupOidc` (Phase 1a), so the two steps cannot run concurrently. The workflow dependency chain enforces this order automatically.
+
+### `setupOidc` — Setup Azure OIDC *(Phase 1a)*
 | | |
 |---|---|
 | **Type** | Boolean (default: `true`) |
-| **Phase** | 🔑 Phase 1 — one-time setup |
+| **Phase** | 🔑 Phase 1a — one-time setup |
 | **When to enable** | **First time only.** Also re-run if federated credentials are corrupted or deleted. |
 | **What it does** | Logs in to Azure via interactive device code, then creates (or updates) the **`GitHub-Actions-OIDC`** App Registration in Microsoft Entra ID. Creates a Service Principal and configures federated credentials so GitHub Actions can authenticate to Azure without passwords. |
-| **Output** | `clientId`, `tenantId`, `subscriptionId` — passed automatically to `configureSecrets`. |
+| **Output** | `clientId`, `tenantId`, `subscriptionId` — passed automatically to `configureSecrets` (Phase 1b). |
 | **Requires** | Azure account with permission to create App Registrations (Application Administrator or Owner). |
 | **Skip when** | Secrets `AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID` already exist and are valid. |
 | **Idempotent** | ✅ Yes — re-running adds missing federated credentials without removing existing ones. |
@@ -87,20 +89,20 @@ Parameters are grouped by the phase they belong to. Enable only the parameters f
 | | |
 |---|---|
 | **Type** | String (default: `GitHub-Actions-OIDC`) |
-| **Phase** | 🔑 Phase 1 — used only when `setupOidc = true` |
+| **Phase** | 🔑 Phase 1a — used only when `setupOidc = true` |
 | **When to change** | Only if you need a custom name for the Entra ID App Registration. Leave blank for the default. |
 
-### `configureSecrets` — Configure GitHub Secrets
+### `configureSecrets` — Configure GitHub Secrets *(Phase 1b)*
 | | |
 |---|---|
 | **Type** | Boolean (default: `true`) |
-| **Phase** | 🔑 Phase 1 — one-time setup |
-| **When to enable** | After `setupOidc` has run (or OIDC credentials already exist) **and** the GitHub App is installed with `APP_ID` + `APP_PRIVATE_KEY` secrets present. |
+| **Phase** | 🔑 Phase 1b — one-time setup (sequential after Phase 1a) |
+| **When to enable** | After `setupOidc` (Phase 1a) has run (or OIDC credentials already exist) **and** the GitHub App is installed with `APP_ID` + `APP_PRIVATE_KEY` secrets present. |
 | **What it does** | Uses the GitHub App token to write `AZUREAPPSERVICE_CLIENTID`, `AZUREAPPSERVICE_TENANTID`, and `AZUREAPPSERVICE_SUBSCRIPTIONID` as both repository secrets and per-environment secrets (auto-creates the GitHub environments if missing). |
 | **Prerequisite** | `APP_ID` and `APP_PRIVATE_KEY` repository secrets **must already exist**. See [Phase 0 Setup](#phase-0--manual-prerequisite-5-min-done-once) below. |
 | **Idempotent** | ✅ Yes — overwrites existing secrets with current values. |
 
-> 💡 **Tip**: Run `setupOidc` and `configureSecrets` **together in a single workflow execution** — they are designed to chain: OIDC outputs feed directly into secret configuration.
+> 💡 **Tip**: Run `setupOidc` and `configureSecrets` **together in a single workflow execution** — they are designed to chain: OIDC outputs from Phase 1a feed directly into Phase 1b secret configuration. They always run sequentially (1a first, then 1b).
 
 ---
 
@@ -135,14 +137,15 @@ Parameters are grouped by the phase they belong to. Enable only the parameters f
 
 ---
 
-## 🔍 Optional Parameter
+## 🔍 Phase 3 Parameter — Enable Pre-Deployment Validation
 
-### `enableValidation` — Pre-Flight Validation
+### `enableValidation` — Enable Pre-Deployment Validation *(Phase 3)*
 | | |
 |---|---|
 | **Type** | Boolean (default: `false`) |
-| **When to enable** | Recommended for all Phase 2 runs. Validates branch/environment alignment and checks that all Phase 1 secrets are present before proceeding. |
-| **What it does** | Validates that branch/environment alignment is correct and that OIDC credentials and GitHub App secrets are all present before proceeding. |
+| **Phase** | 🔍 Phase 3 — optional, runs after Phase 2 bootstrap |
+| **When to enable** | Recommended for all Phase 2 runs. Activates branch/environment alignment checks and validates that all Phase 1 secrets are present before future infrastructure deployments. |
+| **What it does** | Modifies `infra-deploy.yml` to re-enable the `pre-validate` job so that branch/environment alignment is verified and OIDC credentials and GitHub App secrets are present before every infrastructure deployment. |
 | **Tip** | Disable for the very first Phase 1 run to reduce friction; enable for all Phase 2 runs and beyond. |
 
 ---

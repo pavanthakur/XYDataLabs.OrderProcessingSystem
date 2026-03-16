@@ -67,9 +67,9 @@ For a complete first-time setup of the dev environment with all features enabled
 - Deploys UI Web App
 - Sets up Application Insights
 
-#### Phase 6: Enable Validation (1 min)
+#### Phase 6: Enable Pre-Deployment Validation — Bootstrap Phase 3 (1 min)
 - Updates infra-deploy.yml workflow
-- Enables pre-deployment validation
+- Enables pre-deployment validation (branch/env alignment checks)
 - Commits changes to repository
 
 ### Expected Output
@@ -123,10 +123,10 @@ After successful completion, you will have:
 - **Description:** OIDC App Name (requires GitHub App setup)
 - **When to use:** Customize OIDC app name if needed; appears after GitHub App setup
 
-#### enableValidation
+#### enableValidation *(Phase 3 — optional)*
 - **Type:** Boolean
 - **Default:** `true`
-- **Description:** Enable pre-deployment validation for future infrastructure deployments
+- **Description:** **Phase 3** — Enable pre-deployment validation for future infrastructure deployments (runs after Phase 2 bootstrap)
 - **When to use:** Enabled by default; disable only if you want to skip validation setup
 
 #### bootstrapInfra
