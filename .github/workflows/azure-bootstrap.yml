@@ -133,6 +133,8 @@ jobs:
           $enableValidation = "${{ inputs.enableValidation }}"
           $bootstrap = "${{ inputs.bootstrapInfra }}"
           $configSecrets = "${{ inputs.configureSecrets }}"
+          $deployApi = "${{ inputs.deployApi }}"
+          $deployUi = "${{ inputs.deployUi }}"
 
           Write-Host "`n📋 Workflow Inputs:" -ForegroundColor Cyan
           Write-Host "  Environment: $env" -ForegroundColor Yellow
@@ -213,8 +215,8 @@ jobs:
           # Check if repository secrets exist when setup is skipped
           Write-Host "`n  🔐 Repository Secrets Check:" -ForegroundColor Cyan
 
-          # Detect Phase 0-only run: setupGitHubApp=true with no OIDC/bootstrap/configSecrets
-          $isPhase0Only = ($setupGitHubApp -eq "true") -and ($configSecrets -eq "false") -and ($bootstrap -eq "false") -and ($setupOidc -eq "false")
+          # Detect Phase 0-only run: setupGitHubApp=true with no phases that need Azure OIDC
+          $isPhase0Only = ($setupGitHubApp -eq "true") -and ($configSecrets -eq "false") -and ($bootstrap -eq "false") -and ($setupOidc -eq "false") -and ($deployApi -eq "false") -and ($deployUi -eq "false")
 
           if ($isPhase0Only) {
             Write-Host "    ℹ️  Phase 0 run detected — OIDC secrets check skipped" -ForegroundColor Cyan
@@ -225,63 +227,68 @@ jobs:
           } elseif ($setupOidc -eq "false") {
             Write-Host "    Setup OIDC: Unchecked (skipped)" -ForegroundColor Yellow
             Write-Host "    Checking if OIDC secrets already exist in repository..." -ForegroundColor Gray
-            
-            # Use GitHub CLI to check if secrets exist (requires secrets:read permission on GITHUB_TOKEN)
-            try {
-              $secretsCheck = gh secret list --repo '${{ github.repository }}' 2>&1 | Out-String
-              $checkExitCode = $LASTEXITCODE
-              
-              if ($checkExitCode -ne 0) {
-                Write-Host "    ⚠️  Could not list repository secrets (exit code: $checkExitCode)" -ForegroundColor Yellow
-                Write-Host "    Proceeding with caution — verify OIDC secrets manually if needed" -ForegroundColor Gray
-                $global:LASTEXITCODE = 0  # gh failure was handled gracefully; reset so step does not fail
-              } else {
-                $hasClientId = $secretsCheck -match "AZUREAPPSERVICE_CLIENTID"
-                $hasTenantId = $secretsCheck -match "AZUREAPPSERVICE_TENANTID"
-                $hasSubscriptionId = $secretsCheck -match "AZUREAPPSERVICE_SUBSCRIPTIONID"
-                
-                if ($hasClientId -and $hasTenantId -and $hasSubscriptionId) {
-                  Write-Host "    ✅ OIDC repository secrets exist" -ForegroundColor Green
-                } else {
-                  Write-Host "    ❌ OIDC repository secrets are MISSING!" -ForegroundColor Red
-                  Write-Host "" -ForegroundColor Gray
-                  Write-Host "    Required secrets not found:" -ForegroundColor Yellow
-                  if (-not $hasClientId) { Write-Host "      - AZUREAPPSERVICE_CLIENTID" -ForegroundColor Red }
-                  if (-not $hasTenantId) { Write-Host "      - AZUREAPPSERVICE_TENANTID" -ForegroundColor Red }
-                  if (-not $hasSubscriptionId) { Write-Host "      - AZUREAPPSERVICE_SUBSCRIPTIONID" -ForegroundColor Red }
-                  Write-Host "" -ForegroundColor Gray
-                  Write-Host "    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-                  Write-Host "    💡 SOLUTION: Re-run this workflow with these checkboxes SELECTED:" -ForegroundColor Yellow
-                  Write-Host "       ✅ Setup Azure OIDC (Phase 1a) — REQUIRED" -ForegroundColor White
-                  Write-Host "       ✅ Configure GitHub Secrets (Phase 1b)" -ForegroundColor White
-                  if ($bootstrap -eq "true") {
-                    Write-Host "       ✅ Bootstrap infrastructure" -ForegroundColor White
-                  }
-                  Write-Host "    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-                  Write-Host "" -ForegroundColor Gray
-                  Write-Host "    ⚠️  Deployment workflows will fail without these secrets." -ForegroundColor Yellow
-                  
-                  if ($bootstrap -eq "true") {
-                    Write-Host "" -ForegroundColor Gray
-                    Write-Host "    ❌ ERROR: Cannot bootstrap infrastructure without OIDC credentials!" -ForegroundColor Red
-                    Write-Error "OIDC secrets not found. You must check 'Setup Azure OIDC' checkbox to create them."
-                    exit 1
-                  } elseif ($configSecrets -eq "true") {
-                    Write-Host "" -ForegroundColor Gray
-                    Write-Host "    ❌ ERROR: Cannot configure GitHub secrets (Phase 1b) without OIDC credentials!" -ForegroundColor Red
-                    Write-Host "    Phase 1b needs OIDC credentials (clientId/tenantId/subscriptionId) from Phase 1a." -ForegroundColor Red
-                    Write-Host "    Run Phase 1a and Phase 1b together in the same workflow run:" -ForegroundColor Yellow
-                    Write-Host "       ✅ Setup Azure OIDC (Phase 1a)          = true" -ForegroundColor White
-                    Write-Host "       ✅ Configure GitHub Secrets (Phase 1b)  = true" -ForegroundColor White
-                    Write-Error "OIDC secrets not found. Run Phase 1a (Setup Azure OIDC=true) together with Phase 1b (Configure Secrets=true)."
-                    exit 1
-                  }
-                }
+
+            # Check OIDC secrets directly via workflow context — repo-level secrets are accessible
+            # without an environment context. This avoids using `gh secret list` which requires
+            # secrets:read scope that GITHUB_TOKEN does not have in this job (no GitHub App token
+            # is generated here). The same approach is used in the Phase Readiness Pre-Flight
+            # Summary step below.
+            $hasClientId     = "${{ secrets.AZUREAPPSERVICE_CLIENTID }}"   -ne ""
+            $hasTenantId     = "${{ secrets.AZUREAPPSERVICE_TENANTID }}"   -ne ""
+            $hasSubscriptionId = "${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}" -ne ""
+
+            if ($hasClientId -and $hasTenantId -and $hasSubscriptionId) {
+              Write-Host "    ✅ OIDC repository secrets exist — setupOidc=false is valid (re-run)" -ForegroundColor Green
+            } else {
+              Write-Host "    ❌ OIDC repository secrets are MISSING!" -ForegroundColor Red
+              Write-Host "" -ForegroundColor Gray
+              Write-Host "    Required secrets not found:" -ForegroundColor Yellow
+              if (-not $hasClientId) { Write-Host "      - AZUREAPPSERVICE_CLIENTID" -ForegroundColor Red }
+              if (-not $hasTenantId) { Write-Host "      - AZUREAPPSERVICE_TENANTID" -ForegroundColor Red }
+              if (-not $hasSubscriptionId) { Write-Host "      - AZUREAPPSERVICE_SUBSCRIPTIONID" -ForegroundColor Red }
+              Write-Host "" -ForegroundColor Gray
+              Write-Host "    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host "    💡 SOLUTION: Re-run this workflow with these checkboxes SELECTED:" -ForegroundColor Yellow
+              Write-Host "       ✅ Setup Azure OIDC (Phase 1a) — REQUIRED" -ForegroundColor White
+              Write-Host "       ✅ Configure GitHub Secrets (Phase 1b)" -ForegroundColor White
+              if ($bootstrap -eq "true") {
+                Write-Host "       ✅ Bootstrap infrastructure" -ForegroundColor White
               }
-            } catch {
-              Write-Host "    ⚠️  Could not check repository secrets: $($_.Exception.Message)" -ForegroundColor Yellow
-              Write-Host "    Proceeding with caution..." -ForegroundColor Gray
-              $global:LASTEXITCODE = 0  # exception was handled gracefully; reset so step does not fail
+              if ($deployApi -eq "true") {
+                Write-Host "       ✅ Deploy API" -ForegroundColor White
+              }
+              if ($deployUi -eq "true") {
+                Write-Host "       ✅ Deploy UI" -ForegroundColor White
+              }
+              Write-Host "    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host "" -ForegroundColor Gray
+              Write-Host "    ⚠️  Azure OIDC (Phase 1a) is MANDATORY for all phases that interact with Azure." -ForegroundColor Yellow
+              Write-Host "    All bootstrap and deployment operations require AZUREAPPSERVICE_* credentials." -ForegroundColor Yellow
+
+              if ($bootstrap -eq "true") {
+                Write-Host "" -ForegroundColor Gray
+                Write-Host "    ❌ ERROR: Cannot bootstrap infrastructure without OIDC credentials!" -ForegroundColor Red
+                Write-Error "OIDC secrets not found. You must check 'Setup Azure OIDC' checkbox to create them."
+                exit 1
+              } elseif ($configSecrets -eq "true") {
+                Write-Host "" -ForegroundColor Gray
+                Write-Host "    ❌ ERROR: Cannot configure GitHub secrets (Phase 1b) without OIDC credentials!" -ForegroundColor Red
+                Write-Host "    Phase 1b needs OIDC credentials (clientId/tenantId/subscriptionId) from Phase 1a." -ForegroundColor Red
+                Write-Host "    Run Phase 1a and Phase 1b together in the same workflow run:" -ForegroundColor Yellow
+                Write-Host "       ✅ Setup Azure OIDC (Phase 1a)          = true" -ForegroundColor White
+                Write-Host "       ✅ Configure GitHub Secrets (Phase 1b)  = true" -ForegroundColor White
+                Write-Error "OIDC secrets not found. Run Phase 1a (Setup Azure OIDC=true) together with Phase 1b (Configure Secrets=true)."
+                exit 1
+              } elseif ($deployApi -eq "true" -or $deployUi -eq "true") {
+                Write-Host "" -ForegroundColor Gray
+                Write-Host "    ❌ ERROR: Cannot deploy without OIDC credentials!" -ForegroundColor Red
+                Write-Host "    Deployment workflows use azure/login@v2 (OIDC) and require AZUREAPPSERVICE_* secrets." -ForegroundColor Red
+                Write-Host "    Run Phase 1a and Phase 1b first to establish OIDC credentials:" -ForegroundColor Yellow
+                Write-Host "       ✅ Setup Azure OIDC (Phase 1a)          = true" -ForegroundColor White
+                Write-Host "       ✅ Configure GitHub Secrets (Phase 1b)  = true" -ForegroundColor White
+                Write-Error "OIDC secrets not found. Run Phase 1a (Setup Azure OIDC=true) + Phase 1b (Configure Secrets=true) before deploying."
+                exit 1
+              }
             }
           } else {
             Write-Host "    ✅ Setup Azure OIDC: Checked - secrets will be created" -ForegroundColor Green
@@ -475,6 +482,34 @@ jobs:
             Write-Host "             └─ Deploys UI : $(if ($doDeployUi)  { '✅ Yes' } else { 'No' })" -ForegroundColor Gray
           }
 
+          # Deploy phases (triggered after bootstrap summary) — require OIDC
+          $deployPrereq = $doSetupOidc -or $oidcConfigured
+          $deployReady  = (-not $doDeployApi -and -not $doDeployUi) -or $deployPrereq
+          # Only show standalone deploy phases here; when bootstrap is also enabled, deploy is
+          # already shown as part of the bootstrap summary above (lines 475-476).
+          if ($doDeployApi -and -not $doBootstrap) {
+            $deployApiIcon = if ($doDeployApi) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }
+            Write-Host "  Deploy API                          : $deployApiIcon" -ForegroundColor $(if ($doDeployApi) { 'Cyan' } else { 'DarkGray' })
+            if ($doDeployApi) {
+              if ($oidcConfigured -or $doSetupOidc) {
+                Write-Host "             └─ Azure auth: AZUREAPPSERVICE_* secrets → azure/login@v2 (OIDC) ✅" -ForegroundColor Green
+              } else {
+                Write-Host "             └─ ❌ Azure auth: AZUREAPPSERVICE_* secrets missing — Phase 1a required first" -ForegroundColor Red
+              }
+            }
+          }
+          if ($doDeployUi -and -not $doBootstrap) {
+            $deployUiIcon = if ($doDeployUi) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }
+            Write-Host "  Deploy UI                           : $deployUiIcon" -ForegroundColor $(if ($doDeployUi) { 'Cyan' } else { 'DarkGray' })
+            if ($doDeployUi) {
+              if ($oidcConfigured -or $doSetupOidc) {
+                Write-Host "             └─ Azure auth: AZUREAPPSERVICE_* secrets → azure/login@v2 (OIDC) ✅" -ForegroundColor Green
+              } else {
+                Write-Host "             └─ ❌ Azure auth: AZUREAPPSERVICE_* secrets missing — Phase 1a required first" -ForegroundColor Red
+              }
+            }
+          }
+
           # Phase 3: Enable Pre-Deployment Validation
           # No Azure or GitHub App credentials needed — just file edit + git push
           $phase3Icon  = if ($doEnableVal) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }
@@ -488,7 +523,7 @@ jobs:
           Write-Host ""
 
           # ── Overall readiness gate ──────────────────────────────────────
-          $allReady = $phase1bReady -and $phase2Ready -and $phase3Ready
+          $allReady = $phase1bReady -and $phase2Ready -and $phase3Ready -and $deployReady
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
 
           if ($allReady) {
@@ -503,6 +538,11 @@ jobs:
               Write-Host "     → Run Phase 1a first (setupOidc=true + configureSecrets=true)" -ForegroundColor Yellow
               Write-Host "     → OR ensure AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID secrets are set" -ForegroundColor Yellow
             }
+            if (-not $deployReady) {
+              Write-Host "  ❌ Deploy phases require Azure OIDC credentials (azure/login@v2)." -ForegroundColor Red
+              Write-Host "     → Run Phase 1a first (setupOidc=true + configureSecrets=true)" -ForegroundColor Yellow
+              Write-Host "     → OR ensure AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID secrets are set" -ForegroundColor Yellow
+            }
             if (-not $phase1bReady) {
               if (-not $appConfigured) {
                 Write-Host "  ❌ Phase 1b needs GitHub App credentials (APP_ID + APP_PRIVATE_KEY)." -ForegroundColor Red
@@ -514,8 +554,8 @@ jobs:
               }
             }
             Write-Host ""
-            Write-Host "  NOTE: Validation errors above are warnings at this stage." -ForegroundColor Gray
-            Write-Host "  Each job validates its own prerequisites before execution." -ForegroundColor Gray
+            Write-Host "  ℹ️  Azure OIDC (Phase 1a) is MANDATORY for all phases that interact with Azure." -ForegroundColor Yellow
+            Write-Host "  The 'Validate Configuration' step above enforces this and will fail early if needed." -ForegroundColor Gray
             Write-Host ""
           }
 
