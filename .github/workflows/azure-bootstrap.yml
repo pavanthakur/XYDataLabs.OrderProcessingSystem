@@ -13,7 +13,7 @@ on:
           - prod
           - all
       setupOidc:
-        description: '🔑 Phase 1a (one-time) — Setup Azure OIDC | Creates Microsoft Entra ID App Registration + passwordless auth'
+        description: '🔑 Phase 1a — Setup Azure OIDC | First run: uses device code. Re-runs: uses existing AZUREAPPSERVICE_* credentials (no interactive login)'
         required: true
         type: boolean
         default: true
@@ -367,6 +367,17 @@ jobs:
     if: inputs.setupOidc
     needs: [validate-inputs]
     runs-on: windows-latest
+    # Use environment context so both repo-level and environment-level AZUREAPPSERVICE_* secrets
+    # are accessible (stored by configure-github-secrets / Phase 1b from a previous run).
+    # Note: when environment='all', we use 'dev' as the context. This is correct because
+    # configure-github-secrets stores the SAME clientId/tenantId/subscriptionId values across
+    # all environments (they all point to the same Azure Entra ID App Registration), so reading
+    # from any single environment context gives the same credentials.
+    environment: ${{ inputs.environment != 'all' && inputs.environment || 'dev' }}
+    env:
+      EXISTING_CLIENT_ID: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+      EXISTING_TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+      EXISTING_SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
     outputs:
       clientId: ${{ steps.oidc.outputs.clientId }}
       tenantId: ${{ steps.oidc.outputs.tenantId }}
@@ -375,7 +386,62 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Azure Login (Device Code)
+      # ──────────────────────────────────────────────────────────────────────────
+      # AUTHENTICATION — smart login that prefers existing Phase 1a credentials.
+      #
+      # • If AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID are already stored
+      #   as secrets (Phase 1a was run previously), use azure/login@v2 (OIDC,
+      #   non-interactive). This avoids the device-code prompt for re-runs and
+      #   credential-rotation runs.
+      #
+      # • If no existing credentials are found (true first-time setup), fall back
+      #   to az login --use-device-code so the operator can authenticate manually.
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: Check Azure Authentication Method
+        id: auth-check
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║         AZURE AUTHENTICATION METHOD CHECK                     ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Timestamp (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "🔍 Checking for existing Phase 1a OIDC credentials..." -ForegroundColor Cyan
+          Write-Host ""
+
+          $hasClientId     = -not [string]::IsNullOrWhiteSpace($env:EXISTING_CLIENT_ID)
+          $hasTenantId     = -not [string]::IsNullOrWhiteSpace($env:EXISTING_TENANT_ID)
+          $hasSubscriptionId = -not [string]::IsNullOrWhiteSpace($env:EXISTING_SUBSCRIPTION_ID)
+
+          Write-Host "  AZUREAPPSERVICE_CLIENTID      : $(if ($hasClientId)     { '✅ Found' } else { '⬜ Not set' })" -ForegroundColor $(if ($hasClientId)     { 'Green' } else { 'Gray' })
+          Write-Host "  AZUREAPPSERVICE_TENANTID      : $(if ($hasTenantId)     { '✅ Found' } else { '⬜ Not set' })" -ForegroundColor $(if ($hasTenantId)     { 'Green' } else { 'Gray' })
+          Write-Host "  AZUREAPPSERVICE_SUBSCRIPTIONID: $(if ($hasSubscriptionId) { '✅ Found' } else { '⬜ Not set' })" -ForegroundColor $(if ($hasSubscriptionId) { 'Green' } else { 'Gray' })
+          Write-Host ""
+
+          if ($hasClientId -and $hasTenantId -and $hasSubscriptionId) {
+            Write-Host "  ✅ Existing OIDC credentials found (Phase 1a previously configured)" -ForegroundColor Green
+            Write-Host "     → Using azure/login@v2 (non-interactive, passwordless)" -ForegroundColor Gray
+            Write-Host "     → No device-code prompt will appear" -ForegroundColor Gray
+            "useOidc=true" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Host "  ⬜ Existing OIDC credentials not available" -ForegroundColor Yellow
+            Write-Host "     → This appears to be a first-time setup" -ForegroundColor Gray
+            Write-Host "     → Interactive device-code Azure login is required" -ForegroundColor Gray
+            "useOidc=false" >> $env:GITHUB_OUTPUT
+          }
+          Write-Host ""
+
+      - name: Azure Login (Existing OIDC Credentials)
+        if: steps.auth-check.outputs.useOidc == 'true'
+        timeout-minutes: 2
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.EXISTING_CLIENT_ID }}
+          tenant-id: ${{ env.EXISTING_TENANT_ID }}
+          subscription-id: ${{ env.EXISTING_SUBSCRIPTION_ID }}
+
+      - name: Azure Login (Device Code — First-Time Setup Only)
+        if: steps.auth-check.outputs.useOidc == 'false'
         timeout-minutes: 3
         run: |
           Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
