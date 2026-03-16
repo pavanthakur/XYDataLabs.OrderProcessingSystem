@@ -13,7 +13,7 @@ on:
           - prod
           - all
       setupOidc:
-        description: '🔑 Phase 1 (one-time) — Setup Azure OIDC | Creates Microsoft Entra ID App Registration + passwordless auth'
+        description: '🔑 Phase 1a (one-time) — Setup Azure OIDC | Creates Microsoft Entra ID App Registration + passwordless auth'
         required: true
         type: boolean
         default: true
@@ -33,12 +33,12 @@ on:
         type: string
         default: 'XYDataLabsGitHubApp'
       configureSecrets:
-        description: '🔑 Phase 1 (one-time) — Configure GitHub Secrets | Sets CLIENTID, TENANTID, SUBSCRIPTIONID (needs APP_ID + APP_PRIVATE_KEY)'
+        description: '🔑 Phase 1b (one-time, sequential after 1a) — Configure GitHub Secrets | Uses OIDC outputs from Phase 1a + APP_ID + APP_PRIVATE_KEY'
         required: true
         type: boolean
         default: true
       enableValidation:
-        description: '🔍 Pre-Flight Validation [Optional] | Checks branch/env alignment and prerequisites'
+        description: '🔍 Phase 3 (optional) — Enable Pre-Deployment Validation | Activates branch/env alignment checks for future infrastructure deployments'
         required: true
         type: boolean
         default: false
@@ -104,14 +104,14 @@ jobs:
           Write-Host "  environment          = ${{ inputs.environment }}" -ForegroundColor White
           Write-Host "" -ForegroundColor Gray
           Write-Host "  AZURE SETUP:" -ForegroundColor Cyan
-          Write-Host "  setupOidc            = ${{ inputs.setupOidc }}  $(if ('${{ inputs.setupOidc }}' -eq 'true') { '[✅ checked]   — Phase 1: Setup Azure OIDC' } else { '[☐  unchecked] — Phase 1: Setup Azure OIDC' })" -ForegroundColor $(if ('${{ inputs.setupOidc }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "  setupOidc            = ${{ inputs.setupOidc }}  $(if ('${{ inputs.setupOidc }}' -eq 'true') { '[✅ checked]   — Phase 1a: Setup Azure OIDC' } else { '[☐  unchecked] — Phase 1a: Setup Azure OIDC' })" -ForegroundColor $(if ('${{ inputs.setupOidc }}' -eq 'true') { 'Green' } else { 'DarkGray' })
           Write-Host "  oidcAppName          = ${{ inputs.oidcAppName }}" -ForegroundColor DarkGray
           Write-Host "  setupGitHubApp       = ${{ inputs.setupGitHubApp }}  $(if ('${{ inputs.setupGitHubApp }}' -eq 'true') { '[✅ checked]   — Phase 0: Setup GitHub App' } else { '[☐  unchecked] — Phase 0: Setup GitHub App' })" -ForegroundColor $(if ('${{ inputs.setupGitHubApp }}' -eq 'true') { 'Green' } else { 'DarkGray' })
           Write-Host "  githubAppName        = ${{ inputs.githubAppName }}" -ForegroundColor DarkGray
-          Write-Host "  configureSecrets     = ${{ inputs.configureSecrets }}  $(if ('${{ inputs.configureSecrets }}' -eq 'true') { '[✅ checked]   — Phase 1: Configure Secrets' } else { '[☐  unchecked] — Phase 1: Configure Secrets' })" -ForegroundColor $(if ('${{ inputs.configureSecrets }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "  configureSecrets     = ${{ inputs.configureSecrets }}  $(if ('${{ inputs.configureSecrets }}' -eq 'true') { '[✅ checked]   — Phase 1b: Configure Secrets (sequential after 1a)' } else { '[☐  unchecked] — Phase 1b: Configure Secrets (sequential after 1a)' })" -ForegroundColor $(if ('${{ inputs.configureSecrets }}' -eq 'true') { 'Green' } else { 'DarkGray' })
           Write-Host "" -ForegroundColor Gray
           Write-Host "  INFRASTRUCTURE:" -ForegroundColor Cyan
-          Write-Host "  enableValidation     = ${{ inputs.enableValidation }}  $(if ('${{ inputs.enableValidation }}' -eq 'true') { '[✅ checked]   — Pre-Flight Validation' } else { '[☐  unchecked] — Pre-Flight Validation' })" -ForegroundColor $(if ('${{ inputs.enableValidation }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "  enableValidation     = ${{ inputs.enableValidation }}  $(if ('${{ inputs.enableValidation }}' -eq 'true') { '[✅ checked]   — Phase 3: Enable Pre-Deployment Validation' } else { '[☐  unchecked] — Phase 3: Enable Pre-Deployment Validation' })" -ForegroundColor $(if ('${{ inputs.enableValidation }}' -eq 'true') { 'Green' } else { 'DarkGray' })
           Write-Host "  bootstrapInfra       = ${{ inputs.bootstrapInfra }}  $(if ('${{ inputs.bootstrapInfra }}' -eq 'true') { '[✅ checked]   — Phase 2: Bootstrap Infrastructure' } else { '[☐  unchecked] — Phase 2: Bootstrap Infrastructure' })" -ForegroundColor $(if ('${{ inputs.bootstrapInfra }}' -eq 'true') { 'Green' } else { 'DarkGray' })
           Write-Host "" -ForegroundColor Gray
           Write-Host "  DEPLOYMENT:" -ForegroundColor Cyan
@@ -218,8 +218,8 @@ jobs:
 
           if ($isPhase0Only) {
             Write-Host "    ℹ️  Phase 0 run detected — OIDC secrets check skipped" -ForegroundColor Cyan
-            Write-Host "    ✅ OIDC secrets are not required yet (Phase 1 task)" -ForegroundColor Green
-            Write-Host "    💡 Next step: After completing GitHub App setup, run Phase 1:" -ForegroundColor Yellow
+            Write-Host "    ✅ OIDC secrets are not required yet (Phase 1a/1b task)" -ForegroundColor Green
+            Write-Host "    💡 Next step: After completing GitHub App setup, run Phase 1a + 1b:" -ForegroundColor Yellow
             Write-Host "       ✅ Setup Azure OIDC" -ForegroundColor White
             Write-Host "       ✅ Configure Secrets" -ForegroundColor White
           } elseif ($setupOidc -eq "false") {
@@ -275,13 +275,13 @@ jobs:
             Write-Host "    ✅ Setup Azure OIDC: Checked - secrets will be created" -ForegroundColor Green
           }
 
-          # Check GitHub App secrets when configureSecrets is requested (Phase 1 mandatory gate)
+          # Check GitHub App secrets when configureSecrets is requested (Phase 1b mandatory gate)
           if ($configSecrets -eq "true") {
             $appName     = "${{ inputs.githubAppName }}"
             $appSlug     = $appName.ToLower() -replace '[^a-z0-9]', '-'
             $secretsUrl  = "https://github.com/${{ github.repository }}/settings/secrets/actions"
 
-            Write-Host "`n  🤖 GitHub App Check (MANDATORY for Phase 1 — 'Configure Secrets'):" -ForegroundColor Cyan
+            Write-Host "`n  🤖 GitHub App Check (MANDATORY for Phase 1b — 'Configure Secrets'):" -ForegroundColor Cyan
             Write-Host "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
 
             # Use the secrets injected by GitHub Actions (most reliable method in workflow context)
@@ -301,9 +301,9 @@ jobs:
               Write-Host "    ✅ PHASE 0 IS CONFIGURED CORRECTLY — OK TO PROCEED WITH PHASE 1" -ForegroundColor Green
               Write-Host "    ════════════════════════════════════════════════════════════" -ForegroundColor Green
             } else {
-              Write-Host "    ❌ PHASE 0 INCOMPLETE — Phase 1 cannot proceed!" -ForegroundColor Red
+              Write-Host "    ❌ PHASE 0 INCOMPLETE — Phase 1b cannot proceed!" -ForegroundColor Red
               Write-Host "" -ForegroundColor Gray
-              Write-Host "    Phase 1 ('Configure Secrets') requires a GitHub App to be created" -ForegroundColor Red
+              Write-Host "    Phase 1b ('Configure Secrets') requires a GitHub App to be created" -ForegroundColor Red
               Write-Host "    and its APP_ID + APP_PRIVATE_KEY secrets to be configured first." -ForegroundColor Red
               Write-Host "" -ForegroundColor Gray
               Write-Host "    ══════════════════════════════════════════════════════════════════" -ForegroundColor Red
@@ -345,7 +345,7 @@ jobs:
               Write-Host "    ══════════════════════════════════════════════════════════════════" -ForegroundColor Red
               Write-Host "" -ForegroundColor Gray
               Write-Host "    ❌ VALIDATION FAILED: Phase 0 prerequisites not met." -ForegroundColor Red
-              Write-Host "    Cannot proceed with Phase 1 until GitHub App is created and" -ForegroundColor Red
+              Write-Host "    Cannot proceed with Phase 1a/1b until GitHub App is created and" -ForegroundColor Red
               Write-Host "    APP_ID + APP_PRIVATE_KEY secrets are added at:" -ForegroundColor Red
               Write-Host "    $secretsUrl" -ForegroundColor Yellow
               Write-Host "" -ForegroundColor Gray
@@ -2650,11 +2650,11 @@ jobs:
           "| Parameter | Value |" >> $env:GITHUB_STEP_SUMMARY
           "|-----------|-------|" >> $env:GITHUB_STEP_SUMMARY
           "| 🎯 Environment | ``${{ inputs.environment }}`` |" >> $env:GITHUB_STEP_SUMMARY
-          "| 🔑 [Phase 1] Setup OIDC | ``${{ inputs.setupOidc }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| 🔑 [Phase 1a] Setup OIDC | ``${{ inputs.setupOidc }}`` |" >> $env:GITHUB_STEP_SUMMARY
           "| ℹ️ [Phase 0] Setup GitHub App | ``${{ inputs.setupGitHubApp }}`` |" >> $env:GITHUB_STEP_SUMMARY
           "| 🤖 GitHub App Name | ``${{ inputs.githubAppName }}`` |" >> $env:GITHUB_STEP_SUMMARY
-          "| 🔑 [Phase 1] Configure Secrets | ``${{ inputs.configureSecrets }}`` |" >> $env:GITHUB_STEP_SUMMARY
-          "| 🔍 Pre-Flight Validation | ``${{ inputs.enableValidation }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| 🔑 [Phase 1b] Configure Secrets (sequential after 1a) | ``${{ inputs.configureSecrets }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| 🔍 [Phase 3] Enable Pre-Deployment Validation | ``${{ inputs.enableValidation }}`` |" >> $env:GITHUB_STEP_SUMMARY
           "| 🔄 [Phase 2] Bootstrap Infrastructure | ``${{ inputs.bootstrapInfra }}`` |" >> $env:GITHUB_STEP_SUMMARY
           "| 🔄 [Phase 2] Deploy API | ``${{ inputs.deployApi }}`` |" >> $env:GITHUB_STEP_SUMMARY
           "| 🔄 [Phase 2] Deploy UI | ``${{ inputs.deployUi }}`` |" >> $env:GITHUB_STEP_SUMMARY
@@ -2749,7 +2749,7 @@ jobs:
           if ($ranPhase0 -and -not $appSecretsOk) {
             "## 🔴 Action Required — Phase 0 Complete, Manual Step Needed" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
-            "> **Phase 0 instructions have been shown. Before Phase 1 can run you must complete the two steps below.**" >> $env:GITHUB_STEP_SUMMARY
+            "> **Phase 0 instructions have been shown. Before Phase 1a/1b can run you must complete the two steps below.**" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
             "**GitHub App Name configured**: ``$appName``" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
@@ -2779,7 +2779,7 @@ jobs:
             "" >> $env:GITHUB_STEP_SUMMARY
             "---" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
-            "### Step 3 — Re-run This Workflow (Phase 1)" >> $env:GITHUB_STEP_SUMMARY
+            "### Step 3 — Re-run This Workflow (Phase 1a + 1b)" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
             "Once the two secrets are saved, **[run this workflow again](https://github.com/${{ github.repository }}/actions/workflows/azure-bootstrap.yml)** with:" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY

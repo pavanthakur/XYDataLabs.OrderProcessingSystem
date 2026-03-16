@@ -52,12 +52,12 @@ To bootstrap a new environment after initial setup:
 | Input | Type | Default | Description |
 |-------|------|---------|-------------|
 | `environment` | choice | - | Target environment (`dev`, `staging`, `prod`, `all`) |
-| `setupOidc` | boolean | `false` | Create Azure AD app registration with federated credentials (first-time only) |
-| `setupGitHubApp` | boolean | `false` | Setup GitHub App (required for automated secret management - first-time only) |
+| `setupOidc` | boolean | `false` | **Phase 1a** — Create Azure AD app registration with federated credentials (first-time only) |
+| `setupGitHubApp` | boolean | `false` | **Phase 0** — Setup GitHub App (required for automated secret management - first-time only) |
 | `oidcAppName` | string | `GitHub-Actions-OIDC` | OIDC App Name (requires GitHub App setup) |
-| `configureSecrets` | boolean | `false` | Automatically configure GitHub repository secrets |
-| `enableValidation` | boolean | `true` | Enable pre-deployment validation for future infrastructure deployments |
-| `bootstrapInfra` | boolean | `true` | Provision Azure resources (Resource Groups, App Services, App Insights) |
+| `configureSecrets` | boolean | `false` | **Phase 1b** — Automatically configure GitHub repository secrets (sequential after Phase 1a) |
+| `enableValidation` | boolean | `true` | **Phase 3** — Enable pre-deployment validation for future infrastructure deployments |
+| `bootstrapInfra` | boolean | `true` | **Phase 2** — Provision Azure resources (Resource Groups, App Services, App Insights) |
 
 ## 🔄 Workflow Jobs
 
@@ -80,6 +80,8 @@ To bootstrap a new environment after initial setup:
 
 ### 2. Configure Secrets (`configure-secrets`)
 **Runs when**: `configureSecrets` input is `true`
+
+> ⚠️ **Sequential, not parallel with Phase 1a:** This job (`Phase 1b`) always runs **after** `setup-oidc` (`Phase 1a`) because it requires the OIDC outputs (`clientId`, `tenantId`, `subscriptionId`) produced by `setup-oidc`. Even if `setupOidc` is skipped (credentials already exist), the `needs: setup-oidc` dependency is preserved so the job graph stays correct. The two Phase 1 steps **cannot run in parallel**.
 
 **Actions**:
 - Checks if secrets already exist
@@ -144,8 +146,8 @@ To bootstrap a new environment after initial setup:
 
 **Purpose**: Ensures prerequisites are configured before bootstrap runs - **Required for bootstrap to proceed**
 
-### 5. Enable Validation (`enable-validation`)
-**Runs when**: `enableValidation` input is `true` AND bootstrap completed
+### 5. Enable Pre-Deployment Validation — Phase 3 (`enable-validation`)
+**Runs when**: `enableValidation` input is `true` AND bootstrap (Phase 2) completed
 
 **Actions**:
 - Modifies `.github/workflows/infra-deploy.yml`
