@@ -140,13 +140,14 @@ So: `APP_ID` + `APP_PRIVATE_KEY` are stored so the workflow can generate a short
 
 **Question**: Why does Azure OIDC appear as a dependency in Phase 1b, 2, and 3? Can Phase 0 + 1a alone be used as prerequisites?
 
-**Answer**: The dependency is different for each phase, and Phase 1b's "dependency" is NOT the same as Phase 2 and 3.
+**Answer**: The dependency is different for each phase. Phase 1b's "dependency" is NOT the same as Phase 2 and 3.
 
 | Phase | Azure OIDC dependency | What actually happens |
 |-------|----------------------|----------------------|
 | **Phase 1b** | Needs credential **values** only | Stores clientId/tenantId/subscriptionId as `AZUREAPPSERVICE_*` GitHub secrets. Does NOT authenticate to Azure. |
 | **Phase 2** | Needs credentials to **authenticate** | Uses `azure/login@v2` with `AZUREAPPSERVICE_*` to log in to Azure and provision infrastructure. |
-| **Phase 3** | Needs credentials to **authenticate** | Uses `azure/login@v2` with `AZUREAPPSERVICE_*` to log in to Azure and deploy applications. |
+| **Phase 3 (deploy)** | Needs credentials to **authenticate** | Uses `azure/login@v2` with `AZUREAPPSERVICE_*` to log in to Azure and deploy applications. |
+| **Phase 3 (enable-validation)** | ❌ None | No Azure operations — just modifies a workflow file. |
 
 **Phase 0 alone is NOT sufficient for Phase 1b, 2, or 3:**
 - Phase 0 only creates the GitHub App (for writing GitHub secrets).
@@ -155,9 +156,41 @@ So: `APP_ID` + `APP_PRIVATE_KEY` are stored so the workflow can generate a short
 
 **Sequence required**: Phase 0 → Phase 1a → Phase 1b → Phase 2 → Phase 3
 
-> **After Phase 1a + 1b run once**, Phase 1a does not need to run again. The `AZUREAPPSERVICE_*` secrets persist in GitHub and are reused by Phase 1b (re-runs), Phase 2, and Phase 3 automatically.
+> **After Phase 1a + 1b run once**, Phase 1a does not need to run again. The `AZUREAPPSERVICE_*` secrets persist in GitHub and are reused by Phase 2 and Phase 3 automatically.
 
-See: [Documentation/QUICK-START-AZURE-BOOTSTRAP.md — Architecture Explained section](./Documentation/QUICK-START-AZURE-BOOTSTRAP.md)
+---
+
+### ❓ FAQ: Is the Azure OIDC Login Shared Across Phases? Why Does It Appear Multiple Times?
+
+**Question**: You said Phase 1b doesn't use Azure OIDC. Does that mean Phase 1a, 2, and 3 use the SAME login mechanism? Why does it appear in multiple places?
+
+**Answer**: Yes — `azure/login@v2` with the same three OIDC credentials is the **consistent, commonized mechanism** for all Azure operations. The reason it appears in multiple jobs is a GitHub Actions architectural constraint, not a design choice.
+
+**Why the same login call appears in every job that needs Azure:**  
+GitHub Actions jobs run on completely isolated, fresh virtual machine runners. An Azure login from one job is not available to another job. Every job that needs to interact with Azure must call `azure/login@v2` independently — this is required by design, not duplication.
+
+**Which jobs call `azure/login@v2`:**
+
+| Job | Login called? | Login method |
+|-----|--------------|--------------|
+| `setup-oidc` (Phase 1a, **first-time**) | ❌ No — device code instead | `az login --use-device-code` (user enters code) |
+| `setup-oidc` (Phase 1a, **re-run**) | ✅ Yes | `azure/login@v2` (same as Phase 2) |
+| `configure-github-secrets` (Phase 1b) | ❌ No | GitHub App token only |
+| `bootstrap-dev` (Phase 2) | ✅ Yes | `azure/login@v2` + Validate + Verify |
+| `bootstrap-staging` (Phase 2) | ✅ Yes | `azure/login@v2` + Validate + Verify |
+| `bootstrap-prod` (Phase 2) | ✅ Yes | `azure/login@v2` + Validate + Verify |
+| `deploy-api-to-azure` | ✅ Yes | `azure/login@v2` + credential gate |
+| `deploy-ui-to-azure` | ✅ Yes | `azure/login@v2` + credential gate |
+| `enable-validation` (Phase 3) | ❌ No | No Azure operations |
+
+**The "user input → Azure token" step exists only once (Phase 1a, first-time):**  
+The device-code step in Phase 1a (`az login --use-device-code`) is the single point where a human provides credentials to generate an Azure token. This runs exactly once. All subsequent logins — Phase 1a re-runs, Phase 2, Phase 3 — are fully automated via OIDC.
+
+**Two login patterns used in the workflow:**
+- **Phase 2 (bootstrap jobs)**: 3-step — `Validate Azure Credentials` → `Azure Login (OIDC or Secrets)` → `Verify Azure Login`. This verifies credentials before AND after the login.
+- **Phase 3 (deploy jobs)**: 2-step — `Check Azure Credentials` (sets a conditional flag) → `Login to Azure` (only runs if credentials are present). All subsequent deploy steps are gated on the same flag.
+
+See: [Documentation/QUICK-START-AZURE-BOOTSTRAP.md — Azure OIDC Login IS Commonized section](./Documentation/QUICK-START-AZURE-BOOTSTRAP.md)
 
 ---
 

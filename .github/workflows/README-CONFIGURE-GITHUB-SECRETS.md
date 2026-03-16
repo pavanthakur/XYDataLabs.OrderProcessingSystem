@@ -28,7 +28,22 @@ The `AZUREAPPSERVICE_*` secrets (`CLIENTID`, `TENANTID`, `SUBSCRIPTIONID`) are t
 
 Phase 1b needs the OIDC credential **values** to store them — not to authenticate with them. Those values come from:
 - **First run**: Phase 1a outputs `clientId`/`tenantId`/`subscriptionId` and passes them to this workflow.
-- **Re-runs**: The `AZUREAPPSERVICE_*` secrets already exist in GitHub; this workflow reads them via `gh secret list` (using the GitHub App token) and skips writing if they're unchanged.
+- **Re-runs**: The `AZUREAPPSERVICE_*` secrets already exist in GitHub from a previous Phase 1b run. This workflow writes them again if new values are passed.
+
+### How `azure/login@v2` is shared across phases
+
+`azure/login@v2` is the **single, consistent Azure authentication action** used by every workflow job that needs to interact with Azure:
+
+| Job | Uses `azure/login@v2`? | Notes |
+|-----|------------------------|-------|
+| **Phase 1b (this workflow)** | ❌ No | GitHub App token only |
+| Phase 1a (re-run) | ✅ Yes | Same credentials as Phase 2 |
+| Phase 2 (bootstrap-dev/staging/prod) | ✅ Yes | 3-step pattern: Validate → Login → Verify |
+| Phase 3 (deploy-api/ui) | ✅ Yes | 2-step pattern: Check → Login (conditional) |
+
+Each job calls `azure/login@v2` independently because GitHub Actions jobs run on isolated runners and cannot share login state.
+
+The **only** place where a human enters credentials to generate an Azure token is Phase 1a's first-time device-code step. All other Azure logins (Phase 1a re-run, Phase 2, Phase 3) are fully automated using the stored OIDC credentials.
 
 ## Purpose
 
