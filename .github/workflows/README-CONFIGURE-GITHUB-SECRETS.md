@@ -227,32 +227,209 @@ When `environment: all` is selected:
 - Job results (setup-result, secrets-result, validation-result)
 - Success/failure status for downstream job dependencies
 
-## Usage Examples
+## 🔬 Phase 1 Dry Run — Step-by-Step Data Flow
 
-### Example 1: First-Time Setup
+This section traces the complete data path from OIDC login through secret creation for a first-time `setupOidc=true` + `configureSecrets=true` run.
 
-```yaml
-# Step 1: Run bootstrap with OIDC setup
-azure-bootstrap.yml:
-  setupOidc: true
-  setupGitHubApp: false
-  configureSecrets: false
+### Inputs (set by user in GitHub UI)
 
-# Step 2: Manually setup GitHub App (one-time)
-# Follow instructions in workflow output or use:
-# ./scripts/setup-github-app-from-manifest.ps1
-
-# Step 3: Run configure-github-secrets workflow manually
-configure-github-secrets.yml:
-  environment: all
-  setupGitHubApp: false
-  configureSecrets: true
-  clientId: <from Azure>
-  tenantId: <from Azure>
-  subscriptionId: <from Azure>
+```
+environment:      dev
+setupOidc:        true   ← Phase 1a
+configureSecrets: true   ← Phase 1b
+setupGitHubApp:   false  ← already done in Phase 0
 ```
 
-### Example 2: Complete Automated Setup
+### Step 1 — `validate-inputs` (azure-bootstrap.yml)
+
+- Validates `environment=dev` and branch = `dev` ✅
+- Checks: `AZUREAPPSERVICE_*` secrets missing → OK because `setupOidc=true` will create them ✅
+- Checks: `APP_ID` + `APP_PRIVATE_KEY` present (required for Phase 1b) ✅
+- Prints Pre-Flight Summary showing both phases "WILL RUN"
+- **No credentials written yet**
+
+### Step 2 — `setup-oidc` — Check Azure Authentication Method
+
+```
+Input from environment context:
+  EXISTING_CLIENT_ID      = "" (not yet set)
+  EXISTING_TENANT_ID      = "" (not yet set)
+  EXISTING_SUBSCRIPTION_ID = "" (not yet set)
+
+Result:
+  useOidc = false  → device-code login required
+```
+
+### Step 3 — `setup-oidc` — Azure Login (Device Code — First-Time Setup Only)
+
+```
+az login --use-device-code
+  ↓
+Workflow logs print:
+  "To sign in, use a web browser to open https://microsoft.com/devicelogin
+   and enter the code ABCD-EFGH to authenticate."
+  ↓
+User opens https://microsoft.com/devicelogin, enters ABCD-EFGH, signs in
+  ↓
+Azure returns an access token bound to the user's account
+  ↓
+Azure CLI session is now authenticated
+```
+
+> ⏱️ Timeout: 3 minutes. If the code is not entered in time, re-run the workflow.
+
+### Step 4 — `setup-oidc` — Setup OIDC App Registration
+
+```
+Parameters computed from environment=dev:
+  branches     = "dev"
+  environments = "dev"
+
+Runs: setup-github-oidc.ps1
+  -Branches "dev"
+  -Environments "dev"
+  -GitHubOwner "pavanthakur"
+  -Repository "XYDataLabs.OrderProcessingSystem"
+  -AppDisplayName "GitHub-Actions-OIDC"
+
+Script actions:
+  1. Creates (or finds existing) Entra ID App Registration "GitHub-Actions-OIDC"
+  2. Creates Service Principal for the App Registration
+  3. Creates federated credential for branch:
+       name:    "github-dev-oidc"
+       subject: "repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev"
+  4. Creates federated credential for environment:
+       name:    "github-dev-env-oidc"
+       subject: "repo:pavanthakur/XYDataLabs.OrderProcessingSystem:environment:dev"
+  5. Assigns Contributor RBAC on the subscription/resource group to the Service Principal
+```
+
+### Step 5 — `setup-oidc` — Extract and Output Credentials
+
+```
+az account show  →  { id: "sub-123", tenantId: "tnt-456" }
+az ad app list --display-name "GitHub-Actions-OIDC"  →  { appId: "clt-789", id: "obj-abc" }
+
+Job outputs written to GITHUB_OUTPUT:
+  clientId       = "clt-789"
+  tenantId       = "tnt-456"
+  subscriptionId = "sub-123"
+  appObjectId    = "obj-abc"
+```
+
+### Step 6 — `configure-github-secrets` — Receives Phase 1a Outputs
+
+```yaml
+# In azure-bootstrap.yml:
+configure-github-secrets:
+  uses: ./.github/workflows/configure-github-secrets.yml
+  with:
+    environment:    dev
+    configureSecrets: true
+    clientId:       ${{ needs.setup-oidc.outputs.clientId }}       # "clt-789"
+    tenantId:       ${{ needs.setup-oidc.outputs.tenantId }}       # "tnt-456"
+    subscriptionId: ${{ needs.setup-oidc.outputs.subscriptionId }} # "sub-123"
+```
+
+### Step 7 — `configure-secrets` — Validate Prerequisites
+
+```
+inputs.clientId     = "clt-789" ✅
+inputs.tenantId     = "tnt-456" ✅
+inputs.subscriptionId = "sub-123" ✅
+
+credentialsProvided = true  → will write new secrets
+useExistingSecrets  = false → fresh credentials
+```
+
+### Step 8 — `configure-secrets` — Generate GitHub App Token
+
+```
+APP_ID + APP_PRIVATE_KEY → actions/create-github-app-token@v1
+  → short-lived GitHub App installation token (valid 1 hour, auto-rotated)
+  → used as GH_TOKEN for all subsequent gh CLI calls
+```
+
+### Step 9 — `configure-secrets` — Set Repository Secrets
+
+```
+gh secret set AZUREAPPSERVICE_CLIENTID       --repo pavanthakur/XYDataLabs.OrderProcessingSystem --body "clt-789"
+gh secret set AZUREAPPSERVICE_TENANTID       --repo pavanthakur/XYDataLabs.OrderProcessingSystem --body "tnt-456"
+gh secret set AZUREAPPSERVICE_SUBSCRIPTIONID --repo pavanthakur/XYDataLabs.OrderProcessingSystem --body "sub-123"
+
+Result:
+  ✅ AZUREAPPSERVICE_CLIENTID       — set at repo level
+  ✅ AZUREAPPSERVICE_TENANTID       — set at repo level
+  ✅ AZUREAPPSERVICE_SUBSCRIPTIONID — set at repo level
+```
+
+### Step 10 — `configure-secrets` — Create GitHub Environment + Set Environment Secrets
+
+```
+environments to configure: ["dev"]  (from environment=dev)
+
+For environment "dev":
+  gh api --method PUT "repos/pavanthakur/XYDataLabs.OrderProcessingSystem/environments/dev"
+    → ✅ environment created (or already exists)
+
+  gh secret set AZUREAPPSERVICE_CLIENTID       --env dev --repo ... --body "clt-789"
+  gh secret set AZUREAPPSERVICE_TENANTID       --env dev --repo ... --body "tnt-456"
+  gh secret set AZUREAPPSERVICE_SUBSCRIPTIONID --env dev --repo ... --body "sub-123"
+    → ✅ all three secrets set at environment level
+```
+
+### Final State (what was created)
+
+| Location | Secret | Value |
+|----------|--------|-------|
+| Repository secrets | `AZUREAPPSERVICE_CLIENTID` | `clt-789` |
+| Repository secrets | `AZUREAPPSERVICE_TENANTID` | `tnt-456` |
+| Repository secrets | `AZUREAPPSERVICE_SUBSCRIPTIONID` | `sub-123` |
+| `dev` environment secrets | `AZUREAPPSERVICE_CLIENTID` | `clt-789` |
+| `dev` environment secrets | `AZUREAPPSERVICE_TENANTID` | `tnt-456` |
+| `dev` environment secrets | `AZUREAPPSERVICE_SUBSCRIPTIONID` | `sub-123` |
+
+| Azure Resource | What Was Created |
+|----------------|-----------------|
+| Entra ID App Registration | `GitHub-Actions-OIDC` with Client ID `clt-789` |
+| Federated credential (branch) | `repo:.../XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev` |
+| Federated credential (environment) | `repo:.../XYDataLabs.OrderProcessingSystem:environment:dev` |
+
+### Re-run Behaviour (after first successful run)
+
+On the next run (e.g., credential rotation or adding `staging`):
+
+```
+Step 2 — Auth Check:
+  EXISTING_CLIENT_ID = "clt-789" ✅
+  useOidc = true  → azure/login@v2 (no device code, fully automated)
+
+Step 7 — Prerequisites:
+  If new clientId/tenantId/subscriptionId passed:
+    credentialsProvided = true  → overwrite existing secrets
+  If no new credentials passed AND existing secrets present:
+    useExistingSecrets = true   → no writes needed, Phase 1b is a no-op
+```
+## Usage Examples
+
+### Example 1: First-Time Setup (Recommended — Run Phase 1a + 1b Together)
+
+```yaml
+# Run azure-bootstrap.yml with both Phase 1 checkboxes selected.
+# OIDC outputs (clientId/tenantId/subscriptionId) are automatically
+# passed from setup-oidc to configure-github-secrets by the workflow.
+
+azure-bootstrap.yml:
+  environment: dev
+  setupOidc: true         # Phase 1a — device-code login, create Entra ID App
+  configureSecrets: true  # Phase 1b — receives 1a outputs, writes AZUREAPPSERVICE_* secrets
+  setupGitHubApp: false   # Already done in Phase 0
+  bootstrapInfra: false   # Run separately in Phase 2
+```
+
+Phase 1a and Phase 1b always run sequentially (1a first, then 1b). The workflow dependency chain enforces this order automatically — no manual coordination is needed.
+
+
 
 ```yaml
 # Run bootstrap with all options
@@ -437,5 +614,5 @@ The workflow automatically validates configuration at the end:
 
 ---
 
-**Last Updated**: 2026-01-27
+**Last Updated**: 2026-03-16
 **Maintainer**: GitHub Copilot
