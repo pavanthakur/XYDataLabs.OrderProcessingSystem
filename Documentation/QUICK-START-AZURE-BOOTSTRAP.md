@@ -49,6 +49,195 @@ It handles everything — Azure authentication, GitHub secrets, cloud infrastruc
 
 ---
 
+## 🏗️ Architecture Explained: Two Authentication Systems
+
+> **Read this section if you're confused about why there are two sets of credentials (GitHub App vs. Azure OIDC) and what each one does.**
+
+The bootstrap setup uses **two completely separate authentication systems** that serve entirely different purposes. Mixing them up is the most common source of confusion.
+
+---
+
+### System 1 — GitHub App (`APP_ID` + `APP_PRIVATE_KEY`)
+
+| | |
+|---|---|
+| **Phase** | Phase 0 prerequisite |
+| **What it is** | A GitHub App you create once and install on your repository |
+| **Credentials stored** | `APP_ID` + `APP_PRIVATE_KEY` — stored manually as GitHub repository secrets |
+| **How it works at runtime** | `actions/create-github-app-token@v1` uses these to generate a **short-lived installation token** (auto-rotated, valid 1 hour) |
+| **What it can do** | Write GitHub repository and environment secrets via the GitHub API |
+| **What it CANNOT do** | Authenticate to Azure or interact with Azure resources in any way |
+| **Used in** | **Phase 1b only** — to call `gh secret set AZUREAPPSERVICE_*` and write Azure credentials into GitHub |
+| **NOT used in** | Phase 2 or Phase 3 — those phases authenticate directly to Azure, not to GitHub |
+
+#### ❓ Why can't `GITHUB_TOKEN` do this?
+
+`GITHUB_TOKEN` is the built-in token every GitHub Actions run gets automatically. It **does not have permission to write repository secrets** — this is a GitHub security design decision. Only a GitHub App installation token (or a PAT with `repo` scope) can call `gh secret set`. A PAT is tied to a user account and expires; a GitHub App is tied to the repository, auto-rotates, and never expires.
+
+---
+
+### System 2 — Azure OIDC (`AZUREAPPSERVICE_CLIENTID` + `TENANTID` + `SUBSCRIPTIONID`)
+
+| | |
+|---|---|
+| **Phase** | Phase 1a creates, Phase 1b stores, Phase 1a re-run + Phase 2 + Phase 3 use |
+| **What it is** | A Microsoft Entra ID App Registration with federated credentials configured for GitHub Actions |
+| **Credentials stored** | `AZUREAPPSERVICE_CLIENTID` + `AZUREAPPSERVICE_TENANTID` + `AZUREAPPSERVICE_SUBSCRIPTIONID` (written automatically by Phase 1b) |
+| **How it works at runtime** | `azure/login@v2` exchanges a GitHub-issued JWT for an Azure access token (passwordless, no stored passwords) |
+| **What it can do** | Authenticate to Azure and interact with Azure resources (create App Services, deploy code, etc.) |
+| **What it CANNOT do** | Write GitHub secrets or interact with the GitHub API |
+| **Used in** | Phase 1a (re-runs) + Phase 2 (bootstrap) + Phase 3 (deploy) — **consistent `azure/login@v2` across all Azure-touching jobs** |
+| **NOT used in** | Phase 0, Phase 1b (first time), or `enable-validation` — those don't interact with Azure resources |
+
+---
+
+### ❓ Why does Phase 1b appear to "depend on" OIDC?
+
+Phase 1b does **NOT authenticate to Azure**. It only needs the OIDC credential **values** (clientId, tenantId, subscriptionId) so it can store them as `AZUREAPPSERVICE_*` GitHub secrets. Those values come from:
+
+- **First run**: Phase 1a outputs them (after logging into Azure and creating the Entra ID App Registration)
+- **Re-runs**: Already stored as `AZUREAPPSERVICE_*` secrets from the previous run — Phase 1a can be skipped
+
+So Phase 1b's "OIDC dependency" is simply needing the **values to write** — not actual Azure authentication.
+
+---
+
+### ✅ Azure OIDC Login IS Commonized
+
+The `azure/login@v2` action with the same three credentials (`AZUREAPPSERVICE_CLIENTID`, `AZUREAPPSERVICE_TENANTID`, `AZUREAPPSERVICE_SUBSCRIPTIONID`) is the **consistent, shared Azure authentication mechanism** across all workflow jobs that need to interact with Azure:
+
+| Job | `azure/login@v2` called? | Credentials source |
+|-----|------------------------|--------------------|
+| `setup-oidc` — re-run | ✅ Yes | Existing `AZUREAPPSERVICE_*` secrets |
+| `bootstrap-dev` | ✅ Yes | Phase 1a outputs or existing secrets |
+| `bootstrap-staging` | ✅ Yes | Phase 1a outputs or existing secrets |
+| `bootstrap-prod` | ✅ Yes | Phase 1a outputs or existing secrets |
+| `deploy-api-to-azure` | ✅ Yes | Existing `AZUREAPPSERVICE_*` secrets |
+| `deploy-ui-to-azure` | ✅ Yes | Existing `AZUREAPPSERVICE_*` secrets |
+| `configure-github-secrets` (Phase 1b) | ❌ No | GitHub App token only |
+| `enable-validation` (Phase 3) | ❌ No | No Azure operations needed |
+
+**Why does `azure/login@v2` appear in multiple jobs instead of once?**  
+GitHub Actions jobs run on completely isolated, fresh runners. An Azure login token is not shared between jobs — each job must authenticate independently. This is not duplication by choice; it is required by GitHub Actions' security model.
+
+#### Phase 1a Special Case: First-Time "User Input" Login Path
+
+Phase 1a is the only job with **two different login paths** selected at runtime:
+
+```
+IF AZUREAPPSERVICE_* secrets already exist (re-run):
+  → azure/login@v2   (same as Phase 2 and Phase 3 — fully automated, no user input)
+
+IF no existing credentials (first-time setup):
+  → az login --use-device-code   ← USER ACTION REQUIRED
+    • Workflow prints a device code in the logs
+    • User navigates to https://microsoft.com/devicelogin and enters the code
+    • Azure returns an access token
+    • Token is used to create the Entra ID App Registration
+    • clientId / tenantId / subscriptionId are extracted and output to Phase 1b
+```
+
+This device-code step is the **only place in the entire workflow where user input generates an Azure token**. It runs exactly once. Every subsequent Azure login (Phase 1a re-runs, Phase 2, Phase 3) is fully automated via OIDC.
+
+#### Standard OIDC Login Pattern in Phase 2 (Bootstrap Jobs)
+
+Each bootstrap job (dev / staging / prod) uses a consistent **3-step Azure login sequence**:
+
+```
+Step 1: Validate Azure Credentials
+        → Checks that CLIENT_ID / TENANT_ID / SUBSCRIPTION_ID are present
+        → Fails fast with a clear error if any are missing
+        → Source: Phase 1a outputs || AZUREAPPSERVICE_* secrets
+
+Step 2: Azure Login (OIDC or Secrets)
+        → uses: azure/login@v2
+        → Exchanges GitHub OIDC JWT for an Azure access token
+        → Passwordless — no stored passwords, no manual input
+
+Step 3: Verify Azure Login
+        → Runs: az account show
+        → Confirms the login succeeded and prints subscription details
+        → Fails the job before any infrastructure changes if login is bad
+```
+
+The three steps are repeated per-environment job (dev, staging, prod) because each job runs on an independent runner.
+
+#### Login Pattern in Phase 3 (Deploy Workflows)
+
+The deploy workflows (`deploy-api-to-azure.yml`, `deploy-ui-to-azure.yml`) use a **2-step pattern** with conditional gating:
+
+```
+Step 1: Check Azure Credentials
+        → Validates that AZUREAPPSERVICE_* secrets are present
+        → Sets credentialsConfigured=true/false output
+        → If credentials are missing: prints fix instructions, exits gracefully (no failure)
+
+Step 2: Login to Azure
+        → uses: azure/login@v2 (only if credentialsConfigured == 'true')
+        → All subsequent steps are also gated on credentialsConfigured == 'true'
+        → Missing credentials = graceful skip, not failure (deploy is optional until infra exists)
+```
+
+---
+
+### Complete Token Flow (All Phases)
+
+```
+Phase 0:  ──── (Manual, one-time) ───────────────────────────────────────────
+           User creates GitHub App + stores APP_ID + APP_PRIVATE_KEY
+           in GitHub repository secrets.
+
+Phase 1a: ──── Azure login (conditional) ────────────────────────────────────
+           ┌─ FIRST RUN (no stored OIDC credentials):
+           │    az login --use-device-code  ← USER INPUT REQUIRED (once only)
+           │    → Azure returns access token from user's credentials
+           └─ RE-RUN (AZUREAPPSERVICE_* already exist):
+                azure/login@v2              ← AUTOMATED, same as Phase 2/3
+           → setup-github-oidc.ps1 creates/updates Entra ID App Registration
+           OUTPUT: clientId, tenantId, subscriptionId
+
+Phase 1b: ──── GitHub App token ─────────────────────────────────────────────
+           APP_ID + APP_PRIVATE_KEY
+             → actions/create-github-app-token@v1 → short-lived GitHub token
+             → gh secret set AZUREAPPSERVICE_CLIENTID  ← stores Phase 1a output
+             → gh secret set AZUREAPPSERVICE_TENANTID  ← stores Phase 1a output
+             → gh secret set AZUREAPPSERVICE_SUBSCRIPTIONID ← stores Phase 1a output
+           ❌ Does NOT talk to Azure at all.
+
+Phase 2:  ──── Azure OIDC (3-step pattern, per-environment job) ─────────────
+           AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID
+             Step 1: Validate credentials present (fast-fail pre-check)
+             Step 2: azure/login@v2 → Authenticate to Azure (passwordless)
+             Step 3: az account show → Verify login succeeded
+             → Provision: Resource Groups, App Services, SQL, Key Vault
+           ❌ Does NOT use GitHub App token at all.
+
+Phase 3:  ──── Azure OIDC (2-step pattern + conditional gating) ─────────────
+(deploy)  AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID
+             Step 1: Check credentials → set credentialsConfigured=true/false
+             Step 2: azure/login@v2 (only if credentialsConfigured == 'true')
+             → Deploy API and UI to Azure App Service
+           ❌ Does NOT use GitHub App token at all.
+
+Phase 3:  ──── No Azure login at all ────────────────────────────────────────
+(enable-  Only modifies infra-deploy.yml workflow file (git commit).
+valid.)   No Azure operations → no Azure login needed.
+```
+
+### Summary Table
+
+| Phase / Job | Uses GitHub App Token? | Azure OIDC login? | Login path | Purpose |
+|-------------|----------------------|-------------------|------------|---------|
+| Phase 0 | N/A — creates the app | ❌ No | — | Create GitHub App + store APP_ID/APP_PRIVATE_KEY |
+| **Phase 1a** (first time) | ❌ No | ❌ No — device code instead | `az login --use-device-code` ← **user input** | Create Entra ID App Registration |
+| **Phase 1a** (re-run) | ❌ No | ✅ `azure/login@v2` | Automated OIDC (same as Phase 2) | Re-run/update Entra ID App Registration |
+| **Phase 1b** | ✅ Yes — writes GitHub secrets | ❌ **No Azure login at all** | GitHub App token only | Store `AZUREAPPSERVICE_*` secrets in GitHub |
+| Phase 2 (bootstrap) | ❌ No | ✅ `azure/login@v2` | 3-step: Validate → Login → Verify | Provision Azure infrastructure |
+| Phase 3 (deploy API/UI) | ❌ No | ✅ `azure/login@v2` | 2-step + conditional gate | Deploy applications to Azure |
+| Phase 3 (enable-validation) | ❌ No | ❌ No Azure login | — | Modify workflow file (git only) |
+
+---
+
 ## 📋 Workflow Parameter Reference
 
 Navigate to: **GitHub → Actions → Azure Bootstrap Setup → Run workflow**

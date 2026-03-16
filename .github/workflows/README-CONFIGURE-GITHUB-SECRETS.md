@@ -4,6 +4,47 @@
 
 This workflow handles GitHub App setup and secret configuration. It was separated from the main bootstrap workflow to improve modularity, readability, and independent execution tracking.
 
+## 🔑 Key Concept: Two Authentication Systems
+
+This workflow is the intersection of two completely independent authentication systems. Understanding the difference is essential for troubleshooting.
+
+### GitHub App Token — writes GitHub secrets
+
+The GitHub App (`APP_ID` + `APP_PRIVATE_KEY`) is used **only to write `AZUREAPPSERVICE_*` secrets into GitHub**. 
+
+- `GITHUB_TOKEN` (the built-in workflow token) does **not** have permission to write repository secrets — this is a GitHub security constraint.
+- A GitHub App installation token (generated from `APP_ID` + `APP_PRIVATE_KEY`) **does** have `Secrets: write` permission.
+- The token is short-lived (1 hour), auto-rotates, and never expires like a PAT would.
+- **The GitHub App token never touches Azure.** It is purely a GitHub API credential.
+
+### Azure OIDC — authenticates to Azure
+
+The `AZUREAPPSERVICE_*` secrets (`CLIENTID`, `TENANTID`, `SUBSCRIPTIONID`) are the output of Phase 1a. They represent an Azure identity (Entra ID App Registration with federated credentials).
+
+- **This workflow (Phase 1b) does NOT use these to authenticate to Azure.** It only stores their values as GitHub secrets.
+- Phase 2 (bootstrap infra) and Phase 3 (deploy) use `azure/login@v2` with these secrets to authenticate to Azure.
+
+### Why Phase 1b "depends on" OIDC credentials
+
+Phase 1b needs the OIDC credential **values** to store them — not to authenticate with them. Those values come from:
+- **First run**: Phase 1a outputs `clientId`/`tenantId`/`subscriptionId` and passes them to this workflow.
+- **Re-runs**: The `AZUREAPPSERVICE_*` secrets already exist in GitHub from a previous Phase 1b run. This workflow writes them again if new values are passed.
+
+### How `azure/login@v2` is shared across phases
+
+`azure/login@v2` is the **single, consistent Azure authentication action** used by every workflow job that needs to interact with Azure:
+
+| Job | Uses `azure/login@v2`? | Notes |
+|-----|------------------------|-------|
+| **Phase 1b (this workflow)** | ❌ No | GitHub App token only |
+| Phase 1a (re-run) | ✅ Yes | Same credentials as Phase 2 |
+| Phase 2 (bootstrap-dev/staging/prod) | ✅ Yes | 3-step pattern: Validate → Login → Verify |
+| Phase 3 (deploy-api/ui) | ✅ Yes | 2-step pattern: Check → Login (conditional) |
+
+Each job calls `azure/login@v2` independently because GitHub Actions jobs run on isolated runners and cannot share login state.
+
+The **only** place where a human enters credentials to generate an Azure token is Phase 1a's first-time device-code step. All other Azure logins (Phase 1a re-run, Phase 2, Phase 3) are fully automated using the stored OIDC credentials.
+
 ## Purpose
 
 Automates:
@@ -296,11 +337,37 @@ configure-github-secrets.yml:
 
 **Symptom:**
 ```
-❌ Missing required OIDC credentials
+❌ OIDC secrets are missing and no new credentials were provided!
 ```
 
-**Solution:**
-Run bootstrap workflow with `setupOidc: true` first, or provide credentials as inputs when running manually.
+**Root Cause:**  
+Phase 1b (`configureSecrets`) was run without Phase 1a (`setupOidc`), and no `AZUREAPPSERVICE_*` secrets exist in the repository yet (first-time setup).
+
+**Solution:**  
+Re-run the bootstrap workflow with **both** Phase 1 checkboxes selected:
+
+| Parameter | Value |
+|-----------|-------|
+| 🔑 Setup Azure OIDC (Phase 1a) | `true` ✅ |
+| 🔑 Configure GitHub Secrets (Phase 1b) | `true` ✅ |
+
+**After the first successful run**, Phase 1a does not need to be repeated. The `AZUREAPPSERVICE_*` secrets are stored persistently and used automatically by Phase 1b on subsequent runs.
+
+---
+
+### ℹ️ Is Azure OIDC Required for Phase 1b, 2, and 3?
+
+**Short answer: Yes for all three phases — but Phase 1a only needs to run ONCE.**
+
+| Phase | Requires Azure OIDC? | Notes |
+|-------|---------------------|-------|
+| Phase 0 — GitHub App | ❌ No | Only manages GitHub secrets; no Azure access |
+| **Phase 1a — Setup Azure OIDC** | N/A — this IS the setup | Run once to create the Azure identity (`GitHub-Actions-OIDC` app registration) |
+| **Phase 1b — Configure Secrets** | ✅ Yes (first run only) | Needs `clientId`/`tenantId`/`subscriptionId` from Phase 1a to store as `AZUREAPPSERVICE_*` secrets. On re-runs: uses existing secrets if present — no Phase 1a needed. |
+| Phase 2 — Bootstrap Infrastructure | ✅ Yes | Uses `AZUREAPPSERVICE_*` secrets set by Phase 1b |
+| Phase 3 — Deploy API/UI | ✅ Yes | Uses `AZUREAPPSERVICE_*` secrets set by Phase 1b |
+
+> **Phase 0 (GitHub App) is NOT a substitute for OIDC.** The GitHub App is only for managing GitHub repository secrets (writing `AZUREAPPSERVICE_*` to GitHub). It does NOT grant any Azure permissions. Phase 2 and Phase 3 always authenticate to Azure via OIDC — the stored `AZUREAPPSERVICE_*` secrets are the mechanism.
 
 ## Validation
 
