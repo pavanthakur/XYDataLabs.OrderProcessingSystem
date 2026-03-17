@@ -1146,7 +1146,7 @@ jobs:
       inputs.bootstrapInfra &&
       (inputs.environment == 'dev' || inputs.environment == 'all') &&
       (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped') &&
-      (needs.configure-github-secrets.result == 'success' || needs.configure-github-secrets.result == 'skipped') &&
+      (needs.configure-github-secrets.result == 'success' || needs.configure-github-secrets.result == 'skipped')
     needs: [validate-inputs, setup-oidc, configure-github-secrets]
     runs-on: windows-latest
     environment: dev
@@ -1665,7 +1665,7 @@ jobs:
       inputs.bootstrapInfra &&
       (inputs.environment == 'staging' || inputs.environment == 'all') &&
       (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped') &&
-      (needs.configure-github-secrets.result == 'success' || needs.configure-github-secrets.result == 'skipped') &&
+      (needs.configure-github-secrets.result == 'success' || needs.configure-github-secrets.result == 'skipped')
     needs: [validate-inputs, setup-oidc, configure-github-secrets]
     runs-on: windows-latest
     environment: staging
@@ -2164,7 +2164,7 @@ jobs:
       inputs.bootstrapInfra &&
       (inputs.environment == 'prod' || inputs.environment == 'all') &&
       (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped') &&
-      (needs.configure-github-secrets.result == 'success' || needs.configure-github-secrets.result == 'skipped') &&
+      (needs.configure-github-secrets.result == 'success' || needs.configure-github-secrets.result == 'skipped')
     needs: [validate-inputs, setup-oidc, configure-github-secrets]
     runs-on: windows-latest
     environment: prod
@@ -2669,7 +2669,7 @@ jobs:
       inputs.cleanupInfra &&
       (inputs.environment == 'dev' || inputs.environment == 'all') &&
       (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped') &&
-      (needs.configure-github-secrets.result == 'success' || needs.configure-github-secrets.result == 'skipped') &&
+      (needs.configure-github-secrets.result == 'success' || needs.configure-github-secrets.result == 'skipped')
     needs: [validate-inputs, setup-oidc, configure-github-secrets]
     runs-on: windows-latest
     environment: dev
@@ -2758,7 +2758,7 @@ jobs:
       inputs.cleanupInfra &&
       (inputs.environment == 'staging' || inputs.environment == 'all') &&
       (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped') &&
-      (needs.configure-github-secrets.result == 'success' || needs.configure-github-secrets.result == 'skipped') &&
+      (needs.configure-github-secrets.result == 'success' || needs.configure-github-secrets.result == 'skipped')
     needs: [validate-inputs, setup-oidc, configure-github-secrets]
     runs-on: windows-latest
     environment: staging
@@ -2843,7 +2843,7 @@ jobs:
       inputs.cleanupInfra &&
       (inputs.environment == 'prod' || inputs.environment == 'all') &&
       (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped') &&
-      (needs.configure-github-secrets.result == 'success' || needs.configure-github-secrets.result == 'skipped') &&
+      (needs.configure-github-secrets.result == 'success' || needs.configure-github-secrets.result == 'skipped')
     needs: [validate-inputs, setup-oidc, configure-github-secrets]
     runs-on: windows-latest
     environment: prod
