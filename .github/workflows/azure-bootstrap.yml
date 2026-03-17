@@ -595,9 +595,9 @@ jobs:
       EXISTING_TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
       EXISTING_SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
     outputs:
-      clientId: ${{ steps.oidc.outputs.clientId }}
-      tenantId: ${{ steps.oidc.outputs.tenantId }}
-      subscriptionId: ${{ steps.oidc.outputs.subscriptionId }}
+      clientId: ${{ steps.oidc.outputs.clientId || steps.oidc-passthrough.outputs.clientId }}
+      tenantId: ${{ steps.oidc.outputs.tenantId || steps.oidc-passthrough.outputs.tenantId }}
+      subscriptionId: ${{ steps.oidc.outputs.subscriptionId || steps.oidc-passthrough.outputs.subscriptionId }}
       appObjectId: ${{ steps.oidc.outputs.appObjectId }}
     steps:
       - uses: actions/checkout@v4
@@ -724,8 +724,42 @@ jobs:
             exit 1
           }
 
+      # When auto-triggered (bootstrapInfra or configureSecrets, without setupOidc), we only
+      # need to pass the existing stored credentials through as job outputs. Running the OIDC
+      # setup script (which creates an App Registration) is skipped — that requires Entra ID
+      # Application Administrator privileges and is only needed on first-time setup (setupOidc).
+      - name: Emit Existing Credentials as Outputs
+        id: oidc-passthrough
+        if: '!inputs.setupOidc'
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║         EMIT EXISTING OIDC CREDENTIALS (PASSTHROUGH)          ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "ℹ️  setup-oidc was auto-triggered (not setupOidc=true)." -ForegroundColor Cyan
+          Write-Host "   Skipping App Registration creation — emitting existing credentials as outputs." -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "  CLIENTID      : $(if ($env:EXISTING_CLIENT_ID)       { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($env:EXISTING_CLIENT_ID) { 'Green' } else { 'Red' })
+          Write-Host "  TENANTID      : $(if ($env:EXISTING_TENANT_ID)       { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($env:EXISTING_TENANT_ID) { 'Green' } else { 'Red' })
+          Write-Host "  SUBSCRIPTIONID: $(if ($env:EXISTING_SUBSCRIPTION_ID) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($env:EXISTING_SUBSCRIPTION_ID) { 'Green' } else { 'Red' })
+          Write-Host ""
+          if (-not $env:EXISTING_CLIENT_ID -or -not $env:EXISTING_TENANT_ID -or -not $env:EXISTING_SUBSCRIPTION_ID) {
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ No existing OIDC credentials found in environment secrets." -ForegroundColor Red
+            Write-Host "   Phase 1a (Setup Azure OIDC) must be run first to create them." -ForegroundColor Red
+            Write-Host "   Re-run this workflow with 'Setup Azure OIDC' (setupOidc) checked." -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Error "Missing OIDC credentials. Run Phase 1a (setupOidc=true) first."
+            exit 1
+          }
+          "clientId=$env:EXISTING_CLIENT_ID"       >> $env:GITHUB_OUTPUT
+          "tenantId=$env:EXISTING_TENANT_ID"       >> $env:GITHUB_OUTPUT
+          "subscriptionId=$env:EXISTING_SUBSCRIPTION_ID" >> $env:GITHUB_OUTPUT
+          Write-Host "✅ Existing credentials emitted as job outputs. App Registration step skipped." -ForegroundColor Green
+
       - name: Setup OIDC App Registration
         id: oidc
+        if: inputs.setupOidc
         run: |
           Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
           Write-Host "║         SETUP GITHUB ACTIONS OIDC                             ║" -ForegroundColor Cyan
@@ -891,6 +925,7 @@ jobs:
           }
 
       - name: Verify Federated Credentials
+        if: inputs.setupOidc
         run: |
           Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
           Write-Host "║         VERIFY FEDERATED CREDENTIALS                          ║" -ForegroundColor Cyan
@@ -1021,6 +1056,7 @@ jobs:
           }
 
       - name: Create Setup Summary
+        if: inputs.setupOidc
         run: |
           "## 🔐 Azure OIDC Setup Complete" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
