@@ -560,6 +560,8 @@ jobs:
             Write-Host "  ℹ️  Azure OIDC (Phase 1a) is MANDATORY for all phases that interact with Azure." -ForegroundColor Yellow
             Write-Host "  Bootstrap, deploy, and Phase 1b (configure secrets) phases enforce this with a hard fail." -ForegroundColor Gray
             Write-Host ""
+            Write-Error "Pre-flight check failed — one or more selected phases have unmet prerequisites. See details above."
+            exit 1
           }
 
   setup-oidc:
