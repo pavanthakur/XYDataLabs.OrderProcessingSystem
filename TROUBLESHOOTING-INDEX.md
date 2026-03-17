@@ -60,8 +60,7 @@ APP_PRIVATE_KEY       : ❌ Missing
 **Quick Fix**:
 1. Edit `.github/workflows/infra-deploy.yml`
 2. Change `if: false  # TODO: Enable after bootstrap` to `if: (github.event_name == 'push') || ...`
-3. Uncomment `needs: pre-validate`
-4. Commit and push
+3. Commit and push
 
 **Alternative**: Grant your GitHub App "Workflows: Read and write" permission (advanced)
 
@@ -146,13 +145,13 @@ So: `APP_ID` + `APP_PRIVATE_KEY` are stored so the workflow can generate a short
 |-------|----------------------|----------------------|
 | **Phase 1b** | Needs credential **values** only | Stores clientId/tenantId/subscriptionId as `AZUREAPPSERVICE_*` GitHub secrets. Does NOT authenticate to Azure. |
 | **Phase 2** | Needs credentials to **authenticate** | Uses `azure/login@v2` with `AZUREAPPSERVICE_*` to log in to Azure and provision infrastructure. |
-| **Phase 3 (deploy)** | Needs credentials to **authenticate** | Uses `azure/login@v2` with `AZUREAPPSERVICE_*` to log in to Azure and deploy applications. |
-| **Phase 3 (enable-validation)** | ❌ None | No Azure operations — just modifies a workflow file. |
+| **Phase 4 (cleanup)** | Needs credentials to **authenticate** | Uses `azure/login@v2` with `AZUREAPPSERVICE_*` to log in to Azure and delete resources. |
+| **Deploy (API/UI)** | Needs credentials to **authenticate** | Uses `azure/login@v2` with `AZUREAPPSERVICE_*` to log in to Azure and deploy applications. |
 
-**Phase 0 alone is NOT sufficient for Phase 1b, 2, or 3:**
+**Phase 0 alone is NOT sufficient for Phase 1b, 2, or 4:**
 - Phase 0 only creates the GitHub App (for writing GitHub secrets).
-- Phase 1a creates the Azure identity and produces the `clientId`/`tenantId`/`subscriptionId` values that Phase 1b stores, and that Phase 2/3 use to authenticate to Azure.
-- Phase 2 and 3 will always fail without `AZUREAPPSERVICE_*` secrets (which Phase 1b writes).
+- Phase 1a creates the Azure identity and produces the `clientId`/`tenantId`/`subscriptionId` values that Phase 1b stores, and that Phase 2/4/deploy use to authenticate to Azure.
+- Phase 2, 4, and deploy will always fail without `AZUREAPPSERVICE_*` secrets (which Phase 1b writes).
 
 **Sequence required**: Phase 0 → Phase 1a → Phase 1b → Phase 2 → Phase 3
 
@@ -181,14 +180,15 @@ GitHub Actions jobs run on completely isolated, fresh virtual machine runners. A
 | `bootstrap-prod` (Phase 2) | ✅ Yes | `azure/login@v2` + Validate + Verify |
 | `deploy-api-to-azure` | ✅ Yes | `azure/login@v2` + credential gate |
 | `deploy-ui-to-azure` | ✅ Yes | `azure/login@v2` + credential gate |
-| `enable-validation` (Phase 3) | ❌ No | No Azure operations |
+| `cleanup-dev/staging/prod` (Phase 4) | ✅ Yes | `azure/login@v2` + delete resources |
 
 **The "user input → Azure token" step exists only once (Phase 1a, first-time):**  
-The device-code step in Phase 1a (`az login --use-device-code`) is the single point where a human provides credentials to generate an Azure token. This runs exactly once. All subsequent logins — Phase 1a re-runs, Phase 2, Phase 3 — are fully automated via OIDC.
+The device-code step in Phase 1a (`az login --use-device-code`) is the single point where a human provides credentials to generate an Azure token. This runs exactly once. All subsequent logins — Phase 1a re-runs, Phase 2, Phase 4, deploy — are fully automated via OIDC.
 
 **Two login patterns used in the workflow:**
 - **Phase 2 (bootstrap jobs)**: 3-step — `Validate Azure Credentials` → `Azure Login (OIDC or Secrets)` → `Verify Azure Login`. This verifies credentials before AND after the login.
-- **Phase 3 (deploy jobs)**: 2-step — `Check Azure Credentials` (sets a conditional flag) → `Login to Azure` (only runs if credentials are present). All subsequent deploy steps are gated on the same flag.
+- **Phase 4 (cleanup jobs)**: Same 3-step pattern as bootstrap.
+- **Deploy jobs**: 2-step — `Check Azure Credentials` (sets a conditional flag) → `Login to Azure` (only runs if credentials are present). All subsequent deploy steps are gated on the same flag.
 
 See: [Documentation/QUICK-START-AZURE-BOOTSTRAP.md — Azure OIDC Login IS Commonized section](./Documentation/QUICK-START-AZURE-BOOTSTRAP.md)
 
@@ -200,7 +200,7 @@ See: [Documentation/QUICK-START-AZURE-BOOTSTRAP.md — Azure OIDC Login IS Commo
 3. **Setup GitHub App** (optional) - One-time GitHub App setup instructions
 4. **Configure Secrets** - Auto-configure GitHub secrets using GitHub App
 5. **Bootstrap Infrastructure** - Deploy Azure resources
-6. **Enable Validation** (optional) - Enable pre-deployment checks
+6. **Cleanup Infrastructure** (optional, destructive) - Delete all resources
 
 ### Prerequisites Validation
 The workflow checks:
@@ -211,8 +211,7 @@ The workflow checks:
 
 ### Common Failure Points
 1. **Step 2 (Generate GitHub App Token)** → App not installed → See [TROUBLESHOOTING-GITHUB-APP-404.md](./TROUBLESHOOTING-GITHUB-APP-404.md)
-2. **Step 5 (Enable Validation)** → Manual workflow edit required → Follow on-screen instructions
-3. **Step 1 (Azure Login)** → Device code timeout → Re-run with "Setup OIDC" enabled
+2. **Step 1 (Azure Login)** → Device code timeout → Re-run with "Setup OIDC" enabled
 
 ---
 
@@ -272,7 +271,6 @@ After successful run:
 - [ ] Review workflow summary for any warnings
 - [ ] Verify Azure secrets configured: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/settings/secrets/actions
 - [ ] Check Azure resources in portal: https://portal.azure.com
-- [ ] Enable validation if not done automatically (one-time manual step)
 
 ---
 

@@ -1138,199 +1138,6 @@ jobs:
       tenantId: ${{ needs.setup-oidc.outputs.tenantId }}
       subscriptionId: ${{ needs.setup-oidc.outputs.subscriptionId }}
   
-  pre-validate-prerequisites:
-    name: Pre-Validate Prerequisites
-    if: false  # Phase 3 (enableValidation) obsoleted — job retained for future use
-    needs: [validate-inputs, setup-oidc, configure-github-secrets]
-    runs-on: windows-latest
-    environment: ${{ inputs.environment != 'all' && inputs.environment || 'dev' }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Validate Prerequisites
-        run: |
-          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-          Write-Host "║         PRE-VALIDATE PREREQUISITES                             ║" -ForegroundColor Cyan
-          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
-          Write-Host ""
-          Write-Host "Timestamp (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
-          Write-Host ""
-          Write-Host "ℹ️  Environment: ${{ inputs.environment }}" -ForegroundColor Cyan
-          Write-Host "ℹ️  Validation Context: ${{ inputs.environment != 'all' && inputs.environment || 'dev' }}" -ForegroundColor Cyan
-          if ("${{ inputs.environment }}" -eq "all") {
-            Write-Host "⚠️  Note: Validating with 'dev' environment context" -ForegroundColor Yellow
-            Write-Host "   Ensure secrets are available in repository or all target environments" -ForegroundColor Gray
-          }
-          Write-Host ""
-          
-          # Check if setup steps were executed or skipped
-          $oidcSetupRan = "${{ needs.setup-oidc.result }}" -eq "success"
-          $githubSecretsSetupRan = "${{ needs.configure-github-secrets.result }}" -eq "success"
-          
-          Write-Host "📋 Previous Step Results:" -ForegroundColor Cyan
-          Write-Host "  Setup OIDC: ${{ needs.setup-oidc.result }}" -ForegroundColor Gray
-          Write-Host "  Configure GitHub Secrets: ${{ needs.configure-github-secrets.result }}" -ForegroundColor Gray
-          Write-Host ""
-          
-          Write-Host "📋 Requested Operations:" -ForegroundColor Cyan
-          Write-Host "  Bootstrap Infrastructure: ${{ inputs.bootstrapInfra }}" -ForegroundColor Gray
-          Write-Host "  Configure Secrets: ${{ inputs.configureSecrets }}" -ForegroundColor Gray
-          Write-Host ""
-          
-          $hasErrors = $false
-          $oidcRequired = "${{ inputs.bootstrapInfra }}" -eq "true"
-          $githubAppRequired = "${{ inputs.configureSecrets }}" -eq "true"
-
-          
-          Write-Host "🔍 Validating OIDC App Configuration..." -ForegroundColor Cyan
-          Write-Host ""
-          
-          # Check if OIDC secrets exist
-          $hasClientId = "${{ secrets.AZUREAPPSERVICE_CLIENTID }}" -ne ""
-          $hasTenantId = "${{ secrets.AZUREAPPSERVICE_TENANTID }}" -ne ""
-          $hasSubscriptionId = "${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}" -ne ""
-          
-          if ($hasClientId -and $hasTenantId -and $hasSubscriptionId) {
-            Write-Host "  ✅ OIDC credentials are configured" -ForegroundColor Green
-          } else {
-            Write-Host "  ❌ OIDC credentials are missing or incomplete" -ForegroundColor Red
-            Write-Host "     Missing:" -ForegroundColor Yellow
-            if (-not $hasClientId) { Write-Host "       - AZUREAPPSERVICE_CLIENTID" -ForegroundColor Red }
-            if (-not $hasTenantId) { Write-Host "       - AZUREAPPSERVICE_TENANTID" -ForegroundColor Red }
-            if (-not $hasSubscriptionId) { Write-Host "       - AZUREAPPSERVICE_SUBSCRIPTIONID" -ForegroundColor Red }
-            Write-Host ""
-            if ($oidcSetupRan) {
-              Write-Host "  ⚠️  OIDC setup ran but secrets are not accessible in this environment" -ForegroundColor Yellow
-              Write-Host "     This may indicate secrets were configured in a different environment" -ForegroundColor Gray
-            } else {
-              Write-Host "  💡 Solution: Run this workflow with 'Setup Azure OIDC' enabled" -ForegroundColor Yellow
-            }
-            if ($oidcRequired) {
-              Write-Host "  ⚠️  OIDC credentials are REQUIRED for infrastructure bootstrap" -ForegroundColor Yellow
-              $hasErrors = $true
-            } else {
-              Write-Host "  ℹ️  OIDC credentials not required for current operation" -ForegroundColor Cyan
-            }
-          }
-          
-          Write-Host ""
-          Write-Host "🔍 Validating GitHub App Configuration..." -ForegroundColor Cyan
-          Write-Host ""
-          
-          # Check if GitHub App secrets exist
-          $hasAppId = "${{ secrets.APP_ID }}" -ne ""
-          $hasPrivateKey = "${{ secrets.APP_PRIVATE_KEY }}" -ne ""
-          
-          if ($hasAppId -and $hasPrivateKey) {
-            Write-Host "  ✅ GitHub App credentials are configured" -ForegroundColor Green
-            Write-Host "     - APP_ID: Present" -ForegroundColor Gray
-            Write-Host "     - APP_PRIVATE_KEY: Present" -ForegroundColor Gray
-            Write-Host "     - APP_INSTALLATION_ID: Auto-discovered at runtime" -ForegroundColor Gray
-          } else {
-            Write-Host "  ❌ GitHub App credentials are missing or incomplete" -ForegroundColor Red
-            Write-Host "     Missing:" -ForegroundColor Yellow
-            if (-not $hasAppId) { Write-Host "       - APP_ID" -ForegroundColor Red }
-            if (-not $hasPrivateKey) { Write-Host "       - APP_PRIVATE_KEY" -ForegroundColor Red }
-            Write-Host ""
-            if ($githubAppSetupRan) {
-              Write-Host "  ⚠️  GitHub App setup completed but secrets are not accessible" -ForegroundColor Yellow
-              Write-Host "     This may indicate secrets were configured in a different environment" -ForegroundColor Gray
-            } else {
-              Write-Host "  💡 Solution: Run this workflow with 'Setup GitHub App' enabled" -ForegroundColor Yellow
-              Write-Host "     Or manually configure GitHub App secrets" -ForegroundColor Yellow
-            }
-            if ($githubAppRequired) {
-              Write-Host "  ⚠️  GitHub App credentials are REQUIRED for automated secret configuration" -ForegroundColor Yellow
-              $hasErrors = $true
-            } else {
-              Write-Host "  ℹ️  GitHub App credentials not required for current operation" -ForegroundColor Cyan
-            }
-          }
-          
-          Write-Host ""
-          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
-          
-          if ($hasErrors) {
-            Write-Host ""
-            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-            Write-Host "❌ VALIDATION FAILED: Prerequisites are not met" -ForegroundColor Red
-            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-            Write-Host ""
-            Write-Host "Required prerequisites are missing for the requested operations." -ForegroundColor Red
-            Write-Host "Please review the validation results above." -ForegroundColor Red
-            Write-Host ""
-            Write-Host "Required Actions:" -ForegroundColor Cyan
-            if ($oidcRequired -and -not ($hasClientId -and $hasTenantId -and $hasSubscriptionId)) {
-              Write-Host "  1. Ensure OIDC credentials are configured (required for bootstrap)" -ForegroundColor White
-              Write-Host "     - Run this workflow with 'Setup Azure OIDC' enabled" -ForegroundColor White
-            }
-            if ($githubAppRequired -and -not ($hasAppId -and $hasPrivateKey)) {
-              Write-Host "  2. Ensure GitHub App credentials are configured (required for secret configuration)" -ForegroundColor White
-              Write-Host "     - Run this workflow with 'Setup GitHub App' enabled" -ForegroundColor White
-              Write-Host "     - Or manually configure APP_ID and APP_PRIVATE_KEY secrets" -ForegroundColor White
-            }
-            Write-Host ""
-            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
-            Write-Host ""
-            Write-Error "Prerequisites validation failed. Cannot proceed with requested operations."
-            exit 1
-          } else {
-            Write-Host "✅ All required prerequisites validated successfully" -ForegroundColor Green
-            Write-Host ""
-            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
-            Write-Host ""
-          }
-
-      - name: Create Validation Summary
-        if: always()
-        run: |
-          "## 🔍 Pre-Validation Results" >> $env:GITHUB_STEP_SUMMARY
-          "" >> $env:GITHUB_STEP_SUMMARY
-          
-          $hasClientId = "${{ secrets.AZUREAPPSERVICE_CLIENTID }}" -ne ""
-          $hasTenantId = "${{ secrets.AZUREAPPSERVICE_TENANTID }}" -ne ""
-          $hasSubscriptionId = "${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}" -ne ""
-          $hasAppId = "${{ secrets.APP_ID }}" -ne ""
-          $hasPrivateKey = "${{ secrets.APP_PRIVATE_KEY }}" -ne ""
-          
-          $oidcRequired = "${{ inputs.bootstrapInfra }}" -eq "true"
-          $githubAppRequired = "${{ inputs.configureSecrets }}" -eq "true"
-          
-          $oidcValid = $hasClientId -and $hasTenantId -and $hasSubscriptionId
-          $githubAppValid = $hasAppId -and $hasPrivateKey
-          
-          $allValid = (-not $oidcRequired -or $oidcValid) -and (-not $githubAppRequired -or $githubAppValid)
-          
-          if (-not $allValid) {
-            "### ❌ Validation Failed" >> $env:GITHUB_STEP_SUMMARY
-            "" >> $env:GITHUB_STEP_SUMMARY
-            "Required prerequisites are missing for the requested operations." >> $env:GITHUB_STEP_SUMMARY
-            "" >> $env:GITHUB_STEP_SUMMARY
-          }
-          
-          "### Azure OIDC Configuration" >> $env:GITHUB_STEP_SUMMARY
-          if ($oidcValid) {
-            "✅ **Status**: Configured" >> $env:GITHUB_STEP_SUMMARY
-          } else {
-            if ($oidcRequired) {
-              "❌ **Status**: Missing or incomplete - **REQUIRED for bootstrap**" >> $env:GITHUB_STEP_SUMMARY
-            } else {
-              "⚠️ **Status**: Missing or incomplete - Not required for current operation" >> $env:GITHUB_STEP_SUMMARY
-            }
-          }
-          "" >> $env:GITHUB_STEP_SUMMARY
-          
-          "### GitHub App Configuration" >> $env:GITHUB_STEP_SUMMARY
-          if ($githubAppValid) {
-            "✅ **Status**: Configured" >> $env:GITHUB_STEP_SUMMARY
-          } else {
-            if ($githubAppRequired) {
-              "❌ **Status**: Missing or incomplete - **REQUIRED for secret configuration**" >> $env:GITHUB_STEP_SUMMARY
-            } else {
-              "⚠️ **Status**: Missing or incomplete - Not required for current operation" >> $env:GITHUB_STEP_SUMMARY
-            }
-          }
-  
   bootstrap-dev:
     name: Bootstrap Dev Environment
     if: |
@@ -1340,8 +1147,7 @@ jobs:
       (inputs.environment == 'dev' || inputs.environment == 'all') &&
       (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped') &&
       (needs.configure-github-secrets.result == 'success' || needs.configure-github-secrets.result == 'skipped') &&
-      (needs.pre-validate-prerequisites.result == 'success' || needs.pre-validate-prerequisites.result == 'skipped')
-    needs: [validate-inputs, setup-oidc, configure-github-secrets, pre-validate-prerequisites]
+    needs: [validate-inputs, setup-oidc, configure-github-secrets]
     runs-on: windows-latest
     environment: dev
     env:
@@ -1860,8 +1666,7 @@ jobs:
       (inputs.environment == 'staging' || inputs.environment == 'all') &&
       (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped') &&
       (needs.configure-github-secrets.result == 'success' || needs.configure-github-secrets.result == 'skipped') &&
-      (needs.pre-validate-prerequisites.result == 'success' || needs.pre-validate-prerequisites.result == 'skipped')
-    needs: [validate-inputs, setup-oidc, configure-github-secrets, pre-validate-prerequisites]
+    needs: [validate-inputs, setup-oidc, configure-github-secrets]
     runs-on: windows-latest
     environment: staging
     env:
@@ -2360,8 +2165,7 @@ jobs:
       (inputs.environment == 'prod' || inputs.environment == 'all') &&
       (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped') &&
       (needs.configure-github-secrets.result == 'success' || needs.configure-github-secrets.result == 'skipped') &&
-      (needs.pre-validate-prerequisites.result == 'success' || needs.pre-validate-prerequisites.result == 'skipped')
-    needs: [validate-inputs, setup-oidc, configure-github-secrets, pre-validate-prerequisites]
+    needs: [validate-inputs, setup-oidc, configure-github-secrets]
     runs-on: windows-latest
     environment: prod
     env:
@@ -2866,8 +2670,7 @@ jobs:
       (inputs.environment == 'dev' || inputs.environment == 'all') &&
       (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped') &&
       (needs.configure-github-secrets.result == 'success' || needs.configure-github-secrets.result == 'skipped') &&
-      (needs.pre-validate-prerequisites.result == 'success' || needs.pre-validate-prerequisites.result == 'skipped')
-    needs: [validate-inputs, setup-oidc, configure-github-secrets, pre-validate-prerequisites]
+    needs: [validate-inputs, setup-oidc, configure-github-secrets]
     runs-on: windows-latest
     environment: dev
     env:
@@ -2956,8 +2759,7 @@ jobs:
       (inputs.environment == 'staging' || inputs.environment == 'all') &&
       (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped') &&
       (needs.configure-github-secrets.result == 'success' || needs.configure-github-secrets.result == 'skipped') &&
-      (needs.pre-validate-prerequisites.result == 'success' || needs.pre-validate-prerequisites.result == 'skipped')
-    needs: [validate-inputs, setup-oidc, configure-github-secrets, pre-validate-prerequisites]
+    needs: [validate-inputs, setup-oidc, configure-github-secrets]
     runs-on: windows-latest
     environment: staging
     env:
@@ -3042,8 +2844,7 @@ jobs:
       (inputs.environment == 'prod' || inputs.environment == 'all') &&
       (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped') &&
       (needs.configure-github-secrets.result == 'success' || needs.configure-github-secrets.result == 'skipped') &&
-      (needs.pre-validate-prerequisites.result == 'success' || needs.pre-validate-prerequisites.result == 'skipped')
-    needs: [validate-inputs, setup-oidc, configure-github-secrets, pre-validate-prerequisites]
+    needs: [validate-inputs, setup-oidc, configure-github-secrets]
     runs-on: windows-latest
     environment: prod
     env:
@@ -3122,7 +2923,7 @@ jobs:
   summary:
     name: Bootstrap Summary
     if: always() && github.event_name == 'workflow_dispatch'
-    needs: [setup-oidc, configure-github-secrets, pre-validate-prerequisites, bootstrap-dev, bootstrap-staging, bootstrap-prod, cleanup-dev, cleanup-staging, cleanup-prod]
+    needs: [setup-oidc, configure-github-secrets, bootstrap-dev, bootstrap-staging, bootstrap-prod, cleanup-dev, cleanup-staging, cleanup-prod]
     runs-on: windows-latest
     steps:
       - name: Generate Summary
@@ -3152,7 +2953,6 @@ jobs:
 
           $setupOidc = "${{ needs.setup-oidc.result }}"
           $configSecrets = "${{ needs.configure-github-secrets.result }}"
-          $preValidate = "${{ needs.pre-validate-prerequisites.result }}"
           $bootstrapDev     = "${{ needs.bootstrap-dev.result }}"
           $bootstrapStaging = "${{ needs.bootstrap-staging.result }}"
           $bootstrapProd    = "${{ needs.bootstrap-prod.result }}"
@@ -3171,11 +2971,6 @@ jobs:
           if ($configSecrets -ne "") {
             $icon = if ($configSecrets -eq "success") { "✅" } else { "❌" }
             "| Configure Secrets | $icon $configSecrets |" >> $env:GITHUB_STEP_SUMMARY
-          }
-
-          if ($preValidate -ne "") {
-            $icon = if ($preValidate -eq "success") { "✅" } elseif ($preValidate -eq "skipped") { "⏭️" } else { "❌" }
-            "| Pre-Validate Prerequisites | $icon $preValidate |" >> $env:GITHUB_STEP_SUMMARY
           }
 
           if ($bootstrapDev -ne "") {

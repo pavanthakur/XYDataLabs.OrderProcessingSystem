@@ -32,7 +32,6 @@ For a complete first-time setup of the dev environment with all features enabled
 | **Setup GitHub App** | ✅ `true` | Configure GitHub App (eliminates PAT expiration) |
 | **Configure GitHub secrets** | ✅ `true` | Auto-configure repository secrets |
 | **Bootstrap infrastructure** | ✅ `true` | Provision Azure resources |
-| **Enable pre-deployment validation** | ✅ `true` | Enable validation checks |
 
 3. Click **"Run workflow"** button
 
@@ -61,38 +60,6 @@ For a complete first-time setup of the dev environment with all features enabled
 - Verifies all credentials
 
 #### Phase 5: Bootstrap Infrastructure (3-5 min)
-- Creates resource group: `rg-orderprocessing-dev`
-- Provisions App Service Plan (F1 Free tier)
-- Deploys API Web App
-- Deploys UI Web App
-- Sets up Application Insights
-
-#### Phase 6: Enable Pre-Deployment Validation — Bootstrap Phase 3 (1 min)
-- Updates infra-deploy.yml workflow
-- Enables pre-deployment validation (branch/env alignment checks)
-- Commits changes to repository
-
-### Expected Output
-
-After successful completion, you will have:
-
-#### Azure Resources
-- ✅ Resource Group: `rg-orderprocessing-dev`
-- ✅ App Service Plan: `asp-orderprocessing-dev` (F1 Free)
-- ✅ API Web App: `pavanthakur-orderprocessing-api-xyapp-dev`
-- ✅ UI Web App: `pavanthakur-orderprocessing-ui-xyapp-dev`
-- ✅ Application Insights: `ai-orderprocessing-dev`
-
-#### GitHub Configuration
-- ✅ Repository secrets configured
-- ✅ Environment secrets configured
-- ✅ GitHub App installed (if enabled)
-- ✅ Federated credentials created
-
-#### Validation
-- ✅ Pre-deployment validation enabled
-- ✅ What-if analysis configured
-- ✅ Parameter validation active
 
 ## Workflow Inputs
 
@@ -123,11 +90,9 @@ After successful completion, you will have:
 - **Description:** OIDC App Name (requires GitHub App setup)
 - **When to use:** Customize OIDC app name if needed; appears after GitHub App setup
 
-#### enableValidation *(Phase 3 — optional)*
-- **Type:** Boolean
-- **Default:** `true`
-- **Description:** **Phase 3** — Enable pre-deployment validation for future infrastructure deployments (runs after Phase 2 bootstrap)
-- **When to use:** Enabled by default; disable only if you want to skip validation setup
+#### enableValidation
+
+> **Removed** — Phase 3 (`enableValidation`) has been obsoleted and the input no longer exists in the workflow.
 
 #### bootstrapInfra
 - **Type:** Boolean
@@ -145,14 +110,13 @@ After successful completion, you will have:
 
 1. **validate-inputs** - Validates all parameters and displays summary
 2. **setup-oidc** - Creates Azure AD app and federated credentials
-3. **setup-github-app** - Guides GitHub App setup (manual steps)
-4. **configure-secrets** - Sets repository and environment secrets
-5. **pre-validate-prerequisites** - Validates OIDC and GitHub App credentials before bootstrap (fails if missing)
-6. **bootstrap-dev** - Provisions dev environment infrastructure
-7. **bootstrap-staging** - Provisions staging environment infrastructure
-8. **bootstrap-prod** - Provisions production environment infrastructure
-9. **enable-validation** - Enables pre-deployment validation for future deployments
-10. **summary** - Generates final workflow summary
+3. **configure-secrets** - Sets repository and environment secrets
+4. **bootstrap-dev** - Provisions dev environment infrastructure
+5. **bootstrap-staging** - Provisions staging environment infrastructure
+6. **bootstrap-prod** - Provisions production environment infrastructure
+7. **cleanup-dev/staging/prod** - ⚠️ Destructive: deletes App Services and Resource Group
+8. **summary** - Generates final workflow summary
+9. **trigger-deployments** - Optionally triggers API/UI deploy workflows
 
 ## Verification
 
@@ -255,6 +219,6 @@ For issues or questions:
 
 ---
 
-**Last Updated:** 2025-11-22  
+**Last Updated:** 2026-03-18  
 **Workflow Version:** 1.0  
 **Maintainer:** Platform Team

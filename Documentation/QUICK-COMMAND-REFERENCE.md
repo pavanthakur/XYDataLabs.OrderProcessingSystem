@@ -201,8 +201,8 @@ gh workflow run "Azure Bootstrap Setup" `
 	-f setupOidc=true `
 	-f setupGitHubApp=true `
 	-f configureSecrets=true `
-	-f enableValidation=true `
-	-f bootstrapInfra=true
+	-f bootstrapInfra=true `
+	-f cleanupInfra=false
 
 # Run secrets configuration only (use when OIDC is already set):
 gh workflow run "Azure Bootstrap Setup" `
@@ -211,8 +211,8 @@ gh workflow run "Azure Bootstrap Setup" `
 	-f setupOidc=false `
 	-f setupGitHubApp=false `
 	-f configureSecrets=true `
-	-f enableValidation=false `
-	-f bootstrapInfra=false
+	-f bootstrapInfra=false `
+	-f cleanupInfra=false
 
 # Run for all environments (advanced; ensure OIDC + secrets ready):
 gh workflow run "Azure Bootstrap Setup" `
@@ -221,8 +221,14 @@ gh workflow run "Azure Bootstrap Setup" `
 	-f setupOidc=false `
 	-f setupGitHubApp=false `
 	-f configureSecrets=true `
-	-f enableValidation=true `
-	-f bootstrapInfra=true
+	-f bootstrapInfra=true `
+	-f cleanupInfra=false
+
+# Cleanup dev environment (⚠️ DESTRUCTIVE — deletes all resources):
+gh workflow run "Azure Bootstrap Setup" `
+	--ref dev `
+	-f environment=dev `
+	-f cleanupInfra=true
 
 # Check latest runs
 gh run list -L 5

@@ -124,6 +124,7 @@ All workflows live in `.github/workflows/`. Each has a companion `README-*.md` i
 | **Phase 1** | `configureSecrets = true` | Calls `configure-github-secrets.yml` to store OIDC values as GitHub repo/env secrets using the GitHub App token. |
 | **Phase 2** | `bootstrapInfra = true` | Runs `bootstrap-enterprise-infra.ps1` — resource group, App Service, SQL, Key Vault. |
 | **Phase 2** | `deployApi / deployUi` | Calls `run-database-migrations.ps1` then deploys binaries. |
+| **Phase 4** | `cleanupInfra = true` | ⚠️ **DESTRUCTIVE**: Stops and deletes App Services, then deletes the entire Resource Group. |
 
 ### OIDC Authentication Pattern
 

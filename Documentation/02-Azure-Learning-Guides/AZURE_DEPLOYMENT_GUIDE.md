@@ -23,24 +23,23 @@ This guide documents the complete setup process for deploying the Order Processi
   2. Setup GitHub App (first-time only) 
   3. OIDC App Name (requires GitHub App setup)
   4. Configure GitHub secrets
-  5. Enable pre-deployment validation (default: ✅ true)
-  6. Bootstrap infrastructure (default: ✅ true)
-- ✅ **Enable-Validation Job**: Automatically enables validation for future deployments
-  - Runs AFTER bootstrap completes
-  - Modifies `infra-deploy.yml` to enable pre-validate checks
-  - Enables what-if analysis before every future deployment
+  5. Bootstrap infrastructure (default: ✅ true)
+  6. Cleanup infrastructure (⚠️ destructive, optional)
+- ✅ **Cleanup Jobs**: Phase 4 cleanup can delete all resources per environment
+  - Stops and deletes App Services, then deletes Resource Group
+  - Guarded by `cleanupInfra` checkbox (default: off)
 
 **Key Benefit**: Prerequisites are now validated upfront, preventing bootstrap failures and providing clear error messages.
 
 **Job Execution Chain**:
 ```
-setup-oidc → setup-github-app → configure-secrets 
+setup-oidc → configure-github-secrets
     ↓
-pre-validate-prerequisites (fails if credentials missing)
-    ↓ (blocked if failed)
 bootstrap-dev, bootstrap-staging, bootstrap-prod
     ↓
-enable-validation → summary
+cleanup-dev, cleanup-staging, cleanup-prod (if cleanupInfra enabled)
+    ↓
+summary → trigger-deployments
 ```
 
 ### 📚 Related Documentation
@@ -626,7 +625,7 @@ git push origin dev
 1. **Workflow file**: `.github/workflows/deploy-api-to-azure.yml` (or `deploy-ui-to-azure.yml`)
 2. **Trigger**: Push to `dev` branch
 3. **Authentication**: Uses OIDC federated credential `github-dev-oidc`
-4. **Secrets**: Retrieved from repository secrets (configured in Phase 3)
+4. **Secrets**: Retrieved from repository secrets (configured in Phase 1b)
 5. **Deployment**: Builds and deploys to `pavanthakur-orderprocessing-api-xyapp-dev`
 
 **OIDC Authentication Flow in GitHub Actions:**

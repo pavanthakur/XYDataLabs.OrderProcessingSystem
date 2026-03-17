@@ -9,11 +9,11 @@ azure-bootstrap.yml (3,740 lines)
 ├── setup-github-app          ← 194 lines
 ├── configure-secrets          ← 720 lines  
 ├── validate-final-configuration ← 178 lines
-├── pre-validate-prerequisites
+├── pre-validate-prerequisites  ← removed (Phase 3 obsoleted)
 ├── bootstrap-dev
 ├── bootstrap-staging
 ├── bootstrap-prod
-├── enable-validation
+├── enable-validation           ← removed (Phase 3 obsoleted)
 ├── summary
 └── trigger-deployments
 
@@ -34,18 +34,20 @@ Total GitHub config: ~1,092 lines in main workflow
 ### Main Bootstrap Workflow
 
 ```
-azure-bootstrap.yml (2,667 lines) ← 29% reduction
+azure-bootstrap.yml (~2,900 lines)
+├── check-trigger
 ├── validate-inputs
 ├── setup-oidc
 │   └── outputs: clientId, tenantId, subscriptionId
 ├── configure-github-secrets    ← workflow_call (16 lines)
 │   └── calls: configure-github-secrets.yml
 │       └── passes: environment, OIDC outputs, flags
-├── pre-validate-prerequisites
 ├── bootstrap-dev
 ├── bootstrap-staging
 ├── bootstrap-prod
-├── enable-validation
+├── cleanup-dev                ← Phase 4 (⚠️ destructive)
+├── cleanup-staging             ← Phase 4 (⚠️ destructive)
+├── cleanup-prod               ← Phase 4 (⚠️ destructive)
 ├── summary
 └── trigger-deployments
 
@@ -103,9 +105,9 @@ Can be triggered:
 │       │                                                       │
 │       └─ Returns: setup-result, secrets-result               │
 │       ↓                                                       │
-│  4. pre-validate-prerequisites                               │
+│  4. bootstrap-dev/staging/prod                               │
 │       ↓                                                       │
-│  5. bootstrap-dev/staging/prod                               │
+│  5. cleanup-dev/staging/prod (⚠️ Phase 4, if enabled)        │
 │       ↓                                                       │
 │  6. summary                                                   │
 │                                                               │

@@ -47,7 +47,6 @@ See [Phase 0 in the Quick Start Guide](../../Documentation/QUICK-START-AZURE-BOO
 | `setupOidc` | ✅ `true` | Phase 1a — creates Entra ID App Registration |
 | `configureSecrets` | ✅ `true` | Phase 1b — writes `AZUREAPPSERVICE_*` to GitHub |
 | `bootstrapInfra` | `false` | Do this separately (Phase 2) |
-| `enableValidation` | `false` | Skip for first run |
 | `setupGitHubApp` | `false` | Already done in Phase 0 |
 
 4. Click **Run workflow**
@@ -65,7 +64,6 @@ See [Phase 0 in the Quick Start Guide](../../Documentation/QUICK-START-AZURE-BOO
 | `setupOidc` | `false` |
 | `configureSecrets` | `false` |
 | `bootstrapInfra` | ✅ `true` |
-| `enableValidation` | ✅ `true` (recommended) |
 
 ---
 
@@ -74,15 +72,15 @@ See [Phase 0 in the Quick Start Guide](../../Documentation/QUICK-START-AZURE-BOO
 | Input | Type | Default | Description |
 |-------|------|---------|-------------|
 | `environment` | choice | *(required)* | Target: `dev` / `staging` / `prod` / `all`. Branch must match: `dev`→dev, `staging`→staging, `main`→prod. |
-| `setupOidc` | boolean | `true` | **Phase 1a** — Creates Microsoft Entra ID App Registration + OIDC federated credentials. First run: device-code login. Re-runs: uses existing `AZUREAPPSERVICE_*` credentials (no interactive prompt). |
+| `setupOidc` | boolean | `false` | **Phase 1a** — Creates Microsoft Entra ID App Registration + OIDC federated credentials. First run: device-code login. Re-runs: uses existing `AZUREAPPSERVICE_*` credentials (no interactive prompt). |
 | `oidcAppName` | string | `GitHub-Actions-OIDC` | Name of the Azure AD App Registration to create/update. |
 | `setupGitHubApp` | boolean | `false` | **Phase 0 helper** — Shows GitHub App setup instructions if `APP_ID`/`APP_PRIVATE_KEY` are missing. Does not create the app. |
 | `githubAppName` | string | `XYDataLabsGitHubApp` | Your GitHub App name (used in instructions and validation). |
-| `configureSecrets` | boolean | `true` | **Phase 1b** — Writes `AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID` to GitHub repo + environment secrets. Requires Phase 0 (APP_ID + APP_PRIVATE_KEY) and Phase 1a OIDC outputs. |
+| `configureSecrets` | boolean | `false` | **Phase 1b** — Writes `AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID` to GitHub repo + environment secrets. Requires Phase 0 (APP_ID + APP_PRIVATE_KEY) and Phase 1a OIDC outputs. |
 | `bootstrapInfra` | boolean | `true` | **Phase 2** — Provisions Resource Group, App Service, SQL, Key Vault. |
 | `deployApi` | boolean | `false` | **Phase 2 optional** — Deploys API code after bootstrap. |
 | `deployUi` | boolean | `false` | **Phase 2 optional** — Deploys UI code after bootstrap. |
-| `enableValidation` | boolean | `false` | **Phase 3** — Activates pre-deployment validation checks in `infra-deploy.yml` for future runs. |
+| `cleanupInfra` | boolean | `false` | **Phase 4 (DESTRUCTIVE)** — Deletes UI App, API App, then the entire Resource Group. Irreversible. |
 
 ---
 
@@ -151,16 +149,9 @@ subscriptionId: ${{ needs.setup-oidc.outputs.subscriptionId }}
 
 See [`README-CONFIGURE-GITHUB-SECRETS.md`](README-CONFIGURE-GITHUB-SECRETS.md) for full details and the Phase 1 dry-run data flow.
 
-### 4. `pre-validate-prerequisites`
-**Runs when**: bootstrap or Phase 2 deploy is requested, after Phase 1b completes  
-**Needs**: `validate-inputs`, `setup-oidc`, `configure-github-secrets`
-
-- Checks that `AZUREAPPSERVICE_*` and `APP_ID`/`APP_PRIVATE_KEY` secrets are present
-- Fails the job (blocks Phase 2) if OIDC credentials are still missing after Phase 1
-
-### 5. `bootstrap-dev` / `bootstrap-staging` / `bootstrap-prod` (Phase 2)
+### 4. `bootstrap-dev` / `bootstrap-staging` / `bootstrap-prod` (Phase 2)
 **Runs when**: `bootstrapInfra=true` AND environment matches  
-**Needs**: `pre-validate-prerequisites`
+**Needs**: `validate-inputs`, `setup-oidc`, `configure-github-secrets`
 
 **Azure login (3-step pattern per environment)**:
 ```
@@ -176,15 +167,16 @@ Step 3: az account show — verify login succeeded before making changes
 - Assigns Contributor RBAC to the OIDC service principal
 - Dev, Staging, and Prod jobs run in parallel when `environment=all`
 
-### 6. `enable-validation` (Phase 3)
-**Runs when**: `enableValidation=true`, after Phase 2  
-**Needs**: `pre-validate-prerequisites`
+### 5. `cleanup-dev` / `cleanup-staging` / `cleanup-prod` (Phase 4 — DESTRUCTIVE)
+**Runs when**: `cleanupInfra=true` AND environment matches  
+**Needs**: `validate-inputs`, `setup-oidc`, `configure-github-secrets`
 
-- Modifies `.github/workflows/infra-deploy.yml` to re-enable the `pre-validate` job
-- Commits the change (git push)
-- No Azure credentials required — git operation only
+- Stops and deletes UI App Service (blocking)
+- Stops and deletes API App Service (blocking)
+- Deletes the entire Resource Group (`az group delete --no-wait`)
+- ⚠️ **Irreversible** — all resources in the resource group are destroyed
 
-### 7. `summary`
+### 6. `summary`
 **Runs**: always (after all jobs complete)
 
 - Aggregates results from all jobs
@@ -228,7 +220,6 @@ environment: staging
 setupOidc: false        # Already done
 configureSecrets: false # Already done
 bootstrapInfra: true
-enableValidation: true
 ```
 
 ### Scenario 4: Re-run Bootstrap (Fix Issues)
@@ -333,7 +324,7 @@ az group list --query "[?starts_with(name, 'rg-orderprocessing')].name"
 | Phase 1a (re-run) | `azure/login@v2` (OIDC) | ❌ No — fully automated |
 | Phase 1b | GitHub App installation token | ❌ No — auto-generated |
 | Phase 2 (bootstrap) | `azure/login@v2` (OIDC) | ❌ No — fully automated |
-| Phase 3 (deploy) | `azure/login@v2` (OIDC) | ❌ No — fully automated |
+| Phase 4 (cleanup) | `azure/login@v2` (OIDC) | ❌ No — fully automated |
 
 No passwords, PATs, or certificates are stored. Azure authentication uses OIDC token exchange.
 
@@ -385,31 +376,25 @@ All three environments receive the same credentials (they all point to the same 
                                │
                ┌───────────────┴───────────────┐
                │ if setupOidc=true             │ if setupGitHubApp or
-               ▼                               │ configureSecrets=true
-    ┌─────────────────────┐                    ▼
-    │   setup-oidc        │         ┌───────────────────────────┐
-    │   (Phase 1a)        │────────▶│  configure-github-secrets │
-    │   ① Check existing  │ outputs │  (Phase 1b)               │
-    │     credentials     │ ──────▶ │  ① Validate prerequisites │
-    │   ② Azure login     │ clientId│  ② Generate App token     │
-    │     (OIDC or device)│ tenantId│  ③ Set repo secrets       │
-    │   ③ Run OIDC script │ subId   │  ④ Create environments    │
-    │   ④ Output creds    │         │  ⑤ Set env secrets        │
-    └─────────────────────┘         └─────────────┬─────────────┘
-                                                  │
-                                                  ▼
-                                   ┌──────────────────────────┐
-                                   │  pre-validate-prereqs    │
-                                   │  Checks AZUREAPPSERVICE_*│
-                                   │  and APP_ID present      │
-                                   └──────────────┬───────────┘
+               │ (auto-triggers for Phase 2/4) │ configureSecrets=true
+               ▼                               ▼
+    ┌─────────────────────┐         ┌───────────────────────────┐
+    │   setup-oidc        │────────▶│  configure-github-secrets │
+    │   (Phase 1a)        │ outputs │  (Phase 1b)               │
+    │   ① Check existing  │ ──────▶ │  ① Validate prerequisites │
+    │     credentials     │ clientId│  ② Generate App token     │
+    │   ② Azure login     │ tenantId│  ③ Set repo secrets       │
+    │     (OIDC or device)│ subId   │  ④ Create environments    │
+    │   ③ Run OIDC script │         │  ⑤ Set env secrets        │
+    │   ④ Output creds    │         └─────────────┬─────────────┘
+    └─────────────────────┘                       │
                                                   │
                        ┌──────────────────────────┴──────────────────────────┐
                        │                          │                          │
                        ▼                          ▼                          ▼
             ┌──────────────────┐      ┌──────────────────┐      ┌──────────────────┐
             │  bootstrap-dev   │      │ bootstrap-staging │      │  bootstrap-prod  │
-            │  (if selected)   │      │  (if selected)   │      │  (if selected)   │
+            │  (Phase 2)       │      │  (Phase 2)       │      │  (Phase 2)       │
             │  ① Validate creds│      │  ① Validate creds│      │  ① Validate creds│
             │  ② azure/login   │      │  ② azure/login   │      │  ② azure/login   │
             │  ③ Verify login  │      │  ③ Verify login  │      │  ③ Verify login  │
@@ -418,15 +403,24 @@ All three environments receive the same credentials (they all point to the same 
                      │                         │                         │
                      └─────────────────────────┼─────────────────────────┘
                                                │
-                               ┌───────────────┴───────────────┐
-                               │                               │
-                               ▼                               ▼
-                   ┌───────────────────────┐      ┌───────────────────────┐
-                   │   enable-validation   │      │       summary         │
-                   │   (if enabled)        │      │   (always runs)       │
-                   │   Modifies            │      │   Aggregates results  │
-                   │   infra-deploy.yml    │      │   Displays status     │
-                   └───────────────────────┘      └───────────────────────┘
+            ┌──────────────────────────────────┼──────────────────────────┐
+            │                                  │                          │
+            ▼                                  ▼                          ▼
+ ┌──────────────────┐             ┌──────────────────┐      ┌───────────────────────┐
+ │  cleanup-dev     │             │ cleanup-staging   │      │  cleanup-prod         │
+ │  (Phase 4 ⚠️)    │             │  (Phase 4 ⚠️)     │      │  (Phase 4 ⚠️)         │
+ │  DESTRUCTIVE     │             │  DESTRUCTIVE      │      │  DESTRUCTIVE          │
+ └────────┬─────────┘             └────────┬──────────┘      └────────┬──────────────┘
+          │                                │                          │
+          └────────────────────────────────┼──────────────────────────┘
+                                           │
+                                           ▼
+                              ┌───────────────────────┐
+                              │       summary         │
+                              │   (always runs)       │
+                              │   Aggregates results  │
+                              │   Displays status     │
+                              └───────────────────────┘
 ```
 
 ---
@@ -464,6 +458,6 @@ After Phase 2 succeeds:
 
 ---
 
-**Last Updated**: 2026-03-16  
+**Last Updated**: 2026-03-18  
 **Workflow Version**: Current (`azure-bootstrap.yml`)  
 **Maintainer**: GitHub Copilot
