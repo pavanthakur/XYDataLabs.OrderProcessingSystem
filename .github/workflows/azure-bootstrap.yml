@@ -464,7 +464,8 @@ jobs:
             } elseif ($oidcConfigured) {
               Write-Host "             └─ OIDC source: existing AZUREAPPSERVICE_* secrets ✅" -ForegroundColor Green
             } else {
-              Write-Host "             └─ ⚠️  OIDC source: none found — Phase 1a must have run previously" -ForegroundColor Yellow
+              Write-Host "             └─ ⚠️  OIDC source: not found at repository level" -ForegroundColor Yellow
+              Write-Host "                    (May exist as environment secrets — Phase 1b will verify)" -ForegroundColor Gray
             }
             Write-Host "             └─ GitHub App token: $(if ($appConfigured) { '✅ APP_ID + APP_PRIVATE_KEY present' } else { '❌ Missing — Phase 0 required' })" `
               -ForegroundColor $(if ($appConfigured) { 'Green' } else { 'Red' })
@@ -481,39 +482,43 @@ jobs:
             } elseif ($oidcConfigured) {
               Write-Host "             └─ Azure auth: AZUREAPPSERVICE_* secrets → azure/login@v2 (OIDC) ✅" -ForegroundColor Green
             } else {
-              Write-Host "             └─ ❌ Azure auth: AZUREAPPSERVICE_* secrets missing — Phase 1a required first" -ForegroundColor Red
+              Write-Host "             └─ ⚠️  Azure auth: AZUREAPPSERVICE_* not found at repo level" -ForegroundColor Yellow
+              Write-Host "                    (May exist as environment secrets — Phase 2 will verify at runtime)" -ForegroundColor Gray
             }
-            Write-Host "             └─ Deploys API: $(if ($doDeployApi) { '✅ Yes' } else { 'No' })" -ForegroundColor Gray
             Write-Host "             └─ Deploys UI : $(if ($doDeployUi)  { '✅ Yes' } else { 'No' })" -ForegroundColor Gray
           }
 
-          # Deploy phases (triggered after bootstrap summary) — require OIDC
-          $deployPrereq = $doSetupOidc -or $oidcConfigured
-          $deployReady  = (-not $doDeployApi -and -not $doDeployUi) -or $deployPrereq
-          # Only show standalone deploy phases here; when bootstrap is also enabled, deploy is
-          # already shown as part of the bootstrap summary above (lines 475-476).
-          if ($doDeployApi -and -not $doBootstrap) {
-            $deployApiIcon = if ($doDeployApi) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }
-            Write-Host "  Deploy API                          : $deployApiIcon" -ForegroundColor $(if ($doDeployApi) { 'Cyan' } else { 'DarkGray' })
-            if ($doDeployApi) {
-              if ($oidcConfigured -or $doSetupOidc) {
-                Write-Host "             └─ Azure auth: AZUREAPPSERVICE_* secrets → azure/login@v2 (OIDC) ✅" -ForegroundColor Green
-              } else {
-                Write-Host "             └─ ❌ Azure auth: AZUREAPPSERVICE_* secrets missing — Phase 1a required first" -ForegroundColor Red
-              }
-            }
-          }
-          if ($doDeployUi -and -not $doBootstrap) {
-            $deployUiIcon = if ($doDeployUi) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }
-            Write-Host "  Deploy UI                           : $deployUiIcon" -ForegroundColor $(if ($doDeployUi) { 'Cyan' } else { 'DarkGray' })
-            if ($doDeployUi) {
-              if ($oidcConfigured -or $doSetupOidc) {
-                Write-Host "             └─ Azure auth: AZUREAPPSERVICE_* secrets → azure/login@v2 (OIDC) ✅" -ForegroundColor Green
-              } else {
-                Write-Host "             └─ ❌ Azure auth: AZUREAPPSERVICE_* secrets missing — Phase 1a required first" -ForegroundColor Red
-              }
-            }
-          }
+           # Deploy phases (triggered after bootstrap summary) — require OIDC
+           $deployPrereq = $doSetupOidc -or $oidcConfigured
+           # Deploy jobs run with environment context and can access env-level secrets.
+           # Never hard-block in pre-flight when repo-level OIDC is absent; show a warning instead.
+           $deployReady  = $true
+           # Only show standalone deploy phases here; when bootstrap is also enabled, deploy is
+           # already shown as part of the bootstrap summary above (lines 475-476).
+           if ($doDeployApi -and -not $doBootstrap) {
+             $deployApiIcon = if ($doDeployApi) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }
+             Write-Host "  Deploy API                          : $deployApiIcon" -ForegroundColor $(if ($doDeployApi) { 'Cyan' } else { 'DarkGray' })
+             if ($doDeployApi) {
+               if ($oidcConfigured -or $doSetupOidc) {
+                 Write-Host "             └─ Azure auth: AZUREAPPSERVICE_* secrets → azure/login@v2 (OIDC) ✅" -ForegroundColor Green
+               } else {
+                 Write-Host "             └─ ⚠️  Azure auth: not confirmed at repo level" -ForegroundColor Yellow
+                 Write-Host "                    (May exist as environment secrets — will verify at runtime)" -ForegroundColor Gray
+               }
+             }
+           }
+           if ($doDeployUi -and -not $doBootstrap) {
+             $deployUiIcon = if ($doDeployUi) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }
+             Write-Host "  Deploy UI                           : $deployUiIcon" -ForegroundColor $(if ($doDeployUi) { 'Cyan' } else { 'DarkGray' })
+             if ($doDeployUi) {
+               if ($oidcConfigured -or $doSetupOidc) {
+                 Write-Host "             └─ Azure auth: AZUREAPPSERVICE_* secrets → azure/login@v2 (OIDC) ✅" -ForegroundColor Green
+               } else {
+                 Write-Host "             └─ ⚠️  Azure auth: not confirmed at repo level" -ForegroundColor Yellow
+                 Write-Host "                    (May exist as environment secrets — will verify at runtime)" -ForegroundColor Gray
+               }
+             }
+           }
 
           # Phase 3: Enable Pre-Deployment Validation
           # No Azure or GitHub App credentials needed — just file edit + git push
@@ -543,20 +548,14 @@ jobs:
               Write-Host "     → Run Phase 1a first (setupOidc=true + configureSecrets=true)" -ForegroundColor Yellow
               Write-Host "     → OR ensure AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID secrets are set" -ForegroundColor Yellow
             }
-            if (-not $deployReady) {
-              Write-Host "  ⚠️  Deploy phases: OIDC credentials not found at repository level." -ForegroundColor Yellow
-              Write-Host "     Deployment workflows run with environment context and can access env-level secrets." -ForegroundColor Gray
-              Write-Host "     → Ensure AZUREAPPSERVICE_* exist as environment secrets (dev/staging/prod)" -ForegroundColor Yellow
-              Write-Host "     → For first-time setup: run Phase 1a + 1b together before deploying" -ForegroundColor Yellow
-            }
             if (-not $phase1bReady) {
               if (-not $appConfigured) {
                 Write-Host "  ❌ Phase 1b needs GitHub App credentials (APP_ID + APP_PRIVATE_KEY)." -ForegroundColor Red
                 Write-Host "     → Complete Phase 0 (APP_ID + APP_PRIVATE_KEY must be set)" -ForegroundColor Yellow
               }
               if (-not $oidcAvailableForPhase1b) {
-                Write-Host "  ⚠️  Phase 1b: OIDC credentials not found at repository level and Phase 1a is not running." -ForegroundColor Yellow
-                Write-Host "     Phase 1b will still proceed — configure-github-secrets.yml verifies credentials with detailed diagnostics." -ForegroundColor Gray
+                Write-Host "  ⚠️  Phase 1b: OIDC not confirmed at repo level; Phase 1a is not running." -ForegroundColor Yellow
+                Write-Host "     Phase 1b will check repo and environment secrets — see its logs for details." -ForegroundColor Gray
                 Write-Host "     → For first-time setup or to refresh secrets: enable Phase 1a + 1b together" -ForegroundColor Yellow
               }
             }
