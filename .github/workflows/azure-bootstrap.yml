@@ -57,6 +57,11 @@ on:
         required: true
         type: boolean
         default: false
+      cleanupInfra:
+        description: '🗑️ Phase 4 (DESTRUCTIVE) — Cleanup Infrastructure | Deletes UI App, API App, then the entire Resource Group. ⚠️ IRREVERSIBLE — use only for teardown/reset. Do NOT combine with Bootstrap.'
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -134,7 +139,8 @@ jobs:
           $bootstrap = "${{ inputs.bootstrapInfra }}"
           $configSecrets = "${{ inputs.configureSecrets }}"
           $deployApi = "${{ inputs.deployApi }}"
-          $deployUi = "${{ inputs.deployUi }}"
+          $deployUi  = "${{ inputs.deployUi }}"
+          $cleanup   = "${{ inputs.cleanupInfra }}"
 
           Write-Host "`n📋 Workflow Inputs:" -ForegroundColor Cyan
           Write-Host "  Environment: $env" -ForegroundColor Yellow
@@ -216,7 +222,7 @@ jobs:
           Write-Host "`n  🔐 Repository Secrets Check:" -ForegroundColor Cyan
 
           # Detect Phase 0-only run: setupGitHubApp=true with no phases that need Azure OIDC
-          $isPhase0Only = ($setupGitHubApp -eq "true") -and ($configSecrets -eq "false") -and ($bootstrap -eq "false") -and ($setupOidc -eq "false") -and ($deployApi -eq "false") -and ($deployUi -eq "false")
+          $isPhase0Only = ($setupGitHubApp -eq "true") -and ($configSecrets -eq "false") -and ($bootstrap -eq "false") -and ($setupOidc -eq "false") -and ($deployApi -eq "false") -and ($deployUi -eq "false") -and ($cleanup -eq "false")
 
           if ($isPhase0Only) {
             Write-Host "    ℹ️  Phase 0 run detected — OIDC secrets check skipped" -ForegroundColor Cyan
@@ -275,6 +281,11 @@ jobs:
                 Write-Host "    ℹ️  OIDC secrets not found at repository level, but Phase 1b is selected." -ForegroundColor Cyan
                 Write-Host "    Phase 1a (Setup Azure OIDC) will auto-trigger to acquire credentials" -ForegroundColor Cyan
                 Write-Host "    before Phase 1b runs. Expect a device-code login prompt if first-time setup." -ForegroundColor Cyan
+              } elseif ($cleanup -eq "true") {
+                Write-Host "" -ForegroundColor Gray
+                Write-Host "    ℹ️  OIDC secrets not found at repository level, but cleanupInfra is selected." -ForegroundColor Cyan
+                Write-Host "    Phase 1a (Setup Azure OIDC) will auto-trigger to acquire credentials" -ForegroundColor Cyan
+                Write-Host "    before cleanup runs. Expect a device-code login prompt if first-time setup." -ForegroundColor Cyan
               } elseif ($deployApi -eq "true" -or $deployUi -eq "true") {
                 Write-Host "" -ForegroundColor Gray
                 Write-Host "    ⚠️  WARNING: OIDC repository secrets not found at the repository level." -ForegroundColor Yellow
@@ -405,6 +416,7 @@ jobs:
           $doEnableVal     = "${{ inputs.enableValidation }}" -eq "true"
           $doDeployApi     = "${{ inputs.deployApi }}"        -eq "true"
           $doDeployUi      = "${{ inputs.deployUi }}"         -eq "true"
+          $doCleanup       = "${{ inputs.cleanupInfra }}"     -eq "true"
 
           # ── Credential summary ───────────────────────────────────────────
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
@@ -433,16 +445,17 @@ jobs:
           Write-Host "  Phase 0 — GitHub App Instructions  : $phase0Icon" -ForegroundColor $(if ($doSetupGhApp) { 'Cyan' } else { 'DarkGray' })
 
           # Phase 1a: Setup OIDC
-          # Phase 1a auto-triggers when configureSecrets or bootstrapInfra is selected
-          # (Phase 1b needs OIDC outputs to write secrets; Phase 2 needs them for Azure login)
-          $effectiveSetupOidc = $doSetupOidc -or $doConfigSecrets -or $doBootstrap
+          # Phase 1a auto-triggers when configureSecrets, bootstrapInfra, or cleanupInfra is selected
+          # (Phase 1b needs OIDC outputs to write secrets; Phase 2+4 need them for Azure login)
+          $effectiveSetupOidc = $doSetupOidc -or $doConfigSecrets -or $doBootstrap -or $doCleanup
           $phase1aPrereq = $true  # Prereqs checked at auth-check step (falls back to device code if no existing creds)
           $phase1aIcon   = if ($effectiveSetupOidc) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }
           $phase1aAuth   = if ($oidcConfigured) { 'non-interactive (OIDC)' } else { 'interactive (device code — first-time)' }
-          $phase1aNote   = if (-not $doSetupOidc -and ($doConfigSecrets -or $doBootstrap)) {
+          $phase1aNote   = if (-not $doSetupOidc -and ($doConfigSecrets -or $doBootstrap -or $doCleanup)) {
             $triggers = @()
             if ($doConfigSecrets) { $triggers += 'Phase 1b' }
             if ($doBootstrap)     { $triggers += 'Phase 2' }
+            if ($doCleanup)       { $triggers += 'Phase 4' }
             " (auto-triggered by $($triggers -join ' + '))"
           } else { '' }
           Write-Host "  Phase 1a — Setup Azure OIDC        : $phase1aIcon$phase1aNote" -ForegroundColor $(if ($effectiveSetupOidc) { 'Cyan' } else { 'DarkGray' })
@@ -532,10 +545,31 @@ jobs:
             Write-Host "             └─ Can run independently after bootstrap is complete ✅" -ForegroundColor Green
           }
 
+          # Phase 4: Cleanup Infrastructure — DESTRUCTIVE
+          # Needs Azure OIDC to login (same as Phase 2)
+          $phase4Prereq = $effectiveSetupOidc -or $oidcConfigured
+          $phase4Icon   = if ($doCleanup) { '🔴 WILL RUN (⚠️ DESTRUCTIVE — IRREVERSIBLE)' } else { '⏭️  SKIPPED' }
+          $phase4Ready  = -not $doCleanup -or $phase4Prereq
+          Write-Host "  Phase 4 — Cleanup Infrastructure   : $phase4Icon" -ForegroundColor $(if ($doCleanup) { 'Red' } else { 'DarkGray' })
+          if ($doCleanup) {
+            Write-Host "             └─ ⚠️  Deletes: UI App Service, API App Service, then entire Resource Group" -ForegroundColor Red
+            Write-Host "             └─ All SQL, Key Vault, App Insights, ASP removed with Resource Group" -ForegroundColor Red
+            if ($effectiveSetupOidc) {
+              Write-Host "             └─ Azure auth: fresh OIDC from Phase 1a" -ForegroundColor Gray
+            } elseif ($oidcConfigured) {
+              Write-Host "             └─ Azure auth: AZUREAPPSERVICE_* secrets ✅" -ForegroundColor Green
+            } else {
+              Write-Host "             └─ ⚠️ Azure auth: not confirmed at repo level (may exist as env secrets)" -ForegroundColor Yellow
+            }
+            if ($doBootstrap) {
+              Write-Host "             └─ ⚠️  WARNING: Bootstrap is also selected — avoid running both together!" -ForegroundColor Red
+            }
+          }
+
           Write-Host ""
 
           # ── Overall readiness gate ──────────────────────────────────────
-          $allReady = $phase1bReady -and $phase2Ready -and $phase3Ready -and $deployReady
+          $allReady = $phase1bReady -and $phase2Ready -and $phase3Ready -and $phase4Ready -and $deployReady
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
 
           if ($allReady) {
@@ -579,7 +613,7 @@ jobs:
     #   running setup-oidc here ensures credentials are always available via job outputs.
     # If credentials already exist (environment or repo level), non-interactive OIDC login is
     # used. If not, device-code login runs (first-time setup).
-    if: inputs.setupOidc || inputs.configureSecrets || inputs.bootstrapInfra
+    if: inputs.setupOidc || inputs.configureSecrets || inputs.bootstrapInfra || inputs.cleanupInfra
     needs: [validate-inputs]
     runs-on: windows-latest
     # Use environment context so both repo-level and environment-level AZUREAPPSERVICE_* secrets
@@ -2953,10 +2987,278 @@ jobs:
           "2. Monitor deployments at: [Actions](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions)" >> $env:GITHUB_STEP_SUMMARY
           "3. View resources in [Azure Portal](https://portal.azure.com)" >> $env:GITHUB_STEP_SUMMARY
 
+  # ─────────────────────────────────────────────────────────────────────────────
+  # PHASE 4 — CLEANUP JOBS (DESTRUCTIVE)
+  # Deletes App Services individually, then the entire Resource Group.
+  # Uses same OIDC credential pattern as bootstrap jobs.
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  cleanup-dev:
+    name: Cleanup Dev Environment
+    if: |
+      !cancelled() &&
+      needs.validate-inputs.result == 'success' &&
+      inputs.cleanupInfra &&
+      (inputs.environment == 'dev' || inputs.environment == 'all') &&
+      (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped') &&
+      (needs.configure-github-secrets.result == 'success' || needs.configure-github-secrets.result == 'skipped') &&
+      (needs.pre-validate-prerequisites.result == 'success' || needs.pre-validate-prerequisites.result == 'skipped')
+    needs: [validate-inputs, setup-oidc, configure-github-secrets, pre-validate-prerequisites]
+    runs-on: windows-latest
+    environment: dev
+    env:
+      CLIENT_ID: ${{ needs.setup-oidc.outputs.clientId || secrets.AZUREAPPSERVICE_CLIENTID }}
+      TENANT_ID: ${{ needs.setup-oidc.outputs.tenantId || secrets.AZUREAPPSERVICE_TENANTID }}
+      SUBSCRIPTION_ID: ${{ needs.setup-oidc.outputs.subscriptionId || secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login
+        timeout-minutes: 3
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.CLIENT_ID }}
+          tenant-id: ${{ env.TENANT_ID }}
+          subscription-id: ${{ env.SUBSCRIPTION_ID }}
+
+      - name: Cleanup Dev Infrastructure
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Red
+          Write-Host "║   ⚠️  CLEANUP DEV INFRASTRUCTURE — DESTRUCTIVE OPERATION      ║" -ForegroundColor Red
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Red
+          Write-Host ""
+          Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+
+          $env         = 'dev'
+          $baseName    = 'orderprocessing'
+          $githubOwner = 'pavanthakur'
+          $rg          = "rg-$baseName-$env"
+          $apiApp      = "$githubOwner-$baseName-api-xyapp-$env"
+          $uiApp       = "$githubOwner-$baseName-ui-xyapp-$env"
+
+          Write-Host "📋 Resources targeted for deletion:" -ForegroundColor Yellow
+          Write-Host "  Resource Group : $rg" -ForegroundColor Gray
+          Write-Host "  UI App Service : $uiApp" -ForegroundColor Gray
+          Write-Host "  API App Service: $apiApp" -ForegroundColor Gray
+          Write-Host "  All remaining resources (SQL, Key Vault, App Insights, ASP) deleted with Resource Group" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+
+          function Remove-AppService {
+            param([string]$AppName, [string]$ResourceGroup)
+            Write-Host ""
+            Write-Host "  🗑️  Deleting App Service: $AppName..." -ForegroundColor Yellow
+            $exists = az webapp show --name $AppName --resource-group $ResourceGroup --query "name" -o tsv 2>$null
+            if ($LASTEXITCODE -eq 0 -and $exists) {
+              az webapp stop --name $AppName --resource-group $ResourceGroup 2>$null
+              az webapp delete --name $AppName --resource-group $ResourceGroup --keep-empty-plan 2>$null
+              if ($LASTEXITCODE -eq 0) { Write-Host "  ✅ $AppName deleted." -ForegroundColor Green }
+              else { Write-Host "  ⚠️  $AppName deletion returned exit code $LASTEXITCODE." -ForegroundColor Yellow }
+            } else {
+              Write-Host "  ⚠️  $AppName not found — already deleted or never created." -ForegroundColor Yellow
+            }
+          }
+
+          # Step 1: Delete UI App Service
+          Remove-AppService -AppName $uiApp -ResourceGroup $rg
+
+          # Step 2: Delete API App Service
+          Remove-AppService -AppName $apiApp -ResourceGroup $rg
+
+          # Step 3: Delete Resource Group (removes SQL, Key Vault, App Insights, ASP, and everything else)
+          Write-Host ""
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+          Write-Host "  🗑️  Deleting Resource Group ($rg)..." -ForegroundColor Red
+          $rgExists = az group exists --name $rg 2>$null
+          if ($rgExists -eq "true") {
+            az group delete --name $rg --yes --no-wait
+            Write-Host "  ✅ Resource Group deletion initiated (background). All remaining resources will be removed." -ForegroundColor Green
+          } else {
+            Write-Host "  ⚠️  Resource Group $rg not found — already deleted or never created." -ForegroundColor Yellow
+          }
+
+          Write-Host ""
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+          Write-Host "✅ DEV CLEANUP COMPLETE — End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Green
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+
+  cleanup-staging:
+    name: Cleanup Staging Environment
+    if: |
+      !cancelled() &&
+      needs.validate-inputs.result == 'success' &&
+      inputs.cleanupInfra &&
+      (inputs.environment == 'staging' || inputs.environment == 'all') &&
+      (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped') &&
+      (needs.configure-github-secrets.result == 'success' || needs.configure-github-secrets.result == 'skipped') &&
+      (needs.pre-validate-prerequisites.result == 'success' || needs.pre-validate-prerequisites.result == 'skipped')
+    needs: [validate-inputs, setup-oidc, configure-github-secrets, pre-validate-prerequisites]
+    runs-on: windows-latest
+    environment: staging
+    env:
+      CLIENT_ID: ${{ needs.setup-oidc.outputs.clientId || secrets.AZUREAPPSERVICE_CLIENTID }}
+      TENANT_ID: ${{ needs.setup-oidc.outputs.tenantId || secrets.AZUREAPPSERVICE_TENANTID }}
+      SUBSCRIPTION_ID: ${{ needs.setup-oidc.outputs.subscriptionId || secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login
+        timeout-minutes: 3
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.CLIENT_ID }}
+          tenant-id: ${{ env.TENANT_ID }}
+          subscription-id: ${{ env.SUBSCRIPTION_ID }}
+
+      - name: Cleanup Staging Infrastructure
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Red
+          Write-Host "║ ⚠️  CLEANUP STAGING INFRASTRUCTURE — DESTRUCTIVE OPERATION    ║" -ForegroundColor Red
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Red
+          Write-Host ""
+          Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+
+          $env         = 'staging'
+          $baseName    = 'orderprocessing'
+          $githubOwner = 'pavanthakur'
+          $rg          = "rg-$baseName-$env"
+          $apiApp      = "$githubOwner-$baseName-api-xyapp-$env"
+          $uiApp       = "$githubOwner-$baseName-ui-xyapp-$env"
+
+          Write-Host "📋 Resources targeted for deletion:" -ForegroundColor Yellow
+          Write-Host "  Resource Group : $rg" -ForegroundColor Gray
+          Write-Host "  UI App Service : $uiApp" -ForegroundColor Gray
+          Write-Host "  API App Service: $apiApp" -ForegroundColor Gray
+          Write-Host "  All remaining resources (SQL, Key Vault, App Insights, ASP) deleted with Resource Group" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+
+          function Remove-AppService {
+            param([string]$AppName, [string]$ResourceGroup)
+            Write-Host ""
+            Write-Host "  🗑️  Deleting App Service: $AppName..." -ForegroundColor Yellow
+            $exists = az webapp show --name $AppName --resource-group $ResourceGroup --query "name" -o tsv 2>$null
+            if ($LASTEXITCODE -eq 0 -and $exists) {
+              az webapp stop --name $AppName --resource-group $ResourceGroup 2>$null
+              az webapp delete --name $AppName --resource-group $ResourceGroup --keep-empty-plan 2>$null
+              if ($LASTEXITCODE -eq 0) { Write-Host "  ✅ $AppName deleted." -ForegroundColor Green }
+              else { Write-Host "  ⚠️  $AppName deletion returned exit code $LASTEXITCODE." -ForegroundColor Yellow }
+            } else {
+              Write-Host "  ⚠️  $AppName not found — already deleted or never created." -ForegroundColor Yellow
+            }
+          }
+
+          Remove-AppService -AppName $uiApp  -ResourceGroup $rg
+          Remove-AppService -AppName $apiApp -ResourceGroup $rg
+
+          Write-Host ""
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+          Write-Host "  🗑️  Deleting Resource Group ($rg)..." -ForegroundColor Red
+          $rgExists = az group exists --name $rg 2>$null
+          if ($rgExists -eq "true") {
+            az group delete --name $rg --yes --no-wait
+            Write-Host "  ✅ Resource Group deletion initiated (background). All remaining resources will be removed." -ForegroundColor Green
+          } else {
+            Write-Host "  ⚠️  Resource Group $rg not found — already deleted or never created." -ForegroundColor Yellow
+          }
+
+          Write-Host ""
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+          Write-Host "✅ STAGING CLEANUP COMPLETE — End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Green
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+
+  cleanup-prod:
+    name: Cleanup Production Environment
+    if: |
+      !cancelled() &&
+      needs.validate-inputs.result == 'success' &&
+      inputs.cleanupInfra &&
+      (inputs.environment == 'prod' || inputs.environment == 'all') &&
+      (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped') &&
+      (needs.configure-github-secrets.result == 'success' || needs.configure-github-secrets.result == 'skipped') &&
+      (needs.pre-validate-prerequisites.result == 'success' || needs.pre-validate-prerequisites.result == 'skipped')
+    needs: [validate-inputs, setup-oidc, configure-github-secrets, pre-validate-prerequisites]
+    runs-on: windows-latest
+    environment: prod
+    env:
+      CLIENT_ID: ${{ needs.setup-oidc.outputs.clientId || secrets.AZUREAPPSERVICE_CLIENTID }}
+      TENANT_ID: ${{ needs.setup-oidc.outputs.tenantId || secrets.AZUREAPPSERVICE_TENANTID }}
+      SUBSCRIPTION_ID: ${{ needs.setup-oidc.outputs.subscriptionId || secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login
+        timeout-minutes: 3
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.CLIENT_ID }}
+          tenant-id: ${{ env.TENANT_ID }}
+          subscription-id: ${{ env.SUBSCRIPTION_ID }}
+
+      - name: Cleanup Production Infrastructure
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Red
+          Write-Host "║ ⚠️  CLEANUP PROD INFRASTRUCTURE — DESTRUCTIVE OPERATION       ║" -ForegroundColor Red
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Red
+          Write-Host ""
+          Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+
+          $env         = 'prod'
+          $baseName    = 'orderprocessing'
+          $githubOwner = 'pavanthakur'
+          $rg          = "rg-$baseName-$env"
+          $apiApp      = "$githubOwner-$baseName-api-xyapp-$env"
+          $uiApp       = "$githubOwner-$baseName-ui-xyapp-$env"
+
+          Write-Host "📋 Resources targeted for deletion:" -ForegroundColor Yellow
+          Write-Host "  Resource Group : $rg" -ForegroundColor Gray
+          Write-Host "  UI App Service : $uiApp" -ForegroundColor Gray
+          Write-Host "  API App Service: $apiApp" -ForegroundColor Gray
+          Write-Host "  All remaining resources (SQL, Key Vault, App Insights, ASP) deleted with Resource Group" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+
+          function Remove-AppService {
+            param([string]$AppName, [string]$ResourceGroup)
+            Write-Host ""
+            Write-Host "  🗑️  Deleting App Service: $AppName..." -ForegroundColor Yellow
+            $exists = az webapp show --name $AppName --resource-group $ResourceGroup --query "name" -o tsv 2>$null
+            if ($LASTEXITCODE -eq 0 -and $exists) {
+              az webapp stop --name $AppName --resource-group $ResourceGroup 2>$null
+              az webapp delete --name $AppName --resource-group $ResourceGroup --keep-empty-plan 2>$null
+              if ($LASTEXITCODE -eq 0) { Write-Host "  ✅ $AppName deleted." -ForegroundColor Green }
+              else { Write-Host "  ⚠️  $AppName deletion returned exit code $LASTEXITCODE." -ForegroundColor Yellow }
+            } else {
+              Write-Host "  ⚠️  $AppName not found — already deleted or never created." -ForegroundColor Yellow
+            }
+          }
+
+          Remove-AppService -AppName $uiApp  -ResourceGroup $rg
+          Remove-AppService -AppName $apiApp -ResourceGroup $rg
+
+          Write-Host ""
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+          Write-Host "  🗑️  Deleting Resource Group ($rg)..." -ForegroundColor Red
+          $rgExists = az group exists --name $rg 2>$null
+          if ($rgExists -eq "true") {
+            az group delete --name $rg --yes --no-wait
+            Write-Host "  ✅ Resource Group deletion initiated (background). All remaining resources will be removed." -ForegroundColor Green
+          } else {
+            Write-Host "  ⚠️  Resource Group $rg not found — already deleted or never created." -ForegroundColor Yellow
+          }
+
+          Write-Host ""
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+          Write-Host "✅ PROD CLEANUP COMPLETE — End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Green
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+
   summary:
     name: Bootstrap Summary
     if: always() && github.event_name == 'workflow_dispatch'
-    needs: [setup-oidc, configure-github-secrets, pre-validate-prerequisites, bootstrap-dev, bootstrap-staging, bootstrap-prod, enable-validation]
+    needs: [setup-oidc, configure-github-secrets, pre-validate-prerequisites, bootstrap-dev, bootstrap-staging, bootstrap-prod, enable-validation, cleanup-dev, cleanup-staging, cleanup-prod]
     runs-on: windows-latest
     steps:
       - name: Generate Summary
@@ -2977,6 +3279,7 @@ jobs:
           "| 🔄 [Phase 2] Bootstrap Infrastructure | ``${{ inputs.bootstrapInfra }}`` |" >> $env:GITHUB_STEP_SUMMARY
           "| 🔄 [Phase 2] Deploy API | ``${{ inputs.deployApi }}`` |" >> $env:GITHUB_STEP_SUMMARY
           "| 🔄 [Phase 2] Deploy UI | ``${{ inputs.deployUi }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| ⚠️ [Phase 4] Cleanup Infrastructure | ``${{ inputs.cleanupInfra }}`` |" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
           
           "### ✅ Job Execution Results" >> $env:GITHUB_STEP_SUMMARY
@@ -2987,10 +3290,13 @@ jobs:
           $setupOidc = "${{ needs.setup-oidc.result }}"
           $configSecrets = "${{ needs.configure-github-secrets.result }}"
           $preValidate = "${{ needs.pre-validate-prerequisites.result }}"
-          $bootstrapDev = "${{ needs.bootstrap-dev.result }}"
+          $bootstrapDev     = "${{ needs.bootstrap-dev.result }}"
           $bootstrapStaging = "${{ needs.bootstrap-staging.result }}"
-          $bootstrapProd = "${{ needs.bootstrap-prod.result }}"
-          $enableVal = "${{ needs.enable-validation.result }}"
+          $bootstrapProd    = "${{ needs.bootstrap-prod.result }}"
+          $enableVal        = "${{ needs.enable-validation.result }}"
+          $cleanupDev       = "${{ needs.cleanup-dev.result }}"
+          $cleanupStaging   = "${{ needs.cleanup-staging.result }}"
+          $cleanupProd      = "${{ needs.cleanup-prod.result }}"
 
           "| Step | Status |" >> $env:GITHUB_STEP_SUMMARY
           "|------|--------|" >> $env:GITHUB_STEP_SUMMARY
@@ -3028,6 +3334,21 @@ jobs:
           if ($enableVal -ne "") {
             $icon = if ($enableVal -eq "success") { "✅" } elseif ($enableVal -eq "skipped") { "⏭️" } else { "❌" }
             "| Enable Validation | $icon $enableVal |" >> $env:GITHUB_STEP_SUMMARY
+          }
+
+          if ($cleanupDev -ne "") {
+            $icon = if ($cleanupDev -eq "success") { "✅" } elseif ($cleanupDev -eq "skipped") { "⏭️" } else { "❌" }
+            "| ⚠️ Cleanup Dev | $icon $cleanupDev |" >> $env:GITHUB_STEP_SUMMARY
+          }
+
+          if ($cleanupStaging -ne "") {
+            $icon = if ($cleanupStaging -eq "success") { "✅" } elseif ($cleanupStaging -eq "skipped") { "⏭️" } else { "❌" }
+            "| ⚠️ Cleanup Staging | $icon $cleanupStaging |" >> $env:GITHUB_STEP_SUMMARY
+          }
+
+          if ($cleanupProd -ne "") {
+            $icon = if ($cleanupProd -eq "success") { "✅" } elseif ($cleanupProd -eq "skipped") { "⏭️" } else { "❌" }
+            "| ⚠️ Cleanup Prod | $icon $cleanupProd |" >> $env:GITHUB_STEP_SUMMARY
           }
 
           "" >> $env:GITHUB_STEP_SUMMARY
