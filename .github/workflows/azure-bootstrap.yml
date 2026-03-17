@@ -16,7 +16,7 @@ on:
         description: '🔑 Phase 1a — Setup Azure OIDC | First run: uses device code. Re-runs: uses existing AZUREAPPSERVICE_* credentials (no interactive login)'
         required: true
         type: boolean
-        default: true
+        default: false
       oidcAppName:
         description: 'OIDC App Name | Default: GitHub-Actions-OIDC (only change if using custom name)'
         required: false
@@ -34,11 +34,6 @@ on:
         default: 'XYDataLabsGitHubApp'
       configureSecrets:
         description: '🔑 Phase 1b — Configure GitHub Secrets | Requires Phase 0 (APP_ID+APP_PRIVATE_KEY). Run with 1a (first-time) or standalone to verify existing AZUREAPPSERVICE_* secrets'
-        required: true
-        type: boolean
-        default: true
-      enableValidation:
-        description: '🔍 Phase 3 (optional) — Enable Pre-Deployment Validation | Activates branch/env alignment checks for future infrastructure deployments'
         required: true
         type: boolean
         default: false
@@ -116,7 +111,6 @@ jobs:
           Write-Host "  configureSecrets     = ${{ inputs.configureSecrets }}  $(if ('${{ inputs.configureSecrets }}' -eq 'true') { '[✅ checked]   — Phase 1b: Configure Secrets (with 1a or standalone)' } else { '[☐  unchecked] — Phase 1b: Configure Secrets (with 1a or standalone)' })" -ForegroundColor $(if ('${{ inputs.configureSecrets }}' -eq 'true') { 'Green' } else { 'DarkGray' })
           Write-Host "" -ForegroundColor Gray
           Write-Host "  INFRASTRUCTURE:" -ForegroundColor Cyan
-          Write-Host "  enableValidation     = ${{ inputs.enableValidation }}  $(if ('${{ inputs.enableValidation }}' -eq 'true') { '[✅ checked]   — Phase 3: Enable Pre-Deployment Validation' } else { '[☐  unchecked] — Phase 3: Enable Pre-Deployment Validation' })" -ForegroundColor $(if ('${{ inputs.enableValidation }}' -eq 'true') { 'Green' } else { 'DarkGray' })
           Write-Host "  bootstrapInfra       = ${{ inputs.bootstrapInfra }}  $(if ('${{ inputs.bootstrapInfra }}' -eq 'true') { '[✅ checked]   — Phase 2: Bootstrap Infrastructure' } else { '[☐  unchecked] — Phase 2: Bootstrap Infrastructure' })" -ForegroundColor $(if ('${{ inputs.bootstrapInfra }}' -eq 'true') { 'Green' } else { 'DarkGray' })
           Write-Host "" -ForegroundColor Gray
           Write-Host "  DEPLOYMENT:" -ForegroundColor Cyan
@@ -135,7 +129,6 @@ jobs:
           $env = "${{ inputs.environment }}"
           $setupOidc = "${{ inputs.setupOidc }}"
           $setupGitHubApp = "${{ inputs.setupGitHubApp }}"
-          $enableValidation = "${{ inputs.enableValidation }}"
           $bootstrap = "${{ inputs.bootstrapInfra }}"
           $configSecrets = "${{ inputs.configureSecrets }}"
           $deployApi = "${{ inputs.deployApi }}"
@@ -146,7 +139,6 @@ jobs:
           Write-Host "  Environment: $env" -ForegroundColor Yellow
           Write-Host "  Setup OIDC: $setupOidc" -ForegroundColor Yellow
           Write-Host "  Setup GitHub App: $setupGitHubApp" -ForegroundColor Yellow
-          Write-Host "  Enable validation: $enableValidation" -ForegroundColor Yellow
           Write-Host "  Bootstrap infra: $bootstrap" -ForegroundColor Yellow
           Write-Host "  Configure secrets: $configSecrets" -ForegroundColor Yellow
 
@@ -413,7 +405,6 @@ jobs:
           $doSetupGhApp    = "${{ inputs.setupGitHubApp }}"   -eq "true"
           $doConfigSecrets = "${{ inputs.configureSecrets }}" -eq "true"
           $doBootstrap     = "${{ inputs.bootstrapInfra }}"   -eq "true"
-          $doEnableVal     = "${{ inputs.enableValidation }}" -eq "true"
           $doDeployApi     = "${{ inputs.deployApi }}"        -eq "true"
           $doDeployUi      = "${{ inputs.deployUi }}"         -eq "true"
           $doCleanup       = "${{ inputs.cleanupInfra }}"     -eq "true"
@@ -535,16 +526,6 @@ jobs:
              }
            }
 
-          # Phase 3: Enable Pre-Deployment Validation
-          # No Azure or GitHub App credentials needed — just file edit + git push
-          $phase3Icon  = if ($doEnableVal) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }
-          $phase3Ready = $true  # No credentials required; standalone-safe
-          Write-Host "  Phase 3 — Enable Validation        : $phase3Icon" -ForegroundColor $(if ($doEnableVal) { 'Cyan' } else { 'DarkGray' })
-          if ($doEnableVal) {
-            Write-Host "             └─ No Azure credentials required (file edit + git commit)" -ForegroundColor Gray
-            Write-Host "             └─ Can run independently after bootstrap is complete ✅" -ForegroundColor Green
-          }
-
           # Phase 4: Cleanup Infrastructure — DESTRUCTIVE
           # Needs Azure OIDC to login (same as Phase 2)
           $phase4Prereq = $effectiveSetupOidc -or $oidcConfigured
@@ -569,7 +550,7 @@ jobs:
           Write-Host ""
 
           # ── Overall readiness gate ──────────────────────────────────────
-          $allReady = $phase1bReady -and $phase2Ready -and $phase3Ready -and $phase4Ready -and $deployReady
+          $allReady = $phase1bReady -and $phase2Ready -and $phase4Ready -and $deployReady
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
 
           if ($allReady) {
@@ -1159,10 +1140,7 @@ jobs:
   
   pre-validate-prerequisites:
     name: Pre-Validate Prerequisites
-    if: |
-      !cancelled() &&
-      needs.validate-inputs.result == 'success' &&
-      inputs.enableValidation
+    if: false  # Phase 3 (enableValidation) obsoleted — job retained for future use
     needs: [validate-inputs, setup-oidc, configure-github-secrets]
     runs-on: windows-latest
     environment: ${{ inputs.environment != 'all' && inputs.environment || 'dev' }}
@@ -2873,120 +2851,6 @@ jobs:
           path: Resources/Azure-Deployment/logs/bootstrap-*.log
           retention-days: 30
 
-  enable-validation:
-    name: Enable Pre-Deployment Validation
-    if: |
-      !cancelled() &&
-      needs.validate-inputs.result == 'success' &&
-      inputs.enableValidation &&
-      (needs.bootstrap-dev.result == 'success' || needs.bootstrap-dev.result == 'skipped') &&
-      (needs.bootstrap-staging.result == 'success' || needs.bootstrap-staging.result == 'skipped') &&
-      (needs.bootstrap-prod.result == 'success' || needs.bootstrap-prod.result == 'skipped')
-    needs: [validate-inputs, bootstrap-dev, bootstrap-staging, bootstrap-prod]
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Enable Validation in Workflow
-        run: |
-          Write-Host "🔧 Enabling pre-deployment validation..." -ForegroundColor Cyan
-
-          $workflowPath = ".github/workflows/infra-deploy.yml"
-          $content = Get-Content $workflowPath -Raw
-
-          # Re-enable pre-validate job
-          $content = $content -replace 'if: false  # TODO: Enable after bootstrap - requires Azure OIDC setup', 'if: (github.event_name == ''push'') || (github.event_name == ''workflow_dispatch'' && !inputs.dryRun)'
-
-          # Re-enable job dependency
-          $content = $content -replace '# needs: pre-validate  # TODO: Uncomment after bootstrap', 'needs: pre-validate'
-
-          Set-Content $workflowPath -Value $content -NoNewline
-
-          Write-Host "✅ Validation enabled" -ForegroundColor Green
-
-      - name: Commit Changes
-        id: commit
-        continue-on-error: true
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add .github/workflows/infra-deploy.yml
-          
-          if (git diff --staged --quiet) {
-            Write-Host "ℹ️  No changes detected - validation may already be enabled" -ForegroundColor Yellow
-            exit 0
-          }
-          
-          git commit -m "chore(ci): enable pre-deployment validation after bootstrap"
-          git push
-      
-      - name: Handle Push Failure
-        if: steps.commit.outcome == 'failure'
-        run: |
-          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Yellow
-          Write-Host "║    WORKFLOW UPDATE REQUIRES MANUAL ACTION                     ║" -ForegroundColor Yellow
-          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Yellow
-          Write-Host ""
-          Write-Host "⚠️  Unable to automatically update workflow file" -ForegroundColor Yellow
-          Write-Host ""
-          Write-Host "GitHub's security model prevents workflows from modifying other workflow" -ForegroundColor White
-          Write-Host "files using the default GITHUB_TOKEN for security reasons." -ForegroundColor White
-          Write-Host ""
-          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
-          Write-Host "📋 MANUAL STEP REQUIRED (One-time, 2 minutes)" -ForegroundColor Cyan
-          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
-          Write-Host ""
-          Write-Host "To enable pre-deployment validation, make this change:" -ForegroundColor White
-          Write-Host ""
-          Write-Host "File: .github/workflows/infra-deploy.yml" -ForegroundColor Yellow
-          Write-Host ""
-          Write-Host "In the pre-validate job, change:" -ForegroundColor Cyan
-          Write-Host "  if: false  # TODO: Enable after bootstrap" -ForegroundColor Red
-          Write-Host "to:" -ForegroundColor Cyan
-          Write-Host "  if: (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && !inputs.dryRun)" -ForegroundColor Green
-          Write-Host ""
-          Write-Host "Also in the deploy job, uncomment:" -ForegroundColor Cyan
-          Write-Host "  needs: pre-validate" -ForegroundColor Green
-          Write-Host ""
-          
-          Write-Warning "Automatic workflow update failed. Please manually enable validation using the instructions above."
-
-      - name: Create Completion Summary
-        run: |
-          $commitSuccess = "${{ steps.commit.outcome }}" -eq "success"
-          
-          "## ✅ Azure Bootstrap Complete!" >> $env:GITHUB_STEP_SUMMARY
-          "" >> $env:GITHUB_STEP_SUMMARY
-          "### 🎉 What's Ready" >> $env:GITHUB_STEP_SUMMARY
-          "- ✅ Azure OIDC configured" >> $env:GITHUB_STEP_SUMMARY
-          "- ✅ GitHub secrets configured" >> $env:GITHUB_STEP_SUMMARY
-          "- ✅ Infrastructure bootstrapped (${{ inputs.environment }})" >> $env:GITHUB_STEP_SUMMARY
-          
-          if ($commitSuccess) {
-            "- ✅ Pre-deployment validation enabled" >> $env:GITHUB_STEP_SUMMARY
-          } else {
-            "- ⚠️ Pre-deployment validation - **Manual step required** (see above)" >> $env:GITHUB_STEP_SUMMARY
-          }
-          
-          "" >> $env:GITHUB_STEP_SUMMARY
-          
-          if (-not $commitSuccess) {
-            "### ⚠️ Manual Step Required" >> $env:GITHUB_STEP_SUMMARY
-            "" >> $env:GITHUB_STEP_SUMMARY
-            "To enable pre-deployment validation, edit ```.github/workflows/infra-deploy.yml```:" >> $env:GITHUB_STEP_SUMMARY
-            "" >> $env:GITHUB_STEP_SUMMARY
-            "1. In the ``pre-validate`` job, change ``if: false`` to ``if: (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && !inputs.dryRun)``" >> $env:GITHUB_STEP_SUMMARY
-            "2. In the ``deploy`` job, uncomment the line ``needs: pre-validate``" >> $env:GITHUB_STEP_SUMMARY
-            "" >> $env:GITHUB_STEP_SUMMARY
-            "See detailed instructions in the logs above." >> $env:GITHUB_STEP_SUMMARY
-            "" >> $env:GITHUB_STEP_SUMMARY
-          }
-          
-          "### 🚀 Next Steps" >> $env:GITHUB_STEP_SUMMARY
-          "1. Push code changes to trigger deployment workflow" >> $env:GITHUB_STEP_SUMMARY
-          "2. Monitor deployments at: [Actions](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions)" >> $env:GITHUB_STEP_SUMMARY
-          "3. View resources in [Azure Portal](https://portal.azure.com)" >> $env:GITHUB_STEP_SUMMARY
-
   # ─────────────────────────────────────────────────────────────────────────────
   # PHASE 4 — CLEANUP JOBS (DESTRUCTIVE)
   # Deletes App Services individually, then the entire Resource Group.
@@ -3258,7 +3122,7 @@ jobs:
   summary:
     name: Bootstrap Summary
     if: always() && github.event_name == 'workflow_dispatch'
-    needs: [setup-oidc, configure-github-secrets, pre-validate-prerequisites, bootstrap-dev, bootstrap-staging, bootstrap-prod, enable-validation, cleanup-dev, cleanup-staging, cleanup-prod]
+    needs: [setup-oidc, configure-github-secrets, pre-validate-prerequisites, bootstrap-dev, bootstrap-staging, bootstrap-prod, cleanup-dev, cleanup-staging, cleanup-prod]
     runs-on: windows-latest
     steps:
       - name: Generate Summary
@@ -3275,8 +3139,7 @@ jobs:
           "| ℹ️ [Phase 0] Setup GitHub App | ``${{ inputs.setupGitHubApp }}`` |" >> $env:GITHUB_STEP_SUMMARY
           "| 🤖 GitHub App Name | ``${{ inputs.githubAppName }}`` |" >> $env:GITHUB_STEP_SUMMARY
           "| 🔑 [Phase 1b] Configure Secrets (sequential after 1a) | ``${{ inputs.configureSecrets }}`` |" >> $env:GITHUB_STEP_SUMMARY
-          "| 🔍 [Phase 3] Enable Pre-Deployment Validation | ``${{ inputs.enableValidation }}`` |" >> $env:GITHUB_STEP_SUMMARY
-          "| 🔄 [Phase 2] Bootstrap Infrastructure | ``${{ inputs.bootstrapInfra }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          "|  [Phase 2] Bootstrap Infrastructure | ``${{ inputs.bootstrapInfra }}`` |" >> $env:GITHUB_STEP_SUMMARY
           "| 🔄 [Phase 2] Deploy API | ``${{ inputs.deployApi }}`` |" >> $env:GITHUB_STEP_SUMMARY
           "| 🔄 [Phase 2] Deploy UI | ``${{ inputs.deployUi }}`` |" >> $env:GITHUB_STEP_SUMMARY
           "| ⚠️ [Phase 4] Cleanup Infrastructure | ``${{ inputs.cleanupInfra }}`` |" >> $env:GITHUB_STEP_SUMMARY
@@ -3293,7 +3156,6 @@ jobs:
           $bootstrapDev     = "${{ needs.bootstrap-dev.result }}"
           $bootstrapStaging = "${{ needs.bootstrap-staging.result }}"
           $bootstrapProd    = "${{ needs.bootstrap-prod.result }}"
-          $enableVal        = "${{ needs.enable-validation.result }}"
           $cleanupDev       = "${{ needs.cleanup-dev.result }}"
           $cleanupStaging   = "${{ needs.cleanup-staging.result }}"
           $cleanupProd      = "${{ needs.cleanup-prod.result }}"
@@ -3329,11 +3191,6 @@ jobs:
           if ($bootstrapProd -ne "") {
             $icon = if ($bootstrapProd -eq "success") { "✅" } elseif ($bootstrapProd -eq "skipped") { "⏭️" } else { "❌" }
             "| Bootstrap Prod | $icon $bootstrapProd |" >> $env:GITHUB_STEP_SUMMARY
-          }
-
-          if ($enableVal -ne "") {
-            $icon = if ($enableVal -eq "success") { "✅" } elseif ($enableVal -eq "skipped") { "⏭️" } else { "❌" }
-            "| Enable Validation | $icon $enableVal |" >> $env:GITHUB_STEP_SUMMARY
           }
 
           if ($cleanupDev -ne "") {
