@@ -272,22 +272,27 @@ jobs:
                 exit 1
               } elseif ($configSecrets -eq "true") {
                 Write-Host "" -ForegroundColor Gray
-                Write-Host "    ❌ ERROR: Cannot configure GitHub secrets (Phase 1b) without OIDC credentials!" -ForegroundColor Red
-                Write-Host "    Phase 1b needs OIDC credentials (clientId/tenantId/subscriptionId) from Phase 1a." -ForegroundColor Red
-                Write-Host "    Run Phase 1a and Phase 1b together in the same workflow run:" -ForegroundColor Yellow
+                Write-Host "    ⚠️  WARNING: OIDC repository secrets not found at the repository level." -ForegroundColor Yellow
+                Write-Host "    This is expected if secrets are stored as environment secrets only," -ForegroundColor Gray
+                Write-Host "    OR if Phase 1a (Setup Azure OIDC) has not been run yet." -ForegroundColor Gray
+                Write-Host "" -ForegroundColor Gray
+                Write-Host "    Phase 1b will now attempt to run. It will verify credentials and" -ForegroundColor Gray
+                Write-Host "    provide a detailed error if OIDC credentials are genuinely missing." -ForegroundColor Gray
+                Write-Host "" -ForegroundColor Gray
+                Write-Host "    💡 TIP: For first-time setup or to refresh secrets, run Phase 1a + 1b together:" -ForegroundColor Yellow
                 Write-Host "       ✅ Setup Azure OIDC (Phase 1a)          = true" -ForegroundColor White
                 Write-Host "       ✅ Configure GitHub Secrets (Phase 1b)  = true" -ForegroundColor White
-                Write-Error "OIDC secrets not found. Run Phase 1a (Setup Azure OIDC=true) together with Phase 1b (Configure Secrets=true)."
-                exit 1
               } elseif ($deployApi -eq "true" -or $deployUi -eq "true") {
                 Write-Host "" -ForegroundColor Gray
-                Write-Host "    ❌ ERROR: Cannot deploy without OIDC credentials!" -ForegroundColor Red
-                Write-Host "    Deployment workflows use azure/login@v2 (OIDC) and require AZUREAPPSERVICE_* secrets." -ForegroundColor Red
-                Write-Host "    Run Phase 1a and Phase 1b first to establish OIDC credentials:" -ForegroundColor Yellow
+                Write-Host "    ⚠️  WARNING: OIDC repository secrets not found at the repository level." -ForegroundColor Yellow
+                Write-Host "    This is expected if secrets are stored as environment secrets only." -ForegroundColor Gray
+                Write-Host "    Deployment workflows run in separate jobs with environment context" -ForegroundColor Gray
+                Write-Host "    and can access environment-level secrets directly." -ForegroundColor Gray
+                Write-Host "" -ForegroundColor Gray
+                Write-Host "    💡 TIP: Ensure AZUREAPPSERVICE_* secrets exist as environment secrets" -ForegroundColor Yellow
+                Write-Host "    (dev/staging/prod). If not yet configured, run Phase 1a + 1b first:" -ForegroundColor Gray
                 Write-Host "       ✅ Setup Azure OIDC (Phase 1a)          = true" -ForegroundColor White
                 Write-Host "       ✅ Configure GitHub Secrets (Phase 1b)  = true" -ForegroundColor White
-                Write-Error "OIDC secrets not found. Run Phase 1a (Setup Azure OIDC=true) + Phase 1b (Configure Secrets=true) before deploying."
-                exit 1
               }
             }
           } else {
@@ -539,9 +544,10 @@ jobs:
               Write-Host "     → OR ensure AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID secrets are set" -ForegroundColor Yellow
             }
             if (-not $deployReady) {
-              Write-Host "  ❌ Deploy phases require Azure OIDC credentials (azure/login@v2)." -ForegroundColor Red
-              Write-Host "     → Run Phase 1a first (setupOidc=true + configureSecrets=true)" -ForegroundColor Yellow
-              Write-Host "     → OR ensure AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID secrets are set" -ForegroundColor Yellow
+              Write-Host "  ⚠️  Deploy phases: OIDC credentials not found at repository level." -ForegroundColor Yellow
+              Write-Host "     Deployment workflows run with environment context and can access env-level secrets." -ForegroundColor Gray
+              Write-Host "     → Ensure AZUREAPPSERVICE_* exist as environment secrets (dev/staging/prod)" -ForegroundColor Yellow
+              Write-Host "     → For first-time setup: run Phase 1a + 1b together before deploying" -ForegroundColor Yellow
             }
             if (-not $phase1bReady) {
               if (-not $appConfigured) {
@@ -549,13 +555,14 @@ jobs:
                 Write-Host "     → Complete Phase 0 (APP_ID + APP_PRIVATE_KEY must be set)" -ForegroundColor Yellow
               }
               if (-not $oidcAvailableForPhase1b) {
-                Write-Host "  ❌ Phase 1b needs OIDC credentials — none found and Phase 1a is not running." -ForegroundColor Red
-                Write-Host "     → Enable 'Setup Azure OIDC (Phase 1a)' in the same run as 'Configure GitHub Secrets (Phase 1b)'" -ForegroundColor Yellow
+                Write-Host "  ⚠️  Phase 1b: OIDC credentials not found at repository level and Phase 1a is not running." -ForegroundColor Yellow
+                Write-Host "     Phase 1b will still proceed — configure-github-secrets.yml verifies credentials with detailed diagnostics." -ForegroundColor Gray
+                Write-Host "     → For first-time setup or to refresh secrets: enable Phase 1a + 1b together" -ForegroundColor Yellow
               }
             }
             Write-Host ""
             Write-Host "  ℹ️  Azure OIDC (Phase 1a) is MANDATORY for all phases that interact with Azure." -ForegroundColor Yellow
-            Write-Host "  The 'Validate Configuration' step above enforces this and will fail early if needed." -ForegroundColor Gray
+            Write-Host "  Bootstrap phase enforces this with a hard fail; deploy phases proceed with a warning." -ForegroundColor Gray
             Write-Host ""
           }
 
