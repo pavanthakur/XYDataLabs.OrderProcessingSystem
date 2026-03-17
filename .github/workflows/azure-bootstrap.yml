@@ -272,16 +272,21 @@ jobs:
                 exit 1
               } elseif ($configSecrets -eq "true") {
                 Write-Host "" -ForegroundColor Gray
-                Write-Host "    ⚠️  WARNING: OIDC repository secrets not found at the repository level." -ForegroundColor Yellow
-                Write-Host "    This is expected if secrets are stored as environment secrets only," -ForegroundColor Gray
-                Write-Host "    OR if Phase 1a (Setup Azure OIDC) has not been run yet." -ForegroundColor Gray
+                Write-Host "    ❌ ERROR: Cannot configure GitHub secrets (Phase 1b) without OIDC credentials!" -ForegroundColor Red
+                Write-Host "    Phase 1b needs clientId, tenantId, and subscriptionId — none found in repository secrets." -ForegroundColor Red
                 Write-Host "" -ForegroundColor Gray
-                Write-Host "    Phase 1b will now attempt to run. It will verify credentials and" -ForegroundColor Gray
-                Write-Host "    provide a detailed error if OIDC credentials are genuinely missing." -ForegroundColor Gray
-                Write-Host "" -ForegroundColor Gray
-                Write-Host "    💡 TIP: For first-time setup or to refresh secrets, run Phase 1a + 1b together:" -ForegroundColor Yellow
+                Write-Host "    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+                Write-Host "    💡 SOLUTION: Re-run with both Phase 1 steps selected:" -ForegroundColor Yellow
                 Write-Host "       ✅ Setup Azure OIDC (Phase 1a)          = true" -ForegroundColor White
                 Write-Host "       ✅ Configure GitHub Secrets (Phase 1b)  = true" -ForegroundColor White
+                Write-Host "    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+                Write-Host "" -ForegroundColor Gray
+                Write-Host "    ℹ️  NOTE: If AZUREAPPSERVICE_* secrets are stored at environment level only" -ForegroundColor Cyan
+                Write-Host "    (not repository level), they are not visible to this pre-flight check." -ForegroundColor Gray
+                Write-Host "    In that case, run configure-github-secrets.yml directly — it verifies" -ForegroundColor Gray
+                Write-Host "    environment-level secrets using the GitHub App token." -ForegroundColor Gray
+                Write-Error "OIDC secrets not found. Run Phase 1a (setupOidc=true) together with Phase 1b (configureSecrets=true)."
+                exit 1
               } elseif ($deployApi -eq "true" -or $deployUi -eq "true") {
                 Write-Host "" -ForegroundColor Gray
                 Write-Host "    ⚠️  WARNING: OIDC repository secrets not found at the repository level." -ForegroundColor Yellow
@@ -554,14 +559,15 @@ jobs:
                 Write-Host "     → Complete Phase 0 (APP_ID + APP_PRIVATE_KEY must be set)" -ForegroundColor Yellow
               }
               if (-not $oidcAvailableForPhase1b) {
-                Write-Host "  ⚠️  Phase 1b: OIDC not confirmed at repo level; Phase 1a is not running." -ForegroundColor Yellow
-                Write-Host "     Phase 1b will check repo and environment secrets — see its logs for details." -ForegroundColor Gray
+                Write-Host "  ❌ Phase 1b: OIDC credentials not found at repository level; Phase 1a is not running." -ForegroundColor Red
+                Write-Host "     The 'Validate Configuration' step above will enforce a hard fail." -ForegroundColor Gray
                 Write-Host "     → For first-time setup or to refresh secrets: enable Phase 1a + 1b together" -ForegroundColor Yellow
+                Write-Host "     → If secrets are at environment level only: run configure-github-secrets.yml directly" -ForegroundColor Yellow
               }
             }
             Write-Host ""
             Write-Host "  ℹ️  Azure OIDC (Phase 1a) is MANDATORY for all phases that interact with Azure." -ForegroundColor Yellow
-            Write-Host "  Bootstrap phase enforces this with a hard fail; deploy phases proceed with a warning." -ForegroundColor Gray
+            Write-Host "  Bootstrap, deploy, and Phase 1b (configure secrets) phases enforce this with a hard fail." -ForegroundColor Gray
             Write-Host ""
           }
 
