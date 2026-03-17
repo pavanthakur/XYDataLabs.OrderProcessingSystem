@@ -272,18 +272,9 @@ jobs:
                 exit 1
               } elseif ($configSecrets -eq "true") {
                 Write-Host "" -ForegroundColor Gray
-                Write-Host "    ⚠️  WARNING: OIDC repository secrets not found at the repository level." -ForegroundColor Yellow
-                Write-Host "    Phase 1b (Configure Secrets) will proceed — configure-github-secrets.yml" -ForegroundColor Gray
-                Write-Host "    verifies credentials at runtime using the GitHub App token." -ForegroundColor Gray
-                Write-Host "" -ForegroundColor Gray
-                Write-Host "    ℹ️  NOTE: If AZUREAPPSERVICE_* secrets are stored at environment level only" -ForegroundColor Cyan
-                Write-Host "    (not repository level), they are not visible to this pre-flight check." -ForegroundColor Gray
-                Write-Host "    configure-github-secrets.yml will verify them using the GitHub App token." -ForegroundColor Gray
-                Write-Host "" -ForegroundColor Gray
-                Write-Host "    💡 TIP: If this is a first-time setup (no OIDC credentials exist yet)," -ForegroundColor Yellow
-                Write-Host "    re-run with both Phase 1 steps selected:" -ForegroundColor Gray
-                Write-Host "       ✅ Setup Azure OIDC (Phase 1a)          = true" -ForegroundColor White
-                Write-Host "       ✅ Configure GitHub Secrets (Phase 1b)  = true" -ForegroundColor White
+                Write-Host "    ℹ️  OIDC secrets not found at repository level, but Phase 1b is selected." -ForegroundColor Cyan
+                Write-Host "    Phase 1a (Setup Azure OIDC) will auto-trigger to acquire credentials" -ForegroundColor Cyan
+                Write-Host "    before Phase 1b runs. Expect a device-code login prompt." -ForegroundColor Cyan
               } elseif ($deployApi -eq "true" -or $deployUi -eq "true") {
                 Write-Host "" -ForegroundColor Gray
                 Write-Host "    ⚠️  WARNING: OIDC repository secrets not found at the repository level." -ForegroundColor Yellow
@@ -442,11 +433,14 @@ jobs:
           Write-Host "  Phase 0 — GitHub App Instructions  : $phase0Icon" -ForegroundColor $(if ($doSetupGhApp) { 'Cyan' } else { 'DarkGray' })
 
           # Phase 1a: Setup OIDC
+          # Phase 1a auto-triggers when configureSecrets is selected (Phase 1b needs OIDC outputs)
+          $effectiveSetupOidc = $doSetupOidc -or $doConfigSecrets
           $phase1aPrereq = $true  # Prereqs checked at auth-check step (falls back to device code if no existing creds)
-          $phase1aIcon   = if ($doSetupOidc) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }
+          $phase1aIcon   = if ($effectiveSetupOidc) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }
           $phase1aAuth   = if ($oidcConfigured) { 'non-interactive (OIDC)' } else { 'interactive (device code — first-time)' }
-          Write-Host "  Phase 1a — Setup Azure OIDC        : $phase1aIcon" -ForegroundColor $(if ($doSetupOidc) { 'Cyan' } else { 'DarkGray' })
-          if ($doSetupOidc) {
+          $phase1aNote   = if ($doConfigSecrets -and -not $doSetupOidc) { ' (auto-triggered by Phase 1b)' } else { '' }
+          Write-Host "  Phase 1a — Setup Azure OIDC        : $phase1aIcon$phase1aNote" -ForegroundColor $(if ($effectiveSetupOidc) { 'Cyan' } else { 'DarkGray' })
+          if ($effectiveSetupOidc) {
             Write-Host "             └─ Login method: $phase1aAuth" -ForegroundColor Gray
           }
 
@@ -457,12 +451,12 @@ jobs:
           # phase1bReady is true in any of these cases:
           #   (1) Phase 1b not selected — nothing to validate
           #   (2) GitHub App credentials present AND OIDC credentials available (existing or fresh from Phase 1a)
-          $oidcAvailableForPhase1b = $doSetupOidc -or $oidcConfigured
+          $oidcAvailableForPhase1b = $effectiveSetupOidc -or $oidcConfigured
           $phase1bReady   = (-not $phase1bEnabled) -or ($phase1bPrereq -and $oidcAvailableForPhase1b)
           Write-Host "  Phase 1b — Configure GitHub Secrets: $phase1bIcon" -ForegroundColor $(if ($phase1bEnabled) { 'Cyan' } else { 'DarkGray' })
           if ($phase1bEnabled) {
-            if ($doSetupOidc) {
-              Write-Host "             └─ OIDC source: fresh credentials from Phase 1a" -ForegroundColor Gray
+            if ($effectiveSetupOidc) {
+              Write-Host "             └─ OIDC source: fresh credentials from Phase 1a$(if (-not $doSetupOidc) { ' (auto-triggered)' } else { '' })" -ForegroundColor Gray
             } elseif ($oidcConfigured) {
               Write-Host "             └─ OIDC source: existing AZUREAPPSERVICE_* secrets ✅" -ForegroundColor Green
             } else {
@@ -474,12 +468,12 @@ jobs:
           }
 
           # Phase 2: Bootstrap Infrastructure
-          $phase2Prereq = $doSetupOidc -or $oidcConfigured  # Needs OIDC (either fresh from 1a or pre-existing)
+          $phase2Prereq = $effectiveSetupOidc -or $oidcConfigured  # Needs OIDC (either fresh from 1a or pre-existing)
           $phase2Icon   = if ($doBootstrap) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }
           $phase2Ready  = -not $doBootstrap -or $phase2Prereq
           Write-Host "  Phase 2 — Bootstrap Infrastructure : $phase2Icon" -ForegroundColor $(if ($doBootstrap) { 'Cyan' } else { 'DarkGray' })
           if ($doBootstrap) {
-            if ($doSetupOidc) {
+            if ($effectiveSetupOidc) {
               Write-Host "             └─ Azure auth: fresh OIDC from Phase 1a" -ForegroundColor Gray
             } elseif ($oidcConfigured) {
               Write-Host "             └─ Azure auth: AZUREAPPSERVICE_* secrets → azure/login@v2 (OIDC) ✅" -ForegroundColor Green
@@ -491,7 +485,7 @@ jobs:
           }
 
            # Deploy phases (triggered after bootstrap summary) — require OIDC
-           $deployPrereq = $doSetupOidc -or $oidcConfigured
+           $deployPrereq = $effectiveSetupOidc -or $oidcConfigured
            # Deploy jobs run with environment context and can access env-level secrets.
            # Never hard-block in pre-flight when repo-level OIDC is absent; show a warning instead.
            $deployReady  = $true
@@ -501,7 +495,7 @@ jobs:
              $deployApiIcon = if ($doDeployApi) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }
              Write-Host "  Deploy API                          : $deployApiIcon" -ForegroundColor $(if ($doDeployApi) { 'Cyan' } else { 'DarkGray' })
              if ($doDeployApi) {
-               if ($oidcConfigured -or $doSetupOidc) {
+               if ($oidcConfigured -or $effectiveSetupOidc) {
                  Write-Host "             └─ Azure auth: AZUREAPPSERVICE_* secrets → azure/login@v2 (OIDC) ✅" -ForegroundColor Green
                } else {
                  Write-Host "             └─ ⚠️  Azure auth: not confirmed at repo level" -ForegroundColor Yellow
@@ -513,7 +507,7 @@ jobs:
              $deployUiIcon = if ($doDeployUi) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }
              Write-Host "  Deploy UI                           : $deployUiIcon" -ForegroundColor $(if ($doDeployUi) { 'Cyan' } else { 'DarkGray' })
              if ($doDeployUi) {
-               if ($oidcConfigured -or $doSetupOidc) {
+               if ($oidcConfigured -or $effectiveSetupOidc) {
                  Write-Host "             └─ Azure auth: AZUREAPPSERVICE_* secrets → azure/login@v2 (OIDC) ✅" -ForegroundColor Green
                } else {
                  Write-Host "             └─ ⚠️  Azure auth: not confirmed at repo level" -ForegroundColor Yellow
@@ -570,7 +564,11 @@ jobs:
 
   setup-oidc:
     name: Setup Azure OIDC
-    if: inputs.setupOidc
+    # Auto-trigger when configureSecrets is selected: Phase 1b needs OIDC credentials
+    # (clientId/tenantId/subscriptionId) to write as GitHub secrets. If they don't exist
+    # yet, this job acquires them via device-code login; if they already exist, it uses
+    # non-interactive OIDC login. Either way, the outputs are passed to Phase 1b.
+    if: inputs.setupOidc || inputs.configureSecrets
     needs: [validate-inputs]
     runs-on: windows-latest
     # Use environment context so both repo-level and environment-level AZUREAPPSERVICE_* secrets
