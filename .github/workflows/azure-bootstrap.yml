@@ -272,21 +272,18 @@ jobs:
                 exit 1
               } elseif ($configSecrets -eq "true") {
                 Write-Host "" -ForegroundColor Gray
-                Write-Host "    ❌ ERROR: Cannot configure GitHub secrets (Phase 1b) without OIDC credentials!" -ForegroundColor Red
-                Write-Host "    Phase 1b needs clientId, tenantId, and subscriptionId — none found in repository secrets." -ForegroundColor Red
-                Write-Host "" -ForegroundColor Gray
-                Write-Host "    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-                Write-Host "    💡 SOLUTION: Re-run with both Phase 1 steps selected:" -ForegroundColor Yellow
-                Write-Host "       ✅ Setup Azure OIDC (Phase 1a)          = true" -ForegroundColor White
-                Write-Host "       ✅ Configure GitHub Secrets (Phase 1b)  = true" -ForegroundColor White
-                Write-Host "    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+                Write-Host "    ⚠️  WARNING: OIDC repository secrets not found at the repository level." -ForegroundColor Yellow
+                Write-Host "    Phase 1b (Configure Secrets) will proceed — configure-github-secrets.yml" -ForegroundColor Gray
+                Write-Host "    verifies credentials at runtime using the GitHub App token." -ForegroundColor Gray
                 Write-Host "" -ForegroundColor Gray
                 Write-Host "    ℹ️  NOTE: If AZUREAPPSERVICE_* secrets are stored at environment level only" -ForegroundColor Cyan
                 Write-Host "    (not repository level), they are not visible to this pre-flight check." -ForegroundColor Gray
-                Write-Host "    In that case, run configure-github-secrets.yml directly — it verifies" -ForegroundColor Gray
-                Write-Host "    environment-level secrets using the GitHub App token." -ForegroundColor Gray
-                Write-Error "OIDC secrets not found. Run Phase 1a (setupOidc=true) together with Phase 1b (configureSecrets=true)."
-                exit 1
+                Write-Host "    configure-github-secrets.yml will verify them using the GitHub App token." -ForegroundColor Gray
+                Write-Host "" -ForegroundColor Gray
+                Write-Host "    💡 TIP: If this is a first-time setup (no OIDC credentials exist yet)," -ForegroundColor Yellow
+                Write-Host "    re-run with both Phase 1 steps selected:" -ForegroundColor Gray
+                Write-Host "       ✅ Setup Azure OIDC (Phase 1a)          = true" -ForegroundColor White
+                Write-Host "       ✅ Configure GitHub Secrets (Phase 1b)  = true" -ForegroundColor White
               } elseif ($deployApi -eq "true" -or $deployUi -eq "true") {
                 Write-Host "" -ForegroundColor Gray
                 Write-Host "    ⚠️  WARNING: OIDC repository secrets not found at the repository level." -ForegroundColor Yellow
