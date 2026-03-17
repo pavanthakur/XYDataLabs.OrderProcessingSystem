@@ -267,14 +267,14 @@ jobs:
 
               if ($bootstrap -eq "true") {
                 Write-Host "" -ForegroundColor Gray
-                Write-Host "    ❌ ERROR: Cannot bootstrap infrastructure without OIDC credentials!" -ForegroundColor Red
-                Write-Error "OIDC secrets not found. You must check 'Setup Azure OIDC' checkbox to create them."
-                exit 1
+                Write-Host "    ℹ️  OIDC secrets not found at repository level, but bootstrapInfra is selected." -ForegroundColor Cyan
+                Write-Host "    Phase 1a (Setup Azure OIDC) will auto-trigger to acquire credentials" -ForegroundColor Cyan
+                Write-Host "    before bootstrap runs. Expect a device-code login prompt if first-time setup." -ForegroundColor Cyan
               } elseif ($configSecrets -eq "true") {
                 Write-Host "" -ForegroundColor Gray
                 Write-Host "    ℹ️  OIDC secrets not found at repository level, but Phase 1b is selected." -ForegroundColor Cyan
                 Write-Host "    Phase 1a (Setup Azure OIDC) will auto-trigger to acquire credentials" -ForegroundColor Cyan
-                Write-Host "    before Phase 1b runs. Expect a device-code login prompt." -ForegroundColor Cyan
+                Write-Host "    before Phase 1b runs. Expect a device-code login prompt if first-time setup." -ForegroundColor Cyan
               } elseif ($deployApi -eq "true" -or $deployUi -eq "true") {
                 Write-Host "" -ForegroundColor Gray
                 Write-Host "    ⚠️  WARNING: OIDC repository secrets not found at the repository level." -ForegroundColor Yellow
@@ -433,12 +433,18 @@ jobs:
           Write-Host "  Phase 0 — GitHub App Instructions  : $phase0Icon" -ForegroundColor $(if ($doSetupGhApp) { 'Cyan' } else { 'DarkGray' })
 
           # Phase 1a: Setup OIDC
-          # Phase 1a auto-triggers when configureSecrets is selected (Phase 1b needs OIDC outputs)
-          $effectiveSetupOidc = $doSetupOidc -or $doConfigSecrets
+          # Phase 1a auto-triggers when configureSecrets or bootstrapInfra is selected
+          # (Phase 1b needs OIDC outputs to write secrets; Phase 2 needs them for Azure login)
+          $effectiveSetupOidc = $doSetupOidc -or $doConfigSecrets -or $doBootstrap
           $phase1aPrereq = $true  # Prereqs checked at auth-check step (falls back to device code if no existing creds)
           $phase1aIcon   = if ($effectiveSetupOidc) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }
           $phase1aAuth   = if ($oidcConfigured) { 'non-interactive (OIDC)' } else { 'interactive (device code — first-time)' }
-          $phase1aNote   = if ($doConfigSecrets -and -not $doSetupOidc) { ' (auto-triggered by Phase 1b)' } else { '' }
+          $phase1aNote   = if (-not $doSetupOidc -and ($doConfigSecrets -or $doBootstrap)) {
+            $triggers = @()
+            if ($doConfigSecrets) { $triggers += 'Phase 1b' }
+            if ($doBootstrap)     { $triggers += 'Phase 2' }
+            " (auto-triggered by $($triggers -join ' + '))"
+          } else { '' }
           Write-Host "  Phase 1a — Setup Azure OIDC        : $phase1aIcon$phase1aNote" -ForegroundColor $(if ($effectiveSetupOidc) { 'Cyan' } else { 'DarkGray' })
           if ($effectiveSetupOidc) {
             Write-Host "             └─ Login method: $phase1aAuth" -ForegroundColor Gray
@@ -566,11 +572,14 @@ jobs:
 
   setup-oidc:
     name: Setup Azure OIDC
-    # Auto-trigger when configureSecrets is selected: Phase 1b needs OIDC credentials
-    # (clientId/tenantId/subscriptionId) to write as GitHub secrets. If they don't exist
-    # yet, this job acquires them via device-code login; if they already exist, it uses
-    # non-interactive OIDC login. Either way, the outputs are passed to Phase 1b.
-    if: inputs.setupOidc || inputs.configureSecrets
+    # Auto-trigger when configureSecrets or bootstrapInfra is selected:
+    # - Phase 1b (configureSecrets) needs OIDC outputs to write as GitHub secrets.
+    # - Phase 2 (bootstrapInfra) needs OIDC outputs for Azure login. validate-inputs has no
+    #   environment context so it cannot see environment-level AZUREAPPSERVICE_* secrets;
+    #   running setup-oidc here ensures credentials are always available via job outputs.
+    # If credentials already exist (environment or repo level), non-interactive OIDC login is
+    # used. If not, device-code login runs (first-time setup).
+    if: inputs.setupOidc || inputs.configureSecrets || inputs.bootstrapInfra
     needs: [validate-inputs]
     runs-on: windows-latest
     # Use environment context so both repo-level and environment-level AZUREAPPSERVICE_* secrets
