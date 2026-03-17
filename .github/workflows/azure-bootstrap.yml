@@ -272,18 +272,18 @@ jobs:
                 exit 1
               } elseif ($configSecrets -eq "true") {
                 Write-Host "" -ForegroundColor Gray
-                Write-Host "    ⚠️  WARNING: OIDC repository secrets not found at the repository level." -ForegroundColor Yellow
-                Write-Host "    Phase 1b (Configure Secrets) will proceed — configure-github-secrets.yml" -ForegroundColor Gray
-                Write-Host "    verifies credentials at runtime using the GitHub App token." -ForegroundColor Gray
+                Write-Host "    ❌ ERROR: Cannot configure GitHub secrets (Phase 1b) without OIDC credentials!" -ForegroundColor Red
+                Write-Host "    Azure OIDC (Phase 1a) is MANDATORY for Phase 1b on first-time setup." -ForegroundColor Red
+                Write-Host "    Phase 0 (GitHub App) alone is not sufficient — it only manages GitHub secrets." -ForegroundColor Yellow
+                Write-Host "    Phase 1a creates the Azure identity and provides clientId/tenantId/subscriptionId." -ForegroundColor Yellow
                 Write-Host "" -ForegroundColor Gray
-                Write-Host "    ℹ️  NOTE: If AZUREAPPSERVICE_* secrets are stored at environment level only" -ForegroundColor Cyan
-                Write-Host "    (not repository level), they are not visible to this pre-flight check." -ForegroundColor Gray
-                Write-Host "    configure-github-secrets.yml will verify them using the GitHub App token." -ForegroundColor Gray
-                Write-Host "" -ForegroundColor Gray
-                Write-Host "    💡 TIP: If this is a first-time setup (no OIDC credentials exist yet)," -ForegroundColor Yellow
-                Write-Host "    re-run with both Phase 1 steps selected:" -ForegroundColor Gray
+                Write-Host "    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+                Write-Host "    💡 SOLUTION: Re-run with Phase 1a + 1b together:" -ForegroundColor Yellow
                 Write-Host "       ✅ Setup Azure OIDC (Phase 1a)          = true" -ForegroundColor White
                 Write-Host "       ✅ Configure GitHub Secrets (Phase 1b)  = true" -ForegroundColor White
+                Write-Host "    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+                Write-Error "OIDC secrets not found. Phase 1a (Setup Azure OIDC) is required for Phase 1b. Check both 'Setup Azure OIDC' and 'Configure GitHub Secrets' checkboxes."
+                exit 1
               } elseif ($deployApi -eq "true" -or $deployUi -eq "true") {
                 Write-Host "" -ForegroundColor Gray
                 Write-Host "    ⚠️  WARNING: OIDC repository secrets not found at the repository level." -ForegroundColor Yellow
@@ -566,6 +566,8 @@ jobs:
             Write-Host "  ℹ️  Azure OIDC (Phase 1a) is MANDATORY for all phases that interact with Azure." -ForegroundColor Yellow
             Write-Host "  Bootstrap, deploy, and Phase 1b (configure secrets) phases enforce this with a hard fail." -ForegroundColor Gray
             Write-Host ""
+            Write-Error "Pre-flight check failed — one or more selected phases have unmet prerequisites. See details above."
+            exit 1
           }
 
   setup-oidc:
