@@ -120,8 +120,8 @@ All workflows live in `.github/workflows/`. Each has a companion `README-*.md` i
 | Phase | Input flag | What it does |
 |-------|-----------|--------------|
 | **Phase 0** | `setupGitHubApp = true` | Shows GitHub App creation instructions. Requires `APP_ID` + `APP_PRIVATE_KEY` secrets to already exist to show "Phase 0 configured correctly" banner. |
-| **Phase 1a** | `setupOidc = true` | Creates/updates Microsoft Entra ID App Registration + federated OIDC credentials via `setup-github-oidc.ps1`. Auto-triggers when Phase 1b is selected. Phase 2/X do **not** auto-trigger Phase 1a — they rely on environment secrets from Phase 1b. |
-| **Phase 1b** | `configureSecrets = true` | Calls `configure-github-secrets.yml` to store OIDC values as GitHub repo/env secrets using the GitHub App token. |
+| **Phase 1a** | `setupOidc = true` | Creates/updates Microsoft Entra ID App Registration + federated OIDC credentials via `setup-github-oidc.ps1`. Auto-triggers when Phase 1b is selected. Phase 2/X do **not** auto-trigger Phase 1a — they rely on environment secrets from Phase 1b. **Always runs in `dev` environment context** — branch check is relaxed for Phase 1a/1b-only runs. Recommended: `branch=dev`, `environment=all`. |
+| **Phase 1b** | `configureSecrets = true` | Calls `configure-github-secrets.yml` to store OIDC values as GitHub repo/env secrets using the GitHub App token. **Always runs in `dev` environment context** like Phase 1a. |
 | **Phase 2** | `bootstrapInfra = true` | Runs `bootstrap-enterprise-infra.ps1` — resource group, App Service, SQL, Key Vault. |
 | **Phase 2** | `deployApi / deployUi` | Dispatches `deploy-api-to-azure.yml` / `deploy-ui-to-azure.yml`. **Blocked** if the bootstrap job for the target environment failed. |
 | **Phase X** | `cleanupInfra = true` | ⚠️ **DESTRUCTIVE**: Stops and deletes App Services, then deletes the entire Resource Group. |

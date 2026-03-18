@@ -33,12 +33,12 @@ on:
         type: boolean
         default: true
       configureSecrets:
-        description: '🔑 Phase 1b — Configure GitHub Secrets | Requires Phase 0 (APP_ID+APP_PRIVATE_KEY). Run with 1a (first-time) or standalone to verify existing AZUREAPPSERVICE_* secrets'
+        description: '🔑 Phase 1b — Configure GitHub Secrets | Requires Phase 0 (APP_ID+APP_PRIVATE_KEY). ⚠️ Runs in dev context like Phase 1a. Recommended: branch=dev, environment=all'
         required: true
         type: boolean
         default: false
       setupOidc:
-        description: '🔑 Phase 1a — Setup Azure OIDC | First run: uses device code. Re-runs: uses existing AZUREAPPSERVICE_* credentials (no interactive login)'
+        description: '🔑 Phase 1a — Setup Azure OIDC | ⚠️ Always uses dev branch context. Recommended: branch=dev, environment=all (sets up dev+staging+prod in one run)'
         required: true
         type: boolean
         default: false
@@ -189,12 +189,27 @@ jobs:
           $currentBranch = "${{ github.ref_name }}"
           $expectedBranch = if ($env -eq "prod") { "main" } elseif ($env -eq "all") { "any" } else { $env }
           
+          # Phase 1a/1b-only runs always use 'environment: dev' job context regardless of
+          # the environment input, so the branch-environment check doesn't apply to them.
+          # The environment input only controls which federated credentials get created.
+          $isPhase1Only = ($setupOidc -eq "true" -or $configSecrets -eq "true") -and ($bootstrap -eq "false") -and ($cleanup -eq "false") -and ($deployApi -eq "false") -and ($deployUi -eq "false")
+
           Write-Host "`n  Branch/Environment Match Check:" -ForegroundColor Cyan
           Write-Host "    Current branch: $currentBranch" -ForegroundColor Gray
           Write-Host "    Target environment: $env" -ForegroundColor Gray
           Write-Host "    Expected branch: $expectedBranch" -ForegroundColor Gray
           
-          if ($env -ne "all" -and $currentBranch -ne $expectedBranch) {
+          if ($isPhase1Only) {
+            Write-Host "  ℹ️  Phase 1a/1b-only run detected — branch check relaxed" -ForegroundColor Cyan
+            Write-Host "     Phase 1a/1b always runs in 'dev' environment context regardless of branch." -ForegroundColor Gray
+            Write-Host "     The environment input ('$env') controls which federated credentials are created." -ForegroundColor Gray
+            if ($env -ne "all") {
+              Write-Host "" -ForegroundColor Gray
+              Write-Host "  ⚠️  RECOMMENDATION: Use environment='all' with branch='dev' for Phase 1a/1b" -ForegroundColor Yellow
+              Write-Host "     This creates federated credentials for dev + staging + prod in one run," -ForegroundColor Yellow
+              Write-Host "     preventing AADSTS700213 errors when running Phase 2 for other environments." -ForegroundColor Yellow
+            }
+          } elseif ($env -ne "all" -and $currentBranch -ne $expectedBranch) {
             Write-Host "`n  ❌ BRANCH MISMATCH ERROR" -ForegroundColor Red
             Write-Host "     You are running from branch '$currentBranch' but targeting environment '$env'" -ForegroundColor Red
             Write-Host "     Expected branch: '$expectedBranch'" -ForegroundColor Yellow
