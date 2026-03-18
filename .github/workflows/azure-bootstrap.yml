@@ -1194,20 +1194,35 @@ jobs:
             
             if (-not $hasClientId -or -not $hasTenantId -or -not $hasSubscriptionId) {
               Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-              Write-Host "❌ AZURE CREDENTIALS MISSING" -ForegroundColor Red
+              Write-Host "❌ DEPLOYMENT BLOCKED — OIDC NOT CONFIGURED FOR 'dev'" -ForegroundColor Red
               Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
               Write-Host ""
-              Write-Host "Required credentials are not available." -ForegroundColor Red
+              Write-Host "Phase 1a (Setup Azure OIDC) and Phase 1b (Configure GitHub Secrets)" -ForegroundColor Red
+              Write-Host "must be completed BEFORE Phase 2 can run." -ForegroundColor Red
               Write-Host ""
-              Write-Host "Troubleshooting:" -ForegroundColor Yellow
-              Write-Host "  1. Ensure 'Setup Azure OIDC' job completed successfully" -ForegroundColor Gray
-              Write-Host "  2. OR ensure secrets are configured:" -ForegroundColor Gray
-              Write-Host "     - AZUREAPPSERVICE_CLIENTID" -ForegroundColor Gray
-              Write-Host "     - AZUREAPPSERVICE_TENANTID" -ForegroundColor Gray
-              Write-Host "     - AZUREAPPSERVICE_SUBSCRIPTIONID" -ForegroundColor Gray
-              Write-Host "  3. Re-run workflow with 'Setup Azure OIDC' = true" -ForegroundColor Gray
+              Write-Host "These are ONE-TIME setup steps that create:" -ForegroundColor Yellow
+              Write-Host "  Phase 1a → Azure AD federated identity credentials (GitHub ↔ Azure OIDC trust)" -ForegroundColor Gray
+              Write-Host "  Phase 1b → GitHub environment secrets (AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID)" -ForegroundColor Gray
               Write-Host ""
-              Write-Error "Azure credentials not found. Ensure OIDC setup is run or secrets are configured."
+              Write-Host "TO FIX — Run Phase 1a + 1b (one-time setup):" -ForegroundColor Cyan
+              Write-Host "  1. Go to Actions → 'Azure Bootstrap Setup' → Run workflow" -ForegroundColor White
+              Write-Host "  2. Set 'Use workflow from' = dev branch" -ForegroundColor White
+              Write-Host "  3. Set Environment = 'all' (sets up dev + staging + prod in one run)" -ForegroundColor White
+              Write-Host "  4. Check ✅ Phase 1a — Setup Azure OIDC" -ForegroundColor White
+              Write-Host "  5. Check ✅ Phase 1b — Configure GitHub Secrets" -ForegroundColor White
+              Write-Host "  6. Uncheck all Phase 2 options" -ForegroundColor White
+              Write-Host "  7. Click 'Run workflow' and wait for completion" -ForegroundColor White
+              Write-Host ""
+              Write-Host "After Phase 1a + 1b succeed, re-run this workflow with Phase 2 options." -ForegroundColor Yellow
+              Write-Host ""
+              Write-Host "⚠️  No infrastructure or deployment will proceed until OIDC is configured." -ForegroundColor Red
+              Write-Host "⚠️  API and UI deployments are also blocked when bootstrap fails." -ForegroundColor Red
+              Write-Host ""
+              if (-not $hasClientId) { Write-Host "  ❌ AZUREAPPSERVICE_CLIENTID       — Missing in 'dev' environment" -ForegroundColor Red }
+              if (-not $hasTenantId) { Write-Host "  ❌ AZUREAPPSERVICE_TENANTID       — Missing in 'dev' environment" -ForegroundColor Red }
+              if (-not $hasSubscriptionId) { Write-Host "  ❌ AZUREAPPSERVICE_SUBSCRIPTIONID — Missing in 'dev' environment" -ForegroundColor Red }
+              Write-Host ""
+              Write-Error "DEPLOYMENT BLOCKED: Phase 1a + 1b not completed for 'dev'. Run Phase 1a (Setup Azure OIDC) + Phase 1b (Configure GitHub Secrets) with environment='all' first."
               exit 1
             }
             
@@ -1713,20 +1728,35 @@ jobs:
             
             if (-not $hasClientId -or -not $hasTenantId -or -not $hasSubscriptionId) {
               Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-              Write-Host "❌ AZURE CREDENTIALS MISSING" -ForegroundColor Red
+              Write-Host "❌ DEPLOYMENT BLOCKED — OIDC NOT CONFIGURED FOR 'staging'" -ForegroundColor Red
               Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
               Write-Host ""
-              Write-Host "Required credentials are not available." -ForegroundColor Red
+              Write-Host "Phase 1a (Setup Azure OIDC) and Phase 1b (Configure GitHub Secrets)" -ForegroundColor Red
+              Write-Host "must be completed BEFORE Phase 2 can run." -ForegroundColor Red
               Write-Host ""
-              Write-Host "Troubleshooting:" -ForegroundColor Yellow
-              Write-Host "  1. Ensure 'Setup Azure OIDC' job completed successfully" -ForegroundColor Gray
-              Write-Host "  2. OR ensure secrets are configured:" -ForegroundColor Gray
-              Write-Host "     - AZUREAPPSERVICE_CLIENTID" -ForegroundColor Gray
-              Write-Host "     - AZUREAPPSERVICE_TENANTID" -ForegroundColor Gray
-              Write-Host "     - AZUREAPPSERVICE_SUBSCRIPTIONID" -ForegroundColor Gray
-              Write-Host "  3. Re-run workflow with 'Setup Azure OIDC' = true" -ForegroundColor Gray
+              Write-Host "These are ONE-TIME setup steps that create:" -ForegroundColor Yellow
+              Write-Host "  Phase 1a → Azure AD federated identity credentials (GitHub ↔ Azure OIDC trust)" -ForegroundColor Gray
+              Write-Host "  Phase 1b → GitHub environment secrets (AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID)" -ForegroundColor Gray
               Write-Host ""
-              Write-Error "Azure credentials not found. Ensure OIDC setup is run or secrets are configured."
+              Write-Host "TO FIX — Run Phase 1a + 1b (one-time setup):" -ForegroundColor Cyan
+              Write-Host "  1. Go to Actions → 'Azure Bootstrap Setup' → Run workflow" -ForegroundColor White
+              Write-Host "  2. Set 'Use workflow from' = dev branch" -ForegroundColor White
+              Write-Host "  3. Set Environment = 'all' (sets up dev + staging + prod in one run)" -ForegroundColor White
+              Write-Host "  4. Check ✅ Phase 1a — Setup Azure OIDC" -ForegroundColor White
+              Write-Host "  5. Check ✅ Phase 1b — Configure GitHub Secrets" -ForegroundColor White
+              Write-Host "  6. Uncheck all Phase 2 options" -ForegroundColor White
+              Write-Host "  7. Click 'Run workflow' and wait for completion" -ForegroundColor White
+              Write-Host ""
+              Write-Host "After Phase 1a + 1b succeed, re-run this workflow with Phase 2 options." -ForegroundColor Yellow
+              Write-Host ""
+              Write-Host "⚠️  No infrastructure or deployment will proceed until OIDC is configured." -ForegroundColor Red
+              Write-Host "⚠️  API and UI deployments are also blocked when bootstrap fails." -ForegroundColor Red
+              Write-Host ""
+              if (-not $hasClientId) { Write-Host "  ❌ AZUREAPPSERVICE_CLIENTID       — Missing in 'staging' environment" -ForegroundColor Red }
+              if (-not $hasTenantId) { Write-Host "  ❌ AZUREAPPSERVICE_TENANTID       — Missing in 'staging' environment" -ForegroundColor Red }
+              if (-not $hasSubscriptionId) { Write-Host "  ❌ AZUREAPPSERVICE_SUBSCRIPTIONID — Missing in 'staging' environment" -ForegroundColor Red }
+              Write-Host ""
+              Write-Error "DEPLOYMENT BLOCKED: Phase 1a + 1b not completed for 'staging'. Run Phase 1a (Setup Azure OIDC) + Phase 1b (Configure GitHub Secrets) with environment='all' first."
               exit 1
             }
             
@@ -2212,20 +2242,35 @@ jobs:
             
             if (-not $hasClientId -or -not $hasTenantId -or -not $hasSubscriptionId) {
               Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-              Write-Host "❌ AZURE CREDENTIALS MISSING" -ForegroundColor Red
+              Write-Host "❌ DEPLOYMENT BLOCKED — OIDC NOT CONFIGURED FOR 'prod'" -ForegroundColor Red
               Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
               Write-Host ""
-              Write-Host "Required credentials are not available." -ForegroundColor Red
+              Write-Host "Phase 1a (Setup Azure OIDC) and Phase 1b (Configure GitHub Secrets)" -ForegroundColor Red
+              Write-Host "must be completed BEFORE Phase 2 can run." -ForegroundColor Red
               Write-Host ""
-              Write-Host "Troubleshooting:" -ForegroundColor Yellow
-              Write-Host "  1. Ensure 'Setup Azure OIDC' job completed successfully" -ForegroundColor Gray
-              Write-Host "  2. OR ensure secrets are configured:" -ForegroundColor Gray
-              Write-Host "     - AZUREAPPSERVICE_CLIENTID" -ForegroundColor Gray
-              Write-Host "     - AZUREAPPSERVICE_TENANTID" -ForegroundColor Gray
-              Write-Host "     - AZUREAPPSERVICE_SUBSCRIPTIONID" -ForegroundColor Gray
-              Write-Host "  3. Re-run workflow with 'Setup Azure OIDC' = true" -ForegroundColor Gray
+              Write-Host "These are ONE-TIME setup steps that create:" -ForegroundColor Yellow
+              Write-Host "  Phase 1a → Azure AD federated identity credentials (GitHub ↔ Azure OIDC trust)" -ForegroundColor Gray
+              Write-Host "  Phase 1b → GitHub environment secrets (AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID)" -ForegroundColor Gray
               Write-Host ""
-              Write-Error "Azure credentials not found. Ensure OIDC setup is run or secrets are configured."
+              Write-Host "TO FIX — Run Phase 1a + 1b (one-time setup):" -ForegroundColor Cyan
+              Write-Host "  1. Go to Actions → 'Azure Bootstrap Setup' → Run workflow" -ForegroundColor White
+              Write-Host "  2. Set 'Use workflow from' = dev branch" -ForegroundColor White
+              Write-Host "  3. Set Environment = 'all' (sets up dev + staging + prod in one run)" -ForegroundColor White
+              Write-Host "  4. Check ✅ Phase 1a — Setup Azure OIDC" -ForegroundColor White
+              Write-Host "  5. Check ✅ Phase 1b — Configure GitHub Secrets" -ForegroundColor White
+              Write-Host "  6. Uncheck all Phase 2 options" -ForegroundColor White
+              Write-Host "  7. Click 'Run workflow' and wait for completion" -ForegroundColor White
+              Write-Host ""
+              Write-Host "After Phase 1a + 1b succeed, re-run this workflow with Phase 2 options." -ForegroundColor Yellow
+              Write-Host ""
+              Write-Host "⚠️  No infrastructure or deployment will proceed until OIDC is configured." -ForegroundColor Red
+              Write-Host "⚠️  API and UI deployments are also blocked when bootstrap fails." -ForegroundColor Red
+              Write-Host ""
+              if (-not $hasClientId) { Write-Host "  ❌ AZUREAPPSERVICE_CLIENTID       — Missing in 'prod' environment" -ForegroundColor Red }
+              if (-not $hasTenantId) { Write-Host "  ❌ AZUREAPPSERVICE_TENANTID       — Missing in 'prod' environment" -ForegroundColor Red }
+              if (-not $hasSubscriptionId) { Write-Host "  ❌ AZUREAPPSERVICE_SUBSCRIPTIONID — Missing in 'prod' environment" -ForegroundColor Red }
+              Write-Host ""
+              Write-Error "DEPLOYMENT BLOCKED: Phase 1a + 1b not completed for 'prod'. Run Phase 1a (Setup Azure OIDC) + Phase 1b (Configure GitHub Secrets) with environment='all' first."
               exit 1
             }
             
@@ -3096,16 +3141,32 @@ jobs:
             "**Next:** Run this workflow with \`Setup Azure OIDC = true\` and \`Configure GitHub Secrets = true\` to set up Azure credentials." >> $env:GITHUB_STEP_SUMMARY
           }
 
-  # Optional: Trigger deployment workflows after successful bootstrap
+  # Trigger deployment workflows — ONLY after bootstrap succeeds for the target environment.
+  # When bootstrapInfra is selected, the relevant bootstrap job(s) must succeed before
+  # API/UI deployments are dispatched. This prevents deploying to environments where
+  # Phase 1a+1b (OIDC setup) was never completed. When bootstrapInfra is NOT selected
+  # (deploy-only run), deployments proceed without bootstrap checks.
   trigger-deployments:
     name: Trigger Deployments
     runs-on: ubuntu-latest
-    needs: [summary]
+    needs: [summary, bootstrap-dev, bootstrap-staging, bootstrap-prod]
     if: |
       !cancelled() &&
       (inputs.deployApi || inputs.deployUi) &&
       needs.summary.result != 'failure' &&
-      needs.summary.result != 'cancelled'
+      needs.summary.result != 'cancelled' &&
+      (
+        inputs.bootstrapInfra != true ||
+        (inputs.environment == 'dev' && needs.bootstrap-dev.result == 'success') ||
+        (inputs.environment == 'staging' && needs.bootstrap-staging.result == 'success') ||
+        (inputs.environment == 'prod' && needs.bootstrap-prod.result == 'success') ||
+        (
+          inputs.environment == 'all' &&
+          needs.bootstrap-dev.result == 'success' &&
+          needs.bootstrap-staging.result == 'success' &&
+          needs.bootstrap-prod.result == 'success'
+        )
+      )
     steps:
       - name: Trigger API Deployment
         if: inputs.deployApi

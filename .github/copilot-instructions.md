@@ -120,11 +120,40 @@ All workflows live in `.github/workflows/`. Each has a companion `README-*.md` i
 | Phase | Input flag | What it does |
 |-------|-----------|--------------|
 | **Phase 0** | `setupGitHubApp = true` | Shows GitHub App creation instructions. Requires `APP_ID` + `APP_PRIVATE_KEY` secrets to already exist to show "Phase 0 configured correctly" banner. |
-| **Phase 1** | `setupOidc = true` | Creates/updates Microsoft Entra ID App Registration + federated OIDC credentials via `setup-github-oidc.ps1`. |
-| **Phase 1** | `configureSecrets = true` | Calls `configure-github-secrets.yml` to store OIDC values as GitHub repo/env secrets using the GitHub App token. |
+| **Phase 1a** | `setupOidc = true` | Creates/updates Microsoft Entra ID App Registration + federated OIDC credentials via `setup-github-oidc.ps1`. Auto-triggers when Phase 1b, Phase 2, or Phase X is selected. |
+| **Phase 1b** | `configureSecrets = true` | Calls `configure-github-secrets.yml` to store OIDC values as GitHub repo/env secrets using the GitHub App token. |
 | **Phase 2** | `bootstrapInfra = true` | Runs `bootstrap-enterprise-infra.ps1` — resource group, App Service, SQL, Key Vault. |
-| **Phase 2** | `deployApi / deployUi` | Calls `run-database-migrations.ps1` then deploys binaries. |
+| **Phase 2** | `deployApi / deployUi` | Dispatches `deploy-api-to-azure.yml` / `deploy-ui-to-azure.yml`. **Blocked** if the bootstrap job for the target environment failed. |
 | **Phase X** | `cleanupInfra = true` | ⚠️ **DESTRUCTIVE**: Stops and deletes App Services, then deletes the entire Resource Group. |
+
+### Phase 1a + 1b — One-Time OIDC Prerequisite
+
+Phase 1a and Phase 1b are **one-time setup steps** that must complete before Phase 2 or Phase X
+can authenticate with Azure. They create the OIDC trust between GitHub and Azure:
+
+| Step | What it creates |
+|------|-----------------|
+| **Phase 1a** | Azure AD App Registration + federated identity credentials (`environment:dev`, `environment:staging`, `environment:prod`, branch refs) |
+| **Phase 1b** | GitHub environment secrets (`AZUREAPPSERVICE_CLIENTID`, `AZUREAPPSERVICE_TENANTID`, `AZUREAPPSERVICE_SUBSCRIPTIONID`) for dev, staging, and prod |
+
+**How to run (recommended — one-time per repository):**
+1. Go to **Actions → Azure Bootstrap Setup → Run workflow**
+2. Set **Use workflow from** = `dev` branch
+3. Set **Environment** = `all` (configures dev + staging + prod in a single run)
+4. Check ✅ **Phase 1a — Setup Azure OIDC** and ✅ **Phase 1b — Configure GitHub Secrets**
+5. Uncheck all Phase 2 options
+6. Run and wait for completion
+
+> **Note:** `setup-oidc` always uses `environment: dev` context (hardcoded) because all environments
+> share the same Azure AD App Registration. This avoids the chicken-and-egg problem where a new
+> environment's federated credential doesn't exist yet.
+
+### Deployment Guard
+
+The `trigger-deployments` job depends on bootstrap job results. When `bootstrapInfra` is selected,
+API/UI deployments are **blocked** unless the bootstrap job for the target environment succeeds.
+If Phase 1a+1b were never completed, bootstrap fails at credential validation and deployments
+are automatically prevented.
 
 ### OIDC Authentication Pattern
 
@@ -277,8 +306,11 @@ Port allocations: Local VS (5010–5013) · Docker dev (5020–5023) · UAT (503
 |---------|---------------------|
 | Workflow exits with code 1 on GitHub App step | `TROUBLESHOOTING-INDEX.md` — check if `APP_ID`/`APP_PRIVATE_KEY` are present; `gh api /app` requires JWT, not installation token |
 | `AADSTS700016` during Azure login | Federated credential missing for branch — run `fix-federated-credential.ps1` |
+| `AADSTS700213` during Azure login | Federated credential missing for environment — run Phase 1a with `environment=all` from `dev` branch |
+| `DEPLOYMENT BLOCKED` in bootstrap | Phase 1a+1b not completed — run Phase 1a + 1b with `environment=all` from `dev` branch first |
+| API/UI deployment skipped after bootstrap failure | Deployment guard blocks dispatches when bootstrap fails — fix the bootstrap error first |
 | Secrets show ❌ Missing | Ensure workflow runs with correct environment (dev/staging/prod), not "all" |
-| Bootstrap infra fails | Check OIDC secrets are configured (Phase 1 must run before Phase 2) |
+| Bootstrap infra fails | Check OIDC secrets are configured (Phase 1a+1b must run before Phase 2) |
 | `APP_INSTALLATION_ID` errors | Not needed — auto-discovered; remove any manual configuration |
 | Branch/env mismatch error | Use `dev` branch for `dev` env, `staging` for `staging`, `main` for `prod` |
 | What-if fails on Bicep | Run `validate-deployment.yml` independently to see full error output |
