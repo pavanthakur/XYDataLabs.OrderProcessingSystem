@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: '🎯 Environment | IMPORTANT: Set "Use workflow from" branch to match (dev→dev, staging→staging, main→prod)'
+        description: '🎯 Environment | Convention: set "Use workflow from" branch to match (dev→dev, staging→staging, main→prod)'
         required: true
         type: choice
         options:
@@ -137,20 +137,21 @@ jobs:
           Write-Host "    Expected branch: $expectedBranch" -ForegroundColor Gray
 
           if ($env -ne "all" -and $currentBranch -ne $expectedBranch) {
-            Write-Host "`n  ❌ BRANCH MISMATCH ERROR" -ForegroundColor Red
-            Write-Host "     You are running from branch '$currentBranch' but targeting environment '$env'" -ForegroundColor Red
-            Write-Host "     Expected branch: '$expectedBranch'" -ForegroundColor Yellow
+            # For manual dispatch the user explicitly selected the environment — treat as advisory only.
+            # A mismatch is common when bootstrapping staging/prod before the feature branch is merged.
+            Write-Host "`n  ⚠️  BRANCH/ENVIRONMENT ADVISORY" -ForegroundColor Yellow
+            Write-Host "     Running from branch '$currentBranch' targeting environment '$env'" -ForegroundColor Yellow
+            Write-Host "     Convention: '$expectedBranch' branch → '$env' environment" -ForegroundColor Gray
             Write-Host "" -ForegroundColor Gray
-            Write-Host "  📋 Correct Branch → Environment Mapping:" -ForegroundColor Yellow
-            Write-Host "     dev branch      → dev environment" -ForegroundColor White
-            Write-Host "     staging branch  → staging environment" -ForegroundColor White
-            Write-Host "     main branch     → prod environment" -ForegroundColor White
+            Write-Host "  📋 Branch → Environment Convention:" -ForegroundColor Gray
+            Write-Host "     dev branch      → dev environment" -ForegroundColor Gray
+            Write-Host "     staging branch  → staging environment" -ForegroundColor Gray
+            Write-Host "     main branch     → prod environment" -ForegroundColor Gray
             Write-Host "" -ForegroundColor Gray
-            Write-Host "  💡 Solution: Change 'Use workflow from' to branch '$expectedBranch'" -ForegroundColor Yellow
-            Write-Error "Branch/environment mismatch. Cannot proceed."
-            exit 1
+            Write-Host "  ✅ Proceeding — manual workflow_dispatch allows cross-branch targeting." -ForegroundColor Green
+          } else {
+            Write-Host "  ✅ Branch matches target environment" -ForegroundColor Green
           }
-          Write-Host "  ✅ Branch matches target environment" -ForegroundColor Green
 
           # Check OIDC secrets exist (required for all operations in this workflow)
           Write-Host "`n  🔐 OIDC Secrets Check:" -ForegroundColor Cyan
