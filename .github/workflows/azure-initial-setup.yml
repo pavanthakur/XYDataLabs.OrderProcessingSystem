@@ -414,9 +414,21 @@ jobs:
           Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
           Write-Host ""
           
-          $hasOidc = -not [string]::IsNullOrWhiteSpace("${{ secrets.AZUREAPPSERVICE_CLIENTID }}")
-          
-          if ($hasOidc) {
+          $hasOidc    = -not [string]::IsNullOrWhiteSpace("${{ secrets.AZUREAPPSERVICE_CLIENTID }}")
+          $setupOidc  = "${{ inputs.setupOidc }}" -eq "true"
+
+          # When setupOidc=true we are creating/modifying Azure AD App Registrations.
+          # The OIDC service principal only has subscription Contributor — it does NOT have
+          # Azure AD directory permissions (Application.ReadWrite.All) needed to manage
+          # App Registrations.  Force device code so the human user's Azure AD identity
+          # is used instead.
+          if ($setupOidc) {
+            Write-Host "ℹ️  setupOidc=true: Azure AD App Registration management required." -ForegroundColor Cyan
+            Write-Host "   Forcing device code login — only a user with Azure AD admin rights" -ForegroundColor Cyan
+            Write-Host "   (Application Administrator / Global Admin) can create App Registrations." -ForegroundColor Cyan
+            Write-Host "   The OIDC service principal has subscription Contributor only." -ForegroundColor Gray
+            "useExistingOidc=false" >> $env:GITHUB_OUTPUT
+          } elseif ($hasOidc) {
             Write-Host "✅ Existing OIDC credentials found — will use non-interactive login" -ForegroundColor Green
             "useExistingOidc=true" >> $env:GITHUB_OUTPUT
           } else {
