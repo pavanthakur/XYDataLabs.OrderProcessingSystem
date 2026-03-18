@@ -265,9 +265,10 @@ jobs:
 
               if ($bootstrap -eq "true") {
                 Write-Host "" -ForegroundColor Gray
-                Write-Host "    ℹ️  OIDC secrets not found at repository level, but bootstrapInfra is selected." -ForegroundColor Cyan
-                Write-Host "    Phase 1a (Setup Azure OIDC) will auto-trigger to acquire credentials" -ForegroundColor Cyan
-                Write-Host "    before bootstrap runs. Expect a device-code login prompt if first-time setup." -ForegroundColor Cyan
+                Write-Host "    ❌ OIDC secrets not found — Phase 2 (Bootstrap) WILL FAIL at credential validation." -ForegroundColor Red
+                Write-Host "    Phase 1a + 1b must be completed BEFORE Phase 2 can run." -ForegroundColor Red
+                Write-Host "    → Re-run with Phase 1a (Setup Azure OIDC) + Phase 1b (Configure Secrets) checked" -ForegroundColor Yellow
+                Write-Host "    → Set environment = 'all' from 'dev' branch for one-time setup" -ForegroundColor Yellow
               } elseif ($configSecrets -eq "true") {
                 Write-Host "" -ForegroundColor Gray
                 Write-Host "    ℹ️  OIDC secrets not found at repository level, but Phase 1b is selected." -ForegroundColor Cyan
@@ -275,9 +276,10 @@ jobs:
                 Write-Host "    before Phase 1b runs. Expect a device-code login prompt if first-time setup." -ForegroundColor Cyan
               } elseif ($cleanup -eq "true") {
                 Write-Host "" -ForegroundColor Gray
-                Write-Host "    ℹ️  OIDC secrets not found at repository level, but cleanupInfra is selected." -ForegroundColor Cyan
-                Write-Host "    Phase 1a (Setup Azure OIDC) will auto-trigger to acquire credentials" -ForegroundColor Cyan
-                Write-Host "    before cleanup runs. Expect a device-code login prompt if first-time setup." -ForegroundColor Cyan
+                Write-Host "    ❌ OIDC secrets not found — Phase X (Cleanup) WILL FAIL at credential validation." -ForegroundColor Red
+                Write-Host "    Phase 1a + 1b must be completed BEFORE Phase X can run." -ForegroundColor Red
+                Write-Host "    → Re-run with Phase 1a (Setup Azure OIDC) + Phase 1b (Configure Secrets) checked" -ForegroundColor Yellow
+                Write-Host "    → Set environment = 'all' from 'dev' branch for one-time setup" -ForegroundColor Yellow
               } elseif ($deployApi -eq "true" -or $deployUi -eq "true") {
                 Write-Host "" -ForegroundColor Gray
                 Write-Host "    ⚠️  WARNING: OIDC repository secrets not found at the repository level." -ForegroundColor Yellow
@@ -436,18 +438,14 @@ jobs:
           Write-Host "  Phase 0 — GitHub App Instructions  : $phase0Icon" -ForegroundColor $(if ($doSetupGhApp) { 'Cyan' } else { 'DarkGray' })
 
           # Phase 1a: Setup OIDC
-          # Phase 1a auto-triggers when configureSecrets, bootstrapInfra, or cleanupInfra is selected
-          # (Phase 1b needs OIDC outputs to write secrets; Phase 2+X need them for Azure login)
-          $effectiveSetupOidc = $doSetupOidc -or $doConfigSecrets -or $doBootstrap -or $doCleanup
+          # Phase 1a only auto-triggers for Phase 1b (configureSecrets). Phase 2/X rely on
+          # environment secrets stored by Phase 1b — they do NOT auto-trigger Phase 1a.
+          $effectiveSetupOidc = $doSetupOidc -or $doConfigSecrets
           $phase1aPrereq = $true  # Prereqs checked at auth-check step (falls back to device code if no existing creds)
           $phase1aIcon   = if ($effectiveSetupOidc) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }
           $phase1aAuth   = if ($oidcConfigured) { 'non-interactive (OIDC)' } else { 'interactive (device code — first-time)' }
-          $phase1aNote   = if (-not $doSetupOidc -and ($doConfigSecrets -or $doBootstrap -or $doCleanup)) {
-            $triggers = @()
-            if ($doConfigSecrets) { $triggers += 'Phase 1b' }
-            if ($doBootstrap)     { $triggers += 'Phase 2' }
-            if ($doCleanup)       { $triggers += 'Phase X' }
-            " (auto-triggered by $($triggers -join ' + '))"
+          $phase1aNote   = if (-not $doSetupOidc -and $doConfigSecrets) {
+            " (auto-triggered by Phase 1b)"
           } else { '' }
           Write-Host "  Phase 1a — Setup Azure OIDC        : $phase1aIcon$phase1aNote" -ForegroundColor $(if ($effectiveSetupOidc) { 'Cyan' } else { 'DarkGray' })
           if ($effectiveSetupOidc) {
@@ -478,6 +476,8 @@ jobs:
           }
 
           # Phase 2: Bootstrap Infrastructure
+          # Phase 2 relies on environment secrets stored by Phase 1b, OR fresh OIDC from Phase 1a
+          # if the user explicitly selected setupOidc.
           $phase2Prereq = $effectiveSetupOidc -or $oidcConfigured  # Needs OIDC (either fresh from 1a or pre-existing)
           $phase2Icon   = if ($doBootstrap) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }
           $phase2Ready  = -not $doBootstrap -or $phase2Prereq
@@ -488,8 +488,9 @@ jobs:
             } elseif ($oidcConfigured) {
               Write-Host "             └─ Azure auth: AZUREAPPSERVICE_* secrets → azure/login@v2 (OIDC) ✅" -ForegroundColor Green
             } else {
-              Write-Host "             └─ ⚠️  Azure auth: AZUREAPPSERVICE_* not found at repo level" -ForegroundColor Yellow
-              Write-Host "                    (May exist as environment secrets — Phase 2 will verify at runtime)" -ForegroundColor Gray
+              Write-Host "             └─ ❌ Azure auth: AZUREAPPSERVICE_* not found at repo level" -ForegroundColor Red
+              Write-Host "                    Phase 1a + 1b must be completed first (environment='all' from 'dev' branch)" -ForegroundColor Red
+              Write-Host "                    Bootstrap will fail at credential validation with DEPLOYMENT BLOCKED error" -ForegroundColor Red
             }
             Write-Host "             └─ Deploys UI : $(if ($doDeployUi)  { '✅ Yes' } else { 'No' })" -ForegroundColor Gray
           }
@@ -527,7 +528,7 @@ jobs:
            }
 
           # Phase X: Cleanup Infrastructure — DESTRUCTIVE
-          # Needs Azure OIDC to login (same as Phase 2)
+          # Same as Phase 2: relies on environment secrets from Phase 1b
           $phaseXPrereq = $effectiveSetupOidc -or $oidcConfigured
           $phaseXIcon   = if ($doCleanup) { '🔴 WILL RUN (⚠️ DESTRUCTIVE — IRREVERSIBLE)' } else { '⏭️  SKIPPED' }
           $phaseXReady  = -not $doCleanup -or $phaseXPrereq
@@ -540,7 +541,9 @@ jobs:
             } elseif ($oidcConfigured) {
               Write-Host "             └─ Azure auth: AZUREAPPSERVICE_* secrets ✅" -ForegroundColor Green
             } else {
-              Write-Host "             └─ ⚠️ Azure auth: not confirmed at repo level (may exist as env secrets)" -ForegroundColor Yellow
+              Write-Host "             └─ ❌ Azure auth: AZUREAPPSERVICE_* not found at repo level" -ForegroundColor Red
+              Write-Host "                    Phase 1a + 1b must be completed first (environment='all' from 'dev' branch)" -ForegroundColor Red
+              Write-Host "                    Cleanup will fail at credential validation with DEPLOYMENT BLOCKED error" -ForegroundColor Red
             }
             if ($doBootstrap) {
               Write-Host "             └─ ⚠️  WARNING: Bootstrap is also selected — avoid running both together!" -ForegroundColor Red
@@ -561,9 +564,17 @@ jobs:
             Write-Host ""
             Write-Host "⚠️  PRE-FLIGHT CHECK — One or more phases have unmet prerequisites:" -ForegroundColor Yellow
             if (-not $phase2Ready) {
-              Write-Host "  ❌ Phase 2 needs Azure OIDC credentials." -ForegroundColor Red
-              Write-Host "     → Run Phase 1a first (setupOidc=true + configureSecrets=true)" -ForegroundColor Yellow
-              Write-Host "     → OR ensure AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID secrets are set" -ForegroundColor Yellow
+              Write-Host "  ❌ Phase 2 (Bootstrap) requires OIDC credentials." -ForegroundColor Red
+              Write-Host "     Phase 1a + 1b must be completed as a one-time prerequisite." -ForegroundColor Red
+              Write-Host "     → Run Phase 1a (Setup Azure OIDC) + Phase 1b (Configure Secrets)" -ForegroundColor Yellow
+              Write-Host "     → Set environment = 'all' from 'dev' branch" -ForegroundColor Yellow
+              Write-Host "     → After Phase 1a+1b succeed, re-run with Phase 2 options" -ForegroundColor Yellow
+            }
+            if (-not $phaseXReady) {
+              Write-Host "  ❌ Phase X (Cleanup) requires OIDC credentials." -ForegroundColor Red
+              Write-Host "     Phase 1a + 1b must be completed as a one-time prerequisite." -ForegroundColor Red
+              Write-Host "     → Run Phase 1a (Setup Azure OIDC) + Phase 1b (Configure Secrets)" -ForegroundColor Yellow
+              Write-Host "     → Set environment = 'all' from 'dev' branch" -ForegroundColor Yellow
             }
             if (-not $phase1bReady) {
               if (-not $appConfigured) {
@@ -587,14 +598,13 @@ jobs:
 
   setup-oidc:
     name: Setup Azure OIDC
-    # Auto-trigger when configureSecrets or bootstrapInfra is selected:
-    # - Phase 1b (configureSecrets) needs OIDC outputs to write as GitHub secrets.
-    # - Phase 2 (bootstrapInfra) needs OIDC outputs for Azure login. validate-inputs has no
-    #   environment context so it cannot see environment-level AZUREAPPSERVICE_* secrets;
-    #   running setup-oidc here ensures credentials are always available via job outputs.
-    # If credentials already exist (environment or repo level), non-interactive OIDC login is
-    # used. If not, device-code login runs (first-time setup).
-    if: inputs.setupOidc || inputs.configureSecrets || inputs.bootstrapInfra || inputs.cleanupInfra
+    # Only runs when Phase 1a or Phase 1b is explicitly selected.
+    # Phase 2 (bootstrapInfra) and Phase X (cleanupInfra) are NOT auto-triggers —
+    # they rely on environment secrets stored by Phase 1b. If those secrets don't
+    # exist (Phase 1a+1b was never completed), the bootstrap/cleanup credential
+    # validation step will fail with a clear "DEPLOYMENT BLOCKED" error directing
+    # the user to run Phase 1a+1b first.
+    if: inputs.setupOidc || inputs.configureSecrets
     needs: [validate-inputs]
     runs-on: windows-latest
     # Always use 'dev' environment context for authentication.
