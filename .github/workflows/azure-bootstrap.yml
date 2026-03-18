@@ -1251,12 +1251,43 @@ jobs:
             exit 1
           }
       - name: Azure Login (OIDC or Secrets)
+        id: azure-login
         timeout-minutes: 3
         uses: azure/login@v2
         with:
           client-id: ${{ env.CLIENT_ID }}
           tenant-id: ${{ env.TENANT_ID }}
           subscription-id: ${{ env.SUBSCRIPTION_ID }}
+      
+      - name: Diagnose Azure Login Failure
+        if: failure() && steps.azure-login.outcome == 'failure'
+        run: |
+          Write-Host "" 
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+          Write-Host "❌ AZURE LOGIN FAILED — DIAGNOSIS" -ForegroundColor Red
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+          Write-Host ""
+          Write-Host "GitHub OIDC secrets are present for 'dev' but Azure login failed." -ForegroundColor Yellow
+          Write-Host ""
+          Write-Host "Most likely cause: AADSTS700213" -ForegroundColor Red
+          Write-Host "  The Azure AD App Registration is missing the federated identity" -ForegroundColor Red
+          Write-Host "  credential for subject 'repo:${{ github.repository }}:environment:dev'." -ForegroundColor Red
+          Write-Host ""
+          Write-Host "This happens when Phase 1a (Setup Azure OIDC) was never run, or" -ForegroundColor Yellow
+          Write-Host "was run with environment='dev' only and the credential was later" -ForegroundColor Yellow
+          Write-Host "deleted, or the Azure AD App Registration was recreated." -ForegroundColor Yellow
+          Write-Host ""
+          Write-Host "TO FIX — Run Phase 1a + 1b (one-time OIDC setup):" -ForegroundColor Cyan
+          Write-Host "  1. Go to Actions → 'Azure Bootstrap Setup' → Run workflow" -ForegroundColor White
+          Write-Host "  2. Set 'Use workflow from' = dev branch" -ForegroundColor White
+          Write-Host "  3. Set Environment = 'all' (configures dev + staging + prod in one run)" -ForegroundColor White
+          Write-Host "  4. Check ✅ Phase 1a — Setup Azure OIDC" -ForegroundColor White
+          Write-Host "  5. Check ✅ Phase 1b — Configure GitHub Secrets" -ForegroundColor White
+          Write-Host "  6. Uncheck all Phase 2 options" -ForegroundColor White
+          Write-Host "  7. Click 'Run workflow' and wait for completion" -ForegroundColor White
+          Write-Host ""
+          Write-Host "After Phase 1a + 1b succeed, re-run this workflow with Phase 2 options." -ForegroundColor Yellow
+          Write-Host ""
       
       - name: Verify Azure Login
         run: |
@@ -1785,12 +1816,42 @@ jobs:
             exit 1
           }
       - name: Azure Login (OIDC or Secrets)
+        id: azure-login
         timeout-minutes: 3
         uses: azure/login@v2
         with:
           client-id: ${{ env.CLIENT_ID }}
           tenant-id: ${{ env.TENANT_ID }}
           subscription-id: ${{ env.SUBSCRIPTION_ID }}
+      
+      - name: Diagnose Azure Login Failure
+        if: failure() && steps.azure-login.outcome == 'failure'
+        run: |
+          Write-Host ""
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+          Write-Host "❌ AZURE LOGIN FAILED — DIAGNOSIS" -ForegroundColor Red
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+          Write-Host ""
+          Write-Host "GitHub OIDC secrets are present for 'staging' but Azure login failed." -ForegroundColor Yellow
+          Write-Host ""
+          Write-Host "Most likely cause: AADSTS700213" -ForegroundColor Red
+          Write-Host "  The Azure AD App Registration is missing the federated identity" -ForegroundColor Red
+          Write-Host "  credential for subject 'repo:${{ github.repository }}:environment:staging'." -ForegroundColor Red
+          Write-Host ""
+          Write-Host "This happens when Phase 1a (Setup Azure OIDC) was never run for this" -ForegroundColor Yellow
+          Write-Host "environment, or was only run with environment='dev' (not 'all')." -ForegroundColor Yellow
+          Write-Host ""
+          Write-Host "TO FIX — Run Phase 1a + 1b (one-time OIDC setup):" -ForegroundColor Cyan
+          Write-Host "  1. Go to Actions → 'Azure Bootstrap Setup' → Run workflow" -ForegroundColor White
+          Write-Host "  2. Set 'Use workflow from' = dev branch" -ForegroundColor White
+          Write-Host "  3. Set Environment = 'all' (configures dev + staging + prod in one run)" -ForegroundColor White
+          Write-Host "  4. Check ✅ Phase 1a — Setup Azure OIDC" -ForegroundColor White
+          Write-Host "  5. Check ✅ Phase 1b — Configure GitHub Secrets" -ForegroundColor White
+          Write-Host "  6. Uncheck all Phase 2 options" -ForegroundColor White
+          Write-Host "  7. Click 'Run workflow' and wait for completion" -ForegroundColor White
+          Write-Host ""
+          Write-Host "After Phase 1a + 1b succeed, re-run this workflow with Phase 2 options." -ForegroundColor Yellow
+          Write-Host ""
       
       - name: Verify Azure Login
         run: |
@@ -2299,12 +2360,42 @@ jobs:
             exit 1
           }
       - name: Azure Login (OIDC or Secrets)
+        id: azure-login
         timeout-minutes: 3
         uses: azure/login@v2
         with:
           client-id: ${{ env.CLIENT_ID }}
           tenant-id: ${{ env.TENANT_ID }}
           subscription-id: ${{ env.SUBSCRIPTION_ID }}
+      
+      - name: Diagnose Azure Login Failure
+        if: failure() && steps.azure-login.outcome == 'failure'
+        run: |
+          Write-Host ""
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+          Write-Host "❌ AZURE LOGIN FAILED — DIAGNOSIS" -ForegroundColor Red
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+          Write-Host ""
+          Write-Host "GitHub OIDC secrets are present for 'prod' but Azure login failed." -ForegroundColor Yellow
+          Write-Host ""
+          Write-Host "Most likely cause: AADSTS700213" -ForegroundColor Red
+          Write-Host "  The Azure AD App Registration is missing the federated identity" -ForegroundColor Red
+          Write-Host "  credential for subject 'repo:${{ github.repository }}:environment:prod'." -ForegroundColor Red
+          Write-Host ""
+          Write-Host "This happens when Phase 1a (Setup Azure OIDC) was never run for this" -ForegroundColor Yellow
+          Write-Host "environment, or was only run with environment='dev' (not 'all')." -ForegroundColor Yellow
+          Write-Host ""
+          Write-Host "TO FIX — Run Phase 1a + 1b (one-time OIDC setup):" -ForegroundColor Cyan
+          Write-Host "  1. Go to Actions → 'Azure Bootstrap Setup' → Run workflow" -ForegroundColor White
+          Write-Host "  2. Set 'Use workflow from' = dev branch" -ForegroundColor White
+          Write-Host "  3. Set Environment = 'all' (configures dev + staging + prod in one run)" -ForegroundColor White
+          Write-Host "  4. Check ✅ Phase 1a — Setup Azure OIDC" -ForegroundColor White
+          Write-Host "  5. Check ✅ Phase 1b — Configure GitHub Secrets" -ForegroundColor White
+          Write-Host "  6. Uncheck all Phase 2 options" -ForegroundColor White
+          Write-Host "  7. Click 'Run workflow' and wait for completion" -ForegroundColor White
+          Write-Host ""
+          Write-Host "After Phase 1a + 1b succeed, re-run this workflow with Phase 2 options." -ForegroundColor Yellow
+          Write-Host ""
       
       - name: Verify Azure Login
         run: |
@@ -3149,6 +3240,47 @@ jobs:
             "\`APP_ID\` and \`APP_PRIVATE_KEY\` are present. The workflow can use the GitHub App for automated secret management." >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
             "**Next:** Run this workflow with \`Setup Azure OIDC = true\` and \`Configure GitHub Secrets = true\` to set up Azure credentials." >> $env:GITHUB_STEP_SUMMARY
+          }
+
+          # Show failure diagnosis when any bootstrap job failed
+          $anyBootstrapFailed = ($bootstrapDev -eq "failure") -or ($bootstrapStaging -eq "failure") -or ($bootstrapProd -eq "failure")
+
+          if ($anyBootstrapFailed) {
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "---" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "## ❌ Bootstrap Failed — Likely Cause and Remediation" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "| Failed Job | Most Likely Cause |" >> $env:GITHUB_STEP_SUMMARY
+            "|-----------|------------------|" >> $env:GITHUB_STEP_SUMMARY
+            if ($bootstrapDev -eq "failure") {
+              "| Bootstrap Dev | Azure AD federated credential for \`environment:dev\` is missing in the App Registration |" >> $env:GITHUB_STEP_SUMMARY
+            }
+            if ($bootstrapStaging -eq "failure") {
+              "| Bootstrap Staging | Azure AD federated credential for \`environment:staging\` is missing in the App Registration |" >> $env:GITHUB_STEP_SUMMARY
+            }
+            if ($bootstrapProd -eq "failure") {
+              "| Bootstrap Prod | Azure AD federated credential for \`environment:prod\` is missing in the App Registration |" >> $env:GITHUB_STEP_SUMMARY
+            }
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "> **Typical error**: \`AADSTS700213: No matching federated identity record found for presented assertion subject 'repo:${{ github.repository }}:environment:ENV'\`" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "**Root cause**: Phase 1a (Setup Azure OIDC) was not run for this environment, or was only run for \`dev\` (not \`all\`). The GitHub OIDC secrets exist but the matching federated credential is absent from your Azure AD App Registration." >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "### ✅ How to Fix — Run Phase 1a + 1b (One-Time OIDC Setup)" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "| Step | Action |" >> $env:GITHUB_STEP_SUMMARY
+            "|------|--------|" >> $env:GITHUB_STEP_SUMMARY
+            "| 1 | Go to **[Actions → Azure Bootstrap Setup → Run workflow](https://github.com/${{ github.repository }}/actions/workflows/azure-bootstrap.yml)** |" >> $env:GITHUB_STEP_SUMMARY
+            "| 2 | Set **Use workflow from** = \`dev\` branch |" >> $env:GITHUB_STEP_SUMMARY
+            "| 3 | Set **Environment** = \`all\` (configures dev + staging + prod in one run) |" >> $env:GITHUB_STEP_SUMMARY
+            "| 4 | Check ✅ **Phase 1a — Setup Azure OIDC** |" >> $env:GITHUB_STEP_SUMMARY
+            "| 5 | Check ✅ **Phase 1b — Configure GitHub Secrets** |" >> $env:GITHUB_STEP_SUMMARY
+            "| 6 | Uncheck all Phase 2 options |" >> $env:GITHUB_STEP_SUMMARY
+            "| 7 | Click **Run workflow** and wait for completion |" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "> After Phase 1a + Phase 1b complete successfully, re-run this workflow with Phase 2 (Bootstrap Infrastructure) options." >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
           }
 
   # Trigger deployment workflows — ONLY after bootstrap succeeds for the target environment.
