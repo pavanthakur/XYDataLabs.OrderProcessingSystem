@@ -33,15 +33,63 @@
 
 ## P0 — MUST (Security & Compliance Blockers)
 
-### SEC-01: Remove hardcoded credentials from source control
-- [ ] **SQL admin password** in `infra/parameters/dev.json`, `prod.json` (`Admin100@`)
-- [ ] **SQL admin password** default in `provision-azure-sql.ps1` param
-- [ ] **SQL password** in `sharedsettings.dev.json`, `sharedsettings.prod.json` connection strings
-- [ ] **OpenPay credentials** (MerchantId, PrivateKey, DeviceSessionId) in `sharedsettings.*.json`
-- [ ] **Certificate password** (`P@ss100`) in `sharedsettings.*.json`
-- **Action**: Move all secrets to Key Vault; use `@Microsoft.KeyVault(SecretUri=...)` references in App Service config; use Bicep `reference()` for SQL password in parameter files; rotate all exposed credentials immediately
-- **Files**: `infra/parameters/*.json`, `Resources/Configuration/sharedsettings.*.json`, `Resources/Azure-Deployment/provision-azure-sql.ps1`, `infra/modules/hosting.bicep`
-- **Risk**: Secrets visible to all repo collaborators and in Git history; violates SOC 2, ISO 27001, PCI-DSS
+### SEC-01: Remove hardcoded credentials from source control ⚠️ CRITICAL — PUBLIC REPO
+
+> **This repository is public.** Every credential below is visible to anyone on the internet
+> and persisted in Git history. This item must be addressed before any other TODO.
+
+#### Exposure Inventory (32 instances across 10 files)
+
+| Credential | Files | Example value |
+|------------|-------|---------------|
+| SQL admin password | `infra/parameters/dev.json`, `staging.json`, `prod.json` | `Admin100@` |
+| SQL admin password (script default) | `provision-azure-sql.ps1` (L20), `run-database-migrations.ps1` (L17) | `Admin100@` |
+| SQL connection-string password | `sharedsettings.dev.json`, `sharedsettings.local.json`, `sharedsettings.uat.json`, `sharedsettings.prod.json` | `Admin100@` |
+| OpenPay MerchantId | `sharedsettings.{dev,local,uat,prod}.json` | (visible in file) |
+| OpenPay PrivateKey | `sharedsettings.{dev,local,uat,prod}.json` | (visible in file) |
+| OpenPay DeviceSessionId | `sharedsettings.{dev,local,uat,prod}.json` | (visible in file) |
+| Certificate password | `sharedsettings.{dev,local,uat,prod}.json` | `P@ss100` |
+
+#### Implementation Steps
+
+**Step 1 — Rotate every exposed credential immediately**
+- [ ] Change SQL admin password in Azure Portal for every environment
+- [ ] Regenerate OpenPay API keys in the OpenPay dashboard
+- [ ] Generate a new certificate with a new password
+- [ ] Update Key Vault with the new values (do NOT commit new values to repo)
+
+**Step 2 — Store all secrets in Azure Key Vault**
+- [ ] Add secrets to Key Vault (`kv-orderproc-{dev|stg|prod}`): `SqlAdminPassword`, `OpenPayMerchantId`, `OpenPayPrivateKey`, `OpenPayDeviceSessionId`, `CertPassword`
+- [ ] Use `populate-keyvault-secrets.ps1` or `az keyvault secret set` (ensure script itself does not hardcode secrets — pass via pipeline variables or interactive prompt)
+
+**Step 3 — Replace hardcoded values with placeholders in config files**
+- [ ] In `sharedsettings.{dev,uat,prod}.json` replace real passwords/keys with `"<<KEY-VAULT>>"` or remove the keys entirely
+- [ ] Keep `sharedsettings.local.json` with developer-safe defaults (e.g. `localdb` no password) or `"<<SET-IN-USER-SECRETS>>"`
+
+**Step 4 — Configure App Service to read from Key Vault**
+- [ ] Add app settings with Key Vault references: `@Microsoft.KeyVault(SecretUri=https://kv-orderproc-{env}.vault.azure.net/secrets/{name})`
+- [ ] Ensure App Service managed identity has `Key Vault Secrets User` role (see SEC-03)
+
+**Step 5 — Use Bicep `reference()` or `getSecret()` for SQL password in IaC**
+- [ ] Remove `sqlAdminPassword` value from `infra/parameters/*.json`
+- [ ] In `infra/modules/sql.bicep` use `@secure() param sqlAdminPassword string` and pass via Key Vault reference at deployment time
+- [ ] Example: `sqlAdminPassword: keyVault.getSecret('SqlAdminPassword')` in the parameters block
+
+**Step 6 — Remove default password values from PowerShell scripts**
+- [ ] `provision-azure-sql.ps1` L20: change `[string]$AdminPassword = 'Admin100@'` → `[Parameter(Mandatory)][string]$AdminPassword`
+- [ ] `run-database-migrations.ps1` L17: same pattern — make password mandatory with no default
+
+**Step 7 — Scrub Git history (optional but recommended for public repo)**
+- [ ] Use `git filter-repo` or BFG Repo-Cleaner to remove secrets from all historical commits
+- [ ] Force-push cleaned history (coordinate with any collaborators)
+- [ ] Alternatively: if history cleanup is too disruptive, treat all exposed credentials as compromised (Step 1 covers this)
+
+**Step 8 — Prevent future leaks**
+- [ ] Add a `.gitignore` pattern for any local secrets file (e.g. `sharedsettings.local.secrets.json`)
+- [ ] Add a [pre-commit hook or GitHub Action](https://github.com/gitleaks/gitleaks) (gitleaks / trufflehog) to scan for secrets on every push
+- [ ] Consider `dotnet user-secrets` for local development instead of JSON files
+
+- **Risk**: Secrets visible to anyone on the internet and in Git history; violates SOC 2, ISO 27001, PCI-DSS
 
 ### SEC-02: Enable Key Vault purge protection
 - [ ] Set `enablePurgeProtection: true` in `bicep/appservice-with-kv.bicep`
