@@ -138,8 +138,8 @@ After recreation, update these repository secrets:
 
 At: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/settings/secrets/actions
 
-#### 5. Run Bootstrap Workflow
-Trigger the bootstrap workflow with:
+#### 5. Run Initial Setup Workflow
+Trigger the Azure Initial Setup workflow with:
 - ✅ Enable: "Configure Secrets" = true
 - ✅ Select environment: "all" (or specific environment)
 
@@ -188,11 +188,14 @@ The workflow will automatically:
 The bootstrap workflow **already automates** most of the process:
 
 ```yaml
-# In azure-bootstrap.yml
+# In azure-initial-setup.yml (Phase 0/1a/1b)
 inputs:
   setupOidc: true              # ✅ Fully automated
   setupGitHubApp: false        # ⚠️ Semi-automated (provides instructions)
   configureSecrets: true       # ✅ Fully automated (uses GitHub App)
+
+# In azure-bootstrap.yml (Phase 2/Deploy/X)
+inputs:
   bootstrapInfra: true         # ✅ Fully automated
 ```
 
@@ -257,12 +260,16 @@ You asked for a **clean end-to-end deployment flow from scratch**. Here it is:
 
 ### Phase 2: Environment Configuration (Automated)
 
-Run bootstrap workflow with:
+Run Azure Initial Setup workflow (if secrets need updating):
 ```yaml
+# azure-initial-setup.yml
 environment: all
-setupOidc: false           # Already done
-setupGitHubApp: false      # Already done
 configureSecrets: true     # ✅ Automate secret management
+```
+
+Run Azure Bootstrap & Deploy workflow:
+```yaml
+# azure-bootstrap.yml
 bootstrapInfra: true       # ✅ Create Azure resources
 ```
 

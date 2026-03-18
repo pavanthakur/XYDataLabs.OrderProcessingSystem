@@ -1,6 +1,6 @@
 # Troubleshooting Guide Index
 
-Quick links to troubleshooting guides for common issues with the Azure Bootstrap workflow.
+Quick links to troubleshooting guides for common issues with the Azure Initial Setup and Azure Bootstrap & Deploy workflows.
 
 ## 🚨 Common Issues
 
@@ -88,13 +88,11 @@ APP_PRIVATE_KEY       : ❌ Missing
 **Diagnosis**: Bootstrap jobs now include a **Diagnose Azure Login Failure** step that detects this automatically and prints remediation steps in the workflow summary.
 
 **Quick Fix**:
-1. Go to **Actions → Azure Bootstrap Setup → Run workflow**
+1. Go to **Actions → Azure Initial Setup → Run workflow**
 2. Set **Use workflow from** = `dev` branch
-3. Set **Environment** = `all`
-4. Check ✅ **Phase 1a — Setup Azure OIDC** and ✅ **Phase 1b — Configure GitHub Secrets**
-5. Uncheck all Phase 2 options
-6. Run and wait for completion
-7. Re-run the original Phase 2 workflow
+3. Defaults are correct (environment=`all`, Phase 1a + 1b enabled) — click **Run workflow**
+4. Wait for completion
+5. Re-run the original **Azure Bootstrap & Deploy** workflow
 
 ---
 
@@ -118,11 +116,11 @@ APP_PRIVATE_KEY       : ❌ Missing
 
 **Cause**: The workflow requires the branch to match the environment (`dev`→dev, `staging`→staging, `main`→prod).
 
-**Exception**: Phase 0/1a/1b-only runs (setup-only) bypass this check. The `$isSetupOnly` variable in `validate-inputs` detects when only Phase 0, 1a, or 1b is selected (no Phase 2, cleanup, or deploys) and relaxes branch validation. A recommendation message is shown if `environment` is not set to `all`.
+**Exception**: The **Azure Initial Setup** workflow (Phase 0/1a/1b) does not enforce branch/environment matching — it can be run from any branch. A recommendation message is shown if `environment` is not set to `all`.
 
 **Quick Fix**:
-- For Phase 2/X/deploy: Use the correct branch (`dev` for dev, `staging` for staging, `main` for prod)
-- For Phase 1 setup: Use `branch=dev`, `environment=all` (recommended one-time setup)
+- For **Azure Bootstrap & Deploy** (Phase 2/X/deploy): Use the correct branch (`dev` for dev, `staging` for staging, `main` for prod)
+- For **Azure Initial Setup** (Phase 0/1a/1b): Use `branch=dev`, `environment=all` (recommended one-time setup)
 
 ---
 
@@ -252,7 +250,7 @@ The workflow checks:
 
 If your issue isn't covered here:
 
-1. **Check workflow logs**: Actions → Azure Bootstrap Setup → Failed run → View logs
+1. **Check workflow logs**: Actions → **Azure Initial Setup** or **Azure Bootstrap & Deploy** → Failed run → View logs
 2. **Review error messages**: Workflow provides detailed troubleshooting in failed steps
 3. **Verify setup**: Compare your setup against [SETUP-CONFIRMATION.md](./SETUP-CONFIRMATION.md)
 4. **Check documentation**: Browse [Documentation/03-Configuration-Guides/](./Documentation/03-Configuration-Guides/)

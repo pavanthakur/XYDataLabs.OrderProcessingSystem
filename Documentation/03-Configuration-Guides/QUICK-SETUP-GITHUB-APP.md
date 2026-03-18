@@ -130,7 +130,7 @@ Add these **2 secrets** (not 3!):
 
 ### Step 6: Run Workflow ✨
 
-1. Go to Actions → Azure Bootstrap Setup
+1. Go to Actions → Azure Initial Setup
 2. Click **Run workflow**
 3. Select:
    - Configure GitHub secrets: ✅ **true**

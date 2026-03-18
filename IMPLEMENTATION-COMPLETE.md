@@ -113,8 +113,8 @@ GitHub's security model **intentionally requires** interactive user approval for
 # 5. Reinstall app
 # Follow instructions from setup script
 
-# 6. Run bootstrap workflow
-# Actions → Azure Bootstrap Setup
+# 6. Run initial setup workflow (configure secrets)
+# Actions → Azure Initial Setup
 # Enable: "Configure Secrets" = true
 # Environment: all
 

@@ -77,7 +77,7 @@ Inputs:
 
 ### Automated Execution (workflow_call)
 
-Called by `azure-bootstrap.yml` after OIDC setup:
+Called by `azure-initial-setup.yml` after OIDC setup (Phase 1a → Phase 1b):
 
 ```yaml
 configure-github-secrets:
@@ -196,34 +196,35 @@ When `environment: all` is selected:
 - Environments are created if they don't exist
 - Each environment gets its own set of secrets
 
-## Integration with Bootstrap Workflow
+## Integration with Azure Initial Setup Workflow
 
-### Flow in azure-bootstrap.yml
+### Flow in azure-initial-setup.yml
 
 ```
 1. validate-inputs
-2. setup-oidc
+2. setup-oidc (Phase 1a)
    ├── Creates Azure OIDC app
    └── Outputs: clientId, tenantId, subscriptionId
-3. configure-github-secrets ← THIS WORKFLOW
+3. configure-github-secrets (Phase 1b) ← THIS WORKFLOW
    ├── Receives OIDC outputs
    ├── Configures GitHub App (if needed)
    ├── Configures secrets
    └── Validates configuration
-4. pre-validate-prerequisites
-5. bootstrap-dev/staging/prod
-6. summary
+4. summary
 ```
+
+> **Note:** Infrastructure bootstrap (Phase 2) and deployments are handled by the separate
+> `azure-bootstrap.yml` workflow, which runs _after_ initial setup is complete.
 
 ### Context Passing
 
-**From bootstrap to this workflow:**
+**From azure-initial-setup.yml to this workflow:**
 - Environment selection
 - Branch information
 - OIDC credentials (clientId, tenantId, subscriptionId)
 - Setup flags (setupGitHubApp, configureSecrets)
 
-**From this workflow to bootstrap:**
+**From this workflow to azure-initial-setup.yml:**
 - Job results (setup-result, secrets-result, validation-result)
 - Success/failure status for downstream job dependencies
 
@@ -234,13 +235,17 @@ This section traces the complete data path from OIDC login through secret creati
 ### Inputs (set by user in GitHub UI)
 
 ```
+# Run via: Actions → Azure Initial Setup → Run workflow
 environment:      dev
 setupOidc:        true   ← Phase 1a
 configureSecrets: true   ← Phase 1b
 setupGitHubApp:   false  ← already done in Phase 0
 ```
 
-### Step 1 — `validate-inputs` (azure-bootstrap.yml)
+> **Note:** These inputs are on `azure-initial-setup.yml`. Infrastructure bootstrap (`bootstrapInfra`)
+> and deployments (`deployApi`/`deployUi`) are separate inputs on `azure-bootstrap.yml`.
+
+### Step 1 — `validate-inputs` (azure-initial-setup.yml)
 
 - Validates `environment=dev` and branch = `dev` ✅
 - Checks: `AZUREAPPSERVICE_*` secrets missing → OK because `setupOidc=true` will create them ✅
@@ -320,7 +325,7 @@ Job outputs written to GITHUB_OUTPUT:
 ### Step 6 — `configure-github-secrets` — Receives Phase 1a Outputs
 
 ```yaml
-# In azure-bootstrap.yml:
+# In azure-initial-setup.yml:
 configure-github-secrets:
   uses: ./.github/workflows/configure-github-secrets.yml
   with:
@@ -415,35 +420,36 @@ Step 7 — Prerequisites:
 ### Example 1: First-Time Setup (Recommended — Run Phase 1a + 1b Together)
 
 ```yaml
-# Run azure-bootstrap.yml with both Phase 1 checkboxes selected.
+# Run azure-initial-setup.yml with both Phase 1 checkboxes selected.
 # OIDC outputs (clientId/tenantId/subscriptionId) are automatically
 # passed from setup-oidc to configure-github-secrets by the workflow.
 
-azure-bootstrap.yml:
-  environment: dev
+azure-initial-setup.yml:
+  environment: all        # Configure all environments at once
   setupOidc: true         # Phase 1a — device-code login, create Entra ID App
   configureSecrets: true  # Phase 1b — receives 1a outputs, writes AZUREAPPSERVICE_* secrets
   setupGitHubApp: false   # Already done in Phase 0
-  bootstrapInfra: false   # Run separately in Phase 2
 ```
 
 Phase 1a and Phase 1b always run sequentially (1a first, then 1b). The workflow dependency chain enforces this order automatically — no manual coordination is needed.
 
-
+### Example 2: Complete Initial Setup (All Phases)
 
 ```yaml
-# Run bootstrap with all options
-azure-bootstrap.yml:
+# Run azure-initial-setup.yml with all options
+azure-initial-setup.yml:
   environment: all
-  setupOidc: true
-  setupGitHubApp: true  # Shows setup instructions
-  configureSecrets: true  # Automatically configures after OIDC
-  bootstrapInfra: true
+  setupGitHubApp: true    # Phase 0 — shows setup instructions
+  setupOidc: true         # Phase 1a — create Entra ID App + federated credentials
+  configureSecrets: true  # Phase 1b — write AZUREAPPSERVICE_* secrets to GitHub
 
 # This workflow is automatically called and:
 # 1. Provides GitHub App setup guidance
 # 2. Configures all secrets
 # 3. Validates configuration
+
+# After initial setup completes, run infrastructure bootstrap separately:
+# azure-bootstrap.yml → bootstrapInfra: true, deployApi: true, deployUi: true
 ```
 
 ### Example 3: Reconfigure Secrets for Specific Environment
@@ -521,7 +527,7 @@ configure-github-secrets.yml:
 Phase 1b (`configureSecrets`) was run without Phase 1a (`setupOidc`), and no `AZUREAPPSERVICE_*` secrets exist in the repository yet (first-time setup).
 
 **Solution:**  
-Re-run the bootstrap workflow with **both** Phase 1 checkboxes selected:
+Re-run the **Azure Initial Setup** workflow with **both** Phase 1 checkboxes selected:
 
 | Parameter | Value |
 |-----------|-------|
@@ -601,7 +607,8 @@ The workflow automatically validates configuration at the end:
 
 ## Related Workflows
 
-- **azure-bootstrap.yml**: Main orchestration workflow
+- **azure-initial-setup.yml**: Calls this workflow (Phase 0 → 1a → 1b)
+- **azure-bootstrap.yml**: Infrastructure bootstrap & deploy (Phase 2 + deployments) — runs after initial setup
 - **deploy-api-to-azure.yml**: API deployment (uses configured secrets)
 - **deploy-ui-to-azure.yml**: UI deployment (uses configured secrets)
 
@@ -611,8 +618,9 @@ The workflow automatically validates configuration at the end:
 - Extracted jobs: setup-github-app, configure-secrets, validate-configuration
 - Added workflow_call support for integration
 - Added comprehensive validation and error handling
+- **v1.1**: Workflow split — now called exclusively by `azure-initial-setup.yml` (no longer by `azure-bootstrap.yml`). Phase 0/1a/1b live in Initial Setup; Phase 2 + deployments live in Bootstrap & Deploy.
 
 ---
 
-**Last Updated**: 2026-03-16
+**Last Updated**: 2026-03-18
 **Maintainer**: GitHub Copilot

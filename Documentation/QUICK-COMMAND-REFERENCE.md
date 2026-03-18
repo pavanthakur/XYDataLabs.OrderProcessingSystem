@@ -182,7 +182,7 @@ gh secret set SECRET_NAME --body "secret-value"
 gh secret set SECRET_NAME --env dev --body "secret-value"
 ```
 
-### **Run Azure Bootstrap (GitHub CLI)**
+### **Run Azure Workflows (GitHub CLI)**
 ```powershell
 # Prerequisites:
 # - GitHub CLI installed: https://cli.github.com/
@@ -191,41 +191,57 @@ gh secret set SECRET_NAME --env dev --body "secret-value"
 # (Optional) Authenticate gh if not already
 gh auth login
 
-# Verify workflow name exists
-gh workflow list | Select-String "Azure Bootstrap Setup"
+# Verify workflow names exist
+gh workflow list | Select-String "Azure Initial Setup|Azure Bootstrap"
 
-# Run on dev with full setup (recommended first-time):
-gh workflow run "Azure Bootstrap Setup" `
+# ─── Azure Initial Setup (Phase 0/1a/1b: OIDC + secrets) ───
+
+# Run full initial setup on dev (recommended first-time):
+gh workflow run "Azure Initial Setup" `
 	--ref dev `
-	-f environment=dev `
-	-f setupOidc=true `
+	-f environment=all `
 	-f setupGitHubApp=true `
-	-f configureSecrets=true `
-	-f bootstrapInfra=true `
-	-f cleanupInfra=false
+	-f setupOidc=true `
+	-f configureSecrets=true
 
 # Run secrets configuration only (use when OIDC is already set):
-gh workflow run "Azure Bootstrap Setup" `
+gh workflow run "Azure Initial Setup" `
 	--ref dev `
 	-f environment=dev `
-	-f setupOidc=false `
 	-f setupGitHubApp=false `
-	-f configureSecrets=true `
-	-f bootstrapInfra=false `
+	-f setupOidc=false `
+	-f configureSecrets=true
+
+# Configure secrets for all environments:
+gh workflow run "Azure Initial Setup" `
+	--ref dev `
+	-f environment=all `
+	-f setupGitHubApp=false `
+	-f setupOidc=false `
+	-f configureSecrets=true
+
+# ─── Azure Bootstrap & Deploy (Phase 2 + Deploy + Phase X) ───
+
+# Bootstrap infrastructure on dev (recommended after initial setup):
+gh workflow run "Azure Bootstrap & Deploy" `
+	--ref dev `
+	-f environment=dev `
+	-f bootstrapInfra=true `
+	-f deployApi=true `
+	-f deployUi=true `
 	-f cleanupInfra=false
 
-# Run for all environments (advanced; ensure OIDC + secrets ready):
-gh workflow run "Azure Bootstrap Setup" `
+# Bootstrap all environments (advanced; ensure OIDC + secrets ready):
+gh workflow run "Azure Bootstrap & Deploy" `
 	--ref main `
 	-f environment=all `
-	-f setupOidc=false `
-	-f setupGitHubApp=false `
-	-f configureSecrets=true `
 	-f bootstrapInfra=true `
+	-f deployApi=true `
+	-f deployUi=true `
 	-f cleanupInfra=false
 
 # Cleanup dev environment (⚠️ DESTRUCTIVE — deletes all resources):
-gh workflow run "Azure Bootstrap Setup" `
+gh workflow run "Azure Bootstrap & Deploy" `
 	--ref dev `
 	-f environment=dev `
 	-f cleanupInfra=true
@@ -559,7 +575,8 @@ az account show
 # 4. Go to GitHub Actions UI
 # https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions
 
-# 5. Run "Azure Bootstrap Setup" workflow
+# 5. Run "Azure Initial Setup" workflow first (one-time OIDC + secrets)
+# 6. Then run "Azure Bootstrap & Deploy" workflow
 # - Select branch: dev
 # - Select environment: dev
 

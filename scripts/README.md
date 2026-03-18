@@ -369,26 +369,34 @@ See: [Documentation/03-Configuration-Guides/GITHUB-APP-AUTOMATION.md](../Documen
 
 ## Workflow Integration
 
-These scripts integrate with the Azure Bootstrap workflow:
+These scripts integrate with two workflows:
 
-### Bootstrap Workflow Flow
+### Azure Initial Setup Workflow Flow
 ```
-azure-bootstrap.yml
-  ├── setup-oidc (creates Azure OIDC app)
+azure-initial-setup.yml (Phase 0/1a/1b)
   ├── setup-github-app (guides GitHub App creation)
-  ├── configure-secrets (automated secret management)
-  │   ├── Repository secrets via GitHub App
-  │   └── Environment secrets (dev, staging, prod)
-  └── validate-final-configuration (NEW - validates setup)
+  ├── setup-oidc (creates Azure OIDC app)
+  └── configure-secrets (automated secret management)
+      ├── Repository secrets via GitHub App
+      └── Environment secrets (dev, staging, prod)
 ```
 
-### Running Full Bootstrap
-1. Navigate to Actions → Azure Bootstrap Setup
-2. Select workflow options:
+### Azure Bootstrap & Deploy Workflow Flow
+```
+azure-bootstrap.yml (Phase 2/Deploy/X)
+  ├── bootstrap-infra (creates Azure resources)
+  ├── deploy-api / deploy-ui (application deployment)
+  └── cleanup (optional, destructive)
+```
+
+### Running Full Setup & Bootstrap
+1. Navigate to Actions → **Azure Initial Setup** → Run workflow
    - ✅ Setup Azure OIDC
    - ✅ Setup GitHub App (first time only)
    - ✅ Configure Secrets
+2. Navigate to Actions → **Azure Bootstrap & Deploy** → Run workflow
    - ✅ Bootstrap Infrastructure
+   - ✅ Deploy API / Deploy UI
 3. Follow on-screen instructions for any manual steps
 4. Review validation output
 

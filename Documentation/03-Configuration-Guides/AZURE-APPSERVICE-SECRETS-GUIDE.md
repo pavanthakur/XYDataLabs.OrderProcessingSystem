@@ -106,13 +106,12 @@ You have two options for setting up these secrets:
 
 Use the Azure Bootstrap workflow to automatically create and configure all secrets:
 
-1. Go to **Actions** → **Azure Bootstrap Setup** → **Run workflow**
+1. Go to **Actions** → **Azure Initial Setup** → **Run workflow**
 2. Configure the workflow:
    - **Target environment**: Select `dev`, `staging`, `prod`, or `all`
    - **Setup Azure OIDC**: ✅ `true` (first-time setup)
    - **Setup GitHub App**: ✅ `true` (for automated secret management)
    - **Configure GitHub secrets**: ✅ `true` (to set the secrets)
-   - **Bootstrap infrastructure**: Choose based on your needs
 3. Follow the prompts for:
    - Azure device code authentication
    - GitHub App creation (one-time, 4 minutes)
@@ -166,7 +165,7 @@ Extract:
 
 ## Automated Setup via Bootstrap Workflow
 
-The Azure Bootstrap workflow (`azure-bootstrap.yml`) provides a fully automated way to set up all required secrets.
+The Azure Initial Setup workflow (`azure-initial-setup.yml`) provides a fully automated way to set up all required secrets.
 
 ### Prerequisites
 
@@ -316,7 +315,8 @@ After running the bootstrap workflow:
 
 - [Azure OIDC Setup Guide](../../Resources/Azure-Deployment/setup-github-oidc.ps1)
 - [GitHub App Setup](./QUICK-SETUP-GITHUB-APP.md)
-- [Azure Bootstrap Workflow](../../.github/workflows/azure-bootstrap.yml)
+- [Azure Initial Setup Workflow](../../.github/workflows/azure-initial-setup.yml)
+- [Azure Bootstrap & Deploy Workflow](../../.github/workflows/azure-bootstrap.yml)
 - [GitHub OIDC Documentation](https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-azure)
 - [Azure App Service Deployment](https://learn.microsoft.com/en-us/azure/app-service/deploy-github-actions)
 

@@ -2,54 +2,64 @@
 
 ## 🗺️ High-Level Summary
 
-The **Azure Bootstrap workflow** (`azure-bootstrap.yml`) is a one-stop GitHub Actions workflow that takes a brand-new repository from zero to a fully deployed Azure environment.  
-It handles everything — Azure authentication, GitHub secrets, cloud infrastructure, and optionally application deployment — in a single, menu-driven run.
+The bootstrap process uses **two GitHub Actions workflows** that together take a brand-new repository from zero to a fully deployed Azure environment:
+
+| Workflow | File | Purpose |
+|----------|------|---------|
+| **Azure Initial Setup** | `azure-initial-setup.yml` | One-time setup: GitHub App guidance, OIDC identity, GitHub secrets (Phase 0/1a/1b) |
+| **Azure Bootstrap & Deploy** | `azure-bootstrap.yml` | Day-to-day: infrastructure provisioning, app deployment, cleanup (Phase 2/X) |
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                     BOOTSTRAP OVERVIEW                                      │
 │                                                                             │
-│  PHASE 0 — Manual Prerequisite (~5 min, done ONCE)                         │
-│  └── Create GitHub App → Install on repo → Add APP_ID + APP_PRIVATE_KEY    │
+│  ┌── Azure Initial Setup workflow (azure-initial-setup.yml) ────────────┐  │
+│  │                                                                      │  │
+│  │  PHASE 0 — Manual Prerequisite (~5 min, done ONCE)                   │  │
+│  │  └── Create GitHub App → Install on repo → Add APP_ID + KEY         │  │
+│  │                                ↓                                     │  │
+│  │  PHASE 1 — One-Time Azure Setup (~4 min, done ONCE after Phase 0)   │  │
+│  │  ├── setupOidc       → Creates Microsoft Entra ID App Registration   │  │
+│  │  │                     + Federated credentials for passwordless auth │  │
+│  │  └── configureSecrets → Writes AZUREAPPSERVICE_* to GitHub repo+envs│  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
 │                                ↓                                            │
-│  PHASE 1 — One-Time Azure Setup (~4 min, done ONCE after Phase 0)          │
-│  ├── setupOidc       → Creates Microsoft Entra ID App Registration          │
-│  │                     + Federated credentials for passwordless auth        │
-│  └── configureSecrets → Writes AZUREAPPSERVICE_* to GitHub repo + envs     │
-│                                ↓                                            │
-│  PHASE 2 — Day-to-Day Operations (run as needed)                            │
-│  ├── bootstrapInfra  → Resource Groups, App Services, SQL, Key Vault        │
-│  ├── deployApi       → API code deployed to Azure App Service               │
-│  └── deployUi        → UI code deployed to Azure App Service                │
-│                                                                             │
-│  PHASE X — Cleanup (⚠️ DESTRUCTIVE — deletes everything)                    │
-│  └── cleanupInfra    → Deletes App Services, SQL, Key Vault, Resource Group │
+│  ┌── Azure Bootstrap & Deploy workflow (azure-bootstrap.yml) ───────────┐  │
+│  │                                                                      │  │
+│  │  PHASE 2 — Day-to-Day Operations (run as needed)                     │  │
+│  │  ├── bootstrapInfra  → Resource Groups, App Services, SQL, Key Vault │  │
+│  │  ├── deployApi       → API code deployed to Azure App Service        │  │
+│  │  └── deployUi        → UI code deployed to Azure App Service         │  │
+│  │                                                                      │  │
+│  │  PHASE X — Cleanup (⚠️ DESTRUCTIVE — deletes everything)             │  │
+│  │  └── cleanupInfra    → Deletes App Services, SQL, Key Vault, RG     │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-> **Key rule**: Complete the phases in order. Phase 0 and Phase 1 are each done **once** — after they are complete, day-to-day operations only use Phase 2.
+> **Key rule**: Complete the phases in order. Phase 0 and Phase 1 are each done **once** via **Azure Initial Setup** — after they are complete, day-to-day operations only use Phase 2 via **Azure Bootstrap & Deploy**.
 
 ### When do I run each phase?
 
-| Phase | When to Run | Parameters |
-|-------|-------------|------------|
-| **Phase 0** | Once — before anything else | Manual only (no workflow run) |
-| **Phase 1** | Once — after Phase 0 is complete | `setupOidc` + `configureSecrets` |
-| **Phase 2** | Any time — infrastructure and deployments | `bootstrapInfra` + `deployApi` / `deployUi` |
-| **Phase X** | When tearing down — ⚠️ destructive | `cleanupInfra` |
+| Phase | Workflow | When to Run | Parameters |
+|-------|----------|-------------|------------|
+| **Phase 0** | Azure Initial Setup | Once — before anything else | `setupGitHubApp` (guidance only) |
+| **Phase 1** | Azure Initial Setup | Once — after Phase 0 is complete | `setupOidc` + `configureSecrets` |
+| **Phase 2** | Azure Bootstrap & Deploy | Any time — infrastructure and deployments | `bootstrapInfra` + `deployApi` / `deployUi` |
+| **Phase X** | Azure Bootstrap & Deploy | When tearing down — ⚠️ destructive | `cleanupInfra` |
 
 ### What gets created automatically vs. what needs manual work
 
-| Resource | Automated? | Phase |
-|----------|-----------|-------|
-| Microsoft Entra ID App Registration | ✅ Fully automated | Phase 1 (`setupOidc`) |
-| Azure Federated OIDC Credentials | ✅ Fully automated | Phase 1 (`setupOidc`) |
-| GitHub Environments (dev / staging / prod) | ✅ Fully automated | Phase 1 (`configureSecrets`) |
-| GitHub OIDC Secrets (`AZUREAPPSERVICE_*`) | ✅ Fully automated | Phase 1 (`configureSecrets`) |
-| Azure Resource Groups, App Services, SQL | ✅ Fully automated | Phase 2 (`bootstrapInfra`) |
-| Deploy API code to Azure App Service | ✅ Fully automated | Phase 2 (`deployApi`) |
-| Deploy UI code to Azure App Service | ✅ Fully automated | Phase 2 (`deployUi`) |
-| **GitHub App** (`APP_ID` + `APP_PRIVATE_KEY`) | ⚠️ **Manual one-time** | Phase 0 |
+| Resource | Automated? | Phase | Workflow |
+|----------|-----------|-------|----------|
+| Microsoft Entra ID App Registration | ✅ Fully automated | Phase 1 (`setupOidc`) | Azure Initial Setup |
+| Azure Federated OIDC Credentials | ✅ Fully automated | Phase 1 (`setupOidc`) | Azure Initial Setup |
+| GitHub Environments (dev / staging / prod) | ✅ Fully automated | Phase 1 (`configureSecrets`) | Azure Initial Setup |
+| GitHub OIDC Secrets (`AZUREAPPSERVICE_*`) | ✅ Fully automated | Phase 1 (`configureSecrets`) | Azure Initial Setup |
+| Azure Resource Groups, App Services, SQL | ✅ Fully automated | Phase 2 (`bootstrapInfra`) | Azure Bootstrap & Deploy |
+| Deploy API code to Azure App Service | ✅ Fully automated | Phase 2 (`deployApi`) | Azure Bootstrap & Deploy |
+| Deploy UI code to Azure App Service | ✅ Fully automated | Phase 2 (`deployUi`) | Azure Bootstrap & Deploy |
+| **GitHub App** (`APP_ID` + `APP_PRIVATE_KEY`) | ⚠️ **Manual one-time** | Phase 0 | Azure Initial Setup (guidance) |
 
 ---
 
@@ -252,9 +262,15 @@ Deploy:   ──── Azure OIDC (2-step pattern + conditional gating) ──�
 
 ## 📋 Workflow Parameter Reference
 
-Navigate to: **GitHub → Actions → Azure Bootstrap Setup → Run workflow**
+Parameters are split across **two workflows**. Use the workflow that matches the phase you are running.
 
-Parameters are grouped by the phase they belong to. Enable only the parameters for the phase you are currently running.
+---
+
+## 📋 Parameters — Azure Initial Setup (`azure-initial-setup.yml`)
+
+Navigate to: **GitHub → Actions → Azure Initial Setup → Run workflow**
+
+> Phase 0/1a/1b parameters. The Initial Setup workflow does **not** enforce branch–environment matching — you can run it from any branch.
 
 ---
 
@@ -263,8 +279,8 @@ Parameters are grouped by the phase they belong to. Enable only the parameters f
 |---|---|
 | **Type** | Choice: `dev` / `staging` / `prod` / `all` |
 | **Required** | Yes — every run |
-| **Description** | Which Azure environment to provision. `all` provisions dev, staging, and prod in parallel. |
-| **Branch rule** | The **“Use workflow from”** branch must match the environment: `dev`→`dev`, `staging`→`staging`, `main`→`prod`. Use any branch for `all`. **Exception:** Phase 0/1a/1b-only runs (setup-only) bypass this check — the `$isSetupOnly` variable relaxes branch validation when no Phase 2/X/deploy is selected. |
+| **Description** | Which Azure environment to configure. `all` configures dev, staging, and prod. |
+| **Branch rule** | **No branch restriction.** The Initial Setup workflow does not enforce branch–environment matching because Phase 0/1a/1b only configure credentials, not deploy code. Recommended: `branch=dev`, `environment=all`. |
 | **Example** | Start with `dev` to validate the setup cheaply before committing to staging/prod. |
 
 ---
@@ -272,7 +288,7 @@ Parameters are grouped by the phase they belong to. Enable only the parameters f
 ## 🔑 Phase 1 Parameters — One-Time Setup
 > Enable these **once** when setting up a new environment. After Phase 1 is complete, you will not need to run these again unless credentials are lost or rotated.
 
-> ⚠️ **Phase 1a and 1b always run in `dev` environment context** (hardcoded) because all environments share the same Azure AD App Registration. The `validate-inputs` job uses a `$isSetupOnly` variable to detect Phase 0/1a/1b-only runs (no Phase 2, cleanup, or deploys selected) and relaxes the branch-environment check accordingly — you can run Phase 1 from any branch. Recommended: `branch=dev`, `environment=all`.
+> ⚠️ **Phase 1a and 1b always run in `dev` environment context** (hardcoded) because all environments share the same Azure AD App Registration. The Initial Setup workflow does not enforce branch–environment matching, so you can run Phase 1 from any branch. Recommended: `branch=dev`, `environment=all`.
 
 > ⚠️ **Phase 1a → Phase 1b must run sequentially (not in parallel).** `configureSecrets` (Phase 1b) uses the OIDC outputs (`clientId`, `tenantId`, `subscriptionId`) produced by `setupOidc` (Phase 1a), so the two steps cannot run concurrently. The workflow dependency chain enforces this order automatically.
 
@@ -305,9 +321,23 @@ Parameters are grouped by the phase they belong to. Enable only the parameters f
 | **Prerequisite** | `APP_ID` and `APP_PRIVATE_KEY` repository secrets **must already exist**. See [Phase 0 Setup](#phase-0--manual-prerequisite-5-min-done-once) below. |
 | **Idempotent** | ✅ Yes — overwrites existing secrets with current values. |
 
-> 💡 **Tip**: Run `setupOidc` and `configureSecrets` **together in a single workflow execution** — they are designed to chain: OIDC outputs from Phase 1a feed directly into Phase 1b secret configuration. They always run sequentially (1a first, then 1b).
+> 💡 **Tip**: Run `setupOidc` and `configureSecrets` **together in a single Azure Initial Setup workflow run** — they are designed to chain: OIDC outputs from Phase 1a feed directly into Phase 1b secret configuration. They always run sequentially (1a first, then 1b).
 
 ---
+
+## 📋 Parameters — Azure Bootstrap & Deploy (`azure-bootstrap.yml`)
+
+Navigate to: **GitHub → Actions → Azure Bootstrap & Deploy → Run workflow**
+
+> Phase 2/X parameters. This workflow **enforces branch–environment matching**: the **“Use workflow from”** branch must match the environment (`dev`→`dev`, `staging`→`staging`, `main`→`prod`). Use any branch for `environment: all`.
+
+### 🎯 `environment` — Target Environment *(always required)*
+| | |
+|---|---|
+| **Type** | Choice: `dev` / `staging` / `prod` / `all` |
+| **Required** | Yes — every run |
+| **Description** | Which Azure environment to provision. `all` provisions dev, staging, and prod in parallel. |
+| **Branch rule** | The **“Use workflow from”** branch must match the environment: `dev`→`dev`, `staging`→`staging`, `main`→`prod`. Use any branch for `all`. |
 
 ## 🔄 Phase 2 Parameters — Day-to-Day Operations
 > Enable these whenever you need to provision or update infrastructure and deployments. Safe to run repeatedly.
@@ -356,6 +386,8 @@ Parameters are grouped by the phase they belong to. Enable only the parameters f
 ---
 
 ## ℹ️ Phase 0 Helper Parameter
+
+> These parameters are part of the **Azure Initial Setup** workflow (`azure-initial-setup.yml`).
 
 ### `setupGitHubApp` — GitHub App Instructions
 | | |
@@ -451,8 +483,8 @@ Add `APP_ID` and `APP_PRIVATE_KEY` to repository secrets before proceeding.
 
 **Goal**: Create the Azure OIDC identity and push credentials into GitHub. This runs **once per environment** — after this, you never need to run `setupOidc` or `configureSecrets` again unless credentials are rotated or lost.
 
-1. Go to **Actions → Azure Bootstrap Setup → Run workflow**
-2. Set **"Use workflow from"** to `dev`
+1. Go to **Actions → Azure Initial Setup → Run workflow**
+2. Set **"Use workflow from"** to `dev` (any branch works — Initial Setup does not enforce branch matching)
 3. Configure parameters — check **only** the Phase 1 boxes:
 
 | Parameter | Value | Notes |
@@ -462,10 +494,6 @@ Add `APP_ID` and `APP_PRIVATE_KEY` to repository secrets before proceeding.
 | `oidcAppName` | *(default)* | Leave blank (uses `GitHub-Actions-OIDC`) |
 | `setupGitHubApp` | `false` | Already done in Phase 0 |
 | `configureSecrets` ✅ | `true` | 🔑 Phase 1 — writes `AZUREAPPSERVICE_*` secrets to GitHub |
-| `bootstrapInfra` | `false` | 🔄 Phase 2 — do this separately |
-| `deployApi` | `false` | 🔄 Phase 2 |
-| `deployUi` | `false` | 🔄 Phase 2 |
-| `cleanupInfra` | `false` | 🗑️ Phase X — not needed for setup |
 
 4. Click **Run workflow**
 5. When the `setupOidc` step prompts for **device code authentication**:
@@ -490,17 +518,13 @@ Add `APP_ID` and `APP_PRIVATE_KEY` to repository secrets before proceeding.
 
 **Goal**: Provision Azure infrastructure and deploy application code. This is what you run regularly — safe to re-run at any time.
 
-1. Go to **Actions → Azure Bootstrap Setup → Run workflow**
-2. Set **"Use workflow from"** to `dev`
+1. Go to **Actions → Azure Bootstrap & Deploy → Run workflow**
+2. Set **“Use workflow from”** to `dev` (must match environment)
 3. Configure parameters — check **only** the Phase 2 boxes:
 
 | Parameter | Value | Notes |
 |-----------|-------|-------|
 | `environment` | `dev` | |
-| `setupOidc` | `false` | 🔑 Phase 1 — already done, skip |
-| `oidcAppName` | *(default)* | |
-| `setupGitHubApp` | `false` | Phase 0 — already done, skip |
-| `configureSecrets` | `false` | 🔑 Phase 1 — already done, skip |
 | `bootstrapInfra` ✅ | `true` | 🔄 Phase 2 — creates/updates Azure resources |
 | `deployApi` | `false` (or `true`) | 🔄 Phase 2 — enable to deploy API code immediately |
 | `deployUi` | `false` (or `true`) | 🔄 Phase 2 — enable to deploy UI code immediately |
@@ -517,7 +541,7 @@ Add `APP_ID` and `APP_PRIVATE_KEY` to repository secrets before proceeding.
 ### Phase 2 — Deploying Application Code
 
 After infrastructure is ready, deploy application code:
-- **Via Phase 2 bootstrap**: Run workflow with `deployApi = true` and/or `deployUi = true`
+- **Via Azure Bootstrap & Deploy**: Run workflow with `deployApi = true` and/or `deployUi = true`
 - **Via push**: Push to the `dev` branch — deployment workflows trigger automatically
 - **Via manual dispatch**: Run `deploy-api-to-azure.yml` or `deploy-ui-to-azure.yml` directly
 
@@ -525,44 +549,50 @@ After infrastructure is ready, deploy application code:
 
 ### Quick Reference: What to check for each run
 
-| Goal | `setupOidc` | `configureSecrets` | `bootstrapInfra` | `deployApi` | `deployUi` | `cleanupInfra` |
-|------|-------------|---------------------|------------------|-------------|------------|----------------|
-| First-time full setup (Phase 1 + 2) | ✅ | ✅ | ✅ | optional | optional | ❌ |
-| Phase 1 only (OIDC + secrets) | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Phase 2 only (infra + deploy) | ❌ | ❌ | ✅ | optional | optional | ❌ |
-| Redeploy code only | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ |
-| Rotate credentials | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Tear down environment | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Goal | Workflow | Key Parameters |
+|------|----------|---------|
+| First-time full setup (Phase 1 + 2) | **Azure Initial Setup** then **Azure Bootstrap & Deploy** | `setupOidc` + `configureSecrets` → then `bootstrapInfra` |
+| Phase 1 only (OIDC + secrets) | **Azure Initial Setup** | `setupOidc` + `configureSecrets` |
+| Phase 2 only (infra + deploy) | **Azure Bootstrap & Deploy** | `bootstrapInfra` + optional `deployApi` / `deployUi` |
+| Redeploy code only | **Azure Bootstrap & Deploy** | `deployApi` + `deployUi` |
+| Rotate credentials | **Azure Initial Setup** | `setupOidc` + `configureSecrets` |
+| Tear down environment | **Azure Bootstrap & Deploy** | `cleanupInfra` |
 
 ---
 
 ## 🔄 Common Scenarios
 
 ### Scenario A: Brand-New Dev Environment (Phase 0 already done)
+
+**Run 1 — Azure Initial Setup** (`azure-initial-setup.yml`):
 ```yaml
-# Phase 1 (one-time) + Phase 2 combined in a single run
+# Phase 1 (one-time) — create OIDC identity and push credentials
 environment: dev
 setupOidc: true          # 🔑 Phase 1 — Create Entra ID app + OIDC
-oidcAppName: ""          # Use default (GitHub-Actions-OIDC) — only change if custom name needed
+oidcAppName: ""          # Use default (GitHub-Actions-OIDC)
 setupGitHubApp: false    # Phase 0 done — skip
 configureSecrets: true   # 🔑 Phase 1 — Write Azure creds to GitHub secrets
+```
+
+**Run 2 — Azure Bootstrap & Deploy** (`azure-bootstrap.yml`):
+```yaml
+# Phase 2 — provision infrastructure (after Initial Setup completes)
+environment: dev
 bootstrapInfra: true     # 🔄 Phase 2 — Provision Azure resources
 deployApi: false         # 🔄 Phase 2 — Enable once infra is confirmed healthy
 deployUi: false          # 🔄 Phase 2 — Enable once infra is confirmed healthy
 cleanupInfra: false      # 🗑️ Phase X — Not tearing down
 ```
-**Time**: ~15 min | **Use case**: Complete first-time dev environment setup in one go
+**Time**: ~15 min total (two runs) | **Use case**: Complete first-time dev environment setup
 
 ---
 
 ### Scenario B: Add Staging (Phase 1 already done for dev)
+
+**Azure Bootstrap & Deploy** (`azure-bootstrap.yml`):
 ```yaml
 # Phase 2 only — OIDC and secrets already exist from dev setup
-environment: staging      # Switch to staging branch first!
-setupOidc: false         # 🔑 Phase 1 done — skip
-oidcAppName: ""          # N/A (setupOidc is false)
-setupGitHubApp: false    # Phase 0 done — skip
-configureSecrets: false  # 🔑 Phase 1 done — skip (or set true to create staging secrets)
+environment: staging      # Use workflow from staging branch!
 bootstrapInfra: true     # 🔄 Phase 2 — Provision staging resources
 deployApi: false
 deployUi: false
@@ -573,13 +603,11 @@ cleanupInfra: false
 ---
 
 ### Scenario C: Re-provision Infrastructure (Phase 1 already done)
+
+**Azure Bootstrap & Deploy** (`azure-bootstrap.yml`):
 ```yaml
 # Phase 2 only — credentials are fine, just re-create Azure resources
 environment: dev
-setupOidc: false         # 🔑 Phase 1 done — credentials still valid
-oidcAppName: ""          # N/A (setupOidc is false)
-setupGitHubApp: false    # Phase 0 done — skip
-configureSecrets: false  # 🔑 Phase 1 done — secrets still valid
 bootstrapInfra: true     # 🔄 Phase 2 — Re-provision Azure resources
 deployApi: false
 deployUi: false
@@ -590,6 +618,8 @@ cleanupInfra: false
 ---
 
 ### Scenario D: Rotate Azure Credentials
+
+**Azure Initial Setup** (`azure-initial-setup.yml`):
 ```yaml
 # Re-run Phase 1 to refresh credentials and secrets
 environment: dev
@@ -597,29 +627,33 @@ setupOidc: true          # 🔑 Phase 1 — Re-create OIDC credentials
 oidcAppName: ""          # Use default unless your app uses a custom name
 setupGitHubApp: false
 configureSecrets: true   # 🔑 Phase 1 — Update GitHub secrets with new values
-bootstrapInfra: false    # 🔄 Phase 2 — Skip, infra untouched
-deployApi: false
-deployUi: false
-cleanupInfra: false
 ```
 **Time**: ~4 min | **Use case**: Azure credentials rotated; GitHub secrets need updating
 
 ---
 
 ### Scenario E: Bootstrap All Environments at Once
+
+**Run 1 — Azure Initial Setup** (`azure-initial-setup.yml`):
 ```yaml
-# Phase 1 + Phase 2 for all environments simultaneously
+# Phase 1 for all environments
 environment: all          # Use any branch
 setupOidc: true          # 🔑 Phase 1 — Creates credentials for dev + staging + prod
 oidcAppName: ""          # Use default unless using a custom Entra app name
 setupGitHubApp: false    # Phase 0 already done
 configureSecrets: true   # 🔑 Phase 1 — Secrets for all three environments
+```
+
+**Run 2 — Azure Bootstrap & Deploy** (`azure-bootstrap.yml`):
+```yaml
+# Phase 2 for all environments (after Initial Setup completes)
+environment: all          # Use any branch
 bootstrapInfra: true     # 🔄 Phase 2 — Provisions dev + staging + prod in parallel
 deployApi: false
 deployUi: false
 cleanupInfra: false
 ```
-**Time**: ~15 min | **Use case**: Full environment fleet setup in one go
+**Time**: ~15 min total (two runs) | **Use case**: Full environment fleet setup
 
 ---
 
@@ -718,8 +752,8 @@ Watch Actions → the `deploy-api-to-azure.yml` workflow should trigger and succ
 **Fix**: Wait 5 minutes and re-run with only `bootstrapInfra = true`.
 
 ### Issue: Branch/environment mismatch error
-**Cause**: "Use workflow from" branch does not match the target environment.  
-**Fix**: Match the branch to the environment: `dev` branch → `dev` env, `main` branch → `prod` env. Use any branch only for `environment: all`.
+**Cause**: "Use workflow from" branch does not match the target environment in **Azure Bootstrap & Deploy**.  
+**Fix**: Match the branch to the environment: `dev` branch → `dev` env, `main` branch → `prod` env. Use any branch only for `environment: all`. Note: **Azure Initial Setup** does not enforce branch matching.
 
 ---
 
@@ -754,11 +788,12 @@ Watch Actions → the `deploy-api-to-azure.yml` workflow should trigger and succ
 ## 💡 Pro Tips
 
 1. **Phase 0 is a true one-time step**: Once the GitHub App is created, installed, and its secrets are in place, you never touch Phase 0 again.
-2. **Phase 1 is also one-time per environment**: Run `setupOidc + configureSecrets` once, then only use Phase 2 for all ongoing work.
+2. **Phase 1 is also one-time per environment**: Run `setupOidc + configureSecrets` via **Azure Initial Setup** once, then only use **Azure Bootstrap & Deploy** for all ongoing work.
 3. **Phase 2 is idempotent**: Every `bootstrapInfra` run is safe to re-run — existing resources are skipped, missing ones are created. Run it whenever needed.
 4. **Start with `dev`**: Validate the full flow on dev (F1 Free tier, no cost) before extending to staging/prod.
 5. **Use `all`**: Select `environment: all` to provision dev/staging/prod simultaneously once you're confident.
 6. **Save the `.pem` file**: Store the GitHub App private key securely offline — if lost, generate a new one in app settings and update `APP_PRIVATE_KEY`.
+7. **Two workflows, clear separation**: Phase 0/1 (credentials) → **Azure Initial Setup**. Phase 2/X (infrastructure) → **Azure Bootstrap & Deploy**. Never mix them up.
 
 ---
 
@@ -777,6 +812,8 @@ Watch Actions → the `deploy-api-to-azure.yml` workflow should trigger and succ
 
 **Ready to start?**
 
-👉 **Run Workflow**: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/azure-bootstrap.yml
+👉 **Azure Initial Setup** (Phase 0/1): https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/azure-initial-setup.yml
+
+👉 **Azure Bootstrap & Deploy** (Phase 2/X): https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/azure-bootstrap.yml
 
 Then click **"Run workflow"** (top-right green button)

@@ -12,15 +12,23 @@
 .\scripts\setup-github-app-from-manifest.ps1
 ```
 
-### Run Bootstrap (All Environments)
+### Run Initial Setup (All Environments)
 ```yaml
-Workflow: Azure Bootstrap Setup
+Workflow: Azure Initial Setup
 Options:
   - Environment: all
   - Setup Azure OIDC: true (first time) / false (if already done)
   - Setup GitHub App: false (use script instead)
   - Configure Secrets: true
+```
+
+### Run Bootstrap & Deploy
+```yaml
+Workflow: Azure Bootstrap & Deploy
+Options:
+  - Environment: dev (or staging/prod)
   - Bootstrap Infrastructure: true
+  - Deploy API/UI: true
 ```
 
 ---
@@ -79,7 +87,7 @@ GitHub App must have these permissions:
 3. **Recreate**: `.\scripts\setup-github-app-from-manifest.ps1`
 4. **Update Secrets**: APP_ID and APP_PRIVATE_KEY
 5. **Reinstall**: Install app on repository
-6. **Configure**: Run bootstrap workflow
+6. **Configure**: Run Azure Initial Setup workflow
 7. **Validate**: `.\scripts\validate-github-app-config.ps1 -Detailed`
 
 ---

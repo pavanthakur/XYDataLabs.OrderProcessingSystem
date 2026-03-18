@@ -1,0 +1,776 @@
+name: Azure Initial Setup
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: '🎯 Environment | Use "all" (recommended) to configure dev + staging + prod in one run'
+        required: true
+        type: choice
+        options:
+          - all
+          - dev
+          - staging
+          - prod
+        default: 'all'
+      setupGitHubApp:
+        description: 'ℹ️ Phase 0 — GitHub App Instructions | Shows setup steps if APP_ID + APP_PRIVATE_KEY secrets are missing'
+        required: true
+        type: boolean
+        default: true
+      setupOidc:
+        description: '🔑 Phase 1a — Setup Azure OIDC | Creates Azure AD App Registration + federated identity credentials'
+        required: true
+        type: boolean
+        default: true
+      oidcAppName:
+        description: 'OIDC App Name | Default: GitHub-Actions-OIDC (only change if using custom name)'
+        required: false
+        type: string
+        default: 'GitHub-Actions-OIDC'
+      configureSecrets:
+        description: '🔑 Phase 1b — Configure GitHub Secrets | Stores OIDC values as GitHub environment secrets. Requires Phase 0 (APP_ID+APP_PRIVATE_KEY)'
+        required: true
+        type: boolean
+        default: true
+      githubAppName:
+        description: 'GitHub App Name | Your app name (e.g. XYDataLabsGitHubApp) — used for validation and instructions'
+        required: false
+        type: string
+        default: 'XYDataLabsGitHubApp'
+
+permissions:
+  contents: write
+  id-token: write
+  actions: write
+
+jobs:
+  check-trigger:
+    name: Check Workflow Trigger
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: windows-latest
+    steps:
+      - name: Workflow trigger check
+        run: |
+          Write-Host "ℹ️  This workflow is designed for manual dispatch only" -ForegroundColor Cyan
+          Write-Host "   Skipping execution for event: ${{ github.event_name }}" -ForegroundColor Yellow
+          Write-Host "   To run this workflow, use: Actions > Azure Initial Setup > Run workflow" -ForegroundColor Gray
+
+  validate-inputs:
+    name: Validate Workflow Inputs
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Log Workflow Start
+        run: |
+          Write-Host "" -ForegroundColor Gray
+          Write-Host "========================================================================" -ForegroundColor Cyan
+          Write-Host "  AZURE INITIAL SETUP WORKFLOW STARTED" -ForegroundColor Cyan
+          Write-Host "========================================================================" -ForegroundColor Cyan
+          Write-Host "" -ForegroundColor Gray
+          Write-Host "⏰ Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host "👤 Triggered by: ${{ github.actor }}" -ForegroundColor Gray
+          Write-Host "🌿 Branch: ${{ github.ref_name }}" -ForegroundColor Gray
+          Write-Host "📦 Repository: ${{ github.repository }}" -ForegroundColor Gray
+          Write-Host "🔗 Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" -ForegroundColor Gray
+          Write-Host "" -ForegroundColor Gray
+          Write-Host "📋 USER SELECTED PARAMETERS:" -ForegroundColor Yellow
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+          Write-Host "" -ForegroundColor Gray
+          Write-Host "  Parameter              Value    Checkbox" -ForegroundColor DarkGray
+          Write-Host "  ──────────────────────────────────────────────────────────────────────" -ForegroundColor DarkGray
+          Write-Host "  environment          = ${{ inputs.environment }}" -ForegroundColor White
+          Write-Host "" -ForegroundColor Gray
+          Write-Host "  SETUP PHASES:" -ForegroundColor Cyan
+          Write-Host "  setupGitHubApp       = ${{ inputs.setupGitHubApp }}  $(if ('${{ inputs.setupGitHubApp }}' -eq 'true') { '[✅ checked]   — Phase 0: Setup GitHub App' } else { '[☐  unchecked] — Phase 0: Setup GitHub App' })" -ForegroundColor $(if ('${{ inputs.setupGitHubApp }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "  githubAppName        = ${{ inputs.githubAppName }}" -ForegroundColor DarkGray
+          Write-Host "  setupOidc            = ${{ inputs.setupOidc }}  $(if ('${{ inputs.setupOidc }}' -eq 'true') { '[✅ checked]   — Phase 1a: Setup Azure OIDC' } else { '[☐  unchecked] — Phase 1a: Setup Azure OIDC' })" -ForegroundColor $(if ('${{ inputs.setupOidc }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "  oidcAppName          = ${{ inputs.oidcAppName }}" -ForegroundColor DarkGray
+          Write-Host "  configureSecrets     = ${{ inputs.configureSecrets }}  $(if ('${{ inputs.configureSecrets }}' -eq 'true') { '[✅ checked]   — Phase 1b: Configure Secrets' } else { '[☐  unchecked] — Phase 1b: Configure Secrets' })" -ForegroundColor $(if ('${{ inputs.configureSecrets }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "" -ForegroundColor Gray
+          Write-Host "  ──────────────────────────────────────────────────────────────────────" -ForegroundColor DarkGray
+          Write-Host "" -ForegroundColor Gray
+          Write-Host "  ℹ️  This workflow handles one-time Azure setup (Phase 0, 1a, 1b)." -ForegroundColor Cyan
+          Write-Host "     For infrastructure bootstrap & deployments, use 'Azure Bootstrap & Deploy'." -ForegroundColor Cyan
+          Write-Host "" -ForegroundColor Gray
+          Write-Host "========================================================================" -ForegroundColor Cyan
+          Write-Host "" -ForegroundColor Gray
+
+      - name: Validate Configuration
+        run: |
+          Write-Host "🔍 Validating workflow inputs..." -ForegroundColor Cyan
+          Write-Host ("=" * 70) -ForegroundColor Gray
+
+          $env = "${{ inputs.environment }}"
+          $setupOidc = "${{ inputs.setupOidc }}"
+          $setupGitHubApp = "${{ inputs.setupGitHubApp }}"
+          $configSecrets = "${{ inputs.configureSecrets }}"
+
+          Write-Host "`n📋 Workflow Inputs:" -ForegroundColor Cyan
+          Write-Host "  Environment: $env" -ForegroundColor Yellow
+          Write-Host "  Setup OIDC: $setupOidc" -ForegroundColor Yellow
+          Write-Host "  Setup GitHub App: $setupGitHubApp" -ForegroundColor Yellow
+          Write-Host "  Configure secrets: $configSecrets" -ForegroundColor Yellow
+
+          # Validate environment selection
+          if ($env -notin @('dev', 'staging', 'prod', 'all')) {
+            Write-Host "  ❌ Invalid environment: $env" -ForegroundColor Red
+            Write-Error "Invalid environment: $env. Must be dev, staging, prod, or all."
+            exit 1
+          }
+          Write-Host "  ✅ Environment selection valid" -ForegroundColor Green
+
+          # No branch-environment check required for setup workflow.
+          # Phase 0 is informational only, Phase 1a/1b always run in 'dev' environment context.
+          # The environment input only controls which federated credentials get created.
+          Write-Host "`n  ℹ️  Branch check: Not required for initial setup" -ForegroundColor Cyan
+          Write-Host "     Phase 1a/1b always use 'dev' environment context regardless of branch." -ForegroundColor Gray
+
+          if (($setupOidc -eq "true" -or $configSecrets -eq "true") -and $env -ne "all") {
+            Write-Host "" -ForegroundColor Gray
+            Write-Host "  ⚠️  RECOMMENDATION: Use environment='all' for Phase 1a/1b" -ForegroundColor Yellow
+            Write-Host "     This creates federated credentials for dev + staging + prod in one run," -ForegroundColor Yellow
+            Write-Host "     preventing AADSTS700213 errors when running bootstrap for other environments." -ForegroundColor Yellow
+          }
+
+          # Check OIDC secrets status
+          Write-Host "`n  🔐 Repository Secrets Check:" -ForegroundColor Cyan
+
+          # Detect Phase 0-only run
+          $isPhase0Only = ($setupGitHubApp -eq "true") -and ($configSecrets -eq "false") -and ($setupOidc -eq "false")
+
+          if ($isPhase0Only) {
+            Write-Host "    ℹ️  Phase 0 run detected — OIDC secrets check skipped" -ForegroundColor Cyan
+            Write-Host "    ✅ OIDC secrets are not required yet (Phase 1a/1b task)" -ForegroundColor Green
+            Write-Host "    💡 Next step: After completing GitHub App setup, run this workflow again with:" -ForegroundColor Yellow
+            Write-Host "       ✅ Setup Azure OIDC" -ForegroundColor White
+            Write-Host "       ✅ Configure Secrets" -ForegroundColor White
+          } elseif ($setupOidc -eq "false" -and $configSecrets -eq "false") {
+            Write-Host "    ℹ️  No OIDC setup phases selected — secrets check skipped" -ForegroundColor Cyan
+          } elseif ($setupOidc -eq "false") {
+            Write-Host "    Setup OIDC: Unchecked (skipped)" -ForegroundColor Yellow
+            Write-Host "    Checking if OIDC secrets already exist in repository..." -ForegroundColor Gray
+
+            $hasClientId     = "${{ secrets.AZUREAPPSERVICE_CLIENTID }}"   -ne ""
+            $hasTenantId     = "${{ secrets.AZUREAPPSERVICE_TENANTID }}"   -ne ""
+            $hasSubscriptionId = "${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}" -ne ""
+
+            if ($hasClientId -and $hasTenantId -and $hasSubscriptionId) {
+              Write-Host "    ✅ OIDC repository secrets exist — setupOidc=false is valid (re-run)" -ForegroundColor Green
+            } else {
+              Write-Host "    ❌ OIDC repository secrets are MISSING!" -ForegroundColor Red
+              Write-Host "" -ForegroundColor Gray
+              Write-Host "    Required secrets not found:" -ForegroundColor Yellow
+              if (-not $hasClientId) { Write-Host "      - AZUREAPPSERVICE_CLIENTID" -ForegroundColor Red }
+              if (-not $hasTenantId) { Write-Host "      - AZUREAPPSERVICE_TENANTID" -ForegroundColor Red }
+              if (-not $hasSubscriptionId) { Write-Host "      - AZUREAPPSERVICE_SUBSCRIPTIONID" -ForegroundColor Red }
+              Write-Host "" -ForegroundColor Gray
+              Write-Host "    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host "    💡 SOLUTION: Re-run this workflow with these checkboxes SELECTED:" -ForegroundColor Yellow
+              Write-Host "       ✅ Setup Azure OIDC (Phase 1a) — REQUIRED" -ForegroundColor White
+              Write-Host "       ✅ Configure GitHub Secrets (Phase 1b)" -ForegroundColor White
+              Write-Host "    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host "" -ForegroundColor Gray
+              Write-Host "    ⚠️  Azure OIDC (Phase 1a) is MANDATORY for all phases that interact with Azure." -ForegroundColor Yellow
+
+              if ($configSecrets -eq "true") {
+                Write-Host "" -ForegroundColor Gray
+                Write-Host "    ℹ️  OIDC secrets not found at repository level, but Phase 1b is selected." -ForegroundColor Cyan
+                Write-Host "    Phase 1a (Setup Azure OIDC) will auto-trigger to acquire credentials" -ForegroundColor Cyan
+                Write-Host "    before Phase 1b runs. Expect a device-code login prompt if first-time setup." -ForegroundColor Cyan
+              }
+            }
+          } else {
+            Write-Host "    ✅ Setup Azure OIDC: Checked - secrets will be created" -ForegroundColor Green
+          }
+
+          # Check GitHub App secrets when configureSecrets is requested (Phase 1b mandatory gate)
+          if ($configSecrets -eq "true") {
+            $appName     = "${{ inputs.githubAppName }}"
+            $appSlug     = $appName.ToLower() -replace '[^a-z0-9]', '-'
+            $secretsUrl  = "https://github.com/${{ github.repository }}/settings/secrets/actions"
+
+            Write-Host "`n  🤖 GitHub App Check (MANDATORY for Phase 1b — 'Configure Secrets'):" -ForegroundColor Cyan
+            Write-Host "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+
+            $hasAppId      = "${{ secrets.APP_ID }}" -ne ""
+            $hasPrivateKey = "${{ secrets.APP_PRIVATE_KEY }}" -ne ""
+
+            Write-Host "    APP_ID        : $(if ($hasAppId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasAppId) { "Green" } else { "Red" })
+            Write-Host "    APP_PRIVATE_KEY: $(if ($hasPrivateKey) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasPrivateKey) { "Green" } else { "Red" })
+            Write-Host ""
+
+            if ($hasAppId -and $hasPrivateKey) {
+              Write-Host "    ✅ Phase 0 complete — GitHub App secrets are configured" -ForegroundColor Green
+              Write-Host "       GitHub App Name (configured): $appName" -ForegroundColor Cyan
+              Write-Host "    ℹ️  APP_INSTALLATION_ID: auto-discovered at runtime" -ForegroundColor Cyan
+              Write-Host ""
+              Write-Host "    ════════════════════════════════════════════════════════════" -ForegroundColor Green
+              Write-Host "    ✅ PHASE 0 IS CONFIGURED CORRECTLY — OK TO PROCEED WITH PHASE 1" -ForegroundColor Green
+              Write-Host "    ════════════════════════════════════════════════════════════" -ForegroundColor Green
+            } else {
+              Write-Host "    ❌ PHASE 0 INCOMPLETE — Phase 1b cannot proceed!" -ForegroundColor Red
+              Write-Host "" -ForegroundColor Gray
+              Write-Host "    Phase 1b ('Configure Secrets') requires a GitHub App to be created" -ForegroundColor Red
+              Write-Host "    and its APP_ID + APP_PRIVATE_KEY secrets to be configured first." -ForegroundColor Red
+              Write-Host "" -ForegroundColor Gray
+              Write-Host "    ══════════════════════════════════════════════════════════════════" -ForegroundColor Red
+              Write-Host "    HOW TO COMPLETE PHASE 0 (GitHub App Setup)" -ForegroundColor Yellow
+              Write-Host "    ══════════════════════════════════════════════════════════════════" -ForegroundColor Red
+              Write-Host "" -ForegroundColor Gray
+              Write-Host "    STEP 1 — Create GitHub App '$appName'" -ForegroundColor Cyan
+              Write-Host "      Option A (Recommended): Run the setup script:" -ForegroundColor White
+              Write-Host "        .\scripts\setup-github-app-from-manifest.ps1" -ForegroundColor Yellow
+              Write-Host "      Option B (Manual):" -ForegroundColor White
+              Write-Host "        1. Open: https://github.com/settings/apps/new" -ForegroundColor White
+              Write-Host "        2. App name: $appName (or your chosen name)" -ForegroundColor White
+              Write-Host "        3. Set REQUIRED permissions:" -ForegroundColor White
+              Write-Host "           • Actions: write   • Secrets: write   • Workflows: write" -ForegroundColor Gray
+              Write-Host "           • Pull requests: write   • Administration: write" -ForegroundColor Gray
+              Write-Host "           • Environments: write   • Contents: read   • Metadata: read" -ForegroundColor Gray
+              Write-Host "        4. Generate a private key (saves a .pem file)" -ForegroundColor White
+              Write-Host "        5. Note the App ID from the General settings page" -ForegroundColor White
+              Write-Host "        6. Install app on: ${{ github.repository }}" -ForegroundColor White
+              Write-Host "           Link: https://github.com/settings/installations" -ForegroundColor Gray
+              Write-Host "" -ForegroundColor Gray
+              Write-Host "    STEP 2 — Add Repository Secrets at:" -ForegroundColor Cyan
+              Write-Host "      ➡️  $secretsUrl" -ForegroundColor Yellow
+              Write-Host "" -ForegroundColor Gray
+              Write-Host "      Click 'New repository secret' and add:" -ForegroundColor White
+              Write-Host "      ┌─────────────────┬──────────────────────────────────────────────┐" -ForegroundColor DarkGray
+              Write-Host "      │ APP_ID          │ Numeric App ID from app's General settings   │" -ForegroundColor White
+              Write-Host "      │                 │ page: https://github.com/settings/apps/$appSlug │" -ForegroundColor Gray
+              Write-Host "      ├─────────────────┼──────────────────────────────────────────────┤" -ForegroundColor DarkGray
+              Write-Host "      │ APP_PRIVATE_KEY │ Full contents of the downloaded .pem file    │" -ForegroundColor White
+              Write-Host "      │                 │ (include -----BEGIN RSA PRIVATE KEY----- )   │" -ForegroundColor Gray
+              Write-Host "      └─────────────────┴──────────────────────────────────────────────┘" -ForegroundColor DarkGray
+              Write-Host "" -ForegroundColor Gray
+              Write-Host "    STEP 3 — Re-run this workflow with:" -ForegroundColor Cyan
+              Write-Host "      ✅ Setup Azure OIDC         = true" -ForegroundColor Green
+              Write-Host "      ✅ Configure GitHub Secrets = true" -ForegroundColor Green
+              Write-Host "      ❌ Setup GitHub App         = false (already done)" -ForegroundColor DarkGray
+              Write-Host "" -ForegroundColor Gray
+              Write-Host "    ══════════════════════════════════════════════════════════════════" -ForegroundColor Red
+              Write-Host "" -ForegroundColor Gray
+              Write-Host "    ❌ VALIDATION FAILED: Phase 0 prerequisites not met." -ForegroundColor Red
+              Write-Host "    Cannot proceed with Phase 1a/1b until GitHub App is created and" -ForegroundColor Red
+              Write-Host "    APP_ID + APP_PRIVATE_KEY secrets are added at:" -ForegroundColor Red
+              Write-Host "    $secretsUrl" -ForegroundColor Yellow
+              Write-Host "" -ForegroundColor Gray
+              Write-Error "Phase 0 incomplete: GitHub App secrets (APP_ID, APP_PRIVATE_KEY) are required. See instructions above."
+              exit 1
+            }
+            Write-Host "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+          }
+
+          Write-Host "`n" -ForegroundColor Gray
+          Write-Host ("=" * 70) -ForegroundColor Gray
+          Write-Host "✅ Input validation passed - proceeding..." -ForegroundColor Green
+          exit 0
+
+      - name: Phase Readiness Pre-Flight Summary
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║      PHASE READINESS PRE-FLIGHT SUMMARY (DRY-RUN CHECK)       ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "This step shows what will run and whether prerequisites are met." -ForegroundColor Gray
+          Write-Host ""
+
+          # ── Detect credential availability ────────────────────────────────
+          $hasClientId     = "${{ secrets.AZUREAPPSERVICE_CLIENTID }}"   -ne ""
+          $hasTenantId     = "${{ secrets.AZUREAPPSERVICE_TENANTID }}"   -ne ""
+          $hasSubscriptionId = "${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}" -ne ""
+          $oidcConfigured  = $hasClientId -and $hasTenantId -and $hasSubscriptionId
+
+          $hasAppId        = "${{ secrets.APP_ID }}"          -ne ""
+          $hasPrivateKey   = "${{ secrets.APP_PRIVATE_KEY }}" -ne ""
+          $appConfigured   = $hasAppId -and $hasPrivateKey
+
+          # ── Read selected inputs ────────────────────────────────────────
+          $doSetupOidc     = "${{ inputs.setupOidc }}"        -eq "true"
+          $doSetupGhApp    = "${{ inputs.setupGitHubApp }}"   -eq "true"
+          $doConfigSecrets = "${{ inputs.configureSecrets }}" -eq "true"
+
+          # ── Credential summary ───────────────────────────────────────────
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+          Write-Host "🔐 CREDENTIAL STATUS" -ForegroundColor Yellow
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+          Write-Host ""
+          Write-Host "  Azure OIDC (AZUREAPPSERVICE_*):" -ForegroundColor Cyan
+          Write-Host "    CLIENTID      : $(if ($hasClientId)       { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasClientId) { 'Green' } else { 'Red' })
+          Write-Host "    TENANTID      : $(if ($hasTenantId)       { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasTenantId) { 'Green' } else { 'Red' })
+          Write-Host "    SUBSCRIPTIONID: $(if ($hasSubscriptionId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasSubscriptionId) { 'Green' } else { 'Red' })
+          Write-Host ""
+          Write-Host "  GitHub App (Phase 0 credentials):" -ForegroundColor Cyan
+          Write-Host "    APP_ID        : $(if ($hasAppId)      { '✅ Present' } else { '⬜ Missing' })" -ForegroundColor $(if ($hasAppId) { 'Green' } else { 'Yellow' })
+          Write-Host "    APP_PRIVATE_KEY: $(if ($hasPrivateKey) { '✅ Present' } else { '⬜ Missing' })" -ForegroundColor $(if ($hasPrivateKey) { 'Green' } else { 'Yellow' })
+          Write-Host ""
+
+          # ── Phase readiness table ───────────────────────────────────────
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+          Write-Host "📋 PHASE EXECUTION PLAN" -ForegroundColor Yellow
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+          Write-Host ""
+
+          # Phase 0: GitHub App instructions
+          $phase0Icon = if ($doSetupGhApp) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }
+          Write-Host "  Phase 0 — GitHub App Instructions  : $phase0Icon" -ForegroundColor $(if ($doSetupGhApp) { 'Cyan' } else { 'DarkGray' })
+
+          # Phase 1a: Setup OIDC
+          $effectiveSetupOidc = $doSetupOidc -or $doConfigSecrets
+          $phase1aIcon   = if ($effectiveSetupOidc) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }
+          $phase1aAuth   = if ($oidcConfigured) { 'non-interactive (OIDC)' } else { 'interactive (device code — first-time)' }
+          $phase1aNote   = if (-not $doSetupOidc -and $doConfigSecrets) {
+            " (auto-triggered by Phase 1b)"
+          } else { '' }
+          Write-Host "  Phase 1a — Setup Azure OIDC        : $phase1aIcon$phase1aNote" -ForegroundColor $(if ($effectiveSetupOidc) { 'Cyan' } else { 'DarkGray' })
+          if ($effectiveSetupOidc) {
+            Write-Host "             └─ Login method: $phase1aAuth" -ForegroundColor Gray
+          }
+
+          # Phase 1b: Configure GitHub Secrets
+          $phase1bPrereq  = $appConfigured
+          $phase1bEnabled = $doConfigSecrets -or $doSetupGhApp
+          $phase1bIcon    = if ($phase1bEnabled) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }
+          $oidcAvailableForPhase1b = $effectiveSetupOidc -or $oidcConfigured
+          $phase1bReady   = (-not $phase1bEnabled) -or ($phase1bPrereq -and $oidcAvailableForPhase1b)
+          Write-Host "  Phase 1b — Configure GitHub Secrets: $phase1bIcon" -ForegroundColor $(if ($phase1bEnabled) { 'Cyan' } else { 'DarkGray' })
+          if ($phase1bEnabled) {
+            if ($effectiveSetupOidc) {
+              Write-Host "             └─ OIDC source: fresh credentials from Phase 1a$(if (-not $doSetupOidc) { ' (auto-triggered)' } else { '' })" -ForegroundColor Gray
+            } elseif ($oidcConfigured) {
+              Write-Host "             └─ OIDC source: existing AZUREAPPSERVICE_* secrets ✅" -ForegroundColor Green
+            } else {
+              Write-Host "             └─ ⚠️  OIDC source: not found at repository level" -ForegroundColor Yellow
+              Write-Host "                    (May exist as environment secrets — Phase 1b will verify)" -ForegroundColor Gray
+            }
+            Write-Host "             └─ GitHub App token: $(if ($appConfigured) { '✅ APP_ID + APP_PRIVATE_KEY present' } else { '❌ Missing — Phase 0 required' })" `
+              -ForegroundColor $(if ($appConfigured) { 'Green' } else { 'Red' })
+          }
+
+          Write-Host ""
+
+          # ── Overall readiness gate ──────────────────────────────────────
+          $allReady = $phase1bReady
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+
+          if ($allReady) {
+            Write-Host ""
+            Write-Host "✅ PRE-FLIGHT CHECK PASSED — All selected phases have prerequisites met." -ForegroundColor Green
+            Write-Host ""
+          } else {
+            Write-Host ""
+            Write-Host "⚠️  PRE-FLIGHT CHECK — One or more phases have unmet prerequisites:" -ForegroundColor Yellow
+            if (-not $phase1bReady) {
+              if (-not $appConfigured) {
+                Write-Host "  ❌ Phase 1b needs GitHub App credentials (APP_ID + APP_PRIVATE_KEY)." -ForegroundColor Red
+                Write-Host "     → Complete Phase 0 (APP_ID + APP_PRIVATE_KEY must be set)" -ForegroundColor Yellow
+              }
+              if (-not $oidcAvailableForPhase1b) {
+                Write-Host "  ❌ Phase 1b: OIDC credentials not found at repository level; Phase 1a is not running." -ForegroundColor Red
+                Write-Host "     → For first-time setup: enable Phase 1a + 1b together" -ForegroundColor Yellow
+              }
+            }
+            Write-Host ""
+            Write-Error "Pre-flight check failed — one or more selected phases have unmet prerequisites. See details above."
+            exit 1
+          }
+
+          Write-Host ""
+          Write-Host "ℹ️  After initial setup completes, use 'Azure Bootstrap & Deploy' workflow" -ForegroundColor Cyan
+          Write-Host "   for infrastructure provisioning (Phase 2) and deployments." -ForegroundColor Cyan
+          Write-Host ""
+
+  setup-oidc:
+    name: Setup Azure OIDC
+    # Only runs when Phase 1a or Phase 1b is explicitly selected.
+    # Phase 1b auto-triggers Phase 1a because configure-github-secrets needs OIDC values.
+    if: |
+      github.event_name == 'workflow_dispatch' &&
+      (inputs.setupOidc || inputs.configureSecrets)
+    needs: [validate-inputs]
+    runs-on: windows-latest
+    # Always uses 'dev' environment context — all environments share
+    # the same Azure AD App Registration. This avoids the chicken-and-egg
+    # problem where a new environment's federated credential doesn't exist yet.
+    environment: dev
+    outputs:
+      clientId: ${{ steps.oidc-setup.outputs.clientId || steps.oidc-passthrough.outputs.clientId }}
+      tenantId: ${{ steps.oidc-setup.outputs.tenantId || steps.oidc-passthrough.outputs.tenantId }}
+      subscriptionId: ${{ steps.oidc-setup.outputs.subscriptionId || steps.oidc-passthrough.outputs.subscriptionId }}
+      appObjectId: ${{ steps.oidc-setup.outputs.appObjectId || steps.oidc-passthrough.outputs.appObjectId }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Auth Check
+        id: auth-check
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║         AZURE AUTHENTICATION CHECK                           ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          
+          $hasOidc = -not [string]::IsNullOrWhiteSpace("${{ secrets.AZUREAPPSERVICE_CLIENTID }}")
+          
+          if ($hasOidc) {
+            Write-Host "✅ Existing OIDC credentials found — will use non-interactive login" -ForegroundColor Green
+            "useExistingOidc=true" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Host "⚠️  No existing OIDC credentials — will use device code login" -ForegroundColor Yellow
+            Write-Host "   This is expected for first-time setup." -ForegroundColor Gray
+            "useExistingOidc=false" >> $env:GITHUB_OUTPUT
+          }
+        env:
+          CLIENTID: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+
+      - name: Azure Login (Existing OIDC)
+        if: steps.auth-check.outputs.useExistingOidc == 'true'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+
+      - name: Azure Login (Device Code)
+        if: steps.auth-check.outputs.useExistingOidc == 'false'
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Yellow
+          Write-Host "║         DEVICE CODE LOGIN — FIRST-TIME SETUP                  ║" -ForegroundColor Yellow
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Yellow
+          Write-Host ""
+          Write-Host "A device code will be displayed. Follow the instructions to authenticate." -ForegroundColor Cyan
+          Write-Host ""
+          
+          az login --use-device-code
+          
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "❌ Device code login failed" -ForegroundColor Red
+            Write-Error "Azure device code login failed"
+            exit 1
+          }
+          
+          Write-Host "✅ Device code login successful" -ForegroundColor Green
+
+      - name: Emit Existing Credentials as Outputs
+        id: oidc-passthrough
+        if: ${{ !inputs.setupOidc }}
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║      PASSTHROUGH — USING EXISTING OIDC CREDENTIALS           ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Phase 1a (Setup OIDC) was not selected." -ForegroundColor Gray
+          Write-Host "Passing through existing OIDC credentials to downstream jobs." -ForegroundColor Gray
+          Write-Host ""
+          
+          $clientId       = "${{ secrets.AZUREAPPSERVICE_CLIENTID }}"
+          $tenantId       = "${{ secrets.AZUREAPPSERVICE_TENANTID }}"
+          $subscriptionId = "${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}"
+          
+          # Get the app object ID from the existing app registration
+          try {
+            $app = az ad app show --id $clientId | ConvertFrom-Json
+            $appObjectId = $app.id
+            Write-Host "  App Object ID: $appObjectId" -ForegroundColor Gray
+          } catch {
+            Write-Host "  ⚠️  Could not retrieve app object ID (may not be needed)" -ForegroundColor Yellow
+            $appObjectId = ""
+          }
+          
+          "clientId=$clientId"             >> $env:GITHUB_OUTPUT
+          "tenantId=$tenantId"             >> $env:GITHUB_OUTPUT
+          "subscriptionId=$subscriptionId" >> $env:GITHUB_OUTPUT
+          "appObjectId=$appObjectId"       >> $env:GITHUB_OUTPUT
+          
+          Write-Host "✅ Existing credentials emitted as outputs" -ForegroundColor Green
+
+      - name: Setup OIDC App Registration
+        id: oidc-setup
+        if: ${{ inputs.setupOidc }}
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║         SETUP OIDC APP REGISTRATION                          ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          
+          $params = @{
+            AppName      = "${{ inputs.oidcAppName }}"
+            Environment  = "${{ inputs.environment }}"
+            GitHubOrg    = "${{ github.repository_owner }}"
+            GitHubRepo   = "${{ github.event.repository.name }}"
+          }
+          
+          Write-Host "📋 Parameters:" -ForegroundColor Yellow
+          Write-Host "  App Name: $($params.AppName)" -ForegroundColor Gray
+          Write-Host "  Environment: $($params.Environment)" -ForegroundColor Gray
+          Write-Host "  GitHub Org: $($params.GitHubOrg)" -ForegroundColor Gray
+          Write-Host "  GitHub Repo: $($params.GitHubRepo)" -ForegroundColor Gray
+          Write-Host ""
+          
+          $result = ./Resources/Azure-Deployment/setup-github-oidc.ps1 @params
+          
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "❌ OIDC setup failed" -ForegroundColor Red
+            Write-Error "OIDC App Registration setup failed"
+            exit 1
+          }
+          
+          # The script outputs these values
+          $clientId       = $env:OIDC_CLIENT_ID
+          $tenantId       = $env:OIDC_TENANT_ID
+          $subscriptionId = $env:OIDC_SUBSCRIPTION_ID
+          $appObjectId    = $env:OIDC_APP_OBJECT_ID
+          
+          "clientId=$clientId"             >> $env:GITHUB_OUTPUT
+          "tenantId=$tenantId"             >> $env:GITHUB_OUTPUT
+          "subscriptionId=$subscriptionId" >> $env:GITHUB_OUTPUT
+          "appObjectId=$appObjectId"       >> $env:GITHUB_OUTPUT
+          
+          Write-Host ""
+          Write-Host "✅ OIDC App Registration configured successfully" -ForegroundColor Green
+          Write-Host "  Client ID: $clientId" -ForegroundColor Gray
+          Write-Host "  Tenant ID: $tenantId" -ForegroundColor Gray
+          Write-Host "  Subscription ID: $subscriptionId" -ForegroundColor Gray
+
+      - name: Verify Federated Credentials
+        if: ${{ inputs.setupOidc }}
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║      VERIFY FEDERATED CREDENTIALS                            ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          
+          $appObjectId = "${{ steps.oidc-setup.outputs.appObjectId }}"
+          $env = "${{ inputs.environment }}"
+          
+          Write-Host "🔍 Verifying federated credentials for app: $appObjectId" -ForegroundColor Cyan
+          Write-Host "   Environment scope: $env" -ForegroundColor Gray
+          Write-Host ""
+          
+          $maxRetries = 3
+          $retryDelay = 20
+          $attempt = 0
+          $verified = $false
+          
+          while ($attempt -lt $maxRetries -and -not $verified) {
+            $attempt++
+            Write-Host "  Attempt $attempt of $maxRetries..." -ForegroundColor Gray
+            
+            try {
+              $creds = az ad app federated-credential list --id $appObjectId | ConvertFrom-Json
+              
+              if ($creds -and $creds.Count -gt 0) {
+                Write-Host "  ✅ Found $($creds.Count) federated credential(s):" -ForegroundColor Green
+                foreach ($cred in $creds) {
+                  Write-Host "    - $($cred.name): $($cred.subject)" -ForegroundColor Gray
+                }
+                $verified = $true
+              } else {
+                Write-Host "  ⚠️  No federated credentials found yet" -ForegroundColor Yellow
+                if ($attempt -lt $maxRetries) {
+                  Write-Host "  Waiting ${retryDelay}s before retry..." -ForegroundColor Gray
+                  Start-Sleep -Seconds $retryDelay
+                }
+              }
+            } catch {
+              Write-Host "  ⚠️  Error checking credentials: $($_.Exception.Message)" -ForegroundColor Yellow
+              if ($attempt -lt $maxRetries) {
+                Write-Host "  Waiting ${retryDelay}s before retry..." -ForegroundColor Gray
+                Start-Sleep -Seconds $retryDelay
+              }
+            }
+          }
+          
+          if (-not $verified) {
+            Write-Host ""
+            Write-Host "❌ Could not verify federated credentials after $maxRetries attempts" -ForegroundColor Red
+            Write-Error "Federated credential verification failed"
+            exit 1
+          }
+          
+          Write-Host ""
+          Write-Host "✅ Federated credentials verified successfully" -ForegroundColor Green
+
+      - name: Create Setup Summary
+        if: always()
+        run: |
+          "## 🔑 Azure OIDC Setup Summary" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          
+          $setupOidc = "${{ inputs.setupOidc }}"
+          $env = "${{ inputs.environment }}"
+          
+          if ($setupOidc -eq "true") {
+            "**OIDC App Registration**: Created/Updated" >> $env:GITHUB_STEP_SUMMARY
+            "**Environment Scope**: ``$env``" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "| Output | Value |" >> $env:GITHUB_STEP_SUMMARY
+            "|--------|-------|" >> $env:GITHUB_STEP_SUMMARY
+            "| Client ID | ``${{ steps.oidc-setup.outputs.clientId }}`` |" >> $env:GITHUB_STEP_SUMMARY
+            "| Tenant ID | ``${{ steps.oidc-setup.outputs.tenantId }}`` |" >> $env:GITHUB_STEP_SUMMARY
+            "| Subscription ID | ``${{ steps.oidc-setup.outputs.subscriptionId }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          } else {
+            "**OIDC Setup**: Skipped (using existing credentials)" >> $env:GITHUB_STEP_SUMMARY
+          }
+          "" >> $env:GITHUB_STEP_SUMMARY
+
+  configure-github-secrets:
+    name: Configure GitHub Secrets
+    needs: [validate-inputs, setup-oidc]
+    if: |
+      !cancelled() &&
+      needs.validate-inputs.result == 'success' &&
+      needs.setup-oidc.result == 'success' &&
+      (inputs.configureSecrets || inputs.setupGitHubApp)
+    uses: ./.github/workflows/configure-github-secrets.yml
+    secrets: inherit
+    with:
+      environment: ${{ inputs.environment }}
+      setupGitHubApp: ${{ inputs.setupGitHubApp }}
+      githubAppName: ${{ inputs.githubAppName }}
+      configureSecrets: ${{ inputs.configureSecrets }}
+      clientId: ${{ needs.setup-oidc.outputs.clientId }}
+      tenantId: ${{ needs.setup-oidc.outputs.tenantId }}
+      subscriptionId: ${{ needs.setup-oidc.outputs.subscriptionId }}
+
+  summary:
+    name: Initial Setup Summary
+    if: always() && github.event_name == 'workflow_dispatch'
+    needs: [validate-inputs, setup-oidc, configure-github-secrets]
+    runs-on: windows-latest
+    steps:
+      - name: Generate Summary
+        run: |
+          "## 📊 Azure Initial Setup Summary" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          
+          "### 📋 User Configuration" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "| Parameter | Value |" >> $env:GITHUB_STEP_SUMMARY
+          "|-----------|-------|" >> $env:GITHUB_STEP_SUMMARY
+          "| 🎯 Environment | ``${{ inputs.environment }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| ℹ️ [Phase 0] Setup GitHub App | ``${{ inputs.setupGitHubApp }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| 🔑 [Phase 1a] Setup OIDC | ``${{ inputs.setupOidc }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| 🔑 [Phase 1b] Configure Secrets | ``${{ inputs.configureSecrets }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          
+          "### ✅ Job Execution Results" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+
+          $validateInputs = "${{ needs.validate-inputs.result }}"
+          $setupOidc = "${{ needs.setup-oidc.result }}"
+          $configSecrets = "${{ needs.configure-github-secrets.result }}"
+
+          "| Step | Status |" >> $env:GITHUB_STEP_SUMMARY
+          "|------|--------|" >> $env:GITHUB_STEP_SUMMARY
+
+          if ($validateInputs -ne "") {
+            $icon = if ($validateInputs -eq "success") { "✅" } elseif ($validateInputs -eq "skipped") { "⏭️" } else { "❌" }
+            "| Validate Inputs | $icon $validateInputs |" >> $env:GITHUB_STEP_SUMMARY
+          }
+
+          if ($setupOidc -ne "") {
+            $icon = if ($setupOidc -eq "success") { "✅" } elseif ($setupOidc -eq "skipped") { "⏭️" } else { "❌" }
+            "| Setup OIDC | $icon $setupOidc |" >> $env:GITHUB_STEP_SUMMARY
+          }
+
+          if ($configSecrets -ne "") {
+            $icon = if ($configSecrets -eq "success") { "✅" } elseif ($configSecrets -eq "skipped") { "⏭️" } else { "❌" }
+            "| Configure Secrets | $icon $configSecrets |" >> $env:GITHUB_STEP_SUMMARY
+          }
+
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "### 🏗️ What Gets Created" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "| Resource | Automated? | Trigger |" >> $env:GITHUB_STEP_SUMMARY
+          "|----------|-----------|---------|" >> $env:GITHUB_STEP_SUMMARY
+          "| 🏢 Microsoft Entra ID App Registration | ✅ Yes | Setup OIDC = true |" >> $env:GITHUB_STEP_SUMMARY
+          "| 🔑 Azure Federated Credentials (OIDC) | ✅ Yes | Setup OIDC = true |" >> $env:GITHUB_STEP_SUMMARY
+          "| 🌐 GitHub Environments (dev/staging/prod) | ✅ Yes | Configure Secrets = true |" >> $env:GITHUB_STEP_SUMMARY
+          "| 🔐 GitHub OIDC Secrets (AZUREAPPSERVICE_*) | ✅ Yes | Configure Secrets = true |" >> $env:GITHUB_STEP_SUMMARY
+          "| 🤖 GitHub App (APP_ID + APP_PRIVATE_KEY) | ⚠️ Manual | One-time setup required |" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+
+          # Determine next steps based on current state
+          $ranPhase0     = "${{ inputs.setupGitHubApp }}" -eq "true"
+          $hasAppId      = "${{ secrets.APP_ID }}" -ne ""
+          $hasPrivateKey = "${{ secrets.APP_PRIVATE_KEY }}" -ne ""
+          $appSecretsOk  = $hasAppId -and $hasPrivateKey
+          $appName       = "${{ inputs.githubAppName }}"
+          $appSlug       = $appName.ToLower() -replace '[^a-z0-9]', '-'
+          $secretsUrl    = "https://github.com/${{ github.repository }}/settings/secrets/actions"
+
+          if ($ranPhase0 -and -not $appSecretsOk) {
+            "## 🔴 Action Required — Phase 0 Complete, Manual Step Needed" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "> **Phase 0 instructions have been shown. Before Phase 1a/1b can run you must complete the two steps below.**" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "**GitHub App Name configured**: ``$appName``" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "---" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "### Step 1 — Create GitHub App (if not already done)" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "Create a GitHub App named **\`$appName\`** with the required permissions:" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "- **Option A** (Recommended): ``.\scripts\setup-github-app-from-manifest.ps1``" >> $env:GITHUB_STEP_SUMMARY
+            "- **Option B** (Manual): [Create at github.com/settings/apps/new](https://github.com/settings/apps/new)" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "> 📖 **Detailed guide**: [QUICK-SETUP-GITHUB-APP.md](../blob/${{ github.ref_name }}/Documentation/03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md)" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "---" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "### Step 2 — Add Repository Secrets" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "Go to **[Settings → Secrets and variables → Actions]($secretsUrl)** and add:" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "| Secret Name | Where to find the value |" >> $env:GITHUB_STEP_SUMMARY
+            "|-------------|------------------------|" >> $env:GITHUB_STEP_SUMMARY
+            "| \`APP_ID\` | Numeric App ID on the app's **General** settings page: \`https://github.com/settings/apps/$appSlug\` |" >> $env:GITHUB_STEP_SUMMARY
+            "| \`APP_PRIVATE_KEY\` | Full contents of the \`.pem\` file downloaded when generating the private key (include the \`-----BEGIN RSA PRIVATE KEY-----\` header) |" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "**How to add each secret**: Click **New repository secret**, enter Name + Value from table above, then click **Add secret**." >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "---" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "### Step 3 — Re-run This Workflow (Phase 1a + 1b)" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "Once the two secrets are saved, **[run this workflow again](https://github.com/${{ github.repository }}/actions/workflows/azure-initial-setup.yml)** with:" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "| Input | Value |" >> $env:GITHUB_STEP_SUMMARY
+            "|-------|-------|" >> $env:GITHUB_STEP_SUMMARY
+            "| 🎯 Environment | \`${{ inputs.environment }}\` |" >> $env:GITHUB_STEP_SUMMARY
+            "| 🔑 Setup Azure OIDC | \`true\` |" >> $env:GITHUB_STEP_SUMMARY
+            "| ℹ️ Setup GitHub App | \`false\` (already done) |" >> $env:GITHUB_STEP_SUMMARY
+            "| 🔑 Configure GitHub Secrets | \`true\` |" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "> ✅ The workflow will then automatically configure all \`AZUREAPPSERVICE_*\` environment secrets — **no further manual steps are needed**." >> $env:GITHUB_STEP_SUMMARY
+          } elseif ($appSecretsOk) {
+            "## ✅ Phase 0 Complete — GitHub App Secrets Configured" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "**GitHub App Name**: ``$appName``" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "\`APP_ID\` and \`APP_PRIVATE_KEY\` are present. The workflow can use the GitHub App for automated secret management." >> $env:GITHUB_STEP_SUMMARY
+          }
+
+          $allSuccess = ($setupOidc -eq "success" -or $setupOidc -eq "skipped") -and ($configSecrets -eq "success" -or $configSecrets -eq "skipped")
+
+          if ($allSuccess -and $appSecretsOk) {
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "---" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "## ✅ Initial Setup Complete — Next Steps" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "OIDC credentials and GitHub secrets are configured. You can now use the **Azure Bootstrap & Deploy** workflow:" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "1. Go to **[Actions → Azure Bootstrap & Deploy](https://github.com/${{ github.repository }}/actions/workflows/azure-bootstrap.yml)**" >> $env:GITHUB_STEP_SUMMARY
+            "2. Set **Use workflow from** = branch matching your target environment (dev→dev, staging→staging, main→prod)" >> $env:GITHUB_STEP_SUMMARY
+            "3. Select your target **Environment**" >> $env:GITHUB_STEP_SUMMARY
+            "4. Check ✅ **Bootstrap Infrastructure**, ✅ **Deploy API**, ✅ **Deploy UI**" >> $env:GITHUB_STEP_SUMMARY
+            "5. Click **Run workflow**" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+          }

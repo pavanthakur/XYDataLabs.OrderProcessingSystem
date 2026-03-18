@@ -1,12 +1,23 @@
 # Azure Bootstrap Setup Workflow
 
-## Overview
+> **⚠️ This document is superseded.** The workflow has been split into two focused workflows:
+>
+> - **[Azure Initial Setup](README-AZURE-INITIAL-SETUP.md)** (`azure-initial-setup.yml`) — Phase 0 (GitHub App), Phase 1a (OIDC), Phase 1b (secrets)
+> - **[Azure Bootstrap & Deploy](README-AZURE-BOOTSTRAP.md)** (`azure-bootstrap.yml`) — Phase 2 (infrastructure), API/UI deploy, Phase X (cleanup)
+>
+> See those READMEs for current documentation.
 
-The **Azure Bootstrap Setup** workflow (`azure-bootstrap.yml`) is the single entry point for all first-time Azure setup. It sequences Phase 0 prerequisites, Phase 1 OIDC and secrets setup, and Phase 2 infrastructure provisioning in the correct dependency order.
+---
+
+*The content below is preserved for historical reference but may be outdated.*
+
+## Overview (Historical)
+
+The **Azure Bootstrap Setup** workflow (`azure-bootstrap.yml`) was the single entry point for all first-time Azure setup. It sequenced Phase 0 prerequisites, Phase 1 OIDC and secrets setup, and Phase 2 infrastructure provisioning in the correct dependency order. **This has been split into two workflows — see above.**
 
 ## Workflow Name
 
-**Name:** `Azure Bootstrap Setup`
+**Name:** `Azure Bootstrap Setup` (now split into `Azure Initial Setup` + `Azure Bootstrap & Deploy`)
 
 This workflow is designed for manual execution via GitHub Actions UI.
 

@@ -31,30 +31,45 @@ Total GitHub config: ~1,092 lines in main workflow
 
 ## After: Separated Workflows
 
-### Main Bootstrap Workflow
+The original monolithic `azure-bootstrap.yml` was first split to extract GitHub
+configuration into `configure-github-secrets.yml`, then **further split** into two
+top-level workflows to fully separate one-time setup from day-to-day operations:
+
+### Azure Initial Setup (one-time)
 
 ```
-azure-bootstrap.yml (~2,900 lines)
-├── check-trigger
+azure-initial-setup.yml (~767 lines)
 ├── validate-inputs
-├── setup-oidc
+├── setup-github-app             ← Phase 0
+├── setup-oidc                   ← Phase 1a
 │   └── outputs: clientId, tenantId, subscriptionId
-├── configure-github-secrets    ← workflow_call (16 lines)
+├── configure-github-secrets     ← Phase 1b (workflow_call)
 │   └── calls: configure-github-secrets.yml
 │       └── passes: environment, OIDC outputs, flags
-├── bootstrap-dev
-├── bootstrap-staging
-├── bootstrap-prod
-├── cleanup-dev                ← Phase X (⚠️ destructive)
-├── cleanup-staging             ← Phase X (⚠️ destructive)
-├── cleanup-prod               ← Phase X (⚠️ destructive)
-├── summary
-└── trigger-deployments
+└── summary
 
-Main workflow: Cleaner, focused on orchestration
+Run once per repository. Covers GitHub App + OIDC + secrets.
 ```
 
-### New Dedicated Workflow
+### Azure Bootstrap & Deploy (day-to-day)
+
+```
+azure-bootstrap.yml (significantly reduced)
+├── check-trigger
+├── validate-inputs
+├── bootstrap-dev                ← Phase 2
+├── bootstrap-staging            ← Phase 2
+├── bootstrap-prod               ← Phase 2
+├── cleanup-dev                  ← Phase X (⚠️ destructive)
+├── cleanup-staging              ← Phase X (⚠️ destructive)
+├── cleanup-prod                 ← Phase X (⚠️ destructive)
+├── summary
+└── trigger-deployments          ← Dispatches API/UI deploy workflows
+
+Day-to-day: infrastructure provisioning + app deployment.
+```
+
+### Dedicated GitHub Secrets Workflow
 
 ```
 configure-github-secrets.yml (670 lines)
@@ -72,7 +87,7 @@ configure-github-secrets.yml (670 lines)
 
 Can be triggered:
   - Manually (workflow_dispatch)
-  - From bootstrap (workflow_call)
+  - From initial-setup (workflow_call)
   - From other workflows
 ```
 
@@ -80,20 +95,22 @@ Can be triggered:
 
 ## Architecture Flow
 
-### Integrated Execution (Bootstrap)
+### Integrated Execution (Initial Setup — one-time)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                   azure-bootstrap.yml                        │
+│                azure-initial-setup.yml                       │
 ├─────────────────────────────────────────────────────────────┤
 │                                                               │
 │  1. validate-inputs                                          │
 │       ↓                                                       │
-│  2. setup-oidc                                               │
+│  2. setup-github-app (Phase 0)                               │
+│       ↓                                                       │
+│  3. setup-oidc (Phase 1a)                                    │
 │       ├─ Creates Azure OIDC app                              │
 │       └─ Outputs: clientId, tenantId, subscriptionId        │
 │       ↓                                                       │
-│  3. configure-github-secrets (workflow_call)                 │
+│  4. configure-github-secrets (Phase 1b, workflow_call)       │
 │       │                                                       │
 │       ├──→ ┌────────────────────────────────────────┐       │
 │       │    │  configure-github-secrets.yml          │       │
@@ -105,13 +122,31 @@ Can be triggered:
 │       │                                                       │
 │       └─ Returns: setup-result, secrets-result               │
 │       ↓                                                       │
-│  4. bootstrap-dev/staging/prod                               │
-│       ↓                                                       │
-│  5. cleanup-dev/staging/prod (⚠️ Phase X, if enabled)        │
-│       ↓                                                       │
-│  6. summary                                                   │
+│  5. summary                                                   │
 │                                                               │
 └─────────────────────────────────────────────────────────────┘
+```
+
+### Integrated Execution (Bootstrap & Deploy — day-to-day)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   azure-bootstrap.yml                        │
+├─────────────────────────────────────────────────────────────┤
+│                                                               │
+│  1. validate-inputs                                          │
+│       ↓                                                       │
+│  2. bootstrap-dev/staging/prod (Phase 2)                     │
+│       ↓                                                       │
+│  3. cleanup-dev/staging/prod (⚠️ Phase X, if enabled)        │
+│       ↓                                                       │
+│  4. summary                                                   │
+│       ↓                                                       │
+│  5. trigger-deployments (dispatches API/UI workflows)        │
+│                                                               │
+└─────────────────────────────────────────────────────────────┘
+
+Prerequisite: Azure Initial Setup must have run at least once.
 ```
 
 ### Independent Execution (Troubleshooting)
@@ -149,10 +184,10 @@ Can be triggered:
 
 ## Data Flow
 
-### Context Passing (Bootstrap → GitHub Secrets)
+### Context Passing (Initial Setup → GitHub Secrets)
 
 ```
-azure-bootstrap.yml
+azure-initial-setup.yml
      │
      │ setup-oidc job outputs:
      ├─ clientId: "abc123..."
@@ -187,11 +222,11 @@ configure-github-secrets.yml
      ├─ secrets-result: success/failure
      └─ validation-result: success/failure
      │
-     ↓ Back to bootstrap
+     ↓ Back to initial-setup
      │
-azure-bootstrap.yml
+azure-initial-setup.yml
      │
-     └─ Downstream jobs check: needs.configure-github-secrets.result
+     └─ Summary job reports: setup-result, secrets-result
 ```
 
 ---
@@ -208,34 +243,33 @@ GitHub Actions UI:
         └── Hard to isolate GitHub config issues
 ```
 
-### After (Separated)
+### After (Separated — Two Top-Level Workflows)
 
 ```
 GitHub Actions UI:
-├── azure-bootstrap.yml
-│   └── Main workflow run
+├── azure-initial-setup.yml          ← One-time (Phase 0/1a/1b)
+│   └── Setup workflow run
+│       ├── setup-github-app
 │       ├── setup-oidc
-│       ├── configure-github-secrets ← Calls workflow
-│       ├── bootstrap-dev
-│       └── ...
+│       ├── configure-github-secrets ← Calls reusable workflow
+│       └── summary
 │
-├── configure-github-secrets.yml
-    └── Separate workflow run (nested)
-        ├── setup-github-app
-        ├── configure-secrets
-        └── validate-configuration
-    
-OR (independent execution):
-
-├── configure-github-secrets.yml
-    └── Independent workflow run
+├── azure-bootstrap.yml               ← Day-to-day (Phase 2/X/Deploy)
+│   └── Bootstrap workflow run
+│       ├── bootstrap-dev/staging/prod
+│       ├── cleanup-dev/staging/prod
+│       ├── summary
+│       └── trigger-deployments
+│
+├── configure-github-secrets.yml       ← Reusable / standalone
+    └── Separate workflow run (nested or independent)
         ├── setup-github-app
         ├── configure-secrets
         └── validate-configuration
 ```
 
 **Benefits:**
-- ✅ Clear separation in UI
+- ✅ Clear separation in UI — setup vs day-to-day
 - ✅ Easy to find GitHub config runs
 - ✅ Can debug independently
 - ✅ Similar to API/UI deployment tracking
@@ -246,8 +280,8 @@ OR (independent execution):
 
 | Aspect | Before (Monolithic) | After (Separated) |
 |--------|-------------------|------------------|
-| **Lines of code** | 3,740 | 2,667 bootstrap + 670 config |
-| **GitHub config lines** | 1,092 in main | 670 in separate workflow |
+| **Lines of code** | 3,740 | ~767 initial-setup + reduced bootstrap + 670 config |
+| **GitHub config lines** | 1,092 in main | 670 in separate workflow + ~767 in initial-setup |
 | **Readability** | ❌ Long, complex | ✅ Modular, focused |
 | **Independent execution** | ❌ No | ✅ Yes |
 | **Troubleshooting** | ❌ Difficult | ✅ Easy |
@@ -277,7 +311,7 @@ OR (independent execution):
 - Easy to find and review GitHub config runs
 
 ### 4. Maintainability
-- Bootstrap workflow reduced by 29%
+- One-time setup fully separated from day-to-day operations
 - Each workflow has focused responsibility
 - Easier to debug and fix issues
 
@@ -316,14 +350,19 @@ OR (independent execution):
 
 ### Pattern 1: First-Time Complete Setup
 ```
-1. Run azure-bootstrap.yml
-   - setupOidc: true
-   - setupGitHubApp: true (shows guidance)
-   - configureSecrets: true
-   - bootstrapInfra: true
+1. Run azure-initial-setup.yml
+   - setupGitHubApp: true (Phase 0 — shows guidance)
+   - setupOidc: true (Phase 1a)
+   - configureSecrets: true (Phase 1b)
 
 → Automatically calls configure-github-secrets.yml
-→ Complete setup in one workflow run
+→ OIDC + secrets configured
+
+2. Run azure-bootstrap.yml
+   - bootstrapInfra: true (Phase 2)
+   - deployApi / deployUi: true
+
+→ Provisions infrastructure and deploys apps
 ```
 
 ### Pattern 2: Troubleshoot Secret Configuration
@@ -362,9 +401,9 @@ OR (independent execution):
 
 ---
 
-**Document Version**: 1.0
-**Last Updated**: 2026-01-27
-**Migration Completed**: ✅ Yes
+**Document Version**: 2.0
+**Last Updated**: 2026-03-18
+**Migration Completed**: ✅ Yes (further split: initial-setup + bootstrap & deploy)
 
 ---
 
