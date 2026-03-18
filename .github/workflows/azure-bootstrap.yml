@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: '🎯 Environment | Convention: set "Use workflow from" branch to match (dev→dev, staging→staging, main→prod)'
+        description: '🎯 Environment | ⚠️ IMPORTANT: set "Use workflow from" branch to match (dev→dev, staging→staging, main→prod)'
         required: true
         type: choice
         options:
@@ -137,18 +137,23 @@ jobs:
           Write-Host "    Expected branch: $expectedBranch" -ForegroundColor Gray
 
           if ($env -ne "all" -and $currentBranch -ne $expectedBranch) {
-            # For manual dispatch the user explicitly selected the environment — treat as advisory only.
-            # A mismatch is common when bootstrapping staging/prod before the feature branch is merged.
-            Write-Host "`n  ⚠️  BRANCH/ENVIRONMENT ADVISORY" -ForegroundColor Yellow
-            Write-Host "     Running from branch '$currentBranch' targeting environment '$env'" -ForegroundColor Yellow
-            Write-Host "     Convention: '$expectedBranch' branch → '$env' environment" -ForegroundColor Gray
+            Write-Host "`n  ╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Red
+            Write-Host "  ║         BRANCH MISMATCH — BOOTSTRAP BLOCKED                   ║" -ForegroundColor Red
+            Write-Host "  ╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Red
             Write-Host "" -ForegroundColor Gray
-            Write-Host "  📋 Branch → Environment Convention:" -ForegroundColor Gray
+            Write-Host "  Current branch  : $currentBranch" -ForegroundColor Red
+            Write-Host "  Target env       : $env" -ForegroundColor Red
+            Write-Host "  Required branch  : $expectedBranch" -ForegroundColor Red
+            Write-Host "" -ForegroundColor Gray
+            Write-Host "  📋 Branch → Environment Convention:" -ForegroundColor Cyan
             Write-Host "     dev branch      → dev environment" -ForegroundColor Gray
             Write-Host "     staging branch  → staging environment" -ForegroundColor Gray
             Write-Host "     main branch     → prod environment" -ForegroundColor Gray
             Write-Host "" -ForegroundColor Gray
-            Write-Host "  ✅ Proceeding — manual workflow_dispatch allows cross-branch targeting." -ForegroundColor Green
+            Write-Host "  TO FIX: Switch to the '$expectedBranch' branch before running this workflow." -ForegroundColor Yellow
+            Write-Host "" -ForegroundColor Gray
+            Write-Error "Branch mismatch: running from '$currentBranch' but targeting '$env' (expected '$expectedBranch' branch)."
+            exit 1
           } else {
             Write-Host "  ✅ Branch matches target environment" -ForegroundColor Green
           }
@@ -2322,6 +2327,11 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
+            const targetEnv = process.env.TARGET_ENV;
+            if (targetEnv === 'all') {
+              core.notice('ℹ️ environment=all is infrastructure-only. Deploy each environment separately from its own branch.');
+              return;
+            }
             const result = await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -2329,7 +2339,7 @@ jobs:
               ref: context.ref
             });
             
-            core.notice(`🚀 API deployment triggered for environment: ${process.env.TARGET_ENV}`);
+            core.notice(`🚀 API deployment triggered for environment: ${targetEnv}`);
             core.notice(`📋 Branch: ${context.ref.replace('refs/heads/', '')}`);
             core.notice(`🔗 View workflow: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/workflows/deploy-api-to-azure.yml`);
 
@@ -2341,6 +2351,11 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
+            const targetEnv = process.env.TARGET_ENV;
+            if (targetEnv === 'all') {
+              core.notice('ℹ️ environment=all is infrastructure-only. Deploy each environment separately from its own branch.');
+              return;
+            }
             const result = await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -2348,7 +2363,7 @@ jobs:
               ref: context.ref
             });
             
-            core.notice(`🚀 UI deployment triggered for environment: ${process.env.TARGET_ENV}`);
+            core.notice(`🚀 UI deployment triggered for environment: ${targetEnv}`);
             core.notice(`📋 Branch: ${context.ref.replace('refs/heads/', '')}`);
             core.notice(`🔗 View workflow: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/workflows/deploy-ui-to-azure.yml`);
 
