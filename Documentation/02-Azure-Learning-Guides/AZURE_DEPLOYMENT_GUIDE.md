@@ -25,7 +25,7 @@ This guide documents the complete setup process for deploying the Order Processi
   4. Configure GitHub secrets
   5. Bootstrap infrastructure (default: ✅ true)
   6. Cleanup infrastructure (⚠️ destructive, optional)
-- ✅ **Cleanup Jobs**: Phase 4 cleanup can delete all resources per environment
+- ✅ **Cleanup Jobs**: Phase X cleanup can delete all resources per environment
   - Stops and deletes App Services, then deletes Resource Group
   - Guarded by `cleanupInfra` checkbox (default: off)
 

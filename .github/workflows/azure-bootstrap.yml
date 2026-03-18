@@ -53,7 +53,7 @@ on:
         type: boolean
         default: false
       cleanupInfra:
-        description: '🗑️ Phase 4 (DESTRUCTIVE) — Cleanup Infrastructure | Deletes UI App, API App, then the entire Resource Group. ⚠️ IRREVERSIBLE — use only for teardown/reset. Do NOT combine with Bootstrap.'
+        description: '🗑️ Phase X (DESTRUCTIVE) — Cleanup Infrastructure | Deletes UI App, API App, then the entire Resource Group. ⚠️ IRREVERSIBLE — use only for teardown/reset. Do NOT combine with Bootstrap.'
         required: true
         type: boolean
         default: false
@@ -446,7 +446,7 @@ jobs:
             $triggers = @()
             if ($doConfigSecrets) { $triggers += 'Phase 1b' }
             if ($doBootstrap)     { $triggers += 'Phase 2' }
-            if ($doCleanup)       { $triggers += 'Phase 4' }
+            if ($doCleanup)       { $triggers += 'Phase X' }
             " (auto-triggered by $($triggers -join ' + '))"
           } else { '' }
           Write-Host "  Phase 1a — Setup Azure OIDC        : $phase1aIcon$phase1aNote" -ForegroundColor $(if ($effectiveSetupOidc) { 'Cyan' } else { 'DarkGray' })
@@ -526,12 +526,12 @@ jobs:
              }
            }
 
-          # Phase 4: Cleanup Infrastructure — DESTRUCTIVE
+          # Phase X: Cleanup Infrastructure — DESTRUCTIVE
           # Needs Azure OIDC to login (same as Phase 2)
-          $phase4Prereq = $effectiveSetupOidc -or $oidcConfigured
-          $phase4Icon   = if ($doCleanup) { '🔴 WILL RUN (⚠️ DESTRUCTIVE — IRREVERSIBLE)' } else { '⏭️  SKIPPED' }
-          $phase4Ready  = -not $doCleanup -or $phase4Prereq
-          Write-Host "  Phase 4 — Cleanup Infrastructure   : $phase4Icon" -ForegroundColor $(if ($doCleanup) { 'Red' } else { 'DarkGray' })
+          $phaseXPrereq = $effectiveSetupOidc -or $oidcConfigured
+          $phaseXIcon   = if ($doCleanup) { '🔴 WILL RUN (⚠️ DESTRUCTIVE — IRREVERSIBLE)' } else { '⏭️  SKIPPED' }
+          $phaseXReady  = -not $doCleanup -or $phaseXPrereq
+          Write-Host "  Phase X — Cleanup Infrastructure   : $phaseXIcon" -ForegroundColor $(if ($doCleanup) { 'Red' } else { 'DarkGray' })
           if ($doCleanup) {
             Write-Host "             └─ ⚠️  Deletes: UI App Service, API App Service, then entire Resource Group" -ForegroundColor Red
             Write-Host "             └─ All SQL, Key Vault, App Insights, ASP removed with Resource Group" -ForegroundColor Red
@@ -550,7 +550,7 @@ jobs:
           Write-Host ""
 
           # ── Overall readiness gate ──────────────────────────────────────
-          $allReady = $phase1bReady -and $phase2Ready -and $phase4Ready -and $deployReady
+          $allReady = $phase1bReady -and $phase2Ready -and $phaseXReady -and $deployReady
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
 
           if ($allReady) {
@@ -1795,15 +1795,15 @@ jobs:
             Write-Host "" -ForegroundColor Gray
             Write-Host "📋 Configuration:" -ForegroundColor Yellow
             Write-Host "  Branch: staging" -ForegroundColor Gray
-            Write-Host "  Environment: staging" -ForegroundColor Gray
+            Write-Host "  Environment: stg" -ForegroundColor Gray
             Write-Host "  Parameter File: infra/parameters/staging.json" -ForegroundColor Gray
-            Write-Host "  Resource Group: rg-orderprocessing-staging" -ForegroundColor Gray
+            Write-Host "  Resource Group: rg-orderprocessing-stg" -ForegroundColor Gray
             Write-Host "  OIDC Subject: repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/staging" -ForegroundColor Gray
             Write-Host "" -ForegroundColor Gray
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
             Write-Host ""
 
-            ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment staging
+            ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment stg
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
@@ -1859,11 +1859,11 @@ jobs:
             Write-Host ""
             Write-Host "📋 Configuration:" -ForegroundColor Yellow
             Write-Host "  Environment: staging" -ForegroundColor Gray
-            Write-Host "  Resource Group: rg-orderprocessing-staging" -ForegroundColor Gray
-            Write-Host "  SQL Server: orderprocessing-sql-staging" -ForegroundColor Gray
+            Write-Host "  Resource Group: rg-orderprocessing-stg" -ForegroundColor Gray
+            Write-Host "  SQL Server: orderprocessing-sql-stg" -ForegroundColor Gray
             Write-Host "  Database: OrderProcessingSystem_Staging" -ForegroundColor Gray
-            Write-Host "  API App: pavanthakur-orderprocessing-api-xyapp-staging" -ForegroundColor Gray
-            Write-Host "  UI App: pavanthakur-orderprocessing-ui-xyapp-staging" -ForegroundColor Gray
+            Write-Host "  API App: pavanthakur-orderprocessing-api-xyapp-stg" -ForegroundColor Gray
+            Write-Host "  UI App: pavanthakur-orderprocessing-ui-xyapp-stg" -ForegroundColor Gray
             Write-Host ""
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
             Write-Host ""
@@ -1991,7 +1991,7 @@ jobs:
             Write-Host ""
             Write-Host "📋 Configuration:" -ForegroundColor Yellow
             Write-Host "  Environment: staging" -ForegroundColor Gray
-            Write-Host "  SQL Server: orderprocessing-sql-staging.database.windows.net" -ForegroundColor Gray
+            Write-Host "  SQL Server: orderprocessing-sql-stg.database.windows.net" -ForegroundColor Gray
             Write-Host "  Database: OrderProcessingSystem_Staging" -ForegroundColor Gray
             Write-Host ""
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
@@ -2656,7 +2656,7 @@ jobs:
           retention-days: 30
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # PHASE 4 — CLEANUP JOBS (DESTRUCTIVE)
+  # PHASE X — CLEANUP JOBS (DESTRUCTIVE)
   # Deletes App Services individually, then the entire Resource Group.
   # Uses same OIDC credential pattern as bootstrap jobs.
   # ─────────────────────────────────────────────────────────────────────────────
@@ -2786,7 +2786,7 @@ jobs:
           Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
           Write-Host ""
 
-          $env         = 'staging'
+          $env         = 'stg'
           $baseName    = 'orderprocessing'
           $githubOwner = 'pavanthakur'
           $rg          = "rg-$baseName-$env"
@@ -2943,7 +2943,7 @@ jobs:
           "|  [Phase 2] Bootstrap Infrastructure | ``${{ inputs.bootstrapInfra }}`` |" >> $env:GITHUB_STEP_SUMMARY
           "| 🔄 [Phase 2] Deploy API | ``${{ inputs.deployApi }}`` |" >> $env:GITHUB_STEP_SUMMARY
           "| 🔄 [Phase 2] Deploy UI | ``${{ inputs.deployUi }}`` |" >> $env:GITHUB_STEP_SUMMARY
-          "| ⚠️ [Phase 4] Cleanup Infrastructure | ``${{ inputs.cleanupInfra }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| ⚠️ [Phase X] Cleanup Infrastructure | ``${{ inputs.cleanupInfra }}`` |" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
           
           "### ✅ Job Execution Results" >> $env:GITHUB_STEP_SUMMARY

@@ -54,8 +54,11 @@ Write-Host "Database Migrations - Azure SQL" -ForegroundColor White
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
+# Map environment name to Azure resource suffix (staging uses abbreviated 'stg' to match bootstrap)
+$envSuffix = switch ($Environment) { 'staging' { 'stg' } default { $Environment } }
+
 # Generate resource names
-$sqlServerName = "$BaseName-sql-$Environment"
+$sqlServerName = "$BaseName-sql-$envSuffix"
 $dbName = "OrderProcessingSystem_" + (Get-Culture).TextInfo.ToTitleCase($Environment)
 $fullyQualifiedDomain = "$sqlServerName.database.windows.net"
 
@@ -173,8 +176,8 @@ Write-Host ""
 
 Write-Host "Next Steps:" -ForegroundColor Yellow
 $appPrefix = if ($Owner) { "$Owner-$BaseName" } else { $BaseName }
-Write-Host "  1. Test API: https://$appPrefix-api-xyapp-$Environment.azurewebsites.net/swagger"
-Write-Host "  2. Test UI:  https://$appPrefix-ui-xyapp-$Environment.azurewebsites.net"
+Write-Host "  1. Test API: https://$appPrefix-api-xyapp-$envSuffix.azurewebsites.net/swagger"
+Write-Host "  2. Test UI:  https://$appPrefix-ui-xyapp-$envSuffix.azurewebsites.net"
 Write-Host "  3. Query database in Azure Portal -> Query editor"
 Write-Host ""
 

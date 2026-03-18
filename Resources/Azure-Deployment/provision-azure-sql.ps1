@@ -42,13 +42,16 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "Azure SQL Database Provisioning" -ForegroundColor White
 Write-Host "========================================" -ForegroundColor Cyan
 
+# Map environment name to Azure resource suffix (staging uses abbreviated 'stg' to match bootstrap)
+$envSuffix = switch ($Environment) { 'staging' { 'stg' } default { $Environment } }
+
 # Generate resource names (must match bootstrap-enterprise-infra.ps1)
-$rgName = "rg-$BaseName-$Environment"
-$sqlServerName = "$BaseName-sql-$Environment"
+$rgName = "rg-$BaseName-$envSuffix"
+$sqlServerName = "$BaseName-sql-$envSuffix"
 $dbName = "OrderProcessingSystem_" + (Get-Culture).TextInfo.ToTitleCase($Environment)
 # Prepend GitHub owner to webapp names for global uniqueness (matches bootstrap script)
-$apiAppName = "$GitHubOwner-$BaseName-api-xyapp-$Environment"
-$uiAppName = "$GitHubOwner-$BaseName-ui-xyapp-$Environment"
+$apiAppName = "$GitHubOwner-$BaseName-api-xyapp-$envSuffix"
+$uiAppName = "$GitHubOwner-$BaseName-ui-xyapp-$envSuffix"
 
 Write-Host ""
 Write-Host "Configuration:" -ForegroundColor Yellow

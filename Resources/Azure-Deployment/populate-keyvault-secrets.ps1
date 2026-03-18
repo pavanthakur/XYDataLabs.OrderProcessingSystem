@@ -94,12 +94,15 @@ if ([string]::IsNullOrWhiteSpace($GitHubOwner)) {
     exit 1
 }
 
+# Map environment name to Azure resource suffix (staging uses abbreviated 'stg' to match bootstrap)
+$envSuffix = switch ($Environment) { 'staging' { 'stg' } default { $Environment } }
+
 # Resource names
-$rgName = "rg-$BaseName-$Environment"
+$rgName = "rg-$BaseName-$envSuffix"
 # Shorten base name for Key Vault (max 24 chars total)
 $shortBaseName = $BaseName.Substring(0, [Math]::Min(15, $BaseName.Length))
-$kvName = "kv-$shortBaseName-$Environment"
-$aiName = "ai-$BaseName-$Environment"
+$kvName = "kv-$shortBaseName-$envSuffix"
+$aiName = "ai-$BaseName-$envSuffix"
 
 Write-Host "📋 Configuration:" -ForegroundColor Yellow
 Write-Host "  Environment: $Environment" -ForegroundColor Gray
@@ -253,8 +256,8 @@ try {
     
     # Set KEY_VAULT_NAME environment variable on App Services
     Write-Host "⚙️  Setting KEY_VAULT_NAME environment variable on App Services..." -ForegroundColor Cyan
-    $apiAppName = "$GitHubOwner-$BaseName-api-xyapp-$Environment"
-    $uiAppName = "$GitHubOwner-$BaseName-ui-xyapp-$Environment"
+    $apiAppName = "$GitHubOwner-$BaseName-api-xyapp-$envSuffix"
+    $uiAppName = "$GitHubOwner-$BaseName-ui-xyapp-$envSuffix"
     
     # Set on API App
     try {

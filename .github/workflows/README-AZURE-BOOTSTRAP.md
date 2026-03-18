@@ -80,7 +80,7 @@ See [Phase 0 in the Quick Start Guide](../../Documentation/QUICK-START-AZURE-BOO
 | `bootstrapInfra` | boolean | `true` | **Phase 2** — Provisions Resource Group, App Service, SQL, Key Vault. |
 | `deployApi` | boolean | `false` | **Phase 2 optional** — Deploys API code after bootstrap. |
 | `deployUi` | boolean | `false` | **Phase 2 optional** — Deploys UI code after bootstrap. |
-| `cleanupInfra` | boolean | `false` | **Phase 4 (DESTRUCTIVE)** — Deletes UI App, API App, then the entire Resource Group. Irreversible. |
+| `cleanupInfra` | boolean | `false` | **Phase X (DESTRUCTIVE)** — Deletes UI App, API App, then the entire Resource Group. Irreversible. |
 
 ---
 
@@ -167,7 +167,7 @@ Step 3: az account show — verify login succeeded before making changes
 - Assigns Contributor RBAC to the OIDC service principal
 - Dev, Staging, and Prod jobs run in parallel when `environment=all`
 
-### 5. `cleanup-dev` / `cleanup-staging` / `cleanup-prod` (Phase 4 — DESTRUCTIVE)
+### 5. `cleanup-dev` / `cleanup-staging` / `cleanup-prod` (Phase X — DESTRUCTIVE)
 **Runs when**: `cleanupInfra=true` AND environment matches  
 **Needs**: `validate-inputs`, `setup-oidc`, `configure-github-secrets`
 
@@ -324,7 +324,7 @@ az group list --query "[?starts_with(name, 'rg-orderprocessing')].name"
 | Phase 1a (re-run) | `azure/login@v2` (OIDC) | ❌ No — fully automated |
 | Phase 1b | GitHub App installation token | ❌ No — auto-generated |
 | Phase 2 (bootstrap) | `azure/login@v2` (OIDC) | ❌ No — fully automated |
-| Phase 4 (cleanup) | `azure/login@v2` (OIDC) | ❌ No — fully automated |
+| Phase X (cleanup) | `azure/login@v2` (OIDC) | ❌ No — fully automated |
 
 No passwords, PATs, or certificates are stored. Azure authentication uses OIDC token exchange.
 
@@ -408,7 +408,7 @@ All three environments receive the same credentials (they all point to the same 
             ▼                                  ▼                          ▼
  ┌──────────────────┐             ┌──────────────────┐      ┌───────────────────────┐
  │  cleanup-dev     │             │ cleanup-staging   │      │  cleanup-prod         │
- │  (Phase 4 ⚠️)    │             │  (Phase 4 ⚠️)     │      │  (Phase 4 ⚠️)         │
+ │  (Phase X ⚠️)    │             │  (Phase X ⚠️)     │      │  (Phase X ⚠️)         │
  │  DESTRUCTIVE     │             │  DESTRUCTIVE      │      │  DESTRUCTIVE          │
  └────────┬─────────┘             └────────┬──────────┘      └────────┬──────────────┘
           │                                │                          │

@@ -30,11 +30,14 @@ Write-Host ""
 Write-Host "Environment: $Environment" -ForegroundColor Yellow
 Write-Host ""
 
+# Map environment name to Azure resource suffix (staging uses abbreviated 'stg' to match bootstrap)
+$envSuffix = switch ($Environment) { 'staging' { 'stg' } default { $Environment } }
+
 # Resource names
-$rgName = "rg-$BaseName-$Environment"
-$aiName = "ai-$BaseName-$Environment"
-$apiAppName = "$GitHubOwner-$BaseName-api-xyapp-$Environment"
-$uiAppName = "$GitHubOwner-$BaseName-ui-xyapp-$Environment"
+$rgName = "rg-$BaseName-$envSuffix"
+$aiName = "ai-$BaseName-$envSuffix"
+$apiAppName = "$GitHubOwner-$BaseName-api-xyapp-$envSuffix"
+$uiAppName = "$GitHubOwner-$BaseName-ui-xyapp-$envSuffix"
 
 $allChecks = $true
 

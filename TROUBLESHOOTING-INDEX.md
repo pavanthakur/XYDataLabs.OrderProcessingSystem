@@ -145,13 +145,13 @@ So: `APP_ID` + `APP_PRIVATE_KEY` are stored so the workflow can generate a short
 |-------|----------------------|----------------------|
 | **Phase 1b** | Needs credential **values** only | Stores clientId/tenantId/subscriptionId as `AZUREAPPSERVICE_*` GitHub secrets. Does NOT authenticate to Azure. |
 | **Phase 2** | Needs credentials to **authenticate** | Uses `azure/login@v2` with `AZUREAPPSERVICE_*` to log in to Azure and provision infrastructure. |
-| **Phase 4 (cleanup)** | Needs credentials to **authenticate** | Uses `azure/login@v2` with `AZUREAPPSERVICE_*` to log in to Azure and delete resources. |
+| **Phase X (cleanup)** | Needs credentials to **authenticate** | Uses `azure/login@v2` with `AZUREAPPSERVICE_*` to log in to Azure and delete resources. |
 | **Deploy (API/UI)** | Needs credentials to **authenticate** | Uses `azure/login@v2` with `AZUREAPPSERVICE_*` to log in to Azure and deploy applications. |
 
-**Phase 0 alone is NOT sufficient for Phase 1b, 2, or 4:**
+**Phase 0 alone is NOT sufficient for Phase 1b, 2, or X:**
 - Phase 0 only creates the GitHub App (for writing GitHub secrets).
 - Phase 1a creates the Azure identity and produces the `clientId`/`tenantId`/`subscriptionId` values that Phase 1b stores, and that Phase 2/4/deploy use to authenticate to Azure.
-- Phase 2, 4, and deploy will always fail without `AZUREAPPSERVICE_*` secrets (which Phase 1b writes).
+- Phase 2, X, and deploy will always fail without `AZUREAPPSERVICE_*` secrets (which Phase 1b writes).
 
 **Sequence required**: Phase 0 → Phase 1a → Phase 1b → Phase 2 → Phase 3
 
@@ -180,14 +180,14 @@ GitHub Actions jobs run on completely isolated, fresh virtual machine runners. A
 | `bootstrap-prod` (Phase 2) | ✅ Yes | `azure/login@v2` + Validate + Verify |
 | `deploy-api-to-azure` | ✅ Yes | `azure/login@v2` + credential gate |
 | `deploy-ui-to-azure` | ✅ Yes | `azure/login@v2` + credential gate |
-| `cleanup-dev/staging/prod` (Phase 4) | ✅ Yes | `azure/login@v2` + delete resources |
+| `cleanup-dev/staging/prod` (Phase X) | ✅ Yes | `azure/login@v2` + delete resources |
 
 **The "user input → Azure token" step exists only once (Phase 1a, first-time):**  
-The device-code step in Phase 1a (`az login --use-device-code`) is the single point where a human provides credentials to generate an Azure token. This runs exactly once. All subsequent logins — Phase 1a re-runs, Phase 2, Phase 4, deploy — are fully automated via OIDC.
+The device-code step in Phase 1a (`az login --use-device-code`) is the single point where a human provides credentials to generate an Azure token. This runs exactly once. All subsequent logins — Phase 1a re-runs, Phase 2, Phase X, deploy — are fully automated via OIDC.
 
 **Two login patterns used in the workflow:**
 - **Phase 2 (bootstrap jobs)**: 3-step — `Validate Azure Credentials` → `Azure Login (OIDC or Secrets)` → `Verify Azure Login`. This verifies credentials before AND after the login.
-- **Phase 4 (cleanup jobs)**: Same 3-step pattern as bootstrap.
+- **Phase X (cleanup jobs)**: Same 3-step pattern as bootstrap.
 - **Deploy jobs**: 2-step — `Check Azure Credentials` (sets a conditional flag) → `Login to Azure` (only runs if credentials are present). All subsequent deploy steps are gated on the same flag.
 
 See: [Documentation/QUICK-START-AZURE-BOOTSTRAP.md — Azure OIDC Login IS Commonized section](./Documentation/QUICK-START-AZURE-BOOTSTRAP.md)

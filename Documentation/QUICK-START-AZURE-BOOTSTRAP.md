@@ -22,7 +22,7 @@ It handles everything — Azure authentication, GitHub secrets, cloud infrastruc
 │  ├── deployApi       → API code deployed to Azure App Service               │
 │  └── deployUi        → UI code deployed to Azure App Service                │
 │                                                                             │
-│  PHASE 4 — Cleanup (⚠️ DESTRUCTIVE — deletes everything)                    │
+│  PHASE X — Cleanup (⚠️ DESTRUCTIVE — deletes everything)                    │
 │  └── cleanupInfra    → Deletes App Services, SQL, Key Vault, Resource Group │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -36,7 +36,7 @@ It handles everything — Azure authentication, GitHub secrets, cloud infrastruc
 | **Phase 0** | Once — before anything else | Manual only (no workflow run) |
 | **Phase 1** | Once — after Phase 0 is complete | `setupOidc` + `configureSecrets` |
 | **Phase 2** | Any time — infrastructure and deployments | `bootstrapInfra` + `deployApi` / `deployUi` |
-| **Phase 4** | When tearing down — ⚠️ destructive | `cleanupInfra` |
+| **Phase X** | When tearing down — ⚠️ destructive | `cleanupInfra` |
 
 ### What gets created automatically vs. what needs manual work
 
@@ -84,13 +84,13 @@ The bootstrap setup uses **two completely separate authentication systems** that
 
 | | |
 |---|---|
-| **Phase** | Phase 1a creates, Phase 1b stores, Phase 1a re-run + Phase 2 + Phase 4 use |
+| **Phase** | Phase 1a creates, Phase 1b stores, Phase 1a re-run + Phase 2 + Phase X use |
 | **What it is** | A Microsoft Entra ID App Registration with federated credentials configured for GitHub Actions |
 | **Credentials stored** | `AZUREAPPSERVICE_CLIENTID` + `AZUREAPPSERVICE_TENANTID` + `AZUREAPPSERVICE_SUBSCRIPTIONID` (written automatically by Phase 1b) |
 | **How it works at runtime** | `azure/login@v2` exchanges a GitHub-issued JWT for an Azure access token (passwordless, no stored passwords) |
 | **What it can do** | Authenticate to Azure and interact with Azure resources (create App Services, deploy code, etc.) |
 | **What it CANNOT do** | Write GitHub secrets or interact with the GitHub API |
-| **Used in** | Phase 1a (re-runs) + Phase 2 (bootstrap) + Phase 4 (cleanup) + deploy — **consistent `azure/login@v2` across all Azure-touching jobs** |
+| **Used in** | Phase 1a (re-runs) + Phase 2 (bootstrap) + Phase X (cleanup) + deploy — **consistent `azure/login@v2` across all Azure-touching jobs** |
 | **NOT used in** | Phase 0 or Phase 1b (first time) — those don't interact with Azure resources |
 
 ---
@@ -130,7 +130,7 @@ Phase 1a is the only job with **two different login paths** selected at runtime:
 
 ```
 IF AZUREAPPSERVICE_* secrets already exist (re-run):
-  → azure/login@v2   (same as Phase 2 and Phase 4 — fully automated, no user input)
+  → azure/login@v2   (same as Phase 2 and Phase X — fully automated, no user input)
 
 IF no existing credentials (first-time setup):
   → az login --use-device-code   ← USER ACTION REQUIRED
@@ -141,7 +141,7 @@ IF no existing credentials (first-time setup):
     • clientId / tenantId / subscriptionId are extracted and output to Phase 1b
 ```
 
-This device-code step is the **only place in the entire workflow where user input generates an Azure token**. It runs exactly once. Every subsequent Azure login (Phase 1a re-runs, Phase 2, Phase 4, deploy) is fully automated via OIDC.
+This device-code step is the **only place in the entire workflow where user input generates an Azure token**. It runs exactly once. Every subsequent Azure login (Phase 1a re-runs, Phase 2, Phase X, deploy) is fully automated via OIDC.
 
 #### Standard OIDC Login Pattern in Phase 2 (Bootstrap Jobs)
 
@@ -166,7 +166,7 @@ Step 3: Verify Azure Login
 
 The three steps are repeated per-environment job (dev, staging, prod) because each job runs on an independent runner.
 
-#### Login Pattern in Phase 4 (Cleanup Jobs)
+#### Login Pattern in Phase X (Cleanup Jobs)
 
 Each cleanup job (dev, staging, prod) uses the same **3-step Azure login sequence** as bootstrap, then proceeds to delete resources.
 
@@ -220,7 +220,7 @@ Phase 2:  ──── Azure OIDC (3-step pattern, per-environment job) ──�
              → Provision: Resource Groups, App Services, SQL, Key Vault
            ❌ Does NOT use GitHub App token at all.
 
-Phase 4:  ──── Azure OIDC (3-step pattern, per-environment job) ─────────────
+Phase X:  ──── Azure OIDC (3-step pattern, per-environment job) ─────────────
 (cleanup) AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID
              Step 1: Validate credentials present (fast-fail pre-check)
              Step 2: azure/login@v2 → Authenticate to Azure (passwordless)
@@ -245,7 +245,7 @@ Deploy:   ──── Azure OIDC (2-step pattern + conditional gating) ──�
 | **Phase 1a** (re-run) | ❌ No | ✅ `azure/login@v2` | Automated OIDC (same as Phase 2) | Re-run/update Entra ID App Registration |
 | **Phase 1b** | ✅ Yes — writes GitHub secrets | ❌ **No Azure login at all** | GitHub App token only | Store `AZUREAPPSERVICE_*` secrets in GitHub |
 | Phase 2 (bootstrap) | ❌ No | ✅ `azure/login@v2` | 3-step: Validate → Login → Verify | Provision Azure infrastructure |
-| **Phase 4 (cleanup)** | ❌ No | ✅ `azure/login@v2` | 3-step: Validate → Login → Verify | ⚠️ Delete all Azure resources |
+| **Phase X (cleanup)** | ❌ No | ✅ `azure/login@v2` | 3-step: Validate → Login → Verify | ⚠️ Delete all Azure resources |
 | Deploy (API/UI) | ❌ No | ✅ `azure/login@v2` | 2-step + conditional gate | Deploy applications to Azure |
 
 ---
@@ -338,13 +338,13 @@ Parameters are grouped by the phase they belong to. Enable only the parameters f
 
 ---
 
-## �️ Phase 4 Parameter — Cleanup (⚠️ Destructive)
+## 🗑️ Phase X Parameter — Cleanup (⚠️ Destructive)
 
-### `cleanupInfra` — Cleanup Azure Infrastructure *(Phase 4)*
+### `cleanupInfra` — Cleanup Azure Infrastructure *(Phase X)*
 | | |
 |---|---|
 | **Type** | Boolean (default: `false`) |
-| **Phase** | 🗑️ Phase 4 — ⚠️ **DESTRUCTIVE** |
+| **Phase** | 🗑️ Phase X — ⚠️ **DESTRUCTIVE** |
 | **When to enable** | Only when you want to **permanently delete** all Azure resources for the selected environment(s). |
 | **What it does** | Stops and deletes UI and API App Services (blocking), then deletes the entire Resource Group with `--no-wait` (fire-and-forget). |
 | **Requires** | `AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID` secrets (from Phase 1). |
@@ -463,7 +463,7 @@ Add `APP_ID` and `APP_PRIVATE_KEY` to repository secrets before proceeding.
 | `bootstrapInfra` | `false` | 🔄 Phase 2 — do this separately |
 | `deployApi` | `false` | 🔄 Phase 2 |
 | `deployUi` | `false` | 🔄 Phase 2 |
-| `cleanupInfra` | `false` | 🗑️ Phase 4 — not needed for setup |
+| `cleanupInfra` | `false` | 🗑️ Phase X — not needed for setup |
 
 4. Click **Run workflow**
 5. When the `setupOidc` step prompts for **device code authentication**:
@@ -502,7 +502,7 @@ Add `APP_ID` and `APP_PRIVATE_KEY` to repository secrets before proceeding.
 | `bootstrapInfra` ✅ | `true` | 🔄 Phase 2 — creates/updates Azure resources |
 | `deployApi` | `false` (or `true`) | 🔄 Phase 2 — enable to deploy API code immediately |
 | `deployUi` | `false` (or `true`) | 🔄 Phase 2 — enable to deploy UI code immediately |
-| `cleanupInfra` | `false` | 🗑️ Phase 4 — not tearing down |
+| `cleanupInfra` | `false` | 🗑️ Phase X — not tearing down |
 
 4. Click **Run workflow**
 
@@ -547,7 +547,7 @@ configureSecrets: true   # 🔑 Phase 1 — Write Azure creds to GitHub secrets
 bootstrapInfra: true     # 🔄 Phase 2 — Provision Azure resources
 deployApi: false         # 🔄 Phase 2 — Enable once infra is confirmed healthy
 deployUi: false          # 🔄 Phase 2 — Enable once infra is confirmed healthy
-cleanupInfra: false      # 🗑️ Phase 4 — Not tearing down
+cleanupInfra: false      # 🗑️ Phase X — Not tearing down
 ```
 **Time**: ~15 min | **Use case**: Complete first-time dev environment setup in one go
 

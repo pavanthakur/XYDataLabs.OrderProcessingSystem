@@ -45,9 +45,9 @@ azure-bootstrap.yml (~2,900 lines)
 ├── bootstrap-dev
 ├── bootstrap-staging
 ├── bootstrap-prod
-├── cleanup-dev                ← Phase 4 (⚠️ destructive)
-├── cleanup-staging             ← Phase 4 (⚠️ destructive)
-├── cleanup-prod               ← Phase 4 (⚠️ destructive)
+├── cleanup-dev                ← Phase X (⚠️ destructive)
+├── cleanup-staging             ← Phase X (⚠️ destructive)
+├── cleanup-prod               ← Phase X (⚠️ destructive)
 ├── summary
 └── trigger-deployments
 
@@ -107,7 +107,7 @@ Can be triggered:
 │       ↓                                                       │
 │  4. bootstrap-dev/staging/prod                               │
 │       ↓                                                       │
-│  5. cleanup-dev/staging/prod (⚠️ Phase 4, if enabled)        │
+│  5. cleanup-dev/staging/prod (⚠️ Phase X, if enabled)        │
 │       ↓                                                       │
 │  6. summary                                                   │
 │                                                               │
