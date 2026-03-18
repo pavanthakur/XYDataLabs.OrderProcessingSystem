@@ -497,18 +497,22 @@ jobs:
           Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
           Write-Host ""
           
+          # Map 'all' to the full list of environments the script expects
+          $envInput = "${{ inputs.environment }}"
+          $environments = if ($envInput -eq "all") { "dev,staging,prod" } else { $envInput }
+          
           $params = @{
-            AppName      = "${{ inputs.oidcAppName }}"
-            Environment  = "${{ inputs.environment }}"
-            GitHubOrg    = "${{ github.repository_owner }}"
-            GitHubRepo   = "${{ github.event.repository.name }}"
+            AppDisplayName = "${{ inputs.oidcAppName }}"
+            Environments   = $environments
+            GitHubOwner    = "${{ github.repository_owner }}"
+            Repository     = "${{ github.event.repository.name }}"
           }
           
           Write-Host "📋 Parameters:" -ForegroundColor Yellow
-          Write-Host "  App Name: $($params.AppName)" -ForegroundColor Gray
-          Write-Host "  Environment: $($params.Environment)" -ForegroundColor Gray
-          Write-Host "  GitHub Org: $($params.GitHubOrg)" -ForegroundColor Gray
-          Write-Host "  GitHub Repo: $($params.GitHubRepo)" -ForegroundColor Gray
+          Write-Host "  App Display Name: $($params.AppDisplayName)" -ForegroundColor Gray
+          Write-Host "  Environments: $($params.Environments)" -ForegroundColor Gray
+          Write-Host "  GitHub Owner: $($params.GitHubOwner)" -ForegroundColor Gray
+          Write-Host "  Repository: $($params.Repository)" -ForegroundColor Gray
           Write-Host ""
           
           $result = ./Resources/Azure-Deployment/setup-github-oidc.ps1 @params
