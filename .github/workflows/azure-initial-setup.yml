@@ -449,7 +449,7 @@ jobs:
 
       - name: Azure Login (Device Code)
         if: steps.auth-check.outputs.useExistingOidc == 'false'
-        timeout-minutes: 7
+        timeout-minutes: 5
         run: |
           Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Yellow
           Write-Host "║         DEVICE CODE LOGIN — FIRST-TIME SETUP                  ║" -ForegroundColor Yellow
