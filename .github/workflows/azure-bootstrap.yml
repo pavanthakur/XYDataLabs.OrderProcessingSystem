@@ -420,7 +420,7 @@ jobs:
           Write-Host "  Environment: dev" -ForegroundColor Gray
           Write-Host "  Parameter File: infra/parameters/dev.json" -ForegroundColor Gray
           Write-Host "  Resource Group: rg-orderprocessing-dev" -ForegroundColor Gray
-          Write-Host "  OIDC Subject: repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev" -ForegroundColor Gray
+          Write-Host "  OIDC Subject: repo:${{ github.repository }}:ref:refs/heads/dev" -ForegroundColor Gray
           Write-Host "" -ForegroundColor Gray
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
           Write-Host ""
@@ -484,8 +484,8 @@ jobs:
             Write-Host "  Resource Group: rg-orderprocessing-dev" -ForegroundColor Gray
             Write-Host "  SQL Server: orderprocessing-sql-dev" -ForegroundColor Gray
             Write-Host "  Database: OrderProcessingSystem_Dev" -ForegroundColor Gray
-            Write-Host "  API App: pavanthakur-orderprocessing-api-xyapp-dev" -ForegroundColor Gray
-            Write-Host "  UI App: pavanthakur-orderprocessing-ui-xyapp-dev" -ForegroundColor Gray
+            Write-Host "  API App: ${{ github.repository_owner }}-orderprocessing-api-xyapp-dev" -ForegroundColor Gray
+            Write-Host "  UI App: ${{ github.repository_owner }}-orderprocessing-ui-xyapp-dev" -ForegroundColor Gray
             Write-Host ""
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
             Write-Host ""
@@ -493,7 +493,7 @@ jobs:
             # The provision script is idempotent - it creates SQL Server/Database if they don't exist
             # and configures connection strings on the App Services
             # Note: Script includes 5-minute wait for firewall rule propagation when creating new IP rules
-            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment dev -BaseName orderprocessing -Location centralindia -GitHubOwner pavanthakur
+            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment dev -BaseName orderprocessing -Location centralindia -GitHubOwner '${{ github.repository_owner }}'
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
@@ -696,7 +696,7 @@ jobs:
             Write-Host "🔍 Verifying Application Insights configuration..." -ForegroundColor Cyan
             Write-Host ""
             
-            ./Resources/Azure-Deployment/verify-app-insights.ps1 -Environment dev -BaseName orderprocessing -GitHubOwner pavanthakur
+            ./Resources/Azure-Deployment/verify-app-insights.ps1 -Environment dev -BaseName orderprocessing -GitHubOwner '${{ github.repository_owner }}'
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
@@ -970,7 +970,7 @@ jobs:
             Write-Host "  Environment: stg" -ForegroundColor Gray
             Write-Host "  Parameter File: infra/parameters/staging.json" -ForegroundColor Gray
             Write-Host "  Resource Group: rg-orderprocessing-stg" -ForegroundColor Gray
-            Write-Host "  OIDC Subject: repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/staging" -ForegroundColor Gray
+            Write-Host "  OIDC Subject: repo:${{ github.repository }}:ref:refs/heads/staging" -ForegroundColor Gray
             Write-Host "" -ForegroundColor Gray
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
             Write-Host ""
@@ -1034,8 +1034,8 @@ jobs:
             Write-Host "  Resource Group: rg-orderprocessing-stg" -ForegroundColor Gray
             Write-Host "  SQL Server: orderprocessing-sql-stg" -ForegroundColor Gray
             Write-Host "  Database: OrderProcessingSystem_Staging" -ForegroundColor Gray
-            Write-Host "  API App: pavanthakur-orderprocessing-api-xyapp-stg" -ForegroundColor Gray
-            Write-Host "  UI App: pavanthakur-orderprocessing-ui-xyapp-stg" -ForegroundColor Gray
+            Write-Host "  API App: ${{ github.repository_owner }}-orderprocessing-api-xyapp-stg" -ForegroundColor Gray
+            Write-Host "  UI App: ${{ github.repository_owner }}-orderprocessing-ui-xyapp-stg" -ForegroundColor Gray
             Write-Host ""
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
             Write-Host ""
@@ -1043,7 +1043,7 @@ jobs:
             # The provision script is idempotent - it creates SQL Server/Database if they don't exist
             # and configures connection strings on the App Services
             # Note: Script includes 5-minute wait for firewall rule propagation when creating new IP rules
-            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment staging -BaseName orderprocessing -Location centralindia -GitHubOwner pavanthakur
+            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment staging -BaseName orderprocessing -Location centralindia -GitHubOwner '${{ github.repository_owner }}'
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
@@ -1226,7 +1226,7 @@ jobs:
             Write-Host "🔍 Verifying Application Insights configuration..." -ForegroundColor Cyan
             Write-Host ""
             
-            ./Resources/Azure-Deployment/verify-app-insights.ps1 -Environment staging -BaseName orderprocessing -GitHubOwner pavanthakur
+            ./Resources/Azure-Deployment/verify-app-insights.ps1 -Environment staging -BaseName orderprocessing -GitHubOwner '${{ github.repository_owner }}'
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
@@ -1500,7 +1500,7 @@ jobs:
             Write-Host "  Environment: prod" -ForegroundColor Gray
             Write-Host "  Parameter File: infra/parameters/prod.json" -ForegroundColor Gray
             Write-Host "  Resource Group: rg-orderprocessing-prod" -ForegroundColor Gray
-            Write-Host "  OIDC Subject: repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/main" -ForegroundColor Gray
+            Write-Host "  OIDC Subject: repo:${{ github.repository }}:ref:refs/heads/main" -ForegroundColor Gray
             Write-Host "" -ForegroundColor Gray
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
             Write-Host ""
@@ -1564,8 +1564,8 @@ jobs:
             Write-Host "  Resource Group: rg-orderprocessing-prod" -ForegroundColor Gray
             Write-Host "  SQL Server: orderprocessing-sql-prod" -ForegroundColor Gray
             Write-Host "  Database: OrderProcessingSystem_Prod" -ForegroundColor Gray
-            Write-Host "  API App: pavanthakur-orderprocessing-api-xyapp-prod" -ForegroundColor Gray
-            Write-Host "  UI App: pavanthakur-orderprocessing-ui-xyapp-prod" -ForegroundColor Gray
+            Write-Host "  API App: ${{ github.repository_owner }}-orderprocessing-api-xyapp-prod" -ForegroundColor Gray
+            Write-Host "  UI App: ${{ github.repository_owner }}-orderprocessing-ui-xyapp-prod" -ForegroundColor Gray
             Write-Host ""
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
             Write-Host ""
@@ -1573,7 +1573,7 @@ jobs:
             # The provision script is idempotent - it creates SQL Server/Database if they don't exist
             # and configures connection strings on the App Services
             # Note: Script includes 5-minute wait for firewall rule propagation when creating new IP rules
-            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment prod -BaseName orderprocessing -Location centralindia -GitHubOwner pavanthakur
+            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment prod -BaseName orderprocessing -Location centralindia -GitHubOwner '${{ github.repository_owner }}'
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
@@ -1756,7 +1756,7 @@ jobs:
             Write-Host "🔍 Verifying Application Insights configuration..." -ForegroundColor Cyan
             Write-Host ""
             
-            ./Resources/Azure-Deployment/verify-app-insights.ps1 -Environment prod -BaseName orderprocessing -GitHubOwner pavanthakur
+            ./Resources/Azure-Deployment/verify-app-insights.ps1 -Environment prod -BaseName orderprocessing -GitHubOwner '${{ github.repository_owner }}'
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
@@ -1900,7 +1900,7 @@ jobs:
 
           $env         = 'dev'
           $baseName    = 'orderprocessing'
-          $githubOwner = 'pavanthakur'
+          $githubOwner = '${{ github.repository_owner }}'
           $rg          = "rg-$baseName-$env"
           $apiApp      = "$githubOwner-$baseName-api-xyapp-$env"
           $uiApp       = "$githubOwner-$baseName-ui-xyapp-$env"
@@ -1987,7 +1987,7 @@ jobs:
 
           $env         = 'stg'
           $baseName    = 'orderprocessing'
-          $githubOwner = 'pavanthakur'
+          $githubOwner = '${{ github.repository_owner }}'
           $rg          = "rg-$baseName-$env"
           $apiApp      = "$githubOwner-$baseName-api-xyapp-$env"
           $uiApp       = "$githubOwner-$baseName-ui-xyapp-$env"
@@ -2070,7 +2070,7 @@ jobs:
 
           $env         = 'prod'
           $baseName    = 'orderprocessing'
-          $githubOwner = 'pavanthakur'
+          $githubOwner = '${{ github.repository_owner }}'
           $rg          = "rg-$baseName-$env"
           $apiApp      = "$githubOwner-$baseName-api-xyapp-$env"
           $uiApp       = "$githubOwner-$baseName-ui-xyapp-$env"

@@ -327,7 +327,7 @@ if ($rgList.Count -gt 0) {
 
 # Step 6: Display GitHub Secrets
 Write-Host "`n[6/7] GitHub Repository Secrets Configuration" -ForegroundColor Yellow
-Write-Host "  Add these secrets to: https://github.com/getpavanthakur/TestAppXY_OrderProcessingSystem/settings/secrets/actions" -ForegroundColor Cyan
+Write-Host "  Add these secrets to: https://github.com/$GitHubOwner/$Repository/settings/secrets/actions" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  AZUREAPPSERVICE_CLIENTID:        $appId" -ForegroundColor White
 Write-Host "  AZUREAPPSERVICE_TENANTID:        $tenantId" -ForegroundColor White
@@ -339,13 +339,13 @@ Write-Host "[7/7] Setup complete!" -ForegroundColor Green
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Yellow
 Write-Host "  1. Add the secrets above to GitHub repository secrets:" -ForegroundColor White
-Write-Host "     https://github.com/getpavanthakur/TestAppXY_OrderProcessingSystem/settings/secrets/actions" -ForegroundColor Cyan
+Write-Host "     https://github.com/$GitHubOwner/$Repository/settings/secrets/actions" -ForegroundColor Cyan
 Write-Host "     GitHub → Settings → Secrets and variables → Actions → New repository secret" -ForegroundColor Gray
 Write-Host ""
 Write-Host "  2. Update workflow files to include branches/environments you just configured (if not already)." -ForegroundColor White
 Write-Host "  3. Run the workflow manually or push changes to a configured branch to trigger deployment." -ForegroundColor White
 Write-Host "  4. (Optional) Re-run with -ResourceGroupNames to grant RBAC for additional environments." -ForegroundColor White
-Write-Host "     https://github.com/getpavanthakur/TestAppXY_OrderProcessingSystem/actions" -ForegroundColor Cyan
+Write-Host "     https://github.com/$GitHubOwner/$Repository/actions" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "=====================================" -ForegroundColor Cyan
 

@@ -535,16 +535,19 @@ jobs:
             exit 1
           }
           
-          # The script outputs these values
-          $clientId       = $env:OIDC_CLIENT_ID
-          $tenantId       = $env:OIDC_TENANT_ID
-          $subscriptionId = $env:OIDC_SUBSCRIPTION_ID
-          $appObjectId    = $env:OIDC_APP_OBJECT_ID
+          # Query Azure directly — the script does not export env vars
+          $appName        = "${{ inputs.oidcAppName }}"
+          $appInfo        = az ad app list --display-name $appName | ConvertFrom-Json
+          $clientId       = $appInfo[0].appId
+          $appObjectId    = $appInfo[0].id
+          $subscription   = az account show | ConvertFrom-Json
+          $tenantId       = $subscription.tenantId
+          $subscriptionId = $subscription.id
           
-          "clientId=$clientId"             >> $env:GITHUB_OUTPUT
-          "tenantId=$tenantId"             >> $env:GITHUB_OUTPUT
-          "subscriptionId=$subscriptionId" >> $env:GITHUB_OUTPUT
-          "appObjectId=$appObjectId"       >> $env:GITHUB_OUTPUT
+          "clientId=$clientId"              >> $env:GITHUB_OUTPUT
+          "tenantId=$tenantId"              >> $env:GITHUB_OUTPUT
+          "subscriptionId=$subscriptionId"  >> $env:GITHUB_OUTPUT
+          "appObjectId=$appObjectId"        >> $env:GITHUB_OUTPUT
           
           Write-Host ""
           Write-Host "✅ OIDC App Registration configured successfully" -ForegroundColor Green
