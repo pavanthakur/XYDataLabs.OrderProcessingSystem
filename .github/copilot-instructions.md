@@ -39,7 +39,7 @@ practice Azure cloud deployment, CI/CD automation, and enterprise DevOps pattern
 ├── .github/
 │   ├── app-manifest.json          # GitHub App manifest (permissions config)
 │   ├── copilot-instructions.md    # ← THIS FILE (Copilot context)
-│   └── workflows/                 # 9 GitHub Actions workflows + 8 README docs
+│   └── workflows/                 # 9 GitHub Actions workflows + 7 README docs
 │
 ├── Documentation/                 # All markdown documentation (organised)
 │   ├── README.md                  # Main documentation hub
@@ -162,7 +162,7 @@ Parameter files follow the pattern `{environment}.json` / `{environment}.paramet
 
 | Script | Purpose |
 |--------|---------|
-| `bootstrap-enterprise-infra.ps1` | **Main bootstrap**: resource group, App Service, SQL, Key Vault, OIDC |
+| `bootstrap-enterprise-infra.ps1` | **Main bootstrap**: resource group, App Service Plan, Web Apps, App Insights, Key Vault + managed identity, OIDC |
 | `setup-github-oidc.ps1` | Create/update Entra ID app + federated OIDC credentials |
 | `configure-github-secrets.ps1` | Store OIDC values as GitHub repo/env secrets |
 | `configure-app-environment.ps1` | Set App Service application settings per environment |
@@ -213,8 +213,12 @@ via the `ASPNETCORE_ENVIRONMENT` variable.
 
 ### Key Vault integration
 
-Key Vault (`kv-orderproc-{env}`) holds application secrets at runtime. The API uses managed
+Key Vault (`kv-orderproc-{dev|stg|prod}`) holds application secrets at runtime. The API uses managed
 identity to access Key Vault without credentials in config files.
+
+> **Note**: Azure resource names for staging use the abbreviated suffix `stg` (e.g. `rg-orderprocessing-stg`,
+> `kv-orderproc-stg`), not `staging`. The workflow environment name remains `staging` but all scripts
+> map it internally via `$envSuffix = switch ($Environment) { 'staging' { 'stg' } default { $Environment } }`.
 
 ---
 
@@ -251,7 +255,11 @@ Port allocations: Local VS (5010–5013) · Docker dev (5020–5023) · UAT (503
 | `IMPLEMENTATION-COMPLETE.md` | Root | GitHub App implementation summary |
 | `.github/workflows/README.md` | Workflows | Workflow overview, secrets, path triggers |
 | `.github/workflows/README-AZURE-BOOTSTRAP.md` | Workflows | Bootstrap workflow deep-dive |
+| `.github/workflows/README-AZURE-BOOTSTRAP-SETUP.md` | Workflows | Step-by-step bootstrap setup guide |
 | `.github/workflows/README-CONFIGURE-GITHUB-SECRETS.md` | Workflows | Secrets workflow detail |
+| `.github/workflows/README-INFRA-DEPLOY.md` | Workflows | Infrastructure deployment workflow guide |
+| `.github/workflows/README-VALIDATE-DEPLOYMENT.md` | Workflows | Pre-deployment validation workflow detail |
+| `.github/workflows/README-TEST-VALIDATE-DEPLOYMENT.md` | Workflows | Test pre-deployment validation workflow detail |
 | `Documentation/README.md` | Documentation/ | Documentation hub with links to all guides |
 | `Documentation/Operations-Quick-Links-README.md` | Documentation/ | Quick reference links for operations tasks |
 | `Documentation/QUICK-COMMAND-REFERENCE.md` | Documentation/ | Command cheat sheet for Azure, Git, Docker |
