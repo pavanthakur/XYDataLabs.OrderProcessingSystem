@@ -3263,9 +3263,9 @@ jobs:
               "| Bootstrap Prod | Azure AD federated credential for \`environment:prod\` is missing in the App Registration |" >> $env:GITHUB_STEP_SUMMARY
             }
             "" >> $env:GITHUB_STEP_SUMMARY
-            "> **Typical error**: \`AADSTS700213: No matching federated identity record found for presented assertion subject 'repo:${{ github.repository }}:environment:ENV'\`" >> $env:GITHUB_STEP_SUMMARY
+            "> **Typical error**: ``AADSTS700213: No matching federated identity record found for presented assertion subject 'repo:${{ github.repository }}:environment:ENV'``" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
-            "**Root cause**: Phase 1a (Setup Azure OIDC) was not run for this environment, or was only run for \`dev\` (not \`all\`). The GitHub OIDC secrets exist but the matching federated credential is absent from your Azure AD App Registration." >> $env:GITHUB_STEP_SUMMARY
+            "**Root cause**: Phase 1a (Setup Azure OIDC) was not run for this environment, or was only run for ``dev`` (not ``all``). The GitHub OIDC secrets exist but the matching federated credential is absent from your Azure AD App Registration." >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
             "### ✅ How to Fix — Run Phase 1a + 1b (One-Time OIDC Setup)" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
