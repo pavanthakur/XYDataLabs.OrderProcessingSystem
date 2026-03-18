@@ -55,6 +55,7 @@ jobs:
     name: Validate Workflow Inputs
     if: github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
+    environment: ${{ inputs.environment != 'all' && inputs.environment || 'dev' }}
     permissions:
       contents: read
       actions: read
