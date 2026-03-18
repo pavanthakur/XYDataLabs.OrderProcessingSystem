@@ -830,7 +830,7 @@ jobs:
             "" >> $env:GITHUB_STEP_SUMMARY
             "**GitHub App Name**: ``$appName``" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
-            "\`APP_ID\` and \`APP_PRIVATE_KEY\` are present. The workflow can use the GitHub App for automated secret management." >> $env:GITHUB_STEP_SUMMARY
+            "``APP_ID`` and ``APP_PRIVATE_KEY`` are present. The workflow can use the GitHub App for automated secret management." >> $env:GITHUB_STEP_SUMMARY
           }
 
           $allSuccess = ($setupOidc -eq "success" -or $setupOidc -eq "skipped") -and ($configSecrets -eq "success" -or $configSecrets -eq "skipped")
