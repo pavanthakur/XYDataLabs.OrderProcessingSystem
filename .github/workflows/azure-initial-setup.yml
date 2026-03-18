@@ -152,36 +152,17 @@ jobs:
             Write-Host "    ℹ️  No OIDC setup phases selected — secrets check skipped" -ForegroundColor Cyan
           } elseif ($setupOidc -eq "false") {
             Write-Host "    Setup OIDC: Unchecked (skipped)" -ForegroundColor Yellow
-            Write-Host "    Checking if OIDC secrets already exist in repository..." -ForegroundColor Gray
-
-            $hasClientId     = "${{ secrets.AZUREAPPSERVICE_CLIENTID }}"   -ne ""
-            $hasTenantId     = "${{ secrets.AZUREAPPSERVICE_TENANTID }}"   -ne ""
-            $hasSubscriptionId = "${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}" -ne ""
-
-            if ($hasClientId -and $hasTenantId -and $hasSubscriptionId) {
-              Write-Host "    ✅ OIDC repository secrets exist — setupOidc=false is valid (re-run)" -ForegroundColor Green
+            Write-Host "    ℹ️  OIDC secrets are stored at environment level (dev/staging/prod) — not at repository level." -ForegroundColor Cyan
+            Write-Host "    Verification of environment secrets is performed by Phase 1b (Configure Secrets)." -ForegroundColor Gray
+            Write-Host "" -ForegroundColor Gray
+            Write-Host "    To verify: Settings → Environments → [dev/staging/prod] → Secrets" -ForegroundColor Gray
+            Write-Host "    Expected: AZUREAPPSERVICE_CLIENTID, AZUREAPPSERVICE_TENANTID, AZUREAPPSERVICE_SUBSCRIPTIONID" -ForegroundColor Gray
+            Write-Host "" -ForegroundColor Gray
+            if ($configSecrets -eq "true") {
+              Write-Host "    ✅ Phase 1b selected — environment secrets will be verified and updated if needed." -ForegroundColor Green
             } else {
-              Write-Host "    ❌ OIDC repository secrets are MISSING!" -ForegroundColor Red
-              Write-Host "" -ForegroundColor Gray
-              Write-Host "    Required secrets not found:" -ForegroundColor Yellow
-              if (-not $hasClientId) { Write-Host "      - AZUREAPPSERVICE_CLIENTID" -ForegroundColor Red }
-              if (-not $hasTenantId) { Write-Host "      - AZUREAPPSERVICE_TENANTID" -ForegroundColor Red }
-              if (-not $hasSubscriptionId) { Write-Host "      - AZUREAPPSERVICE_SUBSCRIPTIONID" -ForegroundColor Red }
-              Write-Host "" -ForegroundColor Gray
-              Write-Host "    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-              Write-Host "    💡 SOLUTION: Re-run this workflow with these checkboxes SELECTED:" -ForegroundColor Yellow
-              Write-Host "       ✅ Setup Azure OIDC (Phase 1a) — REQUIRED" -ForegroundColor White
-              Write-Host "       ✅ Configure GitHub Secrets (Phase 1b)" -ForegroundColor White
-              Write-Host "    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-              Write-Host "" -ForegroundColor Gray
-              Write-Host "    ⚠️  Azure OIDC (Phase 1a) is MANDATORY for all phases that interact with Azure." -ForegroundColor Yellow
-
-              if ($configSecrets -eq "true") {
-                Write-Host "" -ForegroundColor Gray
-                Write-Host "    ℹ️  OIDC secrets not found at repository level, but Phase 1b is selected." -ForegroundColor Cyan
-                Write-Host "    Phase 1a (Setup Azure OIDC) will auto-trigger to acquire credentials" -ForegroundColor Cyan
-                Write-Host "    before Phase 1b runs. Expect a device-code login prompt if first-time setup." -ForegroundColor Cyan
-              }
+              Write-Host "    ✅ Assuming environment secrets exist from a previous Phase 1a/1b run." -ForegroundColor Green
+              Write-Host "       If bootstrap or deploy fails with AADSTS errors, re-run with Phase 1a + 1b enabled." -ForegroundColor Gray
             }
           } else {
             Write-Host "    ✅ Setup Azure OIDC: Checked - secrets will be created" -ForegroundColor Green
