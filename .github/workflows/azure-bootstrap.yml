@@ -597,14 +597,17 @@ jobs:
     if: inputs.setupOidc || inputs.configureSecrets || inputs.bootstrapInfra || inputs.cleanupInfra
     needs: [validate-inputs]
     runs-on: windows-latest
-    # Use environment context so both repo-level and environment-level AZUREAPPSERVICE_* secrets
-    # are accessible (stored by configure-github-secrets / Phase 1b from a previous run).
-    # Note: when environment='all', we use 'dev' as the context. This is intentional:
-    # configure-github-secrets writes the same clientId/tenantId/subscriptionId values to
-    # ALL environments (they all point to the same Azure Entra ID App Registration — see
-    # configure-github-secrets.yml Configure Secrets step). Reading from any single environment
-    # context therefore gives the same credentials as reading from any other environment.
-    environment: ${{ inputs.environment != 'all' && inputs.environment || 'dev' }}
+    # Always use 'dev' environment context for authentication.
+    # RATIONALE: configure-github-secrets stores the SAME clientId/tenantId/subscriptionId
+    # in ALL environments (dev, staging, prod) because they all point to the same Azure
+    # Entra ID App Registration. Reading from 'dev' gives identical values to any other env.
+    #
+    # IMPORTANT: Using a per-environment context (e.g. 'staging') would require a matching
+    # federated identity credential for 'environment:staging' to already exist in Azure AD —
+    # a chicken-and-egg problem when setting up a new environment for the first time.
+    # Hardcoding 'dev' avoids this because the 'environment:dev' credential is created first
+    # during initial setup and always exists thereafter.
+    environment: dev
     env:
       EXISTING_CLIENT_ID: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
       EXISTING_TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
