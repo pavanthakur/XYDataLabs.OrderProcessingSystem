@@ -192,18 +192,21 @@ jobs:
           # Phase 1a/1b-only runs always use 'environment: dev' job context regardless of
           # the environment input, so the branch-environment check doesn't apply to them.
           # The environment input only controls which federated credentials get created.
-          $isPhase1Only = ($setupOidc -eq "true" -or $configSecrets -eq "true") -and ($bootstrap -eq "false") -and ($cleanup -eq "false") -and ($deployApi -eq "false") -and ($deployUi -eq "false")
+          # Phase 0/1a/1b-only runs don't need the branch-environment check:
+          # - Phase 0 is informational only (no Azure interaction)
+          # - Phase 1a/1b always use 'environment: dev' job context regardless of input
+          # The environment input only controls which federated credentials get created.
+          $isSetupOnly = (($setupOidc -eq "true" -or $configSecrets -eq "true" -or $setupGitHubApp -eq "true") -and ($bootstrap -eq "false") -and ($cleanup -eq "false") -and ($deployApi -eq "false") -and ($deployUi -eq "false"))
 
           Write-Host "`n  Branch/Environment Match Check:" -ForegroundColor Cyan
           Write-Host "    Current branch: $currentBranch" -ForegroundColor Gray
           Write-Host "    Target environment: $env" -ForegroundColor Gray
           Write-Host "    Expected branch: $expectedBranch" -ForegroundColor Gray
           
-          if ($isPhase1Only) {
-            Write-Host "  ℹ️  Phase 1a/1b-only run detected — branch check relaxed" -ForegroundColor Cyan
-            Write-Host "     Phase 1a/1b always runs in 'dev' environment context regardless of branch." -ForegroundColor Gray
-            Write-Host "     The environment input ('$env') controls which federated credentials are created." -ForegroundColor Gray
-            if ($env -ne "all") {
+          if ($isSetupOnly) {
+            Write-Host "  ℹ️  Setup-only run detected (Phase 0/1a/1b) — branch check relaxed" -ForegroundColor Cyan
+            Write-Host "     These phases run in 'dev' environment context regardless of branch." -ForegroundColor Gray
+            if (($setupOidc -eq "true" -or $configSecrets -eq "true") -and $env -ne "all") {
               Write-Host "" -ForegroundColor Gray
               Write-Host "  ⚠️  RECOMMENDATION: Use environment='all' with branch='dev' for Phase 1a/1b" -ForegroundColor Yellow
               Write-Host "     This creates federated credentials for dev + staging + prod in one run," -ForegroundColor Yellow
