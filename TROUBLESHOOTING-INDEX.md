@@ -80,6 +80,24 @@ APP_PRIVATE_KEY       : ❌ Missing
 
 ---
 
+#### ❌ "AADSTS700213: No matching federated identity record"
+**Error**: `AADSTS700213: No matching federated identity record found for presented assertion subject 'repo:...:environment:staging'`
+
+**Cause**: The Azure AD App Registration is missing the federated identity credential for the target environment. This happens when Phase 1a was never run, or was run for a single environment instead of `all`.
+
+**Diagnosis**: Bootstrap jobs now include a **Diagnose Azure Login Failure** step that detects this automatically and prints remediation steps in the workflow summary.
+
+**Quick Fix**:
+1. Go to **Actions → Azure Bootstrap Setup → Run workflow**
+2. Set **Use workflow from** = `dev` branch
+3. Set **Environment** = `all`
+4. Check ✅ **Phase 1a — Setup Azure OIDC** and ✅ **Phase 1b — Configure GitHub Secrets**
+5. Uncheck all Phase 2 options
+6. Run and wait for completion
+7. Re-run the original Phase 2 workflow
+
+---
+
 #### ❌ "OIDC App Not Found"
 **Error**: `Failed to create or find OIDC app 'GitHub-Actions-OIDC'`
 
@@ -90,6 +108,21 @@ APP_PRIVATE_KEY       : ❌ Missing
 2. Check Azure CLI is authenticated: `az account show`
 3. Re-run workflow with "Setup Azure OIDC" enabled
 4. Review OIDC setup logs
+
+---
+
+### Branch / Environment Mismatch
+
+#### ❌ "Branch/environment mismatch"
+**Error**: `ERROR: Branch 'staging' does not match expected branch for environment 'dev'`
+
+**Cause**: The workflow requires the branch to match the environment (`dev`→dev, `staging`→staging, `main`→prod).
+
+**Exception**: Phase 0/1a/1b-only runs (setup-only) bypass this check. The `$isSetupOnly` variable in `validate-inputs` detects when only Phase 0, 1a, or 1b is selected (no Phase 2, cleanup, or deploys) and relaxes branch validation. A recommendation message is shown if `environment` is not set to `all`.
+
+**Quick Fix**:
+- For Phase 2/X/deploy: Use the correct branch (`dev` for dev, `staging` for staging, `main` for prod)
+- For Phase 1 setup: Use `branch=dev`, `environment=all` (recommended one-time setup)
 
 ---
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The **Generate GitHub App Token** workflow (`generate-github-app-token.yml`) replaces the previous `azure-bootstrap.yml` file for focused GitHub App token generation after Azure OIDC is confirmed.
+The **Azure Bootstrap Setup** workflow (`azure-bootstrap.yml`) is the single entry point for all first-time Azure setup. It sequences Phase 0 prerequisites, Phase 1 OIDC and secrets setup, and Phase 2 infrastructure provisioning in the correct dependency order.
 
 ## Workflow Name
 
@@ -12,13 +12,15 @@ This workflow is designed for manual execution via GitHub Actions UI.
 
 ## Quick Access
 
-**Direct Link:** https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/generate-github-app-token.yml
+**Direct Link:** https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/azure-bootstrap.yml
 
 ## Running for Dev Profile with All Options Enabled
 
 ### Recommended Configuration
 
 For a complete first-time setup of the dev environment with all features enabled:
+
+> ⚠️ **Phase 1a and 1b always run in `dev` environment context** (hardcoded) because all environments share the same Azure AD App Registration. The `validate-inputs` job uses a `$isSetupOnly` variable to detect Phase 0/1a/1b-only runs and relaxes the branch-environment check accordingly.
 
 1. Navigate to: **Actions → Azure Bootstrap Setup → Run workflow**
 
@@ -92,7 +94,7 @@ For a complete first-time setup of the dev environment with all features enabled
 
 #### enableValidation
 
-> **Removed** — Phase 3 (`enableValidation`) has been obsoleted and the input no longer exists in the workflow.
+> **Removed** — The `enableValidation` input has been removed from the workflow. Validation logic is now integrated into the `validate-inputs` job and runs automatically on every workflow execution.
 
 #### bootstrapInfra
 - **Type:** Boolean
@@ -154,7 +156,7 @@ az ad app federated-credential list --id <app-object-id> --query "[].{Name:name,
 ### Issue: YAML Syntax Errors
 **Solution:** The workflow has been validated and trailing spaces removed. If you encounter issues, run:
 ```bash
-yamllint -d relaxed .github/workflows/generate-github-app-token.yml
+yamllint -d relaxed .github/workflows/azure-bootstrap.yml
 ```
 
 ### Issue: Device Code Timeout

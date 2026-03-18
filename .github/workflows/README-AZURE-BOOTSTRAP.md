@@ -72,11 +72,11 @@ See [Phase 0 in the Quick Start Guide](../../Documentation/QUICK-START-AZURE-BOO
 | Input | Type | Default | Description |
 |-------|------|---------|-------------|
 | `environment` | choice | *(required)* | Target: `dev` / `staging` / `prod` / `all`. Branch must match: `dev`→dev, `staging`→staging, `main`→prod. |
-| `setupOidc` | boolean | `false` | **Phase 1a** — Creates Microsoft Entra ID App Registration + OIDC federated credentials. First run: device-code login. Re-runs: uses existing `AZUREAPPSERVICE_*` credentials (no interactive prompt). |
+| `setupOidc` | boolean | `false` | **Phase 1a** — Creates Microsoft Entra ID App Registration + OIDC federated credentials. First run: device-code login. Re-runs: uses existing `AZUREAPPSERVICE_*` credentials (no interactive prompt). ⚠️ Always runs in `dev` environment context. Recommended: `branch=dev`, `environment=all`. |
 | `oidcAppName` | string | `GitHub-Actions-OIDC` | Name of the Azure AD App Registration to create/update. |
 | `setupGitHubApp` | boolean | `false` | **Phase 0 helper** — Shows GitHub App setup instructions if `APP_ID`/`APP_PRIVATE_KEY` are missing. Does not create the app. |
 | `githubAppName` | string | `XYDataLabsGitHubApp` | Your GitHub App name (used in instructions and validation). |
-| `configureSecrets` | boolean | `false` | **Phase 1b** — Writes `AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID` to GitHub repo + environment secrets. Requires Phase 0 (APP_ID + APP_PRIVATE_KEY) and Phase 1a OIDC outputs. |
+| `configureSecrets` | boolean | `false` | **Phase 1b** — Writes `AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID` to GitHub repo + environment secrets. Requires Phase 0 (APP_ID + APP_PRIVATE_KEY) and Phase 1a OIDC outputs. ⚠️ Runs in `dev` context like Phase 1a. Recommended: `branch=dev`, `environment=all`. |
 | `bootstrapInfra` | boolean | `true` | **Phase 2** — Provisions Resource Group, App Service, SQL, Key Vault. |
 | `deployApi` | boolean | `false` | **Phase 2 optional** — Deploys API code after bootstrap. |
 | `deployUi` | boolean | `false` | **Phase 2 optional** — Deploys UI code after bootstrap. |
@@ -102,8 +102,11 @@ See [Phase 0 in the Quick Start Guide](../../Documentation/QUICK-START-AZURE-BOO
 > **Azure OIDC is mandatory for all phases that interact with Azure.** If `setupOidc=false` and `AZUREAPPSERVICE_*` secrets don't exist, `validate-inputs` will fail immediately with a clear error — before any other job runs.
 
 ### 2. `setup-oidc` (Phase 1a)
-**Runs when**: `setupOidc=true`  
-**Needs**: `validate-inputs`
+**Runs when**: `setupOidc=true` OR auto-triggered when `configureSecrets=true` and `setupOidc` was not explicitly selected  
+**Needs**: `validate-inputs`  
+**Environment**: Always `dev` (hardcoded) — all environments share the same Azure AD App Registration
+
+> ℹ️ **Auto-trigger**: When `configureSecrets=true` is selected without `setupOidc=true`, the `setup-oidc` job still runs. This ensures OIDC credentials are available for Phase 1b to store. Phase 2 and Phase X do **not** auto-trigger this job.
 
 **Authentication (smart, automatic)**:
 
@@ -131,6 +134,8 @@ See [Phase 0 in the Quick Start Guide](../../Documentation/QUICK-START-AZURE-BOO
 **Needs**: `validate-inputs`, `setup-oidc`
 
 > ⚠️ **Sequential after Phase 1a:** Phase 1b always runs after Phase 1a because it consumes Phase 1a's job outputs (`clientId`, `tenantId`, `subscriptionId`). The two cannot run in parallel.
+
+> ℹ️ **Auto-trigger pattern**: Selecting `configureSecrets=true` automatically triggers `setup-oidc` (Phase 1a) first. This ensures the OIDC credential values are available for Phase 1b to write as GitHub secrets.
 
 **Inputs received from `setup-oidc` outputs**:
 ```yaml

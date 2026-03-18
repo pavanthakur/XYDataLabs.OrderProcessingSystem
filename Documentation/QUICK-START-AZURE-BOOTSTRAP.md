@@ -264,13 +264,15 @@ Parameters are grouped by the phase they belong to. Enable only the parameters f
 | **Type** | Choice: `dev` / `staging` / `prod` / `all` |
 | **Required** | Yes — every run |
 | **Description** | Which Azure environment to provision. `all` provisions dev, staging, and prod in parallel. |
-| **Branch rule** | The **"Use workflow from"** branch must match the environment: `dev`→`dev`, `staging`→`staging`, `main`→`prod`. Use any branch for `all`. |
+| **Branch rule** | The **“Use workflow from”** branch must match the environment: `dev`→`dev`, `staging`→`staging`, `main`→`prod`. Use any branch for `all`. **Exception:** Phase 0/1a/1b-only runs (setup-only) bypass this check — the `$isSetupOnly` variable relaxes branch validation when no Phase 2/X/deploy is selected. |
 | **Example** | Start with `dev` to validate the setup cheaply before committing to staging/prod. |
 
 ---
 
 ## 🔑 Phase 1 Parameters — One-Time Setup
 > Enable these **once** when setting up a new environment. After Phase 1 is complete, you will not need to run these again unless credentials are lost or rotated.
+
+> ⚠️ **Phase 1a and 1b always run in `dev` environment context** (hardcoded) because all environments share the same Azure AD App Registration. The `validate-inputs` job uses a `$isSetupOnly` variable to detect Phase 0/1a/1b-only runs (no Phase 2, cleanup, or deploys selected) and relaxes the branch-environment check accordingly — you can run Phase 1 from any branch. Recommended: `branch=dev`, `environment=all`.
 
 > ⚠️ **Phase 1a → Phase 1b must run sequentially (not in parallel).** `configureSecrets` (Phase 1b) uses the OIDC outputs (`clientId`, `tenantId`, `subscriptionId`) produced by `setupOidc` (Phase 1a), so the two steps cannot run concurrently. The workflow dependency chain enforces this order automatically.
 
