@@ -38,7 +38,7 @@ on:
         type: boolean
         default: false
       bootstrapInfra:
-        description: '🔄 Phase 2 (day-to-day) — Bootstrap Infrastructure | Creates Resource Group, App Services, SQL, Key Vault'
+        description: '🔄 Phase 2 (day-to-day) — Bootstrap Infrastructure | Creates Resource Group, App Service Plan, Web Apps, App Insights, Key Vault + managed identity'
         required: true
         type: boolean
         default: true
@@ -437,7 +437,7 @@ jobs:
 
           # Phase 1a: Setup OIDC
           # Phase 1a auto-triggers when configureSecrets, bootstrapInfra, or cleanupInfra is selected
-          # (Phase 1b needs OIDC outputs to write secrets; Phase 2+4 need them for Azure login)
+          # (Phase 1b needs OIDC outputs to write secrets; Phase 2+X need them for Azure login)
           $effectiveSetupOidc = $doSetupOidc -or $doConfigSecrets -or $doBootstrap -or $doCleanup
           $phase1aPrereq = $true  # Prereqs checked at auth-check step (falls back to device code if no existing creds)
           $phase1aIcon   = if ($effectiveSetupOidc) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }

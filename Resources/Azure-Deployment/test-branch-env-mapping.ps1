@@ -26,7 +26,7 @@ $branchMapping = @{
         Branch = 'staging'
         Environment = 'staging'
         ParameterFile = 'infra/parameters/staging.json'
-        ResourceGroup = 'rg-orderprocessing-staging'
+        ResourceGroup = 'rg-orderprocessing-stg'
         BranchOIDCSubject = 'repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/staging'
         EnvironmentOIDCSubject = 'repo:pavanthakur/XYDataLabs.OrderProcessingSystem:environment:staging'
     }
