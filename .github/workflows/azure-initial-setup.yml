@@ -449,22 +449,77 @@ jobs:
 
       - name: Azure Login (Device Code)
         if: steps.auth-check.outputs.useExistingOidc == 'false'
+        timeout-minutes: 7
         run: |
           Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Yellow
           Write-Host "║         DEVICE CODE LOGIN — FIRST-TIME SETUP                  ║" -ForegroundColor Yellow
           Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Yellow
           Write-Host ""
-          Write-Host "A device code will be displayed. Follow the instructions to authenticate." -ForegroundColor Cyan
+          Write-Host "You have 5 minutes to authenticate. A device code will appear below." -ForegroundColor Cyan
           Write-Host ""
-          
-          az login --use-device-code
-          
-          if ($LASTEXITCODE -ne 0) {
+
+          $timeoutSeconds = 300  # 5 minutes
+
+          # Run az login in a background job so we can enforce a timeout and surface the URL
+          $loginJob = Start-Job { az login --use-device-code 2>&1 }
+
+          $startTime  = Get-Date
+          $shownLines = [System.Collections.Generic.HashSet[string]]::new()
+          $urlWritten = $false
+
+          while ($loginJob.State -notin @('Completed', 'Failed', 'Stopped')) {
+            Start-Sleep -Seconds 2
+
+            # Enforce timeout
+            if (((Get-Date) - $startTime).TotalSeconds -gt $timeoutSeconds) {
+              Stop-Job  $loginJob -ErrorAction SilentlyContinue
+              Remove-Job $loginJob -Force -ErrorAction SilentlyContinue
+              Write-Host ""
+              Write-Host "⏱️  TIMEOUT — Authentication not completed within 5 minutes." -ForegroundColor Red
+              Write-Host "   Re-run the workflow and authenticate promptly." -ForegroundColor Yellow
+              "⏱️ **Login timed out** — Re-run the workflow and authenticate within 5 minutes." >> $env:GITHUB_STEP_SUMMARY
+              Write-Error "Device code login timed out after 5 minutes"
+              exit 1
+            }
+
+            # Stream new output lines
+            $lines = Receive-Job $loginJob -Keep 2>&1
+            foreach ($line in ($lines | ForEach-Object { [string]$_ })) {
+              if ($shownLines.Add($line)) {
+                Write-Host $line
+
+                # When the URL line appears, reprint it prominently and add to summary
+                if (-not $urlWritten -and $line -match '(https://login\.microsoft\.com/[^\s]+)') {
+                  $loginUrl = $Matches[1].TrimEnd('.')
+                  Write-Host ""
+                  Write-Host "  ╔══ 👉 CLICK TO AUTHENTICATE ═══════════════════════════════╗" -ForegroundColor Cyan
+                  Write-Host "  ║  $loginUrl" -ForegroundColor Yellow
+                  Write-Host "  ╚═══════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+                  Write-Host ""
+                  # Write clickable link to step summary (visible in the job summary panel)
+                  "**[👉 Open login page: $loginUrl]($loginUrl)**" >> $env:GITHUB_STEP_SUMMARY
+                  $urlWritten = $true
+                }
+              }
+            }
+          }
+
+          # Flush any remaining output
+          Receive-Job $loginJob 2>&1 | ForEach-Object {
+            $s = [string]$_
+            if ($shownLines.Add($s)) { Write-Host $s }
+          }
+
+          $jobFailed = $loginJob.State -eq 'Failed'
+          Remove-Job $loginJob -Force -ErrorAction SilentlyContinue
+
+          if ($jobFailed) {
             Write-Host "❌ Device code login failed" -ForegroundColor Red
             Write-Error "Azure device code login failed"
             exit 1
           }
-          
+
+          Write-Host ""
           Write-Host "✅ Device code login successful" -ForegroundColor Green
 
       - name: Emit Existing Credentials as Outputs
