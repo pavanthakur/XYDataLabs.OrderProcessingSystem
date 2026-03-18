@@ -609,14 +609,35 @@ jobs:
           $env = "${{ inputs.environment }}"
           
           if ($setupOidc -eq "true") {
-            "**OIDC App Registration**: Created/Updated" >> $env:GITHUB_STEP_SUMMARY
-            "**Environment Scope**: ``$env``" >> $env:GITHUB_STEP_SUMMARY
+            $clientId = "${{ steps.oidc-setup.outputs.clientId }}"
+            $tenantId = "${{ steps.oidc-setup.outputs.tenantId }}"
+            $subscriptionId = "${{ steps.oidc-setup.outputs.subscriptionId }}"
+            $hasOutputs = $clientId -ne "" -and $tenantId -ne "" -and $subscriptionId -ne ""
+            
+            if ($hasOutputs) {
+              "**OIDC App Registration**: ✅ Created/Updated" >> $env:GITHUB_STEP_SUMMARY
+              "**Environment Scope**: ``$env``" >> $env:GITHUB_STEP_SUMMARY
+              "" >> $env:GITHUB_STEP_SUMMARY
+              "| Output | Value |" >> $env:GITHUB_STEP_SUMMARY
+              "|--------|-------|" >> $env:GITHUB_STEP_SUMMARY
+              "| Client ID | ``$clientId`` |" >> $env:GITHUB_STEP_SUMMARY
+              "| Tenant ID | ``$tenantId`` |" >> $env:GITHUB_STEP_SUMMARY
+              "| Subscription ID | ``$subscriptionId`` |" >> $env:GITHUB_STEP_SUMMARY
+            } else {
+              "**OIDC App Registration**: ❌ Failed" >> $env:GITHUB_STEP_SUMMARY
+              "**Environment Scope**: ``$env``" >> $env:GITHUB_STEP_SUMMARY
+              "" >> $env:GITHUB_STEP_SUMMARY
+              "> The ``setup-github-oidc.ps1`` script failed before producing outputs." >> $env:GITHUB_STEP_SUMMARY
+              "> Check the **Setup OIDC App Registration** step logs above for the error details." >> $env:GITHUB_STEP_SUMMARY
+            }
+          } elseif ("${{ steps.oidc-passthrough.outputs.clientId }}" -ne "") {
+            "**OIDC Setup**: Skipped — using existing credentials (passthrough)" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
             "| Output | Value |" >> $env:GITHUB_STEP_SUMMARY
             "|--------|-------|" >> $env:GITHUB_STEP_SUMMARY
-            "| Client ID | ``${{ steps.oidc-setup.outputs.clientId }}`` |" >> $env:GITHUB_STEP_SUMMARY
-            "| Tenant ID | ``${{ steps.oidc-setup.outputs.tenantId }}`` |" >> $env:GITHUB_STEP_SUMMARY
-            "| Subscription ID | ``${{ steps.oidc-setup.outputs.subscriptionId }}`` |" >> $env:GITHUB_STEP_SUMMARY
+            "| Client ID | ``${{ steps.oidc-passthrough.outputs.clientId }}`` |" >> $env:GITHUB_STEP_SUMMARY
+            "| Tenant ID | ``${{ steps.oidc-passthrough.outputs.tenantId }}`` |" >> $env:GITHUB_STEP_SUMMARY
+            "| Subscription ID | ``${{ steps.oidc-passthrough.outputs.subscriptionId }}`` |" >> $env:GITHUB_STEP_SUMMARY
           } else {
             "**OIDC Setup**: Skipped (using existing credentials)" >> $env:GITHUB_STEP_SUMMARY
           }
