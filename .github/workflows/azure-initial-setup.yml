@@ -721,9 +721,43 @@ jobs:
     steps:
       - name: Generate Summary
         run: |
+          $validateInputs = "${{ needs.validate-inputs.result }}"
+          $setupOidc      = "${{ needs.setup-oidc.result }}"
+          $configSecrets  = "${{ needs.configure-github-secrets.result }}"
+          $hasAppId       = "${{ secrets.APP_ID }}" -ne ""
+          $hasPrivateKey  = "${{ secrets.APP_PRIVATE_KEY }}" -ne ""
+          $appSecretsOk   = $hasAppId -and $hasPrivateKey
+          $allSuccess     = ($setupOidc -eq "success" -or $setupOidc -eq "skipped") -and ($configSecrets -eq "success" -or $configSecrets -eq "skipped")
+
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+          Write-Host "📊 INITIAL SETUP SUMMARY" -ForegroundColor Cyan
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+          Write-Host "  Environment : ${{ inputs.environment }}" -ForegroundColor Gray
+          Write-Host "  Phase 0 (GitHub App)       : ${{ inputs.setupGitHubApp }}" -ForegroundColor Gray
+          Write-Host "  Phase 1a (Setup OIDC)      : ${{ inputs.setupOidc }}" -ForegroundColor Gray
+          Write-Host "  Phase 1b (Configure Secrets): ${{ inputs.configureSecrets }}" -ForegroundColor Gray
+          Write-Host ""
+          $iconFor = { param($r) if ($r -eq "success") { "✅" } elseif ($r -eq "skipped") { "⏭️ " } else { "❌" } }
+          Write-Host "  Job Results:" -ForegroundColor Cyan
+          Write-Host "    Validate Inputs    : $(& $iconFor $validateInputs) $validateInputs"
+          Write-Host "    Setup OIDC         : $(& $iconFor $setupOidc) $setupOidc"
+          Write-Host "    Configure Secrets  : $(& $iconFor $configSecrets) $configSecrets"
+          Write-Host ""
+          if ($allSuccess -and $appSecretsOk) {
+            Write-Host "  ✅ Initial Setup Complete — proceed to Azure Bootstrap & Deploy" -ForegroundColor Green
+          } elseif (-not $appSecretsOk) {
+            Write-Host "  ⚠️  GitHub App secrets missing — complete Phase 0 manual steps first" -ForegroundColor Yellow
+          } else {
+            Write-Host "  ❌ One or more jobs failed — check individual job logs above" -ForegroundColor Red
+          }
+          Write-Host ""
+          Write-Host "  Full details → open the 'Summary' tab at the top of this workflow run." -ForegroundColor Gray
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+          Write-Host ""
+
           "## 📊 Azure Initial Setup Summary" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
-          
+
           "### 📋 User Configuration" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
           "| Parameter | Value |" >> $env:GITHUB_STEP_SUMMARY
@@ -773,9 +807,6 @@ jobs:
 
           # Determine next steps based on current state
           $ranPhase0     = "${{ inputs.setupGitHubApp }}" -eq "true"
-          $hasAppId      = "${{ secrets.APP_ID }}" -ne ""
-          $hasPrivateKey = "${{ secrets.APP_PRIVATE_KEY }}" -ne ""
-          $appSecretsOk  = $hasAppId -and $hasPrivateKey
           $appName       = "${{ inputs.githubAppName }}"
           $appSlug       = $appName.ToLower() -replace '[^a-z0-9]', '-'
           $secretsUrl    = "https://github.com/${{ github.repository }}/settings/secrets/actions"
@@ -791,7 +822,7 @@ jobs:
             "" >> $env:GITHUB_STEP_SUMMARY
             "### Step 1 — Create GitHub App (if not already done)" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
-            "Create a GitHub App named **\`$appName\`** with the required permissions:" >> $env:GITHUB_STEP_SUMMARY
+            "Create a GitHub App named **``$appName``** with the required permissions:" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
             "- **Option A** (Recommended): ``.\scripts\setup-github-app-from-manifest.ps1``" >> $env:GITHUB_STEP_SUMMARY
             "- **Option B** (Manual): [Create at github.com/settings/apps/new](https://github.com/settings/apps/new)" >> $env:GITHUB_STEP_SUMMARY
@@ -806,8 +837,8 @@ jobs:
             "" >> $env:GITHUB_STEP_SUMMARY
             "| Secret Name | Where to find the value |" >> $env:GITHUB_STEP_SUMMARY
             "|-------------|------------------------|" >> $env:GITHUB_STEP_SUMMARY
-            "| \`APP_ID\` | Numeric App ID on the app's **General** settings page: \`https://github.com/settings/apps/$appSlug\` |" >> $env:GITHUB_STEP_SUMMARY
-            "| \`APP_PRIVATE_KEY\` | Full contents of the \`.pem\` file downloaded when generating the private key (include the \`-----BEGIN RSA PRIVATE KEY-----\` header) |" >> $env:GITHUB_STEP_SUMMARY
+            "| ``APP_ID`` | Numeric App ID on the app's **General** settings page: ``https://github.com/settings/apps/$appSlug`` |" >> $env:GITHUB_STEP_SUMMARY
+            "| ``APP_PRIVATE_KEY`` | Full contents of the ``.pem`` file downloaded when generating the private key (include the ``-----BEGIN RSA PRIVATE KEY-----`` header) |" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
             "**How to add each secret**: Click **New repository secret**, enter Name + Value from table above, then click **Add secret**." >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
@@ -819,12 +850,12 @@ jobs:
             "" >> $env:GITHUB_STEP_SUMMARY
             "| Input | Value |" >> $env:GITHUB_STEP_SUMMARY
             "|-------|-------|" >> $env:GITHUB_STEP_SUMMARY
-            "| 🎯 Environment | \`${{ inputs.environment }}\` |" >> $env:GITHUB_STEP_SUMMARY
-            "| 🔑 Setup Azure OIDC | \`true\` |" >> $env:GITHUB_STEP_SUMMARY
-            "| ℹ️ Setup GitHub App | \`false\` (already done) |" >> $env:GITHUB_STEP_SUMMARY
-            "| 🔑 Configure GitHub Secrets | \`true\` |" >> $env:GITHUB_STEP_SUMMARY
+            "| 🎯 Environment | ``${{ inputs.environment }}`` |" >> $env:GITHUB_STEP_SUMMARY
+            "| 🔑 Setup Azure OIDC | ``true`` |" >> $env:GITHUB_STEP_SUMMARY
+            "| ℹ️ Setup GitHub App | ``false`` (already done) |" >> $env:GITHUB_STEP_SUMMARY
+            "| 🔑 Configure GitHub Secrets | ``true`` |" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
-            "> ✅ The workflow will then automatically configure all \`AZUREAPPSERVICE_*\` environment secrets — **no further manual steps are needed**." >> $env:GITHUB_STEP_SUMMARY
+            "> ✅ The workflow will then automatically configure all ``AZUREAPPSERVICE_*`` environment secrets — **no further manual steps are needed**." >> $env:GITHUB_STEP_SUMMARY
           } elseif ($appSecretsOk) {
             "## ✅ Phase 0 Complete — GitHub App Secrets Configured" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
@@ -832,8 +863,6 @@ jobs:
             "" >> $env:GITHUB_STEP_SUMMARY
             "``APP_ID`` and ``APP_PRIVATE_KEY`` are present. The workflow can use the GitHub App for automated secret management." >> $env:GITHUB_STEP_SUMMARY
           }
-
-          $allSuccess = ($setupOidc -eq "success" -or $setupOidc -eq "skipped") -and ($configSecrets -eq "success" -or $configSecrets -eq "skipped")
 
           if ($allSuccess -and $appSecretsOk) {
             "" >> $env:GITHUB_STEP_SUMMARY
