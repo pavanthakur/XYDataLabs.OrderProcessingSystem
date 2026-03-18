@@ -152,6 +152,7 @@ jobs:
 
       - name: Health Check
         if: steps.check-credentials.outputs.credentialsConfigured == 'true'
+        shell: pwsh
         run: |
           Write-Host "Waiting 30 seconds for app to start..." -ForegroundColor Yellow
           Start-Sleep -Seconds 30
@@ -159,11 +160,49 @@ jobs:
           $uiUrl = "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net"
           
           Write-Host "Testing UI endpoint: $uiUrl" -ForegroundColor Cyan
+          $healthy = $true
           try {
             $response = Invoke-WebRequest -Uri $uiUrl -Method Get -TimeoutSec 30
             Write-Host "✅ UI responded with status: $($response.StatusCode)" -ForegroundColor Green
             Write-Host "UI is accessible at: $uiUrl" -ForegroundColor Cyan
           } catch {
-            Write-Host "⚠️ UI health check warning: $($_.Exception.Message)" -ForegroundColor Yellow
-            Write-Host "This may be normal during initial deployment. Check manually: $uiUrl" -ForegroundColor Gray
+            Write-Host "❌ UI health check FAILED: $($_.Exception.Message)" -ForegroundColor Red
+            $healthy = $false
           }
+
+          if (-not $healthy) {
+            Write-Host "" -ForegroundColor Gray
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ DEPLOYMENT HEALTH CHECK FAILED" -ForegroundColor Red
+            Write-Host "   The UI did not respond after deployment. Check App Service logs." -ForegroundColor Red
+            Write-Host "   URL: $uiUrl" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            exit 1
+          }
+
+      - name: Deployment Summary
+        if: always()
+        shell: pwsh
+        run: |
+          $ref    = "${{ github.ref_name }}"
+          $app    = "${{ env.AZURE_WEBAPP_NAME }}"
+          $run    = "${{ github.run_id }}"
+          $repo   = "${{ github.repository }}"
+          $actor  = "${{ github.actor }}"
+          $event  = "${{ github.event_name }}"
+          $sha    = "${{ github.sha }}".Substring(0, 7)
+          $appUrl = if ($app) { "https://$app.azurewebsites.net" } else { "(app name not set — credentials missing)" }
+
+          $status = if (${{ job.status }} -eq 'success') { '✅ SUCCESS' } else { '❌ FAILED' }
+
+          "## 🚀 UI Deployment Summary" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "| Field | Value |" >> $env:GITHUB_STEP_SUMMARY
+          "|-------|-------|" >> $env:GITHUB_STEP_SUMMARY
+          "| Status | $status |" >> $env:GITHUB_STEP_SUMMARY
+          "| Branch | ``$ref`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| Commit | ``$sha`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| Triggered by | $actor ($event) |" >> $env:GITHUB_STEP_SUMMARY
+          "| App Service | ``$app`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| URL | $appUrl |" >> $env:GITHUB_STEP_SUMMARY
+          "| Run | [View run](https://github.com/$repo/actions/runs/$run) |" >> $env:GITHUB_STEP_SUMMARY
