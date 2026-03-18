@@ -533,72 +533,8 @@ jobs:
             exit 1
           }
       
-      - name: Run Database Migrations
-        if: success()
-        run: |
-          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-          Write-Host "║         RUN DATABASE MIGRATIONS FOR DEV                       ║" -ForegroundColor Cyan
-          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
-          Write-Host ""
-          Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
-          Write-Host ""
-          
-          try {
-            Write-Host "🔄 Running Entity Framework migrations for dev environment..." -ForegroundColor Cyan
-            Write-Host ""
-            Write-Host "📋 Configuration:" -ForegroundColor Yellow
-            Write-Host "  Environment: dev" -ForegroundColor Gray
-            Write-Host "  SQL Server: orderprocessing-sql-dev.database.windows.net" -ForegroundColor Gray
-            Write-Host "  Database: OrderProcessingSystem_Dev" -ForegroundColor Gray
-            Write-Host ""
-            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
-            Write-Host ""
-            
-            # Run migrations script using Entity Framework Core CLI commands
-            # This runs AFTER firewall rules are configured and propagated (5-minute wait included in provision step)
-            ./Resources/Azure-Deployment/run-database-migrations.ps1 -Environment dev -BaseName orderprocessing
-            
-            if ($LASTEXITCODE -ne 0) {
-              Write-Host ""
-              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-              Write-Host "❌ DATABASE MIGRATIONS FAILED" -ForegroundColor Red
-              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-              Write-Host ""
-              Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Red
-              Write-Host "Script: ./Resources/Azure-Deployment/run-database-migrations.ps1" -ForegroundColor Gray
-              Write-Host ""
-              Write-Host "⚠️  WARNING: Database schema may not be initialized" -ForegroundColor Yellow
-              Write-Host "⚠️  The application may fail to start without the database schema" -ForegroundColor Yellow
-              Write-Host ""
-              Write-Error "Database migrations failed with exit code $LASTEXITCODE"
-              exit $LASTEXITCODE
-            }
-            
-            Write-Host ""
-            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
-            Write-Host "✅ DATABASE MIGRATIONS COMPLETED SUCCESSFULLY" -ForegroundColor Green
-            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
-            Write-Host ""
-            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
-            Write-Host ""
-          }
-          catch {
-            Write-Host ""
-            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-            Write-Host "❌ EXCEPTION DURING DATABASE MIGRATIONS" -ForegroundColor Red
-            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-            Write-Host ""
-            Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
-            Write-Host ""
-            Write-Host "Stack Trace:" -ForegroundColor Yellow
-            Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
-            Write-Host ""
-            Write-Error "Database migrations failed with exception: $($_.Exception.Message)"
-            exit 1
-          }
-      
       # Refresh Azure authentication token before Key Vault operations
-      # Token from initial login may have expired after long-running migration steps  
+      # Token from initial login may have expired after long-running SQL provisioning steps  
       - name: Clear Azure CLI Token Cache
         run: |
           Write-Host "🔄 Clearing Azure CLI token cache to force fresh authentication..." -ForegroundColor Cyan
@@ -679,6 +615,70 @@ jobs:
             Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
             Write-Host ""
             Write-Error "Key Vault secret population failed with exception: $($_.Exception.Message)"
+            exit 1
+          }
+      
+      - name: Run Database Migrations
+        if: success()
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║         RUN DATABASE MIGRATIONS FOR DEV                       ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+          
+          try {
+            Write-Host "🔄 Running Entity Framework migrations for dev environment..." -ForegroundColor Cyan
+            Write-Host ""
+            Write-Host "📋 Configuration:" -ForegroundColor Yellow
+            Write-Host "  Environment: dev" -ForegroundColor Gray
+            Write-Host "  SQL Server: orderprocessing-sql-dev.database.windows.net" -ForegroundColor Gray
+            Write-Host "  Database: OrderProcessingSystem_Dev" -ForegroundColor Gray
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+            Write-Host ""
+            
+            # Run migrations script using Entity Framework Core CLI commands
+            # This runs AFTER firewall rules are configured and propagated (5-minute wait included in provision step)
+            ./Resources/Azure-Deployment/run-database-migrations.ps1 -Environment dev -BaseName orderprocessing
+            
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host ""
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host "❌ DATABASE MIGRATIONS FAILED" -ForegroundColor Red
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Red
+              Write-Host "Script: ./Resources/Azure-Deployment/run-database-migrations.ps1" -ForegroundColor Gray
+              Write-Host ""
+              Write-Host "⚠️  WARNING: Database schema may not be initialized" -ForegroundColor Yellow
+              Write-Host "⚠️  The application may fail to start without the database schema" -ForegroundColor Yellow
+              Write-Host ""
+              Write-Error "Database migrations failed with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+            }
+            
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host "✅ DATABASE MIGRATIONS COMPLETED SUCCESSFULLY" -ForegroundColor Green
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+            Write-Host ""
+          }
+          catch {
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING DATABASE MIGRATIONS" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Stack Trace:" -ForegroundColor Yellow
+            Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
+            Write-Host ""
+            Write-Error "Database migrations failed with exception: $($_.Exception.Message)"
             exit 1
           }
       
@@ -1084,7 +1084,27 @@ jobs:
           }
       
       # Refresh Azure authentication token before Key Vault operations
-      # Token from initial login may have expired after long-running migration steps
+      # Token from initial login may have expired after long-running SQL provisioning steps
+      - name: Clear Azure CLI Token Cache
+        run: |
+          Write-Host "🔄 Clearing Azure CLI token cache to force fresh authentication..." -ForegroundColor Cyan
+          try {
+            # Clear Azure account to force re-authentication
+            az account clear 2>&1 | Out-Null
+            Write-Host "  ✓ Azure account cleared" -ForegroundColor Gray
+            
+            # Purge Azure CLI cache
+            az cache purge 2>&1 | Out-Null
+            Write-Host "  ✓ Azure CLI cache purged" -ForegroundColor Gray
+            
+            Write-Host "✅ Token cache cleared successfully" -ForegroundColor Green
+          }
+          catch {
+            # Cache clearing failure is not critical - log and continue
+            Write-Host "  ⚠️  Cache clearing encountered an issue (non-critical): $($_.Exception.Message)" -ForegroundColor Yellow
+            Write-Host "  Proceeding with Azure login refresh..." -ForegroundColor Gray
+          }
+      
       - name: Refresh Azure Login for Key Vault Operations
         timeout-minutes: 3
         uses: azure/login@v2
@@ -1614,7 +1634,27 @@ jobs:
           }
       
       # Refresh Azure authentication token before Key Vault operations
-      # Token from initial login may have expired after long-running migration steps
+      # Token from initial login may have expired after long-running SQL provisioning steps
+      - name: Clear Azure CLI Token Cache
+        run: |
+          Write-Host "🔄 Clearing Azure CLI token cache to force fresh authentication..." -ForegroundColor Cyan
+          try {
+            # Clear Azure account to force re-authentication
+            az account clear 2>&1 | Out-Null
+            Write-Host "  ✓ Azure account cleared" -ForegroundColor Gray
+            
+            # Purge Azure CLI cache
+            az cache purge 2>&1 | Out-Null
+            Write-Host "  ✓ Azure CLI cache purged" -ForegroundColor Gray
+            
+            Write-Host "✅ Token cache cleared successfully" -ForegroundColor Green
+          }
+          catch {
+            # Cache clearing failure is not critical - log and continue
+            Write-Host "  ⚠️  Cache clearing encountered an issue (non-critical): $($_.Exception.Message)" -ForegroundColor Yellow
+            Write-Host "  Proceeding with Azure login refresh..." -ForegroundColor Gray
+          }
+      
       - name: Refresh Azure Login for Key Vault Operations
         timeout-minutes: 3
         uses: azure/login@v2
