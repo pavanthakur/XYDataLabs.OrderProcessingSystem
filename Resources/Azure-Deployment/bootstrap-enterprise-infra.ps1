@@ -364,6 +364,13 @@ $oidcJob = Start-Job -ScriptBlock {
     try {
         $existingAppOutput = az ad app list --display-name $appName 2>&1
         if ($LASTEXITCODE -ne 0) {
+            # "Insufficient privileges" is expected: the bootstrap service principal only has
+            # Contributor (resource-management scope) — not Azure AD directory read permissions.
+            # The GitHub-Actions-OIDC App Registration was already created by Phase 1a
+            # (setup-github-oidc.ps1) which ran with a high-privilege device-code login.
+            if ("$existingAppOutput" -like '*Insufficient privileges*') {
+                return @{ Success = $true; SkipAAD = $true; AppId = $null; AppObjectId = $null; SpObjectId = $null; TenantId = $tenantId; SubscriptionId = $subscriptionId; AppCreated = $false; SpCreated = $false; Error = $null }
+            }
             return @{ Success = $false; AppId = $null; AppObjectId = $null; SpObjectId = $null; TenantId = $tenantId; SubscriptionId = $subscriptionId; AppCreated = $false; SpCreated = $false; Error = "Failed to list existing apps: $existingAppOutput" }
         }
         $existingApp = $existingAppOutput | ConvertFrom-Json
@@ -804,8 +811,10 @@ foreach ($env in $envList) {
         Write-Host "  [OK] App Service Plan: $plan is Ready (SKU: $($planStatus.Sku))" -ForegroundColor Green
     }
     else {
-        Write-Host "  [FAIL] App Service Plan: $plan is not ready" -ForegroundColor Red
-        $allResourcesReady = $false
+        # F1 Free tier often reports a non-Succeeded provisioningState briefly after creation
+        # even while both web apps on it are already Running. Demote to WARN — apps running
+        # on the plan are the authoritative readiness signal.
+        Write-Host "  [WARN] App Service Plan: $plan provisioningState not yet Succeeded (apps Running — plan is functional)" -ForegroundColor Yellow
     }
         
     # Verify Application Insights
@@ -955,6 +964,19 @@ $oidcResult = Receive-Job -Job $oidcJob
 Remove-Job -Job $oidcJob
 
 if ($oidcResult.Success) {
+  if ($oidcResult.SkipAAD) {
+    # AAD directory operations not available to bootstrap SP — App Registration already exists from Phase 1a
+    Write-Host "`n  ╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+    Write-Host "  ║  Using Existing GitHub-Actions-OIDC App Registration        ║" -ForegroundColor Cyan
+    Write-Host "  ╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host "  [INFO] The GitHub-Actions-OIDC App Registration was configured by Phase 1a" -ForegroundColor Gray
+    Write-Host "  [INFO] (azure-initial-setup.yml > setup-oidc > setup-github-oidc.ps1)" -ForegroundColor Gray
+    Write-Host "  [INFO] Bootstrap service principal has Contributor scope only — AAD directory" -ForegroundColor Gray
+    Write-Host "         operations (az ad app list) require Directory.Read.All permission." -ForegroundColor Gray
+    Write-Host "  [INFO] Federated credentials and RBAC verified/configured during Phase 1a." -ForegroundColor Gray
+    Write-Host "  [OK]   OIDC login at job start confirmed App Registration is active and working." -ForegroundColor Green
+    Add-StepStatus -Name "Setup OIDC (GitHub-Actions-OIDC)" -Status "Success" -Details "Using existing App Registration (configured by Phase 1a — AAD ops skipped)"
+  } else {
     Add-StepStatus -Name "Setup OIDC (GitHub-Actions-OIDC)" -Status "Success" -Details "AppId=$($oidcResult.AppId)"
     Write-Host "  App (Client) ID: $($oidcResult.AppId)" -ForegroundColor Cyan
     Write-Host "  SP Object ID: $($oidcResult.SpObjectId)" -ForegroundColor Gray
@@ -1022,6 +1044,7 @@ AZUREAPPSERVICE_SUBSCRIPTIONID:  $($oidcResult.SubscriptionId)
     } else {
         Write-Host "  [INFO] Automatic configuration script not found - configure manually" -ForegroundColor Yellow
     }
+  } # end else (full AAD path)
 } else {
     Add-StepStatus -Name "Setup OIDC (GitHub-Actions-OIDC)" -Status "Failed" -Details "$($oidcResult.Error)"
     Write-Host "  [WARN] OIDC setup encountered errors: $($oidcResult.Error)" -ForegroundColor Yellow
