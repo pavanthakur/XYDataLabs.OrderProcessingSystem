@@ -59,6 +59,8 @@ jobs:
   deploy:
     runs-on: windows-latest
     needs: build
+    environment:
+      name: ${{ github.ref_name == 'main' && 'prod' || github.ref_name == 'staging' && 'staging' || 'dev' }}
     permissions:
       id-token: write
       contents: read
