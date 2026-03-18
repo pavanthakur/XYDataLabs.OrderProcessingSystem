@@ -12,6 +12,31 @@ on:
           - staging
           - prod
           - all
+      cleanupInfra:
+        description: '🗑️ Phase X (DESTRUCTIVE) — Cleanup Infrastructure | Deletes UI App, API App, then the entire Resource Group. ⚠️ IRREVERSIBLE — use only for teardown/reset. Do NOT combine with Bootstrap.'
+        required: true
+        type: boolean
+        default: false
+      bootstrapInfra:
+        description: '🔄 Phase 2 (day-to-day) — Bootstrap Infrastructure | Creates Resource Group, App Service Plan, Web Apps, App Insights, Key Vault + managed identity'
+        required: true
+        type: boolean
+        default: true
+      deployApi:
+        description: '🔄 Phase 2 (day-to-day) — Deploy API [Optional] | Deploys API code after infrastructure is ready'
+        required: true
+        type: boolean
+        default: true
+      deployUi:
+        description: '🔄 Phase 2 (day-to-day) — Deploy UI [Optional] | Deploys UI code after infrastructure is ready'
+        required: true
+        type: boolean
+        default: true
+      configureSecrets:
+        description: '🔑 Phase 1b — Configure GitHub Secrets | Requires Phase 0 (APP_ID+APP_PRIVATE_KEY). Run with 1a (first-time) or standalone to verify existing AZUREAPPSERVICE_* secrets'
+        required: true
+        type: boolean
+        default: false
       setupOidc:
         description: '🔑 Phase 1a — Setup Azure OIDC | First run: uses device code. Re-runs: uses existing AZUREAPPSERVICE_* credentials (no interactive login)'
         required: true
@@ -32,31 +57,6 @@ on:
         required: false
         type: string
         default: 'XYDataLabsGitHubApp'
-      configureSecrets:
-        description: '🔑 Phase 1b — Configure GitHub Secrets | Requires Phase 0 (APP_ID+APP_PRIVATE_KEY). Run with 1a (first-time) or standalone to verify existing AZUREAPPSERVICE_* secrets'
-        required: true
-        type: boolean
-        default: false
-      bootstrapInfra:
-        description: '🔄 Phase 2 (day-to-day) — Bootstrap Infrastructure | Creates Resource Group, App Service Plan, Web Apps, App Insights, Key Vault + managed identity'
-        required: true
-        type: boolean
-        default: true
-      deployApi:
-        description: '🔄 Phase 2 (day-to-day) — Deploy API [Optional] | Deploys API code after infrastructure is ready'
-        required: true
-        type: boolean
-        default: true
-      deployUi:
-        description: '🔄 Phase 2 (day-to-day) — Deploy UI [Optional] | Deploys UI code after infrastructure is ready'
-        required: true
-        type: boolean
-        default: true
-      cleanupInfra:
-        description: '🗑️ Phase X (DESTRUCTIVE) — Cleanup Infrastructure | Deletes UI App, API App, then the entire Resource Group. ⚠️ IRREVERSIBLE — use only for teardown/reset. Do NOT combine with Bootstrap.'
-        required: true
-        type: boolean
-        default: false
 
 permissions:
   contents: write
