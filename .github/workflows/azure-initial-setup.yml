@@ -727,7 +727,9 @@ jobs:
           $hasAppId       = "${{ secrets.APP_ID }}" -ne ""
           $hasPrivateKey  = "${{ secrets.APP_PRIVATE_KEY }}" -ne ""
           $appSecretsOk   = $hasAppId -and $hasPrivateKey
-          $allSuccess     = ($setupOidc -eq "success" -or $setupOidc -eq "skipped") -and ($configSecrets -eq "success" -or $configSecrets -eq "skipped")
+          $allSuccess     = ($validateInputs -eq "success") -and
+                            ($setupOidc     -eq "success" -or $setupOidc     -eq "skipped") -and
+                            ($configSecrets -eq "success" -or $configSecrets -eq "skipped")
 
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
           Write-Host "📊 INITIAL SETUP SUMMARY" -ForegroundColor Cyan
@@ -770,10 +772,6 @@ jobs:
           
           "### ✅ Job Execution Results" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
-
-          $validateInputs = "${{ needs.validate-inputs.result }}"
-          $setupOidc = "${{ needs.setup-oidc.result }}"
-          $configSecrets = "${{ needs.configure-github-secrets.result }}"
 
           "| Step | Status |" >> $env:GITHUB_STEP_SUMMARY
           "|------|--------|" >> $env:GITHUB_STEP_SUMMARY
