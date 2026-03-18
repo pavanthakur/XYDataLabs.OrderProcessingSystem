@@ -4,7 +4,7 @@ Day-to-day workflow for Azure infrastructure provisioning, application deploymen
 
 ## 🎯 Purpose
 
-This workflow (`azure-bootstrap.yml`) handles **infrastructure and deployment operations** for the Order Processing System. It provisions Azure resources (Phase 2), triggers API/UI deployments, and can tear down environments (Phase X).
+This workflow (`azure-bootstrap.yml`) handles **infrastructure and deployment operations** for the Order Processing System. It provisions Azure resources (Phase A), triggers API/UI deployments, and can tear down environments (Phase X).
 
 > ⚠️ **Prerequisite**: The [Azure Initial Setup](README-AZURE-INITIAL-SETUP.md) workflow must have completed successfully before this workflow can run. That workflow handles Phase 0 (GitHub App), Phase 1a (OIDC), and Phase 1b (GitHub secrets) — all one-time setup steps.
 
@@ -61,7 +61,7 @@ See [`README-AZURE-INITIAL-SETUP.md`](README-AZURE-INITIAL-SETUP.md) for the one
 | Input | Type | Default | Description |
 |-------|------|---------|-------------|
 | `environment` | choice | `dev` | Target: `dev` / `staging` / `prod` / `all`. Branch must match: `dev`→dev, `staging`→staging, `main`→prod. |
-| `bootstrapInfra` | boolean | `true` | **Phase 2** — Provisions Resource Group, App Service Plan, Web Apps, App Insights, Azure SQL, Key Vault + managed identity. |
+| `bootstrapInfra` | boolean | `true` | **Phase A** — Provisions Resource Group, App Service Plan, Web Apps, App Insights, Azure SQL, Key Vault + managed identity. |
 | `deployApi` | boolean | `true` | **Deploy** — Triggers `deploy-api-to-azure.yml` after bootstrap succeeds (or independently if bootstrap is not selected). |
 | `deployUi` | boolean | `true` | **Deploy** — Triggers `deploy-ui-to-azure.yml` after bootstrap succeeds (or independently if bootstrap is not selected). |
 | `cleanupInfra` | boolean | `false` | **Phase X (DESTRUCTIVE)** — Deletes UI App, API App, then entire Resource Group. ⚠️ Irreversible. Do NOT combine with bootstrap. |
@@ -81,7 +81,7 @@ See [`README-AZURE-INITIAL-SETUP.md`](README-AZURE-INITIAL-SETUP.md) for the one
 
 > **All operations in this workflow require OIDC credentials.** If `AZUREAPPSERVICE_*` secrets don't exist, `validate-inputs` fails immediately with a remediation message — before any other job runs.
 
-### 2. `bootstrap-dev` / `bootstrap-staging` / `bootstrap-prod` (Phase 2)
+### 2. `bootstrap-dev` / `bootstrap-staging` / `bootstrap-prod` (Phase A)
 **Runs when**: `bootstrapInfra=true` AND environment matches  
 **Needs**: `validate-inputs`
 
@@ -286,7 +286,7 @@ gh secret list --repo pavanthakur/XYDataLabs.OrderProcessingSystem
 
 | Operation | Method | Interactive? |
 |-----------|--------|-------------|
-| Phase 2 (bootstrap) | `azure/login@v2` (OIDC) | ❌ No — fully automated |
+| Phase A (bootstrap) | `azure/login@v2` (OIDC) | ❌ No — fully automated |
 | Phase X (cleanup) | `azure/login@v2` (OIDC) | ❌ No — fully automated |
 | Deploy triggers | `GITHUB_TOKEN` | ❌ No — automatic |
 
@@ -338,7 +338,7 @@ This workflow reads secrets — it does **not** create or modify them. Secret ma
           ▼                    ▼                     ▼
 ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
 │  bootstrap-dev   │ │ bootstrap-staging│ │  bootstrap-prod  │
-│  (Phase 2)       │ │  (Phase 2)      │ │  (Phase 2)       │
+│  (Phase A)       │ │  (Phase A)      │ │  (Phase A)       │
 │  ① Validate creds│ │  ① Validate creds│ │  ① Validate creds│
 │  ② azure/login   │ │  ② azure/login  │ │  ② azure/login   │
 │  ③ Run bootstrap │ │  ③ Run bootstrap│ │  ③ Run bootstrap  │
@@ -410,6 +410,6 @@ After deployment triggers succeed:
 
 ---
 
-**Last Updated**: 2026-03-18  
+**Last Updated**: 2026-03-19  
 **Workflow Version**: Current (`azure-bootstrap.yml` — "Azure Bootstrap & Deploy")  
 **Maintainer**: GitHub Copilot

@@ -112,7 +112,7 @@ After completion, proceed to the **Azure Bootstrap & Deploy** workflow for infra
 
 | Workflow | Purpose |
 |----------|---------|
-| [Azure Bootstrap & Deploy](README-AZURE-BOOTSTRAP.md) | Infrastructure provisioning + deployment (Phase 2/X) — run **after** this workflow |
+| [Azure Bootstrap & Deploy](README-AZURE-BOOTSTRAP.md) | Infrastructure provisioning + deployment (Phase A/X) — run **after** this workflow |
 | [Configure GitHub Secrets](README-CONFIGURE-GITHUB-SECRETS.md) | Reusable workflow called by Phase 1b |
 
 ---

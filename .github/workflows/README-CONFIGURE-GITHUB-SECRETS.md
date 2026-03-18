@@ -22,7 +22,7 @@ The GitHub App (`APP_ID` + `APP_PRIVATE_KEY`) is used **only to write `AZUREAPPS
 The `AZUREAPPSERVICE_*` secrets (`CLIENTID`, `TENANTID`, `SUBSCRIPTIONID`) are the output of Phase 1a. They represent an Azure identity (Entra ID App Registration with federated credentials).
 
 - **This workflow (Phase 1b) does NOT use these to authenticate to Azure.** It only stores their values as GitHub secrets.
-- Phase 2 (bootstrap infra) and Phase 3 (deploy) use `azure/login@v2` with these secrets to authenticate to Azure.
+- Phase A (bootstrap infra) and Deploy workflows use `azure/login@v2` with these secrets to authenticate to Azure.
 
 ### Why Phase 1b "depends on" OIDC credentials
 
@@ -37,13 +37,13 @@ Phase 1b needs the OIDC credential **values** to store them — not to authentic
 | Job | Uses `azure/login@v2`? | Notes |
 |-----|------------------------|-------|
 | **Phase 1b (this workflow)** | ❌ No | GitHub App token only |
-| Phase 1a (re-run) | ✅ Yes | Same credentials as Phase 2 |
-| Phase 2 (bootstrap-dev/staging/prod) | ✅ Yes | 3-step pattern: Validate → Login → Verify |
-| Phase 3 (deploy-api/ui) | ✅ Yes | 2-step pattern: Check → Login (conditional) |
+| Phase 1a (re-run) | ✅ Yes | Same credentials as Phase A |
+| Phase A (bootstrap-dev/staging/prod) | ✅ Yes | 3-step pattern: Validate → Login → Verify |
+| Deploy (deploy-api/ui) | ✅ Yes | 2-step pattern: Check → Login (conditional) |
 
 Each job calls `azure/login@v2` independently because GitHub Actions jobs run on isolated runners and cannot share login state.
 
-The **only** place where a human enters credentials to generate an Azure token is Phase 1a's first-time device-code step. All other Azure logins (Phase 1a re-run, Phase 2, Phase 3) are fully automated using the stored OIDC credentials.
+The **only** place where a human enters credentials to generate an Azure token is Phase 1a's first-time device-code step. All other Azure logins (Phase 1a re-run, Phase A, Deploy workflows) are fully automated using the stored OIDC credentials.
 
 ## Purpose
 
@@ -213,7 +213,7 @@ When `environment: all` is selected:
 4. summary
 ```
 
-> **Note:** Infrastructure bootstrap (Phase 2) and deployments are handled by the separate
+> **Note:** Infrastructure bootstrap (Phase A) and deployments are handled by the separate
 > `azure-bootstrap.yml` workflow, which runs _after_ initial setup is complete.
 
 ### Context Passing
@@ -538,19 +538,19 @@ Re-run the **Azure Initial Setup** workflow with **both** Phase 1 checkboxes sel
 
 ---
 
-### ℹ️ Is Azure OIDC Required for Phase 1b, 2, and 3?
+### ℹ️ Is Azure OIDC Required for Phase 1b, A, and Deploy?
 
-**Short answer: Yes for all three phases — but Phase 1a only needs to run ONCE.**
+**Short answer: Yes for Phase 1b, A, and Deploy — but Phase 1a only needs to run ONCE.**
 
 | Phase | Requires Azure OIDC? | Notes |
 |-------|---------------------|-------|
 | Phase 0 — GitHub App | ❌ No | Only manages GitHub secrets; no Azure access |
 | **Phase 1a — Setup Azure OIDC** | N/A — this IS the setup | Run once to create the Azure identity (`GitHub-Actions-OIDC` app registration) |
 | **Phase 1b — Configure Secrets** | ✅ Yes (first run only) | Needs `clientId`/`tenantId`/`subscriptionId` from Phase 1a to store as `AZUREAPPSERVICE_*` secrets. On re-runs: uses existing secrets if present — no Phase 1a needed. |
-| Phase 2 — Bootstrap Infrastructure | ✅ Yes | Uses `AZUREAPPSERVICE_*` secrets set by Phase 1b |
-| Phase 3 — Deploy API/UI | ✅ Yes | Uses `AZUREAPPSERVICE_*` secrets set by Phase 1b |
+| Phase A — Bootstrap Infrastructure | ✅ Yes | Uses `AZUREAPPSERVICE_*` secrets set by Phase 1b |
+| Deploy — Deploy API/UI | ✅ Yes | Uses `AZUREAPPSERVICE_*` secrets set by Phase 1b |
 
-> **Phase 0 (GitHub App) is NOT a substitute for OIDC.** The GitHub App is only for managing GitHub repository secrets (writing `AZUREAPPSERVICE_*` to GitHub). It does NOT grant any Azure permissions. Phase 2 and Phase 3 always authenticate to Azure via OIDC — the stored `AZUREAPPSERVICE_*` secrets are the mechanism.
+> **Phase 0 (GitHub App) is NOT a substitute for OIDC.** The GitHub App is only for managing GitHub repository secrets (writing `AZUREAPPSERVICE_*` to GitHub). It does NOT grant any Azure permissions. Phase A and Deploy workflows always authenticate to Azure via OIDC — the stored `AZUREAPPSERVICE_*` secrets are the mechanism.
 
 ## Validation
 
@@ -608,7 +608,7 @@ The workflow automatically validates configuration at the end:
 ## Related Workflows
 
 - **azure-initial-setup.yml**: Calls this workflow (Phase 0 → 1a → 1b)
-- **azure-bootstrap.yml**: Infrastructure bootstrap & deploy (Phase 2 + deployments) — runs after initial setup
+- **azure-bootstrap.yml**: Infrastructure bootstrap & deploy (Phase A + deployments) — runs after initial setup
 - **deploy-api-to-azure.yml**: API deployment (uses configured secrets)
 - **deploy-ui-to-azure.yml**: UI deployment (uses configured secrets)
 
@@ -618,9 +618,56 @@ The workflow automatically validates configuration at the end:
 - Extracted jobs: setup-github-app, configure-secrets, validate-configuration
 - Added workflow_call support for integration
 - Added comprehensive validation and error handling
-- **v1.1**: Workflow split — now called exclusively by `azure-initial-setup.yml` (no longer by `azure-bootstrap.yml`). Phase 0/1a/1b live in Initial Setup; Phase 2 + deployments live in Bootstrap & Deploy.
+- **v1.1**: Workflow split — now called exclusively by `azure-initial-setup.yml` (no longer by `azure-bootstrap.yml`). Phase 0/1a/1b live in Initial Setup; Phase A + deployments live in Bootstrap & Deploy.
+- **v1.2**: Phase 2/3 naming retired — renamed to Phase A (bootstrap) and Deploy. Backtick rendering fix in step summaries. LASTEXITCODE false exit-1 fix, fail-hard behavior, and comprehensive diagnostics added.
 
 ---
 
-**Last Updated**: 2026-03-18
+## 🔧 Recent Functional Changes (March 2026)
+
+### Backtick Rendering Fix in Step Summaries
+**Symptom**: GitHub step summary showed `\APP_ID\` instead of `` `APP_ID` ``.
+**Root cause**: In PowerShell double-quoted strings, the sequence `` \` `` is a literal backslash followed by the escape character — producing `\X` not `` `X` ``. All GITHUB_STEP_SUMMARY lines used `` \` `` wrapping.
+**Fix**: Replaced all occurrences of `` \` `` with ` `` ` (double backtick = literal backtick in PowerShell double-quoted strings) across every `$env:GITHUB_STEP_SUMMARY` heredoc in this workflow.
+
+### LASTEXITCODE False Exit-1 Fix
+**Commit**: `dffb1eb`
+**Symptom**: `Validate Prerequisites` step failed even when validation passed — logged "✅ Prerequisite validation complete" then immediately exited with code 1.
+**Root cause**: `gh secret list --env prod` returns a non-zero exit code when the environment does not yet exist. GitHub Actions checks `$LASTEXITCODE` implicitly at the end of every `run:` step with `pwsh`. The `else` branch handled the missing environment gracefully, but the non-zero `$LASTEXITCODE` was still visible at step exit.
+**Fix**: Added `exit 0` at the very end of the `Validate Prerequisites` step, after all validation logic, to ensure the step always exits cleanly when the script itself determined success.
+
+### Fail-Hard for Environment Secret Creation
+**Commit**: `12266d6`
+**What changed**: The `Set Environment Secrets` step now tracks failures per-environment and per-secret into a `$totalFail` counter. If `$totalFail -gt 0` at the end, the step exits with code 1.
+**Why**: All three environments (`dev`, `staging`, `prod`) must have correct secrets for any deployment to work. A partial write leaves the repository in an inconsistent state, so a warning-only path was insufficient.
+
+### Comprehensive Failure Diagnostics
+**Commit**: `12266d6`
+**What changed**: Every failure path now emits structured diagnostic output:
+- Exact API response or `gh` exit code
+- Authentication method in use at the time of failure
+- The exact command that failed (for copy-paste reproduction)
+- Numbered list of possible causes, each with a direct URL for remediation
+
+**Failure paths covered**:
+| Step | Condition | Diagnostic info logged |
+|------|-----------|----------------------|
+| `Validate Prerequisites` | `AZUREAPPSERVICE_*` secrets missing | Which env is missing + how to re-run Initial Setup |
+| `Check GitHub App Authentication` | `else` branch (not token nor app) | All 3 boolean values + per-condition guidance |
+| `Set Repository Secrets` | Required value missing | Per-value source explanation + solution |
+| `Set Repository Secrets` | `gh secret set` failure | Target / auth method / exact command / 3 causes |
+| `Set Environment Secrets` | Environment creation fails | API endpoint + 3 causes with doc links |
+| `Set Environment Secrets` | Per-secret write fails | API response + exact command + causes |
+
+### Three-Way `useExistingSecrets` Decision Logic
+**Commit**: `d7c785d`
+**What changed**: The prerequisite check now always queries environment-level secrets (not just repo-level) before deciding whether to skip secret writes. Three outcomes:
+1. Fresh credentials passed as inputs → `useExistingSecrets = false` (always write)
+2. No fresh creds, but all three `AZUREAPPSERVICE_*` exist at repo or environment level → `useExistingSecrets = true` (skip writes; credential rotation not needed)
+3. No fresh creds, secrets missing → fail with diagnostic error pointing to Initial Setup
+**Also**: Added `|| secrets.*` fallback to `env:` blocks in downstream jobs so existing repository secrets work as credential sources without requiring explicit inputs.
+
+---
+
+**Last Updated**: 2026-03-19
 **Maintainer**: GitHub Copilot

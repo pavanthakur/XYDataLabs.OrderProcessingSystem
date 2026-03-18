@@ -1,4 +1,4 @@
-name: Azure Bootstrap & Deploy
+﻿name: Azure Bootstrap & Deploy
 
 on:
   workflow_dispatch:
@@ -14,17 +14,17 @@ on:
           - all
         default: 'dev'
       bootstrapInfra:
-        description: '🔄 Phase 2 — Bootstrap Infrastructure | Creates Resource Group, App Service Plan, Web Apps, App Insights, Key Vault + managed identity'
+        description: '🔄 Phase A — Bootstrap Infrastructure | Creates Resource Group, App Service Plan, Web Apps, App Insights, Key Vault + managed identity'
         required: true
         type: boolean
         default: true
       deployApi:
-        description: '🔄 Phase 2 — Deploy API [Optional] | Deploys API code after infrastructure is ready'
+        description: '🔄 Phase A — Deploy API [Optional] | Deploys API code after infrastructure is ready'
         required: true
         type: boolean
         default: true
       deployUi:
-        description: '🔄 Phase 2 — Deploy UI [Optional] | Deploys UI code after infrastructure is ready'
+        description: '🔄 Phase A — Deploy UI [Optional] | Deploys UI code after infrastructure is ready'
         required: true
         type: boolean
         default: true
@@ -80,11 +80,11 @@ jobs:
           Write-Host "  environment          = ${{ inputs.environment }}" -ForegroundColor White
           Write-Host "" -ForegroundColor Gray
           Write-Host "  INFRASTRUCTURE:" -ForegroundColor Cyan
-          Write-Host "  bootstrapInfra       = ${{ inputs.bootstrapInfra }}  $(if ('${{ inputs.bootstrapInfra }}' -eq 'true') { '[✅ checked]   — Phase 2: Bootstrap Infrastructure' } else { '[☐  unchecked] — Phase 2: Bootstrap Infrastructure' })" -ForegroundColor $(if ('${{ inputs.bootstrapInfra }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "  bootstrapInfra       = ${{ inputs.bootstrapInfra }}  $(if ('${{ inputs.bootstrapInfra }}' -eq 'true') { '[✅ checked]   — Phase A: Bootstrap Infrastructure' } else { '[☐  unchecked] — Phase A: Bootstrap Infrastructure' })" -ForegroundColor $(if ('${{ inputs.bootstrapInfra }}' -eq 'true') { 'Green' } else { 'DarkGray' })
           Write-Host "" -ForegroundColor Gray
           Write-Host "  DEPLOYMENT:" -ForegroundColor Cyan
-          Write-Host "  deployApi            = ${{ inputs.deployApi }}  $(if ('${{ inputs.deployApi }}' -eq 'true') { '[✅ checked]   — Phase 2: Deploy API' } else { '[☐  unchecked] — Phase 2: Deploy API' })" -ForegroundColor $(if ('${{ inputs.deployApi }}' -eq 'true') { 'Green' } else { 'DarkGray' })
-          Write-Host "  deployUi             = ${{ inputs.deployUi }}  $(if ('${{ inputs.deployUi }}' -eq 'true') { '[✅ checked]   — Phase 2: Deploy UI' } else { '[☐  unchecked] — Phase 2: Deploy UI' })" -ForegroundColor $(if ('${{ inputs.deployUi }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "  deployApi            = ${{ inputs.deployApi }}  $(if ('${{ inputs.deployApi }}' -eq 'true') { '[✅ checked]   — Phase A: Deploy API' } else { '[☐  unchecked] — Phase A: Deploy API' })" -ForegroundColor $(if ('${{ inputs.deployApi }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "  deployUi             = ${{ inputs.deployUi }}  $(if ('${{ inputs.deployUi }}' -eq 'true') { '[✅ checked]   — Phase A: Deploy UI' } else { '[☐  unchecked] — Phase A: Deploy UI' })" -ForegroundColor $(if ('${{ inputs.deployUi }}' -eq 'true') { 'Green' } else { 'DarkGray' })
           Write-Host "" -ForegroundColor Gray
           Write-Host "  CLEANUP:" -ForegroundColor $(if ('${{ inputs.cleanupInfra }}' -eq 'true') { 'Red' } else { 'DarkGray' })
           Write-Host "  cleanupInfra         = ${{ inputs.cleanupInfra }}  $(if ('${{ inputs.cleanupInfra }}' -eq 'true') { '[✅ checked]   — Phase X: ⚠️  DESTRUCTIVE Cleanup' } else { '[☐  unchecked] — Phase X: Cleanup Infrastructure' })" -ForegroundColor $(if ('${{ inputs.cleanupInfra }}' -eq 'true') { 'Red' } else { 'DarkGray' })
@@ -210,9 +210,9 @@ jobs:
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
           Write-Host ""
 
-          # Phase 2: Bootstrap Infrastructure
+          # Phase A: Bootstrap Infrastructure
           $phase2Icon = if ($doBootstrap) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }
-          Write-Host "  Phase 2 — Bootstrap Infrastructure : $phase2Icon" -ForegroundColor $(if ($doBootstrap) { 'Cyan' } else { 'DarkGray' })
+          Write-Host "  Phase A — Bootstrap Infrastructure : $phase2Icon" -ForegroundColor $(if ($doBootstrap) { 'Cyan' } else { 'DarkGray' })
           if ($doBootstrap) {
             Write-Host "             └─ Azure auth: AZUREAPPSERVICE_* secrets → azure/login@v2 (OIDC) ✅" -ForegroundColor Green
             Write-Host "             └─ Deploy API: $(if ($doDeployApi) { '✅ Yes' } else { 'No' })" -ForegroundColor Gray
