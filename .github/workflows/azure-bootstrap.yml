@@ -46,12 +46,12 @@ on:
         description: '🔄 Phase 2 (day-to-day) — Deploy API [Optional] | Deploys API code after infrastructure is ready'
         required: true
         type: boolean
-        default: false
+        default: true
       deployUi:
         description: '🔄 Phase 2 (day-to-day) — Deploy UI [Optional] | Deploys UI code after infrastructure is ready'
         required: true
         type: boolean
-        default: false
+        default: true
       cleanupInfra:
         description: '🗑️ Phase X (DESTRUCTIVE) — Cleanup Infrastructure | Deletes UI App, API App, then the entire Resource Group. ⚠️ IRREVERSIBLE — use only for teardown/reset. Do NOT combine with Bootstrap.'
         required: true
