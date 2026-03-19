@@ -12,31 +12,34 @@
 **✅ COMPLETED SO FAR (Days 1-31):**
 - ✅ Azure fundamentals (Portal, CLI, resource management)
 - ✅ App Service deployment with OIDC authentication
-- ✅ GitHub Actions CI/CD workflows
+- ✅ GitHub Actions CI/CD workflows (9 workflows: bootstrap, initial setup, deploy API/UI, infra deploy, validate, docker health)
 - ✅ Bicep Infrastructure as Code (modules + parameters)
 - ✅ Multi-environment setup (dev/staging/prod)
+- ✅ Advanced CI/CD: parallel dispatch, health check retries (3×60s), bootstrap summary with endpoints table
 
 **🔥 YOUR NEXT 3 PRIORITIES:**
 
-### Priority 1: Complete Azure Fundamentals (Days 32-56)
-**Why:** Build strong foundation before containers  
+### Priority 1: Azure Data & Resilience (Days 32-56)
+**Why:** Connect your app to real Azure data services using passwordless auth — the foundation for everything that follows  
 **Tasks:**
-- Days 32-40: Azure SQL Database, Entity Framework migrations
-- Days 41-48: Azure Functions, Event Grid, Service Bus
-- Days 49-56: Azure Key Vault, security best practices
+- Days 32-43: Azure SQL + EF Core + `DefaultAzureCredential` + Polly + Health Checks
+- Days 44-52: Azure Functions + Service Bus (microservice pub/sub in C#)
+- Days 53-56: Key Vault + `IOptions<T>` + Worker Services + Outbox Pattern
 
-### Priority 2: Start Docker Journey (Days 57-63) - Week 9
-**Why:** Core skill for ACA migration  
-**Starting Point:** See "Week 9: Docker & Containerization Fundamentals" below  
-**First Steps:**
-1. Install Docker Desktop
-2. Run your first container: `docker run hello-world`
-3. Dockerize your API with multi-stage Dockerfile
-4. Test locally before Azure deployment
+### Priority 2: Azure Services Deep Dive + Containers (Days 57-86)
+**Why:** Master advanced Azure services, then containerise with confidence  
+**Tasks:**
+- Days 57-65: Azure Functions Advanced (Durable) + Serilog structured logging
+- Days 66-72: Cosmos DB (with C# SDK + `DefaultAzureCredential`) + Azure Cache for Redis
+- Days 73-86: .NET Aspire orchestration + Docker + Integration Tests (TestContainers) + ACR
 
-### Priority 3: Create ACA Migration Plan Timeline
-**Why:** Know your full journey ahead  
-**Action:** Review the complete 16-week plan below and set realistic dates
+### Priority 3: ACA + Auth + Enterprise (Days 87-112)
+**Why:** Migrate to containers with full enterprise security and observability  
+**Tasks:**
+- Days 87-93: ACA deployment via Aspire (`azd up`) + Log Analytics + ingress
+- Days 94-96: APIM JWT validation + `JwtBearer` middleware + RBAC in C#
+- Days 97-100: Security scanning (Trivy, SBOM) + Azure Defender + Azure Policy
+- Days 101-112: Front Door + APIM versioning + SRE practices + Final ACA migration
 
 ---
 
@@ -254,18 +257,195 @@ After completing today's tasks, you will have:
 - [ ] **Optional:** Deploy with dry run = false
 - [x] **Time:** 2 hours | **Completed:** ✅ Code done, testing pending
 
-#### Day 32-56: Continue Azure_Learning_Guide_Complete.md curriculum
-*(Serverless, databases, security, monitoring - follow existing guide)*
+---
+
+### Week 5-8 (continued): Azure Data & Resilience (Days 32-56)
+
+#### Day 32: Azure SQL Database — Provision via Bicep
+- [ ] Create `infra/modules/sql.bicep` (SQL Server + database)
+- [ ] Add SQL module to `infra/main.bicep` with firewall rules
+- [ ] Deploy via `az deployment group create -g rg-orderprocessing-dev -f infra/main.bicep`
+- [ ] Verify database in Azure Portal
+- [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
+
+#### Day 33: EF Core Migrations Against Azure SQL
+- [ ] Configure EF Core connection string for Azure SQL
+- [ ] Run `dotnet ef migrations add InitialCreate`
+- [ ] Apply migrations: `dotnet ef database update`
+- [ ] Seed test data and verify via Azure Portal Data Explorer
+- [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
+
+#### Day 34: Environment-Specific SQL Configuration
+- [ ] Configure SQL connection strings in `Resources/Configuration/sharedsettings.{dev,staging,prod}.json`
+- [ ] Enable SQL logging in development
+- [ ] Test connection from App Service in Azure Portal
+- [ ] **Time:** 1 hour | **Completed:** ___/___/___
+
+#### Day 35: SQL Security — Enable Managed Identity
+- [ ] Enable system-assigned managed identity on App Service
+- [ ] Create SQL contained user: `CREATE USER [<app-service-name>] FROM EXTERNAL PROVIDER`
+- [ ] Grant roles: `ALTER ROLE db_datareader ADD MEMBER [<app-service-name>]`
+- [ ] Verify passwordless connection from Azure App Service logs
+- [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
+
+#### Day 36: 🆕 DefaultAzureCredential in C# (Azure-first .NET)
+> **Why now:** First time C# code connects to Azure without any stored password or secret
+- [ ] Add `Azure.Identity` NuGet package
+- [ ] Replace SQL password auth with access token via `DefaultAzureCredential`
+- [ ] Understand credential chain: `EnvironmentCredential → ManagedIdentityCredential → VisualStudioCredential → AzureCliCredential`
+- [ ] Test locally: `az login` → CLI credential picked up automatically
+- [ ] Test in Azure: Managed Identity credential used automatically
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+
+#### Day 37: Connect API to Azure SQL — Passwordless End-to-End
+- [ ] Update `DbContext` to supply `DefaultAzureCredential` access token for Azure SQL
+- [ ] Verify no SQL username/password anywhere in config or environment variables
+- [ ] Deploy updated API and confirm successful connection in Application Insights
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+
+#### Day 38: Azure SQL — Resilience Baseline
+- [ ] Test what happens when SQL is briefly unavailable (stop/start via Portal)
+- [ ] Observe EF Core default retry (`EnableRetryOnFailure`)
+- [ ] Document failure modes and plan Polly layering (Day 39)
+- [ ] **Time:** 1 hour | **Completed:** ___/___/___
+
+#### Day 39: 🆕 Polly — Retry & Circuit Breaker (Azure-first .NET)
+> **Why now:** Azure SQL + downstream services fail transiently — structured retries are essential
+- [ ] Add `Microsoft.Extensions.Http.Polly` NuGet package
+- [ ] Configure `IHttpClientFactory` with Polly retry policy (3 retries, exponential backoff with jitter)
+- [ ] Add circuit breaker policy (5 consecutive failures → open for 30 seconds)
+- [ ] Test: simulate transient failure and observe retry behaviour in logs
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+
+#### Day 40: Polly — Timeout & Fallback Policies
+- [ ] Add timeout policy (10 seconds for external HTTP calls)
+- [ ] Add fallback policy (return cached/default data when all retries exhausted)
+- [ ] Combine policies with `PolicyWrap`
+- [ ] Log retry attempts to Application Insights as custom events
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+
+#### Day 41: Resilience Testing in Azure
+- [ ] Use Azure Portal → App Service → "Stop" to simulate downstream failure
+- [ ] Observe Polly circuit breaker opening after threshold
+- [ ] Observe automatic recovery when service resumes
+- [ ] Document resilience patterns for interview readiness
+- [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
+
+#### Day 42: 🆕 ASP.NET Core Health Checks (Azure-first .NET)
+> **Why now:** Required for App Service health probe verification and ACA readiness probes later
+- [ ] Add `Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore` NuGet package
+- [ ] Register health checks: `AddHealthChecks().AddDbContextCheck<AppDbContext>()`
+- [ ] Map endpoints: `app.MapHealthChecks("/health")` (liveness) and `/health/ready` (readiness + DB check)
+- [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
+
+#### Day 43: Health Checks — Azure Integration
+- [ ] Configure App Service health check probe to use `/health` endpoint
+- [ ] Add custom health check for Service Bus connectivity
+- [ ] View health status in Azure Portal → App Service → Health Check
+- [ ] **Time:** 1 hour | **Completed:** ___/___/___
+
+#### Day 44: Azure Functions — HTTP Trigger
+- [ ] Create first HTTP-triggered Function (order processing trigger)
+- [ ] Deploy Function App to Azure via Bicep
+- [ ] Monitor invocations with Application Insights
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+
+#### Day 45: Azure Functions — Timer Trigger & Output Bindings
+- [ ] Create Timer-triggered Function (scheduled order cleanup)
+- [ ] Use output binding to write to Azure SQL
+- [ ] Test locally with Azure Functions Core Tools
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+
+#### Day 46: Azure Functions — Deployment & OIDC
+- [ ] Create GitHub Actions workflow for Function App deployment
+- [ ] Use OIDC login (same pattern as App Service)
+- [ ] Configure Function App settings via Bicep
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+
+#### Day 47: Azure Functions — Monitoring & Cold Start
+- [ ] View Function invocations in Application Insights
+- [ ] Understand cold start in Consumption plan
+- [ ] Compare Consumption vs Premium plan (always-on)
+- [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
+
+#### Day 48: Azure Service Bus — Namespace, Topics & Subscriptions
+- [ ] Create Service Bus namespace (Standard tier) via Bicep
+- [ ] Create Topic `order-events` with Subscriptions: `inventory-sub`, `notifications-sub`
+- [ ] Grant Managed Identity `Azure Service Bus Data Sender` role on namespace
+- [ ] Grant Managed Identity `Azure Service Bus Data Receiver` role for each subscription
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+
+#### Day 49: 🆕 Microservice Pub/Sub in C# via Service Bus (Azure-first .NET)
+> **Why now:** Real service-to-service decoupling — replace direct HTTP calls between microservices
+- [ ] Add `Azure.Messaging.ServiceBus` NuGet package
+- [ ] **Orders API (Publisher):** Use `ServiceBusClient` + `ServiceBusSender` with `DefaultAzureCredential` to publish `OrderPlacedEvent` to `order-events` Topic
+- [ ] **Inventory API (Subscriber):** Use `ServiceBusProcessor` on `inventory-sub` to consume events
+- [ ] **Notifications API (Subscriber):** Use `ServiceBusProcessor` on `notifications-sub`
+- [ ] All three use `DefaultAzureCredential` — no connection strings in code
+- [ ] Test end-to-end: place order → both APIs receive event independently
+- [ ] **Time:** 3 hours | **Completed:** ___/___/___
+
+#### Day 50: Service Bus — Dead Letter, Retry & Monitoring
+- [ ] Implement dead-letter queue handling for failed messages
+- [ ] Configure max delivery count (3 retries before dead-lettering)
+- [ ] Monitor message counts (active, dead-lettered) in Azure Portal
+- [ ] Verify end-to-end: order placed → Inventory updated + Notification sent
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+
+#### Day 51: Event Grid — Reactive Architecture
+- [ ] Create Event Grid Topic for Azure resource events
+- [ ] Subscribe Azure Function to Event Grid events (blob upload → process)
+- [ ] Compare: Service Bus (command/guaranteed delivery) vs Event Grid (system events/push)
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+
+#### Day 52: Decision Matrix — Event Grid vs Service Bus vs Storage Queue
+- [ ] Document architectural decision matrix with real examples from OrderProcessingSystem
+- [ ] Understand when to use each service for the order processing scenarios
+- [ ] **Time:** 1 hour | **Completed:** ___/___/___
+
+#### Day 53: Azure Key Vault + Azure App Configuration
+- [ ] Add additional secrets to existing Key Vault (API keys, feature flags)
+- [ ] Provision Azure App Configuration store via Bicep
+- [ ] Store feature flags and non-secret configuration in App Configuration
+- [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
+
+#### Day 54: 🆕 IOptions\<T\> — Bind Secrets & Config in C# (Azure-first .NET)
+> **Why now:** Key Vault and App Configuration are useless without strongly-typed C# classes to consume them
+- [ ] Add `Azure.Extensions.AspNetCore.Configuration.Secrets` (Key Vault config provider)
+- [ ] Add `Microsoft.Extensions.Configuration.AzureAppConfiguration` NuGet package
+- [ ] Register both providers in `Program.cs` using `DefaultAzureCredential`
+- [ ] Create `OrderSettings`, `ServiceBusSettings`, `DatabaseSettings` option classes
+- [ ] Bind via `services.Configure<OrderSettings>(configuration.GetSection("Orders"))`
+- [ ] Inject `IOptions<OrderSettings>` in services — no raw `IConfiguration` in business logic
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+
+#### Day 55: 🆕 Worker Services + BackgroundService on Azure (Azure-first .NET)
+> **Why now:** Long-running background polling from Service Bus needs a hosted Worker Service
+- [ ] Create `XYDataLabs.OrderProcessingSystem.Worker` project (Worker Service template)
+- [ ] Implement `BackgroundService` that processes order events via `ServiceBusProcessor`
+- [ ] Register as `IHostedService` in DI
+- [ ] Deploy as a separate Azure App Service (Worker)
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+
+#### Day 56: 🆕 Outbox Pattern — Reliable Messaging (Azure-first .NET)
+> **Why now:** Without Outbox, a DB write can succeed but the Service Bus publish can silently fail — losing the event
+- [ ] Add `OutboxMessage` table to SQL database via EF migration
+- [ ] In `PlaceOrder` handler: write to `Orders` + `OutboxMessage` in a single SQL transaction
+- [ ] Create background worker that reads `OutboxMessage` rows, publishes to Service Bus, marks as processed
+- [ ] Test: simulate Service Bus downtime — order saved, event delivered later when bus recovers
+- [ ] **Time:** 3 hours | **Completed:** ___/___/___
 
 ---
 
-### Week 9: Docker & Containerization Fundamentals
-**Reference:** Containerization-ACA-Aspire-Learning-Path.md → Module 1
+### Week 9: Azure Functions Advanced & Event-Driven Architecture (Days 57-64)
+> **Note:** Azure Functions basics (HTTP trigger, Timer trigger, OIDC deployment) are covered in Days 44-47. Days 57-64 build on the Service Bus work from Days 48-50 with advanced patterns.
 
-#### Day 57: Azure Functions Basics
-- [ ] Create first HTTP-triggered Function
-- [ ] Deploy Function to Azure
-- [ ] Monitor with Application Insights
+#### Day 57: Queue-Triggered Azure Functions (Advanced Patterns)
+- [ ] Create Queue-triggered Azure Function building on Day 48 Service Bus setup
+- [ ] Handle poison messages with retry logic and dead-letter
+- [ ] Monitor queue metrics in Application Insights
+- [ ] Test at-least-once delivery semantics
+- [ ] Implement dead-letter queue handling
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 #### Day 58: 🆕 Azure Storage Queues vs Service Bus
@@ -284,13 +464,13 @@ After completing today's tasks, you will have:
 - [ ] Implement dead-letter queue handling
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
-#### Day 60: Service Bus Deep Dive
-- [ ] Create Service Bus namespace (Standard tier)
-- [ ] Create Queue for critical order processing
-- [ ] Create Topic + Subscriptions for event broadcasting
-- [ ] Implement Service Bus-triggered Function
-- [ ] Test message ordering with sessions
-- [ ] Implement dead-letter queue handling
+#### Day 60: Service Bus — Advanced Patterns (Sessions, Transactions, Deduplication)
+> **Note:** Service Bus namespace creation and pub/sub between microservices was covered in Days 48-50. This day focuses on advanced patterns.
+- [ ] Implement message sessions for ordered per-customer processing via `ServiceBusSessionProcessor`
+- [ ] Use `ServiceBusReceiver` with `ReceiveMode.PeekLock` for transactional processing
+- [ ] Test message deduplication using message ID
+- [ ] Implement Service Bus-triggered Azure Function for order processing
+- [ ] Document when to use sessions vs standard queues
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 #### Day 61: Event Grid vs Service Bus (Interview Critical)
@@ -313,24 +493,30 @@ After completing today's tasks, you will have:
 
 ---
 
-### Week 8: 🆕 Azure Cosmos DB (NoSQL Database)
+### Week 10: 🆕 Serilog + Cosmos DB + Redis (Days 65-72)
 **Reference:** AZURE-TOP-7-SERVICES-ANALYSIS.md
 
-#### Day 65: Cosmos DB Fundamentals
-- [ ] Provision Cosmos DB account (Core SQL API)
-- [ ] Create database and container
-- [ ] Understand partition keys and Request Units (RUs)
-- [ ] Insert first document via Azure Portal
-- [ ] Query data with Data Explorer
+#### Day 65: 🆕 Serilog Structured Logging (Azure-first .NET)
+> **Why now:** Unstructured logs are unreadable in Docker and ACA containers — Serilog must be in place before containerising
+- [ ] Add `Serilog.AspNetCore`, `Serilog.Sinks.ApplicationInsights`, `Serilog.Enrichers.Environment` NuGet packages
+- [ ] Replace default logging with Serilog in `Program.cs` using `UseSerilog()`
+- [ ] Configure sinks: Console (structured JSON) + Application Insights
+- [ ] Add enrichers: `WithMachineName()`, `WithEnvironmentName()`, `WithCorrelationId()`
+- [ ] Use structured properties (not string interpolation): `Log.Information("Order {OrderId} placed for {CustomerId}", orderId, customerId)`
+- [ ] Verify correlation IDs flow across service calls in App Insights
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
-#### Day 66: Cosmos DB SDK Integration
-- [ ] Add Microsoft.Azure.Cosmos NuGet package
+#### Day 66: Cosmos DB Fundamentals + SDK Integration (with DefaultAzureCredential)
+- [ ] Provision Cosmos DB account (Core SQL API) via Bicep
+- [ ] Create database and container with appropriate partition key
+- [ ] Understand partition keys and Request Units (RUs)
+- [ ] Insert first document via Azure Portal, query with Data Explorer
+- [ ] Add `Microsoft.Azure.Cosmos` NuGet package
+- [ ] Connect using `DefaultAzureCredential` (no connection strings)
 - [ ] Create repository pattern for Cosmos DB
 - [ ] Implement CRUD operations (Create, Read, Update, Delete)
-- [ ] Query with LINQ and SQL syntax
-- [ ] Handle partition key in operations
-- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+- [ ] Query with LINQ and SQL syntax, handle partition key in operations
+- [ ] **Time:** 3 hours | **Completed:** ___/___/___
 
 #### Day 67: Product Catalog Microservice
 - [ ] Create new project: `XYDataLabs.OrderProcessingSystem.ProductCatalogAPI`
@@ -366,7 +552,7 @@ After completing today's tasks, you will have:
 
 ---
 
-### Week 9: 🆕 Azure Cache for Redis
+### Week 10 (continued): 🆕 Azure Cache for Redis
 **Reference:** AZURE-TOP-7-SERVICES-ANALYSIS.md
 
 #### Day 71: Redis Fundamentals & Integration
@@ -391,7 +577,7 @@ After completing today's tasks, you will have:
 
 ---
 
-### Week 10: 🆕 .NET Aspire - Cloud-Native Orchestration ⭐ NEW
+### Week 11: 🆕 .NET Aspire - Cloud-Native Orchestration ⭐ NEW
 **Reference:** Official .NET Aspire documentation
 
 #### Day 73: .NET Aspire Fundamentals
@@ -456,27 +642,29 @@ After completing today's tasks, you will have:
 
 ---
 
-### Week 11: Azure Container Registry (ACR) + Aspire Deployment
+### Week 11 (continued): Azure Container Registry (ACR) + Aspire Deployment
 **Reference:** Containerization-ACA-Aspire-Learning-Path.md → Module 2
 
-#### Day 80: Docker Basics (Quick Refresher)
+#### Day 80: Docker Basics + Integration Testing (Azure-first .NET)
+> **Why integration testing now:** Before pushing real container images to ACR you need a reliable test suite
 - [ ] Verify Docker Desktop running
 - [ ] Create multi-stage Dockerfile for Orders API
 - [ ] Build image: `docker build -t orderprocessing-api:local`
 - [ ] Understand Aspire uses Docker under the hood
-- [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
+- [ ] 🆕 Add `Microsoft.AspNetCore.Mvc.Testing` + `Testcontainers.MsSql` + `Testcontainers.Redis` NuGet packages
+- [ ] 🆕 Create `IntegrationTests` project with `WebApplicationFactory<Program>` test base
+- [ ] 🆕 Write integration test: spin up SQL + Redis containers, run API, POST `/orders`, assert response
+- [ ] 🆕 Add integration test step to GitHub Actions CI workflow (runs before pushing to ACR)
+- [ ] **Time:** 3 hours | **Completed:** ___/___/___
 
-#### Day 81: Provision ACR via Bicep
+#### Day 81: Provision ACR via Bicep + Authenticate
 - [ ] Create `infra/modules/acr.bicep` (Task 2.1)
 - [ ] Add ACR to `infra/main.bicep`
 - [ ] Deploy: `az deployment sub create`
-- [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
-
-#### Day 81: ACR Authentication
 - [ ] Login to ACR: `az acr login --name <acr>`
 - [ ] Tag image: `docker tag <image> <acr>.azurecr.io/<image>:v1`
 - [ ] Push image: `docker push <acr>.azurecr.io/<image>:v1`
-- [ ] **Time:** 1 hour | **Completed:** ___/___/___
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 #### Day 82: CI/CD - Build & Push Containers
 **Reference:** Task 2.2
@@ -565,57 +753,8 @@ After completing today's tasks, you will have:
 - [ ] Cost analysis: ACA pricing model
 - [ ] Decide: Aspire for development, ACA for production
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
-- [ ] **Time:** 2-3 hours | **Completed:** ___/___/___
 
----
-
-### Week 12: Observability & OpenTelemetry
-**Reference:** Containerization-ACA-Aspire-Learning-Path.md → Module 4
-
-#### Day 78: Install OpenTelemetry Packages
-**Reference:** Task 4.1
-- [ ] Add NuGet packages to API project
-- [ ] Configure OpenTelemetry in `Program.cs`
-- [ ] Wire to Application Insights connection string
-- [ ] **Time:** 1 hour | **Completed:** ___/___/___
-
-#### Day 79: Deploy & Verify Telemetry
-- [ ] Rebuild API with OTel, push to ACR
-- [ ] Deploy new revision to ACA
-- [ ] View traces in Application Insights Transaction Search
-- [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
-
-#### Day 80: Custom Metrics & Distributed Tracing
-- [ ] Add custom spans and metrics
-- [ ] Test distributed tracing (UI → API)
-- [ ] Create Application Map in App Insights
-- [ ] **Time:** 2 hours | **Completed:** ___/___/___
-
-#### Day 81: Log Analytics Queries
-- [ ] Write KQL queries for container logs
-- [ ] Filter by app, severity, time range
-- [ ] Create saved queries
-- [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
-
-#### Day 82: Alerts & Action Groups
-**Reference:** ACA-Migration-Plan.md → Phase 3
-- [ ] Create Action Group (email notification)
-- [ ] Set metric alert (CPU > 80%)
-- [ ] Set log alert (error rate threshold)
-- [ ] **Time:** 1 hour | **Completed:** ___/___/___
-
-#### Day 83: Workbooks & Dashboards
-**Reference:** ACA-Migration-Plan.md → Phase 12b
-- [ ] Create Azure Monitor workbook
-- [ ] Add charts: request rate, latency, errors
-- [ ] Pin to Azure Dashboard
-- [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
-
-#### Day 84: Review & Lab
-- [ ] Trigger alerts intentionally (load test)
-- [ ] Analyze end-to-end transaction in App Insights
-- [ ] Weekend: Set up availability tests (synthetic monitoring)
-- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+> **Observability note:** OpenTelemetry, distributed tracing, custom metrics, KQL queries, alerts, and workbooks are covered as part of the .NET Aspire observability deep-dive in Days 78-79 and the ACA Log Analytics work in Day 87. The Aspire Service Defaults project wires OTel automatically.
 
 ---
 
@@ -667,8 +806,9 @@ After completing today's tasks, you will have:
 
 ### Week 14: 🆕 Azure API Management (APIM)
 **Reference:** AZURE-TOP-7-SERVICES-ANALYSIS.md
+> **Sequence note:** This section follows ACA completion (Day 93). Days 91-98 here map to calendar Days 94-101 in the overall plan.
 
-#### Day 91: APIM Fundamentals
+#### Day 91 (→94): APIM Fundamentals
 - [ ] Provision API Management service (Developer tier)
 - [ ] Understand APIM components: Gateway, Portal, Management API
 - [ ] Import OpenAPI definition from Orders API
@@ -682,19 +822,26 @@ After completing today's tasks, you will have:
 - [ ] Test policies with Postman
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
-#### Day 93: Authentication & Authorization
-- [ ] Configure OAuth2 with Azure AD
-- [ ] Implement JWT validation policy
-- [ ] Set up subscription keys
-- [ ] Test authenticated requests
-- [ ] **Time:** 2.5 hours | **Completed:** ___/___/___
+#### Day 93: Authentication & Authorization — APIM + C# (Azure-first .NET)
+- [ ] Configure OAuth2 with Azure AD in APIM
+- [ ] Implement JWT validation policy in APIM (gateway validates before forwarding)
+- [ ] 🆕 Add `Microsoft.AspNetCore.Authentication.JwtBearer` NuGet package to Orders API
+- [ ] 🆕 Configure `JwtBearer` middleware in `Program.cs` to validate Azure AD tokens independently
+- [ ] 🆕 Implement policy-based RBAC: `IAuthorizationRequirement` for Admin/User roles
+- [ ] 🆕 Annotate controllers with `[Authorize(Policy = "OrdersReadPolicy")]` and `[Authorize(Policy = "OrdersWritePolicy")]`
+- [ ] Set up subscription keys for external consumers
+- [ ] Test: no token → 401; Admin token → 200; User token → policy-based access
+- [ ] **Time:** 3 hours | **Completed:** ___/___/___
 
-#### Day 94: API Versioning
-- [ ] Create v1 and v2 of Orders API
-- [ ] Configure version sets in APIM
-- [ ] Implement header-based versioning
-- [ ] Test version routing
-- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+#### Day 94: API Versioning — APIM + C# (Azure-first .NET)
+- [ ] Configure version sets in APIM (header-based: `Api-Version: v1`)
+- [ ] 🆕 Add `Asp.Versioning.Http` NuGet package (official API versioning for ASP.NET Core)
+- [ ] 🆕 Configure `AddApiVersioning()` + `AddApiExplorer()` in `Program.cs`
+- [ ] 🆕 Annotate controllers with `[ApiVersion("1.0")]` and `[ApiVersion("2.0")]`
+- [ ] 🆕 Implement Problem Details RFC 7807 standardised error responses: `AddProblemDetails()` in `Program.cs`
+- [ ] APIM backend updated to route to versioned ACA endpoints
+- [ ] Test: `v1` endpoint returns old schema; `v2` endpoint returns expanded schema
+- [ ] **Time:** 2.5 hours | **Completed:** ___/___/___
 
 #### Day 95: Developer Portal
 - [ ] Customize developer portal branding
@@ -725,16 +872,11 @@ After completing today's tasks, you will have:
 - [ ] Weekend: Explore APIM self-hosted gateway
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
-#### Day 91: Review & Lab
-- [ ] Remediate vulnerabilities found by Trivy
-- [ ] Test Key Vault secret rotation
-- [ ] Weekend: Set up Managed Identity for downstream services
-- [ ] **Time:** 2-3 hours | **Completed:** ___/___/___
-
 ---
 
-### Week 14: Networking & Edge
+### Week 15: Networking & Edge (Front Door + WAF)
 **Reference:** Containerization-ACA-Aspire-Learning-Path.md → Module 6 + ACA-Migration-Plan.md → Phase 7b
+> **Sequence note:** This section follows APIM (Day 98). Days 92-98 here map to calendar Days 101-107 in the overall plan.
 
 #### Day 92: Azure Front Door Basics
 - [ ] Understand Front Door architecture (origin, endpoint, WAF)
@@ -782,7 +924,7 @@ After completing today's tasks, you will have:
 
 ---
 
-### Week 15: Reliability & SRE
+### Week 16: Reliability & SRE
 **Reference:** Containerization-ACA-Aspire-Learning-Path.md → Module 8 + ACA-Migration-Plan.md → Phase 12b
 
 #### Day 99: Blue/Green Deployment
@@ -831,7 +973,7 @@ After completing today's tasks, you will have:
 
 ---
 
-### Week 16: .NET Aspire & Final Migration
+### Week 17: Final Migration (ACA Cutover + Decommission)
 **Reference:** Containerization-ACA-Aspire-Learning-Path.md → Module 7 + ACA-Migration-Plan.md → Phase 10-13
 
 #### Day 106: .NET Aspire Overview
@@ -921,11 +1063,10 @@ After completing today's tasks, you will have:
 **Days Completed:** 31 / 112  
 **Percentage Complete:** 28%  
 
-**Current Phase:** Week 5-8: Infrastructure as Code & CI/CD Hardening  
-**Current Week:** Week 5 (Days 29-35)  
-**Last Completed Task:** Manual workflow deployment added with dry run capability  
-**Today's Focus:** Test manual infra deployment workflow (Day 31 extension)  
-**Next Milestone:** Complete workflow testing, then move to Azure SQL (Day 32)  
+**Current Phase:** Azure Data & Resilience (Days 32-56)  
+**Current Day:** Day 32 — Azure SQL Database via Bicep  
+**Last Completed Task:** Day 31 extended — 9 GitHub Actions workflows live across dev/staging/prod; bootstrap summary with endpoints table; health check retries (60s wait + 3×60s attempts); parallel dispatch with 3-min lookup timeout (commit `b7ecbce`)  
+**Next Milestone:** Deploy Azure SQL via Bicep, connect API with DefaultAzureCredential (Days 32-37)  
 
 ---
 
@@ -988,48 +1129,35 @@ Track these weekly:
 
 ## 🚀 QUICK ACTION ITEMS (START HERE)
 
-### 🔥 TODAY'S PRIORITY (Day 31 Extension - Manual Workflow Testing)
-**Goal:** Test and validate the manual infrastructure deployment workflow
+### 🔥 TODAY'S PRIORITY (Day 32 — Azure SQL Database)
+**Goal:** Provision Azure SQL Database via Bicep and connect the Orders API with passwordless managed identity auth
 
 **MUST DO TODAY:**
-1. ⏳ **Read workflow guide:** `.github/workflows/README-INFRA-DEPLOY.md`
-2. ⏳ **Run dry run test:**
-   - Go to: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions
-   - Find: "Deploy Azure Infrastructure" workflow
-   - Click: "Run workflow" button
-   - Set parameters:
-     - Environment: `dev`
-     - Location: `centralindia`
-     - App Service SKU: `F1`
-     - Enable Identity: `false` (avoid identity module issues)
-     - **Dry Run: `TRUE`** ✅ (safe - no actual deployment)
-   - Review: What-if output to understand changes
-3. ⏳ **Optional real deployment:** 
-   - If dry run looks good, run again with `Dry Run: FALSE`
-   - Verify resources created in Azure Portal
-4. ⏳ **Document learnings:** Note any errors or surprises
+1. ⏳ **Create `infra/modules/sql.bicep`** — SQL Server + database module
+2. ⏳ **Add SQL module to `infra/main.bicep`** with firewall rules
+3. ⏳ **Deploy** via `az deployment group create -g rg-orderprocessing-dev -f infra/main.bicep -p infra/parameters/dev.json`
+4. ⏳ **Configure EF Core migrations** against the deployed Azure SQL instance
+5. ⏳ **Enable Managed Identity** on App Service and grant SQL access
 
 **Why This Matters:**
-- Validates your Day 29-31 Bicep work
-- Tests manual deployment capability
-- Prepares you for multi-environment deployments
-- Essential skill before moving to containers
+- First real Azure data service connected to your app
+- Sets up the passwordless auth pattern (`DefaultAzureCredential`) used for all subsequent Azure services
+- Foundation for Service Bus, Cosmos DB, Key Vault patterns that follow
 
 ---
 
-### This Week's Focus (Days 32-35)
-**Goal:** Strengthen Azure fundamentals before moving to containers
+### This Week's Focus (Days 32-43: Azure SQL → Polly → Health Checks)
+**Goal:** Connect the API to Azure SQL passwordlessly, add resilience with Polly, and expose health endpoints
 
-**After completing today's priority:**
-1. ⏳ Set up Azure SQL Database
-2. ⏳ Configure Entity Framework migrations
-3. ⏳ Deploy database via Bicep
-4. ⏳ Test connection from App Service
+**Sequence:**
+1. Days 32-35: Azure SQL via Bicep + EF Core migrations + Managed Identity
+2. Days 36-37: `DefaultAzureCredential` in C# — fully passwordless connection
+3. Days 38-41: Polly retry + circuit breaker for transient failures
+4. Days 42-43: ASP.NET Core Health Checks + App Service health probe integration
 
-**Preparation for Docker (Week 9):**
-- 📖 Read: Docker basics in `Containerization-ACA-Aspire-Learning-Path.md`
-- 📥 Install: Docker Desktop for Windows
-- 📝 Review: Your existing Dockerfiles (if any)
+**Preparation for Service Bus (Days 48-50):**
+- Azure Service Bus requires a namespace — Bicep template planned for Day 48
+- The pub/sub C# pattern (Day 49) is the most critical .NET-in-Azure skill in this phase
 
 ### Resources You Have
 ✅ **Migration Strategy:** `Documentation/04-Enterprise-Architecture/ACA-Migration-Plan.md`  
@@ -1038,6 +1166,6 @@ Track these weekly:
 
 ---
 
-**Last Updated:** November 21, 2025  
+**Last Updated:** March 20, 2026  
 **Next Review:** Weekly on Sundays  
-**Progress:** 31/112 days (28% complete)
+**Progress:** 31/112 days (28% complete) — Day 32 starting
