@@ -130,10 +130,155 @@ After completing today's tasks, you will have:
 ## 📅 Daily Progress Tracker
 
 ### ✅ Weeks 1-2: Azure Fundamentals (Days 1-14) — [Daily Progress](02-Daily-Progress/week-01-02-azure-fundamentals.md)
+**Reference:** Azure_Learning_Guide_Complete.md (Days 1-14)
+
+#### Day 1: Azure Portal & Resource Groups ✅
+- [x] Read Azure Portal overview
+- [x] Create first resource group via Portal
+- [x] Explore Portal navigation and dashboards
+- [x] **Time:** 1 hour | **Completed:** ✅ Done
+
+#### Day 2: Azure CLI Basics ✅
+- [x] Verify Azure CLI installation (`az --version`)
+- [x] Login: `az login`
+- [x] List subscriptions: `az account list`
+- [x] Create RG via CLI: `az group create`
+- [x] **Time:** 1 hour | **Completed:** ✅ Done
+
+#### Day 3: Resource Tagging & Organization ✅
+- [x] Learn tagging strategy (env, app, owner)
+- [x] Apply tags to existing resources
+- [x] Query resources by tags
+- [x] **Time:** 1 hour | **Completed:** ✅ Done
+
+#### Day 4: Azure Storage Accounts ✅
+- [x] Create storage account via Portal
+- [x] Upload blob, create container
+- [x] Generate SAS token, test access
+- [x] **Time:** 1 hour | **Completed:** ✅ Done
+
+#### Day 5: Virtual Networks Basics ✅
+- [x] Create VNet with subnets
+- [x] Understand address spaces, NSGs
+- [x] Deploy VM in VNet (optional)
+- [x] **Time:** 1.5 hours | **Completed:** ✅ Done
+
+#### Day 6: Azure Monitor & Application Insights ✅
+- [x] Enable App Insights on sample app
+- [x] View metrics, logs, traces
+- [x] Set up basic alert rule
+- [x] **Time:** 1 hour | **Completed:** ✅ Done
+
+#### Day 7: Review & Weekend Lab ✅
+- [x] Complete Week 1-2 exercises
+- [x] Deploy end-to-end test environment
+- [x] Document learnings in personal notes
+- [x] **Time:** 2-3 hours | **Completed:** ✅ Done
+
+*(Continue Days 8-14 per Azure_Learning_Guide_Complete.md)*
+
+---
 
 ### ✅ Weeks 3-4: App Service & OIDC Deployment (Days 15-28) — [Daily Progress](02-Daily-Progress/week-03-04-appservice-oidc.md)
+**Reference:** Azure_Learning_Guide_Complete.md (Days 15-28)
+
+#### Day 15: App Service Plans Overview ✅
+- [x] Understand SKUs (Free, Basic, Standard, Premium)
+- [x] Create App Service Plan (F1 for dev)
+- [x] Deploy sample .NET 8 app
+- [x] **Time:** 1 hour | **Completed:** ✅ Done
+
+#### Day 16: GitHub Actions Basics ✅
+- [x] Create `.github/workflows` directory
+- [x] Write first workflow (hello-world)
+- [x] Trigger workflow on push
+- [x] **Time:** 1 hour | **Completed:** ✅ Done
+
+#### Day 17: OIDC Setup (Part 1) ✅
+**Reference:** AZURE_DEPLOYMENT_GUIDE.md
+- [x] Run `setup-github-oidc.ps1` script
+- [x] Create App Registration in Entra ID
+- [x] Add federated credentials for dev/staging/main
+- [x] **Time:** 1.5 hours | **Completed:** ✅ Done
+
+#### Day 18: OIDC Setup (Part 2) & GitHub Secrets ✅
+- [x] Assign Contributor role to Service Principal
+- [x] Add secrets to GitHub (CLIENTID, TENANTID, SUBSCRIPTIONID)
+- [x] Test OIDC login in workflow
+- [x] **Time:** 1.5 hours | **Completed:** ✅ Done
+
+#### Day 19: Deploy API to App Service ✅
+- [x] Create workflow for API deployment
+- [x] Build .NET project in CI
+- [x] Deploy to App Service (staging slot)
+- [x] **Time:** 2 hours | **Completed:** ✅ Done
+
+#### Day 20: Deploy UI to App Service ✅
+- [x] Create UI deployment workflow
+- [x] Configure environment variables for API URL
+- [x] Test end-to-end flow
+- [x] **Time:** 2 hours | **Completed:** ✅ Done
+
+#### Day 21: Bicep Basics ✅
+- [x] Install Bicep CLI
+- [x] Write first Bicep file (storage account)
+- [x] Deploy via `az deployment group create`
+- [x] **Time:** 1.5 hours | **Completed:** ✅ Done
+
+#### Day 22-28: Complete App Service Module
+*(Refer to Azure_Learning_Guide_Complete.md Days 22-28 for serverless functions, event-driven patterns)*
+
+---
 
 ### ✅ Weeks 5-8: IaC, CI/CD + Azure SQL Baseline (Days 29-34) — [Daily Progress](02-Daily-Progress/week-05-08-iac-data.md)
+**Reference:** Azure_Learning_Guide_Complete.md + infra/ folder
+
+#### Day 29: Bicep Modules ✅
+- [x] Understand module structure
+- [x] Create reusable App Service module
+- [x] Reference module from main.bicep
+- [x] **Time:** 1.5 hours | **Completed:** ✅ Done
+
+#### Day 30: Parameter Files ✅
+- [x] Create `dev.json`, `staging.json`, `prod.json`
+- [x] Parameterize environment-specific values
+- [x] Deploy to multiple environments
+- [x] **Time:** 1 hour | **Completed:** ✅ Done
+
+#### Day 31: GitHub Actions - Infra Deployment ✅ (Extended)
+**Reference:** `.github/workflows/infra-deploy.yml` + `README-INFRA-DEPLOY.md` + `AZURE_DEPLOYMENT_GUIDE.md` (Manual workflow trigger & dry run parameters section)
+- [x] Add what-if step for PR reviews
+- [x] Deploy on branch push (dev/staging/main)
+- [x] Validate deployments
+- [x] **Enhanced:** Added workflow_dispatch for manual runs
+- [x] **Enhanced:** Interactive parameter selection via GitHub UI
+- [x] **Enhanced:** Dry run mode for safe testing
+- [x] **Time:** 2 hours | **Completed:** ✅
+
+#### Day 32: Azure SQL Database — Provision via Bicep ✅
+- [x] Create `infra/modules/sql.bicep` (SQL Server + database)
+- [x] Add SQL module to `infra/main.bicep` with firewall rules
+- [x] Deploy via `az deployment sub create` — `orderprocessing-sql-dev` + `OrderProcessingSystem_Dev` live in Azure Portal
+- [x] Verify database in Azure Portal ✅ confirmed in `rg-orderprocessing-dev`
+- [x] **Time:** 1.5 hours | **Completed:** ✅
+
+#### Day 33: EF Core Migrations Against Azure SQL ✅
+- [x] Configure EF Core connection string for Azure SQL
+- [x] Run `dotnet ef migrations add InitialCreate`
+- [x] Apply migrations: `dotnet ef database update` — all 6 migrations applied to `OrderProcessingSystem_Dev`
+- [x] Seed test data and verify via Azure Portal Data Explorer — 120 Customers, 13 tables confirmed
+- [x] **Time:** 1.5 hours | **Completed:** ✅
+
+#### Day 34: Environment-Specific SQL Configuration + Copilot Infrastructure ✅
+- [x] Configure SQL connection strings in `Resources/Configuration/sharedsettings.{dev,staging,prod}.json`
+- [x] Enable SQL logging in development (`LogTo`, `EnableSensitiveDataLogging`, `EnableDetailedErrors` guarded by `IsDevelopment()`)
+- [x] Set up `.github/instructions/` skill files (ef-migrations, azure-workflows, bicep, curriculum, architecture)
+- [x] Created `docs/architecture/decisions/` ADR framework (ADR-000 template + ADR-001 to ADR-005)
+- [x] Created `/memories/architect-patterns.md` — career-wide Azure/.NET/Angular/Docker patterns
+- [x] Created `/memories/repo/azure-resources.md` and `dotnet-conventions.md`
+- [x] Created `.github/prompts/day-complete.prompt.md` — auto-routing agent prompt
+- [x] Test connection from App Service in Azure Portal — verified via Swagger (`GetAllCustomersByName` returned data) + local EF Core SQL logs confirmed
+- [x] **Time:** 4 hours | **Completed:** ✅ 20/03/2026
 
 ---
 

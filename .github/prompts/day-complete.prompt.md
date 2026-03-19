@@ -18,7 +18,8 @@ Then, based on their answer, apply the following routing rules automatically —
    - Mark completed items `[x]`, update the `**Completed:**` date line
 
 2. **If any CLI commands were run** (az, dotnet ef, git, sqlcmd, docker, pwsh):
-   - Identify the correct topic file under `Documentation/commands/`:
+   - Add them to the matching section in `Documentation/QUICK-COMMAND-REFERENCE.md`
+   - Also add them to the appropriate topic file under `Documentation/commands/`:
 
      | Topic | File |
      |-------|------|
@@ -27,9 +28,7 @@ Then, based on their answer, apply the following routing rules automatically —
      | Azure SQL, EF Core, sqlcmd, firewall | `commands/azure-sql-ef.md` |
      | Local dev, dotnet run, Docker | `commands/local-dev.md` |
 
-   - Add the command to that topic file under the appropriate section (create a new section if needed)
-   - Do NOT add command blocks to `Documentation/QUICK-COMMAND-REFERENCE.md` directly — it is an index only
-   - If a brand-new topic file is needed, create it and add a row to the index table in `QUICK-COMMAND-REFERENCE.md`
+   - Create a new section in both files if the topic doesn't exist yet
 
 3. **If a technology/tool was chosen over an alternative:**
    - Create a new ADR in `docs/architecture/decisions/ADR-NNN-title.md`
