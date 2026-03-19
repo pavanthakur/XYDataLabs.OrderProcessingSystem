@@ -1,5 +1,5 @@
 # Quick Command Reference Guide
-**Last Updated:** November 21, 2025
+**Last Updated:** March 20, 2026
 
 This guide provides essential commands for daily development, validation, and documentation tasks to ensure smooth workflow and prevent costly errors.
 
@@ -163,6 +163,90 @@ az group list --output table
 # List resources in a resource group
 az resource list --resource-group rg-orderprocessing-dev --output table
 ```
+
+---
+
+## 🗄️ Azure SQL Commands (Day 32+)
+
+### **SQL Server & Database Info**
+```powershell
+# Get SQL Server FQDN
+az sql server show `
+  --name orderprocessing-sql-dev `
+  --resource-group rg-orderprocessing-dev `
+  --query fullyQualifiedDomainName -o tsv
+# Output: orderprocessing-sql-dev.database.windows.net
+
+# List SQL databases
+az sql db list --server orderprocessing-sql-dev --resource-group rg-orderprocessing-dev --output table
+
+# Check SQL Server firewall rules
+az sql server firewall-rule list --server orderprocessing-sql-dev --resource-group rg-orderprocessing-dev --output table
+```
+
+### **Firewall — Open/Close for Local Development**
+```powershell
+# Detect your public IP
+$myIp = (Invoke-RestMethod -Uri "https://api.ipify.org")
+Write-Host "Your IP: $myIp"
+
+# Add firewall rule for local machine
+az sql server firewall-rule create `
+  --server orderprocessing-sql-dev `
+  --resource-group rg-orderprocessing-dev `
+  --name "dev-machine" `
+  --start-ip-address $myIp `
+  --end-ip-address $myIp
+
+# Remove firewall rule after local work (good practice)
+az sql server firewall-rule delete `
+  --server orderprocessing-sql-dev `
+  --resource-group rg-orderprocessing-dev `
+  --name "dev-machine"
+```
+> ⚠️ Always remove the firewall rule after finishing local work.
+
+### **EF Core Migrations Against Azure SQL**
+```powershell
+cd q:\GIT\TestAppXY_OrderProcessingSystem
+
+# Set Azure connection string
+$azureCs = "Server=tcp:orderprocessing-sql-dev.database.windows.net,1433;Initial Catalog=OrderProcessingSystem_Dev;User ID=sqladmin;Password=Admin100@;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+
+# Apply all pending migrations to Azure SQL
+dotnet ef database update `
+  --project XYDataLabs.OrderProcessingSystem.Infrastructure `
+  --startup-project XYDataLabs.OrderProcessingSystem.API `
+  --connection $azureCs
+
+# List all applied migrations
+dotnet ef migrations list `
+  --project XYDataLabs.OrderProcessingSystem.Infrastructure `
+  --startup-project XYDataLabs.OrderProcessingSystem.API
+```
+
+### **Verify Tables & Seed Data via sqlcmd**
+```powershell
+# List all tables
+sqlcmd -S orderprocessing-sql-dev.database.windows.net `
+  -d OrderProcessingSystem_Dev -U sqladmin -P "Admin100@" `
+  -Q "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE' ORDER BY TABLE_NAME" -N -C
+
+# Check migration history
+sqlcmd -S orderprocessing-sql-dev.database.windows.net `
+  -d OrderProcessingSystem_Dev -U sqladmin -P "Admin100@" `
+  -Q "SELECT MigrationId FROM __EFMigrationsHistory ORDER BY MigrationId" -N -C
+
+# Check row counts
+sqlcmd -S orderprocessing-sql-dev.database.windows.net `
+  -d OrderProcessingSystem_Dev -U sqladmin -P "Admin100@" `
+  -Q "SELECT 'Customers' AS [Table], COUNT(*) AS [Rows] FROM Customers UNION ALL SELECT 'Products', COUNT(*) FROM Products UNION ALL SELECT 'Orders', COUNT(*) FROM Orders" -N -C
+```
+
+### **Day 33 Result (March 20, 2026)**
+- Applied 6 migrations to `OrderProcessingSystem_Dev` ✅
+- 13 tables created: `Customers`, `Products`, `Orders`, `OrderProducts`, `BillingCustomers`, `BillingCustomerKeyInfos`, `CardTransactions`, `PayinLogs`, `PayinLogDetails`, `PaymentMethods`, `PaymentProviders`, `TransactionStatusHistories`, `__EFMigrationsHistory`
+- 120 customers seeded ✅
 
 ### **GitHub Secrets Management**
 ```powershell

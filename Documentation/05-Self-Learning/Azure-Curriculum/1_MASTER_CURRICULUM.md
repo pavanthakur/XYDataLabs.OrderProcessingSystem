@@ -107,6 +107,7 @@ After completing today's tasks, you will have:
 2. **[Azure_Learning_Guide_Complete.md](./Azure_Learning_Guide_Complete.md)** - Foundational Azure concepts and early deployment
 3. **[ACA Migration Plan](../../04-Enterprise-Architecture/ACA-Migration-Plan.md)** - Enterprise migration roadmap (17 phases)
 4. **[Containerization Learning Path](../../02-Azure-Learning-Guides/Containerization-ACA-Aspire-Learning-Path.md)** - Hands-on Docker, ACR, ACA (8 modules)
+5. **[Quick Command Reference](../../../QUICK-COMMAND-REFERENCE.md)** - All essential commands: Git, Azure CLI, Azure SQL, EF Core migrations, Docker, GitHub Actions, troubleshooting
 
 ---
 
@@ -252,34 +253,34 @@ After completing today's tasks, you will have:
 - [x] **Enhanced:** Added workflow_dispatch for manual runs
 - [x] **Enhanced:** Interactive parameter selection via GitHub UI
 - [x] **Enhanced:** Dry run mode for safe testing
-- [ ] **TODO TODAY:** Test manual workflow with dry run
-- [ ] **TODO TODAY:** Review what-if output
-- [ ] **Optional:** Deploy with dry run = false
-- [x] **Time:** 2 hours | **Completed:** ✅ Code done, testing pending
+- [x] **TODO TODAY:** Test manual workflow with dry run
+- [x] **TODO TODAY:** Review what-if output
+- [x] **Optional:** Deploy with dry run = false
+- [x] **Time:** 2 hours | **Completed:** ✅
 
 ---
 
 ### Week 5-8 (continued): Azure Data & Resilience (Days 32-56)
 
-#### Day 32: Azure SQL Database — Provision via Bicep
-- [ ] Create `infra/modules/sql.bicep` (SQL Server + database)
-- [ ] Add SQL module to `infra/main.bicep` with firewall rules
-- [ ] Deploy via `az deployment group create -g rg-orderprocessing-dev -f infra/main.bicep`
-- [ ] Verify database in Azure Portal
-- [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
+#### Day 32: Azure SQL Database — Provision via Bicep ✅
+- [x] Create `infra/modules/sql.bicep` (SQL Server + database)
+- [x] Add SQL module to `infra/main.bicep` with firewall rules
+- [x] Deploy via `az deployment sub create` — `orderprocessing-sql-dev` + `OrderProcessingSystem_Dev` live in Azure Portal
+- [x] Verify database in Azure Portal ✅ confirmed in `rg-orderprocessing-dev`
+- [x] **Time:** 1.5 hours | **Completed:** ✅
 
-#### Day 33: EF Core Migrations Against Azure SQL
-- [ ] Configure EF Core connection string for Azure SQL
-- [ ] Run `dotnet ef migrations add InitialCreate`
-- [ ] Apply migrations: `dotnet ef database update`
-- [ ] Seed test data and verify via Azure Portal Data Explorer
-- [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
+#### Day 33: EF Core Migrations Against Azure SQL ✅
+- [x] Configure EF Core connection string for Azure SQL
+- [x] Run `dotnet ef migrations add InitialCreate`
+- [x] Apply migrations: `dotnet ef database update` — all 6 migrations applied to `OrderProcessingSystem_Dev`
+- [x] Seed test data and verify via Azure Portal Data Explorer — 120 Customers, 13 tables confirmed
+- [x] **Time:** 1.5 hours | **Completed:** ✅
 
 #### Day 34: Environment-Specific SQL Configuration
-- [ ] Configure SQL connection strings in `Resources/Configuration/sharedsettings.{dev,staging,prod}.json`
-- [ ] Enable SQL logging in development
+- [x] Configure SQL connection strings in `Resources/Configuration/sharedsettings.{dev,staging,prod}.json`
+- [x] Enable SQL logging in development
 - [ ] Test connection from App Service in Azure Portal
-- [ ] **Time:** 1 hour | **Completed:** ___/___/___
+- [ ] **Time:** 1 hour | **Completed:** ___/___/___ (Connection strings ✅, SQL logging ✅, portal testing pending)
 
 #### Day 35: SQL Security — Enable Managed Identity
 - [ ] Enable system-assigned managed identity on App Service
@@ -290,12 +291,12 @@ After completing today's tasks, you will have:
 
 #### Day 36: 🆕 DefaultAzureCredential in C# (Azure-first .NET)
 > **Why now:** First time C# code connects to Azure without any stored password or secret
-- [ ] Add `Azure.Identity` NuGet package
+- [x] Add `Azure.Identity` NuGet package
 - [ ] Replace SQL password auth with access token via `DefaultAzureCredential`
 - [ ] Understand credential chain: `EnvironmentCredential → ManagedIdentityCredential → VisualStudioCredential → AzureCliCredential`
 - [ ] Test locally: `az login` → CLI credential picked up automatically
 - [ ] Test in Azure: Managed Identity credential used automatically
-- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___ (Azure.Identity added + used for Key Vault; SQL passwordless not yet done)
 
 #### Day 37: Connect API to Azure SQL — Passwordless End-to-End
 - [ ] Update `DbContext` to supply `DefaultAzureCredential` access token for Azure SQL
@@ -498,13 +499,13 @@ After completing today's tasks, you will have:
 
 #### Day 65: 🆕 Serilog Structured Logging (Azure-first .NET)
 > **Why now:** Unstructured logs are unreadable in Docker and ACA containers — Serilog must be in place before containerising
-- [ ] Add `Serilog.AspNetCore`, `Serilog.Sinks.ApplicationInsights`, `Serilog.Enrichers.Environment` NuGet packages
-- [ ] Replace default logging with Serilog in `Program.cs` using `UseSerilog()`
-- [ ] Configure sinks: Console (structured JSON) + Application Insights
+- [x] Add `Serilog.AspNetCore`, `Serilog.Sinks.ApplicationInsights`, `Serilog.Enrichers.Environment` NuGet packages
+- [x] Replace default logging with Serilog in `Program.cs` using `UseSerilog()`
+- [x] Configure sinks: Console (structured JSON) + Application Insights
 - [ ] Add enrichers: `WithMachineName()`, `WithEnvironmentName()`, `WithCorrelationId()`
-- [ ] Use structured properties (not string interpolation): `Log.Information("Order {OrderId} placed for {CustomerId}", orderId, customerId)`
+- [x] Use structured properties (not string interpolation): `Log.Information("Order {OrderId} placed for {CustomerId}", orderId, customerId)`
 - [ ] Verify correlation IDs flow across service calls in App Insights
-- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+- [ ] **Time:** 2 hours | **Completed:** ___/___/___ (Serilog + Console/File/AppInsights sinks done; dedicated enricher packages + correlation IDs pending)
 
 #### Day 66: Cosmos DB Fundamentals + SDK Integration (with DefaultAzureCredential)
 - [ ] Provision Cosmos DB account (Core SQL API) via Bicep

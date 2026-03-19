@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -20,6 +21,13 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure
             builder.Services.AddDbContext<OrderProcessingSystemDbContext>(options =>
             {
                 options.UseSqlServer(builder.Configuration.GetConnectionString(Constants.Configuration.OrderProcessingSystemDbConnectionString));
+
+                if (builder.Environment.IsDevelopment())
+                {
+                    options.LogTo(Console.WriteLine, LogLevel.Information)
+                           .EnableSensitiveDataLogging()
+                           .EnableDetailedErrors();
+                }
             });
 
             // Database initialization will happen automatically through DI when DbContext is first used
