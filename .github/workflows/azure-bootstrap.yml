@@ -2167,7 +2167,7 @@ jobs:
   summary:
     name: Bootstrap Summary
     if: always() && github.event_name == 'workflow_dispatch'
-    needs: [validate-inputs, bootstrap-dev, bootstrap-staging, bootstrap-prod, cleanup-dev, cleanup-staging, cleanup-prod]
+    needs: [validate-inputs, bootstrap-dev, bootstrap-staging, bootstrap-prod, cleanup-dev, cleanup-staging, cleanup-prod, trigger-deployments]
     runs-on: windows-latest
     steps:
       - name: Generate Summary
@@ -2189,13 +2189,14 @@ jobs:
           "### ✅ Job Execution Results" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
 
-          $validateInputs   = "${{ needs.validate-inputs.result }}"
-          $bootstrapDev     = "${{ needs.bootstrap-dev.result }}"
-          $bootstrapStaging = "${{ needs.bootstrap-staging.result }}"
-          $bootstrapProd    = "${{ needs.bootstrap-prod.result }}"
-          $cleanupDev       = "${{ needs.cleanup-dev.result }}"
-          $cleanupStaging   = "${{ needs.cleanup-staging.result }}"
-          $cleanupProd      = "${{ needs.cleanup-prod.result }}"
+          $validateInputs      = "${{ needs.validate-inputs.result }}"
+          $bootstrapDev        = "${{ needs.bootstrap-dev.result }}"
+          $bootstrapStaging    = "${{ needs.bootstrap-staging.result }}"
+          $bootstrapProd       = "${{ needs.bootstrap-prod.result }}"
+          $cleanupDev          = "${{ needs.cleanup-dev.result }}"
+          $cleanupStaging      = "${{ needs.cleanup-staging.result }}"
+          $cleanupProd         = "${{ needs.cleanup-prod.result }}"
+          $triggerDeployments  = "${{ needs.trigger-deployments.result }}"
 
           "| Step | Status |" >> $env:GITHUB_STEP_SUMMARY
           "|------|--------|" >> $env:GITHUB_STEP_SUMMARY
@@ -2235,7 +2236,17 @@ jobs:
             "| ⚠️ Cleanup Prod | $icon $cleanupProd |" >> $env:GITHUB_STEP_SUMMARY
           }
 
+          if ($triggerDeployments -ne "") {
+            $icon = if ($triggerDeployments -eq "success") { "✅" } elseif ($triggerDeployments -eq "skipped") { "⏭️" } else { "❌" }
+            "| 🚀 Trigger Deployments | $icon $triggerDeployments |" >> $env:GITHUB_STEP_SUMMARY
+          }
+
           "" >> $env:GITHUB_STEP_SUMMARY
+
+          if ($triggerDeployments -eq "success" -and ('${{ inputs.deployApi }}' -eq 'true' -or '${{ inputs.deployUi }}' -eq 'true')) {
+            "> **Note:** API/UI deployments run as separate workflows. Check their status in the [Actions tab](https://github.com/${{ github.repository }}/actions)." >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+          }
           "### 🏗️ What Gets Created Automatically" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
           "| Resource | Automated? | Trigger |" >> $env:GITHUB_STEP_SUMMARY

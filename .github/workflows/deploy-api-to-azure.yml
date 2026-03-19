@@ -219,27 +219,28 @@ jobs:
 
           $apiUrl     = "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net"
           $swaggerUrl = "$apiUrl/swagger"
-          $healthy    = $true
 
-          Write-Host "Testing API endpoint: $apiUrl" -ForegroundColor Cyan
-          try {
-            $response = Invoke-WebRequest -Uri $apiUrl -Method Get -TimeoutSec 30
-            Write-Host "✅ API responded with status: $($response.StatusCode)" -ForegroundColor Green
-          } catch {
-            Write-Host "❌ API health check FAILED: $($_.Exception.Message)" -ForegroundColor Red
-            $healthy = $false
-          }
-
+          # Primary check: Swagger endpoint (APIs may not have a root route)
           Write-Host "Testing Swagger endpoint: $swaggerUrl" -ForegroundColor Cyan
+          $swaggerOk = $false
           try {
             $swaggerResponse = Invoke-WebRequest -Uri $swaggerUrl -Method Get -TimeoutSec 30
             Write-Host "✅ Swagger UI responded with status: $($swaggerResponse.StatusCode)" -ForegroundColor Green
+            $swaggerOk = $true
           } catch {
             Write-Host "❌ Swagger health check FAILED: $($_.Exception.Message)" -ForegroundColor Red
-            $healthy = $false
           }
 
-          if (-not $healthy) {
+          # Informational: root endpoint (may return 404 if no default route — not a failure)
+          Write-Host "Testing API root endpoint: $apiUrl" -ForegroundColor Cyan
+          try {
+            $response = Invoke-WebRequest -Uri $apiUrl -Method Get -TimeoutSec 30
+            Write-Host "✅ API root responded with status: $($response.StatusCode)" -ForegroundColor Green
+          } catch {
+            Write-Host "ℹ️  API root returned non-200 (expected if no default route): $($_.Exception.Message)" -ForegroundColor Yellow
+          }
+
+          if (-not $swaggerOk) {
             Write-Host "" -ForegroundColor Gray
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
             Write-Host "❌ DEPLOYMENT HEALTH CHECK FAILED" -ForegroundColor Red
@@ -262,7 +263,7 @@ jobs:
           $sha    = "${{ github.sha }}".Substring(0, 7)
           $appUrl = if ($app) { "https://$app.azurewebsites.net/swagger" } else { "(app name not set — credentials missing)" }
 
-          $status = if (${{ job.status }} -eq 'success') { '✅ SUCCESS' } else { '❌ FAILED' }
+          $status = if ('${{ job.status }}' -eq 'success') { '✅ SUCCESS' } else { '❌ FAILED' }
 
           "## 🚀 API Deployment Summary" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY

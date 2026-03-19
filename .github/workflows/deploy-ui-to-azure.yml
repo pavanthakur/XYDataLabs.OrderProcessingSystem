@@ -195,7 +195,7 @@ jobs:
           $sha    = "${{ github.sha }}".Substring(0, 7)
           $appUrl = if ($app) { "https://$app.azurewebsites.net" } else { "(app name not set — credentials missing)" }
 
-          $status = if (${{ job.status }} -eq 'success') { '✅ SUCCESS' } else { '❌ FAILED' }
+          $status = if ('${{ job.status }}' -eq 'success') { '✅ SUCCESS' } else { '❌ FAILED' }
 
           "## 🚀 UI Deployment Summary" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
