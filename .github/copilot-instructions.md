@@ -292,8 +292,9 @@ Port allocations: Local VS (5010–5013) · Docker dev (5020–5023) · UAT (503
 | Prompt | Command | Purpose |
 |--------|---------|--------|
 | Day Complete Router | `/day-complete` | After each curriculum day — routes updates to all correct documents, suggests commit |
+| SQL Local Access | `/sql-local-access` | Opens or closes Azure SQL firewall for local IP after a fresh bootstrap/deploy. Prints SSMS connection details. |
 
-> **Quick prompt tip:** `Ctrl+Shift+I` → select Agent mode → type `/day-complete`
+> **Quick prompt tip:** `Ctrl+Shift+I` → select Agent mode → type `/day-complete` or `/sql-local-access`
 
 ---
 

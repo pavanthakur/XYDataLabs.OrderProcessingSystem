@@ -820,6 +820,7 @@ These are reusable agent prompts stored in `.github/prompts/`. Type them in VS C
 | Command | When to use | What it does |
 |---------|-------------|--------------|
 | `@workspace /day-complete` | End of every curriculum day | Routes updates to curriculum, commands doc, ADRs, memory files. Suggests commit message. |
+| `/sql-local-access` | After every fresh bootstrap/deploy | Opens or closes Azure SQL firewall for your local IP. Prints SSMS connection details. |
 
 ### **How to run a prompt**
 1. Open VS Code Chat: `Ctrl+Shift+I`
