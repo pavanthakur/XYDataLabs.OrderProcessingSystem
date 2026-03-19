@@ -2418,9 +2418,10 @@ jobs:
                 ref:   ref
               });
 
-              // Poll until the newly-created run appears (up to 90 s, every 5 s)
+              // Poll until the newly-created run appears (up to 3 min, every 5 s).
+              // GitHub can take >90 s to surface a new run in the list API.
               let run = null;
-              for (let i = 0; i < 18; i++) {
+              for (let i = 0; i < 36; i++) {
                 await new Promise(r => setTimeout(r, 5000));
                 const res = await github.rest.actions.listWorkflowRuns({
                   owner:       context.repo.owner,
@@ -2431,9 +2432,9 @@ jobs:
                   per_page:    5
                 });
                 run = res.data.workflow_runs.find(r => new Date(r.created_at) >= dispatchedAt);
-                if (run) { core.info(`  Found run #${run.run_number}: ${run.html_url}`); break; }
+                if (run) { core.info(`  [${workflowId}] Found run #${run.run_number}: ${run.html_url}`); break; }
               }
-              if (!run) throw new Error(`[${workflowId}] Run not found within 90 s of dispatch`);
+              if (!run) throw new Error(`[${workflowId}] Run not found within 3 minutes of dispatch`);
 
               // Poll until complete (every 15 s, max 25 min = 100 attempts)
               for (let i = 0; i < 100 && run.status !== 'completed'; i++) {
@@ -2458,19 +2459,25 @@ jobs:
               return run;
             }
 
-            // Dispatch API and UI sequentially; collect errors so both are attempted
+            // Dispatch API and UI in parallel; wait for both before reporting results
+            const tasks = [];
+            if (deployApi) tasks.push({ label: 'API', id: 'deploy-api-to-azure.yml' });
+            if (deployUi)  tasks.push({ label: 'UI',  id: 'deploy-ui-to-azure.yml'  });
+
+            const settled = await Promise.allSettled(tasks.map(t => dispatchAndAwait(t.id)));
+
             let apiRun = null, uiRun = null;
             const errors = [];
-
-            if (deployApi) {
-              try   { apiRun = await dispatchAndAwait('deploy-api-to-azure.yml'); }
-              catch (e) { errors.push(e.message); core.error(`❌ API deployment failed: ${e.message}`); }
-            }
-
-            if (deployUi) {
-              try   { uiRun = await dispatchAndAwait('deploy-ui-to-azure.yml'); }
-              catch (e) { errors.push(e.message); core.error(`❌ UI deployment failed: ${e.message}`); }
-            }
+            settled.forEach((result, i) => {
+              const label = tasks[i].label;
+              if (result.status === 'fulfilled') {
+                if (label === 'API') apiRun = result.value;
+                else                 uiRun  = result.value;
+              } else {
+                errors.push(result.reason.message);
+                core.error(`❌ ${label} deployment failed: ${result.reason.message}`);
+              }
+            });
 
             // Write step summary with actual run results
             const rows = [
