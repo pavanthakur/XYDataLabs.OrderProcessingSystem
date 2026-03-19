@@ -7,7 +7,7 @@ applyTo: "**/*CURRICULUM*,**/05-Self-Learning/**"
 `Documentation/05-Self-Learning/Azure-Curriculum/1_MASTER_CURRICULUM.md`
 
 ## Current Progress (as of March 2026)
-- Days 1-34: ✅ Complete (archived in `archive/week-01-02`, `week-03-04`, `week-05-08`)
+- Days 1-34: ✅ Complete (detail in `02-Daily-Progress/week-01-02`, `week-03-04`, `week-05-08`)
 - Day 35: ❌ Not started — Managed Identity for SQL
 - Day 36: 🔶 Partial — Azure.Identity pkg ✅, SQL passwordless not done
 - Days 37+: ❌ Not started
@@ -36,10 +36,10 @@ All hands-on commands go to the appropriate topic file in `Documentation/command
 - `commands/azure-sql-ef.md` — Azure SQL, EF Core, sqlcmd, firewall
 - `commands/local-dev.md` — local dev, dotnet run, Docker, SQL logging
 
-## Archive Convention
-Completed weeks → `Documentation/05-Self-Learning/Azure-Curriculum/archive/week-NN-name.md`
+## Daily Progress Convention
+Completed weeks → `Documentation/05-Self-Learning/Azure-Curriculum/02-Daily-Progress/week-NN-name.md`
 Master file keeps: current week + next 2 weeks + overview sections only.
-Archivedweeks are replaced with a single summary line + archive link.
+Completed weeks are replaced with a single summary line + Daily Progress link.
 
 ---
 

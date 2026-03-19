@@ -50,15 +50,15 @@ Then, based on their answer, apply the following routing rules automatically —
 
 8. **If a full week is now complete** (all days in the week have ✅ Completed dates):
    - Move that week's block from `1_MASTER_CURRICULUM.md` to:
-     `Documentation/05-Self-Learning/Azure-Curriculum/archive/week-NN-name.md`
-   - Use this archive file header:
+     `Documentation/05-Self-Learning/Azure-Curriculum/02-Daily-Progress/week-NN-name.md`
+   - Use this file header:
      ```markdown
-     # Archive: Weeks N-N — <Title> (Days X-Y)
+     # Daily Progress: Weeks N-N — <Title> (Days X-Y)
      **Archived:** DD/MM/YYYY | **Status:** ✅ All Complete
      **Source:** 1_MASTER_CURRICULUM.md — Week N-N block
      ```
    - Replace the archived block in master with one summary line:
-     `### ✅ Weeks N-N: <Week Name> (Days X-Y) — [Archive](archive/week-NN-name.md)`
+     `### ✅ Weeks N-N: <Week Name> (Days X-Y) — [Daily Progress](02-Daily-Progress/week-NN-name.md)`
    - Update the **COMPLETED SO FAR** bullet at the top of the master file if it exists
 
 ## After Routing

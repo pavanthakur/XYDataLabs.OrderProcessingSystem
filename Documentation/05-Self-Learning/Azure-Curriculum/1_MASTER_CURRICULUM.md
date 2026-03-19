@@ -129,11 +129,11 @@ After completing today's tasks, you will have:
 
 ## 📅 Daily Progress Tracker
 
-### ✅ Weeks 1-2: Azure Fundamentals (Days 1-14) — [Archive](archive/week-01-02-azure-fundamentals.md)
+### ✅ Weeks 1-2: Azure Fundamentals (Days 1-14) — [Daily Progress](02-Daily-Progress/week-01-02-azure-fundamentals.md)
 
-### ✅ Weeks 3-4: App Service & OIDC Deployment (Days 15-28) — [Archive](archive/week-03-04-appservice-oidc.md)
+### ✅ Weeks 3-4: App Service & OIDC Deployment (Days 15-28) — [Daily Progress](02-Daily-Progress/week-03-04-appservice-oidc.md)
 
-### ✅ Weeks 5-8: IaC, CI/CD + Azure SQL Baseline (Days 29-34) — [Archive](archive/week-05-08-iac-data.md)
+### ✅ Weeks 5-8: IaC, CI/CD + Azure SQL Baseline (Days 29-34) — [Daily Progress](02-Daily-Progress/week-05-08-iac-data.md)
 
 ---
 
