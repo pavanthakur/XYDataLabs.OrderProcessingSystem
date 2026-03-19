@@ -11,8 +11,8 @@
     "sqlAdminUsername": { "value": "sqladmin" },
     "sqlAdminPassword": { "value": "Admin100@" },
     "databaseServiceObjective": { "value": "Basic" },
-    "aadAdminLogin": { "value": "TODO: run: az ad signed-in-user show --query userPrincipalName -o tsv" },
-    "aadAdminObjectId": { "value": "TODO: run: az ad signed-in-user show --query id -o tsv" }
+    "aadAdminLogin": { "value": "pavan.thakur_gmail.com#EXT#@pavanthakurgmail.onmicrosoft.com" },
+    "aadAdminObjectId": { "value": "99fce3f5-b801-4aa1-b2df-122900204d65" }
   }
 }
 

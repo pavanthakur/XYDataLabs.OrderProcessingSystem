@@ -11,7 +11,7 @@
     "sqlAdminUsername": { "value": "sqladmin" },
     "sqlAdminPassword": { "value": "Admin100@" },
     "databaseServiceObjective": { "value": "S0" },
-    "aadAdminLogin": { "value": "TODO: dedicated production Azure AD admin account UPN" },
-    "aadAdminObjectId": { "value": "TODO: run: az ad signed-in-user show --query id -o tsv" }
+    "aadAdminLogin": { "value": "pavan.thakur_gmail.com#EXT#@pavanthakurgmail.onmicrosoft.com" },
+    "aadAdminObjectId": { "value": "99fce3f5-b801-4aa1-b2df-122900204d65" }
   }
 }
