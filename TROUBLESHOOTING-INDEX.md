@@ -109,6 +109,32 @@ APP_PRIVATE_KEY       : ❌ Missing
 
 ---
 
+### SQL Managed Identity (Day 35+)
+
+#### ❌ "Login failed for user '<token-identified principal>'" after clean deployment
+**Symptom**: API starts but all DB calls return 500; App Service log shows `Login failed for user '<token-identified principal>'`.
+
+**Cause**: After a clean redeploy (resource group deleted + recreated), the App Service gets a **new managed identity principal ID**. The old SQL contained user is gone with the deleted database. The Bicep deployment sets the AAD admin on the SQL Server, but does **not** create the contained user inside the database — that is a one-time manual step.
+
+**Fix** — re-run the setup script (must be logged in as the AAD admin set in the parameter files):
+```powershell
+.\Resources\Azure-Deployment\setup-sql-managed-identity.ps1 -Environment dev
+# or staging / prod
+```
+
+**When to re-run this script:**
+| Scenario | Re-run needed? |
+|----------|---------------|
+| Regular `git push` redeploy | ❌ No |
+| Bicep incremental redeploy | ❌ No |
+| App Service recreated (same RG) | ✅ Yes — new principal ID |
+| Full resource group teardown + recreate | ✅ Yes — new DB + new principal ID |
+| First-time setup on a new environment | ✅ Yes |
+
+> **Note**: `aadAdminObjectId` and `aadAdminLogin` in the parameter files never need updating — they are your permanent Azure AD user identifiers. Only the SQL contained user (inside the DB) is lost on a clean deploy.
+
+---
+
 ### Branch / Environment Mismatch
 
 #### ❌ "Branch/environment mismatch"
