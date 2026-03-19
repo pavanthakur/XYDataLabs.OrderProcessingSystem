@@ -207,6 +207,30 @@ cleanupInfra: true      # ⚠️ DESTRUCTIVE — deletes everything
 
 ---
 
+## ⚠️ Post-Clean-Deploy Checklist (After Bootstrap + API Deploy)
+
+After a **full clean deployment** (resource group deleted and recreated), the SQL contained user for the App Service managed identity is lost with the old database. The API will return 500 errors until this is fixed.
+
+**Always run this after a clean deploy:**
+```powershell
+# In VS Code Chat (Agent mode):
+/sql-mi-setup
+
+# Or directly:
+.\Resources\Azure-Deployment\setup-sql-managed-identity.ps1 -Environment dev
+```
+
+| Step | Action | Required after clean deploy? |
+|------|--------|-----------------------------|
+| 1 | Run `azure-bootstrap.yml` (bootstrapInfra + deployApi) | ✅ |
+| 2 | Run `/sql-mi-setup` prompt (or `setup-sql-managed-identity.ps1`) | ✅ **Do not skip** |
+| 3 | Verify `/api/orders` returns 200 (not 500) | ✅ |
+| 4 | Optional: open SQL firewall for local SSMS via `/sql-local-access` | Optional |
+
+> See [TROUBLESHOOTING-INDEX.md](../../TROUBLESHOOTING-INDEX.md#sql-managed-identity-day-35) for full details on the symptom and fix.
+
+---
+
 ## 🔍 Monitoring & Troubleshooting
 
 ### View Workflow Progress

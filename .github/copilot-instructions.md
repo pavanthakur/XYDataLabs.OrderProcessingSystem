@@ -293,8 +293,9 @@ Port allocations: Local VS (5010–5013) · Docker dev (5020–5023) · UAT (503
 |--------|---------|--------|
 | Day Complete Router | `/day-complete` | After each curriculum day — routes updates to all correct documents, suggests commit |
 | SQL Local Access | `/sql-local-access` | Opens or closes Azure SQL firewall for local IP after a fresh bootstrap/deploy. Prints SSMS connection details. |
+| SQL MI Setup | `/sql-mi-setup` | ⚠️ **Run after every clean deploy** — creates SQL contained user for App Service managed identity. Required after any resource group teardown + recreate or first-time environment setup. |
 
-> **Quick prompt tip:** `Ctrl+Shift+I` → select Agent mode → type `/day-complete` or `/sql-local-access`
+> **Quick prompt tip:** `Ctrl+Shift+I` → select Agent mode → type `/day-complete`, `/sql-local-access`, or `/sql-mi-setup`
 
 ---
 
