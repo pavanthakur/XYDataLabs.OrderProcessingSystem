@@ -2497,7 +2497,7 @@ jobs:
             // Build Azure app URLs (staging env uses 'stg' suffix in resource names)
             const owner     = context.repo.owner.toLowerCase();
             const envSuffix = targetEnv === 'staging' ? 'stg' : targetEnv;
-            const apiUrl    = `https://${owner}-orderprocessing-api-xyapp-${envSuffix}.azurewebsites.net`;
+            const apiUrl    = `https://${owner}-orderprocessing-api-xyapp-${envSuffix}.azurewebsites.net/swagger`;
             const uiUrl     = `https://${owner}-orderprocessing-ui-xyapp-${envSuffix}.azurewebsites.net`;
 
             let s = core.summary
@@ -2510,7 +2510,7 @@ jobs:
                 .addHeading('🔗 Deployed Endpoints', 3)
                 .addTable([
                   [{ data: 'Service', header: true }, { data: 'URL', header: true }, { data: 'Status', header: true }],
-                  ...(deployApi ? [['API (Swagger)', `[${apiUrl}/swagger](${apiUrl}/swagger)`, apiRun ? '✅ deployed' : '❌ failed']] : []),
+                  ...(deployApi ? [['API (Swagger)', `[${apiUrl}](${apiUrl})`, apiRun ? '✅ deployed' : '❌ failed']] : []),
                   ...(deployUi  ? [['UI',            `[${uiUrl}](${uiUrl})`,                   uiRun  ? '✅ deployed' : '❌ failed']] : [])
                 ]);
             }
