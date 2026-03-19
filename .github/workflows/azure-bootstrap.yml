@@ -2271,6 +2271,62 @@ jobs:
           "---" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
 
+          # Show failure diagnosis when validate-inputs failed
+          if ($validateInputs -eq "failure") {
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "---" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "## ❌ Validate Inputs Failed — Cause and Remediation" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+
+            $branch = "${{ github.ref_name }}"
+            $env    = "${{ inputs.environment }}"
+            $expectedBranch = if ($env -eq "prod") { "main" } elseif ($env -eq "all") { "any" } else { $env }
+            $isMismatch = ($env -ne "all") -and ($branch -ne $expectedBranch)
+
+            if ($isMismatch) {
+              "### 🌿 Branch / Environment Mismatch" >> $env:GITHUB_STEP_SUMMARY
+              "" >> $env:GITHUB_STEP_SUMMARY
+              "| Field | Value |" >> $env:GITHUB_STEP_SUMMARY
+              "|-------|-------|" >> $env:GITHUB_STEP_SUMMARY
+              "| Current branch | ``$branch`` |" >> $env:GITHUB_STEP_SUMMARY
+              "| Target environment | ``$env`` |" >> $env:GITHUB_STEP_SUMMARY
+              "| Required branch | ``$expectedBranch`` |" >> $env:GITHUB_STEP_SUMMARY
+              "" >> $env:GITHUB_STEP_SUMMARY
+              "> ❌ **You ran this workflow from the \`\`$branch\`\` branch but selected environment \`\`$env\`\`.**" >> $env:GITHUB_STEP_SUMMARY
+              "> Each environment must be deployed from its matching branch." >> $env:GITHUB_STEP_SUMMARY
+              "" >> $env:GITHUB_STEP_SUMMARY
+              "### ✅ How to Fix" >> $env:GITHUB_STEP_SUMMARY
+              "" >> $env:GITHUB_STEP_SUMMARY
+              "| Step | Action |" >> $env:GITHUB_STEP_SUMMARY
+              "|------|--------|" >> $env:GITHUB_STEP_SUMMARY
+              "| 1 | Go to **[Actions → Azure Bootstrap & Deploy → Run workflow](https://github.com/${{ github.repository }}/actions/workflows/azure-bootstrap.yml)** |" >> $env:GITHUB_STEP_SUMMARY
+              "| 2 | In **'Use workflow from'** — switch branch to **``$expectedBranch``** |" >> $env:GITHUB_STEP_SUMMARY
+              "| 3 | Set **Environment** to **``$env``** |" >> $env:GITHUB_STEP_SUMMARY
+              "| 4 | Click **Run workflow** |" >> $env:GITHUB_STEP_SUMMARY
+              "" >> $env:GITHUB_STEP_SUMMARY
+              "**Branch → Environment convention:**" >> $env:GITHUB_STEP_SUMMARY
+              "" >> $env:GITHUB_STEP_SUMMARY
+              "| Branch | Environment |" >> $env:GITHUB_STEP_SUMMARY
+              "|--------|-------------|" >> $env:GITHUB_STEP_SUMMARY
+              "| ``dev`` | ``dev`` |" >> $env:GITHUB_STEP_SUMMARY
+              "| ``staging`` | ``staging`` |" >> $env:GITHUB_STEP_SUMMARY
+              "| ``main`` | ``prod`` |" >> $env:GITHUB_STEP_SUMMARY
+            } else {
+              "### 🔐 OIDC Secrets Missing" >> $env:GITHUB_STEP_SUMMARY
+              "" >> $env:GITHUB_STEP_SUMMARY
+              "> The \`\`AZUREAPPSERVICE_CLIENTID\`\`, \`\`AZUREAPPSERVICE_TENANTID\`\`, or \`\`AZUREAPPSERVICE_SUBSCRIPTIONID\`\` secrets are not configured for the **``$env``** environment." >> $env:GITHUB_STEP_SUMMARY
+              "" >> $env:GITHUB_STEP_SUMMARY
+              "### ✅ How to Fix — Run the 'Azure Initial Setup' Workflow" >> $env:GITHUB_STEP_SUMMARY
+              "" >> $env:GITHUB_STEP_SUMMARY
+              "| Step | Action |" >> $env:GITHUB_STEP_SUMMARY
+              "|------|--------|" >> $env:GITHUB_STEP_SUMMARY
+              "| 1 | Go to **[Actions → Azure Initial Setup → Run workflow](https://github.com/${{ github.repository }}/actions/workflows/azure-initial-setup.yml)** |" >> $env:GITHUB_STEP_SUMMARY
+              "| 2 | All defaults are correct (environment=``all``, OIDC + secrets enabled) |" >> $env:GITHUB_STEP_SUMMARY
+              "| 3 | Click **Run workflow** and wait for completion, then re-run this workflow |" >> $env:GITHUB_STEP_SUMMARY
+            }
+          }
+
           # Show failure diagnosis when any bootstrap job failed
           $anyBootstrapFailed = ($bootstrapDev -eq "failure") -or ($bootstrapStaging -eq "failure") -or ($bootstrapProd -eq "failure")
 
