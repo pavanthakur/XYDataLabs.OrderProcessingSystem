@@ -2244,7 +2244,11 @@ jobs:
           "" >> $env:GITHUB_STEP_SUMMARY
 
           if ($triggerDeployments -eq "success" -and ('${{ inputs.deployApi }}' -eq 'true' -or '${{ inputs.deployUi }}' -eq 'true')) {
-            "> **Note:** API/UI deployments run as separate workflows. Check their status in the [Actions tab](https://github.com/${{ github.repository }}/actions)." >> $env:GITHUB_STEP_SUMMARY
+            "> **Deployments completed successfully.** See the Trigger Deployments summary for direct run links." >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+          }
+          if ($triggerDeployments -eq "failure" -and ('${{ inputs.deployApi }}' -eq 'true' -or '${{ inputs.deployUi }}' -eq 'true')) {
+            "> ❌ **One or more deployments failed.** Check the [Trigger Deployments job log](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details." >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
           }
           "### 🏗️ What Gets Created Automatically" >> $env:GITHUB_STEP_SUMMARY
@@ -2329,78 +2333,116 @@ jobs:
         )
       )
     steps:
-      - name: Trigger API Deployment
-        if: inputs.deployApi
+      - name: Dispatch and Await Deployments
+        if: inputs.environment != 'all'
         uses: actions/github-script@v7
         env:
+          DEPLOY_API: ${{ inputs.deployApi }}
+          DEPLOY_UI:  ${{ inputs.deployUi }}
           TARGET_ENV: ${{ inputs.environment }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
+            const deployApi = process.env.DEPLOY_API === 'true';
+            const deployUi  = process.env.DEPLOY_UI  === 'true';
             const targetEnv = process.env.TARGET_ENV;
-            if (targetEnv === 'all') {
-              core.notice('ℹ️ environment=all is infrastructure-only. Deploy each environment separately from its own branch.');
-              return;
-            }
-            const result = await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'deploy-api-to-azure.yml',
-              ref: context.ref
-            });
-            
-            core.notice(`🚀 API deployment triggered for environment: ${targetEnv}`);
-            core.notice(`📋 Branch: ${context.ref.replace('refs/heads/', '')}`);
-            core.notice(`🔗 View workflow: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/workflows/deploy-api-to-azure.yml`);
+            const ref       = context.ref;
+            const branch    = ref.replace('refs/heads/', '');
 
-      - name: Trigger UI Deployment
-        if: inputs.deployUi
-        uses: actions/github-script@v7
-        env:
-          TARGET_ENV: ${{ inputs.environment }}
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const targetEnv = process.env.TARGET_ENV;
-            if (targetEnv === 'all') {
-              core.notice('ℹ️ environment=all is infrastructure-only. Deploy each environment separately from its own branch.');
-              return;
-            }
-            const result = await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'deploy-ui-to-azure.yml',
-              ref: context.ref
-            });
-            
-            core.notice(`🚀 UI deployment triggered for environment: ${targetEnv}`);
-            core.notice(`📋 Branch: ${context.ref.replace('refs/heads/', '')}`);
-            core.notice(`🔗 View workflow: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/workflows/deploy-ui-to-azure.yml`);
+            // Dispatch a workflow and poll until it reaches 'completed' status.
+            // Returns the final run object. Throws on timeout or non-success conclusion.
+            async function dispatchAndAwait(workflowId) {
+              const dispatchedAt = new Date();
 
-      - name: Add Deployment Summary
-        if: always()
+              core.info(`🚀 Dispatching ${workflowId} on branch '${branch}'...`);
+              await github.rest.actions.createWorkflowDispatch({
+                owner: context.repo.owner,
+                repo:  context.repo.repo,
+                workflow_id: workflowId,
+                ref:   ref
+              });
+
+              // Poll until the newly-created run appears (up to 90 s, every 5 s)
+              let run = null;
+              for (let i = 0; i < 18; i++) {
+                await new Promise(r => setTimeout(r, 5000));
+                const res = await github.rest.actions.listWorkflowRuns({
+                  owner:       context.repo.owner,
+                  repo:        context.repo.repo,
+                  workflow_id: workflowId,
+                  branch:      branch,
+                  event:       'workflow_dispatch',
+                  per_page:    5
+                });
+                run = res.data.workflow_runs.find(r => new Date(r.created_at) >= dispatchedAt);
+                if (run) { core.info(`  Found run #${run.run_number}: ${run.html_url}`); break; }
+              }
+              if (!run) throw new Error(`[${workflowId}] Run not found within 90 s of dispatch`);
+
+              // Poll until complete (every 15 s, max 25 min = 100 attempts)
+              for (let i = 0; i < 100 && run.status !== 'completed'; i++) {
+                core.info(`  [${workflowId}] status=${run.status} (${i * 15} s elapsed)...`);
+                await new Promise(r => setTimeout(r, 15000));
+                const updated = await github.rest.actions.getWorkflowRun({
+                  owner:  context.repo.owner,
+                  repo:   context.repo.repo,
+                  run_id: run.id
+                });
+                run = updated.data;
+              }
+
+              if (run.status !== 'completed') {
+                throw new Error(`[${workflowId}] Timed out after 25 minutes. Run: ${run.html_url}`);
+              }
+              if (run.conclusion !== 'success') {
+                throw new Error(`[${workflowId}] Completed with conclusion '${run.conclusion}'. Run: ${run.html_url}`);
+              }
+
+              core.notice(`✅ ${workflowId} succeeded: ${run.html_url}`);
+              return run;
+            }
+
+            // Dispatch API and UI sequentially; collect errors so both are attempted
+            let apiRun = null, uiRun = null;
+            const errors = [];
+
+            if (deployApi) {
+              try   { apiRun = await dispatchAndAwait('deploy-api-to-azure.yml'); }
+              catch (e) { errors.push(e.message); core.error(`❌ API deployment failed: ${e.message}`); }
+            }
+
+            if (deployUi) {
+              try   { uiRun = await dispatchAndAwait('deploy-ui-to-azure.yml'); }
+              catch (e) { errors.push(e.message); core.error(`❌ UI deployment failed: ${e.message}`); }
+            }
+
+            // Write step summary with actual run results
+            const rows = [
+              [{data: 'Workflow', header: true}, {data: 'Result', header: true}, {data: 'Run', header: true}]
+            ];
+            if (deployApi) rows.push([
+              'API Deployment',
+              apiRun ? '✅ success' : '❌ failed',
+              apiRun ? `[#${apiRun.run_number}](${apiRun.html_url})` : 'see error above'
+            ]);
+            if (deployUi) rows.push([
+              'UI Deployment',
+              uiRun ? '✅ success' : '❌ failed',
+              uiRun ? `[#${uiRun.run_number}](${uiRun.html_url})` : 'see error above'
+            ]);
+
+            await core.summary
+              .addHeading('🚀 Deployment Results', 2)
+              .addRaw(`**Target Environment:** \`${targetEnv}\`  **Branch:** \`${branch}\`\n\n`)
+              .addTable(rows)
+              .write();
+
+            if (errors.length > 0) {
+              core.setFailed(`One or more deployments failed:\n${errors.join('\n')}`);
+            }
+
+      - name: environment=all notice
+        if: inputs.environment == 'all'
         run: |
-          echo "## 🚀 Deployment Triggers" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Target Environment:** \`${{ inputs.environment }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Branch:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Workflow | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
-          
-          if [ "${{ inputs.deployApi }}" == "true" ]; then
-            echo "| API Deployment | ✅ Triggered |" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "🔗 [View API Deployment Runs](https://github.com/${{ github.repository }}/actions/workflows/deploy-api-to-azure.yml)" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          if [ "${{ inputs.deployUi }}" == "true" ]; then
-            echo "| UI Deployment | ✅ Triggered |" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "🔗 [View UI Deployment Runs](https://github.com/${{ github.repository }}/actions/workflows/deploy-ui-to-azure.yml)" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "> **Note:** Deployments determine their target environment from the branch name." >> $GITHUB_STEP_SUMMARY
-          echo "> The branch \`${{ github.ref_name }}\` corresponds to the \`${{ inputs.environment }}\` environment." >> $GITHUB_STEP_SUMMARY
+          echo "ℹ️ environment=all is infrastructure-only. Deploy each environment separately from its own branch." >> $GITHUB_STEP_SUMMARY
 
