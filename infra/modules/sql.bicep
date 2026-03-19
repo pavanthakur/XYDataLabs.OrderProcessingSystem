@@ -25,6 +25,12 @@ param databaseServiceObjective string = 'Basic'
 @description('Maximum database size in GB')
 param maxSizeGB int = 2
 
+@description('Azure AD admin object ID for SQL Server (leave empty to skip AD admin setup). Get via: az ad signed-in-user show --query id -o tsv')
+param aadAdminObjectId string = ''
+
+@description('Azure AD admin login — UPN for users (e.g. user@tenant.onmicrosoft.com) or display name for service principals. Get via: az ad signed-in-user show --query userPrincipalName -o tsv')
+param aadAdminLogin string = ''
+
 var sqlServerName = '${baseName}-sql-${environment}'
 var databaseName = 'OrderProcessingSystem_${toUpper(substring(environment, 0, 1))}${substring(environment, 1)}'
 
@@ -79,7 +85,20 @@ resource database 'Microsoft.Sql/servers/databases@2023-08-01-preview' = {
   }
 }
 
+// Azure AD administrator — required for Managed Identity connections from App Services.
+// Set aadAdminObjectId + aadAdminLogin in parameters/{env}.json, then run:
+//   Resources/Azure-Deployment/setup-sql-managed-identity.ps1 -Environment dev
+resource sqlAadAdmin 'Microsoft.Sql/servers/administrators@2023-08-01-preview' = if (!empty(aadAdminObjectId)) {
+  parent: sqlServer
+  name: 'ActiveDirectory'
+  properties: {
+    administratorType: 'ActiveDirectory'
+    login: aadAdminLogin
+    sid: aadAdminObjectId
+    tenantId: tenant().tenantId
+  }
+}
+
 output sqlServerName string = sqlServer.name
 output sqlServerFqdn string = sqlServer.properties.fullyQualifiedDomainName
 output databaseName string = database.name
-output sqlAdminUsername string = sqlAdminUsername

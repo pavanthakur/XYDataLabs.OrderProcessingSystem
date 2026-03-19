@@ -28,6 +28,12 @@ param sqlAdminPassword string
 @description('Database service objective (Basic, S0, S1, etc)')
 param databaseServiceObjective string = 'Basic'
 
+@description('Azure AD admin object ID for SQL Server managed identity auth (optional). Get via: az ad signed-in-user show --query id -o tsv')
+param aadAdminObjectId string = ''
+
+@description('Azure AD admin login name (optional). Get via: az ad signed-in-user show --query userPrincipalName -o tsv')
+param aadAdminLogin string = ''
+
 var rgName = 'rg-${baseName}-${environment}'
 
 // Resource Group (subscription scope deployment creates RG first)
@@ -51,6 +57,8 @@ module sql 'modules/sql.bicep' = {
     sqlAdminUsername: sqlAdminUsername
     sqlAdminPassword: sqlAdminPassword
     databaseServiceObjective: databaseServiceObjective
+    aadAdminObjectId: aadAdminObjectId
+    aadAdminLogin: aadAdminLogin
   }
 }
 
@@ -68,8 +76,6 @@ module hosting 'modules/hosting.bicep' = {
     appInsightsInstrumentationKey: insights.outputs.appInsightsInstrumentationKey
     sqlServerFqdn: sql.outputs.sqlServerFqdn
     sqlDatabaseName: sql.outputs.databaseName
-    sqlAdminUsername: sql.outputs.sqlAdminUsername
-    sqlAdminPassword: sqlAdminPassword
   }
 }
 

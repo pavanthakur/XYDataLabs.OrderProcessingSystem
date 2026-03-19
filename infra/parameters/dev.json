@@ -10,7 +10,9 @@
     "enableIdentity": { "value": true },
     "sqlAdminUsername": { "value": "sqladmin" },
     "sqlAdminPassword": { "value": "Admin100@" },
-    "databaseServiceObjective": { "value": "Basic" }
+    "databaseServiceObjective": { "value": "Basic" },
+    "aadAdminLogin": { "value": "TODO: run: az ad signed-in-user show --query userPrincipalName -o tsv" },
+    "aadAdminObjectId": { "value": "TODO: run: az ad signed-in-user show --query id -o tsv" }
   }
 }
 

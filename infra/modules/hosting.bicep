@@ -16,19 +16,15 @@ param appInsightsInstrumentationKey string = ''
 param sqlServerFqdn string = ''
 @description('SQL Database Name (optional)')
 param sqlDatabaseName string = ''
-@description('SQL Admin Username (optional)')
-param sqlAdminUsername string = ''
-@description('SQL Admin Password (optional)')
-@secure()
-param sqlAdminPassword string = ''
-
 var planName = 'asp-${baseName}-${environment}'
 var apiName = '${githubOwner}-${baseName}-api-xyapp-${environment}'
 var uiName  = '${githubOwner}-${baseName}-ui-xyapp-${environment}'
 
-// Construct SQL connection string from components
-// Only create connection string if all required SQL parameters are provided
-var sqlConnectionString = !empty(sqlServerFqdn) && !empty(sqlDatabaseName) && !empty(sqlAdminUsername) && !empty(sqlAdminPassword) ? 'Server=tcp:${sqlServerFqdn},1433;Initial Catalog=${sqlDatabaseName};User ID=${sqlAdminUsername};Password=${sqlAdminPassword};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;' : ''
+// Passwordless connection string — App Service Managed Identity authenticates via 'Active Directory Default'.
+// Requires: (1) Azure AD admin set on SQL Server via aadAdminObjectId Bicep param,
+//           (2) setup-sql-managed-identity.ps1 run once after first deploy to CREATE USER + grant roles.
+// Local dev: sharedsettings.local.json uses SQL password auth — unaffected by this change.
+var sqlConnectionString = !empty(sqlServerFqdn) && !empty(sqlDatabaseName) ? 'Server=tcp:${sqlServerFqdn},1433;Initial Catalog=${sqlDatabaseName};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;Authentication=Active Directory Default' : ''
 
 // App Insights configuration for App Services
 var appInsightsSettings = !empty(appInsightsConnectionString) ? [
