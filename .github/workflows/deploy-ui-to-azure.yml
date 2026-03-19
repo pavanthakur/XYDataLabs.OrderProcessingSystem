@@ -156,20 +156,33 @@ jobs:
         if: steps.check-credentials.outputs.credentialsConfigured == 'true'
         shell: pwsh
         run: |
-          Write-Host "Waiting 30 seconds for app to start..." -ForegroundColor Yellow
-          Start-Sleep -Seconds 30
-          
+          Write-Host "Waiting 60 seconds for app to start (cold-start buffer)..." -ForegroundColor Yellow
+          Start-Sleep -Seconds 60
+
           $uiUrl = "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net"
-          
+
+          # Retry up to 3 times with 30 s between attempts; 60 s timeout each.
+          # Azure App Service cold starts can take 60–90 s after deployment.
           Write-Host "Testing UI endpoint: $uiUrl" -ForegroundColor Cyan
-          $healthy = $true
-          try {
-            $response = Invoke-WebRequest -Uri $uiUrl -Method Get -TimeoutSec 30
-            Write-Host "✅ UI responded with status: $($response.StatusCode)" -ForegroundColor Green
-            Write-Host "UI is accessible at: $uiUrl" -ForegroundColor Cyan
-          } catch {
-            Write-Host "❌ UI health check FAILED: $($_.Exception.Message)" -ForegroundColor Red
-            $healthy = $false
+          $healthy     = $false
+          $maxAttempts = 3
+          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            try {
+              $response = Invoke-WebRequest -Uri $uiUrl -Method Get -TimeoutSec 60
+              Write-Host "✅ UI responded with status: $($response.StatusCode)" -ForegroundColor Green
+              Write-Host "UI is accessible at: $uiUrl" -ForegroundColor Cyan
+              $healthy = $true
+              break
+            } catch {
+              Write-Host "  Attempt $attempt/$maxAttempts failed: $($_.Exception.Message)" -ForegroundColor Yellow
+              if ($attempt -lt $maxAttempts) {
+                Write-Host "  Retrying in 30 s..." -ForegroundColor Yellow
+                Start-Sleep -Seconds 30
+              }
+            }
+          }
+          if (-not $healthy) {
+            Write-Host "❌ UI health check FAILED after $maxAttempts attempts" -ForegroundColor Red
           }
 
           if (-not $healthy) {
