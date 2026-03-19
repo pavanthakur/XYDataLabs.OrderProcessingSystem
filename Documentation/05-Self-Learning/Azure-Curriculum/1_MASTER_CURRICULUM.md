@@ -276,11 +276,16 @@ After completing today's tasks, you will have:
 - [x] Seed test data and verify via Azure Portal Data Explorer — 120 Customers, 13 tables confirmed
 - [x] **Time:** 1.5 hours | **Completed:** ✅
 
-#### Day 34: Environment-Specific SQL Configuration
+#### Day 34: Environment-Specific SQL Configuration + Copilot Infrastructure ✅
 - [x] Configure SQL connection strings in `Resources/Configuration/sharedsettings.{dev,staging,prod}.json`
-- [x] Enable SQL logging in development
+- [x] Enable SQL logging in development (`LogTo`, `EnableSensitiveDataLogging`, `EnableDetailedErrors` guarded by `IsDevelopment()`)
+- [x] Set up `.github/instructions/` skill files (ef-migrations, azure-workflows, bicep, curriculum, architecture)
+- [x] Created `docs/architecture/decisions/` ADR framework (ADR-000 template + ADR-001 to ADR-005)
+- [x] Created `/memories/architect-patterns.md` — career-wide Azure/.NET/Angular/Docker patterns
+- [x] Created `/memories/repo/azure-resources.md` and `dotnet-conventions.md`
+- [x] Created `.github/prompts/day-complete.prompt.md` — auto-routing agent prompt
 - [ ] Test connection from App Service in Azure Portal
-- [ ] **Time:** 1 hour | **Completed:** ___/___/___ (Connection strings ✅, SQL logging ✅, portal testing pending)
+- [x] **Time:** 4 hours | **Completed:** 20/03/2026 (portal test pending)
 
 #### Day 35: SQL Security — Enable Managed Identity
 - [ ] Enable system-assigned managed identity on App Service
