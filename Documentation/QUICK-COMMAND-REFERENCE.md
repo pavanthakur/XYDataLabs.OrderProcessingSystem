@@ -813,6 +813,38 @@ git diff
 
 ---
 
+## 🤖 Copilot Agent Prompts (VS Code Chat)
+
+These are reusable agent prompts stored in `.github/prompts/`. Type them in VS Code Chat (`Ctrl+Shift+I` → Agent mode).
+
+| Command | When to use | What it does |
+|---------|-------------|--------------|
+| `@workspace /day-complete` | End of every curriculum day | Routes updates to curriculum, commands doc, ADRs, memory files. Suggests commit message. |
+
+### **How to run a prompt**
+1. Open VS Code Chat: `Ctrl+Shift+I`
+2. Switch to **Agent mode** (dropdown top-left of chat)
+3. Type: `/day-complete` and press Enter
+4. Answer the question: "What did you complete today?"
+5. Copilot auto-updates all the right documents and suggests a commit
+
+### **Routing Decision (quick ref)**
+| What you did | Document to update |
+|--------------|-------------------|
+| Completed checklist item | `1_MASTER_CURRICULUM.md` |
+| Ran a CLI command | `QUICK-COMMAND-REFERENCE.md` (this file) |
+| Chose technology X over Y | New `docs/architecture/decisions/ADR-NNN.md` |
+| Learned reusable pattern | `/memories/architect-patterns.md` |
+| New Azure resource/FQDN | `/memories/repo/azure-resources.md` |
+| New .NET class/convention | `/memories/repo/dotnet-conventions.md` |
+| Workflow/deployment gotcha | `/memories/repo/workflow-split.md` |
+
+### **Prompts folder**
+All prompt files: `.github/prompts/*.prompt.md`  
+To add a new prompt: create `.github/prompts/<name>.prompt.md` with `mode: agent` in YAML frontmatter.
+
+---
+
 ## 📚 Additional Resources
 
 ### **Documentation Files**

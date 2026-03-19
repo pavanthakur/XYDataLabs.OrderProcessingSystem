@@ -277,7 +277,27 @@ Port allocations: Local VS (5010–5013) · Docker dev (5020–5023) · UAT (503
 
 ---
 
-## 9. Key Documentation Files
+## 9. Copilot Prompts & Instruction Files
+
+### Instruction files (auto-attach by file pattern)
+| File | Applies to |
+|------|------------|
+| `.github/instructions/ef-migrations.instructions.md` | `**/Infrastructure/**`, `**/Migrations/**` |
+| `.github/instructions/azure-workflows.instructions.md` | `**/.github/workflows/**` |
+| `.github/instructions/bicep.instructions.md` | `**/infra/**`, `**/*.bicep` |
+| `.github/instructions/curriculum.instructions.md` | `**/*CURRICULUM*`, `**/05-Self-Learning/**` |
+| `.github/instructions/architecture.instructions.md` | `**/docs/architecture/**`, `**/*ADR*` |
+
+### Reusable agent prompts (type in VS Code Chat → Agent mode)
+| Prompt | Command | Purpose |
+|--------|---------|--------|
+| Day Complete Router | `/day-complete` | After each curriculum day — routes updates to all correct documents, suggests commit |
+
+> **Quick prompt tip:** `Ctrl+Shift+I` → select Agent mode → type `/day-complete`
+
+---
+
+## 10. Key Documentation Files
 
 | File | Where | What it covers |
 |------|-------|---------------|
