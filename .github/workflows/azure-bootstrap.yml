@@ -2293,7 +2293,7 @@ jobs:
               "| Target environment | ``$env`` |" >> $env:GITHUB_STEP_SUMMARY
               "| Required branch | ``$expectedBranch`` |" >> $env:GITHUB_STEP_SUMMARY
               "" >> $env:GITHUB_STEP_SUMMARY
-              "> ❌ **You ran this workflow from the \`\`$branch\`\` branch but selected environment \`\`$env\`\`.**" >> $env:GITHUB_STEP_SUMMARY
+              "> ❌ **You ran this workflow from the ``$branch`` branch but selected environment ``$env``.**" >> $env:GITHUB_STEP_SUMMARY
               "> Each environment must be deployed from its matching branch." >> $env:GITHUB_STEP_SUMMARY
               "" >> $env:GITHUB_STEP_SUMMARY
               "### ✅ How to Fix" >> $env:GITHUB_STEP_SUMMARY
@@ -2315,7 +2315,7 @@ jobs:
             } else {
               "### 🔐 OIDC Secrets Missing" >> $env:GITHUB_STEP_SUMMARY
               "" >> $env:GITHUB_STEP_SUMMARY
-              "> The \`\`AZUREAPPSERVICE_CLIENTID\`\`, \`\`AZUREAPPSERVICE_TENANTID\`\`, or \`\`AZUREAPPSERVICE_SUBSCRIPTIONID\`\` secrets are not configured for the **``$env``** environment." >> $env:GITHUB_STEP_SUMMARY
+              "> The ``AZUREAPPSERVICE_CLIENTID``, ``AZUREAPPSERVICE_TENANTID``, or ``AZUREAPPSERVICE_SUBSCRIPTIONID`` secrets are not configured for the **``$env``** environment." >> $env:GITHUB_STEP_SUMMARY
               "" >> $env:GITHUB_STEP_SUMMARY
               "### ✅ How to Fix — Run the 'Azure Initial Setup' Workflow" >> $env:GITHUB_STEP_SUMMARY
               "" >> $env:GITHUB_STEP_SUMMARY
