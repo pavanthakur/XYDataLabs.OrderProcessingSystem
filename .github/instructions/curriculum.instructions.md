@@ -7,8 +7,7 @@ applyTo: "**/*CURRICULUM*,**/05-Self-Learning/**"
 `Documentation/05-Self-Learning/Azure-Curriculum/1_MASTER_CURRICULUM.md`
 
 ## Current Progress (as of March 2026)
-- Days 1-33: ✅ Complete
-- Day 34: 🔶 Partial — SQL logging ✅, portal test pending
+- Days 1-34: ✅ Complete (archived in `archive/week-01-02`, `week-03-04`, `week-05-08`)
 - Day 35: ❌ Not started — Managed Identity for SQL
 - Day 36: 🔶 Partial — Azure.Identity pkg ✅, SQL passwordless not done
 - Days 37+: ❌ Not started
@@ -29,8 +28,18 @@ When marking a day complete:
 `Day <N>: <Short description of what was done>`
 Example: `Day 34: Enable EF Core SQL logging in Development environment`
 
-## Related Commands Document
-`Documentation/QUICK-COMMAND-REFERENCE.md` — all hands-on commands executed each day should be added here under the relevant section.
+## Related Commands Documents
+`Documentation/QUICK-COMMAND-REFERENCE.md` — index only (links to topic files below).
+All hands-on commands go to the appropriate topic file in `Documentation/commands/`:
+- `commands/git-workflow.md` — git, validation, daily workflow
+- `commands/azure-infra.md` — Azure CLI, Bicep, OIDC, GitHub workflows
+- `commands/azure-sql-ef.md` — Azure SQL, EF Core, sqlcmd, firewall
+- `commands/local-dev.md` — local dev, dotnet run, Docker, SQL logging
+
+## Archive Convention
+Completed weeks → `Documentation/05-Self-Learning/Azure-Curriculum/archive/week-NN-name.md`
+Master file keeps: current week + next 2 weeks + overview sections only.
+Archivedweeks are replaced with a single summary line + archive link.
 
 ---
 
@@ -41,7 +50,7 @@ When completing a curriculum day or implementing something new, use this decisio
 | What you learned / did | Update this document |
 |------------------------|---------------------|
 | Completed a checklist item | `1_MASTER_CURRICULUM.md` — mark `[x]`, update Completed date |
-| Ran a new CLI command (az, dotnet ef, git, sqlcmd) | `Documentation/QUICK-COMMAND-REFERENCE.md` — add to relevant section |
+| Ran a new CLI command (az, dotnet ef, git, sqlcmd) | `Documentation/commands/<topic>.md` — git-workflow / azure-infra / azure-sql-ef / local-dev |
 | Made a technology choice (why X over Y) | New `docs/architecture/decisions/ADR-NNN-title.md` |
 | Discovered a reusable pattern for any future project | `/memories/architect-patterns.md` — add to relevant section |
 | New Azure resource name / FQDN / credentials detail | `/memories/repo/azure-resources.md` |

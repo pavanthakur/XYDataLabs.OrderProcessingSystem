@@ -18,8 +18,18 @@ Then, based on their answer, apply the following routing rules automatically —
    - Mark completed items `[x]`, update the `**Completed:**` date line
 
 2. **If any CLI commands were run** (az, dotnet ef, git, sqlcmd, docker, pwsh):
-   - Add them to the matching section in `Documentation/QUICK-COMMAND-REFERENCE.md`
-   - Create a new section if the topic doesn't exist yet
+   - Identify the correct topic file under `Documentation/commands/`:
+
+     | Topic | File |
+     |-------|------|
+     | Git, validation, daily workflow | `commands/git-workflow.md` |
+     | Azure CLI, Bicep, infra, OIDC | `commands/azure-infra.md` |
+     | Azure SQL, EF Core, sqlcmd, firewall | `commands/azure-sql-ef.md` |
+     | Local dev, dotnet run, Docker | `commands/local-dev.md` |
+
+   - Add the command to that topic file under the appropriate section (create a new section if needed)
+   - Do NOT add command blocks to `Documentation/QUICK-COMMAND-REFERENCE.md` directly — it is an index only
+   - If a brand-new topic file is needed, create it and add a row to the index table in `QUICK-COMMAND-REFERENCE.md`
 
 3. **If a technology/tool was chosen over an alternative:**
    - Create a new ADR in `docs/architecture/decisions/ADR-NNN-title.md`
@@ -37,6 +47,19 @@ Then, based on their answer, apply the following routing rules automatically —
 
 7. **If a workflow/deployment gotcha was discovered:**
    - Add to `/memories/repo/workflow-split.md`
+
+8. **If a full week is now complete** (all days in the week have ✅ Completed dates):
+   - Move that week's block from `1_MASTER_CURRICULUM.md` to:
+     `Documentation/05-Self-Learning/Azure-Curriculum/archive/week-NN-name.md`
+   - Use this archive file header:
+     ```markdown
+     # Archive: Weeks N-N — <Title> (Days X-Y)
+     **Archived:** DD/MM/YYYY | **Status:** ✅ All Complete
+     **Source:** 1_MASTER_CURRICULUM.md — Week N-N block
+     ```
+   - Replace the archived block in master with one summary line:
+     `### ✅ Weeks N-N: <Week Name> (Days X-Y) — [Archive](archive/week-NN-name.md)`
+   - Update the **COMPLETED SO FAR** bullet at the top of the master file if it exists
 
 ## After Routing
 - Summarise what was updated and where
