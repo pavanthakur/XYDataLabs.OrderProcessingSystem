@@ -214,21 +214,34 @@ jobs:
         if: steps.check-credentials.outputs.credentialsConfigured == 'true'
         shell: pwsh
         run: |
-          Write-Host "Waiting 30 seconds for app to start..." -ForegroundColor Yellow
-          Start-Sleep -Seconds 30
+          Write-Host "Waiting 60 seconds for app to start (cold-start buffer)..." -ForegroundColor Yellow
+          Start-Sleep -Seconds 60
 
           $apiUrl     = "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net"
           $swaggerUrl = "$apiUrl/swagger"
 
-          # Primary check: Swagger endpoint (APIs may not have a root route)
+          # Primary check: Swagger endpoint (APIs may not have a root route).
+          # Retry up to 3 times with 30 s between attempts; 60 s timeout each.
+          # Azure App Service cold starts can take 60–90 s after deployment.
           Write-Host "Testing Swagger endpoint: $swaggerUrl" -ForegroundColor Cyan
-          $swaggerOk = $false
-          try {
-            $swaggerResponse = Invoke-WebRequest -Uri $swaggerUrl -Method Get -TimeoutSec 30
-            Write-Host "✅ Swagger UI responded with status: $($swaggerResponse.StatusCode)" -ForegroundColor Green
-            $swaggerOk = $true
-          } catch {
-            Write-Host "❌ Swagger health check FAILED: $($_.Exception.Message)" -ForegroundColor Red
+          $swaggerOk   = $false
+          $maxAttempts = 3
+          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            try {
+              $swaggerResponse = Invoke-WebRequest -Uri $swaggerUrl -Method Get -TimeoutSec 60
+              Write-Host "✅ Swagger UI responded with status: $($swaggerResponse.StatusCode)" -ForegroundColor Green
+              $swaggerOk = $true
+              break
+            } catch {
+              Write-Host "  Attempt $attempt/$maxAttempts failed: $($_.Exception.Message)" -ForegroundColor Yellow
+              if ($attempt -lt $maxAttempts) {
+                Write-Host "  Retrying in 30 s..." -ForegroundColor Yellow
+                Start-Sleep -Seconds 30
+              }
+            }
+          }
+          if (-not $swaggerOk) {
+            Write-Host "❌ Swagger health check FAILED after $maxAttempts attempts" -ForegroundColor Red
           }
 
           # Informational: root endpoint (may return 404 if no default route — not a failure)
