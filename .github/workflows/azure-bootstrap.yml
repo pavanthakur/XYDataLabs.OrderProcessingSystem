@@ -2312,12 +2312,10 @@ jobs:
   trigger-deployments:
     name: Trigger Deployments
     runs-on: ubuntu-latest
-    needs: [summary, bootstrap-dev, bootstrap-staging, bootstrap-prod]
+    needs: [bootstrap-dev, bootstrap-staging, bootstrap-prod]
     if: |
       !cancelled() &&
       (inputs.deployApi || inputs.deployUi) &&
-      needs.summary.result != 'failure' &&
-      needs.summary.result != 'cancelled' &&
       (
         inputs.bootstrapInfra != true ||
         (inputs.environment == 'dev' && needs.bootstrap-dev.result == 'success') ||
