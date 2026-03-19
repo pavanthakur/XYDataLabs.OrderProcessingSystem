@@ -2494,11 +2494,28 @@ jobs:
               uiRun ? `[#${uiRun.run_number}](${uiRun.html_url})` : 'see error above'
             ]);
 
-            await core.summary
+            // Build Azure app URLs (staging env uses 'stg' suffix in resource names)
+            const owner     = context.repo.owner.toLowerCase();
+            const envSuffix = targetEnv === 'staging' ? 'stg' : targetEnv;
+            const apiUrl    = `https://${owner}-orderprocessing-api-xyapp-${envSuffix}.azurewebsites.net`;
+            const uiUrl     = `https://${owner}-orderprocessing-ui-xyapp-${envSuffix}.azurewebsites.net`;
+
+            let s = core.summary
               .addHeading('🚀 Deployment Results', 2)
               .addRaw(`**Target Environment:** \`${targetEnv}\`  **Branch:** \`${branch}\`\n\n`)
-              .addTable(rows)
-              .write();
+              .addTable(rows);
+
+            if (deployApi || deployUi) {
+              s = s
+                .addHeading('🔗 Deployed Endpoints', 3)
+                .addTable([
+                  [{ data: 'Service', header: true }, { data: 'URL', header: true }, { data: 'Status', header: true }],
+                  ...(deployApi ? [['API (Swagger)', `[${apiUrl}/swagger](${apiUrl}/swagger)`, apiRun ? '✅ deployed' : '❌ failed']] : []),
+                  ...(deployUi  ? [['UI',            `[${uiUrl}](${uiUrl})`,                   uiRun  ? '✅ deployed' : '❌ failed']] : [])
+                ]);
+            }
+
+            await s.write();
 
             if (errors.length > 0) {
               core.setFailed(`One or more deployments failed:\n${errors.join('\n')}`);
