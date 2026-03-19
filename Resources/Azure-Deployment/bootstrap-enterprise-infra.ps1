@@ -29,7 +29,7 @@ param(
     [Parameter(Mandatory = $false)] [string]$SubscriptionId,
     [Parameter(Mandatory = $false)] [string]$BaseName = 'orderprocessing',
     [Parameter(Mandatory = $false)] [string]$Location = 'centralindia',
-    [Parameter(Mandatory = $true)] [ValidateSet('dev','stg','prod')] [string]$Environment,
+    [Parameter(Mandatory = $true)] [ValidateSet('dev','staging','prod')] [string]$Environment,
     [Parameter(Mandatory = $false)] [string]$ApiSuffix = 'api-xyapp',
     [Parameter(Mandatory = $false)] [string]$UiSuffix = 'ui-xyapp',
     [Parameter(Mandatory = $false)] [string]$DevSku = 'F1',
@@ -54,16 +54,19 @@ function Add-LogEntry {
 
 Add-LogEntry -Phase 'init' -Action 'start' -Status 'ok' -Detail "env=$Environment;location=$Location"
 
+# Map canonical env name to Azure resource suffix ('staging' -> 'stg', others unchanged)
+$envSuffix = switch ($Environment) { 'staging' { 'stg' } default { $Environment } }
+
 # Dry-run mode: compute planned names and exit before changes
 if ($DryRun) {
-    $rg     = "rg-$BaseName-$Environment"
-    $plan   = "asp-$BaseName-$Environment"
-    $apiApp = "$GitHubOwner-$BaseName-$ApiSuffix-$Environment"
-    $uiApp  = "$GitHubOwner-$BaseName-$UiSuffix-$Environment"
-    $aiName = "ai-$BaseName-$Environment"
+    $rg     = "rg-$BaseName-$envSuffix"
+    $plan   = "asp-$BaseName-$envSuffix"
+    $apiApp = "$GitHubOwner-$BaseName-$ApiSuffix-$envSuffix"
+    $uiApp  = "$GitHubOwner-$BaseName-$UiSuffix-$envSuffix"
+    $aiName = "ai-$BaseName-$envSuffix"
     Write-Host "=== DRY RUN PLAN ===" -ForegroundColor Cyan
     Write-Host "Resource Group : $rg" -ForegroundColor Gray
-    Write-Host "App Service Plan: $plan (SKU: $(switch($Environment){'dev'{$DevSku};'stg'{$StagingSku};'prod'{$ProductionSku}}))" -ForegroundColor Gray
+    Write-Host "App Service Plan: $plan (SKU: $(switch($envSuffix){'dev'{$DevSku};'stg'{$StagingSku};'prod'{$ProductionSku}}))" -ForegroundColor Gray
     Write-Host "API WebApp      : $apiApp" -ForegroundColor Gray
     Write-Host "UI WebApp       : $uiApp" -ForegroundColor Gray
     Write-Host "App Insights    : $aiName" -ForegroundColor Gray
@@ -98,10 +101,10 @@ function Get-AspNetCoreEnvironment {
     param([string]$Environment)
     
     switch ($Environment) {
-        "dev" { return "Development" }
-        "stg" { return "Staging" }
-        "prod" { return "Production" }
-        default { return "Development" }
+        "dev"     { return "Development" }
+        "staging" { return "Staging" }
+        "prod"    { return "Production" }
+        default   { return "Development" }
     }
 }
 
@@ -352,9 +355,9 @@ foreach ($provider in $requiredProviders) {
 }
 Write-Host "  Provider registration check complete" -ForegroundColor Green
 
-$envList = @($Environment)
+$envList = @($envSuffix)
 if (-not $envList) { Write-Error "No environments specified."; exit 1 }
-Write-Host "[DEBUG] Processing environment: $Environment" -ForegroundColor Magenta
+Write-Host "[DEBUG] Processing environment: $envSuffix" -ForegroundColor Magenta
 
 # Start OIDC App Registration creation in parallel
 Write-Host "`n[PARALLEL] Starting GitHub Actions OIDC App Registration..." -ForegroundColor Cyan
