@@ -982,7 +982,7 @@ jobs:
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
             Write-Host ""
 
-            ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment staging
+            ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment stg
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
