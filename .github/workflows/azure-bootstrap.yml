@@ -2535,28 +2535,13 @@ jobs:
               }
             });
 
-            // Write step summary with actual run results
-            const rows = [
-              [{data: 'Workflow', header: true}, {data: 'Result', header: true}, {data: 'Run', header: true}]
-            ];
-            if (deployApi) rows.push([
-              'API Deployment',
-              apiRun ? '✅ success' : '❌ failed',
-              apiRun ? `[#${apiRun.run_number}](${apiRun.html_url})` : 'see error above'
-            ]);
-            if (deployUi) rows.push([
-              'UI Deployment',
-              uiRun ? '✅ success' : '❌ failed',
-              uiRun ? `[#${uiRun.run_number}](${uiRun.html_url})` : 'see error above'
-            ]);
-
             // Build Azure app URLs (staging env uses 'stg' suffix in resource names)
             const owner     = context.repo.owner.toLowerCase();
             const envSuffix = targetEnv === 'staging' ? 'stg' : targetEnv;
             const apiUrl    = `https://${owner}-orderprocessing-api-xyapp-${envSuffix}.azurewebsites.net/swagger`;
             const uiUrl     = `https://${owner}-orderprocessing-ui-xyapp-${envSuffix}.azurewebsites.net`;
 
-            // Expose outputs so the Bootstrap Summary job can embed run links
+            // Expose outputs so the Bootstrap Summary job can embed run links and URLs
             if (deployApi) {
               core.setOutput('api_run_url',    apiRun ? apiRun.html_url    : '');
               core.setOutput('api_run_number', apiRun ? String(apiRun.run_number) : '');
@@ -2568,31 +2553,6 @@ jobs:
             core.setOutput('api_url', deployApi ? apiUrl : '');
             core.setOutput('ui_url',  deployUi  ? uiUrl  : '');
             core.setOutput('errors',  errors.join('\n'));
-
-            let s = core.summary
-              .addHeading('🚀 Deployment Results', 2)
-              .addRaw(`**Target Environment:** \`${targetEnv}\`  **Branch:** \`${branch}\`\n\n`)
-              .addTable(rows);
-
-            if (deployApi || deployUi) {
-              s = s
-                .addHeading('🔗 Deployed Endpoints', 3)
-                .addTable([
-                  [{ data: 'Service', header: true }, { data: 'URL', header: true }, { data: 'Status', header: true }],
-                  ...(deployApi ? [['API (Swagger)', `[${apiUrl}](${apiUrl})`, apiRun ? '✅ deployed' : '❌ failed']] : []),
-                  ...(deployUi  ? [['UI',            `[${uiUrl}](${uiUrl})`,   uiRun  ? '✅ deployed' : '❌ failed']] : [])
-                ]);
-            }
-
-            // Surface errors inline in the summary (not just in the step log)
-            if (errors.length > 0) {
-              s = s
-                .addHeading('❌ Deployment Errors', 3)
-                .addRaw('> [!CAUTION]\n')
-                .addRaw(errors.map(e => `> ${e}`).join('\n') + '\n\n');
-            }
-
-            await s.write();
 
             if (errors.length > 0) {
               core.setFailed(`One or more deployments failed:\n${errors.join('\n')}`);
