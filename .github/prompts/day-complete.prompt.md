@@ -60,6 +60,17 @@ Then, based on their answer, apply the following routing rules automatically —
      `### ✅ Weeks N-N: <Week Name> (Days X-Y) — [Daily Progress](02-Daily-Progress/week-NN-name.md)`
    - Update the **COMPLETED SO FAR** bullet at the top of the master file if it exists
 
+9. **Always: Add Detailed Activity to Daily Progress file**
+   - Open the corresponding `02-Daily-Progress/week-NN-name.md` file for the current week
+   - Under the completed day's heading, add a `**Detailed Activity:**` block after the `**Time:**` line
+   - Include:
+     - What was built, configured, or verified — step by step
+     - Important commands run with any notable output
+     - Key gotchas or discoveries (especially environment/config differences)
+     - What this enables for the next day
+   - Use numbered sub-headings (e.g. `**1. Topic**`) when the day had multiple distinct activities
+   - Include code blocks for any actual code added or console output confirmed
+
 ## After Routing
 - Summarise what was updated and where
 - Suggest a commit message in the format: `Day <N>: <what was done>`
