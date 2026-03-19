@@ -2243,13 +2243,60 @@ jobs:
 
           "" >> $env:GITHUB_STEP_SUMMARY
 
-          if ($triggerDeployments -eq "success" -and ('${{ inputs.deployApi }}' -eq 'true' -or '${{ inputs.deployUi }}' -eq 'true')) {
-            "> **Deployments completed successfully.** See the Trigger Deployments summary for direct run links." >> $env:GITHUB_STEP_SUMMARY
+          $deployApi = '${{ inputs.deployApi }}' -eq 'true'
+          $deployUi  = '${{ inputs.deployUi }}'  -eq 'true'
+
+          if ($deployApi -or $deployUi) {
+            # Deployment detail section — shown whenever deploy inputs were selected
             "" >> $env:GITHUB_STEP_SUMMARY
-          }
-          if ($triggerDeployments -eq "failure" -and ('${{ inputs.deployApi }}' -eq 'true' -or '${{ inputs.deployUi }}' -eq 'true')) {
-            "> ❌ **One or more deployments failed.** Check the [Trigger Deployments job log](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details." >> $env:GITHUB_STEP_SUMMARY
+            "### 🚀 Deployment Detail" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
+            "| Service | Selected | Run | Status |" >> $env:GITHUB_STEP_SUMMARY
+            "|---------|----------|-----|--------|" >> $env:GITHUB_STEP_SUMMARY
+
+            if ($deployApi) {
+              $apiRunNum = '${{ needs.trigger-deployments.outputs.api_run_number }}'
+              $apiRunUrl = '${{ needs.trigger-deployments.outputs.api_run_url }}'
+              $apiStatus = if ($apiRunNum) { "✅ success" } elseif ($triggerDeployments -eq "skipped") { "⏭️ skipped" } else { "❌ failed" }
+              $apiRun    = if ($apiRunUrl) { "[#$apiRunNum]($apiRunUrl)" } else { "—" }
+              "| API | ✅ yes | $apiRun | $apiStatus |" >> $env:GITHUB_STEP_SUMMARY
+            } else {
+              "| API | ➖ no | — | — |" >> $env:GITHUB_STEP_SUMMARY
+            }
+
+            if ($deployUi) {
+              $uiRunNum = '${{ needs.trigger-deployments.outputs.ui_run_number }}'
+              $uiRunUrl = '${{ needs.trigger-deployments.outputs.ui_run_url }}'
+              $uiStatus = if ($uiRunNum) { "✅ success" } elseif ($triggerDeployments -eq "skipped") { "⏭️ skipped" } else { "❌ failed" }
+              $uiRun    = if ($uiRunUrl) { "[#$uiRunNum]($uiRunUrl)" } else { "—" }
+              "| UI  | ✅ yes | $uiRun | $uiStatus |" >> $env:GITHUB_STEP_SUMMARY
+            } else {
+              "| UI  | ➖ no | — | — |" >> $env:GITHUB_STEP_SUMMARY
+            }
+
+            "" >> $env:GITHUB_STEP_SUMMARY
+
+            # Endpoint URLs — only when at least one deploy succeeded
+            $apiUrl = '${{ needs.trigger-deployments.outputs.api_url }}'
+            $uiUrl  = '${{ needs.trigger-deployments.outputs.ui_url }}'
+            if ($apiUrl -or $uiUrl) {
+              "#### 🔗 Deployed Endpoints" >> $env:GITHUB_STEP_SUMMARY
+              "" >> $env:GITHUB_STEP_SUMMARY
+              "| Service | URL |" >> $env:GITHUB_STEP_SUMMARY
+              "|---------|-----|" >> $env:GITHUB_STEP_SUMMARY
+              if ($apiUrl) { "| API (Swagger) | [$apiUrl]($apiUrl) |" >> $env:GITHUB_STEP_SUMMARY }
+              if ($uiUrl)  { "| UI            | [$uiUrl]($uiUrl)   |" >> $env:GITHUB_STEP_SUMMARY }
+              "" >> $env:GITHUB_STEP_SUMMARY
+            }
+
+            # Error detail — surfaces the dispatch error message inline
+            $deployErrors = '${{ needs.trigger-deployments.outputs.errors }}'
+            if ($deployErrors) {
+              "> [!CAUTION]" >> $env:GITHUB_STEP_SUMMARY
+              "> **Deployment errors:**" >> $env:GITHUB_STEP_SUMMARY
+              $deployErrors -split "`n" | ForEach-Object { "> $_" >> $env:GITHUB_STEP_SUMMARY }
+              "" >> $env:GITHUB_STEP_SUMMARY
+            }
           }
           "### 🏗️ What Gets Created Automatically" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
@@ -2373,6 +2420,14 @@ jobs:
     name: Trigger Deployments
     runs-on: ubuntu-latest
     needs: [bootstrap-dev, bootstrap-staging, bootstrap-prod]
+    outputs:
+      api_run_url:    ${{ steps.dispatch.outputs.api_run_url }}
+      api_run_number: ${{ steps.dispatch.outputs.api_run_number }}
+      ui_run_url:     ${{ steps.dispatch.outputs.ui_run_url }}
+      ui_run_number:  ${{ steps.dispatch.outputs.ui_run_number }}
+      api_url:        ${{ steps.dispatch.outputs.api_url }}
+      ui_url:         ${{ steps.dispatch.outputs.ui_url }}
+      errors:         ${{ steps.dispatch.outputs.errors }}
     if: |
       !cancelled() &&
       (inputs.deployApi || inputs.deployUi) &&
@@ -2390,6 +2445,7 @@ jobs:
       )
     steps:
       - name: Dispatch and Await Deployments
+        id: dispatch
         if: inputs.environment != 'all'
         uses: actions/github-script@v7
         env:
@@ -2500,6 +2556,19 @@ jobs:
             const apiUrl    = `https://${owner}-orderprocessing-api-xyapp-${envSuffix}.azurewebsites.net/swagger`;
             const uiUrl     = `https://${owner}-orderprocessing-ui-xyapp-${envSuffix}.azurewebsites.net`;
 
+            // Expose outputs so the Bootstrap Summary job can embed run links
+            if (deployApi) {
+              core.setOutput('api_run_url',    apiRun ? apiRun.html_url    : '');
+              core.setOutput('api_run_number', apiRun ? String(apiRun.run_number) : '');
+            }
+            if (deployUi) {
+              core.setOutput('ui_run_url',     uiRun ? uiRun.html_url     : '');
+              core.setOutput('ui_run_number',  uiRun ? String(uiRun.run_number)  : '');
+            }
+            core.setOutput('api_url', deployApi ? apiUrl : '');
+            core.setOutput('ui_url',  deployUi  ? uiUrl  : '');
+            core.setOutput('errors',  errors.join('\n'));
+
             let s = core.summary
               .addHeading('🚀 Deployment Results', 2)
               .addRaw(`**Target Environment:** \`${targetEnv}\`  **Branch:** \`${branch}\`\n\n`)
@@ -2511,8 +2580,16 @@ jobs:
                 .addTable([
                   [{ data: 'Service', header: true }, { data: 'URL', header: true }, { data: 'Status', header: true }],
                   ...(deployApi ? [['API (Swagger)', `[${apiUrl}](${apiUrl})`, apiRun ? '✅ deployed' : '❌ failed']] : []),
-                  ...(deployUi  ? [['UI',            `[${uiUrl}](${uiUrl})`,                   uiRun  ? '✅ deployed' : '❌ failed']] : [])
+                  ...(deployUi  ? [['UI',            `[${uiUrl}](${uiUrl})`,   uiRun  ? '✅ deployed' : '❌ failed']] : [])
                 ]);
+            }
+
+            // Surface errors inline in the summary (not just in the step log)
+            if (errors.length > 0) {
+              s = s
+                .addHeading('❌ Deployment Errors', 3)
+                .addRaw('> [!CAUTION]\n')
+                .addRaw(errors.map(e => `> ${e}`).join('\n') + '\n\n');
             }
 
             await s.write();
