@@ -71,6 +71,14 @@ Then, based on their answer, apply the following routing rules automatically —
    - Use numbered sub-headings (e.g. `**1. Topic**`) when the day had multiple distinct activities
    - Include code blocks for any actual code added or console output confirmed
 
+10. **If any multi-environment file was modified** (Bicep modules, parameter files, sharedsettings, workflows):
+    - Verify the change is applied to ALL three environments — dev + staging + prod:
+      - `infra/parameters/dev.json` → `staging.json` → `prod.json`
+      - `sharedsettings.dev.json` → `sharedsettings.uat.json` → `sharedsettings.prod.json`
+    - Staging Azure resource names use suffix `stg` (not `staging`) — e.g. `rg-orderprocessing-stg`
+    - If a Bicep module adds new params, add placeholder entries in all 3 parameter files
+    - Flag any environment that was missed and apply the missing change before committing
+
 ## After Routing
 - Summarise what was updated and where
 - Suggest a commit message in the format: `Day <N>: <what was done>`
