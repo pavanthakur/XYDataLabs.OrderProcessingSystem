@@ -648,7 +648,7 @@ jobs:
             
             # Run migrations script using Entity Framework Core CLI commands
             # This runs AFTER firewall rules are configured and propagated (5-minute wait included in provision step)
-            ./Resources/Azure-Deployment/run-database-migrations.ps1 -Environment dev -BaseName orderprocessing
+            ./Resources/Azure-Deployment/run-database-migrations.ps1 -Environment dev -BaseName orderprocessing -Owner '${{ github.repository_owner }}'
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
@@ -1198,7 +1198,7 @@ jobs:
             
             # Run migrations script using Entity Framework Core CLI commands
             # This runs AFTER firewall rules are configured and propagated (5-minute wait included in provision step)
-            ./Resources/Azure-Deployment/run-database-migrations.ps1 -Environment staging -BaseName orderprocessing
+            ./Resources/Azure-Deployment/run-database-migrations.ps1 -Environment staging -BaseName orderprocessing -Owner '${{ github.repository_owner }}'
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
@@ -1748,7 +1748,7 @@ jobs:
             
             # Run migrations script using Entity Framework Core CLI commands
             # This runs AFTER firewall rules are configured and propagated (5-minute wait included in provision step)
-            ./Resources/Azure-Deployment/run-database-migrations.ps1 -Environment prod -BaseName orderprocessing
+            ./Resources/Azure-Deployment/run-database-migrations.ps1 -Environment prod -BaseName orderprocessing -Owner '${{ github.repository_owner }}'
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
