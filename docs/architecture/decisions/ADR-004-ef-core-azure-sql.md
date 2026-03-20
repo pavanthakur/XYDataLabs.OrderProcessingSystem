@@ -1,7 +1,7 @@
 # ADR-004: EF Core 8 with Azure SQL for Relational Data
 
 **Date:** 2024-12-28  
-**Status:** Accepted — evolving (passwordless auth planned ADR-006)  
+**Status:** Accepted — passwordless auth implemented (see ADR-006)  
 **Deciders:** Project architect
 
 ---
@@ -37,15 +37,16 @@ Use **EF Core 8** with **SQL Server provider** against **Azure SQL** (Basic tier
 **Positive:**
 - Schema migrations are version-controlled and reproducible
 - Strongly-typed LINQ queries reduce SQL injection risk
-- `EnableRetryOnFailure()` provides built-in transient fault handling
+- `EnableRetryOnFailure()` provides built-in transient fault handling (5 retries, 30s max delay)
 
 **Negative / Trade-offs:**
 - EF Core change tracking adds memory overhead — use `AsNoTracking()` for read-only queries
 - Complex reporting queries should bypass EF Core and use raw SQL or Views
 
 **Current state (as of March 2026):**
-- Password auth (`User ID=sqladmin;Password=...`) — temporary, used for migrations
-- Day 35-37: Replace with Managed Identity + `DefaultAzureCredential` (no password in any config)
+- Passwordless auth active: `Authentication=Active Directory Default` (see ADR-006)
+- No SQL password exists in source control, config files, or GitHub secrets
+- SQL admin password stored exclusively in Azure Key Vault (`sql-admin-password` secret)
 
 **Migration commands:**
 ```powershell
@@ -61,4 +62,4 @@ dotnet ef database update \
 
 ## Related
 - ADR-001: Clean Architecture — EF Core lives exclusively in Infrastructure layer
-- ADR-006 (planned): Passwordless SQL with DefaultAzureCredential + Managed Identity
+- ADR-006: Passwordless SQL with DefaultAzureCredential + Managed Identity (implemented 2026-03-20)

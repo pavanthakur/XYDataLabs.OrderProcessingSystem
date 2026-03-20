@@ -15,7 +15,7 @@ Resources\Azure-Deployment\test-enterprise-deployment.ps1 -Environment dev
 
 Key scripts referenced by the guide:
 - `bootstrap-enterprise-infra.ps1` → Baseline RG/Plan/WebApps and OIDC
-- `provision-azure-sql.ps1` → Azure SQL server/db + connection strings
+- `provision-azure-sql.ps1` → Azure SQL server/db + SQL Entra admin + passwordless app connection strings
 - `run-database-migrations.ps1` → EF migrations with SQL fallback
 - `setup-appinsights-dev.ps1` → Workspace-based AI + diagnostics + auto-instrumentation
 - `test-enterprise-deployment.ps1` → Orchestrates an end-to-end from-scratch test

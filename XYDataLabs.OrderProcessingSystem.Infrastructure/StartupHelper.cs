@@ -20,7 +20,12 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure
         {
             builder.Services.AddDbContext<OrderProcessingSystemDbContext>(options =>
             {
-                options.UseSqlServer(builder.Configuration.GetConnectionString(Constants.Configuration.OrderProcessingSystemDbConnectionString));
+                options.UseSqlServer(
+                    builder.Configuration.GetConnectionString(Constants.Configuration.OrderProcessingSystemDbConnectionString),
+                    sqlOptions => sqlOptions.EnableRetryOnFailure(
+                        maxRetryCount: 5,
+                        maxRetryDelay: TimeSpan.FromSeconds(30),
+                        errorNumbersToAdd: null));
 
                 if (builder.Environment.IsDevelopment())
                 {
