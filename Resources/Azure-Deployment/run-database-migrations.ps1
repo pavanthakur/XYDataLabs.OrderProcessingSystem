@@ -14,7 +14,7 @@ param(
     [string]$AdminUsername = 'sqladmin',
     
     [Parameter(Mandatory=$false)]
-    [string]$AdminPassword = 'Admin100@',
+    [string]$AdminPassword = '',
     
     [Parameter(Mandatory=$false)]
     [string]$Owner = ''
@@ -67,6 +67,18 @@ Write-Host "  Environment:    $Environment"
 Write-Host "  SQL Server:     $fullyQualifiedDomain"
 Write-Host "  Database:       $dbName"
 Write-Host ""
+
+# Retrieve password from Key Vault if not supplied
+if ([string]::IsNullOrWhiteSpace($AdminPassword)) {
+    $kvName = "kv-$BaseName-$envSuffix"
+    Write-Info "AdminPassword not provided — retrieving from Key Vault '$kvName'..."
+    $AdminPassword = az keyvault secret show --vault-name $kvName --name "sql-admin-password" --query value -o tsv 2>$null
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($AdminPassword)) {
+        Write-Err "AdminPassword not provided and could not be retrieved from Key Vault '$kvName'. Ensure bootstrap has run and OIDC is configured."
+        exit 1
+    }
+    Write-Ok "  Password retrieved from Key Vault."
+}
 
 # Build connection string for migrations
 $connectionString = "Server=tcp:$fullyQualifiedDomain,1433;Initial Catalog=$dbName;User ID=$AdminUsername;Password=$AdminPassword;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"

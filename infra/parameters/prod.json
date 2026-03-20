@@ -9,7 +9,14 @@
     "appServiceSku": { "value": "B1" },
     "enableIdentity": { "value": true },
     "sqlAdminUsername": { "value": "sqladmin" },
-    "sqlAdminPassword": { "value": "Admin100@" },
+    "sqlAdminPassword": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/19f22d2f-1557-479b-a9b7-6dc6af67980c/resourceGroups/rg-orderprocessing-prod/providers/Microsoft.KeyVault/vaults/kv-orderprocessing-prod"
+        },
+        "secretName": "sql-admin-password"
+      }
+    },
     "databaseServiceObjective": { "value": "S0" },
     "aadAdminLogin": { "value": "pavan.thakur_gmail.com#EXT#@pavanthakurgmail.onmicrosoft.com" },
     "aadAdminObjectId": { "value": "99fce3f5-b801-4aa1-b2df-122900204d65" }

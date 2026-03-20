@@ -285,32 +285,32 @@ After completing today's tasks, you will have:
 ### Week 5-8 (continued): Azure Data & Resilience (Days 35-56)
 
 #### Day 35: SQL Security — Enable Managed Identity
-- [ ] Enable system-assigned managed identity on App Service
-- [ ] Create SQL contained user: `CREATE USER [<app-service-name>] FROM EXTERNAL PROVIDER`
-- [ ] Grant roles: `ALTER ROLE db_datareader ADD MEMBER [<app-service-name>]`
-- [ ] Verify passwordless connection from Azure App Service logs
-- [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
+- [x] Enable system-assigned managed identity on App Service
+- [x] Create SQL contained user: `CREATE USER [<app-service-name>] FROM EXTERNAL PROVIDER`
+- [x] Grant roles: `ALTER ROLE db_datareader ADD MEMBER [<app-service-name>]`
+- [x] Verify passwordless connection from Azure App Service logs
+- [x] **Time:** 1.5 hours | **Completed:** 2026-03-20
 
 #### Day 36: 🆕 DefaultAzureCredential in C# (Azure-first .NET)
 > **Why now:** First time C# code connects to Azure without any stored password or secret
 - [x] Add `Azure.Identity` NuGet package
-- [ ] Replace SQL password auth with access token via `DefaultAzureCredential`
-- [ ] Understand credential chain: `EnvironmentCredential → ManagedIdentityCredential → VisualStudioCredential → AzureCliCredential`
-- [ ] Test locally: `az login` → CLI credential picked up automatically
-- [ ] Test in Azure: Managed Identity credential used automatically
-- [ ] **Time:** 2 hours | **Completed:** ___/___/___ (Azure.Identity added + used for Key Vault; SQL passwordless not yet done)
+- [x] Replace SQL password auth with access token via `DefaultAzureCredential`
+- [x] Understand credential chain: `EnvironmentCredential → ManagedIdentityCredential → VisualStudioCredential → AzureCliCredential`
+- [x] Test locally: `az login` → CLI credential picked up automatically
+- [x] Test in Azure: Managed Identity credential used automatically
+- [x] **Time:** 2 hours | **Completed:** 2026-03-20
 
 #### Day 37: Connect API to Azure SQL — Passwordless End-to-End
-- [ ] Update `DbContext` to supply `DefaultAzureCredential` access token for Azure SQL
-- [ ] Verify no SQL username/password anywhere in config or environment variables
-- [ ] Deploy updated API and confirm successful connection in Application Insights
-- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+- [x] Update `DbContext` to supply `DefaultAzureCredential` access token for Azure SQL
+- [x] Verify no SQL username/password anywhere in config or environment variables
+- [x] Deploy updated API and confirm successful connection in Application Insights
+- [x] **Time:** 2 hours | **Completed:** 2026-03-20
 
 #### Day 38: Azure SQL — Resilience Baseline
-- [ ] Test what happens when SQL is briefly unavailable (stop/start via Portal)
-- [ ] Observe EF Core default retry (`EnableRetryOnFailure`)
-- [ ] Document failure modes and plan Polly layering (Day 39)
-- [ ] **Time:** 1 hour | **Completed:** ___/___/___
+- [x] Test what happens when SQL is briefly unavailable (stop/start via Portal)
+- [x] Observe EF Core default retry (`EnableRetryOnFailure`)
+- [x] Document failure modes and plan Polly layering (Day 39)
+- [x] **Time:** 1 hour | **Completed:** 2026-03-20
 
 #### Day 39: 🆕 Polly — Retry & Circuit Breaker (Azure-first .NET)
 > **Why now:** Azure SQL + downstream services fail transiently — structured retries are essential

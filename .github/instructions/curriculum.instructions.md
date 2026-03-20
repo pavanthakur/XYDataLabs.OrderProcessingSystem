@@ -8,9 +8,8 @@ applyTo: "**/*CURRICULUM*,**/05-Self-Learning/**"
 
 ## Current Progress (as of March 2026)
 - Days 1-34: ✅ Complete (detail in `02-Daily-Progress/week-01-02`, `week-03-04`, `week-05-08`)
-- Day 35: ❌ Not started — Managed Identity for SQL
-- Day 36: 🔶 Partial — Azure.Identity pkg ✅, SQL passwordless not done
-- Days 37+: ❌ Not started
+- Days 35-38: ✅ Complete 2026-03-20 — Managed Identity for SQL, DefaultAzureCredential, passwordless conn string, EnableRetryOnFailure
+- Days 39+: ❌ Not started
 
 ## Checkbox Marking Convention
 - `[x]` = done

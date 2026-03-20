@@ -432,7 +432,8 @@ jobs:
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
           Write-Host ""
 
-          ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment dev
+          ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment dev `
+            -OidcSpObjectId '${{ secrets.OIDC_SP_OBJECT_ID }}'
           
           if ($LASTEXITCODE -ne 0) {
             Write-Host ""
@@ -497,10 +498,16 @@ jobs:
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
             Write-Host ""
             
+            # Retrieve SQL admin password from Key Vault (set by bootstrap)
+            $sqlAdminPassword = az keyvault secret show --vault-name kv-orderprocessing-dev --name sql-admin-password --query value -o tsv 2>$null
+            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($sqlAdminPassword)) {
+              Write-Host "⚠️  Could not retrieve sql-admin-password from KV. Run bootstrap first." -ForegroundColor Yellow
+            }
+            
             # The provision script is idempotent - it creates SQL Server/Database if they don't exist
             # and configures connection strings on the App Services
             # Note: Script includes 5-minute wait for firewall rule propagation when creating new IP rules
-            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment dev -BaseName orderprocessing -Location centralindia -GitHubOwner '${{ github.repository_owner }}'
+            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment dev -BaseName orderprocessing -Location centralindia -GitHubOwner '${{ github.repository_owner }}' -AdminPassword $sqlAdminPassword
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
@@ -686,6 +693,58 @@ jobs:
             Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
             Write-Host ""
             Write-Error "Database migrations failed with exception: $($_.Exception.Message)"
+            exit 1
+          }
+
+      - name: Configure SQL Managed Identity Database User
+        if: success()
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║   CONFIGURE SQL MANAGED IDENTITY DATABASE USER FOR DEV        ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+
+          try {
+            Write-Host "🔐 Creating the API managed identity database user for dev..." -ForegroundColor Cyan
+            Write-Host ""
+
+            ./Resources/Azure-Deployment/setup-sql-managed-identity.ps1 -Environment dev -BaseName orderprocessing -GitHubOwner '${{ github.repository_owner }}' -UseSqlAuthentication
+
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host ""
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host "❌ SQL MANAGED IDENTITY SETUP FAILED" -ForegroundColor Red
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Red
+              Write-Host "Script: ./Resources/Azure-Deployment/setup-sql-managed-identity.ps1" -ForegroundColor Gray
+              Write-Host ""
+              Write-Error "SQL managed identity setup failed with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+            }
+
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host "✅ SQL MANAGED IDENTITY DATABASE USER CONFIGURED" -ForegroundColor Green
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+            Write-Host ""
+          }
+          catch {
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING SQL MANAGED IDENTITY SETUP" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Stack Trace:" -ForegroundColor Yellow
+            Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
+            Write-Host ""
+            Write-Error "SQL managed identity setup failed with exception: $($_.Exception.Message)"
             exit 1
           }
       
@@ -982,7 +1041,8 @@ jobs:
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
             Write-Host ""
 
-            ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment stg
+            ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment stg `
+              -OidcSpObjectId '${{ secrets.OIDC_SP_OBJECT_ID }}'
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
@@ -1047,10 +1107,16 @@ jobs:
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
             Write-Host ""
             
+            # Retrieve SQL admin password from Key Vault (set by bootstrap)
+            $sqlAdminPassword = az keyvault secret show --vault-name kv-orderprocessing-stg --name sql-admin-password --query value -o tsv 2>$null
+            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($sqlAdminPassword)) {
+              Write-Host "⚠️  Could not retrieve sql-admin-password from KV. Run bootstrap first." -ForegroundColor Yellow
+            }
+            
             # The provision script is idempotent - it creates SQL Server/Database if they don't exist
             # and configures connection strings on the App Services
             # Note: Script includes 5-minute wait for firewall rule propagation when creating new IP rules
-            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment staging -BaseName orderprocessing -Location centralindia -GitHubOwner '${{ github.repository_owner }}'
+            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment staging -BaseName orderprocessing -Location centralindia -GitHubOwner '${{ github.repository_owner }}' -AdminPassword $sqlAdminPassword
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
@@ -1236,6 +1302,58 @@ jobs:
             Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
             Write-Host ""
             Write-Error "Database migrations failed with exception: $($_.Exception.Message)"
+            exit 1
+          }
+
+      - name: Configure SQL Managed Identity Database User
+        if: success()
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║ CONFIGURE SQL MANAGED IDENTITY DATABASE USER FOR STAGING      ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+
+          try {
+            Write-Host "🔐 Creating the API managed identity database user for staging..." -ForegroundColor Cyan
+            Write-Host ""
+
+            ./Resources/Azure-Deployment/setup-sql-managed-identity.ps1 -Environment staging -BaseName orderprocessing -GitHubOwner '${{ github.repository_owner }}' -UseSqlAuthentication
+
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host ""
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host "❌ SQL MANAGED IDENTITY SETUP FAILED" -ForegroundColor Red
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Red
+              Write-Host "Script: ./Resources/Azure-Deployment/setup-sql-managed-identity.ps1" -ForegroundColor Gray
+              Write-Host ""
+              Write-Error "SQL managed identity setup failed with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+            }
+
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host "✅ SQL MANAGED IDENTITY DATABASE USER CONFIGURED" -ForegroundColor Green
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+            Write-Host ""
+          }
+          catch {
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING SQL MANAGED IDENTITY SETUP" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Stack Trace:" -ForegroundColor Yellow
+            Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
+            Write-Host ""
+            Write-Error "SQL managed identity setup failed with exception: $($_.Exception.Message)"
             exit 1
           }
       
@@ -1532,7 +1650,8 @@ jobs:
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
             Write-Host ""
 
-            ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment prod
+            ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environment prod `
+              -OidcSpObjectId '${{ secrets.OIDC_SP_OBJECT_ID }}'
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
@@ -1597,10 +1716,16 @@ jobs:
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
             Write-Host ""
             
+            # Retrieve SQL admin password from Key Vault (set by bootstrap)
+            $sqlAdminPassword = az keyvault secret show --vault-name kv-orderprocessing-prod --name sql-admin-password --query value -o tsv 2>$null
+            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($sqlAdminPassword)) {
+              Write-Host "⚠️  Could not retrieve sql-admin-password from KV. Run bootstrap first." -ForegroundColor Yellow
+            }
+            
             # The provision script is idempotent - it creates SQL Server/Database if they don't exist
             # and configures connection strings on the App Services
             # Note: Script includes 5-minute wait for firewall rule propagation when creating new IP rules
-            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment prod -BaseName orderprocessing -Location centralindia -GitHubOwner '${{ github.repository_owner }}'
+            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment prod -BaseName orderprocessing -Location centralindia -GitHubOwner '${{ github.repository_owner }}' -AdminPassword $sqlAdminPassword
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
@@ -1786,6 +1911,58 @@ jobs:
             Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
             Write-Host ""
             Write-Error "Database migrations failed with exception: $($_.Exception.Message)"
+            exit 1
+          }
+
+      - name: Configure SQL Managed Identity Database User
+        if: success()
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║  CONFIGURE SQL MANAGED IDENTITY DATABASE USER FOR PROD        ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Start Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+          Write-Host ""
+
+          try {
+            Write-Host "🔐 Creating the API managed identity database user for production..." -ForegroundColor Cyan
+            Write-Host ""
+
+            ./Resources/Azure-Deployment/setup-sql-managed-identity.ps1 -Environment prod -BaseName orderprocessing -GitHubOwner '${{ github.repository_owner }}' -UseSqlAuthentication
+
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host ""
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host "❌ SQL MANAGED IDENTITY SETUP FAILED" -ForegroundColor Red
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Red
+              Write-Host "Script: ./Resources/Azure-Deployment/setup-sql-managed-identity.ps1" -ForegroundColor Gray
+              Write-Host ""
+              Write-Error "SQL managed identity setup failed with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+            }
+
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host "✅ SQL MANAGED IDENTITY DATABASE USER CONFIGURED" -ForegroundColor Green
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "End Time (UTC): $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+            Write-Host ""
+          }
+          catch {
+            Write-Host ""
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ EXCEPTION DURING SQL MANAGED IDENTITY SETUP" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Stack Trace:" -ForegroundColor Yellow
+            Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
+            Write-Host ""
+            Write-Error "SQL managed identity setup failed with exception: $($_.Exception.Message)"
             exit 1
           }
       
@@ -2297,6 +2474,11 @@ jobs:
               $deployErrors -split "`n" | ForEach-Object { "> $_" >> $env:GITHUB_STEP_SUMMARY }
               "" >> $env:GITHUB_STEP_SUMMARY
             }
+
+            "### 🧭 Manual Follow-Up" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "> Review [.github/prompts/README.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/.github/prompts/README.md) for required post-deploy prompts and manual follow-up steps." >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
           }
           "### 🏗️ What Gets Created Automatically" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY

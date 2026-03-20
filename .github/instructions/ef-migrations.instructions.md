@@ -17,7 +17,7 @@ applyTo: "**/Infrastructure/**,**/Migrations/**,**/DataContext/**"
 ## Azure SQL (Dev)
 - Server: `orderprocessing-sql-dev.database.windows.net`
 - Database: `OrderProcessingSystem_Dev`
-- Admin: `sqladmin` (password auth — passwordless via DefaultAzureCredential planned for Day 36-37)
+- Admin: `sqladmin` (passwordless via `Authentication=Active Directory Default` — see ADR-006)
 - Resource Group: `rg-orderprocessing-dev`
 
 ## Migration Commands

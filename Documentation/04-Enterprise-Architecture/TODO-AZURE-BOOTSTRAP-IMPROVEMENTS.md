@@ -42,8 +42,8 @@
 
 | Credential | Files | Example value |
 |------------|-------|---------------|
-| SQL admin password | `infra/parameters/dev.json`, `staging.json`, `prod.json` | `Admin100@` |
-| SQL admin password (script default) | `provision-azure-sql.ps1` (L20), `run-database-migrations.ps1` (L17) | `Admin100@` |
+| SQL admin password | `infra/parameters/dev.json`, `staging.json`, `prod.json` | `Admin100@` — **FIXED ✅ 2026-03-20** (KV ARM reference) |
+| SQL admin password (script default) | `provision-azure-sql.ps1` (L20), `run-database-migrations.ps1` (L17) | `Admin100@` — **FIXED ✅ 2026-03-20** (KV retrieval) |
 | SQL connection-string password | `sharedsettings.dev.json`, `sharedsettings.local.json`, `sharedsettings.uat.json`, `sharedsettings.prod.json` | `Admin100@` |
 | OpenPay MerchantId | `sharedsettings.{dev,local,uat,prod}.json` | (visible in file) |
 | OpenPay PrivateKey | `sharedsettings.{dev,local,uat,prod}.json` | (visible in file) |
@@ -71,13 +71,13 @@
 - [ ] Ensure App Service managed identity has `Key Vault Secrets User` role (see SEC-03)
 
 **Step 5 — Use Bicep `reference()` or `getSecret()` for SQL password in IaC**
-- [ ] Remove `sqlAdminPassword` value from `infra/parameters/*.json`
+- [x] Remove `sqlAdminPassword` value from `infra/parameters/*.json` — **DONE ✅ 2026-03-20** (ARM Key Vault reference)
 - [ ] In `infra/modules/sql.bicep` use `@secure() param sqlAdminPassword string` and pass via Key Vault reference at deployment time
 - [ ] Example: `sqlAdminPassword: keyVault.getSecret('SqlAdminPassword')` in the parameters block
 
 **Step 6 — Remove default password values from PowerShell scripts**
-- [ ] `provision-azure-sql.ps1` L20: change `[string]$AdminPassword = 'Admin100@'` → `[Parameter(Mandatory)][string]$AdminPassword`
-- [ ] `run-database-migrations.ps1` L17: same pattern — make password mandatory with no default
+- [x] `provision-azure-sql.ps1` L20: change `[string]$AdminPassword = 'Admin100@'` → empty default with KV fallback — **DONE ✅ 2026-03-20**
+- [x] `run-database-migrations.ps1` L17: same pattern — KV fallback if not supplied — **DONE ✅ 2026-03-20**
 
 **Step 7 — Scrub Git history (optional but recommended for public repo)**
 - [ ] Use `git filter-repo` or BFG Repo-Cleaner to remove secrets from all historical commits

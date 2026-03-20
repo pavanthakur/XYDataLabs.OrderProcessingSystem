@@ -14,7 +14,7 @@ All ADRs live in `docs/architecture/decisions/ADR-NNN-title.md`
 | ADR-003 | Subscription-scope Bicep (`az deployment sub create`) | ✅ Accepted |
 | ADR-004 | EF Core 8 + Azure SQL (password auth → passwordless planned) | ✅ Accepted, evolving |
 | ADR-005 | Serilog structured logging | ✅ Accepted, enrichers pending |
-| ADR-006 | (Planned) Passwordless SQL via DefaultAzureCredential + Managed Identity | 📋 Planned Day 35-37 |
+| ADR-006 | Passwordless SQL via DefaultAzureCredential + Managed Identity | ✅ Accepted 2026-03-20 |
 
 ## When to Write an ADR
 Write one whenever you:

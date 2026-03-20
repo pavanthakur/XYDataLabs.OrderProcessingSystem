@@ -131,7 +131,19 @@ APP_PRIVATE_KEY       : ❌ Missing
 | Full resource group teardown + recreate | ✅ Yes — new DB + new principal ID |
 | First-time setup on a new environment | ✅ Yes |
 
-> **Note**: `aadAdminObjectId` and `aadAdminLogin` in the parameter files never need updating — they are your permanent Azure AD user identifiers. Only the SQL contained user (inside the DB) is lost on a clean deploy.
+**Short validation check in SSMS:**
+```sql
+SELECT login_name, program_name
+FROM sys.dm_exec_sessions
+WHERE is_user_process = 1
+	AND database_id = DB_ID('OrderProcessingSystem_Dev')
+```
+
+**Expected result:**
+- After bootstrap completes and the API is called, you should see a `Core Microsoft SqlClient Data Provider` row with a GUID-like `login_name` instead of `sqladmin`.
+- That GUID-like `login_name` is the expected token-based Azure AD / managed identity session.
+
+> **Note**: `aadAdminObjectId` and `aadAdminLogin` in the parameter files never need updating — they are your permanent Azure AD user identifiers. The SQL contained user setup is automated by `azure-bootstrap.yml` on every run.
 
 ---
 

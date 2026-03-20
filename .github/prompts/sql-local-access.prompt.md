@@ -29,9 +29,9 @@ After running, confirm the result and display the SSMS connection details:
 | Database | `OrderProcessingSystem_Dev` |
 | Auth | SQL Server Authentication |
 | Login | `sqladmin` |
-| Password | `Admin100@` |
+| Password | Retrieve from Key Vault: `az keyvault secret show --vault-name kv-orderprocessing-<env> --name sql-admin-password --query value -o tsv` |
 
 Remind the user:
 - The rule `dev-machine` is re-used each time (upsert-safe — same name overwrites)
 - Always close with `-Close` when done local work
-- Day 35 (Managed Identity) will eliminate the need for this rule for the App Service — but local SSMS still needs it until you use Entra auth locally
+- The SQL admin password is auto-generated and stored in Key Vault — never committed to source control
