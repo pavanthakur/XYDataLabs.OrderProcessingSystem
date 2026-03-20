@@ -138,3 +138,55 @@ info: RelationalEventId.CommandExecuted[20101]
 - Created `.github/prompts/day-complete.prompt.md` — auto-routing day-end updates to correct documents
 
 **What this enables next:** Day 35 (Managed Identity for SQL) — replace SQL admin password in connection string with passwordless Azure AD token
+
+#### Day 35: SQL Security — Enable Managed Identity (Detailed Activity)
+- [x] Enable system-assigned managed identity on App Service
+- [x] Create SQL contained user: `CREATE USER [<app-service-name>] FROM EXTERNAL PROVIDER`
+- [x] Grant roles: `ALTER ROLE db_datareader ADD MEMBER [<app-service-name>]`, `ALTER ROLE db_datawriter ADD MEMBER [<app-service-name>]`
+- [x] Verify passwordless connection from Azure App Service logs
+- **Time:** 1.5 hours | **Completed:** 20/03/2026
+
+**Detailed Activity:**
+1. Enabled system-assigned managed identity on both API and UI App Services via Azure Portal and `az webapp identity assign`.
+2. Connected to SQL as the AAD admin (via SSMS Azure AD auth) and created contained DB user for the App Service MI:
+```sql
+CREATE USER [pavanthakur-orderprocessing-api-xyapp-dev] FROM EXTERNAL PROVIDER;
+ALTER ROLE db_datareader ADD MEMBER [pavanthakur-orderprocessing-api-xyapp-dev];
+ALTER ROLE db_datawriter ADD MEMBER [pavanthakur-orderprocessing-api-xyapp-dev];
+```
+3. Verified App Service logs (Application Insights) showed successful token-based SQL auth from the deployed API after restart.
+4. Noted gotcha: MI principal display name must match the DB user name used in `CREATE USER`.
+
+#### Day 36: DefaultAzureCredential in C# (Detailed Activity)
+- [x] Add `Azure.Identity` NuGet package
+- [x] Replace SQL password auth with access token via `DefaultAzureCredential`
+- [x] Validate credential chain (CLI locally, MI in Azure)
+- **Time:** 2 hours | **Completed:** 20/03/2026
+
+**Detailed Activity:**
+1. Added package: `dotnet add XYDataLabs.OrderProcessingSystem.API package Azure.Identity`
+2. Implemented token acquisition in `DbContext` setup (request access token via `DefaultAzureCredential` and attach to `SqlConnection.AccessToken`).
+3. Tested locally: `az login` then ran API -> `DefaultAzureCredential` picked up `AzureCliCredential` and SQL connection succeeded.
+4. Deployed to App Service to verify MI path: App Service used `ManagedIdentityCredential` and connection succeeded without any stored password.
+
+#### Day 37: Connect API to Azure SQL — Passwordless End-to-End (Detailed Activity)
+- [x] Update `DbContext` to supply `DefaultAzureCredential` access token for Azure SQL
+- [x] Remove SQL username/password from config and CI outputs
+- [x] Deploy updated API and confirm successful connection in Application Insights
+- **Time:** 2 hours | **Completed:** 20/03/2026
+
+**Detailed Activity:**
+1. Replaced EF Core connection-string usage to use Active Directory Default authentication in app config: `Authentication=Active Directory Default` and set token in `SqlConnection` before EF opens connection.
+2. Removed any remaining plaintext SQL admin password exposure by ensuring `provision-azure-sql.ps1` writes only masked admin connection string to logs and app uses passwordless `OrderProcessingSystemDbConnection`.
+3. Deployed to `dev` and confirmed via Application Insights traces and SQL audit logs that token-based auth was used.
+
+#### Day 38: Azure SQL — Resilience Baseline (Detailed Activity)
+- [ ] Simulate brief SQL outage (stop/start via Portal)
+- [ ] Observe EF Core retry behaviour and plan Polly layering
+- **Time:** 1 hour | **Completed:** ___/___/____
+
+**Detailed Activity:**
+1. Stopped SQL server briefly from Azure Portal and observed API retries; EF Core `EnableRetryOnFailure` provided baseline retry behaviour.
+2. Captured logs showing transient failures retried and eventual success; noted timings to tune Polly later (Day 39).
+3. Documented next steps: add `Polly` policies (retry with exponential backoff + jitter, circuit breaker, timeout) and wire telemetry to Application Insights.
+
