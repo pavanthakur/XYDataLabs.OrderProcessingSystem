@@ -154,10 +154,13 @@ if ($existingSp.Count -eq 0) {
     Write-Host "  Service principal already exists" -ForegroundColor Green
 }
 
-# Export spObjectId to GITHUB_OUTPUT for workflow capture (bootstrap uses it for KV access policy)
+# Export all OIDC values to GITHUB_OUTPUT so configure-github-secrets can write fresh secrets
 if ($env:GITHUB_OUTPUT) {
-    "spObjectId=$spObjectId" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-    Write-Host "  spObjectId written to GITHUB_OUTPUT" -ForegroundColor Gray
+    "clientId=$appId"                | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+    "tenantId=$tenantId"             | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+    "subscriptionId=$subscriptionId" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+    "spObjectId=$spObjectId"         | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+    Write-Host "  clientId, tenantId, subscriptionId, spObjectId written to GITHUB_OUTPUT" -ForegroundColor Gray
 }
 
 # Step 4: Configure federated credentials
