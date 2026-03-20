@@ -1,5 +1,5 @@
 # Quick Command Reference Guide
-**Last Updated:** March 20, 2026 (Day 34 + Copilot infrastructure session)
+**Last Updated:** March 21, 2026 (Day 35 + Infra reliability fixes)
 
 All commands in one place. Also available as topic-specific deep dives in `Documentation/commands/`:
 
@@ -167,6 +167,19 @@ az group list --output table
 
 # List resources in a resource group
 az resource list --resource-group rg-orderprocessing-dev --output table
+
+### SQL provisioning helpers (repo scripts)
+
+```powershell
+# Retrieve SQL admin password from Key Vault (used by provisioning script when not provided)
+az keyvault secret show --vault-name kv-orderprocessing-dev --name sql-admin-password --query value -o tsv
+
+# Open local firewall for dev (script handles IP detection + cleanup)
+.\Resources\Azure-Deployment\open-local-sql-firewall.ps1 -Environment dev
+
+# Close local firewall when done
+.\Resources\Azure-Deployment\open-local-sql-firewall.ps1 -Environment dev -Close
+```
 ```
 
 ### **Run Azure Workflows (GitHub CLI)**
