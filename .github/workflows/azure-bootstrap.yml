@@ -516,6 +516,59 @@ jobs:
             exit 1
           }
       
+      # Re-authenticate before Key Vault data-plane operations.
+      # The OIDC JWT (GitHub assertion) is valid for only 5 minutes; bootstrap takes ~11 minutes,
+      # so the token is always expired by the time bootstrap reaches the KV sql-admin-password write.
+      # A fresh login here ensures the password can be written (or recovered) before SQL provisioning reads it.
+      - name: Refresh Azure Login Before SQL Operations
+        timeout-minutes: 3
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.CLIENT_ID }}
+          tenant-id: ${{ env.TENANT_ID }}
+          subscription-id: ${{ env.SUBSCRIPTION_ID }}
+      
+      - name: Ensure SQL Password in Key Vault
+        if: success()
+        run: |
+          $kvName = "kv-orderprocessing-dev"
+          Write-Host "🔑 Ensuring sql-admin-password is present in Key Vault '$kvName'..." -ForegroundColor Cyan
+          try {
+            $showErr = $null
+            $existingPw = az keyvault secret show --vault-name $kvName --name "sql-admin-password" --query value -o tsv 2>&1
+            $showExit = $LASTEXITCODE
+            # Separate the value (tsv) from any error messages in the combined output
+            if ($showExit -eq 0 -and -not [string]::IsNullOrWhiteSpace($existingPw) -and $existingPw -notmatch "^ERROR:") {
+              Write-Host "  [OK] sql-admin-password already present in Key Vault (bootstrap wrote it successfully)" -ForegroundColor Green
+            } else {
+              # Distinguish between "secret not found" (expected on first run) and "vault/access error" (unexpected)
+              $errText = if ($existingPw -match "^ERROR:") { $existingPw } else { "" }
+              if ($errText -match "SecretNotFound|does not exist|404") {
+                Write-Host "  [KV] Secret not found (expected on first run) — generating now..." -ForegroundColor Yellow
+              } elseif ($showExit -ne 0) {
+                # Could not access the vault — try anyway; set will also fail and produce a clear error
+                Write-Host "  [WARN] Could not read from Key Vault (exit $showExit): $errText" -ForegroundColor Yellow
+                Write-Host "  [KV] Attempting to generate and write sql-admin-password..." -ForegroundColor Yellow
+              } else {
+                Write-Host "  [KV] sql-admin-password not found — generating now (bootstrap token had expired before writing)..." -ForegroundColor Yellow
+              }
+              $bytes = [System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32)
+              $sqlAdminPassword = ([System.Convert]::ToBase64String($bytes)).Substring(0, 28) + "Aa1!"
+              $setOut = az keyvault secret set --vault-name $kvName --name "sql-admin-password" --value $sqlAdminPassword 2>&1
+              if ($LASTEXITCODE -eq 0) {
+                Write-Host "  [OK] sql-admin-password generated and stored in Key Vault" -ForegroundColor Green
+              } else {
+                Write-Host "  ❌ Failed to store sql-admin-password in Key Vault: $setOut" -ForegroundColor Red
+                Write-Error "Failed to store sql-admin-password in Key Vault '$kvName': $setOut"
+                exit 1
+              }
+            }
+          } catch {
+            Write-Host "  ❌ Exception ensuring sql-admin-password: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Error "Exception ensuring sql-admin-password in Key Vault '$kvName': $($_.Exception.Message)"
+            exit 1
+          }
+
       - name: Provision SQL Database and Configure Connection Strings
         if: success()
         run: |
@@ -1179,6 +1232,59 @@ jobs:
             exit 1
           }
       
+      # Re-authenticate before Key Vault data-plane operations.
+      # The OIDC JWT (GitHub assertion) is valid for only 5 minutes; bootstrap takes ~11 minutes,
+      # so the token is always expired by the time bootstrap reaches the KV sql-admin-password write.
+      # A fresh login here ensures the password can be written (or recovered) before SQL provisioning reads it.
+      - name: Refresh Azure Login Before SQL Operations
+        timeout-minutes: 3
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.CLIENT_ID }}
+          tenant-id: ${{ env.TENANT_ID }}
+          subscription-id: ${{ env.SUBSCRIPTION_ID }}
+      
+      - name: Ensure SQL Password in Key Vault
+        if: success()
+        run: |
+          $kvName = "kv-orderprocessing-stg"
+          Write-Host "🔑 Ensuring sql-admin-password is present in Key Vault '$kvName'..." -ForegroundColor Cyan
+          try {
+            $showErr = $null
+            $existingPw = az keyvault secret show --vault-name $kvName --name "sql-admin-password" --query value -o tsv 2>&1
+            $showExit = $LASTEXITCODE
+            # Separate the value (tsv) from any error messages in the combined output
+            if ($showExit -eq 0 -and -not [string]::IsNullOrWhiteSpace($existingPw) -and $existingPw -notmatch "^ERROR:") {
+              Write-Host "  [OK] sql-admin-password already present in Key Vault (bootstrap wrote it successfully)" -ForegroundColor Green
+            } else {
+              # Distinguish between "secret not found" (expected on first run) and "vault/access error" (unexpected)
+              $errText = if ($existingPw -match "^ERROR:") { $existingPw } else { "" }
+              if ($errText -match "SecretNotFound|does not exist|404") {
+                Write-Host "  [KV] Secret not found (expected on first run) — generating now..." -ForegroundColor Yellow
+              } elseif ($showExit -ne 0) {
+                # Could not access the vault — try anyway; set will also fail and produce a clear error
+                Write-Host "  [WARN] Could not read from Key Vault (exit $showExit): $errText" -ForegroundColor Yellow
+                Write-Host "  [KV] Attempting to generate and write sql-admin-password..." -ForegroundColor Yellow
+              } else {
+                Write-Host "  [KV] sql-admin-password not found — generating now (bootstrap token had expired before writing)..." -ForegroundColor Yellow
+              }
+              $bytes = [System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32)
+              $sqlAdminPassword = ([System.Convert]::ToBase64String($bytes)).Substring(0, 28) + "Aa1!"
+              $setOut = az keyvault secret set --vault-name $kvName --name "sql-admin-password" --value $sqlAdminPassword 2>&1
+              if ($LASTEXITCODE -eq 0) {
+                Write-Host "  [OK] sql-admin-password generated and stored in Key Vault" -ForegroundColor Green
+              } else {
+                Write-Host "  ❌ Failed to store sql-admin-password in Key Vault: $setOut" -ForegroundColor Red
+                Write-Error "Failed to store sql-admin-password in Key Vault '$kvName': $setOut"
+                exit 1
+              }
+            }
+          } catch {
+            Write-Host "  ❌ Exception ensuring sql-admin-password: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Error "Exception ensuring sql-admin-password in Key Vault '$kvName': $($_.Exception.Message)"
+            exit 1
+          }
+
       - name: Provision SQL Database and Configure Connection Strings
         if: success()
         run: |
@@ -1842,6 +1948,59 @@ jobs:
             exit 1
           }
       
+      # Re-authenticate before Key Vault data-plane operations.
+      # The OIDC JWT (GitHub assertion) is valid for only 5 minutes; bootstrap takes ~11 minutes,
+      # so the token is always expired by the time bootstrap reaches the KV sql-admin-password write.
+      # A fresh login here ensures the password can be written (or recovered) before SQL provisioning reads it.
+      - name: Refresh Azure Login Before SQL Operations
+        timeout-minutes: 3
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.CLIENT_ID }}
+          tenant-id: ${{ env.TENANT_ID }}
+          subscription-id: ${{ env.SUBSCRIPTION_ID }}
+      
+      - name: Ensure SQL Password in Key Vault
+        if: success()
+        run: |
+          $kvName = "kv-orderprocessing-prod"
+          Write-Host "🔑 Ensuring sql-admin-password is present in Key Vault '$kvName'..." -ForegroundColor Cyan
+          try {
+            $showErr = $null
+            $existingPw = az keyvault secret show --vault-name $kvName --name "sql-admin-password" --query value -o tsv 2>&1
+            $showExit = $LASTEXITCODE
+            # Separate the value (tsv) from any error messages in the combined output
+            if ($showExit -eq 0 -and -not [string]::IsNullOrWhiteSpace($existingPw) -and $existingPw -notmatch "^ERROR:") {
+              Write-Host "  [OK] sql-admin-password already present in Key Vault (bootstrap wrote it successfully)" -ForegroundColor Green
+            } else {
+              # Distinguish between "secret not found" (expected on first run) and "vault/access error" (unexpected)
+              $errText = if ($existingPw -match "^ERROR:") { $existingPw } else { "" }
+              if ($errText -match "SecretNotFound|does not exist|404") {
+                Write-Host "  [KV] Secret not found (expected on first run) — generating now..." -ForegroundColor Yellow
+              } elseif ($showExit -ne 0) {
+                # Could not access the vault — try anyway; set will also fail and produce a clear error
+                Write-Host "  [WARN] Could not read from Key Vault (exit $showExit): $errText" -ForegroundColor Yellow
+                Write-Host "  [KV] Attempting to generate and write sql-admin-password..." -ForegroundColor Yellow
+              } else {
+                Write-Host "  [KV] sql-admin-password not found — generating now (bootstrap token had expired before writing)..." -ForegroundColor Yellow
+              }
+              $bytes = [System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32)
+              $sqlAdminPassword = ([System.Convert]::ToBase64String($bytes)).Substring(0, 28) + "Aa1!"
+              $setOut = az keyvault secret set --vault-name $kvName --name "sql-admin-password" --value $sqlAdminPassword 2>&1
+              if ($LASTEXITCODE -eq 0) {
+                Write-Host "  [OK] sql-admin-password generated and stored in Key Vault" -ForegroundColor Green
+              } else {
+                Write-Host "  ❌ Failed to store sql-admin-password in Key Vault: $setOut" -ForegroundColor Red
+                Write-Error "Failed to store sql-admin-password in Key Vault '$kvName': $setOut"
+                exit 1
+              }
+            }
+          } catch {
+            Write-Host "  ❌ Exception ensuring sql-admin-password: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Error "Exception ensuring sql-admin-password in Key Vault '$kvName': $($_.Exception.Message)"
+            exit 1
+          }
+
       - name: Provision SQL Database and Configure Connection Strings
         if: success()
         run: |
