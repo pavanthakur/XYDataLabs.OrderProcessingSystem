@@ -602,11 +602,13 @@ jobs:
               exit 1
             }
             Write-Output "::add-mask::$sqlAdminPassword"
+            $sqlAdminPasswordSecure = ConvertTo-SecureString $sqlAdminPassword -AsPlainText -Force
+            $sqlAdminPassword = $null
             
             # The provision script is idempotent - it creates SQL Server/Database if they don't exist
             # and configures connection strings on the App Services
-            # Note: Script includes 5-minute wait for firewall rule propagation when creating new IP rules
-            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment dev -BaseName orderprocessing -Location centralindia -GitHubOwner '${{ github.repository_owner }}' -AdminPassword $sqlAdminPassword
+            # Note: Script probes SQL connectivity after creating firewall rules (exits early on success, max 5 min)
+            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment dev -BaseName orderprocessing -Location centralindia -GitHubOwner '${{ github.repository_owner }}' -AdminPassword $sqlAdminPasswordSecure
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
@@ -1336,11 +1338,13 @@ jobs:
               exit 1
             }
             Write-Output "::add-mask::$sqlAdminPassword"
+            $sqlAdminPasswordSecure = ConvertTo-SecureString $sqlAdminPassword -AsPlainText -Force
+            $sqlAdminPassword = $null
             
             # The provision script is idempotent - it creates SQL Server/Database if they don't exist
             # and configures connection strings on the App Services
-            # Note: Script includes 5-minute wait for firewall rule propagation when creating new IP rules
-            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment staging -BaseName orderprocessing -Location centralindia -GitHubOwner '${{ github.repository_owner }}' -AdminPassword $sqlAdminPassword
+            # Note: Script probes SQL connectivity after creating firewall rules (exits early on success, max 5 min)
+            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment staging -BaseName orderprocessing -Location centralindia -GitHubOwner '${{ github.repository_owner }}' -AdminPassword $sqlAdminPasswordSecure
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
@@ -2070,11 +2074,13 @@ jobs:
               exit 1
             }
             Write-Output "::add-mask::$sqlAdminPassword"
+            $sqlAdminPasswordSecure = ConvertTo-SecureString $sqlAdminPassword -AsPlainText -Force
+            $sqlAdminPassword = $null
             
             # The provision script is idempotent - it creates SQL Server/Database if they don't exist
             # and configures connection strings on the App Services
-            # Note: Script includes 5-minute wait for firewall rule propagation when creating new IP rules
-            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment prod -BaseName orderprocessing -Location centralindia -GitHubOwner '${{ github.repository_owner }}' -AdminPassword $sqlAdminPassword
+            # Note: Script probes SQL connectivity after creating firewall rules (exits early on success, max 5 min)
+            ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment prod -BaseName orderprocessing -Location centralindia -GitHubOwner '${{ github.repository_owner }}' -AdminPassword $sqlAdminPasswordSecure
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
