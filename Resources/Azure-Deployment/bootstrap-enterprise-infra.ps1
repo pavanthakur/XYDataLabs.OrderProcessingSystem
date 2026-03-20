@@ -1145,3 +1145,12 @@ Write-Host "  3. Review .github/prompts/README.md for required manual post-deplo
 try { $csvPath = Join-Path $logDir ("step-summary-" + (Get-Date -Format "yyyyMMdd-HHmmss") + ".csv"); $global:StepStatus | Export-Csv -Path $csvPath -NoTypeInformation -Force; Write-Log "Step summary exported to $csvPath" "INFO" "Cyan" } catch { Write-Log "Failed to export step summary CSV: $($_.Exception.Message)" "WARN" "Yellow" }
 
 Write-Log "=== Bootstrap completed ===" "INFO" "Cyan"
+
+$failedSteps = @($global:StepStatus | Where-Object { $_.Status -eq 'Failed' })
+if ($failedSteps.Count -gt 0) {
+    Write-Log "Bootstrap completed with one or more failed steps; exiting with code 1" "WARN" "Yellow"
+    exit 1
+}
+
+$global:LASTEXITCODE = 0
+exit 0
