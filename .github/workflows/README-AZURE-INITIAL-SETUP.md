@@ -49,6 +49,30 @@ See [QUICK-SETUP-GITHUB-APP.md](../../Documentation/03-Configuration-Guides/QUIC
 
 After completion, proceed to the **Azure Bootstrap & Deploy** workflow for infrastructure.
 
+### Additional Entra Permission For SQL Managed Identity Automation
+
+In some tenants, the existing `GitHub-Actions-OIDC` app registration can authenticate to Azure Resource Manager but still lacks permission to read Microsoft Entra service principal metadata.
+
+That does not break OIDC login itself, but it can break the later SQL managed identity automation during bootstrap or API deployment. The failure usually includes one of these messages:
+
+- `Could not resolve managed identity appId`
+- `ERROR: Insufficient privileges to complete the operation.`
+
+If you hit that error later, update the existing `GitHub-Actions-OIDC` app registration in Azure Portal:
+
+1. Go to `Azure Portal -> Microsoft Entra ID -> App registrations`
+2. Open `GitHub-Actions-OIDC`
+3. Open `API permissions`
+4. Click `Add a permission`
+5. Choose `Microsoft Graph`
+6. Choose `Application permissions`
+7. Add `Application.Read.All`
+8. Click `Grant admin consent`
+9. Wait 1 to 3 minutes for permission propagation
+10. Re-run `Azure Bootstrap & Deploy` or `Deploy API to Azure`
+
+If the same error still appears after propagation, add `Directory.Read.All`, grant admin consent, wait briefly, and re-run the workflow.
+
 ---
 
 ## 📋 Workflow Inputs

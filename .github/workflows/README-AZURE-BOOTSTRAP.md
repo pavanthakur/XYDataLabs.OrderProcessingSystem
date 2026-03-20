@@ -240,6 +240,32 @@ Expected result:
 - After bootstrap completes and the API is called, you should see a `Core Microsoft SqlClient Data Provider` row with a GUID-like `login_name` instead of `sqladmin`.
 - That GUID-like `login_name` is the expected token-based Azure AD / managed identity session and is a valid success signal.
 
+### If SQL Managed Identity Setup Fails With Entra Permission Error
+
+If bootstrap reaches `Configure SQL Managed Identity Database User` but fails with either of these messages:
+
+- `Could not resolve managed identity appId`
+- `ERROR: Insufficient privileges to complete the operation.`
+
+the existing `GitHub-Actions-OIDC` app registration is missing Microsoft Entra read permission needed to resolve the App Service managed identity `appId/clientId`.
+
+Azure Portal fix:
+
+1. Go to `Azure Portal -> Microsoft Entra ID -> App registrations`
+2. Open `GitHub-Actions-OIDC`
+3. Open `API permissions`
+4. Click `Add a permission`
+5. Choose `Microsoft Graph`
+6. Choose `Application permissions`
+7. Add `Application.Read.All`
+8. Click `Grant admin consent`
+9. Wait 1 to 3 minutes
+10. Re-run `Azure Bootstrap & Deploy`
+
+If the error still persists, repeat the same flow and also add `Directory.Read.All`, grant admin consent, wait briefly, and re-run the workflow.
+
+Do not run cleanup for this issue. The resources are already provisioned; only the Entra permission gap needs to be fixed.
+
 > See [TROUBLESHOOTING-INDEX.md](../../TROUBLESHOOTING-INDEX.md#sql-managed-identity-day-35) for full details on the symptom and fix.
 >
 > See [Prompt README](../../.github/prompts/README.md) for available prompts (`/day-complete`, `/sql-local-access`).
@@ -300,6 +326,19 @@ Expected result:
 **Cause**: The deployment guard blocks API/UI dispatches when the bootstrap job for the target environment fails.
 
 **Fix**: Fix the bootstrap error first, then re-run the workflow. Check the summary job output for a failure diagnosis with likely causes and remediation steps.
+
+#### Configure SQL Managed Identity Database User fails with "Insufficient privileges"
+
+**Cause**: The `GitHub-Actions-OIDC` app can authenticate to Azure but cannot read Microsoft Entra service principal metadata required by `setup-sql-managed-identity.ps1`.
+
+**Fix**:
+1. `Azure Portal -> Microsoft Entra ID -> App registrations`
+2. Open `GitHub-Actions-OIDC`
+3. `API permissions -> Add a permission -> Microsoft Graph -> Application permissions`
+4. Add `Application.Read.All`
+5. Click `Grant admin consent`
+6. Wait 1 to 3 minutes and re-run bootstrap
+7. If still failing, also add `Directory.Read.All`, grant consent, wait briefly, and re-run
 
 ### Verify Setup Completion
 

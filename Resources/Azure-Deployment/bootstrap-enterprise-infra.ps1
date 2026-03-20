@@ -1081,10 +1081,14 @@ AZUREAPPSERVICE_SUBSCRIPTIONID:  $($oidcResult.SubscriptionId)
 "@
     $secretsOutput | Set-Clipboard -ErrorAction SilentlyContinue
     Write-Host "  [OK] Secrets copied to clipboard!" -ForegroundColor Green
+    $isGitHubActionsRun = $env:GITHUB_ACTIONS -eq 'true'
     # Automatic GitHub secrets configuration (if helper script is present)
     Write-Host "`n  [AUTOMATION] Configuring GitHub secrets automatically..." -ForegroundColor Cyan
     $configScriptPath = Join-Path $PSScriptRoot "configure-github-secrets.ps1"
-    if (Test-Path $configScriptPath) {
+    if ($isGitHubActionsRun) {
+        Write-Host "  [SKIP] Skipping GitHub secret automation in GitHub Actions to avoid interactive login prompts during deployment" -ForegroundColor Yellow
+        Add-StepStatus -Name "Auto-configure GitHub Secrets" -Status "Skipped" -Details "GitHub Actions run detected; secrets must be configured outside deployment"
+    } elseif (Test-Path $configScriptPath) {
         try {
             & $configScriptPath -Repository "$GitHubOwner/$GitHubRepo" -Force -ErrorAction Stop
             Write-Host "  [OK] GitHub secrets configured automatically!" -ForegroundColor Green
