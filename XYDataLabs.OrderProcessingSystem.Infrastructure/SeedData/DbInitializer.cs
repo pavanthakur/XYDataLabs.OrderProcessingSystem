@@ -12,10 +12,18 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
 {
     public static class DbInitializer
     {
-        public static void Initialize(OrderProcessingSystemDbContext context)
+        public static void Initialize(OrderProcessingSystemDbContext context, bool applyMigrations = true)
         {
-            // Apply all pending migrations and create database if it doesn't exist
-            context.Database.Migrate();
+            if (context is null)
+            {
+                throw new ArgumentNullException(nameof(context));
+            }
+
+            // Azure deployments run schema migrations in workflow steps before app startup.
+            if (applyMigrations)
+            {
+                context.Database.Migrate();
+            }
 
             SeedOpenpayProvider(context);
 

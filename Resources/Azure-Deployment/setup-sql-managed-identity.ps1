@@ -8,6 +8,8 @@
 #   - For GitHub Actions, this script also supports SQL authentication mode.
 #   - That mode creates the Microsoft Entra user by SID/TYPE and avoids the
 #     interactive Azure AD admin login requirement used for local/manual runs.
+#   - The SQL SID must match the managed identity service principal appId
+#     (clientId), not the App Service principalId/objectId.
 #
 # Prerequisites:
 #   - az login (logged in as the Azure AD admin set in aadAdminObjectId parameter file)
@@ -22,8 +24,8 @@
 #
 # When to re-run:
 #   - First time per environment (one-off setup)
-#   - If App Service is deleted & recreated (new managed identity principal ID)
-#   - Never needed on regular redeploys
+#   - If App Service is deleted & recreated (new managed identity)
+#   - Safe to run on regular redeploys because the script is idempotent
 
 param(
     [Parameter(Mandatory=$true)]
@@ -102,6 +104,17 @@ function Convert-GuidToSqlSidHex {
     $guid = [Guid]$GuidText
     $bytes = $guid.ToByteArray()
     return '0x' + (($bytes | ForEach-Object { $_.ToString('X2') }) -join '')
+}
+
+function Resolve-ManagedIdentityAppId {
+    param([Parameter(Mandatory=$true)][string]$PrincipalId)
+
+    $appId = az ad sp show --id $PrincipalId --query appId -o tsv 2>&1
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($appId)) {
+        throw "Could not resolve managed identity appId for principalId '$PrincipalId'. Azure SQL contained users require SID derived from the managed identity appId/clientId. Azure CLI output: $appId"
+    }
+
+    return $appId.Trim()
 }
 
 function Invoke-SqlScriptFile {
@@ -185,17 +198,18 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($principalId)) {
 Write-Host "  Principal ID : $principalId" -ForegroundColor Green
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Step 2: Resolve display name
-# For a system-assigned managed identity, Azure AD always uses the App Service
-# name as the display name — no graph call needed or permitted (OIDC SP has
-# Contributor scope only; Directory.Read.All is not granted).
-# SQL SID = principalId (objectId) of the managed identity service principal,
-# NOT the appId. This is correct per Azure SQL contained-user SID requirements.
+# Step 2: Resolve identity metadata
+# For a system-assigned managed identity, Azure AD uses the App Service name as
+# the display name. Azure SQL contained users created by SID/TYPE=E must use a
+# SID derived from the managed identity service principal appId/clientId.
 # ─────────────────────────────────────────────────────────────────────────────
-Write-Host "Step 2: Resolving identity display name..." -ForegroundColor Yellow
+Write-Host "Step 2: Resolving identity metadata..." -ForegroundColor Yellow
 $displayName = $apiAppName
+$managedIdentityAppId = Resolve-ManagedIdentityAppId -PrincipalId $principalId
 Write-Host "  Display name : $displayName" -ForegroundColor Green
-Write-Host "  SID source   : principalId (objectId) — correct for Azure SQL TYPE = E" -ForegroundColor Gray
+Write-Host "  Principal ID : $principalId" -ForegroundColor Gray
+Write-Host "  App ID       : $managedIdentityAppId" -ForegroundColor Green
+Write-Host "  SID source   : appId (clientId) — required for Azure SQL TYPE = E" -ForegroundColor Gray
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Step 3: Resolve execution mode
@@ -270,8 +284,20 @@ PRINT 'Roles granted: db_datareader, db_datawriter, db_ddladmin'
 "@
 
 if ($UseSqlAuthentication) {
-    $sidHex = Convert-GuidToSqlSidHex -GuidText $principalId
+    $sidHex = Convert-GuidToSqlSidHex -GuidText $managedIdentityAppId
     $sqlScript = @"
+IF EXISTS (
+    SELECT 1
+    FROM sys.database_principals
+    WHERE name = '$displayName'
+      AND type = 'E'
+      AND CONVERT(varchar(max), sid, 1) <> '$sidHex'
+)
+BEGIN
+    DROP USER [$displayName];
+    PRINT 'Dropped contained user with stale SID: $displayName'
+END
+
 IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '$displayName')
 BEGIN
     CREATE USER [$displayName] WITH SID = $sidHex, TYPE = E;
@@ -279,7 +305,7 @@ BEGIN
 END
 ELSE
 BEGIN
-    PRINT 'User already exists (idempotent): $displayName'
+    PRINT 'User already exists with expected SID (idempotent): $displayName'
 END
 
 $roleGrantSql

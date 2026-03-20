@@ -11,6 +11,7 @@ using XYDataLabs.OpenPayAdapter;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData;
 using XYDataLabs.OrderProcessingSystem.Application.Utilities;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
+using System;
 
 namespace XYDataLabs.OrderProcessingSystem.Application
 {
@@ -18,6 +19,11 @@ namespace XYDataLabs.OrderProcessingSystem.Application
     {
         public static void InjectApplicationDependencies(this IHostApplicationBuilder builder)
         {
+            if (builder is null)
+            {
+                throw new ArgumentNullException(nameof(builder));
+            }
+
             // Use the correct extension method for adding validators
             builder.Services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
 
@@ -36,9 +42,10 @@ namespace XYDataLabs.OrderProcessingSystem.Application
                 // Create a new scope to resolve scoped dependencies
                 using var scope = serviceProvider.CreateScope();
                 var dbContext = scope.ServiceProvider.GetRequiredService<OrderProcessingSystemDbContext>();
+                var isAzure = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME"));
                 
-                // Ensure database is initialized with seed data before loading master data
-                DbInitializer.Initialize(dbContext);
+                // Keep local and Docker startup convenience, but avoid schema migration on Azure.
+                DbInitializer.Initialize(dbContext, applyMigrations: !isAzure);
                 
                 return new AppMasterData(dbContext);
             });
