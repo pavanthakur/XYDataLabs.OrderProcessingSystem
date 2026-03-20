@@ -65,11 +65,11 @@ jobs:
           
           # Map environment to app name suffix
           if [ "$ENV" = "prod" ]; then
-            echo "app-name=pavanthakur-orderprocessing-api-xyapp-prod" >> $GITHUB_OUTPUT
+            echo "app-name=${{ github.repository_owner }}-orderprocessing-api-xyapp-prod" >> $GITHUB_OUTPUT
           elif [ "$ENV" = "uat" ]; then
-            echo "app-name=pavanthakur-orderprocessing-api-xyapp-uat" >> $GITHUB_OUTPUT
+            echo "app-name=${{ github.repository_owner }}-orderprocessing-api-xyapp-uat" >> $GITHUB_OUTPUT
           else
-            echo "app-name=pavanthakur-orderprocessing-api-xyapp-dev" >> $GITHUB_OUTPUT
+            echo "app-name=${{ github.repository_owner }}-orderprocessing-api-xyapp-dev" >> $GITHUB_OUTPUT
           fi
           
           # Determine parameter file
