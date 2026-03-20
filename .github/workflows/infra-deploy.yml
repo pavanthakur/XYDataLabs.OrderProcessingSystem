@@ -104,7 +104,7 @@ jobs:
               --parameters location=${{ steps.params.outputs.location }} \
                            environment=${{ steps.params.outputs.env }} \
                            baseName=orderprocessing \
-                           githubOwner=pavanthakur \
+                           githubOwner=${{ github.repository_owner }} \
                            appServiceSku=${{ steps.params.outputs.sku }} \
                            enableIdentity=${{ steps.params.outputs.identity }}
           else
@@ -168,7 +168,7 @@ jobs:
               --parameters location=${{ steps.params.outputs.location }} \
                            environment=${{ steps.params.outputs.env }} \
                            baseName=orderprocessing \
-                           githubOwner=pavanthakur \
+                           githubOwner=${{ github.repository_owner }} \
                            appServiceSku=${{ steps.params.outputs.sku }} \
                            enableIdentity=${{ steps.params.outputs.identity }}
           else
