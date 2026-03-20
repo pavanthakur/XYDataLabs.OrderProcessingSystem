@@ -355,29 +355,71 @@ jobs:
       - name: Diagnose Azure Login Failure
         if: failure() && steps.azure-login.outcome == 'failure'
         run: |
-          Write-Host "" 
+          Write-Host ""
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-          Write-Host "❌ AZURE LOGIN FAILED — DIAGNOSIS" -ForegroundColor Red
+          Write-Host "❌ AZURE LOGIN FAILED — DIAGNOSIS (dev)" -ForegroundColor Red
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
           Write-Host ""
-          Write-Host "GitHub OIDC secrets are present for 'dev' but Azure login failed." -ForegroundColor Yellow
+          Write-Host "Error: AADSTS700016 / AADSTS700213" -ForegroundColor Red
+          Write-Host "  The Client ID stored in AZUREAPPSERVICE_CLIENTID for the 'dev' environment" -ForegroundColor Red
+          Write-Host "  does not match any App Registration in the Azure AD tenant." -ForegroundColor Red
+          Write-Host "  This almost always means the Entra App was deleted and re-created," -ForegroundColor Red
+          Write-Host "  leaving a stale Client ID in the GitHub environment secret." -ForegroundColor Red
           Write-Host ""
-          Write-Host "Most likely cause: AADSTS700213" -ForegroundColor Red
-          Write-Host "  The Azure AD App Registration is missing the federated identity" -ForegroundColor Red
-          Write-Host "  credential for subject 'repo:${{ github.repository }}:environment:dev'." -ForegroundColor Red
+          Write-Host "  subject claim used: repo:${{ github.repository }}:environment:dev" -ForegroundColor Gray
           Write-Host ""
-          Write-Host "This happens when the 'Azure Initial Setup' workflow was never run, or" -ForegroundColor Yellow
-          Write-Host "was run with environment='dev' only (not 'all'), or the Azure AD App" -ForegroundColor Yellow
-          Write-Host "Registration was recreated." -ForegroundColor Yellow
+          Write-Host "  ── STEP-BY-STEP FIX ──────────────────────────────────────────" -ForegroundColor Yellow
           Write-Host ""
-          Write-Host "TO FIX — Run the 'Azure Initial Setup' workflow:" -ForegroundColor Cyan
-          Write-Host "  1. Go to Actions → 'Azure Initial Setup' → Run workflow" -ForegroundColor White
-          Write-Host "  2. All defaults are correct (environment='all', OIDC + secrets enabled)" -ForegroundColor White
-          Write-Host "  3. Click 'Run workflow' and wait for completion" -ForegroundColor White
+          Write-Host "  STEP 1 — Delete the stale secrets from all environments:" -ForegroundColor White
+          Write-Host "    Open: https://github.com/${{ github.repository }}/settings/environments" -ForegroundColor Cyan
+          Write-Host "    (You will see: main / copilot / prod / staging / dev — each may show '3 secrets')" -ForegroundColor Gray
           Write-Host ""
-          Write-Host "After initial setup succeeds, re-run this workflow." -ForegroundColor Yellow
+          Write-Host "    For EACH of dev / staging / prod:" -ForegroundColor White
+          Write-Host "      a. Click the environment name" -ForegroundColor Gray
+          Write-Host "      b. Scroll to 'Environment secrets'" -ForegroundColor Gray
+          Write-Host "      c. Click the trash icon next to each of these 3 secrets:" -ForegroundColor Gray
+          Write-Host "           AZUREAPPSERVICE_CLIENTID       ← delete" -ForegroundColor DarkYellow
+          Write-Host "           AZUREAPPSERVICE_TENANTID       ← delete" -ForegroundColor DarkYellow
+          Write-Host "           AZUREAPPSERVICE_SUBSCRIPTIONID ← delete" -ForegroundColor DarkYellow
           Write-Host ""
-      
+          Write-Host "  STEP 2 — Re-run Azure Initial Setup:" -ForegroundColor White
+          Write-Host "    Go to: Actions → 'Azure Initial Setup' → Run workflow" -ForegroundColor Gray
+          Write-Host "    Use these inputs:" -ForegroundColor Gray
+          Write-Host "      Phase 1a (Setup Azure OIDC)  = ✅ checked" -ForegroundColor Gray
+          Write-Host "      Phase 1b (Configure Secrets) = ✅ checked" -ForegroundColor Gray
+          Write-Host "      environment                  = all" -ForegroundColor Gray
+          Write-Host "    Wait for all jobs to turn green." -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "  STEP 3 — Re-run this Bootstrap workflow." -ForegroundColor White
+          Write-Host ""
+          Write-Host "  ──────────────────────────────────────────────────────────────" -ForegroundColor DarkGray
+          Write-Host "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+          Write-Host ""
+          "## ❌ Azure Login Failed — dev" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "**Error**: AADSTS700016 / AADSTS700213 — The Client ID in ``AZUREAPPSERVICE_CLIENTID`` does not match any Entra App." >> $env:GITHUB_STEP_SUMMARY
+          "**Likely cause**: The Entra App was deleted and re-created, leaving a stale Client ID in the GitHub environment secret." >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "### 🛠️ Step-by-Step Fix" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "**Step 1 — Delete stale secrets from all environments:**" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "1. Open **[Settings → Environments](https://github.com/${{ github.repository }}/settings/environments)**" >> $env:GITHUB_STEP_SUMMARY
+          "   *(you will see: main / copilot / prod / staging / dev — each showing '3 secrets')*" >> $env:GITHUB_STEP_SUMMARY
+          "2. For **each** of ``dev`` / ``staging`` / ``prod`` → click → *Environment secrets* → delete:" >> $env:GITHUB_STEP_SUMMARY
+          "   - ``AZUREAPPSERVICE_CLIENTID``" >> $env:GITHUB_STEP_SUMMARY
+          "   - ``AZUREAPPSERVICE_TENANTID``" >> $env:GITHUB_STEP_SUMMARY
+          "   - ``AZUREAPPSERVICE_SUBSCRIPTIONID``" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "**Step 2 — Re-run Azure Initial Setup:**" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "Go to **Actions → Azure Initial Setup → Run workflow** with:" >> $env:GITHUB_STEP_SUMMARY
+          "- Phase 1a (Setup Azure OIDC) = ✅" >> $env:GITHUB_STEP_SUMMARY
+          "- Phase 1b (Configure Secrets) = ✅" >> $env:GITHUB_STEP_SUMMARY
+          "- environment = ``all``" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "**Step 3 — Re-run this Bootstrap workflow.**" >> $env:GITHUB_STEP_SUMMARY
+
       - name: Verify Azure Login
         run: |
           Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
@@ -967,26 +1009,69 @@ jobs:
         run: |
           Write-Host ""
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-          Write-Host "❌ AZURE LOGIN FAILED — DIAGNOSIS" -ForegroundColor Red
+          Write-Host "❌ AZURE LOGIN FAILED — DIAGNOSIS (staging)" -ForegroundColor Red
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
           Write-Host ""
-          Write-Host "GitHub OIDC secrets are present for 'staging' but Azure login failed." -ForegroundColor Yellow
+          Write-Host "Error: AADSTS700016 / AADSTS700213" -ForegroundColor Red
+          Write-Host "  The Client ID stored in AZUREAPPSERVICE_CLIENTID for the 'staging' environment" -ForegroundColor Red
+          Write-Host "  does not match any App Registration in the Azure AD tenant." -ForegroundColor Red
+          Write-Host "  This almost always means the Entra App was deleted and re-created," -ForegroundColor Red
+          Write-Host "  leaving a stale Client ID in the GitHub environment secret." -ForegroundColor Red
           Write-Host ""
-          Write-Host "Most likely cause: AADSTS700213" -ForegroundColor Red
-          Write-Host "  The Azure AD App Registration is missing the federated identity" -ForegroundColor Red
-          Write-Host "  credential for subject 'repo:${{ github.repository }}:environment:staging'." -ForegroundColor Red
+          Write-Host "  subject claim used: repo:${{ github.repository }}:environment:staging" -ForegroundColor Gray
           Write-Host ""
-          Write-Host "This happens when the 'Azure Initial Setup' workflow was never run for this" -ForegroundColor Yellow
-          Write-Host "environment, or was only run with environment='dev' (not 'all')." -ForegroundColor Yellow
+          Write-Host "  ── STEP-BY-STEP FIX ──────────────────────────────────────────" -ForegroundColor Yellow
           Write-Host ""
-          Write-Host "TO FIX — Run the 'Azure Initial Setup' workflow:" -ForegroundColor Cyan
-          Write-Host "  1. Go to Actions → 'Azure Initial Setup' → Run workflow" -ForegroundColor White
-          Write-Host "  2. All defaults are correct (environment='all', OIDC + secrets enabled)" -ForegroundColor White
-          Write-Host "  3. Click 'Run workflow' and wait for completion" -ForegroundColor White
+          Write-Host "  STEP 1 — Delete the stale secrets from all environments:" -ForegroundColor White
+          Write-Host "    Open: https://github.com/${{ github.repository }}/settings/environments" -ForegroundColor Cyan
+          Write-Host "    (You will see: main / copilot / prod / staging / dev — each may show '3 secrets')" -ForegroundColor Gray
           Write-Host ""
-          Write-Host "After initial setup succeeds, re-run this workflow." -ForegroundColor Yellow
+          Write-Host "    For EACH of dev / staging / prod:" -ForegroundColor White
+          Write-Host "      a. Click the environment name" -ForegroundColor Gray
+          Write-Host "      b. Scroll to 'Environment secrets'" -ForegroundColor Gray
+          Write-Host "      c. Click the trash icon next to each of these 3 secrets:" -ForegroundColor Gray
+          Write-Host "           AZUREAPPSERVICE_CLIENTID       ← delete" -ForegroundColor DarkYellow
+          Write-Host "           AZUREAPPSERVICE_TENANTID       ← delete" -ForegroundColor DarkYellow
+          Write-Host "           AZUREAPPSERVICE_SUBSCRIPTIONID ← delete" -ForegroundColor DarkYellow
           Write-Host ""
-      
+          Write-Host "  STEP 2 — Re-run Azure Initial Setup:" -ForegroundColor White
+          Write-Host "    Go to: Actions → 'Azure Initial Setup' → Run workflow" -ForegroundColor Gray
+          Write-Host "    Use these inputs:" -ForegroundColor Gray
+          Write-Host "      Phase 1a (Setup Azure OIDC)  = ✅ checked" -ForegroundColor Gray
+          Write-Host "      Phase 1b (Configure Secrets) = ✅ checked" -ForegroundColor Gray
+          Write-Host "      environment                  = all" -ForegroundColor Gray
+          Write-Host "    Wait for all jobs to turn green." -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "  STEP 3 — Re-run this Bootstrap workflow." -ForegroundColor White
+          Write-Host ""
+          Write-Host "  ──────────────────────────────────────────────────────────────" -ForegroundColor DarkGray
+          Write-Host "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+          Write-Host ""
+          "## ❌ Azure Login Failed — staging" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "**Error**: AADSTS700016 / AADSTS700213 — The Client ID in ``AZUREAPPSERVICE_CLIENTID`` does not match any Entra App." >> $env:GITHUB_STEP_SUMMARY
+          "**Likely cause**: The Entra App was deleted and re-created, leaving a stale Client ID in the GitHub environment secret." >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "### 🛠️ Step-by-Step Fix" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "**Step 1 — Delete stale secrets from all environments:**" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "1. Open **[Settings → Environments](https://github.com/${{ github.repository }}/settings/environments)**" >> $env:GITHUB_STEP_SUMMARY
+          "   *(you will see: main / copilot / prod / staging / dev — each showing '3 secrets')*" >> $env:GITHUB_STEP_SUMMARY
+          "2. For **each** of ``dev`` / ``staging`` / ``prod`` → click → *Environment secrets* → delete:" >> $env:GITHUB_STEP_SUMMARY
+          "   - ``AZUREAPPSERVICE_CLIENTID``" >> $env:GITHUB_STEP_SUMMARY
+          "   - ``AZUREAPPSERVICE_TENANTID``" >> $env:GITHUB_STEP_SUMMARY
+          "   - ``AZUREAPPSERVICE_SUBSCRIPTIONID``" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "**Step 2 — Re-run Azure Initial Setup:**" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "Go to **Actions → Azure Initial Setup → Run workflow** with:" >> $env:GITHUB_STEP_SUMMARY
+          "- Phase 1a (Setup Azure OIDC) = ✅" >> $env:GITHUB_STEP_SUMMARY
+          "- Phase 1b (Configure Secrets) = ✅" >> $env:GITHUB_STEP_SUMMARY
+          "- environment = ``all``" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "**Step 3 — Re-run this Bootstrap workflow.**" >> $env:GITHUB_STEP_SUMMARY
+
       - name: Verify Azure Login
         run: |
           Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
@@ -1576,26 +1661,69 @@ jobs:
         run: |
           Write-Host ""
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-          Write-Host "❌ AZURE LOGIN FAILED — DIAGNOSIS" -ForegroundColor Red
+          Write-Host "❌ AZURE LOGIN FAILED — DIAGNOSIS (prod)" -ForegroundColor Red
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
           Write-Host ""
-          Write-Host "GitHub OIDC secrets are present for 'prod' but Azure login failed." -ForegroundColor Yellow
+          Write-Host "Error: AADSTS700016 / AADSTS700213" -ForegroundColor Red
+          Write-Host "  The Client ID stored in AZUREAPPSERVICE_CLIENTID for the 'prod' environment" -ForegroundColor Red
+          Write-Host "  does not match any App Registration in the Azure AD tenant." -ForegroundColor Red
+          Write-Host "  This almost always means the Entra App was deleted and re-created," -ForegroundColor Red
+          Write-Host "  leaving a stale Client ID in the GitHub environment secret." -ForegroundColor Red
           Write-Host ""
-          Write-Host "Most likely cause: AADSTS700213" -ForegroundColor Red
-          Write-Host "  The Azure AD App Registration is missing the federated identity" -ForegroundColor Red
-          Write-Host "  credential for subject 'repo:${{ github.repository }}:environment:prod'." -ForegroundColor Red
+          Write-Host "  subject claim used: repo:${{ github.repository }}:environment:prod" -ForegroundColor Gray
           Write-Host ""
-          Write-Host "This happens when the 'Azure Initial Setup' workflow was never run for this" -ForegroundColor Yellow
-          Write-Host "environment, or was only run with environment='dev' (not 'all')." -ForegroundColor Yellow
+          Write-Host "  ── STEP-BY-STEP FIX ──────────────────────────────────────────" -ForegroundColor Yellow
           Write-Host ""
-          Write-Host "TO FIX — Run the 'Azure Initial Setup' workflow:" -ForegroundColor Cyan
-          Write-Host "  1. Go to Actions → 'Azure Initial Setup' → Run workflow" -ForegroundColor White
-          Write-Host "  2. All defaults are correct (environment='all', OIDC + secrets enabled)" -ForegroundColor White
-          Write-Host "  3. Click 'Run workflow' and wait for completion" -ForegroundColor White
+          Write-Host "  STEP 1 — Delete the stale secrets from all environments:" -ForegroundColor White
+          Write-Host "    Open: https://github.com/${{ github.repository }}/settings/environments" -ForegroundColor Cyan
+          Write-Host "    (You will see: main / copilot / prod / staging / dev — each may show '3 secrets')" -ForegroundColor Gray
           Write-Host ""
-          Write-Host "After initial setup succeeds, re-run this workflow." -ForegroundColor Yellow
+          Write-Host "    For EACH of dev / staging / prod:" -ForegroundColor White
+          Write-Host "      a. Click the environment name" -ForegroundColor Gray
+          Write-Host "      b. Scroll to 'Environment secrets'" -ForegroundColor Gray
+          Write-Host "      c. Click the trash icon next to each of these 3 secrets:" -ForegroundColor Gray
+          Write-Host "           AZUREAPPSERVICE_CLIENTID       ← delete" -ForegroundColor DarkYellow
+          Write-Host "           AZUREAPPSERVICE_TENANTID       ← delete" -ForegroundColor DarkYellow
+          Write-Host "           AZUREAPPSERVICE_SUBSCRIPTIONID ← delete" -ForegroundColor DarkYellow
           Write-Host ""
-      
+          Write-Host "  STEP 2 — Re-run Azure Initial Setup:" -ForegroundColor White
+          Write-Host "    Go to: Actions → 'Azure Initial Setup' → Run workflow" -ForegroundColor Gray
+          Write-Host "    Use these inputs:" -ForegroundColor Gray
+          Write-Host "      Phase 1a (Setup Azure OIDC)  = ✅ checked" -ForegroundColor Gray
+          Write-Host "      Phase 1b (Configure Secrets) = ✅ checked" -ForegroundColor Gray
+          Write-Host "      environment                  = all" -ForegroundColor Gray
+          Write-Host "    Wait for all jobs to turn green." -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "  STEP 3 — Re-run this Bootstrap workflow." -ForegroundColor White
+          Write-Host ""
+          Write-Host "  ──────────────────────────────────────────────────────────────" -ForegroundColor DarkGray
+          Write-Host "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+          Write-Host ""
+          "## ❌ Azure Login Failed — prod" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "**Error**: AADSTS700016 / AADSTS700213 — The Client ID in ``AZUREAPPSERVICE_CLIENTID`` does not match any Entra App." >> $env:GITHUB_STEP_SUMMARY
+          "**Likely cause**: The Entra App was deleted and re-created, leaving a stale Client ID in the GitHub environment secret." >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "### 🛠️ Step-by-Step Fix" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "**Step 1 — Delete stale secrets from all environments:**" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "1. Open **[Settings → Environments](https://github.com/${{ github.repository }}/settings/environments)**" >> $env:GITHUB_STEP_SUMMARY
+          "   *(you will see: main / copilot / prod / staging / dev — each showing '3 secrets')*" >> $env:GITHUB_STEP_SUMMARY
+          "2. For **each** of ``dev`` / ``staging`` / ``prod`` → click → *Environment secrets* → delete:" >> $env:GITHUB_STEP_SUMMARY
+          "   - ``AZUREAPPSERVICE_CLIENTID``" >> $env:GITHUB_STEP_SUMMARY
+          "   - ``AZUREAPPSERVICE_TENANTID``" >> $env:GITHUB_STEP_SUMMARY
+          "   - ``AZUREAPPSERVICE_SUBSCRIPTIONID``" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "**Step 2 — Re-run Azure Initial Setup:**" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "Go to **Actions → Azure Initial Setup → Run workflow** with:" >> $env:GITHUB_STEP_SUMMARY
+          "- Phase 1a (Setup Azure OIDC) = ✅" >> $env:GITHUB_STEP_SUMMARY
+          "- Phase 1b (Configure Secrets) = ✅" >> $env:GITHUB_STEP_SUMMARY
+          "- environment = ``all``" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "**Step 3 — Re-run this Bootstrap workflow.**" >> $env:GITHUB_STEP_SUMMARY
+
       - name: Verify Azure Login
         run: |
           Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan

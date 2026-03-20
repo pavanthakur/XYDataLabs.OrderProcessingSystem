@@ -515,11 +515,76 @@ jobs:
           Write-Host "Phase 1a (Setup OIDC) was not selected." -ForegroundColor Gray
           Write-Host "Passing through existing OIDC credentials to downstream jobs." -ForegroundColor Gray
           Write-Host ""
-          
-          $clientId       = "${{ secrets.AZUREAPPSERVICE_CLIENTID }}"
+
+          $storedClientId = "${{ secrets.AZUREAPPSERVICE_CLIENTID }}"
           $tenantId       = "${{ secrets.AZUREAPPSERVICE_TENANTID }}"
           $subscriptionId = "${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}"
-          
+
+          # ── Client ID integrity check ────────────────────────────────────────────
+          # Always query Azure by display name and compare against the stored secret.
+          # If they differ (e.g. after accidental app deletion + re-creation) we use
+          # the Azure-sourced value so Phase 1b force-writes the correct Client ID.
+          # GitHub secrets are write-only — we cannot read the stored value back to
+          # compare programmatically, but we CAN compare what Azure says against what
+          # the GitHub Actions context exposes via ${{ secrets.* }}.
+          # ─────────────────────────────────────────────────────────────────────────
+          $appName  = "${{ inputs.oidcAppName }}"
+          $clientId = $storedClientId   # default; overridden on mismatch
+
+          Write-Host "🔍 Verifying Client ID against Azure ($appName)..." -ForegroundColor Cyan
+          try {
+            $azureApps    = az ad app list --display-name $appName 2>&1 | ConvertFrom-Json -ErrorAction Stop
+            $azureClientId = if ($azureApps -and $azureApps.Count -gt 0) { $azureApps[0].appId } else { $null }
+
+            if ($azureClientId) {
+              Write-Host "  Stored secret Client ID : $storedClientId" -ForegroundColor Gray
+              Write-Host "  Azure App Client ID     : $azureClientId"  -ForegroundColor Gray
+
+              if ($storedClientId -ne $azureClientId) {
+                Write-Host ""
+                Write-Host "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
+                Write-Host "  ⚠️  CLIENT ID MISMATCH DETECTED" -ForegroundColor Yellow
+                Write-Host "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
+                Write-Host "  Stored GitHub secret : $storedClientId  ← STALE (old / deleted app)" -ForegroundColor Red
+                Write-Host "  Azure App Client ID  : $azureClientId   ← CORRECT" -ForegroundColor Green
+                Write-Host ""
+                Write-Host "  Likely cause: '$appName' was deleted and re-created in Entra ID," -ForegroundColor Yellow
+                Write-Host "  leaving the old Client ID in the GitHub environment secrets." -ForegroundColor Yellow
+                Write-Host ""
+                Write-Host "  ✅ Auto-fix in progress: using Azure-sourced Client ID for this run." -ForegroundColor Cyan
+                Write-Host "     Phase 1b will overwrite AZUREAPPSERVICE_CLIENTID in all environments." -ForegroundColor Cyan
+                Write-Host ""
+                Write-Host "  ── MANUAL FALLBACK (use only if Phase 1b also fails below) ──────" -ForegroundColor DarkGray
+                Write-Host "  1. Open: https://github.com/${{ github.repository }}/settings/environments" -ForegroundColor White
+                Write-Host "     (Screenshot: you will see dev / staging / prod each showing '3 secrets')" -ForegroundColor Gray
+                Write-Host "  2. For EACH environment (dev, staging, prod):" -ForegroundColor White
+                Write-Host "       a. Click the environment name" -ForegroundColor Gray
+                Write-Host "       b. Scroll to 'Environment secrets'" -ForegroundColor Gray
+                Write-Host "       c. Click the trash icon next to each of these 3 secrets:" -ForegroundColor Gray
+                Write-Host "            AZUREAPPSERVICE_CLIENTID" -ForegroundColor DarkYellow
+                Write-Host "            AZUREAPPSERVICE_TENANTID" -ForegroundColor DarkYellow
+                Write-Host "            AZUREAPPSERVICE_SUBSCRIPTIONID" -ForegroundColor DarkYellow
+                Write-Host "  3. Re-run Azure Initial Setup with ALL of these checked:" -ForegroundColor White
+                Write-Host "       Phase 1a (Setup Azure OIDC)  = ✅  (re-creates OIDC credentials)" -ForegroundColor Gray
+                Write-Host "       Phase 1b (Configure Secrets) = ✅  (writes fresh secrets)" -ForegroundColor Gray
+                Write-Host "       environment                  = all   (updates dev + staging + prod)" -ForegroundColor Gray
+                Write-Host "  ──────────────────────────────────────────────────────────────────" -ForegroundColor DarkGray
+                Write-Host "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
+                $clientId = $azureClientId
+              } else {
+                Write-Host "  ✅ Client ID matches Azure — secret is current" -ForegroundColor Green
+              }
+            } else {
+              Write-Host "  ⚠️  App '$appName' not found in Azure AD — using stored secret value" -ForegroundColor Yellow
+              Write-Host "     If unexpected, verify the app exists at:" -ForegroundColor Gray
+              Write-Host "     https://portal.azure.com → Azure Active Directory → App Registrations" -ForegroundColor Gray
+            }
+          } catch {
+            Write-Host "  ⚠️  Could not query Azure AD: $($_.Exception.Message)" -ForegroundColor Yellow
+            Write-Host "     Using stored secret value." -ForegroundColor Gray
+          }
+          Write-Host ""
+
           # Get the app object ID from the existing app registration
           try {
             $app = az ad app show --id $clientId | ConvertFrom-Json
@@ -698,11 +763,22 @@ jobs:
               "> Check the **Setup OIDC App Registration** step logs above for the error details." >> $env:GITHUB_STEP_SUMMARY
             }
           } elseif ("${{ steps.oidc-passthrough.outputs.clientId }}" -ne "") {
+            $ptClientId = "${{ steps.oidc-passthrough.outputs.clientId }}"
+            $storedId   = "${{ secrets.AZUREAPPSERVICE_CLIENTID }}"
+            $mismatch   = ($storedId -ne "" -and $storedId -ne $ptClientId)
             "**OIDC Setup**: Skipped — using existing credentials (passthrough)" >> $env:GITHUB_STEP_SUMMARY
+            if ($mismatch) {
+              "" >> $env:GITHUB_STEP_SUMMARY
+              "> ⚠️ **Client ID mismatch detected**: stored secret (`$storedId`) differs from Azure (`$ptClientId`)." >> $env:GITHUB_STEP_SUMMARY
+              "> Phase 1b will overwrite the stale `AZUREAPPSERVICE_CLIENTID` secret with the Azure-sourced value." >> $env:GITHUB_STEP_SUMMARY
+            }
             "" >> $env:GITHUB_STEP_SUMMARY
             "| Output | Value |" >> $env:GITHUB_STEP_SUMMARY
             "|--------|-------|" >> $env:GITHUB_STEP_SUMMARY
-            "| Client ID | ``${{ steps.oidc-passthrough.outputs.clientId }}`` |" >> $env:GITHUB_STEP_SUMMARY
+            "| Client ID (Azure) | ``$ptClientId`` |" >> $env:GITHUB_STEP_SUMMARY
+            if ($mismatch) {
+              "| Client ID (stored secret — stale) | ``$storedId`` |" >> $env:GITHUB_STEP_SUMMARY
+            }
             "| Tenant ID | ``${{ steps.oidc-passthrough.outputs.tenantId }}`` |" >> $env:GITHUB_STEP_SUMMARY
             "| Subscription ID | ``${{ steps.oidc-passthrough.outputs.subscriptionId }}`` |" >> $env:GITHUB_STEP_SUMMARY
           } else {
