@@ -543,8 +543,12 @@ jobs:
             # Retrieve SQL admin password from Key Vault (set by bootstrap)
             $sqlAdminPassword = az keyvault secret show --vault-name kv-orderprocessing-dev --name sql-admin-password --query value -o tsv 2>$null
             if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($sqlAdminPassword)) {
-              Write-Host "⚠️  Could not retrieve sql-admin-password from KV. Run bootstrap first." -ForegroundColor Yellow
+              Write-Host "❌ Could not retrieve sql-admin-password from Key Vault kv-orderprocessing-dev" -ForegroundColor Red
+              Write-Host "   Ensure bootstrap completed successfully and the secret was populated." -ForegroundColor Yellow
+              Write-Error "SQL provisioning cannot continue without sql-admin-password"
+              exit 1
             }
+            Write-Output "::add-mask::$sqlAdminPassword"
             
             # The provision script is idempotent - it creates SQL Server/Database if they don't exist
             # and configures connection strings on the App Services
@@ -752,7 +756,14 @@ jobs:
             Write-Host "🔐 Creating the API managed identity database user for dev..." -ForegroundColor Cyan
             Write-Host ""
 
-            ./Resources/Azure-Deployment/setup-sql-managed-identity.ps1 -Environment dev -BaseName orderprocessing -GitHubOwner '${{ github.repository_owner }}' -UseSqlAuthentication
+            $sqlAdminPassword = az keyvault secret show --vault-name kv-orderprocessing-dev --name sql-admin-password --query value -o tsv 2>$null
+            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($sqlAdminPassword)) {
+              Write-Host "❌ Could not retrieve sql-admin-password from Key Vault kv-orderprocessing-dev" -ForegroundColor Red
+              throw "SQL managed identity setup cannot continue without sql-admin-password"
+            }
+            Write-Output "::add-mask::$sqlAdminPassword"
+
+            ./Resources/Azure-Deployment/setup-sql-managed-identity.ps1 -Environment dev -BaseName orderprocessing -GitHubOwner '${{ github.repository_owner }}' -UseSqlAuthentication -SqlAdminUsername sqladmin -SqlAdminPassword $sqlAdminPassword
 
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
@@ -1195,8 +1206,12 @@ jobs:
             # Retrieve SQL admin password from Key Vault (set by bootstrap)
             $sqlAdminPassword = az keyvault secret show --vault-name kv-orderprocessing-stg --name sql-admin-password --query value -o tsv 2>$null
             if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($sqlAdminPassword)) {
-              Write-Host "⚠️  Could not retrieve sql-admin-password from KV. Run bootstrap first." -ForegroundColor Yellow
+              Write-Host "❌ Could not retrieve sql-admin-password from Key Vault kv-orderprocessing-stg" -ForegroundColor Red
+              Write-Host "   Ensure bootstrap completed successfully and the secret was populated." -ForegroundColor Yellow
+              Write-Error "SQL provisioning cannot continue without sql-admin-password"
+              exit 1
             }
+            Write-Output "::add-mask::$sqlAdminPassword"
             
             # The provision script is idempotent - it creates SQL Server/Database if they don't exist
             # and configures connection strings on the App Services
@@ -1404,7 +1419,14 @@ jobs:
             Write-Host "🔐 Creating the API managed identity database user for staging..." -ForegroundColor Cyan
             Write-Host ""
 
-            ./Resources/Azure-Deployment/setup-sql-managed-identity.ps1 -Environment staging -BaseName orderprocessing -GitHubOwner '${{ github.repository_owner }}' -UseSqlAuthentication
+            $sqlAdminPassword = az keyvault secret show --vault-name kv-orderprocessing-stg --name sql-admin-password --query value -o tsv 2>$null
+            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($sqlAdminPassword)) {
+              Write-Host "❌ Could not retrieve sql-admin-password from Key Vault kv-orderprocessing-stg" -ForegroundColor Red
+              throw "SQL managed identity setup cannot continue without sql-admin-password"
+            }
+            Write-Output "::add-mask::$sqlAdminPassword"
+
+            ./Resources/Azure-Deployment/setup-sql-managed-identity.ps1 -Environment staging -BaseName orderprocessing -GitHubOwner '${{ github.repository_owner }}' -UseSqlAuthentication -SqlAdminUsername sqladmin -SqlAdminPassword $sqlAdminPassword
 
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
@@ -1847,8 +1869,12 @@ jobs:
             # Retrieve SQL admin password from Key Vault (set by bootstrap)
             $sqlAdminPassword = az keyvault secret show --vault-name kv-orderprocessing-prod --name sql-admin-password --query value -o tsv 2>$null
             if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($sqlAdminPassword)) {
-              Write-Host "⚠️  Could not retrieve sql-admin-password from KV. Run bootstrap first." -ForegroundColor Yellow
+              Write-Host "❌ Could not retrieve sql-admin-password from Key Vault kv-orderprocessing-prod" -ForegroundColor Red
+              Write-Host "   Ensure bootstrap completed successfully and the secret was populated." -ForegroundColor Yellow
+              Write-Error "SQL provisioning cannot continue without sql-admin-password"
+              exit 1
             }
+            Write-Output "::add-mask::$sqlAdminPassword"
             
             # The provision script is idempotent - it creates SQL Server/Database if they don't exist
             # and configures connection strings on the App Services
@@ -2056,7 +2082,14 @@ jobs:
             Write-Host "🔐 Creating the API managed identity database user for production..." -ForegroundColor Cyan
             Write-Host ""
 
-            ./Resources/Azure-Deployment/setup-sql-managed-identity.ps1 -Environment prod -BaseName orderprocessing -GitHubOwner '${{ github.repository_owner }}' -UseSqlAuthentication
+            $sqlAdminPassword = az keyvault secret show --vault-name kv-orderprocessing-prod --name sql-admin-password --query value -o tsv 2>$null
+            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($sqlAdminPassword)) {
+              Write-Host "❌ Could not retrieve sql-admin-password from Key Vault kv-orderprocessing-prod" -ForegroundColor Red
+              throw "SQL managed identity setup cannot continue without sql-admin-password"
+            }
+            Write-Output "::add-mask::$sqlAdminPassword"
+
+            ./Resources/Azure-Deployment/setup-sql-managed-identity.ps1 -Environment prod -BaseName orderprocessing -GitHubOwner '${{ github.repository_owner }}' -UseSqlAuthentication -SqlAdminUsername sqladmin -SqlAdminPassword $sqlAdminPassword
 
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
