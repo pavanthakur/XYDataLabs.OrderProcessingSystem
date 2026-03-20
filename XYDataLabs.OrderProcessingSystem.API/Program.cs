@@ -5,9 +5,11 @@ using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
 using Serilog;
 using Serilog.Events;
+using Serilog.Sinks.ApplicationInsights.TelemetryConverters;
 using System.Reflection;
 using XYDataLabs.OrderProcessingSystem.Utilities;
 using Microsoft.Extensions.Configuration;
+using Microsoft.ApplicationInsights.Extensibility;
 using System.Text.RegularExpressions;
 using XYDataLabs.OrderProcessingSystem.Application.Utilities;
 
@@ -28,6 +30,7 @@ var isDocker = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER")
 // Detect Azure App Service using WEBSITE_SITE_NAME environment variable
 var azureSiteName = Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME");
 var isAzure = !string.IsNullOrWhiteSpace(azureSiteName);
+var runtimeLabel = isAzure ? "Azure" : (isDocker ? "Docker" : "Local");
 
 // Map .NET environment names to our simplified profile names
 var environmentName = builder.Environment.EnvironmentName switch
@@ -167,7 +170,7 @@ builder.Services.AddSwaggerGen(options =>
         Title = $"OrderProcessingSystem API - {environmentName.ToUpper()} Environment",
         Version = "v1",
         Description = $"OrderProcessingSystem API with Customer, Order endpoints running in {environmentName.ToUpper()} environment" + 
-                     (isDocker ? " 🐳 (Docker)" : " 🖥️ (Local)"),
+                     $" [{runtimeLabel}]",
     });
     
     // Add server configuration for proper Swagger API calls
@@ -200,7 +203,13 @@ builder.Host.UseSerilog((context, services, loggerConfiguration) =>
         .Enrich.FromLogContext()
         .Enrich.WithProperty("Environment", environmentName)
         .Enrich.WithProperty("Application", "API")
-        .Enrich.WithProperty("Runtime", isDocker ? "Docker" : "Local");
+        .Enrich.WithProperty("Runtime", runtimeLabel);
+
+    var telemetryConfiguration = services.GetService<TelemetryConfiguration>();
+    if (telemetryConfiguration is not null)
+    {
+        loggerConfiguration.WriteTo.ApplicationInsights(telemetryConfiguration, TelemetryConverter.Traces);
+    }
 
     if (isDocker)
     {
@@ -250,6 +259,16 @@ else
 
 var app = builder.Build();
 
+static void ConfigureApiExceptionHandler(IApplicationBuilder errorApp)
+{
+    errorApp.Run(async context =>
+    {
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsJsonAsync(new { message = "An unexpected error occurred. Please try again later." });
+    });
+}
+
 // Initialize database and AppMasterData during startup
 using (var scope = app.Services.CreateScope())
 {
@@ -270,6 +289,8 @@ SharedSettingsLoader.PrintApiSettingsDebug(apiSettings, activeSettings, "API", i
 // Add Serilog request logging
 app.UseSerilogRequestLogging();
 
+var useDeveloperExceptionPage = builder.Environment.IsDevelopment() && !isAzure;
+
 // Configure the HTTP request pipeline.
 // Environment-specific middleware configuration using our simplified profile names
 if (environmentName == "dev" || environmentName == "uat")
@@ -283,9 +304,13 @@ if (environmentName == "dev" || environmentName == "uat")
         options.RoutePrefix = "swagger"; // Set Swagger UI to /swagger/index.html
     });
     
-    if (environmentName == "dev")
+    if (useDeveloperExceptionPage)
     {
         app.UseDeveloperExceptionPage();
+    }
+    else
+    {
+        app.UseExceptionHandler(ConfigureApiExceptionHandler);
     }
 }
 else if (environmentName == "prod")
@@ -301,6 +326,8 @@ else if (environmentName == "prod")
         options.SwaggerEndpoint("/swagger/v1/swagger.json", "OrderProcessingSystem API v1");
         options.RoutePrefix = "swagger";
     });
+    app.UseExceptionHandler(ConfigureApiExceptionHandler);
+    app.UseHsts();
     
     /* PRODUCTION SECURITY CONFIGURATION (currently commented for testing)
     // Uncomment this block and comment out Swagger above for production security:
@@ -312,7 +339,7 @@ else if (environmentName == "prod")
 else
 {
     // Fallback for other environments
-    app.UseExceptionHandler("/Home/Error");
+    app.UseExceptionHandler(ConfigureApiExceptionHandler);
     app.UseHsts();
 }
 

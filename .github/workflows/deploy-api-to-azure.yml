@@ -210,6 +210,48 @@ jobs:
             throw
           }
 
+      - name: Configure SQL Managed Identity Database User
+        if: steps.check-credentials.outputs.credentialsConfigured == 'true'
+        shell: pwsh
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║      CONFIGURE SQL MANAGED IDENTITY DATABASE USER             ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+
+          $ref = "${{ github.ref }}"
+          if ($ref -eq 'refs/heads/main') { $targetEnv = 'prod' }
+          elseif ($ref -eq 'refs/heads/staging') { $targetEnv = 'staging' }
+          elseif ($ref -eq 'refs/heads/dev') { $targetEnv = 'dev' }
+          else { $branch = $ref.Replace('refs/heads/',''); $targetEnv = $branch }
+
+          $envSuffix = if ($targetEnv -eq 'staging') { 'stg' } else { $targetEnv }
+          $kvName = "kv-orderprocessing-$envSuffix"
+          $owner = "${{ github.repository_owner }}"
+
+          try {
+            $sqlAdminPassword = az keyvault secret show --vault-name $kvName --name sql-admin-password --query value -o tsv 2>$null
+            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($sqlAdminPassword)) {
+              throw "Could not retrieve sql-admin-password from Key Vault '$kvName'."
+            }
+
+            Write-Output "::add-mask::$sqlAdminPassword"
+            ./Resources/Azure-Deployment/setup-sql-managed-identity.ps1 -Environment $targetEnv -BaseName orderprocessing -GitHubOwner $owner -UseSqlAuthentication -SqlAdminUsername sqladmin -SqlAdminPassword $sqlAdminPassword
+
+            if ($LASTEXITCODE -ne 0) {
+              throw "SQL managed identity database user setup failed with exit code $LASTEXITCODE"
+            }
+          }
+          catch {
+            Write-Host "" 
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "❌ SQL MANAGED IDENTITY SETUP FAILED" -ForegroundColor Red
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+            Write-Host "" 
+            Write-Host "Exception: $($_.Exception.Message)" -ForegroundColor Red
+            throw
+          }
+
       - name: Health Check
         if: steps.check-credentials.outputs.credentialsConfigured == 'true'
         shell: pwsh
