@@ -717,14 +717,19 @@ foreach ($env in $envList) {
         }
 
         # Grant OIDC SP access policy for KV secret resolution in ARM deployments (infra-deploy.yml)
-        # Contributor role covers Microsoft.KeyVault/vaults/accessPolicies/write (management plane)
+        # and for populate-keyvault-secrets.ps1 which runs as the same service principal.
+        # NOTE: the OIDC SP is typically the same identity as the current login (both use
+        #       AZUREAPPSERVICE_CLIENTID / GitHub-Actions-OIDC). Granting only 'get list' here
+        #       would silently OVERWRITE the 'get list set delete' granted to the current identity
+        #       above, causing az keyvault secret set to fail in the Populate Key Vault step.
+        #       We therefore grant the full set of permissions needed for both bootstrap and runtime.
         if (-not [string]::IsNullOrWhiteSpace($OidcSpObjectId)) {
-            Write-Host "  [KV] Granting OIDC SP (objectId: $OidcSpObjectId) secrets get+list access policy..." -ForegroundColor Yellow
-            $spPolicyResult = az keyvault set-policy --name $kvName --object-id $OidcSpObjectId --secret-permissions get list 2>&1
+            Write-Host "  [KV] Granting OIDC SP (objectId: $OidcSpObjectId) secrets get+list+set+delete access policy..." -ForegroundColor Yellow
+            $spPolicyResult = az keyvault set-policy --name $kvName --object-id $OidcSpObjectId --secret-permissions get list set delete 2>&1
             if ($LASTEXITCODE -eq 0) {
-                Write-Host "  [OK] OIDC SP access policy set (ARM KV references will resolve in infra-deploy.yml)" -ForegroundColor Green
+                Write-Host "  [OK] OIDC SP access policy set — get+list+set+delete (bootstrap + ARM KV references)" -ForegroundColor Green
             } else {
-                Write-Host "  [WARN] Could not set OIDC SP access policy: $spPolicyResult" -ForegroundColor Yellow
+                Write-Host "  [WARN] Could not set OIDC SP access policy: $($spPolicyResult | Out-String)" -ForegroundColor Yellow
                 Write-Host "  [HINT] Pass -OidcSpObjectId and ensure this identity has Contributor on the subscription" -ForegroundColor Gray
             }
         } else {
