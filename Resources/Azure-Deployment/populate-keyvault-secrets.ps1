@@ -41,20 +41,21 @@ function Invoke-AzCommandWithRetry {
     while ($attempt -lt $MaxRetries) {
         $attempt++
         try {
-            # Execute the command
+            # Execute the command — capture both stdout and stderr
             $result = Invoke-Expression $Command 2>&1
             $exitCode = $LASTEXITCODE
             
-            # Check for connection reset error in the output
-            $resultStr = $result | Out-String
+            # Flatten the result (may contain ErrorRecord objects from 2>&1) to a plain string
+            $resultStr = ($result | ForEach-Object { "$_" }) -join "`n"
+            
             if ($resultStr -match "ConnectionResetError|Connection aborted|forcibly closed") {
                 throw "Connection error detected in output"
             }
             
-            # Return result with exit code
+            # Return result with exit code and a pre-flattened string for easy display
             return @{
                 Success = ($exitCode -eq 0)
-                Output = $result
+                Output = $resultStr
                 ExitCode = $exitCode
             }
         }
