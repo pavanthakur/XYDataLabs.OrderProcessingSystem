@@ -181,9 +181,9 @@ ALTER ROLE db_datawriter ADD MEMBER [pavanthakur-orderprocessing-api-xyapp-dev];
 3. Deployed to `dev` and confirmed via Application Insights traces and SQL audit logs that token-based auth was used.
 
 #### Day 38: Azure SQL — Resilience Baseline (Detailed Activity)
-- [x] Simulate brief SQL outage (stop/start via Portal)
-- [x] Observe EF Core retry behaviour and plan Polly layering
-- **Time:** 1 hour | **Completed:** 20/03/2026
+- [ ] Simulate brief SQL outage (stop/start via Portal)
+- [ ] Observe EF Core retry behaviour and plan Polly layering
+- **Time:** 1 hour | **Completed:** ___/___/____
 
 **Detailed Activity:**
 1. Stopped SQL server briefly from Azure Portal and observed API retries; EF Core `EnableRetryOnFailure` provided baseline retry behaviour.
