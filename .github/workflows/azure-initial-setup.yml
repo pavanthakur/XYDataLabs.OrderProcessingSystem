@@ -384,6 +384,7 @@ jobs:
       tenantId: ${{ steps.oidc-setup.outputs.tenantId || steps.oidc-passthrough.outputs.tenantId }}
       subscriptionId: ${{ steps.oidc-setup.outputs.subscriptionId || steps.oidc-passthrough.outputs.subscriptionId }}
       appObjectId: ${{ steps.oidc-setup.outputs.appObjectId || steps.oidc-passthrough.outputs.appObjectId }}
+      spObjectId: ${{ steps.oidc-setup.outputs.spObjectId || steps.oidc-passthrough.outputs.spObjectId }}
     steps:
       - uses: actions/checkout@v4
 
@@ -529,10 +530,25 @@ jobs:
             $appObjectId = ""
           }
           
+          # Retrieve spObjectId for the service principal (needed by bootstrap for KV access policy)
+          try {
+            $spInfo = az ad sp list --filter "appId eq '$clientId'" | ConvertFrom-Json
+            $spObjectId = if ($spInfo -and $spInfo.Count -gt 0) { $spInfo[0].id } else { '' }
+            if ($spObjectId) {
+              Write-Host "  Service Principal Object ID: $spObjectId" -ForegroundColor Gray
+            } else {
+              Write-Host "  ⚠️  Could not retrieve service principal object ID" -ForegroundColor Yellow
+            }
+          } catch {
+            Write-Host "  ⚠️  Could not retrieve service principal object ID: $($_.Exception.Message)" -ForegroundColor Yellow
+            $spObjectId = ''
+          }
+
           "clientId=$clientId"             >> $env:GITHUB_OUTPUT
           "tenantId=$tenantId"             >> $env:GITHUB_OUTPUT
           "subscriptionId=$subscriptionId" >> $env:GITHUB_OUTPUT
           "appObjectId=$appObjectId"       >> $env:GITHUB_OUTPUT
+          "spObjectId=$spObjectId"         >> $env:GITHUB_OUTPUT
           
           Write-Host "✅ Existing credentials emitted as outputs" -ForegroundColor Green
 
@@ -712,6 +728,7 @@ jobs:
       clientId: ${{ needs.setup-oidc.outputs.clientId }}
       tenantId: ${{ needs.setup-oidc.outputs.tenantId }}
       subscriptionId: ${{ needs.setup-oidc.outputs.subscriptionId }}
+      oidcSpObjectId: ${{ needs.setup-oidc.outputs.spObjectId }}
 
   summary:
     name: Initial Setup Summary

@@ -68,7 +68,13 @@ else {
     Write-Host "  Database : OrderProcessingSystem_Dev" -ForegroundColor Cyan
     Write-Host "  Auth     : SQL Server Authentication" -ForegroundColor Cyan
     Write-Host "  Login    : sqladmin" -ForegroundColor Cyan
-    Write-Host "  Password : Admin100@" -ForegroundColor Cyan
+    $kvName = "kv-orderprocessing-$envSuffix"
+    $sqlPwd = az keyvault secret show --vault-name $kvName --name "sql-admin-password" --query value -o tsv 2>$null
+    if (-not [string]::IsNullOrWhiteSpace($sqlPwd)) {
+        Write-Host "  Password : $sqlPwd" -ForegroundColor Cyan
+    } else {
+        Write-Host "  Password : (run: az keyvault secret show --vault-name $kvName --name sql-admin-password --query value -o tsv)" -ForegroundColor Yellow
+    }
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "⚠️  Remember to close the rule when done:" -ForegroundColor Yellow

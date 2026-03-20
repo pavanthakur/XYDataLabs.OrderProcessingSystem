@@ -209,25 +209,40 @@ cleanupInfra: true      # ⚠️ DESTRUCTIVE — deletes everything
 
 ## ⚠️ Post-Clean-Deploy Checklist (After Bootstrap + API Deploy)
 
-After a **full clean deployment** (resource group deleted and recreated), the SQL contained user for the App Service managed identity is lost with the old database. The API will return 500 errors until this is fixed.
+Prompt reference for manual post-deploy commands:
+- [Prompt README](../../.github/prompts/README.md)
 
-**Always run this after a clean deploy:**
+After a **full clean deployment** (resource group deleted and recreated), the bootstrap workflow automatically recreates the SQL contained user for the App Service managed identity.
+
+**Bootstrap handles this automatically — no manual steps required:**
 ```powershell
-# In VS Code Chat (Agent mode):
-/sql-mi-setup
-
-# Or directly:
-.\Resources\Azure-Deployment\setup-sql-managed-identity.ps1 -Environment dev
+# Managed identity SQL setup is automated inside azure-bootstrap.yml:
+# - setup-sql-managed-identity.ps1 is called on every bootstrap run
+# - No manual /sql-mi-setup step needed
 ```
 
 | Step | Action | Required after clean deploy? |
 |------|--------|-----------------------------|
 | 1 | Run `azure-bootstrap.yml` (bootstrapInfra + deployApi) | ✅ |
-| 2 | Run `/sql-mi-setup` prompt (or `setup-sql-managed-identity.ps1`) | ✅ **Do not skip** |
-| 3 | Verify `/api/orders` returns 200 (not 500) | ✅ |
-| 4 | Optional: open SQL firewall for local SSMS via `/sql-local-access` | Optional |
+| 2 | Verify `/api/orders` returns 200 (not 500) | ✅ |
+| 3 | Optional: open SQL firewall for local SSMS via `/sql-local-access` | Optional |
+
+Short validation check in SSMS:
+
+```sql
+SELECT login_name, program_name
+FROM sys.dm_exec_sessions
+WHERE is_user_process = 1
+    AND database_id = DB_ID('OrderProcessingSystem_Dev')
+```
+
+Expected result:
+- After bootstrap completes and the API is called, you should see a `Core Microsoft SqlClient Data Provider` row with a GUID-like `login_name` instead of `sqladmin`.
+- That GUID-like `login_name` is the expected token-based Azure AD / managed identity session and is a valid success signal.
 
 > See [TROUBLESHOOTING-INDEX.md](../../TROUBLESHOOTING-INDEX.md#sql-managed-identity-day-35) for full details on the symptom and fix.
+>
+> See [Prompt README](../../.github/prompts/README.md) for available prompts (`/day-complete`, `/sql-local-access`).
 
 ---
 

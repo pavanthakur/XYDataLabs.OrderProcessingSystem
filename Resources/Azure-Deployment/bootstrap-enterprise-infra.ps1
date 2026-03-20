@@ -37,7 +37,8 @@ param(
     [Parameter(Mandatory = $false)] [string]$ProductionSku = 'P1v3',
     [Parameter(Mandatory = $false)] [string]$GitHubOwner = 'pavanthakur',
     [Parameter(Mandatory = $false)] [switch]$DryRun,
-    [Parameter(Mandatory = $false)] [ValidateSet('text','json')] [string]$LogFormat = 'text'
+    [Parameter(Mandatory = $false)] [ValidateSet('text','json')] [string]$LogFormat = 'text',
+    [Parameter(Mandatory = $false)] [string]$OidcSpObjectId = ''
 )
 
 # Repository name (fixed for this project)
@@ -690,6 +691,46 @@ foreach ($env in $envList) {
         # Run populate-keyvault-secrets.ps1 after bootstrap to add application secrets
         Write-Host "  [INFO] Key Vault created and configured" -ForegroundColor Cyan
         Write-Host "  [INFO] Run populate-keyvault-secrets.ps1 to add application secrets" -ForegroundColor Gray
+
+        # Generate (or retrieve existing) SQL admin password — stored exclusively in Key Vault
+        # Bootstrap is idempotent: if secret already exists, it is retrieved and reused
+        Write-Host "`n  [KV] Managing SQL admin password in Key Vault '$kvName'..." -ForegroundColor Cyan
+        $sqlAdminPassword = $null
+        try {
+            $existingPw = az keyvault secret show --vault-name $kvName --name "sql-admin-password" --query value -o tsv 2>$null
+            if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($existingPw)) {
+                $sqlAdminPassword = $existingPw
+                Write-Host "  [OK] Existing sql-admin-password retrieved from Key Vault (idempotent)" -ForegroundColor Green
+            } else {
+                # Generate cryptographically random password — nobody will ever know this value
+                $bytes = [System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32)
+                $sqlAdminPassword = ([System.Convert]::ToBase64String($bytes)).Substring(0, 28) + "Aa1!"
+                az keyvault secret set --vault-name $kvName --name "sql-admin-password" --value $sqlAdminPassword | Out-Null
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Host "  [OK] New sql-admin-password generated and stored in Key Vault" -ForegroundColor Green
+                } else {
+                    Write-Host "  [WARN] Could not store sql-admin-password in Key Vault" -ForegroundColor Yellow
+                }
+            }
+        } catch {
+            Write-Host "  [WARN] Exception managing sql-admin-password: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+
+        # Grant OIDC SP access policy for KV secret resolution in ARM deployments (infra-deploy.yml)
+        # Contributor role covers Microsoft.KeyVault/vaults/accessPolicies/write (management plane)
+        if (-not [string]::IsNullOrWhiteSpace($OidcSpObjectId)) {
+            Write-Host "  [KV] Granting OIDC SP (objectId: $OidcSpObjectId) secrets get+list access policy..." -ForegroundColor Yellow
+            $spPolicyResult = az keyvault set-policy --name $kvName --object-id $OidcSpObjectId --secret-permissions get list 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "  [OK] OIDC SP access policy set (ARM KV references will resolve in infra-deploy.yml)" -ForegroundColor Green
+            } else {
+                Write-Host "  [WARN] Could not set OIDC SP access policy: $spPolicyResult" -ForegroundColor Yellow
+                Write-Host "  [HINT] Pass -OidcSpObjectId and ensure this identity has Contributor on the subscription" -ForegroundColor Gray
+            }
+        } else {
+            Write-Host "  [INFO] OidcSpObjectId not provided — OIDC SP KV access policy not set" -ForegroundColor Gray
+            Write-Host "  [INFO] Run azure-initial-setup.yml (Phase 1a+1b) first to store OIDC_SP_OBJECT_ID secret" -ForegroundColor Gray
+        }
     }
 
     # Unified readiness wait - ensures plan + apps reach ready status
@@ -1082,6 +1123,7 @@ if ($oidcResult.Success) {
     Write-Host "  1. Add the repository secrets copied above to GitHub (if not already)." -ForegroundColor White
     Write-Host "  2. Push to branches to trigger deployments." -ForegroundColor White
 }
+Write-Host "  3. Review .github/prompts/README.md for required manual post-deploy prompts and follow-up steps." -ForegroundColor White
 
 # Write detailed StepStatus to CSV and finalize log
 try { $csvPath = Join-Path $logDir ("step-summary-" + (Get-Date -Format "yyyyMMdd-HHmmss") + ".csv"); $global:StepStatus | Export-Csv -Path $csvPath -NoTypeInformation -Force; Write-Log "Step summary exported to $csvPath" "INFO" "Cyan" } catch { Write-Log "Failed to export step summary CSV: $($_.Exception.Message)" "WARN" "Yellow" }

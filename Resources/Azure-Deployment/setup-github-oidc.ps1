@@ -154,6 +154,12 @@ if ($existingSp.Count -eq 0) {
     Write-Host "  Service principal already exists" -ForegroundColor Green
 }
 
+# Export spObjectId to GITHUB_OUTPUT for workflow capture (bootstrap uses it for KV access policy)
+if ($env:GITHUB_OUTPUT) {
+    "spObjectId=$spObjectId" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+    Write-Host "  spObjectId written to GITHUB_OUTPUT" -ForegroundColor Gray
+}
+
 # Step 4: Configure federated credentials
 Write-Host "`n[4/7] Configuring federated credentials..." -ForegroundColor Yellow
 
