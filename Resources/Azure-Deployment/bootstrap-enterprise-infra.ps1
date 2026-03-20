@@ -716,21 +716,28 @@ foreach ($env in $envList) {
             Write-Host "  [WARN] Exception managing sql-admin-password: $($_.Exception.Message)" -ForegroundColor Yellow
         }
 
-        # Grant OIDC SP access policy for KV secret resolution in ARM deployments (infra-deploy.yml)
-        # and for populate-keyvault-secrets.ps1 which runs as the same service principal.
-        # NOTE: the OIDC SP is typically the same identity as the current login (both use
-        #       AZUREAPPSERVICE_CLIENTID / GitHub-Actions-OIDC). Granting only 'get list' here
-        #       would silently OVERWRITE the 'get list set delete' granted to the current identity
-        #       above, causing az keyvault secret set to fail in the Populate Key Vault step.
-        #       We therefore grant the full set of permissions needed for both bootstrap and runtime.
+        # Grant OIDC SP access policy for KV secret resolution in ARM deployments (infra-deploy.yml).
+        # Least-privilege logic:
+        #   • Same principal as the logged-in identity  → skip (already has get+list+set+delete above)
+        #   • Different principal (dedicated OIDC SP)   → grant get+list only (ARM references only need read)
+        # Skipping the duplicate call prevents a narrower policy from silently overwriting the
+        # broader one set above, which was the root cause of the Populate Key Vault failure.
         if (-not [string]::IsNullOrWhiteSpace($OidcSpObjectId)) {
-            Write-Host "  [KV] Granting OIDC SP (objectId: $OidcSpObjectId) secrets get+list+set+delete access policy..." -ForegroundColor Yellow
-            $spPolicyResult = az keyvault set-policy --name $kvName --object-id $OidcSpObjectId --secret-permissions get list set delete 2>&1
-            if ($LASTEXITCODE -eq 0) {
-                Write-Host "  [OK] OIDC SP access policy set — get+list+set+delete (bootstrap + ARM KV references)" -ForegroundColor Green
+            if (-not [string]::IsNullOrWhiteSpace($currentObjectId) -and $OidcSpObjectId -eq $currentObjectId) {
+                # OIDC SP and current identity are the same service principal.
+                # The 'get list set delete' policy was already granted in the block above — no second call needed.
+                Write-Host "  [KV] OIDC SP object ID matches current identity — skipping duplicate policy grant" -ForegroundColor Green
+                Write-Host "  [OK] OIDC SP already has get+list+set+delete from the current identity grant above" -ForegroundColor Green
             } else {
-                Write-Host "  [WARN] Could not set OIDC SP access policy: $($spPolicyResult | Out-String)" -ForegroundColor Yellow
-                Write-Host "  [HINT] Pass -OidcSpObjectId and ensure this identity has Contributor on the subscription" -ForegroundColor Gray
+                # Different principal — grant only get+list (sufficient for ARM KV references in infra-deploy.yml)
+                Write-Host "  [KV] Granting OIDC SP (objectId: $OidcSpObjectId) secrets get+list access policy (ARM KV references)..." -ForegroundColor Yellow
+                $spPolicyResult = az keyvault set-policy --name $kvName --object-id $OidcSpObjectId --secret-permissions get list 2>&1
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Host "  [OK] OIDC SP access policy set — get+list (ARM KV references; separate from current identity)" -ForegroundColor Green
+                } else {
+                    Write-Host "  [WARN] Could not set OIDC SP access policy: $($spPolicyResult | Out-String)" -ForegroundColor Yellow
+                    Write-Host "  [HINT] Pass -OidcSpObjectId and ensure this identity has Contributor on the subscription" -ForegroundColor Gray
+                }
             }
         } else {
             Write-Host "  [INFO] OidcSpObjectId not provided — OIDC SP KV access policy not set" -ForegroundColor Gray
