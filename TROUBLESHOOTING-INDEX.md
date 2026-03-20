@@ -145,6 +145,38 @@ WHERE is_user_process = 1
 
 > **Note**: `aadAdminObjectId` and `aadAdminLogin` in the parameter files never need updating — they are your permanent Azure AD user identifiers. The SQL contained user setup is automated by `azure-bootstrap.yml` on every run.
 
+#### ❌ "Could not resolve managed identity appId" / "Insufficient privileges to complete the operation"
+
+**Symptom**: `Azure Bootstrap & Deploy` or `Deploy API to Azure` reaches the SQL managed identity step and fails with:
+
+- `Could not resolve managed identity appId`
+- `ERROR: Insufficient privileges to complete the operation.`
+
+**Cause**: The existing `GitHub-Actions-OIDC` app registration can authenticate to Azure Resource Manager, but it lacks Microsoft Entra read permission needed to resolve the App Service managed identity `appId/clientId`.
+
+**Azure Portal Fix**:
+1. Go to `Azure Portal -> Microsoft Entra ID -> App registrations`
+2. Open `GitHub-Actions-OIDC`
+3. Open `API permissions`
+4. Click `Add a permission`
+5. Choose `Microsoft Graph`
+6. Choose `Application permissions`
+7. Add `Application.Read.All`
+8. Click `Grant admin consent`
+9. Wait 1 to 3 minutes for propagation
+10. Re-run `Azure Bootstrap & Deploy` or `Deploy API to Azure`
+
+If the same error still appears, add `Directory.Read.All`, grant admin consent, wait briefly, and re-run the workflow.
+
+**Do not do this for this error:**
+- Do not run cleanup
+- Do not recreate the resource group
+- Do not rerun Azure Initial Setup unless the OIDC app registration itself was recreated
+
+**Why the fix works:**
+- SQL provisioning, Key Vault population, and EF migrations can succeed with Azure Resource Manager access only
+- the SQL managed identity automation additionally needs to read Microsoft Entra service principal metadata
+
 ---
 
 ### Branch / Environment Mismatch

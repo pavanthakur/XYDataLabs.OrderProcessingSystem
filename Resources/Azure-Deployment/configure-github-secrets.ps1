@@ -16,10 +16,14 @@ param(
     [string]$Repository = "getpavanthakur/TestAppXY_OrderProcessingSystem",
     
     [Parameter(Mandatory=$false)]
-    [switch]$Force
+    [switch]$Force,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$AllowInteractiveLogin
 )
 
 $ErrorActionPreference = 'Stop'
+$isCiEnvironment = ($env:GITHUB_ACTIONS -eq 'true') -or ($env:CI -eq 'true')
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "GitHub Secrets Configuration" -ForegroundColor White
@@ -45,12 +49,21 @@ try {
         Write-Host "  [OK] Authenticated to github.com" -ForegroundColor Green
     } else {
         Write-Host "  [WARN] Not authenticated to GitHub" -ForegroundColor Yellow
-        Write-Host "  [ACTION] Running: gh auth login" -ForegroundColor Yellow
-        gh auth login
+        if ($AllowInteractiveLogin -and -not $isCiEnvironment) {
+            Write-Host "  [ACTION] Running: gh auth login" -ForegroundColor Yellow
+            gh auth login
+        } else {
+            throw "GitHub CLI is not authenticated. Run 'gh auth login' manually before invoking this script, or pass -AllowInteractiveLogin in a local interactive session."
+        }
     }
 } catch {
     Write-Host "  [ERROR] GitHub authentication failed" -ForegroundColor Red
-    Write-Host "  [ACTION] Run: gh auth login" -ForegroundColor Yellow
+    if ($isCiEnvironment) {
+        Write-Host "  [ACTION] Skip GitHub secret automation in CI or provide a non-interactive authenticated GitHub CLI context" -ForegroundColor Yellow
+    } else {
+        Write-Host "  [ACTION] Run: gh auth login" -ForegroundColor Yellow
+        Write-Host "  [ACTION] Or rerun with: -AllowInteractiveLogin" -ForegroundColor Yellow
+    }
     exit 1
 }
 

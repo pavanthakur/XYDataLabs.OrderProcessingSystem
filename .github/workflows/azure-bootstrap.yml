@@ -846,6 +846,24 @@ jobs:
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
             Write-Host ""
             Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+            $managedIdentityPermissionHint = $_.Exception.Message -like '*Could not resolve managed identity appId*' -or $_.Exception.Message -like '*Insufficient privileges to complete the operation*'
+            if ($managedIdentityPermissionHint) {
+              Write-Host ""
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
+              Write-Host "POSSIBLE FIX — GRANT GRAPH READ PERMISSION TO GITHUB OIDC APP" -ForegroundColor Yellow
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
+              Write-Host "1. Azure Portal -> Microsoft Entra ID -> App registrations" -ForegroundColor White
+              Write-Host "2. Open 'GitHub-Actions-OIDC'" -ForegroundColor White
+              Write-Host "3. API permissions -> Add a permission -> Microsoft Graph" -ForegroundColor White
+              Write-Host "4. Choose Application permissions" -ForegroundColor White
+              Write-Host "5. Add 'Application.Read.All'" -ForegroundColor White
+              Write-Host "6. Grant admin consent" -ForegroundColor White
+              Write-Host "7. Wait 1-3 minutes for propagation" -ForegroundColor White
+              Write-Host "8. Re-run this workflow" -ForegroundColor White
+              Write-Host ""
+              Write-Host "If still failing, also add 'Directory.Read.All', grant consent, wait briefly, and re-run." -ForegroundColor Yellow
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## Possible Fix - SQL Managed Identity Entra Permission`n- Open Azure Portal -> Microsoft Entra ID -> App registrations`n- Open GitHub-Actions-OIDC`n- API permissions -> Add a permission -> Microsoft Graph -> Application permissions`n- Add Application.Read.All`n- Grant admin consent`n- Wait 1-3 minutes and re-run this workflow`n- If still failing, also add Directory.Read.All and grant admin consent`n"
+            }
             Write-Host ""
             Write-Host "Stack Trace:" -ForegroundColor Yellow
             Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
@@ -1562,6 +1580,24 @@ jobs:
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
             Write-Host ""
             Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+            $managedIdentityPermissionHint = $_.Exception.Message -like '*Could not resolve managed identity appId*' -or $_.Exception.Message -like '*Insufficient privileges to complete the operation*'
+            if ($managedIdentityPermissionHint) {
+              Write-Host ""
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
+              Write-Host "POSSIBLE FIX — GRANT GRAPH READ PERMISSION TO GITHUB OIDC APP" -ForegroundColor Yellow
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
+              Write-Host "1. Azure Portal -> Microsoft Entra ID -> App registrations" -ForegroundColor White
+              Write-Host "2. Open 'GitHub-Actions-OIDC'" -ForegroundColor White
+              Write-Host "3. API permissions -> Add a permission -> Microsoft Graph" -ForegroundColor White
+              Write-Host "4. Choose Application permissions" -ForegroundColor White
+              Write-Host "5. Add 'Application.Read.All'" -ForegroundColor White
+              Write-Host "6. Grant admin consent" -ForegroundColor White
+              Write-Host "7. Wait 1-3 minutes for propagation" -ForegroundColor White
+              Write-Host "8. Re-run this workflow" -ForegroundColor White
+              Write-Host ""
+              Write-Host "If still failing, also add 'Directory.Read.All', grant consent, wait briefly, and re-run." -ForegroundColor Yellow
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## Possible Fix - SQL Managed Identity Entra Permission`n- Open Azure Portal -> Microsoft Entra ID -> App registrations`n- Open GitHub-Actions-OIDC`n- API permissions -> Add a permission -> Microsoft Graph -> Application permissions`n- Add Application.Read.All`n- Grant admin consent`n- Wait 1-3 minutes and re-run this workflow`n- If still failing, also add Directory.Read.All and grant admin consent`n"
+            }
             Write-Host ""
             Write-Host "Stack Trace:" -ForegroundColor Yellow
             Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
@@ -2278,6 +2314,24 @@ jobs:
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
             Write-Host ""
             Write-Host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+            $managedIdentityPermissionHint = $_.Exception.Message -like '*Could not resolve managed identity appId*' -or $_.Exception.Message -like '*Insufficient privileges to complete the operation*'
+            if ($managedIdentityPermissionHint) {
+              Write-Host ""
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
+              Write-Host "POSSIBLE FIX — GRANT GRAPH READ PERMISSION TO GITHUB OIDC APP" -ForegroundColor Yellow
+              Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
+              Write-Host "1. Azure Portal -> Microsoft Entra ID -> App registrations" -ForegroundColor White
+              Write-Host "2. Open 'GitHub-Actions-OIDC'" -ForegroundColor White
+              Write-Host "3. API permissions -> Add a permission -> Microsoft Graph" -ForegroundColor White
+              Write-Host "4. Choose Application permissions" -ForegroundColor White
+              Write-Host "5. Add 'Application.Read.All'" -ForegroundColor White
+              Write-Host "6. Grant admin consent" -ForegroundColor White
+              Write-Host "7. Wait 1-3 minutes for propagation" -ForegroundColor White
+              Write-Host "8. Re-run this workflow" -ForegroundColor White
+              Write-Host ""
+              Write-Host "If still failing, also add 'Directory.Read.All', grant consent, wait briefly, and re-run." -ForegroundColor Yellow
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## Possible Fix - SQL Managed Identity Entra Permission`n- Open Azure Portal -> Microsoft Entra ID -> App registrations`n- Open GitHub-Actions-OIDC`n- API permissions -> Add a permission -> Microsoft Graph -> Application permissions`n- Add Application.Read.All`n- Grant admin consent`n- Wait 1-3 minutes and re-run this workflow`n- If still failing, also add Directory.Read.All and grant admin consent`n"
+            }
             Write-Host ""
             Write-Host "Stack Trace:" -ForegroundColor Yellow
             Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
