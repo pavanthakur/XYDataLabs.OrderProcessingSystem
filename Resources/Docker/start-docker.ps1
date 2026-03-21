@@ -56,13 +56,13 @@ function Get-DockerComposeCommand {
     try {
         docker compose version > $null 2>&1
         if ($LASTEXITCODE -eq 0) {
-            return { param($args) docker compose @args }
+            return { docker compose @args }
         }
     } catch {}
     # Fallback to legacy docker-compose if present
     try {
         if (Get-Command docker-compose -ErrorAction SilentlyContinue) {
-            return { param($args) docker-compose @args }
+            return { docker-compose @args }
         }
     } catch {}
     throw "Docker Compose not found (neither 'docker compose' nor 'docker-compose'). Install Docker Compose plugin."
@@ -198,7 +198,7 @@ function Get-ComposeContainerIds {
         [string]$Profile
     )
     try {
-        $ids = & $ComposeCmd $ComposeFiles --profile $Profile ps -q 2>$null
+        $ids = & $ComposeCmd @ComposeFiles --profile $Profile ps -q 2>$null
         return $ids
     } catch {
         return @()
@@ -259,7 +259,7 @@ function Show-ComposeLogs {
     )
     try {
         Write-ColoredOutput "Recent container logs (last $Tail lines):" "Yellow" "INFO"
-        $logs = & $ComposeCmd $ComposeFiles --profile $Profile logs --no-color --tail $Tail 2>&1
+        $logs = & $ComposeCmd @ComposeFiles --profile $Profile logs --no-color --tail $Tail 2>&1
         $logs | ForEach-Object { Write-ColoredOutput "  $_" "Gray" "INFO" }
     } catch {
         Write-ColoredOutput "Failed to fetch compose logs: $($_.Exception.Message)" "Yellow" "WARNING"
@@ -575,7 +575,7 @@ try {
         }
         
         Write-ColoredOutput "Running: $ComposeDisplay $($composeFiles -join ' ') --profile $Profile down" "Gray" "INFO"
-        & $ComposeCmd $composeFiles --profile $Profile down
+        & $ComposeCmd @composeFiles --profile $Profile down
         return
     }
 
@@ -684,7 +684,7 @@ try {
         try {
             Write-ColoredOutput "Reset requested: stopping existing services..." "Yellow" "INFO"
             Write-ColoredOutput "Running (reset): $ComposeDisplay $($composeFiles -join ' ') --profile $Profile down -v" "Gray" "INFO"
-            & $ComposeCmd $composeFiles --profile $Profile down -v 2>$null | Out-Null
+            & $ComposeCmd @composeFiles --profile $Profile down -v 2>$null | Out-Null
         } catch {}
         Remove-ProjectImages -Environment $Environment -Profile $Profile
     }
@@ -720,49 +720,43 @@ try {
         # Legacy mode: Use existing images if available
         $dockerCmd = "$ComposeDisplay $($composeFiles -join ' ') --profile $Profile up -d"
         Write-ColoredOutput "Running: $dockerCmd" "Gray"
-        $dockerOutput = & $ComposeCmd $composeFiles --profile $Profile up -d 2>&1
+        # Stream directly — avoids 2>&1 TTY breakage
+        & $ComposeCmd @composeFiles --profile $Profile up -d
+        $dockerOutput = ""
     } else {
         Write-ColoredOutput "Building fresh container images (Azure-style deployment)..." "Cyan" "INFO"
         Write-ColoredOutput "🏢 Enterprise Mode: Ensuring reproducible, secure builds" "Green" "INFO"
         $buildCmd = "$ComposeDisplay $($composeFiles -join ' ') --profile $Profile build --no-cache"
         Write-ColoredOutput "Running: $buildCmd" "Gray"
-        $buildOutput = & $ComposeCmd $composeFiles --profile $Profile build --no-cache 2>&1
-        $buildOutputString = $buildOutput -join "`n"
+        # Stream build output directly to console — capturing with 2>&1 breaks Docker BuildKit's
+        # TTY/progress-pipe detection on Windows and causes instant exit code 1 before any layer builds.
+        & $ComposeCmd @composeFiles --profile $Profile build --no-cache
         $buildExitCode = $LASTEXITCODE
 
-        # Check build success (support modern BuildKit outputs)
-        $buildSucceeded = ($buildExitCode -eq 0) -or `
-                          ($buildOutputString -match "Successfully built") -or `
-                          ($buildOutputString -match "naming to") -or `
-                          ($buildOutputString -match "exporting to image")
-
-        # Fallback: validate target images exist even if logs are ambiguous
-        if (-not $buildSucceeded) {
-            $targetImages = @()
-            switch ($Profile) {
-                'http'  { $targetImages = @("xydatalabs-orderprocessingsystem-api-http:$Environment", "xydatalabs-orderprocessingsystem-ui-http:$Environment") }
-                'https' { $targetImages = @("xydatalabs-orderprocessingsystem-api-https:$Environment", "xydatalabs-orderprocessingsystem-ui-https:$Environment") }
-                'all'   { $targetImages = @(
-                                "xydatalabs-orderprocessingsystem-api-http:$Environment", "xydatalabs-orderprocessingsystem-ui-http:$Environment",
-                                "xydatalabs-orderprocessingsystem-api-https:$Environment", "xydatalabs-orderprocessingsystem-ui-https:$Environment"
-                             ) }
-            }
-            $existing = $false
-            foreach ($img in $targetImages) {
-                $id = docker images -q $img 2>$null
-                if (-not [string]::IsNullOrWhiteSpace($id)) { $existing = $true }
-            }
-            if ($existing) { $buildSucceeded = $true }
+        # Determine expected target images for this profile
+        $targetImages = @()
+        switch ($Profile) {
+            'http'  { $targetImages = @("xydatalabs-orderprocessingsystem-api-http:$Environment", "xydatalabs-orderprocessingsystem-ui-http:$Environment") }
+            'https' { $targetImages = @("xydatalabs-orderprocessingsystem-api-https:$Environment", "xydatalabs-orderprocessingsystem-ui-https:$Environment") }
+            'all'   { $targetImages = @(
+                            "xydatalabs-orderprocessingsystem-api-http:$Environment", "xydatalabs-orderprocessingsystem-ui-http:$Environment",
+                            "xydatalabs-orderprocessingsystem-api-https:$Environment", "xydatalabs-orderprocessingsystem-ui-https:$Environment"
+                         ) }
         }
 
+        # Primary success check: exit code; fallback: verify images exist in daemon
+        $existing = $false
+        foreach ($img in $targetImages) {
+            $id = docker images -q $img 2>$null
+            if (-not [string]::IsNullOrWhiteSpace($id)) { $existing = $true }
+        }
+        $buildSucceeded = ($buildExitCode -eq 0) -or $existing
+
         if (-not $buildSucceeded) {
-            Write-ColoredOutput "⚠️  Build step reported failure. Checking for existing target images..." "Yellow" "WARNING"
-            if (-not $existing) {
-                Write-ColoredOutput "❌ Build failed and required images are missing." "Red" "ERROR"
-                throw "Docker build failed with exit code: $buildExitCode"
-            } else {
-                Write-ColoredOutput "Proceeding using existing images (skipping build failure)." "Yellow" "WARNING"
-            }
+            Write-ColoredOutput "❌ Build failed (exit code $buildExitCode) and required images are missing." "Red" "ERROR"
+            Write-ColoredOutput "  Tip: run manually to see full output:" "Yellow" "INFO"
+            Write-ColoredOutput "  $buildCmd" "White" "INFO"
+            throw "Docker build failed with exit code: $buildExitCode"
         } else {
             Write-ColoredOutput "✅ Fresh images built successfully (enterprise-ready)" "Green" "SUCCESS"
         }
@@ -772,7 +766,9 @@ try {
         # Start containers
         $dockerCmd = "$ComposeDisplay $($composeFiles -join ' ') --profile $Profile up -d"
         Write-ColoredOutput "Running: $dockerCmd" "Gray"
-        $dockerOutput = & $ComposeCmd $composeFiles --profile $Profile up -d 2>&1
+        # Stream up output directly (same TTY reason as build above)
+        & $ComposeCmd @composeFiles --profile $Profile up -d
+        $dockerOutput = ""
     }
     
     # Health wait implicit for Strict and LegacyBuild
@@ -861,7 +857,7 @@ try {
             
             # Retry the command
             Write-ColoredOutput "Retrying Docker Compose startup..." "Yellow" "INFO"
-            $dockerOutput = & $ComposeCmd $composeFiles --profile $Profile up -d 2>&1
+            $dockerOutput = & $ComposeCmd @composeFiles --profile $Profile up -d 2>&1
             
             # Check retry result
             if ($LASTEXITCODE -ne 0) {

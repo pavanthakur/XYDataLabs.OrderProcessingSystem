@@ -42,20 +42,15 @@ namespace XYDataLabs.OrderProcessingSystem.Utilities
             Console.WriteLine($"[DEBUG] Base path: {basePath}");
             
             // Build configuration with JSON file first, then environment variables override
-            // This allows Azure App Service connection strings to take precedence over local JSON settings
+            // This allows Docker Compose / Azure App Service env vars to take precedence over JSON settings
             builder
                 .SetBasePath(basePath)
-                .AddJsonFile($"Resources/Configuration/sharedsettings.{effectiveEnvironment}.json", optional: false, reloadOnChange: true);
-            
-            // Add environment variables AFTER JSON file so they can override
-            // Azure App Service sets connection strings as environment variables with specific prefixes:
-            // - SQLAZURECONNSTR_<name> for SQL Azure connection strings
-            // - CUSTOMCONNSTR_<name> for custom connection strings
-            // ASP.NET Core automatically maps these to ConnectionStrings:<name> in configuration
+                .AddJsonFile($"Resources/Configuration/sharedsettings.{effectiveEnvironment}.json", optional: false, reloadOnChange: true)
+                .AddEnvironmentVariables(); // Always re-apply env vars after JSON so Docker/Azure overrides win
+
             if (isAzure)
             {
-                Console.WriteLine("[DEBUG] Azure environment detected - adding environment variables for connection string override");
-                builder.AddEnvironmentVariables();
+                Console.WriteLine("[DEBUG] Azure environment detected - adding Key Vault (wins over env vars)");
                 
                 // Add Azure Key Vault configuration using Managed Identity
                 // ENTERPRISE REQUIREMENT: Key Vault is mandatory for Azure deployments
