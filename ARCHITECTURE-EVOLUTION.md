@@ -237,6 +237,7 @@ XYDataLabs.OrderProcessingSystem.sln
 - **Strongly-typed IDs** — `OrderId`, `CustomerId`, `ProductId` as `readonly record struct` wrappers around `Guid`; eliminates parameter-swap bugs (`Guid orderId, Guid customerId` → `OrderId orderId, CustomerId customerId`); EF Core value converters for transparent persistence
 - **Optimistic concurrency** — `RowVersion` (`byte[]` / `[Timestamp]`) on `BaseAuditableEntity`; EF Core intercepts `DbUpdateConcurrencyException` in `SaveChangesAsync` → wraps as domain `ConcurrencyException`; command handlers catch and return `Result.Failure(Errors.Conflict)` with retry guidance
 - **Domain invariants** — enforced inside aggregate methods (e.g. cannot ship an unpaid order), returning `Result<T>.Failure` with descriptive `Error` — no exceptions for business rules
+- **Aggregate boundary rule** — aggregates enforce only their own transactional invariants and do not depend on injected infrastructure services. External collaboration (payment gateways, inventory lookups, messaging, persistence orchestration) remains in application handlers, process managers, or domain policies — keeps aggregate behavior focused and predictable
 
 ### Builds On
 
@@ -334,6 +335,7 @@ Before extracting to separate deployables, restructure the monolith into isolate
 - **Per-module database migrators** — `IModuleDatabaseMigrator` interface; each module owns its `DbContext` and independent migration history. Startup runs all migrators sequentially
 - **Module self-registration** — `AddOrdersModule()`, `AddInventoryModule()`, `AddNotificationsModule()` extension methods chain API registration, infrastructure setup, and assembly scanning. `Program.cs` stays clean as project count grows
 - **`AssemblyReference.cs` markers** — static class per project exposing `Assembly` for reliable handler discovery, endpoint registration, and architecture test scanning
+- **Bounded-context and subdomain mapping** — before extraction, explicitly model Orders, Inventory, and Notifications as business contexts with clear responsibilities, upstream/downstream relationships, and published contracts. Module boundaries should follow business capability boundaries, not just technical packaging
 - **Architecture tests updated** — `NetArchTest.Rules` (from Phase 5) now enforces inter-module boundaries: modules cannot reference each other's internals, only PublicApi contracts
 - **Specification pattern** — composable query objects (`OrderByStatusSpec`, `ActiveCustomersSpec`) encapsulating EF Core `Where`/`Include`/`OrderBy` logic; reusable across handlers within a module. Introduced alongside per-module repositories — specifications replace scattered inline LINQ with testable, named query definitions
 
