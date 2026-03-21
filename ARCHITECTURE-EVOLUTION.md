@@ -648,9 +648,16 @@ Secure, scalable cloud-native microservices with APIM as public gateway, durable
 - **Init containers** — ACA init container runs the migration bundle before the app container starts
 - **Rollback** — migration bundles support `--target` for reverting to a specific migration; never use destructive migrations in production
 
+### Performance Conventions
+
+- **`AsNoTracking()`** on all EF Core read queries — enforced as team convention; avoids change-tracker overhead on write-side validation/lookup queries
+- **Indexing review** per service DB — cover foreign keys, `TenantId` filters, and common `WHERE` clause columns; use EF Core query logging or SQL Profiler to identify slow queries
+- **Dapper for hot-path reads** — optional fallback for performance-critical write-side queries where EF overhead is measurable (e.g. bulk order validation); EF Core remains the default
+- **Bulk operations** — use `EFCore.BulkExtensions` or raw SQL for batch import/export scenarios (e.g. bulk order ingestion); standard single-entity writes remain via EF Core
+
 ### Outcome
 
-Independent, fully decoupled services with clear data ownership, a documented choreography-vs-saga decision framework, and automated database migrations.
+Independent, fully decoupled services with clear data ownership, a documented choreography-vs-saga decision framework, automated database migrations, and codified performance conventions.
 
 ---
 
@@ -893,6 +900,7 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 - [ ] Database per service + data ownership
 - [ ] Choreography vs Saga decision framework
 - [ ] Database migration strategy (EF bundles + init containers)
+- [ ] Performance conventions (`AsNoTracking`, indexing review, Dapper for hot paths, bulk operations)
 - [ ] Per-service CI/CD pipelines
 - [ ] Observability dashboards + SLOs
 - [ ] Advanced Polly (bulkhead, fallback)
@@ -925,6 +933,7 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 | **Multi-tenancy** | Enforced at every layer (API, events, DB, Cosmos DB partition key) |
 | **Observability** | OpenTelemetry + App Insights + Azure Monitor dashboards |
 | **Resilience** | Polly (retry, circuit breaker, timeout, bulkhead) + dead-letter queues |
+| **Performance** | `AsNoTracking` convention, indexed tenant queries, Dapper for hot paths, bulk operations |
 | **Cache** | Azure Cache for Redis (distributed cache + session state) |
 | **Error Handling** | ProblemDetails (RFC 9457) + global exception middleware |
 | **Events** | Versioned schemas (inbox + outbox) + choreography with Saga escalation |
