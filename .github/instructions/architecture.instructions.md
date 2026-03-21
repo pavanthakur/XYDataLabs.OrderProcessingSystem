@@ -32,3 +32,4 @@ Context → Decision → Rationale table → Consequences → Related
 3. **`az deployment sub create` for `infra/`** — never `az deployment group create`
 4. **Structured logging only** — `Log.Information("{Key}", value)` not `$"text {value}"`
 5. **OIDC only for CI/CD** — never add `client-secret:` to any workflow
+6. **Clean Architecture layer rules enforced** — see `clean-architecture.instructions.md` (auto-applied to all `.cs` / `.csproj` files)

@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
-using XYDataLabs.OrderProcessingSystem.Utilities;
+using XYDataLabs.OrderProcessingSystem.SharedKernel;
 using System;
 
 namespace XYDataLabs.OrderProcessingSystem.UI.Controllers
@@ -67,7 +67,7 @@ namespace XYDataLabs.OrderProcessingSystem.UI.Controllers
                 // Load shared settings and get API base URL for local/Docker environments
                 var builder = new ConfigurationBuilder();
                 bool useHttps;
-                XYDataLabs.OrderProcessingSystem.Utilities.ApiSettings apiSettings;
+                XYDataLabs.OrderProcessingSystem.SharedKernel.ApiSettings apiSettings;
                 var apiSection = SharedSettingsLoader.AddAndBindSettings(
                     services: null, // Now allowed
                     builder: builder,

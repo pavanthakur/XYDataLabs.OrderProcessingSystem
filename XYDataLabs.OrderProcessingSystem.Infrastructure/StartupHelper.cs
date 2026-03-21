@@ -1,4 +1,5 @@
-﻿using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
+﻿using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
+using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -10,7 +11,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using XYDataLabs.OrderProcessingSystem.Utilities;
+using XYDataLabs.OrderProcessingSystem.SharedKernel;
 
 namespace XYDataLabs.OrderProcessingSystem.Infrastructure
 {
@@ -35,7 +36,9 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure
                 }
             });
 
-            // Database initialization will happen automatically through DI when DbContext is first used
+            // Forward IAppDbContext to the EF-registered concrete context
+            builder.Services.AddScoped<IAppDbContext>(sp =>
+                sp.GetRequiredService<OrderProcessingSystemDbContext>());
         }
     }
 }

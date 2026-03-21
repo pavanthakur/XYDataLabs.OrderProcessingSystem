@@ -26,7 +26,7 @@ practice Azure cloud deployment, CI/CD automation, and enterprise DevOps pattern
 | `XYDataLabs.OrderProcessingSystem.Application` | Use cases, DTOs, MediatR |
 | `XYDataLabs.OrderProcessingSystem.Domain` | Core entities, domain logic (DDD) |
 | `XYDataLabs.OrderProcessingSystem.Infrastructure` | EF Core, SQL Server, data access |
-| `XYDataLabs.OrderProcessingSystem.Utilities` | Shared helpers and cross-cutting concerns |
+| `XYDataLabs.OrderProcessingSystem.SharedKernel` | Shared helpers and cross-cutting concerns |
 | `XYDataLabs.OpenPayAdapter` | OpenPay payment integration |
 | `XYDataLabs.OrderProcessingSystem.UnitTest` | xUnit, Moq, Bogus, FluentAssertions tests |
 

@@ -3,7 +3,7 @@ using System.IO;
 using Serilog;
 using Serilog.Events;
 using Microsoft.Extensions.Options;
-using XYDataLabs.OrderProcessingSystem.Utilities;
+using XYDataLabs.OrderProcessingSystem.SharedKernel;
 
 // Bootstrap Serilog as early as possible so Log.* writes go to console immediately
 // Azure App Service Deployment - Fix for Application Not Starting

@@ -1,51 +1,59 @@
 ﻿using Bogus;
-using Castle.Core.Resource;
+using FluentAssertions;
 using FluentValidation;
 using FluentValidation.Results;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
+using XYDataLabs.OrderProcessingSystem.Application.Features.Orders.Commands;
+using XYDataLabs.OrderProcessingSystem.Application.Features.Orders.Queries;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
 using XYDataLabs.OrderProcessingSystem.UnitTest.TestBase;
 using Microsoft.EntityFrameworkCore;
 using Moq;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Linq.Expressions;
-using System.Threading.Tasks;
 using Xunit;
-using ValidationResult = FluentValidation.Results.ValidationResult;
 
 namespace XYDataLabs.OrderProcessingSystem.UnitTest.ServicesTest
 {
     public class OrderServiceUnitTest : OrderServiceTestBase
     {
-
         [Fact]
-        public async Task CreateOrderAsync_CustomerNotFound_ThrowsKeyNotFoundException()
+        public async Task CreateOrderCommand_CustomerNotFound_ReturnsNotFound()
         {
             // Arrange
             var customers = GenerateCustomersWithOrders(1, 1).AsQueryable();
             var mockDbSet = GetMockDbSet(customers);
             MockDbContext.Setup(db => db.Customers).Returns(mockDbSet.Object);
 
-            // Act & Assert
-            await Assert.ThrowsAsync<KeyNotFoundException>(() => _orderService.CreateOrderAsync(2, new List<int> { 1, 2 }));
+            var handler = new CreateOrderCommandHandler(MockDbContext.Object, MockMapper.Object);
+
+            // Act
+            var result = await handler.HandleAsync(new CreateOrderCommand(2, new List<int> { 1, 2 }));
+
+            // Assert
+            result.IsFailure.Should().BeTrue();
+            result.Error.Code.Should().Be("NotFound");
         }
 
         [Fact]
-        public async Task CreateOrderAsync_UnfulfilledOrderExists_ThrowsValidationException()
+        public async Task CreateOrderCommand_UnfulfilledOrderExists_ReturnsConflict()
         {
             // Arrange
             var customers = GenerateCustomersWithOrders(1, 1).AsQueryable();
             var mockDbSet = GetMockDbSet(customers);
             MockDbContext.Setup(db => db.Customers).Returns(mockDbSet.Object);
 
-            // Act & Assert
-            await Assert.ThrowsAsync<FluentValidation.ValidationException>(() => _orderService.CreateOrderAsync(1, new List<int> { 1, 2 }));
+            var handler = new CreateOrderCommandHandler(MockDbContext.Object, MockMapper.Object);
+
+            // Act
+            var result = await handler.HandleAsync(new CreateOrderCommand(1, new List<int> { 1, 2 }));
+
+            // Assert
+            result.IsFailure.Should().BeTrue();
+            result.Error.Code.Should().Be("Validation");
         }
 
         [Fact]
-        public async Task CreateOrderAsync_ProductNotFound_ThrowsKeyNotFoundException()
+        public async Task CreateOrderCommand_ProductNotFound_ReturnsNotFound()
         {
             // Arrange
             var customers = GenerateCustomersWithFulFilledOrders(1, 1).AsQueryable();
@@ -56,37 +64,18 @@ namespace XYDataLabs.OrderProcessingSystem.UnitTest.ServicesTest
             var mockDbSetProducts = GetMockDbSet(products);
             MockDbContext.Setup(db => db.Products).Returns(mockDbSetProducts.Object);
 
-            // Act & Assert
-            await Assert.ThrowsAsync<KeyNotFoundException>(() => _orderService.CreateOrderAsync(1, new List<int> { 1, 2 }));
+            var handler = new CreateOrderCommandHandler(MockDbContext.Object, MockMapper.Object);
+
+            // Act
+            var result = await handler.HandleAsync(new CreateOrderCommand(1, new List<int> { 1, 2 }));
+
+            // Assert
+            result.IsFailure.Should().BeTrue();
+            result.Error.Code.Should().Be("NotFound");
         }
 
         [Fact]
-        public async Task CreateOrderAsync_InvalidOrder_ThrowsValidationException()
-        {
-            // Arrange
-            const string OrderValidationErrorMessage = "Customer cannot place a new order until their previous order is fulfilled.";
-            var customers = GenerateCustomersWithFulFilledOrders(1, 1).AsQueryable();
-            var mockDbSetCustomers = GetMockDbSet(customers);
-            MockDbContext.Setup(db => db.Customers).Returns(mockDbSetCustomers.Object);
-
-            var products = GenerateProducts(1).AsQueryable();
-            var mockDbSetProducts = GetMockDbSet(products);
-            MockDbContext.Setup(db => db.Products).Returns(mockDbSetProducts.Object);
-
-            MockOrderValidator.Setup(v => v.ValidateAsync(It.IsAny<Order>(), default))
-                .ReturnsAsync(new ValidationResult(new List<ValidationFailure> { new ValidationFailure("Order", OrderValidationErrorMessage) }));
-
-            // Act & Assert
-            var exception = await Assert.ThrowsAsync<FluentValidation.ValidationException>(() => _orderService.CreateOrderAsync(1, new List<int> { 1 }));
-            Assert.NotNull(exception);
-            Assert.IsType<FluentValidation.ValidationException>(exception);
-            Assert.NotNull(exception.Errors);
-            Assert.Single(exception.Errors);
-            Assert.Equal(OrderValidationErrorMessage, exception.Errors.First().ErrorMessage);
-        }
-
-        [Fact]
-        public async Task CreateOrderAsync_ValidOrder_ReturnsOrderDto()
+        public async Task CreateOrderCommand_ValidOrder_ReturnsOrderDto()
         {
             // Arrange
             var customers = GenerateCustomersWithFulFilledOrders(1, 1).AsQueryable();
@@ -109,7 +98,7 @@ namespace XYDataLabs.OrderProcessingSystem.UnitTest.ServicesTest
                 TotalPrice = orders.First().TotalPrice,
                 OrderProductDtos = orders.First().OrderProducts.Select(op => new OrderProductDto
                 {
-                    ProductId = op.Product?.ProductId ?? 0, 
+                    ProductId = op.Product?.ProductId ?? 0,
                     Quantity = op.Quantity,
                     Price = op.Price,
                     ProductDto = op.Product != null ? new ProductDto
@@ -123,23 +112,21 @@ namespace XYDataLabs.OrderProcessingSystem.UnitTest.ServicesTest
             };
 
             MockMapper.Setup(m => m.Map<OrderDto>(It.IsAny<Order>())).Returns(orderDto);
-            MockOrderValidator.Setup(v => v.ValidateAsync(It.IsAny<Order>(), default))
-                .ReturnsAsync(new ValidationResult());
+            MockDbContext.Setup(db => db.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+
+            var handler = new CreateOrderCommandHandler(MockDbContext.Object, MockMapper.Object);
 
             // Act
-            var result = await _orderService.CreateOrderAsync(1, new List<int> { 1 });
+            var result = await handler.HandleAsync(new CreateOrderCommand(1, new List<int> { 1 }));
 
             // Assert
-            Assert.NotNull(result);
-            Assert.Equal(orderDto.CustomerId, result.CustomerId);
-            Assert.NotNull(result.OrderProductDtos);
-            Assert.Equal(orderDto.OrderProductDtos?.Count ?? 0, result.OrderProductDtos?.Count ?? 0);
-            Assert.NotNull(result.OrderProductDtos?.First().ProductDto);
-            Assert.Equal(orderDto.OrderProductDtos?.First().ProductDto, result.OrderProductDtos?.First().ProductDto);
+            result.IsSuccess.Should().BeTrue();
+            result.Value.Should().NotBeNull();
+            result.Value!.CustomerId.Should().Be(orderDto.CustomerId);
         }
 
         [Fact]
-        public async Task GetOrderDetailsAsync_ReturnsOrderDto()
+        public async Task GetOrderDetailsQuery_ReturnsOrderDto()
         {
             // Arrange
             var orderId = 1;
@@ -149,14 +136,13 @@ namespace XYDataLabs.OrderProcessingSystem.UnitTest.ServicesTest
                 CustomerId = CustomerId,
                 TotalPrice = 100,
                 OrderProducts = new List<OrderProduct>
-                    {
-                        new OrderProduct { ProductId = 1, Quantity = 1 },
-                        new OrderProduct { ProductId = 2, Quantity = 1 }
-                    }
+                {
+                    new OrderProduct { ProductId = 1, Quantity = 1 },
+                    new OrderProduct { ProductId = 2, Quantity = 1 }
+                }
             };
 
             var mockOrderDbSet = GetMockDbSet(new List<Order> { order }.AsQueryable());
-
             MockDbContext.Setup(c => c.Orders).Returns(mockOrderDbSet.Object);
 
             var orderDto = new OrderDto
@@ -174,13 +160,32 @@ namespace XYDataLabs.OrderProcessingSystem.UnitTest.ServicesTest
 
             MockMapper.Setup(m => m.Map<OrderDto>(It.IsAny<Order>())).Returns(orderDto);
 
+            var handler = new GetOrderDetailsQueryHandler(MockDbContext.Object, MockMapper.Object);
+
             // Act
-            var result = await _orderService.GetOrderDetailsAsync(orderId);
+            var result = await handler.HandleAsync(new GetOrderDetailsQuery(orderId));
 
             // Assert
-            Assert.NotNull(result);
-            Assert.Equal(orderDto.OrderId, result.OrderId);
-            Assert.Equal(orderDto.TotalPrice, result.TotalPrice);
+            result.IsSuccess.Should().BeTrue();
+            result.Value!.OrderId.Should().Be(orderDto.OrderId);
+            result.Value.TotalPrice.Should().Be(orderDto.TotalPrice);
+        }
+
+        [Fact]
+        public async Task GetOrderDetailsQuery_ReturnsNotFound_WhenOrderDoesNotExist()
+        {
+            // Arrange
+            var mockOrderDbSet = GetMockDbSet(new List<Order>().AsQueryable());
+            MockDbContext.Setup(c => c.Orders).Returns(mockOrderDbSet.Object);
+
+            var handler = new GetOrderDetailsQueryHandler(MockDbContext.Object, MockMapper.Object);
+
+            // Act
+            var result = await handler.HandleAsync(new GetOrderDetailsQuery(999));
+
+            // Assert
+            result.IsFailure.Should().BeTrue();
+            result.Error.Code.Should().Be("NotFound");
         }
     }
 }

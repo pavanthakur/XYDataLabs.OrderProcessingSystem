@@ -1,9 +1,8 @@
-﻿using XYDataLabs.OrderProcessingSystem.Application.DTO;
-using XYDataLabs.OrderProcessingSystem.Application.Interfaces;
-using XYDataLabs.OrderProcessingSystem.Domain.Entities;
-using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.AspNetCore.Mvc;
-using System.Text;
+﻿using Microsoft.AspNetCore.Mvc;
+using XYDataLabs.OrderProcessingSystem.API.Extensions;
+using XYDataLabs.OrderProcessingSystem.Application.CQRS;
+using XYDataLabs.OrderProcessingSystem.Application.DTO;
+using XYDataLabs.OrderProcessingSystem.Application.Features.Payments.Commands;
 
 namespace XYDataLabs.OrderProcessingSystem.API.Controllers
 {
@@ -11,12 +10,12 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
     [Route("api/[controller]")]
     public class PaymentsController : ControllerBase
     {
-        private readonly IOpenPayService _openPayService;
+        private readonly IDispatcher _dispatcher;
         private readonly ILogger<PaymentsController> _logger;
 
-        public PaymentsController(IOpenPayService openPayService, ILogger<PaymentsController> logger)
+        public PaymentsController(IDispatcher dispatcher, ILogger<PaymentsController> logger)
         {
-            _openPayService = openPayService;
+            _dispatcher = dispatcher;
             _logger = logger;
         }
 
@@ -30,8 +29,16 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
         {
             try
             {
-                var payment = await _openPayService.ProcessPaymentAsync(request);
-                return Ok(payment);
+                var result = await _dispatcher.SendAsync(new ProcessPaymentCommand(
+                    request.Name,
+                    request.Email,
+                    request.DeviceSessionId,
+                    request.CardNumber,
+                    request.ExpirationYear,
+                    request.ExpirationMonth,
+                    request.Cvv2,
+                    request.OrderId));
+                return result.ToActionResult();
             }
             catch (Exception ex)
             {

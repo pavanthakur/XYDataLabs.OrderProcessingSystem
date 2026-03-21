@@ -1,7 +1,9 @@
-﻿using XYDataLabs.OrderProcessingSystem.Application.DTO;
-using XYDataLabs.OrderProcessingSystem.Application.Interfaces;
-using XYDataLabs.OrderProcessingSystem.Domain.Entities;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
+using XYDataLabs.OrderProcessingSystem.API.Extensions;
+using XYDataLabs.OrderProcessingSystem.Application.CQRS;
+using XYDataLabs.OrderProcessingSystem.Application.DTO;
+using XYDataLabs.OrderProcessingSystem.Application.Features.Orders.Commands;
+using XYDataLabs.OrderProcessingSystem.Application.Features.Orders.Queries;
 
 namespace XYDataLabs.OrderProcessingSystem.API.Controllers
 {
@@ -12,15 +14,11 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
     [ApiController]
     public class OrderController : ControllerBase
     {
-        private readonly IOrderService _orderService;
+        private readonly IDispatcher _dispatcher;
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="OrderController"/> class.
-        /// </summary>
-        /// <param name="orderService">The order service.</param>
-        public OrderController(IOrderService orderService)
+        public OrderController(IDispatcher dispatcher)
         {
-            _orderService = orderService;
+            _dispatcher = dispatcher;
         }
 
         /// <summary>
@@ -31,42 +29,23 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
         /// <response code="201">Create order</response>
         [HttpPost]
         [ProducesResponseType(StatusCodes.Status201Created)]
-        public async Task<ActionResult<OrderDto>> CreateOrder(CreateOrderRequestDto createOrderRequestDto)
+        public async Task<ActionResult> CreateOrder(CreateOrderRequestDto createOrderRequestDto)
         {
-            try
-            {
-                var order = await _orderService.CreateOrderAsync(createOrderRequestDto.CustomerId, createOrderRequestDto.ProductIds);
-                return CreatedAtAction(nameof(CreateOrder), new { id = order.OrderId }, order);
-            }
-            catch (FluentValidation.ValidationException ex)
-            {
-                return BadRequest(ex.Message);
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(ex.Message);
-            }
+            var result = await _dispatcher.SendAsync(
+                new CreateOrderCommand(createOrderRequestDto.CustomerId, createOrderRequestDto.ProductIds));
+            return result.ToCreatedResult(nameof(CreateOrder), new { id = result.Value?.OrderId });
         }
 
         /// <summary>
         /// Endpoint to retrieve details for a specific order, including the total price
         /// </summary>
-        /// <remarks>This is the first step to 
-        /// retrieve a specific Order</remarks>  
         /// <param name="id">Order id</param>
         /// <returns>Order</returns>
         [HttpGet("{id}", Name = nameof(GetOrderDetailsById))]
-        public async Task<ActionResult<OrderDto>> GetOrderDetailsById(int id)
+        public async Task<ActionResult> GetOrderDetailsById(int id)
         {
-            try
-            {
-                var order = await _orderService.GetOrderDetailsAsync(id);
-                return Ok(order);
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(ex.Message);
-            }
+            var result = await _dispatcher.QueryAsync(new GetOrderDetailsQuery(id));
+            return result.ToActionResult();
         }
     }
 }

@@ -1,14 +1,17 @@
 using AutoMapper;
 using XYDataLabs.OrderProcessingSystem.API.Middleware;
 using XYDataLabs.OrderProcessingSystem.Application;
+using XYDataLabs.OrderProcessingSystem.Infrastructure;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
 using Serilog;
 using Serilog.Events;
 using Serilog.Sinks.ApplicationInsights.TelemetryConverters;
 using System.Reflection;
-using XYDataLabs.OrderProcessingSystem.Utilities;
+using XYDataLabs.OrderProcessingSystem.SharedKernel;
 using Microsoft.Extensions.Configuration;
+using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
+using XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData;
 using Microsoft.ApplicationInsights.Extensibility;
 using System.Text.RegularExpressions;
 using XYDataLabs.OrderProcessingSystem.Application.Utilities;
@@ -143,6 +146,7 @@ builder.Services.AddCors(options =>
     });
 });
 
+builder.InjectInfrastructureDependencies();
 builder.InjectApplicationDependencies();
 
 builder.Services.AddControllers();
@@ -274,6 +278,11 @@ using (var scope = app.Services.CreateScope())
 {
     try
     {
+        // Apply migrations locally/Docker; skip on Azure (managed via pipelines)
+        var dbContext = scope.ServiceProvider.GetRequiredService<OrderProcessingSystemDbContext>();
+        var isAzureRuntime = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME"));
+        DbInitializer.Initialize(dbContext, applyMigrations: !isAzureRuntime);
+
         var appMasterData = scope.ServiceProvider.GetRequiredService<AppMasterData>();
         Log.Information("Database initialized and AppMasterData loaded successfully during startup");
     }

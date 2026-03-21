@@ -22,7 +22,7 @@ COPY ["XYDataLabs.OrderProcessingSystem.API/XYDataLabs.OrderProcessingSystem.API
 COPY ["XYDataLabs.OrderProcessingSystem.Application/XYDataLabs.OrderProcessingSystem.Application.csproj", "XYDataLabs.OrderProcessingSystem.Application/"]
 COPY ["XYDataLabs.OrderProcessingSystem.Domain/XYDataLabs.OrderProcessingSystem.Domain.csproj", "XYDataLabs.OrderProcessingSystem.Domain/"]
 COPY ["XYDataLabs.OrderProcessingSystem.Infrastructure/XYDataLabs.OrderProcessingSystem.Infrastructure.csproj", "XYDataLabs.OrderProcessingSystem.Infrastructure/"]
-COPY ["XYDataLabs.OrderProcessingSystem.Utilities/XYDataLabs.OrderProcessingSystem.Utilities.csproj", "XYDataLabs.OrderProcessingSystem.Utilities/"]
+COPY ["XYDataLabs.OrderProcessingSystem.SharedKernel/XYDataLabs.OrderProcessingSystem.SharedKernel.csproj", "XYDataLabs.OrderProcessingSystem.SharedKernel/"]
 COPY ["XYDataLabs.OpenPayAdapter/XYDataLabs.OpenPayAdapter.csproj", "XYDataLabs.OpenPayAdapter/"]
 
 # Restore dependencies
@@ -51,7 +51,7 @@ COPY ["XYDataLabs.OrderProcessingSystem.API/XYDataLabs.OrderProcessingSystem.API
 COPY ["XYDataLabs.OrderProcessingSystem.Application/XYDataLabs.OrderProcessingSystem.Application.csproj", "../XYDataLabs.OrderProcessingSystem.Application/"]
 COPY ["XYDataLabs.OrderProcessingSystem.Domain/XYDataLabs.OrderProcessingSystem.Domain.csproj", "../XYDataLabs.OrderProcessingSystem.Domain/"]
 COPY ["XYDataLabs.OrderProcessingSystem.Infrastructure/XYDataLabs.OrderProcessingSystem.Infrastructure.csproj", "../XYDataLabs.OrderProcessingSystem.Infrastructure/"]
-COPY ["XYDataLabs.OrderProcessingSystem.Utilities/XYDataLabs.OrderProcessingSystem.Utilities.csproj", "../XYDataLabs.OrderProcessingSystem.Utilities/"]
+COPY ["XYDataLabs.OrderProcessingSystem.SharedKernel/XYDataLabs.OrderProcessingSystem.SharedKernel.csproj", "../XYDataLabs.OrderProcessingSystem.SharedKernel/"]
 COPY ["XYDataLabs.OpenPayAdapter/XYDataLabs.OpenPayAdapter.csproj", "../XYDataLabs.OpenPayAdapter/"]
 
 RUN dotnet restore "XYDataLabs.OrderProcessingSystem.API.csproj"

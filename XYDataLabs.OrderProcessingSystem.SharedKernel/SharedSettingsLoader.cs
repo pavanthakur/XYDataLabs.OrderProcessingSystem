@@ -3,7 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Azure.Identity;
 using System;
 
-namespace XYDataLabs.OrderProcessingSystem.Utilities
+namespace XYDataLabs.OrderProcessingSystem.SharedKernel
 {
     /// <summary>
     /// Provides helpers for loading shared configuration and binding strongly-typed ApiSettings

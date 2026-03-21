@@ -1,4 +1,4 @@
-namespace XYDataLabs.OrderProcessingSystem.Utilities
+namespace XYDataLabs.OrderProcessingSystem.SharedKernel
 {
     /// <summary>
     /// Application-wide constants and configuration keys.

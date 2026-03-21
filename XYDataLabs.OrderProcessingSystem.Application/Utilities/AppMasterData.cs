@@ -1,15 +1,15 @@
-﻿using XYDataLabs.OrderProcessingSystem.Domain.Entities;
-using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
+﻿using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
+using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.Utilities
 {
     public class AppMasterData
     {
-        private readonly OrderProcessingSystemDbContext _dbContext;
+        private readonly IAppDbContext _dbContext;
         private IReadOnlyList<PaymentProvider> _paymentProviders = new List<PaymentProvider>().AsReadOnly();
 
-        public AppMasterData(OrderProcessingSystemDbContext dbContext)
+        public AppMasterData(IAppDbContext dbContext)
         {
             _dbContext = dbContext;
             InitializeData();

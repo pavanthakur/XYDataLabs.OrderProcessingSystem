@@ -1,9 +1,10 @@
+using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
 {
-    public class OrderProcessingSystemDbContext : DbContext
+    public class OrderProcessingSystemDbContext : DbContext, IAppDbContext
     {
         public OrderProcessingSystemDbContext()
         {

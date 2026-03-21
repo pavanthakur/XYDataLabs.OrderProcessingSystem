@@ -26,7 +26,7 @@ Azure App Service Deployment (Monolith)
 - `XYDataLabs.OrderProcessingSystem.Application` - Use cases and DTOs
 - `XYDataLabs.OrderProcessingSystem.Domain` - Core entities
 - `XYDataLabs.OrderProcessingSystem.Infrastructure` - Data access
-- `XYDataLabs.OrderProcessingSystem.Utilities` - Shared utilities
+- `XYDataLabs.OrderProcessingSystem.SharedKernel` - Shared kernel / cross-cutting concerns
 - `XYDataLabs.OpenPayAdapter` - Payment integration
 
 **Status:** ✅ Working, deployed, monitored

@@ -1,7 +1,7 @@
 ﻿using AutoMapper;
 using FluentValidation;
+using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
-using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -11,7 +11,7 @@ namespace XYDataLabs.OrderProcessingSystem.UnitTest.TestBase
 {
     public class OrderProcessingSystemTestBase<T1> where T1 : class
     {
-        protected Mock<OrderProcessingSystemDbContext> MockDbContext { get; private set; }
+        protected Mock<IAppDbContext> MockDbContext { get; private set; }
         protected Mock<DbSet<Customer>> MockCustomerDbSet { get; private set; }
         protected Mock<DbSet<Order>> MockOrderDbSet { get; private set; }
         protected Mock<DbSet<Product>> MockProductDbSet { get; private set; }
@@ -23,7 +23,7 @@ namespace XYDataLabs.OrderProcessingSystem.UnitTest.TestBase
         public OrderProcessingSystemTestBase()
         {
             // Initialize Mock DbContext
-            MockDbContext = new Mock<OrderProcessingSystemDbContext>();
+            MockDbContext = new Mock<IAppDbContext>();
             MockLogger = new Mock<ILogger<T1>>();
             MockMapper = new Mock<IMapper>();
 

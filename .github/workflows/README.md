@@ -84,14 +84,14 @@ git push origin dev  # Deploys both API and UI to dev environment
 - `XYDataLabs.OrderProcessingSystem.Application/**`
 - `XYDataLabs.OrderProcessingSystem.Domain/**`
 - `XYDataLabs.OrderProcessingSystem.Infrastructure/**`
-- `XYDataLabs.OrderProcessingSystem.Utilities/**`
+- `XYDataLabs.OrderProcessingSystem.SharedKernel/**`
 
 **UI Workflow** (`deploy-ui-to-azure.yml`) triggers on changes to:
 - `XYDataLabs.OrderProcessingSystem.UI/**`
 - `XYDataLabs.OrderProcessingSystem.Application/**`
 - `XYDataLabs.OrderProcessingSystem.Domain/**`
 - `XYDataLabs.OrderProcessingSystem.Infrastructure/**`
-- `XYDataLabs.OrderProcessingSystem.Utilities/**`
+- `XYDataLabs.OrderProcessingSystem.SharedKernel/**`
 
 **Docker Workflow** (`docker-health.yml`) triggers on:
 - Any push to `main` branch

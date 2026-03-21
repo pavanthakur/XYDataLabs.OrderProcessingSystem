@@ -54,7 +54,7 @@ Monolithic Application on Azure App Service
 3. `XYDataLabs.OrderProcessingSystem.Application` - Business logic
 4. `XYDataLabs.OrderProcessingSystem.Domain` - Entities
 5. `XYDataLabs.OrderProcessingSystem.Infrastructure` - Data access
-6. `XYDataLabs.OrderProcessingSystem.Utilities` - Shared utilities
+6. `XYDataLabs.OrderProcessingSystem.SharedKernel` - Shared kernel / cross-cutting concerns
 7. `XYDataLabs.OpenPayAdapter` - Payment adapter
 
 ### Current Environment Status

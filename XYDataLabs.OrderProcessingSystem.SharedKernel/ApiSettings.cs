@@ -1,4 +1,4 @@
-﻿namespace XYDataLabs.OrderProcessingSystem.Utilities
+﻿namespace XYDataLabs.OrderProcessingSystem.SharedKernel
 {
     public class ApiSettingsSection
     {

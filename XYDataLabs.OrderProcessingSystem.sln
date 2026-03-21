@@ -51,7 +51,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Configuration", "Configurat
 		Resources\Configuration\sharedsettings.dev.json = Resources\Configuration\sharedsettings.dev.json
 		Resources\Configuration\sharedsettings.local.json = Resources\Configuration\sharedsettings.local.json
 		Resources\Configuration\sharedsettings.prod.json = Resources\Configuration\sharedsettings.prod.json
-		Resources\Configuration\sharedsettings.uat.json = Resources\Configuration\sharedsettings.uat.json
+		Resources\Configuration\sharedsettings.stg.json = Resources\Configuration\sharedsettings.stg.json
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Docker", "Docker", "{E1A8B2C7-4D5F-6789-ABCD-123456789DE3}"
@@ -60,7 +60,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Docker", "Docker", "{E1A8B2
 		Resources\Docker\docker-compose.database.yml = Resources\Docker\docker-compose.database.yml
 		Resources\Docker\docker-compose.dev.yml = Resources\Docker\docker-compose.dev.yml
 		Resources\Docker\docker-compose.prod.yml = Resources\Docker\docker-compose.prod.yml
-		Resources\Docker\docker-compose.uat.yml = Resources\Docker\docker-compose.uat.yml
+		Resources\Docker\docker-compose.stg.yml = Resources\Docker\docker-compose.stg.yml
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Azure-Deployment", "Azure-Deployment", "{E1A8B2C8-4D5F-6789-ABCD-123456789DE4}"
@@ -209,7 +209,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Technical-Enhancements", "T
 		Documentation\05-Self-Learning\TODO\Technical-Enhancements\05_DEVELOPMENT_WORKFLOW_INSIGHTS.md = Documentation\05-Self-Learning\TODO\Technical-Enhancements\05_DEVELOPMENT_WORKFLOW_INSIGHTS.md
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XYDataLabs.OrderProcessingSystem.Utilities", "XYDataLabs.OrderProcessingSystem.Utilities\XYDataLabs.OrderProcessingSystem.Utilities.csproj", "{DFC0BB5F-D671-DE7D-4A5D-D10E77984910}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XYDataLabs.OrderProcessingSystem.SharedKernel", "XYDataLabs.OrderProcessingSystem.SharedKernel\XYDataLabs.OrderProcessingSystem.SharedKernel.csproj", "{DFC0BB5F-D671-DE7D-4A5D-D10E77984910}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Archive", "Archive", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
 EndProject

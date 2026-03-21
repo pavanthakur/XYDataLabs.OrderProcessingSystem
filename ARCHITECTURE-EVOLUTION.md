@@ -62,7 +62,7 @@ XYDataLabs.OrderProcessingSystem.sln
 ├── XYDataLabs.OrderProcessingSystem.Application  (Business Logic)
 ├── XYDataLabs.OrderProcessingSystem.Domain       (Entities)
 ├── XYDataLabs.OrderProcessingSystem.Infrastructure (Data Access)
-├── XYDataLabs.OrderProcessingSystem.Utilities    (Shared)
+├── XYDataLabs.OrderProcessingSystem.SharedKernel  (Shared)
 └── XYDataLabs.OpenPayAdapter                     (Payment Integration)
 ```
 
@@ -167,7 +167,7 @@ XYDataLabs.OrderProcessingSystem.sln
 ├── XYDataLabs.OrderProcessingSystem.Application      (Shared)
 ├── XYDataLabs.OrderProcessingSystem.Domain           (Shared)
 ├── XYDataLabs.OrderProcessingSystem.Infrastructure   (Shared)
-├── XYDataLabs.OrderProcessingSystem.Utilities        (Shared)
+├── XYDataLabs.OrderProcessingSystem.SharedKernel     (Shared)
 └── XYDataLabs.OpenPayAdapter                         (Shared)
 ```
 

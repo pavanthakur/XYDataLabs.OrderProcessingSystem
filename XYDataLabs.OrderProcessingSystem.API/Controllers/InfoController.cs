@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using XYDataLabs.OrderProcessingSystem.Utilities;
+using XYDataLabs.OrderProcessingSystem.SharedKernel;
 
 namespace XYDataLabs.OrderProcessingSystem.API.Controllers
 {
