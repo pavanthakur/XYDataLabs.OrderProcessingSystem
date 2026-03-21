@@ -217,6 +217,8 @@ XYDataLabs.OrderProcessingSystem.sln
 - `TenantValidationBehavior<TRequest, TResult>` — CQRS pipeline behavior enforcing tenant consistency across all requests
 - `AuditLog` table (tenant-scoped) with structured entries for create/update/delete operations
 - Structured logging enrichment: `TenantId`, `TraceId`, request name on every log line
+- **Problem Details (RFC 9457)** — standardized error responses (`type`, `title`, `status`, `detail`, `traceId`, `tenantId`) on all endpoints
+- **Global exception middleware** — catch-all that converts unhandled exceptions → `ProblemDetails` (no stack traces in production)
 - Security headers middleware:
   - `X-Content-Type-Options: nosniff`
   - `X-Frame-Options: DENY`
@@ -231,7 +233,7 @@ XYDataLabs.OrderProcessingSystem.sln
 
 ### Outcome
 
-Secure, observable, tenant-enforced system ready for event-driven decoupling.
+Secure, observable, tenant-enforced system with standardized error handling — ready for event-driven decoupling.
 
 ---
 
@@ -282,18 +284,21 @@ Secure, observable, tenant-enforced system ready for event-driven decoupling.
 - **Domain Events** — `OrderCreatedDomainEvent`, `PaymentProcessedDomainEvent`
 - **Integration Events** — `OrderCreatedIntegrationEvent`, `InventoryReservedIntegrationEvent`, `NotificationRequestedIntegrationEvent`
 - **Outbox Pattern** — `OutboxMessages` table, transaction-safe event storage (same DB transaction as entity writes)
+- **Inbox Pattern** — `InboxMessages` table for idempotent consumers (deduplication by `MessageId` before processing)
 - **Background Publisher** — `IHostedService` that polls `OutboxMessages` and dispatches to the event bus
 - **Event Dispatcher** — in-memory implementation (pluggable interface; swapped to Azure Service Bus in Phase 10)
+- **Event Versioning** — envelope with `SchemaVersion` field; convention: `OrderCreatedV1` → `OrderCreatedV2` with backward-compatible projection
 
 ### Rules
 
 - Events are **immutable** value objects — never modified after creation
 - Outbox writes in the **same transaction** as the domain change (no dual-write)
-- Background publisher is **idempotent** — consumers must handle duplicate delivery
+- Background publisher is **idempotent** — Inbox table deduplicates by `MessageId` before handler execution
+- **Event schema changes** must be backward-compatible (additive fields only; breaking changes = new version)
 
 ### Outcome
 
-Loose coupling, async workflows, and a microservice-ready event backbone.
+Loose coupling, async workflows, idempotent delivery, and a microservice-ready event backbone with versioned schemas.
 
 ---
 
@@ -340,11 +345,11 @@ Loose coupling, async workflows, and a microservice-ready event backbone.
 │              │   (Shared — temp)   │                                 │
 │              └─────────────────────┘                                 │
 │                                                                      │
-│  Managed by Docker Compose (6 containers)                            │
+│  Managed by Docker Compose (7 containers)                            │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### Solution Structure (10 Projects)
+### Solution Structure (11 Projects)
 
 ```
 XYDataLabs.OrderProcessingSystem.sln
@@ -361,6 +366,7 @@ XYDataLabs.OrderProcessingSystem.sln
 ├── XYDataLabs.OrderProcessingSystem.NotificationsAPI (NEW - Notifications)
 │   └── Controllers/
 │       └── NotificationController.cs
+├── XYDataLabs.OrderProcessingSystem.Contracts        (NEW - Shared event schemas + API DTOs)
 ├── XYDataLabs.OrderProcessingSystem.UI               (Existing - Updated routing)
 ├── XYDataLabs.OrderProcessingSystem.Application      (Shared — temporary)
 ├── XYDataLabs.OrderProcessingSystem.Domain           (Shared — temporary)
@@ -404,6 +410,11 @@ services:
     image: mcr.microsoft.com/mssql/server:2022-latest
     ports:
       - "1433:1433"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
 ```
 
 ### Communication Rules (Critical)
@@ -424,13 +435,33 @@ services:
 - Fault isolation — one service failure doesn't crash entire system
 - Production pattern — same as Azure Container Apps architecture
 - Service-level observability — per-service metrics and tracing
+- Resilient inter-service communication via Polly from day one
 
 ⚠️ **Challenges:**
-- Increased complexity (6 containers vs 2)
+- Increased complexity (7 containers vs 2, including Redis)
 - Network latency between services
 - Distributed transactions complexity
-- Requires resilience patterns (retries, circuit breakers)
 - Docker Compose orchestration required
+
+### Gateway Cross-Cutting Concerns
+
+- **CORS** — policy per downstream service, configured in YARP
+- **Rate limiting** — `System.Threading.RateLimiting` per tenant/client at gateway level
+- **Request/response logging** — structured audit trail at gateway entry point
+- **Request size limits** — prevent oversized payloads reaching downstream services
+- **Authentication prep** — token forwarding middleware (prepares for Phase 10 JWT)
+
+### Resilience (Polly v8 Basics)
+
+- `HttpClientFactory` with named/typed clients for inter-service HTTP calls
+- **Retry** — exponential backoff for transient HTTP failures
+- **Circuit breaker** — prevent cascade failures when a downstream service is unhealthy
+- **Timeout** — per-request timeout to avoid hanging calls
+
+### Operational Concerns
+
+- **Graceful shutdown** — `IHostApplicationLifetime` to drain in-flight requests before container stops
+- **Structured concurrency** — `Task.WhenAll` for parallel scatter-gather queries through gateway
 
 ### Outcome
 
@@ -486,6 +517,11 @@ Working microservices locally with correct event-based communication model.
 │  │  (JWT + OIDC)        │         │  (Logging & Metrics) │          │
 │  └──────────────────────┘         └──────────────────────┘          │
 │                                                                      │
+│  ┌──────────────────────┐                                            │
+│  │  Azure Cache for     │                                            │
+│  │  Redis (Private EP)  │                                            │
+│  └──────────────────────┘                                            │
+│                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -494,9 +530,10 @@ Working microservices locally with correct event-based communication model.
 - Deploy to **Azure Container Apps** (managed environment, auto-scaling, scale-to-zero)
 - **Azure Container Registry (ACR)** — build and push container images
 - **Azure Service Bus** — replace in-memory event bus with durable topics + subscriptions
-- **Observability** — App Insights + OpenTelemetry distributed tracing across all services
+- **Azure Cache for Redis** — managed Redis replacing local container; used for distributed cache and session state
+- **Observability** — App Insights + OpenTelemetry distributed tracing across all services; `traceparent` propagated through Service Bus message headers
 - **Secrets** — Azure Key Vault with managed identity (no credentials in config)
-- **Private networking** — VNet integration, private endpoints for SQL and Key Vault
+- **Private networking** — VNet integration, private endpoints for SQL, Key Vault, and Redis
 
 ### Security
 
@@ -512,11 +549,22 @@ Working microservices locally with correct event-based communication model.
 - Each service subscribes to relevant topics
 - Dead-letter queues for failed message processing
 
+### Dead-Letter Queue (DLQ) Handling
+
+- **Alert threshold** — Azure Monitor alert when DLQ depth exceeds configurable limit
+- **Reprocess endpoint** — admin API to replay dead-lettered messages back to source topic
+- **Poison message quarantine** — messages that fail reprocessing N times are moved to a poison store for manual review
+
+### Advanced Deployment Patterns
+
+- **Blue-green deployments** — zero-downtime with ACA revisions; switch traffic after health check passes
+- **Canary releases** — gradual traffic shifting (e.g. 10% → 50% → 100%) with automatic rollback on error-rate spike
+
 > **Operational Detail:** See [ACA-Migration-Plan.md](./Documentation/04-Enterprise-Architecture/ACA-Migration-Plan.md) for the 13-phase operational runbook covering governance, identity hardening, ACR setup, canary deployments, and decommissioning.
 
 ### Outcome
 
-Secure, scalable cloud-native microservices with durable messaging.
+Secure, scalable cloud-native microservices with durable messaging, managed Redis, DLQ handling, and zero-downtime deployments.
 
 ---
 
@@ -572,51 +620,62 @@ Secure, scalable cloud-native microservices with durable messaging.
 - If Orders needs inventory status, it subscribes to `InventoryUpdated` events and maintains a local projection
 - Cross-service reads use lightweight HTTP queries (via gateway) for real-time needs
 
+### Distributed Workflow Strategy
+
+- **Default: Choreography** — services react to events independently (e.g. `OrderCreated` → Inventory reserves → Notification sends)
+- **Escalation: Saga / Process Manager** — introduce only when a workflow requires compensating actions across 3+ services (e.g. order fulfilment with payment rollback)
+- **Decision criteria:** If a failure in step N requires undoing steps 1…N-1, use a Saga; otherwise choreography is sufficient
+
+### Database Migration Strategy
+
+- **EF Core bundles** — `dotnet ef migrations bundle` produces a self-contained executable for each service DB
+- **Init containers** — ACA init container runs the migration bundle before the app container starts
+- **Rollback** — migration bundles support `--target` for reverting to a specific migration; never use destructive migrations in production
+
 ### Outcome
 
-Independent, fully decoupled services with clear data ownership boundaries.
+Independent, fully decoupled services with clear data ownership, a documented choreography-vs-saga decision framework, and automated database migrations.
 
 ---
 
 ## Phase 12 — Platform Engineering & DevOps 📅
 
-**Focus:** Operational excellence and production-grade infrastructure.
+**Focus:** Operational excellence — configuration, observability dashboards, and advanced resilience.
 
 ### Key Deliverables
 
 - **Central configuration** — Azure App Configuration for feature flags and shared settings
 - **Secrets management** — Azure Key Vault with RBAC (migrate from access policies)
-- **Resilience** — Polly v8 integration (retry, circuit breaker, timeout, bulkhead)
 - **Observability dashboards** — Azure Monitor workbooks with per-service metrics, SLIs/SLOs
 - **Distributed tracing** — full correlation across Service Bus messages and HTTP requests
 - **Per-service CI/CD pipelines** — independent build/test/deploy per service
 - **Health check gates** — deployment blocked if `/health/ready` fails post-deploy
+- **Advanced Polly** — bulkhead isolation + fallback policies (retry + circuit breaker already in Phase 9)
 
 ### Outcome
 
-Scalable, manageable production platform with enterprise-grade operations.
+Scalable, manageable production platform with enterprise-grade operations and advanced resilience.
 
 ---
 
-## Phase 13 — Aspire & Final Maturity 📅
+## Phase 13 — Aspire & Developer Experience 📅
 
-**Focus:** Developer experience + system maturity with .NET Aspire.
+**Focus:** Developer inner-loop experience with .NET Aspire.
 
 ### Key Deliverables
 
 - Adopt **.NET Aspire** for local orchestration and service composition
 - **AppHost project** — replaces Docker Compose for local development
+- **Resource definitions** — `builder.AddRedis()`, `builder.AddSqlServer()`, `builder.AddProject<OrdersAPI>()` etc.
 - **Service discovery** — Aspire-managed service resolution (no hardcoded URLs)
 - **Dashboard** — Aspire dashboard for local traces, logs, and metrics
-- Advanced deployment patterns:
-  - **Blue-green deployments** — zero-downtime with ACA revisions
-  - **Canary releases** — gradual traffic shifting
+- **Integration tests** — `DistributedApplicationTestingBuilder` for end-to-end tests against the Aspire graph
 - Full end-to-end trace correlation across all services
 - **Aspire manifest** → ACA deployment via `azd` or Bicep
 
 ### Outcome
 
-Enterprise-grade, cloud-native system with excellent developer inner-loop experience.
+Enterprise-grade, cloud-native system with excellent developer inner-loop experience and integration-tested service graph.
 
 ---
 
@@ -697,6 +756,14 @@ Enterprise-grade, cloud-native system with excellent developer inner-loop experi
 - **MongoDB is NOT the source of truth** — SQL Server is authoritative
 - **Eventual consistency** — reads may lag behind writes by seconds
 
+### Read Model Versioning
+
+- Every MongoDB document includes a `_schemaVersion` field (integer)
+- Projection handlers write the current schema version; older documents coexist with newer ones
+- **Backward-compatible projections** — query code handles missing fields with sensible defaults
+- On major schema change, a Hangfire job rebuilds the projection from event history, bumping `_schemaVersion`
+- **Projection lag metric** — OTel gauge tracking seconds between last SQL write and corresponding MongoDB update; alert if > threshold
+
 ### Outcome
 
 True CQRS with read/write separation, high-performance queries via MongoDB, scalable read layer, and eventually consistent system.
@@ -707,13 +774,13 @@ True CQRS with read/write separation, high-performance queries via MongoDB, scal
 
 | Feature | Baseline (Monolith) | Phase 9 (YARP Local) | Phase 10 (ACA Cloud) | Phase 14 (Final State) |
 |---------|--------------------|--------------------|--------------------|-----------------------|
-| **Deployment** | 2 App Services | Docker Compose (6 containers) | ACA (auto-scaling) | ACA + MongoDB |
+| **Deployment** | 2 App Services | Docker Compose (7 containers) | ACA (auto-scaling) | ACA + MongoDB |
 | **Communication** | In-process | Events + HTTP | Service Bus + HTTP | Service Bus + HTTP |
 | **Data** | Single shared DB | Single shared DB | Single shared DB | DB per service + MongoDB |
 | **Scaling** | Vertical only | Per-container | Per-service auto-scale | Per-service + read replicas |
 | **Identity** | Key Vault (basic) | N/A (local) | Entra ID + JWT + MI | Entra ID + JWT + MI |
 | **Observability** | App Insights | OTel + local traces | OTel + Azure Monitor | Full distributed traces |
-| **Resilience** | None | Basic retry | Polly + circuit breakers | Polly + dead-letter + retry |
+| **Resilience** | None | Polly basics (retry + CB) | Polly + advanced + DLQ | Polly + dead-letter + retry |
 | **Dev Experience** | VS F5 | Docker Compose | ACA deploy | .NET Aspire |
 
 ---
@@ -739,7 +806,7 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
      │
      ├── Phase 11    ─── 📅 Split databases (each service owns its data)
      │
-     ├── Phase 12    ─── 📅 Platform engineering (Polly, CI/CD, dashboards)
+     ├── Phase 12    ─── 📅 Platform engineering (App Config, CI/CD, dashboards)
      │
      ├── Phase 13    ─── 📅 Aspire orchestration + advanced deployments
      │
@@ -775,26 +842,38 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 ### Phase 7-8 📅 Hardening & Events
 - [ ] Tenant enforcement + audit logging
 - [ ] Security headers + liveness/readiness health checks
+- [ ] ProblemDetails (RFC 9457) + global exception middleware
 - [ ] Domain events + integration events
 - [ ] Outbox pattern + background event publisher
+- [ ] Inbox pattern (idempotent consumers) + event versioning
 
 ### Phase 9-10 📅 Microservices & Cloud
 - [ ] YARP reverse proxy + service decomposition
-- [ ] Docker Compose orchestration
+- [ ] Gateway cross-cutting (CORS, rate limiting, request logging, size limits)
+- [ ] SharedContracts project for inter-service event schemas + DTOs
+- [ ] Docker Compose orchestration (including Redis)
+- [ ] Polly v8 basics (retry, circuit breaker, timeout) from day one
+- [ ] Graceful shutdown + structured concurrency
 - [ ] Azure Container Apps deployment
-- [ ] Azure Service Bus messaging backbone
+- [ ] Azure Service Bus messaging backbone + DLQ handling
+- [ ] Azure Cache for Redis (managed)
 - [ ] Azure Entra ID + JWT authentication
+- [ ] Blue-green + canary deployments via ACA revisions
 
 ### Phase 11-12 📅 Autonomy & Operations
 - [ ] Database per service + data ownership
-- [ ] Resilience patterns (Polly)
+- [ ] Choreography vs Saga decision framework
+- [ ] Database migration strategy (EF bundles + init containers)
 - [ ] Per-service CI/CD pipelines
 - [ ] Observability dashboards + SLOs
+- [ ] Advanced Polly (bulkhead, fallback)
+- [ ] Azure App Configuration + feature flags
 
 ### Phase 13-14 📅 Maturity & CQRS
-- [ ] .NET Aspire orchestration + service discovery
-- [ ] Blue-green / canary deployments
+- [ ] .NET Aspire orchestration + resource definitions + service discovery
+- [ ] Aspire integration tests (`DistributedApplicationTestingBuilder`)
 - [ ] MongoDB read models + projection handlers
+- [ ] Read model versioning (`_schemaVersion`) + projection lag metric
 - [ ] Hangfire background jobs for projection rebuilds
 
 ---
@@ -811,7 +890,10 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 | **Identity** | Azure Entra ID + JWT + Managed Identity |
 | **Multi-tenancy** | Enforced at every layer (API, events, DB, MongoDB) |
 | **Observability** | OpenTelemetry + App Insights + Azure Monitor dashboards |
-| **Resilience** | Polly (retry, circuit breaker, timeout) + dead-letter queues |
+| **Resilience** | Polly (retry, circuit breaker, timeout, bulkhead) + dead-letter queues |
+| **Cache** | Azure Cache for Redis (distributed cache + session state) |
+| **Error Handling** | ProblemDetails (RFC 9457) + global exception middleware |
+| **Events** | Versioned schemas (inbox + outbox) + choreography with Saga escalation |
 | **Orchestration** | .NET Aspire (local) + Azure Container Apps (cloud) |
 | **CI/CD** | Per-service GitHub Actions + health check deployment gates |
 | **Deployments** | Blue-green + canary via ACA revisions |
