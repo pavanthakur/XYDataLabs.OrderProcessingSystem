@@ -234,6 +234,8 @@ XYDataLabs.OrderProcessingSystem.sln
 - **Aggregate root** — `Order` entity with private constructor, `Create()` factory method returning `Result<Order>`
 - **State machine** — `Order` status transitions: `Created → Paid → Shipped → Delivered → Cancelled` with explicit transition methods (`Pay()`, `Ship()`, `Deliver()`, `Cancel()`) each returning `Result<T>` — invalid transitions return failure, never throw
 - **Value objects** — `Address` and `Money` as immutable `record` types with self-validation in constructor
+- **Strongly-typed IDs** — `OrderId`, `CustomerId`, `ProductId` as `readonly record struct` wrappers around `Guid`; eliminates parameter-swap bugs (`Guid orderId, Guid customerId` → `OrderId orderId, CustomerId customerId`); EF Core value converters for transparent persistence
+- **Optimistic concurrency** — `RowVersion` (`byte[]` / `[Timestamp]`) on `BaseAuditableEntity`; EF Core intercepts `DbUpdateConcurrencyException` in `SaveChangesAsync` → wraps as domain `ConcurrencyException`; command handlers catch and return `Result.Failure(Errors.Conflict)` with retry guidance
 - **Domain invariants** — enforced inside aggregate methods (e.g. cannot ship an unpaid order), returning `Result<T>.Failure` with descriptive `Error` — no exceptions for business rules
 
 ### Builds On
@@ -299,6 +301,7 @@ Secure, observable, tenant-enforced system with rich domain model, standardized 
 - **Event Dispatcher** — in-memory implementation (pluggable interface; swapped to Azure Service Bus in Phase 10)
 - **Event Versioning** — envelope with `SchemaVersion` field; convention: `OrderCreatedV1` → `OrderCreatedV2` with backward-compatible projection
 - **Parallel event handler execution** — `EventPublisher` dispatches all `IEventHandler<T>` via `Task.WhenAll`; partial failures collected into `AggregateException` — one handler failing does not skip remaining handlers
+- **Automatic domain event dispatch** — `SaveChangesAsync` override extracts `IDomainEvent`s from `ChangeTracker.Entries<Entity>()` after `base.SaveChangesAsync()` succeeds; events are either published in-process (Phase 8) or written to the Outbox table in the same transaction — ensures events only fire after successful persistence, never on rollback
 
 ### Rules
 
@@ -926,7 +929,8 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 - [ ] Tenant enforcement + audit logging
 - [ ] Security headers + liveness/readiness health checks
 - [ ] ProblemDetails (RFC 9457) + global exception middleware
-- [ ] DDD tactical patterns: aggregate root, state machine (`Order` status transitions), value objects (`Address`, `Money`), domain invariants via `Result<T>`
+- [ ] DDD tactical patterns: aggregate root, state machine (`Order` status transitions), value objects (`Address`, `Money`), strongly-typed IDs (`OrderId`, `CustomerId`), domain invariants via `Result<T>`
+- [ ] Optimistic concurrency — EF Core `RowVersion` + `ConcurrencyException` handling in command handlers
 - [ ] Domain events + integration events
 - [ ] Outbox pattern + background event publisher
 - [ ] Inbox pattern (idempotent consumers) + event versioning
@@ -1010,6 +1014,46 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 
 ---
 
+## Gap Analysis: Patterns Evaluated & Deferred
+
+_Patterns from industry reference architectures (Milan Jovanovic's Bookify, etc.) evaluated against the 14-phase plan. Items below were considered and deliberately deferred or excluded — documented here so the reasoning is preserved._
+
+### Deliberately Skipped (Not Needed)
+
+| Pattern | Why Skipped |
+|---------|------------|
+| **Explicit `IUnitOfWork` interface** (separate from DbContext) | `IAppDbContext` already serves this purpose — exposes `DbSet`s + `SaveChangesAsync()`. Adding a separate `IUnitOfWork` with only `SaveChangesAsync()` duplicates the abstraction without adding testability or flexibility. Both approaches are valid; this plan prefers one abstraction over two. Bookify's choice reflects MediatR conventions; our hand-rolled CQRS doesn't require it. |
+| **Repository per aggregate root** (generic `Repository<T>` base) | Handlers call `_dbContext.Orders.FindAsync()` directly — adding a repository wrapper introduces indirection without value in a monolith where EF Core already provides unit-of-work + change tracking. Repositories become useful in Phase 9 (module isolation) as per-module persistence boundaries; the plan already implies them there. Adding them earlier is premature abstraction. |
+| **Dapper for CQRS read side** (`ISqlConnectionFactory` + raw SQL for queries) | The read side currently targets the same SQL database with EF `AsNoTracking()` queries. Dapper's performance advantage matters at scale or with complex denormalized reads — neither applies until Phase 14 (MongoDB read models). Adding `ISqlConnectionFactory` now creates a second data-access path that must be maintained alongside EF Core with no measurable benefit. Phase 14's Cosmos DB read models achieve the CQRS read-side separation more completely. |
+| **`IConfigureNamedOptions<T>`** (for JWT Bearer setup) | Clean pattern for injecting `IOptions<T>` into authentication configuration, but Phase 10 (Entra ID + JWT) is the earliest it becomes relevant. Not worth a plan bullet — will be applied as an implementation detail when JWT auth is wired. |
+
+### Deferred to Later Phase (Will Add When Relevant)
+
+| Pattern | Deferred To | Why Not Now |
+|---------|-------------|-------------|
+| **Local Identity Provider (Keycloak)** | Phase 9 (Docker Compose) | Docker Compose infrastructure doesn't exist until Phase 9. Adding Keycloak before that means managing a standalone Docker dependency just for auth testing — unnecessary when Azure Entra ID is already configured for the deployed app. Phase 9's Docker Compose is the natural home for local Keycloak alongside the other service containers. |
+| **`DelegatingHandler` for external HTTP** (auto-inject auth tokens on outgoing calls) | Phase 9 (inter-service HTTP) | No inter-service HTTP calls exist until Phase 9 (YARP + microservices). The existing OpenPay adapter is a direct SDK call, not `HttpClient`. Phase 9's Polly v8 section (retry, circuit breaker, timeout) is where `HttpClientFactory` + `DelegatingHandler` patterns belong — they work together. |
+
+### Already Covered (Analysis Missed It)
+
+| Pattern | Where Covered |
+|---------|---------------|
+| **Value Objects** (`Money`, `Address`, etc.) | Phase 7 — DDD Tactical Patterns section |
+| **Factory methods + private constructors** | Phase 7 — "`Order` entity with private constructor, `Create()` factory method returning `Result<Order>`" |
+| **Entity state machine** (guard clauses returning `Result`) | Phase 7 — `Pay()`, `Ship()`, `Deliver()`, `Cancel()` each returning `Result<T>` |
+| **Bogus/Faker for seed data** | Already in codebase — `Bogus` package in Infrastructure project, used for dev data seeding |
+| **Domain event dispatch** | Phase 8 — Outbox pattern + automatic `SaveChangesAsync` dispatch via `ChangeTracker` |
+
+### Added After Gap Analysis
+
+| Pattern | Added To | Rationale |
+|---------|----------|----------|
+| **Optimistic concurrency** (EF `RowVersion` + `ConcurrencyException`) | Phase 7 | Genuine gap — any multi-tenant system with concurrent writes needs row versioning. Critical for Order aggregate where parallel requests (e.g., simultaneous `Pay()` and `Cancel()`) must be detected and failed safely. |
+| **Strongly-typed IDs** (`OrderId`, `CustomerId` as `readonly record struct`) | Phase 7 | Eliminates `Guid` parameter-swap bugs at compile time. Lightweight pattern (one-line record struct + EF value converter) with high safety payoff. Natural companion to Value Objects. |
+| **SaveChangesAsync domain event dispatch** (ChangeTracker extraction) | Phase 8 | Was implied by Outbox pattern but not explicitly documented. Made explicit: extract events from `ChangeTracker.Entries<Entity>()` after `base.SaveChangesAsync()` — ensures events only fire on successful persistence. |
+
+---
+
 ## References
 
 ### Documentation
@@ -1083,5 +1127,5 @@ All technical skills from a typical Azure .NET senior role are fully covered or 
 
 ---
 
-**Last Updated:** March 21, 2026  
+**Last Updated:** March 22, 2026  
 **Status:** Phases 1-6 Complete ✅ | Phase 7 Next 📅 | Phases 8-14 Planned 📅
