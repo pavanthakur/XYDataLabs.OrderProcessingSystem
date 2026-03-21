@@ -1,11 +1,14 @@
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 using Microsoft.EntityFrameworkCore;
 
 namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
 {
     public class OrderProcessingSystemDbContext : DbContext, IAppDbContext
     {
+        private readonly ITenantProvider? _tenantProvider;
+
         public OrderProcessingSystemDbContext()
         {
         }
@@ -13,6 +16,14 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
         public OrderProcessingSystemDbContext(DbContextOptions<OrderProcessingSystemDbContext> options)
         : base(options)
         {
+        }
+
+        public OrderProcessingSystemDbContext(
+            DbContextOptions<OrderProcessingSystemDbContext> options,
+            ITenantProvider tenantProvider)
+        : base(options)
+        {
+            _tenantProvider = tenantProvider;
         }
 
         // Existing DbSets
@@ -122,6 +133,48 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
             modelBuilder.Entity<CardTransaction>()
                 .Property(ct => ct.CreditCardCvv2)
                 .HasMaxLength(255); // Encrypted value will be longer
+
+            // ── Multi-tenancy global query filters ──
+            // BaseAuditableEntity descendants
+            modelBuilder.Entity<Customer>().HasQueryFilter(e => _tenantProvider == null || e.TenantId == _tenantProvider.TenantId);
+            modelBuilder.Entity<Order>().HasQueryFilter(e => _tenantProvider == null || e.TenantId == _tenantProvider.TenantId);
+            modelBuilder.Entity<Product>().HasQueryFilter(e => _tenantProvider == null || e.TenantId == _tenantProvider.TenantId);
+            modelBuilder.Entity<BillingCustomer>().HasQueryFilter(e => _tenantProvider == null || e.TenantId == _tenantProvider.TenantId);
+            modelBuilder.Entity<BillingCustomerKeyInfo>().HasQueryFilter(e => _tenantProvider == null || e.TenantId == _tenantProvider.TenantId);
+            modelBuilder.Entity<CardTransaction>().HasQueryFilter(e => _tenantProvider == null || e.TenantId == _tenantProvider.TenantId);
+            modelBuilder.Entity<PayinLog>().HasQueryFilter(e => _tenantProvider == null || e.TenantId == _tenantProvider.TenantId);
+            modelBuilder.Entity<PayinLogDetails>().HasQueryFilter(e => _tenantProvider == null || e.TenantId == _tenantProvider.TenantId);
+            modelBuilder.Entity<PaymentMethod>().HasQueryFilter(e => _tenantProvider == null || e.TenantId == _tenantProvider.TenantId);
+            modelBuilder.Entity<PaymentProvider>().HasQueryFilter(e => _tenantProvider == null || e.TenantId == _tenantProvider.TenantId);
+            modelBuilder.Entity<TransactionStatusHistory>().HasQueryFilter(e => _tenantProvider == null || e.TenantId == _tenantProvider.TenantId);
+
+            // BaseAuditableCreateEntity descendant
+            modelBuilder.Entity<OrderProduct>().HasQueryFilter(e => _tenantProvider == null || e.TenantId == _tenantProvider.TenantId);
+        }
+
+        public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            if (_tenantProvider is not null)
+            {
+                var tenantId = _tenantProvider.TenantId;
+
+                foreach (var entry in ChangeTracker.Entries())
+                {
+                    if (entry.State == EntityState.Added)
+                    {
+                        if (entry.Entity is BaseAuditableEntity auditable)
+                        {
+                            auditable.TenantId = tenantId;
+                        }
+                        else if (entry.Entity is BaseAuditableCreateEntity auditableCreate)
+                        {
+                            auditableCreate.TenantId = tenantId;
+                        }
+                    }
+                }
+            }
+
+            return await base.SaveChangesAsync(cancellationToken);
         }
     }
 }

@@ -1,7 +1,7 @@
 # Architecture Evolution: Monolith to Microservices
 
-**Last Updated:** January 26, 2026  
-**Current Status:** Phase 1 Complete, Ready for Phase 2
+**Last Updated:** March 21, 2026  
+**Current Status:** Phase 1 Complete (with CQRS modernization), Ready for Phase 2
 
 ---
 
@@ -52,17 +52,23 @@ This document tracks the architectural evolution of the XYDataLabs Order Process
 
 ```
 XYDataLabs.OrderProcessingSystem.sln
-├── XYDataLabs.OrderProcessingSystem.API          (Monolithic API)
-│   ├── Controllers/
-│   │   ├── OrderController.cs
-│   │   ├── CustomerController.cs
-│   │   └── InfoController.cs
+├── XYDataLabs.OrderProcessingSystem.API          (Composition Root)
+│   ├── Controllers/                              (Thin — IDispatcher only)
+│   ├── Extensions/ResultExtensions.cs            (Result<T> → ActionResult)
+│   ├── Middleware/
 │   └── Program.cs
+├── XYDataLabs.OrderProcessingSystem.Application  (Use Cases — CQRS)
+│   ├── Abstractions/IAppDbContext.cs
+│   ├── CQRS/                                     (Dispatcher, Behaviors)
+│   ├── Features/Customers/                       (Commands + Queries)
+│   ├── Features/Orders/                           (Commands + Queries)
+│   ├── Features/Payments/                         (Commands)
+│   ├── DTO/
+│   └── Validators/
+├── XYDataLabs.OrderProcessingSystem.Domain       (Entities — zero deps)
+├── XYDataLabs.OrderProcessingSystem.Infrastructure (EF Core, DbContext)
+├── XYDataLabs.OrderProcessingSystem.SharedKernel  (Result<T>, ApiResponse<T>)
 ├── XYDataLabs.OrderProcessingSystem.UI           (MVC Web App)
-├── XYDataLabs.OrderProcessingSystem.Application  (Business Logic)
-├── XYDataLabs.OrderProcessingSystem.Domain       (Entities)
-├── XYDataLabs.OrderProcessingSystem.Infrastructure (Data Access)
-├── XYDataLabs.OrderProcessingSystem.SharedKernel  (Shared)
 └── XYDataLabs.OpenPayAdapter                     (Payment Integration)
 ```
 
@@ -99,6 +105,82 @@ XYDataLabs.OrderProcessingSystem.sln
 
 - **API Swagger:** https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net/swagger
 - **UI:** https://pavanthakur-orderprocessing-ui-xyapp-dev.azurewebsites.net
+
+---
+
+## Internal Architecture Modernization (6 Phases)
+
+Independent of the Monolith → Microservices evolution above, the monolith's **internal code quality**
+is being incrementally improved through 6 phases to become Aspire-ready and production-hardened.
+
+| # | Phase | Focus | Status |
+|---|-------|-------|--------|
+| **1** | Structural Foundation | Utilities→SharedKernel rename, `Result<T>`, `IAppDbContext`, remove Application→Infrastructure dependency | ✅ **COMPLETE** |
+| **2** | Hand-Rolled CQRS | CQRS abstractions, Dispatcher, pipeline behaviors, 12 handlers, controller refactoring, old service deletion | ✅ **COMPLETE** |
+| **3** | Observability (OpenTelemetry) | `AddObservability()`, auto-instrumentation (HTTP/SQL/Runtime), App Insights + OTLP exporters, custom `ActivitySource`, correlation middleware | ✅ **COMPLETE** |
+| **4** | Multi-Tenancy Skeleton | `ITenantProvider`, `TenantId` on `BaseAuditableEntity`, EF global query filters, `X-Tenant-Id` header | ✅ **COMPLETE** |
+| **5** | Test Project Restructure | Split into Domain.Tests, Application.Tests, API.Tests, Integration.Tests (Testcontainers) | 📅 Planned |
+| **6** | Polish & Hardening | Redis `CachingBehavior`, API versioning `/api/v1/`, health checks, `CancellationToken`, `IOptions<T>` | 📅 Planned |
+
+### Phase 1 — Structural Foundation ✅
+- Renamed `Utilities` project → `SharedKernel` (project, .csproj refs, namespaces, .sln)
+- Added `Result<T>` + `Error` types in `SharedKernel/Results/`
+- Added `ApiResponse<T>` standard envelope
+- Added `IAppDbContext` interface in `Application/Abstractions/`
+- `OrderProcessingSystemDbContext` implements `IAppDbContext`
+- Changed all services: concrete DbContext → `IAppDbContext`
+- Removed Application → Infrastructure project reference
+- Moved DI wiring to API composition root
+
+### Phase 2 — Hand-Rolled CQRS ✅
+- CQRS abstractions: `ICommand<T>`, `IQuery<T>`, `ICommandHandler`, `IQueryHandler`, `IPipelineBehavior`, `IDispatcher`
+- `Dispatcher` — resolves handlers from DI, chains pipeline behaviors
+- `ValidationBehavior` — runs FluentValidation, returns `Result<T>.Failure` on errors
+- `LoggingBehavior` — structured logging with duration tracking
+- `CqrsServiceExtensions.AddCqrs()` — assembly-scanning auto-registration
+- 12 handlers: 7 Customer (Create, GetAll, GetById, GetByName, GetWithOrders, Update, Delete), 2 Order (CreateOrder, GetOrderDetails), 1 Payment (ProcessPayment), + info endpoint unchanged
+- All controllers refactored to thin `IDispatcher`-only delegates
+- `ResultExtensions` maps `Result<T>` → `ApiResponse<T>` → HTTP status codes
+- Old service layer deleted (ICustomerService, IOrderService, IOpenPayService, CustomerService, OrderService, OpenPayService, CustomerValidator, OrderValidator)
+- All 31 unit tests rewritten and passing
+- **Committed:** `85fdd46` on `dev` branch (March 21, 2026)
+
+### Phase 3 — Observability (OpenTelemetry) ✅
+- Added 8 NuGet packages to SharedKernel (7 OpenTelemetry + Serilog)
+- Created `AddObservability(serviceName, configuration, activitySourceNames)` extension in `SharedKernel/Observability/`
+- Auto-instrumentation: ASP.NET Core, HttpClient, SqlClient, Runtime metrics
+- Azure Monitor exporter (App Insights) + conditional OTLP exporter (Jaeger/Aspire)
+- Created 3 `ActivitySource` classes: `OrderProcessing.Orders`, `.Customers`, `.Payments`
+- Added activity spans to `CreateOrderCommandHandler` and `ProcessPaymentCommandHandler`
+- Created `CorrelationMiddleware` in SharedKernel — extracts `Activity.TraceId`, enriches Serilog `LogContext`, adds `X-Trace-Id` response header
+- Updated Serilog output templates: `{CorrelationId}` → `[{TraceId}]` in all 4 sharedsettings files
+- Wired API + UI `Program.cs` with `AddObservability()` and `CorrelationMiddleware`
+- Bumped `Microsoft.Extensions.DependencyInjection` + `Options.ConfigurationExtensions` to 9.0.0
+- Build: 0 errors, 31/31 tests passing
+
+### Phase 4 — Multi-Tenancy Skeleton ✅
+- `ITenantProvider` interface in `SharedKernel/Multitenancy/` (cross-cutting, avoids circular dependency)
+- `TenantId` property added to both `BaseAuditableEntity` and `BaseAuditableCreateEntity` — covers all 13 entities
+- EF Global Query Filters on all 13 entity `DbSet`s with `_tenantProvider == null ||` guard for design-time/test compat
+- `SaveChangesAsync` override auto-stamps `TenantId` on Added entities (both base classes)
+- `TenantMiddleware` extracts `X-Tenant-Id` header (default: `"default"`), stores in `HttpContext.Items`, enriches Serilog `LogContext`
+- `HeaderTenantProvider` reads tenant from `HttpContext.Items` at DI scope resolution
+- AppMasterData uses `.IgnoreQueryFilters()` for cross-tenant PaymentProviders
+- Wired in API + UI `Program.cs` (Scoped DI, middleware before `CorrelationMiddleware`)
+- Build: 0 errors, 31/31 tests passing
+
+### Phase 5 — Test Project Restructure 📅
+- Split single UnitTest project into Domain.Tests, Application.Tests, API.Tests
+- Add Integration.Tests with Testcontainers (SQL Server)
+- Migrate existing tests to correct projects
+
+### Phase 6 — Polish & Hardening 📅
+- `ICacheService` + Redis implementation
+- `CachingBehavior` CQRS pipeline (queries opt in via `ICacheable`)
+- API versioning: `/api/v1/[controller]`
+- Health checks (SQL, Redis, external deps)
+- `CancellationToken` on all handler signatures
+- `TimeProvider` abstraction, `IOptions<T>` for settings
 
 ---
 
@@ -364,6 +446,9 @@ Phase 3 (Migration)  ──────────────► Deploy when r
 - [x] SQL Database on Azure
 - [x] Key Vault integration (partial)
 - [x] Clean Architecture principles
+- [x] CQRS with Result<T> pattern (internal modernization Phases 1-2)
+- [x] IAppDbContext abstraction (no concrete DbContext in Application)
+- [x] SharedKernel with ApiResponse<T> standard envelope
 
 ### Phase 2 📅 Next Goals
 - [ ] Microservices decomposition
@@ -404,5 +489,5 @@ Phase 3 (Migration)  ──────────────► Deploy when r
 
 ---
 
-**Last Updated:** January 26, 2026  
-**Status:** Phase 1 Complete ✅ | Phase 2 Planned 📅 | Phase 3 Future 📅
+**Last Updated:** March 21, 2026  
+**Status:** Phase 1 Complete ✅ (incl. internal modernization Phases 1-2 of 6) | Phase 2 Planned 📅 | Phase 3 Future 📅

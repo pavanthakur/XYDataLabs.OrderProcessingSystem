@@ -20,6 +20,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Utilities
             //TODO : Add caching mechanism to avoid multiple db calls
             // Load payment providers with their methods
             _paymentProviders = _dbContext.PaymentProviders
+                .IgnoreQueryFilters()
                 .AsNoTracking()
                 .ToList()
                 .AsReadOnly();

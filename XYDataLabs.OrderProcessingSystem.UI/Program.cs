@@ -4,6 +4,8 @@ using Serilog;
 using Serilog.Events;
 using Microsoft.Extensions.Options;
 using XYDataLabs.OrderProcessingSystem.SharedKernel;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 
 // Bootstrap Serilog as early as possible so Log.* writes go to console immediately
 // Azure App Service Deployment - Fix for Application Not Starting
@@ -61,6 +63,9 @@ else
 {
     Log.Warning("[CONFIG] Application Insights NOT configured - connection string missing for {Environment} environment", environmentName);
 }
+
+// OpenTelemetry distributed tracing and metrics (Phase 3 — Observability)
+builder.Services.AddObservability("OrderProcessingSystem.UI", builder.Configuration);
 
 // Configure Serilog with environment-aware paths
 builder.Host.UseSerilog((context, services, loggerConfiguration) =>
@@ -209,10 +214,17 @@ else
 builder.Services.AddControllersWithViews();
 builder.Services.AddRazorPages().AddRazorRuntimeCompilation();
 
+builder.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
+builder.Services.AddScoped<ITenantProvider, HeaderTenantProvider>();
+
 var app = builder.Build();
 
 // Log requests to help diagnose issues
 app.UseSerilogRequestLogging();
+
+app.UseMiddleware<TenantMiddleware>();
+
+app.UseMiddleware<CorrelationMiddleware>();
 
 SharedSettingsLoader.PrintApiSettingsDebug(apiSettings, activeSettings, "UI", isDocker);
 

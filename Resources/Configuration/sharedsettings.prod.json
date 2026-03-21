@@ -37,7 +37,7 @@
         "Args": {
           "path": "logs/webapi-.log",
           "rollingInterval": "Day",
-          "outputTemplate": "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} {CorrelationId} {Level:u3} {Username} {Message:lj}{Exception}{NewLine}"
+          "outputTemplate": "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{TraceId}] {Level:u3} {Username} {Message:lj}{Exception}{NewLine}"
         }
       }
     ]
@@ -59,7 +59,7 @@
         "Args": {
           "path": "logs/ui-.log",
           "rollingInterval": "Day",
-          "outputTemplate": "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} {CorrelationId} {Level:u3} {Username} {Message:lj}{Exception}{NewLine}"
+          "outputTemplate": "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{TraceId}] {Level:u3} {Username} {Message:lj}{Exception}{NewLine}"
         }
       }
     ]

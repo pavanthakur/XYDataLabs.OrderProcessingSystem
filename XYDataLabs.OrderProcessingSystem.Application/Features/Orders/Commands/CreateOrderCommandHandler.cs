@@ -21,6 +21,9 @@ public sealed class CreateOrderCommandHandler : ICommandHandler<CreateOrderComma
 
     public async Task<Result<OrderDto>> HandleAsync(CreateOrderCommand command, CancellationToken cancellationToken = default)
     {
+        using var activity = OrderActivitySource.Source.StartActivity("CreateOrder");
+        activity?.SetTag("order.customer_id", command.CustomerId);
+        activity?.SetTag("order.product_count", command.ProductIds.Count);
         var customer = await _context.Customers
             .Include(c => c.Orders)
             .FirstOrDefaultAsync(c => c.CustomerId == command.CustomerId, cancellationToken);

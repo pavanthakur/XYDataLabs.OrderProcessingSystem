@@ -51,6 +51,9 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
 
     public async Task<Result<PaymentDto>> HandleAsync(ProcessPaymentCommand command, CancellationToken cancellationToken = default)
     {
+        using var activity = PaymentActivitySource.Source.StartActivity("ProcessPayment");
+        activity?.SetTag("payment.order_id", command.OrderId);
+
         try
         {
             _logger.LogInformation("Starting combined customer, card, and payment process");

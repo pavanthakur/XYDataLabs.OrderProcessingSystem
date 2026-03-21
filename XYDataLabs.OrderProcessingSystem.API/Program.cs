@@ -15,6 +15,11 @@ using XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData;
 using Microsoft.ApplicationInsights.Extensibility;
 using System.Text.RegularExpressions;
 using XYDataLabs.OrderProcessingSystem.Application.Utilities;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
+using XYDataLabs.OrderProcessingSystem.Application.Features.Orders;
+using XYDataLabs.OrderProcessingSystem.Application.Features.Customers;
+using XYDataLabs.OrderProcessingSystem.Application.Features.Payments;
 
 // Bootstrap Serilog as early as possible so Log.* writes go to console immediately
 // Azure App Service Deployment - Fix for Application Not Starting
@@ -95,6 +100,7 @@ else
 }
 
 builder.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>(); // Required for LoggingMiddleware
+builder.Services.AddScoped<ITenantProvider, HeaderTenantProvider>();
 
 // Configure Application Insights for environment-wise telemetry and logging
 var appInsightsConnectionString = builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"] 
@@ -121,6 +127,14 @@ else
 {
     Log.Warning("[CONFIG] Application Insights NOT configured - connection string missing for {Environment} environment", environmentName);
 }
+
+// OpenTelemetry distributed tracing and metrics (Phase 3 — Observability)
+builder.Services.AddObservability(
+    "OrderProcessingSystem.API",
+    builder.Configuration,
+    OrderActivitySource.Name,
+    CustomerActivitySource.Name,
+    PaymentActivitySource.Name);
 
 builder.Services.AddCors(options =>
 {
@@ -363,6 +377,10 @@ if (activeSettings.HttpsEnabled)
 }
 
 app.UseAuthorization();
+
+app.UseMiddleware<TenantMiddleware>();
+
+app.UseMiddleware<CorrelationMiddleware>();
 
 app.UseMiddleware<LoggingMiddleware>();
 
