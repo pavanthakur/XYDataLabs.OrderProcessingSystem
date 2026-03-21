@@ -142,6 +142,7 @@ XYDataLabs.OrderProcessingSystem.sln
 - Changed all services: concrete DbContext → `IAppDbContext`
 - Removed Application → Infrastructure project reference
 - Moved DI wiring to API composition root
+- **Roslyn analyzers** — `Roslynator.Analyzers`, `Meziantou.Analyzer`, `SonarAnalyzer.CSharp` in `Directory.Packages.props`; enforces code quality, security patterns, and anti-pattern detection at build time
 
 ## Phase 2 — Hand-Rolled CQRS ✅
 - CQRS abstractions: `ICommand<T>`, `IQuery<T>`, `ICommandHandler`, `IQueryHandler`, `IPipelineBehavior`, `IDispatcher`
@@ -190,6 +191,7 @@ XYDataLabs.OrderProcessingSystem.sln
 - `SqlServerFixture` — Testcontainers `MsSqlContainer` with shared `[Collection("SqlServer")]`
 - `IntegrationTestWebAppFactory` — replaces DbContext with Testcontainers connection string
 - Removed old `XYDataLabs.OrderProcessingSystem.UnitTest` project from solution
+- **Architecture tests** (`NetArchTest.Rules`) — compile-time enforcement of layer boundaries: Domain has zero dependencies, Application never references Infrastructure, no circular references between projects
 - Build: 0 errors, 39/39 unit tests passing (integration tests require Docker)
 
 ## Phase 6 — Polish & Hardening ✅
@@ -226,6 +228,13 @@ XYDataLabs.OrderProcessingSystem.sln
 - Enhanced OpenTelemetry: request duration metrics, tenant validation failure counters
 - Split health checks into `/health/live` (liveness) and `/health/ready` (readiness with SQL + Redis)
 
+### DDD Tactical Patterns
+
+- **Aggregate root** — `Order` entity with private constructor, `Create()` factory method returning `Result<Order>`
+- **State machine** — `Order` status transitions: `Created → Paid → Shipped → Delivered → Cancelled` with explicit transition methods (`Pay()`, `Ship()`, `Deliver()`, `Cancel()`) each returning `Result<T>` — invalid transitions return failure, never throw
+- **Value objects** — `Address` and `Money` as immutable `record` types with self-validation in constructor
+- **Domain invariants** — enforced inside aggregate methods (e.g. cannot ship an unpaid order), returning `Result<T>.Failure` with descriptive `Error` — no exceptions for business rules
+
 ### Builds On
 
 - Phase 4 (multi-tenancy skeleton — `ITenantProvider`, EF global filters)
@@ -233,7 +242,7 @@ XYDataLabs.OrderProcessingSystem.sln
 
 ### Outcome
 
-Secure, observable, tenant-enforced system with standardized error handling — ready for event-driven decoupling.
+Secure, observable, tenant-enforced system with rich domain model, standardized error handling — ready for event-driven decoupling.
 
 ---
 
@@ -288,6 +297,7 @@ Secure, observable, tenant-enforced system with standardized error handling — 
 - **Background Publisher** — `IHostedService` that polls `OutboxMessages` and dispatches to the event bus
 - **Event Dispatcher** — in-memory implementation (pluggable interface; swapped to Azure Service Bus in Phase 10)
 - **Event Versioning** — envelope with `SchemaVersion` field; convention: `OrderCreatedV1` → `OrderCreatedV2` with backward-compatible projection
+- **Parallel event handler execution** — `EventPublisher` dispatches all `IEventHandler<T>` via `Task.WhenAll`; partial failures collected into `AggregateException` — one handler failing does not skip remaining handlers
 
 ### Rules
 
@@ -295,16 +305,32 @@ Secure, observable, tenant-enforced system with standardized error handling — 
 - Outbox writes in the **same transaction** as the domain change (no dual-write)
 - Background publisher is **idempotent** — Inbox table deduplicates by `MessageId` before handler execution
 - **Event schema changes** must be backward-compatible (additive fields only; breaking changes = new version)
+- **Parallel dispatch** — all handlers for a given event execute concurrently; failures are aggregated, not swallowed
 
 ### Outcome
 
-Loose coupling, async workflows, idempotent delivery, and a microservice-ready event backbone with versioned schemas.
+Loose coupling, async workflows, idempotent delivery, parallel event handling, and a microservice-ready event backbone with versioned schemas.
 
 ---
 
 ## Phase 9 — YARP Microservices Architecture (Local) 📅
 
-**Focus:** Service decomposition + local orchestration with event-based communication.
+**Focus:** Module isolation within the monolith, then service extraction with event-based communication.
+
+### Module Isolation (First Step — Before Extraction)
+
+Before extracting to separate deployables, restructure the monolith into isolated modules:
+
+- **Per-module project structure** — split shared `Application`, `Domain`, `Infrastructure` into per-module libraries:
+  - `Orders.Domain`, `Orders.Features`, `Orders.Infrastructure`
+  - `Inventory.Domain`, `Inventory.Features`, `Inventory.Infrastructure`
+  - `Notifications.Domain`, `Notifications.Features`, `Notifications.Infrastructure`
+- **PublicApi contracts** — `IOrderModuleApi`, `IInventoryModuleApi` interfaces in dedicated `*.PublicApi` projects with strongly-typed request/response records. Modules depend ONLY on each other's PublicApi — never internal Domain/Features/Infrastructure
+- **Per-module DB schemas** — each module owns its own SQL schema (`orders`, `inventory`, `notifications`) within the shared database. Phase 11's "split databases" then becomes a connection string change, not a data migration
+- **Per-module database migrators** — `IModuleDatabaseMigrator` interface; each module owns its `DbContext` and independent migration history. Startup runs all migrators sequentially
+- **Module self-registration** — `AddOrdersModule()`, `AddInventoryModule()`, `AddNotificationsModule()` extension methods chain API registration, infrastructure setup, and assembly scanning. `Program.cs` stays clean as project count grows
+- **`AssemblyReference.cs` markers** — static class per project exposing `Assembly` for reliable handler discovery, endpoint registration, and architecture test scanning
+- **Architecture tests updated** — `NetArchTest.Rules` (from Phase 5) now enforces inter-module boundaries: modules cannot reference each other's internals, only PublicApi contracts
 
 ### Architecture Diagram
 
@@ -367,10 +393,19 @@ XYDataLabs.OrderProcessingSystem.sln
 │   └── Controllers/
 │       └── NotificationController.cs
 ├── XYDataLabs.OrderProcessingSystem.Contracts        (NEW - Shared event schemas + API DTOs)
+├── XYDataLabs.OrderProcessingSystem.Orders.PublicApi  (NEW - IOrderModuleApi + request/response records)
+├── XYDataLabs.OrderProcessingSystem.Inventory.PublicApi (NEW - IInventoryModuleApi + contracts)
+├── XYDataLabs.OrderProcessingSystem.Notifications.PublicApi (NEW - INotificationModuleApi + contracts)
 ├── XYDataLabs.OrderProcessingSystem.UI               (Existing - Updated routing)
-├── XYDataLabs.OrderProcessingSystem.Application      (Shared — temporary)
-├── XYDataLabs.OrderProcessingSystem.Domain           (Shared — temporary)
-├── XYDataLabs.OrderProcessingSystem.Infrastructure   (Shared — temporary)
+├── XYDataLabs.OrderProcessingSystem.Orders.Domain     (Split from shared Domain)
+├── XYDataLabs.OrderProcessingSystem.Orders.Features   (Split from shared Application)
+├── XYDataLabs.OrderProcessingSystem.Orders.Infrastructure (Split from shared Infrastructure)
+├── XYDataLabs.OrderProcessingSystem.Inventory.Domain  (NEW)
+├── XYDataLabs.OrderProcessingSystem.Inventory.Features (NEW)
+├── XYDataLabs.OrderProcessingSystem.Inventory.Infrastructure (NEW)
+├── XYDataLabs.OrderProcessingSystem.Notifications.Domain (NEW)
+├── XYDataLabs.OrderProcessingSystem.Notifications.Features (NEW)
+├── XYDataLabs.OrderProcessingSystem.Notifications.Infrastructure (NEW)
 ├── XYDataLabs.OrderProcessingSystem.SharedKernel     (Shared)
 └── XYDataLabs.OpenPayAdapter                         (Shared)
 ```
@@ -423,8 +458,8 @@ services:
 |--------------------|---------|---------|
 | **Queries** (read) | Synchronous HTTP | UI → Gateway → Orders API `GET /api/v1/Order/{id}` |
 | **Workflows** (write) | Asynchronous Events | `OrderCreated` → Event Bus → Inventory reserves stock |
-| **Shared DB** | Temporary only | Will be split per service in Phase 11 |
-| **Shared projects** | Temporary only | Application/Domain/Infrastructure shared until Phase 11 |
+| **Shared DB** | Per-module schemas | `orders.*`, `inventory.*`, `notifications.*` schemas in shared DB; split to separate DBs in Phase 11 |
+| **Module isolation** | Per-module projects | Each module owns Domain/Features/Infrastructure; cross-module communication via PublicApi contracts only |
 
 ### Characteristics
 
@@ -465,7 +500,7 @@ services:
 
 ### Outcome
 
-Working microservices locally with correct event-based communication model.
+Module-isolated, working microservices locally with proven PublicApi boundaries and correct event-based communication model.
 
 ---
 
@@ -882,17 +917,26 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 - [x] Multi-tenancy skeleton (EF global filters, `X-Tenant-Id` header)
 - [x] Structured test projects (Domain, Application, API, Integration)
 - [x] Caching pipeline, API versioning `/api/v1/`, health checks, CancellationToken, TimeProvider
+- [x] Roslyn analyzers (Roslynator, Meziantou, SonarAnalyzer) — build-time code quality enforcement
+- [x] Architecture tests (`NetArchTest.Rules`) — enforcing Clean Architecture layer boundaries
 
 ### Phase 7-8 📅 Hardening & Events
 - [ ] Tenant enforcement + audit logging
 - [ ] Security headers + liveness/readiness health checks
 - [ ] ProblemDetails (RFC 9457) + global exception middleware
+- [ ] DDD tactical patterns: aggregate root, state machine (`Order` status transitions), value objects (`Address`, `Money`), domain invariants via `Result<T>`
 - [ ] Domain events + integration events
 - [ ] Outbox pattern + background event publisher
 - [ ] Inbox pattern (idempotent consumers) + event versioning
+- [ ] Parallel event handler execution (`Task.WhenAll` + `AggregateException` aggregation)
 
 ### Phase 9-10 📅 Microservices & Cloud
-- [ ] YARP reverse proxy + service decomposition
+- [ ] Module isolation: per-module project structure (Domain/Features/Infrastructure/PublicApi per module)
+- [ ] PublicApi contracts (`IOrderModuleApi`, `IInventoryModuleApi`) — inter-module communication via contracts only
+- [ ] Per-module DB schemas in shared database + `IModuleDatabaseMigrator` per module
+- [ ] Module self-registration (`AddOrdersModule()`) + `AssemblyReference.cs` markers
+- [ ] Architecture tests (NetArchTest) enforcing inter-module boundaries
+- [ ] YARP reverse proxy + service extraction from isolated modules
 - [ ] Gateway cross-cutting (CORS, rate limiting, request logging, size limits)
 - [ ] SharedContracts project for inter-service event schemas + DTOs
 - [ ] Docker Compose orchestration (including Redis)
@@ -938,7 +982,7 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 
 | Capability | Implementation |
 |-----------|----------------|
-| **Architecture** | Clean Architecture + CQRS + Event-Driven Microservices |
+| **Architecture** | Clean Architecture + CQRS + Event-Driven Microservices (modular monolith → microservices extraction) |
 | **Gateway** | APIM (public, north-south) + YARP (internal, east-west) with JWT validation |
 | **Communication** | Azure Service Bus (async domain events) + Event Grid (platform events) + HTTP (sync queries) |
 | **Write DB** | SQL Server (source of truth) per service |
@@ -950,7 +994,10 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 | **Performance** | `AsNoTracking` convention, indexed tenant queries, EF Core 8 `SqlQuery<T>` for complex queries, bulk operations |
 | **Cache** | Azure Cache for Redis (distributed cache + session state) |
 | **Error Handling** | ProblemDetails (RFC 9457) + global exception middleware |
-| **Events** | Versioned schemas (inbox + outbox) + choreography with Saga escalation |
+| **Domain Modeling** | DDD aggregate roots, state machines, value objects, domain invariants via `Result<T>` |
+| **Module Boundaries** | Per-module PublicApi contracts, `AssemblyReference.cs` markers, NetArchTest enforcement |
+| **Code Quality** | Roslyn analyzers (Roslynator, Meziantou, SonarAnalyzer) — build-time enforcement |
+| **Events** | Versioned schemas (inbox + outbox) + choreography with Saga escalation + parallel dispatch |
 | **Workflows** | Azure Durable Functions — orchestrator/activity pattern for Saga workflows with compensating actions |
 | **Serverless** | Azure Functions for DLQ reprocessing + scheduled health checks + Durable orchestrations |
 | **File Storage** | Azure Blob Storage (order attachments, private endpoint) |
@@ -986,6 +1033,7 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 - Azure Cosmos DB for MongoDB: https://learn.microsoft.com/azure/cosmos-db/mongodb/
 - .NET Aspire: https://learn.microsoft.com/dotnet/aspire/
 - Hangfire: https://www.hangfire.io/
+- NetArchTest: https://github.com/BenMorris/NetArchTest
 - Microservices Patterns: https://microservices.io/patterns/
 
 ---
