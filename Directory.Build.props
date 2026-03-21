@@ -4,7 +4,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
-    <WarningsAsErrors />
+    <WarningsAsErrors>nullable</WarningsAsErrors>
     <CodeAnalysisRuleSet>$(MSBuildThisFileDirectory)Resources\BuildConfiguration\CodeAnalysis.ruleset</CodeAnalysisRuleSet>
     <!-- Docker-specific properties to prevent Windows Principal errors -->
     <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>

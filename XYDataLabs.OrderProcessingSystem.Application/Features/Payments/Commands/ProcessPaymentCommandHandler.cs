@@ -181,7 +181,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         {
             BillingCustomerId = billingCustomer.Id,
             KeyName = "CreationDate",
-            KeyValue = Convert.ToString(billingCustomer.CreatedDate)
+            KeyValue = billingCustomer.CreatedDate?.ToString("O", System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty
         };
 
         _context.BillingCustomerKeyInfos.Add(keyInfo);

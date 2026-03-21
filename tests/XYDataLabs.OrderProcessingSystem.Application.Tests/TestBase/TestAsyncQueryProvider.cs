@@ -29,12 +29,12 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase
 
         public object Execute(Expression expression)
         {
-            return _inner.Execute(expression);
+            return _inner.Execute(expression)!;
         }
 
         public TResult Execute<TResult>(Expression expression)
         {
-            return _inner.Execute<TResult>(expression);
+            return _inner.Execute<TResult>(expression)!;
         }
 
         public IAsyncEnumerable<TResult> ExecuteAsync<TResult>(Expression expression)
