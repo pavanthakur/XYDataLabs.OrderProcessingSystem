@@ -335,6 +335,7 @@ Before extracting to separate deployables, restructure the monolith into isolate
 - **Module self-registration** — `AddOrdersModule()`, `AddInventoryModule()`, `AddNotificationsModule()` extension methods chain API registration, infrastructure setup, and assembly scanning. `Program.cs` stays clean as project count grows
 - **`AssemblyReference.cs` markers** — static class per project exposing `Assembly` for reliable handler discovery, endpoint registration, and architecture test scanning
 - **Architecture tests updated** — `NetArchTest.Rules` (from Phase 5) now enforces inter-module boundaries: modules cannot reference each other's internals, only PublicApi contracts
+- **Specification pattern** — composable query objects (`OrderByStatusSpec`, `ActiveCustomersSpec`) encapsulating EF Core `Where`/`Include`/`OrderBy` logic; reusable across handlers within a module. Introduced alongside per-module repositories — specifications replace scattered inline LINQ with testable, named query definitions
 
 ### Architecture Diagram
 
@@ -943,6 +944,7 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 - [ ] Per-module DB schemas in shared database + `IModuleDatabaseMigrator` per module
 - [ ] Module self-registration (`AddOrdersModule()`) + `AssemblyReference.cs` markers
 - [ ] Architecture tests (NetArchTest) enforcing inter-module boundaries
+- [ ] Specification pattern — composable, testable query objects per module (replaces inline LINQ in handlers)
 - [ ] YARP reverse proxy + service extraction from isolated modules
 - [ ] Gateway cross-cutting (CORS, rate limiting, request logging, size limits)
 - [ ] SharedContracts project for inter-service event schemas + DTOs
@@ -982,6 +984,7 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 - [ ] Read model versioning (`_schemaVersion`) + projection lag metric
 - [ ] Cosmos DB change feed awareness (alternative projection driver)
 - [ ] Hangfire background jobs for projection rebuilds
+- [ ] Snapshot pattern — periodic aggregate snapshots for fast rebuild from event history
 
 ---
 
@@ -1066,6 +1069,8 @@ _Patterns from industry reference architectures evaluated against the 14-phase p
 | **Optimistic concurrency** (EF `RowVersion` + `ConcurrencyException`) | Phase 7 | Genuine gap — any multi-tenant system with concurrent writes needs row versioning. Critical for Order aggregate where parallel requests (e.g., simultaneous `Pay()` and `Cancel()`) must be detected and failed safely. |
 | **Strongly-typed IDs** (`OrderId`, `CustomerId` as `readonly record struct`) | Phase 7 | Eliminates `Guid` parameter-swap bugs at compile time. Lightweight pattern (one-line record struct + EF value converter) with high safety payoff. Natural companion to Value Objects. |
 | **SaveChangesAsync domain event dispatch** (ChangeTracker extraction) | Phase 8 | Was implied by Outbox pattern but not explicitly documented. Made explicit: extract events from `ChangeTracker.Entries<Entity>()` after `base.SaveChangesAsync()` — ensures events only fire on successful persistence. |
+| **Specification pattern** (composable query objects) | Phase 9 | Encapsulates reusable EF Core query logic (`Where`/`Include`/`OrderBy`) into named, testable specifications. Not useful in monolith (inline LINQ suffices); becomes valuable when per-module repositories need shared query definitions across handlers. |
+| **Snapshot pattern** (point-in-time entity state capture) | Phase 14 | Enables fast aggregate rebuild from event history: load latest snapshot + replay recent events instead of full replay. Paired with Hangfire periodic snapshot jobs. Not needed until event volumes justify optimization. |
 
 ### Twelve-Factor App Compliance
 
