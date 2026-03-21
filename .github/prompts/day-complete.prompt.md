@@ -1,5 +1,5 @@
 ---
-mode: agent
+agent: agent
 description: Run after completing a curriculum day. Asks what was done and automatically routes updates to the correct documents.
 ---
 

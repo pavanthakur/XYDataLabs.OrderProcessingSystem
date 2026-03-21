@@ -30,7 +30,8 @@ dotnet ef migrations add <MigrationName> \
 # Apply to Azure SQL (with firewall rule open for current IP)
 $ip = (Invoke-RestMethod https://api.ipify.org)
 az sql server firewall-rule create --server orderprocessing-sql-dev --resource-group rg-orderprocessing-dev --name "dev-machine" --start-ip-address $ip --end-ip-address $ip
-$azureCs = "Server=tcp:orderprocessing-sql-dev.database.windows.net,1433;Initial Catalog=OrderProcessingSystem_Dev;User ID=sqladmin;Password=Admin100@;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+$sqlPwd = Read-Host "Enter Azure SQL password" -MaskInput
+$azureCs = "Server=tcp:orderprocessing-sql-dev.database.windows.net,1433;Initial Catalog=OrderProcessingSystem_Dev;User ID=sqladmin;Password=$sqlPwd;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
 dotnet ef database update --project XYDataLabs.OrderProcessingSystem.Infrastructure --startup-project XYDataLabs.OrderProcessingSystem.API --connection $azureCs
 az sql server firewall-rule delete --server orderprocessing-sql-dev --resource-group rg-orderprocessing-dev --name "dev-machine"
 ```

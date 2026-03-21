@@ -72,6 +72,9 @@ The script now provides detailed progress messages, including timers and status 
 # Navigate to Docker folder
 cd Resources\Docker
 
+# Optional first-run bootstrap: copy .env.local.example to .env.local and set local-only secrets
+Copy-Item .env.local.example .env.local
+
 # Development - HTTP (Most Common)
 .\start-docker.ps1 -Environment dev -Profile http
 
@@ -87,6 +90,20 @@ cd Resources\Docker
 # CI/local strict startup (require health to pass)
 .\start-docker.ps1 -Environment dev -Profile http -Strict
 ```
+
+### Local Secret File
+
+`Resources\Docker\.env.local` is the local Docker secret source. It is gitignored and should contain:
+
+```text
+LOCAL_SQL_PASSWORD=<local-sql-password>
+LOCAL_CERT_PASSWORD=<local-cert-password>
+LOCAL_OPENPAY_MERCHANT_ID=<local-openpay-merchant-id>
+LOCAL_OPENPAY_PRIVATE_KEY=<local-openpay-private-key>
+LOCAL_OPENPAY_DEVICE_SESSION_ID=<local-openpay-device-session-id>
+```
+
+If `.env.local` is missing, `start-docker.ps1` now prompts once for each required value and writes the file for future runs.
 
 ### Stop Services
 ```powershell
@@ -301,7 +318,7 @@ cd Resources\Docker
 ### 2. SSL Certificates (Required for HTTPS)
 ```powershell
 # Generate development certificates
-dotnet dev-certs https -ep ./Resources/Certificates/aspnetapp.pfx -p P@ss100
+dotnet dev-certs https -ep ./Resources/Certificates/aspnetapp.pfx -p <local-cert-password>
 dotnet dev-certs https --trust
 ```
 
@@ -890,7 +907,7 @@ When you select **docker-dev-http** or similar profile in Visual Studio:
 
 ```powershell
 # Check all databases
-sqlcmd -S localhost -U sa -P Admin100@ -Q "SELECT name FROM sys.databases WHERE name LIKE 'OrderProcessingSystem%'"
+sqlcmd -S localhost -U sa -P <LOCAL_SQL_PASSWORD> -Q "SELECT name FROM sys.databases WHERE name LIKE 'OrderProcessingSystem%'"
 
 # Expected Results:
 # OrderProcessingSystem_Local  (Non-Docker)
@@ -1200,7 +1217,7 @@ Get-Content "logs/docker-startup-$(Get-Date -Format 'yyyy-MM-dd').log" -Tail 20 
 
 **Prerequisites Checklist**:
 - [ ] SSL certificates present in `Resources/Certificates/aspnetapp.pfx`
-- [ ] Certificate password matches config (P@ss100)
+- [ ] Certificate password is supplied from `.env.local` or local user-secrets
 - [ ] No containers running on ports 5020-5023
 
 **Execution Checklist**:
@@ -1378,7 +1395,7 @@ docker network ls | Select-String "xy-"
 #### **Database Isolation Test**
 ```powershell
 # Verify separate databases for each environment
-sqlcmd -S host.docker.internal -U sa -P Admin100@ -Q "SELECT name FROM sys.databases WHERE name LIKE 'OrderProcessingSystem%'"
+sqlcmd -S host.docker.internal -U sa -P <LOCAL_SQL_PASSWORD> -Q "SELECT name FROM sys.databases WHERE name LIKE 'OrderProcessingSystem%'"
 ```
 
 **Database Verification**:
@@ -1567,7 +1584,7 @@ docker network rm xynetwork
 ```powershell
 # Regenerate certificates
 dotnet dev-certs https --clean
-dotnet dev-certs https -ep ./Resources/Certificates/aspnetapp.pfx -p P@ss100
+dotnet dev-certs https -ep ./Resources/Certificates/aspnetapp.pfx -p <local-cert-password>
 dotnet dev-certs https --trust
 ```
 

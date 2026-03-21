@@ -67,11 +67,21 @@ az keyvault show --name $KV_NAME --resource-group $RG_NAME --query id -o tsv
 # Set Key Vault name
 KV_NAME="kv-orderproc-dev"
 
-# Add OpenPay Adapter API Key (replace with actual value)
+# Add OpenPay secrets (replace with actual values)
 az keyvault secret set \
   --vault-name $KV_NAME \
-  --name "OpenPayAdapter--ApiKey" \
-  --value "your-openpay-api-key-here"
+  --name "OpenPay--MerchantId" \
+  --value "<openpay-merchant-id>"
+
+az keyvault secret set \
+  --vault-name $KV_NAME \
+  --name "OpenPay--PrivateKey" \
+  --value "<openpay-private-key>"
+
+az keyvault secret set \
+  --vault-name $KV_NAME \
+  --name "OpenPay--DeviceSessionId" \
+  --value "<openpay-device-session-id>"
 
 # Add Application Insights Connection String (replace with actual value)
 # Get from your Application Insights resource
@@ -89,7 +99,7 @@ az keyvault secret set \
 az keyvault secret list --vault-name $KV_NAME --query "[].name" -o table
 ```
 
-**Note**: The secret names use `--` (double hyphens) because Azure Key Vault doesn't support `:` in secret names. App Service automatically resolves Key Vault references and the app settings will use `__` (double underscores) format (e.g., `OpenPayAdapter__ApiKey`).
+**Note**: The secret names use `--` (double hyphens) because Azure Key Vault doesn't support `:` in secret names. App Service automatically resolves Key Vault references and the app settings will use `__` (double underscores) format (for example, `OpenPay__MerchantId`).
 
 #### 1.3 Configure GitHub Environment Secrets
 
@@ -208,9 +218,6 @@ Create `bicep/parameters/stg.parameters.json`:
     },
     "environment": {
       "value": "stg"
-    },
-    "openPayAdapterBaseUrl": {
-      "value": "https://api.openpay.stg.example.com"
     }
   }
 }
@@ -221,7 +228,13 @@ Create `bicep/parameters/stg.parameters.json`:
 ```bash
 # Add secrets to Staging Key Vault
 az keyvault secret set --vault-name kv-orderproc-stg \
-  --name "OpenPayAdapter--ApiKey" --value "stg-api-key"
+  --name "OpenPay--MerchantId" --value "<stg-openpay-merchant-id>"
+
+az keyvault secret set --vault-name kv-orderproc-stg \
+  --name "OpenPay--PrivateKey" --value "<stg-openpay-private-key>"
+
+az keyvault secret set --vault-name kv-orderproc-stg \
+  --name "OpenPay--DeviceSessionId" --value "<stg-openpay-device-session-id>"
 
 az keyvault secret set --vault-name kv-orderproc-stg \
   --name "ApplicationInsights--ConnectionString" --value "stg-app-insights-connection-string"
@@ -281,9 +294,6 @@ Create `bicep/parameters/prod.parameters.json`:
     },
     "environment": {
       "value": "prod"
-    },
-    "openPayAdapterBaseUrl": {
-      "value": "https://api.openpay.com"
     }
   }
 }
@@ -294,7 +304,13 @@ Create `bicep/parameters/prod.parameters.json`:
 ```bash
 # Add secrets to Production Key Vault
 az keyvault secret set --vault-name kv-orderproc-prod \
-  --name "OpenPayAdapter--ApiKey" --value "production-api-key"
+  --name "OpenPay--MerchantId" --value "<prod-openpay-merchant-id>"
+
+az keyvault secret set --vault-name kv-orderproc-prod \
+  --name "OpenPay--PrivateKey" --value "<prod-openpay-private-key>"
+
+az keyvault secret set --vault-name kv-orderproc-prod \
+  --name "OpenPay--DeviceSessionId" --value "<prod-openpay-device-session-id>"
 
 az keyvault secret set --vault-name kv-orderproc-prod \
   --name "ApplicationInsights--ConnectionString" --value "production-app-insights-connection-string"
@@ -329,7 +345,7 @@ az webapp config appsettings list \
 az webapp config appsettings list \
   --name $APP_NAME \
   --resource-group $RG_NAME \
-  --query "[?name=='ASPNETCORE_ENVIRONMENT' || name=='OpenPayAdapter__ApiKey']" \
+  --query "[?name=='ASPNETCORE_ENVIRONMENT' || name=='OpenPay__MerchantId' || name=='OpenPay__PrivateKey' || name=='OpenPay__DeviceSessionId']" \
   --output table
 ```
 
@@ -480,7 +496,7 @@ If Key Vault is unavailable, temporarily use direct values:
 az webapp config appsettings set \
   --name $APP_NAME \
   --resource-group $RG_NAME \
-  --settings OpenPayAdapter__ApiKey="temporary-direct-value"
+  --settings OpenPay__PrivateKey="temporary-direct-value"
 
 # Warning: This should only be temporary - rotate secrets after
 ```
@@ -495,7 +511,7 @@ To rotate a secret:
    ```bash
    az keyvault secret set \
      --vault-name $KV_NAME \
-     --name "OpenPayAdapter--ApiKey" \
+    --name "OpenPay--PrivateKey" \
      --value "new-secret-value"
    ```
 

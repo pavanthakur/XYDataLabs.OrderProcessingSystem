@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Azure.Identity;
 using System;
+using System.Reflection;
 
 namespace XYDataLabs.OrderProcessingSystem.SharedKernel
 {
@@ -41,12 +42,24 @@ namespace XYDataLabs.OrderProcessingSystem.SharedKernel
             Console.WriteLine($"[DEBUG] Loading shared settings: Environment={environmentName}, IsDocker={isDocker}, IsAzure={isAzure}, Effective={effectiveEnvironment}");
             Console.WriteLine($"[DEBUG] Base path: {basePath}");
             
-            // Build configuration with JSON file first, then environment variables override
-            // This allows Docker Compose / Azure App Service env vars to take precedence over JSON settings
+            // Build configuration with JSON file first.
+            // Local user secrets override committed samples, environment variables override both,
+            // and Azure Key Vault wins in Azure.
             builder
                 .SetBasePath(basePath)
-                .AddJsonFile($"Resources/Configuration/sharedsettings.{effectiveEnvironment}.json", optional: false, reloadOnChange: true)
-                .AddEnvironmentVariables(); // Always re-apply env vars after JSON so Docker/Azure overrides win
+                .AddJsonFile($"Resources/Configuration/sharedsettings.{effectiveEnvironment}.json", optional: false, reloadOnChange: true);
+
+            if (!isDocker && !isAzure)
+            {
+                var entryAssembly = Assembly.GetEntryAssembly();
+                if (entryAssembly is not null)
+                {
+                    builder.AddUserSecrets(entryAssembly, optional: true);
+                    Console.WriteLine($"[DEBUG] Added user secrets for local development: {entryAssembly.GetName().Name}");
+                }
+            }
+
+            builder.AddEnvironmentVariables(); // Always re-apply env vars after JSON/user secrets so Docker/Azure overrides win
 
             if (isAzure)
             {
@@ -209,7 +222,7 @@ namespace XYDataLabs.OrderProcessingSystem.SharedKernel
             if (activeSettings.HttpsEnabled)
             {
                 Console.WriteLine($"[ENV VALIDATION] {context}.CertPath: {activeSettings.CertPath}");
-                Console.WriteLine($"[ENV VALIDATION] {context}.CertPassword: {activeSettings.CertPassword}");
+                Console.WriteLine($"[ENV VALIDATION] {context}.CertPassword: {DescribeSecret(activeSettings.CertPassword)}");
             }
             Console.WriteLine($"[DEBUG] Running in Docker: {isDocker}");
             Console.WriteLine($"[DEBUG] UI.Http Port: {apiSettings.UI.http.Port}");
@@ -232,6 +245,11 @@ namespace XYDataLabs.OrderProcessingSystem.SharedKernel
                 && name.Length <= 24 
                 && KeyVaultNameRegex().IsMatch(name);
         }
+
+            private static string DescribeSecret(string? value)
+            {
+                return string.IsNullOrWhiteSpace(value) ? "<empty>" : "<configured>";
+            }
 
         [System.Text.RegularExpressions.GeneratedRegex(@"^[a-zA-Z0-9\-]+$", System.Text.RegularExpressions.RegexOptions.Compiled)]
         private static partial System.Text.RegularExpressions.Regex KeyVaultNameRegex();

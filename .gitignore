@@ -53,6 +53,7 @@ Generated\ Files/
 **/obj/Docker/
 **/obj/**/Docker/
 .dockerignore
+Resources/Docker/.env.local
 
 # MSTest test Results
 [Tt]est[Rr]esult*/

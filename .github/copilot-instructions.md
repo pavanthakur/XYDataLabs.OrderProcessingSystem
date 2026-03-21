@@ -21,14 +21,23 @@ practice Azure cloud deployment, CI/CD automation, and enterprise DevOps pattern
 
 | Project | Role |
 |---------|------|
-| `XYDataLabs.OrderProcessingSystem.API` | ASP.NET Core Web API — orders, customers, payments, Swagger |
+| `XYDataLabs.OrderProcessingSystem.API` | ASP.NET Core Web API — thin controllers, composition root, Swagger |
 | `XYDataLabs.OrderProcessingSystem.UI` | ASP.NET Core MVC — presentation layer |
-| `XYDataLabs.OrderProcessingSystem.Application` | Use cases, DTOs, MediatR |
-| `XYDataLabs.OrderProcessingSystem.Domain` | Core entities, domain logic (DDD) |
+| `XYDataLabs.OrderProcessingSystem.Application` | Hand-rolled CQRS (ICommand/IQuery/IDispatcher), DTOs, pipeline behaviors |
+| `XYDataLabs.OrderProcessingSystem.Domain` | Core entities, domain logic (DDD) — zero dependencies |
 | `XYDataLabs.OrderProcessingSystem.Infrastructure` | EF Core, SQL Server, data access |
-| `XYDataLabs.OrderProcessingSystem.SharedKernel` | Shared helpers and cross-cutting concerns |
+| `XYDataLabs.OrderProcessingSystem.SharedKernel` | Result<T>, constants, observability, multi-tenancy |
 | `XYDataLabs.OpenPayAdapter` | OpenPay payment integration |
-| `XYDataLabs.OrderProcessingSystem.UnitTest` | xUnit, Moq, Bogus, FluentAssertions tests |
+
+### Test Projects (under `tests/`)
+
+| Project | Role |
+|---------|------|
+| `XYDataLabs.OrderProcessingSystem.Domain.Tests` | Entity unit tests (xUnit, FluentAssertions) |
+| `XYDataLabs.OrderProcessingSystem.Application.Tests` | CQRS handler unit tests (xUnit, Moq, Bogus) |
+| `XYDataLabs.OrderProcessingSystem.API.Tests` | Controller unit tests |
+| `XYDataLabs.OrderProcessingSystem.Integration.Tests` | End-to-end tests (Testcontainers + WebApplicationFactory) |
+| `XYDataLabs.OrderProcessingSystem.Architecture.Tests` | NetArchTest layer boundary enforcement |
 
 ---
 
@@ -74,10 +83,19 @@ practice Azure cloud deployment, CI/CD automation, and enterprise DevOps pattern
 │   ├── configure-secrets-and-run.ps1
 │   └── validate-github-app-config.ps1
 │
-├── docs/runbooks/                 # Operations runbooks
+├── tests/                         # All test projects (5 projects)
+│   ├── XYDataLabs.OrderProcessingSystem.Domain.Tests/
+│   ├── XYDataLabs.OrderProcessingSystem.Application.Tests/
+│   ├── XYDataLabs.OrderProcessingSystem.API.Tests/
+│   ├── XYDataLabs.OrderProcessingSystem.Integration.Tests/
+│   └── XYDataLabs.OrderProcessingSystem.Architecture.Tests/
+│
+├── docs/
+│   ├── runbooks/                  # Operations runbooks
+│   └── architecture/decisions/    # ADRs (ADR-001 through ADR-006)
 │
 ├── TROUBLESHOOTING-INDEX.md       # ← Quick troubleshooting guide with links
-├── ARCHITECTURE-EVOLUTION.md      # Monolith → Microservices roadmap
+├── ARCHITECTURE-EVOLUTION.md      # 14-phase monolith → microservices roadmap
 ├── AZURE-PROGRESS-EVALUATION.md   # Learning progress tracker (weeks 1–10)
 ├── AZURE-TOP-7-SERVICES-ANALYSIS.md  # Analysis of 7 key Azure services
 ├── GITHUB-APP-DELETION-SUMMARY.md    # GitHub App automation and deletion procedures
@@ -282,6 +300,7 @@ Port allocations: Local VS (5010–5013) · Docker dev (5020–5023) · Docker s
 ### Instruction files (auto-attach by file pattern)
 | File | Applies to |
 |------|------------|
+| `.github/instructions/clean-architecture.instructions.md` | `**/*.cs`, `**/*.csproj` |
 | `.github/instructions/ef-migrations.instructions.md` | `**/Infrastructure/**`, `**/Migrations/**` |
 | `.github/instructions/azure-workflows.instructions.md` | `**/.github/workflows/**` |
 | `.github/instructions/bicep.instructions.md` | `**/infra/**`, `**/*.bicep` |
@@ -293,8 +312,9 @@ Port allocations: Local VS (5010–5013) · Docker dev (5020–5023) · Docker s
 |--------|---------|--------|
 | Day Complete Router | `/day-complete` | After each curriculum day — routes updates to all correct documents, suggests commit |
 | SQL Local Access | `/sql-local-access` | Opens or closes Azure SQL firewall for local IP after a fresh bootstrap/deploy. Prints SSMS connection details. |
+| Context Audit | `/context-audit` | Detects stale AI context by diffing memory files and copilot-instructions against the actual codebase. Run periodically or after major refactors. |
 
-> **Quick prompt tip:** `Ctrl+Shift+I` → select Agent mode → type `/day-complete` or `/sql-local-access`
+> **Quick prompt tip:** `Ctrl+Shift+I` → select Agent mode → type `/day-complete`, `/sql-local-access`, or `/context-audit`
 >
 > **Prompt reference:** See `.github/prompts/README.md` for when to use each prompt, prerequisites, and operational notes.
 >
@@ -307,7 +327,7 @@ Port allocations: Local VS (5010–5013) · Docker dev (5020–5023) · Docker s
 | File | Where | What it covers |
 |------|-------|---------------|
 | `TROUBLESHOOTING-INDEX.md` | Root | Quick links for common GitHub App / OIDC / workflow errors |
-| `ARCHITECTURE-EVOLUTION.md` | Root | Phase 1 (monolith ✅) → Phase 2 (YARP microservices 📅) |
+| `ARCHITECTURE-EVOLUTION.md` | Root | 14-phase roadmap: Phases 1-6 ✅ complete, Phase 7 next 📅 |
 | `AZURE-PROGRESS-EVALUATION.md` | Root | Learning progress weeks 1–10, next-step guides |
 | `AZURE-TOP-7-SERVICES-ANALYSIS.md` | Root | Analysis of 7 key Azure services used in this project |
 | `GITHUB-APP-DELETION-SUMMARY.md` | Root | GitHub App automation and deletion procedures |

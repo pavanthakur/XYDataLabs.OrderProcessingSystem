@@ -79,7 +79,7 @@ function Invoke-AzCommandWithRetry {
 - Key Vault verification
 - Key Vault listing
 - Application Insights connection string retrieval
-- Secret creation (OpenPayAdapter--ApiKey)
+- Secret creation (OpenPay--MerchantId / OpenPay--PrivateKey / OpenPay--DeviceSessionId)
 - Secret creation (ApplicationInsights--ConnectionString)
 - Secret listing for verification
 - App Service checks (API and UI)

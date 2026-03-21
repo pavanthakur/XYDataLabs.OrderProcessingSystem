@@ -223,7 +223,9 @@ jobs:
             echo ""
             echo "Note: The deployment will create the Key Vault automatically."
             echo "After deployment, populate the Key Vault with required secrets:"
-            echo "  - OpenPayAdapter--ApiKey"
+            echo "  - OpenPay--MerchantId"
+            echo "  - OpenPay--PrivateKey"
+            echo "  - OpenPay--DeviceSessionId"
             echo "  - ApplicationInsights--ConnectionString"
             echo ""
             echo "See bicep/README.md for detailed instructions"
@@ -320,14 +322,16 @@ jobs:
           
           # Check for required settings
           ASPNETCORE_ENV=$(echo "$SETTINGS" | jq -r '.[] | select(.name=="ASPNETCORE_ENVIRONMENT") | .value')
-          OPENPAY_BASE=$(echo "$SETTINGS" | jq -r '.[] | select(.name=="OpenPayAdapter__BaseUrl") | .value')
-          OPENPAY_KEY=$(echo "$SETTINGS" | jq -r '.[] | select(.name=="OpenPayAdapter__ApiKey") | .value')
+          OPENPAY_MERCHANT=$(echo "$SETTINGS" | jq -r '.[] | select(.name=="OpenPay__MerchantId") | .value')
+          OPENPAY_PRIVATE=$(echo "$SETTINGS" | jq -r '.[] | select(.name=="OpenPay__PrivateKey") | .value')
+          OPENPAY_DEVICE=$(echo "$SETTINGS" | jq -r '.[] | select(.name=="OpenPay__DeviceSessionId") | .value')
           APP_INSIGHTS=$(echo "$SETTINGS" | jq -r '.[] | select(.name=="APPLICATIONINSIGHTS_CONNECTION_STRING") | .value')
           
           echo "App Settings Check:"
           echo "  ASPNETCORE_ENVIRONMENT: $ASPNETCORE_ENV"
-          echo "  OpenPayAdapter__BaseUrl: $OPENPAY_BASE"
-          echo "  OpenPayAdapter__ApiKey: ${OPENPAY_KEY:0:30}..." # Mask secret
+          echo "  OpenPay__MerchantId: ${OPENPAY_MERCHANT:0:12}..."
+          echo "  OpenPay__PrivateKey: ${OPENPAY_PRIVATE:0:12}..." # Mask secret
+          echo "  OpenPay__DeviceSessionId: ${OPENPAY_DEVICE:0:12}..." # Mask secret
           echo "  APPLICATIONINSIGHTS_CONNECTION_STRING: ${APP_INSIGHTS:0:30}..." # Mask secret
           
           # Verify required settings exist
@@ -336,12 +340,14 @@ jobs:
             echo "ERROR: ASPNETCORE_ENVIRONMENT is missing"
             MISSING=1
           fi
-          if [ -z "$OPENPAY_BASE" ] || [ "$OPENPAY_BASE" = "null" ]; then
-            echo "ERROR: OpenPayAdapter__BaseUrl is missing"
-            MISSING=1
+          if [ -z "$OPENPAY_MERCHANT" ] || [ "$OPENPAY_MERCHANT" = "null" ]; then
+            echo "WARNING: OpenPay__MerchantId is missing (Key Vault reference may not be configured)"
           fi
-          if [ -z "$OPENPAY_KEY" ] || [ "$OPENPAY_KEY" = "null" ]; then
-            echo "WARNING: OpenPayAdapter__ApiKey is missing (Key Vault reference may not be configured)"
+          if [ -z "$OPENPAY_PRIVATE" ] || [ "$OPENPAY_PRIVATE" = "null" ]; then
+            echo "WARNING: OpenPay__PrivateKey is missing (Key Vault reference may not be configured)"
+          fi
+          if [ -z "$OPENPAY_DEVICE" ] || [ "$OPENPAY_DEVICE" = "null" ]; then
+            echo "WARNING: OpenPay__DeviceSessionId is missing (Key Vault reference may not be configured)"
           fi
           if [ -z "$APP_INSIGHTS" ] || [ "$APP_INSIGHTS" = "null" ]; then
             echo "WARNING: APPLICATIONINSIGHTS_CONNECTION_STRING is missing (Key Vault reference may not be configured)"

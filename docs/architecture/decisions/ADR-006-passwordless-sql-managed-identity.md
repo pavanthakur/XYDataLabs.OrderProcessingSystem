@@ -10,7 +10,7 @@
 
 ADR-004 established EF Core + Azure SQL with password authentication as a temporary measure. The following problems were identified:
 
-1. **Hardcoded password in source control** — `Admin100@` was committed in `infra/parameters/*.json` and as a default in `provision-azure-sql.ps1`. This is a critical security vulnerability.
+1. **Hardcoded password in source control** — a literal SQL admin password was committed in `infra/parameters/*.json` and as a default in `provision-azure-sql.ps1`. This is a critical security vulnerability.
 2. **No secret rotation** — A static password stored in Git and parameter files cannot be rotated without code changes and redeployments.
 3. **Manual SQL setup after clean deploys** — The `/sql-mi-setup` prompt was required after every resource group teardown to recreate SQL contained users. This is error-prone and not automated.
 

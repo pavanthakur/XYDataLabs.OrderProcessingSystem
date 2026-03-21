@@ -18,9 +18,6 @@ param appServiceSku string = 'F1'
 @description('Environment name (dev, uat, prod)')
 param environment string = 'dev'
 
-@description('Non-secret OpenPayAdapter base URL')
-param openPayAdapterBaseUrl string = 'https://api.openpay.example.com'
-
 // Key Vault name (must be globally unique, max 24 chars)
 // Using shortened base name and environment to stay within limits
 // Calculation: 'kv-' (3) + baseName (max 15) + '-' (1) + environment (max 5) = 24 chars max
@@ -107,14 +104,18 @@ resource appService 'Microsoft.Web/sites@2023-12-01' = {
           name: 'ASPNETCORE_ENVIRONMENT'
           value: aspNetCoreEnvironment
         }
-        {
-          name: 'OpenPayAdapter__BaseUrl'
-          value: openPayAdapterBaseUrl
-        }
         // Secret app settings as Key Vault references
         {
-          name: 'OpenPayAdapter__ApiKey'
-          value: '@Microsoft.KeyVault(SecretUri=https://${keyVaultName}${az.environment().suffixes.keyvaultDns}/secrets/OpenPayAdapter--ApiKey/)'
+          name: 'OpenPay__MerchantId'
+          value: '@Microsoft.KeyVault(SecretUri=https://${keyVaultName}${az.environment().suffixes.keyvaultDns}/secrets/OpenPay--MerchantId/)'
+        }
+        {
+          name: 'OpenPay__PrivateKey'
+          value: '@Microsoft.KeyVault(SecretUri=https://${keyVaultName}${az.environment().suffixes.keyvaultDns}/secrets/OpenPay--PrivateKey/)'
+        }
+        {
+          name: 'OpenPay__DeviceSessionId'
+          value: '@Microsoft.KeyVault(SecretUri=https://${keyVaultName}${az.environment().suffixes.keyvaultDns}/secrets/OpenPay--DeviceSessionId/)'
         }
         {
           name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'

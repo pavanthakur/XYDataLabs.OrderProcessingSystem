@@ -43,7 +43,7 @@ Your application will use **hostname-based connections**:
 ```json
 {
   "ConnectionStrings": {
-    "OrderProcessingSystemDbConnection": "Server=sql-server,1433;Database=OrderProcessingSystem;User Id=sa;Password=Admin100@;TrustServerCertificate=True;"
+    "OrderProcessingSystemDbConnection": "Server=sql-server,1433;Database=OrderProcessingSystem;User Id=sa;Password=<LOCAL_SQL_PASSWORD>;TrustServerCertificate=True;"
   }
 }
 ```
@@ -52,7 +52,7 @@ Your application will use **hostname-based connections**:
 ```json
 {
   "ConnectionStrings": {
-    "OrderProcessingSystemDbConnection_Local": "Server=localhost,1433;Database=OrderProcessingSystem;User Id=sa;Password=Admin100@;TrustServerCertificate=True;"
+    "OrderProcessingSystemDbConnection_Local": "Server=localhost,1433;Database=OrderProcessingSystem;User Id=sa;Password=<LOCAL_SQL_PASSWORD>;TrustServerCertificate=True;"
   }
 }
 ```
@@ -87,15 +87,15 @@ services:
 {
   "DatabaseSettings": {
     "Development": {
-      "ConnectionString": "Server=sql-server,1433;Database=OrderProcessingSystem;User Id=sa;Password=Admin100@;TrustServerCertificate=True;",
+      "ConnectionString": "Server=sql-server,1433;Database=OrderProcessingSystem;User Id=sa;Password=<LOCAL_SQL_PASSWORD>;TrustServerCertificate=True;",
       "RedisConnectionString": "redis:6379"
     },
     "UAT": {
-      "ConnectionString": "Server=sql-server,1433;Database=OrderProcessingSystem_UAT;User Id=sa;Password=Admin100@;TrustServerCertificate=True;",
+      "ConnectionString": "Server=sql-server,1433;Database=OrderProcessingSystem_UAT;User Id=sa;Password=<LOCAL_SQL_PASSWORD>;TrustServerCertificate=True;",
       "RedisConnectionString": "redis:6379"
     },
     "Production": {
-      "ConnectionString": "Server=sql-server,1433;Database=OrderProcessingSystem_Prod;User Id=sa;Password=Admin100@;TrustServerCertificate=True;",
+      "ConnectionString": "Server=sql-server,1433;Database=OrderProcessingSystem_Prod;User Id=sa;Password=<LOCAL_SQL_PASSWORD>;TrustServerCertificate=True;",
       "RedisConnectionString": "redis:6379"
     }
   }

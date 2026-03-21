@@ -132,6 +132,69 @@ function Write-ColoredOutput {
     }
 }
 
+function Initialize-LocalDockerSecrets {
+    param([string]$SecretsFilePath = ".env.local")
+
+    $secretDefinitions = @(
+        @{ Name = "LOCAL_SQL_PASSWORD"; Prompt = "Enter LOCAL_SQL_PASSWORD for local Docker SQL" },
+        @{ Name = "LOCAL_CERT_PASSWORD"; Prompt = "Enter LOCAL_CERT_PASSWORD for local HTTPS certificate" },
+        @{ Name = "LOCAL_OPENPAY_MERCHANT_ID"; Prompt = "Enter LOCAL_OPENPAY_MERCHANT_ID for local Docker payment flows" },
+        @{ Name = "LOCAL_OPENPAY_PRIVATE_KEY"; Prompt = "Enter LOCAL_OPENPAY_PRIVATE_KEY for local Docker payment flows" },
+        @{ Name = "LOCAL_OPENPAY_DEVICE_SESSION_ID"; Prompt = "Enter LOCAL_OPENPAY_DEVICE_SESSION_ID for local Docker payment flows" }
+    )
+
+    $fileSecrets = @{}
+    if (Test-Path $SecretsFilePath) {
+        foreach ($line in Get-Content $SecretsFilePath) {
+            if ($line -match '^\s*([A-Z0-9_]+)\s*=\s*(.*)$') {
+                $fileSecrets[$matches[1]] = $matches[2].Trim()
+            }
+        }
+    }
+
+    $storedNewSecret = $false
+    foreach ($definition in $secretDefinitions) {
+        $secretName = $definition.Name
+        $currentValue = (Get-Item -Path "Env:$secretName" -ErrorAction SilentlyContinue).Value
+        if (-not [string]::IsNullOrWhiteSpace($currentValue)) {
+            Write-ColoredOutput "Using $secretName from current environment" "Green" "INFO"
+            $fileSecrets[$secretName] = $currentValue
+            continue
+        }
+
+        $fileValue = if ($fileSecrets.ContainsKey($secretName)) { $fileSecrets[$secretName] } else { $null }
+        if (-not [string]::IsNullOrWhiteSpace($fileValue)) {
+            Set-Item -Path "Env:$secretName" -Value $fileValue
+            Write-ColoredOutput "Loaded $secretName from $SecretsFilePath" "Green" "INFO"
+            continue
+        }
+
+        Write-ColoredOutput "$secretName not set. Prompting once and storing it in $SecretsFilePath (gitignored)." "Yellow" "INFO"
+        $secretValue = Read-Host $definition.Prompt -MaskInput
+        if ([string]::IsNullOrWhiteSpace($secretValue)) {
+            throw "$secretName is required for Docker startup."
+        }
+
+        $fileSecrets[$secretName] = $secretValue
+        Set-Item -Path "Env:$secretName" -Value $secretValue
+        $storedNewSecret = $true
+    }
+
+    if ($storedNewSecret -or -not (Test-Path $SecretsFilePath)) {
+        $fileContent = @(
+            '# Local Docker secrets for this machine only',
+            '# This file is gitignored',
+            "LOCAL_SQL_PASSWORD=$($fileSecrets['LOCAL_SQL_PASSWORD'])",
+            "LOCAL_CERT_PASSWORD=$($fileSecrets['LOCAL_CERT_PASSWORD'])",
+            "LOCAL_OPENPAY_MERCHANT_ID=$($fileSecrets['LOCAL_OPENPAY_MERCHANT_ID'])",
+            "LOCAL_OPENPAY_PRIVATE_KEY=$($fileSecrets['LOCAL_OPENPAY_PRIVATE_KEY'])",
+            "LOCAL_OPENPAY_DEVICE_SESSION_ID=$($fileSecrets['LOCAL_OPENPAY_DEVICE_SESSION_ID'])"
+        )
+        Set-Content -Path $SecretsFilePath -Value $fileContent
+        Write-ColoredOutput "Stored local Docker secrets in $SecretsFilePath for future runs" "Green" "SUCCESS"
+    }
+}
+
 function Show-ImageStatus {
     param([string]$Environment)
     
@@ -590,6 +653,8 @@ try {
     if ([string]::IsNullOrEmpty($SharedSettingsPath)) {
         $SharedSettingsPath = "../Configuration/sharedsettings.$Environment.json"
     }
+
+    Initialize-LocalDockerSecrets -SecretsFilePath ".env.local"
     
     # Enterprise backup if required
     if ($EnterpriseMode -and ($BackupFirst -or $EnterpriseConfig[$Environment].BackupRequired)) {

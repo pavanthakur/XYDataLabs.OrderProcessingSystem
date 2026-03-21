@@ -15,7 +15,10 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:5020
       - ASPNETCORE_HTTP_PORTS=5020
-      - ConnectionStrings__OrderProcessingSystemDbConnection=Server=host.docker.internal,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=Admin100@;TrustServerCertificate=True;
+      - ConnectionStrings__OrderProcessingSystemDbConnection=Server=host.docker.internal,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
+      - OpenPay__MerchantId=${LOCAL_OPENPAY_MERCHANT_ID}
+      - OpenPay__PrivateKey=${LOCAL_OPENPAY_PRIVATE_KEY}
+      - OpenPay__DeviceSessionId=${LOCAL_OPENPAY_DEVICE_SESSION_ID}
       - USE_HTTPS=false
     volumes:
       - ../../logs:/logs
@@ -44,8 +47,12 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=https://+:5021
       - ASPNETCORE_HTTPS_PORTS=5021
-      - ASPNETCORE_Kestrel__Certificates__Default__Password=P@ss100
-      - ConnectionStrings__OrderProcessingSystemDbConnection=Server=host.docker.internal,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=Admin100@;TrustServerCertificate=True;
+      - ASPNETCORE_Kestrel__Certificates__Default__Password=${LOCAL_CERT_PASSWORD}
+      - ApiSettings__API__https__CertPassword=${LOCAL_CERT_PASSWORD}
+      - ConnectionStrings__OrderProcessingSystemDbConnection=Server=host.docker.internal,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
+      - OpenPay__MerchantId=${LOCAL_OPENPAY_MERCHANT_ID}
+      - OpenPay__PrivateKey=${LOCAL_OPENPAY_PRIVATE_KEY}
+      - OpenPay__DeviceSessionId=${LOCAL_OPENPAY_DEVICE_SESSION_ID}
     volumes:
       - ../../logs:/logs
       - ../../Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
@@ -104,7 +111,8 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=https://+:5023
       - ASPNETCORE_HTTPS_PORTS=5023
-      - ASPNETCORE_Kestrel__Certificates__Default__Password=P@ss100
+      - ASPNETCORE_Kestrel__Certificates__Default__Password=${LOCAL_CERT_PASSWORD}
+      - ApiSettings__UI__https__CertPassword=${LOCAL_CERT_PASSWORD}
       - ApiSettings__BaseUrl=https://localhost:5021
     volumes:
       - ../../logs:/logs
