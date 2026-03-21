@@ -484,7 +484,7 @@ Working microservices locally with correct event-based communication model.
 │  │                                                                 │ │
 │  │  ┌──────────────────────────────────────────────────────────┐  │ │
 │  │  │              YARP Gateway Container App                   │  │ │
-│  │  │         (Public Ingress - HTTPS + JWT validation)         │  │ │
+│  │  │         (Internal - JWT validation + routing)             │  │ │
 │  │  └────────┬──────────┬──────────┬──────────┬────────────────┘  │ │
 │  │           │          │          │          │                    │ │
 │  │  ┌────────▼─────┐ ┌──▼─────────┐ ┌────────▼────────┐ ┌───▼───┐│ │
@@ -517,10 +517,15 @@ Working microservices locally with correct event-based communication model.
 │  │  (JWT + OIDC)        │         │  (Logging & Metrics) │          │
 │  └──────────────────────┘         └──────────────────────┘          │
 │                                                                      │
-│  ┌──────────────────────┐                                            │
-│  │  Azure Cache for     │                                            │
-│  │  Redis (Private EP)  │                                            │
-│  └──────────────────────┘                                            │
+│  ┌──────────────────────┐         ┌──────────────────────┐          │
+│  │  Azure Cache for     │         │  Azure API           │          │
+│  │  Redis (Private EP)  │         │  Management (APIM)   │          │
+│  └──────────────────────┘         │  (Public Gateway)    │          │
+│                                   └──────────────────────┘          │
+│  ┌──────────────────────┐         ┌──────────────────────┐          │
+│  │  Azure Functions     │         │  Azure Event Grid    │          │
+│  │  (DLQ reprocessor)   │         │  (Platform events)   │          │
+│  └──────────────────────┘         └──────────────────────┘          │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -528,19 +533,24 @@ Working microservices locally with correct event-based communication model.
 ### Key Deliverables
 
 - Deploy to **Azure Container Apps** (managed environment, auto-scaling, scale-to-zero)
+- **Azure API Management (APIM)** — Consumption tier as public-facing gateway; subscription keys, external rate limiting, developer portal, API analytics. YARP becomes the internal east-west proxy behind APIM: `Internet → APIM → ACA Ingress → YARP → Services`
 - **Azure Container Registry (ACR)** — build and push container images
 - **Azure Service Bus** — replace in-memory event bus with durable topics + subscriptions
+- **Azure Event Grid** — platform/infrastructure event routing (deployment notifications, blob lifecycle); Service Bus remains for domain events. Decision rule: Event Grid = reactive fan-out, Service Bus = reliable delivery with sessions/DLQ
+- **Azure Functions** — Service Bus-triggered Function for DLQ reprocessing (isolated process model); timer-triggered Function for scheduled projection health checks (Phase 14)
 - **Azure Cache for Redis** — managed Redis replacing local container; used for distributed cache and session state
 - **Observability** — App Insights + OpenTelemetry distributed tracing across all services; `traceparent` propagated through Service Bus message headers
 - **Secrets** — Azure Key Vault with managed identity (no credentials in config)
 - **Private networking** — VNet integration, private endpoints for SQL, Key Vault, and Redis
+- **Cost governance** — scale-to-zero on all Container Apps, APIM Consumption tier (pay-per-call), autoscale RU caps on Cosmos DB, Azure Budget alerts per resource group
 
 ### Security
 
 - **Identity:** Azure Entra ID (Azure AD) for authentication
-- **JWT auth** — token validation at gateway, token propagation to downstream services
+- **JWT auth** — token validation at APIM (policy-based) and YARP gateway, token propagation to downstream services
 - **Managed Identity** — services access Key Vault and SQL without stored credentials
 - **OIDC** — GitHub Actions deploys via federated credentials (existing pattern)
+- **WAF / Network Security** — Azure Front Door or WAF policy in front of APIM; NSG rules for ACA VNet; private DNS zones for internal service resolution
 
 ### Messaging Backbone
 
@@ -552,7 +562,7 @@ Working microservices locally with correct event-based communication model.
 ### Dead-Letter Queue (DLQ) Handling
 
 - **Alert threshold** — Azure Monitor alert when DLQ depth exceeds configurable limit
-- **Reprocess endpoint** — admin API to replay dead-lettered messages back to source topic
+- **Azure Function (DLQ reprocessor)** — Service Bus-triggered Function replays dead-lettered messages back to source topic (replaces admin API endpoint — Functions are the natural fit for stateless, event-triggered processing)
 - **Poison message quarantine** — messages that fail reprocessing N times are moved to a poison store for manual review
 
 ### Advanced Deployment Patterns
@@ -564,7 +574,7 @@ Working microservices locally with correct event-based communication model.
 
 ### Outcome
 
-Secure, scalable cloud-native microservices with durable messaging, managed Redis, DLQ handling, and zero-downtime deployments.
+Secure, scalable cloud-native microservices with APIM as public gateway, durable messaging (Service Bus + Event Grid), Azure Functions for DLQ reprocessing, managed Redis, and zero-downtime deployments.
 
 ---
 
@@ -651,10 +661,12 @@ Independent, fully decoupled services with clear data ownership, a documented ch
 - **Per-service CI/CD pipelines** — independent build/test/deploy per service
 - **Health check gates** — deployment blocked if `/health/ready` fails post-deploy
 - **Advanced Polly** — bulkhead isolation + fallback policies (retry + circuit breaker already in Phase 9)
+- **DR / Business Continuity** — documented RTO/RPO targets per service; Azure SQL geo-replication strategy; Cosmos DB multi-region (mention only); backup/restore runbook
+- **Performance / Load Testing** — Azure Load Testing or k6 for baseline performance; SLO validation under realistic load before production
 
 ### Outcome
 
-Scalable, manageable production platform with enterprise-grade operations and advanced resilience.
+Scalable, manageable production platform with enterprise-grade operations, advanced resilience, DR planning, and load-tested SLOs.
 
 ---
 
@@ -679,7 +691,7 @@ Enterprise-grade, cloud-native system with excellent developer inner-loop experi
 
 ---
 
-## Phase 14 — CQRS Read Model with NoSQL (MongoDB) 📅
+## Phase 14 — CQRS Read Model with Cosmos DB (MongoDB API) 📅
 
 **Focus:** Separate read and write models for performance and scalability.
 
@@ -693,12 +705,13 @@ Enterprise-grade, cloud-native system with excellent developer inner-loop experi
 │  ─────────                            ─────────                     │
 │                                                                      │
 │  ┌──────────┐    ┌─────────────┐      ┌──────────┐    ┌──────────┐ │
-│  │ Command  │───►│  Handler    │      │  Query   │───►│ MongoDB  │ │
-│  │ (POST/   │    │ (validates, │      │  (GET)   │    │ (fast    │ │
-│  │  PUT/    │    │  writes)    │      └──────────┘    │  reads)  │ │
-│  │  DELETE) │    └─────┬───────┘                      └──────────┘ │
-│  └──────────┘          │                                    ▲       │
-│                        │                                    │       │
+│  │ Command  │───►│  Handler    │      │  Query   │───►│ Cosmos DB│ │
+│  │ (POST/   │    │ (validates, │      │  (GET)   │    │ MongoDB  │ │
+│  │  PUT/    │    │  writes)    │      └──────────┘    │ API      │ │
+│  │  DELETE) │    └─────────────┘                      │ (fast    │ │
+│  └──────────┘          │                          │  reads)  │ │
+│                        │                          └──────────┘ │
+│                        │                                ▲       │
 │               ┌────────▼─────────┐                          │       │
 │               │  SQL Server      │                          │       │
 │               │  (Source of      │                          │       │
@@ -732,41 +745,44 @@ Enterprise-grade, cloud-native system with excellent developer inner-loop experi
 
 ### Key Deliverables
 
-**1. Read Models (MongoDB)**
+**1. Read Models (Azure Cosmos DB for MongoDB API)**
 - Denormalized documents: Orders with Customer + Payment info, optimized for UI queries
-- `TenantId` included in every document; query filters applied per tenant
+- `TenantId` as **partition key** — natural fit for multi-tenancy; included in every document; query filters applied per tenant
+- Same MongoDB .NET driver — code runs against Cosmos DB for MongoDB API with zero changes
+- **RU provisioning** — autoscale with configurable max RU cap per collection
 
 **2. Projection Handlers**
 - Consume events: `OrderCreated`, `PaymentProcessed`, `CustomerUpdated`
-- Build/update denormalized MongoDB documents in near-real-time
+- Build/update denormalized Cosmos DB documents in near-real-time
 
 **3. Background Jobs (Hangfire)**
 - Rebuild projections on demand
-- Fix inconsistencies between SQL and MongoDB
+- Fix inconsistencies between SQL and Cosmos DB
 - Backfill missing data after schema changes
 
 **4. Multi-Tenancy**
-- `TenantId` field in every MongoDB document
+- `TenantId` as partition key in every Cosmos DB document
 - All read queries filtered by tenant — same pattern as EF global filters
 
 ### Rules (Critical)
 
-- **No dual write** — never write to SQL + MongoDB in the same request
-- **Always:** Write → SQL → Outbox → Event Bus → Projection → MongoDB
-- **MongoDB is NOT the source of truth** — SQL Server is authoritative
+- **No dual write** — never write to SQL + Cosmos DB in the same request
+- **Always:** Write → SQL → Outbox → Event Bus → Projection → Cosmos DB
+- **Cosmos DB is NOT the source of truth** — SQL Server is authoritative
 - **Eventual consistency** — reads may lag behind writes by seconds
 
 ### Read Model Versioning
 
-- Every MongoDB document includes a `_schemaVersion` field (integer)
+- Every Cosmos DB document includes a `_schemaVersion` field (integer)
 - Projection handlers write the current schema version; older documents coexist with newer ones
 - **Backward-compatible projections** — query code handles missing fields with sensible defaults
 - On major schema change, a Hangfire job rebuilds the projection from event history, bumping `_schemaVersion`
-- **Projection lag metric** — OTel gauge tracking seconds between last SQL write and corresponding MongoDB update; alert if > threshold
+- **Projection lag metric** — OTel gauge tracking seconds between last SQL write and corresponding Cosmos DB update; alert if > threshold
+- **Cosmos DB change feed** — noted as an alternative to Service Bus for driving projections (can be evaluated if latency requirements tighten)
 
 ### Outcome
 
-True CQRS with read/write separation, high-performance queries via MongoDB, scalable read layer, and eventually consistent system.
+True CQRS with read/write separation, high-performance queries via Cosmos DB (MongoDB API), scalable read layer with `TenantId` partitioning, and eventually consistent system.
 
 ---
 
@@ -774,13 +790,14 @@ True CQRS with read/write separation, high-performance queries via MongoDB, scal
 
 | Feature | Baseline (Monolith) | Phase 9 (YARP Local) | Phase 10 (ACA Cloud) | Phase 14 (Final State) |
 |---------|--------------------|--------------------|--------------------|-----------------------|
-| **Deployment** | 2 App Services | Docker Compose (7 containers) | ACA (auto-scaling) | ACA + MongoDB |
-| **Communication** | In-process | Events + HTTP | Service Bus + HTTP | Service Bus + HTTP |
-| **Data** | Single shared DB | Single shared DB | Single shared DB | DB per service + MongoDB |
+| **Deployment** | 2 App Services | Docker Compose (7 containers) | ACA (auto-scaling) | ACA + Cosmos DB |
+| **Communication** | In-process | Events + HTTP | Service Bus + Event Grid + HTTP | Service Bus + Event Grid + HTTP |
+| **Data** | Single shared DB | Single shared DB | Single shared DB | DB per service + Cosmos DB |
 | **Scaling** | Vertical only | Per-container | Per-service auto-scale | Per-service + read replicas |
 | **Identity** | Key Vault (basic) | N/A (local) | Entra ID + JWT + MI | Entra ID + JWT + MI |
 | **Observability** | App Insights | OTel + local traces | OTel + Azure Monitor | Full distributed traces |
 | **Resilience** | None | Polly basics (retry + CB) | Polly + advanced + DLQ | Polly + dead-letter + retry |
+| **API Gateway** | N/A | YARP (local) | APIM (public) + YARP (internal) | APIM + YARP |
 | **Dev Experience** | VS F5 | Docker Compose | ACA deploy | .NET Aspire |
 
 ---
@@ -802,7 +819,7 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
      │
      ├── Phase 9     ─── 📅 Extract services locally (YARP + Docker Compose)
      │
-     ├── Phase 10    ─── 📅 Deploy to Azure Container Apps + Service Bus
+     ├── Phase 10    ─── 📅 Deploy to ACA + Service Bus + APIM + Functions
      │
      ├── Phase 11    ─── 📅 Split databases (each service owns its data)
      │
@@ -810,7 +827,7 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
      │
      ├── Phase 13    ─── 📅 Aspire orchestration + advanced deployments
      │
-     └── Phase 14    ─── 📅 CQRS read model (MongoDB) — final architecture
+     └── Phase 14    ─── 📅 CQRS read model (Cosmos DB) — final architecture
 ```
 
 ### Why This Order?
@@ -855,10 +872,14 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 - [ ] Polly v8 basics (retry, circuit breaker, timeout) from day one
 - [ ] Graceful shutdown + structured concurrency
 - [ ] Azure Container Apps deployment
+- [ ] Azure API Management (APIM) as public gateway (Consumption tier)
 - [ ] Azure Service Bus messaging backbone + DLQ handling
+- [ ] Azure Event Grid for platform/infrastructure events
+- [ ] Azure Functions for DLQ reprocessing (Service Bus trigger, isolated process)
 - [ ] Azure Cache for Redis (managed)
 - [ ] Azure Entra ID + JWT authentication
 - [ ] Blue-green + canary deployments via ACA revisions
+- [ ] Cost governance (scale-to-zero, budget alerts)
 
 ### Phase 11-12 📅 Autonomy & Operations
 - [ ] Database per service + data ownership
@@ -868,12 +889,16 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 - [ ] Observability dashboards + SLOs
 - [ ] Advanced Polly (bulkhead, fallback)
 - [ ] Azure App Configuration + feature flags
+- [ ] DR / Business Continuity (RTO/RPO targets, geo-replication strategy)
+- [ ] Performance / Load Testing (Azure Load Testing or k6)
 
 ### Phase 13-14 📅 Maturity & CQRS
 - [ ] .NET Aspire orchestration + resource definitions + service discovery
 - [ ] Aspire integration tests (`DistributedApplicationTestingBuilder`)
-- [ ] MongoDB read models + projection handlers
+- [ ] Cosmos DB (MongoDB API) read models + projection handlers
+- [ ] Partition key strategy (`TenantId`) + autoscale RU provisioning
 - [ ] Read model versioning (`_schemaVersion`) + projection lag metric
+- [ ] Cosmos DB change feed awareness (alternative projection driver)
 - [ ] Hangfire background jobs for projection rebuilds
 
 ---
@@ -883,17 +908,18 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 | Capability | Implementation |
 |-----------|----------------|
 | **Architecture** | Clean Architecture + CQRS + Event-Driven Microservices |
-| **Gateway** | YARP reverse proxy with JWT validation |
-| **Communication** | Azure Service Bus (async) + HTTP (sync queries) |
+| **Gateway** | APIM (public, north-south) + YARP (internal, east-west) with JWT validation |
+| **Communication** | Azure Service Bus (async domain events) + Event Grid (platform events) + HTTP (sync queries) |
 | **Write DB** | SQL Server (source of truth) per service |
-| **Read DB** | MongoDB (denormalized projections) |
+| **Read DB** | Azure Cosmos DB for MongoDB API (denormalized projections, TenantId partition key) |
 | **Identity** | Azure Entra ID + JWT + Managed Identity |
-| **Multi-tenancy** | Enforced at every layer (API, events, DB, MongoDB) |
+| **Multi-tenancy** | Enforced at every layer (API, events, DB, Cosmos DB partition key) |
 | **Observability** | OpenTelemetry + App Insights + Azure Monitor dashboards |
 | **Resilience** | Polly (retry, circuit breaker, timeout, bulkhead) + dead-letter queues |
 | **Cache** | Azure Cache for Redis (distributed cache + session state) |
 | **Error Handling** | ProblemDetails (RFC 9457) + global exception middleware |
 | **Events** | Versioned schemas (inbox + outbox) + choreography with Saga escalation |
+| **Serverless** | Azure Functions for DLQ reprocessing + scheduled health checks |
 | **Orchestration** | .NET Aspire (local) + Azure Container Apps (cloud) |
 | **CI/CD** | Per-service GitHub Actions + health check deployment gates |
 | **Deployments** | Blue-green + canary via ACA revisions |
@@ -915,9 +941,12 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 ### External References
 - YARP Documentation: https://microsoft.github.io/reverse-proxy/
 - Azure Container Apps: https://learn.microsoft.com/azure/container-apps/
+- Azure API Management: https://learn.microsoft.com/azure/api-management/
+- Azure Functions: https://learn.microsoft.com/azure/azure-functions/
 - Azure Service Bus: https://learn.microsoft.com/azure/service-bus-messaging/
+- Azure Event Grid: https://learn.microsoft.com/azure/event-grid/
+- Azure Cosmos DB for MongoDB: https://learn.microsoft.com/azure/cosmos-db/mongodb/
 - .NET Aspire: https://learn.microsoft.com/dotnet/aspire/
-- MongoDB .NET Driver: https://www.mongodb.com/docs/drivers/csharp/
 - Hangfire: https://www.hangfire.io/
 - Microservices Patterns: https://microservices.io/patterns/
 
