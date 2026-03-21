@@ -1,6 +1,6 @@
 # Architecture Evolution: Monolith to Enterprise Microservices
 
-**Last Updated:** March 21, 2026  
+**Last Updated:** March 22, 2026  
 **Current Status:** Phases 1-6 Complete ✅ | Phase 7 Next 📅 | Phases 8-14 Planned 📅
 
 ---
@@ -142,7 +142,7 @@ XYDataLabs.OrderProcessingSystem.sln
 - Changed all services: concrete DbContext → `IAppDbContext`
 - Removed Application → Infrastructure project reference
 - Moved DI wiring to API composition root
-- **Roslyn analyzers** — `Roslynator.Analyzers`, `Meziantou.Analyzer`, `SonarAnalyzer.CSharp` in `Directory.Packages.props`; enforces code quality, security patterns, and anti-pattern detection at build time
+- **Roslyn analyzers** — `Roslynator.Analyzers`, `Meziantou.Analyzer`, `SonarAnalyzer.CSharp` in `Directory.Build.props` (global, build-time only); enforces code quality, security patterns, and anti-pattern detection at build time
 
 ## Phase 2 — Hand-Rolled CQRS ✅
 - CQRS abstractions: `ICommand<T>`, `IQuery<T>`, `ICommandHandler`, `IQueryHandler`, `IPipelineBehavior`, `IDispatcher`
@@ -206,6 +206,7 @@ XYDataLabs.OrderProcessingSystem.sln
 - Swagger configured with `SubstituteApiVersionInUrl`, versioned group `'v'VVV`
 - 3 new CachingBehavior unit tests (cache miss, cache hit, non-cacheable passthrough)
 - All integration test routes updated to `/api/v1/` paths
+- **Central Package Management (CPM)** — `ManagePackageVersionsCentrally=true` in `Directory.Packages.props`; all `Version=""` attributes removed from individual `.csproj` files; single source of truth for all NuGet package versions across the solution
 - Build: 0 errors, 42/42 unit tests passing
 
 ---
@@ -919,6 +920,7 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 - [x] Caching pipeline, API versioning `/api/v1/`, health checks, CancellationToken, TimeProvider
 - [x] Roslyn analyzers (Roslynator, Meziantou, SonarAnalyzer) — build-time code quality enforcement
 - [x] Architecture tests (`NetArchTest.Rules`) — enforcing Clean Architecture layer boundaries
+- [x] Central Package Management — `Directory.Packages.props` as single source of truth for all NuGet versions
 
 ### Phase 7-8 📅 Hardening & Events
 - [ ] Tenant enforcement + audit logging
