@@ -119,7 +119,7 @@ is being incrementally improved through 6 phases to become Aspire-ready and prod
 | **2** | Hand-Rolled CQRS | CQRS abstractions, Dispatcher, pipeline behaviors, 12 handlers, controller refactoring, old service deletion | ✅ **COMPLETE** |
 | **3** | Observability (OpenTelemetry) | `AddObservability()`, auto-instrumentation (HTTP/SQL/Runtime), App Insights + OTLP exporters, custom `ActivitySource`, correlation middleware | ✅ **COMPLETE** |
 | **4** | Multi-Tenancy Skeleton | `ITenantProvider`, `TenantId` on `BaseAuditableEntity`, EF global query filters, `X-Tenant-Id` header | ✅ **COMPLETE** |
-| **5** | Test Project Restructure | Split into Domain.Tests, Application.Tests, API.Tests, Integration.Tests (Testcontainers) | 📅 Planned |
+| **5** | Test Project Restructure | Split into Domain.Tests, Application.Tests, API.Tests, Integration.Tests (Testcontainers) | ✅ **COMPLETE** |
 | **6** | Polish & Hardening | Redis `CachingBehavior`, API versioning `/api/v1/`, health checks, `CancellationToken`, `IOptions<T>` | 📅 Planned |
 
 ### Phase 1 — Structural Foundation ✅
@@ -169,10 +169,17 @@ is being incrementally improved through 6 phases to become Aspire-ready and prod
 - Wired in API + UI `Program.cs` (Scoped DI, middleware before `CorrelationMiddleware`)
 - Build: 0 errors, 31/31 tests passing
 
-### Phase 5 — Test Project Restructure 📅
-- Split single UnitTest project into Domain.Tests, Application.Tests, API.Tests
-- Add Integration.Tests with Testcontainers (SQL Server)
-- Migrate existing tests to correct projects
+### Phase 5 — Test Project Restructure ✅
+- Created 4 test projects under `tests/` solution folder:
+  - `Domain.Tests` — 8 entity tests (Customer defaults, Order defaults, OrderProduct computed price, tenant inheritance)
+  - `Application.Tests` — 17 handler tests migrated (OrderHandlerTests, CustomerHandlerTests) + 4 TestBase classes
+  - `API.Tests` — 15 controller tests migrated (OrderControllerTests, CustomersControllerTests)
+  - `Integration.Tests` — 4 end-to-end scenario tests (Testcontainers SQL Server + WebApplicationFactory)
+- Added `public partial class Program { }` to API for WebApplicationFactory<Program> access
+- `SqlServerFixture` — Testcontainers `MsSqlContainer` with shared `[Collection("SqlServer")]`
+- `IntegrationTestWebAppFactory` — replaces DbContext with Testcontainers connection string
+- Removed old `XYDataLabs.OrderProcessingSystem.UnitTest` project from solution
+- Build: 0 errors, 39/39 unit tests passing (integration tests require Docker)
 
 ### Phase 6 — Polish & Hardening 📅
 - `ICacheService` + Redis implementation
@@ -181,6 +188,7 @@ is being incrementally improved through 6 phases to become Aspire-ready and prod
 - Health checks (SQL, Redis, external deps)
 - `CancellationToken` on all handler signatures
 - `TimeProvider` abstraction, `IOptions<T>` for settings
+- Update required unit test project related to latest modified changes
 
 ---
 
