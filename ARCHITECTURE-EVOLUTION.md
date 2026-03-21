@@ -1016,7 +1016,7 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 
 ## Gap Analysis: Patterns Evaluated & Deferred
 
-_Patterns from industry reference architectures (Milan Jovanovic's Bookify, etc.) evaluated against the 14-phase plan. Items below were considered and deliberately deferred or excluded — documented here so the reasoning is preserved._
+_Patterns from industry reference architectures evaluated against the 14-phase plan. Items below were considered and deliberately deferred or excluded — documented here so the reasoning is preserved._
 
 | Pattern | Decision | Phase | Rationale |
 |---|---:|---|---|
@@ -1065,6 +1065,27 @@ _Patterns from industry reference architectures (Milan Jovanovic's Bookify, etc.
 | **Optimistic concurrency** (EF `RowVersion` + `ConcurrencyException`) | Phase 7 | Genuine gap — any multi-tenant system with concurrent writes needs row versioning. Critical for Order aggregate where parallel requests (e.g., simultaneous `Pay()` and `Cancel()`) must be detected and failed safely. |
 | **Strongly-typed IDs** (`OrderId`, `CustomerId` as `readonly record struct`) | Phase 7 | Eliminates `Guid` parameter-swap bugs at compile time. Lightweight pattern (one-line record struct + EF value converter) with high safety payoff. Natural companion to Value Objects. |
 | **SaveChangesAsync domain event dispatch** (ChangeTracker extraction) | Phase 8 | Was implied by Outbox pattern but not explicitly documented. Made explicit: extract events from `ChangeTracker.Entries<Entity>()` after `base.SaveChangesAsync()` — ensures events only fire on successful persistence. |
+
+### Twelve-Factor App Compliance
+
+_Every factor is already covered across the 14-phase plan — documented here for completeness._
+
+| # | Factor | Where Covered | Status |
+|---|--------|---------------|--------|
+| 1 | **Codebase** — one repo, multiple deploys | GitHub repo + branch→env mapping (`dev`→dev, `staging`→staging, `main`→prod) | ✅ |
+| 2 | **Dependencies** — explicitly declared | CPM (`Directory.Packages.props`), all NuGet packages versioned centrally (Phase 6) | ✅ |
+| 3 | **Config** — env vars, not code | `sharedsettings.{dev,stg,prod}.json`, `ASPNETCORE_ENVIRONMENT`, Key Vault for secrets | ✅ |
+| 4 | **Backing Services** — treat as attached resources | Azure SQL, Redis (Phase 6), Service Bus (Phase 10) — all via connection strings, swappable | ✅ |
+| 5 | **Build, Release, Run** — strict separation | GitHub Actions: build → test → publish → deploy. 9 workflows. Docker images. | ✅ |
+| 6 | **Processes** — stateless | `IDistributedCache` (Phase 6) — Redis or in-memory. No in-process session state. | ✅ |
+| 7 | **Port Binding** — self-contained | Kestrel, Docker port mapping (5010–5043), ACA ingress (Phase 10) | ✅ |
+| 8 | **Concurrency** — scale out via processes | ACA auto-scale + scale-to-zero (Phase 10), per-service scaling | ✅ |
+| 9 | **Disposability** — fast startup, graceful shutdown | `IHostApplicationLifetime` drain pattern (Phase 9) | ✅ |
+| 10 | **Dev/Prod Parity** — keep environments similar | Docker Compose mirrors prod (Phase 9), `sharedsettings` per env, same Bicep IaC all envs | ✅ |
+| 11 | **Logs** — stream to stdout | Serilog Console sink (Phase 3), structured logging with `TraceId` + `TenantId` | ✅ |
+| 12 | **Admin Processes** — one-off tasks as code | EF migrations (`run-database-migrations.ps1`), PowerShell bootstrap scripts, Hangfire jobs (Phase 14) | ✅ |
+
+> All 12 factors are addressed. The plan doesn't explicitly name-drop "Twelve-Factor" as a concept, but every principle is implemented organically across Phases 1–14.
 
 ---
 
