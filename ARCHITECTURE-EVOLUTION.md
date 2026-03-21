@@ -501,6 +501,7 @@ services:
 
 - **Graceful shutdown** — `IHostApplicationLifetime` to drain in-flight requests before container stops
 - **Structured concurrency** — `Task.WhenAll` for parallel scatter-gather queries through gateway
+- **Testcontainers snapshots** — pre-seeded Docker images for integration tests: build a custom SQL Server image with migrations + seed data baked in, so each test run skips migration/seed overhead; apply when test suite runtime becomes a CI bottleneck across multiple per-module DBs
 
 ### Outcome
 
