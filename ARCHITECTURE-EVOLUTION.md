@@ -120,7 +120,7 @@ is being incrementally improved through 6 phases to become Aspire-ready and prod
 | **3** | Observability (OpenTelemetry) | `AddObservability()`, auto-instrumentation (HTTP/SQL/Runtime), App Insights + OTLP exporters, custom `ActivitySource`, correlation middleware | ✅ **COMPLETE** |
 | **4** | Multi-Tenancy Skeleton | `ITenantProvider`, `TenantId` on `BaseAuditableEntity`, EF global query filters, `X-Tenant-Id` header | ✅ **COMPLETE** |
 | **5** | Test Project Restructure | Split into Domain.Tests, Application.Tests, API.Tests, Integration.Tests (Testcontainers) | ✅ **COMPLETE** |
-| **6** | Polish & Hardening | Redis `CachingBehavior`, API versioning `/api/v1/`, health checks, `CancellationToken`, `IOptions<T>` | 📅 Planned |
+| **6** | Polish & Hardening | `CachingBehavior` (IDistributedCache/Redis), API versioning `/api/v1/`, health checks, `CancellationToken`, `TimeProvider` | ✅ **COMPLETE** |
 
 ### Phase 1 — Structural Foundation ✅
 - Renamed `Utilities` project → `SharedKernel` (project, .csproj refs, namespaces, .sln)
@@ -181,14 +181,19 @@ is being incrementally improved through 6 phases to become Aspire-ready and prod
 - Removed old `XYDataLabs.OrderProcessingSystem.UnitTest` project from solution
 - Build: 0 errors, 39/39 unit tests passing (integration tests require Docker)
 
-### Phase 6 — Polish & Hardening 📅
-- `ICacheService` + Redis implementation
-- `CachingBehavior` CQRS pipeline (queries opt in via `ICacheable`)
-- API versioning: `/api/v1/[controller]`
-- Health checks (SQL, Redis, external deps)
-- `CancellationToken` on all handler signatures
-- `TimeProvider` abstraction, `IOptions<T>` for settings
-- Update required unit test project related to latest modified changes
+### Phase 6 — Polish & Hardening ✅
+- `CancellationToken` propagated through all 10 controller actions → Dispatcher → handlers
+- `TimeProvider` abstraction replaces `DateTime.UtcNow` (InfoController, ProcessPaymentCommandHandler); registered as `TimeProvider.System` singleton
+- `ICacheable` interface + `CachingBehavior<TRequest,TResult>` pipeline behavior (outermost, before logging)
+- `IDistributedCache`: Redis via `StackExchangeRedisCache` when connection string present, `DistributedMemoryCache` fallback
+- `GetAllCustomersQuery` implements `ICacheable` (5-min cache, key `customers:all`)
+- `[JsonConstructor]` on `Result<T>` and `Error` for cache serialization round-trip
+- `/health` endpoint with SQL Server health check (`AspNetCore.HealthChecks.SqlServer`)
+- API versioning: `Asp.Versioning.Mvc` — URL segment `/api/v1/[controller]`, `[ApiVersion("1.0")]` on all controllers
+- Swagger configured with `SubstituteApiVersionInUrl`, versioned group `'v'VVV`
+- 3 new CachingBehavior unit tests (cache miss, cache hit, non-cacheable passthrough)
+- All integration test routes updated to `/api/v1/` paths
+- Build: 0 errors, 42/42 unit tests passing
 
 ---
 

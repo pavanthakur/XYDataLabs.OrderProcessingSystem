@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Asp.Versioning;
+using Microsoft.AspNetCore.Mvc;
 using XYDataLabs.OrderProcessingSystem.API.Extensions;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
@@ -10,7 +11,8 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
     /// <summary>
     /// Controller to manage customer-related operations.
     /// </summary>
-    [Route("api/[controller]")]
+    [ApiVersion("1.0")]
+    [Route("api/v{version:apiVersion}/[controller]")]
     [ApiController]
     public class CustomerController : ControllerBase
     {

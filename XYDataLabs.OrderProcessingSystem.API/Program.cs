@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using AutoMapper;
 using XYDataLabs.OrderProcessingSystem.API.Middleware;
 using XYDataLabs.OrderProcessingSystem.Application;
@@ -171,6 +172,19 @@ if (!string.IsNullOrWhiteSpace(dbConnForHealth))
     healthChecksBuilder.AddSqlServer(dbConnForHealth, name: "sqlserver");
 
 builder.Services.AddControllers();
+
+// API Versioning — URL segment: /api/v1/[controller]
+builder.Services.AddApiVersioning(options =>
+{
+    options.DefaultApiVersion = new ApiVersion(1, 0);
+    options.AssumeDefaultVersionWhenUnspecified = true;
+    options.ReportApiVersions = true;
+    options.ApiVersionReader = new UrlSegmentApiVersionReader();
+}).AddApiExplorer(options =>
+{
+    options.GroupNameFormat = "'v'VVV";
+    options.SubstituteApiVersionInUrl = true;
+});
 
 // Register Swagger services
 builder.Services.AddEndpointsApiExplorer();// Required for generating Swagger API documentation

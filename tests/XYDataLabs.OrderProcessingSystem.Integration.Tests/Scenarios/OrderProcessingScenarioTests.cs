@@ -43,7 +43,7 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Scenarios
                 Email = "integration@test.com"
             };
 
-            var response = await _client.PostAsJsonAsync("/api/Customers", request);
+            var response = await _client.PostAsJsonAsync("/api/v1/Customers", request);
 
             response.StatusCode.Should().Be(HttpStatusCode.Created);
         }
@@ -51,7 +51,7 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Scenarios
         [Fact]
         public async Task GetAllCustomers_ReturnsOk()
         {
-            var response = await _client.GetAsync("/api/Customers/GetAllCustomers");
+            var response = await _client.GetAsync("/api/v1/Customers/GetAllCustomers");
 
             response.StatusCode.Should().Be(HttpStatusCode.OK);
         }
@@ -65,7 +65,7 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Scenarios
                 Name = "Order Test Customer",
                 Email = "order-test@test.com"
             };
-            var customerResponse = await _client.PostAsJsonAsync("/api/Customers", customerRequest);
+            var customerResponse = await _client.PostAsJsonAsync("/api/v1/Customers", customerRequest);
             customerResponse.StatusCode.Should().Be(HttpStatusCode.Created);
 
             // Create an order for the customer
@@ -75,7 +75,7 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Scenarios
                 ProductIds = new List<int> { 1 }
             };
 
-            var orderResponse = await _client.PostAsJsonAsync("/api/Order", orderRequest);
+            var orderResponse = await _client.PostAsJsonAsync("/api/v1/Order", orderRequest);
 
             // May fail if no products exist in seed data — the test validates the pipeline is wired
             orderResponse.StatusCode.Should().BeOneOf(HttpStatusCode.Created, HttpStatusCode.BadRequest);
@@ -84,7 +84,7 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Scenarios
         [Fact]
         public async Task GetNonExistentCustomer_ReturnsNotFound()
         {
-            var response = await _client.GetAsync("/api/Customers/99999");
+            var response = await _client.GetAsync("/api/v1/Customers/99999");
 
             response.StatusCode.Should().Be(HttpStatusCode.NotFound);
         }

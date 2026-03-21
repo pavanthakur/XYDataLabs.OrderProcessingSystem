@@ -1,10 +1,12 @@
+using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
 using XYDataLabs.OrderProcessingSystem.SharedKernel;
 
 namespace XYDataLabs.OrderProcessingSystem.API.Controllers
 {
+    [ApiVersion("1.0")]
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/v{version:apiVersion}/[controller]")]
     public class InfoController : ControllerBase
     {
         private readonly ILogger<InfoController> _logger;

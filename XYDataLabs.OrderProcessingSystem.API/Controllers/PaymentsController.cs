@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Asp.Versioning;
+using Microsoft.AspNetCore.Mvc;
 using XYDataLabs.OrderProcessingSystem.API.Extensions;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
@@ -6,8 +7,9 @@ using XYDataLabs.OrderProcessingSystem.Application.Features.Payments.Commands;
 
 namespace XYDataLabs.OrderProcessingSystem.API.Controllers
 {
+    [ApiVersion("1.0")]
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/v{version:apiVersion}/[controller]")]
     public class PaymentsController : ControllerBase
     {
         private readonly IDispatcher _dispatcher;
