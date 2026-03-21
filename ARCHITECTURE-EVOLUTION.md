@@ -527,6 +527,11 @@ Working microservices locally with correct event-based communication model.
 │  │  (DLQ reprocessor)   │         │  (Platform events)   │          │
 │  └──────────────────────┘         └──────────────────────┘          │
 │                                                                      │
+│  ┌──────────────────────┐                                            │
+│  │  Azure Blob Storage  │                                            │
+│  │  (Order attachments) │                                            │
+│  └──────────────────────┘                                            │
+│                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -538,10 +543,11 @@ Working microservices locally with correct event-based communication model.
 - **Azure Service Bus** — replace in-memory event bus with durable topics + subscriptions
 - **Azure Event Grid** — platform/infrastructure event routing (deployment notifications, blob lifecycle); Service Bus remains for domain events. Decision rule: Event Grid = reactive fan-out, Service Bus = reliable delivery with sessions/DLQ
 - **Azure Functions** — Service Bus-triggered Function for DLQ reprocessing (isolated process model); timer-triggered Function for scheduled projection health checks (Phase 14)
+- **Azure Blob Storage** — order file attachments (invoices, receipts, proof of delivery); managed identity access, private endpoint. `BlobCreated` events routed via Event Grid to trigger downstream processing (e.g. Document Intelligence extraction in Phase 12)
 - **Azure Cache for Redis** — managed Redis replacing local container; used for distributed cache and session state
 - **Observability** — App Insights + OpenTelemetry distributed tracing across all services; `traceparent` propagated through Service Bus message headers
 - **Secrets** — Azure Key Vault with managed identity (no credentials in config)
-- **Private networking** — VNet integration, private endpoints for SQL, Key Vault, and Redis
+- **Private networking** — VNet integration, private endpoints for SQL, Key Vault, Redis, and Blob Storage
 - **Cost governance** — scale-to-zero on all Container Apps, APIM Consumption tier (pay-per-call), autoscale RU caps on Cosmos DB, Azure Budget alerts per resource group
 
 ### Security
@@ -661,12 +667,13 @@ Independent, fully decoupled services with clear data ownership, a documented ch
 - **Per-service CI/CD pipelines** — independent build/test/deploy per service
 - **Health check gates** — deployment blocked if `/health/ready` fails post-deploy
 - **Advanced Polly** — bulkhead isolation + fallback policies (retry + circuit breaker already in Phase 9)
+- **Azure AI Document Intelligence** — extract structured data from uploaded invoices/receipts in Blob Storage; Event Grid triggers Function → Document Intelligence API → enriches order metadata. Demonstrates Azure Cognitive Services integration without over-engineering.
 - **DR / Business Continuity** — documented RTO/RPO targets per service; Azure SQL geo-replication strategy; Cosmos DB multi-region (mention only); backup/restore runbook
 - **Performance / Load Testing** — Azure Load Testing or k6 for baseline performance; SLO validation under realistic load before production
 
 ### Outcome
 
-Scalable, manageable production platform with enterprise-grade operations, advanced resilience, DR planning, and load-tested SLOs.
+Scalable, manageable production platform with enterprise-grade operations, advanced resilience, AI-powered document processing, DR planning, and load-tested SLOs.
 
 ---
 
@@ -876,6 +883,7 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 - [ ] Azure Service Bus messaging backbone + DLQ handling
 - [ ] Azure Event Grid for platform/infrastructure events
 - [ ] Azure Functions for DLQ reprocessing (Service Bus trigger, isolated process)
+- [ ] Azure Blob Storage for order attachments (invoices, receipts) + Event Grid integration
 - [ ] Azure Cache for Redis (managed)
 - [ ] Azure Entra ID + JWT authentication
 - [ ] Blue-green + canary deployments via ACA revisions
@@ -889,6 +897,7 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 - [ ] Observability dashboards + SLOs
 - [ ] Advanced Polly (bulkhead, fallback)
 - [ ] Azure App Configuration + feature flags
+- [ ] Azure AI Document Intelligence (invoice extraction from Blob Storage uploads)
 - [ ] DR / Business Continuity (RTO/RPO targets, geo-replication strategy)
 - [ ] Performance / Load Testing (Azure Load Testing or k6)
 
@@ -920,6 +929,8 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 | **Error Handling** | ProblemDetails (RFC 9457) + global exception middleware |
 | **Events** | Versioned schemas (inbox + outbox) + choreography with Saga escalation |
 | **Serverless** | Azure Functions for DLQ reprocessing + scheduled health checks |
+| **File Storage** | Azure Blob Storage (order attachments, private endpoint) |
+| **AI / Cognitive** | Azure AI Document Intelligence (invoice data extraction) |
 | **Orchestration** | .NET Aspire (local) + Azure Container Apps (cloud) |
 | **CI/CD** | Per-service GitHub Actions + health check deployment gates |
 | **Deployments** | Blue-green + canary via ACA revisions |
@@ -945,6 +956,8 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 - Azure Functions: https://learn.microsoft.com/azure/azure-functions/
 - Azure Service Bus: https://learn.microsoft.com/azure/service-bus-messaging/
 - Azure Event Grid: https://learn.microsoft.com/azure/event-grid/
+- Azure Blob Storage: https://learn.microsoft.com/azure/storage/blobs/
+- Azure AI Document Intelligence: https://learn.microsoft.com/azure/ai-services/document-intelligence/
 - Azure Cosmos DB for MongoDB: https://learn.microsoft.com/azure/cosmos-db/mongodb/
 - .NET Aspire: https://learn.microsoft.com/dotnet/aspire/
 - Hangfire: https://www.hangfire.io/
