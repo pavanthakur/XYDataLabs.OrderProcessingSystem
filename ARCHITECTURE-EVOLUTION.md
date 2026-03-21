@@ -629,6 +629,7 @@ Secure, scalable cloud-native microservices with APIM as public gateway, durable
 - Shared projects (`Application`, `Domain`, `Infrastructure`) split into per-service libraries
 - **Eventual consistency** — no cross-service joins; data synchronization via events only
 - Each service maintains its own read-optimized projections of data it needs from other services
+- **`XYDataLabs.OrderProcessingSystem.DurableFunctions`** — separate Azure Functions project (isolated process model) hosting Durable Function orchestrations for cross-service workflows that require compensating actions (see Distributed Workflow Strategy below)
 
 ### Rules
 
@@ -641,6 +642,18 @@ Secure, scalable cloud-native microservices with APIM as public gateway, durable
 - **Default: Choreography** — services react to events independently (e.g. `OrderCreated` → Inventory reserves → Notification sends)
 - **Escalation: Saga / Process Manager** — introduce only when a workflow requires compensating actions across 3+ services (e.g. order fulfilment with payment rollback)
 - **Decision criteria:** If a failure in step N requires undoing steps 1…N-1, use a Saga; otherwise choreography is sufficient
+
+### Durable Functions Project (`XYDataLabs.OrderProcessingSystem.DurableFunctions`)
+
+- **Separate project** — Azure Functions (isolated process model) with `Microsoft.Azure.Functions.Worker.Extensions.DurableTask`
+- **Orchestrator functions** — `OrderFulfilmentOrchestrator` (payment → inventory → shipping → notification with compensating rollback)
+- **Activity functions** — each step is an activity: `ReserveInventoryActivity`, `ProcessPaymentActivity`, `SendNotificationActivity`, `CompensatePaymentActivity`
+- **Sub-orchestrations** — complex sub-workflows (e.g. multi-item inventory reservation) composed within parent orchestrators
+- **Fan-out/fan-in** — parallel activity execution (e.g. validate all order line items concurrently, await all before proceeding)
+- **Durable timers + human interaction** — approval workflows with configurable timeout and escalation
+- **Service Bus triggers** — orchestrations started by Service Bus messages (e.g. `OrderCreated` event triggers `OrderFulfilmentOrchestrator`)
+- **Observability** — Durable Functions execution history + OpenTelemetry correlation; orchestration status queryable via built-in HTTP API
+- **Deployment** — separate ACA container app with its own CI/CD pipeline; scale-to-zero when idle
 
 ### Database Migration Strategy
 
@@ -657,7 +670,7 @@ Secure, scalable cloud-native microservices with APIM as public gateway, durable
 
 ### Outcome
 
-Independent, fully decoupled services with clear data ownership, a documented choreography-vs-saga decision framework, automated database migrations, and codified performance conventions.
+Independent, fully decoupled services with clear data ownership, Durable Functions for orchestrated workflows with compensating actions, automated database migrations, and codified performance conventions.
 
 ---
 
@@ -899,6 +912,7 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 ### Phase 11-12 📅 Autonomy & Operations
 - [ ] Database per service + data ownership
 - [ ] Choreography vs Saga decision framework
+- [ ] Azure Durable Functions project — orchestrator + activity functions for Saga workflows
 - [ ] Database migration strategy (EF bundles + init containers)
 - [ ] Performance conventions (`AsNoTracking`, indexing review, EF Core 8 `SqlQuery<T>` for complex queries, bulk operations)
 - [ ] Per-service CI/CD pipelines
@@ -937,7 +951,8 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 | **Cache** | Azure Cache for Redis (distributed cache + session state) |
 | **Error Handling** | ProblemDetails (RFC 9457) + global exception middleware |
 | **Events** | Versioned schemas (inbox + outbox) + choreography with Saga escalation |
-| **Serverless** | Azure Functions for DLQ reprocessing + scheduled health checks |
+| **Workflows** | Azure Durable Functions — orchestrator/activity pattern for Saga workflows with compensating actions |
+| **Serverless** | Azure Functions for DLQ reprocessing + scheduled health checks + Durable orchestrations |
 | **File Storage** | Azure Blob Storage (order attachments, private endpoint) |
 | **AI / Cognitive** | Azure AI Document Intelligence (invoice data extraction) |
 | **Orchestration** | .NET Aspire (local) + Azure Container Apps (cloud) |
@@ -963,6 +978,7 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 - Azure Container Apps: https://learn.microsoft.com/azure/container-apps/
 - Azure API Management: https://learn.microsoft.com/azure/api-management/
 - Azure Functions: https://learn.microsoft.com/azure/azure-functions/
+- Azure Durable Functions: https://learn.microsoft.com/azure/azure-functions/durable/
 - Azure Service Bus: https://learn.microsoft.com/azure/service-bus-messaging/
 - Azure Event Grid: https://learn.microsoft.com/azure/event-grid/
 - Azure Blob Storage: https://learn.microsoft.com/azure/storage/blobs/
@@ -986,7 +1002,7 @@ _This section maps the architecture plan to common Azure .NET senior role requir
 | **ASP.NET / ASP.NET Core** | ✅ Covered | API (controllers, middleware, pipeline), UI (MVC), YARP gateway |
 | **Entity Framework** | ✅ Covered | EF Core, global query filters, migrations, `IAppDbContext`, DB per service (Phase 11) |
 | **Azure App Services** | ✅ Covered | Baseline deployment — already running in production |
-| **Azure Functions** | ✅ Covered | Phase 10 — DLQ reprocessor (Service Bus trigger), timer-triggered health checks |
+| **Azure Functions** | ✅ Covered | Phase 10 — DLQ reprocessor (Service Bus trigger), timer-triggered health checks; Phase 11 — Durable Functions orchestrations (Saga workflows) |
 | **Azure Storage (Blob)** | ✅ Covered | Phase 10 — order attachments, managed identity, Event Grid integration |
 | **Azure SQL Database** | ✅ Covered | Baseline → Phase 14 — source of truth, per-service DBs in Phase 11 |
 | **Azure Cosmos DB (NoSQL)** | ✅ Covered | Phase 14 — MongoDB API, TenantId partition key, projections |
