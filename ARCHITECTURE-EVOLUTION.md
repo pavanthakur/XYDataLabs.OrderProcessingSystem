@@ -1018,6 +1018,20 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 
 _Patterns from industry reference architectures (Milan Jovanovic's Bookify, etc.) evaluated against the 14-phase plan. Items below were considered and deliberately deferred or excluded — documented here so the reasoning is preserved._
 
+| Pattern | Decision | Phase | Rationale |
+|---|---:|---|---|
+| Explicit `IUnitOfWork` interface | Skipped | N/A | `IAppDbContext` already exposes `SaveChangesAsync()` and DbSets — separate `IUnitOfWork` would duplicate abstraction in the monolith. |
+| Repository per aggregate root | Skipped / Deferred | Phase 9 | Repositories add indirection in a monolith; useful when modules own persistence (Phase 9+). |
+| Dapper for CQRS read side | Deferred | Phase 14 | Performance/read-model optimization — not needed until dedicated read stores or heavy denormalized queries. |
+| `IConfigureNamedOptions<T>` (JWT setup) | Skipped | Phase 10 | Implementation detail applied when Entra ID/JWT is wired; not a design-level requirement. |
+| Local Keycloak (IdP) | Deferred | Phase 9 | Requires Docker Compose infra; defer until local microservice orchestration exists. |
+| `DelegatingHandler` for external HTTP | Deferred | Phase 9 | Relevant for inter-service `HttpClient` use; implement when services call each other. |
+| Optimistic concurrency (`RowVersion`) | Added | Phase 7 | Critical for multi-tenant concurrent writes — detect and surface `ConcurrencyException` to handlers. |
+| Strongly-typed IDs (`OrderId`, `CustomerId`) | Added | Phase 7 | Lightweight safety to prevent Guid parameter-swap bugs; use EF value converters for persistence. |
+| SaveChangesAsync domain event dispatch (ChangeTracker) | Added | Phase 8 | Ensures domain events are only published after successful persistence (in-process or to Outbox). |
+| Value Objects (Money, Address) | Covered | Phase 7 | Already planned as DDD tactical patterns. |
+
+
 ### Deliberately Skipped (Not Needed)
 
 | Pattern | Why Skipped |
