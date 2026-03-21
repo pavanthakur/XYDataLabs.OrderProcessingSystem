@@ -39,6 +39,21 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure
             // Forward IAppDbContext to the EF-registered concrete context
             builder.Services.AddScoped<IAppDbContext>(sp =>
                 sp.GetRequiredService<OrderProcessingSystemDbContext>());
+
+            // IDistributedCache — Redis when configured, in-memory fallback otherwise
+            var redisConnection = builder.Configuration.GetConnectionString("Redis");
+            if (!string.IsNullOrWhiteSpace(redisConnection))
+            {
+                builder.Services.AddStackExchangeRedisCache(options =>
+                {
+                    options.Configuration = redisConnection;
+                    options.InstanceName = "OrderProcessing:";
+                });
+            }
+            else
+            {
+                builder.Services.AddDistributedMemoryCache();
+            }
         }
     }
 }

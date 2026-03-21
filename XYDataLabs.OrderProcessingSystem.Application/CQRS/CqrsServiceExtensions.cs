@@ -30,7 +30,8 @@ public static class CqrsServiceExtensions
             }
         }
 
-        // Register open-generic pipeline behaviors (order matters: logging wraps validation)
+        // Register open-generic pipeline behaviors (order: caching → logging → validation)
+        services.AddScoped(typeof(IPipelineBehavior<,>), typeof(CachingBehavior<,>));
         services.AddScoped(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
         services.AddScoped(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
 

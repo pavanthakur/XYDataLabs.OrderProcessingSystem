@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json.Serialization;
 
 namespace XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
 
@@ -12,6 +13,14 @@ public sealed class Result<T>
 
     [MemberNotNullWhen(false, nameof(Value))]
     public bool IsFailure => !IsSuccess;
+
+    [JsonConstructor]
+    private Result(T? value, Error error, bool isSuccess)
+    {
+        Value = value;
+        Error = error;
+        IsSuccess = isSuccess;
+    }
 
     private Result(T value)
     {

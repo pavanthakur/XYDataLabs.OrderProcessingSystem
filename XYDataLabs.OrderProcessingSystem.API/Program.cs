@@ -164,6 +164,12 @@ builder.Services.AddCors(options =>
 builder.InjectInfrastructureDependencies();
 builder.InjectApplicationDependencies();
 
+// Health checks
+var healthChecksBuilder = builder.Services.AddHealthChecks();
+var dbConnForHealth = builder.Configuration.GetConnectionString(Constants.Configuration.OrderProcessingSystemDbConnectionString);
+if (!string.IsNullOrWhiteSpace(dbConnForHealth))
+    healthChecksBuilder.AddSqlServer(dbConnForHealth, name: "sqlserver");
+
 builder.Services.AddControllers();
 
 // Register Swagger services
@@ -388,6 +394,8 @@ app.UseMiddleware<LoggingMiddleware>();
 app.UseMiddleware<ErrorHandlingMiddleware>();
 
 app.MapControllers();
+
+app.MapHealthChecks("/health");
 
 if (isAzure)
 {

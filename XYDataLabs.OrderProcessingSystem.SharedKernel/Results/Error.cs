@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
 
 public sealed class Error
@@ -5,6 +7,7 @@ public sealed class Error
     public string Code { get; }
     public string Description { get; }
 
+    [JsonConstructor]
     private Error(string code, string description)
     {
         Code = code;
