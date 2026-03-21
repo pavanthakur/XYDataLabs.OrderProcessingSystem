@@ -57,8 +57,8 @@ practice Azure cloud deployment, CI/CD automation, and enterprise DevOps pattern
 ├── Resources/
 │   ├── Azure-Deployment/          # 27 PowerShell automation scripts (see §6)
 │   ├── BuildConfiguration/        # BannedSymbols, CodeAnalysis.ruleset, MSBuild props
-│   ├── Configuration/             # sharedsettings.{dev,uat,prod,local}.json
-│   └── Docker/                    # start-docker.ps1 + docker-compose.{dev,uat,prod}.yml
+│   ├── Configuration/             # sharedsettings.{dev,stg,prod,local}.json
+│   └── Docker/                    # start-docker.ps1 + docker-compose.{dev,stg,prod}.yml
 │
 ├── bicep/                         # Bicep IaC for subscription-scoped deployment
 │   ├── appservice-with-kv.bicep
@@ -105,7 +105,7 @@ All workflows live in `.github/workflows/`. Each has a companion `README-*.md` i
 | `test-validate-deployment.yml` | Test Pre-Deployment Validation | Manual or PR | Tests the validation workflow independently. |
 | `deploy-api-to-azure.yml` | Deploy API to Azure App Service | Push to dev/staging/main (API paths) | Build → test → publish → Azure OIDC login → deploy → health check |
 | `deploy-ui-to-azure.yml` | Deploy UI to Azure App Service | Push to dev/staging/main (UI paths) | Build → test → publish → Azure OIDC login → deploy → health check |
-| `deploy-and-verify.yml` | Deploy and Verify (Secure Config) | Push to dev/main/uat or manual | Full end-to-end: infra + app deploy + post-deploy health verification |
+| `deploy-and-verify.yml` | Deploy and Verify (Secure Config) | Push to dev/main/stg or manual | Full end-to-end: infra + app deploy + post-deploy health verification |
 | `docker-health.yml` | Docker Startup Health | Push to main, PR to main | Validates `Resources/Docker/start-docker.ps1` smoke test |
 
 ### Branch → Environment Mapping
@@ -231,7 +231,7 @@ Parameter files follow the pattern `{environment}.json` / `{environment}.paramet
 
 ### Multi-environment settings
 
-`Resources/Configuration/sharedsettings.{dev,uat,prod,local}.json` — loaded by `appsettings.json`
+`Resources/Configuration/sharedsettings.{dev,stg,prod,local}.json` — loaded by `appsettings.json`
 via the `ASPNETCORE_ENVIRONMENT` variable.
 
 ### GitHub App vs OIDC Secrets
@@ -273,7 +273,7 @@ identity to access Key Vault without credentials in config files.
 .\Resources\Docker\start-docker.ps1 -Environment dev -Profile https -Reset
 ```
 
-Port allocations: Local VS (5010–5013) · Docker dev (5020–5023) · UAT (5030–5033) · Prod (5040–5043).
+Port allocations: Local VS (5010–5013) · Docker dev (5020–5023) · Docker stg (5030–5033) · Prod (5040–5043).
 
 ---
 

@@ -98,7 +98,7 @@
 **Detailed Activity:**
 
 **1. SQL Connection Strings**
-- Added connection strings in `sharedsettings.dev.json`, `sharedsettings.staging.json`, `sharedsettings.prod.json`
+- Added connection strings in `sharedsettings.dev.json`, `sharedsettings.stg.json`, `sharedsettings.prod.json`
 - Each environment points to its own Azure SQL server; local (`sharedsettings.local.json`) points to local SQL
 
 **2. EF Core SQL Logging (StartupHelper.cs)**

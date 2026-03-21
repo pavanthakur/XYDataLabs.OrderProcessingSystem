@@ -2,7 +2,7 @@
 .SYNOPSIS
     Validates configuration consistency across sharedsettings.*.json files.
 .DESCRIPTION
-    Compares keys between dev, staging, prod, uat sharedsettings files under Resources/Configuration.
+    Compares keys between dev, stg, prod sharedsettings files under Resources/Configuration.
     Reports missing keys, extra keys, and differing scalar values.
 .PARAMETER BasePath
     Override path to configuration directory. Default resolves relative to script.

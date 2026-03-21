@@ -53,7 +53,7 @@ Write-Host ""
 Write-Host "4. Checking Container Health..." -ForegroundColor Yellow
 $dockerRunning = docker ps -q 2>$null
 if ($dockerRunning) {
-    $containerNames = docker ps --format "{{.Names}}" 2>$null | Where-Object { $_ -match "(api|ui)-(dev|uat|prod)-(http|https)" }
+    $containerNames = docker ps --format "{{.Names}}" 2>$null | Where-Object { $_ -match "(api|ui)-(dev|stg|prod)-(http|https)" }
     if ($containerNames) {
         Write-Host "✅ Docker Containers Running:" -ForegroundColor Green
         $containerNames | ForEach-Object { Write-Host "   $($_)" -ForegroundColor Gray }

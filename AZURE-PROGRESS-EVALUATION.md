@@ -125,11 +125,11 @@ YARP Microservices Architecture (Local Development)
 **Location:** `docs/runbooks/keyvault-managed-identity-deploy.md`
 
 **Coverage:**
-- ✅ Key Vault creation for dev/uat/prod
+- ✅ Key Vault creation for dev/stg/prod
 - ✅ Secret population (OpenPay API Key, Application Insights)
 - ✅ Managed Identity setup for App Services
 - ✅ Access policy configuration
-- ✅ Phase-wise rollout (Dev → UAT → Prod)
+- ✅ Phase-wise rollout (Dev → Stg → Prod)
 - ✅ Validation procedures
 - ✅ Troubleshooting guide
 - ✅ Secret rotation procedures
@@ -618,7 +618,7 @@ You are **cleared to proceed** with Day 32+ tasks. All documentation is in place
 1. Run Key Vault access fix commands (5 minutes)
 2. Verify access by listing secrets (2 minutes)
 3. Review Day 32-40 tasks in `1_MASTER_CURRICULUM.md`
-4. Follow the Key Vault runbook for UAT/Prod setup (when ready)
+4. Follow the Key Vault runbook for Stg/Prod setup (when ready)
 
 **No documentation updates needed** - proceed with technical execution!
 
