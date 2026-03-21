@@ -827,6 +827,7 @@ Enterprise-grade, cloud-native system with excellent developer inner-loop experi
 - Rebuild projections on demand
 - Fix inconsistencies between SQL and Cosmos DB
 - Backfill missing data after schema changes
+- **Distributed locking (job-specific showcase)** — optional singleton coordination for projection rebuild/backfill jobs when duplicate execution across multiple instances would create operational inconsistency. Keep this as a concrete example (for example, `RebuildOrdersProjectionJob`) rather than introducing a generic lock abstraction; prefer idempotency first
 
 **4. Multi-Tenancy**
 - `TenantId` as partition key in every Cosmos DB document
@@ -984,6 +985,7 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 - [ ] Read model versioning (`_schemaVersion`) + projection lag metric
 - [ ] Cosmos DB change feed awareness (alternative projection driver)
 - [ ] Hangfire background jobs for projection rebuilds
+- [ ] Narrow distributed-locking showcase for one Hangfire rebuild/backfill job (non-generic singleton coordination)
 - [ ] Snapshot pattern — periodic aggregate snapshots for fast rebuild from event history
 
 ---
@@ -1052,6 +1054,7 @@ _Patterns from industry reference architectures evaluated against the 14-phase p
 |---------|-------------|-------------|
 | **Local Identity Provider (Keycloak)** | Phase 9 (Docker Compose) | Docker Compose infrastructure doesn't exist until Phase 9. Adding Keycloak before that means managing a standalone Docker dependency just for auth testing — unnecessary when Azure Entra ID is already configured for the deployed app. Phase 9's Docker Compose is the natural home for local Keycloak alongside the other service containers. |
 | **`DelegatingHandler` for external HTTP** (auto-inject auth tokens on outgoing calls) | Phase 9 (inter-service HTTP) | No inter-service HTTP calls exist until Phase 9 (YARP + microservices). The existing OpenPay adapter is a direct SDK call, not `HttpClient`. Phase 9's Polly v8 section (retry, circuit breaker, timeout) is where `HttpClientFactory` + `DelegatingHandler` patterns belong — they work together. |
+| **Distributed locking / singleton job coordination** | Phase 14 (Hangfire rebuilds/backfills) | Not needed for normal request handling or event consumers because Inbox/Outbox idempotency and messaging semantics come first. Becomes relevant only for true singleton maintenance jobs such as projection rebuilds, backfills, or repair tasks where duplicate execution across multiple instances has real operational cost. Keep it as a single concrete example, not a shared locking framework. |
 
 ### Already Covered (Analysis Missed It)
 
