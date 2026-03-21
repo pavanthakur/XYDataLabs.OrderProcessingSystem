@@ -29,7 +29,7 @@ Console.WriteLine("[EARLIEST DEBUG] Environment variable check completed...");
 var environmentName = builder.Environment.EnvironmentName switch
 {
     "Development" => Constants.Environments.Dev,
-    "Staging" => Constants.Environments.Uat,
+    "Staging" => Constants.Environments.Staging,
     "Production" => Constants.Environments.Production,
     _ => Constants.Environments.Dev // Default to dev for any other environment
 };

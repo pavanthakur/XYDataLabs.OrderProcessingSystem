@@ -28,7 +28,7 @@ namespace XYDataLabs.OrderProcessingSystem.UI.Controllers
             var environmentName = environment switch
             {
                 "Development" => Constants.Environments.Dev,
-                "Staging" => Constants.Environments.Uat, 
+                "Staging" => Constants.Environments.Staging, 
                 "Production" => Constants.Environments.Production,
                 _ => Constants.Environments.Dev // Default to dev for any other environment
             };
@@ -87,9 +87,9 @@ namespace XYDataLabs.OrderProcessingSystem.UI.Controllers
             ViewData["Environment"] = environmentName.ToUpper();
             ViewData["EnvironmentColor"] = environmentName switch
             {
-                "dev" => "success",      // Green for development
-                "stg" => "warning",      // Yellow for Staging
-                "prod" => "danger",      // Red for production
+                Constants.Environments.Dev => "success",      // Green for development
+                Constants.Environments.Staging => "warning",      // Yellow for Staging
+                Constants.Environments.Production => "danger",      // Red for production
                 _ => "secondary"         // Gray for unknown
             };
             ViewData["IsDocker"] = isDocker;

@@ -18,7 +18,7 @@ $ErrorActionPreference='Stop'
 if (-not $BasePath) { $BasePath = Join-Path (Split-Path $PSScriptRoot -Parent) 'Configuration' }
 if (!(Test-Path $BasePath)) { Write-Error "Configuration path not found: $BasePath" }
 
-$files = @('sharedsettings.dev.json','sharedsettings.staging.json','sharedsettings.prod.json','sharedsettings.uat.json') | ForEach-Object { Join-Path $BasePath $_ }
+$files = @('sharedsettings.dev.json','sharedsettings.stg.json','sharedsettings.prod.json') | ForEach-Object { Join-Path $BasePath $_ }
 $loaded = @{}
 foreach ($f in $files) { 
     if (Test-Path $f){ 

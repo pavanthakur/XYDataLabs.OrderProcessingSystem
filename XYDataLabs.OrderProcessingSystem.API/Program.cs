@@ -36,7 +36,7 @@ var runtimeLabel = isAzure ? "Azure" : (isDocker ? "Docker" : "Local");
 var environmentName = builder.Environment.EnvironmentName switch
 {
     "Development" => Constants.Environments.Dev,
-    "Staging" => Constants.Environments.Uat, 
+    "Staging" => Constants.Environments.Staging, 
     "Production" => Constants.Environments.Production,
     _ => Constants.Environments.Dev // Default to dev for any other environment
 };
@@ -293,9 +293,9 @@ var useDeveloperExceptionPage = builder.Environment.IsDevelopment() && !isAzure;
 
 // Configure the HTTP request pipeline.
 // Environment-specific middleware configuration using our simplified profile names
-if (environmentName == "dev" || environmentName == "stg")
+if (environmentName == Constants.Environments.Dev || environmentName == Constants.Environments.Staging)
 {
-    // Enable Swagger for Development and UAT environments
+    // Enable Swagger for Development and Staging environments
     app.UseSwagger();
     app.UseSwaggerUI(options =>
     {

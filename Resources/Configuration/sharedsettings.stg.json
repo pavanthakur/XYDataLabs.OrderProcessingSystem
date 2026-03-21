@@ -102,7 +102,7 @@
       "LaunchUrl": "swagger",
       "EnvironmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Staging",
-        "CORS_ALLOWED_ORIGINS": "https://localhost:5033;https://uat-ui.xydatalabs.com"
+        "CORS_ALLOWED_ORIGINS": "https://localhost:5033;https://stg-ui.xydatalabs.com"
       }
     },
     "UI": {
@@ -118,38 +118,38 @@
     },
     "Cloud": {
       "Enabled": true,
-      "ResourceGroup": "rg-orderprocessing-uat",
+      "ResourceGroup": "rg-orderprocessing-stg",
       "Location": "East US",
       "WebApps": {
         "API": {
-          "Name": "wa-orderprocessing-api-uat",
-          "Url": "https://wa-orderprocessing-api-uat.azurewebsites.net"
+          "Name": "wa-orderprocessing-api-stg",
+          "Url": "https://wa-orderprocessing-api-stg.azurewebsites.net"
         },
         "UI": {
-          "Name": "wa-orderprocessing-ui-uat",
-          "Url": "https://wa-orderprocessing-ui-uat.azurewebsites.net"
+          "Name": "wa-orderprocessing-ui-stg",
+          "Url": "https://wa-orderprocessing-ui-stg.azurewebsites.net"
         }
       },
       "Database": {
-        "ServerName": "sql-orderprocessing-uat.database.windows.net",
+        "ServerName": "sql-orderprocessing-stg.database.windows.net",
         "DatabaseName": "OrderProcessingDB"
       }
     }
   },
   "Docker": {
     "Networks": {
-      "Name": "xy-uat-network",
+      "Name": "xy-stg-network",
       "Subnet": "172.21.0.0/16",
       "Gateway": "172.21.0.1"
     },
     "Volumes": {
       "Database": {
-        "Name": "orderprocessing_db_uat",
+        "Name": "orderprocessing_db_stg",
         "Persistent": true,
         "BackupEnabled": true
       },
       "Logs": {
-        "Name": "orderprocessing_logs_uat",
+        "Name": "orderprocessing_logs_stg",
         "Persistent": true,
         "BackupEnabled": true
       }

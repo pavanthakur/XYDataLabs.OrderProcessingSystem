@@ -12,13 +12,13 @@ Write-Host ""
 
 # Check 1: Network Isolation
 Write-Host "1. Checking Docker Network Isolation..." -ForegroundColor Yellow
-$networks = docker network ls --format "{{.Name}}" 2>$null | Where-Object { $_ -match "xy-(dev|uat|prod)-network" }
+$networks = docker network ls --format "{{.Name}}" 2>$null | Where-Object { $_ -match "xy-(dev|stg|prod)-network" }
 if ($networks) {
     Write-Host "✅ Enterprise Networks Found:" -ForegroundColor Green
     $networks | ForEach-Object { Write-Host "   $($_)" -ForegroundColor Gray }
     $networkScore = 100
 } else {
-    Write-Host "❌ Missing enterprise networks (xy-dev-network, xy-uat-network, xy-prod-network)" -ForegroundColor Red
+    Write-Host "❌ Missing enterprise networks (xy-dev-network, xy-stg-network, xy-prod-network)" -ForegroundColor Red
     $networkScore = 0
 }
 Write-Host ""

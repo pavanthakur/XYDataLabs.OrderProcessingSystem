@@ -28,7 +28,7 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
             var environmentName = environment switch
             {
                 "Development" => Constants.Environments.Dev,
-                "Staging" => Constants.Environments.Uat, 
+                "Staging" => Constants.Environments.Staging, 
                 "Production" => Constants.Environments.Production,
                 _ => Constants.Environments.Dev // Default to dev for any other environment
             };
