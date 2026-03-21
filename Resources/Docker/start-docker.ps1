@@ -5,7 +5,7 @@ param(
     [string]$Profile = "http",
     
     [Parameter(Mandatory=$false)]
-    [ValidateSet("dev", "uat", "prod")]
+    [ValidateSet("dev", "stg", "prod")]
     [string]$Environment = "dev",
     
     [Parameter(Mandatory=$false)]
@@ -96,8 +96,8 @@ $EnterpriseConfig = @{
         BackupRequired = $false
         SecurityLevel = "development"
     }
-    "uat" = @{
-        NetworkName = "xy-uat-network"
+    "stg" = @{
+        NetworkName = "xy-stg-network"
         CleanupPolicy = "conservative"
         BackupRequired = $true
         SecurityLevel = "testing"
@@ -302,7 +302,7 @@ function Ensure-DockerNetwork {
                 # Create enterprise network with proper isolation and labeling
                 $subnet = switch ($Environment) {
                     "dev" { "172.20.0.0/16" }
-                    "uat" { "172.21.0.0/16" }
+                    "stg" { "172.21.0.0/16" }
                     "prod" { "172.22.0.0/16" }
                     default { "172.20.0.0/16" }
                 }
@@ -513,9 +513,9 @@ try {
     if ($Help) {
         Write-Host "XY Order Processing System Docker Startup Script" -ForegroundColor Cyan
         Write-Host "Usage:" -ForegroundColor Yellow
-        Write-Host "  .\start-docker.ps1 [-Environment dev|uat|prod] [-Profile http|https|all] [options]\n" -ForegroundColor White
+        Write-Host "  .\start-docker.ps1 [-Environment dev|stg|prod] [-Profile http|https|all] [options]\n" -ForegroundColor White
         Write-Host "Core Parameters:" -ForegroundColor Yellow
-        Write-Host "  -Environment <env>        Target environment (dev|uat|prod). Default: dev" -ForegroundColor White
+        Write-Host "  -Environment <env>        Target environment (dev|stg|prod). Default: dev" -ForegroundColor White
         Write-Host "  -Profile <profile>         Service profile (http|https|all). Default: http" -ForegroundColor White
         Write-Host "  -Down                      Stop services for environment/profile." -ForegroundColor White
         Write-Host "  -LegacyBuild               Reuse existing images (development speed)." -ForegroundColor White
@@ -525,9 +525,9 @@ try {
         Write-Host "  -Reset                     Stop stack (if running) + remove images for selected profile before start." -ForegroundColor White
         Write-Host "Enterprise Parameters:" -ForegroundColor Yellow
         Write-Host "  -EnterpriseMode            Enable enterprise networks, logging, cleanup policies." -ForegroundColor White
-        Write-Host "  -ConservativeClean         Adjust cleanup aggressiveness (primarily UAT/prod)." -ForegroundColor White
+        Write-Host "  -ConservativeClean         Adjust cleanup aggressiveness (primarily STG/prod)." -ForegroundColor White
         Write-Host "  -PreservePersistentData    Preserve labeled persistent volumes during cleanup." -ForegroundColor White
-        Write-Host "  -BackupFirst               Force backup prior to start (prod/uat best practice)." -ForegroundColor White
+        Write-Host "  -BackupFirst               Force backup prior to start (prod/stg best practice)." -ForegroundColor White
         Write-Host "Path Overrides:" -ForegroundColor Yellow
         Write-Host "  -SharedSettingsPath <path> Override shared settings file location." -ForegroundColor White
         Write-Host "  -EnvFilePath <path>        (Reserved) Environment file output path (currently not generated)." -ForegroundColor White
@@ -543,7 +543,7 @@ try {
         Write-Host "  Fast reuse + health:      .\start-docker.ps1 -Environment dev -Profile http -LegacyBuild -Strict" -ForegroundColor White
         Write-Host "  Skip warm step:           .\start-docker.ps1 -Environment dev -Profile http -NoPrePull" -ForegroundColor White
         Write-Host "  Full reset & rebuild:     .\start-docker.ps1 -Environment dev -Profile https -Reset" -ForegroundColor White
-        Write-Host "  UAT strict HTTPS:         .\start-docker.ps1 -Environment uat -Profile https -Strict" -ForegroundColor White
+        Write-Host "  STG strict HTTPS:         .\start-docker.ps1 -Environment stg -Profile https -Strict" -ForegroundColor White
         Write-Host "  Prod enterprise w/backup: .\start-docker.ps1 -Environment prod -Profile https -EnterpriseMode -BackupFirst" -ForegroundColor White
         Write-Host "\nDeprecated Parameters (removed): -PrePullRetryCount, -UseBuildFallbackForPrePull, -FailOnPrePullError, -WaitForHealthy, -CleanImages" -ForegroundColor DarkGray
         Write-Host "Replacements: Strict handles resilience & health; Reset replaces CleanImages; NoPrePull skips warm step." -ForegroundColor DarkGray
@@ -571,7 +571,7 @@ try {
             $composeFiles = @("-f", "docker-compose.$Environment.yml")
             Write-ColoredOutput "Using environment-specific compose file: docker-compose.$Environment.yml" "Gray" "INFO"
         } else {
-            throw "Environment-specific compose file docker-compose.$Environment.yml not found. Available environments: dev, uat, prod"
+            throw "Environment-specific compose file docker-compose.$Environment.yml not found. Available environments: dev, stg, prod"
         }
         
         Write-ColoredOutput "Running: $ComposeDisplay $($composeFiles -join ' ') --profile $Profile down" "Gray" "INFO"
@@ -651,7 +651,7 @@ try {
         $composeFiles = @("-f", "docker-compose.$Environment.yml")
         Write-ColoredOutput "Using environment-specific compose file: docker-compose.$Environment.yml" "Green"
     } else {
-        throw "Environment-specific compose file docker-compose.$Environment.yml not found. Available environments: dev, uat, prod"
+        throw "Environment-specific compose file docker-compose.$Environment.yml not found. Available environments: dev, stg, prod"
     }
     
     # Display port information from compose file (no .env generation needed)
@@ -663,8 +663,8 @@ try {
             Write-ColoredOutput "   UI HTTP: 5022" "White"
             Write-ColoredOutput "   UI HTTPS: 5023" "White"
         }
-        "uat" {
-            Write-ColoredOutput "UAT Environment Ports:" "Cyan"
+        "stg" {
+            Write-ColoredOutput "Staging Environment Ports:" "Cyan"
             Write-ColoredOutput "   API HTTP: 5030" "White"
             Write-ColoredOutput "   API HTTPS: 5031" "White"
             Write-ColoredOutput "   UI HTTP: 5032" "White"
@@ -715,7 +715,7 @@ try {
     # Start containers depending on mode
     if ($LegacyBuild) {
         Write-ColoredOutput "Using legacy build mode (development speed)..." "Yellow" "WARNING"
-        Write-ColoredOutput "⚠️  Not recommended for UAT/Production environments" "Yellow" "WARNING"
+        Write-ColoredOutput "⚠️  Not recommended for STG/Production environments" "Yellow" "WARNING"
         
         # Legacy mode: Use existing images if available
         $dockerCmd = "$ComposeDisplay $($composeFiles -join ' ') --profile $Profile up -d"
@@ -925,7 +925,7 @@ try {
                     Write-ColoredOutput "   UI (HTTPS):  https://localhost:5023" "White" "INFO"
                 }
             }
-            "uat" {
+            "stg" {
                 if ($Profile -eq "http" -or $Profile -eq "all") {
                     Write-ColoredOutput "   API (HTTP):  http://localhost:5030/swagger" "White" "INFO"
                     Write-ColoredOutput "   UI (HTTP):   http://localhost:5032" "White" "INFO"
@@ -957,9 +957,9 @@ try {
             if ($EnterpriseMode) {
                 Write-ColoredOutput "  - Enterprise: Aggressive cleanup available" "Gray" "INFO"
             }
-        } elseif ($Environment -eq "uat") {
+        } elseif ($Environment -eq "stg") {
             Write-ColoredOutput "" "White"
-            Write-ColoredOutput "UAT Environment Notes:" "Cyan" "INFO"
+            Write-ColoredOutput "Staging Environment Notes:" "Cyan" "INFO"
             Write-ColoredOutput "  - Production-like configuration for testing" "Gray" "INFO"
             Write-ColoredOutput "  - Enhanced monitoring and health checks" "Gray" "INFO"
             Write-ColoredOutput "  - Resource limits applied" "Gray" "INFO"

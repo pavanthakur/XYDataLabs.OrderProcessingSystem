@@ -1,10 +1,10 @@
-# UAT Environment - Complete Configuration
-# Usage: docker-compose -f docker-compose.uat.yml --profile http up
-# Purpose: UAT testing configuration with production-like settings
+# Staging Environment - Complete Configuration
+# Usage: docker-compose -f docker-compose.stg.yml --profile http up
+# Purpose: Staging/pre-production configuration with production-like settings
 
 services:
-  api-uat-http:
-    image: xydatalabs-orderprocessingsystem-api-http:uat
+  api-stg-http:
+    image: xydatalabs-orderprocessingsystem-api-http:stg
     build:
       context: ../..
       dockerfile: XYDataLabs.OrderProcessingSystem.API/Dockerfile
@@ -15,14 +15,14 @@ services:
       - ASPNETCORE_ENVIRONMENT=Staging
       - ASPNETCORE_URLS=http://+:5030
       - ASPNETCORE_HTTP_PORTS=5030
-      - ConnectionStrings__OrderProcessingSystemDbConnection=Server=host.docker.internal,1433;Database=OrderProcessingSystem_UAT;User Id=sa;Password=Admin100@;TrustServerCertificate=True;
+      - ConnectionStrings__OrderProcessingSystemDbConnection=Server=host.docker.internal,1433;Database=OrderProcessingSystem_Stg;User Id=sa;Password=Admin100@;TrustServerCertificate=True;
       - USE_HTTPS=false
     volumes:
       - ../../logs:/logs
       - ../../Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
-      - ../../Resources/Configuration/sharedsettings.uat.json:/app/Resources/Configuration/sharedsettings.uat.json:ro
+      - ../../Resources/Configuration/sharedsettings.stg.json:/app/Resources/Configuration/sharedsettings.stg.json:ro
     networks:
-      - xy-uat-network
+      - xy-stg-network
       - xy-database-network
     profiles: ["http", "all", "api"]
     healthcheck:
@@ -32,8 +32,8 @@ services:
       retries: 2
       start_period: 10s
 
-  api-uat-https:
-    image: xydatalabs-orderprocessingsystem-api-https:uat
+  api-stg-https:
+    image: xydatalabs-orderprocessingsystem-api-https:stg
     build:
       context: ../..
       dockerfile: XYDataLabs.OrderProcessingSystem.API/Dockerfile
@@ -45,13 +45,13 @@ services:
       - ASPNETCORE_URLS=https://+:5031
       - ASPNETCORE_HTTPS_PORTS=5031
       - ASPNETCORE_Kestrel__Certificates__Default__Password=P@ss100
-      - ConnectionStrings__OrderProcessingSystemDbConnection=Server=host.docker.internal,1433;Database=OrderProcessingSystem_UAT;User Id=sa;Password=Admin100@;TrustServerCertificate=True;
+      - ConnectionStrings__OrderProcessingSystemDbConnection=Server=host.docker.internal,1433;Database=OrderProcessingSystem_Stg;User Id=sa;Password=Admin100@;TrustServerCertificate=True;
     volumes:
       - ../../logs:/logs
       - ../../Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
-      - ../../Resources/Configuration/sharedsettings.uat.json:/app/Resources/Configuration/sharedsettings.uat.json:ro
+      - ../../Resources/Configuration/sharedsettings.stg.json:/app/Resources/Configuration/sharedsettings.stg.json:ro
     networks:
-      - xy-uat-network
+      - xy-stg-network
       - xy-database-network
     profiles: ["https", "all", "api-https"]
     healthcheck:
@@ -61,8 +61,8 @@ services:
       retries: 2
       start_period: 10s
 
-  ui-uat-http:
-    image: xydatalabs-orderprocessingsystem-ui-http:uat
+  ui-stg-http:
+    image: xydatalabs-orderprocessingsystem-ui-http:stg
     build:
       context: ../..
       dockerfile: XYDataLabs.OrderProcessingSystem.UI/Dockerfile
@@ -76,13 +76,13 @@ services:
       - ApiSettings__BaseUrl=http://localhost:5030
       - USE_HTTPS=false
     volumes:
-      - ../../Resources/Configuration/sharedsettings.uat.json:/app/Resources/Configuration/sharedsettings.uat.json:ro
+      - ../../Resources/Configuration/sharedsettings.stg.json:/app/Resources/Configuration/sharedsettings.stg.json:ro
       - ../../logs:/logs
     networks:
-      - xy-uat-network
+      - xy-stg-network
     profiles: ["http", "all", "ui"]
     depends_on:
-      api-uat-http:
+      api-stg-http:
         condition: service_healthy
     healthcheck:
       test: curl --fail http://localhost:5032 --insecure || exit 1
@@ -91,8 +91,8 @@ services:
       retries: 2
       start_period: 10s
 
-  ui-uat-https:
-    image: xydatalabs-orderprocessingsystem-ui-https:uat
+  ui-stg-https:
+    image: xydatalabs-orderprocessingsystem-ui-https:stg
     build:
       context: ../..
       dockerfile: XYDataLabs.OrderProcessingSystem.UI/Dockerfile
@@ -107,13 +107,13 @@ services:
       - ApiSettings__BaseUrl=https://localhost:5031
     volumes:
       - ../../Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
-      - ../../Resources/Configuration/sharedsettings.uat.json:/app/Resources/Configuration/sharedsettings.uat.json:ro
+      - ../../Resources/Configuration/sharedsettings.stg.json:/app/Resources/Configuration/sharedsettings.stg.json:ro
       - ../../logs:/logs
     networks:
-      - xy-uat-network
+      - xy-stg-network
     profiles: ["https", "all", "ui-https"]
     depends_on:
-      api-uat-https:
+      api-stg-https:
         condition: service_healthy
     healthcheck:
       test: curl --fail https://localhost:5033 --insecure || exit 1
@@ -122,9 +122,9 @@ services:
       retries: 2
       start_period: 10s
 
-# UAT networking
+# Staging networking
 networks:
-  xy-uat-network:
+  xy-stg-network:
     external: true
   xy-database-network:
     external: true

@@ -88,7 +88,7 @@ namespace XYDataLabs.OrderProcessingSystem.UI.Controllers
             ViewData["EnvironmentColor"] = environmentName switch
             {
                 "dev" => "success",      // Green for development
-                "uat" => "warning",      // Yellow for UAT
+                "stg" => "warning",      // Yellow for Staging
                 "prod" => "danger",      // Red for production
                 _ => "secondary"         // Gray for unknown
             };

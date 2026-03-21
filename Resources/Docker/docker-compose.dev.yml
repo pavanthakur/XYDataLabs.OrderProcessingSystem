@@ -15,7 +15,7 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:5020
       - ASPNETCORE_HTTP_PORTS=5020
-      - ConnectionStrings__OrderProcessingSystemDbConnection=Server=host.docker.internal,1433;Database=OrderProcessingSystem;User Id=sa;Password=Admin100@;TrustServerCertificate=True;
+      - ConnectionStrings__OrderProcessingSystemDbConnection=Server=host.docker.internal,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=Admin100@;TrustServerCertificate=True;
       - USE_HTTPS=false
     volumes:
       - ../../logs:/logs
@@ -45,7 +45,7 @@ services:
       - ASPNETCORE_URLS=https://+:5021
       - ASPNETCORE_HTTPS_PORTS=5021
       - ASPNETCORE_Kestrel__Certificates__Default__Password=P@ss100
-      - ConnectionStrings__OrderProcessingSystemDbConnection=Server=host.docker.internal,1433;Database=OrderProcessingSystem;User Id=sa;Password=Admin100@;TrustServerCertificate=True;
+      - ConnectionStrings__OrderProcessingSystemDbConnection=Server=host.docker.internal,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=Admin100@;TrustServerCertificate=True;
     volumes:
       - ../../logs:/logs
       - ../../Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro

@@ -43,7 +43,7 @@ namespace XYDataLabs.OrderProcessingSystem.Utilities
         {
             public const string Local = "local";
             public const string Dev = "dev";
-            public const string Uat = "uat";
+            public const string Uat = "stg";
             public const string Production = "prod";
         }
 

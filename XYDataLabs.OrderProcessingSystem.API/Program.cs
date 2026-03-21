@@ -293,7 +293,7 @@ var useDeveloperExceptionPage = builder.Environment.IsDevelopment() && !isAzure;
 
 // Configure the HTTP request pipeline.
 // Environment-specific middleware configuration using our simplified profile names
-if (environmentName == "dev" || environmentName == "uat")
+if (environmentName == "dev" || environmentName == "stg")
 {
     // Enable Swagger for Development and UAT environments
     app.UseSwagger();
