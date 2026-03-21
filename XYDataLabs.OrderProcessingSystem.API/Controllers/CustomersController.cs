@@ -28,9 +28,9 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
         /// <returns></returns>
         /// <response code="200">Returns all customers</response>
         [HttpGet("GetAllCustomers", Name = nameof(GetAllCustomers))]
-        public async Task<ActionResult> GetAllCustomers()
+        public async Task<ActionResult> GetAllCustomers(CancellationToken cancellationToken)
         {
-            var result = await _dispatcher.QueryAsync(new GetAllCustomersQuery());
+            var result = await _dispatcher.QueryAsync(new GetAllCustomersQuery(), cancellationToken);
             return result.ToActionResult();
         }
 
@@ -42,9 +42,9 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
         /// <param name="pageSize">Page size for pagination.</param>
         /// <returns>A list of customers matching the search criteria.</returns>
         [HttpGet("GetAllCustomersByName")]
-        public async Task<ActionResult> GetAllCustomersByName(string name, int pageNumber = 1, int pageSize = 10)
+        public async Task<ActionResult> GetAllCustomersByName(string name, int pageNumber = 1, int pageSize = 10, CancellationToken cancellationToken = default)
         {
-            var result = await _dispatcher.QueryAsync(new GetCustomersByNameQuery(name, pageNumber, pageSize));
+            var result = await _dispatcher.QueryAsync(new GetCustomersByNameQuery(name, pageNumber, pageSize), cancellationToken);
             return result.ToActionResult();
         }
 
@@ -54,9 +54,9 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
         /// <param name="id">Customer id</param>
         /// <returns>Customer</returns>
         [HttpGet("{id}", Name = nameof(GetCustomerById))]
-        public async Task<ActionResult> GetCustomerById(int id)
+        public async Task<ActionResult> GetCustomerById(int id, CancellationToken cancellationToken)
         {
-            var result = await _dispatcher.QueryAsync(new GetCustomerWithOrdersQuery(id));
+            var result = await _dispatcher.QueryAsync(new GetCustomerWithOrdersQuery(id), cancellationToken);
             return result.ToActionResult();
         }
 
@@ -66,9 +66,9 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
         /// <param name="customerRequestDto">customer</param>
         /// <returns>Customer</returns>
         [HttpPost]
-        public async Task<ActionResult> CreateCustomer(CreateCustomerRequestDto customerRequestDto)
+        public async Task<ActionResult> CreateCustomer(CreateCustomerRequestDto customerRequestDto, CancellationToken cancellationToken)
         {
-            var result = await _dispatcher.SendAsync(new CreateCustomerCommand(customerRequestDto.Name, customerRequestDto.Email));
+            var result = await _dispatcher.SendAsync(new CreateCustomerCommand(customerRequestDto.Name, customerRequestDto.Email), cancellationToken);
             return result.ToCreatedResult(nameof(CreateCustomer), new { id = result.Value });
         }
 
@@ -79,9 +79,9 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
         /// <param name="customerRequestDto">customer</param>
         /// <returns>Customer</returns>
         [HttpPut("{id}")]
-        public async Task<ActionResult> UpdateCustomer(int id, UpdateCustomerRequestDto customerRequestDto)
+        public async Task<ActionResult> UpdateCustomer(int id, UpdateCustomerRequestDto customerRequestDto, CancellationToken cancellationToken)
         {
-            var result = await _dispatcher.SendAsync(new UpdateCustomerCommand(id, customerRequestDto.Name, customerRequestDto.Email));
+            var result = await _dispatcher.SendAsync(new UpdateCustomerCommand(id, customerRequestDto.Name, customerRequestDto.Email), cancellationToken);
             return result.ToActionResult();
         }
 
@@ -91,9 +91,9 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
         /// <param name="id">Customer id</param>
         /// <returns>Customer</returns>
         [HttpDelete("{id}")]
-        public async Task<ActionResult> DeleteCustomer(int id)
+        public async Task<ActionResult> DeleteCustomer(int id, CancellationToken cancellationToken)
         {
-            var result = await _dispatcher.SendAsync(new DeleteCustomerCommand(id));
+            var result = await _dispatcher.SendAsync(new DeleteCustomerCommand(id), cancellationToken);
             return result.ToActionResult();
         }
     }

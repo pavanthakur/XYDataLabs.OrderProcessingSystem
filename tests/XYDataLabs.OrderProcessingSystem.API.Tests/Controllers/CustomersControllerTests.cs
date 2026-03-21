@@ -30,7 +30,7 @@ namespace XYDataLabs.OrderProcessingSystem.API.Tests.Controllers
                 .ReturnsAsync(Result<IEnumerable<CustomerDto>>.Success(customers));
 
             // Act
-            var result = await _controller.GetAllCustomers();
+            var result = await _controller.GetAllCustomers(CancellationToken.None);
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result);
@@ -48,7 +48,7 @@ namespace XYDataLabs.OrderProcessingSystem.API.Tests.Controllers
                 .ReturnsAsync(Result<CustomerDto>.Success(customer));
 
             // Act
-            var result = await _controller.GetCustomerById(1);
+            var result = await _controller.GetCustomerById(1, CancellationToken.None);
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result);
@@ -65,7 +65,7 @@ namespace XYDataLabs.OrderProcessingSystem.API.Tests.Controllers
                 .ReturnsAsync(Result<CustomerDto>.Failure(Error.NotFound));
 
             // Act
-            var result = await _controller.GetCustomerById(1);
+            var result = await _controller.GetCustomerById(1, CancellationToken.None);
 
             // Assert
             Assert.IsType<NotFoundObjectResult>(result);
@@ -80,7 +80,7 @@ namespace XYDataLabs.OrderProcessingSystem.API.Tests.Controllers
                 .ReturnsAsync(Result<int>.Success(1));
 
             // Act
-            var result = await _controller.CreateCustomer(createCustomerRequest);
+            var result = await _controller.CreateCustomer(createCustomerRequest, CancellationToken.None);
 
             // Assert
             var createdAtActionResult = Assert.IsType<CreatedAtActionResult>(result);
@@ -96,7 +96,7 @@ namespace XYDataLabs.OrderProcessingSystem.API.Tests.Controllers
                 .ReturnsAsync(Result<int>.Failure(Error.Validation));
 
             // Act
-            var result = await _controller.CreateCustomer(createCustomerRequest);
+            var result = await _controller.CreateCustomer(createCustomerRequest, CancellationToken.None);
 
             // Assert
             Assert.IsType<BadRequestObjectResult>(result);
@@ -111,7 +111,7 @@ namespace XYDataLabs.OrderProcessingSystem.API.Tests.Controllers
                 .ReturnsAsync(Result<IEnumerable<CustomerDto>>.Success(customers));
 
             // Act
-            var result = await _controller.GetAllCustomersByName("John");
+            var result = await _controller.GetAllCustomersByName("John", cancellationToken: CancellationToken.None);
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result);
@@ -129,7 +129,7 @@ namespace XYDataLabs.OrderProcessingSystem.API.Tests.Controllers
                 .ReturnsAsync(Result<int>.Success(1));
 
             // Act
-            var result = await _controller.UpdateCustomer(1, updateCustomerRequest);
+            var result = await _controller.UpdateCustomer(1, updateCustomerRequest, CancellationToken.None);
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result);
@@ -145,7 +145,7 @@ namespace XYDataLabs.OrderProcessingSystem.API.Tests.Controllers
                 .ReturnsAsync(Result<int>.Failure(Error.NotFound));
 
             // Act
-            var result = await _controller.UpdateCustomer(1, updateCustomerRequest);
+            var result = await _controller.UpdateCustomer(1, updateCustomerRequest, CancellationToken.None);
 
             // Assert
             Assert.IsType<NotFoundObjectResult>(result);
@@ -159,7 +159,7 @@ namespace XYDataLabs.OrderProcessingSystem.API.Tests.Controllers
                 .ReturnsAsync(Result<bool>.Success(true));
 
             // Act
-            var result = await _controller.DeleteCustomer(1);
+            var result = await _controller.DeleteCustomer(1, CancellationToken.None);
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result);
@@ -174,7 +174,7 @@ namespace XYDataLabs.OrderProcessingSystem.API.Tests.Controllers
                 .ReturnsAsync(Result<bool>.Failure(Error.NotFound));
 
             // Act
-            var result = await _controller.DeleteCustomer(1);
+            var result = await _controller.DeleteCustomer(1, CancellationToken.None);
 
             // Assert
             Assert.IsType<NotFoundObjectResult>(result);

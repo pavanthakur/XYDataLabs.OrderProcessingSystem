@@ -27,6 +27,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
     private readonly AppMasterData _appMasterData;
     private readonly PaymentProvider _openPayProvider;
     private readonly IConfiguration _configuration;
+    private readonly TimeProvider _timeProvider;
 
     public ProcessPaymentCommandHandler(
         IOpenPayAdapterService openPayAdapterService,
@@ -34,7 +35,8 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         ILogger<ProcessPaymentCommandHandler> logger,
         IAppDbContext context,
         IMapper mapper,
-        AppMasterData appMasterData)
+        AppMasterData appMasterData,
+        TimeProvider timeProvider)
     {
         _openPayAdapterService = openPayAdapterService;
         _logger = logger;
@@ -44,6 +46,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         _context = context;
         _mapper = mapper;
         _appMasterData = appMasterData;
+        _timeProvider = timeProvider;
 
         _openPayProvider = _appMasterData.GetProviderByName("OpenPay")
             ?? throw new InvalidOperationException("OpenPay provider not found in master data");
@@ -90,7 +93,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
                 Amount = new decimal(100.00),
                 Currency = AppMasterConstant.DefaultCurrencyCode,
                 Status = charge.Status ?? "unknown",
-                CreatedAt = charge.CreationDate ?? DateTime.UtcNow,
+                CreatedAt = charge.CreationDate ?? _timeProvider.GetUtcNow().UtcDateTime,
                 TransactionId = charge.Authorization,
                 ThreeDSecureUrl = charge.PaymentMethod?.Url,
                 ErrorMessage = charge.ErrorMessage
@@ -111,7 +114,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             Token = Guid.NewGuid().ToString("N"),
             Status = true,
             PaymentProviderId = _openPayProvider.Id,
-            CreatedDate = DateTime.UtcNow
+            CreatedDate = _timeProvider.GetUtcNow().UtcDateTime
         };
         _context.PaymentMethods.Add(openPayMethod);
         await _context.SaveChangesAsync(cancellationToken);
@@ -129,7 +132,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
 
         paymentMethod.CreatedBy = billingCustomerId;
         paymentMethod.UpdatedBy = billingCustomerId;
-        paymentMethod.UpdatedDate = DateTime.UtcNow;
+        paymentMethod.UpdatedDate = _timeProvider.GetUtcNow().UtcDateTime;
         _context.PaymentMethods.Update(paymentMethod);
         await _context.SaveChangesAsync(cancellationToken);
 
@@ -170,7 +173,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         billingCustomer.APICustomerId = openpayCustomer.Id;
         billingCustomer.TwoLetterIsoCode = AppMasterConstant.DefaultCountryCode;
         billingCustomer.PaymentMethodId = paymentMethod.Id;
-        billingCustomer.CreatedDate = DateTime.UtcNow;
+        billingCustomer.CreatedDate = _timeProvider.GetUtcNow().UtcDateTime;
         _context.BillingCustomers.Add(billingCustomer);
         await _context.SaveChangesAsync(cancellationToken);
 
@@ -228,7 +231,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             TransactionMessage = $"Card created with ID: {createdCard.Id}",
             IsTransactionSuccess = true,
             CreatedBy = billingCustomerId,
-            CreatedDate = DateTime.UtcNow
+            CreatedDate = _timeProvider.GetUtcNow().UtcDateTime
         };
 
         _context.CardTransactions.Add(cardTransaction);
@@ -240,7 +243,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             Status = EnumHelper.GetEnumDescription(OpenPayTransactionStatus.Completed),
             Notes = "Card tokenization successful",
             CreatedBy = billingCustomerId,
-            CreatedDate = DateTime.UtcNow
+            CreatedDate = _timeProvider.GetUtcNow().UtcDateTime
         };
 
         _context.TransactionStatusHistories.Add(statusHistory);
@@ -290,7 +293,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             Currency = AppMasterConstant.DefaultCurrencyCode,
             Result = EnumHelper.GetEnumIdFromDescription<PaymentStatus>(charge.Status) ?? (int)PaymentStatus.Unknown,
             CreatedBy = billingCustomerId,
-            CreatedDate = DateTime.UtcNow
+            CreatedDate = _timeProvider.GetUtcNow().UtcDateTime
         };
 
         _context.PayinLogs.Add(payinLog);
@@ -302,7 +305,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             PostInfo = System.Text.Json.JsonSerializer.Serialize(chargeRequest),
             RespInfo = System.Text.Json.JsonSerializer.Serialize(charge),
             CreatedBy = billingCustomerId,
-            CreatedDate = DateTime.UtcNow
+            CreatedDate = _timeProvider.GetUtcNow().UtcDateTime
         };
 
         _context.PayinLogDetails.Add(payinLogDetails);
@@ -328,7 +331,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             CreditCardCvv2 = request.Cvv2,
             TransactionMessage = charge.ErrorMessage,
             CreatedBy = billingCustomerId,
-            CreatedDate = DateTime.UtcNow
+            CreatedDate = _timeProvider.GetUtcNow().UtcDateTime
         };
 
         _context.CardTransactions.Add(cardTransaction);
@@ -340,7 +343,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             Status = charge.Status,
             Notes = charge.ErrorMessage,
             CreatedBy = billingCustomerId,
-            CreatedDate = DateTime.UtcNow
+            CreatedDate = _timeProvider.GetUtcNow().UtcDateTime
         };
 
         _context.TransactionStatusHistories.Add(statusHistory);

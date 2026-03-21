@@ -29,10 +29,10 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
         /// <response code="201">Create order</response>
         [HttpPost]
         [ProducesResponseType(StatusCodes.Status201Created)]
-        public async Task<ActionResult> CreateOrder(CreateOrderRequestDto createOrderRequestDto)
+        public async Task<ActionResult> CreateOrder(CreateOrderRequestDto createOrderRequestDto, CancellationToken cancellationToken)
         {
             var result = await _dispatcher.SendAsync(
-                new CreateOrderCommand(createOrderRequestDto.CustomerId, createOrderRequestDto.ProductIds));
+                new CreateOrderCommand(createOrderRequestDto.CustomerId, createOrderRequestDto.ProductIds), cancellationToken);
             return result.ToCreatedResult(nameof(CreateOrder), new { id = result.Value?.OrderId });
         }
 
@@ -42,9 +42,9 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
         /// <param name="id">Order id</param>
         /// <returns>Order</returns>
         [HttpGet("{id}", Name = nameof(GetOrderDetailsById))]
-        public async Task<ActionResult> GetOrderDetailsById(int id)
+        public async Task<ActionResult> GetOrderDetailsById(int id, CancellationToken cancellationToken)
         {
-            var result = await _dispatcher.QueryAsync(new GetOrderDetailsQuery(id));
+            var result = await _dispatcher.QueryAsync(new GetOrderDetailsQuery(id), cancellationToken);
             return result.ToActionResult();
         }
     }

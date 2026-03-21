@@ -101,6 +101,7 @@ else
 
 builder.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>(); // Required for LoggingMiddleware
 builder.Services.AddScoped<ITenantProvider, HeaderTenantProvider>();
+builder.Services.AddSingleton(TimeProvider.System);
 
 // Configure Application Insights for environment-wise telemetry and logging
 var appInsightsConnectionString = builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"] 

@@ -25,7 +25,7 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
         /// <param name="request">CustomerWithCardPaymentRequestDto</param>
         /// <returns>Payment status</returns>
         [HttpPost("ProcessPayment")]
-        public async Task<IActionResult> ProcessPayment([FromBody] CustomerWithCardPaymentRequestDto request)
+        public async Task<IActionResult> ProcessPayment([FromBody] CustomerWithCardPaymentRequestDto request, CancellationToken cancellationToken)
         {
             try
             {
@@ -37,7 +37,7 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
                     request.ExpirationYear,
                     request.ExpirationMonth,
                     request.Cvv2,
-                    request.OrderId));
+                    request.OrderId), cancellationToken);
                 return result.ToActionResult();
             }
             catch (Exception ex)

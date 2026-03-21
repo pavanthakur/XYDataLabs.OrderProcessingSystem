@@ -8,10 +8,12 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
     public class InfoController : ControllerBase
     {
         private readonly ILogger<InfoController> _logger;
+        private readonly TimeProvider _timeProvider;
 
-        public InfoController(ILogger<InfoController> logger)
+        public InfoController(ILogger<InfoController> logger, TimeProvider timeProvider)
         {
             _logger = logger;
+            _timeProvider = timeProvider;
         }
 
         /// <summary>
@@ -45,7 +47,7 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
                 MachineName = Environment.MachineName,
                 Platform = Environment.OSVersion.Platform.ToString(),
                 Framework = Environment.Version.ToString(),
-                Timestamp = DateTime.UtcNow
+                Timestamp = _timeProvider.GetUtcNow().UtcDateTime
             };
 
             return Ok(environmentInfo);
