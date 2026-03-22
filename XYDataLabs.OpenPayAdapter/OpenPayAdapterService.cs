@@ -21,7 +21,8 @@ namespace XYDataLabs.OpenPayAdapter
 
         public async Task<Customer> CreateCustomerAsync(Customer customer)
         {
-            _logger.Information("Creating customer with email: {Email}", customer.Email);
+            var maskedEmail = MaskEmail(customer.Email);
+            _logger.Information("Creating customer with email: {Email}", maskedEmail);
             try
             {
                 var createdCustomer = await Task.Run(() => _openpayApi.CustomerService.Create(customer));
@@ -30,13 +31,14 @@ namespace XYDataLabs.OpenPayAdapter
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "Failed to create customer with email: {Email}", customer.Email);
+                _logger.Error(ex, "Failed to create customer with email: {Email}", maskedEmail);
                 throw;
             }
         }
         public async Task<Card> CreateCardTokenAsync(Card card)
         {
-            _logger.Information("Creating card token for holder: {HolderName}", card.HolderName);
+            var maskedHolderName = MaskHolder(card.HolderName);
+            _logger.Information("Creating card token for holder: {HolderName}", maskedHolderName);
             try
             {
                 var createdToken = await Task.Run(() => _openpayApi.CardService.Create(card));
@@ -45,7 +47,7 @@ namespace XYDataLabs.OpenPayAdapter
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "Failed to create card token for holder: {HolderName}", card.HolderName);
+                _logger.Error(ex, "Failed to create card token for holder: {HolderName}", maskedHolderName);
                 throw;
             }
         }
@@ -97,6 +99,32 @@ namespace XYDataLabs.OpenPayAdapter
                 _logger.Error(ex, "Failed to retrieve charge {ChargeId} from OpenPay", chargeId);
                 throw;
             }
+        }
+
+        private static string MaskEmail(string? email)
+        {
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                return "[empty]";
+            }
+
+            var atIndex = email.IndexOf('@');
+            if (atIndex <= 1)
+            {
+                return "***@***";
+            }
+
+            return $"{email[0]}***{email[atIndex..]}";
+        }
+
+        private static string MaskHolder(string? name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return "[empty]";
+            }
+
+            return $"{name[0]}{new string('*', Math.Max(name.Length - 1, 2))}";
         }
     }
 }

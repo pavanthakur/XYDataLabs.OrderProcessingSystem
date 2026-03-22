@@ -21,6 +21,8 @@ public sealed class GetCustomersByNameQueryHandler : IQueryHandler<GetCustomersB
 
     public async Task<Result<IEnumerable<CustomerDto>>> HandleAsync(GetCustomersByNameQuery query, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(query);
+
         // Server-side filtering (fixed from original client-side ToListAsync → filter)
         IQueryable<Customer> customersQuery = _context.Customers;
 
@@ -30,6 +32,7 @@ public sealed class GetCustomersByNameQueryHandler : IQueryHandler<GetCustomersB
         }
 
         var customers = await customersQuery
+            .OrderBy(c => c.CustomerId)
             .Skip((query.PageNumber - 1) * query.PageSize)
             .Take(query.PageSize)
             .ToListAsync(cancellationToken);

@@ -2,6 +2,7 @@
 let deviceSessionId;
 const payButton = document.getElementById('pay-button');
 const runtimeConfigurationUrl = `${API_BASE_URL}/api/v1/info/runtime-configuration`;
+const pendingPaymentStorageKeyPrefix = 'pending-payment:';
 let runtimeConfigurationPromise;
 
 const setPayButtonState = (enabled, text) => {
@@ -26,6 +27,21 @@ const loadRuntimeConfiguration = async () => {
     }
 
     return payload;
+};
+
+const persistPendingPaymentContext = payment => {
+    if (!payment?.id) {
+        return;
+    }
+
+    try {
+        sessionStorage.setItem(`${pendingPaymentStorageKeyPrefix}${payment.id}`, JSON.stringify({
+            attemptOrderId: payment.attemptOrderId || null,
+            customerOrderId: payment.customerOrderId || null
+        }));
+    } catch (error) {
+        console.warn('Unable to persist pending payment context before 3DS redirect.', error);
+    }
 };
 
 if (payButton) {
@@ -141,6 +157,7 @@ document.getElementById('payment-form').addEventListener('submit', async functio
                     const paymentStatus = (payment.status || '').toLowerCase();
 
                     if (paymentStatus === 'charge_pending' && payment.threeDSecureUrl) {
+                        persistPendingPaymentContext(payment);
                         window.location.assign(payment.threeDSecureUrl);
                         return;
                     }

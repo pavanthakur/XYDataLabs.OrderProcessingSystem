@@ -2,7 +2,7 @@
 @{
     ViewData["Title"] = "Payment Callback";
     var attemptOrderIdJson = System.Text.Json.JsonSerializer.Serialize(ViewData["AttemptOrderId"]?.ToString());
-    var callbackRequestJson = System.Text.Json.JsonSerializer.Serialize(new
+    var callbackRequestTemplateJson = System.Text.Json.JsonSerializer.Serialize(new
     {
         attemptOrderId = ViewData["AttemptOrderId"]?.ToString(),
         callbackStatus = Model.Status,
@@ -108,7 +108,8 @@
             const apiBaseUrl = @Html.Raw(apiBaseUrlJson);
             const paymentId = @Html.Raw(paymentIdJson);
             const attemptOrderId = @Html.Raw(attemptOrderIdJson);
-            const callbackRequest = @Html.Raw(callbackRequestJson);
+            const callbackRequestTemplate = @Html.Raw(callbackRequestTemplateJson);
+            const pendingPaymentStorageKeyPrefix = 'pending-payment:';
             const header = document.getElementById('callback-header');
             const heading = document.getElementById('callback-heading');
             const banner = document.getElementById('callback-status-banner');
@@ -145,6 +146,32 @@
                 info: 'Payment Callback Received'
             };
 
+            const getStoredPendingPaymentContext = currentPaymentId => {
+                if (!currentPaymentId) {
+                    return null;
+                }
+
+                try {
+                    const rawValue = sessionStorage.getItem(`${pendingPaymentStorageKeyPrefix}${currentPaymentId}`);
+                    return rawValue ? JSON.parse(rawValue) : null;
+                } catch (error) {
+                    console.warn('Unable to read stored pending payment context.', error);
+                    return null;
+                }
+            };
+
+            const clearStoredPendingPaymentContext = currentPaymentId => {
+                if (!currentPaymentId) {
+                    return;
+                }
+
+                try {
+                    sessionStorage.removeItem(`${pendingPaymentStorageKeyPrefix}${currentPaymentId}`);
+                } catch (error) {
+                    console.warn('Unable to clear stored pending payment context.', error);
+                }
+            };
+
             const toDisplayText = value => {
                 if (!value) {
                     return 'Unknown';
@@ -158,8 +185,15 @@
                     .join(' ');
             };
 
-            if (!paymentId || !apiBaseUrl || !attemptOrderId) {
-                banner.textContent = 'The callback was received, but the payment cannot be confirmed because the payment id, API base URL, or attempt order id is missing.';
+            const pendingPaymentContext = getStoredPendingPaymentContext(paymentId);
+            const resolvedAttemptOrderId = attemptOrderId || pendingPaymentContext?.attemptOrderId || null;
+            const callbackRequest = {
+                ...callbackRequestTemplate,
+                attemptOrderId: resolvedAttemptOrderId
+            };
+
+            if (!paymentId || !apiBaseUrl) {
+                banner.textContent = 'The callback was received, but the payment cannot be confirmed because the payment id or API base URL is missing.';
                 banner.className = 'alert alert-warning mb-4';
                 return;
             }
@@ -201,6 +235,8 @@
                     return payload.data;
                 })
                 .then(data => {
+                    clearStoredPendingPaymentContext(paymentId);
+
                     header.className = `card-header ${headerClassByCategory[data.statusCategory] || 'bg-info text-white'}`;
                     heading.textContent = headingByCategory[data.statusCategory] || 'Payment Callback Received';
 

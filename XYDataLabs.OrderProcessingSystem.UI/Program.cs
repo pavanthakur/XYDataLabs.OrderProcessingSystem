@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Configuration;
 using System.IO;
 using Serilog;
+using Serilog.Context;
 using Serilog.Events;
 using Microsoft.Extensions.Options;
 using XYDataLabs.OrderProcessingSystem.SharedKernel;
@@ -37,6 +38,8 @@ var environmentName = builder.Environment.EnvironmentName switch
     _ => Constants.Environments.Dev // Default to dev for any other environment
 };
 
+var configuredActiveTenantCode = "none";
+
 Console.WriteLine("[EARLIEST DEBUG] Environment name mapping completed...");
 
 // Configure Serilog with environment-aware paths
@@ -50,28 +53,30 @@ builder.Host.UseSerilog((context, services, loggerConfiguration) =>
         .Enrich.FromLogContext()
         .Enrich.WithProperty("Environment", environmentName)
         .Enrich.WithProperty("Application", "UI")
-        .Enrich.WithProperty("Runtime", isDocker ? "Docker" : "Local");
+        .Enrich.WithProperty("Runtime", isDocker ? "Docker" : "Local")
+        .Enrich.WithProperty("TenantCode", configuredActiveTenantCode)
+        .Enrich.WithProperty("RequestedTenantCode", "none");
 
     if (isDocker)
     {
         // Docker: Use console output (primary) + file output 
         loggerConfiguration
-            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] [{Runtime}] {Message:lj}{NewLine}{Exception}")
+            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{NewLine}{Exception}")
             .WriteTo.File(
                 path: "/logs/ui-.log",
                 rollingInterval: RollingInterval.Day,
-                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] [{Runtime}] {Message:lj}{Exception}{NewLine}"
+                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{Exception}{NewLine}"
             );
     }
     else
     {
         // Non-Docker: Use file output + console
         loggerConfiguration
-            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] [{Runtime}] {Message:lj}{NewLine}{Exception}")
+            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{NewLine}{Exception}")
             .WriteTo.File(
                 path: "../logs/ui-.log",
                 rollingInterval: RollingInterval.Day,
-                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] [{Runtime}] {Message:lj}{Exception}{NewLine}"
+                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{Exception}{NewLine}"
             );
     }
 });
@@ -115,6 +120,17 @@ try
     if (isAzure)
     {
         Console.WriteLine("[CONFIG] ✅ Configuration loaded successfully from Azure Key Vault");
+    }
+
+    configuredActiveTenantCode = builder.Configuration
+        .GetSection(TenantConfigurationOptions.SectionName)
+        .Get<TenantConfigurationOptions>()?
+        .ActiveTenantCode?
+        .Trim();
+
+    if (string.IsNullOrWhiteSpace(configuredActiveTenantCode))
+    {
+        configuredActiveTenantCode = "none";
     }
 }
 catch (Exception ex)
@@ -219,7 +235,35 @@ builder.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
 var app = builder.Build();
 
 // Log requests to help diagnose issues
-app.UseSerilogRequestLogging();
+app.Use(async (context, next) =>
+{
+    var requestedTenantCode = context.Request.Headers[TenantMiddleware.TenantHeaderName].FirstOrDefault()?.Trim();
+    var resolvedTenantCode = string.IsNullOrWhiteSpace(requestedTenantCode)
+        ? configuredActiveTenantCode
+        : requestedTenantCode;
+
+    using (LogContext.PushProperty("TenantCode", string.IsNullOrWhiteSpace(resolvedTenantCode) ? "none" : resolvedTenantCode))
+    using (LogContext.PushProperty("RequestedTenantCode", string.IsNullOrWhiteSpace(requestedTenantCode) ? "none" : requestedTenantCode))
+    {
+        await next();
+    }
+});
+
+app.UseSerilogRequestLogging(options =>
+{
+    options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms for tenant {TenantCode}";
+    options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+    {
+        var requestedTenantCode = httpContext.Request.Headers[TenantMiddleware.TenantHeaderName].FirstOrDefault()?.Trim();
+        var resolvedTenantCode = string.IsNullOrWhiteSpace(requestedTenantCode)
+            ? configuredActiveTenantCode
+            : requestedTenantCode;
+
+        diagnosticContext.Set("TenantCode", string.IsNullOrWhiteSpace(resolvedTenantCode) ? "none" : resolvedTenantCode);
+        diagnosticContext.Set("RequestedTenantCode", string.IsNullOrWhiteSpace(requestedTenantCode) ? "none" : requestedTenantCode);
+        diagnosticContext.Set("TenantHeaderName", TenantMiddleware.TenantHeaderName);
+    };
+});
 
 app.UseMiddleware<CorrelationMiddleware>();
 

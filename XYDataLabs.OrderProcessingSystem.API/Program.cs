@@ -15,6 +15,7 @@ using XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData;
 using Microsoft.ApplicationInsights.Extensibility;
 using System.Text.RegularExpressions;
 using XYDataLabs.OrderProcessingSystem.Application.Utilities;
+using XYDataLabs.OrderProcessingSystem.API.Swagger;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Configuration;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
@@ -175,6 +176,10 @@ if (!string.IsNullOrWhiteSpace(dbConnForHealth))
 
 builder.Services.AddControllers();
 
+var tenantConfigurationOptions = builder.Configuration
+    .GetSection(TenantConfigurationOptions.SectionName)
+    .Get<TenantConfigurationOptions>() ?? new TenantConfigurationOptions();
+
 // API Versioning — URL segment: /api/v1/[controller]
 builder.Services.AddApiVersioning(options =>
 {
@@ -194,6 +199,7 @@ builder.Services.AddSwaggerGen(options =>
 {
     var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+    options.OperationFilter<TenantHeaderOperationFilter>();
 
     if (File.Exists(xmlPath))
     {
@@ -211,7 +217,8 @@ builder.Services.AddSwaggerGen(options =>
         Title = $"OrderProcessingSystem API - {environmentName.ToUpper()} Environment",
         Version = "v1",
         Description = $"OrderProcessingSystem API with Customer, Order endpoints running in {environmentName.ToUpper()} environment" + 
-                     $" [{runtimeLabel}]",
+                     $" [{runtimeLabel}]" +
+                     $" | Active Tenant: {tenantConfigurationOptions.ActiveTenantCode}",
     });
     
     // Add server configuration for proper Swagger API calls
@@ -255,21 +262,21 @@ builder.Host.UseSerilog((context, services, loggerConfiguration) =>
     if (isDocker)
     {
         loggerConfiguration
-            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] [{Runtime}] {Message:lj}{NewLine}{Exception}")
+            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{NewLine}{Exception}")
             .WriteTo.File(
                 path: "/logs/webapi-.log",
                 rollingInterval: RollingInterval.Day,
-                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] [{Runtime}] {Message:lj}{Exception}{NewLine}"
+                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{Exception}{NewLine}"
             );
     }
     else
     {
         loggerConfiguration
-            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] [{Runtime}] {Message:lj}{NewLine}{Exception}")
+            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{NewLine}{Exception}")
             .WriteTo.File(
                 path: "../logs/webapi-.log",
                 rollingInterval: RollingInterval.Day,
-                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] [{Runtime}] {Message:lj}{Exception}{NewLine}"
+                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{Exception}{NewLine}"
             );
     }
 });
@@ -333,7 +340,21 @@ using (var scope = app.Services.CreateScope())
 SharedSettingsLoader.PrintApiSettingsDebug(apiSettings, activeSettings, "API", isDocker);
 
 // Add Serilog request logging
-app.UseSerilogRequestLogging();
+app.UseSerilogRequestLogging(options =>
+{
+    options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms for tenant {TenantCode}";
+    options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+    {
+        var tenantCode = ResolveTenantCodeForLogging(httpContext);
+        var requestedTenantCode = httpContext.Request.Headers[TenantMiddleware.TenantHeaderName].FirstOrDefault();
+
+        diagnosticContext.Set("TenantCode", tenantCode);
+        diagnosticContext.Set(
+            "RequestedTenantCode",
+            string.IsNullOrWhiteSpace(requestedTenantCode) ? "none" : requestedTenantCode.Trim());
+        diagnosticContext.Set("TenantHeaderName", TenantMiddleware.TenantHeaderName);
+    };
+});
 
 var useDeveloperExceptionPage = builder.Environment.IsDevelopment() && !isAzure;
 
@@ -435,6 +456,25 @@ catch (Exception ex)
 finally
 {
     Log.CloseAndFlush();
+}
+
+static string ResolveTenantCodeForLogging(HttpContext httpContext)
+{
+    var tenantProvider = httpContext.RequestServices.GetService<ITenantProvider>();
+    if (tenantProvider is not null && tenantProvider.HasTenantContext && !string.IsNullOrWhiteSpace(tenantProvider.TenantCode))
+    {
+        return tenantProvider.TenantCode;
+    }
+
+    var requestedTenantCode = httpContext.Request.Headers[TenantMiddleware.TenantHeaderName].FirstOrDefault();
+    if (!string.IsNullOrWhiteSpace(requestedTenantCode))
+    {
+        return requestedTenantCode.Trim();
+    }
+
+    return string.Equals(httpContext.Request.Path.Value, "/api/v1/info/runtime-configuration", StringComparison.OrdinalIgnoreCase)
+        ? "bootstrap"
+        : "none";
 }
 
 // Required for WebApplicationFactory<Program> in integration tests

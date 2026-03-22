@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using Serilog;
 using Serilog.Context;
 using System.Text.Json;
 
@@ -7,42 +8,64 @@ namespace XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 public sealed class TenantMiddleware
 {
     private readonly RequestDelegate _next;
-    private readonly ITenantResolver _tenantResolver;
     public const string TenantHeaderName = "X-Tenant-Code";
     internal const string HttpContextItemKey = "TenantContext";
     private const string RuntimeConfigurationPath = "/api/v1/info/runtime-configuration";
 
-    public TenantMiddleware(RequestDelegate next, ITenantResolver tenantResolver)
+    public TenantMiddleware(RequestDelegate next)
     {
         _next = next;
-        _tenantResolver = tenantResolver;
     }
 
-    public async Task InvokeAsync(HttpContext context)
+    public async Task InvokeAsync(HttpContext context, ITenantResolver tenantResolver)
     {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(tenantResolver);
+
+        var requestedTenantCode = context.Request.Headers[TenantHeaderName].FirstOrDefault()?.Trim();
+
+        using var requestedTenantScope = LogContext.PushProperty(
+            "RequestedTenantCode",
+            string.IsNullOrWhiteSpace(requestedTenantCode) ? "none" : requestedTenantCode);
+
         if (IsRuntimeConfigurationRequest(context.Request.Path))
         {
+            using var bootstrapTenantScope = LogContext.PushProperty("TenantCode", "bootstrap");
             await _next(context);
             return;
         }
 
-        var tenantCode = context.Request.Headers[TenantHeaderName].FirstOrDefault();
-
-        if (string.IsNullOrWhiteSpace(tenantCode))
+        if (string.IsNullOrWhiteSpace(requestedTenantCode))
         {
+            Log.Warning(
+                "Rejected request {Method} {Path} because required tenant header {TenantHeaderName} was missing",
+                context.Request.Method,
+                context.Request.Path,
+                TenantHeaderName);
             await WriteFailureAsync(context, StatusCodes.Status400BadRequest, $"Missing required header '{TenantHeaderName}'.");
             return;
         }
 
-        var tenantContext = await _tenantResolver.ResolveTenantAsync(tenantCode, context.RequestAborted);
+        var tenantContext = await tenantResolver.ResolveTenantAsync(requestedTenantCode, context.RequestAborted);
         if (tenantContext is null)
         {
-            await WriteFailureAsync(context, StatusCodes.Status400BadRequest, $"Tenant code '{tenantCode}' is not recognized.");
+            Log.Warning(
+                "Rejected request {Method} {Path} because tenant code {RequestedTenantCode} was not recognized",
+                context.Request.Method,
+                context.Request.Path,
+                requestedTenantCode);
+            await WriteFailureAsync(context, StatusCodes.Status400BadRequest, $"Tenant code '{requestedTenantCode}' is not recognized.");
             return;
         }
 
         if (IsBlockedStatus(tenantContext.TenantStatus))
         {
+            Log.Warning(
+                "Rejected request {Method} {Path} because tenant {TenantCode} is in blocked status {TenantStatus}",
+                context.Request.Method,
+                context.Request.Path,
+                tenantContext.TenantCode,
+                tenantContext.TenantStatus);
             await WriteFailureAsync(context, StatusCodes.Status403Forbidden, $"Tenant '{tenantContext.TenantCode}' is not active.");
             return;
         }
