@@ -48,5 +48,33 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
                 return StatusCode(500, new { message = "An error occurred while processing the payment" });
             }
         }
+
+        [HttpPost("{paymentId}/confirm-status")]
+        public async Task<IActionResult> ConfirmPaymentStatus(string paymentId, [FromBody] PaymentStatusLookupRequestDto request, CancellationToken cancellationToken)
+        {
+            try
+            {
+                _logger.LogInformation(
+                    "Received payment status confirmation request for payment {PaymentId} and order {OrderId}",
+                    paymentId,
+                    request.OrderId);
+
+                var result = await _dispatcher.SendAsync(
+                    new ConfirmPaymentStatusCommand(
+                        paymentId,
+                        request.OrderId,
+                        request.CallbackStatus,
+                        request.ErrorMessage,
+                        request.CallbackParameters),
+                    cancellationToken);
+
+                return result.ToActionResult();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error confirming payment status for payment {PaymentId}", paymentId);
+                return StatusCode(500, new { message = "An error occurred while confirming the payment status" });
+            }
+        }
     }
 }

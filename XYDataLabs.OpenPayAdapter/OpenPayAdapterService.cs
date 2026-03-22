@@ -65,5 +65,26 @@ namespace XYDataLabs.OpenPayAdapter
                 throw;
             }
         }
+
+        public async Task<Charge> GetChargeAsync(string chargeId, string? customerId = null)
+        {
+            _logger.Information("Retrieving charge {ChargeId} from OpenPay", chargeId);
+
+            try
+            {
+                var charge = await Task.Run(() =>
+                    string.IsNullOrWhiteSpace(customerId)
+                        ? _openpayApi.ChargeService.Get(chargeId)
+                        : _openpayApi.ChargeService.Get(customerId, chargeId));
+
+                _logger.Information("Successfully retrieved charge {ChargeId} with status {Status}", chargeId, charge.Status);
+                return charge;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Failed to retrieve charge {ChargeId} from OpenPay", chargeId);
+                throw;
+            }
+        }
     }
 }
