@@ -71,6 +71,20 @@ This repository was rebaselined in March 2026. Historical migrations were intent
 - **DesignTimeDbContextFactory** ensures migration generation works independently of Program.cs
 - **Architecture test** `EfMigrationDriftTests` runs in CI — prevents forgetting to create a migration after model changes
 
+## Seed data placement rule
+
+Two categories of seed data exist in this repository. They are not interchangeable.
+
+**Baseline reference rows — allowed and required in the baseline migration**
+Rows that must exist immediately after migration for the database to be in a valid operational state. Currently: `TenantA` and `TenantB` in the `Tenants` table.
+Rule: if the application cannot start or the middleware cannot function without these rows, they belong in the baseline migration `Up()` method, not in `DbInitializer`.
+
+**Sample and runtime bootstrap data — must live outside migrations in `DbInitializer.cs`**
+Rows that populate an otherwise valid database with demo, development, or environment-specific data. Currently: customers, products, orders, OpenPay provider configuration.
+Rule: if the database is structurally valid without these rows, they belong in `DbInitializer`, not in a migration.
+
+Do not move baseline reference rows out of the migration without an explicit architecture review. Doing so weakens deterministic database bootstrapping and breaks any environment that skips `DbInitializer` (for example, CI pipeline fresh migrations).
+
 ## Multi-Tenancy Schema
 - `TenantId` column: `int NOT NULL` FK to `Tenants.Id` on all tenant-owned tables
 - `Tenants` carries `Id`, `ExternalId`, `Code`, `Name`, and `Status`

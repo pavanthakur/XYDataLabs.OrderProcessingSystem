@@ -1,11 +1,12 @@
 using AutoMapper;
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Openpay.Entities;
 using Openpay.Entities.Request;
 using XYDataLabs.OpenPayAdapter;
+using XYDataLabs.OpenPayAdapter.Configuration;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
@@ -26,12 +27,12 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
     private readonly IAppDbContext _context;
     private readonly IMapper _mapper;
     private readonly PaymentProvider _openPayProvider;
-    private readonly IConfiguration _configuration;
+    private readonly OpenPayConfig _openPayConfig;
     private readonly TimeProvider _timeProvider;
 
     public ProcessPaymentCommandHandler(
         IOpenPayAdapterService openPayAdapterService,
-        IConfiguration configuration,
+        IOptions<OpenPayConfig> openPayOptions,
         ILogger<ProcessPaymentCommandHandler> logger,
         IAppDbContext context,
         IMapper mapper,
@@ -39,7 +40,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(openPayAdapterService);
-        ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(openPayOptions);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(mapper);
@@ -48,9 +49,8 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
 
         _openPayAdapterService = openPayAdapterService;
         _logger = logger;
-        _configuration = configuration;
-        _redirectUrl = configuration[Constants.Configuration.OpenPayRedirectUrl]
-            ?? throw new InvalidOperationException("RedirectUrl is not configured");
+        _openPayConfig = openPayOptions.Value;
+        _redirectUrl = _openPayConfig.RedirectUrl;
         _context = context;
         _mapper = mapper;
         _timeProvider = timeProvider;
@@ -72,15 +72,14 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             var customerOrderId = ResolveCustomerOrderId(command.CustomerOrderId);
             var paymentTraceId = GeneratePaymentTraceId();
             var attemptOrderId = GenerateAttemptOrderId(customerOrderId);
-            var isThreeDSecureEnabled = _configuration.GetValue<bool?>(Constants.Configuration.OpenPayUseThreeDSecure) ?? true;
+            var isThreeDSecureEnabled = _openPayConfig.Use3DSecure;
 
             activity?.SetTag("payment.customer_order_id", customerOrderId);
             activity?.SetTag("payment.attempt_order_id", attemptOrderId);
             activity?.SetTag("payment.trace_id", paymentTraceId);
 
-            var deviceSessionId = _configuration[Constants.Configuration.OpenPayDeviceSessionId];
             var resolvedDeviceSessionId = string.IsNullOrWhiteSpace(command.DeviceSessionId)
-                ? deviceSessionId ?? throw new InvalidOperationException("DeviceSessionId is not configured")
+                ? _openPayConfig.DeviceSessionId
                 : command.DeviceSessionId;
 
             // Build DTO for mapper compatibility

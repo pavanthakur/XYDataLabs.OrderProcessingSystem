@@ -1,6 +1,7 @@
 ﻿using XYDataLabs.OpenPayAdapter.Configuration;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Serilog;
 
 namespace XYDataLabs.OpenPayAdapter
@@ -11,9 +12,10 @@ namespace XYDataLabs.OpenPayAdapter
             this IServiceCollection services,
             IConfiguration configuration)
         {
-            services.Configure<OpenPayConfig>(
-                configuration.GetSection("OpenPay")
-            );
+            services.AddSingleton<IValidateOptions<OpenPayConfig>, OpenPayConfigValidator>();
+            services.AddOptions<OpenPayConfig>()
+                .Bind(configuration.GetSection("OpenPay"))
+                .ValidateOnStart();
 
             // Register HttpClient
             services.AddHttpClient<IOpenPayAdapterService, OpenPayAdapterService>();

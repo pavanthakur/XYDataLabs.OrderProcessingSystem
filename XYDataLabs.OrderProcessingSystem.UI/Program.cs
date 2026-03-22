@@ -4,6 +4,7 @@ using Serilog;
 using Serilog.Events;
 using Microsoft.Extensions.Options;
 using XYDataLabs.OrderProcessingSystem.SharedKernel;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Configuration;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 
@@ -37,35 +38,6 @@ var environmentName = builder.Environment.EnvironmentName switch
 };
 
 Console.WriteLine("[EARLIEST DEBUG] Environment name mapping completed...");
-
-// Configure Application Insights for environment-wise telemetry and logging
-var appInsightsConnectionString = builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"] 
-    ?? Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CONNECTION_STRING");
-
-if (!string.IsNullOrWhiteSpace(appInsightsConnectionString))
-{
-    try
-    {
-        builder.Services.AddApplicationInsightsTelemetry(options =>
-        {
-            options.ConnectionString = appInsightsConnectionString;
-            options.EnableAdaptiveSampling = true;
-            options.EnableQuickPulseMetricStream = true;
-        });
-        Log.Information("[CONFIG] Application Insights enabled for {Environment} environment", environmentName);
-    }
-    catch (Exception ex)
-    {
-        Log.Error(ex, "[CONFIG] Failed to configure Application Insights for {Environment} environment - application will continue without telemetry", environmentName);
-    }
-}
-else
-{
-    Log.Warning("[CONFIG] Application Insights NOT configured - connection string missing for {Environment} environment", environmentName);
-}
-
-// OpenTelemetry distributed tracing and metrics (Phase 3 — Observability)
-builder.Services.AddObservability("OrderProcessingSystem.UI", builder.Configuration);
 
 // Configure Serilog with environment-aware paths
 builder.Host.UseSerilog((context, services, loggerConfiguration) =>
@@ -150,6 +122,34 @@ catch (Exception ex)
     Console.WriteLine($"[FATAL] Configuration initialization failed: {ex.Message}");
     throw; // Re-throw to stop application startup
 }
+
+var applicationInsightsOptions = ApplicationInsightsOptions.FromConfiguration(builder.Configuration);
+var appInsightsConnectionString = applicationInsightsOptions.ConnectionString;
+
+if (!string.IsNullOrWhiteSpace(appInsightsConnectionString))
+{
+    try
+    {
+        builder.Services.AddApplicationInsightsTelemetry(options =>
+        {
+            options.ConnectionString = appInsightsConnectionString;
+            options.EnableAdaptiveSampling = true;
+            options.EnableQuickPulseMetricStream = true;
+        });
+        Log.Information("[CONFIG] Application Insights enabled for {Environment} environment", environmentName);
+    }
+    catch (Exception ex)
+    {
+        Log.Error(ex, "[CONFIG] Failed to configure Application Insights for {Environment} environment - application will continue without telemetry", environmentName);
+    }
+}
+else
+{
+    Log.Warning("[CONFIG] Application Insights NOT configured - connection string missing for {Environment} environment", environmentName);
+}
+
+// OpenTelemetry distributed tracing and metrics (Phase 3 — Observability)
+builder.Services.AddObservability("OrderProcessingSystem.UI", builder.Configuration);
 
 // Use SharedSettingsLoader to load sharedsettings.json
 // var sharedConfig = SharedSettingsLoader.LoadSharedSettings(builder.Configuration, builder.Environment.EnvironmentName, isDocker);

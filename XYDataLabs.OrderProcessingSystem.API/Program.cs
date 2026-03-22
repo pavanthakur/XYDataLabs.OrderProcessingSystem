@@ -3,7 +3,6 @@ using AutoMapper;
 using XYDataLabs.OrderProcessingSystem.API.Middleware;
 using XYDataLabs.OrderProcessingSystem.Application;
 using XYDataLabs.OrderProcessingSystem.Infrastructure;
-using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
 using Serilog;
 using Serilog.Events;
@@ -16,6 +15,7 @@ using XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData;
 using Microsoft.ApplicationInsights.Extensibility;
 using System.Text.RegularExpressions;
 using XYDataLabs.OrderProcessingSystem.Application.Utilities;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Configuration;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.Multitenancy;
@@ -107,8 +107,8 @@ builder.Services.AddScoped<ITenantResolver, EntityFrameworkTenantResolver>();
 builder.Services.AddSingleton(TimeProvider.System);
 
 // Configure Application Insights for environment-wise telemetry and logging
-var appInsightsConnectionString = builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"] 
-    ?? Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CONNECTION_STRING");
+var applicationInsightsOptions = ApplicationInsightsOptions.FromConfiguration(builder.Configuration);
+var appInsightsConnectionString = applicationInsightsOptions.ConnectionString;
 
 if (!string.IsNullOrWhiteSpace(appInsightsConnectionString))
 {

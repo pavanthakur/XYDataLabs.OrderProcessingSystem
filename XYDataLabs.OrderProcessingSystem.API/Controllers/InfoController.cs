@@ -1,8 +1,9 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using System.Globalization;
 using XYDataLabs.OrderProcessingSystem.SharedKernel;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Configuration;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 
 namespace XYDataLabs.OrderProcessingSystem.API.Controllers
@@ -13,13 +14,16 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
     public class InfoController : ControllerBase
     {
         private readonly ILogger<InfoController> _logger;
-        private readonly IConfiguration _configuration;
+        private readonly TenantConfigurationOptions _tenantConfigurationOptions;
         private readonly TimeProvider _timeProvider;
 
-        public InfoController(ILogger<InfoController> logger, IConfiguration configuration, TimeProvider timeProvider)
+        public InfoController(
+            ILogger<InfoController> logger,
+            IOptions<TenantConfigurationOptions> tenantConfigurationOptions,
+            TimeProvider timeProvider)
         {
             _logger = logger;
-            _configuration = configuration;
+            _tenantConfigurationOptions = tenantConfigurationOptions.Value;
             _timeProvider = timeProvider;
         }
 
@@ -73,7 +77,7 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public IActionResult GetRuntimeConfiguration()
         {
-            var activeTenantCode = _configuration[Constants.Configuration.ActiveTenantCode]?.Trim();
+            var activeTenantCode = _tenantConfigurationOptions.ActiveTenantCode.Trim();
 
             if (string.IsNullOrWhiteSpace(activeTenantCode))
             {

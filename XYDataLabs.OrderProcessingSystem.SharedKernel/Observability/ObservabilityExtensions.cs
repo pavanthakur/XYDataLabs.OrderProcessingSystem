@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Configuration;
 
 namespace XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
 
@@ -17,6 +18,8 @@ public static class ObservabilityExtensions
     {
         var resourceBuilder = ResourceBuilder.CreateDefault()
             .AddService(serviceName);
+        var applicationInsightsOptions = ApplicationInsightsOptions.FromConfiguration(configuration);
+        var appInsightsConnStr = applicationInsightsOptions.ConnectionString;
 
         services.AddOpenTelemetry()
             .ConfigureResource(r => r.AddService(serviceName))
@@ -34,9 +37,6 @@ public static class ObservabilityExtensions
                 }
 
                 // Azure Monitor exporter (App Insights)
-                var appInsightsConnStr = configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"]
-                    ?? Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CONNECTION_STRING");
-
                 if (!string.IsNullOrWhiteSpace(appInsightsConnStr))
                 {
                     tracing.AddAzureMonitorTraceExporter(o => o.ConnectionString = appInsightsConnStr);
@@ -58,9 +58,6 @@ public static class ObservabilityExtensions
                     .AddRuntimeInstrumentation();
 
                 // Azure Monitor metrics exporter
-                var appInsightsConnStr = configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"]
-                    ?? Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CONNECTION_STRING");
-
                 if (!string.IsNullOrWhiteSpace(appInsightsConnStr))
                 {
                     metrics.AddAzureMonitorMetricExporter(o => o.ConnectionString = appInsightsConnStr);

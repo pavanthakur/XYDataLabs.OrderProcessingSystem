@@ -1,8 +1,10 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Azure.Identity;
 using System;
 using System.Reflection;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Configuration;
 
 namespace XYDataLabs.OrderProcessingSystem.SharedKernel
 {
@@ -157,7 +159,11 @@ namespace XYDataLabs.OrderProcessingSystem.SharedKernel
             LoadSharedSettings(builder, environmentName, isDocker);
             var configuration = builder.Build();
 
-            services?.Configure<ApiSettings>(configuration.GetSection("ApiSettings"));
+            if (services is not null)
+            {
+                ConfigureValidatedOptions(services, configuration);
+            }
+
             apiSettings = configuration.GetSection("ApiSettings").Get<ApiSettings>() ?? new ApiSettings();
 
             // Diagnostics for DB connection
@@ -205,6 +211,29 @@ namespace XYDataLabs.OrderProcessingSystem.SharedKernel
             }
 
             return activeSettings;
+        }
+
+        private static void ConfigureValidatedOptions(IServiceCollection services, IConfiguration configuration)
+        {
+            services.AddSingleton<IValidateOptions<ApiSettings>, ApiSettingsValidator>();
+            services.AddSingleton<IValidateOptions<TenantConfigurationOptions>, TenantConfigurationOptionsValidator>();
+
+            services.AddOptions<ApiSettings>()
+                .Bind(configuration.GetSection(Constants.AppSettings.ApiSettings))
+                .ValidateOnStart();
+
+            services.AddOptions<TenantConfigurationOptions>()
+                .Bind(configuration.GetSection(TenantConfigurationOptions.SectionName))
+                .ValidateOnStart();
+
+            services.AddOptions<ObservabilityOptions>()
+                .Bind(configuration.GetSection(ObservabilityOptions.SectionName));
+
+            services.AddOptions<ApplicationInsightsOptions>()
+                .Configure(options =>
+                {
+                    options.ConnectionString = ApplicationInsightsOptions.FromConfiguration(configuration).ConnectionString;
+                });
         }
 
         /// <summary>

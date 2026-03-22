@@ -12,6 +12,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using XYDataLabs.OrderProcessingSystem.SharedKernel;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Configuration;
 
 namespace XYDataLabs.OrderProcessingSystem.Infrastructure
 {
@@ -19,7 +20,9 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure
     {
         public static void InjectInfrastructureDependencies(this IHostApplicationBuilder builder)
         {
-            var enableSensitiveDataLogging = builder.Configuration.GetValue<bool>(Constants.Configuration.EnableEfSensitiveDataLogging);
+            var observabilityOptions = builder.Configuration
+                .GetSection(ObservabilityOptions.SectionName)
+                .Get<ObservabilityOptions>() ?? new ObservabilityOptions();
 
             builder.Services.AddDbContext<OrderProcessingSystemDbContext>(options =>
             {
@@ -30,7 +33,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure
                         maxRetryDelay: TimeSpan.FromSeconds(30),
                         errorNumbersToAdd: null));
 
-                if (enableSensitiveDataLogging)
+                if (observabilityOptions.EnableEfSensitiveDataLogging)
                 {
                     options.LogTo(Console.WriteLine, LogLevel.Information)
                            .EnableSensitiveDataLogging()
