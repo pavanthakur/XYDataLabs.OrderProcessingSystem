@@ -134,6 +134,22 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
                 .Property(ct => ct.CreditCardCvv2)
                 .HasMaxLength(255); // Encrypted value will be longer
 
+            // ── Multi-tenancy: TenantId column configuration ──
+            // All entities inherit TenantId from base classes.
+            // Configure max length for indexable column size (not nvarchar(max)).
+            foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+            {
+                var clrType = entityType.ClrType;
+                if (typeof(BaseAuditableEntity).IsAssignableFrom(clrType) ||
+                    typeof(BaseAuditableCreateEntity).IsAssignableFrom(clrType))
+                {
+                    modelBuilder.Entity(clrType)
+                        .Property("TenantId")
+                        .HasMaxLength(128)
+                        .HasDefaultValue(string.Empty);
+                }
+            }
+
             // ── Multi-tenancy global query filters ──
             // BaseAuditableEntity descendants
             modelBuilder.Entity<Customer>().HasQueryFilter(e => _tenantProvider == null || e.TenantId == _tenantProvider.TenantId);
@@ -152,29 +168,39 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
             modelBuilder.Entity<OrderProduct>().HasQueryFilter(e => _tenantProvider == null || e.TenantId == _tenantProvider.TenantId);
         }
 
+        public override int SaveChanges()
+        {
+            StampTenantOnAddedEntities();
+            return base.SaveChanges();
+        }
+
         public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
-            if (_tenantProvider is not null)
-            {
-                var tenantId = _tenantProvider.TenantId;
+            StampTenantOnAddedEntities();
+            return await base.SaveChangesAsync(cancellationToken);
+        }
 
-                foreach (var entry in ChangeTracker.Entries())
+        private void StampTenantOnAddedEntities()
+        {
+            if (_tenantProvider is null)
+                return;
+
+            var tenantId = _tenantProvider.TenantId;
+
+            foreach (var entry in ChangeTracker.Entries())
+            {
+                if (entry.State == EntityState.Added)
                 {
-                    if (entry.State == EntityState.Added)
+                    if (entry.Entity is BaseAuditableEntity auditable)
                     {
-                        if (entry.Entity is BaseAuditableEntity auditable)
-                        {
-                            auditable.TenantId = tenantId;
-                        }
-                        else if (entry.Entity is BaseAuditableCreateEntity auditableCreate)
-                        {
-                            auditableCreate.TenantId = tenantId;
-                        }
+                        auditable.TenantId = tenantId;
+                    }
+                    else if (entry.Entity is BaseAuditableCreateEntity auditableCreate)
+                    {
+                        auditableCreate.TenantId = tenantId;
                     }
                 }
             }
-
-            return await base.SaveChangesAsync(cancellationToken);
         }
     }
 }
