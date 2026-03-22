@@ -58,14 +58,26 @@ document.getElementById('payment-form').addEventListener('submit', function (e) 
             };
 
             // Call your API endpoint
-            fetch(API_BASE_URL + '/api/payments/processpayment', {
+            fetch(API_BASE_URL + '/api/v1/payments/processpayment', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify(paymentData)
             })
-                .then(response => response.json())
+                .then(async response => {
+                    const contentType = response.headers.get('content-type') || '';
+                    const data = contentType.includes('application/json')
+                        ? await response.json()
+                        : null;
+
+                    if (!response.ok) {
+                        const message = data?.message || `Payment request failed with status ${response.status}`;
+                        throw new Error(message);
+                    }
+
+                    return data;
+                })
                 .then(data => {
                     if (data && data.status && data.status.length > 0 && data.status !== 'unknown') {
                         alert('Payment processed successfully!');
