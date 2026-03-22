@@ -120,8 +120,6 @@
             const statusSource = document.getElementById('backend-status-source');
             const statusMessage = document.getElementById('backend-status-message');
             const statusReference = document.getElementById('backend-status-reference');
-            const runtimeConfigurationUrl = `${apiBaseUrl}/api/v1/info/runtime-configuration`;
-
             const headerClassByCategory = {
                 success: 'bg-success text-white',
                 warning: 'bg-warning text-dark',
@@ -198,27 +196,21 @@
                 return;
             }
 
-            const fetchRuntimeConfiguration = async () => {
-                const response = await fetch(runtimeConfigurationUrl, {
-                    headers: {
-                        'Accept': 'application/json'
-                    }
-                });
-
-                const payload = await response.json();
-                if (!response.ok || !payload?.activeTenantCode) {
-                    throw new Error(payload?.detail || 'API tenant configuration is missing.');
+            const getTenantRuntime = () => {
+                if (!window.OrderProcessingTenant) {
+                    return Promise.reject(new Error('Tenant bootstrap script is unavailable.'));
                 }
 
-                return payload;
+                return window.OrderProcessingTenant.ready();
             };
 
-            fetchRuntimeConfiguration()
+            getTenantRuntime()
                 .then(runtimeConfiguration => fetch(`${apiBaseUrl}/api/v1/payments/${encodeURIComponent(paymentId)}/confirm-status`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        [runtimeConfiguration.tenantHeaderName || 'X-Tenant-Code']: runtimeConfiguration.activeTenantCode
+                        [window.OrderProcessingTenant?.getTenantHeaderName() || runtimeConfiguration.tenantHeaderName || 'X-Tenant-Code']:
+                            window.OrderProcessingTenant?.getSelectedTenantCode() || runtimeConfiguration.activeTenantCode
                     },
                     body: JSON.stringify(callbackRequest)
                 }))

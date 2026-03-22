@@ -43,7 +43,7 @@ public sealed class TenantHeaderOperationFilter : IOperationFilter
             Name = TenantMiddleware.TenantHeaderName,
             In = ParameterLocation.Header,
             Required = true,
-            Description = $"Canonical tenant code required by multitenant middleware for tenant-scoped endpoints. Current active tenant: {_tenantConfigurationOptions.ActiveTenantCode}.",
+            Description = $"Canonical tenant code required by multitenant middleware for tenant-scoped endpoints. In Swagger UI this header is controlled by the top tenant selector. Configured fallback tenant: {_tenantConfigurationOptions.ActiveTenantCode}.",
             Example = new OpenApiString(_tenantConfigurationOptions.ActiveTenantCode),
             Schema = new OpenApiSchema
             {

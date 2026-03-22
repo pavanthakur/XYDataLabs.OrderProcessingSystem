@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using FluentAssertions;
 using XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure;
 using Xunit;
@@ -52,6 +53,43 @@ public sealed class TenantMiddlewareTests : IAsyncLifetime
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         body.Should().Contain("activeTenantCode");
         body.Should().Contain("X-Tenant-Code");
+    }
+
+    [Fact]
+    public async Task RuntimeConfiguration_ReturnsDbTenants_AndHonorsSelectedTenantHeader()
+    {
+        var tenantA = await IntegrationTestData.CreateTenantAsync(_factory);
+        var tenantB = await IntegrationTestData.CreateTenantAsync(_factory);
+
+        using var bootstrapClient = _factory.CreateClient();
+        using var headerSelectedClient = _factory.CreateTenantClient(tenantB.TenantCode);
+
+        var bootstrapResponse = await bootstrapClient.GetAsync("/api/v1/info/runtime-configuration");
+        var headerSelectedResponse = await headerSelectedClient.GetAsync("/api/v1/info/runtime-configuration");
+
+        bootstrapResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        headerSelectedResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var bootstrapDocument = JsonDocument.Parse(await bootstrapResponse.Content.ReadAsStringAsync());
+        using var headerSelectedDocument = JsonDocument.Parse(await headerSelectedResponse.Content.ReadAsStringAsync());
+
+        var bootstrapRoot = bootstrapDocument.RootElement;
+        var headerSelectedRoot = headerSelectedDocument.RootElement;
+
+        bootstrapRoot.GetProperty("tenantHeaderName").GetString().Should().Be(IntegrationTestWebAppFactory.TenantHeaderName);
+        bootstrapRoot.GetProperty("configuredActiveTenantCode").GetString().Should().NotBeNullOrWhiteSpace();
+
+        var availableTenants = bootstrapRoot.GetProperty("availableTenants").EnumerateArray().ToList();
+        availableTenants.Should().HaveCountGreaterOrEqualTo(2);
+        availableTenants.Select(tenant => tenant.GetProperty("tenantCode").GetString())
+            .Should().Contain([tenantA.TenantCode, tenantB.TenantCode]);
+
+        headerSelectedRoot.GetProperty("availableTenants").EnumerateArray()
+            .Select(tenant => tenant.GetProperty("tenantCode").GetString())
+            .Should().Contain([tenantA.TenantCode, tenantB.TenantCode]);
+
+        headerSelectedRoot.GetProperty("activeTenantCode").GetString().Should().Be(tenantB.TenantCode);
+        bootstrapRoot.GetProperty("activeTenantCode").GetString().Should().NotBeNullOrWhiteSpace();
     }
 
     [Fact]

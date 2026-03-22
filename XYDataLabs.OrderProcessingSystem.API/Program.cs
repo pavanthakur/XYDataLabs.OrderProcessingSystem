@@ -339,6 +339,8 @@ using (var scope = app.Services.CreateScope())
 
 SharedSettingsLoader.PrintApiSettingsDebug(apiSettings, activeSettings, "API", isDocker);
 
+app.UseStaticFiles();
+
 // Add Serilog request logging
 app.UseSerilogRequestLogging(options =>
 {
@@ -369,6 +371,7 @@ if (environmentName == Constants.Environments.Dev || environmentName == Constant
         // Use relative path for Docker compatibility
         options.SwaggerEndpoint("/swagger/v1/swagger.json", "OrderProcessingSystem API v1");
         options.RoutePrefix = "swagger"; // Set Swagger UI to /swagger/index.html
+        options.InjectJavascript("/swagger-assets/tenant-selector.js");
     });
     
     if (useDeveloperExceptionPage)
@@ -392,6 +395,7 @@ else if (environmentName == "prod")
     {
         options.SwaggerEndpoint("/swagger/v1/swagger.json", "OrderProcessingSystem API v1");
         options.RoutePrefix = "swagger";
+        options.InjectJavascript("/swagger-assets/tenant-selector.js");
     });
     app.UseExceptionHandler(ConfigureApiExceptionHandler);
     app.UseHsts();

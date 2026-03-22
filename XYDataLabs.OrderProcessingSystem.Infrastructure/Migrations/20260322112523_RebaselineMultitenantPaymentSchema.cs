@@ -31,14 +31,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                     table.PrimaryKey("PK_Tenants", x => x.Id);
                 });
 
-            migrationBuilder.Sql(@"
-SET IDENTITY_INSERT [Tenants] ON;
-INSERT INTO [Tenants] ([Id], [ExternalId], [Code], [Name], [Status], [CreatedBy], [CreatedDate], [UpdatedBy], [UpdatedDate])
-VALUES
-    (1, N'tnt_ext_tenanta_20260322', N'TenantA', N'Tenant A', N'Active', 1, SYSUTCDATETIME(), NULL, NULL),
-    (2, N'tnt_ext_tenantb_20260322', N'TenantB', N'Tenant B', N'Active', 1, SYSUTCDATETIME(), NULL, NULL);
-SET IDENTITY_INSERT [Tenants] OFF;
-");
+            SeedBaselineTenants(migrationBuilder);
 
             migrationBuilder.CreateTable(
                 name: "Customers",
@@ -660,6 +653,18 @@ SET IDENTITY_INSERT [Tenants] OFF;
 
             migrationBuilder.DropTable(
                 name: "Tenants");
+        }
+
+        private static void SeedBaselineTenants(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.Sql(@"
+SET IDENTITY_INSERT [Tenants] ON;
+INSERT INTO [Tenants] ([Id], [ExternalId], [Code], [Name], [Status], [CreatedBy], [CreatedDate], [UpdatedBy], [UpdatedDate])
+VALUES
+    (1, N'tnt_ext_tenanta_20260322', N'TenantA', N'Tenant A', N'Active', 1, SYSUTCDATETIME(), NULL, NULL),
+    (2, N'tnt_ext_tenantb_20260322', N'TenantB', N'Tenant B', N'Active', 1, SYSUTCDATETIME(), NULL, NULL);
+SET IDENTITY_INSERT [Tenants] OFF;
+");
         }
     }
 }

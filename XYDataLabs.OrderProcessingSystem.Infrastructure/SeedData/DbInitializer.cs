@@ -12,7 +12,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
 {
     public static class DbInitializer
     {
-        private const int DefaultSeedTenantId = 1;
+        private static readonly string[] StartupSeedTenantCodes = { "TenantA", "TenantB" };
+        private const int SeededCustomerCountPerTenant = 120;
 
         public static void Initialize(OrderProcessingSystemDbContext context, bool applyMigrations = true)
         {
@@ -27,102 +28,163 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                 context.Database.Migrate();
             }
 
-            SeedOpenpayProvider(context);
+            var startupSeedTenants = GetStartupSeedTenants(context);
 
-            // Check if the data already exists
-            if (context.Customers.Any() || context.Products.Any() || context.Orders.Any() || context.OrderProducts.Any())
+            SeedOpenpayProviders(context, startupSeedTenants);
+
+            foreach (var seedTenant in startupSeedTenants)
             {
-                return; // DB has been seeded
+                SeedTenantSampleData(context, seedTenant);
             }
 
-            SeedCustomers(context);
-            SeedProducts(context);
-            SeedOrders(context);
-            SeedOrderProducts(context);
-
-            UpdateOrderTotalPrices(context);
+            UpdateOrderTotalPrices(context, startupSeedTenants.Select(seedTenant => seedTenant.TenantId).ToArray());
         }
 
-        private static void SeedCustomers(OrderProcessingSystemDbContext context)
+        private static IReadOnlyList<StartupSeedTenant> GetStartupSeedTenants(OrderProcessingSystemDbContext context)
+        {
+            var tenants = context.Tenants
+                .AsNoTracking()
+                .Where(tenant => StartupSeedTenantCodes.Contains(tenant.Code))
+                .Select(tenant => new StartupSeedTenant(tenant.Id, tenant.Code, tenant.Name))
+                .ToList();
+
+            var missingTenantCodes = StartupSeedTenantCodes
+                .Except(tenants.Select(tenant => tenant.TenantCode), StringComparer.Ordinal)
+                .ToArray();
+
+            if (missingTenantCodes.Length > 0)
+            {
+                throw new InvalidOperationException($"Startup seed tenants were not found in Tenants table: {string.Join(", ", missingTenantCodes)}");
+            }
+
+            return tenants;
+        }
+
+        private static void SeedTenantSampleData(OrderProcessingSystemDbContext context, StartupSeedTenant seedTenant)
+        {
+            if (!context.Customers.Any(customer => customer.TenantId == seedTenant.TenantId))
+            {
+                SeedCustomers(context, seedTenant);
+            }
+
+            if (!context.Products.Any(product => product.TenantId == seedTenant.TenantId))
+            {
+                SeedProducts(context, seedTenant);
+            }
+
+            if (!context.Orders.Any(order => order.TenantId == seedTenant.TenantId))
+            {
+                SeedOrders(context, seedTenant);
+            }
+
+            if (!context.OrderProducts.Any(orderProduct => orderProduct.TenantId == seedTenant.TenantId))
+            {
+                SeedOrderProducts(context, seedTenant);
+            }
+        }
+
+        private static void SeedCustomers(OrderProcessingSystemDbContext context, StartupSeedTenant seedTenant)
         {
             var faker = new Faker<Customer>()
-                .RuleFor(c => c.Name, f => f.Name.FullName())
-                .RuleFor(c => c.Email, f => f.Internet.Email())
-                .RuleFor(c => c.TenantId, _ => DefaultSeedTenantId);
+                .RuleFor(c => c.Name, f => $"{seedTenant.TenantCode} {f.Name.FullName()}")
+                .RuleFor(c => c.Email, (f, _) => $"{seedTenant.TenantCode}.{f.UniqueIndex}@example.test")
+                .RuleFor(c => c.TenantId, _ => seedTenant.TenantId);
 
-            var customers = faker.Generate(120);
+            var customers = faker.Generate(SeededCustomerCountPerTenant);
             context.Customers.AddRange(customers);
             context.SaveChanges();
         }
 
-        private static void SeedProducts(OrderProcessingSystemDbContext context)
+        private static void SeedProducts(OrderProcessingSystemDbContext context, StartupSeedTenant seedTenant)
         {
             var products = new List<Product>
                 {
-                    new Product { Name = "Laptop", Price = 500.00m, TenantId = DefaultSeedTenantId },
-                    new Product { Name = "Phone", Price = 300.00m, TenantId = DefaultSeedTenantId },
-                    new Product { Name = "Headphones", Price = 200.00m, TenantId = DefaultSeedTenantId }
+                    new Product { Name = $"{seedTenant.TenantCode} Laptop", Description = $"Sample laptop for {seedTenant.TenantName}", Price = 500.00m, TenantId = seedTenant.TenantId },
+                    new Product { Name = $"{seedTenant.TenantCode} Phone", Description = $"Sample phone for {seedTenant.TenantName}", Price = 300.00m, TenantId = seedTenant.TenantId },
+                    new Product { Name = $"{seedTenant.TenantCode} Headphones", Description = $"Sample headphones for {seedTenant.TenantName}", Price = 200.00m, TenantId = seedTenant.TenantId }
                 };
             context.Products.AddRange(products);
             context.SaveChanges();
         }
 
-        private static void SeedOrders(OrderProcessingSystemDbContext context)
+        private static void SeedOrders(OrderProcessingSystemDbContext context, StartupSeedTenant seedTenant)
         {
-            var customers = context.Customers.ToList();
-            var products = context.Products.ToList();
+            var customers = context.Customers
+                .Where(customer => customer.TenantId == seedTenant.TenantId)
+                .OrderBy(customer => customer.CustomerId)
+                .ToList();
+
+            var products = context.Products
+                .Where(product => product.TenantId == seedTenant.TenantId)
+                .OrderBy(product => product.ProductId)
+                .ToList();
 
             var orders = new List<Order>
                 {
-                    new Order { OrderDate = DateTime.Now, CustomerId = customers[0].CustomerId, TotalPrice = products.Sum(product => product.Price), TenantId = DefaultSeedTenantId },
-                    new Order { OrderDate = DateTime.Now, CustomerId = customers[1].CustomerId, TenantId = DefaultSeedTenantId }
+                    new Order { OrderDate = DateTime.UtcNow, CustomerId = customers[0].CustomerId, TotalPrice = products.Sum(product => product.Price), TenantId = seedTenant.TenantId },
+                    new Order { OrderDate = DateTime.UtcNow, CustomerId = customers[1].CustomerId, TenantId = seedTenant.TenantId }
                 };
             context.Orders.AddRange(orders);
             context.SaveChanges();
         }
 
-        private static void SeedOrderProducts(OrderProcessingSystemDbContext context)
+        private static void SeedOrderProducts(OrderProcessingSystemDbContext context, StartupSeedTenant seedTenant)
         {
-            var orders = context.Orders.ToList();
-            var products = context.Products.ToList();
+            var orders = context.Orders
+                .Where(order => order.TenantId == seedTenant.TenantId)
+                .OrderBy(order => order.OrderId)
+                .ToList();
+
+            var products = context.Products
+                .Where(product => product.TenantId == seedTenant.TenantId)
+                .OrderBy(product => product.ProductId)
+                .ToList();
 
             var orderProducts = new List<OrderProduct>
                 {
-                    new OrderProduct { OrderId = orders[0].OrderId, ProductId = products[0].ProductId, Quantity = 1, TenantId = DefaultSeedTenantId },
-                    new OrderProduct { OrderId = orders[0].OrderId, ProductId = products[1].ProductId, Quantity = 2, TenantId = DefaultSeedTenantId },
-                    new OrderProduct { OrderId = orders[1].OrderId, ProductId = products[2].ProductId, Quantity = 1, TenantId = DefaultSeedTenantId }
+                    new OrderProduct { OrderId = orders[0].OrderId, ProductId = products[0].ProductId, Quantity = 1, TenantId = seedTenant.TenantId },
+                    new OrderProduct { OrderId = orders[0].OrderId, ProductId = products[1].ProductId, Quantity = 2, TenantId = seedTenant.TenantId },
+                    new OrderProduct { OrderId = orders[1].OrderId, ProductId = products[2].ProductId, Quantity = 1, TenantId = seedTenant.TenantId }
                 };
             context.OrderProducts.AddRange(orderProducts);
             context.SaveChanges();
         }
 
-        private static void SeedOpenpayProvider(OrderProcessingSystemDbContext context)
+        private static void SeedOpenpayProviders(OrderProcessingSystemDbContext context, IReadOnlyList<StartupSeedTenant> seedTenants)
         {
-            // Check if providers already exist
-            if (context.PaymentProviders.Any())
+            foreach (var seedTenant in seedTenants)
             {
-                return;
+                var providerExists = context.PaymentProviders.Any(provider =>
+                    provider.TenantId == seedTenant.TenantId &&
+                    provider.Name == "OpenPay");
+
+                if (providerExists)
+                {
+                    continue;
+                }
+
+                var openPayProvider = new PaymentProvider
+                {
+                    Name = "OpenPay",
+                    APIUrl = "https://sandbox-api.openpay.mx/v1",
+                    IsActive = true,
+                    IsProduction = false,
+                    TenantId = seedTenant.TenantId,
+                    CreatedBy = 1,
+                    CreatedDate = DateTime.UtcNow
+                };
+
+                context.PaymentProviders.Add(openPayProvider);
             }
 
-            // Add OpenPay Provider
-            var openPayProvider = new PaymentProvider
-            {
-                Name = "OpenPay",
-                APIUrl = "https://sandbox-api.openpay.mx/v1",
-                IsActive = true,
-                IsProduction = false,
-                TenantId = DefaultSeedTenantId,
-                CreatedBy = 1,
-                CreatedDate = DateTime.UtcNow
-            };
-            context.PaymentProviders.Add(openPayProvider);
             context.SaveChanges();
         }
 
-        private static void UpdateOrderTotalPrices(OrderProcessingSystemDbContext context)
+        private static void UpdateOrderTotalPrices(OrderProcessingSystemDbContext context, params int[] tenantIds)
         {
             // Perform the LINQ query to calculate the total price for each order
             var orderTotalPrices = context.Orders
+                .Where(order => tenantIds.Contains(order.TenantId))
                 .Join(context.OrderProducts,
                     o => o.OrderId,
                     op => op.OrderId,
@@ -151,5 +213,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
             // Save the changes to the database
             context.SaveChanges();
         }
+
+        private sealed record StartupSeedTenant(int TenantId, string TenantCode, string TenantName);
     }
 }

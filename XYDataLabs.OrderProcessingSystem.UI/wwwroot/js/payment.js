@@ -1,7 +1,6 @@
 ﻿// Initialize device session ID when the page loads
 let deviceSessionId;
 const payButton = document.getElementById('pay-button');
-const runtimeConfigurationUrl = `${API_BASE_URL}/api/v1/info/runtime-configuration`;
 const pendingPaymentStorageKeyPrefix = 'pending-payment:';
 let runtimeConfigurationPromise;
 
@@ -14,19 +13,12 @@ const setPayButtonState = (enabled, text) => {
     payButton.textContent = text;
 };
 
-const loadRuntimeConfiguration = async () => {
-    const response = await fetch(runtimeConfigurationUrl, {
-        headers: {
-            'Accept': 'application/json'
-        }
-    });
-
-    const payload = await response.json();
-    if (!response.ok || !payload?.activeTenantCode) {
-        throw new Error(payload?.detail || 'API tenant configuration is missing.');
+const getTenantRuntime = () => {
+    if (!window.OrderProcessingTenant) {
+        return Promise.reject(new Error('Tenant bootstrap script is unavailable.'));
     }
 
-    return payload;
+    return window.OrderProcessingTenant.ready();
 };
 
 const persistPendingPaymentContext = payment => {
@@ -46,7 +38,7 @@ const persistPendingPaymentContext = payment => {
 
 if (payButton) {
     setPayButtonState(false, 'Loading tenant configuration...');
-    runtimeConfigurationPromise = loadRuntimeConfiguration()
+    runtimeConfigurationPromise = getTenantRuntime()
         .then(runtimeConfiguration => {
             setPayButtonState(true, 'Process Payment');
             return runtimeConfiguration;
@@ -82,8 +74,8 @@ document.getElementById('payment-form').addEventListener('submit', async functio
         return;
     }
 
-    const tenantCode = runtimeConfiguration.activeTenantCode;
-    const tenantHeaderName = runtimeConfiguration.tenantHeaderName || 'X-Tenant-Code';
+    const tenantCode = window.OrderProcessingTenant?.getSelectedTenantCode() || runtimeConfiguration.activeTenantCode;
+    const tenantHeaderName = window.OrderProcessingTenant?.getTenantHeaderName() || runtimeConfiguration.tenantHeaderName || 'X-Tenant-Code';
 
     // Show loading state
     const submitButton = this.querySelector('button[type="submit"]');
@@ -226,4 +218,3 @@ document.getElementById('cvv').addEventListener('input', function (e) {
 });
 
 console.log('API_BASE_URL (from payment.js):', typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : 'NOT DEFINED');
-console.log('Runtime configuration URL (from payment.js):', runtimeConfigurationUrl);
