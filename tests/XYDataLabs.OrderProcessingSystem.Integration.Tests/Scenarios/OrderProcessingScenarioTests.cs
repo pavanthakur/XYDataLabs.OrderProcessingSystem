@@ -14,18 +14,22 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Scenarios
         private readonly SqlServerFixture _fixture;
         private IntegrationTestWebAppFactory _factory = null!;
         private HttpClient _client = null!;
+        private TestTenantContext _tenant = null!;
+        private OrderScenarioSeed _scenarioSeed = null!;
 
         public OrderProcessingScenarioTests(SqlServerFixture fixture)
         {
             _fixture = fixture;
         }
 
-        public Task InitializeAsync()
+        public async Task InitializeAsync()
         {
             _factory = new IntegrationTestWebAppFactory(_fixture.ConnectionString);
             _client = _factory.CreateClient();
-            _client.DefaultRequestHeaders.Add("X-Tenant-Id", "integration-test");
-            return Task.CompletedTask;
+            _tenant = await IntegrationTestData.CreateTenantAsync(_factory);
+            _scenarioSeed = await IntegrationTestData.SeedOrderScenarioAsync(_factory, _tenant.TenantId);
+
+            _client.DefaultRequestHeaders.Add(IntegrationTestWebAppFactory.TenantHeaderName, _tenant.TenantCode);
         }
 
         public async Task DisposeAsync()
@@ -40,10 +44,10 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Scenarios
             var request = new CreateCustomerRequestDto
             {
                 Name = "Integration Test Customer",
-                Email = "integration@test.com"
+                Email = $"integration-{Guid.NewGuid():N}@test.com"
             };
 
-            var response = await _client.PostAsJsonAsync("/api/v1/Customers", request);
+            var response = await _client.PostAsJsonAsync("/api/v1/Customer", request);
 
             response.StatusCode.Should().Be(HttpStatusCode.Created);
         }
@@ -51,7 +55,7 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Scenarios
         [Fact]
         public async Task GetAllCustomers_ReturnsOk()
         {
-            var response = await _client.GetAsync("/api/v1/Customers/GetAllCustomers");
+            var response = await _client.GetAsync("/api/v1/Customer/GetAllCustomers");
 
             response.StatusCode.Should().Be(HttpStatusCode.OK);
         }
@@ -59,34 +63,24 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Scenarios
         [Fact]
         public async Task CreateOrder_WithValidCustomer_ReturnsCreated()
         {
-            // Create a customer first
-            var customerRequest = new CreateCustomerRequestDto
-            {
-                Name = "Order Test Customer",
-                Email = "order-test@test.com"
-            };
-            var customerResponse = await _client.PostAsJsonAsync("/api/v1/Customers", customerRequest);
-            customerResponse.StatusCode.Should().Be(HttpStatusCode.Created);
-
-            // Create an order for the customer
             var orderRequest = new CreateOrderRequestDto
             {
-                CustomerId = 1,
-                ProductIds = new List<int> { 1 }
+                CustomerId = _scenarioSeed.CustomerId,
+                ProductIds = new List<int> { _scenarioSeed.ProductId }
             };
 
             var orderResponse = await _client.PostAsJsonAsync("/api/v1/Order", orderRequest);
 
-            // May fail if no products exist in seed data — the test validates the pipeline is wired
-            orderResponse.StatusCode.Should().BeOneOf(HttpStatusCode.Created, HttpStatusCode.BadRequest);
+            orderResponse.StatusCode.Should().Be(HttpStatusCode.Created);
         }
 
         [Fact]
         public async Task GetNonExistentCustomer_ReturnsNotFound()
         {
-            var response = await _client.GetAsync("/api/v1/Customers/99999");
+            var response = await _client.GetAsync("/api/v1/Customer/99999");
 
             response.StatusCode.Should().Be(HttpStatusCode.NotFound);
         }
     }
+
 }

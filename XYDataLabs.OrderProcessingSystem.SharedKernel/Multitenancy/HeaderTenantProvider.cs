@@ -3,8 +3,7 @@ using Microsoft.AspNetCore.Http;
 namespace XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 
 /// <summary>
-/// Reads the current tenant from HttpContext.Items, set by TenantMiddleware.
-/// Falls back to "default" when no HttpContext is available (e.g. background services, seed data).
+/// Reads the current tenant context from HttpContext.Items, set by TenantMiddleware.
 /// </summary>
 public sealed class HeaderTenantProvider : ITenantProvider
 {
@@ -15,19 +14,23 @@ public sealed class HeaderTenantProvider : ITenantProvider
         _httpContextAccessor = httpContextAccessor;
     }
 
-    public string TenantId
-    {
-        get
-        {
-            var context = _httpContextAccessor.HttpContext;
-            if (context?.Items.TryGetValue(TenantMiddleware.HttpContextItemKey, out var tenantObj) == true
-                && tenantObj is string tenant
-                && !string.IsNullOrWhiteSpace(tenant))
-            {
-                return tenant;
-            }
+    public bool HasTenantContext => ResolveTenantContext() is not null;
 
-            return TenantMiddleware.DefaultTenantId;
+    public int TenantId => ResolveTenantContext()?.TenantId ?? 0;
+
+    public string TenantCode => ResolveTenantContext()?.TenantCode ?? string.Empty;
+
+    public string TenantExternalId => ResolveTenantContext()?.TenantExternalId ?? string.Empty;
+
+    private TenantContext? ResolveTenantContext()
+    {
+        var context = _httpContextAccessor.HttpContext;
+        if (context?.Items.TryGetValue(TenantMiddleware.HttpContextItemKey, out var tenantObj) == true
+            && tenantObj is TenantContext tenantContext)
+        {
+            return tenantContext;
         }
+
+        return null;
     }
 }

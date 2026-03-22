@@ -6,7 +6,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Features.Payments.Command
 
 public sealed record ConfirmPaymentStatusCommand(
     string PaymentId,
-    string? OrderId,
+    string? AttemptOrderId,
     string? CallbackStatus,
     string? ErrorMessage,
     IReadOnlyDictionary<string, string>? CallbackParameters)

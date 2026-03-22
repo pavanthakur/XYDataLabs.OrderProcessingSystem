@@ -72,13 +72,25 @@ namespace XYDataLabs.OpenPayAdapter
 
             try
             {
-                var charge = await Task.Run(() =>
-                    string.IsNullOrWhiteSpace(customerId)
-                        ? _openpayApi.ChargeService.Get(chargeId)
-                        : _openpayApi.ChargeService.Get(customerId, chargeId));
+                var charge = await Task.Run(() => _openpayApi.ChargeService.Get(chargeId));
 
-                _logger.Information("Successfully retrieved charge {ChargeId} with status {Status}", chargeId, charge.Status);
+                _logger.Information("Successfully retrieved charge {ChargeId} with status {Status} using merchant scope", chargeId, charge.Status);
                 return charge;
+            }
+            catch (OpenpayException ex) when (ex.ErrorCode == 1005 && !string.IsNullOrWhiteSpace(customerId))
+            {
+                _logger.Warning(
+                    ex,
+                    "Merchant-scope charge lookup returned 1005 for charge {ChargeId}. Retrying with customer scope for customer {CustomerId}",
+                    chargeId,
+                    customerId);
+
+                var fallbackCharge = await Task.Run(() => _openpayApi.ChargeService.Get(customerId, chargeId));
+                _logger.Information(
+                    "Successfully retrieved charge {ChargeId} with status {Status} using customer scope fallback",
+                    chargeId,
+                    fallbackCharge.Status);
+                return fallbackCharge;
             }
             catch (Exception ex)
             {

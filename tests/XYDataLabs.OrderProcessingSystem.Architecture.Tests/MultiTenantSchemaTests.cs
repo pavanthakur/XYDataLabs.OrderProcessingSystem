@@ -1,0 +1,109 @@
+using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
+using XYDataLabs.OrderProcessingSystem.Application.DTO;
+using XYDataLabs.OrderProcessingSystem.Domain.Entities;
+using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
+using XYDataLabs.OrderProcessingSystem.UI.Models;
+
+namespace XYDataLabs.OrderProcessingSystem.Architecture.Tests;
+
+public class MultiTenantSchemaTests
+{
+    [Fact]
+    public void TenantOwned_Payment_Entities_Should_Define_Required_Composite_Indexes()
+    {
+        using var context = CreateDbContext();
+        var model = context.Model;
+
+        HasIndex(model.FindEntityType(typeof(CardTransaction)), nameof(CardTransaction.TenantId), nameof(CardTransaction.CustomerOrderId)).Should().BeTrue();
+        HasIndex(model.FindEntityType(typeof(CardTransaction)), nameof(CardTransaction.TenantId), nameof(CardTransaction.AttemptOrderId)).Should().BeTrue();
+        HasIndex(model.FindEntityType(typeof(PayinLog)), nameof(PayinLog.TenantId), nameof(PayinLog.AttemptOrderId)).Should().BeTrue();
+        HasIndex(model.FindEntityType(typeof(TransactionStatusHistory)), nameof(TransactionStatusHistory.TenantId), nameof(TransactionStatusHistory.AttemptOrderId)).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Tenants_Table_Should_Not_Have_Global_Query_Filter()
+    {
+        using var context = CreateDbContext();
+        var tenantEntity = context.Model.FindEntityType(typeof(Tenant));
+
+        tenantEntity.Should().NotBeNull();
+        tenantEntity!.GetQueryFilter().Should().BeNull(
+            because: "tenant resolution must query the Tenants table without bootstrapping through an ambient tenant filter");
+    }
+
+    [Fact]
+    public void TenantOwned_Entities_Should_Have_Global_Query_Filters()
+    {
+        using var context = CreateDbContext();
+
+        context.Model.FindEntityType(typeof(CardTransaction))!.GetQueryFilter().Should().NotBeNull();
+        context.Model.FindEntityType(typeof(PayinLog))!.GetQueryFilter().Should().NotBeNull();
+        context.Model.FindEntityType(typeof(TransactionStatusHistory))!.GetQueryFilter().Should().NotBeNull();
+    }
+
+    [Fact]
+    public void CustomerFacing_Payment_Types_Should_Not_Expose_Internal_Identifiers()
+    {
+        var customerFacingTypes = new[]
+        {
+            typeof(CustomerWithCardPaymentRequestDto),
+            typeof(PaymentDto),
+            typeof(PaymentStatusDetailsDto),
+            typeof(PaymentCallbackViewModel)
+        };
+
+        var bannedPropertyNames = new[]
+        {
+            "OrderId",
+            "AttemptOrderId",
+            "PaymentTraceId",
+            "TenantId",
+            "ReferenceNo",
+            "APINO1",
+            "APINO2"
+        };
+
+        foreach (var type in customerFacingTypes)
+        {
+            var exposedBannedProperties = type
+                .GetProperties()
+                .Select(property => property.Name)
+                .Where(propertyName => bannedPropertyNames.Contains(propertyName, StringComparer.Ordinal))
+                .ToArray();
+
+            exposedBannedProperties.Should().BeEmpty(
+                because: $"{type.Name} must expose only customer-safe payment identifiers");
+        }
+
+        typeof(CustomerWithCardPaymentRequestDto).GetProperty(nameof(CustomerWithCardPaymentRequestDto.CustomerOrderId)).Should().NotBeNull();
+        typeof(PaymentDto).GetProperty(nameof(PaymentDto.CustomerOrderId)).Should().NotBeNull();
+        typeof(PaymentStatusDetailsDto).GetProperty(nameof(PaymentStatusDetailsDto.CustomerOrderId)).Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Technical_Payment_Reconciliation_Request_Should_Use_AttemptOrderId_Only()
+    {
+        typeof(PaymentStatusLookupRequestDto).GetProperty(nameof(PaymentStatusLookupRequestDto.AttemptOrderId)).Should().NotBeNull();
+        typeof(PaymentStatusLookupRequestDto).GetProperty("OrderId").Should().BeNull();
+    }
+
+    private static bool HasIndex(IEntityType? entityType, params string[] propertyNames)
+    {
+        entityType.Should().NotBeNull();
+
+        return entityType!
+            .GetIndexes()
+            .Any(index => index.Properties.Select(property => property.Name).SequenceEqual(propertyNames));
+    }
+
+    private static OrderProcessingSystemDbContext CreateDbContext()
+    {
+        var options = new DbContextOptionsBuilder<OrderProcessingSystemDbContext>()
+            .UseSqlServer("Server=(localdb)\\mssqllocaldb;Database=SchemaTests_DoNotConnect;Trusted_Connection=True;")
+            .Options;
+
+        return new OrderProcessingSystemDbContext(options);
+    }
+}

@@ -4,7 +4,7 @@ public sealed class PaymentStatusDetailsDto
 {
     public string PaymentId { get; set; } = string.Empty;
 
-    public string? OrderId { get; set; }
+    public string? CustomerOrderId { get; set; }
 
     public string Status { get; set; } = "unknown";
 
@@ -33,4 +33,8 @@ public sealed class PaymentStatusDetailsDto
     public DateTime? TransactionDate { get; set; }
 
     public string? ThreeDSecureUrl { get; set; }
+
+    public bool IsThreeDSecureEnabled { get; set; }
+
+    public string? ThreeDSecureStage { get; set; }
 }

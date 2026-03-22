@@ -12,4 +12,4 @@ public sealed record ProcessPaymentCommand(
     string ExpirationYear,
     string ExpirationMonth,
     string Cvv2,
-    string OrderId) : ICommand<Result<PaymentDto>>;
+    string CustomerOrderId) : ICommand<Result<PaymentDto>>;

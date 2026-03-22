@@ -18,6 +18,7 @@ using System.Text.RegularExpressions;
 using XYDataLabs.OrderProcessingSystem.Application.Utilities;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
+using XYDataLabs.OrderProcessingSystem.Infrastructure.Multitenancy;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Orders;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Customers;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Payments;
@@ -102,6 +103,7 @@ else
 
 builder.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>(); // Required for LoggingMiddleware
 builder.Services.AddScoped<ITenantProvider, HeaderTenantProvider>();
+builder.Services.AddScoped<ITenantResolver, EntityFrameworkTenantResolver>();
 builder.Services.AddSingleton(TimeProvider.System);
 
 // Configure Application Insights for environment-wise telemetry and logging

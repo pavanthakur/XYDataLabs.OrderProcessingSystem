@@ -26,6 +26,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
             _tenantProvider = tenantProvider;
         }
 
+        public virtual DbSet<Tenant> Tenants { get; set; }
+
         // Existing DbSets
         public virtual DbSet<Customer> Customers { get; set; }
         public virtual DbSet<Product> Products { get; set; }
@@ -53,6 +55,14 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<Tenant>()
+                .HasIndex(item => item.ExternalId)
+                .IsUnique();
+
+            modelBuilder.Entity<Tenant>()
+                .HasIndex(item => item.Code)
+                .IsUnique();
 
             // Configure many-to-many relationship
             modelBuilder.Entity<OrderProduct>()
@@ -116,10 +126,28 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
                 .HasIndex(ct => ct.TransactionId);
 
             modelBuilder.Entity<CardTransaction>()
+                .HasIndex(ct => ct.PaymentTraceId);
+
+            modelBuilder.Entity<CardTransaction>()
+                .HasIndex(ct => new { ct.TenantId, ct.CustomerOrderId });
+
+            modelBuilder.Entity<CardTransaction>()
+                .HasIndex(ct => new { ct.TenantId, ct.AttemptOrderId });
+
+            modelBuilder.Entity<CardTransaction>()
                 .HasIndex(ct => ct.TransactionDate);
 
             modelBuilder.Entity<PayinLog>()
-                .HasIndex(pl => pl.ReferenceNo);
+                .HasIndex(pl => new { pl.TenantId, pl.AttemptOrderId });
+
+            modelBuilder.Entity<PayinLog>()
+                .HasIndex(pl => pl.CustomerOrderId);
+
+            modelBuilder.Entity<PayinLog>()
+                .HasIndex(pl => pl.PaymentTraceId);
+
+            modelBuilder.Entity<TransactionStatusHistory>()
+                .HasIndex(tsh => new { tsh.TenantId, tsh.AttemptOrderId });
 
             modelBuilder.Entity<PaymentMethod>()
                 .HasIndex(pm => pm.Token)
@@ -134,38 +162,70 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
                 .Property(ct => ct.CreditCardCvv2)
                 .HasMaxLength(255); // Encrypted value will be longer
 
-            // ── Multi-tenancy: TenantId column configuration ──
-            // All entities inherit TenantId from base classes.
-            // Configure max length for indexable column size (not nvarchar(max)).
-            foreach (var entityType in modelBuilder.Model.GetEntityTypes())
-            {
-                var clrType = entityType.ClrType;
-                if (typeof(BaseAuditableEntity).IsAssignableFrom(clrType) ||
-                    typeof(BaseAuditableCreateEntity).IsAssignableFrom(clrType))
-                {
-                    modelBuilder.Entity(clrType)
-                        .Property("TenantId")
-                        .HasMaxLength(128)
-                        .HasDefaultValue(string.Empty);
-                }
-            }
+            modelBuilder.Entity<CardTransaction>()
+                .Property(ct => ct.PaymentTraceId)
+                .HasMaxLength(64);
 
-            // ── Multi-tenancy global query filters ──
-            // BaseAuditableEntity descendants
-            modelBuilder.Entity<Customer>().HasQueryFilter(e => _tenantProvider == null || e.TenantId == _tenantProvider.TenantId);
-            modelBuilder.Entity<Order>().HasQueryFilter(e => _tenantProvider == null || e.TenantId == _tenantProvider.TenantId);
-            modelBuilder.Entity<Product>().HasQueryFilter(e => _tenantProvider == null || e.TenantId == _tenantProvider.TenantId);
-            modelBuilder.Entity<BillingCustomer>().HasQueryFilter(e => _tenantProvider == null || e.TenantId == _tenantProvider.TenantId);
-            modelBuilder.Entity<BillingCustomerKeyInfo>().HasQueryFilter(e => _tenantProvider == null || e.TenantId == _tenantProvider.TenantId);
-            modelBuilder.Entity<CardTransaction>().HasQueryFilter(e => _tenantProvider == null || e.TenantId == _tenantProvider.TenantId);
-            modelBuilder.Entity<PayinLog>().HasQueryFilter(e => _tenantProvider == null || e.TenantId == _tenantProvider.TenantId);
-            modelBuilder.Entity<PayinLogDetails>().HasQueryFilter(e => _tenantProvider == null || e.TenantId == _tenantProvider.TenantId);
-            modelBuilder.Entity<PaymentMethod>().HasQueryFilter(e => _tenantProvider == null || e.TenantId == _tenantProvider.TenantId);
-            modelBuilder.Entity<PaymentProvider>().HasQueryFilter(e => _tenantProvider == null || e.TenantId == _tenantProvider.TenantId);
-            modelBuilder.Entity<TransactionStatusHistory>().HasQueryFilter(e => _tenantProvider == null || e.TenantId == _tenantProvider.TenantId);
+            modelBuilder.Entity<CardTransaction>()
+                .Property(ct => ct.CustomerOrderId)
+                .HasMaxLength(128);
 
-            // BaseAuditableCreateEntity descendant
-            modelBuilder.Entity<OrderProduct>().HasQueryFilter(e => _tenantProvider == null || e.TenantId == _tenantProvider.TenantId);
+            modelBuilder.Entity<CardTransaction>()
+                .Property(ct => ct.AttemptOrderId)
+                .HasMaxLength(128);
+
+            modelBuilder.Entity<CardTransaction>()
+                .Property(ct => ct.ThreeDSecureStage)
+                .HasMaxLength(64);
+
+            modelBuilder.Entity<PayinLog>()
+                .Property(pl => pl.PaymentTraceId)
+                .HasMaxLength(64);
+
+            modelBuilder.Entity<PayinLog>()
+                .Property(pl => pl.CustomerOrderId)
+                .HasMaxLength(128);
+
+            modelBuilder.Entity<PayinLog>()
+                .Property(pl => pl.AttemptOrderId)
+                .HasMaxLength(128);
+
+            modelBuilder.Entity<PayinLog>()
+                .Property(pl => pl.ThreeDSecureStage)
+                .HasMaxLength(64);
+
+            modelBuilder.Entity<PayinLogDetails>()
+                .Property(pld => pld.PaymentTraceId)
+                .HasMaxLength(64);
+
+            modelBuilder.Entity<PayinLogDetails>()
+                .Property(pld => pld.ThreeDSecureStage)
+                .HasMaxLength(64);
+
+            modelBuilder.Entity<TransactionStatusHistory>()
+                .Property(tsh => tsh.PaymentTraceId)
+                .HasMaxLength(64);
+
+            modelBuilder.Entity<TransactionStatusHistory>()
+                .Property(tsh => tsh.ThreeDSecureStage)
+                .HasMaxLength(64);
+
+            modelBuilder.Entity<TransactionStatusHistory>()
+                .Property(tsh => tsh.AttemptOrderId)
+                .HasMaxLength(128);
+
+            ConfigureTenantOwnership<Customer>(modelBuilder);
+            ConfigureTenantOwnership<Order>(modelBuilder);
+            ConfigureTenantOwnership<Product>(modelBuilder);
+            ConfigureTenantOwnership<BillingCustomer>(modelBuilder);
+            ConfigureTenantOwnership<BillingCustomerKeyInfo>(modelBuilder);
+            ConfigureTenantOwnership<CardTransaction>(modelBuilder);
+            ConfigureTenantOwnership<PayinLog>(modelBuilder);
+            ConfigureTenantOwnership<PayinLogDetails>(modelBuilder);
+            ConfigureTenantOwnership<PaymentMethod>(modelBuilder);
+            ConfigureTenantOwnership<PaymentProvider>(modelBuilder);
+            ConfigureTenantOwnership<TransactionStatusHistory>(modelBuilder);
+            ConfigureTenantOwnership<OrderProduct>(modelBuilder);
         }
 
         public override int SaveChanges()
@@ -182,7 +242,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
 
         private void StampTenantOnAddedEntities()
         {
-            if (_tenantProvider is null)
+            if (_tenantProvider is null || !_tenantProvider.HasTenantContext)
                 return;
 
             var tenantId = _tenantProvider.TenantId;
@@ -201,6 +261,25 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
                     }
                 }
             }
+        }
+
+        private void ConfigureTenantOwnership<TEntity>(ModelBuilder modelBuilder)
+            where TEntity : class
+        {
+            modelBuilder.Entity<TEntity>()
+                .HasOne<Tenant>()
+                .WithMany()
+                .HasForeignKey("TenantId")
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<TEntity>()
+                .HasQueryFilter(BuildTenantFilterExpression<TEntity>());
+        }
+
+        private System.Linq.Expressions.Expression<Func<TEntity, bool>> BuildTenantFilterExpression<TEntity>()
+            where TEntity : class
+        {
+            return entity => _tenantProvider == null || !_tenantProvider.HasTenantContext || EF.Property<int>(entity, "TenantId") == _tenantProvider.TenantId;
         }
     }
 }

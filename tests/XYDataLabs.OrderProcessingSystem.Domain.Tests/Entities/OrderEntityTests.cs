@@ -16,7 +16,7 @@ namespace XYDataLabs.OrderProcessingSystem.Domain.Tests.Entities
             order.TotalPrice.Should().Be(0);
             order.IsFulfilled.Should().BeFalse();
             order.Customer.Should().BeNull();
-            order.TenantId.Should().BeEmpty();
+            order.TenantId.Should().Be(0);
         }
 
         [Fact]
@@ -54,7 +54,7 @@ namespace XYDataLabs.OrderProcessingSystem.Domain.Tests.Entities
         {
             var orderProduct = new OrderProduct();
 
-            orderProduct.TenantId.Should().BeEmpty();
+            orderProduct.TenantId.Should().Be(0);
             orderProduct.CreatedBy.Should().BeNull();
             orderProduct.CreatedDate.Should().BeNull();
         }

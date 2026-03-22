@@ -1,11 +1,15 @@
 namespace XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 
 /// <summary>
-/// Provides the current tenant identifier for multi-tenancy isolation.
-/// Implemented by HeaderTenantProvider (reads X-Tenant-Id header via HttpContext).
-/// Lives in SharedKernel so all layers can depend on it without circular references.
+/// Provides the current resolved tenant context for multi-tenancy isolation.
 /// </summary>
 public interface ITenantProvider
 {
-    string TenantId { get; }
+    bool HasTenantContext { get; }
+
+    int TenantId { get; }
+
+    string TenantCode { get; }
+
+    string TenantExternalId { get; }
 }

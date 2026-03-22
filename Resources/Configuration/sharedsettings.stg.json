@@ -17,7 +17,14 @@
     "PrivateKey": "__OPENPAY_PRIVATE_KEY__",
     "DeviceSessionId": "__OPENPAY_DEVICE_SESSION_ID__",
     "IsProduction": false,
+    "Use3DSecure": true,
     "RedirectUrl": "https://stg-domain.com/payment/callback"
+  },
+  "Observability": {
+    "EnableEfSensitiveDataLogging": false
+  },
+  "TenantConfiguration": {
+    "ActiveTenantCode": "TenantA"
   },
   "Serilog": {
     "Using": [ "Serilog.Sinks.File" ],

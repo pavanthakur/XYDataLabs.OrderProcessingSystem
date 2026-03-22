@@ -19,6 +19,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure
     {
         public static void InjectInfrastructureDependencies(this IHostApplicationBuilder builder)
         {
+            var enableSensitiveDataLogging = builder.Configuration.GetValue<bool>(Constants.Configuration.EnableEfSensitiveDataLogging);
+
             builder.Services.AddDbContext<OrderProcessingSystemDbContext>(options =>
             {
                 options.UseSqlServer(
@@ -28,7 +30,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure
                         maxRetryDelay: TimeSpan.FromSeconds(30),
                         errorNumbersToAdd: null));
 
-                if (builder.Environment.IsDevelopment())
+                if (enableSensitiveDataLogging)
                 {
                     options.LogTo(Console.WriteLine, LogLevel.Information)
                            .EnableSensitiveDataLogging()

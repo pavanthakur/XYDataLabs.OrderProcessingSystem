@@ -60,5 +60,41 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Utilities
             [Description("completed")]
             Completed = 2
         }
+
+        public enum ThreeDSecureStage
+        {
+            [Description("not_applicable")]
+            NotApplicable = 1,
+
+            [Description("tokenization_completed")]
+            TokenizationCompleted = 2,
+
+            [Description("charge_requested")]
+            ChargeRequested = 3,
+
+            [Description("redirect_issued")]
+            RedirectIssued = 4,
+
+            [Description("callback_received")]
+            CallbackReceived = 5,
+
+            [Description("remote_confirmation_started")]
+            RemoteConfirmationStarted = 6,
+
+            [Description("pending_confirmation")]
+            PendingConfirmation = 7,
+
+            [Description("completed")]
+            Completed = 8,
+
+            [Description("failed")]
+            Failed = 9,
+
+            [Description("cancelled")]
+            Cancelled = 10,
+
+            [Description("unknown")]
+            Unknown = 11
+        }
     }
 }

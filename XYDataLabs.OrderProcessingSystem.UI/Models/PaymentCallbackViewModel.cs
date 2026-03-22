@@ -4,8 +4,6 @@ public sealed class PaymentCallbackViewModel
 {
     public string? PaymentId { get; init; }
 
-    public string? OrderId { get; init; }
-
     public string Status { get; init; } = "unknown";
 
     public string? ErrorMessage { get; init; }

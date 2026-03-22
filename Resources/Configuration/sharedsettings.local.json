@@ -14,7 +14,14 @@
     "PrivateKey": "__OPENPAY_PRIVATE_KEY__",
     "DeviceSessionId": "__OPENPAY_DEVICE_SESSION_ID__",
     "IsProduction": false,
+    "Use3DSecure": true,
     "RedirectUrl": "http://localhost:5012/payment/callback"
+  },
+  "Observability": {
+    "EnableEfSensitiveDataLogging": true
+  },
+  "TenantConfiguration": {
+    "ActiveTenantCode": "TenantA"
   },
   "Serilog": {
     "Using": [ "Serilog.Sinks.File" ],

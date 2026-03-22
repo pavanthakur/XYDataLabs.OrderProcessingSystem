@@ -12,6 +12,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
 {
     public static class DbInitializer
     {
+        private const int DefaultSeedTenantId = 1;
+
         public static void Initialize(OrderProcessingSystemDbContext context, bool applyMigrations = true)
         {
             if (context is null)
@@ -45,7 +47,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
         {
             var faker = new Faker<Customer>()
                 .RuleFor(c => c.Name, f => f.Name.FullName())
-                .RuleFor(c => c.Email, f => f.Internet.Email());
+                .RuleFor(c => c.Email, f => f.Internet.Email())
+                .RuleFor(c => c.TenantId, _ => DefaultSeedTenantId);
 
             var customers = faker.Generate(120);
             context.Customers.AddRange(customers);
@@ -56,9 +59,9 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
         {
             var products = new List<Product>
                 {
-                    new Product { Name = "Laptop", Price = 500.00m },
-                    new Product { Name = "Phone", Price = 300.00m },
-                    new Product { Name = "Headphones", Price = 200.00m }
+                    new Product { Name = "Laptop", Price = 500.00m, TenantId = DefaultSeedTenantId },
+                    new Product { Name = "Phone", Price = 300.00m, TenantId = DefaultSeedTenantId },
+                    new Product { Name = "Headphones", Price = 200.00m, TenantId = DefaultSeedTenantId }
                 };
             context.Products.AddRange(products);
             context.SaveChanges();
@@ -71,8 +74,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
 
             var orders = new List<Order>
                 {
-                    new Order { OrderDate = DateTime.Now, CustomerId = customers[0].CustomerId, TotalPrice = products.Sum(product => product.Price) },
-                    new Order { OrderDate = DateTime.Now, CustomerId = customers[1].CustomerId }
+                    new Order { OrderDate = DateTime.Now, CustomerId = customers[0].CustomerId, TotalPrice = products.Sum(product => product.Price), TenantId = DefaultSeedTenantId },
+                    new Order { OrderDate = DateTime.Now, CustomerId = customers[1].CustomerId, TenantId = DefaultSeedTenantId }
                 };
             context.Orders.AddRange(orders);
             context.SaveChanges();
@@ -85,9 +88,9 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
 
             var orderProducts = new List<OrderProduct>
                 {
-                    new OrderProduct { OrderId = orders[0].OrderId, ProductId = products[0].ProductId, Quantity = 1 },
-                    new OrderProduct { OrderId = orders[0].OrderId, ProductId = products[1].ProductId, Quantity = 2 },
-                    new OrderProduct { OrderId = orders[1].OrderId, ProductId = products[2].ProductId, Quantity = 1 }
+                    new OrderProduct { OrderId = orders[0].OrderId, ProductId = products[0].ProductId, Quantity = 1, TenantId = DefaultSeedTenantId },
+                    new OrderProduct { OrderId = orders[0].OrderId, ProductId = products[1].ProductId, Quantity = 2, TenantId = DefaultSeedTenantId },
+                    new OrderProduct { OrderId = orders[1].OrderId, ProductId = products[2].ProductId, Quantity = 1, TenantId = DefaultSeedTenantId }
                 };
             context.OrderProducts.AddRange(orderProducts);
             context.SaveChanges();
@@ -108,6 +111,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                 APIUrl = "https://sandbox-api.openpay.mx/v1",
                 IsActive = true,
                 IsProduction = false,
+                TenantId = DefaultSeedTenantId,
                 CreatedBy = 1,
                 CreatedDate = DateTime.UtcNow
             };

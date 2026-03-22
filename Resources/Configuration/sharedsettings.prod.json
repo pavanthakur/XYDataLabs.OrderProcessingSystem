@@ -17,8 +17,15 @@
     "PrivateKey": "__OPENPAY_PRIVATE_KEY__", 
     "DeviceSessionId": "__OPENPAY_DEVICE_SESSION_ID__",
     "IsProduction": false,
+    "Use3DSecure": true,
     "RedirectUrl": "https://production-domain.com/payment/callback",
     "_Comment": "Resolve production OpenPay credentials from environment variables locally and Azure Key Vault in deployed environments."
+  },
+  "Observability": {
+    "EnableEfSensitiveDataLogging": false
+  },
+  "TenantConfiguration": {
+    "ActiveTenantCode": "TenantA"
   },
   "Serilog": {
     "Using": [ "Serilog.Sinks.File" ],

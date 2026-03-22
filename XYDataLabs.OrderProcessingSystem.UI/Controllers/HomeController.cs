@@ -1,5 +1,4 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
 using XYDataLabs.OrderProcessingSystem.SharedKernel;
 using System;
 using XYDataLabs.OrderProcessingSystem.UI.Models;
@@ -38,21 +37,23 @@ namespace XYDataLabs.OrderProcessingSystem.UI.Controllers
                 item => item.Key,
                 item => item.Value.ToString(),
                 StringComparer.OrdinalIgnoreCase);
+            var attemptOrderId = GetFirstValue(parameters, "order_id", "orderId");
 
             var model = new PaymentCallbackViewModel
             {
                 PaymentId = GetFirstValue(parameters, "id", "transaction_id", "payment_id"),
-                OrderId = GetFirstValue(parameters, "order_id", "orderId"),
                 Status = GetFirstValue(parameters, "status", "transaction_status", "operation_status") ?? "unknown",
                 ErrorMessage = GetFirstValue(parameters, "error_message", "error", "message", "description"),
                 Parameters = parameters
             };
 
+            ViewData["AttemptOrderId"] = attemptOrderId;
+
             _logger.LogInformation(
-                "OpenPay callback received with status {Status} for payment {PaymentId} and order {OrderId}",
+                "OpenPay callback received with raw status {Status} for payment {PaymentId} and attempt order {AttemptOrderId}",
                 model.Status,
                 model.PaymentId,
-                model.OrderId);
+                attemptOrderId);
 
             return View(model);
         }

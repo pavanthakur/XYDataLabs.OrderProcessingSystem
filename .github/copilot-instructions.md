@@ -302,6 +302,7 @@ Port allocations: Local VS (5010–5013) · Docker dev (5020–5023) · Docker s
 |------|------------|
 | `.github/instructions/clean-architecture.instructions.md` | `**/*.cs`, `**/*.csproj` |
 | `.github/instructions/ef-migrations.instructions.md` | `**/Infrastructure/**`, `**/Migrations/**` |
+| `.github/instructions/multitenant-payment-schema.instructions.md` | `**/Domain/Entities/**/*.cs`, `**/Application/DTO/**/*.cs`, `**/Application/Features/Payments/**/*.cs`, `**/Infrastructure/**/*.cs`, related UI/API/test files |
 | `.github/instructions/azure-workflows.instructions.md` | `**/.github/workflows/**` |
 | `.github/instructions/bicep.instructions.md` | `**/infra/**`, `**/*.bicep` |
 | `.github/instructions/curriculum.instructions.md` | `**/*CURRICULUM*`, `**/05-Self-Learning/**` |
@@ -327,6 +328,7 @@ Port allocations: Local VS (5010–5013) · Docker dev (5020–5023) · Docker s
 | File | Where | What it covers |
 |------|-------|---------------|
 | `TROUBLESHOOTING-INDEX.md` | Root | Quick links for common GitHub App / OIDC / workflow errors |
+| `ARCHITECTURE.md` | Root | Binding tenant, payment identifier, migration, and test standard for future model creation |
 | `ARCHITECTURE-EVOLUTION.md` | Root | 14-phase roadmap: Phases 1-6 ✅ complete, Phase 7 next 📅 |
 | `AZURE-PROGRESS-EVALUATION.md` | Root | Learning progress weeks 1–10, next-step guides |
 | `AZURE-TOP-7-SERVICES-ANALYSIS.md` | Root | Analysis of 7 key Azure services used in this project |

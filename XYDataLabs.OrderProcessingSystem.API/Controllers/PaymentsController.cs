@@ -25,10 +25,13 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
         ///    Creates a new customer, adds a card, and processes a payment in a single operation
         /// </summary>
         /// <param name="request">CustomerWithCardPaymentRequestDto</param>
+        /// <param name="cancellationToken">Request cancellation token</param>
         /// <returns>Payment status</returns>
         [HttpPost("ProcessPayment")]
         public async Task<IActionResult> ProcessPayment([FromBody] CustomerWithCardPaymentRequestDto request, CancellationToken cancellationToken)
         {
+            ArgumentNullException.ThrowIfNull(request);
+
             try
             {
                 var result = await _dispatcher.SendAsync(new ProcessPaymentCommand(
@@ -39,7 +42,7 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
                     request.ExpirationYear,
                     request.ExpirationMonth,
                     request.Cvv2,
-                    request.OrderId), cancellationToken);
+                    request.CustomerOrderId), cancellationToken);
                 return result.ToActionResult();
             }
             catch (Exception ex)
@@ -52,17 +55,19 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
         [HttpPost("{paymentId}/confirm-status")]
         public async Task<IActionResult> ConfirmPaymentStatus(string paymentId, [FromBody] PaymentStatusLookupRequestDto request, CancellationToken cancellationToken)
         {
+            ArgumentNullException.ThrowIfNull(request);
+
             try
             {
                 _logger.LogInformation(
-                    "Received payment status confirmation request for payment {PaymentId} and order {OrderId}",
+                    "Received payment status confirmation request for payment {PaymentId} and attempt order {AttemptOrderId}",
                     paymentId,
-                    request.OrderId);
+                    request.AttemptOrderId);
 
                 var result = await _dispatcher.SendAsync(
                     new ConfirmPaymentStatusCommand(
                         paymentId,
-                        request.OrderId,
+                        request.AttemptOrderId,
                         request.CallbackStatus,
                         request.ErrorMessage,
                         request.CallbackParameters),

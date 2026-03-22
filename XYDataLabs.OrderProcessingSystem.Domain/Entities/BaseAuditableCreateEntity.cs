@@ -9,8 +9,7 @@ namespace XYDataLabs.OrderProcessingSystem.Domain.Entities
 {
     public abstract class BaseAuditableCreateEntity
     {
-        [MaxLength(128)]
-        public string TenantId { get; set; } = string.Empty;
+        public int TenantId { get; set; }
         public int? CreatedBy { get; set; }
         public DateTime? CreatedDate { get; set; }
     }

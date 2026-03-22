@@ -20,12 +20,21 @@ namespace XYDataLabs.OrderProcessingSystem.Domain.Entities
         public string TransactionId { get; set; } = string.Empty;
 
         [Required]
+        [MaxLength(64)]
+        public string PaymentTraceId { get; set; } = string.Empty;
+
+        [Required]
         public string PaymentMethod { get; set; } = string.Empty;
 
         [Required]
         public string TransactionType { get; set; } = string.Empty;
 
-        public string? OrderId { get; set; }
+        [Required]
+        [MaxLength(128)]
+        public string CustomerOrderId { get; set; } = string.Empty;
+
+        [MaxLength(128)]
+        public string? AttemptOrderId { get; set; }
 
         [Required]
         public string TransactionStatus { get; set; } = string.Empty;
@@ -60,6 +69,12 @@ namespace XYDataLabs.OrderProcessingSystem.Domain.Entities
 
         [Required]
         public bool IsTransactionSuccess { get; set; }
+
+        [Required]
+        public bool IsThreeDSecureEnabled { get; set; }
+
+        [MaxLength(64)]
+        public string? ThreeDSecureStage { get; set; }
 
         public string? RedirectUrl { get; set; }
 

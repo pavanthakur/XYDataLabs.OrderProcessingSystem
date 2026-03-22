@@ -12,8 +12,8 @@ using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 {
     [DbContext(typeof(OrderProcessingSystemDbContext))]
-    [Migration("20260322080855_AddTenantIdToAllEntities")]
-    partial class AddTenantIdToAllEntities
+    [Migration("20260322112523_RebaselineMultitenantPaymentSchema")]
+    partial class RebaselineMultitenantPaymentSchema
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -58,12 +58,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("TenantId")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(128)
-                        .HasColumnType("nvarchar(128)")
-                        .HasDefaultValue("");
+                    b.Property<int>("TenantId")
+                        .HasColumnType("int");
 
                     b.Property<string>("TwoLetterIsoCode")
                         .IsRequired()
@@ -83,6 +79,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                     b.HasIndex("Email");
 
                     b.HasIndex("PaymentMethodId");
+
+                    b.HasIndex("TenantId");
 
                     b.ToTable("BillingCustomers");
                 });
@@ -114,12 +112,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
 
-                    b.Property<string>("TenantId")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(128)
-                        .HasColumnType("nvarchar(128)")
-                        .HasDefaultValue("");
+                    b.Property<int>("TenantId")
+                        .HasColumnType("int");
 
                     b.Property<int?>("UpdatedBy")
                         .HasColumnType("int");
@@ -130,6 +124,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("BillingCustomerId");
+
+                    b.HasIndex("TenantId");
 
                     b.ToTable("BillingCustomerKeyInfos");
                 });
@@ -144,6 +140,10 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("AttemptOrderId")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
 
                     b.Property<int?>("CreatedBy")
                         .HasColumnType("int");
@@ -178,28 +178,38 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                     b.Property<int>("CustomerId")
                         .HasColumnType("int");
 
+                    b.Property<string>("CustomerOrderId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<bool>("IsTransactionSuccess")
+                    b.Property<bool>("IsThreeDSecureEnabled")
                         .HasColumnType("bit");
 
-                    b.Property<string>("OrderId")
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<bool>("IsTransactionSuccess")
+                        .HasColumnType("bit");
 
                     b.Property<string>("PaymentMethod")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("PaymentTraceId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<string>("RedirectUrl")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("TenantId")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(128)
-                        .HasColumnType("nvarchar(128)")
-                        .HasDefaultValue("");
+                    b.Property<int>("TenantId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ThreeDSecureStage")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("TransactionCustomerId")
                         .IsRequired()
@@ -236,9 +246,15 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 
                     b.HasIndex("CustomerId");
 
+                    b.HasIndex("PaymentTraceId");
+
                     b.HasIndex("TransactionDate");
 
                     b.HasIndex("TransactionId");
+
+                    b.HasIndex("TenantId", "AttemptOrderId");
+
+                    b.HasIndex("TenantId", "CustomerOrderId");
 
                     b.ToTable("CardTransactions");
                 });
@@ -268,12 +284,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                     b.Property<string>("OpenpayCustomerId")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("TenantId")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(128)
-                        .HasColumnType("nvarchar(128)")
-                        .HasDefaultValue("");
+                    b.Property<int>("TenantId")
+                        .HasColumnType("int");
 
                     b.Property<int?>("UpdatedBy")
                         .HasColumnType("int");
@@ -282,6 +294,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                         .HasColumnType("datetime2");
 
                     b.HasKey("CustomerId");
+
+                    b.HasIndex("TenantId");
 
                     b.ToTable("Customers");
                 });
@@ -309,12 +323,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                     b.Property<DateTime>("OrderDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("TenantId")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(128)
-                        .HasColumnType("nvarchar(128)")
-                        .HasDefaultValue("");
+                    b.Property<int>("TenantId")
+                        .HasColumnType("int");
 
                     b.Property<decimal>("TotalPrice")
                         .HasColumnType("decimal(18,2)");
@@ -328,6 +338,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                     b.HasKey("OrderId");
 
                     b.HasIndex("CustomerId");
+
+                    b.HasIndex("TenantId");
 
                     b.ToTable("Orders");
                 });
@@ -355,16 +367,14 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("SysId"));
 
-                    b.Property<string>("TenantId")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(128)
-                        .HasColumnType("nvarchar(128)")
-                        .HasDefaultValue("");
+                    b.Property<int>("TenantId")
+                        .HasColumnType("int");
 
                     b.HasKey("OrderId", "ProductId");
 
                     b.HasIndex("ProductId");
+
+                    b.HasIndex("TenantId");
 
                     b.ToTable("OrderProducts");
                 });
@@ -377,19 +387,15 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("APINO1")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("APINO2")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
                     b.Property<decimal?>("Amount")
                         .HasColumnType("decimal(18,4)");
 
                     b.Property<decimal?>("AmountFromAPI")
                         .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("AttemptOrderId")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
 
                     b.Property<string>("CardOwnerName")
                         .HasMaxLength(100)
@@ -405,9 +411,25 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<string>("CustomerOrderId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<bool>("IsThreeDSecureEnabled")
+                        .HasColumnType("bit");
+
                     b.Property<string>("LastFourCardNbr")
                         .HasMaxLength(4)
                         .HasColumnType("nvarchar(4)");
+
+                    b.Property<string>("OpenPayAuthorizationId")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("OpenPayChargeId")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<int?>("PayinType")
                         .HasColumnType("int");
@@ -419,19 +441,20 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<string>("ReferenceNo")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                    b.Property<string>("PaymentTraceId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<int?>("Result")
                         .HasColumnType("int");
 
-                    b.Property<string>("TenantId")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(128)
-                        .HasColumnType("nvarchar(128)")
-                        .HasDefaultValue("");
+                    b.Property<int>("TenantId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ThreeDSecureStage")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<int?>("UpdatedBy")
                         .HasColumnType("int");
@@ -441,9 +464,13 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CustomerOrderId");
+
                     b.HasIndex("PaymentMethodId");
 
-                    b.HasIndex("ReferenceNo");
+                    b.HasIndex("PaymentTraceId");
+
+                    b.HasIndex("TenantId", "AttemptOrderId");
 
                     b.ToTable("PayinLogs");
                 });
@@ -468,18 +495,22 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                     b.Property<int>("PayinLogId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PaymentTraceId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<string>("PostInfo")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("RespInfo")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("TenantId")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(128)
-                        .HasColumnType("nvarchar(128)")
-                        .HasDefaultValue("");
+                    b.Property<int>("TenantId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ThreeDSecureStage")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<int?>("UpdatedBy")
                         .HasColumnType("int");
@@ -490,6 +521,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("PayinLogId");
+
+                    b.HasIndex("TenantId");
 
                     b.ToTable("PayinLogDetails");
                 });
@@ -514,12 +547,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                     b.Property<bool>("Status")
                         .HasColumnType("bit");
 
-                    b.Property<string>("TenantId")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(128)
-                        .HasColumnType("nvarchar(128)")
-                        .HasDefaultValue("");
+                    b.Property<int>("TenantId")
+                        .HasColumnType("int");
 
                     b.Property<string>("Token")
                         .IsRequired()
@@ -534,6 +563,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("PaymentProviderId");
+
+                    b.HasIndex("TenantId");
 
                     b.HasIndex("Token")
                         .IsUnique();
@@ -571,12 +602,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<string>("TenantId")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(128)
-                        .HasColumnType("nvarchar(128)")
-                        .HasDefaultValue("");
+                    b.Property<int>("TenantId")
+                        .HasColumnType("int");
 
                     b.Property<int?>("UpdatedBy")
                         .HasColumnType("int");
@@ -585,6 +612,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
 
                     b.ToTable("PaymentProviders");
                 });
@@ -615,12 +644,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                     b.Property<decimal>("Price")
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<string>("TenantId")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(128)
-                        .HasColumnType("nvarchar(128)")
-                        .HasDefaultValue("");
+                    b.Property<int>("TenantId")
+                        .HasColumnType("int");
 
                     b.Property<int?>("UpdatedBy")
                         .HasColumnType("int");
@@ -630,7 +655,60 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 
                     b.HasKey("ProductId");
 
+                    b.HasIndex("TenantId");
+
                     b.ToTable("Products");
+                });
+
+            modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.Tenant", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ExternalId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("ExternalId")
+                        .IsUnique();
+
+                    b.ToTable("Tenants");
                 });
 
             modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.TransactionStatusHistory", b =>
@@ -640,6 +718,10 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AttemptOrderId")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
 
                     b.Property<int?>("CreatedBy")
                         .HasColumnType("int");
@@ -651,17 +733,21 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
 
+                    b.Property<string>("PaymentTraceId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<string>("TenantId")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(128)
-                        .HasColumnType("nvarchar(128)")
-                        .HasDefaultValue("");
+                    b.Property<int>("TenantId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ThreeDSecureStage")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<int>("TransactionId")
                         .HasColumnType("int");
@@ -676,6 +762,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 
                     b.HasIndex("TransactionId");
 
+                    b.HasIndex("TenantId", "AttemptOrderId");
+
                     b.ToTable("TransactionStatusHistories");
                 });
 
@@ -684,6 +772,12 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                     b.HasOne("XYDataLabs.OrderProcessingSystem.Domain.Entities.PaymentMethod", "PaymentMethod")
                         .WithMany("BillingCustomers")
                         .HasForeignKey("PaymentMethodId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("XYDataLabs.OrderProcessingSystem.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -698,6 +792,12 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("XYDataLabs.OrderProcessingSystem.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("BillingCustomer");
                 });
 
@@ -709,7 +809,22 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("XYDataLabs.OrderProcessingSystem.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.Customer", b =>
+                {
+                    b.HasOne("XYDataLabs.OrderProcessingSystem.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.Order", b =>
@@ -718,6 +833,12 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                         .WithMany("Orders")
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("XYDataLabs.OrderProcessingSystem.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Customer");
@@ -737,6 +858,12 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("XYDataLabs.OrderProcessingSystem.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("Order");
 
                     b.Navigation("Product");
@@ -749,6 +876,12 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                         .HasForeignKey("PaymentMethodId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("XYDataLabs.OrderProcessingSystem.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("PaymentMethod");
                 });
 
@@ -758,6 +891,12 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                         .WithMany("PayinLogDetails")
                         .HasForeignKey("PayinLogId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("XYDataLabs.OrderProcessingSystem.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("PayinLog");
@@ -771,11 +910,41 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("XYDataLabs.OrderProcessingSystem.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("PaymentProvider");
+                });
+
+            modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.PaymentProvider", b =>
+                {
+                    b.HasOne("XYDataLabs.OrderProcessingSystem.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.Product", b =>
+                {
+                    b.HasOne("XYDataLabs.OrderProcessingSystem.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.TransactionStatusHistory", b =>
                 {
+                    b.HasOne("XYDataLabs.OrderProcessingSystem.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("XYDataLabs.OrderProcessingSystem.Domain.Entities.CardTransaction", "Transaction")
                         .WithMany("StatusHistory")
                         .HasForeignKey("TransactionId")

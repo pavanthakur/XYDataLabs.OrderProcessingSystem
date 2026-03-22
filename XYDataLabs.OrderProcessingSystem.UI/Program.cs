@@ -215,14 +215,11 @@ builder.Services.AddControllersWithViews();
 builder.Services.AddRazorPages().AddRazorRuntimeCompilation();
 
 builder.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
-builder.Services.AddScoped<ITenantProvider, HeaderTenantProvider>();
 
 var app = builder.Build();
 
 // Log requests to help diagnose issues
 app.UseSerilogRequestLogging();
-
-app.UseMiddleware<TenantMiddleware>();
 
 app.UseMiddleware<CorrelationMiddleware>();
 

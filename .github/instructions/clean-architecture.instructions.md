@@ -89,9 +89,12 @@ API (→ Application, → Infrastructure, → SharedKernel) ← composition root
 - Structured logging only: `Log.Information("{Key}", value)` — never string interpolation
 
 ### Multi-Tenancy
-- Shared DB + EF Global Query Filters via `ITenantProvider`
-- `TenantId` on `BaseAuditableEntity`, auto-stamped on `SaveChangesAsync`
-- `HeaderTenantProvider` reads `X-Tenant-Id` header
+- Shared DB + `Tenants` master table + EF Global Query Filters via `ITenantProvider`
+- Tenant-owned entities use inherited `TenantId` (`int`) on `BaseAuditableEntity` / `BaseAuditableCreateEntity`, auto-stamped on `SaveChangesAsync`
+- `HeaderTenantProvider` resolves `X-Tenant-Code` to canonical tenant context (`TenantId`, `TenantCode`, `TenantExternalId`)
+- Missing or unknown tenant code returns HTTP 400; suspended or decommissioned tenant returns HTTP 403
+- `Tenants` is a system table and must be excluded from global tenant query filters
+- Non-request operations must set `TenantId` explicitly instead of relying on ambient tenant context
 
 ## Red Flags — Reject These in Code Review
 

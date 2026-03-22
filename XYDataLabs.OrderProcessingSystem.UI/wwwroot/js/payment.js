@@ -1,5 +1,47 @@
 ﻿// Initialize device session ID when the page loads
 let deviceSessionId;
+const payButton = document.getElementById('pay-button');
+const runtimeConfigurationUrl = `${API_BASE_URL}/api/v1/info/runtime-configuration`;
+let runtimeConfigurationPromise;
+
+const setPayButtonState = (enabled, text) => {
+    if (!payButton) {
+        return;
+    }
+
+    payButton.disabled = !enabled;
+    payButton.textContent = text;
+};
+
+const loadRuntimeConfiguration = async () => {
+    const response = await fetch(runtimeConfigurationUrl, {
+        headers: {
+            'Accept': 'application/json'
+        }
+    });
+
+    const payload = await response.json();
+    if (!response.ok || !payload?.activeTenantCode) {
+        throw new Error(payload?.detail || 'API tenant configuration is missing.');
+    }
+
+    return payload;
+};
+
+if (payButton) {
+    setPayButtonState(false, 'Loading tenant configuration...');
+    runtimeConfigurationPromise = loadRuntimeConfiguration()
+        .then(runtimeConfiguration => {
+            setPayButtonState(true, 'Process Payment');
+            return runtimeConfiguration;
+        })
+        .catch(error => {
+            setPayButtonState(false, 'Tenant configuration unavailable');
+            console.error('Unable to load tenant runtime configuration from API:', error);
+            throw error;
+        });
+}
+
 window.addEventListener('load', function () {
     try {
         // Initialize OpenPay with sandbox credentials
@@ -13,8 +55,19 @@ window.addEventListener('load', function () {
     }
 });
 
-document.getElementById('payment-form').addEventListener('submit', function (e) {
+document.getElementById('payment-form').addEventListener('submit', async function (e) {
     e.preventDefault();
+
+    let runtimeConfiguration;
+    try {
+        runtimeConfiguration = await runtimeConfigurationPromise;
+    } catch (error) {
+        alert(error.message || 'API tenant configuration is missing.');
+        return;
+    }
+
+    const tenantCode = runtimeConfiguration.activeTenantCode;
+    const tenantHeaderName = runtimeConfiguration.tenantHeaderName || 'X-Tenant-Code';
 
     // Show loading state
     const submitButton = this.querySelector('button[type="submit"]');
@@ -29,7 +82,7 @@ document.getElementById('payment-form').addEventListener('submit', function (e) 
         expiration_year: document.getElementById('expiryYear').value,
         cvv2: document.getElementById('cvv').value,
         email: document.getElementById('email').value,
-        orderId: document.getElementById('orderId').value,
+        customerOrderId: document.getElementById('customerOrderId').value,
         device_session_id: deviceSessionId
     };
 
@@ -53,7 +106,7 @@ document.getElementById('payment-form').addEventListener('submit', function (e) 
                 "expirationYear": cardData.expiration_year,
                 "expirationMonth": cardData.expiration_month,
                 "cvv2": cardData.cvv2,
-                "orderId": cardData.orderId,
+                "customerOrderId": cardData.customerOrderId,
                 "deviceSessionId": cardData.device_session_id
             };
 
@@ -61,7 +114,8 @@ document.getElementById('payment-form').addEventListener('submit', function (e) 
             fetch(API_BASE_URL + '/api/v1/payments/processpayment', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    [tenantHeaderName]: tenantCode
                 },
                 body: JSON.stringify(paymentData)
             })
@@ -155,3 +209,4 @@ document.getElementById('cvv').addEventListener('input', function (e) {
 });
 
 console.log('API_BASE_URL (from payment.js):', typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : 'NOT DEFINED');
+console.log('Runtime configuration URL (from payment.js):', runtimeConfigurationUrl);
