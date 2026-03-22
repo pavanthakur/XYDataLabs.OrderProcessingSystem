@@ -78,18 +78,30 @@ document.getElementById('payment-form').addEventListener('submit', function (e) 
 
                     return data;
                 })
-                .then(data => {
-                    if (data && data.status && data.status.length > 0 && data.status !== 'unknown') {
-                        alert('Payment processed successfully!');
-                        // Reset form
-                        document.getElementById('payment-form').reset();
-                    } else {
-                        alert('Payment failed: ' + data.message);
+                .then(apiResponse => {
+                    if (!apiResponse?.success || !apiResponse?.data) {
+                        throw new Error(apiResponse?.message || 'Payment response did not include a valid result.');
                     }
+
+                    const payment = apiResponse.data;
+                    const paymentStatus = (payment.status || '').toLowerCase();
+
+                    if (paymentStatus === 'charge_pending' && payment.threeDSecureUrl) {
+                        window.location.assign(payment.threeDSecureUrl);
+                        return;
+                    }
+
+                    if (paymentStatus && paymentStatus !== 'unknown') {
+                        alert('Payment processed successfully!');
+                        document.getElementById('payment-form').reset();
+                        return;
+                    }
+
+                    throw new Error(payment.errorMessage || apiResponse.message || 'Payment failed.');
                 })
                 .catch(error => {
                     console.error('Error processing payment:', error);
-                    alert('An error occurred while processing the payment.');
+                    alert(error.message || 'An error occurred while processing the payment.');
                 })
                 .finally(() => {
                     // Reset button state
