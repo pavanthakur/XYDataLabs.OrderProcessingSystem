@@ -28,7 +28,7 @@
   </PropertyGroup>
   <ItemGroup>
     <None Include="docker-compose.dev.yml" />
-    <None Include="docker-compose.uat.yml" />
+    <None Include="docker-compose.stg.yml" />
     <None Include="docker-compose.prod.yml" />
     <None Include=".dockerignore" />
   </ItemGroup>

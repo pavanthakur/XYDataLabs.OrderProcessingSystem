@@ -135,7 +135,7 @@
       },
       "Database": {
         "ServerName": "sql-orderprocessing-prod.database.windows.net",
-        "DatabaseName": "OrderProcessingDB",
+        "DatabaseName": "OrderProcessingSystem_Prod",
         "Edition": "Premium"
       }
     }

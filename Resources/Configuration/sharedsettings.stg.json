@@ -132,7 +132,7 @@
       },
       "Database": {
         "ServerName": "sql-orderprocessing-stg.database.windows.net",
-        "DatabaseName": "OrderProcessingDB"
+        "DatabaseName": "OrderProcessingSystem_Stg"
       }
     }
   },

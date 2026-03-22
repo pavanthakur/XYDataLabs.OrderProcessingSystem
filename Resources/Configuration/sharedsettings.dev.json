@@ -8,7 +8,7 @@
   "AllowedHosts": "*",
   "ConnectionStrings": {
     "OrderProcessingSystemDbConnection": "Server=tcp:orderprocessing-sql-dev.database.windows.net,1433;Initial Catalog=OrderProcessingSystem_Dev;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;Authentication=Active Directory Default",
-    "OrderProcessingSystemDbConnection_Local": "Server=localhost,1433;Database=OrderProcessingSystem;User Id=sa;Password=__LOCAL_SQL_PASSWORD__;TrustServerCertificate=True;"
+    "OrderProcessingSystemDbConnection_Local": "Server=localhost,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=__LOCAL_SQL_PASSWORD__;TrustServerCertificate=True;"
   },
   "OpenPay": {
     "MerchantId": "__OPENPAY_MERCHANT_ID__",
@@ -112,7 +112,7 @@
     "Local": {
       "Enabled": true,
       "ConnectionStrings": {
-        "DefaultConnection": "Server=localhost,1433;Database=OrderProcessingDB_Dev;User Id=sa;Password=__LOCAL_SQL_PASSWORD__;TrustServerCertificate=True;",
+        "DefaultConnection": "Server=localhost,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=__LOCAL_SQL_PASSWORD__;TrustServerCertificate=True;",
         "Redis": "localhost:6379"
       }
     },
