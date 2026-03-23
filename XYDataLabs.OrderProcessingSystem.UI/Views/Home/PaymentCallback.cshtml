@@ -34,6 +34,18 @@
                     </div>
 
                     <dl class="row">
+                        <dt class="col-sm-3">Tenant</dt>
+                        <dd id="callback-tenant-code" class="col-sm-9">
+                            @if (!string.IsNullOrWhiteSpace(ViewData["TenantCode"]?.ToString()))
+                            {
+                                <span class="badge bg-secondary">@ViewData["TenantCode"]</span>
+                            }
+                            else
+                            {
+                                <span class="text-muted">Resolving...</span>
+                            }
+                        </dd>
+
                         <dt class="col-sm-3">Payment Id</dt>
                         <dd class="col-sm-9">@(Model.PaymentId ?? "Not provided")</dd>
 
@@ -113,6 +125,7 @@
             const header = document.getElementById('callback-header');
             const heading = document.getElementById('callback-heading');
             const banner = document.getElementById('callback-status-banner');
+            const tenantCodeEl = document.getElementById('callback-tenant-code');
             const customerOrderId = document.getElementById('callback-customer-order-id');
             const threeDSecureStage = document.getElementById('callback-3ds-stage');
             const inlineStatusSource = document.getElementById('backend-status-source-inline');
@@ -205,6 +218,13 @@
             };
 
             getTenantRuntime()
+                .then(runtimeConfiguration => {
+                    const resolvedTenant = window.OrderProcessingTenant?.getSelectedTenantCode() || runtimeConfiguration.activeTenantCode;
+                    if (tenantCodeEl && resolvedTenant) {
+                        tenantCodeEl.innerHTML = `<span class="badge bg-secondary">${resolvedTenant}</span>`;
+                    }
+                    return runtimeConfiguration;
+                })
                 .then(runtimeConfiguration => fetch(`${apiBaseUrl}/api/v1/payments/${encodeURIComponent(paymentId)}/confirm-status`, {
                     method: 'POST',
                     headers: {

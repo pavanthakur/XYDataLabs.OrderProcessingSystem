@@ -38,6 +38,7 @@ namespace XYDataLabs.OrderProcessingSystem.UI.Controllers
                 item => item.Value.ToString(),
                 StringComparer.OrdinalIgnoreCase);
             var attemptOrderId = GetFirstValue(parameters, "order_id", "orderId");
+            var tenantCode = GetFirstValue(parameters, "tenantCode");
 
             var model = new PaymentCallbackViewModel
             {
@@ -48,6 +49,7 @@ namespace XYDataLabs.OrderProcessingSystem.UI.Controllers
             };
 
             ViewData["AttemptOrderId"] = attemptOrderId;
+            ViewData["TenantCode"] = tenantCode;
 
             _logger.LogInformation(
                 "OpenPay callback received with raw status {Status} for payment {PaymentId} and attempt order {AttemptOrderId}",
