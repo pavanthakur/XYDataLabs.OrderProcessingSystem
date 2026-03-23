@@ -13,6 +13,7 @@ using XYDataLabs.OrderProcessingSystem.Application.DTO;
 using XYDataLabs.OrderProcessingSystem.Application.Utilities;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.SharedKernel;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
 using static XYDataLabs.OrderProcessingSystem.Application.Utilities.AppMasterConstant;
 using OpenPayCustomer = Openpay.Entities.Customer;
@@ -29,6 +30,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
     private readonly PaymentProvider _openPayProvider;
     private readonly OpenPayConfig _openPayConfig;
     private readonly TimeProvider _timeProvider;
+    private readonly ITenantProvider _tenantProvider;
 
     public ProcessPaymentCommandHandler(
         IOpenPayAdapterService openPayAdapterService,
@@ -37,7 +39,8 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         IAppDbContext context,
         IMapper mapper,
         AppMasterData appMasterData,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        ITenantProvider tenantProvider)
     {
         ArgumentNullException.ThrowIfNull(openPayAdapterService);
         ArgumentNullException.ThrowIfNull(openPayOptions);
@@ -46,6 +49,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         ArgumentNullException.ThrowIfNull(mapper);
         ArgumentNullException.ThrowIfNull(appMasterData);
         ArgumentNullException.ThrowIfNull(timeProvider);
+        ArgumentNullException.ThrowIfNull(tenantProvider);
 
         _openPayAdapterService = openPayAdapterService;
         _logger = logger;
@@ -57,6 +61,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
 
         _openPayProvider = appMasterData.GetProviderByName("OpenPay")
             ?? throw new InvalidOperationException("OpenPay provider not found in master data");
+        _tenantProvider = tenantProvider;
     }
 
     public async Task<Result<PaymentDto>> HandleAsync(ProcessPaymentCommand command, CancellationToken cancellationToken = default)
@@ -101,11 +106,16 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
                 paymentTraceId,
                 customerOrderId);
 
+            var tenantCode = _tenantProvider.TenantCode;
+            var redirectUrl = string.IsNullOrWhiteSpace(tenantCode)
+                ? _redirectUrl
+                : $"{_redirectUrl}?tenantCode={Uri.EscapeDataString(tenantCode)}";
+
             var paymentMethod = await CreatePaymentMethodAsync(cancellationToken);
             var (openpayCustomer, billingCustomerId) = await CreateCustomerAsync(request, paymentMethod, cancellationToken);
             await UpdatePaymentMethodByBillingCustomerIdAsync(paymentMethod.Id, billingCustomerId, cancellationToken);
             var createdCard = await CreateCardTokenAsync(request, openpayCustomer, billingCustomerId, customerOrderId, attemptOrderId, paymentTraceId, cancellationToken);
-            var charge = await CreateChargeAsync(request, openpayCustomer, createdCard.Id, paymentMethod, billingCustomerId, customerOrderId, attemptOrderId, paymentTraceId, isThreeDSecureEnabled, cancellationToken);
+            var charge = await CreateChargeAsync(request, openpayCustomer, createdCard.Id, paymentMethod, billingCustomerId, customerOrderId, attemptOrderId, paymentTraceId, isThreeDSecureEnabled, redirectUrl, cancellationToken);
             var threeDSecureStage = ResolveChargeThreeDSecureStage(charge.Status, isThreeDSecureEnabled, charge.PaymentMethod?.Url);
 
             return new PaymentDto
@@ -298,6 +308,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         string attemptOrderId,
         string paymentTraceId,
         bool isThreeDSecureEnabled,
+        string redirectUrl,
         CancellationToken cancellationToken)
     {
         _logger.LogInformation(
@@ -317,7 +328,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             DeviceSessionId = request.DeviceSessionId,
             OrderId = attemptOrderId,
             Use3DSecure = isThreeDSecureEnabled,
-            RedirectUrl = _redirectUrl,
+            RedirectUrl = redirectUrl,
             Customer = customer
         };
 

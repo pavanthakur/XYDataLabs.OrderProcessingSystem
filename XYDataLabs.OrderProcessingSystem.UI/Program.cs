@@ -238,6 +238,9 @@ var app = builder.Build();
 app.Use(async (context, next) =>
 {
     var requestedTenantCode = context.Request.Headers[TenantMiddleware.TenantHeaderName].FirstOrDefault()?.Trim();
+    // Fallback to query parameter: OpenPay 3DS browser redirects carry no request headers
+    if (string.IsNullOrWhiteSpace(requestedTenantCode))
+        requestedTenantCode = context.Request.Query["tenantCode"].FirstOrDefault()?.Trim();
     var resolvedTenantCode = string.IsNullOrWhiteSpace(requestedTenantCode)
         ? configuredActiveTenantCode
         : requestedTenantCode;
@@ -255,6 +258,9 @@ app.UseSerilogRequestLogging(options =>
     options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
     {
         var requestedTenantCode = httpContext.Request.Headers[TenantMiddleware.TenantHeaderName].FirstOrDefault()?.Trim();
+        // Fallback to query parameter: OpenPay 3DS browser redirects carry no request headers
+        if (string.IsNullOrWhiteSpace(requestedTenantCode))
+            requestedTenantCode = httpContext.Request.Query["tenantCode"].FirstOrDefault()?.Trim();
         var resolvedTenantCode = string.IsNullOrWhiteSpace(requestedTenantCode)
             ? configuredActiveTenantCode
             : requestedTenantCode;
