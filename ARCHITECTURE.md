@@ -270,7 +270,17 @@ Rules:
 | Tenant stamping scope | tenant-owned base classes only |
 | Tenant table filtering | no global query filter |
 
-## 15. File-Level References
+## 15. Card Data Handling (PCI DSS 3.2)
+
+Binding rules for payment card data storage:
+
+1. `CardTransaction` must never store raw PAN or CVV. CVV must not be persisted under any circumstances.
+2. `CardTransaction.MaskedCardNumber` stores BIN (first 6) + masked middle + last 4, e.g. `411111******1234`.
+3. `PayinLog.LastFourCardNbr` stores only the last 4 digits for audit trail.
+4. No DTO, log output, or error message may contain a full card number or CVV.
+5. Architecture tests must enforce these constraints to prevent regression.
+
+## 16. File-Level References
 
 Use these as the first reference points when applying the standard:
 

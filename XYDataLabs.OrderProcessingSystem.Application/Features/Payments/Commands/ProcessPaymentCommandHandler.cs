@@ -274,8 +274,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             CreditCardOwnerName = request.Name,
             CreditCardExpireYear = int.Parse(request.ExpirationYear, CultureInfo.InvariantCulture),
             CreditCardExpireMonth = int.Parse(request.ExpirationMonth, CultureInfo.InvariantCulture),
-            CreditCardNumber = request.CardNumber,
-            CreditCardCvv2 = request.Cvv2,
+            MaskedCardNumber = MaskCardNumber(request.CardNumber),
             TransactionMessage = $"Card created with ID: {createdCard.Id}",
             IsTransactionSuccess = true,
             IsThreeDSecureEnabled = false,
@@ -406,8 +405,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             CreditCardOwnerName = request.Name,
             CreditCardExpireYear = int.Parse(request.ExpirationYear, CultureInfo.InvariantCulture),
             CreditCardExpireMonth = int.Parse(request.ExpirationMonth, CultureInfo.InvariantCulture),
-            CreditCardNumber = request.CardNumber,
-            CreditCardCvv2 = request.Cvv2,
+            MaskedCardNumber = MaskCardNumber(request.CardNumber),
             TransactionMessage = charge.ErrorMessage,
             CreatedBy = billingCustomerId,
             CreatedDate = _timeProvider.GetUtcNow().UtcDateTime
@@ -448,6 +446,17 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
     private static string GeneratePaymentTraceId()
     {
         return Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
+    }
+
+    private static string MaskCardNumber(string cardNumber)
+    {
+        if (string.IsNullOrWhiteSpace(cardNumber) || cardNumber.Length < 10)
+            return "******";
+
+        var bin = cardNumber[..6];
+        var lastFour = cardNumber[^4..];
+        var masked = new string('*', cardNumber.Length - 10);
+        return $"{bin}{masked}{lastFour}";
     }
 
     private static string ResolveCustomerOrderId(string? customerOrderId)

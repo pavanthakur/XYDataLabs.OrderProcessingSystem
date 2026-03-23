@@ -73,6 +73,14 @@ These rules are binding for all tenant, payment, DTO, migration, middleware, and
 - `AttemptOrderId` is provider/callback/technical only.
 - `PaymentTraceId` is internal-only and must not appear in customer-facing DTOs or UI.
 
+## Card data handling (PCI DSS 3.2)
+- `CardTransaction` must never store raw PAN or CVV.
+- `CreditCardCvv2` was removed — CVV must not be persisted under any circumstances.
+- `MaskedCardNumber` stores BIN (first 6) + masked middle + last 4, e.g. `411111******1234`.
+- `PayinLog.LastFourCardNbr` stores only the last 4 digits for audit trail.
+- No DTO, log output, or error message may contain a full card number or CVV.
+- Architecture tests enforce these constraints — see `CardTransaction_Should_Not_Store_Raw_Card_Data`.
+
 ## EF and migrations
 - Current baseline starts from `RebaselineMultitenantPaymentSchema`.
 - `TenantA` and `TenantB` must be seeded in the baseline migration `Up()`.

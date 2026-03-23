@@ -130,6 +130,21 @@ public class MultiTenantSchemaTests
             because: "TenantRegistryDbContext must not apply query filters — it is used for pre-auth tenant resolution");
     }
 
+    [Fact]
+    public void CardTransaction_Should_Not_Store_Raw_Card_Data()
+    {
+        var cardTransactionType = typeof(CardTransaction);
+
+        cardTransactionType.GetProperty("CreditCardNumber").Should().BeNull(
+            because: "raw PAN must never be stored — use MaskedCardNumber (BIN + last 4) instead");
+
+        cardTransactionType.GetProperty("CreditCardCvv2").Should().BeNull(
+            because: "CVV2 must never be persisted per PCI DSS 3.2");
+
+        cardTransactionType.GetProperty(nameof(CardTransaction.MaskedCardNumber)).Should().NotBeNull(
+            because: "CardTransaction must store only the masked card number for audit purposes");
+    }
+
     private static bool HasIndex(IEntityType? entityType, params string[] propertyNames)
     {
         entityType.Should().NotBeNull();

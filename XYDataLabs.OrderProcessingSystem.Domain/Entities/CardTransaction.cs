@@ -55,17 +55,14 @@ namespace XYDataLabs.OrderProcessingSystem.Domain.Entities
         [Required]
         public int CreditCardExpireMonth { get; set; }
 
-        [Required]
-        public string CreditCardCvv2 { get; set; } = string.Empty;
-
         public string? Description { get; set; }
 
         [Required]
         [Column(TypeName = "decimal(18,2)")]
         public decimal Amount { get; set; }
 
-        [Required]
-        public string CreditCardNumber { get; set; } = string.Empty;
+        [MaxLength(19)]
+        public string? MaskedCardNumber { get; set; }
 
         [Required]
         public bool IsTransactionSuccess { get; set; }

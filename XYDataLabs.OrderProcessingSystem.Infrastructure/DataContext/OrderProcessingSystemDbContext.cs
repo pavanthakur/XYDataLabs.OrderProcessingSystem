@@ -156,14 +156,9 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
                 .HasIndex(pm => pm.Token)
                 .IsUnique();
 
-            // Configure sensitive data columns with encryption
             modelBuilder.Entity<CardTransaction>()
-                .Property(ct => ct.CreditCardNumber)
-                .HasMaxLength(255); // Encrypted value will be longer
-
-            modelBuilder.Entity<CardTransaction>()
-                .Property(ct => ct.CreditCardCvv2)
-                .HasMaxLength(255); // Encrypted value will be longer
+                .Property(ct => ct.MaskedCardNumber)
+                .HasMaxLength(19);
 
             modelBuilder.Entity<CardTransaction>()
                 .Property(ct => ct.PaymentTraceId)
