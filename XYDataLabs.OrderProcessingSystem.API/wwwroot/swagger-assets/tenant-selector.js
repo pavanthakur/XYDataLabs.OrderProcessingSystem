@@ -135,9 +135,21 @@
     const initialize = async () => {
         const preferredTenantCode = getStoredTenantCode();
 
-        const response = await window.fetch(runtimeConfigurationUrl, {
-            headers: { 'Accept': 'application/json' }
-        });
+        // Pre-set the global immediately from localStorage so the Swagger UI requestInterceptor
+        // already has the correct tenant for any request fired before our init completes.
+        // The server call below confirms the stored tenant is still valid and may override it.
+        if (preferredTenantCode) {
+            setActiveTenant(preferredTenantCode);
+        }
+
+        // Include the stored tenant in the initialization fetch so the server returns data
+        // in the context of the preferred tenant rather than the configured default.
+        // Note: requestInterceptor is Swagger UI-only — it does not apply to raw window.fetch.
+        const initHeaders = preferredTenantCode
+            ? { 'Accept': 'application/json', 'X-Tenant-Code': preferredTenantCode }
+            : { 'Accept': 'application/json' };
+
+        const response = await window.fetch(runtimeConfigurationUrl, { headers: initHeaders });
         const payload = await response.json();
 
         if (!response.ok || !payload?.activeTenantCode) {
@@ -147,7 +159,7 @@
         availableTenants = Array.isArray(payload.availableTenants) ? payload.availableTenants : [];
         selectedTenantCode = resolveTenantCode(payload, preferredTenantCode);
         persistTenantCode(selectedTenantCode);
-        setActiveTenant(selectedTenantCode);
+        setActiveTenant(selectedTenantCode); // Re-confirm with server-validated value
         ensureSelector();
     };
 
