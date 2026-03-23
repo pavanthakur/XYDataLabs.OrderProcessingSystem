@@ -15,7 +15,6 @@ using XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData;
 using Microsoft.ApplicationInsights.Extensibility;
 using System.Text.RegularExpressions;
 using XYDataLabs.OrderProcessingSystem.Application.Utilities;
-using XYDataLabs.OrderProcessingSystem.API.Swagger;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Configuration;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
@@ -200,33 +199,9 @@ builder.Services.AddSwaggerGen(options =>
     var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
 
-    // Declare X-Tenant-Code as a global ApiKey security scheme so the developer sets it
-    // once in the Authorize dialog and it is automatically applied to every API call.
-    options.AddSecurityDefinition("TenantCode", new OpenApiSecurityScheme
-    {
-        Name = TenantMiddleware.TenantHeaderName,
-        Type = SecuritySchemeType.ApiKey,
-        In = ParameterLocation.Header,
-        Description = "Canonical tenant code. Set once in the Authorize dialog (or use the top tenant dropdown) — applied automatically to every API call."
-    });
-
-    options.AddSecurityRequirement(new OpenApiSecurityRequirement
-    {
-        {
-            new OpenApiSecurityScheme
-            {
-                Reference = new OpenApiReference
-                {
-                    Type = ReferenceType.SecurityScheme,
-                    Id = "TenantCode"
-                }
-            },
-            Array.Empty<string>()
-        }
-    });
-
-    // Remove redundant per-endpoint X-Tenant-Code parameter — covered by the global scheme above.
-    options.OperationFilter<RemoveTenantHeaderParameterFilter>();
+    // Tenant header is injected automatically by the Swagger UI requestInterceptor below
+    // (reading window.OrderProcessingActiveTenant set by the top-bar dropdown).
+    // No security scheme / Authorize button / lock icons needed.
 
     if (File.Exists(xmlPath))
     {
@@ -399,6 +374,10 @@ if (environmentName == Constants.Environments.Dev || environmentName == Constant
         options.SwaggerEndpoint("/swagger/v1/swagger.json", "OrderProcessingSystem API v1");
         options.RoutePrefix = "swagger"; // Set Swagger UI to /swagger/index.html
         options.InjectJavascript("/swagger-assets/tenant-selector.js");
+        // Inject X-Tenant-Code on every Swagger request using the value set by the
+        // top-bar dropdown (window.OrderProcessingActiveTenant). When login is added,
+        // that code will set the same global — no other changes needed here.
+        options.UseRequestInterceptor("(req) => { const t = window.OrderProcessingActiveTenant; if (t) req.headers['X-Tenant-Code'] = t; return req; }");
     });
     
     if (useDeveloperExceptionPage)
@@ -423,6 +402,7 @@ else if (environmentName == "prod")
         options.SwaggerEndpoint("/swagger/v1/swagger.json", "OrderProcessingSystem API v1");
         options.RoutePrefix = "swagger";
         options.InjectJavascript("/swagger-assets/tenant-selector.js");
+        options.UseRequestInterceptor("(req) => { const t = window.OrderProcessingActiveTenant; if (t) req.headers['X-Tenant-Code'] = t; return req; }");
     });
     app.UseExceptionHandler(ConfigureApiExceptionHandler);
     app.UseHsts();

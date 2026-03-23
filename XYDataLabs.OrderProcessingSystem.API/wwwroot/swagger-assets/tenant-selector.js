@@ -1,8 +1,9 @@
 (function () {
     const tenantStorageKey = 'order-processing:selected-tenant';
     const runtimeConfigurationUrl = '/api/v1/info/runtime-configuration';
-    // Security scheme key must match options.AddSecurityDefinition("TenantCode", ...) in Program.cs
-    const securityDefinitionKey = 'TenantCode';
+    // window.OrderProcessingActiveTenant is read by the Swagger UI requestInterceptor
+    // (configured in Program.cs UseSwaggerUI) to inject X-Tenant-Code on every API call.
+    // When login is added, the auth module sets the same global — no JS changes needed here.
     let selectedTenantCode = null;
     let availableTenants = [];
 
@@ -28,12 +29,8 @@
         }
     };
 
-    const authorizeWithTenant = tenantCode => {
-        if (!tenantCode || !window.ui?.preauthorizeApiKey) {
-            return;
-        }
-
-        window.ui.preauthorizeApiKey(securityDefinitionKey, tenantCode);
+    const setActiveTenant = tenantCode => {
+        window.OrderProcessingActiveTenant = tenantCode || null;
     };
 
     const resolveTenantCode = (payload, preferredTenantCode) => {
@@ -92,7 +89,7 @@
 
                 selectedTenantCode = newTenantCode;
                 persistTenantCode(selectedTenantCode);
-                authorizeWithTenant(selectedTenantCode);
+                setActiveTenant(selectedTenantCode);
             });
 
             container.appendChild(label);
@@ -150,20 +147,8 @@
         availableTenants = Array.isArray(payload.availableTenants) ? payload.availableTenants : [];
         selectedTenantCode = resolveTenantCode(payload, preferredTenantCode);
         persistTenantCode(selectedTenantCode);
+        setActiveTenant(selectedTenantCode);
         ensureSelector();
-
-        // Pre-authorize: Swagger UI's window.ui object may not be initialised at load time,
-        // so poll briefly until it is available and then call preauthorizeApiKey.
-        const waitForUiAndAuthorize = () => {
-            if (window.ui?.preauthorizeApiKey) {
-                authorizeWithTenant(selectedTenantCode);
-                return;
-            }
-
-            window.setTimeout(waitForUiAndAuthorize, 200);
-        };
-
-        waitForUiAndAuthorize();
     };
 
     window.addEventListener('load', () => {
