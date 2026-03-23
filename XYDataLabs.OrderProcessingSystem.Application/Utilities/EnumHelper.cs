@@ -26,5 +26,25 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Utilities
             }
             return null;  // Return null if description not found
         }
+
+        /// <summary>
+        /// Normalises a raw OpenPay payment status string to the canonical internal status value
+        /// used across all payment tables (TransactionStatus, PaymentStatus enum descriptions).
+        /// </summary>
+        public static string? NormalizeOpenPayStatus(string? status)
+        {
+            if (string.IsNullOrWhiteSpace(status))
+                return null;
+
+            var upper = status.Trim().ToUpperInvariant();
+            return upper switch
+            {
+                "COMPLETED" or "SUCCESS" or "PAID" => "completed",
+                "CHARGE_PENDING" or "PENDING" or "IN_PROGRESS" => "charge_pending",
+                "FAILED" or "DECLINED" or "ERROR" => "failed",
+                "CANCELLED" or "CANCELED" => "cancelled",
+                _ => upper
+            };
+        }
     }
 }

@@ -213,11 +213,17 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         _context.BillingCustomers.Add(billingCustomer);
         await _context.SaveChangesAsync(cancellationToken);
 
+        // Id is now assigned by the database — backfill the audit column in the same batch as the key info insert
+        billingCustomer.CreatedBy = billingCustomer.Id;
+        _context.BillingCustomers.Update(billingCustomer);
+
         var keyInfo = new BillingCustomerKeyInfo
         {
             BillingCustomerId = billingCustomer.Id,
             KeyName = "CreationDate",
-            KeyValue = billingCustomer.CreatedDate?.ToString("O", System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty
+            KeyValue = billingCustomer.CreatedDate?.ToString("O", System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty,
+            CreatedBy = billingCustomer.Id,
+            CreatedDate = billingCustomer.CreatedDate
         };
 
         _context.BillingCustomerKeyInfos.Add(keyInfo);
@@ -288,6 +294,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             Notes = "Card tokenization successful",
             PaymentTraceId = paymentTraceId,
             ThreeDSecureStage = EnumHelper.GetEnumDescription(ThreeDSecureStage.TokenizationCompleted),
+            IsThreeDSecureEnabled = false,
             CreatedBy = billingCustomerId,
             CreatedDate = _timeProvider.GetUtcNow().UtcDateTime
         };
@@ -384,7 +391,8 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             TransactionType = EnumHelper.GetEnumDescription(TransactionType.Charge),
             CustomerOrderId = customerOrderId,
             AttemptOrderId = chargeRequest.OrderId,
-            TransactionStatus = charge.Status,
+            Description = chargeRequest.Description,
+            TransactionStatus = EnumHelper.NormalizeOpenPayStatus(charge.Status) ?? "unknown",
             TransactionDate = charge.CreationDate,
             Amount = charge.Amount,
             CurrencyCode = AppMasterConstant.DefaultCurrencyCode,
@@ -409,10 +417,11 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         {
             TransactionId = cardTransaction.Id,
             AttemptOrderId = chargeRequest.OrderId,
-            Status = charge.Status,
+            Status = EnumHelper.NormalizeOpenPayStatus(charge.Status) ?? "unknown",
             Notes = charge.ErrorMessage,
             PaymentTraceId = paymentTraceId,
             ThreeDSecureStage = threeDSecureStage,
+            IsThreeDSecureEnabled = isThreeDSecureEnabled,
             CreatedBy = billingCustomerId,
             CreatedDate = _timeProvider.GetUtcNow().UtcDateTime
         };

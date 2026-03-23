@@ -29,6 +29,8 @@ namespace XYDataLabs.OrderProcessingSystem.Domain.Entities
         [MaxLength(64)]
         public string? ThreeDSecureStage { get; set; }
 
+        public bool IsThreeDSecureEnabled { get; set; }
+
         [ForeignKey(nameof(TransactionId))]
         public virtual CardTransaction Transaction { get; set; } = null!;
     }

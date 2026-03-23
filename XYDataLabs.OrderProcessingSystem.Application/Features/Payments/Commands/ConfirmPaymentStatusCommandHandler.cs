@@ -188,6 +188,7 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
                 Notes = $"Browser callback payload received for trace {transaction.PaymentTraceId}",
                 PaymentTraceId = transaction.PaymentTraceId,
                 ThreeDSecureStage = EnumHelper.GetEnumDescription(ThreeDSecureStage.CallbackReceived),
+                IsThreeDSecureEnabled = transaction.IsThreeDSecureEnabled,
                 CreatedBy = transaction.CustomerId,
                 CreatedDate = now
             });
@@ -201,6 +202,7 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
             Notes = BuildAuditMessage(command, remoteCharge, resolvedStatus, resolvedThreeDSecureStage, transaction.PaymentTraceId),
             PaymentTraceId = transaction.PaymentTraceId,
             ThreeDSecureStage = resolvedThreeDSecureStage,
+            IsThreeDSecureEnabled = transaction.IsThreeDSecureEnabled,
             CreatedBy = transaction.CustomerId,
             CreatedDate = now
         });
@@ -266,23 +268,7 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
     }
 
     private static string? NormalizeStatus(string? status)
-    {
-        if (string.IsNullOrWhiteSpace(status))
-        {
-            return null;
-        }
-
-        var normalizedStatus = status.Trim().ToUpperInvariant();
-
-        return normalizedStatus switch
-        {
-            "COMPLETED" or "SUCCESS" or "PAID" => "completed",
-            "CHARGE_PENDING" or "PENDING" or "IN_PROGRESS" => "charge_pending",
-            "FAILED" or "DECLINED" or "ERROR" => "failed",
-            "CANCELLED" or "CANCELED" => "cancelled",
-            _ => normalizedStatus
-        };
-    }
+        => EnumHelper.NormalizeOpenPayStatus(status);
 
     private static string ToStatusCategory(string status)
     {
