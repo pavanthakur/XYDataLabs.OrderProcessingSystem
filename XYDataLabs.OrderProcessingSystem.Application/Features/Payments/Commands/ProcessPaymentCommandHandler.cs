@@ -124,7 +124,6 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             {
                 Id = charge.Id,
                 CustomerOrderId = customerOrderId,
-                AttemptOrderId = attemptOrderId,
                 CustomerId = openpayCustomer.Id,
                 Amount = new decimal(100.00),
                 Currency = AppMasterConstant.DefaultCurrencyCode,
