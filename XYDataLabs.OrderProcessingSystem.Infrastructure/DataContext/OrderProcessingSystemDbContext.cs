@@ -149,6 +149,9 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
             modelBuilder.Entity<TransactionStatusHistory>()
                 .HasIndex(tsh => new { tsh.TenantId, tsh.AttemptOrderId });
 
+            modelBuilder.Entity<TransactionStatusHistory>()
+                .HasIndex(tsh => new { tsh.TenantId, tsh.TransactionReferenceId });
+
             modelBuilder.Entity<PaymentMethod>()
                 .HasIndex(pm => pm.Token)
                 .IsUnique();

@@ -31,7 +31,10 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Utilities
             Failed = 3,
 
             [Description("unknown")]
-            Unknown = 4
+            Unknown = 4,
+
+            [Description("cancelled")]
+            Cancelled = 5
         }
 
         public enum TransactionType

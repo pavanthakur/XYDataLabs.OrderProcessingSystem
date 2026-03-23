@@ -116,7 +116,9 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             await UpdatePaymentMethodByBillingCustomerIdAsync(paymentMethod.Id, billingCustomerId, cancellationToken);
             var createdCard = await CreateCardTokenAsync(request, openpayCustomer, billingCustomerId, customerOrderId, attemptOrderId, paymentTraceId, cancellationToken);
             var charge = await CreateChargeAsync(request, openpayCustomer, createdCard.Id, paymentMethod, billingCustomerId, customerOrderId, attemptOrderId, paymentTraceId, isThreeDSecureEnabled, redirectUrl, cancellationToken);
-            var threeDSecureStage = ResolveChargeThreeDSecureStage(charge.Status, isThreeDSecureEnabled, charge.PaymentMethod?.Url);
+            var normalizedChargeStatus = EnumHelper.NormalizeOpenPayStatus(charge.Status)
+                ?? EnumHelper.GetEnumDescription(PaymentStatus.Unknown);
+            var threeDSecureStage = ResolveChargeThreeDSecureStage(normalizedChargeStatus, isThreeDSecureEnabled, charge.PaymentMethod?.Url);
 
             return new PaymentDto
             {
@@ -126,7 +128,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
                 CustomerId = openpayCustomer.Id,
                 Amount = new decimal(100.00),
                 Currency = AppMasterConstant.DefaultCurrencyCode,
-                Status = charge.Status ?? "unknown",
+                Status = normalizedChargeStatus,
                 CreatedAt = charge.CreationDate ?? _timeProvider.GetUtcNow().UtcDateTime,
                 TransactionId = charge.Authorization,
                 ThreeDSecureUrl = charge.PaymentMethod?.Url,
@@ -341,7 +343,9 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
 
         var charge = await _openPayAdapterService.CreateChargeAsync(chargeRequest);
         _logger.LogInformation("Charge created with ID: {ChargeId}", charge.Id);
-        var threeDSecureStage = ResolveChargeThreeDSecureStage(charge.Status, isThreeDSecureEnabled, charge.PaymentMethod?.Url);
+        var normalizedChargeStatus = EnumHelper.NormalizeOpenPayStatus(charge.Status)
+            ?? EnumHelper.GetEnumDescription(PaymentStatus.Unknown);
+        var threeDSecureStage = ResolveChargeThreeDSecureStage(normalizedChargeStatus, isThreeDSecureEnabled, charge.PaymentMethod?.Url);
 
         var payinLog = new PayinLog
         {
@@ -359,7 +363,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             Currency = AppMasterConstant.DefaultCurrencyCode,
             IsThreeDSecureEnabled = isThreeDSecureEnabled,
             ThreeDSecureStage = threeDSecureStage,
-            Result = EnumHelper.GetEnumIdFromDescription<PaymentStatus>(charge.Status) ?? (int)PaymentStatus.Unknown,
+            Result = EnumHelper.GetEnumIdFromDescription<PaymentStatus>(normalizedChargeStatus) ?? (int)PaymentStatus.Unknown,
             CreatedBy = billingCustomerId,
             CreatedDate = _timeProvider.GetUtcNow().UtcDateTime
         };
@@ -392,11 +396,11 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             CustomerOrderId = customerOrderId,
             AttemptOrderId = chargeRequest.OrderId,
             Description = chargeRequest.Description,
-            TransactionStatus = EnumHelper.NormalizeOpenPayStatus(charge.Status) ?? "unknown",
+            TransactionStatus = normalizedChargeStatus,
             TransactionDate = charge.CreationDate,
             Amount = charge.Amount,
             CurrencyCode = AppMasterConstant.DefaultCurrencyCode,
-            IsTransactionSuccess = string.Equals(charge.Status, "completed", StringComparison.OrdinalIgnoreCase),
+            IsTransactionSuccess = EnumHelper.IsSuccessStatus(normalizedChargeStatus),
             IsThreeDSecureEnabled = isThreeDSecureEnabled,
             ThreeDSecureStage = threeDSecureStage,
             RedirectUrl = charge.PaymentMethod?.Url,
@@ -417,11 +421,12 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         {
             TransactionId = cardTransaction.Id,
             AttemptOrderId = chargeRequest.OrderId,
-            Status = EnumHelper.NormalizeOpenPayStatus(charge.Status) ?? "unknown",
+            Status = normalizedChargeStatus,
             Notes = charge.ErrorMessage,
             PaymentTraceId = paymentTraceId,
             ThreeDSecureStage = threeDSecureStage,
             IsThreeDSecureEnabled = isThreeDSecureEnabled,
+            TransactionReferenceId = charge.Authorization,
             CreatedBy = billingCustomerId,
             CreatedDate = _timeProvider.GetUtcNow().UtcDateTime
         };
@@ -453,30 +458,22 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             : customerOrderId.Trim();
     }
 
-    private static string ResolveChargeThreeDSecureStage(string? status, bool isThreeDSecureEnabled, string? redirectUrl)
+    private static string ResolveChargeThreeDSecureStage(string? normalizedStatus, bool isThreeDSecureEnabled, string? redirectUrl)
     {
         if (!isThreeDSecureEnabled)
-        {
             return EnumHelper.GetEnumDescription(ThreeDSecureStage.NotApplicable);
-        }
 
-        var normalizedStatus = status?.Trim().ToUpperInvariant();
-        if (string.Equals(normalizedStatus, "COMPLETED", StringComparison.Ordinal))
-        {
+        if (EnumHelper.IsSuccessStatus(normalizedStatus))
             return EnumHelper.GetEnumDescription(ThreeDSecureStage.Completed);
-        }
 
-        if (string.Equals(normalizedStatus, "FAILED", StringComparison.Ordinal)
-            || string.Equals(normalizedStatus, "DECLINED", StringComparison.Ordinal)
-            || string.Equals(normalizedStatus, "ERROR", StringComparison.Ordinal))
-        {
+        if (EnumHelper.IsFailedStatus(normalizedStatus))
             return EnumHelper.GetEnumDescription(ThreeDSecureStage.Failed);
-        }
+
+        if (EnumHelper.IsCancelledStatus(normalizedStatus))
+            return EnumHelper.GetEnumDescription(ThreeDSecureStage.Cancelled);
 
         if (!string.IsNullOrWhiteSpace(redirectUrl))
-        {
             return EnumHelper.GetEnumDescription(ThreeDSecureStage.RedirectIssued);
-        }
 
         return EnumHelper.GetEnumDescription(ThreeDSecureStage.ChargeRequested);
     }

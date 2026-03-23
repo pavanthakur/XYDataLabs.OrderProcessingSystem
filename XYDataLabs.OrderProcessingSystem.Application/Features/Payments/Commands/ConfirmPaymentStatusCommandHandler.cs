@@ -131,12 +131,12 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
             PaymentId = command.PaymentId,
             CustomerOrderId = transaction.CustomerOrderId,
             Status = resolvedStatus,
-            StatusCategory = ToStatusCategory(resolvedStatus),
-            StatusMessage = ToStatusMessage(resolvedStatus, remoteStatusConfirmed),
-            IsSuccess = IsSuccessStatus(resolvedStatus),
-            IsPending = IsPendingStatus(resolvedStatus),
-            IsFailure = IsFailureStatus(resolvedStatus),
-            IsFinal = IsFinalStatus(resolvedStatus),
+            StatusCategory = EnumHelper.ToStatusCategory(resolvedStatus),
+            StatusMessage = EnumHelper.ToStatusMessage(resolvedStatus, remoteStatusConfirmed),
+            IsSuccess = EnumHelper.IsSuccessStatus(resolvedStatus),
+            IsPending = EnumHelper.IsPendingStatus(resolvedStatus),
+            IsFailure = EnumHelper.IsFailureStatus(resolvedStatus),
+            IsFinal = EnumHelper.IsFinalStatus(resolvedStatus),
             CallbackRecorded = callbackRecorded,
             RemoteStatusConfirmed = remoteStatusConfirmed,
             StatusSource = remoteStatusConfirmed ? "openpay" : "database",
@@ -169,7 +169,7 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
         }
 
         transaction.TransactionStatus = resolvedStatus;
-        transaction.IsTransactionSuccess = IsSuccessStatus(resolvedStatus);
+        transaction.IsTransactionSuccess = EnumHelper.IsSuccessStatus(resolvedStatus);
         transaction.TransactionMessage = resolvedErrorMessage ?? BuildAuditMessage(command, remoteCharge, resolvedStatus, resolvedThreeDSecureStage, transaction.PaymentTraceId);
         transaction.TransactionReferenceId = FirstNonEmpty(remoteCharge?.Authorization, transaction.TransactionReferenceId);
         transaction.TransactionDate = remoteCharge?.CreationDate ?? transaction.TransactionDate;
@@ -189,6 +189,7 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
                 PaymentTraceId = transaction.PaymentTraceId,
                 ThreeDSecureStage = EnumHelper.GetEnumDescription(ThreeDSecureStage.CallbackReceived),
                 IsThreeDSecureEnabled = transaction.IsThreeDSecureEnabled,
+                TransactionReferenceId = transaction.TransactionReferenceId,
                 CreatedBy = transaction.CustomerId,
                 CreatedDate = now
             });
@@ -203,6 +204,7 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
             PaymentTraceId = transaction.PaymentTraceId,
             ThreeDSecureStage = resolvedThreeDSecureStage,
             IsThreeDSecureEnabled = transaction.IsThreeDSecureEnabled,
+            TransactionReferenceId = transaction.TransactionReferenceId,
             CreatedBy = transaction.CustomerId,
             CreatedDate = now
         });
@@ -270,52 +272,6 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
     private static string? NormalizeStatus(string? status)
         => EnumHelper.NormalizeOpenPayStatus(status);
 
-    private static string ToStatusCategory(string status)
-    {
-        return status switch
-        {
-            "completed" => "success",
-            "charge_pending" => "warning",
-            "failed" => "danger",
-            "cancelled" => "secondary",
-            _ => "info"
-        };
-    }
-
-    private static string ToStatusMessage(string status, bool remoteStatusConfirmed)
-    {
-        return status switch
-        {
-            "completed" => remoteStatusConfirmed
-                ? "Payment completed successfully and the final status was confirmed with OpenPay."
-                : "Payment completed successfully based on the latest local record.",
-            "charge_pending" => remoteStatusConfirmed
-                ? "Payment is still pending issuer or 3D Secure completion according to OpenPay."
-                : "Payment is still pending confirmation based on the latest local record.",
-            "failed" => remoteStatusConfirmed
-                ? "Payment failed and the final status was confirmed with OpenPay."
-                : "Payment failed based on the latest local record.",
-            "cancelled" => remoteStatusConfirmed
-                ? "Payment was cancelled and the final status was confirmed with OpenPay."
-                : "Payment was cancelled based on the latest local record.",
-            _ => remoteStatusConfirmed
-                ? "Payment callback was received, but OpenPay returned a status that is not explicitly mapped yet."
-                : "Payment callback was received, but the final status could not be confirmed remotely."
-        };
-    }
-
-    private static bool IsSuccessStatus(string status) => string.Equals(status, "completed", StringComparison.Ordinal);
-
-    private static bool IsPendingStatus(string status)
-        => string.Equals(status, "charge_pending", StringComparison.Ordinal)
-            || string.Equals(status, "pending", StringComparison.Ordinal);
-
-    private static bool IsFailureStatus(string status)
-        => string.Equals(status, "failed", StringComparison.Ordinal)
-            || string.Equals(status, "cancelled", StringComparison.Ordinal);
-
-    private static bool IsFinalStatus(string status) => IsSuccessStatus(status) || IsFailureStatus(status);
-
     private static string? FirstNonEmpty(params string?[] values)
     {
         return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
@@ -324,34 +280,22 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
     private static string ResolveThreeDSecureStage(string resolvedStatus, bool isThreeDSecureEnabled, bool callbackPayloadReceived, bool remoteStatusConfirmed)
     {
         if (!isThreeDSecureEnabled)
-        {
             return EnumHelper.GetEnumDescription(ThreeDSecureStage.NotApplicable);
-        }
 
-        if (IsSuccessStatus(resolvedStatus))
-        {
+        if (EnumHelper.IsSuccessStatus(resolvedStatus))
             return EnumHelper.GetEnumDescription(ThreeDSecureStage.Completed);
-        }
 
-        if (string.Equals(resolvedStatus, "failed", StringComparison.Ordinal))
-        {
+        if (EnumHelper.IsFailedStatus(resolvedStatus))
             return EnumHelper.GetEnumDescription(ThreeDSecureStage.Failed);
-        }
 
-        if (string.Equals(resolvedStatus, "cancelled", StringComparison.Ordinal))
-        {
+        if (EnumHelper.IsCancelledStatus(resolvedStatus))
             return EnumHelper.GetEnumDescription(ThreeDSecureStage.Cancelled);
-        }
 
-        if (remoteStatusConfirmed && IsPendingStatus(resolvedStatus))
-        {
+        if (remoteStatusConfirmed && EnumHelper.IsPendingStatus(resolvedStatus))
             return EnumHelper.GetEnumDescription(ThreeDSecureStage.PendingConfirmation);
-        }
 
         if (callbackPayloadReceived)
-        {
             return EnumHelper.GetEnumDescription(ThreeDSecureStage.CallbackReceived);
-        }
 
         return EnumHelper.GetEnumDescription(ThreeDSecureStage.Unknown);
     }
