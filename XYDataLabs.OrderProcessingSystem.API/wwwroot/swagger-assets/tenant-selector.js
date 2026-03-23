@@ -1,7 +1,8 @@
 (function () {
     const tenantStorageKey = 'order-processing:selected-tenant';
     const runtimeConfigurationUrl = '/api/v1/info/runtime-configuration';
-    const tenantHeaderName = 'X-Tenant-Code';
+    // Security scheme key must match options.AddSecurityDefinition("TenantCode", ...) in Program.cs
+    const securityDefinitionKey = 'TenantCode';
     let selectedTenantCode = null;
     let availableTenants = [];
 
@@ -27,53 +28,12 @@
         }
     };
 
-    const syncTenantHeaderInputs = () => {
-        if (!selectedTenantCode) {
+    const authorizeWithTenant = tenantCode => {
+        if (!tenantCode || !window.ui?.preauthorizeApiKey) {
             return;
         }
 
-        const tenantParameterNames = Array.from(document.querySelectorAll('.parameter__name, .parameters-col_name'))
-            .filter(element => element.textContent?.trim() === tenantHeaderName);
-
-        for (const parameterName of tenantParameterNames) {
-            const parameterContainer = parameterName.closest('tr')
-                || parameterName.closest('.parameter__in')
-                || parameterName.closest('.parameters-container')
-                || parameterName.parentElement;
-
-            if (!parameterContainer) {
-                continue;
-            }
-
-            const inputs = Array.from(parameterContainer.querySelectorAll('input, textarea'))
-                .filter(input => input.id !== 'swagger-tenant-selector');
-
-            for (const input of inputs) {
-                if (input.value === selectedTenantCode) {
-                    lockTenantHeaderInput(input);
-                    continue;
-                }
-
-                input.value = selectedTenantCode;
-                input.dispatchEvent(new Event('input', { bubbles: true }));
-                input.dispatchEvent(new Event('change', { bubbles: true }));
-                lockTenantHeaderInput(input);
-            }
-        }
-    };
-
-    const lockTenantHeaderInput = input => {
-        input.readOnly = true;
-        input.setAttribute('aria-readonly', 'true');
-        input.setAttribute('title', 'Controlled by the Swagger tenant selector.');
-        input.style.backgroundColor = '#f3f4f6';
-        input.style.cursor = 'not-allowed';
-    };
-
-    const scheduleTenantHeaderSync = () => {
-        window.setTimeout(syncTenantHeaderInputs, 0);
-        window.setTimeout(syncTenantHeaderInputs, 150);
-        window.setTimeout(syncTenantHeaderInputs, 500);
+        window.ui.preauthorizeApiKey(securityDefinitionKey, tenantCode);
     };
 
     const resolveTenantCode = (payload, preferredTenantCode) => {
@@ -92,40 +52,6 @@
         }
 
         return tenants[0]?.tenantCode || null;
-    };
-
-    const patchFetch = () => {
-        if (window.__orderProcessingTenantFetchPatched) {
-            return;
-        }
-
-        const originalFetch = window.fetch.bind(window);
-        window.fetch = function (input, init) {
-            const requestUrl = input instanceof Request ? input.url : input;
-            const absoluteUrl = new URL(requestUrl, window.location.origin);
-            const isSameOriginApiRequest = absoluteUrl.origin === window.location.origin
-                && absoluteUrl.pathname.startsWith('/api/');
-            const isRuntimeConfigurationRequest = absoluteUrl.pathname === runtimeConfigurationUrl;
-
-            if (!isSameOriginApiRequest || isRuntimeConfigurationRequest || !selectedTenantCode) {
-                return originalFetch(input, init);
-            }
-
-            if (input instanceof Request) {
-                const headers = new Headers(init?.headers || input.headers || undefined);
-                headers.set(tenantHeaderName, selectedTenantCode);
-                return originalFetch(new Request(input, { headers }), init);
-            }
-
-            const requestInit = { ...(init || {}) };
-            const headers = new Headers(requestInit.headers || undefined);
-            headers.set(tenantHeaderName, selectedTenantCode);
-            requestInit.headers = headers;
-
-            return originalFetch(input, requestInit);
-        };
-
-        window.__orderProcessingTenantFetchPatched = true;
     };
 
     const upsertSelector = () => {
@@ -166,7 +92,7 @@
 
                 selectedTenantCode = newTenantCode;
                 persistTenantCode(selectedTenantCode);
-                reloadSwaggerUi();
+                authorizeWithTenant(selectedTenantCode);
             });
 
             container.appendChild(label);
@@ -191,8 +117,6 @@
             select.value = selectedTenantCode;
         }
 
-        scheduleTenantHeaderSync();
-
         return true;
     };
 
@@ -211,28 +135,12 @@
         tryRender();
     };
 
-    const reloadSwaggerUi = () => {
-        if (window.location.hash) {
-            window.location.assign(window.location.pathname + window.location.search);
-            return;
-        }
-
-        window.location.reload();
-    };
-
     const initialize = async () => {
-        patchFetch();
-
         const preferredTenantCode = getStoredTenantCode();
-        const headers = {
-            'Accept': 'application/json'
-        };
 
-        if (preferredTenantCode) {
-            headers[tenantHeaderName] = preferredTenantCode;
-        }
-
-        const response = await window.fetch(runtimeConfigurationUrl, { headers });
+        const response = await window.fetch(runtimeConfigurationUrl, {
+            headers: { 'Accept': 'application/json' }
+        });
         const payload = await response.json();
 
         if (!response.ok || !payload?.activeTenantCode) {
@@ -243,16 +151,19 @@
         selectedTenantCode = resolveTenantCode(payload, preferredTenantCode);
         persistTenantCode(selectedTenantCode);
         ensureSelector();
-        scheduleTenantHeaderSync();
 
-        const observer = new MutationObserver(() => {
-            scheduleTenantHeaderSync();
-        });
+        // Pre-authorize: Swagger UI's window.ui object may not be initialised at load time,
+        // so poll briefly until it is available and then call preauthorizeApiKey.
+        const waitForUiAndAuthorize = () => {
+            if (window.ui?.preauthorizeApiKey) {
+                authorizeWithTenant(selectedTenantCode);
+                return;
+            }
 
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
+            window.setTimeout(waitForUiAndAuthorize, 200);
+        };
+
+        waitForUiAndAuthorize();
     };
 
     window.addEventListener('load', () => {

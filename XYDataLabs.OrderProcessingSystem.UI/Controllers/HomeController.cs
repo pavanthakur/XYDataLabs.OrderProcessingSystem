@@ -64,6 +64,7 @@ namespace XYDataLabs.OrderProcessingSystem.UI.Controllers
 
             ViewData["ApiBaseUrl"] = apiBaseUrl;
             ViewData["Environment"] = environmentName.ToUpperInvariant();
+            ViewData["IsDevelopment"] = string.Equals(environmentName, Constants.Environments.Dev, StringComparison.Ordinal);
             ViewData["EnvironmentColor"] = environmentName switch
             {
                 Constants.Environments.Dev => "success",

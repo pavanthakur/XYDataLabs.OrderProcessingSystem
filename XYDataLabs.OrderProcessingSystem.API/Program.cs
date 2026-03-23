@@ -199,7 +199,34 @@ builder.Services.AddSwaggerGen(options =>
 {
     var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
-    options.OperationFilter<TenantHeaderOperationFilter>();
+
+    // Declare X-Tenant-Code as a global ApiKey security scheme so the developer sets it
+    // once in the Authorize dialog and it is automatically applied to every API call.
+    options.AddSecurityDefinition("TenantCode", new OpenApiSecurityScheme
+    {
+        Name = TenantMiddleware.TenantHeaderName,
+        Type = SecuritySchemeType.ApiKey,
+        In = ParameterLocation.Header,
+        Description = "Canonical tenant code. Set once in the Authorize dialog (or use the top tenant dropdown) — applied automatically to every API call."
+    });
+
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "TenantCode"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+
+    // Remove redundant per-endpoint X-Tenant-Code parameter — covered by the global scheme above.
+    options.OperationFilter<RemoveTenantHeaderParameterFilter>();
 
     if (File.Exists(xmlPath))
     {
