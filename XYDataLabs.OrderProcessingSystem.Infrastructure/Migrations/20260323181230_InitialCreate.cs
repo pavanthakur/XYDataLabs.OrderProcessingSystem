@@ -21,6 +21,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                     Code = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false),
                     Name = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: false),
                     Status = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false),
+                    TenantTier = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    ConnectionString = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
                     CreatedBy = table.Column<int>(type: "int", nullable: true),
                     CreatedDate = table.Column<DateTime>(type: "datetime2", nullable: true),
                     UpdatedBy = table.Column<int>(type: "int", nullable: true),
@@ -615,11 +617,23 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                 name: "IX_TransactionStatusHistories_TransactionId",
                 table: "TransactionStatusHistories",
                 column: "TransactionId");
+
+            // Seed baseline tenants (required for application startup — DbInitializer depends on these rows)
+            migrationBuilder.Sql(@"
+SET IDENTITY_INSERT [Tenants] ON;
+INSERT INTO [Tenants] ([Id], [ExternalId], [Code], [Name], [Status], [TenantTier], [CreatedBy], [CreatedDate], [ConnectionString], [UpdatedBy], [UpdatedDate])
+VALUES
+    (1, N'tnt_ext_tenanta_20260322', N'TenantA', N'Tenant A', N'Active', N'SharedPool', 1, SYSUTCDATETIME(), NULL, NULL, NULL),
+    (2, N'tnt_ext_tenantb_20260322', N'TenantB', N'Tenant B', N'Active', N'SharedPool', 1, SYSUTCDATETIME(), NULL, NULL, NULL);
+SET IDENTITY_INSERT [Tenants] OFF;
+");
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.Sql("DELETE FROM [Tenants] WHERE [Id] IN (1, 2);");
+
             migrationBuilder.DropTable(
                 name: "BillingCustomerKeyInfos");
 

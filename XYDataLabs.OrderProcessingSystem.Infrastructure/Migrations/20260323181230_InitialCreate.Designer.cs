@@ -12,7 +12,7 @@ using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 {
     [DbContext(typeof(OrderProcessingSystemDbContext))]
-    [Migration("20260323173753_InitialCreate")]
+    [Migration("20260323181230_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -673,6 +673,10 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("nvarchar(32)");
 
+                    b.Property<string>("ConnectionString")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<int?>("CreatedBy")
                         .HasColumnType("int");
 
@@ -693,6 +697,11 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("TenantTier")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<int?>("UpdatedBy")
                         .HasColumnType("int");

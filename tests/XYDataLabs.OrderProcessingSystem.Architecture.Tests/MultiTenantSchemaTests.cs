@@ -89,6 +89,47 @@ public class MultiTenantSchemaTests
         typeof(PaymentStatusLookupRequestDto).GetProperty("OrderId").Should().BeNull();
     }
 
+    [Fact]
+    public void Tenant_Should_Have_TenantTier_Column()
+    {
+        using var context = CreateDbContext();
+        var tenantEntity = context.Model.FindEntityType(typeof(Tenant));
+
+        tenantEntity.Should().NotBeNull();
+        var property = tenantEntity!.FindProperty(nameof(Tenant.TenantTier));
+        property.Should().NotBeNull(because: "the Tenant entity must have a TenantTier column for hybrid multitenancy");
+        property!.IsNullable.Should().BeFalse(because: "TenantTier is required");
+        property.GetMaxLength().Should().Be(20);
+    }
+
+    [Fact]
+    public void Tenant_Should_Have_ConnectionString_Column()
+    {
+        using var context = CreateDbContext();
+        var tenantEntity = context.Model.FindEntityType(typeof(Tenant));
+
+        tenantEntity.Should().NotBeNull();
+        var property = tenantEntity!.FindProperty(nameof(Tenant.ConnectionString));
+        property.Should().NotBeNull(because: "the Tenant entity must have a ConnectionString column for dedicated database routing");
+        property!.IsNullable.Should().BeTrue(because: "ConnectionString is null for SharedPool tenants");
+        property.GetMaxLength().Should().Be(500);
+    }
+
+    [Fact]
+    public void TenantRegistryDbContext_Tenant_Should_Not_Have_Global_Query_Filter()
+    {
+        var options = new DbContextOptionsBuilder<TenantRegistryDbContext>()
+            .UseSqlServer("Server=(localdb)\\mssqllocaldb;Database=SchemaTests_DoNotConnect;Trusted_Connection=True;")
+            .Options;
+
+        using var registryContext = new TenantRegistryDbContext(options);
+        var tenantEntity = registryContext.Model.FindEntityType(typeof(Tenant));
+
+        tenantEntity.Should().NotBeNull();
+        tenantEntity!.GetQueryFilter().Should().BeNull(
+            because: "TenantRegistryDbContext must not apply query filters — it is used for pre-auth tenant resolution");
+    }
+
     private static bool HasIndex(IEntityType? entityType, params string[] propertyNames)
     {
         entityType.Should().NotBeNull();

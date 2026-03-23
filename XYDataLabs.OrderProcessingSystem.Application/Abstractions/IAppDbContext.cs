@@ -10,7 +10,6 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 /// </summary>
 public interface IAppDbContext
 {
-    DbSet<Tenant> Tenants { get; }
     DbSet<Customer> Customers { get; }
     DbSet<Product> Products { get; }
     DbSet<Order> Orders { get; }

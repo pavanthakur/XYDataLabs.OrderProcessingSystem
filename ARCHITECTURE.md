@@ -39,6 +39,8 @@ public class Tenant
     public string Code { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
+    public string TenantTier { get; set; } = "SharedPool";   // "SharedPool" | "Dedicated"
+    public string? ConnectionString { get; set; }             // null for SharedPool; dedicated DB connection for Dedicated
     public int? CreatedBy { get; set; }
     public DateTime? CreatedDate { get; set; }
     public int? UpdatedBy { get; set; }
@@ -74,6 +76,8 @@ public interface ITenantProvider
     int TenantId { get; }
     string TenantCode { get; }
     string TenantExternalId { get; }
+    string? ConnectionString { get; }
+    bool IsSharedPool { get; }
 }
 ```
 

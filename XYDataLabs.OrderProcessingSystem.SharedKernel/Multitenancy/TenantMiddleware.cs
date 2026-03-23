@@ -75,6 +75,7 @@ public sealed class TenantMiddleware
         using (LogContext.PushProperty("TenantId", tenantContext.TenantId))
         using (LogContext.PushProperty("TenantCode", tenantContext.TenantCode))
         using (LogContext.PushProperty("TenantExternalId", tenantContext.TenantExternalId))
+        using (LogContext.PushProperty("TenantTier", tenantContext.IsSharedPool ? "SharedPool" : "Dedicated"))
         {
             await _next(context);
         }

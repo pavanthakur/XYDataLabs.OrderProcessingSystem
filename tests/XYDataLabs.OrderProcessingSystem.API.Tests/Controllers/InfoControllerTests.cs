@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
-using Moq.EntityFrameworkCore;
 using XYDataLabs.OrderProcessingSystem.API.Controllers;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
@@ -19,8 +18,8 @@ public class InfoControllerTests
     public async Task GetRuntimeConfiguration_ReturnsActiveTenantConfiguration()
     {
         var controller = CreateController("TenantA", [
-            new Tenant { Id = 1, Code = "TenantA", Name = "Tenant A", Status = "Active" },
-            new Tenant { Id = 2, Code = "TenantB", Name = "Tenant B", Status = "Active" }
+            new TenantInfo(1, "TenantA", "Tenant A"),
+            new TenantInfo(2, "TenantB", "Tenant B")
         ]);
 
         var result = await controller.GetRuntimeConfiguration(CancellationToken.None);
@@ -43,8 +42,8 @@ public class InfoControllerTests
     public async Task GetRuntimeConfiguration_ReturnsRequestedTenant_WhenHeaderMatchesActiveTenant()
     {
         var controller = CreateController("TenantA", [
-            new Tenant { Id = 1, Code = "TenantA", Name = "Tenant A", Status = "Active" },
-            new Tenant { Id = 2, Code = "TenantB", Name = "Tenant B", Status = "Active" }
+            new TenantInfo(1, "TenantA", "Tenant A"),
+            new TenantInfo(2, "TenantB", "Tenant B")
         ]);
         controller.ControllerContext = new ControllerContext
         {
@@ -63,7 +62,7 @@ public class InfoControllerTests
     public async Task GetRuntimeConfiguration_ReturnsProblem_WhenActiveTenantCodeIsMissing()
     {
         var controller = CreateController(string.Empty, [
-            new Tenant { Id = 1, Code = "TenantA", Name = "Tenant A", Status = "Active" }
+            new TenantInfo(1, "TenantA", "Tenant A")
         ]);
 
         var result = await controller.GetRuntimeConfiguration(CancellationToken.None);
@@ -72,14 +71,16 @@ public class InfoControllerTests
         objectResult.StatusCode.Should().Be(500);
     }
 
-    private static InfoController CreateController(string activeTenantCode, IEnumerable<Tenant> tenants)
+    private static InfoController CreateController(string activeTenantCode, IReadOnlyList<TenantInfo> tenants)
     {
-        var dbContext = new Mock<IAppDbContext>();
-        dbContext.Setup(context => context.Tenants).ReturnsDbSet(tenants);
+        var tenantRegistry = new Mock<ITenantRegistry>();
+        tenantRegistry
+            .Setup(r => r.GetActiveTenantsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(tenants);
 
         return new InfoController(
             Mock.Of<ILogger<InfoController>>(),
-            dbContext.Object,
+            tenantRegistry.Object,
             Options.Create(new TenantConfigurationOptions { ActiveTenantCode = activeTenantCode }),
             TimeProvider.System);
     }

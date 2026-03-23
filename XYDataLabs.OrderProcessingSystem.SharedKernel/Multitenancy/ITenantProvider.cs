@@ -12,4 +12,8 @@ public interface ITenantProvider
     string TenantCode { get; }
 
     string TenantExternalId { get; }
+
+    string? ConnectionString { get; }
+
+    bool IsSharedPool { get; }
 }

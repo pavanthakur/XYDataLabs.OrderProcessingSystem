@@ -1,6 +1,5 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using System.Globalization;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
@@ -17,23 +16,23 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
     {
         private const string ActiveTenantStatus = "Active";
         private readonly ILogger<InfoController> _logger;
-        private readonly IAppDbContext _appDbContext;
+        private readonly ITenantRegistry _tenantRegistry;
         private readonly TenantConfigurationOptions _tenantConfigurationOptions;
         private readonly TimeProvider _timeProvider;
 
         public InfoController(
             ILogger<InfoController> logger,
-            IAppDbContext appDbContext,
+            ITenantRegistry tenantRegistry,
             IOptions<TenantConfigurationOptions> tenantConfigurationOptions,
             TimeProvider timeProvider)
         {
             ArgumentNullException.ThrowIfNull(logger);
-            ArgumentNullException.ThrowIfNull(appDbContext);
+            ArgumentNullException.ThrowIfNull(tenantRegistry);
             ArgumentNullException.ThrowIfNull(tenantConfigurationOptions);
             ArgumentNullException.ThrowIfNull(timeProvider);
 
             _logger = logger;
-            _appDbContext = appDbContext;
+            _tenantRegistry = tenantRegistry;
             _tenantConfigurationOptions = tenantConfigurationOptions.Value;
             _timeProvider = timeProvider;
         }
@@ -102,16 +101,10 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
                     title: "Active tenant configuration is missing.");
             }
 
-            var availableTenants = await _appDbContext.Tenants
-                .AsNoTracking()
-                .Where(tenant => tenant.Status == ActiveTenantStatus)
-                .OrderBy(tenant => tenant.Name)
-                .ThenBy(tenant => tenant.Code)
-                .Select(tenant => new AvailableTenantConfiguration(
-                    tenant.Id,
-                    tenant.Code,
-                    tenant.Name))
-                .ToListAsync(cancellationToken);
+            var activeTenantsList = await _tenantRegistry.GetActiveTenantsAsync(cancellationToken);
+            var availableTenants = activeTenantsList
+                .Select(t => new AvailableTenantConfiguration(t.TenantId, t.TenantCode, t.TenantName))
+                .ToList();
 
             if (availableTenants.Count == 0)
             {

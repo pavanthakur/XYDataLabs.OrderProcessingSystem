@@ -5,7 +5,7 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure;
 
 internal sealed record TestTenantContext(int TenantId, string TenantCode, string TenantExternalId, string TenantName, string TenantStatus)
 {
-    public TenantContext ToTenantContext() => new(TenantId, TenantCode, TenantExternalId, TenantName, TenantStatus);
+    public TenantContext ToTenantContext() => new(TenantId, TenantCode, TenantExternalId, TenantName, TenantStatus, ConnectionString: null, IsSharedPool: true);
 }
 
 internal sealed record OrderScenarioSeed(int CustomerId, int ProductId);

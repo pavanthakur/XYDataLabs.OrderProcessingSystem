@@ -5,4 +5,6 @@ public sealed record TenantContext(
     string TenantCode,
     string TenantExternalId,
     string TenantName,
-    string TenantStatus);
+    string TenantStatus,
+    string? ConnectionString,
+    bool IsSharedPool);

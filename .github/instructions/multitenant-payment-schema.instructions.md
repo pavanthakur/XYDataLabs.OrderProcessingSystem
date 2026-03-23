@@ -22,9 +22,32 @@ These rules are binding for all tenant, payment, DTO, migration, middleware, and
 - Missing or unknown tenant code → HTTP 400.
 - Resolved `Suspended` or `Decommissioned` tenant → HTTP 403.
 - No null tenant context may flow downstream.
-- `ITenantProvider` must expose `HasTenantContext`, `TenantId`, `TenantCode`, and `TenantExternalId`.
+- `ITenantProvider` must expose `HasTenantContext`, `TenantId`, `TenantCode`, `TenantExternalId`, `ConnectionString`, and `IsSharedPool`.
 - The only approved headerless bootstrap path is `GET /api/v1/info/runtime-configuration`.
 - UI/browser code must read the active tenant from API runtime configuration, not UI-local configuration.
+
+## Tenant tier model (hybrid)
+- Two tiers: `SharedPool` (default) and `Dedicated`. Values in `TenantTierConstants`.
+- `Tenant.TenantTier` — nvarchar(20), NOT NULL, default `SharedPool`.
+- `Tenant.ConnectionString` — nvarchar(500), nullable.
+  - `null` = shared pool. Non-null = dedicated DB connection string.
+  - For Managed Identity connections: store the full connection string (no credentials embedded).
+  - For password-based connections: store a Key Vault secret name reference, never the raw password.
+- `TenantA` and `TenantB` are always `SharedPool` with `ConnectionString = null`.
+- `IsSharedPool` is derived from `TenantTier == SharedPool`, NOT from `ConnectionString == null`.
+- A Dedicated tenant without a provisioned ConnectionString is treated as unresolvable (fail-loud, not silent shared-pool routing).
+
+## Tenant resolution pipeline (circular dependency rule)
+- `EntityFrameworkTenantResolver` MUST use `TenantRegistryDbContext`, never `OrderProcessingSystemDbContext`.
+- `TenantRegistryDbContext` always uses the shared/admin connection string from configuration.
+- `TenantRegistryDbContext` has no `ITenantProvider` dependency and no query filters.
+- `OrderProcessingSystemDbContext` uses the per-request connection string resolved from `ITenantProvider`.
+- Query filters are always active on all DbContexts (defense-in-depth). On dedicated DBs the filter is trivially true.
+
+## IAppDbContext boundary
+- `IAppDbContext` must NOT expose `DbSet<Tenant>`. Tenant queries go through `ITenantRegistry` or `ITenantResolver`.
+- Application-layer handlers must never query the `Tenants` table directly.
+- `ITenantRegistry` (in Application/Abstractions) provides read-only access to active tenants for bootstrap endpoints.
 
 ## Tenant-owned entities
 - Tenant-owned entities must inherit from `BaseAuditableEntity` or `BaseAuditableCreateEntity`.

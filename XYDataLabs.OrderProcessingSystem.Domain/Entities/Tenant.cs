@@ -25,6 +25,13 @@ public class Tenant
     [MaxLength(32)]
     public string Status { get; set; } = string.Empty;
 
+    [Required]
+    [MaxLength(20)]
+    public string TenantTier { get; set; } = "SharedPool";
+
+    [MaxLength(500)]
+    public string? ConnectionString { get; set; }
+
     public int? CreatedBy { get; set; }
 
     public DateTime? CreatedDate { get; set; }

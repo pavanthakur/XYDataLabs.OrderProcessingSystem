@@ -22,6 +22,10 @@ public sealed class HeaderTenantProvider : ITenantProvider
 
     public string TenantExternalId => ResolveTenantContext()?.TenantExternalId ?? string.Empty;
 
+    public string? ConnectionString => ResolveTenantContext()?.ConnectionString;
+
+    public bool IsSharedPool => ResolveTenantContext()?.IsSharedPool ?? true;
+
     private TenantContext? ResolveTenantContext()
     {
         var context = _httpContextAccessor.HttpContext;

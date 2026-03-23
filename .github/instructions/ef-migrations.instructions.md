@@ -4,7 +4,9 @@ applyTo: "**/Infrastructure/**,**/Migrations/**,**/DataContext/**"
 # EF Core Conventions — XYDataLabs.OrderProcessingSystem
 
 ## DbContext
-- Class: `OrderProcessingSystemDbContext`
+- Business context: `OrderProcessingSystemDbContext` — tenant-owned entities with query filters and FK enforcement
+- Registry context: `TenantRegistryDbContext` — lightweight, used for tenant resolution only (no query filters, no ITenantProvider)
+- Migrations are managed for `OrderProcessingSystemDbContext` only
 - Project: `XYDataLabs.OrderProcessingSystem.Infrastructure`
 - Startup project for migrations: `XYDataLabs.OrderProcessingSystem.API`
 - Design-time factory: `DesignTimeDbContextFactory` (decouples EF tooling from Program.cs)
@@ -23,10 +25,11 @@ applyTo: "**/Infrastructure/**,**/Migrations/**,**/DataContext/**"
 
 ## Migration Commands
 ```powershell
-# Add new migration
+# Add new migration (--context required because two DbContexts exist)
 dotnet ef migrations add <MigrationName> `
   --project XYDataLabs.OrderProcessingSystem.Infrastructure `
-  --startup-project XYDataLabs.OrderProcessingSystem.API
+  --startup-project XYDataLabs.OrderProcessingSystem.API `
+  --context OrderProcessingSystemDbContext
 
 # Apply to Azure SQL (with firewall rule open for current IP)
 $ip = (Invoke-RestMethod https://api.ipify.org)
@@ -38,12 +41,15 @@ az sql server firewall-rule delete --server orderprocessing-sql-dev --resource-g
 ```
 
 ## Applied Migrations (current baseline)
-1. `20260322112523_RebaselineMultitenantPaymentSchema`
+1. `20260323181230_InitialCreate` — full schema + TenantA/TenantB seed
 
 This repository was rebaselined in March 2026. Historical migrations were intentionally removed. The current migration chain starts from a single clean baseline and future migrations must build from that baseline only.
 
 ## Current Schema Notes
 - `Tenants` is the tenant authority table and is seeded in the baseline migration `Up()` with `TenantA` and `TenantB`
+- `Tenants` now includes `TenantTier` (nvarchar 20, NOT NULL, default 'SharedPool') and `ConnectionString` (nvarchar 500, nullable)
+- `TenantRegistryDbContext` owns the `Tenants` DbSet for tenant resolution (no query filters, no ITenantProvider dependency)
+- `OrderProcessingSystemDbContext` still configures `Tenants` entity for FK integrity from business entities
 - Tenant-owned tables use `TenantId int NOT NULL` as an FK to `Tenants.Id`
 - `Tenants` is excluded from global query filters; tenant-owned entities are filtered by `ITenantProvider.TenantId`
 - Required composite indexes currently include:
