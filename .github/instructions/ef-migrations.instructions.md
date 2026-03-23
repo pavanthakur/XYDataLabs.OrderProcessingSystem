@@ -41,7 +41,7 @@ az sql server firewall-rule delete --server orderprocessing-sql-dev --resource-g
 ```
 
 ## Applied Migrations (current baseline)
-1. `20260323181230_InitialCreate` — full schema + TenantA/TenantB seed
+1. `20260323190110_InitialCreate` — full schema + TenantA/TenantB seed (MaskedCardNumber, no CVV2)
 
 This repository was rebaselined in March 2026. Historical migrations were intentionally removed. The current migration chain starts from a single clean baseline and future migrations must build from that baseline only.
 

@@ -12,7 +12,7 @@ using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 {
     [DbContext(typeof(OrderProcessingSystemDbContext))]
-    [Migration("20260323181230_InitialCreate")]
+    [Migration("20260323190110_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -151,21 +151,11 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                     b.Property<DateTime?>("CreatedDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("CreditCardCvv2")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
                     b.Property<int>("CreditCardExpireMonth")
                         .HasColumnType("int");
 
                     b.Property<int>("CreditCardExpireYear")
                         .HasColumnType("int");
-
-                    b.Property<string>("CreditCardNumber")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
 
                     b.Property<string>("CreditCardOwnerName")
                         .IsRequired()
@@ -191,6 +181,10 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 
                     b.Property<bool>("IsTransactionSuccess")
                         .HasColumnType("bit");
+
+                    b.Property<string>("MaskedCardNumber")
+                        .HasMaxLength(19)
+                        .HasColumnType("nvarchar(19)");
 
                     b.Property<string>("PaymentMethod")
                         .IsRequired()
