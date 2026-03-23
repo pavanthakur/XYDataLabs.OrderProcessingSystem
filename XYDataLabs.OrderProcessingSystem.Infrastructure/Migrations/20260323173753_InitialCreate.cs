@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 {
     /// <inheritdoc />
-    public partial class RebaselineMultitenantPaymentSchema : Migration
+    public partial class InitialCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -30,8 +30,6 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                 {
                     table.PrimaryKey("PK_Tenants", x => x.Id);
                 });
-
-            SeedBaselineTenants(migrationBuilder);
 
             migrationBuilder.CreateTable(
                 name: "Customers",
@@ -425,6 +423,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                     Notes = table.Column<string>(type: "nvarchar(255)", maxLength: 255, nullable: true),
                     PaymentTraceId = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: true),
                     ThreeDSecureStage = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: true),
+                    IsThreeDSecureEnabled = table.Column<bool>(type: "bit", nullable: false),
+                    TransactionReferenceId = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: true),
                     TenantId = table.Column<int>(type: "int", nullable: false),
                     CreatedBy = table.Column<int>(type: "int", nullable: true),
                     CreatedDate = table.Column<DateTime>(type: "datetime2", nullable: true),
@@ -607,6 +607,11 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                 columns: new[] { "TenantId", "AttemptOrderId" });
 
             migrationBuilder.CreateIndex(
+                name: "IX_TransactionStatusHistories_TenantId_TransactionReferenceId",
+                table: "TransactionStatusHistories",
+                columns: new[] { "TenantId", "TransactionReferenceId" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_TransactionStatusHistories_TransactionId",
                 table: "TransactionStatusHistories",
                 column: "TransactionId");
@@ -653,18 +658,6 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 
             migrationBuilder.DropTable(
                 name: "Tenants");
-        }
-
-        private static void SeedBaselineTenants(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.Sql(@"
-SET IDENTITY_INSERT [Tenants] ON;
-INSERT INTO [Tenants] ([Id], [ExternalId], [Code], [Name], [Status], [CreatedBy], [CreatedDate], [UpdatedBy], [UpdatedDate])
-VALUES
-    (1, N'tnt_ext_tenanta_20260322', N'TenantA', N'Tenant A', N'Active', 1, SYSUTCDATETIME(), NULL, NULL),
-    (2, N'tnt_ext_tenantb_20260322', N'TenantB', N'Tenant B', N'Active', 1, SYSUTCDATETIME(), NULL, NULL);
-SET IDENTITY_INSERT [Tenants] OFF;
-");
         }
     }
 }

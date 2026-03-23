@@ -12,8 +12,8 @@ using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 {
     [DbContext(typeof(OrderProcessingSystemDbContext))]
-    [Migration("20260323170059_AddIsThreeDSecureEnabledToTransactionStatusHistory")]
-    partial class AddIsThreeDSecureEnabledToTransactionStatusHistory
+    [Migration("20260323173753_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -755,6 +755,10 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                     b.Property<int>("TransactionId")
                         .HasColumnType("int");
 
+                    b.Property<string>("TransactionReferenceId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<int?>("UpdatedBy")
                         .HasColumnType("int");
 
@@ -766,6 +770,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                     b.HasIndex("TransactionId");
 
                     b.HasIndex("TenantId", "AttemptOrderId");
+
+                    b.HasIndex("TenantId", "TransactionReferenceId");
 
                     b.ToTable("TransactionStatusHistories");
                 });
