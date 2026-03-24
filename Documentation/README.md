@@ -72,6 +72,137 @@ Open VS Code Chat → switch to **Agent mode** → type the command:
 
 > **Maintenance rule**: When adding a new agent, instruction, or prompt — update [`.github/copilot-instructions.md` §9](../.github/copilot-instructions.md) and [`.github/prompts/README.md`](../.github/prompts/README.md).
 
+### End-to-End Example: Adding a New Feature with Multitenant Support
+
+**Scenario**: You need to add a `Shipment` entity with full CQRS, controller, EF migration, and tests — all tenant-aware.
+
+#### Step 1 — Plan (default agent)
+
+Use the **default agent** for cross-cutting planning:
+
+```
+Prompt: "I need to add a Shipment feature with multitenant support.
+         Plan the full end-to-end: entity, handler, DTO, controller, migration, tests."
+```
+
+Copilot will outline all layers needed. Once you agree on the plan, switch to specialized agents.
+
+#### Step 2 — Domain + Application + Infrastructure (CQRS Backend agent)
+
+Switch to **CQRS Backend** agent → it auto-follows clean-architecture + multitenant + ef-migrations rules.
+
+```
+Prompt: "Create the Shipment entity in Domain with TenantId, OrderId, TrackingNumber,
+         ShippedDate, Status. Then create CreateShipmentCommand, handler, DTO,
+         and configure it in OrderProcessingSystemDbContext."
+```
+
+What happens behind the scenes:
+- `clean-architecture.instructions.md` fires → enforces layer boundaries
+- `multitenant-payment-schema.instructions.md` fires → enforces `TenantId` FK, composite indexes, tenant filter
+- `ef-migrations.instructions.md` fires → follows DbContext configuration rules
+
+Files created/modified:
+```
+Domain/Entities/Shipment.cs                          ← new entity with TenantId
+Application/DTO/ShipmentDto.cs                       ← new DTO
+Application/Features/Shipments/Commands/             ← new command + handler
+Infrastructure/DataContext/OrderProcessingSystemDbContext.cs  ← DbSet + config
+```
+
+#### Step 3 — Generate EF Migration (CQRS Backend agent)
+
+Stay on **CQRS Backend** agent:
+
+```
+Prompt: "Generate the EF migration for Shipment, run drift check, verify it's clean."
+```
+
+Terminal commands it will run:
+```powershell
+# Generate migration
+dotnet ef migrations add AddShipment `
+  --project XYDataLabs.OrderProcessingSystem.Infrastructure `
+  --startup-project XYDataLabs.OrderProcessingSystem.API `
+  --context OrderProcessingSystemDbContext
+
+# Drift check — should produce empty migration
+dotnet ef migrations add DriftCheck `
+  --project XYDataLabs.OrderProcessingSystem.Infrastructure `
+  --startup-project XYDataLabs.OrderProcessingSystem.API `
+  --context OrderProcessingSystemDbContext
+
+# Remove drift check migration
+dotnet ef migrations remove `
+  --project XYDataLabs.OrderProcessingSystem.Infrastructure `
+  --startup-project XYDataLabs.OrderProcessingSystem.API `
+  --context OrderProcessingSystemDbContext
+```
+
+#### Step 4 — Controller (CQRS Backend agent)
+
+```
+Prompt: "Add ShipmentController with POST and GET endpoints, 
+         dispatching to the command/query handlers."
+```
+
+#### Step 5 — Tests (CQRS Backend agent)
+
+```
+Prompt: "Add unit tests for CreateShipmentCommandHandler 
+         and architecture tests for Shipment entity tenant compliance."
+```
+
+#### Step 6 — Build + Test
+
+```
+Prompt: "Build the solution and run all tests."
+```
+
+```powershell
+dotnet build XYDataLabs.OrderProcessingSystem.sln
+dotnet test XYDataLabs.OrderProcessingSystem.sln --no-build
+```
+
+#### Step 7 — Review (Code Reviewer agent)
+
+Switch to **Code Reviewer** agent before committing:
+
+```
+Prompt: "Review all uncommitted changes for architecture compliance, 
+         tenant safety, and security."
+```
+
+It will output a severity table:
+
+| Severity | File | Finding |
+|----------|------|---------|
+| ✅ PASS | Shipment.cs | TenantId FK present, composite index defined |
+| ✅ PASS | ShipmentController.cs | No Infrastructure imports in controller |
+| 🟡 LOW | ShipmentDto.cs | Consider adding validation attributes |
+
+#### Step 8 — Commit + Update Context
+
+```powershell
+git add -A
+git commit -m "Add Shipment entity with multitenant CQRS and EF migration"
+```
+
+Then optionally run `/context-audit` to verify instruction files still reflect the codebase.
+
+#### Summary: Which Agent at Each Step
+
+| Step | Agent | Why |
+|------|-------|-----|
+| 1. Plan | default | Cross-cutting, needs full context |
+| 2. Entity + CQRS | **CQRS Backend** | Enforces clean-arch + tenant rules |
+| 3. Migration | **CQRS Backend** | Follows ef-migrations protocol |
+| 4. Controller | **CQRS Backend** | Ensures no layer violations in API |
+| 5. Tests | **CQRS Backend** | Knows test project conventions |
+| 6. Build + test | **CQRS Backend** | Runs dotnet build/test |
+| 7. Review | **Code Reviewer** | Read-only audit before commit |
+| 8. Context check | `/context-audit` | Detects stale instruction references |
+
 ---
 
 ## 🏗️ Current Architecture vs Learning Plan
