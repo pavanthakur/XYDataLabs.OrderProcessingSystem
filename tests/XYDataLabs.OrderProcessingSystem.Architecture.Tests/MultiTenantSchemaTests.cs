@@ -145,6 +145,36 @@ public class MultiTenantSchemaTests
             because: "CardTransaction must store only the masked card number for audit purposes");
     }
 
+    // ------------------------------------------------------------------ Fix 1 regression guard
+
+    [Fact]
+    public void CardTransaction_FK_To_BillingCustomers_Should_Be_Named_BillingCustomerId()
+    {
+        // Regression guard for fix 1: the FK was renamed from CustomerId to BillingCustomerId.
+        // A future refactor must not silently reintroduce the old column name.
+        var type = typeof(CardTransaction);
+
+        type.GetProperty("BillingCustomerId").Should().NotBeNull(
+            because: "CardTransaction.BillingCustomerId is the FK to BillingCustomers (renamed from CustomerId in fix 1)");
+
+        type.GetProperty("CustomerId").Should().BeNull(
+            because: "the old CustomerId property was renamed BillingCustomerId; re-adding it would create " +
+                     "a confusing ambiguity and break DB join queries");
+    }
+
+    // ------------------------------------------------------------------ Fix 2 regression guard
+
+    [Fact]
+    public void Customer_Should_Not_Have_OpenpayCustomerId_Property()
+    {
+        // Regression guard for fix 2: OpenpayCustomerId was never populated in any code path
+        // and was removed as a dead column. Its re-addition would create a misleading empty column
+        // and would require a new migration.
+        typeof(Customer).GetProperty("OpenpayCustomerId").Should().BeNull(
+            because: "OpenpayCustomerId was a dead column on Customer that was removed in fix 2; " +
+                     "OpenPay customer IDs are stored on BillingCustomer.APICustomerId instead");
+    }
+
     private static bool HasIndex(IEntityType? entityType, params string[] propertyNames)
     {
         entityType.Should().NotBeNull();
