@@ -295,7 +295,7 @@ Port allocations: Local VS (5010–5013) · Docker dev (5020–5023) · Docker s
 
 ---
 
-## 9. Copilot Prompts & Instruction Files
+## 9. Copilot Prompts, Instructions & Agents
 
 ### Instruction files (auto-attach by file pattern)
 | File | Applies to |
@@ -307,6 +307,34 @@ Port allocations: Local VS (5010–5013) · Docker dev (5020–5023) · Docker s
 | `.github/instructions/bicep.instructions.md` | `**/infra/**`, `**/*.bicep` |
 | `.github/instructions/curriculum.instructions.md` | `**/*CURRICULUM*`, `**/05-Self-Learning/**` |
 | `.github/instructions/architecture.instructions.md` | `**/docs/architecture/**`, `**/*ADR*` |
+
+### Instruction auto-injection matrix
+
+When editing a file, multiple instruction files may fire simultaneously based on overlapping `applyTo` patterns.
+This matrix shows which instructions auto-attach for common file locations:
+
+| File location | clean-arch | ef-migrations | multitenant | azure-workflows | bicep | architecture | curriculum |
+|---------------|:----------:|:-------------:|:-----------:|:---------------:|:-----:|:------------:|:----------:|
+| `Domain/Entities/*.cs` | ✓ | | ✓ | | | | |
+| `Application/Features/**/*.cs` | ✓ | | ✓ | | | | |
+| `Application/DTO/**/*.cs` | ✓ | | ✓ | | | | |
+| `Infrastructure/**/*.cs` | ✓ | ✓ | ✓ | | | | |
+| `Infrastructure/Migrations/*` | ✓ | ✓ | ✓ | | | | |
+| `API/Controllers/*.cs` | ✓ | | ✓ | | | | |
+| `SharedKernel/**/*.cs` | ✓ | | | | | | |
+| `tests/Architecture.Tests/*.cs` | ✓ | | ✓ | | | | |
+| `.github/workflows/*.yml` | | | | ✓ | | | |
+| `infra/**/*.bicep` | | | | | ✓ | | |
+| `docs/architecture/decisions/*` | | | | | | ✓ | |
+| `Documentation/05-Self-Learning/*` | | | | | | | ✓ |
+
+### Custom agents (select in VS Code Chat agent picker)
+
+| Agent | File | Use when |
+|-------|------|----------|
+| Azure DevOps | `.github/agents/azure-devops.agent.md` | Working on workflows, Bicep, PowerShell scripts, Docker, OIDC config |
+| CQRS Backend | `.github/agents/cqrs-backend.agent.md` | Working on C# domain/application/infrastructure code, CQRS patterns, EF Core |
+| Code Reviewer | `.github/agents/code-reviewer.agent.md` | Reviewing changes for architecture compliance, security, tenant safety (read-only) |
 
 ### Reusable agent prompts (type in VS Code Chat → Agent mode)
 | Prompt | Command | Purpose |
@@ -320,6 +348,7 @@ Port allocations: Local VS (5010–5013) · Docker dev (5020–5023) · Docker s
 > **Prompt reference:** See `.github/prompts/README.md` for when to use each prompt, prerequisites, and operational notes.
 >
 > **Maintenance rule:** When adding or changing any reusable prompt in `.github/prompts/`, also update `.github/prompts/README.md` and any operational docs that point users to required manual post-deploy steps.
+> When adding or changing any agent in `.github/agents/`, also update the Custom agents table above.
 
 ---
 
@@ -354,7 +383,7 @@ Port allocations: Local VS (5010–5013) · Docker dev (5020–5023) · Docker s
 
 ---
 
-## 10. Common Troubleshooting Patterns
+## 11. Common Troubleshooting Patterns
 
 | Symptom | First place to check |
 |---------|---------------------|

@@ -64,6 +64,28 @@ Use when:
 | Need local SSMS/sqlcmd access to Azure SQL | `/sql-local-access` |
 | Check for stale AI context / memory drift | `/context-audit` |
 
+## Typical Workflows
+
+```
+[After a coding/learning day]
+└─ /day-complete  →  routes curriculum + command updates
+   └─ [Optional] /context-audit  →  verify no stale references created
+
+[After bootstrap or deploy]
+└─ /sql-local-access  →  open firewall + get SSMS connection details
+   └─ [When done] /sql-local-access  →  close firewall rule
+```
+
+## Custom Agents
+
+Select these in the VS Code Chat agent picker for focused, context-scoped assistance:
+
+| Agent | File | Use when |
+|-------|------|----------|
+| Azure DevOps | `.github/agents/azure-devops.agent.md` | Workflows, Bicep, PowerShell scripts, Docker, OIDC |
+| CQRS Backend | `.github/agents/cqrs-backend.agent.md` | C# domain/application/infrastructure code, CQRS, EF Core |
+| Code Reviewer | `.github/agents/code-reviewer.agent.md` | Architecture compliance review, security audit (read-only) |
+
 ## Related Files
 
 | File | Purpose |
