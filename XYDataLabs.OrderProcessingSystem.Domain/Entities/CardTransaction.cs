@@ -11,7 +11,7 @@ namespace XYDataLabs.OrderProcessingSystem.Domain.Entities
         public int Id { get; set; }
 
         [Required]
-        public int CustomerId { get; set; }
+        public int BillingCustomerId { get; set; }
 
         [Required]
         public string TransactionCustomerId { get; set; } = string.Empty;
@@ -77,8 +77,8 @@ namespace XYDataLabs.OrderProcessingSystem.Domain.Entities
 
         public string? TransactionMessage { get; set; }
 
-        [ForeignKey(nameof(CustomerId))]
-        public virtual BillingCustomer Customer { get; set; } = null!;
+        [ForeignKey(nameof(BillingCustomerId))]
+        public virtual BillingCustomer BillingCustomer { get; set; } = null!;
 
         public virtual ICollection<TransactionStatusHistory> StatusHistory { get; set; } = new List<TransactionStatusHistory>();
     }

@@ -142,7 +142,7 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
             StatusSource = remoteStatusConfirmed ? "openpay" : "database",
             ErrorMessage = resolvedErrorMessage,
             TransactionReferenceId = FirstNonEmpty(remoteCharge?.Authorization, transaction.TransactionReferenceId),
-            TransactionDate = remoteCharge?.CreationDate ?? transaction.TransactionDate,
+            TransactionDate = NormalizeToUtc(remoteCharge?.CreationDate) ?? transaction.TransactionDate,
             ThreeDSecureUrl = FirstNonEmpty(remoteCharge?.PaymentMethod?.Url, transaction.RedirectUrl),
             IsThreeDSecureEnabled = transaction.IsThreeDSecureEnabled,
             ThreeDSecureStage = resolvedThreeDSecureStage
@@ -172,10 +172,10 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
         transaction.IsTransactionSuccess = EnumHelper.IsSuccessStatus(resolvedStatus);
         transaction.TransactionMessage = resolvedErrorMessage ?? BuildAuditMessage(command, remoteCharge, resolvedStatus, resolvedThreeDSecureStage, transaction.PaymentTraceId);
         transaction.TransactionReferenceId = FirstNonEmpty(remoteCharge?.Authorization, transaction.TransactionReferenceId);
-        transaction.TransactionDate = remoteCharge?.CreationDate ?? transaction.TransactionDate;
+        transaction.TransactionDate = NormalizeToUtc(remoteCharge?.CreationDate) ?? transaction.TransactionDate;
         transaction.RedirectUrl = FirstNonEmpty(remoteCharge?.PaymentMethod?.Url, transaction.RedirectUrl);
         transaction.ThreeDSecureStage = resolvedThreeDSecureStage;
-        transaction.UpdatedBy = transaction.CustomerId;
+        transaction.UpdatedBy = transaction.BillingCustomerId;
         transaction.UpdatedDate = now;
 
         if (callbackPayloadReceived)
@@ -190,7 +190,7 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
                 ThreeDSecureStage = EnumHelper.GetEnumDescription(ThreeDSecureStage.CallbackReceived),
                 IsThreeDSecureEnabled = transaction.IsThreeDSecureEnabled,
                 TransactionReferenceId = transaction.TransactionReferenceId,
-                CreatedBy = transaction.CustomerId,
+                CreatedBy = transaction.BillingCustomerId,
                 CreatedDate = now
             });
         }
@@ -205,7 +205,7 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
             ThreeDSecureStage = resolvedThreeDSecureStage,
             IsThreeDSecureEnabled = transaction.IsThreeDSecureEnabled,
             TransactionReferenceId = transaction.TransactionReferenceId,
-            CreatedBy = transaction.CustomerId,
+            CreatedBy = transaction.BillingCustomerId,
             CreatedDate = now
         });
 
@@ -217,7 +217,7 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
             payinLog.OpenPayAuthorizationId = FirstNonEmpty(remoteCharge?.Authorization, payinLog.OpenPayAuthorizationId);
             payinLog.IsThreeDSecureEnabled = transaction.IsThreeDSecureEnabled;
             payinLog.ThreeDSecureStage = resolvedThreeDSecureStage;
-            payinLog.UpdatedBy = transaction.CustomerId;
+            payinLog.UpdatedBy = transaction.BillingCustomerId;
             payinLog.UpdatedDate = now;
 
             _context.PayinLogDetails.Add(new Domain.Entities.PayinLogDetails
@@ -228,7 +228,7 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
                 AdditionalInfo = BuildAuditMessage(command, remoteCharge, resolvedStatus, resolvedThreeDSecureStage, transaction.PaymentTraceId),
                 PaymentTraceId = transaction.PaymentTraceId,
                 ThreeDSecureStage = resolvedThreeDSecureStage,
-                CreatedBy = transaction.CustomerId,
+                CreatedBy = transaction.BillingCustomerId,
                 CreatedDate = now
             });
         }
@@ -298,5 +298,13 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
             return EnumHelper.GetEnumDescription(ThreeDSecureStage.CallbackReceived);
 
         return EnumHelper.GetEnumDescription(ThreeDSecureStage.Unknown);
+    }
+
+    private static DateTime? NormalizeToUtc(DateTime? dateTime)
+    {
+        if (!dateTime.HasValue) return null;
+        return dateTime.Value.Kind == DateTimeKind.Utc
+            ? dateTime.Value
+            : DateTime.SpecifyKind(dateTime.Value, DateTimeKind.Local).ToUniversalTime();
     }
 }

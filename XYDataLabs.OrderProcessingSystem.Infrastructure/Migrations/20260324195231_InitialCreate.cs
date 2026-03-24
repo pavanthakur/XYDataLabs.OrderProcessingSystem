@@ -41,7 +41,6 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                         .Annotation("SqlServer:Identity", "1, 1"),
                     Name = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Email = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    OpenpayCustomerId = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     TenantId = table.Column<int>(type: "int", nullable: false),
                     CreatedBy = table.Column<int>(type: "int", nullable: true),
                     CreatedDate = table.Column<DateTime>(type: "datetime2", nullable: true),
@@ -331,7 +330,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    CustomerId = table.Column<int>(type: "int", nullable: false),
+                    BillingCustomerId = table.Column<int>(type: "int", nullable: false),
                     TransactionCustomerId = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     TransactionId = table.Column<string>(type: "nvarchar(450)", nullable: false),
                     PaymentTraceId = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
@@ -364,8 +363,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                 {
                     table.PrimaryKey("PK_CardTransactions", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_CardTransactions_BillingCustomers_CustomerId",
-                        column: x => x.CustomerId,
+                        name: "FK_CardTransactions_BillingCustomers_BillingCustomerId",
+                        column: x => x.BillingCustomerId,
                         principalTable: "BillingCustomers",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
@@ -480,9 +479,9 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                 column: "TenantId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_CardTransactions_CustomerId",
+                name: "IX_CardTransactions_BillingCustomerId",
                 table: "CardTransactions",
-                column: "CustomerId");
+                column: "BillingCustomerId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_CardTransactions_PaymentTraceId",
@@ -616,23 +615,11 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                 name: "IX_TransactionStatusHistories_TransactionId",
                 table: "TransactionStatusHistories",
                 column: "TransactionId");
-
-            // Seed baseline tenants (required for application startup — DbInitializer depends on these rows)
-            migrationBuilder.Sql(@"
-SET IDENTITY_INSERT [Tenants] ON;
-INSERT INTO [Tenants] ([Id], [ExternalId], [Code], [Name], [Status], [TenantTier], [CreatedBy], [CreatedDate], [ConnectionString], [UpdatedBy], [UpdatedDate])
-VALUES
-    (1, N'tnt_ext_tenanta_20260322', N'TenantA', N'Tenant A', N'Active', N'SharedPool', 1, SYSUTCDATETIME(), NULL, NULL, NULL),
-    (2, N'tnt_ext_tenantb_20260322', N'TenantB', N'Tenant B', N'Active', N'SharedPool', 1, SYSUTCDATETIME(), NULL, NULL, NULL);
-SET IDENTITY_INSERT [Tenants] OFF;
-");
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.Sql("DELETE FROM [Tenants] WHERE [Id] IN (1, 2);");
-
             migrationBuilder.DropTable(
                 name: "BillingCustomerKeyInfos");
 

@@ -92,9 +92,9 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
                 .OnDelete(DeleteBehavior.Cascade);
 
             modelBuilder.Entity<CardTransaction>()
-                .HasOne(ct => ct.Customer)
+                .HasOne(ct => ct.BillingCustomer)
                 .WithMany(bc => bc.CardTransactions)
-                .HasForeignKey(ct => ct.CustomerId)
+                .HasForeignKey(ct => ct.BillingCustomerId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<TransactionStatusHistory>()

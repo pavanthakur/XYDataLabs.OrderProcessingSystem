@@ -12,7 +12,7 @@ using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 {
     [DbContext(typeof(OrderProcessingSystemDbContext))]
-    [Migration("20260323190110_InitialCreate")]
+    [Migration("20260324195231_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -145,6 +145,9 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
 
+                    b.Property<int>("BillingCustomerId")
+                        .HasColumnType("int");
+
                     b.Property<int?>("CreatedBy")
                         .HasColumnType("int");
 
@@ -164,9 +167,6 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                     b.Property<string>("CurrencyCode")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("CustomerId")
-                        .HasColumnType("int");
 
                     b.Property<string>("CustomerOrderId")
                         .IsRequired()
@@ -238,7 +238,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CustomerId");
+                    b.HasIndex("BillingCustomerId");
 
                     b.HasIndex("PaymentTraceId");
 
@@ -273,9 +273,6 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("OpenpayCustomerId")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("TenantId")
@@ -815,9 +812,9 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 
             modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.CardTransaction", b =>
                 {
-                    b.HasOne("XYDataLabs.OrderProcessingSystem.Domain.Entities.BillingCustomer", "Customer")
+                    b.HasOne("XYDataLabs.OrderProcessingSystem.Domain.Entities.BillingCustomer", "BillingCustomer")
                         .WithMany("CardTransactions")
-                        .HasForeignKey("CustomerId")
+                        .HasForeignKey("BillingCustomerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -827,7 +824,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.Navigation("Customer");
+                    b.Navigation("BillingCustomer");
                 });
 
             modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.Customer", b =>

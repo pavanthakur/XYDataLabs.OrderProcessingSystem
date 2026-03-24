@@ -14,7 +14,6 @@ namespace XYDataLabs.OrderProcessingSystem.Domain.Tests.Entities
             customer.CustomerId.Should().Be(0);
             customer.Name.Should().BeEmpty();
             customer.Email.Should().BeEmpty();
-            customer.OpenpayCustomerId.Should().BeNull();
             customer.TenantId.Should().Be(0);
             customer.CreatedBy.Should().BeNull();
             customer.CreatedDate.Should().BeNull();
@@ -37,14 +36,12 @@ namespace XYDataLabs.OrderProcessingSystem.Domain.Tests.Entities
                 CustomerId = 1,
                 Name = "John Doe",
                 Email = "john@example.com",
-                OpenpayCustomerId = "op_123",
                 TenantId = 1
             };
 
             customer.CustomerId.Should().Be(1);
             customer.Name.Should().Be("John Doe");
             customer.Email.Should().Be("john@example.com");
-            customer.OpenpayCustomerId.Should().Be("op_123");
             customer.TenantId.Should().Be(1);
         }
     }

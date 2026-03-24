@@ -70,6 +70,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
 
         using var activity = PaymentActivitySource.Source.StartActivity("ProcessPayment");
 
+        Domain.Entities.PaymentMethod? paymentMethod = null;
         try
         {
             _logger.LogInformation("Starting combined customer, card, and payment process");
@@ -111,7 +112,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
                 ? _redirectUrl
                 : $"{_redirectUrl}?tenantCode={Uri.EscapeDataString(tenantCode)}";
 
-            var paymentMethod = await CreatePaymentMethodAsync(cancellationToken);
+            paymentMethod = await CreatePaymentMethodAsync(cancellationToken);
             var (openpayCustomer, billingCustomerId) = await CreateCustomerAsync(request, paymentMethod, cancellationToken);
             await UpdatePaymentMethodByBillingCustomerIdAsync(paymentMethod.Id, billingCustomerId, cancellationToken);
             var createdCard = await CreateCardTokenAsync(request, openpayCustomer, billingCustomerId, customerOrderId, attemptOrderId, paymentTraceId, cancellationToken);
@@ -139,6 +140,21 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error in combined payment process: {Message}", ex.Message);
+            if (paymentMethod is not null)
+            {
+                try
+                {
+                    paymentMethod.Status = false;
+                    paymentMethod.UpdatedDate = _timeProvider.GetUtcNow().UtcDateTime;
+                    _context.PaymentMethods.Update(paymentMethod);
+                    await _context.SaveChangesAsync(CancellationToken.None);
+                    _logger.LogInformation("Deactivated orphaned PaymentMethod {PaymentMethodId} after payment failure", paymentMethod.Id);
+                }
+                catch (Exception cleanupEx)
+                {
+                    _logger.LogWarning(cleanupEx, "Failed to deactivate orphaned PaymentMethod {PaymentMethodId}", paymentMethod.Id);
+                }
+            }
             throw new InvalidOperationException("Payment processing failed during customer, card, or charge creation.", ex);
         }
     }
@@ -259,7 +275,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
 
         var cardTransaction = new CardTransaction
         {
-            CustomerId = billingCustomerId,
+            BillingCustomerId = billingCustomerId,
             TransactionCustomerId = openpayCustomerEntity.Id,
             TransactionId = createdCard.Id,
             PaymentTraceId = paymentTraceId,
@@ -268,7 +284,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             CustomerOrderId = customerOrderId,
             AttemptOrderId = attemptOrderId,
             TransactionStatus = EnumHelper.GetEnumDescription(OpenPayTransactionStatus.Completed),
-            TransactionDate = createdCard.CreationDate,
+            TransactionDate = NormalizeToUtc(createdCard.CreationDate),
             CurrencyCode = AppMasterConstant.DefaultCurrencyCode,
             Amount = new decimal(100.00),
             CreditCardOwnerName = request.Name,
@@ -385,7 +401,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
 
         var cardTransaction = new CardTransaction
         {
-            CustomerId = billingCustomerId,
+            BillingCustomerId = billingCustomerId,
             TransactionCustomerId = customer.Id,
             TransactionId = charge.Id,
             PaymentTraceId = paymentTraceId,
@@ -395,7 +411,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             AttemptOrderId = chargeRequest.OrderId,
             Description = chargeRequest.Description,
             TransactionStatus = normalizedChargeStatus,
-            TransactionDate = charge.CreationDate,
+            TransactionDate = NormalizeToUtc(charge.CreationDate),
             Amount = charge.Amount,
             CurrencyCode = AppMasterConstant.DefaultCurrencyCode,
             IsTransactionSuccess = EnumHelper.IsSuccessStatus(normalizedChargeStatus),
@@ -489,5 +505,13 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
     private static string BuildTrackingInfo(string paymentTraceId, string customerOrderId, string attemptOrderId, string threeDSecureStage, string message)
     {
         return $"PaymentTraceId={paymentTraceId}; CustomerOrderId={customerOrderId}; AttemptOrderId={attemptOrderId}; ThreeDSecureStage={threeDSecureStage}; {message}";
+    }
+
+    private static DateTime? NormalizeToUtc(DateTime? dateTime)
+    {
+        if (!dateTime.HasValue) return null;
+        return dateTime.Value.Kind == DateTimeKind.Utc
+            ? dateTime.Value
+            : DateTime.SpecifyKind(dateTime.Value, DateTimeKind.Local).ToUniversalTime();
     }
 }
