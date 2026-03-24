@@ -4,6 +4,76 @@ This folder contains all project documentation files organized into logical cate
 
 > 🤖 **Copilot / AI Reference**: For a single-page overview of the entire repository (structure, workflows, scripts, patterns, common issues), see [`.github/copilot-instructions.md`](../.github/copilot-instructions.md).
 
+---
+
+## 🤖 Copilot AI Tooling — How to Use
+
+This repository has a structured Copilot customization layer. Here's what exists and how to use each piece.
+
+### Custom Agents (pick before asking)
+
+Open VS Code Chat (**Ctrl+Shift+I**) → click the **agent picker dropdown** at the top → select the agent that matches your task:
+
+| Agent | When to select | What it does |
+|-------|---------------|--------------|
+| **Azure DevOps** | Workflows, Bicep, PowerShell, Docker, OIDC | Scoped to IaC/CI/CD files; won't touch C# business logic |
+| **CQRS Backend** | C# entities, handlers, DTOs, EF Core, tests | Scoped to Domain/Application/Infrastructure; follows clean-arch rules |
+| **Code Reviewer** | Review changes before committing | **Read-only** — checks architecture, security, tenant safety; outputs severity table |
+| *(default)* | General questions, multi-domain work | No scope restriction — loads all context |
+
+**Tip**: Always pick a specialized agent when your task fits one domain. The default agent loads everything; specialized agents stay focused and follow domain-specific rules.
+
+### Instruction Files (automatic — no action needed)
+
+These auto-attach based on which file you're editing. You don't invoke them manually.
+
+| File you're editing | Instructions that auto-load |
+|---------------------|----------------------------|
+| Any `.cs` or `.csproj` | `clean-architecture.instructions.md` |
+| `Infrastructure/**`, `Migrations/**` | + `ef-migrations.instructions.md` |
+| Domain entities, DTOs, payment handlers, controllers | + `multitenant-payment-schema.instructions.md` |
+| `.github/workflows/**` | `azure-workflows.instructions.md` |
+| `infra/**`, `*.bicep` | `bicep.instructions.md` |
+| `docs/architecture/**`, `*ADR*` | `architecture.instructions.md` |
+| `05-Self-Learning/**`, `*CURRICULUM*` | `curriculum.instructions.md` |
+
+Full overlap matrix: see [`.github/copilot-instructions.md` §9](../.github/copilot-instructions.md).
+
+### Reusable Prompts (slash commands in Agent mode)
+
+Open VS Code Chat → switch to **Agent mode** → type the command:
+
+| Command | When to use | What it does |
+|---------|------------|--------------|
+| `/day-complete` | After finishing a curriculum day | Routes updates to curriculum checkboxes, command references, daily logs |
+| `/sql-local-access` | Need local SSMS access to Azure SQL | Opens/closes firewall rule, prints connection details |
+| `/context-audit` | Periodically or after major refactors | Detects stale AI context by diffing memory files vs actual codebase |
+
+**Typical workflow**:
+```
+[After a coding/learning day]
+└─ /day-complete  →  auto-updates curriculum + command docs
+   └─ [Optional] /context-audit  →  verify no stale references
+
+[After bootstrap or deploy]
+└─ /sql-local-access  →  open firewall + SSMS details
+   └─ [When done] /sql-local-access  →  close firewall
+```
+
+### File Locations
+
+| What | Where |
+|------|-------|
+| Global project context | [`.github/copilot-instructions.md`](../.github/copilot-instructions.md) |
+| Instruction files (7) | [`.github/instructions/`](../.github/instructions/) |
+| Custom agents (3) | [`.github/agents/`](../.github/agents/) |
+| Reusable prompts (3) | [`.github/prompts/`](../.github/prompts/) |
+| Repository memory | `/memories/repo/` (local only, not in git) |
+
+> **Maintenance rule**: When adding a new agent, instruction, or prompt — update [`.github/copilot-instructions.md` §9](../.github/copilot-instructions.md) and [`.github/prompts/README.md`](../.github/prompts/README.md).
+
+---
+
 ## 🏗️ Current Architecture vs Learning Plan
 
 ### Current Production Architecture (Week 4 - Deployed ✅)
