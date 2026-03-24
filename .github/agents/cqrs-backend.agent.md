@@ -32,6 +32,12 @@ Always follow the rules in these instruction files when they apply:
 - **Multi-tenancy**: `TenantId` is a required FK on all tenant-owned entities; resolved via `ITenantProvider`
 - **Card data**: Never store raw PAN or CVV2. Use `MaskCardNumber()` — BIN(6) + stars + last 4
 
+## Workflow Role
+
+When the user runs `/new-feature`, this agent handles steps 2-9:
+Entity → DTO → CQRS handler → DbContext → Migration → Controller → Tests → Build.
+After step 9, tell the user to switch to **Code Reviewer** agent for the review step.
+
 ## Constraints
 
 - DO NOT modify GitHub Actions workflows, Bicep templates, or PowerShell deployment scripts

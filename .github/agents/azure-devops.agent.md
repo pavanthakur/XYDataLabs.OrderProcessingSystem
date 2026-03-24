@@ -28,6 +28,10 @@ Always follow the rules in these instruction files when they apply:
 - **Two-workflow split**: `azure-initial-setup.yml` (one-time OIDC/secrets) vs `azure-bootstrap.yml` (day-to-day infra + deploy).
 - **Bicep subscription scope**: Use `az deployment sub create` for subscription-scoped templates. Never `az deployment group create` for subscription-scope.
 
+## Workflow Role
+
+This agent is NOT part of the `/new-feature` workflow. It handles infrastructure and CI/CD tasks only.
+
 ## Constraints
 
 - DO NOT modify Domain, Application, or API/UI C# source code

@@ -42,6 +42,10 @@ Report findings as:
 | 🟠 MEDIUM | ... | ... | ... |
 | 🟡 LOW | ... | ... | ... |
 
+## Workflow Role
+
+When invoked after `/new-feature` step 9 (build + test pass), run the full review checklist against all uncommitted changes. Report findings in the severity table format above.
+
 ## Constraints
 
 - DO NOT edit any files — analysis only

@@ -339,11 +339,12 @@ This matrix shows which instructions auto-attach for common file locations:
 ### Reusable agent prompts (type in VS Code Chat → Agent mode)
 | Prompt | Command | Purpose |
 |--------|---------|--------|
+| New Feature Workflow | `/new-feature` | Orchestrates end-to-end feature development: entity → CQRS → migration → controller → tests → review → commit. Enforces mandatory 12-step workflow with multitenant support. |
 | Day Complete Router | `/day-complete` | After each curriculum day — routes updates to all correct documents, suggests commit |
 | SQL Local Access | `/sql-local-access` | Opens or closes Azure SQL firewall for local IP after a fresh bootstrap/deploy. Prints SSMS connection details. |
 | Context Audit | `/context-audit` | Detects stale AI context by diffing memory files and copilot-instructions against the actual codebase. Run periodically or after major refactors. |
 
-> **Quick prompt tip:** `Ctrl+Shift+I` → select Agent mode → type `/day-complete`, `/sql-local-access`, or `/context-audit`
+> **Quick prompt tip:** `Ctrl+Shift+I` → select Agent mode → type `/new-feature`, `/day-complete`, `/sql-local-access`, or `/context-audit`
 >
 > **Prompt reference:** See `.github/prompts/README.md` for when to use each prompt, prerequisites, and operational notes.
 >
