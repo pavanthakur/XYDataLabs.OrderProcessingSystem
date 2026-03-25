@@ -48,10 +48,10 @@
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
     },
-    "docker-uat-http": {
+    "docker-stg-http": {
       "commandName": "Executable",
       "executablePath": "powershell.exe",
-      "commandLineArgs": "-NoProfile -ExecutionPolicy Bypass -Command \"& '$(SolutionDir)Resources\\Docker\\start-docker.ps1' -Environment uat -Profile http -Reset -NoPrePull\"",
+      "commandLineArgs": "-NoProfile -ExecutionPolicy Bypass -Command \"& '$(SolutionDir)Resources\\Docker\\start-docker.ps1' -Environment stg -Profile http -Reset -NoPrePull\"",
       "workingDirectory": "$(SolutionDir)",
       "launchBrowser": true,
       "launchUrl": "http://localhost:5030/swagger",
@@ -59,10 +59,10 @@
         "ASPNETCORE_ENVIRONMENT": "Staging"
       }
     },
-    "docker-uat-https": {
+    "docker-stg-https": {
       "commandName": "Executable",
       "executablePath": "powershell.exe",
-      "commandLineArgs": "-NoProfile -ExecutionPolicy Bypass -Command \"& '$(SolutionDir)Resources\\Docker\\start-docker.ps1' -Environment uat -Profile https -Reset -NoPrePull\"",
+      "commandLineArgs": "-NoProfile -ExecutionPolicy Bypass -Command \"& '$(SolutionDir)Resources\\Docker\\start-docker.ps1' -Environment stg -Profile https -Reset -NoPrePull\"",
       "workingDirectory": "$(SolutionDir)",
       "launchBrowser": true,
       "launchUrl": "https://localhost:5031/swagger",

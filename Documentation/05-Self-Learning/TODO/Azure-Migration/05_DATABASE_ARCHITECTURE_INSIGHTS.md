@@ -33,12 +33,12 @@ docker logs <container_name>
 #### 2. Updated Connection Strings
 **For Docker containers (container-to-container):**
 ```json
-"Server=sql-server,1433;Database=OrderProcessingSystem;User Id=sa;Password=Admin100@;TrustServerCertificate=True;"
+"Server=sql-server,1433;Database=OrderProcessingSystem;User Id=sa;Password=<LOCAL_SQL_PASSWORD>;TrustServerCertificate=True;"
 ```
 
 **For local development (host-to-container):**
 ```json
-"Server=localhost,1433;Database=OrderProcessingSystem;User Id=sa;Password=Admin100@;TrustServerCertificate=True;"
+"Server=localhost,1433;Database=OrderProcessingSystem;User Id=sa;Password=<LOCAL_SQL_PASSWORD>;TrustServerCertificate=True;"
 ```
 
 #### 3. Network Configuration
@@ -73,7 +73,7 @@ Add to `C:\Windows\System32\drivers\etc\hosts`:
 ```json
 {
   "ConnectionStrings": {
-    "OrderProcessingSystemDbConnection": "Server=${DB_SERVER:-localhost};Database=${DB_NAME:-OrderProcessingSystem};User Id=${DB_USER:-sa};Password=${DB_PASSWORD:-Admin100@};TrustServerCertificate=True;"
+    "OrderProcessingSystemDbConnection": "Server=${DB_SERVER:-localhost};Database=${DB_NAME:-OrderProcessingSystem};User Id=${DB_USER:-sa};Password=${DB_PASSWORD:-<LOCAL_SQL_PASSWORD>};TrustServerCertificate=True;"
   }
 }
 ```
@@ -83,7 +83,7 @@ Set environment variables:
 $env:DB_SERVER = "your-sql-server-hostname"
 $env:DB_NAME = "OrderProcessingSystem"
 $env:DB_USER = "sa"
-$env:DB_PASSWORD = "Admin100@"
+$env:DB_PASSWORD = "<LOCAL_SQL_PASSWORD>"
 ```
 
 ---
@@ -96,12 +96,12 @@ $env:DB_PASSWORD = "Admin100@"
 {
   "ConnectionStrings": {
     "Development": {
-      "Docker": "Server=sql-server,1433;Database=OrderProcessingSystem;User Id=sa;Password=Admin100@;TrustServerCertificate=True;",
-      "Local": "Server=localhost,1433;Database=OrderProcessingSystem;User Id=sa;Password=Admin100@;TrustServerCertificate=True;",
+      "Docker": "Server=sql-server,1433;Database=OrderProcessingSystem;User Id=sa;Password=<LOCAL_SQL_PASSWORD>;TrustServerCertificate=True;",
+      "Local": "Server=localhost,1433;Database=OrderProcessingSystem;User Id=sa;Password=<LOCAL_SQL_PASSWORD>;TrustServerCertificate=True;",
       "LocalDB": "Server=(localdb)\\mssqllocaldb;Database=OrderProcessingSystem;Trusted_Connection=true;MultipleActiveResultSets=true;"
     },
     "UAT": {
-      "Docker": "Server=sql-server,1433;Database=OrderProcessingSystem_UAT;User Id=sa;Password=Admin100@;TrustServerCertificate=True;",
+      "Docker": "Server=sql-server,1433;Database=OrderProcessingSystem_UAT;User Id=sa;Password=<LOCAL_SQL_PASSWORD>;TrustServerCertificate=True;",
       "Azure": "Server=sql-uat.database.windows.net;Database=OrderProcessingDB_UAT;Authentication=Active Directory Default;"
     },
     "Production": {

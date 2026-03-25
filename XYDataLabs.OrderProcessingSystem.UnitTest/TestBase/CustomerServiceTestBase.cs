@@ -1,40 +1,26 @@
 ﻿using AutoMapper;
 using Bogus;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
-using XYDataLabs.OrderProcessingSystem.Application.Interfaces;
-using XYDataLabs.OrderProcessingSystem.Application.Services;
+using XYDataLabs.OrderProcessingSystem.Application.Features.Customers.Commands;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
-using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
-using Serilog.Core;
-using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.ComponentModel.DataAnnotations.Schema;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace XYDataLabs.OrderProcessingSystem.UnitTest.TestBase
 {
-    public class CustomerServiceTestBase : OrderProcessingSystemTestBase<CustomerService>
+    public class CustomerServiceTestBase : OrderProcessingSystemTestBase<CreateCustomerCommandHandler>
     {
-        protected readonly ICustomerService _customerService;
-
         public CustomerServiceTestBase()
         {
-            _customerService = new CustomerService(MockDbContext.Object, MockLogger.Object, MockMapper.Object);
         }
 
         /// <summary>
-        ///  Setup common test data for CustomerService
+        ///  Setup common test data for Customer handlers
         /// </summary>
         public override void SetupTestBase()
         {
-            //SetupCustomerData();
         }
+
         protected List<Customer> GenerateCustomers(int count)
         {
             return new Faker<Customer>()
@@ -44,7 +30,6 @@ namespace XYDataLabs.OrderProcessingSystem.UnitTest.TestBase
                 .Generate(count);
         }
 
-        // Fake Data Generation
         protected List<CreateCustomerRequestDto> GenerateNewCustomerRequestDto(int count)
         {
             var faker = new Faker<CreateCustomerRequestDto>()
@@ -65,12 +50,7 @@ namespace XYDataLabs.OrderProcessingSystem.UnitTest.TestBase
                     .RuleFor(o => o.OrderId, _ => orderId++)
                     .RuleFor(o => o.CustomerId, (f, c) => c.CustomerId)
                     .RuleFor(o => o.TotalPrice, f => f.Finance.Amount(50, 500))
-                    //.RuleFor(o => o.OrderProducts, (f, o) => new List<OrderProduct>(new Faker<OrderProduct>()
-                    //    .RuleFor(op => op.OrderId, _ => o.OrderId)
-                    //    .RuleFor(op => op.ProductId, f => f.Random.Int(1, 100))
-                    //    .RuleFor(op => op.Quantity, f => f.Random.Int(1, 10))
-                    //    .Generate(f.Random.Int(1, 5)))) // Generate List<OrderProduct> and assign to List<OrderProduct>
-                    .Generate(f.Random.Int(1, orderCount)))); // Generate List<Order> and assign to List<Order>
+                    .Generate(f.Random.Int(1, orderCount))));
 
             return customerFaker.Generate(customerCount);
         }

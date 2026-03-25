@@ -42,13 +42,13 @@
 
 | Credential | Files | Example value |
 |------------|-------|---------------|
-| SQL admin password | `infra/parameters/dev.json`, `staging.json`, `prod.json` | `Admin100@` — **FIXED ✅ 2026-03-20** (KV ARM reference) |
-| SQL admin password (script default) | `provision-azure-sql.ps1` (L20), `run-database-migrations.ps1` (L17) | `Admin100@` — **FIXED ✅ 2026-03-20** (KV retrieval) |
-| SQL connection-string password | `sharedsettings.dev.json`, `sharedsettings.local.json`, `sharedsettings.uat.json`, `sharedsettings.prod.json` | `Admin100@` |
+| SQL admin password | `infra/parameters/dev.json`, `staging.json`, `prod.json` | `<hardcoded SQL password>` — **FIXED ✅ 2026-03-20** (KV ARM reference) |
+| SQL admin password (script default) | `provision-azure-sql.ps1` (L20), `run-database-migrations.ps1` (L17) | `<hardcoded SQL password>` — **FIXED ✅ 2026-03-20** (KV retrieval) |
+| SQL connection-string password | `sharedsettings.dev.json`, `sharedsettings.local.json`, `sharedsettings.uat.json`, `sharedsettings.prod.json` | `<hardcoded SQL password>` |
 | OpenPay MerchantId | `sharedsettings.{dev,local,uat,prod}.json` | (visible in file) |
 | OpenPay PrivateKey | `sharedsettings.{dev,local,uat,prod}.json` | (visible in file) |
 | OpenPay DeviceSessionId | `sharedsettings.{dev,local,uat,prod}.json` | (visible in file) |
-| Certificate password | `sharedsettings.{dev,local,uat,prod}.json` | `P@ss100` |
+| Certificate password | `sharedsettings.{dev,local,uat,prod}.json` | `<hardcoded certificate password>` |
 
 #### Implementation Steps
 
@@ -76,7 +76,7 @@
 - [ ] Example: `sqlAdminPassword: keyVault.getSecret('SqlAdminPassword')` in the parameters block
 
 **Step 6 — Remove default password values from PowerShell scripts**
-- [x] `provision-azure-sql.ps1` L20: change `[string]$AdminPassword = 'Admin100@'` → empty default with KV fallback — **DONE ✅ 2026-03-20**
+- [x] `provision-azure-sql.ps1` L20: change hardcoded SQL password default → empty default with KV fallback — **DONE ✅ 2026-03-20**
 - [x] `run-database-migrations.ps1` L17: same pattern — KV fallback if not supplied — **DONE ✅ 2026-03-20**
 
 **Step 7 — Scrub Git history (optional but recommended for public repo)**

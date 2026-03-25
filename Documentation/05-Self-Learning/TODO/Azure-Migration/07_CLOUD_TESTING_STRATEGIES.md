@@ -35,7 +35,7 @@
 ### Verification Commands:
 ```powershell
 # Check database creation (Note: Uses OrderProcessingSystem_Local for non-Docker)
-sqlcmd -S localhost -U sa -P Admin100@ -Q "SELECT name FROM sys.databases WHERE name = 'OrderProcessingSystem_Local'"
+sqlcmd -S localhost -U sa -P <LOCAL_SQL_PASSWORD> -Q "SELECT name FROM sys.databases WHERE name = 'OrderProcessingSystem_Local'"
 
 # Test API endpoint
 Invoke-RestMethod -Uri "http://localhost:5010/api/Customer/GetAllCustomers?pageNumber=1&pageSize=3" -Method Get

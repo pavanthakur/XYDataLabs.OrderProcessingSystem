@@ -20,7 +20,8 @@ Run the secret population script:
 ```
 
 This script will:
-- ✅ Add `OpenPayAdapter--ApiKey` secret (with placeholder for dev/staging)
+- ✅ Add `OpenPay--MerchantId`, `OpenPay--PrivateKey`, and `OpenPay--DeviceSessionId` secrets
+- ✅ Add `ApiSettings--API--https--CertPassword` and `ApiSettings--UI--https--CertPassword` secrets
 - ✅ Add `ApplicationInsights--ConnectionString` secret (auto-retrieved)
 - ✅ Set `KEY_VAULT_NAME` environment variable on App Services
 - ✅ Verify all secrets were added successfully
@@ -180,7 +181,11 @@ builder.AddAzureKeyVault(
 
 Secrets use `--` (double dash) as separator (converted to `:` in configuration):
 
-- `OpenPayAdapter--ApiKey` → `OpenPayAdapter:ApiKey`
+- `OpenPay--MerchantId` → `OpenPay:MerchantId`
+- `OpenPay--PrivateKey` → `OpenPay:PrivateKey`
+- `OpenPay--DeviceSessionId` → `OpenPay:DeviceSessionId`
+- `ApiSettings--API--https--CertPassword` → `ApiSettings:API:https:CertPassword`
+- `ApiSettings--UI--https--CertPassword` → `ApiSettings:UI:https:CertPassword`
 - `ApplicationInsights--ConnectionString` → `ApplicationInsights:ConnectionString`
 
 This matches the configuration section structure in `appsettings.json`.
@@ -274,8 +279,8 @@ az webapp log tail \
    ```powershell
    az keyvault secret set \
      --vault-name kv-orderproc-prod \
-     --name "OpenPayAdapter--ApiKey" \
-     --value "your-production-api-key"
+     --name "OpenPay--PrivateKey" \
+     --value "<production-openpay-private-key>"
    ```
 
 2. **Review Access Policies:**
@@ -300,8 +305,8 @@ To rotate a secret:
 # Add new version
 az keyvault secret set \
   --vault-name kv-orderproc-prod \
-  --name "OpenPayAdapter--ApiKey" \
-  --value "new-api-key"
+  --name "OpenPay--PrivateKey" \
+  --value "<new-production-openpay-private-key>"
 
 # No app restart needed - apps will pick up new version automatically
 ```

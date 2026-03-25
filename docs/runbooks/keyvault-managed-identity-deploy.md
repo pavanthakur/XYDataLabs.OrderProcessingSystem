@@ -2,7 +2,7 @@
 
 ## Overview
 
-This runbook provides step-by-step instructions for deploying the Order Processing System API with secure configuration management using Azure Key Vault and Managed Identity. This approach prevents missing runtime secrets and ensures consistent deployments across dev → uat → prod environments.
+This runbook provides step-by-step instructions for deploying the Order Processing System API with secure configuration management using Azure Key Vault and Managed Identity. This approach prevents missing runtime secrets and ensures consistent deployments across dev → stg → prod environments.
 
 ## Architecture
 
@@ -11,7 +11,7 @@ The deployment uses the following security model:
 1. **System-Assigned Managed Identity**: Each App Service has its own managed identity that authenticates to Azure Key Vault
 2. **Key Vault References**: Sensitive app settings reference Key Vault secrets using the `@Microsoft.KeyVault(...)` syntax
 3. **Non-Secret Settings**: Non-sensitive configuration stored as regular app settings
-4. **Environment-Specific Parameters**: Each environment (dev/uat/prod) has its own parameter file for infrastructure deployment
+4. **Environment-Specific Parameters**: Each environment (dev/stg/prod) has its own parameter file for infrastructure deployment
 
 ## Prerequisites
 
@@ -31,9 +31,9 @@ The deployment uses the following security model:
 
 2. **GitHub Repository**:
    - Repository admin access (to configure secrets and environments)
-   - Ability to push to dev, uat, and main branches
+   - Ability to push to dev, stg, and main branches
 
-## Rollout Plan: Dev → UAT → Prod
+## Rollout Plan: Dev → Stg → Prod
 
 ### Phase 1: Development Environment
 
@@ -67,11 +67,21 @@ az keyvault show --name $KV_NAME --resource-group $RG_NAME --query id -o tsv
 # Set Key Vault name
 KV_NAME="kv-orderproc-dev"
 
-# Add OpenPay Adapter API Key (replace with actual value)
+# Add OpenPay secrets (replace with actual values)
 az keyvault secret set \
   --vault-name $KV_NAME \
-  --name "OpenPayAdapter--ApiKey" \
-  --value "your-openpay-api-key-here"
+  --name "OpenPay--MerchantId" \
+  --value "<openpay-merchant-id>"
+
+az keyvault secret set \
+  --vault-name $KV_NAME \
+  --name "OpenPay--PrivateKey" \
+  --value "<openpay-private-key>"
+
+az keyvault secret set \
+  --vault-name $KV_NAME \
+  --name "OpenPay--DeviceSessionId" \
+  --value "<openpay-device-session-id>"
 
 # Add Application Insights Connection String (replace with actual value)
 # Get from your Application Insights resource
@@ -89,7 +99,7 @@ az keyvault secret set \
 az keyvault secret list --vault-name $KV_NAME --query "[].name" -o table
 ```
 
-**Note**: The secret names use `--` (double hyphens) because Azure Key Vault doesn't support `:` in secret names. App Service automatically resolves Key Vault references and the app settings will use `__` (double underscores) format (e.g., `OpenPayAdapter__ApiKey`).
+**Note**: The secret names use `--` (double hyphens) because Azure Key Vault doesn't support `:` in secret names. App Service automatically resolves Key Vault references and the app settings will use `__` (double underscores) format (for example, `OpenPay__MerchantId`).
 
 #### 1.3 Configure GitHub Environment Secrets
 
@@ -162,16 +172,16 @@ az keyvault show \
   --query properties.accessPolicies
 ```
 
-### Phase 2: UAT Environment
+### Phase 2: Staging Environment
 
-Once dev is validated, repeat the process for UAT:
+Once dev is validated, repeat the process for Staging:
 
-#### 2.1 Create UAT Key Vault
+#### 2.1 Create Staging Key Vault
 
 ```bash
-ENVIRONMENT="uat"
-KV_NAME="kv-orderproc-uat"
-RG_NAME="rg-orderprocessing-uat"
+ENVIRONMENT="stg"
+KV_NAME="kv-orderproc-stg"
+RG_NAME="rg-orderprocessing-stg"
 
 az group create --name $RG_NAME --location centralindia
 
@@ -182,9 +192,9 @@ az keyvault create \
   --enable-rbac-authorization false
 ```
 
-#### 2.2 Create UAT Parameter File
+#### 2.2 Create Staging Parameter File
 
-Create `bicep/parameters/uat.parameters.json`:
+Create `bicep/parameters/stg.parameters.json`:
 
 ```json
 {
@@ -192,13 +202,13 @@ Create `bicep/parameters/uat.parameters.json`:
   "contentVersion": "1.0.0.0",
   "parameters": {
     "appName": {
-      "value": "pavanthakur-orderprocessing-api-xyapp-uat"
+      "value": "pavanthakur-orderprocessing-api-xyapp-stg"
     },
     "keyVaultName": {
-      "value": "kv-orderproc-uat"
+      "value": "kv-orderproc-stg"
     },
     "appServicePlanName": {
-      "value": "asp-orderprocessing-uat"
+      "value": "asp-orderprocessing-stg"
     },
     "location": {
       "value": "centralindia"
@@ -207,37 +217,40 @@ Create `bicep/parameters/uat.parameters.json`:
       "value": "B1"
     },
     "environment": {
-      "value": "uat"
-    },
-    "openPayAdapterBaseUrl": {
-      "value": "https://api.openpay.uat.example.com"
+      "value": "stg"
     }
   }
 }
 ```
 
-#### 2.3 Populate UAT Secrets and Deploy
+#### 2.3 Populate Staging Secrets and Deploy
 
 ```bash
-# Add secrets to UAT Key Vault
-az keyvault secret set --vault-name kv-orderproc-uat \
-  --name "OpenPayAdapter--ApiKey" --value "uat-api-key"
+# Add secrets to Staging Key Vault
+az keyvault secret set --vault-name kv-orderproc-stg \
+  --name "OpenPay--MerchantId" --value "<stg-openpay-merchant-id>"
 
-az keyvault secret set --vault-name kv-orderproc-uat \
-  --name "ApplicationInsights--ConnectionString" --value "uat-app-insights-connection-string"
+az keyvault secret set --vault-name kv-orderproc-stg \
+  --name "OpenPay--PrivateKey" --value "<stg-openpay-private-key>"
+
+az keyvault secret set --vault-name kv-orderproc-stg \
+  --name "OpenPay--DeviceSessionId" --value "<stg-openpay-device-session-id>"
+
+az keyvault secret set --vault-name kv-orderproc-stg \
+  --name "ApplicationInsights--ConnectionString" --value "stg-app-insights-connection-string"
 
 # Run configuration script
-./scripts/configure-secrets-and-run.ps1 -Environment uat
+./scripts/configure-secrets-and-run.ps1 -Environment stg
 
-# Merge dev to uat branch to trigger deployment
-git checkout uat
+# Merge dev to staging branch to trigger deployment
+git checkout staging
 git merge dev
-git push origin uat
+git push origin staging
 ```
 
 ### Phase 3: Production Environment
 
-After UAT validation, deploy to production:
+After staging validation, deploy to production:
 
 #### 3.1 Create Production Key Vault
 
@@ -281,9 +294,6 @@ Create `bicep/parameters/prod.parameters.json`:
     },
     "environment": {
       "value": "prod"
-    },
-    "openPayAdapterBaseUrl": {
-      "value": "https://api.openpay.com"
     }
   }
 }
@@ -294,7 +304,13 @@ Create `bicep/parameters/prod.parameters.json`:
 ```bash
 # Add secrets to Production Key Vault
 az keyvault secret set --vault-name kv-orderproc-prod \
-  --name "OpenPayAdapter--ApiKey" --value "production-api-key"
+  --name "OpenPay--MerchantId" --value "<prod-openpay-merchant-id>"
+
+az keyvault secret set --vault-name kv-orderproc-prod \
+  --name "OpenPay--PrivateKey" --value "<prod-openpay-private-key>"
+
+az keyvault secret set --vault-name kv-orderproc-prod \
+  --name "OpenPay--DeviceSessionId" --value "<prod-openpay-device-session-id>"
 
 az keyvault secret set --vault-name kv-orderproc-prod \
   --name "ApplicationInsights--ConnectionString" --value "production-app-insights-connection-string"
@@ -329,7 +345,7 @@ az webapp config appsettings list \
 az webapp config appsettings list \
   --name $APP_NAME \
   --resource-group $RG_NAME \
-  --query "[?name=='ASPNETCORE_ENVIRONMENT' || name=='OpenPayAdapter__ApiKey']" \
+  --query "[?name=='ASPNETCORE_ENVIRONMENT' || name=='OpenPay__MerchantId' || name=='OpenPay__PrivateKey' || name=='OpenPay__DeviceSessionId']" \
   --output table
 ```
 
@@ -480,7 +496,7 @@ If Key Vault is unavailable, temporarily use direct values:
 az webapp config appsettings set \
   --name $APP_NAME \
   --resource-group $RG_NAME \
-  --settings OpenPayAdapter__ApiKey="temporary-direct-value"
+  --settings OpenPay__PrivateKey="temporary-direct-value"
 
 # Warning: This should only be temporary - rotate secrets after
 ```
@@ -495,7 +511,7 @@ To rotate a secret:
    ```bash
    az keyvault secret set \
      --vault-name $KV_NAME \
-     --name "OpenPayAdapter--ApiKey" \
+    --name "OpenPay--PrivateKey" \
      --value "new-secret-value"
    ```
 

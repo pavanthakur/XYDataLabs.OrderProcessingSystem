@@ -5,7 +5,7 @@ param(
     [string]$Profile = "http",
     
     [Parameter(Mandatory=$false)]
-    [ValidateSet("dev", "uat", "prod")]
+    [ValidateSet("dev", "stg", "prod")]
     [string]$Environment = "dev",
     
     [Parameter(Mandatory=$false)]
@@ -56,13 +56,13 @@ function Get-DockerComposeCommand {
     try {
         docker compose version > $null 2>&1
         if ($LASTEXITCODE -eq 0) {
-            return { param($args) docker compose @args }
+            return { docker compose @args }
         }
     } catch {}
     # Fallback to legacy docker-compose if present
     try {
         if (Get-Command docker-compose -ErrorAction SilentlyContinue) {
-            return { param($args) docker-compose @args }
+            return { docker-compose @args }
         }
     } catch {}
     throw "Docker Compose not found (neither 'docker compose' nor 'docker-compose'). Install Docker Compose plugin."
@@ -96,8 +96,8 @@ $EnterpriseConfig = @{
         BackupRequired = $false
         SecurityLevel = "development"
     }
-    "uat" = @{
-        NetworkName = "xy-uat-network"
+    "stg" = @{
+        NetworkName = "xy-stg-network"
         CleanupPolicy = "conservative"
         BackupRequired = $true
         SecurityLevel = "testing"
@@ -129,6 +129,69 @@ function Write-ColoredOutput {
             New-Item -Type Directory -Path "logs" -Force | Out-Null 
         }
         Add-Content -Path $logFile -Value $logEntry
+    }
+}
+
+function Initialize-LocalDockerSecrets {
+    param([string]$SecretsFilePath = ".env.local")
+
+    $secretDefinitions = @(
+        @{ Name = "LOCAL_SQL_PASSWORD"; Prompt = "Enter LOCAL_SQL_PASSWORD for local Docker SQL" },
+        @{ Name = "LOCAL_CERT_PASSWORD"; Prompt = "Enter LOCAL_CERT_PASSWORD for local HTTPS certificate" },
+        @{ Name = "LOCAL_OPENPAY_MERCHANT_ID"; Prompt = "Enter LOCAL_OPENPAY_MERCHANT_ID for local Docker payment flows" },
+        @{ Name = "LOCAL_OPENPAY_PRIVATE_KEY"; Prompt = "Enter LOCAL_OPENPAY_PRIVATE_KEY for local Docker payment flows" },
+        @{ Name = "LOCAL_OPENPAY_DEVICE_SESSION_ID"; Prompt = "Enter LOCAL_OPENPAY_DEVICE_SESSION_ID for local Docker payment flows" }
+    )
+
+    $fileSecrets = @{}
+    if (Test-Path $SecretsFilePath) {
+        foreach ($line in Get-Content $SecretsFilePath) {
+            if ($line -match '^\s*([A-Z0-9_]+)\s*=\s*(.*)$') {
+                $fileSecrets[$matches[1]] = $matches[2].Trim()
+            }
+        }
+    }
+
+    $storedNewSecret = $false
+    foreach ($definition in $secretDefinitions) {
+        $secretName = $definition.Name
+        $currentValue = (Get-Item -Path "Env:$secretName" -ErrorAction SilentlyContinue).Value
+        if (-not [string]::IsNullOrWhiteSpace($currentValue)) {
+            Write-ColoredOutput "Using $secretName from current environment" "Green" "INFO"
+            $fileSecrets[$secretName] = $currentValue
+            continue
+        }
+
+        $fileValue = if ($fileSecrets.ContainsKey($secretName)) { $fileSecrets[$secretName] } else { $null }
+        if (-not [string]::IsNullOrWhiteSpace($fileValue)) {
+            Set-Item -Path "Env:$secretName" -Value $fileValue
+            Write-ColoredOutput "Loaded $secretName from $SecretsFilePath" "Green" "INFO"
+            continue
+        }
+
+        Write-ColoredOutput "$secretName not set. Prompting once and storing it in $SecretsFilePath (gitignored)." "Yellow" "INFO"
+        $secretValue = Read-Host $definition.Prompt -MaskInput
+        if ([string]::IsNullOrWhiteSpace($secretValue)) {
+            throw "$secretName is required for Docker startup."
+        }
+
+        $fileSecrets[$secretName] = $secretValue
+        Set-Item -Path "Env:$secretName" -Value $secretValue
+        $storedNewSecret = $true
+    }
+
+    if ($storedNewSecret -or -not (Test-Path $SecretsFilePath)) {
+        $fileContent = @(
+            '# Local Docker secrets for this machine only',
+            '# This file is gitignored',
+            "LOCAL_SQL_PASSWORD=$($fileSecrets['LOCAL_SQL_PASSWORD'])",
+            "LOCAL_CERT_PASSWORD=$($fileSecrets['LOCAL_CERT_PASSWORD'])",
+            "LOCAL_OPENPAY_MERCHANT_ID=$($fileSecrets['LOCAL_OPENPAY_MERCHANT_ID'])",
+            "LOCAL_OPENPAY_PRIVATE_KEY=$($fileSecrets['LOCAL_OPENPAY_PRIVATE_KEY'])",
+            "LOCAL_OPENPAY_DEVICE_SESSION_ID=$($fileSecrets['LOCAL_OPENPAY_DEVICE_SESSION_ID'])"
+        )
+        Set-Content -Path $SecretsFilePath -Value $fileContent
+        Write-ColoredOutput "Stored local Docker secrets in $SecretsFilePath for future runs" "Green" "SUCCESS"
     }
 }
 
@@ -198,7 +261,7 @@ function Get-ComposeContainerIds {
         [string]$Profile
     )
     try {
-        $ids = & $ComposeCmd $ComposeFiles --profile $Profile ps -q 2>$null
+        $ids = & $ComposeCmd @ComposeFiles --profile $Profile ps -q 2>$null
         return $ids
     } catch {
         return @()
@@ -259,7 +322,7 @@ function Show-ComposeLogs {
     )
     try {
         Write-ColoredOutput "Recent container logs (last $Tail lines):" "Yellow" "INFO"
-        $logs = & $ComposeCmd $ComposeFiles --profile $Profile logs --no-color --tail $Tail 2>&1
+        $logs = & $ComposeCmd @ComposeFiles --profile $Profile logs --no-color --tail $Tail 2>&1
         $logs | ForEach-Object { Write-ColoredOutput "  $_" "Gray" "INFO" }
     } catch {
         Write-ColoredOutput "Failed to fetch compose logs: $($_.Exception.Message)" "Yellow" "WARNING"
@@ -302,7 +365,7 @@ function Ensure-DockerNetwork {
                 # Create enterprise network with proper isolation and labeling
                 $subnet = switch ($Environment) {
                     "dev" { "172.20.0.0/16" }
-                    "uat" { "172.21.0.0/16" }
+                    "stg" { "172.21.0.0/16" }
                     "prod" { "172.22.0.0/16" }
                     default { "172.20.0.0/16" }
                 }
@@ -513,9 +576,9 @@ try {
     if ($Help) {
         Write-Host "XY Order Processing System Docker Startup Script" -ForegroundColor Cyan
         Write-Host "Usage:" -ForegroundColor Yellow
-        Write-Host "  .\start-docker.ps1 [-Environment dev|uat|prod] [-Profile http|https|all] [options]\n" -ForegroundColor White
+        Write-Host "  .\start-docker.ps1 [-Environment dev|stg|prod] [-Profile http|https|all] [options]\n" -ForegroundColor White
         Write-Host "Core Parameters:" -ForegroundColor Yellow
-        Write-Host "  -Environment <env>        Target environment (dev|uat|prod). Default: dev" -ForegroundColor White
+        Write-Host "  -Environment <env>        Target environment (dev|stg|prod). Default: dev" -ForegroundColor White
         Write-Host "  -Profile <profile>         Service profile (http|https|all). Default: http" -ForegroundColor White
         Write-Host "  -Down                      Stop services for environment/profile." -ForegroundColor White
         Write-Host "  -LegacyBuild               Reuse existing images (development speed)." -ForegroundColor White
@@ -525,9 +588,9 @@ try {
         Write-Host "  -Reset                     Stop stack (if running) + remove images for selected profile before start." -ForegroundColor White
         Write-Host "Enterprise Parameters:" -ForegroundColor Yellow
         Write-Host "  -EnterpriseMode            Enable enterprise networks, logging, cleanup policies." -ForegroundColor White
-        Write-Host "  -ConservativeClean         Adjust cleanup aggressiveness (primarily UAT/prod)." -ForegroundColor White
+        Write-Host "  -ConservativeClean         Adjust cleanup aggressiveness (primarily STG/prod)." -ForegroundColor White
         Write-Host "  -PreservePersistentData    Preserve labeled persistent volumes during cleanup." -ForegroundColor White
-        Write-Host "  -BackupFirst               Force backup prior to start (prod/uat best practice)." -ForegroundColor White
+        Write-Host "  -BackupFirst               Force backup prior to start (prod/stg best practice)." -ForegroundColor White
         Write-Host "Path Overrides:" -ForegroundColor Yellow
         Write-Host "  -SharedSettingsPath <path> Override shared settings file location." -ForegroundColor White
         Write-Host "  -EnvFilePath <path>        (Reserved) Environment file output path (currently not generated)." -ForegroundColor White
@@ -543,7 +606,7 @@ try {
         Write-Host "  Fast reuse + health:      .\start-docker.ps1 -Environment dev -Profile http -LegacyBuild -Strict" -ForegroundColor White
         Write-Host "  Skip warm step:           .\start-docker.ps1 -Environment dev -Profile http -NoPrePull" -ForegroundColor White
         Write-Host "  Full reset & rebuild:     .\start-docker.ps1 -Environment dev -Profile https -Reset" -ForegroundColor White
-        Write-Host "  UAT strict HTTPS:         .\start-docker.ps1 -Environment uat -Profile https -Strict" -ForegroundColor White
+        Write-Host "  STG strict HTTPS:         .\start-docker.ps1 -Environment stg -Profile https -Strict" -ForegroundColor White
         Write-Host "  Prod enterprise w/backup: .\start-docker.ps1 -Environment prod -Profile https -EnterpriseMode -BackupFirst" -ForegroundColor White
         Write-Host "\nDeprecated Parameters (removed): -PrePullRetryCount, -UseBuildFallbackForPrePull, -FailOnPrePullError, -WaitForHealthy, -CleanImages" -ForegroundColor DarkGray
         Write-Host "Replacements: Strict handles resilience & health; Reset replaces CleanImages; NoPrePull skips warm step." -ForegroundColor DarkGray
@@ -571,11 +634,11 @@ try {
             $composeFiles = @("-f", "docker-compose.$Environment.yml")
             Write-ColoredOutput "Using environment-specific compose file: docker-compose.$Environment.yml" "Gray" "INFO"
         } else {
-            throw "Environment-specific compose file docker-compose.$Environment.yml not found. Available environments: dev, uat, prod"
+            throw "Environment-specific compose file docker-compose.$Environment.yml not found. Available environments: dev, stg, prod"
         }
         
         Write-ColoredOutput "Running: $ComposeDisplay $($composeFiles -join ' ') --profile $Profile down" "Gray" "INFO"
-        & $ComposeCmd $composeFiles --profile $Profile down
+        & $ComposeCmd @composeFiles --profile $Profile down
         return
     }
 
@@ -590,6 +653,8 @@ try {
     if ([string]::IsNullOrEmpty($SharedSettingsPath)) {
         $SharedSettingsPath = "../Configuration/sharedsettings.$Environment.json"
     }
+
+    Initialize-LocalDockerSecrets -SecretsFilePath ".env.local"
     
     # Enterprise backup if required
     if ($EnterpriseMode -and ($BackupFirst -or $EnterpriseConfig[$Environment].BackupRequired)) {
@@ -651,7 +716,7 @@ try {
         $composeFiles = @("-f", "docker-compose.$Environment.yml")
         Write-ColoredOutput "Using environment-specific compose file: docker-compose.$Environment.yml" "Green"
     } else {
-        throw "Environment-specific compose file docker-compose.$Environment.yml not found. Available environments: dev, uat, prod"
+        throw "Environment-specific compose file docker-compose.$Environment.yml not found. Available environments: dev, stg, prod"
     }
     
     # Display port information from compose file (no .env generation needed)
@@ -663,8 +728,8 @@ try {
             Write-ColoredOutput "   UI HTTP: 5022" "White"
             Write-ColoredOutput "   UI HTTPS: 5023" "White"
         }
-        "uat" {
-            Write-ColoredOutput "UAT Environment Ports:" "Cyan"
+        "stg" {
+            Write-ColoredOutput "Staging Environment Ports:" "Cyan"
             Write-ColoredOutput "   API HTTP: 5030" "White"
             Write-ColoredOutput "   API HTTPS: 5031" "White"
             Write-ColoredOutput "   UI HTTP: 5032" "White"
@@ -684,7 +749,7 @@ try {
         try {
             Write-ColoredOutput "Reset requested: stopping existing services..." "Yellow" "INFO"
             Write-ColoredOutput "Running (reset): $ComposeDisplay $($composeFiles -join ' ') --profile $Profile down -v" "Gray" "INFO"
-            & $ComposeCmd $composeFiles --profile $Profile down -v 2>$null | Out-Null
+            & $ComposeCmd @composeFiles --profile $Profile down -v 2>$null | Out-Null
         } catch {}
         Remove-ProjectImages -Environment $Environment -Profile $Profile
     }
@@ -715,54 +780,48 @@ try {
     # Start containers depending on mode
     if ($LegacyBuild) {
         Write-ColoredOutput "Using legacy build mode (development speed)..." "Yellow" "WARNING"
-        Write-ColoredOutput "⚠️  Not recommended for UAT/Production environments" "Yellow" "WARNING"
+        Write-ColoredOutput "⚠️  Not recommended for STG/Production environments" "Yellow" "WARNING"
         
         # Legacy mode: Use existing images if available
         $dockerCmd = "$ComposeDisplay $($composeFiles -join ' ') --profile $Profile up -d"
         Write-ColoredOutput "Running: $dockerCmd" "Gray"
-        $dockerOutput = & $ComposeCmd $composeFiles --profile $Profile up -d 2>&1
+        # Stream directly — avoids 2>&1 TTY breakage
+        & $ComposeCmd @composeFiles --profile $Profile up -d
+        $dockerOutput = ""
     } else {
         Write-ColoredOutput "Building fresh container images (Azure-style deployment)..." "Cyan" "INFO"
         Write-ColoredOutput "🏢 Enterprise Mode: Ensuring reproducible, secure builds" "Green" "INFO"
         $buildCmd = "$ComposeDisplay $($composeFiles -join ' ') --profile $Profile build --no-cache"
         Write-ColoredOutput "Running: $buildCmd" "Gray"
-        $buildOutput = & $ComposeCmd $composeFiles --profile $Profile build --no-cache 2>&1
-        $buildOutputString = $buildOutput -join "`n"
+        # Stream build output directly to console — capturing with 2>&1 breaks Docker BuildKit's
+        # TTY/progress-pipe detection on Windows and causes instant exit code 1 before any layer builds.
+        & $ComposeCmd @composeFiles --profile $Profile build --no-cache
         $buildExitCode = $LASTEXITCODE
 
-        # Check build success (support modern BuildKit outputs)
-        $buildSucceeded = ($buildExitCode -eq 0) -or `
-                          ($buildOutputString -match "Successfully built") -or `
-                          ($buildOutputString -match "naming to") -or `
-                          ($buildOutputString -match "exporting to image")
-
-        # Fallback: validate target images exist even if logs are ambiguous
-        if (-not $buildSucceeded) {
-            $targetImages = @()
-            switch ($Profile) {
-                'http'  { $targetImages = @("xydatalabs-orderprocessingsystem-api-http:$Environment", "xydatalabs-orderprocessingsystem-ui-http:$Environment") }
-                'https' { $targetImages = @("xydatalabs-orderprocessingsystem-api-https:$Environment", "xydatalabs-orderprocessingsystem-ui-https:$Environment") }
-                'all'   { $targetImages = @(
-                                "xydatalabs-orderprocessingsystem-api-http:$Environment", "xydatalabs-orderprocessingsystem-ui-http:$Environment",
-                                "xydatalabs-orderprocessingsystem-api-https:$Environment", "xydatalabs-orderprocessingsystem-ui-https:$Environment"
-                             ) }
-            }
-            $existing = $false
-            foreach ($img in $targetImages) {
-                $id = docker images -q $img 2>$null
-                if (-not [string]::IsNullOrWhiteSpace($id)) { $existing = $true }
-            }
-            if ($existing) { $buildSucceeded = $true }
+        # Determine expected target images for this profile
+        $targetImages = @()
+        switch ($Profile) {
+            'http'  { $targetImages = @("xydatalabs-orderprocessingsystem-api-http:$Environment", "xydatalabs-orderprocessingsystem-ui-http:$Environment") }
+            'https' { $targetImages = @("xydatalabs-orderprocessingsystem-api-https:$Environment", "xydatalabs-orderprocessingsystem-ui-https:$Environment") }
+            'all'   { $targetImages = @(
+                            "xydatalabs-orderprocessingsystem-api-http:$Environment", "xydatalabs-orderprocessingsystem-ui-http:$Environment",
+                            "xydatalabs-orderprocessingsystem-api-https:$Environment", "xydatalabs-orderprocessingsystem-ui-https:$Environment"
+                         ) }
         }
 
+        # Primary success check: exit code; fallback: verify images exist in daemon
+        $existing = $false
+        foreach ($img in $targetImages) {
+            $id = docker images -q $img 2>$null
+            if (-not [string]::IsNullOrWhiteSpace($id)) { $existing = $true }
+        }
+        $buildSucceeded = ($buildExitCode -eq 0) -or $existing
+
         if (-not $buildSucceeded) {
-            Write-ColoredOutput "⚠️  Build step reported failure. Checking for existing target images..." "Yellow" "WARNING"
-            if (-not $existing) {
-                Write-ColoredOutput "❌ Build failed and required images are missing." "Red" "ERROR"
-                throw "Docker build failed with exit code: $buildExitCode"
-            } else {
-                Write-ColoredOutput "Proceeding using existing images (skipping build failure)." "Yellow" "WARNING"
-            }
+            Write-ColoredOutput "❌ Build failed (exit code $buildExitCode) and required images are missing." "Red" "ERROR"
+            Write-ColoredOutput "  Tip: run manually to see full output:" "Yellow" "INFO"
+            Write-ColoredOutput "  $buildCmd" "White" "INFO"
+            throw "Docker build failed with exit code: $buildExitCode"
         } else {
             Write-ColoredOutput "✅ Fresh images built successfully (enterprise-ready)" "Green" "SUCCESS"
         }
@@ -772,7 +831,9 @@ try {
         # Start containers
         $dockerCmd = "$ComposeDisplay $($composeFiles -join ' ') --profile $Profile up -d"
         Write-ColoredOutput "Running: $dockerCmd" "Gray"
-        $dockerOutput = & $ComposeCmd $composeFiles --profile $Profile up -d 2>&1
+        # Stream up output directly (same TTY reason as build above)
+        & $ComposeCmd @composeFiles --profile $Profile up -d
+        $dockerOutput = ""
     }
     
     # Health wait implicit for Strict and LegacyBuild
@@ -861,7 +922,7 @@ try {
             
             # Retry the command
             Write-ColoredOutput "Retrying Docker Compose startup..." "Yellow" "INFO"
-            $dockerOutput = & $ComposeCmd $composeFiles --profile $Profile up -d 2>&1
+            $dockerOutput = & $ComposeCmd @composeFiles --profile $Profile up -d 2>&1
             
             # Check retry result
             if ($LASTEXITCODE -ne 0) {
@@ -929,7 +990,7 @@ try {
                     Write-ColoredOutput "   UI (HTTPS):  https://localhost:5023" "White" "INFO"
                 }
             }
-            "uat" {
+            "stg" {
                 if ($Profile -eq "http" -or $Profile -eq "all") {
                     Write-ColoredOutput "   API (HTTP):  http://localhost:5030/swagger" "White" "INFO"
                     Write-ColoredOutput "   UI (HTTP):   http://localhost:5032" "White" "INFO"
@@ -961,9 +1022,9 @@ try {
             if ($EnterpriseMode) {
                 Write-ColoredOutput "  - Enterprise: Aggressive cleanup available" "Gray" "INFO"
             }
-        } elseif ($Environment -eq "uat") {
+        } elseif ($Environment -eq "stg") {
             Write-ColoredOutput "" "White"
-            Write-ColoredOutput "UAT Environment Notes:" "Cyan" "INFO"
+            Write-ColoredOutput "Staging Environment Notes:" "Cyan" "INFO"
             Write-ColoredOutput "  - Production-like configuration for testing" "Gray" "INFO"
             Write-ColoredOutput "  - Enhanced monitoring and health checks" "Gray" "INFO"
             Write-ColoredOutput "  - Resource limits applied" "Gray" "INFO"

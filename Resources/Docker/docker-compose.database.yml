@@ -11,7 +11,7 @@ services:
     hostname: sql-server
     environment:
       - ACCEPT_EULA=Y
-      - SA_PASSWORD=Admin100@
+      - SA_PASSWORD=${LOCAL_SQL_PASSWORD}
       - MSSQL_PID=Express
       - MSSQL_TCP_PORT=1433
       - MSSQL_COLLATION=SQL_Latin1_General_CP1_CI_AS
@@ -26,7 +26,7 @@ services:
       - xy-database-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P Admin100@ -Q 'SELECT 1'"]
+      test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${LOCAL_SQL_PASSWORD} -Q 'SELECT 1'"]
       interval: 30s
       timeout: 10s
       retries: 5

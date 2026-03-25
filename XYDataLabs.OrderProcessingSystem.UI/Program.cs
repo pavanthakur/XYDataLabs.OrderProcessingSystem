@@ -1,9 +1,13 @@
 ﻿using Microsoft.Extensions.Configuration;
 using System.IO;
 using Serilog;
+using Serilog.Context;
 using Serilog.Events;
 using Microsoft.Extensions.Options;
-using XYDataLabs.OrderProcessingSystem.Utilities;
+using XYDataLabs.OrderProcessingSystem.SharedKernel;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Configuration;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 
 // Bootstrap Serilog as early as possible so Log.* writes go to console immediately
 // Azure App Service Deployment - Fix for Application Not Starting
@@ -29,38 +33,14 @@ Console.WriteLine("[EARLIEST DEBUG] Environment variable check completed...");
 var environmentName = builder.Environment.EnvironmentName switch
 {
     "Development" => Constants.Environments.Dev,
-    "Staging" => Constants.Environments.Uat,
+    "Staging" => Constants.Environments.Staging,
     "Production" => Constants.Environments.Production,
     _ => Constants.Environments.Dev // Default to dev for any other environment
 };
 
+var configuredActiveTenantCode = "none";
+
 Console.WriteLine("[EARLIEST DEBUG] Environment name mapping completed...");
-
-// Configure Application Insights for environment-wise telemetry and logging
-var appInsightsConnectionString = builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"] 
-    ?? Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CONNECTION_STRING");
-
-if (!string.IsNullOrWhiteSpace(appInsightsConnectionString))
-{
-    try
-    {
-        builder.Services.AddApplicationInsightsTelemetry(options =>
-        {
-            options.ConnectionString = appInsightsConnectionString;
-            options.EnableAdaptiveSampling = true;
-            options.EnableQuickPulseMetricStream = true;
-        });
-        Log.Information("[CONFIG] Application Insights enabled for {Environment} environment", environmentName);
-    }
-    catch (Exception ex)
-    {
-        Log.Error(ex, "[CONFIG] Failed to configure Application Insights for {Environment} environment - application will continue without telemetry", environmentName);
-    }
-}
-else
-{
-    Log.Warning("[CONFIG] Application Insights NOT configured - connection string missing for {Environment} environment", environmentName);
-}
 
 // Configure Serilog with environment-aware paths
 builder.Host.UseSerilog((context, services, loggerConfiguration) =>
@@ -73,28 +53,30 @@ builder.Host.UseSerilog((context, services, loggerConfiguration) =>
         .Enrich.FromLogContext()
         .Enrich.WithProperty("Environment", environmentName)
         .Enrich.WithProperty("Application", "UI")
-        .Enrich.WithProperty("Runtime", isDocker ? "Docker" : "Local");
+        .Enrich.WithProperty("Runtime", isDocker ? "Docker" : "Local")
+        .Enrich.WithProperty("TenantCode", configuredActiveTenantCode)
+        .Enrich.WithProperty("RequestedTenantCode", "none");
 
     if (isDocker)
     {
         // Docker: Use console output (primary) + file output 
         loggerConfiguration
-            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] [{Runtime}] {Message:lj}{NewLine}{Exception}")
+            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{NewLine}{Exception}")
             .WriteTo.File(
                 path: "/logs/ui-.log",
                 rollingInterval: RollingInterval.Day,
-                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] [{Runtime}] {Message:lj}{Exception}{NewLine}"
+                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{Exception}{NewLine}"
             );
     }
     else
     {
         // Non-Docker: Use file output + console
         loggerConfiguration
-            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] [{Runtime}] {Message:lj}{NewLine}{Exception}")
+            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{NewLine}{Exception}")
             .WriteTo.File(
                 path: "../logs/ui-.log",
                 rollingInterval: RollingInterval.Day,
-                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] [{Runtime}] {Message:lj}{Exception}{NewLine}"
+                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{Exception}{NewLine}"
             );
     }
 });
@@ -139,12 +121,51 @@ try
     {
         Console.WriteLine("[CONFIG] ✅ Configuration loaded successfully from Azure Key Vault");
     }
+
+    configuredActiveTenantCode = builder.Configuration
+        .GetSection(TenantConfigurationOptions.SectionName)
+        .Get<TenantConfigurationOptions>()?
+        .ActiveTenantCode?
+        .Trim();
+
+    if (string.IsNullOrWhiteSpace(configuredActiveTenantCode))
+    {
+        configuredActiveTenantCode = "none";
+    }
 }
 catch (Exception ex)
 {
     Console.WriteLine($"[FATAL] Configuration initialization failed: {ex.Message}");
     throw; // Re-throw to stop application startup
 }
+
+var applicationInsightsOptions = ApplicationInsightsOptions.FromConfiguration(builder.Configuration);
+var appInsightsConnectionString = applicationInsightsOptions.ConnectionString;
+
+if (!string.IsNullOrWhiteSpace(appInsightsConnectionString))
+{
+    try
+    {
+        builder.Services.AddApplicationInsightsTelemetry(options =>
+        {
+            options.ConnectionString = appInsightsConnectionString;
+            options.EnableAdaptiveSampling = true;
+            options.EnableQuickPulseMetricStream = true;
+        });
+        Log.Information("[CONFIG] Application Insights enabled for {Environment} environment", environmentName);
+    }
+    catch (Exception ex)
+    {
+        Log.Error(ex, "[CONFIG] Failed to configure Application Insights for {Environment} environment - application will continue without telemetry", environmentName);
+    }
+}
+else
+{
+    Log.Warning("[CONFIG] Application Insights NOT configured - connection string missing for {Environment} environment", environmentName);
+}
+
+// OpenTelemetry distributed tracing and metrics (Phase 3 — Observability)
+builder.Services.AddObservability("OrderProcessingSystem.UI", builder.Configuration);
 
 // Use SharedSettingsLoader to load sharedsettings.json
 // var sharedConfig = SharedSettingsLoader.LoadSharedSettings(builder.Configuration, builder.Environment.EnvironmentName, isDocker);
@@ -209,10 +230,48 @@ else
 builder.Services.AddControllersWithViews();
 builder.Services.AddRazorPages().AddRazorRuntimeCompilation();
 
+builder.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
+
 var app = builder.Build();
 
 // Log requests to help diagnose issues
-app.UseSerilogRequestLogging();
+app.Use(async (context, next) =>
+{
+    var requestedTenantCode = context.Request.Headers[TenantMiddleware.TenantHeaderName].FirstOrDefault()?.Trim();
+    // Fallback to query parameter: OpenPay 3DS browser redirects carry no request headers
+    if (string.IsNullOrWhiteSpace(requestedTenantCode))
+        requestedTenantCode = context.Request.Query["tenantCode"].FirstOrDefault()?.Trim();
+    var resolvedTenantCode = string.IsNullOrWhiteSpace(requestedTenantCode)
+        ? configuredActiveTenantCode
+        : requestedTenantCode;
+
+    using (LogContext.PushProperty("TenantCode", string.IsNullOrWhiteSpace(resolvedTenantCode) ? "none" : resolvedTenantCode))
+    using (LogContext.PushProperty("RequestedTenantCode", string.IsNullOrWhiteSpace(requestedTenantCode) ? "none" : requestedTenantCode))
+    {
+        await next();
+    }
+});
+
+app.UseSerilogRequestLogging(options =>
+{
+    options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms for tenant {TenantCode}";
+    options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+    {
+        var requestedTenantCode = httpContext.Request.Headers[TenantMiddleware.TenantHeaderName].FirstOrDefault()?.Trim();
+        // Fallback to query parameter: OpenPay 3DS browser redirects carry no request headers
+        if (string.IsNullOrWhiteSpace(requestedTenantCode))
+            requestedTenantCode = httpContext.Request.Query["tenantCode"].FirstOrDefault()?.Trim();
+        var resolvedTenantCode = string.IsNullOrWhiteSpace(requestedTenantCode)
+            ? configuredActiveTenantCode
+            : requestedTenantCode;
+
+        diagnosticContext.Set("TenantCode", string.IsNullOrWhiteSpace(resolvedTenantCode) ? "none" : resolvedTenantCode);
+        diagnosticContext.Set("RequestedTenantCode", string.IsNullOrWhiteSpace(requestedTenantCode) ? "none" : requestedTenantCode);
+        diagnosticContext.Set("TenantHeaderName", TenantMiddleware.TenantHeaderName);
+    };
+});
+
+app.UseMiddleware<CorrelationMiddleware>();
 
 SharedSettingsLoader.PrintApiSettingsDebug(apiSettings, activeSettings, "UI", isDocker);
 

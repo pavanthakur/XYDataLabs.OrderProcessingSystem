@@ -14,6 +14,27 @@ param(
     [string]$GitHubOwner = 'pavanthakur',
     
     [Parameter(Mandatory=$false)]
+    [string]$OpenPayMerchantId,
+
+    [Parameter(Mandatory=$false)]
+    [string]$OpenPayPrivateKey,
+
+    [Parameter(Mandatory=$false)]
+    [string]$OpenPayDeviceSessionId,
+
+    [Parameter(Mandatory=$false)]
+    [bool]$OpenPayIsProduction = $false,
+
+    [Parameter(Mandatory=$false)]
+    [string]$OpenPayRedirectUrl,
+
+    [Parameter(Mandatory=$false)]
+    [string]$ApiHttpsCertPassword,
+
+    [Parameter(Mandatory=$false)]
+    [string]$UiHttpsCertPassword,
+
+    [Parameter(Mandatory=$false)]
     [string]$OpenPayApiKey,
     
     [Parameter(Mandatory=$false)]
@@ -75,6 +96,22 @@ function Invoke-AzCommandWithRetry {
     
     # If we get here, all retries failed
     throw "Command failed after $MaxRetries attempts: $Command"
+}
+
+function Set-KeyVaultSecretValue {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$VaultName,
+
+        [Parameter(Mandatory=$true)]
+        [string]$SecretName,
+
+        [Parameter(Mandatory=$true)]
+        [string]$SecretValue
+    )
+
+    $secretCmd = "az keyvault secret set --vault-name $VaultName --name '$SecretName' --value '$SecretValue' --output json"
+    return Invoke-AzCommandWithRetry -Command $secretCmd
 }
 
 Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
@@ -156,37 +193,80 @@ try {
     }
     Write-Host ""
     
-    # 1. Add OpenPayAdapter API Key
-    Write-Host "🔑 [1/2] Adding OpenPayAdapter API Key..." -ForegroundColor Cyan
-    
-    if ([string]::IsNullOrWhiteSpace($OpenPayApiKey)) {
-        # Generate a placeholder value for development/testing
-        Write-Host "  ⚠️  No API key provided, using placeholder value" -ForegroundColor Yellow
-        $OpenPayApiKey = "openpay-api-key-placeholder-$Environment-$(Get-Date -Format 'yyyyMMdd')"
-        Write-Host "  ℹ️  NOTE: Replace this with actual API key before production use" -ForegroundColor Yellow
+    # 1. Add OpenPay and HTTPS certificate secrets
+    Write-Host "🔑 [1/3] Adding OpenPay and HTTPS certificate secrets..." -ForegroundColor Cyan
+
+    if ([string]::IsNullOrWhiteSpace($OpenPayPrivateKey) -and -not [string]::IsNullOrWhiteSpace($OpenPayApiKey)) {
+        Write-Host "  ⚠️  OpenPayApiKey is deprecated. Using it as OpenPayPrivateKey for backward compatibility." -ForegroundColor Yellow
+        $OpenPayPrivateKey = $OpenPayApiKey
     }
-    
-    try {
-        $secretCmd = "az keyvault secret set --vault-name $kvName --name 'OpenPayAdapter--ApiKey' --value '$OpenPayApiKey' --output json"
-        $secretResult = Invoke-AzCommandWithRetry -Command $secretCmd
-        
-        if ($secretResult.Success) {
-            Write-Host "  ✅ OpenPayAdapter--ApiKey added successfully" -ForegroundColor Green
-            $secretsAdded++
-        } else {
-            Write-Host "  ❌ Failed to add OpenPayAdapter--ApiKey" -ForegroundColor Red
-            Write-Host "  Error details: $($secretResult.Output)" -ForegroundColor Red
+
+    if ([string]::IsNullOrWhiteSpace($OpenPayMerchantId)) {
+        $OpenPayMerchantId = "set-openpay-merchant-id-$Environment"
+        Write-Host "  ⚠️  OpenPayMerchantId not provided. Placeholder secret will be created." -ForegroundColor Yellow
+    }
+
+    if ([string]::IsNullOrWhiteSpace($OpenPayPrivateKey)) {
+        $OpenPayPrivateKey = "set-openpay-private-key-$Environment"
+        Write-Host "  ⚠️  OpenPayPrivateKey not provided. Placeholder secret will be created." -ForegroundColor Yellow
+    }
+
+    if ([string]::IsNullOrWhiteSpace($OpenPayDeviceSessionId)) {
+        $OpenPayDeviceSessionId = "set-openpay-device-session-id-$Environment"
+        Write-Host "  ⚠️  OpenPayDeviceSessionId not provided. Placeholder secret will be created." -ForegroundColor Yellow
+    }
+
+    if ([string]::IsNullOrWhiteSpace($OpenPayRedirectUrl)) {
+        $OpenPayRedirectUrl = switch ($Environment) {
+            'dev' { 'https://your-domain.com/payment/callback' }
+            'staging' { 'https://stg-domain.com/payment/callback' }
+            'prod' { 'https://production-domain.com/payment/callback' }
+        }
+        Write-Host "  ⚠️  OpenPayRedirectUrl not provided. Using environment default: $OpenPayRedirectUrl" -ForegroundColor Yellow
+    }
+
+    if ([string]::IsNullOrWhiteSpace($ApiHttpsCertPassword)) {
+        $ApiHttpsCertPassword = "set-api-https-cert-password-$Environment"
+        Write-Host "  ⚠️  ApiHttpsCertPassword not provided. Placeholder secret will be created." -ForegroundColor Yellow
+    }
+
+    if ([string]::IsNullOrWhiteSpace($UiHttpsCertPassword)) {
+        $UiHttpsCertPassword = "set-ui-https-cert-password-$Environment"
+        Write-Host "  ⚠️  UiHttpsCertPassword not provided. Placeholder secret will be created." -ForegroundColor Yellow
+    }
+
+    $secretMap = [ordered]@{
+        'OpenPay--MerchantId' = $OpenPayMerchantId
+        'OpenPay--PrivateKey' = $OpenPayPrivateKey
+        'OpenPay--DeviceSessionId' = $OpenPayDeviceSessionId
+        'OpenPay--IsProduction' = $OpenPayIsProduction.ToString().ToLowerInvariant()
+        'OpenPay--RedirectUrl' = $OpenPayRedirectUrl
+        'ApiSettings--API--https--CertPassword' = $ApiHttpsCertPassword
+        'ApiSettings--UI--https--CertPassword' = $UiHttpsCertPassword
+    }
+
+    foreach ($secretEntry in $secretMap.GetEnumerator()) {
+        try {
+            $secretResult = Set-KeyVaultSecretValue -VaultName $kvName -SecretName $secretEntry.Key -SecretValue $secretEntry.Value
+
+            if ($secretResult.Success) {
+                Write-Host "  ✅ $($secretEntry.Key) added successfully" -ForegroundColor Green
+                $secretsAdded++
+            } else {
+                Write-Host "  ❌ Failed to add $($secretEntry.Key)" -ForegroundColor Red
+                Write-Host "  Error details: $($secretResult.Output)" -ForegroundColor Red
+                $secretsFailed++
+            }
+        } catch {
+            Write-Host "  ❌ Exception adding $($secretEntry.Key): $($_.Exception.Message)" -ForegroundColor Red
             $secretsFailed++
         }
-    } catch {
-        Write-Host "  ❌ Exception adding OpenPayAdapter--ApiKey: $($_.Exception.Message)" -ForegroundColor Red
-        $secretsFailed++
     }
     
     Write-Host ""
     
     # 2. Add Application Insights Connection String
-    Write-Host "🔑 [2/2] Adding Application Insights Connection String..." -ForegroundColor Cyan
+    Write-Host "🔑 [2/3] Adding Application Insights Connection String..." -ForegroundColor Cyan
     
     if ([string]::IsNullOrWhiteSpace($ApplicationInsightsConnectionString)) {
         # Retrieve from Application Insights resource
@@ -229,6 +309,8 @@ try {
         }
     }
     
+    Write-Host ""
+    Write-Host "🔑 [3/3] Key Vault secret population complete." -ForegroundColor Cyan
     Write-Host ""
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
     Write-Host "📊 Secret Population Summary:" -ForegroundColor Cyan

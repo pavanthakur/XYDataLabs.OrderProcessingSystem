@@ -1,9 +1,6 @@
-﻿@using Microsoft.Extensions.Configuration
-@{
+﻿@{
     ViewData["Title"] = "Payment Form";
 }
-
-@inject IConfiguration Configuration
 
 <div class="container py-5">
     <div class="row justify-content-center">
@@ -23,7 +20,7 @@
                         <div class="mb-3">
                             <label for="cardNumber" class="form-label">Card Number</label>
                             <input type="text" class="form-control" id="cardNumber" value="4111111111111111"
-                                   maxlength="16" required>
+                                   maxlength="19" inputmode="numeric" autocomplete="cc-number" required>
                         </div>
                         <div class="row mb-3">
                             <div class="col">
@@ -47,8 +44,8 @@
                             <input type="email" class="form-control" id="email" value="" required>
                         </div>
                         <div class="mb-3">
-                            <label for="orderId" class="form-label">Order ID</label>
-                            <input type="text" class="form-control" id="orderId" value="" required>
+                            <label for="customerOrderId" class="form-label">Customer Order ID</label>
+                            <input type="text" class="form-control" id="customerOrderId" value="" maxlength="128" autocomplete="off" required>
                         </div>
                         <button id="pay-button" type="submit" class="btn btn-primary w-100">Process Payment</button>
                     </form>
@@ -60,7 +57,6 @@
 
 @section Scripts {
     <script>
-        // Always use the value from backend-provided ViewData
         const API_BASE_URL = '@ViewData["ApiBaseUrl"]';
         console.log('API_BASE_URL:', API_BASE_URL);
     </script>

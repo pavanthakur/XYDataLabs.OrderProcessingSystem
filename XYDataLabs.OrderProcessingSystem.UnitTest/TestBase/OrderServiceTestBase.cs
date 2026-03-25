@@ -2,35 +2,22 @@
 using Bogus;
 using FluentValidation;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
-using XYDataLabs.OrderProcessingSystem.Application.Interfaces;
-using XYDataLabs.OrderProcessingSystem.Application.Services;
+using XYDataLabs.OrderProcessingSystem.Application.Features.Orders.Commands;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
-using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 using Microsoft.EntityFrameworkCore;
 using Moq;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace XYDataLabs.OrderProcessingSystem.UnitTest.TestBase
 {
-    public abstract class OrderServiceTestBase : OrderProcessingSystemTestBase<OrderService>
+    public abstract class OrderServiceTestBase : OrderProcessingSystemTestBase<CreateOrderCommandHandler>
     {
-        protected readonly IOrderService _orderService;
-
         protected readonly int CustomerId = 1;
         protected readonly List<int> ProductIds;
         protected readonly Customer Customer;
         protected readonly List<Product> Products;
-        protected readonly OrderDto OrderDto;
-
 
         protected OrderServiceTestBase()
         {
-            _orderService = new OrderService(MockDbContext.Object, MockOrderValidator.Object, MockMapper.Object);
-
             Customer = GenerateCustomer();
             Products = GenerateProducts(3);
             ProductIds = Products.Select(p => p.ProductId).ToList();
@@ -80,6 +67,7 @@ namespace XYDataLabs.OrderProcessingSystem.UnitTest.TestBase
                     .Generate(f.Random.Int(1, 5))))
                 .Generate(count);
         }
+
         protected Order CreateTestOrder(int orderId)
         {
             return new Faker<Order>()
@@ -105,8 +93,8 @@ namespace XYDataLabs.OrderProcessingSystem.UnitTest.TestBase
                         .RuleFor(op => op.OrderId, _ => o.OrderId)
                         .RuleFor(op => op.ProductId, f => f.Random.Int(1, 100))
                         .RuleFor(op => op.Quantity, f => f.Random.Int(1, 10))
-                        .Generate(f.Random.Int(1, 5)))) // Generate List<OrderProduct> and assign to List<OrderProduct>
-                    .Generate(f.Random.Int(1, orderCount)))); // Generate List<Order> and assign to List<Order>
+                        .Generate(f.Random.Int(1, 5))))
+                    .Generate(f.Random.Int(1, orderCount))));
 
             return customerFaker.Generate(customerCount);
         }
@@ -127,8 +115,8 @@ namespace XYDataLabs.OrderProcessingSystem.UnitTest.TestBase
                         .RuleFor(op => op.OrderId, _ => o.OrderId)
                         .RuleFor(op => op.ProductId, f => f.Random.Int(1, 100))
                         .RuleFor(op => op.Quantity, f => f.Random.Int(1, 10))
-                        .Generate(f.Random.Int(1, 5)))) // Generate List<OrderProduct> and assign to List<OrderProduct>
-                    .Generate(f.Random.Int(1, orderCount)))); // Generate List<Order> and assign to List<Order>
+                        .Generate(f.Random.Int(1, 5))))
+                    .Generate(f.Random.Int(1, orderCount))));
 
             return customerFaker.Generate(customerCount);
         }

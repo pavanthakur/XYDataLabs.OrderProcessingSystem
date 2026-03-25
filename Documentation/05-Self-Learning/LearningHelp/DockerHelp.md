@@ -125,7 +125,7 @@ Quick scenarios:
 - HTTPS certificate/trust issues (development)
   - Fix:
     ```powershell
-    dotnet dev-certs https -ep .\Resources\Certificates\aspnetapp.pfx -p P@ss100
+    dotnet dev-certs https -ep .\Resources\Certificates\aspnetapp.pfx -p <local-cert-password>
     dotnet dev-certs https --trust
     ```
 

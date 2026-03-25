@@ -1,0 +1,164 @@
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning",
+      "Microsoft.AspNetCore.Hosting.Diagnostics": "Error",
+      "System": "Warning"
+    }
+  },
+  "AllowedHosts": "*",
+  "ConnectionStrings": {
+    "OrderProcessingSystemDbConnection": "Server=host.docker.internal,1433;Database=OrderProcessingSystem_Stg;User Id=sa;Password=__LOCAL_SQL_PASSWORD__;TrustServerCertificate=True;",
+    "OrderProcessingSystemDbConnection_Local": "Server=localhost,1433;Database=OrderProcessingSystem_Stg;User Id=sa;Password=__LOCAL_SQL_PASSWORD__;TrustServerCertificate=True;"
+  },
+  "OpenPay": {
+    "MerchantId": "__OPENPAY_MERCHANT_ID__",
+    "PrivateKey": "__OPENPAY_PRIVATE_KEY__",
+    "DeviceSessionId": "__OPENPAY_DEVICE_SESSION_ID__",
+    "IsProduction": false,
+    "RedirectUrl": "https://stg-domain.com/payment/callback"
+  },
+  "Observability": {
+    "EnableEfSensitiveDataLogging": false
+  },
+  "TenantConfiguration": {
+    "ActiveTenantCode": "TenantA"
+  },
+  "Serilog": {
+    "Using": [ "Serilog.Sinks.File" ],
+    "MinimumLevel": {
+      "Default": "Information",
+      "Override": {
+        "Microsoft": "Warning",
+        "Microsoft.AspNetCore.Hosting.Diagnostics": "Error",
+        "Microsoft.Hosting.Lifetime": "Information",
+        "System": "Warning"
+      }
+    },
+    "WriteTo": [
+      {
+        "Name": "File",
+        "Args": {
+          "path": "logs/webapi-.log",
+          "rollingInterval": "Day",
+          "outputTemplate": "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{TraceId}] {Level:u3} {Username} {Message:lj}{Exception}{NewLine}"
+        }
+      }
+    ]
+  },
+  "SerilogUI": {
+    "Using": [ "Serilog.Sinks.File" ],
+    "MinimumLevel": {
+      "Default": "Information",
+      "Override": {
+        "Microsoft": "Warning",
+        "Microsoft.AspNetCore.Hosting.Diagnostics": "Error",
+        "Microsoft.Hosting.Lifetime": "Information",
+        "System": "Warning"
+      }
+    },
+    "WriteTo": [
+      {
+        "Name": "File",
+        "Args": {
+          "path": "logs/ui-.log",
+          "rollingInterval": "Day",
+          "outputTemplate": "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{TraceId}] {Level:u3} {Username} {Message:lj}{Exception}{NewLine}"
+        }
+      }
+    ]
+  },
+  "ApiSettings": {
+    "UI": {
+      "http": {
+        "Host": "localhost",
+        "Port": 5032,
+        "HttpsEnabled": false
+      },
+      "https": {
+        "Host": "localhost",
+        "Port": 5033,
+        "HttpsEnabled": true,
+        "CertPassword": "__CERT_PASSWORD__",
+        "CertPath": "/https/aspnetapp.pfx"
+      }
+    },
+    "API": {
+      "http": {
+        "Host": "localhost",
+        "Port": 5030,
+        "HttpsEnabled": false
+      },
+      "https": {
+        "Host": "localhost",
+        "Port": 5031,
+        "HttpsEnabled": true,
+        "CertPassword": "__CERT_PASSWORD__",
+        "CertPath": "/https/aspnetapp.pfx"
+      }
+    }
+  },
+  "LaunchSettings": {
+    "Environment": "Staging",
+    "DefaultProfile": "https",
+    "LaunchBrowser": false,
+    "HotReloadEnabled": false,
+    "API": {
+      "LaunchUrl": "swagger",
+      "EnvironmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Staging",
+        "CORS_ALLOWED_ORIGINS": "https://localhost:5033;https://stg-ui.xydatalabs.com"
+      }
+    },
+    "UI": {
+      "EnvironmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Staging",
+        "API_BASE_URL": "https://localhost:5031"
+      }
+    }
+  },
+  "Azure": {
+    "Local": {
+      "Enabled": false
+    },
+    "Cloud": {
+      "Enabled": true,
+      "ResourceGroup": "rg-orderprocessing-stg",
+      "Location": "East US",
+      "WebApps": {
+        "API": {
+          "Name": "wa-orderprocessing-api-stg",
+          "Url": "https://wa-orderprocessing-api-stg.azurewebsites.net"
+        },
+        "UI": {
+          "Name": "wa-orderprocessing-ui-stg",
+          "Url": "https://wa-orderprocessing-ui-stg.azurewebsites.net"
+        }
+      },
+      "Database": {
+        "ServerName": "sql-orderprocessing-stg.database.windows.net",
+        "DatabaseName": "OrderProcessingSystem_Stg"
+      }
+    }
+  },
+  "Docker": {
+    "Networks": {
+      "Name": "xy-stg-network",
+      "Subnet": "172.21.0.0/16",
+      "Gateway": "172.21.0.1"
+    },
+    "Volumes": {
+      "Database": {
+        "Name": "orderprocessing_db_stg",
+        "Persistent": true,
+        "BackupEnabled": true
+      },
+      "Logs": {
+        "Name": "orderprocessing_logs_stg",
+        "Persistent": true,
+        "BackupEnabled": true
+      }
+    }
+  }
+}

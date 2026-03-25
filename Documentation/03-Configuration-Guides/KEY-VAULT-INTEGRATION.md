@@ -25,7 +25,8 @@ OpenPay--PrivateKey
 OpenPay--DeviceSessionId
 OpenPay--IsProduction
 OpenPay--RedirectUrl
-OpenPayAdapter--ApiKey
+ApiSettings--API--https--CertPassword
+ApiSettings--UI--https--CertPassword
 ApplicationInsights--ConnectionString
 ```
 
@@ -56,10 +57,11 @@ Secrets are automatically populated by the CI/CD workflow using a dedicated scri
 ```
 
 This script:
-1. Adds `OpenPayAdapter--ApiKey` (placeholder for dev/staging, actual key for prod)
-2. Auto-retrieves and adds `ApplicationInsights--ConnectionString`
-3. Validates Key Vault exists before adding secrets
-4. Provides comprehensive logging and error handling
+1. Adds `OpenPay--*` secrets used by the application configuration binder
+2. Adds `ApiSettings--API--https--CertPassword` and `ApiSettings--UI--https--CertPassword`
+3. Auto-retrieves and adds `ApplicationInsights--ConnectionString`
+4. Validates Key Vault exists before adding secrets
+5. Provides comprehensive logging and error handling
 
 See [KEYVAULT-SECRET-AUTOMATION.md](../../KEYVAULT-SECRET-AUTOMATION.md) for complete automation details.
 
@@ -93,9 +95,10 @@ When running in Azure App Service:
 ### Local/Docker Environment
 
 When running locally or in Docker:
-1. Application uses file-based configuration from `sharedsettings.local.json` or `sharedsettings.dev.json`
-2. Key Vault is **not** accessed (maintains existing behavior)
-3. No Azure credentials required for local development
+1. Application uses committed `sharedsettings.local.json` or `sharedsettings.dev.json` samples plus local secret overrides
+2. Non-Docker local development should use `.NET user-secrets` for `OpenPay:*` and `ApiSettings:*:https:CertPassword`
+3. Docker development should use `Resources/Docker/.env.local` for `LOCAL_SQL_PASSWORD`, `LOCAL_CERT_PASSWORD`, and local OpenPay values
+4. Key Vault is **not** accessed locally
 
 ## Security Features
 
@@ -168,12 +171,19 @@ To update Key Vault secrets:
 
 **Option 1: Run the populate script**
 ```powershell
-./Resources/Azure-Deployment/populate-keyvault-secrets.ps1 -Environment {env} -OpenPayApiKey "new-key"
+./Resources/Azure-Deployment/populate-keyvault-secrets.ps1 -Environment {env} `
+    -OpenPayMerchantId "<merchant-id>" `
+    -OpenPayPrivateKey "<private-key>" `
+    -OpenPayDeviceSessionId "<device-session-id>" `
+    -ApiHttpsCertPassword "<api-cert-password>" `
+    -UiHttpsCertPassword "<ui-cert-password>"
 ```
 
 **Option 2: Use Azure CLI directly**
 ```bash
-az keyvault secret set --vault-name kv-orderprocessing-{env} --name OpenPayAdapter--ApiKey --value "new-key"
+az keyvault secret set --vault-name kv-orderprocessing-{env} --name OpenPay--MerchantId --value "<merchant-id>"
+az keyvault secret set --vault-name kv-orderprocessing-{env} --name OpenPay--PrivateKey --value "<private-key>"
+az keyvault secret set --vault-name kv-orderprocessing-{env} --name OpenPay--DeviceSessionId --value "<device-session-id>"
 ```
 
 Web apps will automatically pick up new values (no restart required).

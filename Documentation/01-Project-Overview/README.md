@@ -9,8 +9,15 @@ Note : Logs can be checked inside TestAppXY_OrderProcessingSystem\logs\ folder.
 -->
 
 # Certificate were generated with below commands
-Q:\GIT\TestAppXY_OrderProcessingSystem> dotnet dev-certs https -ep ./Resources/Certificates/aspnetapp.pfx -p P@ss100
+Q:\GIT\TestAppXY_OrderProcessingSystem> dotnet dev-certs https -ep ./Resources/Certificates/aspnetapp.pfx -p <local-cert-password>
 Q:\GIT\TestAppXY_OrderProcessingSystem> dotnet dev-certs https --trust
+
+# Local secrets for Visual Studio / dotnet run
+Q:\GIT\TestAppXY_OrderProcessingSystem> dotnet user-secrets set "ApiSettings:API:https:CertPassword" "<local-cert-password>" --project .\XYDataLabs.OrderProcessingSystem.API\XYDataLabs.OrderProcessingSystem.API.csproj
+Q:\GIT\TestAppXY_OrderProcessingSystem> dotnet user-secrets set "ApiSettings:UI:https:CertPassword" "<local-cert-password>" --project .\XYDataLabs.OrderProcessingSystem.UI\XYDataLabs.OrderProcessingSystem.UI.csproj
+Q:\GIT\TestAppXY_OrderProcessingSystem> dotnet user-secrets set "OpenPay:MerchantId" "<local-openpay-merchant-id>" --project .\XYDataLabs.OrderProcessingSystem.API\XYDataLabs.OrderProcessingSystem.API.csproj
+Q:\GIT\TestAppXY_OrderProcessingSystem> dotnet user-secrets set "OpenPay:PrivateKey" "<local-openpay-private-key>" --project .\XYDataLabs.OrderProcessingSystem.API\XYDataLabs.OrderProcessingSystem.API.csproj
+Q:\GIT\TestAppXY_OrderProcessingSystem> dotnet user-secrets set "OpenPay:DeviceSessionId" "<local-openpay-device-session-id>" --project .\XYDataLabs.OrderProcessingSystem.API\XYDataLabs.OrderProcessingSystem.API.csproj
 
 # 🏃‍♂️ How to Run the Project
 
@@ -27,6 +34,8 @@ Q:\GIT\TestAppXY_OrderProcessingSystem> dotnet dev-certs https --trust
 
 ### **Option 2: Docker Development**
 ```powershell
+# First run: copy Resources\Docker\.env.local.example to Resources\Docker\.env.local or let start-docker.ps1 prompt and create it.
+
 # Development environment (ports 5020-5023)
 .\start-docker.ps1 -Environment dev -Profile http
 

@@ -268,7 +268,7 @@ Do not run cleanup for this issue. The resources are already provisioned; only t
 
 > See [TROUBLESHOOTING-INDEX.md](../../TROUBLESHOOTING-INDEX.md#sql-managed-identity-day-35) for full details on the symptom and fix.
 >
-> See [Prompt README](../../.github/prompts/README.md) for available prompts (`/day-complete`, `/sql-local-access`).
+> See [Prompt README](../../.github/prompts/README.md) for available prompts (`/day-complete`, `/sql-local-access`, `/context-audit`).
 
 ---
 

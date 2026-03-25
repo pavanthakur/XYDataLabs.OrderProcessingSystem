@@ -11,7 +11,7 @@ on:
       - 'XYDataLabs.OrderProcessingSystem.Application/**'
       - 'XYDataLabs.OrderProcessingSystem.Domain/**'
       - 'XYDataLabs.OrderProcessingSystem.Infrastructure/**'
-      - 'XYDataLabs.OrderProcessingSystem.Utilities/**'
+      - 'XYDataLabs.OrderProcessingSystem.SharedKernel/**'
       - 'Resources/Configuration/**'
       - '.github/workflows/deploy-api-to-azure.yml'
   workflow_dispatch:

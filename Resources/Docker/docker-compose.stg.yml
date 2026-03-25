@@ -1,0 +1,138 @@
+# Staging Environment - Complete Configuration
+# Usage: docker-compose -f docker-compose.stg.yml --profile http up
+# Purpose: Staging/pre-production configuration with production-like settings
+
+services:
+  api-stg-http:
+    image: xydatalabs-orderprocessingsystem-api-http:stg
+    build:
+      context: ../..
+      dockerfile: XYDataLabs.OrderProcessingSystem.API/Dockerfile
+      target: final
+    ports:
+      - "5030:5030"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Staging
+      - ASPNETCORE_URLS=http://+:5030
+      - ASPNETCORE_HTTP_PORTS=5030
+      - ConnectionStrings__OrderProcessingSystemDbConnection=Server=host.docker.internal,1433;Database=OrderProcessingSystem_Stg;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
+      - OpenPay__MerchantId=${LOCAL_OPENPAY_MERCHANT_ID}
+      - OpenPay__PrivateKey=${LOCAL_OPENPAY_PRIVATE_KEY}
+      - OpenPay__DeviceSessionId=${LOCAL_OPENPAY_DEVICE_SESSION_ID}
+      - USE_HTTPS=false
+    volumes:
+      - ../../logs:/logs
+      - ../../Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
+      - ../../Resources/Configuration/sharedsettings.stg.json:/app/Resources/Configuration/sharedsettings.stg.json:ro
+    networks:
+      - xy-stg-network
+      - xy-database-network
+    profiles: ["http", "all", "api"]
+    healthcheck:
+      test: curl --fail http://localhost:5030/swagger --insecure || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 2
+      start_period: 10s
+
+  api-stg-https:
+    image: xydatalabs-orderprocessingsystem-api-https:stg
+    build:
+      context: ../..
+      dockerfile: XYDataLabs.OrderProcessingSystem.API/Dockerfile
+      target: final
+    ports:
+      - "5031:5031"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Staging
+      - ASPNETCORE_URLS=https://+:5031
+      - ASPNETCORE_HTTPS_PORTS=5031
+      - ASPNETCORE_Kestrel__Certificates__Default__Password=${LOCAL_CERT_PASSWORD}
+      - ApiSettings__API__https__CertPassword=${LOCAL_CERT_PASSWORD}
+      - ConnectionStrings__OrderProcessingSystemDbConnection=Server=host.docker.internal,1433;Database=OrderProcessingSystem_Stg;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
+      - OpenPay__MerchantId=${LOCAL_OPENPAY_MERCHANT_ID}
+      - OpenPay__PrivateKey=${LOCAL_OPENPAY_PRIVATE_KEY}
+      - OpenPay__DeviceSessionId=${LOCAL_OPENPAY_DEVICE_SESSION_ID}
+    volumes:
+      - ../../logs:/logs
+      - ../../Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
+      - ../../Resources/Configuration/sharedsettings.stg.json:/app/Resources/Configuration/sharedsettings.stg.json:ro
+    networks:
+      - xy-stg-network
+      - xy-database-network
+    profiles: ["https", "all", "api-https"]
+    healthcheck:
+      test: curl --fail https://localhost:5031/swagger --insecure || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 2
+      start_period: 10s
+
+  ui-stg-http:
+    image: xydatalabs-orderprocessingsystem-ui-http:stg
+    build:
+      context: ../..
+      dockerfile: XYDataLabs.OrderProcessingSystem.UI/Dockerfile
+      target: final
+    ports:
+      - "5032:5032"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Staging
+      - ASPNETCORE_URLS=http://+:5032
+      - ASPNETCORE_HTTP_PORTS=5032
+      - ApiSettings__BaseUrl=http://localhost:5030
+      - USE_HTTPS=false
+    volumes:
+      - ../../Resources/Configuration/sharedsettings.stg.json:/app/Resources/Configuration/sharedsettings.stg.json:ro
+      - ../../logs:/logs
+    networks:
+      - xy-stg-network
+    profiles: ["http", "all", "ui"]
+    depends_on:
+      api-stg-http:
+        condition: service_healthy
+    healthcheck:
+      test: curl --fail http://localhost:5032 --insecure || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 2
+      start_period: 10s
+
+  ui-stg-https:
+    image: xydatalabs-orderprocessingsystem-ui-https:stg
+    build:
+      context: ../..
+      dockerfile: XYDataLabs.OrderProcessingSystem.UI/Dockerfile
+      target: final
+    ports:
+      - "5033:5033"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Staging
+      - ASPNETCORE_URLS=https://+:5033
+      - ASPNETCORE_HTTPS_PORTS=5033
+      - ASPNETCORE_Kestrel__Certificates__Default__Password=${LOCAL_CERT_PASSWORD}
+      - ApiSettings__UI__https__CertPassword=${LOCAL_CERT_PASSWORD}
+      - ApiSettings__BaseUrl=https://localhost:5031
+    volumes:
+      - ../../Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
+      - ../../Resources/Configuration/sharedsettings.stg.json:/app/Resources/Configuration/sharedsettings.stg.json:ro
+      - ../../logs:/logs
+    networks:
+      - xy-stg-network
+    profiles: ["https", "all", "ui-https"]
+    depends_on:
+      api-stg-https:
+        condition: service_healthy
+    healthcheck:
+      test: curl --fail https://localhost:5033 --insecure || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 2
+      start_period: 10s
+
+# Staging networking
+networks:
+  xy-stg-network:
+    external: true
+  xy-database-network:
+    external: true
