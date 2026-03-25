@@ -34,6 +34,7 @@ These rules are binding for all tenant, payment, DTO, migration, middleware, and
   - For Managed Identity connections: store the full connection string (no credentials embedded).
   - For password-based connections: store a Key Vault secret name reference, never the raw password.
 - `TenantA` and `TenantB` are always `SharedPool` with `ConnectionString = null`.
+- `TenantC` is `Dedicated` with `ConnectionString = null` in migration (ops provisions per environment via Key Vault or App Settings).
 - `IsSharedPool` is derived from `TenantTier == SharedPool`, NOT from `ConnectionString == null`.
 - A Dedicated tenant without a provisioned ConnectionString is treated as unresolvable (fail-loud, not silent shared-pool routing).
 
@@ -81,6 +82,22 @@ These rules are binding for all tenant, payment, DTO, migration, middleware, and
 - No DTO, log output, or error message may contain a full card number or CVV.
 - Architecture tests enforce these constraints — see `CardTransaction_Should_Not_Store_Raw_Card_Data`.
 
+## ConfigureTenantOwnership pattern
+- Every new tenant-owned entity MUST be registered in `ConfigureTenantOwnership<T>()` in `OnModelCreating()`.
+- This single call configures: FK to `Tenants(Id)`, global query filter on `TenantId`, and `DeleteBehavior.Restrict`.
+- Do NOT manually configure these three concerns individually — always use `ConfigureTenantOwnership<T>()`.
+- After adding the call, also add the corresponding `DbSet<T>` to both `OrderProcessingSystemDbContext` and `IAppDbContext`.
+
+## IAppDbContext parity rule
+- `IAppDbContext` must expose every `DbSet<T>` from `OrderProcessingSystemDbContext` **except** `DbSet<Tenant>`.
+- `Tenant` is a system entity — tenant queries go through `ITenantRegistry` or `ITenantResolver`, never through `IAppDbContext`.
+- Architecture test `IAppDbContext_DbSets_Must_Match_OrderProcessingSystemDbContext_Minus_Tenant` enforces this at CI.
+
+## IgnoreQueryFilters exemption rule
+- `.IgnoreQueryFilters()` bypasses tenant isolation and is restricted to an architecture-test allow-list.
+- Current approved usages: `AppMasterData.cs` (cross-tenant PaymentProviders reference data).
+- Any new usage requires: (1) a code-review justification documenting why cross-tenant access is safe, and (2) adding the filename to the allow-list in `ArchitectureTests.IgnoreQueryFilters_Usage_Must_Be_In_Allow_List_Only`.
+
 ## EF and migrations
 - Current baseline starts from `RebaselineMultitenantPaymentSchema`.
 - `TenantA` and `TenantB` must be seeded in the baseline migration `Up()`.
@@ -95,14 +112,45 @@ These rules are binding for all tenant, payment, DTO, migration, middleware, and
 - Never rely on ambient middleware tenant context in non-request code paths.
 
 ## Required test coverage
-- Architecture tests must cover:
-  - migration drift
-  - tenant-scoped index presence
-  - tenant filter isolation
-  - identifier surface compliance
-- Middleware/integration tests must cover:
-  - 400 for missing tenant code
-  - 400 for unknown tenant code
-  - 403 for blocked tenant status
-  - per-class tenant isolation
-  - no dependency on shared baseline tenant rows
+
+### Architecture tests (`MultiTenantSchemaTests`)
+- Migration drift detection (`EfMigrationDriftTests`)
+- Tenant-scoped composite index presence on payment entities
+- Tenant global query filter presence on tenant-owned entities; absence on Tenant entity
+- Customer-facing DTO identifier surface compliance (no internal IDs exposed)
+- `TenantTierConstants` defines `SharedPool` and `Dedicated` values
+- `Tenant.TenantTier` defaults to `SharedPool`
+- `Tenant.ConnectionString` is nullable (SharedPool = null, Dedicated = provisioned)
+- `TenantRegistryDbContext` has no query filter on Tenant
+
+### Middleware / integration tests (`TenantMiddlewareTests`)
+- 400 for missing tenant header
+- 400 for unknown tenant code
+- 403 for Suspended / Decommissioned tenant status
+- Runtime configuration endpoint returns DB tenants without auth
+
+### SharedPool tenant isolation tests (`TenantIsolationTests`)
+- Per-entity query-filter isolation: tenants in the same DB see only their own data
+- No dependency on shared baseline tenant rows (tests create their own tenants)
+
+### Dedicated tenant tests (`DedicatedTenantTests`)
+
+**Middleware / status scenarios (single-DB factory):**
+- Dedicated + unprovisioned (null CS) + Active → 400 (fail-loud, not silent shared-pool fallback)
+- Dedicated + unprovisioned (null CS) + Suspended → 400 (unresolvable takes priority over status)
+- Dedicated + provisioned + Suspended → 403
+- Dedicated + provisioned + Decommissioned → 403
+- Dedicated + provisioned + Active → 200 (routed to dedicated DB)
+- SharedPool tenant coexists with Dedicated tenants without interference
+
+**Physical DB isolation scenarios (routing-aware factory):**
+- Data written to dedicated tenant is physically present in dedicated DB (direct SQL verification)
+- Dedicated tenant data NOT visible via direct query on shared-pool DB
+- SharedPool tenant data NOT visible via direct query on dedicated DB
+
+### New feature guardrail
+When adding a new tenant-owned entity or feature:
+1. SharedPool path: verify query filter isolation via `TenantIsolationTests` pattern
+2. Dedicated path: verify physical DB isolation via `DedicatedTenantTests` pattern — write through routing factory, verify via direct SQL on both databases
+3. Architecture guard: ensure FK to Tenants, composite index, and query filter are tested
+4. Never silently route an unprovisioned Dedicated tenant to SharedPool — fail loud

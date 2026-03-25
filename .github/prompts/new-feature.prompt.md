@@ -52,13 +52,15 @@ Rules (from `clean-architecture.instructions.md`):
 
 Update `XYDataLabs.OrderProcessingSystem.Infrastructure/DataContext/OrderProcessingSystemDbContext.cs`.
 
-Rules (from `ef-migrations.instructions.md`):
+Rules (from `ef-migrations.instructions.md` + `multitenant-payment-schema.instructions.md`):
 - Add `public DbSet<EntityName> EntityNames { get; set; }` property
-- Add fluent configuration in `OnModelCreating()`:
-  - `HasMaxLength()` for string properties
-  - Composite index on `(TenantId, <primary lookup field>)` — follow existing pattern
-  - FK relationship to `Tenants` table
-- Add global query filter: `.HasQueryFilter(e => e.TenantId == _tenantProvider.TenantId)`
+- Add the **same** `DbSet<EntityName>` to `IAppDbContext` in `Application/Abstractions/IAppDbContext.cs` — architecture tests enforce parity
+- In `OnModelCreating()`, add `ConfigureTenantOwnership<EntityName>(modelBuilder);` — this single call configures:
+  - FK to `Tenants(Id)`
+  - Global query filter on `TenantId`
+  - `DeleteBehavior.Restrict`
+- Do NOT manually configure these three concerns individually — always use `ConfigureTenantOwnership<T>()`
+- Add any entity-specific fluent configuration (e.g. `HasMaxLength()`, composite indexes beyond TenantId)
 - Follow the same configuration pattern as existing entities (e.g., `CardTransaction`, `CustomerOrder`)
 
 ## Step 6: EF Migration
@@ -104,6 +106,16 @@ Rules:
 - No Infrastructure namespace imports
 - Follow existing controller patterns (route naming, response types)
 
+## Step 7B: API Surface Tenant Compliance
+
+Before proceeding to tests, verify the controller and request DTOs comply with tenant rules:
+
+- **No action parameter** may be named `TenantId`, `TenantCode`, or `TenantExternalId`
+- **No request DTO property** may be named `TenantId`, `TenantCode`, or `TenantExternalId`
+- Tenant context is resolved from the `X-Tenant-Code` header via middleware — never from client input
+- Response DTOs must NOT expose `TenantId` (internal FK only)
+- The architecture test `Controllers_Should_Not_Accept_TenantId_Or_TenantCode_Parameters` enforces this at CI
+
 ## Step 8: Tests
 
 ### Unit Tests
@@ -116,6 +128,15 @@ Add to `tests/XYDataLabs.OrderProcessingSystem.Architecture.Tests/`:
 - Entity has `TenantId` property
 - Entity does not have forbidden properties (follow `CardTransaction_Should_Not_Store_Raw_Card_Data` pattern)
 - Layer dependency tests (if not already covered by existing generic tests)
+
+**Note:** The following are enforced automatically by existing dynamic guardrail tests — no per-entity tests needed:
+- `All_TenantOwned_Entities_Should_Inherit_AuditBase` — checks all IAppDbContext entities
+- `All_TenantOwned_Entities_Should_Have_Global_Query_Filter` — checks ConfigureTenantOwnership was called
+- `All_TenantOwned_Entities_Should_Have_FK_To_Tenants` — checks FK to Tenants(Id)
+- `IAppDbContext_DbSets_Must_Match_OrderProcessingSystemDbContext_Minus_Tenant` — checks parity
+- `Controllers_Should_Not_Accept_TenantId_Or_TenantCode_Parameters` — checks API surface
+- `IgnoreQueryFilters_Usage_Must_Be_In_Allow_List_Only` — catches unapproved filter bypass
+- `All_CQRS_Handlers_Must_Return_Result_T` — ensures Result<T> pattern
 
 ## Step 9: Build + Test
 
@@ -142,6 +163,9 @@ Before committing, perform a self-review against this checklist:
 | DTO excludes TenantId? | TenantId is never exposed to API consumers |
 | Migration reviewed? | Up() and Down() are correct and reversible |
 | Drift check passed? | Temp migration was empty |
+| ConfigureTenantOwnership called? | Entity registered in `ConfigureTenantOwnership<T>()` — not manual FK/filter/delete config |
+| IAppDbContext updated? | `DbSet<T>` added to both concrete DbContext and `IAppDbContext` interface |
+| No tenant params in controller? | No `TenantId`/`TenantCode`/`TenantExternalId` in action params or request DTOs |
 | All tests pass? | `dotnet test` exits with 0 failures |
 
 ## Step 11: Commit

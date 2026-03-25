@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 
@@ -11,9 +12,11 @@ using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 {
     [DbContext(typeof(OrderProcessingSystemDbContext))]
-    partial class OrderProcessingSystemDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260324210853_SeedDedicatedTenantC")]
+    partial class SeedDedicatedTenantC
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

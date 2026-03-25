@@ -3,9 +3,18 @@ using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 
 namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure;
 
-internal sealed record TestTenantContext(int TenantId, string TenantCode, string TenantExternalId, string TenantName, string TenantStatus)
+internal sealed record TestTenantContext(
+    int TenantId,
+    string TenantCode,
+    string TenantExternalId,
+    string TenantName,
+    string TenantStatus,
+    string? ConnectionString = null,
+    bool IsSharedPool = true)
 {
-    public TenantContext ToTenantContext() => new(TenantId, TenantCode, TenantExternalId, TenantName, TenantStatus, ConnectionString: null, IsSharedPool: true);
+    public TenantContext ToTenantContext() => new(
+        TenantId, TenantCode, TenantExternalId, TenantName, TenantStatus,
+        ConnectionString, IsSharedPool);
 }
 
 internal sealed record OrderScenarioSeed(int CustomerId, int ProductId);
@@ -43,6 +52,38 @@ internal static class IntegrationTestData
             await dbContext.SaveChangesAsync();
 
             return new TestTenantContext(tenant.Id, tenant.Code, tenant.ExternalId, tenant.Name, tenant.Status);
+        });
+
+    /// <summary>
+    /// Creates a Dedicated-tier tenant in the shared (registry) database.
+    /// Pass a non-null <paramref name="connectionString"/> to make it resolvable
+    /// (routes to that DB); pass null to test the fail-loud unprovisioned path.
+    /// </summary>
+    public static Task<TestTenantContext> CreateDedicatedTenantAsync(
+        IntegrationTestWebAppFactory factory,
+        string? connectionString = null,
+        string status = "Active") =>
+        factory.ExecuteDbContextAsync(async dbContext =>
+        {
+            var uniqueSuffix = Guid.NewGuid().ToString("N")[..10];
+            var tenant = new Tenant
+            {
+                Code = $"DT{uniqueSuffix}"[..Math.Min(12, 2 + uniqueSuffix.Length)],
+                ExternalId = $"tnt_ext_ded_{uniqueSuffix}",
+                Name = $"Dedicated Tenant {uniqueSuffix}",
+                Status = status,
+                TenantTier = TenantTierConstants.Dedicated,
+                ConnectionString = connectionString,
+                CreatedBy = 1,
+                CreatedDate = DateTime.UtcNow
+            };
+
+            dbContext.Tenants.Add(tenant);
+            await dbContext.SaveChangesAsync();
+
+            return new TestTenantContext(
+                tenant.Id, tenant.Code, tenant.ExternalId, tenant.Name, tenant.Status,
+                tenant.ConnectionString, IsSharedPool: false);
         });
 
     public static Task<OrderScenarioSeed> SeedOrderScenarioAsync(

@@ -43,12 +43,14 @@ az sql server firewall-rule delete --server orderprocessing-sql-dev --resource-g
 ## Applied Migrations (current baseline)
 1. `20260324195231_InitialCreate` — full schema (MaskedCardNumber, no CVV2, BillingCustomerId FK)
 2. `20260324202503_SeedBaselineTenants` — inserts TenantA and TenantB rows (IF NOT EXISTS guards — safe for Azure re-apply)
+3. `20260324210853_SeedDedicatedTenantC` — inserts TenantC as Dedicated-tier tenant (IF NOT EXISTS guard, ConnectionString NULL — ops must provision per environment)
 
 This repository was rebaselined in March 2026. Historical migrations were intentionally removed. The current migration chain starts from a single clean baseline and future migrations must build from that baseline only.
 
 ## Current Schema Notes
-- `Tenants` is the tenant authority table — TenantA and TenantB are seeded by `20260324202503_SeedBaselineTenants` migration (IF NOT EXISTS SQL, not `migrationBuilder.InsertData`) for Azure safety
+- `Tenants` is the tenant authority table — TenantA and TenantB are seeded by `20260324202503_SeedBaselineTenants` migration; TenantC (Dedicated tier) is seeded by `20260324210853_SeedDedicatedTenantC` migration (all with IF NOT EXISTS SQL for Azure safety)
 - `Tenants` now includes `TenantTier` (nvarchar 20, NOT NULL, default 'SharedPool') and `ConnectionString` (nvarchar 500, nullable)
+- TenantA and TenantB are SharedPool (ConnectionString = NULL); TenantC is Dedicated (ConnectionString = NULL in migration — ops provisions per environment)
 - `TenantRegistryDbContext` owns the `Tenants` DbSet for tenant resolution (no query filters, no ITenantProvider dependency)
 - `OrderProcessingSystemDbContext` still configures `Tenants` entity for FK integrity from business entities
 - Tenant-owned tables use `TenantId int NOT NULL` as an FK to `Tenants.Id`
@@ -83,8 +85,12 @@ This repository was rebaselined in March 2026. Historical migrations were intent
 Two categories of seed data exist in this repository. They are not interchangeable.
 
 **Baseline reference rows — allowed and required in the baseline migration**
-Rows that must exist immediately after migration for the database to be in a valid operational state. Currently: `TenantA` and `TenantB` in the `Tenants` table.
+Rows that must exist immediately after migration for the database to be in a valid operational state. Currently: `TenantA` and `TenantB` in the `Tenants` table (SharedPool tier).
 Rule: if the application cannot start or the middleware cannot function without these rows, they belong in the baseline migration `Up()` method, not in `DbInitializer`.
+
+**Dedicated-tier baseline tenant rows — separate migration per tenant**
+Rows that register a tenant for dedicated database routing but do not assign a connection string (ops provisions per environment). Currently: `TenantC` in `20260324210853_SeedDedicatedTenantC`.
+Rule: each Dedicated-tier tenant gets its own migration with IF NOT EXISTS guard. ConnectionString is intentionally NULL in the migration — environment-specific provisioning sets it via Key Vault or App Settings. An unprovisioned Dedicated tenant fails loud (HTTP 400), never silently falls back to SharedPool.
 
 **Sample and runtime bootstrap data — must live outside migrations in `DbInitializer.cs`**
 Rows that populate an otherwise valid database with demo, development, or environment-specific data. Currently: customers, products, orders, OpenPay provider configuration.

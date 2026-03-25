@@ -88,12 +88,16 @@ API (→ Application, → Infrastructure, → SharedKernel) ← composition root
 - Custom `ActivitySource` per bounded context for business operation spans
 - Structured logging only: `Log.Information("{Key}", value)` — never string interpolation
 
-### Multi-Tenancy
-- Shared DB + `Tenants` master table + EF Global Query Filters via `ITenantProvider`
-- Tenant-owned entities use inherited `TenantId` (`int`) on `BaseAuditableEntity` / `BaseAuditableCreateEntity`, auto-stamped on `SaveChangesAsync`
-- `HeaderTenantProvider` resolves `X-Tenant-Code` to canonical tenant context (`TenantId`, `TenantCode`, `TenantExternalId`)
+### Multi-Tenancy (Hybrid — SharedPool + Dedicated)
+- Two tiers: `SharedPool` (default, shared DB with TenantId discriminator) and `Dedicated` (separate physical DB per tenant). See ADR-007.
+- Tenant-owned entities inherit `BaseAuditableEntity` or `BaseAuditableCreateEntity` — provides `TenantId` + audit columns. Never redeclare `TenantId` on derived entities.
+- **ConfigureTenantOwnership<T>()**: Single method in `OnModelCreating()` that configures FK to Tenants + global query filter + DeleteBehavior.Restrict. Every new tenant-owned entity MUST be registered here.
+- **IAppDbContext parity**: Every `DbSet<T>` on `OrderProcessingSystemDbContext` (except `Tenant`) must appear on `IAppDbContext`. Architecture tests enforce this.
+- **IgnoreQueryFilters rule**: Bypasses tenant isolation — usage is restricted to an architecture-test allow-list. Any new usage must be reviewed for tenant safety and added to the allow-list explicitly.
+- `HeaderTenantProvider` resolves `X-Tenant-Code` to canonical tenant context (`TenantId`, `TenantCode`, `TenantExternalId`, `ConnectionString`, `IsSharedPool`)
 - Missing or unknown tenant code returns HTTP 400; suspended or decommissioned tenant returns HTTP 403
-- `Tenants` is a system table and must be excluded from global tenant query filters
+- `Tenants` is a system table — excluded from query filters, `IAppDbContext`, and tenant stamping
+- **Controllers must never accept TenantId, TenantCode, or TenantExternalId as parameters or in request DTOs.** Tenant context comes from middleware only.
 - Non-request operations must set `TenantId` explicitly instead of relying on ambient tenant context
 
 ## Red Flags — Reject These in Code Review
