@@ -193,6 +193,32 @@ Different `OpenPayCustomerId` per tenant confirms no cross-sharing.
 
 ---
 
+## Query 6a — PaymentProviders (per-tenant OpenPay configuration)
+
+Confirms each tenant has a correctly seeded OpenPay provider entry. Without this row, payment processing fails silently.
+
+```sql
+SELECT
+    t.Code           AS Tenant,
+    pp.Id,
+    pp.Name,
+    pp.APIUrl,
+    pp.IsProduction,
+    pp.IsActive,
+    pp.TenantId
+FROM   dbo.PaymentProviders pp
+JOIN   dbo.Tenants          t  ON t.Id = pp.TenantId
+ORDER BY pp.TenantId;
+```
+
+**Expected:**
+- 1 row per tenant with `Name = OpenPay`, `IsActive = 1`, `IsProduction = 0` (sandbox)
+- `APIUrl = https://sandbox-api.openpay.mx/v1`
+- Each row has the correct `TenantId` matching the `Tenants` table
+- For Option B: TenantC's provider is in `OrderProcessingSystem_TenantC`, not here (run Q6a-B below)
+
+---
+
 ## Query 7 — TenantC row counts
 
 Confirms TenantC (Dedicated) has the expected number of DB writes after a successful payment.
@@ -289,6 +315,19 @@ WHERE  ct.TenantId <> 3;
 ```
 
 **Expected:** 0 rows. Any result is a critical isolation failure.
+
+### Q6a-B — PaymentProviders on dedicated DB
+
+Confirms TenantC has its own OpenPay provider seeded in the dedicated DB.
+
+```sql
+-- Run against: OrderProcessingSystem_TenantC
+SELECT pp.Id, pp.TenantId, pp.Name, pp.APIUrl, pp.IsProduction, pp.IsActive
+FROM   dbo.PaymentProviders pp
+ORDER BY pp.Id;
+```
+
+**Expected:** 1 row with `TenantId = 3`, `Name = OpenPay`, `IsActive = 1`, `IsProduction = 0`.
 
 ### Q9-B — No TenantC data leaked into shared DB
 
