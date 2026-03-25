@@ -105,6 +105,16 @@ window.OrderProcessingTenant = (() => {
             throw new Error('API base URL is not available in the UI layout.');
         }
 
+        // Absorb tenantCode from URL query param (carried by post-3DS return navigations).
+        // The server middleware already reads this param for log context; here we sync it
+        // into localStorage so the API call below uses the correct tenant immediately.
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlTenantCode = urlParams.get('tenantCode')?.trim() || null;
+        if (urlTenantCode) {
+            persistTenantCode(urlTenantCode);
+            history.replaceState({}, '', window.location.pathname);
+        }
+
         const preferredTenantCode = getStoredTenantCode();
         const headers = {
             'Accept': 'application/json'

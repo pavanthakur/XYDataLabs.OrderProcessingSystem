@@ -106,7 +106,7 @@
                     </details>
 
                     <div class="mt-4 d-flex gap-2">
-                        <a class="btn btn-primary" asp-controller="Home" asp-action="Index">Return to payment page</a>
+                        <a id="return-home" class="btn btn-primary" href="/">Return to payment page</a>
                     </div>
                 </div>
             </div>
@@ -217,11 +217,16 @@
                 return window.OrderProcessingTenant.ready();
             };
 
+            const returnHomeLink = document.getElementById('return-home');
+
             getTenantRuntime()
                 .then(runtimeConfiguration => {
                     const resolvedTenant = window.OrderProcessingTenant?.getSelectedTenantCode() || runtimeConfiguration.activeTenantCode;
                     if (tenantCodeEl && resolvedTenant) {
                         tenantCodeEl.innerHTML = `<span class="badge bg-secondary">${resolvedTenant}</span>`;
+                    }
+                    if (returnHomeLink && resolvedTenant) {
+                        returnHomeLink.href = `/?tenantCode=${encodeURIComponent(resolvedTenant)}`;
                     }
                     return runtimeConfiguration;
                 })
