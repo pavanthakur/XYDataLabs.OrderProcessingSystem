@@ -6,7 +6,8 @@ SQL queries to verify end-to-end payment records in the database after a transac
 deployment, or incident investigation. Run these in order — each query builds on the context
 of the previous one.
 
-**Target database:** `OrderProcessingSystem_Local` (dev) · adjust connection for stg/prod.  
+**Target database (shared-pool tenants):** `OrderProcessingSystem_Local` (dev) · adjust connection for stg/prod.  
+**Target database (TenantC Option B):** `OrderProcessingSystem_TenantC` — use the dedicated-DB queries in the [Option B section](#option-b--tenantc-dedicated-db-verification) at the end of this runbook.  
 **When to run:**
 - After a full end-to-end payment test (manual or automated)
 - After a production deployment to confirm seeded data and schema are correct
@@ -40,7 +41,7 @@ ORDER BY Id;
 
 **Expected:**
 - TenantA, TenantB → `SharedPool`, `ConnectionString = NULL`
-- TenantC → `Dedicated`, `ConnectionString = *** (set)` — provisioned via `UPDATE dbo.Tenants SET ConnectionString = '...' WHERE Code = 'TenantC'`
+- TenantC → `Dedicated`, `ConnectionString = *** (set)` — auto-provisioned on first startup via `DedicatedTenantConnectionStrings:TenantC` in `sharedsettings.local.json` + `ApplyDedicatedConnectionStrings()` in `DbInitializer`. No manual `UPDATE` required.
 
 ---
 
@@ -211,14 +212,16 @@ SELECT 'TransactionStatusHistories', COUNT(*) FROM dbo.TransactionStatusHistorie
 );
 ```
 
-**Expected after one successful 3DS payment:**
+**Expected after one successful 3DS payment (Option A — same physical DB as shared pool):**
 - `CardTransactions` = 2 (tokenization + charge)
 - `BillingCustomers` = 1
 - `PaymentMethods` = 1
 - `PayinLogs` = 1
 - `TransactionStatusHistories` = 4
 
-**Expected before ConnectionString is provisioned:** All rows = 0.
+**Expected for Option B (TenantC on dedicated `OrderProcessingSystem_TenantC` DB):** All counts = **0** here — this is correct. TenantC data lives entirely in `OrderProcessingSystem_TenantC`. Run the Option B queries below to verify.
+
+**Expected before ConnectionString is provisioned:** All rows = 0 and middleware rejects TenantC requests with `400`.
 
 ---
 
@@ -240,3 +243,63 @@ WHERE  (ct.CustomerOrderId LIKE '%-tA-%' AND ct.TenantId <> 1)
 **Expected:** 0 rows.  
 > Note: this relies on the `CustomerOrderId` naming convention (`-tA-` / `-tB-` suffix).
 > For tenants added later, extend the `WHERE` clause with their suffix + expected `TenantId`.
+>
+> For Option B: TenantC data is not in `OrderProcessingSystem_Local` at all — run Q8-B in the Option B section to verify isolation on the dedicated DB.
+
+---
+
+## Option B — TenantC dedicated-DB verification
+
+Run these queries connected to **`OrderProcessingSystem_TenantC`** (not `OrderProcessingSystem_Local`).
+All shared-pool tables (TenantA, TenantB) must be absent — TenantC only.
+
+### Q7-B — TenantC row counts (dedicated DB)
+
+```sql
+-- Run against: OrderProcessingSystem_TenantC
+SELECT 'CardTransactions'           AS [Table], COUNT(*) AS RowCount FROM dbo.CardTransactions          WHERE TenantId = 3
+UNION ALL
+SELECT 'BillingCustomers',           COUNT(*) FROM dbo.BillingCustomers          WHERE TenantId = 3
+UNION ALL
+SELECT 'PaymentMethods',             COUNT(*) FROM dbo.PaymentMethods             WHERE TenantId = 3
+UNION ALL
+SELECT 'PayinLogs',                  COUNT(*) FROM dbo.PayinLogs                  WHERE TenantId = 3
+UNION ALL
+SELECT 'TransactionStatusHistories', COUNT(*) FROM dbo.TransactionStatusHistories WHERE TenantId = 3;
+```
+
+**Expected after one successful 3DS payment:**
+- `CardTransactions` = 2 (tokenization + charge)
+- `BillingCustomers` = 1
+- `PaymentMethods` = 1
+- `PayinLogs` = 1
+- `TransactionStatusHistories` = 4
+
+### Q8-B — No bleed from shared-pool tenants into dedicated DB
+
+Confirms no TenantA or TenantB data was written to TenantC's dedicated DB.
+Must return 0 rows.
+
+```sql
+-- Run against: OrderProcessingSystem_TenantC
+SELECT 'Shared-pool bleed into TenantC dedicated DB' AS Check,
+       ct.CustomerOrderId, ct.TenantId
+FROM   dbo.CardTransactions ct
+WHERE  ct.TenantId <> 3;
+```
+
+**Expected:** 0 rows. Any result is a critical isolation failure.
+
+### Q9-B — No TenantC data leaked into shared DB
+
+Run on **`OrderProcessingSystem_Local`** to confirm TenantC payment rows did not bleed into the shared pool.
+
+```sql
+-- Run against: OrderProcessingSystem_Local
+SELECT 'TenantC bleed into shared DB' AS Check,
+       ct.CustomerOrderId, ct.TenantId
+FROM   dbo.CardTransactions ct
+WHERE  ct.TenantId = 3;
+```
+
+**Expected:** 0 rows. Any result means the dedicated-DB routing failed and TenantC wrote to the shared DB instead.
