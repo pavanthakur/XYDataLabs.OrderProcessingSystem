@@ -1,5 +1,6 @@
 ﻿using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -225,6 +226,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
         /// Seeds sample data for every Dedicated-tier tenant whose ConnectionString is provisioned.
         /// Creates a separate DbContext per dedicated tenant so data lands in the correct database,
         /// whether that is the same physical DB (Option A) or a separate DB (Option B).
+        /// A NullTenantProvider is injected so EF Core query filters evaluate safely (HasTenantContext=false →
+        /// filter short-circuits to true, making all rows visible — correct for cross-tenant seeding).
         /// </summary>
         private static void SeedDedicatedTenants(OrderProcessingSystemDbContext mainContext, bool applyMigrations)
         {
@@ -239,7 +242,11 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                     .UseSqlServer(tenant.ConnectionString!)
                     .Options;
 
-                using var dedicatedContext = new OrderProcessingSystemDbContext(dedicatedOptions);
+                // NullTenantProvider ensures EF Core query filters short-circuit safely
+                // (HasTenantContext = false → filter = true → all rows visible).
+                // Without this, dedicatedContext._tenantProvider would be null and EF Core's
+                // expression tree evaluator can NullReference on _tenantProvider.HasTenantContext.
+                using var dedicatedContext = new OrderProcessingSystemDbContext(dedicatedOptions, new NullTenantProvider());
 
                 // For Option B (fresh dedicated DB), apply migrations so the schema exists.
                 // For Option A (same DB), this is idempotent — no-op.
@@ -261,6 +268,21 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                 SeedTenantSampleData(dedicatedContext, seedTenant);
                 UpdateOrderTotalPrices(dedicatedContext, seedTenant.TenantId);
             }
+        }
+
+        /// <summary>
+        /// Null-object ITenantProvider used when creating a DbContext for dedicated-tenant seeding.
+        /// HasTenantContext = false causes EF Core query filters to pass all rows through,
+        /// which is correct when seeding a dedicated DB that holds only one tenant's data.
+        /// </summary>
+        private sealed class NullTenantProvider : ITenantProvider
+        {
+            public bool HasTenantContext => false;
+            public int TenantId => 0;
+            public string TenantCode => string.Empty;
+            public string TenantExternalId => string.Empty;
+            public string? ConnectionString => null;
+            public bool IsSharedPool => true;
         }
 
         private sealed record StartupSeedTenant(int TenantId, string TenantCode, string TenantName);
