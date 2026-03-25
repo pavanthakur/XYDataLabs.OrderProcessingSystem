@@ -1,4 +1,4 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.12.35514.174
@@ -22,9 +22,9 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		.editorconfig = .editorconfig
 		.gitattributes = .gitattributes
 		.gitignore = .gitignore
+		README.md = README.md
+		ARCHITECTURE.md = ARCHITECTURE.md
 		ARCHITECTURE-EVOLUTION.md = ARCHITECTURE-EVOLUTION.md
-		AZURE-PROGRESS-EVALUATION.md = AZURE-PROGRESS-EVALUATION.md
-		AZURE-TOP-7-SERVICES-ANALYSIS.md = AZURE-TOP-7-SERVICES-ANALYSIS.md
 		Directory.Build.props = Directory.Build.props
 		Directory.Packages.props = Directory.Packages.props
 		LICENSE = LICENSE
@@ -87,13 +87,24 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{E1A8B2C9-4D5F-6789-ABCD-123456789DE6}"
 	ProjectSection(SolutionItems) = preProject
 		.github\workflows\README.md = .github\workflows\README.md
+		.github\workflows\README-AZURE-BOOTSTRAP.md = .github\workflows\README-AZURE-BOOTSTRAP.md
+		.github\workflows\README-AZURE-BOOTSTRAP-SETUP.md = .github\workflows\README-AZURE-BOOTSTRAP-SETUP.md
+		.github\workflows\README-AZURE-INITIAL-SETUP.md = .github\workflows\README-AZURE-INITIAL-SETUP.md
+		.github\workflows\README-CONFIGURE-GITHUB-SECRETS.md = .github\workflows\README-CONFIGURE-GITHUB-SECRETS.md
 		.github\workflows\README-INFRA-DEPLOY.md = .github\workflows\README-INFRA-DEPLOY.md
+		.github\workflows\README-TEST-VALIDATE-DEPLOYMENT.md = .github\workflows\README-TEST-VALIDATE-DEPLOYMENT.md
 		.github\workflows\README-VALIDATE-DEPLOYMENT.md = .github\workflows\README-VALIDATE-DEPLOYMENT.md
-		.github\workflows\infra-deploy.yml = .github\workflows\infra-deploy.yml
-		.github\workflows\validate-deployment.yml = .github\workflows\validate-deployment.yml
+		.github\workflows\QUICK-START-TEST-VALIDATION.md = .github\workflows\QUICK-START-TEST-VALIDATION.md
+		.github\workflows\azure-bootstrap.yml = .github\workflows\azure-bootstrap.yml
+		.github\workflows\azure-initial-setup.yml = .github\workflows\azure-initial-setup.yml
+		.github\workflows\configure-github-secrets.yml = .github\workflows\configure-github-secrets.yml
+		.github\workflows\deploy-and-verify.yml = .github\workflows\deploy-and-verify.yml
 		.github\workflows\deploy-api-to-azure.yml = .github\workflows\deploy-api-to-azure.yml
 		.github\workflows\deploy-ui-to-azure.yml = .github\workflows\deploy-ui-to-azure.yml
 		.github\workflows\docker-health.yml = .github\workflows\docker-health.yml
+		.github\workflows\infra-deploy.yml = .github\workflows\infra-deploy.yml
+		.github\workflows\test-validate-deployment.yml = .github\workflows\test-validate-deployment.yml
+		.github\workflows\validate-deployment.yml = .github\workflows\validate-deployment.yml
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "infra", "infra", "{E1A8B2CA-4D5F-6789-ABCD-123456789DE6}"
@@ -363,6 +374,60 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XYDataLabs.OrderProcessingS
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XYDataLabs.OrderProcessingSystem.Architecture.Tests", "tests\XYDataLabs.OrderProcessingSystem.Architecture.Tests\XYDataLabs.OrderProcessingSystem.Architecture.Tests.csproj", "{605F0822-01EC-40C7-9129-ED6687CE972B}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "scripts", "scripts", "{BB000001-0001-0001-0001-000000000001}"
+	ProjectSection(SolutionItems) = preProject
+		scripts\README.md = scripts\README.md
+		scripts\configure-secrets-and-run.ps1 = scripts\configure-secrets-and-run.ps1
+		scripts\setup-github-app-from-manifest.ps1 = scripts\setup-github-app-from-manifest.ps1
+		scripts\validate-github-app-config.ps1 = scripts\validate-github-app-config.ps1
+		scripts\test-bootstrap-dry-run.ps1 = scripts\test-bootstrap-dry-run.ps1
+		scripts\test-pre-deployment-validation.ps1 = scripts\test-pre-deployment-validation.ps1
+		scripts\test-recommended-next-steps.ps1 = scripts\test-recommended-next-steps.ps1
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{CC000001-0001-0001-0001-000000000001}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "architecture", "architecture", "{CC000002-0001-0001-0001-000000000001}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "decisions", "decisions", "{CC000003-0001-0001-0001-000000000001}"
+	ProjectSection(SolutionItems) = preProject
+		docs\architecture\decisions\ADR-000-template.md = docs\architecture\decisions\ADR-000-template.md
+		docs\architecture\decisions\ADR-001-clean-architecture.md = docs\architecture\decisions\ADR-001-clean-architecture.md
+		docs\architecture\decisions\ADR-002-oidc-passwordless-auth.md = docs\architecture\decisions\ADR-002-oidc-passwordless-auth.md
+		docs\architecture\decisions\ADR-003-subscription-scope-bicep.md = docs\architecture\decisions\ADR-003-subscription-scope-bicep.md
+		docs\architecture\decisions\ADR-004-ef-core-azure-sql.md = docs\architecture\decisions\ADR-004-ef-core-azure-sql.md
+		docs\architecture\decisions\ADR-005-serilog-structured-logging.md = docs\architecture\decisions\ADR-005-serilog-structured-logging.md
+		docs\architecture\decisions\ADR-006-passwordless-sql-managed-identity.md = docs\architecture\decisions\ADR-006-passwordless-sql-managed-identity.md
+		docs\architecture\decisions\ADR-007-hybrid-multitenant-model.md = docs\architecture\decisions\ADR-007-hybrid-multitenant-model.md
+		docs\architecture\decisions\ADR-008-architecture-test-guardrails.md = docs\architecture\decisions\ADR-008-architecture-test-guardrails.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "internal", "internal", "{CC000004-0001-0001-0001-000000000001}"
+	ProjectSection(SolutionItems) = preProject
+		docs\internal\AZURE-PROGRESS-EVALUATION.md = docs\internal\AZURE-PROGRESS-EVALUATION.md
+		docs\internal\AZURE-TOP-7-SERVICES-ANALYSIS.md = docs\internal\AZURE-TOP-7-SERVICES-ANALYSIS.md
+		docs\internal\GITHUB-APP-DELETION-SUMMARY.md = docs\internal\GITHUB-APP-DELETION-SUMMARY.md
+		docs\internal\GITHUB-APP-QUICK-REFERENCE.md = docs\internal\GITHUB-APP-QUICK-REFERENCE.md
+		docs\internal\IMPLEMENTATION-COMPLETE.md = docs\internal\IMPLEMENTATION-COMPLETE.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "runbooks", "runbooks", "{CC000005-0001-0001-0001-000000000001}"
+	ProjectSection(SolutionItems) = preProject
+		docs\runbooks\keyvault-managed-identity-deploy.md = docs\runbooks\keyvault-managed-identity-deploy.md
+		docs\runbooks\payment-db-verification.md = docs\runbooks\payment-db-verification.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "bicep", "bicep", "{DD000001-0001-0001-0001-000000000001}"
+	ProjectSection(SolutionItems) = preProject
+		bicep\README.md = bicep\README.md
+		bicep\appservice-with-kv.bicep = bicep\appservice-with-kv.bicep
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "parameters", "parameters", "{DD000002-0001-0001-0001-000000000001}"
+	ProjectSection(SolutionItems) = preProject
+		bicep\parameters\dev.parameters.json = bicep\parameters\dev.parameters.json
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -568,6 +633,11 @@ Global
 		{D7349574-850D-4FE5-97F4-92EEF6641EBA} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{BD1C2BE6-AD27-4376-9016-3066D0FBC91E} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{605F0822-01EC-40C7-9129-ED6687CE972B} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{CC000002-0001-0001-0001-000000000001} = {CC000001-0001-0001-0001-000000000001}
+		{CC000003-0001-0001-0001-000000000001} = {CC000002-0001-0001-0001-000000000001}
+		{CC000004-0001-0001-0001-000000000001} = {CC000001-0001-0001-0001-000000000001}
+		{CC000005-0001-0001-0001-000000000001} = {CC000001-0001-0001-0001-000000000001}
+		{DD000002-0001-0001-0001-000000000001} = {DD000001-0001-0001-0001-000000000001}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {E83A7CED-28C5-4597-8180-BDBDD6B27808}
