@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Bogus;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
 {
@@ -16,7 +17,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
         private static readonly string[] StartupSeedTenantCodes = { "TenantA", "TenantB" };
         private const int SeededCustomerCountPerTenant = 120;
 
-        public static void Initialize(OrderProcessingSystemDbContext context, bool applyMigrations = true)
+        public static void Initialize(OrderProcessingSystemDbContext context, IConfiguration? configuration = null, bool applyMigrations = true)
         {
             if (context is null)
             {
@@ -27,6 +28,15 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
             if (applyMigrations)
             {
                 context.Database.Migrate();
+            }
+
+            // Apply dedicated tenant connection strings from configuration before Phase 2.
+            // Migrations always seed TenantC.ConnectionString = NULL. This step re-applies
+            // environment-specific values from DedicatedTenantConnectionStrings config so
+            // Phase 2 can run without a manual UPDATE on every fresh database creation.
+            if (configuration is not null)
+            {
+                ApplyDedicatedConnectionStrings(context, configuration);
             }
 
             // Phase 1: seed shared-pool tenants (TenantA, TenantB) into the main DB.
@@ -46,6 +56,39 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
             // Option B (ConnectionString points to a separate dedicated DB).
             // Skipped when ConnectionString is null — no DB to connect to yet.
             SeedDedicatedTenants(context, applyMigrations);
+        }
+
+        /// <summary>
+        /// Reads DedicatedTenantConnectionStrings from IConfiguration and stamps any matching
+        /// Dedicated-tier tenant rows whose ConnectionString is currently NULL.
+        /// This fixes the "two-restart" problem: migrations always seed ConnectionString = NULL,
+        /// so without this step Phase 2 would find nothing on every fresh DB creation.
+        /// </summary>
+        private static void ApplyDedicatedConnectionStrings(OrderProcessingSystemDbContext context, IConfiguration configuration)
+        {
+            var section = configuration.GetSection("DedicatedTenantConnectionStrings");
+            if (!section.Exists())
+                return;
+
+            var configuredStrings = section.GetChildren()
+                .ToDictionary(c => c.Key, c => c.Value, StringComparer.OrdinalIgnoreCase);
+
+            if (configuredStrings.Count == 0)
+                return;
+
+            var dedicatedCodes = configuredStrings.Keys.ToArray();
+            var tenantsToUpdate = context.Tenants
+                .Where(t => t.TenantTier == "Dedicated" && t.ConnectionString == null && dedicatedCodes.Contains(t.Code))
+                .ToList();
+
+            foreach (var tenant in tenantsToUpdate)
+            {
+                if (configuredStrings.TryGetValue(tenant.Code, out var cs) && !string.IsNullOrWhiteSpace(cs))
+                    tenant.ConnectionString = cs;
+            }
+
+            if (tenantsToUpdate.Any(t => t.ConnectionString != null))
+                context.SaveChanges();
         }
 
         private static IReadOnlyList<StartupSeedTenant> GetStartupSeedTenants(OrderProcessingSystemDbContext context)

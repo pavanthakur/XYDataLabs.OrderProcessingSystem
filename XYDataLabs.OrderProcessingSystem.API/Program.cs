@@ -327,7 +327,7 @@ using (var scope = app.Services.CreateScope())
         // Apply migrations locally/Docker; skip on Azure (managed via pipelines)
         var dbContext = scope.ServiceProvider.GetRequiredService<OrderProcessingSystemDbContext>();
         var isAzureRuntime = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME"));
-        DbInitializer.Initialize(dbContext, applyMigrations: !isAzureRuntime);
+        DbInitializer.Initialize(dbContext, app.Configuration, applyMigrations: !isAzureRuntime);
 
         var appMasterData = scope.ServiceProvider.GetRequiredService<AppMasterData>();
         Log.Information("Database initialized and AppMasterData loaded successfully during startup");

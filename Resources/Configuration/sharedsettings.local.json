@@ -9,6 +9,9 @@
   "ConnectionStrings": {
     "OrderProcessingSystemDbConnection": "Server=localhost;Database=OrderProcessingSystem_Local;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true;"
   },
+  "DedicatedTenantConnectionStrings": {
+    "TenantC": "Server=localhost;Database=OrderProcessingSystem_TenantC;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true;"
+  },
   "OpenPay": {
     "MerchantId": "__OPENPAY_MERCHANT_ID__",
     "PrivateKey": "__OPENPAY_PRIVATE_KEY__",
