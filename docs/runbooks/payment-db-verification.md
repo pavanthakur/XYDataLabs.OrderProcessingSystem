@@ -194,8 +194,8 @@ Different `OpenPayCustomerId` per tenant confirms no cross-sharing.
 
 ## Query 7 — TenantC row counts
 
-Confirms TenantC (Dedicated, ConnectionString provisioned) has the expected number of DB writes after a successful payment.
-Prior to provisioning, the middleware rejects TenantC requests with `400` and all counts are 0.
+Confirms TenantC (Dedicated) has the expected number of DB writes after a successful payment.
+Before ConnectionString is provisioned, the middleware rejects TenantC requests with `400` and all counts remain 0.
 
 ```sql
 SELECT 'CardTransactions'           AS [Table], COUNT(*) AS RowCount FROM dbo.CardTransactions          WHERE TenantId = 3
@@ -218,7 +218,7 @@ SELECT 'TransactionStatusHistories', COUNT(*) FROM dbo.TransactionStatusHistorie
 - `PayinLogs` = 1
 - `TransactionStatusHistories` = 4
 
-**Expected before provisioning (ConnectionString = NULL):** All rows = 0.
+**Expected before ConnectionString is provisioned:** All rows = 0.
 
 ---
 

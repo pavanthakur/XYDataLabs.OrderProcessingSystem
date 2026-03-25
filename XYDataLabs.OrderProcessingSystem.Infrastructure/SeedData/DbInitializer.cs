@@ -28,6 +28,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                 context.Database.Migrate();
             }
 
+            // Phase 1: seed shared-pool tenants (TenantA, TenantB) into the main DB.
             var startupSeedTenants = GetStartupSeedTenants(context);
 
             SeedOpenpayProviders(context, startupSeedTenants);
@@ -38,6 +39,12 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
             }
 
             UpdateOrderTotalPrices(context, startupSeedTenants.Select(seedTenant => seedTenant.TenantId).ToArray());
+
+            // Phase 2: seed dedicated-tier tenants into their own DB connection.
+            // Works for both Option A (ConnectionString points to same physical DB) and
+            // Option B (ConnectionString points to a separate dedicated DB).
+            // Skipped when ConnectionString is null — no DB to connect to yet.
+            SeedDedicatedTenants(context, applyMigrations);
         }
 
         private static IReadOnlyList<StartupSeedTenant> GetStartupSeedTenants(OrderProcessingSystemDbContext context)
@@ -212,6 +219,48 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
             }
             // Save the changes to the database
             context.SaveChanges();
+        }
+
+        /// <summary>
+        /// Seeds sample data for every Dedicated-tier tenant whose ConnectionString is provisioned.
+        /// Creates a separate DbContext per dedicated tenant so data lands in the correct database,
+        /// whether that is the same physical DB (Option A) or a separate DB (Option B).
+        /// </summary>
+        private static void SeedDedicatedTenants(OrderProcessingSystemDbContext mainContext, bool applyMigrations)
+        {
+            var dedicatedTenants = mainContext.Tenants
+                .AsNoTracking()
+                .Where(t => t.TenantTier == "Dedicated" && t.ConnectionString != null)
+                .ToList();
+
+            foreach (var tenant in dedicatedTenants)
+            {
+                var dedicatedOptions = new DbContextOptionsBuilder<OrderProcessingSystemDbContext>()
+                    .UseSqlServer(tenant.ConnectionString!)
+                    .Options;
+
+                using var dedicatedContext = new OrderProcessingSystemDbContext(dedicatedOptions);
+
+                // For Option B (fresh dedicated DB), apply migrations so the schema exists.
+                // For Option A (same DB), this is idempotent — no-op.
+                if (applyMigrations)
+                    dedicatedContext.Database.Migrate();
+
+                // Look up the tenant row in the dedicated DB's own Tenants table.
+                // Migrations seed all tenant rows into every DB, so this row will exist.
+                var seedTenant = dedicatedContext.Tenants
+                    .AsNoTracking()
+                    .Where(t => t.Code == tenant.Code)
+                    .Select(t => new StartupSeedTenant(t.Id, t.Code, t.Name))
+                    .FirstOrDefault();
+
+                if (seedTenant is null)
+                    continue;
+
+                SeedOpenpayProviders(dedicatedContext, new[] { seedTenant });
+                SeedTenantSampleData(dedicatedContext, seedTenant);
+                UpdateOrderTotalPrices(dedicatedContext, seedTenant.TenantId);
+            }
         }
 
         private sealed record StartupSeedTenant(int TenantId, string TenantCode, string TenantName);
