@@ -40,7 +40,7 @@ ORDER BY Id;
 
 **Expected:**
 - TenantA, TenantB → `SharedPool`, `ConnectionString = NULL`
-- TenantC → `Dedicated`, `ConnectionString = NULL` in dev (provisioned by ops per environment, not seeded)
+- TenantC → `Dedicated`, `ConnectionString = *** (set)` — provisioned via `UPDATE dbo.Tenants SET ConnectionString = '...' WHERE Code = 'TenantC'`
 
 ---
 
@@ -192,10 +192,10 @@ Different `OpenPayCustomerId` per tenant confirms no cross-sharing.
 
 ---
 
-## Query 7 — TenantC isolation check
+## Query 7 — TenantC row counts
 
-Confirms TenantC (Dedicated, no ConnectionString provisioned in dev) produced zero DB writes.
-The middleware rejects TenantC requests with `400` before any DB write occurs.
+Confirms TenantC (Dedicated, ConnectionString provisioned) has the expected number of DB writes after a successful payment.
+Prior to provisioning, the middleware rejects TenantC requests with `400` and all counts are 0.
 
 ```sql
 SELECT 'CardTransactions'           AS [Table], COUNT(*) AS RowCount FROM dbo.CardTransactions          WHERE TenantId = 3
@@ -211,7 +211,14 @@ SELECT 'TransactionStatusHistories', COUNT(*) FROM dbo.TransactionStatusHistorie
 );
 ```
 
-**Expected:** All rows = 0.
+**Expected after one successful 3DS payment:**
+- `CardTransactions` = 2 (tokenization + charge)
+- `BillingCustomers` = 1
+- `PaymentMethods` = 1
+- `PayinLogs` = 1
+- `TransactionStatusHistories` = 4
+
+**Expected before provisioning (ConnectionString = NULL):** All rows = 0.
 
 ---
 
@@ -226,7 +233,8 @@ SELECT 'CardTransactions cross-bleed' AS Check,
 FROM   dbo.CardTransactions ct
 JOIN   dbo.Tenants t ON t.Id = ct.TenantId
 WHERE  (ct.CustomerOrderId LIKE '%-tA-%' AND ct.TenantId <> 1)
-    OR (ct.CustomerOrderId LIKE '%-tB-%' AND ct.TenantId <> 2);
+    OR (ct.CustomerOrderId LIKE '%-tB-%' AND ct.TenantId <> 2)
+    OR (ct.CustomerOrderId LIKE '%-tC-%' AND ct.TenantId <> 3);
 ```
 
 **Expected:** 0 rows.  
