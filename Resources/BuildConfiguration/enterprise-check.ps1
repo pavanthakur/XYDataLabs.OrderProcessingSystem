@@ -12,13 +12,13 @@ Write-Host ""
 
 # Check 1: Network Isolation
 Write-Host "1. Checking Docker Network Isolation..." -ForegroundColor Yellow
-$networks = docker network ls --format "{{.Name}}" 2>$null | Where-Object { $_ -match "xy-(dev|uat|prod)-network" }
+$networks = docker network ls --format "{{.Name}}" 2>$null | Where-Object { $_ -match "xy-(dev|stg|prod)-network" }
 if ($networks) {
     Write-Host "✅ Enterprise Networks Found:" -ForegroundColor Green
     $networks | ForEach-Object { Write-Host "   $($_)" -ForegroundColor Gray }
     $networkScore = 100
 } else {
-    Write-Host "❌ Missing enterprise networks (xy-dev-network, xy-uat-network, xy-prod-network)" -ForegroundColor Red
+    Write-Host "❌ Missing enterprise networks (xy-dev-network, xy-stg-network, xy-prod-network)" -ForegroundColor Red
     $networkScore = 0
 }
 Write-Host ""
@@ -53,7 +53,7 @@ Write-Host ""
 Write-Host "4. Checking Container Health..." -ForegroundColor Yellow
 $dockerRunning = docker ps -q 2>$null
 if ($dockerRunning) {
-    $containerNames = docker ps --format "{{.Names}}" 2>$null | Where-Object { $_ -match "(api|ui)-(dev|uat|prod)-(http|https)" }
+    $containerNames = docker ps --format "{{.Names}}" 2>$null | Where-Object { $_ -match "(api|ui)-(dev|stg|prod)-(http|https)" }
     if ($containerNames) {
         Write-Host "✅ Docker Containers Running:" -ForegroundColor Green
         $containerNames | ForEach-Object { Write-Host "   $($_)" -ForegroundColor Gray }

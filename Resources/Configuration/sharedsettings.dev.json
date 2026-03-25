@@ -8,14 +8,20 @@
   "AllowedHosts": "*",
   "ConnectionStrings": {
     "OrderProcessingSystemDbConnection": "Server=tcp:orderprocessing-sql-dev.database.windows.net,1433;Initial Catalog=OrderProcessingSystem_Dev;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;Authentication=Active Directory Default",
-    "OrderProcessingSystemDbConnection_Local": "Server=localhost,1433;Database=OrderProcessingSystem;User Id=sa;Password=Admin100@;TrustServerCertificate=True;"
+    "OrderProcessingSystemDbConnection_Local": "Server=localhost,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=__LOCAL_SQL_PASSWORD__;TrustServerCertificate=True;"
   },
   "OpenPay": {
-    "MerchantId": "sk_3433941e467c4875b178ce26348b0fac",
-    "PrivateKey": "moiep6umtcnanql3jrxp",
-    "DeviceSessionId": "kR1MiQhz2otdIuUlQkbEyitIqVMiI16f",
+    "MerchantId": "__OPENPAY_MERCHANT_ID__",
+    "PrivateKey": "__OPENPAY_PRIVATE_KEY__",
+    "DeviceSessionId": "__OPENPAY_DEVICE_SESSION_ID__",
     "IsProduction": false,
     "RedirectUrl": "https://your-domain.com/payment/callback"
+  },
+  "Observability": {
+    "EnableEfSensitiveDataLogging": true
+  },
+  "TenantConfiguration": {
+    "ActiveTenantCode": "TenantA"
   },
   "Serilog": {
     "Using": [ "Serilog.Sinks.File" ],
@@ -33,7 +39,7 @@
         "Args": {
           "path": "logs/webapi-.log",
           "rollingInterval": "Day",
-          "outputTemplate": "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} {CorrelationId} {Level:u3} {Username} {Message:lj}{Exception}{NewLine}"
+          "outputTemplate": "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{TraceId}] {Level:u3} {Username} {Message:lj}{Exception}{NewLine}"
         }
       }
     ]
@@ -54,7 +60,7 @@
         "Args": {
           "path": "logs/ui-.log",
           "rollingInterval": "Day",
-          "outputTemplate": "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} {CorrelationId} {Level:u3} {Username} {Message:lj}{Exception}{NewLine}"
+          "outputTemplate": "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{TraceId}] {Level:u3} {Username} {Message:lj}{Exception}{NewLine}"
         }
       }
     ]
@@ -70,7 +76,7 @@
         "Host": "localhost",
         "Port": 5023,
         "HttpsEnabled": true,
-        "CertPassword": "P@ss100",
+        "CertPassword": "__CERT_PASSWORD__",
         "CertPath": "/https/aspnetapp.pfx"
       }
     },
@@ -84,7 +90,7 @@
         "Host": "localhost",
         "Port": 5021,
         "HttpsEnabled": true,
-        "CertPassword": "P@ss100",
+        "CertPassword": "__CERT_PASSWORD__",
         "CertPath": "/https/aspnetapp.pfx"
       }
     }
@@ -112,7 +118,7 @@
     "Local": {
       "Enabled": true,
       "ConnectionStrings": {
-        "DefaultConnection": "Server=localhost,1433;Database=OrderProcessingDB_Dev;User Id=sa;Password=Admin100@;TrustServerCertificate=True;",
+        "DefaultConnection": "Server=localhost,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=__LOCAL_SQL_PASSWORD__;TrustServerCertificate=True;",
         "Redis": "localhost:6379"
       }
     },

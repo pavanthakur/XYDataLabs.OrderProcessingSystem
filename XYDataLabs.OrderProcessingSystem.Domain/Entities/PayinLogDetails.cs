@@ -16,6 +16,12 @@ namespace XYDataLabs.OrderProcessingSystem.Domain.Entities
 
         public string? AdditionalInfo { get; set; }
 
+        [MaxLength(64)]
+        public string? PaymentTraceId { get; set; }
+
+        [MaxLength(64)]
+        public string? ThreeDSecureStage { get; set; }
+
         [Required]
         public int PayinLogId { get; set; }
 

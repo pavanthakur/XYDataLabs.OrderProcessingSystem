@@ -1,17 +1,27 @@
+using Asp.Versioning;
 using AutoMapper;
 using XYDataLabs.OrderProcessingSystem.API.Middleware;
 using XYDataLabs.OrderProcessingSystem.Application;
-using Microsoft.Extensions.Options;
+using XYDataLabs.OrderProcessingSystem.Infrastructure;
 using Microsoft.OpenApi.Models;
 using Serilog;
 using Serilog.Events;
 using Serilog.Sinks.ApplicationInsights.TelemetryConverters;
 using System.Reflection;
-using XYDataLabs.OrderProcessingSystem.Utilities;
+using XYDataLabs.OrderProcessingSystem.SharedKernel;
 using Microsoft.Extensions.Configuration;
+using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
+using XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData;
 using Microsoft.ApplicationInsights.Extensibility;
 using System.Text.RegularExpressions;
 using XYDataLabs.OrderProcessingSystem.Application.Utilities;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Configuration;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
+using XYDataLabs.OrderProcessingSystem.Infrastructure.Multitenancy;
+using XYDataLabs.OrderProcessingSystem.Application.Features.Orders;
+using XYDataLabs.OrderProcessingSystem.Application.Features.Customers;
+using XYDataLabs.OrderProcessingSystem.Application.Features.Payments;
 
 // Bootstrap Serilog as early as possible so Log.* writes go to console immediately
 // Azure App Service Deployment - Fix for Application Not Starting
@@ -36,7 +46,7 @@ var runtimeLabel = isAzure ? "Azure" : (isDocker ? "Docker" : "Local");
 var environmentName = builder.Environment.EnvironmentName switch
 {
     "Development" => Constants.Environments.Dev,
-    "Staging" => Constants.Environments.Uat, 
+    "Staging" => Constants.Environments.Staging, 
     "Production" => Constants.Environments.Production,
     _ => Constants.Environments.Dev // Default to dev for any other environment
 };
@@ -92,10 +102,13 @@ else
 }
 
 builder.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>(); // Required for LoggingMiddleware
+builder.Services.AddScoped<ITenantProvider, HeaderTenantProvider>();
+builder.Services.AddScoped<ITenantResolver, EntityFrameworkTenantResolver>();
+builder.Services.AddSingleton(TimeProvider.System);
 
 // Configure Application Insights for environment-wise telemetry and logging
-var appInsightsConnectionString = builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"] 
-    ?? Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CONNECTION_STRING");
+var applicationInsightsOptions = ApplicationInsightsOptions.FromConfiguration(builder.Configuration);
+var appInsightsConnectionString = applicationInsightsOptions.ConnectionString;
 
 if (!string.IsNullOrWhiteSpace(appInsightsConnectionString))
 {
@@ -118,6 +131,14 @@ else
 {
     Log.Warning("[CONFIG] Application Insights NOT configured - connection string missing for {Environment} environment", environmentName);
 }
+
+// OpenTelemetry distributed tracing and metrics (Phase 3 — Observability)
+builder.Services.AddObservability(
+    "OrderProcessingSystem.API",
+    builder.Configuration,
+    OrderActivitySource.Name,
+    CustomerActivitySource.Name,
+    PaymentActivitySource.Name);
 
 builder.Services.AddCors(options =>
 {
@@ -143,9 +164,33 @@ builder.Services.AddCors(options =>
     });
 });
 
+builder.InjectInfrastructureDependencies();
 builder.InjectApplicationDependencies();
 
+// Health checks
+var healthChecksBuilder = builder.Services.AddHealthChecks();
+var dbConnForHealth = builder.Configuration.GetConnectionString(Constants.Configuration.OrderProcessingSystemDbConnectionString);
+if (!string.IsNullOrWhiteSpace(dbConnForHealth))
+    healthChecksBuilder.AddSqlServer(dbConnForHealth, name: "sqlserver");
+
 builder.Services.AddControllers();
+
+var tenantConfigurationOptions = builder.Configuration
+    .GetSection(TenantConfigurationOptions.SectionName)
+    .Get<TenantConfigurationOptions>() ?? new TenantConfigurationOptions();
+
+// API Versioning — URL segment: /api/v1/[controller]
+builder.Services.AddApiVersioning(options =>
+{
+    options.DefaultApiVersion = new ApiVersion(1, 0);
+    options.AssumeDefaultVersionWhenUnspecified = true;
+    options.ReportApiVersions = true;
+    options.ApiVersionReader = new UrlSegmentApiVersionReader();
+}).AddApiExplorer(options =>
+{
+    options.GroupNameFormat = "'v'VVV";
+    options.SubstituteApiVersionInUrl = true;
+});
 
 // Register Swagger services
 builder.Services.AddEndpointsApiExplorer();// Required for generating Swagger API documentation
@@ -153,6 +198,10 @@ builder.Services.AddSwaggerGen(options =>
 {
     var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+
+    // Tenant header is injected automatically by the Swagger UI requestInterceptor below
+    // (reading window.OrderProcessingActiveTenant set by the top-bar dropdown).
+    // No security scheme / Authorize button / lock icons needed.
 
     if (File.Exists(xmlPath))
     {
@@ -170,7 +219,8 @@ builder.Services.AddSwaggerGen(options =>
         Title = $"OrderProcessingSystem API - {environmentName.ToUpper()} Environment",
         Version = "v1",
         Description = $"OrderProcessingSystem API with Customer, Order endpoints running in {environmentName.ToUpper()} environment" + 
-                     $" [{runtimeLabel}]",
+                     $" [{runtimeLabel}]" +
+                     $" | Active Tenant: {tenantConfigurationOptions.ActiveTenantCode}",
     });
     
     // Add server configuration for proper Swagger API calls
@@ -214,21 +264,21 @@ builder.Host.UseSerilog((context, services, loggerConfiguration) =>
     if (isDocker)
     {
         loggerConfiguration
-            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] [{Runtime}] {Message:lj}{NewLine}{Exception}")
+            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{NewLine}{Exception}")
             .WriteTo.File(
                 path: "/logs/webapi-.log",
                 rollingInterval: RollingInterval.Day,
-                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] [{Runtime}] {Message:lj}{Exception}{NewLine}"
+                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{Exception}{NewLine}"
             );
     }
     else
     {
         loggerConfiguration
-            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] [{Runtime}] {Message:lj}{NewLine}{Exception}")
+            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{NewLine}{Exception}")
             .WriteTo.File(
                 path: "../logs/webapi-.log",
                 rollingInterval: RollingInterval.Day,
-                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] [{Runtime}] {Message:lj}{Exception}{NewLine}"
+                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{Exception}{NewLine}"
             );
     }
 });
@@ -274,6 +324,11 @@ using (var scope = app.Services.CreateScope())
 {
     try
     {
+        // Apply migrations locally/Docker; skip on Azure (managed via pipelines)
+        var dbContext = scope.ServiceProvider.GetRequiredService<OrderProcessingSystemDbContext>();
+        var isAzureRuntime = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME"));
+        DbInitializer.Initialize(dbContext, app.Configuration, applyMigrations: !isAzureRuntime);
+
         var appMasterData = scope.ServiceProvider.GetRequiredService<AppMasterData>();
         Log.Information("Database initialized and AppMasterData loaded successfully during startup");
     }
@@ -286,22 +341,43 @@ using (var scope = app.Services.CreateScope())
 
 SharedSettingsLoader.PrintApiSettingsDebug(apiSettings, activeSettings, "API", isDocker);
 
+app.UseStaticFiles();
+
 // Add Serilog request logging
-app.UseSerilogRequestLogging();
+app.UseSerilogRequestLogging(options =>
+{
+    options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms for tenant {TenantCode}";
+    options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+    {
+        var tenantCode = ResolveTenantCodeForLogging(httpContext);
+        var requestedTenantCode = httpContext.Request.Headers[TenantMiddleware.TenantHeaderName].FirstOrDefault();
+
+        diagnosticContext.Set("TenantCode", tenantCode);
+        diagnosticContext.Set(
+            "RequestedTenantCode",
+            string.IsNullOrWhiteSpace(requestedTenantCode) ? "none" : requestedTenantCode.Trim());
+        diagnosticContext.Set("TenantHeaderName", TenantMiddleware.TenantHeaderName);
+    };
+});
 
 var useDeveloperExceptionPage = builder.Environment.IsDevelopment() && !isAzure;
 
 // Configure the HTTP request pipeline.
 // Environment-specific middleware configuration using our simplified profile names
-if (environmentName == "dev" || environmentName == "uat")
+if (environmentName == Constants.Environments.Dev || environmentName == Constants.Environments.Staging)
 {
-    // Enable Swagger for Development and UAT environments
+    // Enable Swagger for Development and Staging environments
     app.UseSwagger();
     app.UseSwaggerUI(options =>
     {
         // Use relative path for Docker compatibility
         options.SwaggerEndpoint("/swagger/v1/swagger.json", "OrderProcessingSystem API v1");
         options.RoutePrefix = "swagger"; // Set Swagger UI to /swagger/index.html
+        options.InjectJavascript("/swagger-assets/tenant-selector.js");
+        // Inject X-Tenant-Code on every Swagger request using the value set by the
+        // top-bar dropdown (window.OrderProcessingActiveTenant). When login is added,
+        // that code will set the same global — no other changes needed here.
+        options.UseRequestInterceptor("(req) => { const t = window.OrderProcessingActiveTenant; if (t) req.headers['X-Tenant-Code'] = t; return req; }");
     });
     
     if (useDeveloperExceptionPage)
@@ -325,6 +401,8 @@ else if (environmentName == "prod")
     {
         options.SwaggerEndpoint("/swagger/v1/swagger.json", "OrderProcessingSystem API v1");
         options.RoutePrefix = "swagger";
+        options.InjectJavascript("/swagger-assets/tenant-selector.js");
+        options.UseRequestInterceptor("(req) => { const t = window.OrderProcessingActiveTenant; if (t) req.headers['X-Tenant-Code'] = t; return req; }");
     });
     app.UseExceptionHandler(ConfigureApiExceptionHandler);
     app.UseHsts();
@@ -355,11 +433,17 @@ if (activeSettings.HttpsEnabled)
 
 app.UseAuthorization();
 
+app.UseMiddleware<TenantMiddleware>();
+
+app.UseMiddleware<CorrelationMiddleware>();
+
 app.UseMiddleware<LoggingMiddleware>();
 
 app.UseMiddleware<ErrorHandlingMiddleware>();
 
 app.MapControllers();
+
+app.MapHealthChecks("/health");
 
 if (isAzure)
 {
@@ -384,3 +468,25 @@ finally
 {
     Log.CloseAndFlush();
 }
+
+static string ResolveTenantCodeForLogging(HttpContext httpContext)
+{
+    var tenantProvider = httpContext.RequestServices.GetService<ITenantProvider>();
+    if (tenantProvider is not null && tenantProvider.HasTenantContext && !string.IsNullOrWhiteSpace(tenantProvider.TenantCode))
+    {
+        return tenantProvider.TenantCode;
+    }
+
+    var requestedTenantCode = httpContext.Request.Headers[TenantMiddleware.TenantHeaderName].FirstOrDefault();
+    if (!string.IsNullOrWhiteSpace(requestedTenantCode))
+    {
+        return requestedTenantCode.Trim();
+    }
+
+    return string.Equals(httpContext.Request.Path.Value, "/api/v1/info/runtime-configuration", StringComparison.OrdinalIgnoreCase)
+        ? "bootstrap"
+        : "none";
+}
+
+// Required for WebApplicationFactory<Program> in integration tests
+public partial class Program { }

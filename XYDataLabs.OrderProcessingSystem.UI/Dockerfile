@@ -27,7 +27,7 @@ WORKDIR /src
 
 # Copy all project files for dependency resolution
 COPY ["XYDataLabs.OrderProcessingSystem.UI/XYDataLabs.OrderProcessingSystem.UI.csproj", "XYDataLabs.OrderProcessingSystem.UI/"]
-COPY ["XYDataLabs.OrderProcessingSystem.Utilities/XYDataLabs.OrderProcessingSystem.Utilities.csproj", "XYDataLabs.OrderProcessingSystem.Utilities/"]
+COPY ["XYDataLabs.OrderProcessingSystem.SharedKernel/XYDataLabs.OrderProcessingSystem.SharedKernel.csproj", "XYDataLabs.OrderProcessingSystem.SharedKernel/"]
 
 # Restore dependencies
 RUN dotnet restore "./XYDataLabs.OrderProcessingSystem.UI/XYDataLabs.OrderProcessingSystem.UI.csproj"
@@ -44,7 +44,7 @@ RUN mkdir -p /logs && chown -R appuser:appuser /logs
 
 # Copy all project files for dependency resolution
 COPY ["XYDataLabs.OrderProcessingSystem.UI/XYDataLabs.OrderProcessingSystem.UI.csproj", "./"]
-COPY ["XYDataLabs.OrderProcessingSystem.Utilities/XYDataLabs.OrderProcessingSystem.Utilities.csproj", "../XYDataLabs.OrderProcessingSystem.Utilities/"]
+COPY ["XYDataLabs.OrderProcessingSystem.SharedKernel/XYDataLabs.OrderProcessingSystem.SharedKernel.csproj", "../XYDataLabs.OrderProcessingSystem.SharedKernel/"]
 
 RUN dotnet restore "XYDataLabs.OrderProcessingSystem.UI.csproj"
 

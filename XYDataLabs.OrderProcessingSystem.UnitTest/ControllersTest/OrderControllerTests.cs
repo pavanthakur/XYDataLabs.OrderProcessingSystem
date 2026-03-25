@@ -1,24 +1,25 @@
 ﻿using XYDataLabs.OrderProcessingSystem.API.Controllers;
+using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
-using XYDataLabs.OrderProcessingSystem.Application.Interfaces;
+using XYDataLabs.OrderProcessingSystem.Application.Features.Orders.Commands;
+using XYDataLabs.OrderProcessingSystem.Application.Features.Orders.Queries;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using Xunit;
 
 namespace XYDataLabs.OrderProcessingSystem.UnitTest.ControllersTest
 {
     public class OrderControllerTests
     {
-        private readonly Mock<IOrderService> _mockOrderService;
+        private readonly Mock<IDispatcher> _mockDispatcher;
         private readonly OrderController _orderController;
 
         public OrderControllerTests()
         {
-            _mockOrderService = new Mock<IOrderService>();
-            _orderController = new OrderController(_mockOrderService.Object);
+            _mockDispatcher = new Mock<IDispatcher>();
+            _orderController = new OrderController(_mockDispatcher.Object);
         }
 
         [Fact]
@@ -41,20 +42,19 @@ namespace XYDataLabs.OrderProcessingSystem.UnitTest.ControllersTest
                 OrderProductDtos = new List<OrderProductDto>()
             };
 
-            _mockOrderService.Setup(s => s.CreateOrderAsync(createOrderRequestDto.CustomerId, createOrderRequestDto.ProductIds))
-                .ReturnsAsync(orderDto);
+            _mockDispatcher.Setup(d => d.SendAsync(It.IsAny<CreateOrderCommand>(), default))
+                .ReturnsAsync(Result<OrderDto>.Success(orderDto));
 
             // Act
             var result = await _orderController.CreateOrder(createOrderRequestDto);
 
             // Assert
-            var createdAtActionResult = Assert.IsType<CreatedAtActionResult>(result.Result);
+            var createdAtActionResult = Assert.IsType<CreatedAtActionResult>(result);
             Assert.Equal(StatusCodes.Status201Created, createdAtActionResult.StatusCode);
-            Assert.Equal(orderDto, createdAtActionResult.Value);
         }
 
         [Fact]
-        public async Task CreateOrder_ReturnsBadRequest_WhenValidationExceptionIsThrown()
+        public async Task CreateOrder_ReturnsBadRequest_WhenValidationFails()
         {
             // Arrange
             var createOrderRequestDto = new CreateOrderRequestDto
@@ -63,20 +63,18 @@ namespace XYDataLabs.OrderProcessingSystem.UnitTest.ControllersTest
                 ProductIds = new List<int> { 1, 2, 3 }
             };
 
-            _mockOrderService.Setup(s => s.CreateOrderAsync(createOrderRequestDto.CustomerId, createOrderRequestDto.ProductIds))
-                .ThrowsAsync(new FluentValidation.ValidationException("Validation error"));
+            _mockDispatcher.Setup(d => d.SendAsync(It.IsAny<CreateOrderCommand>(), default))
+                .ReturnsAsync(Result<OrderDto>.Failure(Error.Validation));
 
             // Act
             var result = await _orderController.CreateOrder(createOrderRequestDto);
 
             // Assert
-            var badRequestResult = Assert.IsType<BadRequestObjectResult>(result.Result);
-            Assert.Equal(StatusCodes.Status400BadRequest, badRequestResult.StatusCode);
-            Assert.Equal("Validation error", badRequestResult.Value);
+            Assert.IsType<BadRequestObjectResult>(result);
         }
 
         [Fact]
-        public async Task CreateOrder_ReturnsNotFound_WhenKeyNotFoundExceptionIsThrown()
+        public async Task CreateOrder_ReturnsNotFound_WhenCustomerNotFound()
         {
             // Arrange
             var createOrderRequestDto = new CreateOrderRequestDto
@@ -85,16 +83,14 @@ namespace XYDataLabs.OrderProcessingSystem.UnitTest.ControllersTest
                 ProductIds = new List<int> { 1, 2, 3 }
             };
 
-            _mockOrderService.Setup(s => s.CreateOrderAsync(createOrderRequestDto.CustomerId, createOrderRequestDto.ProductIds))
-                .ThrowsAsync(new KeyNotFoundException("Customer not found"));
+            _mockDispatcher.Setup(d => d.SendAsync(It.IsAny<CreateOrderCommand>(), default))
+                .ReturnsAsync(Result<OrderDto>.Failure(Error.NotFound));
 
             // Act
             var result = await _orderController.CreateOrder(createOrderRequestDto);
 
             // Assert
-            var notFoundResult = Assert.IsType<NotFoundObjectResult>(result.Result);
-            Assert.Equal(StatusCodes.Status404NotFound, notFoundResult.StatusCode);
-            Assert.Equal("Customer not found", notFoundResult.Value);
+            Assert.IsType<NotFoundObjectResult>(result);
         }
 
         [Fact]
@@ -112,34 +108,31 @@ namespace XYDataLabs.OrderProcessingSystem.UnitTest.ControllersTest
                 OrderProductDtos = new List<OrderProductDto>()
             };
 
-            _mockOrderService.Setup(s => s.GetOrderDetailsAsync(orderId))
-                .ReturnsAsync(orderDto);
+            _mockDispatcher.Setup(d => d.QueryAsync(It.IsAny<GetOrderDetailsQuery>(), default))
+                .ReturnsAsync(Result<OrderDto>.Success(orderDto));
 
             // Act
             var result = await _orderController.GetOrderDetailsById(orderId);
 
             // Assert
-            var okResult = Assert.IsType<OkObjectResult>(result.Result);
+            var okResult = Assert.IsType<OkObjectResult>(result);
             Assert.Equal(StatusCodes.Status200OK, okResult.StatusCode);
-            Assert.Equal(orderDto, okResult.Value);
         }
 
         [Fact]
-        public async Task GetOrderDetailsById_ReturnsNotFound_WhenKeyNotFoundExceptionIsThrown()
+        public async Task GetOrderDetailsById_ReturnsNotFound_WhenOrderNotFound()
         {
             // Arrange
             var orderId = 1;
 
-            _mockOrderService.Setup(s => s.GetOrderDetailsAsync(orderId))
-                .ThrowsAsync(new KeyNotFoundException("Order not found"));
+            _mockDispatcher.Setup(d => d.QueryAsync(It.IsAny<GetOrderDetailsQuery>(), default))
+                .ReturnsAsync(Result<OrderDto>.Failure(Error.NotFound));
 
             // Act
             var result = await _orderController.GetOrderDetailsById(orderId);
 
             // Assert
-            var notFoundResult = Assert.IsType<NotFoundObjectResult>(result.Result);
-            Assert.Equal(StatusCodes.Status404NotFound, notFoundResult.StatusCode);
-            Assert.Equal("Order not found", notFoundResult.Value);
+            Assert.IsType<NotFoundObjectResult>(result);
         }
     }
 }

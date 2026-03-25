@@ -15,6 +15,7 @@ All ADRs live in `docs/architecture/decisions/ADR-NNN-title.md`
 | ADR-004 | EF Core 8 + Azure SQL (password auth → passwordless planned) | ✅ Accepted, evolving |
 | ADR-005 | Serilog structured logging | ✅ Accepted, enrichers pending |
 | ADR-006 | Passwordless SQL via DefaultAzureCredential + Managed Identity | ✅ Accepted 2026-03-20 |
+| ADR-007 | Hybrid multitenant model (SharedPool + Dedicated Database) | ✅ Accepted |
 
 ## When to Write an ADR
 Write one whenever you:
@@ -32,3 +33,6 @@ Context → Decision → Rationale table → Consequences → Related
 3. **`az deployment sub create` for `infra/`** — never `az deployment group create`
 4. **Structured logging only** — `Log.Information("{Key}", value)` not `$"text {value}"`
 5. **OIDC only for CI/CD** — never add `client-secret:` to any workflow
+6. **Clean Architecture layer rules enforced** — see `clean-architecture.instructions.md` (auto-applied to all `.cs` / `.csproj` files)
+7. **Hybrid multitenancy — IsSharedPool from TenantTier** — never derive tier from ConnectionString null-check
+8. **TenantRegistryDbContext for tenant resolution** — never resolve tenants through the business DbContext

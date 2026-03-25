@@ -1,5 +1,5 @@
 ---
-mode: agent
+agent: agent
 description: Open or close Azure SQL firewall for local SSMS/sqlcmd access after a fresh bootstrap or deploy
 ---
 

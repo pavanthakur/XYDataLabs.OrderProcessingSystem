@@ -39,7 +39,7 @@ All environments (Development, UAT, Production) successfully configured and test
 - **UI Program.cs**: Consistent configuration across environments
 
 ### 2. Database Configuration
-- All environments using working connection string: `Server=192.168.1.8;Database=OrderProcessingSystem;User Id=sa;Password=Admin100@;TrustServerCertificate=True;`
+- All environments using working connection string pattern: `Server=192.168.1.8;Database=OrderProcessingSystem;User Id=sa;Password=<LOCAL_SQL_PASSWORD>;TrustServerCertificate=True;`
 - Production uses environment variable: `PROD_DATABASE_CONNECTION_STRING`
 
 ### 3. OpenPay Payment Gateway

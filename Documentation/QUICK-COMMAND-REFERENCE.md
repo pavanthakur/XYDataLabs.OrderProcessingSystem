@@ -1,5 +1,5 @@
 # Quick Command Reference Guide
-**Last Updated:** March 21, 2026 (Day 35 + Infra reliability fixes)
+**Last Updated:** March 20, 2026 (Day 34 + Copilot infrastructure session)
 
 All commands in one place. Also available as topic-specific deep dives in `Documentation/commands/`:
 
@@ -400,7 +400,7 @@ dotnet run
 |------|-----|-----|
 | Local VS (F5) | http://localhost:5010 | http://localhost:5012 |
 | Docker dev | http://localhost:5020 | http://localhost:5022 |
-| Docker UAT | http://localhost:5030 | http://localhost:5032 |
+| Docker stg | http://localhost:5030 | http://localhost:5032 |
 
 ---
 

@@ -29,7 +29,9 @@ This directory contains Azure Bicep templates for deploying the Order Processing
    - **Contributor** role on the resource group (to create resources)
    - **User Access Administrator** role (to assign access policies) or sufficient permissions to manage Key Vault access
 2. After deployment, populate the Key Vault with these secrets:
-   - `OpenPayAdapter--ApiKey`
+  - `OpenPay--MerchantId`
+  - `OpenPay--PrivateKey`
+  - `OpenPay--DeviceSessionId`
    - `ApplicationInsights--ConnectionString`
 
 ### Deployment
@@ -84,7 +86,6 @@ curl https://<app-name>.azurewebsites.net/api/info/environment
 | `location` | Azure region | No | Resource Group location |
 | `appServiceSku` | App Service Plan SKU (F1, B1, P1v3) | No | F1 |
 | `environment` | Environment name (dev, uat, prod) | No | dev |
-| `openPayAdapterBaseUrl` | OpenPay Adapter base URL (non-secret) | No | https://api.openpay.example.com |
 
 **Note**: The Key Vault name is automatically computed as `kv-{shortBaseName}-{environment}` where `shortBaseName` is the first 15 characters of `baseName`. This ensures the name stays within Azure's 24-character limit and matches the naming convention used in `infra/modules/keyvault.bicep`.
 
@@ -94,10 +95,11 @@ The template configures the following app settings:
 
 ### Non-Secret Settings
 - `ASPNETCORE_ENVIRONMENT`: Mapped from environment parameter (Development/Staging/Production)
-- `OpenPayAdapter__BaseUrl`: OpenPay Adapter base URL
 
 ### Secret Settings (Key Vault References)
-- `OpenPayAdapter__ApiKey`: References Key Vault secret `OpenPayAdapter--ApiKey`
+- `OpenPay__MerchantId`: References Key Vault secret `OpenPay--MerchantId`
+- `OpenPay__PrivateKey`: References Key Vault secret `OpenPay--PrivateKey`
+- `OpenPay__DeviceSessionId`: References Key Vault secret `OpenPay--DeviceSessionId`
 - `APPLICATIONINSIGHTS_CONNECTION_STRING`: References Key Vault secret `ApplicationInsights--ConnectionString`
 
 ## Managed Identity

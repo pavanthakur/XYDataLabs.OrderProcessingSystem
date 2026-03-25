@@ -9,7 +9,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application.DTO
     public class PaymentDto
     {
         public string Id { get; set; } = string.Empty;
-        public string OrderId { get; set; } = string.Empty;
+        public string CustomerOrderId { get; set; } = string.Empty;
         public string CustomerId { get; set; } = string.Empty;
         public decimal Amount { get; set; }
         public string Currency { get; set; } = "MXN";
@@ -18,5 +18,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application.DTO
         public string? TransactionId { get; set; }
         public string? ErrorMessage { get; set; }
         public string? ThreeDSecureUrl { get; set; }
+        public bool IsThreeDSecureEnabled { get; set; }
+        public string? ThreeDSecureStage { get; set; }
     }
 }

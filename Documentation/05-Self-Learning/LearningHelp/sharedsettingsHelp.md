@@ -59,7 +59,7 @@ The single source of truth for all configuration:
         "Host": "localhost",
         "Port": 5003,
         "HttpsEnabled": true,
-        "CertPassword": "P@ss100",
+        "CertPassword": "<local-cert-password>",
         "CertPath": "/https/aspnetapp.pfx"
       }
     },
@@ -73,7 +73,7 @@ The single source of truth for all configuration:
         "Host": "localhost",
         "Port": 5001,
         "HttpsEnabled": true,
-        "CertPassword": "P@ss100",
+        "CertPassword": "<local-cert-password>",
         "CertPath": "/https/aspnetapp.pfx"
       }
     }

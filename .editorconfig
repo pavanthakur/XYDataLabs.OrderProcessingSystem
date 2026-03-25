@@ -230,3 +230,14 @@ dotnet_diagnostic.CA1849.severity = warning
 dotnet_diagnostic.CA2007.severity = none
 dotnet_diagnostic.CA2100.severity = error
 dotnet_diagnostic.CA3001.severity = warning
+
+# Roslynator — suppress noisy rules
+dotnet_diagnostic.RCS1194.severity = suggestion   # Implement exception constructors — too strict for all custom exceptions
+
+# Meziantou — suppress rules not applicable to ASP.NET Core
+dotnet_diagnostic.MA0004.severity = suggestion     # Use ConfigureAwait(false) — not needed in ASP.NET Core
+dotnet_diagnostic.MA0026.severity = suggestion     # Fix TODO/HACK/... comments — noise during development
+dotnet_diagnostic.MA0051.severity = suggestion     # Method is too long — cosmetic, fix incrementally
+
+# SonarAnalyzer — suppress noise
+dotnet_diagnostic.S1135.severity = suggestion      # Complete the task associated to this TODO — noise during development

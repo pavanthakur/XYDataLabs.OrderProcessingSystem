@@ -11,6 +11,7 @@ namespace XYDataLabs.OpenPayAdapter.Configuration
         public string MerchantId { get; set; } = string.Empty;
         public string PrivateKey { get; set; } = string.Empty;
         public string DeviceSessionId { get; set; } = string.Empty;
+        public string RedirectUrl { get; set; } = string.Empty;
         public bool IsProduction { get; set; }
     }
 }

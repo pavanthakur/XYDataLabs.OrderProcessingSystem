@@ -455,7 +455,7 @@ Get-Content logs/docker-startup-$(Get-Date -Format 'yyyy-MM-dd').log -Tail 20
 ls backups/ | Select-Object -Last 5
 
 # Verify database connectivity (non-Docker)
-sqlcmd -S localhost,1433 -U sa -P "Admin100@" -Q "SELECT name FROM sys.databases WHERE name LIKE 'OrderProcessingSystem%'"
+sqlcmd -S localhost,1433 -U sa -P "<LOCAL_SQL_PASSWORD>" -Q "SELECT name FROM sys.databases WHERE name LIKE 'OrderProcessingSystem%'"
 
 # Test Entity Framework migrations (non-Docker)
 cd XYDataLabs.OrderProcessingSystem.API

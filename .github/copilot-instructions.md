@@ -21,14 +21,23 @@ practice Azure cloud deployment, CI/CD automation, and enterprise DevOps pattern
 
 | Project | Role |
 |---------|------|
-| `XYDataLabs.OrderProcessingSystem.API` | ASP.NET Core Web API — orders, customers, payments, Swagger |
+| `XYDataLabs.OrderProcessingSystem.API` | ASP.NET Core Web API — thin controllers, composition root, Swagger |
 | `XYDataLabs.OrderProcessingSystem.UI` | ASP.NET Core MVC — presentation layer |
-| `XYDataLabs.OrderProcessingSystem.Application` | Use cases, DTOs, MediatR |
-| `XYDataLabs.OrderProcessingSystem.Domain` | Core entities, domain logic (DDD) |
+| `XYDataLabs.OrderProcessingSystem.Application` | Hand-rolled CQRS (ICommand/IQuery/IDispatcher), DTOs, pipeline behaviors |
+| `XYDataLabs.OrderProcessingSystem.Domain` | Core entities, domain logic (DDD) — zero dependencies |
 | `XYDataLabs.OrderProcessingSystem.Infrastructure` | EF Core, SQL Server, data access |
-| `XYDataLabs.OrderProcessingSystem.Utilities` | Shared helpers and cross-cutting concerns |
+| `XYDataLabs.OrderProcessingSystem.SharedKernel` | Result<T>, constants, observability, multi-tenancy |
 | `XYDataLabs.OpenPayAdapter` | OpenPay payment integration |
-| `XYDataLabs.OrderProcessingSystem.UnitTest` | xUnit, Moq, Bogus, FluentAssertions tests |
+
+### Test Projects (under `tests/`)
+
+| Project | Role |
+|---------|------|
+| `XYDataLabs.OrderProcessingSystem.Domain.Tests` | Entity unit tests (xUnit, FluentAssertions) |
+| `XYDataLabs.OrderProcessingSystem.Application.Tests` | CQRS handler unit tests (xUnit, Moq, Bogus) |
+| `XYDataLabs.OrderProcessingSystem.API.Tests` | Controller unit tests |
+| `XYDataLabs.OrderProcessingSystem.Integration.Tests` | End-to-end tests (Testcontainers + WebApplicationFactory) |
+| `XYDataLabs.OrderProcessingSystem.Architecture.Tests` | NetArchTest layer boundary enforcement |
 
 ---
 
@@ -57,8 +66,8 @@ practice Azure cloud deployment, CI/CD automation, and enterprise DevOps pattern
 ├── Resources/
 │   ├── Azure-Deployment/          # 27 PowerShell automation scripts (see §6)
 │   ├── BuildConfiguration/        # BannedSymbols, CodeAnalysis.ruleset, MSBuild props
-│   ├── Configuration/             # sharedsettings.{dev,uat,prod,local}.json
-│   └── Docker/                    # start-docker.ps1 + docker-compose.{dev,uat,prod}.yml
+│   ├── Configuration/             # sharedsettings.{dev,stg,prod,local}.json
+│   └── Docker/                    # start-docker.ps1 + docker-compose.{dev,stg,prod}.yml
 │
 ├── bicep/                         # Bicep IaC for subscription-scoped deployment
 │   ├── appservice-with-kv.bicep
@@ -74,10 +83,19 @@ practice Azure cloud deployment, CI/CD automation, and enterprise DevOps pattern
 │   ├── configure-secrets-and-run.ps1
 │   └── validate-github-app-config.ps1
 │
-├── docs/runbooks/                 # Operations runbooks
+├── tests/                         # All test projects (5 projects)
+│   ├── XYDataLabs.OrderProcessingSystem.Domain.Tests/
+│   ├── XYDataLabs.OrderProcessingSystem.Application.Tests/
+│   ├── XYDataLabs.OrderProcessingSystem.API.Tests/
+│   ├── XYDataLabs.OrderProcessingSystem.Integration.Tests/
+│   └── XYDataLabs.OrderProcessingSystem.Architecture.Tests/
+│
+├── docs/
+│   ├── runbooks/                  # Operations runbooks
+│   └── architecture/decisions/    # ADRs (ADR-001 through ADR-006)
 │
 ├── TROUBLESHOOTING-INDEX.md       # ← Quick troubleshooting guide with links
-├── ARCHITECTURE-EVOLUTION.md      # Monolith → Microservices roadmap
+├── ARCHITECTURE-EVOLUTION.md      # 14-phase monolith → microservices roadmap
 ├── AZURE-PROGRESS-EVALUATION.md   # Learning progress tracker (weeks 1–10)
 ├── AZURE-TOP-7-SERVICES-ANALYSIS.md  # Analysis of 7 key Azure services
 ├── GITHUB-APP-DELETION-SUMMARY.md    # GitHub App automation and deletion procedures
@@ -105,7 +123,7 @@ All workflows live in `.github/workflows/`. Each has a companion `README-*.md` i
 | `test-validate-deployment.yml` | Test Pre-Deployment Validation | Manual or PR | Tests the validation workflow independently. |
 | `deploy-api-to-azure.yml` | Deploy API to Azure App Service | Push to dev/staging/main (API paths) | Build → test → publish → Azure OIDC login → deploy → health check |
 | `deploy-ui-to-azure.yml` | Deploy UI to Azure App Service | Push to dev/staging/main (UI paths) | Build → test → publish → Azure OIDC login → deploy → health check |
-| `deploy-and-verify.yml` | Deploy and Verify (Secure Config) | Push to dev/main/uat or manual | Full end-to-end: infra + app deploy + post-deploy health verification |
+| `deploy-and-verify.yml` | Deploy and Verify (Secure Config) | Push to dev/main/stg or manual | Full end-to-end: infra + app deploy + post-deploy health verification |
 | `docker-health.yml` | Docker Startup Health | Push to main, PR to main | Validates `Resources/Docker/start-docker.ps1` smoke test |
 
 ### Branch → Environment Mapping
@@ -231,7 +249,7 @@ Parameter files follow the pattern `{environment}.json` / `{environment}.paramet
 
 ### Multi-environment settings
 
-`Resources/Configuration/sharedsettings.{dev,uat,prod,local}.json` — loaded by `appsettings.json`
+`Resources/Configuration/sharedsettings.{dev,stg,prod,local}.json` — loaded by `appsettings.json`
 via the `ASPNETCORE_ENVIRONMENT` variable.
 
 ### GitHub App vs OIDC Secrets
@@ -273,32 +291,65 @@ identity to access Key Vault without credentials in config files.
 .\Resources\Docker\start-docker.ps1 -Environment dev -Profile https -Reset
 ```
 
-Port allocations: Local VS (5010–5013) · Docker dev (5020–5023) · UAT (5030–5033) · Prod (5040–5043).
+Port allocations: Local VS (5010–5013) · Docker dev (5020–5023) · Docker stg (5030–5033) · Prod (5040–5043).
 
 ---
 
-## 9. Copilot Prompts & Instruction Files
+## 9. Copilot Prompts, Instructions & Agents
 
 ### Instruction files (auto-attach by file pattern)
 | File | Applies to |
 |------|------------|
+| `.github/instructions/clean-architecture.instructions.md` | `**/*.cs`, `**/*.csproj` |
 | `.github/instructions/ef-migrations.instructions.md` | `**/Infrastructure/**`, `**/Migrations/**` |
+| `.github/instructions/multitenant-payment-schema.instructions.md` | `**/Domain/Entities/**/*.cs`, `**/Application/DTO/**/*.cs`, `**/Application/Features/Payments/**/*.cs`, `**/Infrastructure/**/*.cs`, related UI/API/test files |
 | `.github/instructions/azure-workflows.instructions.md` | `**/.github/workflows/**` |
 | `.github/instructions/bicep.instructions.md` | `**/infra/**`, `**/*.bicep` |
 | `.github/instructions/curriculum.instructions.md` | `**/*CURRICULUM*`, `**/05-Self-Learning/**` |
 | `.github/instructions/architecture.instructions.md` | `**/docs/architecture/**`, `**/*ADR*` |
 
+### Instruction auto-injection matrix
+
+When editing a file, multiple instruction files may fire simultaneously based on overlapping `applyTo` patterns.
+This matrix shows which instructions auto-attach for common file locations:
+
+| File location | clean-arch | ef-migrations | multitenant | azure-workflows | bicep | architecture | curriculum |
+|---------------|:----------:|:-------------:|:-----------:|:---------------:|:-----:|:------------:|:----------:|
+| `Domain/Entities/*.cs` | ✓ | | ✓ | | | | |
+| `Application/Features/**/*.cs` | ✓ | | ✓ | | | | |
+| `Application/DTO/**/*.cs` | ✓ | | ✓ | | | | |
+| `Infrastructure/**/*.cs` | ✓ | ✓ | ✓ | | | | |
+| `Infrastructure/Migrations/*` | ✓ | ✓ | ✓ | | | | |
+| `API/Controllers/*.cs` | ✓ | | ✓ | | | | |
+| `SharedKernel/**/*.cs` | ✓ | | | | | | |
+| `tests/Architecture.Tests/*.cs` | ✓ | | ✓ | | | | |
+| `.github/workflows/*.yml` | | | | ✓ | | | |
+| `infra/**/*.bicep` | | | | | ✓ | | |
+| `docs/architecture/decisions/*` | | | | | | ✓ | |
+| `Documentation/05-Self-Learning/*` | | | | | | | ✓ |
+
+### Custom agents (select in VS Code Chat agent picker)
+
+| Agent | File | Use when |
+|-------|------|----------|
+| Azure DevOps | `.github/agents/azure-devops.agent.md` | Working on workflows, Bicep, PowerShell scripts, Docker, OIDC config |
+| CQRS Backend | `.github/agents/cqrs-backend.agent.md` | Working on C# domain/application/infrastructure code, CQRS patterns, EF Core |
+| Code Reviewer | `.github/agents/code-reviewer.agent.md` | Reviewing changes for architecture compliance, security, tenant safety (read-only) |
+
 ### Reusable agent prompts (type in VS Code Chat → Agent mode)
 | Prompt | Command | Purpose |
 |--------|---------|--------|
+| New Feature Workflow | `/new-feature` | Orchestrates end-to-end feature development: entity → CQRS → migration → controller → tests → review → commit. Enforces mandatory 12-step workflow with multitenant support. |
 | Day Complete Router | `/day-complete` | After each curriculum day — routes updates to all correct documents, suggests commit |
 | SQL Local Access | `/sql-local-access` | Opens or closes Azure SQL firewall for local IP after a fresh bootstrap/deploy. Prints SSMS connection details. |
+| Context Audit | `/context-audit` | Detects stale AI context by diffing memory files and copilot-instructions against the actual codebase. Run periodically or after major refactors. |
 
-> **Quick prompt tip:** `Ctrl+Shift+I` → select Agent mode → type `/day-complete` or `/sql-local-access`
+> **Quick prompt tip:** `Ctrl+Shift+I` → select Agent mode → type `/new-feature`, `/day-complete`, `/sql-local-access`, or `/context-audit`
 >
 > **Prompt reference:** See `.github/prompts/README.md` for when to use each prompt, prerequisites, and operational notes.
 >
 > **Maintenance rule:** When adding or changing any reusable prompt in `.github/prompts/`, also update `.github/prompts/README.md` and any operational docs that point users to required manual post-deploy steps.
+> When adding or changing any agent in `.github/agents/`, also update the Custom agents table above.
 
 ---
 
@@ -307,7 +358,8 @@ Port allocations: Local VS (5010–5013) · Docker dev (5020–5023) · UAT (503
 | File | Where | What it covers |
 |------|-------|---------------|
 | `TROUBLESHOOTING-INDEX.md` | Root | Quick links for common GitHub App / OIDC / workflow errors |
-| `ARCHITECTURE-EVOLUTION.md` | Root | Phase 1 (monolith ✅) → Phase 2 (YARP microservices 📅) |
+| `ARCHITECTURE.md` | Root | Binding tenant, payment identifier, migration, and test standard for future model creation |
+| `ARCHITECTURE-EVOLUTION.md` | Root | 14-phase roadmap: Phases 1-6 ✅ complete, Phase 7 next 📅 |
 | `AZURE-PROGRESS-EVALUATION.md` | Root | Learning progress weeks 1–10, next-step guides |
 | `AZURE-TOP-7-SERVICES-ANALYSIS.md` | Root | Analysis of 7 key Azure services used in this project |
 | `GITHUB-APP-DELETION-SUMMARY.md` | Root | GitHub App automation and deletion procedures |
@@ -332,7 +384,7 @@ Port allocations: Local VS (5010–5013) · Docker dev (5020–5023) · UAT (503
 
 ---
 
-## 10. Common Troubleshooting Patterns
+## 11. Common Troubleshooting Patterns
 
 | Symptom | First place to check |
 |---------|---------------------|

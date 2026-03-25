@@ -1,15 +1,15 @@
-﻿using XYDataLabs.OrderProcessingSystem.Domain.Entities;
-using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
+﻿using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
+using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.Utilities
 {
     public class AppMasterData
     {
-        private readonly OrderProcessingSystemDbContext _dbContext;
+        private readonly IAppDbContext _dbContext;
         private IReadOnlyList<PaymentProvider> _paymentProviders = new List<PaymentProvider>().AsReadOnly();
 
-        public AppMasterData(OrderProcessingSystemDbContext dbContext)
+        public AppMasterData(IAppDbContext dbContext)
         {
             _dbContext = dbContext;
             InitializeData();
@@ -20,6 +20,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Utilities
             //TODO : Add caching mechanism to avoid multiple db calls
             // Load payment providers with their methods
             _paymentProviders = _dbContext.PaymentProviders
+                .IgnoreQueryFilters()
                 .AsNoTracking()
                 .ToList()
                 .AsReadOnly();
@@ -30,6 +31,12 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Utilities
         public PaymentProvider? GetProviderByName(string name)
         {
             return _paymentProviders.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        }
+
+        public PaymentProvider? GetProviderByNameForTenant(string name, int tenantId)
+        {
+            return _paymentProviders.FirstOrDefault(p =>
+                p.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && p.TenantId == tenantId);
         }
 
         public void RefreshData()

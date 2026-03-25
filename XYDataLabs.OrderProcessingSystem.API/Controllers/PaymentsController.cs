@@ -1,22 +1,23 @@
-﻿using XYDataLabs.OrderProcessingSystem.Application.DTO;
-using XYDataLabs.OrderProcessingSystem.Application.Interfaces;
-using XYDataLabs.OrderProcessingSystem.Domain.Entities;
-using Microsoft.AspNetCore.Http.HttpResults;
+﻿using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
-using System.Text;
+using XYDataLabs.OrderProcessingSystem.API.Extensions;
+using XYDataLabs.OrderProcessingSystem.Application.CQRS;
+using XYDataLabs.OrderProcessingSystem.Application.DTO;
+using XYDataLabs.OrderProcessingSystem.Application.Features.Payments.Commands;
 
 namespace XYDataLabs.OrderProcessingSystem.API.Controllers
 {
+    [ApiVersion("1.0")]
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/v{version:apiVersion}/[controller]")]
     public class PaymentsController : ControllerBase
     {
-        private readonly IOpenPayService _openPayService;
+        private readonly IDispatcher _dispatcher;
         private readonly ILogger<PaymentsController> _logger;
 
-        public PaymentsController(IOpenPayService openPayService, ILogger<PaymentsController> logger)
+        public PaymentsController(IDispatcher dispatcher, ILogger<PaymentsController> logger)
         {
-            _openPayService = openPayService;
+            _dispatcher = dispatcher;
             _logger = logger;
         }
 
@@ -24,19 +25,60 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
         ///    Creates a new customer, adds a card, and processes a payment in a single operation
         /// </summary>
         /// <param name="request">CustomerWithCardPaymentRequestDto</param>
+        /// <param name="cancellationToken">Request cancellation token</param>
         /// <returns>Payment status</returns>
         [HttpPost("ProcessPayment")]
-        public async Task<IActionResult> ProcessPayment([FromBody] CustomerWithCardPaymentRequestDto request)
+        public async Task<IActionResult> ProcessPayment([FromBody] CustomerWithCardPaymentRequestDto request, CancellationToken cancellationToken)
         {
+            ArgumentNullException.ThrowIfNull(request);
+
             try
             {
-                var payment = await _openPayService.ProcessPaymentAsync(request);
-                return Ok(payment);
+                var result = await _dispatcher.SendAsync(new ProcessPaymentCommand(
+                    request.Name,
+                    request.Email,
+                    request.DeviceSessionId,
+                    request.CardNumber,
+                    request.ExpirationYear,
+                    request.ExpirationMonth,
+                    request.Cvv2,
+                    request.CustomerOrderId), cancellationToken);
+                return result.ToActionResult();
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error processing payment");
                 return StatusCode(500, new { message = "An error occurred while processing the payment" });
+            }
+        }
+
+        [HttpPost("{paymentId}/confirm-status")]
+        public async Task<IActionResult> ConfirmPaymentStatus(string paymentId, [FromBody] PaymentStatusLookupRequestDto request, CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(request);
+
+            try
+            {
+                _logger.LogInformation(
+                    "Received payment status confirmation request for payment {PaymentId} and attempt order {AttemptOrderId}",
+                    paymentId,
+                    request.AttemptOrderId);
+
+                var result = await _dispatcher.SendAsync(
+                    new ConfirmPaymentStatusCommand(
+                        paymentId,
+                        request.AttemptOrderId,
+                        request.CallbackStatus,
+                        request.ErrorMessage,
+                        request.CallbackParameters),
+                    cancellationToken);
+
+                return result.ToActionResult();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error confirming payment status for payment {PaymentId}", paymentId);
+                return StatusCode(500, new { message = "An error occurred while confirming the payment status" });
             }
         }
     }

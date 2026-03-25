@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
-using XYDataLabs.OrderProcessingSystem.Utilities;
+using XYDataLabs.OrderProcessingSystem.SharedKernel;
 using System;
+using XYDataLabs.OrderProcessingSystem.UI.Models;
 
 namespace XYDataLabs.OrderProcessingSystem.UI.Controllers
 {
@@ -16,87 +16,137 @@ namespace XYDataLabs.OrderProcessingSystem.UI.Controllers
 
         public IActionResult Index()
         {
-            // Determine environment and Docker context
-            var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
-            var isDocker = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true";
-            
-            // Detect Azure App Service using WEBSITE_SITE_NAME environment variable
-            var azureSiteName = Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME");
-            var isAzure = !string.IsNullOrWhiteSpace(azureSiteName);
-
-            // Map .NET environment names to our simplified profile names
-            var environmentName = environment switch
-            {
-                "Development" => Constants.Environments.Dev,
-                "Staging" => Constants.Environments.Uat, 
-                "Production" => Constants.Environments.Production,
-                _ => Constants.Environments.Dev // Default to dev for any other environment
-            };
+            var (environmentName, isDocker) = ResolveExecutionContext();
 
             // Log home page access (business event)
             _logger.LogInformation("User accessed home page in {Environment} environment", environmentName);
+            PopulateCommonViewData(environmentName, isDocker);
 
-            // Determine API base URL
-            string apiBaseUrl;
-            
-            // First, check for explicit API_BASE_URL environment variable (allows Azure App Service override)
-            var apiBaseUrlEnv = Environment.GetEnvironmentVariable("API_BASE_URL");
-            if (!string.IsNullOrWhiteSpace(apiBaseUrlEnv))
-            {
-                apiBaseUrl = apiBaseUrlEnv.TrimEnd('/');
-                _logger.LogInformation("Using API_BASE_URL from environment variable: {ApiBaseUrl}", apiBaseUrl);
-            }
-            else if (isAzure)
-            {
-                // On Azure, derive API URL from UI site name by replacing '-ui-' with '-api-'
-                var apiSiteName = azureSiteName!.Replace("-ui-", "-api-");
-                if (apiSiteName != azureSiteName)
-                {
-                    apiBaseUrl = $"https://{apiSiteName}.azurewebsites.net";
-                    _logger.LogInformation("Using derived Azure API URL: {ApiBaseUrl}", apiBaseUrl);
-                }
-                else
-                {
-                    // Fallback if UI site name doesn't contain '-ui-' pattern - use site name directly with '-api' suffix
-                    _logger.LogWarning("Could not derive API site name from UI site name '{UiSiteName}'. Using fallback.", azureSiteName);
-                    apiBaseUrl = $"https://{azureSiteName}-api.azurewebsites.net";
-                }
-            }
-            else
-            {
-                // Load shared settings and get API base URL for local/Docker environments
-                var builder = new ConfigurationBuilder();
-                bool useHttps;
-                XYDataLabs.OrderProcessingSystem.Utilities.ApiSettings apiSettings;
-                var apiSection = SharedSettingsLoader.AddAndBindSettings(
-                    services: null, // Now allowed
-                    builder: builder,
-                    environmentName: environmentName,
-                    isDocker: isDocker,
-                    groupSelector: s => s.API,
-                    apiSettings: out apiSettings,
-                    useHttps: out useHttps
-                );
-                var scheme = useHttps ? "https" : "http";
-                apiBaseUrl = $"{scheme}://{apiSection.Host}:{apiSection.Port}";
-            }
-            
-            ViewData["ApiBaseUrl"] = apiBaseUrl;
-
-            // Pass environment information to the view
-            ViewData["Environment"] = environmentName.ToUpper();
-            ViewData["EnvironmentColor"] = environmentName switch
-            {
-                "dev" => "success",      // Green for development
-                "uat" => "warning",      // Yellow for UAT
-                "prod" => "danger",      // Red for production
-                _ => "secondary"         // Gray for unknown
-            };
-            ViewData["IsDocker"] = isDocker;
-
-            _logger.LogInformation("Rendering home page with API base URL: {ApiBaseUrl}", apiBaseUrl);
+            _logger.LogInformation("Rendering home page with API base URL: {ApiBaseUrl}", ViewData["ApiBaseUrl"]);
 
             return View();
+        }
+
+        [HttpGet("/payment/callback")]
+        public IActionResult PaymentCallback()
+        {
+            var (environmentName, isDocker) = ResolveExecutionContext();
+            PopulateCommonViewData(environmentName, isDocker);
+
+            var parameters = Request.Query.ToDictionary(
+                item => item.Key,
+                item => item.Value.ToString(),
+                StringComparer.OrdinalIgnoreCase);
+            var attemptOrderId = GetFirstValue(parameters, "order_id", "orderId");
+            var tenantCode = GetFirstValue(parameters, "tenantCode");
+
+            var model = new PaymentCallbackViewModel
+            {
+                PaymentId = GetFirstValue(parameters, "id", "transaction_id", "payment_id"),
+                Status = GetFirstValue(parameters, "status", "transaction_status", "operation_status") ?? "unknown",
+                ErrorMessage = GetFirstValue(parameters, "error_message", "error", "message", "description"),
+                Parameters = parameters
+            };
+
+            ViewData["AttemptOrderId"] = attemptOrderId;
+            ViewData["TenantCode"] = tenantCode;
+
+            _logger.LogInformation(
+                "OpenPay callback received with raw status {Status} for payment {PaymentId} and attempt order {AttemptOrderId}",
+                model.Status,
+                model.PaymentId,
+                attemptOrderId);
+
+            return View(model);
+        }
+
+        private void PopulateCommonViewData(string environmentName, bool isDocker)
+        {
+            var apiBaseUrl = ResolveApiBaseUrl(environmentName, isDocker);
+
+            ViewData["ApiBaseUrl"] = apiBaseUrl;
+            ViewData["Environment"] = environmentName.ToUpperInvariant();
+            ViewData["IsDevelopment"] = string.Equals(environmentName, Constants.Environments.Dev, StringComparison.Ordinal);
+            ViewData["EnvironmentColor"] = environmentName switch
+            {
+                Constants.Environments.Dev => "success",
+                Constants.Environments.Staging => "warning",
+                Constants.Environments.Production => "danger",
+                _ => "secondary"
+            };
+            ViewData["IsDocker"] = isDocker;
+        }
+
+        private string ResolveApiBaseUrl(string environmentName, bool isDocker)
+        {
+            var azureSiteName = Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME");
+            var isAzure = !string.IsNullOrWhiteSpace(azureSiteName);
+            var apiBaseUrlEnv = Environment.GetEnvironmentVariable("API_BASE_URL");
+
+            if (!string.IsNullOrWhiteSpace(apiBaseUrlEnv))
+            {
+                var apiBaseUrl = apiBaseUrlEnv.TrimEnd('/');
+                _logger.LogInformation("Using API_BASE_URL from environment variable: {ApiBaseUrl}", apiBaseUrl);
+                return apiBaseUrl;
+            }
+
+            if (isAzure)
+            {
+                var apiSiteName = azureSiteName!.Replace("-ui-", "-api-");
+                if (!string.Equals(apiSiteName, azureSiteName, StringComparison.Ordinal))
+                {
+                    var apiBaseUrl = $"https://{apiSiteName}.azurewebsites.net";
+                    _logger.LogInformation("Using derived Azure API URL: {ApiBaseUrl}", apiBaseUrl);
+                    return apiBaseUrl;
+                }
+
+                _logger.LogWarning("Could not derive API site name from UI site name '{UiSiteName}'. Using fallback.", azureSiteName);
+                return $"https://{azureSiteName}-api.azurewebsites.net";
+            }
+
+            var builder = new ConfigurationBuilder();
+            bool useHttps;
+            ApiSettings apiSettings;
+            var apiSection = SharedSettingsLoader.AddAndBindSettings(
+                services: null,
+                builder: builder,
+                environmentName: environmentName,
+                isDocker: isDocker,
+                groupSelector: s => s.API,
+                apiSettings: out apiSettings,
+                useHttps: out useHttps);
+
+            var scheme = useHttps ? "https" : "http";
+            return $"{scheme}://{apiSection.Host}:{apiSection.Port}";
+        }
+
+        private static (string EnvironmentName, bool IsDocker) ResolveExecutionContext()
+        {
+            var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
+            var isDocker = string.Equals(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"), "true", StringComparison.Ordinal);
+
+            var environmentName = environment switch
+            {
+                "Development" => Constants.Environments.Dev,
+                "Staging" => Constants.Environments.Staging,
+                "Production" => Constants.Environments.Production,
+                _ => Constants.Environments.Dev
+            };
+
+            return (environmentName, isDocker);
+        }
+
+        private static string? GetFirstValue(IReadOnlyDictionary<string, string> parameters, params string[] keys)
+        {
+            foreach (var key in keys)
+            {
+                if (parameters.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value))
+                {
+                    return value;
+                }
+            }
+
+            return null;
         }
     }
 }

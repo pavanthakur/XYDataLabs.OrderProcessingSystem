@@ -2,7 +2,7 @@
 .SYNOPSIS
     Validates configuration consistency across sharedsettings.*.json files.
 .DESCRIPTION
-    Compares keys between dev, staging, prod, uat sharedsettings files under Resources/Configuration.
+    Compares keys between dev, stg, prod sharedsettings files under Resources/Configuration.
     Reports missing keys, extra keys, and differing scalar values.
 .PARAMETER BasePath
     Override path to configuration directory. Default resolves relative to script.
@@ -18,7 +18,7 @@ $ErrorActionPreference='Stop'
 if (-not $BasePath) { $BasePath = Join-Path (Split-Path $PSScriptRoot -Parent) 'Configuration' }
 if (!(Test-Path $BasePath)) { Write-Error "Configuration path not found: $BasePath" }
 
-$files = @('sharedsettings.dev.json','sharedsettings.staging.json','sharedsettings.prod.json','sharedsettings.uat.json') | ForEach-Object { Join-Path $BasePath $_ }
+$files = @('sharedsettings.dev.json','sharedsettings.stg.json','sharedsettings.prod.json') | ForEach-Object { Join-Path $BasePath $_ }
 $loaded = @{}
 foreach ($f in $files) { 
     if (Test-Path $f){ 

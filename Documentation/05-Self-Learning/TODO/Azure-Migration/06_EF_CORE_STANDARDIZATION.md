@@ -129,7 +129,7 @@ dotnet ef database update --project XYDataLabs.OrderProcessingSystem.Infrastruct
 ```json
 {
   "ConnectionStrings": {
-    "OrderProcessingSystemDbConnection": "Server=sql-server,1433;Database=OrderProcessingSystem;User Id=sa;Password=Admin100@;TrustServerCertificate=True;"
+                "OrderProcessingSystemDbConnection": "Server=sql-server,1433;Database=OrderProcessingSystem;User Id=sa;Password=<LOCAL_SQL_PASSWORD>;TrustServerCertificate=True;"
   }
 }
 ```

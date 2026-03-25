@@ -1,9 +1,12 @@
 ﻿using FluentAssertions;
+using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
+using XYDataLabs.OrderProcessingSystem.Application.Features.Customers.Commands;
+using XYDataLabs.OrderProcessingSystem.Application.Features.Customers.Queries;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
 using XYDataLabs.OrderProcessingSystem.UnitTest.TestBase;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
 using Moq;
 
 
@@ -11,30 +14,28 @@ namespace XYDataLabs.OrderProcessingSystem.UnitTest.ServicesTest
 {
     public class CustomerServiceTests : CustomerServiceTestBase
     {
-        public CustomerServiceTests()
-        {
-        }
-
         [Fact]
-        public async Task CreateCustomerAsync_ShouldReturnCustomerId_WhenCustomerIsCreated()
+        public async Task CreateCustomerCommand_ShouldReturnCustomerId_WhenCustomerIsCreated()
         {
             // Arrange
             var newCustomer = GenerateNewCustomerRequestDto(1)[0];
-            var customer = GenerateCustomers(1).FirstOrDefault();
-            MockMapper.Setup(m => m.Map<CreateCustomerRequestDto, Customer>(newCustomer)).Returns(customer);
+            var customer = GenerateCustomers(1).First();
+            MockMapper.Setup(m => m.Map<Customer>(It.IsAny<CreateCustomerRequestDto>())).Returns(customer);
             MockDbContext.Setup(db => db.Customers.Add(It.IsAny<Customer>()));
-            MockDbContext.Setup(db => db.SaveChangesAsync(default)).ReturnsAsync(1);
+            MockDbContext.Setup(db => db.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+
+            var handler = new CreateCustomerCommandHandler(MockDbContext.Object, MockMapper.Object);
 
             // Act
-            var result = await _customerService.CreateCustomerAsync(newCustomer);
+            var result = await handler.HandleAsync(new CreateCustomerCommand(newCustomer.Name, newCustomer.Email));
 
             // Assert
-            MockDbContext.Verify(m => m.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once); // Ensure SaveChanges was called
-            Assert.Equal(1, result);
+            result.IsSuccess.Should().BeTrue();
+            MockDbContext.Verify(m => m.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
         }
 
         [Fact]
-        public async Task GetAllCustomersAsync_ShouldReturnListOfCustomers()
+        public async Task GetAllCustomersQuery_ShouldReturnListOfCustomers()
         {
             // Arrange
             var customers = GenerateCustomers(5).AsQueryable();
@@ -49,17 +50,19 @@ namespace XYDataLabs.OrderProcessingSystem.UnitTest.ServicesTest
             MockMapper.Setup(m => m.Map<IEnumerable<CustomerDto>>(It.IsAny<List<Customer>>())).Returns(customerDtos);
             MockDbContext.Setup(db => db.Customers).Returns(mockDbSet.Object);
 
+            var handler = new GetAllCustomersQueryHandler(MockDbContext.Object, MockMapper.Object);
+
             // Act
-            var result = await _customerService.GetAllCustomersAsync();
+            var result = await handler.HandleAsync(new GetAllCustomersQuery());
 
             // Assert
-            Assert.NotNull(result);
-            Assert.Equal(5, result.Count()); // Ensure 5 customers are returned
-            Assert.Equal(customers.First().Name, result.First().Name);  // Ensure the first customer's name matches
+            result.IsSuccess.Should().BeTrue();
+            result.Value.Should().HaveCount(5);
+            result.Value!.First().Name.Should().Be(customers.First().Name);
         }
 
         [Fact]
-        public async Task GetCustomerByIdAsync_ShouldReturnCustomer_WhenCustomerExists()
+        public async Task GetCustomerByIdQuery_ShouldReturnCustomer_WhenCustomerExists()
         {
             // Arrange
             var customer = GenerateCustomers(1).First();
@@ -70,73 +73,38 @@ namespace XYDataLabs.OrderProcessingSystem.UnitTest.ServicesTest
                 Email = customer.Email
             };
             MockMapper.Setup(m => m.Map<CustomerDto>(customer)).Returns(customerDto);
-            MockDbContext.Setup(db => db.Customers.FindAsync(1)).ReturnsAsync(customer);
+            MockDbContext.Setup(db => db.Customers.FindAsync(new object[] { 1 }, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(customer);
+
+            var handler = new GetCustomerByIdQueryHandler(MockDbContext.Object, MockMapper.Object);
 
             // Act
-            var result = await _customerService.GetCustomerByIdAsync(1);
+            var result = await handler.HandleAsync(new GetCustomerByIdQuery(1));
 
             // Assert
-            Assert.NotNull(result);
-            Assert.Equal(customer.CustomerId, result.CustomerId);
+            result.IsSuccess.Should().BeTrue();
+            result.Value!.CustomerId.Should().Be(customer.CustomerId);
         }
 
         [Fact]
-        public async Task GetCustomerByIdAsync_ShouldReturnNull_WhenCustomerDoesNotExist()
+        public async Task GetCustomerByIdQuery_ShouldReturnNotFound_WhenCustomerDoesNotExist()
         {
             // Arrange
-            MockDbContext.Setup(c => c.Customers.FindAsync(1)).ReturnsAsync((Customer?)null);
+            MockDbContext.Setup(db => db.Customers.FindAsync(new object[] { 1 }, It.IsAny<CancellationToken>()))
+                .ReturnsAsync((Customer?)null);
+
+            var handler = new GetCustomerByIdQueryHandler(MockDbContext.Object, MockMapper.Object);
 
             // Act
-            var result = await _customerService.GetCustomerByIdAsync(1);
+            var result = await handler.HandleAsync(new GetCustomerByIdQuery(1));
 
             // Assert
-            Assert.Null(result);
+            result.IsFailure.Should().BeTrue();
+            result.Error.Code.Should().Be("NotFound");
         }
 
         [Fact]
-        public void VerifyExceptionLoggedInService_ShouldLogException()
-        {
-            // Arrange
-            MockLogger.Setup(l => l.Log(
-                It.Is<LogLevel>(level => level == LogLevel.Error),
-                It.IsAny<EventId>(),
-                It.IsAny<It.IsAnyType>(),
-                It.IsAny<Exception>(),
-                (Func<It.IsAnyType, Exception?, string>)It.IsAny<object>()));
-
-            // Act & Assert
-            var exception = Assert.Throws<Exception>(() => _customerService.VerifyExceptionLoggedInService());
-            Assert.Equal("Test exception to verify ErrorHandlingMiddleware is working", exception.Message);
-
-            MockLogger.Verify(l => l.Log(
-                It.Is<LogLevel>(level => level == LogLevel.Error),
-                It.IsAny<EventId>(),
-                It.IsAny<It.IsAnyType>(),
-                It.IsAny<Exception>(),
-                (Func<It.IsAnyType, Exception?, string>)It.IsAny<object>()), Times.Once);
-        }
-
-        [Fact]
-        public void VerifyExceptionLoggedInService_ReturnsException()
-        {
-            // Arrange
-            MockLogger.Setup(l => l.Log(
-                It.Is<LogLevel>(level => level == LogLevel.Error),
-                It.IsAny<EventId>(),
-                It.IsAny<It.IsAnyType>(),
-                It.IsAny<Exception>(),
-                (Func<It.IsAnyType, Exception?, string>)It.IsAny<object>()));
-
-            // Act
-            var ex = Record.Exception(() => _customerService.VerifyExceptionLoggedInService());
-
-            // Assert
-            Assert.NotNull(ex);
-            Assert.IsType<Exception>(ex);
-        }
-
-        [Fact]
-        public async Task GetCustomerWithOrdersAsync_ShouldReturnCustomerWithOrders_WhenCustomerExists()
+        public async Task GetCustomerWithOrdersQuery_ShouldReturnCustomerWithOrders_WhenCustomerExists()
         {
             // Arrange
             var customerId = 1;
@@ -161,17 +129,19 @@ namespace XYDataLabs.OrderProcessingSystem.UnitTest.ServicesTest
             MockDbContext.Setup(db => db.Customers).Returns(mockDbSet.Object);
             MockMapper.Setup(m => m.Map<CustomerDto>(It.IsAny<Customer>())).Returns(customerDto);
 
+            var handler = new GetCustomerWithOrdersQueryHandler(MockDbContext.Object, MockMapper.Object);
+
             // Act
-            var result = await _customerService.GetCustomerWithOrdersAsync(customerId);
+            var result = await handler.HandleAsync(new GetCustomerWithOrdersQuery(customerId));
 
             // Assert
-            Assert.NotNull(result);
-            Assert.Equal(1, result.CustomerId);
-            Assert.Single(result.OrderDtos);
+            result.IsSuccess.Should().BeTrue();
+            result.Value!.CustomerId.Should().Be(1);
+            result.Value.OrderDtos.Should().ContainSingle();
         }
 
         [Fact]
-        public async Task GetAllCustomersByNameAsync_ShouldReturnListOfCustomers()
+        public async Task GetCustomersByNameQuery_ShouldReturnListOfCustomers()
         {
             // Arrange
             var customers = GenerateCustomers(5).AsQueryable();
@@ -180,7 +150,7 @@ namespace XYDataLabs.OrderProcessingSystem.UnitTest.ServicesTest
                 CustomerId = c.CustomerId,
                 Name = (index == 0 || index == 2) ? "JohnXXX" : c.Name,
                 Email = c.Email
-            }).AsQueryable(); // Convert to IQueryable
+            }).AsQueryable();
             var filteredCustomers = tempCustomers.Where(c => c.Name == "JohnXXX");
             var mockDbSet = GetMockDbSet<Customer>(tempCustomers);
             var customerDtos = filteredCustomers.Select(c => new CustomerDto
@@ -191,67 +161,92 @@ namespace XYDataLabs.OrderProcessingSystem.UnitTest.ServicesTest
             }).ToList();
 
             MockMapper.Setup(m => m.Map<IEnumerable<CustomerDto>>(It.IsAny<List<Customer>>()))
-            .Returns(customerDtos);
+                .Returns(customerDtos);
 
             MockDbContext.Setup(db => db.Customers).Returns(mockDbSet.Object);
 
+            var handler = new GetCustomersByNameQueryHandler(MockDbContext.Object, MockMapper.Object);
+
             // Act
-            var result = await _customerService.GetAllCustomersByNameAsync("JohnXXX", 1, 10);
+            var result = await handler.HandleAsync(new GetCustomersByNameQuery("JohnXXX", 1, 10));
 
             // Assert
-            Assert.NotNull(result);
-            Assert.Equal(2, result.Count()); // Ensure 2 customers are returned
-            Assert.Equal("JohnXXX", result.First().Name);  // Ensure the first customer's name matches
+            result.IsSuccess.Should().BeTrue();
+            result.Value.Should().HaveCount(2);
+            result.Value!.First().Name.Should().Be("JohnXXX");
         }
 
         [Fact]
-        public async Task UpdateCustomerAsync_ShouldReturnCustomerId_WhenCustomerIsUpdated()
+        public async Task UpdateCustomerCommand_ShouldReturnCustomerId_WhenCustomerIsUpdated()
         {
             // Arrange
-            var updateCustomerRequest = new UpdateCustomerRequestDto { Name = "John Doe", Email = "test@test1.com" };
             var customer = GenerateCustomers(1).First();
-            MockMapper.Setup(m => m.Map<UpdateCustomerRequestDto, Customer>(updateCustomerRequest)).Returns(customer);
-            MockDbContext.Setup(db => db.Customers.FindAsync(1)).ReturnsAsync(customer);
-            MockDbContext.Setup(db => db.Customers.Update(It.IsAny<Customer>()));
+            MockDbContext.Setup(db => db.Customers.FindAsync(new object[] { 1 }, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(customer);
             MockDbContext.Setup(db => db.SaveChangesAsync(default)).ReturnsAsync(1);
 
+            var handler = new UpdateCustomerCommandHandler(MockDbContext.Object, MockMapper.Object);
+
             // Act
-            var result = await _customerService.UpdateCustomerAsync(1, updateCustomerRequest);
+            var result = await handler.HandleAsync(new UpdateCustomerCommand(1, "John Doe", "test@test1.com"));
 
             // Assert
-            MockDbContext.Verify(m => m.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once); // Ensure SaveChanges was called
-            Assert.Equal(1, result);
+            result.IsSuccess.Should().BeTrue();
+            MockDbContext.Verify(m => m.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
         }
 
         [Fact]
-        public async Task UpdateCustomerAsync_CustomerNotFound_ReturnsZero()
+        public async Task UpdateCustomerCommand_ShouldReturnNotFound_WhenCustomerDoesNotExist()
         {
             // Arrange
-            int customerId = 1;
-            var updateCustomerDto = new UpdateCustomerRequestDto { Name = "Updated Name", Email = "updated@example.com" };
-            MockDbContext.Setup(c => c.Customers.FindAsync(customerId)).ReturnsAsync((Customer?)null);
+            MockDbContext.Setup(db => db.Customers.FindAsync(new object[] { 1 }, It.IsAny<CancellationToken>()))
+                .ReturnsAsync((Customer?)null);
+
+            var handler = new UpdateCustomerCommandHandler(MockDbContext.Object, MockMapper.Object);
 
             // Act
-            var result = await _customerService.UpdateCustomerAsync(customerId, updateCustomerDto);
+            var result = await handler.HandleAsync(new UpdateCustomerCommand(1, "Updated Name", "updated@example.com"));
 
             // Assert
-            Assert.Equal(0, result);
+            result.IsFailure.Should().BeTrue();
+            result.Error.Code.Should().Be("NotFound");
         }
 
         [Fact]
-        public async Task DeleteCustomerAsync_ShouldCompleteSuccessfully_WhenCustomerIsDeleted()
+        public async Task DeleteCustomerCommand_ShouldReturnSuccess_WhenCustomerIsDeleted()
         {
             // Arrange
             var customer = GenerateCustomers(1).First();
-            MockDbContext.Setup(db => db.Customers.FindAsync(1)).ReturnsAsync(customer);
+            MockDbContext.Setup(db => db.Customers.FindAsync(new object[] { 1 }, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(customer);
             MockDbContext.Setup(db => db.Customers.Remove(It.IsAny<Customer>()));
             MockDbContext.Setup(db => db.SaveChangesAsync(default)).ReturnsAsync(1);
 
+            var handler = new DeleteCustomerCommandHandler(MockDbContext.Object);
+
             // Act
-            await _customerService.DeleteCustomerAsync(1);
+            var result = await handler.HandleAsync(new DeleteCustomerCommand(1));
 
             // Assert
-            MockDbContext.Verify(m => m.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once); // Ensure SaveChanges was called
+            result.IsSuccess.Should().BeTrue();
+            MockDbContext.Verify(m => m.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Fact]
+        public async Task DeleteCustomerCommand_ShouldReturnNotFound_WhenCustomerDoesNotExist()
+        {
+            // Arrange
+            MockDbContext.Setup(db => db.Customers.FindAsync(new object[] { 1 }, It.IsAny<CancellationToken>()))
+                .ReturnsAsync((Customer?)null);
+
+            var handler = new DeleteCustomerCommandHandler(MockDbContext.Object);
+
+            // Act
+            var result = await handler.HandleAsync(new DeleteCustomerCommand(1));
+
+            // Assert
+            result.IsFailure.Should().BeTrue();
+            result.Error.Code.Should().Be("NotFound");
         }
     }
 }

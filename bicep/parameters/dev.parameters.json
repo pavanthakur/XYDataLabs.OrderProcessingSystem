@@ -19,9 +19,6 @@
     },
     "environment": {
       "value": "dev"
-    },
-    "openPayAdapterBaseUrl": {
-      "value": "https://api.openpay.example.com"
     }
   }
 }

@@ -4,11 +4,28 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
-    <WarningsAsErrors />
+    <WarningsAsErrors>nullable</WarningsAsErrors>
     <CodeAnalysisRuleSet>$(MSBuildThisFileDirectory)Resources\BuildConfiguration\CodeAnalysis.ruleset</CodeAnalysisRuleSet>
     <!-- Docker-specific properties to prevent Windows Principal errors -->
     <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
     <DockerUsePrincipal>false</DockerUsePrincipal>
     <DockerfileRunEnvironmentFiles></DockerfileRunEnvironmentFiles>
   </PropertyGroup>
+
+  <!-- Roslyn analyzers — applied globally to all projects (build-time only, never shipped) -->
+  <!-- Versions managed centrally in Directory.Packages.props -->
+  <ItemGroup>
+    <PackageReference Include="Roslynator.Analyzers">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Meziantou.Analyzer">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="SonarAnalyzer.CSharp">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
 </Project>

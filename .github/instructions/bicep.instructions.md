@@ -47,7 +47,7 @@ infra/
 - UI Web App: `pavanthakur-orderprocessing-ui-xyapp-{env}`
 - SQL Server: `orderprocessing-sql-{env}`
 - Key Vault: `kv-orderproc-{env}`
-- App Insights: `appi-orderprocessing-{env}`
+- App Insights: `ai-orderprocessing-{env}`
 
 Note: staging uses `stg` suffix in Azure resource names but `staging` as the workflow environment name.
 

@@ -1,5 +1,55 @@
 ﻿// Initialize device session ID when the page loads
 let deviceSessionId;
+const payButton = document.getElementById('pay-button');
+const pendingPaymentStorageKeyPrefix = 'pending-payment:';
+let runtimeConfigurationPromise;
+
+const setPayButtonState = (enabled, text) => {
+    if (!payButton) {
+        return;
+    }
+
+    payButton.disabled = !enabled;
+    payButton.textContent = text;
+};
+
+const getTenantRuntime = () => {
+    if (!window.OrderProcessingTenant) {
+        return Promise.reject(new Error('Tenant bootstrap script is unavailable.'));
+    }
+
+    return window.OrderProcessingTenant.ready();
+};
+
+const persistPendingPaymentContext = payment => {
+    if (!payment?.id) {
+        return;
+    }
+
+    try {
+        sessionStorage.setItem(`${pendingPaymentStorageKeyPrefix}${payment.id}`, JSON.stringify({
+            attemptOrderId: payment.attemptOrderId || null,
+            customerOrderId: payment.customerOrderId || null
+        }));
+    } catch (error) {
+        console.warn('Unable to persist pending payment context before 3DS redirect.', error);
+    }
+};
+
+if (payButton) {
+    setPayButtonState(false, 'Loading tenant configuration...');
+    runtimeConfigurationPromise = getTenantRuntime()
+        .then(runtimeConfiguration => {
+            setPayButtonState(true, 'Process Payment');
+            return runtimeConfiguration;
+        })
+        .catch(error => {
+            setPayButtonState(false, 'Tenant configuration unavailable');
+            console.error('Unable to load tenant runtime configuration from API:', error);
+            throw error;
+        });
+}
+
 window.addEventListener('load', function () {
     try {
         // Initialize OpenPay with sandbox credentials
@@ -13,8 +63,19 @@ window.addEventListener('load', function () {
     }
 });
 
-document.getElementById('payment-form').addEventListener('submit', function (e) {
+document.getElementById('payment-form').addEventListener('submit', async function (e) {
     e.preventDefault();
+
+    let runtimeConfiguration;
+    try {
+        runtimeConfiguration = await runtimeConfigurationPromise;
+    } catch (error) {
+        alert(error.message || 'API tenant configuration is missing.');
+        return;
+    }
+
+    const tenantCode = window.OrderProcessingTenant?.getSelectedTenantCode() || runtimeConfiguration.activeTenantCode;
+    const tenantHeaderName = window.OrderProcessingTenant?.getTenantHeaderName() || runtimeConfiguration.tenantHeaderName || 'X-Tenant-Code';
 
     // Show loading state
     const submitButton = this.querySelector('button[type="submit"]');
@@ -29,7 +90,7 @@ document.getElementById('payment-form').addEventListener('submit', function (e) 
         expiration_year: document.getElementById('expiryYear').value,
         cvv2: document.getElementById('cvv').value,
         email: document.getElementById('email').value,
-        orderId: document.getElementById('orderId').value,
+        customerOrderId: document.getElementById('customerOrderId').value,
         device_session_id: deviceSessionId
     };
 
@@ -53,31 +114,57 @@ document.getElementById('payment-form').addEventListener('submit', function (e) 
                 "expirationYear": cardData.expiration_year,
                 "expirationMonth": cardData.expiration_month,
                 "cvv2": cardData.cvv2,
-                "orderId": cardData.orderId,
+                "customerOrderId": cardData.customerOrderId,
                 "deviceSessionId": cardData.device_session_id
             };
 
             // Call your API endpoint
-            fetch(API_BASE_URL + '/api/payments/processpayment', {
+            fetch(API_BASE_URL + '/api/v1/payments/processpayment', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    [tenantHeaderName]: tenantCode
                 },
                 body: JSON.stringify(paymentData)
             })
-                .then(response => response.json())
-                .then(data => {
-                    if (data && data.status && data.status.length > 0 && data.status !== 'unknown') {
-                        alert('Payment processed successfully!');
-                        // Reset form
-                        document.getElementById('payment-form').reset();
-                    } else {
-                        alert('Payment failed: ' + data.message);
+                .then(async response => {
+                    const contentType = response.headers.get('content-type') || '';
+                    const data = contentType.includes('application/json')
+                        ? await response.json()
+                        : null;
+
+                    if (!response.ok) {
+                        const message = data?.message || `Payment request failed with status ${response.status}`;
+                        throw new Error(message);
                     }
+
+                    return data;
+                })
+                .then(apiResponse => {
+                    if (!apiResponse?.success || !apiResponse?.data) {
+                        throw new Error(apiResponse?.message || 'Payment response did not include a valid result.');
+                    }
+
+                    const payment = apiResponse.data;
+                    const paymentStatus = (payment.status || '').toLowerCase();
+
+                    if (paymentStatus === 'charge_pending' && payment.threeDSecureUrl) {
+                        persistPendingPaymentContext(payment);
+                        window.location.assign(payment.threeDSecureUrl);
+                        return;
+                    }
+
+                    if (paymentStatus && paymentStatus !== 'unknown') {
+                        alert('Payment processed successfully!');
+                        document.getElementById('payment-form').reset();
+                        return;
+                    }
+
+                    throw new Error(payment.errorMessage || apiResponse.message || 'Payment failed.');
                 })
                 .catch(error => {
                     console.error('Error processing payment:', error);
-                    alert('An error occurred while processing the payment.');
+                    alert(error.message || 'An error occurred while processing the payment.');
                 })
                 .finally(() => {
                     // Reset button state
