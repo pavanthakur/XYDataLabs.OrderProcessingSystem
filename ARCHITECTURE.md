@@ -199,6 +199,20 @@ The following code paths must pass `TenantId` explicitly and must not depend on 
 
 Rule: stamp tenant-owned entities, not everything.
 
+### 10.1 DbInitializer — Dedicated-DB seeding (Phase 2)
+
+`DbInitializer.Initialize()` accepts an optional `IConfiguration` parameter. After running `Database.Migrate()`, it:
+
+1. Calls `ApplyDedicatedConnectionStrings()` — reads `DedicatedTenantConnectionStrings` from config and stamps any Dedicated tenant whose ConnectionString is NULL after migrations.
+2. Seeds shared-pool sample data (Phase 1: TenantA, TenantB).
+3. Calls `SeedDedicatedTenants()` (Phase 2) — for each Dedicated tenant with a non-null ConnectionString, creates a scoped `OrderProcessingSystemDbContext` with `NullTenantProvider` and runs `Database.Migrate()` + sample data seeding on the dedicated DB.
+
+**NullTenantProvider** is a null-object `ITenantProvider` with `HasTenantContext = false`. It prevents query filter NullReferenceException in non-request contexts. The filter short-circuits to `true` (all rows visible), which is correct for dedicated-DB seeding where physical isolation replaces query-filter isolation.
+
+**Config pattern** — each environment provides its own `DedicatedTenantConnectionStrings` section:
+- Local: `sharedsettings.local.json`
+- Azure: Key Vault references or App Settings
+
 ## 11. Required Tests
 
 These tests form the compliance envelope for the standard.
@@ -226,6 +240,30 @@ Required concerns:
 3. HTTP 403 for `Suspended` and `Decommissioned` tenants
 4. per-class tenant isolation
 5. no reuse of global baseline tenant rows in test data setup
+
+### 11.3 Dedicated-DB isolation tests
+
+Required concerns:
+
+1. Dedicated + unprovisioned (null CS) + Active → 400 (fail-loud)
+2. Dedicated + provisioned + Active → 200 (routed to dedicated DB)
+3. Data written to dedicated tenant exists in dedicated DB (direct SQL verification)
+4. Dedicated tenant data not visible via direct query on shared-pool DB
+5. SharedPool tenant data not visible via direct query on dedicated DB
+
+Current examples live in `DedicatedTenantTests`.
+
+### 11.4 Payment handler tests
+
+Required regression guards (both tenant tiers):
+
+1. Both CardTransaction rows (tokenization + charge) set `BillingCustomerId`
+2. OpenPay timestamps normalized to UTC
+3. Orphaned PaymentMethod deactivated on charge failure
+4. TSH state machine entries (callback + remote confirmation)
+5. TSH.CreatedBy uses `BillingCustomerId`
+
+Current examples live in `ProcessPaymentHandlerTests` and `ConfirmPaymentStatusHandlerTests`.
 
 ## 12. Out of Scope
 
@@ -291,8 +329,10 @@ Use these as the first reference points when applying the standard:
 - `XYDataLabs.OrderProcessingSystem.Domain/Entities/BaseAuditableEntity.cs`
 - `XYDataLabs.OrderProcessingSystem.Domain/Entities/BaseAuditableCreateEntity.cs`
 - `XYDataLabs.OrderProcessingSystem.Infrastructure/DataContext/OrderProcessingSystemDbContext.cs`
+- `XYDataLabs.OrderProcessingSystem.Infrastructure/SeedData/DbInitializer.cs`
 - `XYDataLabs.OrderProcessingSystem.Infrastructure/Migrations/20260322112523_RebaselineMultitenantPaymentSchema.cs`
 - `tests/XYDataLabs.OrderProcessingSystem.Architecture.Tests/EfMigrationDriftTests.cs`
 - `tests/XYDataLabs.OrderProcessingSystem.Architecture.Tests/MultiTenantSchemaTests.cs`
+- `tests/XYDataLabs.OrderProcessingSystem.Integration.Tests/DedicatedTenantTests.cs`
 
 Any deviation from this file requires an ADR and explicit architecture approval.

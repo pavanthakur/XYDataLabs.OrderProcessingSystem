@@ -110,6 +110,8 @@ These rules are binding for all tenant, payment, DTO, migration, middleware, and
 ## Non-request operations
 - `DbInitializer`, background jobs, test fixtures, and any out-of-band creation flow must pass `TenantId` explicitly.
 - Never rely on ambient middleware tenant context in non-request code paths.
+- For dedicated-DB seeding, use `NullTenantProvider` (null-object `ITenantProvider` with `HasTenantContext = false`). This causes the EF query filter to short-circuit to `true` (all rows visible), which is correct when physical DB isolation replaces query-filter isolation.
+- `ApplyDedicatedConnectionStrings()` in `DbInitializer` reads `DedicatedTenantConnectionStrings` from config to auto-provision dedicated tenant connection strings on first startup.
 
 ## Required test coverage
 

@@ -43,16 +43,44 @@ az sql server firewall-rule delete --server orderprocessing-sql-dev --resource-g
 ## Applied Migrations (current baseline)
 1. `20260324195231_InitialCreate` — full schema (MaskedCardNumber, no CVV2, BillingCustomerId FK)
 2. `20260324202503_SeedBaselineTenants` — inserts TenantA and TenantB rows (IF NOT EXISTS guards — safe for Azure re-apply)
-3. `20260324210853_SeedDedicatedTenantC` — inserts TenantC as Dedicated-tier tenant (IF NOT EXISTS guard, ConnectionString NULL — ops must provision per environment)
+3. `20260324210853_SeedDedicatedTenantC` — inserts TenantC as Dedicated-tier tenant (IF NOT EXISTS guard, ConnectionString NULL — auto-provisioned on first startup via config)
 
 This repository was rebaselined in March 2026. Historical migrations were intentionally removed. The current migration chain starts from a single clean baseline and future migrations must build from that baseline only.
 
 ## Current Schema Notes
 - `Tenants` is the tenant authority table — TenantA and TenantB are seeded by `20260324202503_SeedBaselineTenants` migration; TenantC (Dedicated tier) is seeded by `20260324210853_SeedDedicatedTenantC` migration (all with IF NOT EXISTS SQL for Azure safety)
 - `Tenants` now includes `TenantTier` (nvarchar 20, NOT NULL, default 'SharedPool') and `ConnectionString` (nvarchar 500, nullable)
-- TenantA and TenantB are SharedPool (ConnectionString = NULL); TenantC is Dedicated (ConnectionString = NULL in migration — ops provisions per environment)
+- TenantA and TenantB are SharedPool (ConnectionString = NULL); TenantC is Dedicated (ConnectionString = NULL in migration — auto-provisioned at startup)
 - `TenantRegistryDbContext` owns the `Tenants` DbSet for tenant resolution (no query filters, no ITenantProvider dependency)
 - `OrderProcessingSystemDbContext` still configures `Tenants` entity for FK integrity from business entities
+
+## DbInitializer — Startup Bootstrap Sequence
+
+Signature: `DbInitializer.Initialize(OrderProcessingSystemDbContext context, IConfiguration? configuration = null, bool applyMigrations = true)`
+
+Called from `Program.cs` as: `DbInitializer.Initialize(dbContext, app.Configuration, applyMigrations: !isAzureRuntime)`
+
+**Phase 1** — Shared-pool sample data:
+1. `Database.Migrate()` — applies pending migrations (seeds TenantA, TenantB, TenantC with ConnectionString = NULL)
+2. `ApplyDedicatedConnectionStrings(context, configuration)` — reads `DedicatedTenantConnectionStrings` config section and UPDATEs any Dedicated tenant whose ConnectionString is still NULL
+3. Seeds customers, products, orders, OpenPay providers for TenantA and TenantB on the shared DB
+
+**Phase 2** — `SeedDedicatedTenants()` — Dedicated-DB bootstrap:
+1. Finds all Dedicated tenants with a non-null ConnectionString
+2. For each: creates a scoped `OrderProcessingSystemDbContext` with `NullTenantProvider`
+3. Runs `Database.Migrate()` on the dedicated DB
+4. Seeds full sample data (customers, products, orders, OpenPay provider with correct TenantId)
+
+**NullTenantProvider pattern:**
+`NullTenantProvider` is a null-object `ITenantProvider` with `HasTenantContext = false`. It prevents the EF Core query filter from throwing NullReferenceException when creating data in a non-request context. The query filter short-circuits to `true` (all rows visible), which is correct for dedicated-DB seeding where physical isolation replaces query-filter isolation.
+
+**DedicatedTenantConnectionStrings config section:**
+```json
+"DedicatedTenantConnectionStrings": {
+  "TenantC": "Server=localhost;Database=OrderProcessingSystem_TenantC;..."
+}
+```
+Each key matches a `Tenant.Code`. The `ApplyDedicatedConnectionStrings()` method reads this section and stamps the connection string on any Dedicated tenant whose ConnectionString is NULL after migrations. This eliminates the need for a manual UPDATE + second restart.
 - Tenant-owned tables use `TenantId int NOT NULL` as an FK to `Tenants.Id`
 - `Tenants` is excluded from global query filters; tenant-owned entities are filtered by `ITenantProvider.TenantId`
 - Required composite indexes currently include:
@@ -89,8 +117,11 @@ Rows that must exist immediately after migration for the database to be in a val
 Rule: if the application cannot start or the middleware cannot function without these rows, they belong in the baseline migration `Up()` method, not in `DbInitializer`.
 
 **Dedicated-tier baseline tenant rows — separate migration per tenant**
-Rows that register a tenant for dedicated database routing but do not assign a connection string (ops provisions per environment). Currently: `TenantC` in `20260324210853_SeedDedicatedTenantC`.
-Rule: each Dedicated-tier tenant gets its own migration with IF NOT EXISTS guard. ConnectionString is intentionally NULL in the migration — environment-specific provisioning sets it via Key Vault or App Settings. An unprovisioned Dedicated tenant fails loud (HTTP 400), never silently falls back to SharedPool.
+Rows that register a tenant for dedicated database routing but do not assign a connection string. Currently: `TenantC` in `20260324210853_SeedDedicatedTenantC`.
+Rule: each Dedicated-tier tenant gets its own migration with IF NOT EXISTS guard. ConnectionString is intentionally NULL in the migration — environment-specific provisioning is handled by:
+- **Local dev**: `DedicatedTenantConnectionStrings` section in `sharedsettings.local.json` + `ApplyDedicatedConnectionStrings()` in DbInitializer (auto-stamps on first startup)
+- **Azure**: Key Vault or App Settings (ops provisions per environment)
+An unprovisioned Dedicated tenant fails loud (HTTP 400), never silently falls back to SharedPool.
 
 **Sample and runtime bootstrap data — must live outside migrations in `DbInitializer.cs`**
 Rows that populate an otherwise valid database with demo, development, or environment-specific data. Currently: customers, products, orders, OpenPay provider configuration.
