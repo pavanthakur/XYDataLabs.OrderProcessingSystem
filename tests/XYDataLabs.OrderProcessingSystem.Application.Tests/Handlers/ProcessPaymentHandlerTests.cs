@@ -108,6 +108,28 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
     // ------------------------------------------------------------------ Fix 3 regression guard
 
     [Fact]
+    public async Task HandleAsync_3DSecureOff_ShouldSetNotApplicableStageOnChargeCardTransaction()
+    {
+        // Arrange — tenant with Use3DSecure = false on its PaymentProvider
+        SetupPaymentDbSets();
+        SetupOpenPayHappyPath();
+        var handler = CreateProcessPaymentHandler(use3DSecure: false);
+
+        // Act
+        await handler.HandleAsync(BuildProcessPaymentCommand());
+
+        // Assert — charge CT (second) must reflect 3DS OFF
+        CapturedCardTransactions.Should().HaveCount(2);
+        var chargeCt = CapturedCardTransactions.Last();
+        chargeCt.IsThreeDSecureEnabled.Should().BeFalse(
+            because: "the tenant's PaymentProvider has Use3DSecure = false");
+        chargeCt.ThreeDSecureStage.Should().Be("not_applicable",
+            because: "when 3DS is disabled for the tenant, the stage must be not_applicable");
+    }
+
+    // ------------------------------------------------------------------ Fix 3 regression guard (orphan deactivation)
+
+    [Fact]
     public async Task HandleAsync_WhenOpenPayChargeFails_ShouldDeactivateOrphanedPaymentMethod()
     {
         // Arrange — fail at charge creation (after PaymentMethod has been persisted)

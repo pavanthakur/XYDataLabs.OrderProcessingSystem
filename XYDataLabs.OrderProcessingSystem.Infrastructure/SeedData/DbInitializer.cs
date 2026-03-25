@@ -220,6 +220,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                     APIUrl = "https://sandbox-api.openpay.mx/v1",
                     IsActive = true,
                     IsProduction = false,
+                    Use3DSecure = true,
                     TenantId = seedTenant.TenantId,
                     CreatedBy = 1,
                     CreatedDate = DateTime.UtcNow

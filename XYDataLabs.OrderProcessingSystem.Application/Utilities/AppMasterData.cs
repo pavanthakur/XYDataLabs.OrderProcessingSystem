@@ -33,6 +33,12 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Utilities
             return _paymentProviders.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
         }
 
+        public PaymentProvider? GetProviderByNameForTenant(string name, int tenantId)
+        {
+            return _paymentProviders.FirstOrDefault(p =>
+                p.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && p.TenantId == tenantId);
+        }
+
         public void RefreshData()
         {
             InitializeData();

@@ -59,9 +59,9 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         _mapper = mapper;
         _timeProvider = timeProvider;
 
-        _openPayProvider = appMasterData.GetProviderByName("OpenPay")
-            ?? throw new InvalidOperationException("OpenPay provider not found in master data");
         _tenantProvider = tenantProvider;
+        _openPayProvider = appMasterData.GetProviderByNameForTenant("OpenPay", tenantProvider.TenantId)
+            ?? throw new InvalidOperationException($"OpenPay provider not found in master data for tenant {tenantProvider.TenantId}");
     }
 
     public async Task<Result<PaymentDto>> HandleAsync(ProcessPaymentCommand command, CancellationToken cancellationToken = default)
@@ -78,7 +78,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             var customerOrderId = ResolveCustomerOrderId(command.CustomerOrderId);
             var paymentTraceId = GeneratePaymentTraceId();
             var attemptOrderId = GenerateAttemptOrderId(customerOrderId);
-            var isThreeDSecureEnabled = _openPayConfig.Use3DSecure;
+            var isThreeDSecureEnabled = _openPayProvider.Use3DSecure;
 
             activity?.SetTag("payment.customer_order_id", customerOrderId);
             activity?.SetTag("payment.attempt_order_id", attemptOrderId);

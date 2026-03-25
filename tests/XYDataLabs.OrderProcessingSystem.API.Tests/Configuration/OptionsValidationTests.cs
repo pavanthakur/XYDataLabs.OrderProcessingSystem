@@ -53,7 +53,6 @@ public class OptionsValidationTests
             PrivateKey = "private-key",
             DeviceSessionId = "device-session",
             RedirectUrl = "/payment/callback",
-            Use3DSecure = true,
             IsProduction = false
         };
 

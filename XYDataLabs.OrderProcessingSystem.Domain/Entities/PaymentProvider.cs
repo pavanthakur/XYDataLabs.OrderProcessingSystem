@@ -22,6 +22,9 @@ namespace XYDataLabs.OrderProcessingSystem.Domain.Entities
         public bool IsProduction { get; set; } 
 
         [Required]
-        public bool IsActive { get; set; } 
+        public bool IsActive { get; set; }
+
+        [Required]
+        public bool Use3DSecure { get; set; } = true;
     }
 }

@@ -262,8 +262,40 @@ Required regression guards (both tenant tiers):
 3. Orphaned PaymentMethod deactivated on charge failure
 4. TSH state machine entries (callback + remote confirmation)
 5. TSH.CreatedBy uses `BillingCustomerId`
+6. 3DS ON path sets `IsThreeDSecureEnabled = true` and `ThreeDSecureStage = completed`
+7. 3DS OFF path sets `IsThreeDSecureEnabled = false` and `ThreeDSecureStage = not_applicable`
 
 Current examples live in `ProcessPaymentHandlerTests` and `ConfirmPaymentStatusHandlerTests`.
+
+### 11.5 Per-tenant 3DS scenario matrix
+
+`PaymentProvider.Use3DSecure` is a per-tenant `bool` column — any combination is valid at runtime:
+
+| Tenant | Tier | Use3DSecure | Supported | Mechanism |
+|---|---|---|---|---|
+| TenantA | SharedPool | true | ✅ | Default seed value |
+| TenantA | SharedPool | false | ✅ | DB UPDATE at runtime |
+| TenantB | SharedPool | true | ✅ | Default seed value |
+| TenantB | SharedPool | false | ✅ | DB UPDATE at runtime |
+| TenantC | Dedicated | true | ✅ | Default seed value |
+| TenantC | Dedicated | false | ✅ | DB UPDATE at runtime |
+| TenantD+ | Either | true/false | ✅ | Set in seed migration or DB UPDATE |
+
+Rules:
+
+1. `Use3DSecure` is a business rule per tenant, not a global infrastructure setting.
+2. The property lives on `PaymentProvider`, not `OpenPayConfig` or appsettings.
+3. `DbInitializer` seeds all tenants with `Use3DSecure = true` by default.
+4. Override per-tenant at runtime via DB UPDATE or by adding a seed-data migration.
+5. `ProcessPaymentCommandHandler` reads the value per-tenant via `AppMasterData.GetProviderByNameForTenant()`.
+6. `ConfirmPaymentStatusCommandHandler` does not consult `PaymentProvider.Use3DSecure` — it reads `IsThreeDSecureEnabled` from the `CardTransaction` row (already stamped by ProcessPayment).
+
+Unit test coverage:
+
+| Path | Test | Verified assertion |
+|---|---|---|
+| 3DS ON (default) | `HandleAsync_NewCustomer_BothCardTransactionsShouldSetBillingCustomerId` | Implicit — uses default `use3DSecure: true` |
+| 3DS OFF | `HandleAsync_3DSecureOff_ShouldSetNotApplicableStageOnChargeCardTransaction` | `IsThreeDSecureEnabled = false`, `ThreeDSecureStage = not_applicable` |
 
 ## 12. Out of Scope
 
@@ -304,6 +336,7 @@ Rules:
 | Business order id | `CustomerOrderId` |
 | Attempt/provider order id | `AttemptOrderId` |
 | Internal correlation id | `PaymentTraceId` |
+| 3DS toggle location | `PaymentProvider.Use3DSecure` (per-tenant, not global config) |
 | Baseline seed location | baseline migration `Up()` |
 | Tenant stamping scope | tenant-owned base classes only |
 | Tenant table filtering | no global query filter |

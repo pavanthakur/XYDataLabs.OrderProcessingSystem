@@ -45,15 +45,14 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
 
     // ------------------------------------------------------------------ factories
 
-    protected ProcessPaymentCommandHandler CreateProcessPaymentHandler()
+    protected ProcessPaymentCommandHandler CreateProcessPaymentHandler(bool use3DSecure = true)
     {
-        var appMasterData = BuildAppMasterData();
+        var appMasterData = BuildAppMasterData(use3DSecure);
         return new ProcessPaymentCommandHandler(
             MockOpenPayAdapter.Object,
             Options.Create(new OpenPayConfig
             {
                 RedirectUrl = "https://example.com/callback",
-                Use3DSecure = true,
                 DeviceSessionId = "default-device-session"
             }),
             new Mock<ILogger<ProcessPaymentCommandHandler>>().Object,
@@ -195,7 +194,7 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
             ErrorMessage: null,
             CallbackParameters: callbackParameters);
 
-    protected static CardTransaction BuildStubCardTransaction(int billingCustomerId = 42) =>
+    protected static CardTransaction BuildStubCardTransaction(int billingCustomerId = 42, bool isThreeDSecureEnabled = true) =>
         new()
         {
             Id = 1,
@@ -206,7 +205,7 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
             CustomerOrderId = "ORDER-001",
             PaymentTraceId = "trace-001",
             TransactionStatus = "charge_pending",
-            IsThreeDSecureEnabled = true,
+            IsThreeDSecureEnabled = isThreeDSecureEnabled,
             IsTransactionSuccess = false,
             TransactionDate = UtcNow,
             TransactionReferenceId = "ref-001"
@@ -219,9 +218,9 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
     /// that safely ignores EF-specific expression nodes (IgnoreQueryFilters, AsNoTracking)
     /// so LINQ to Objects can evaluate the list correctly.
     /// </summary>
-    private AppMasterData BuildAppMasterData()
+    private AppMasterData BuildAppMasterData(bool use3DSecure = true)
     {
-        var provider = new PaymentProvider { Id = 1, Name = "OpenPay" };
+        var provider = new PaymentProvider { Id = 1, Name = "OpenPay", TenantId = 1, Use3DSecure = use3DSecure };
         var list = new List<PaymentProvider> { provider };
 
         var mockProviderSet = new Mock<DbSet<PaymentProvider>>();

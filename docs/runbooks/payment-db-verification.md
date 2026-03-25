@@ -204,6 +204,7 @@ SELECT
     pp.Name,
     pp.APIUrl,
     pp.IsProduction,
+    pp.Use3DSecure,
     pp.IsActive,
     pp.TenantId
 FROM   dbo.PaymentProviders pp
@@ -213,6 +214,7 @@ ORDER BY pp.TenantId;
 
 **Expected:**
 - 1 row per tenant with `Name = OpenPay`, `IsActive = 1`, `IsProduction = 0` (sandbox)
+- `Use3DSecure`: `1` for all tenants by default (per-tenant 3DS toggle — override at runtime via DB UPDATE)
 - `APIUrl = https://sandbox-api.openpay.mx/v1`
 - Each row has the correct `TenantId` matching the `Tenants` table
 - For Option B: TenantC's provider is in `OrderProcessingSystem_TenantC`, not here (run Q6a-B below)
@@ -322,12 +324,12 @@ Confirms TenantC has its own OpenPay provider seeded in the dedicated DB.
 
 ```sql
 -- Run against: OrderProcessingSystem_TenantC
-SELECT pp.Id, pp.TenantId, pp.Name, pp.APIUrl, pp.IsProduction, pp.IsActive
+SELECT pp.Id, pp.TenantId, pp.Name, pp.APIUrl, pp.IsProduction, pp.Use3DSecure, pp.IsActive
 FROM   dbo.PaymentProviders pp
 ORDER BY pp.Id;
 ```
 
-**Expected:** 1 row with `TenantId = 3`, `Name = OpenPay`, `IsActive = 1`, `IsProduction = 0`.
+**Expected:** 1 row with `TenantId = 3`, `Name = OpenPay`, `IsActive = 1`, `IsProduction = 0`, `Use3DSecure = 1`.
 
 ### Q9-B — No TenantC data leaked into shared DB
 

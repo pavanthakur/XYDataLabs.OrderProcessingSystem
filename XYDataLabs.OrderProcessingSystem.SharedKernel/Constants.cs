@@ -20,7 +20,6 @@ namespace XYDataLabs.OrderProcessingSystem.SharedKernel
             /// </summary>
             public const string OpenPayRedirectUrl = "OpenPay:RedirectUrl";
             public const string OpenPayDeviceSessionId = "OpenPay:DeviceSessionId";
-            public const string OpenPayUseThreeDSecure = "OpenPay:Use3DSecure";
             public const string EnableEfSensitiveDataLogging = "Observability:EnableEfSensitiveDataLogging";
             public const string ActiveTenantCode = "TenantConfiguration:ActiveTenantCode";
         }

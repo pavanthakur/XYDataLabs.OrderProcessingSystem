@@ -82,6 +82,13 @@ These rules are binding for all tenant, payment, DTO, migration, middleware, and
 - No DTO, log output, or error message may contain a full card number or CVV.
 - Architecture tests enforce these constraints — see `CardTransaction_Should_Not_Store_Raw_Card_Data`.
 
+## Per-tenant payment flags
+- `PaymentProvider.Use3DSecure` controls whether 3D Secure is enabled per tenant. It is a `bool` column (default `true`) on the `PaymentProvider` entity.
+- This is a business rule per tenant, not an infrastructure/global setting. It must NOT be in `OpenPayConfig` or appsettings JSON.
+- `ProcessPaymentCommandHandler` reads `Use3DSecure` from the tenant-specific `PaymentProvider` row via `AppMasterData.GetProviderByNameForTenant()`.
+- All tenants seed with `Use3DSecure = true` by default (from the `StartupSeedTenant` record default). Override per-tenant at runtime via a DB UPDATE or by adding a seed-data migration.
+- Future per-tenant payment flags (e.g. per-tenant MerchantId) should follow the same pattern: column on `PaymentProvider`, not appsettings.
+
 ## ConfigureTenantOwnership pattern
 - Every new tenant-owned entity MUST be registered in `ConfigureTenantOwnership<T>()` in `OnModelCreating()`.
 - This single call configures: FK to `Tenants(Id)`, global query filter on `TenantId`, and `DeleteBehavior.Restrict`.
