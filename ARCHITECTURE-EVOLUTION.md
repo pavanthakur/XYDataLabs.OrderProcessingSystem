@@ -128,7 +128,7 @@ XYDataLabs.OrderProcessingSystem.sln
 | **9** | YARP Microservices (Local) | Gateway, Orders/Inventory/Notifications APIs, Docker Compose, event-based communication | 📅 Planned |
 | **10** | Azure Container Apps | ACA deployment, ACR, Service Bus, Entra ID + JWT, private networking | 📅 Planned |
 | **11** | Data Ownership & Autonomy | Database per service, remove shared DbContext, eventual consistency | 📅 Planned |
-| **12** | Platform Engineering & DevOps | Azure App Configuration, Polly resilience, per-service CI/CD, observability dashboards | 📅 Planned |
+| **12** | Platform Engineering & DevOps | .NET 10 upgrade, Azure App Configuration, Polly resilience, per-service CI/CD, observability dashboards | 📅 Planned |
 | **13** | Aspire & Final Maturity | .NET Aspire orchestration, service discovery, blue-green/canary deployments | 📅 Planned |
 | **14** | CQRS Read Model (MongoDB) | Separate read/write models, projection handlers, Hangfire, tenant-scoped documents | 📅 Planned |
 
@@ -822,10 +822,11 @@ Independent, fully decoupled services with clear data ownership, Durable Functio
 - **Azure AI Document Intelligence** — extract structured data from uploaded invoices/receipts in Blob Storage; Event Grid triggers Function → Document Intelligence API → enriches order metadata. Demonstrates Azure Cognitive Services integration without over-engineering.
 - **DR / Business Continuity** — documented RTO/RPO targets per service; Azure SQL geo-replication strategy; Cosmos DB multi-region (mention only); backup/restore runbook
 - **Performance / Load Testing** — Azure Load Testing or k6 for baseline performance; SLO validation under realistic load before production
+- **.NET 10 upgrade** — migrate from .NET 8 LTS to .NET 10 LTS (GA: November 2026). Steps: update `global.json` TFM, bump package versions in `Directory.Packages.props`, verify Testcontainers + NetArchTest compatibility, update Dockerfiles and CI pipeline `dotnet-version`. No architecture changes required — runtime upgrade only. .NET 9 (STS, EOL May 2026) is skipped; .NET 8 LTS support runs to November 2026, so this upgrade lands exactly on schedule.
 
 ### Outcome
 
-Scalable, manageable production platform with enterprise-grade operations, advanced resilience, AI-powered document processing, DR planning, and load-tested SLOs.
+Scalable, manageable production platform with enterprise-grade operations, advanced resilience, AI-powered document processing, DR planning, load-tested SLOs, and current LTS runtime.
 
 ---
 
