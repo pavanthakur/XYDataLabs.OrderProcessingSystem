@@ -4,6 +4,55 @@
 
 This directory contains automation scripts for configuring and deploying the Order Processing System with secure configuration management, including GitHub App automation tools.
 
+---
+
+## 🖥️ Local Development Bootstrap
+
+### setup-local.ps1
+
+**Run once after a fresh `git clone`** — bootstraps everything needed to develop locally without any manual prompts.
+
+**Purpose**:
+- Creates `Resources/Docker/.env.local` from `.env.local.example` (Docker secrets)
+- Sets `dotnet user-secrets` for VS F5 and `dotnet run` (API + UI projects)
+- Exports and trusts the HTTPS dev certificate
+
+**Usage**:
+```powershell
+# Zero-touch setup with sandbox defaults
+.\scripts\setup-local.ps1
+
+# Custom passwords (recommended if you want to avoid defaults)
+.\scripts\setup-local.ps1 -CertPassword 'My$ecure1!' -SqlPassword 'My$ecure1!'
+
+# Re-run and overwrite everything (after password change, or clean reset)
+.\scripts\setup-local.ps1 -Force
+```
+
+**Parameters**:
+- `CertPassword` (optional): Password for local HTTPS cert + Docker TLS. Default: `Admin100@` (local sandbox only)
+- `SqlPassword` (optional): Password for Docker SQL Server. Default: `Admin100@` (local sandbox only)
+- `Force` (switch): Overwrite existing `.env.local` and user-secrets unconditionally
+
+**What It Does**:
+1. ✅ Creates `Resources/Docker/.env.local` with Docker secrets (skips if already exists)
+2. ✅ Sets `dotnet user-secrets` for API: `CertPassword`, `OpenPay:MerchantId/PrivateKey/DeviceSessionId`
+3. ✅ Sets `dotnet user-secrets` for UI: `CertPassword`
+4. ✅ Exports `aspnetapp.pfx` and trusts HTTPS dev certificate
+
+**After Running**:
+- Visual Studio F5 on `http`/`https` profile → ready, no prompts
+- Docker: `.\Resources\Docker\start-docker.ps1 -Environment dev -Profile http`
+- To use real OpenPay sandbox credentials: edit `.env.local` directly and update user-secrets
+
+**Idempotent**: Safe to re-run at any time — skips steps already completed.
+
+**Prerequisites**:
+- .NET 8 SDK installed
+- PowerShell 7+
+
+---
+
 ## 🆕 GitHub App Automation Scripts
 
 ### setup-github-app-from-manifest.ps1
