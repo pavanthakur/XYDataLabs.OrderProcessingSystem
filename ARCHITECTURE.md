@@ -203,9 +203,8 @@ Rule: stamp tenant-owned entities, not everything.
 
 `DbInitializer.Initialize()` accepts an optional `IConfiguration` parameter. After running `Database.Migrate()`, it:
 
-1. Calls `ApplyDedicatedConnectionStrings()` — reads `DedicatedTenantConnectionStrings` from config and stamps any Dedicated tenant whose ConnectionString is NULL after migrations.
-2. Seeds shared-pool sample data (Phase 1: TenantA, TenantB).
-3. Calls `SeedDedicatedTenants()` (Phase 2) — for each Dedicated tenant with a non-null ConnectionString, creates a scoped `OrderProcessingSystemDbContext` with `NullTenantProvider` and runs `Database.Migrate()` + sample data seeding on the dedicated DB.
+1. Seeds shared-pool sample data (Phase 1: TenantA, TenantB).
+2. Calls `SeedDedicatedTenants()` (Phase 2) — for each Dedicated-tier tenant, reads the connection string from `IConfiguration["DedicatedTenantConnectionStrings:{Code}"]`, creates a scoped `OrderProcessingSystemDbContext` with `NullTenantProvider` and runs `Database.Migrate()` + sample data seeding on the dedicated DB. Connection strings are never stored in the `Tenants` table (ADR-009).
 
 **NullTenantProvider** is a null-object `ITenantProvider` with `HasTenantContext = false`. It prevents query filter NullReferenceException in non-request contexts. The filter short-circuits to `true` (all rows visible), which is correct for dedicated-DB seeding where physical isolation replaces query-filter isolation.
 
@@ -288,6 +287,7 @@ Rules:
 3. `DbInitializer` seeds all tenants with `Use3DSecure = true` by default.
 4. Override per-tenant at runtime via DB UPDATE or by adding a seed-data migration.
 5. `ProcessPaymentCommandHandler` reads the value per-tenant via `AppMasterData.GetProviderByNameForTenant()`.
+   `AppMasterData` is scoped (per-request) and reads from the tenant-routed DbContext — no API restart needed for Use3DSecure changes.
 6. `ConfirmPaymentStatusCommandHandler` does not consult `PaymentProvider.Use3DSecure` — it reads `IsThreeDSecureEnabled` from the `CardTransaction` row (already stamped by ProcessPayment).
 
 Unit test coverage:

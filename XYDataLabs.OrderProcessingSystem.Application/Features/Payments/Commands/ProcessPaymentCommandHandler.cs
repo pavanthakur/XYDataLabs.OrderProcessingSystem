@@ -160,10 +160,9 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         _logger.LogInformation("Creating PaymentMethod...");
 
         // Resolve the PaymentProviderId from the request-scoped context, which routes to the
-        // tenant's actual DB (dedicated or shared pool). AppMasterData uses the shared DB —
-        // its auto-assigned Id for a dedicated tenant's provider will differ from the Id in
-        // the dedicated DB (which has its own identity sequence starting from 1). Using
-        // _openPayProvider.Id here causes a FK violation on dedicated-tenant DBs.
+        // tenant's actual DB (dedicated or shared pool). The scoped AppMasterData also reads
+        // from this context, but uses the Id for config lookups only (Use3DSecure, Name).
+        // The FK-safe Id must come from the DB that owns the PaymentMethods row.
         var providerIdInTenantDb = await _context.PaymentProviders
             .Where(p => p.Name == "OpenPay")
             .Select(p => p.Id)

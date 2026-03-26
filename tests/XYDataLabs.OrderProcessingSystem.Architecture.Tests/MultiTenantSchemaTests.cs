@@ -105,19 +105,6 @@ public class MultiTenantSchemaTests
     }
 
     [Fact]
-    public void Tenant_Should_Have_ConnectionString_Column()
-    {
-        using var context = CreateDbContext();
-        var tenantEntity = context.Model.FindEntityType(typeof(Tenant));
-
-        tenantEntity.Should().NotBeNull();
-        var property = tenantEntity!.FindProperty(nameof(Tenant.ConnectionString));
-        property.Should().NotBeNull(because: "the Tenant entity must have a ConnectionString column for dedicated database routing");
-        property!.IsNullable.Should().BeTrue(because: "ConnectionString is null for SharedPool tenants");
-        property.GetMaxLength().Should().Be(500);
-    }
-
-    [Fact]
     public void TenantRegistryDbContext_Tenant_Should_Not_Have_Global_Query_Filter()
     {
         var options = new DbContextOptionsBuilder<TenantRegistryDbContext>()
@@ -192,24 +179,6 @@ public class MultiTenantSchemaTests
         var tenant = new Tenant();
         tenant.TenantTier.Should().Be(TenantTierConstants.SharedPool,
             because: "new tenants default to SharedPool tier");
-    }
-
-    [Fact]
-    public void Tenant_ConnectionString_Nullable_For_SharedPool()
-    {
-        using var context = CreateDbContext();
-        var tenantEntity = context.Model.FindEntityType(typeof(Tenant));
-        tenantEntity.Should().NotBeNull();
-
-        var csProperty = tenantEntity!.FindProperty(nameof(Tenant.ConnectionString));
-        csProperty.Should().NotBeNull();
-        csProperty!.IsNullable.Should().BeTrue(
-            because: "SharedPool tenants have null ConnectionString; only Dedicated tenants set it");
-
-        var tierProperty = tenantEntity.FindProperty(nameof(Tenant.TenantTier));
-        tierProperty.Should().NotBeNull();
-        tierProperty!.IsNullable.Should().BeFalse(
-            because: "TenantTier is always required — it drives routing logic");
     }
 
     // ------------------------------------------------------------------ Dynamic guardrail tests (1.1–1.5 + FC4)

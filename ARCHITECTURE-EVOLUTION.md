@@ -178,7 +178,7 @@ XYDataLabs.OrderProcessingSystem.sln
 - `SaveChangesAsync` override auto-stamps `TenantId` on Added entities (both base classes)
 - `TenantMiddleware` extracts `X-Tenant-Id` header (default: `"default"`), stores in `HttpContext.Items`, enriches Serilog `LogContext`
 - `HeaderTenantProvider` reads tenant from `HttpContext.Items` at DI scope resolution
-- AppMasterData uses `.IgnoreQueryFilters()` for cross-tenant PaymentProviders
+- AppMasterData is scoped (per-request) — reads from tenant-routed DbContext, respects query filter (ADR-009)
 - Wired in API + UI `Program.cs` (Scoped DI, middleware before `CorrelationMiddleware`)
 - Build: 0 errors, 31/31 tests passing
 

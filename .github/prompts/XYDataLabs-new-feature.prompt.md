@@ -183,4 +183,14 @@ git commit -m "Add {EntityName} entity with multitenant CQRS and EF migration
 
 ## Step 12: Update Context (optional)
 
-If this is a significant feature, run `/context-audit` to verify instruction files still reflect the codebase.
+If this is a significant feature, run `/XYDataLabs-context-audit` to verify instruction files still reflect the codebase.
+
+## Step 13: Payment Verification (conditional)
+
+**Run this step only if the feature touched any of:**
+- `Application/Features/Payments/`
+- `XYDataLabs.OpenPayAdapter/`
+- `Domain/Entities/CardTransaction*`, `PayinLog*`, `BillingCustomer*`, `PaymentProvider*`, `TransactionStatusHistory*`
+- `Infrastructure/` payment-related data access or seeding
+
+**Action:** Run `/XYDataLabs-verify-payments` to execute the filtered DB verification queries and confirm no data isolation or schema regressions were introduced.

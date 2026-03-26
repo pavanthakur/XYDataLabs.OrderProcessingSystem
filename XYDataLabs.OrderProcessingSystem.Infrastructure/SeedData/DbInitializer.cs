@@ -30,15 +30,6 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                 context.Database.Migrate();
             }
 
-            // Apply dedicated tenant connection strings from configuration before Phase 2.
-            // Migrations always seed TenantC.ConnectionString = NULL. This step re-applies
-            // environment-specific values from DedicatedTenantConnectionStrings config so
-            // Phase 2 can run without a manual UPDATE on every fresh database creation.
-            if (configuration is not null)
-            {
-                ApplyDedicatedConnectionStrings(context, configuration);
-            }
-
             // Phase 1: seed shared-pool tenants (TenantA, TenantB) into the main DB.
             var startupSeedTenants = GetStartupSeedTenants(context);
 
@@ -52,43 +43,10 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
             UpdateOrderTotalPrices(context, startupSeedTenants.Select(seedTenant => seedTenant.TenantId).ToArray());
 
             // Phase 2: seed dedicated-tier tenants into their own DB connection.
-            // Works for both Option A (ConnectionString points to same physical DB) and
-            // Option B (ConnectionString points to a separate dedicated DB).
-            // Skipped when ConnectionString is null — no DB to connect to yet.
-            SeedDedicatedTenants(context, applyMigrations);
-        }
-
-        /// <summary>
-        /// Reads DedicatedTenantConnectionStrings from IConfiguration and stamps any matching
-        /// Dedicated-tier tenant rows whose ConnectionString is currently NULL.
-        /// This fixes the "two-restart" problem: migrations always seed ConnectionString = NULL,
-        /// so without this step Phase 2 would find nothing on every fresh DB creation.
-        /// </summary>
-        private static void ApplyDedicatedConnectionStrings(OrderProcessingSystemDbContext context, IConfiguration configuration)
-        {
-            var section = configuration.GetSection("DedicatedTenantConnectionStrings");
-            if (!section.Exists())
-                return;
-
-            var configuredStrings = section.GetChildren()
-                .ToDictionary(c => c.Key, c => c.Value, StringComparer.OrdinalIgnoreCase);
-
-            if (configuredStrings.Count == 0)
-                return;
-
-            var dedicatedCodes = configuredStrings.Keys.ToArray();
-            var tenantsToUpdate = context.Tenants
-                .Where(t => t.TenantTier == "Dedicated" && t.ConnectionString == null && dedicatedCodes.Contains(t.Code))
-                .ToList();
-
-            foreach (var tenant in tenantsToUpdate)
-            {
-                if (configuredStrings.TryGetValue(tenant.Code, out var cs) && !string.IsNullOrWhiteSpace(cs))
-                    tenant.ConnectionString = cs;
-            }
-
-            if (tenantsToUpdate.Any(t => t.ConnectionString != null))
-                context.SaveChanges();
+            // Connection strings are read from IConfiguration (Key Vault / appsettings),
+            // not from the Tenants table — connection strings are secrets.
+            // Skipped when configuration is null or DedicatedTenantConnectionStrings is absent.
+            SeedDedicatedTenants(context, configuration, applyMigrations);
         }
 
         private static IReadOnlyList<StartupSeedTenant> GetStartupSeedTenants(OrderProcessingSystemDbContext context)
@@ -267,23 +225,42 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
         }
 
         /// <summary>
-        /// Seeds sample data for every Dedicated-tier tenant whose ConnectionString is provisioned.
-        /// Creates a separate DbContext per dedicated tenant so data lands in the correct database,
-        /// whether that is the same physical DB (Option A) or a separate DB (Option B).
+        /// Seeds sample data for every Dedicated-tier tenant whose connection string is configured.
+        /// Connection strings are read from IConfiguration (DedicatedTenantConnectionStrings section),
+        /// not from the Tenants table — connection strings are secrets that belong in Key Vault / config.
+        /// Creates a separate DbContext per dedicated tenant so data lands in the correct database.
         /// A NullTenantProvider is injected so EF Core query filters evaluate safely (HasTenantContext=false →
         /// filter short-circuits to true, making all rows visible — correct for cross-tenant seeding).
         /// </summary>
-        private static void SeedDedicatedTenants(OrderProcessingSystemDbContext mainContext, bool applyMigrations)
+        private static void SeedDedicatedTenants(OrderProcessingSystemDbContext mainContext, IConfiguration? configuration, bool applyMigrations)
         {
+            if (configuration is null)
+                return;
+
+            var section = configuration.GetSection("DedicatedTenantConnectionStrings");
+            if (!section.Exists())
+                return;
+
+            var configuredStrings = section.GetChildren()
+                .ToDictionary(c => c.Key, c => c.Value, StringComparer.OrdinalIgnoreCase);
+
+            if (configuredStrings.Count == 0)
+                return;
+
+            // Resolve dedicated tenants from the main DB, then match against config keys.
             var dedicatedTenants = mainContext.Tenants
                 .AsNoTracking()
-                .Where(t => t.TenantTier == "Dedicated" && t.ConnectionString != null)
+                .Where(t => t.TenantTier == "Dedicated")
+                .ToList()
+                .Where(t => configuredStrings.TryGetValue(t.Code, out var cs) && !string.IsNullOrWhiteSpace(cs))
                 .ToList();
 
             foreach (var tenant in dedicatedTenants)
             {
+                var connectionString = configuredStrings[tenant.Code]!;
+
                 var dedicatedOptions = new DbContextOptionsBuilder<OrderProcessingSystemDbContext>()
-                    .UseSqlServer(tenant.ConnectionString!)
+                    .UseSqlServer(connectionString)
                     .Options;
 
                 // NullTenantProvider ensures EF Core query filters short-circuit safely
@@ -309,12 +286,6 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                     continue;
 
                 SeedOpenpayProviders(dedicatedContext, new[] { seedTenant });
-
-                // AppMasterData is a singleton seeded from the shared/main DB at startup.
-                // Without this call, dedicated-tenant PaymentProviders are invisible to the
-                // singleton (they only exist in the dedicated DB), causing a 500 on payment
-                // requests for dedicated tenants. Seeding into mainContext is idempotent.
-                SeedOpenpayProviders(mainContext, new[] { seedTenant });
 
                 SeedTenantSampleData(dedicatedContext, seedTenant);
                 UpdateOrderTotalPrices(dedicatedContext, seedTenant.TenantId);
