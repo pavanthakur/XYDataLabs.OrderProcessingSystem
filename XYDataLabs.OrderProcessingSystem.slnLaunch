@@ -1,0 +1,122 @@
+[
+  {
+    "Name": "Http Profile",
+    "Projects": [
+      {
+        "Path": "XYDataLabs.OrderProcessingSystem.API\\XYDataLabs.OrderProcessingSystem.API.csproj",
+        "Action": "Start",
+        "DebugTarget": "http"
+      },
+      {
+        "Path": "XYDataLabs.OrderProcessingSystem.UI\\XYDataLabs.OrderProcessingSystem.UI.csproj",
+        "Action": "Start",
+        "DebugTarget": "http"
+      }
+    ]
+  },
+  {
+    "Name": "Https Profile",
+    "Projects": [
+      {
+        "Path": "XYDataLabs.OrderProcessingSystem.API\\XYDataLabs.OrderProcessingSystem.API.csproj",
+        "Action": "Start",
+        "DebugTarget": "https"
+      },
+      {
+        "Path": "XYDataLabs.OrderProcessingSystem.UI\\XYDataLabs.OrderProcessingSystem.UI.csproj",
+        "Action": "Start",
+        "DebugTarget": "https"
+      }
+    ]
+  },
+  {
+    "Name": "Docker Dev Http Profile",
+    "Projects": [
+      {
+        "Path": "XYDataLabs.OrderProcessingSystem.API\\XYDataLabs.OrderProcessingSystem.API.csproj",
+        "Action": "Start",
+        "DebugTarget": "docker-dev-http"
+      },
+      {
+        "Path": "XYDataLabs.OrderProcessingSystem.UI\\XYDataLabs.OrderProcessingSystem.UI.csproj",
+        "Action": "Start",
+        "DebugTarget": "docker-dev-http"
+      }
+    ]
+  },
+  {
+    "Name": "Docker Dev Https Profile",
+    "Projects": [
+      {
+        "Path": "XYDataLabs.OrderProcessingSystem.API\\XYDataLabs.OrderProcessingSystem.API.csproj",
+        "Action": "Start",
+        "DebugTarget": "docker-dev-https"
+      },
+      {
+        "Path": "XYDataLabs.OrderProcessingSystem.UI\\XYDataLabs.OrderProcessingSystem.UI.csproj",
+        "Action": "Start",
+        "DebugTarget": "docker-dev-https"
+      }
+    ]
+  },
+  {
+    "Name": "Docker Stg Http Profile",
+    "Projects": [
+      {
+        "Path": "XYDataLabs.OrderProcessingSystem.API\\XYDataLabs.OrderProcessingSystem.API.csproj",
+        "Action": "Start",
+        "DebugTarget": "docker-stg-http"
+      },
+      {
+        "Path": "XYDataLabs.OrderProcessingSystem.UI\\XYDataLabs.OrderProcessingSystem.UI.csproj",
+        "Action": "Start",
+        "DebugTarget": "docker-stg-http"
+      }
+    ]
+  },
+  {
+    "Name": "Docker Stg Https Profile",
+    "Projects": [
+      {
+        "Path": "XYDataLabs.OrderProcessingSystem.API\\XYDataLabs.OrderProcessingSystem.API.csproj",
+        "Action": "Start",
+        "DebugTarget": "docker-stg-https"
+      },
+      {
+        "Path": "XYDataLabs.OrderProcessingSystem.UI\\XYDataLabs.OrderProcessingSystem.UI.csproj",
+        "Action": "Start",
+        "DebugTarget": "docker-stg-https"
+      }
+    ]
+  },
+  {
+    "Name": "Docker Prod Http Profile",
+    "Projects": [
+      {
+        "Path": "XYDataLabs.OrderProcessingSystem.API\\XYDataLabs.OrderProcessingSystem.API.csproj",
+        "Action": "Start",
+        "DebugTarget": "docker-prod-http"
+      },
+      {
+        "Path": "XYDataLabs.OrderProcessingSystem.UI\\XYDataLabs.OrderProcessingSystem.UI.csproj",
+        "Action": "Start",
+        "DebugTarget": "docker-prod-http"
+      }
+    ]
+  },
+  {
+    "Name": "Docker Prod Https Profile",
+    "Projects": [
+      {
+        "Path": "XYDataLabs.OrderProcessingSystem.API\\XYDataLabs.OrderProcessingSystem.API.csproj",
+        "Action": "Start",
+        "DebugTarget": "docker-prod-https"
+      },
+      {
+        "Path": "XYDataLabs.OrderProcessingSystem.UI\\XYDataLabs.OrderProcessingSystem.UI.csproj",
+        "Action": "Start",
+        "DebugTarget": "docker-prod-https"
+      }
+    ]
+  }
+]
