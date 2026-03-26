@@ -281,6 +281,165 @@ WHERE  (ct.CustomerOrderId LIKE '%-tA-%' AND ct.TenantId <> 1)
 Run these queries connected to **`OrderProcessingSystem_TenantC`** (not `OrderProcessingSystem_Local`).
 All shared-pool tables (TenantA, TenantB) must be absent — TenantC only.
 
+### Q2-B — CardTransactions E2E view (dedicated DB)
+
+Full transaction record including billing customer, card token, and OpenPay IDs — TenantC only.
+
+```sql
+-- Run against: OrderProcessingSystem_TenantC
+SELECT
+    t.Code                      AS Tenant,
+    bc.APICustomerId             AS OpenPayCustomerId,
+    pm.Token                     AS CardToken,
+    ct.CustomerOrderId,
+    ct.AttemptOrderId,
+    ct.TransactionId             AS OpenPayChargeId,
+    ct.PaymentTraceId,
+    ct.TransactionStatus         AS Status,
+    ct.TransactionReferenceId    AS OpenPayReference,
+    ct.MaskedCardNumber,
+    ct.Amount,
+    ct.CurrencyCode,
+    ct.IsThreeDSecureEnabled     AS ThreeDS,
+    ct.ThreeDSecureStage,
+    ct.IsTransactionSuccess,
+    ct.CreatedDate
+FROM   dbo.CardTransactions   ct
+JOIN   dbo.BillingCustomers   bc  ON bc.Id = ct.BillingCustomerId
+JOIN   dbo.PaymentMethods     pm  ON pm.Id = bc.PaymentMethodId
+JOIN   dbo.Tenants            t   ON t.Id  = ct.TenantId
+WHERE  ct.TenantId = 3
+ORDER BY ct.Id;
+```
+
+**Expected after one successful 3DS payment:**
+- 2 rows (tokenization row + charge row) — identical to shared-pool behaviour; see design context at top of this runbook
+- Row 1: `OpenPayChargeId` = card token ID, `ThreeDSecureStage = tokenization_completed`, `IsTransactionSuccess = 1`
+- Row 2: `OpenPayChargeId` = charge ID, `ThreeDSecureStage = completed`, `IsTransactionSuccess = 1`
+- `MaskedCardNumber` in format `411111******1111` — raw PAN must never appear
+- `OpenPayCustomerId` must differ from TenantA and TenantB values (no cross-sharing)
+
+---
+
+### Q3-B — PayinLogs (dedicated DB)
+
+One log per charge attempt for TenantC.
+
+```sql
+-- Run against: OrderProcessingSystem_TenantC
+SELECT
+    t.Code             AS Tenant,
+    pl.CustomerOrderId,
+    pl.AttemptOrderId,
+    pl.OpenPayChargeId,
+    pl.PaymentTraceId,
+    pl.Amount,
+    pl.Currency,
+    pl.LastFourCardNbr,
+    pl.IsThreeDSecureEnabled AS ThreeDS,
+    pl.ThreeDSecureStage,
+    pl.Result,
+    pl.CreatedDate
+FROM   dbo.PayinLogs pl
+JOIN   dbo.Tenants   t  ON t.Id = pl.TenantId
+WHERE  pl.TenantId = 3
+ORDER BY pl.Id;
+```
+
+**Expected:** 1 row, `Result = 1`, `ThreeDSecureStage = completed`.
+
+---
+
+### Q4-B — PayinLogDetails (raw request/response audit, dedicated DB)
+
+Two audit rows per charge: `redirect_issued` (charge creation) and `completed` (callback reconciliation).
+
+```sql
+-- Run against: OrderProcessingSystem_TenantC
+SELECT
+    t.Code                        AS Tenant,
+    pl.OpenPayChargeId,
+    pld.ThreeDSecureStage,
+    pld.PaymentTraceId,
+    LEFT(pld.PostInfo, 120)       AS PostInfo,
+    LEFT(pld.RespInfo, 120)       AS RespInfo,
+    LEFT(pld.AdditionalInfo, 120) AS AdditionalInfo
+FROM   dbo.PayinLogDetails pld
+JOIN   dbo.PayinLogs       pl  ON pl.Id = pld.PayinLogId
+JOIN   dbo.Tenants         t   ON t.Id  = pl.TenantId
+WHERE  pl.TenantId = 3
+ORDER BY pld.Id;
+```
+
+**Expected:** 2 rows:
+
+| Stage | Meaning |
+|-------|---------|
+| `redirect_issued` | Charge-creation request sent to OpenPay; 3DS redirect URL issued |
+| `completed` | Confirm-status request + OpenPay final-status response; callback reconciled |
+
+---
+
+### Q5-B — TransactionStatusHistories 4-step trail (dedicated DB)
+
+Complete audit trail for TenantC's charge. This is the definitive verification of the full payment lifecycle in the dedicated DB.
+
+```sql
+-- Run against: OrderProcessingSystem_TenantC
+SELECT
+    t.Code                   AS Tenant,
+    ct.TransactionId         AS OpenPayChargeId,
+    ct.CustomerOrderId,
+    tsh.AttemptOrderId,
+    tsh.Status,
+    tsh.ThreeDSecureStage,
+    tsh.IsThreeDSecureEnabled AS ThreeDS,
+    tsh.TransactionReferenceId,
+    tsh.Notes,
+    tsh.CreatedDate
+FROM   dbo.TransactionStatusHistories tsh
+JOIN   dbo.CardTransactions           ct  ON ct.Id = tsh.TransactionId
+JOIN   dbo.Tenants                    t   ON t.Id  = ct.TenantId
+WHERE  ct.TenantId = 3
+ORDER BY ct.Id, tsh.Id;
+```
+
+**Expected 4-step trail (same pattern as shared-pool tenants):**
+
+| Step | Status | Stage | Reference | Meaning |
+|------|--------|-------|-----------|---------|
+| 1 | `completed` | `tokenization_completed` | NULL | Card tokenized by OpenPay |
+| 2 | `charge_pending` | `redirect_issued` | NULL | 3DS redirect issued |
+| 3 | `completed` | `callback_received` | 801585 | Browser redirected back |
+| 4 | `completed` | `completed` | 801585 | OpenPay confirmed final status |
+
+---
+
+### Q6-B — BillingCustomerKeyInfos (dedicated DB)
+
+Supplementary keys stored for TenantC's billing customer.
+
+```sql
+-- Run against: OrderProcessingSystem_TenantC
+SELECT
+    t.Code            AS Tenant,
+    bc.APICustomerId  AS OpenPayCustomerId,
+    bc.Email,
+    bck.KeyName,
+    bck.KeyValue,
+    bck.CreatedDate
+FROM   dbo.BillingCustomerKeyInfos bck
+JOIN   dbo.BillingCustomers        bc  ON bc.Id = bck.BillingCustomerId
+JOIN   dbo.Tenants                 t   ON t.Id  = bc.TenantId
+WHERE  bc.TenantId = 3
+ORDER BY bck.Id;
+```
+
+**Expected:** 1 row with `KeyName = CreationDate` and ISO timestamp value.  
+`OpenPayCustomerId` must differ from TenantA and TenantB values — confirms no cross-sharing.
+
+---
+
 ### Q7-B — TenantC row counts (dedicated DB)
 
 ```sql
