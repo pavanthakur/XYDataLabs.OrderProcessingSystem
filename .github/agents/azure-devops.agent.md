@@ -30,7 +30,7 @@ Always follow the rules in these instruction files when they apply:
 
 ## Workflow Role
 
-This agent is NOT part of the `/new-feature` workflow. It handles infrastructure and CI/CD tasks only.
+This agent is NOT part of the `/xylab-new-feature` workflow. It handles infrastructure and CI/CD tasks only.
 
 ## Constraints
 

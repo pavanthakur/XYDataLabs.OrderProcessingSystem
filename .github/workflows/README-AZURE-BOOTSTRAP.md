@@ -225,7 +225,7 @@ After a **full clean deployment** (resource group deleted and recreated), the bo
 |------|--------|-----------------------------|
 | 1 | Run `azure-bootstrap.yml` (bootstrapInfra + deployApi) | ✅ |
 | 2 | Verify `/api/orders` returns 200 (not 500) | ✅ |
-| 3 | Optional: open SQL firewall for local SSMS via `/sql-local-access` | Optional |
+| 3 | Optional: open SQL firewall for local SSMS via `/xylab-sql-local-access` | Optional |
 
 Short validation check in SSMS:
 
@@ -268,7 +268,7 @@ Do not run cleanup for this issue. The resources are already provisioned; only t
 
 > See [TROUBLESHOOTING-INDEX.md](../../TROUBLESHOOTING-INDEX.md#sql-managed-identity-day-35) for full details on the symptom and fix.
 >
-> See [Prompt README](../../.github/prompts/README.md) for available prompts (`/day-complete`, `/sql-local-access`, `/context-audit`).
+> See [Prompt README](../../.github/prompts/README.md) for available prompts (`/xylab-day-complete`, `/xylab-sql-local-access`, `/xylab-context-audit`).
 
 ---
 

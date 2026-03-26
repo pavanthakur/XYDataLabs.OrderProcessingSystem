@@ -339,13 +339,13 @@ This matrix shows which instructions auto-attach for common file locations:
 ### Reusable agent prompts (type in VS Code Chat → Agent mode)
 | Prompt | Command | Purpose |
 |--------|---------|--------|
-| New Feature Workflow | `/new-feature` | Orchestrates end-to-end feature development: entity → CQRS → migration → controller → tests → review → commit → payment verification (conditional). Enforces mandatory 13-step workflow with multitenant support. |
-| Day Complete Router | `/day-complete` | After each curriculum day — routes updates to all correct documents, suggests commit |
-| SQL Local Access | `/sql-local-access` | Opens or closes Azure SQL firewall for local IP after a fresh bootstrap/deploy. Prints SSMS connection details. |
-| Context Audit | `/context-audit` | Detects stale AI context by diffing memory files and copilot-instructions against the actual codebase. Run periodically or after major refactors. |
-| Payment Verification | `/verify-payments` | After any payment test run or payment-related feature change — runs filtered Q2/Q5/Q2-B/Q5-B/Q8 queries for the most recent OR series against both DBs. |
+| New Feature Workflow | `/xylab-new-feature` | Orchestrates end-to-end feature development: entity → CQRS → migration → controller → tests → review → commit → payment verification (conditional). Enforces mandatory 13-step workflow with multitenant support. |
+| Day Complete Router | `/xylab-day-complete` | After each curriculum day — routes updates to all correct documents, suggests commit |
+| SQL Local Access | `/xylab-sql-local-access` | Opens or closes Azure SQL firewall for local IP after a fresh bootstrap/deploy. Prints SSMS connection details. |
+| Context Audit | `/xylab-context-audit` | Detects stale AI context by diffing memory files and copilot-instructions against the actual codebase. Run periodically or after major refactors. |
+| Payment Verification | `/xylab-verify-payments` | After any payment test run or payment-related feature change — runs filtered Q2/Q5/Q2-B/Q5-B/Q8 queries for the most recent OR series against both DBs. |
 
-> **Quick prompt tip:** `Ctrl+Shift+I` → select Agent mode → type `/new-feature`, `/day-complete`, `/sql-local-access`, `/context-audit`, or `/verify-payments`
+> **Quick prompt tip:** `Ctrl+Shift+I` → select Agent mode → type `/xylab-new-feature`, `/xylab-day-complete`, `/xylab-sql-local-access`, `/xylab-context-audit`, or `/xylab-verify-payments`
 >
 > **Prompt reference:** See `.github/prompts/README.md` for when to use each prompt, prerequisites, and operational notes.
 >

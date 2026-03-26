@@ -34,7 +34,7 @@ Always follow the rules in these instruction files when they apply:
 
 ## Workflow Role
 
-When the user runs `/new-feature`, this agent handles steps 2-9:
+When the user runs `/xylab-new-feature`, this agent handles steps 2-9:
 Entity → DTO → CQRS handler → DbContext → Migration → Controller → Tests → Build.
 After step 9, tell the user to switch to **Code Reviewer** agent for the review step.
 
