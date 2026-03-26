@@ -309,6 +309,13 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                     continue;
 
                 SeedOpenpayProviders(dedicatedContext, new[] { seedTenant });
+
+                // AppMasterData is a singleton seeded from the shared/main DB at startup.
+                // Without this call, dedicated-tenant PaymentProviders are invisible to the
+                // singleton (they only exist in the dedicated DB), causing a 500 on payment
+                // requests for dedicated tenants. Seeding into mainContext is idempotent.
+                SeedOpenpayProviders(mainContext, new[] { seedTenant });
+
                 SeedTenantSampleData(dedicatedContext, seedTenant);
                 UpdateOrderTotalPrices(dedicatedContext, seedTenant.TenantId);
             }
