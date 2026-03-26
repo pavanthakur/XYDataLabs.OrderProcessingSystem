@@ -110,6 +110,13 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
         MockDbContext.Setup(db => db.PayinLogDetails).Returns(new Mock<DbSet<PayinLogDetails>>().Object);
         MockDbContext.Setup(db => db.BillingCustomerKeyInfos).Returns(new Mock<DbSet<BillingCustomerKeyInfo>>().Object);
 
+        // PaymentProviders — needed by CreatePaymentMethodAsync to resolve FK-safe PaymentProviderId
+        var providers = new List<PaymentProvider>
+        {
+            new PaymentProvider { Id = 1, Name = "OpenPay", TenantId = 1, Use3DSecure = true }
+        }.AsQueryable();
+        MockDbContext.Setup(db => db.PaymentProviders).Returns(GetMockDbSet(providers).Object);
+
         MockDbContext.Setup(db => db.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
 
 
@@ -211,7 +218,7 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
 
     /// <summary>
     /// Builds AppMasterData with a fake payment provider, using a PassThroughQueryable
-    /// that safely ignores EF-specific expression nodes (IgnoreQueryFilters, AsNoTracking)
+    /// that safely ignores EF-specific expression nodes (AsNoTracking)
     /// so LINQ to Objects can evaluate the list correctly.
     /// </summary>
     private AppMasterData BuildAppMasterData(bool use3DSecure = true)
@@ -247,7 +254,7 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
 
     /// <summary>
     /// A query provider that bypasses EF Core-specific expression tree nodes
-    /// (IgnoreQueryFilters, AsNoTracking) and always enumerates the backing list.
+    /// (AsNoTracking) and always enumerates the backing list.
     /// This is safe for unit-test usage only — it ignores query filter semantics.
     /// </summary>
     private sealed class PassThroughQueryProvider<TEntity>(IEnumerable<TEntity> source) : IQueryProvider
@@ -258,7 +265,7 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
             new PassThroughQueryable<TEntity>(_list);
 
         public IQueryable<TElement> CreateQuery<TElement>(Expression expression) =>
-            // Called by IgnoreQueryFilters() / AsNoTracking(); return a new pass-through queryable
+            // Called by AsNoTracking(); return a new pass-through queryable
             (IQueryable<TElement>)(object)new PassThroughQueryable<TEntity>(_list);
 
         public object? Execute(Expression expression) => _list.ToList();

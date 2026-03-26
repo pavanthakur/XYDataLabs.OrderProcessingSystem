@@ -25,13 +25,11 @@ namespace XYDataLabs.OrderProcessingSystem.Application
             builder.Services.AddOpenPayAdapter(builder.Configuration);
             builder.Services.AddScoped<IOpenPayAdapterService, OpenPayAdapterService>();
 
-            // Initialize AppMasterData as Singleton
-            builder.Services.AddSingleton<AppMasterData>(serviceProvider =>
-            {
-                using var scope = serviceProvider.CreateScope();
-                var dbContext = scope.ServiceProvider.GetRequiredService<IAppDbContext>();
-                return new AppMasterData(dbContext);
-            });
+            // AppMasterData is scoped so each request gets the tenant-routed DbContext.
+            // This ensures dedicated-tier tenants load providers from their own DB — no
+            // cross-tenant data exposure. Changing Use3DSecure takes effect immediately
+            // (no API restart required).
+            builder.Services.AddScoped<AppMasterData>();
         }
     }
 }

@@ -43,14 +43,15 @@ az sql server firewall-rule delete --server orderprocessing-sql-dev --resource-g
 ## Applied Migrations (current baseline)
 1. `20260324195231_InitialCreate` — full schema (MaskedCardNumber, no CVV2, BillingCustomerId FK)
 2. `20260324202503_SeedBaselineTenants` — inserts TenantA and TenantB rows (IF NOT EXISTS guards — safe for Azure re-apply)
-3. `20260324210853_SeedDedicatedTenantC` — inserts TenantC as Dedicated-tier tenant (IF NOT EXISTS guard, ConnectionString NULL — auto-provisioned on first startup via config)
+3. `20260324210853_SeedDedicatedTenantC` — inserts TenantC as Dedicated-tier tenant (IF NOT EXISTS guard)
+4. `RemoveConnectionStringFromTenant` — drops the `ConnectionString` column from `Tenants` (ADR-009; connection strings are never stored in the DB)
 
 This repository was rebaselined in March 2026. Historical migrations were intentionally removed. The current migration chain starts from a single clean baseline and future migrations must build from that baseline only.
 
 ## Current Schema Notes
 - `Tenants` is the tenant authority table — TenantA and TenantB are seeded by `20260324202503_SeedBaselineTenants` migration; TenantC (Dedicated tier) is seeded by `20260324210853_SeedDedicatedTenantC` migration (all with IF NOT EXISTS SQL for Azure safety)
-- `Tenants` now includes `TenantTier` (nvarchar 20, NOT NULL, default 'SharedPool') and `ConnectionString` (nvarchar 500, nullable)
-- TenantA and TenantB are SharedPool (ConnectionString = NULL); TenantC is Dedicated (ConnectionString = NULL in migration — auto-provisioned at startup)
+- `Tenants` includes `TenantTier` (nvarchar 20, NOT NULL, default 'SharedPool'). The `ConnectionString` column was removed by migration `RemoveConnectionStringFromTenant` — connection strings are never stored in the database (ADR-009)
+- TenantA and TenantB are SharedPool; TenantC is Dedicated. Connection strings are resolved at runtime from `IConfiguration["DedicatedTenantConnectionStrings:{Code}"]`
 - `TenantRegistryDbContext` owns the `Tenants` DbSet for tenant resolution (no query filters, no ITenantProvider dependency)
 - `OrderProcessingSystemDbContext` still configures `Tenants` entity for FK integrity from business entities
 
@@ -61,12 +62,11 @@ Signature: `DbInitializer.Initialize(OrderProcessingSystemDbContext context, ICo
 Called from `Program.cs` as: `DbInitializer.Initialize(dbContext, app.Configuration, applyMigrations: !isAzureRuntime)`
 
 **Phase 1** — Shared-pool sample data:
-1. `Database.Migrate()` — applies pending migrations (seeds TenantA, TenantB, TenantC with ConnectionString = NULL)
-2. `ApplyDedicatedConnectionStrings(context, configuration)` — reads `DedicatedTenantConnectionStrings` config section and UPDATEs any Dedicated tenant whose ConnectionString is still NULL
-3. Seeds customers, products, orders, OpenPay providers for TenantA and TenantB on the shared DB
+1. `Database.Migrate()` — applies pending migrations (seeds TenantA, TenantB, TenantC)
+2. Seeds customers, products, orders, OpenPay providers for TenantA and TenantB on the shared DB
 
 **Phase 2** — `SeedDedicatedTenants()` — Dedicated-DB bootstrap:
-1. Finds all Dedicated tenants with a non-null ConnectionString
+1. Finds all Dedicated-tier tenants; reads each connection string from `IConfiguration["DedicatedTenantConnectionStrings:{Code}"]`
 2. For each: creates a scoped `OrderProcessingSystemDbContext` with `NullTenantProvider`
 3. Runs `Database.Migrate()` on the dedicated DB
 4. Seeds full sample data (customers, products, orders, OpenPay provider with correct TenantId)
@@ -80,7 +80,7 @@ Called from `Program.cs` as: `DbInitializer.Initialize(dbContext, app.Configurat
   "TenantC": "Server=localhost;Database=OrderProcessingSystem_TenantC;..."
 }
 ```
-Each key matches a `Tenant.Code`. The `ApplyDedicatedConnectionStrings()` method reads this section and stamps the connection string on any Dedicated tenant whose ConnectionString is NULL after migrations. This eliminates the need for a manual UPDATE + second restart.
+Each key matches a `Tenant.Code`. `SeedDedicatedTenants()` reads this section at runtime to resolve each dedicated DB connection string — connection strings are never written to the `Tenants` table (ADR-009).
 - Tenant-owned tables use `TenantId int NOT NULL` as an FK to `Tenants.Id`
 - `Tenants` is excluded from global query filters; tenant-owned entities are filtered by `ITenantProvider.TenantId`
 - Required composite indexes currently include:
@@ -118,9 +118,9 @@ Rule: if the application cannot start or the middleware cannot function without 
 
 **Dedicated-tier baseline tenant rows — separate migration per tenant**
 Rows that register a tenant for dedicated database routing but do not assign a connection string. Currently: `TenantC` in `20260324210853_SeedDedicatedTenantC`.
-Rule: each Dedicated-tier tenant gets its own migration with IF NOT EXISTS guard. ConnectionString is intentionally NULL in the migration — environment-specific provisioning is handled by:
-- **Local dev**: `DedicatedTenantConnectionStrings` section in `sharedsettings.local.json` + `ApplyDedicatedConnectionStrings()` in DbInitializer (auto-stamps on first startup)
-- **Azure**: Key Vault or App Settings (ops provisions per environment)
+Rule: each Dedicated-tier tenant gets its own migration with IF NOT EXISTS guard. No `ConnectionString` column exists in `Tenants` — environment-specific provisioning is handled by:
+- **Local dev**: `DedicatedTenantConnectionStrings` section in `sharedsettings.local.json` — read at runtime by `SeedDedicatedTenants()` in `DbInitializer`
+- **Azure**: Key Vault or App Settings — read at runtime via `IConfiguration`
 An unprovisioned Dedicated tenant fails loud (HTTP 400), never silently falls back to SharedPool.
 
 **Sample and runtime bootstrap data — must live outside migrations in `DbInitializer.cs`**

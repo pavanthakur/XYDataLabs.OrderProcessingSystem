@@ -17,10 +17,10 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Utilities
 
         private void InitializeData()
         {
-            //TODO : Add caching mechanism to avoid multiple db calls
-            // Load payment providers with their methods
+            // Loads only the current tenant's payment providers via the request-scoped
+            // DbContext (tenant query filter active). Each tenant sees only its own
+            // providers, whether on shared pool or dedicated DB. No filter bypass needed.
             _paymentProviders = _dbContext.PaymentProviders
-                .IgnoreQueryFilters()
                 .AsNoTracking()
                 .ToList()
                 .AsReadOnly();
