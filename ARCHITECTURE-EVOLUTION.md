@@ -124,6 +124,7 @@ XYDataLabs.OrderProcessingSystem.sln
 | **6** | Polish & Hardening | CachingBehavior, Redis, API versioning `/api/v1/`, health checks, CancellationToken, TimeProvider | ✅ **COMPLETE** |
 | **7** | Tenant Enforcement & Ops | TenantValidationBehavior, AuditLog, security headers, liveness/readiness checks | 📅 **NEXT** |
 | **8** | Event-Driven Foundation | Domain events, integration events, Outbox pattern, background publisher | 📅 Planned |
+| **8.5** | Multi-Provider Payment Architecture | Stripe migration, per-tenant provider selection, `HttpClient`-based resilience, idempotency keys | 📅 Planned |
 | **9** | YARP Microservices (Local) | Gateway, Orders/Inventory/Notifications APIs, Docker Compose, event-based communication | 📅 Planned |
 | **10** | Azure Container Apps | ACA deployment, ACR, Service Bus, Entra ID + JWT, private networking | 📅 Planned |
 | **11** | Data Ownership & Autonomy | Database per service, remove shared DbContext, eventual consistency | 📅 Planned |
@@ -321,6 +322,77 @@ The Outbox Pattern in Phase 8 resolves this: write an `OutboxMessage` (with the 
 ### Outcome
 
 Loose coupling, async workflows, idempotent delivery, parallel event handling, and a microservice-ready event backbone with versioned schemas.
+
+---
+
+## Phase 8.5 — Multi-Provider Payment Architecture 📅
+
+**Focus:** Replace OpenPay with Stripe (`Stripe.net`) and enable per-tenant payment provider selection.
+
+### Why Stripe
+
+| Dimension | OpenPay (`Openpay` 1.0.27) | Stripe (`Stripe.net` v50+) |
+|-----------|---------------------------|---------------------------|
+| .NET support | .NET Framework 4.5.2 target | .NET Standard 2.0+ / .NET 8+ native |
+| Maintenance | Last release April 2024 | Active — releases weekly |
+| Async model | Sync SDK wrapped in `Task.Run()` | Async-first throughout |
+| Resilience | Service-level `ResiliencePipeline<T>` workaround | Direct `Microsoft.Extensions.Http.Resilience` on `HttpClient` |
+| Idempotency keys | Must build manually | First-class `RequestOptions.IdempotencyKey` on every call |
+| 3DS | Per-tenant `Use3DSecure` flag (manual) | Payment Intents API — 3DS handled natively by flow |
+
+The async model difference is the most architecturally significant: because the current OpenPay SDK is synchronous, `OpenPayAdapterService` wraps calls in `Task.Run()` and requires a custom `ResiliencePipeline<string>` registered at the service level. Stripe's async SDK would allow standard `Microsoft.Extensions.Http.Resilience` on the `IHttpClientBuilder` — the cleaner, framework-native pattern.
+
+### Migration Path
+
+The adapter pattern already isolates the blast radius. The full swap touches two files:
+- `XYDataLabs.OpenPayAdapter/StripeAdapterService.cs` — new implementation of `IOpenPayAdapterService`
+- `XYDataLabs.OpenPayAdapter/ServiceCollectionExtensions.cs` — DI registration switch
+
+All Application and Domain code remains unchanged.
+
+### Per-Tenant Provider Selection (Advanced)
+
+The `PaymentProvider` entity already exists with a `Use3DSecure` flag per tenant. Extending it with a `ProviderType` discriminator enables per-tenant payment provider routing:
+
+```csharp
+// PaymentProvider entity extension
+public string ProviderType { get; private set; }  // "Stripe" | "OpenPay"
+
+// DI registration — keyed services (.NET 8+)
+services.AddKeyedScoped<IOpenPayAdapterService, StripeAdapterService>("Stripe");
+services.AddKeyedScoped<IOpenPayAdapterService, OpenPayAdapterService>("OpenPay");
+
+// Handler resolution
+var provider = serviceProvider.GetRequiredKeyedService<IOpenPayAdapterService>(
+    tenant.PaymentProvider.ProviderType);
+```
+
+This makes per-tenant payment provider a runtime configuration decision — no redeploy needed to switch a tenant's processor. Each tenant in the `PaymentProvider` table declares their processor type, and the handler resolves the correct adapter via keyed DI.
+
+### Idempotency Key Strategy
+
+With Stripe, every charge call must carry an idempotency key to prevent double-charging on retries. The `AttemptOrderId` already generated per payment attempt maps directly to this — it becomes the idempotency key passed as `RequestOptions.IdempotencyKey`. This is the Phase 8 Outbox Pattern complement: the Outbox guarantees delivery; the idempotency key guarantees the provider sees each charge exactly once regardless of retry count.
+
+### Resilience (Cleaner with Stripe)
+
+With an async SDK, the `ResiliencePipeline<string>` service-level wrapper in `ServiceCollectionExtensions.cs` is replaced by:
+
+```csharp
+services.AddHttpClient<StripeAdapterService>()
+    .AddStandardResilienceHandler();  // Microsoft.Extensions.Http.Resilience
+```
+
+Same retry + circuit breaker semantics, but composed at the `HttpClient` level — the framework-standard pattern. The `ResiliencePipeline<string>` registration and all `_pipeline.ExecuteAsync()` wrapping in the adapter disappears.
+
+### Builds On
+
+- Phase 4 (multi-tenancy — `PaymentProvider` entity per tenant)
+- Phase 7 (`OpenPayAdapterService` resilience + circuit breaker — superseded by `AddStandardResilienceHandler`)
+- Phase 8 (Outbox Pattern — `AttemptOrderId` becomes idempotency key)
+
+### Outcome
+
+Production-grade payment processing with async-native SDK, idempotency-safe retries, per-tenant processor routing, and `HttpClient`-level resilience. `OpenPayAdapterService` can be retained as a second registered provider until all tenants migrate.
 
 ---
 
