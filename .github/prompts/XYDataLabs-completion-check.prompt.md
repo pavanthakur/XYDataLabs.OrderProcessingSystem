@@ -5,44 +5,38 @@ description: Completion quality gate — after finishing any feature, task, scri
 
 Run this after completing any feature, task, script, fix, or workflow change.
 
-**First: run the automated checks below in the terminal.** Then evaluate the results and work through the manual checklist categories. Do not assume anything passes — run the commands.
+## Step 0 — Run automated checks first
 
----
+Run all three blocks in the terminal before evaluating the checklist. Use the results to fill in categories 2, 3, and 4 below.
 
-## Automated Checks — Run These First
-
-### Build
+**Build (warnings as errors):**
 ```powershell
 cd Q:\GIT\TestAppXY_OrderProcessingSystem
-dotnet build XYDataLabs.OrderProcessingSystem.sln --no-incremental -warnaserror
-```
-Expected: 0 errors, 0 warnings. If warnings-as-errors fails, list each warning and fix before continuing.
-
-### Unit Tests
-```powershell
-dotnet test tests/XYDataLabs.OrderProcessingSystem.Domain.Tests --no-build --logger "console;verbosity=normal"
-dotnet test tests/XYDataLabs.OrderProcessingSystem.Application.Tests --no-build --logger "console;verbosity=normal"
+dotnet build XYDataLabs.OrderProcessingSystem.sln --warnaserror /consoleloggerparameters:NoSummary;ForceNoAlign
 ```
 
-### API + Architecture Tests
+**All test projects:**
 ```powershell
-dotnet test tests/XYDataLabs.OrderProcessingSystem.API.Tests --no-build --logger "console;verbosity=normal"
-dotnet test tests/XYDataLabs.OrderProcessingSystem.Architecture.Tests --no-build --logger "console;verbosity=normal"
+cd Q:\GIT\TestAppXY_OrderProcessingSystem
+dotnet test tests/XYDataLabs.OrderProcessingSystem.Domain.Tests --no-build --logger "console;verbosity=minimal"
+dotnet test tests/XYDataLabs.OrderProcessingSystem.Application.Tests --no-build --logger "console;verbosity=minimal"
+dotnet test tests/XYDataLabs.OrderProcessingSystem.API.Tests --no-build --logger "console;verbosity=minimal"
+dotnet test tests/XYDataLabs.OrderProcessingSystem.Architecture.Tests --no-build --logger "console;verbosity=minimal"
 ```
 
-### Secret / Credential Scan
+**Secret / credential scan (no hardcoded values in source):**
 ```powershell
-# Check for any hardcoded passwords, keys, or connection strings with passwords
-Select-String -Path (Get-ChildItem -Recurse -Include *.cs,*.json,*.yml,*.ps1,*.bicep `
-    -Exclude bin,obj,publish,node_modules) `
-    -Pattern 'password\s*=\s*["\x27][^"\x27<>\$\{\[]{6,}|key\s*=\s*["\x27][A-Za-z0-9+/]{20,}' `
-    -CaseSensitive:$false | Where-Object { $_.Path -notmatch '\\tests\\|\.example$|Resources\\Configuration' }
+cd Q:\GIT\TestAppXY_OrderProcessingSystem
+$patterns = @('password\s*=\s*"[^<{]', 'Password\s*=\s*"[^<{]', 'secret\s*=\s*"', 'connectionstring.*password=(?!.*\$\{)', 'privatekey\s*=\s*"')
+$extensions = '*.cs','*.json','*.yml','*.yaml','*.ps1','*.bicep'
+$hits = Get-ChildItem -Recurse -Include $extensions -Exclude '*.example','*.template' |
+    Select-String -Pattern ($patterns -join '|') -CaseSensitive:$false |
+    Where-Object { $_.Path -notmatch '\\(obj|bin|publish|node_modules)\\' }
+if ($hits) { $hits | Format-Table Path, LineNumber, Line -AutoSize; Write-Host "SECRET SCAN: $($hits.Count) potential hit(s) — review each" -ForegroundColor Red }
+else { Write-Host 'SECRET SCAN: clean' -ForegroundColor Green }
 ```
-Expected: no matches. Any match must be investigated — move to Key Vault / user-secrets.
 
 ---
-
-Report the pass/fail result of each command above. Then work through:
 
 ## 1. Documentation
 
@@ -52,31 +46,34 @@ Report the pass/fail result of each command above. Then work through:
 - [ ] If a new prompt was added: does `.github/prompts/README.md` document it, and is it listed in `copilot-instructions.md` §9?
 - [ ] If a new architectural decision was made: is there an ADR in `docs/architecture/decisions/`?
 
-## 2. Guardrails
+## 2. Guardrails *(use secret scan results from Step 0)*
 
+- [ ] Secret scan above: **0 hits** — no hardcoded passwords, keys, or connection strings
 - [ ] If a new domain rule or constraint exists: is it enforced in the Domain layer (not just a comment)?
 - [ ] If inputs cross a system boundary (API, UI, script parameter): is there validation?
-- [ ] If a secret or credential is involved: is it in Key Vault / `.env.local` / user-secrets — never hardcoded?
 - [ ] If the change could affect another tenant: is tenant isolation preserved?
 - [ ] If a script has destructive behaviour: does it require confirmation or a `-Force` / `-WhatIf` flag?
 
-## 3. Unit Tests
+## 3. Unit Tests *(use test results from Step 0)*
 
-- [ ] Does the new/changed domain entity have unit tests in `XYDataLabs.OrderProcessingSystem.Domain.Tests`?
-- [ ] Does the new/changed CQRS handler have unit tests in `XYDataLabs.OrderProcessingSystem.Application.Tests`?
-- [ ] Did the unit test runs above pass with 0 failures?
+- [ ] Build: **0 errors, 0 warnings**
+- [ ] Does the new/changed domain entity have unit tests in `Domain.Tests`?
+- [ ] Does the new/changed CQRS handler have unit tests in `Application.Tests`?
+- [ ] `Domain.Tests` passed (from Step 0 results)
+- [ ] `Application.Tests` passed (from Step 0 results)
 
-## 4. Integration / Architecture Tests
+## 4. Integration / Architecture Tests *(use test results from Step 0)*
 
-- [ ] Does the new/changed controller have tests in `XYDataLabs.OrderProcessingSystem.API.Tests`?
+- [ ] Does the new/changed controller have tests in `API.Tests`?
 - [ ] If an EF Core migration was added: has it been verified against the local DB?
-- [ ] Did the architecture test run above pass (layer boundaries intact)?
+- [ ] `API.Tests` passed (from Step 0 results)
+- [ ] `Architecture.Tests` passed — layer boundaries still enforced (from Step 0 results)
 
 ## 5. Automation / CI-CD
 
 - [ ] If a new script automates a task: can it run unattended (no interactive prompts in CI mode)?
 - [ ] If a new workflow was added: is there a corresponding path trigger in the right workflow file?
-- [ ] If something was previously manual: is it now captured in a script or workflow so it doesn't need to be repeated manually?
+- [ ] If something was previously manual: is it now captured in a script or workflow?
 - [ ] If a VS Code task or Copilot prompt would help discoverability: has one been created?
 
 ## 6. Copilot Context
@@ -88,17 +85,19 @@ Report the pass/fail result of each command above. Then work through:
 
 For each unchecked item, either:
 - **Fix it now** (preferred) — implement the missing piece, then mark it done
-- **Record it** — add a TODO comment or open a tracking item with a clear owner and reason for deferral
+- **Record it** — add a TODO comment with a clear owner and reason for deferral
 
-Finish with a summary table:
+## Summary
 
-| Category | Result |
-|---|---|
-| Build | ✅ / ❌ N errors, N warnings |
-| Unit tests | ✅ / ❌ N failed |
-| API + Arch tests | ✅ / ❌ N failed |
-| Secret scan | ✅ clean / ⚠️ N matches |
-| Documentation | ✅ / ⚠️ gaps listed |
-| Guardrails | ✅ / ⚠️ gaps listed |
-| Automation | ✅ / ⚠️ gaps listed |
-| Copilot context | ✅ / ⚠️ gaps listed |
+Report results in this table:
+
+| Category | Result | Notes |
+|---|---|---|
+| Build | ✅ / ❌ | |
+| Secret scan | ✅ clean / ❌ N hits | |
+| Unit tests | ✅ / ❌ | |
+| Integration/Arch tests | ✅ / ❌ | |
+| Documentation | ✅ / ⚠️ gaps fixed / ❌ deferred | |
+| Guardrails | ✅ / ⚠️ gaps fixed / ❌ deferred | |
+| Automation | ✅ / ⚠️ gaps fixed / ❌ deferred | |
+| Copilot context | ✅ / ⚠️ gaps fixed / ❌ deferred | |
