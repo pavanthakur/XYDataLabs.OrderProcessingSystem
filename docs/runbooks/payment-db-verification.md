@@ -214,7 +214,7 @@ ORDER BY pp.TenantId;
 
 **Expected:**
 - 1 row per tenant with `Name = OpenPay`, `IsActive = 1`, `IsProduction = 0` (sandbox)
-- `Use3DSecure`: `1` for all tenants by default (per-tenant 3DS toggle — override at runtime via DB UPDATE)
+- `Use3DSecure`: `1` for all tenants by default. Toggle per tenant via DB UPDATE — see [Per-tenant 3DS toggle](#per-tenant-3ds-toggle) section. Requires API restart to take effect (singleton reload).
 - `APIUrl = https://sandbox-api.openpay.mx/v1`
 - Each row has the correct `TenantId` matching the `Tenants` table
 - For Option B: TenantC's provider is in `OrderProcessingSystem_TenantC`, not here (run Q6a-B below)
@@ -273,6 +273,98 @@ WHERE  (ct.CustomerOrderId LIKE '%-tA-%' AND ct.TenantId <> 1)
 > For tenants added later, extend the `WHERE` clause with their suffix + expected `TenantId`.
 >
 > For Option B: TenantC data is not in `OrderProcessingSystem_Local` at all — run Q8-B in the Option B section to verify isolation on the dedicated DB.
+
+---
+
+## Per-tenant 3DS toggle
+
+`Use3DSecure` is a per-tenant flag on the `PaymentProviders` table. It controls whether `ProcessPaymentCommand` requests a 3DS redirect flow from OpenPay.
+
+> **Important:** `AppMasterData` is a **singleton** loaded once at API startup. Updating the DB flag takes effect only after the **API is restarted**. No hot-reload is supported.
+
+### Enable / disable 3DS for a tenant (shared-pool DB)
+
+```sql
+-- Run against: OrderProcessingSystem_Local
+-- Disable 3DS for a specific tenant (replace TenantId value as needed)
+UPDATE dbo.PaymentProviders SET Use3DSecure = 0 WHERE TenantId = <TenantId>;
+
+-- Re-enable 3DS
+UPDATE dbo.PaymentProviders SET Use3DSecure = 1 WHERE TenantId = <TenantId>;
+
+-- Check current state for all tenants
+SELECT t.Code AS Tenant, pp.Id, pp.Use3DSecure
+FROM   dbo.PaymentProviders pp
+JOIN   dbo.Tenants          t  ON t.Id = pp.TenantId
+ORDER BY pp.TenantId;
+```
+
+**TenantId reference:** TenantA = 1, TenantB = 2. TenantC is in its dedicated DB (see below).
+
+### Enable / disable 3DS for TenantC (dedicated DB)
+
+```sql
+-- Run against: OrderProcessingSystem_TenantC
+UPDATE dbo.PaymentProviders SET Use3DSecure = 0 WHERE TenantId = 3;
+
+-- Re-enable
+UPDATE dbo.PaymentProviders SET Use3DSecure = 1 WHERE TenantId = 3;
+```
+
+---
+
+## Non-3DS flow: expected results
+
+When `Use3DSecure = 0` the payment completes **synchronously** — no redirect, no `confirm-status` call needed.
+
+### Differences vs 3DS flow
+
+| Field | 3DS flow (`Use3DSecure = 1`) | Non-3DS flow (`Use3DSecure = 0`) |
+|-------|------------------------------|----------------------------------|
+| `ProcessPayment` response `status` | `charge_pending` | `completed` |
+| `threeDSecureUrl` | present (redirect URL) | `null` |
+| `isThreeDSecureEnabled` | `true` | `false` |
+| `threeDSecureStage` | `redirect_issued` | `not_applicable` |
+| `confirm-status` step required | yes | **no** — charge is already final |
+| `CardTransactions` rows | 2 (tokenization + charge) | 2 (tokenization + charge) |
+| `TransactionStatusHistories` rows | 4 | 2 (tokenization_completed + completed) |
+
+### Non-3DS CardTransactions expected (shared or dedicated DB)
+
+```sql
+-- Both rows have IsThreeDSecureEnabled = 0, ThreeDSecureStage = not_applicable
+SELECT ct.CustomerOrderId, ct.TransactionId AS ChargeId,
+       ct.TransactionStatus AS Status, ct.IsThreeDSecureEnabled AS ThreeDS,
+       ct.ThreeDSecureStage AS Stage, ct.IsTransactionSuccess AS OK
+FROM   dbo.CardTransactions ct
+JOIN   dbo.Tenants t ON t.Id = ct.TenantId
+WHERE  t.Code = '<TenantCode>'   -- e.g. 'TenantB' or 'TenantC'
+ORDER BY ct.Id;
+```
+
+**Expected:**
+- Row 1: `Stage = tokenization_completed`, `ThreeDS = 0`
+- Row 2: `Stage = not_applicable`, `ThreeDS = 0`, `Status = completed`
+
+### Non-3DS TransactionStatusHistories expected (2 rows only)
+
+```sql
+SELECT tsh.Status, tsh.ThreeDSecureStage AS Stage, tsh.TransactionReferenceId AS Ref
+FROM   dbo.TransactionStatusHistories tsh
+JOIN   dbo.CardTransactions ct ON ct.Id = tsh.TransactionId
+JOIN   dbo.Tenants t ON t.Id = ct.TenantId
+WHERE  t.Code = '<TenantCode>'   -- e.g. 'TenantB' or 'TenantC'
+ORDER BY tsh.Id;
+```
+
+**Expected 2-step trail (no redirect or callback steps):**
+
+| Step | Status | Stage | Meaning |
+|------|--------|-------|---------|
+| 1 | `completed` | `tokenization_completed` | Card tokenized |
+| 2 | `completed` | `not_applicable` | Charge completed directly — no 3DS redirect |
+
+> **Note:** If a prior 3DS payment exists for the same tenant, filter by `ct.CustomerOrderId` to isolate the non-3DS run.
 
 ---
 
