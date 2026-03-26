@@ -19,20 +19,15 @@ This directory contains automation scripts for configuring and deploying the Ord
 
 **Usage**:
 ```powershell
-# Zero-touch setup with sandbox defaults
+# First run — prompts you to choose SQL + cert passwords, saves to .env.local
 .\scripts\setup-local.ps1
-
-# Custom passwords (recommended if you want to avoid defaults)
-.\scripts\setup-local.ps1 -CertPassword 'My$ecure1!' -SqlPassword 'My$ecure1!'
 
 # Re-run and overwrite everything (after password change, or clean reset)
 .\scripts\setup-local.ps1 -Force
 ```
 
 **Parameters**:
-- `CertPassword` (optional): Password for local HTTPS cert + Docker TLS. Default: `Admin100@` (local sandbox only)
-- `SqlPassword` (optional): Password for Docker SQL Server. Default: `Admin100@` (local sandbox only)
-- `Force` (switch): Overwrite existing `.env.local` and user-secrets unconditionally
+- `Force` (switch): Re-prompt for passwords, overwrite `.env.local`, user-secrets, and dev cert
 
 **What It Does**:
 1. ✅ Creates `Resources/Docker/.env.local` with Docker secrets (skips if already exists)

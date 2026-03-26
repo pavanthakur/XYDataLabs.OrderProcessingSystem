@@ -44,6 +44,31 @@ Important notes:
 - Close the firewall rule when done.
 - This is for local SQL access, not App Service runtime access.
 
+### `/XYDataLabs-setup-local`
+
+Purpose:
+- Bootstraps local development environment after a fresh `git clone`.
+- Runs `scripts/setup-local.ps1` — creates `.env.local`, sets `dotnet user-secrets`, trusts HTTPS dev cert.
+- Summarises next steps for VS F5 and Docker.
+
+Use when:
+- Setting up the project on a new or clean machine.
+- `.env.local` is missing or you need to reset local passwords.
+
+### `/XYDataLabs-completion-check`
+
+Purpose:
+- Runs a structured quality gate after completing any feature, task, script, or workflow.
+- Checks six categories: documentation, guardrails, unit tests, integration/architecture tests, automation/CI-CD, and Copilot context.
+- Fixes gaps immediately where possible; records any justified deferrals.
+
+Use when:
+- Finishing any feature, fix, script, or DevOps task before considering it done.
+- You want a systematic answer to: "Have we documented, guardrailed, tested, and automated this properly?"
+- As the final step in any ad-hoc task that doesn't use `/XYDataLabs-new-feature`.
+
+Note: `/XYDataLabs-new-feature` has its own built-in review step (Code Reviewer agent). Run `/XYDataLabs-completion-check` for everything else.
+
 ### `/XYDataLabs-context-audit`
 
 Purpose:
@@ -98,6 +123,8 @@ Note: This prompt generates focused verification queries. For the full reference
 |----------|--------|
 | Add a new feature end-to-end | `/XYDataLabs-new-feature` |
 | Finish a learning day | `/XYDataLabs-day-complete` |
+| Verify docs/tests/automation after any task | `/XYDataLabs-completion-check` |
+| Set up local dev environment after git clone | `/XYDataLabs-setup-local` |
 | Need local SSMS/sqlcmd access to Azure SQL | `/XYDataLabs-sql-local-access` |
 | Check for stale AI context / memory drift | `/XYDataLabs-context-audit` |
 | Verify payment DB records after a test run | `/XYDataLabs-verify-payments` |
@@ -122,6 +149,13 @@ Note: This prompt generates focused verification queries. For the full reference
 [After a payment test run or payment feature change]
 └─ /XYDataLabs-verify-payments  →  filtered DB queries for the most recent OR series
    └─ Fails? → open docs/runbooks/payment-db-verification.md for full diagnostics
+
+[After any task/fix/script/workflow (not covered by /new-feature)]
+└─ /XYDataLabs-completion-check  →  6-category quality gate
+   └─ Documented? Guardrailed? Unit tested? Integration tested? Automated? Context current?
+
+[Fresh git clone / new machine]
+└─ /XYDataLabs-setup-local  →  runs setup-local.ps1, summarises next steps
 ```
 
 ## Custom Agents

@@ -277,7 +277,12 @@ identity to access Key Vault without credentials in config files.
 
 ## 8. Local Development
 
+**First-time setup (after fresh clone):** Run `scripts/setup-local.ps1` once — creates `.env.local`, sets `dotnet user-secrets`, trusts HTTPS dev cert. VS Code will auto-prompt via the `runOn: folderOpen` task. Or run `/XYDataLabs-setup-local` in Copilot Chat.
+
 ```powershell
+# First-time setup
+.\scripts\setup-local.ps1
+
 # Visual Studio F5 (recommended for debugging)
 # API: http://localhost:5010/swagger  |  UI: http://localhost:5012
 
@@ -341,11 +346,13 @@ This matrix shows which instructions auto-attach for common file locations:
 |--------|---------|--------|
 | New Feature Workflow | `/XYDataLabs-new-feature` | Orchestrates end-to-end feature development: entity → CQRS → migration → controller → tests → review → commit → payment verification (conditional). Enforces mandatory 13-step workflow with multitenant support. |
 | Day Complete Router | `/XYDataLabs-day-complete` | After each curriculum day — routes updates to all correct documents, suggests commit |
+| Completion Check | `/XYDataLabs-completion-check` | After any feature, task, script, or fix — 6-category quality gate: documented? guardrailed? unit tested? integration tested? automated? context current? |
+| Local Setup | `/XYDataLabs-setup-local` | After a fresh git clone — runs setup-local.ps1, summarises VS F5 and Docker next steps |
 | SQL Local Access | `/XYDataLabs-sql-local-access` | Opens or closes Azure SQL firewall for local IP after a fresh bootstrap/deploy. Prints SSMS connection details. |
 | Context Audit | `/XYDataLabs-context-audit` | Detects stale AI context by diffing memory files and copilot-instructions against the actual codebase. Run periodically or after major refactors. |
 | Payment Verification | `/XYDataLabs-verify-payments` | After any payment test run or payment-related feature change — runs filtered Q2/Q5/Q2-B/Q5-B/Q8 queries for the most recent OR series against both DBs. |
 
-> **Quick prompt tip:** `Ctrl+Shift+I` → select Agent mode → type `/XYDataLabs-new-feature`, `/XYDataLabs-day-complete`, `/XYDataLabs-sql-local-access`, `/XYDataLabs-context-audit`, or `/XYDataLabs-verify-payments`
+> **Quick prompt tip:** `Ctrl+Shift+I` → select Agent mode → type `/XYDataLabs-new-feature`, `/XYDataLabs-completion-check`, `/XYDataLabs-setup-local`, `/XYDataLabs-day-complete`, `/XYDataLabs-sql-local-access`, `/XYDataLabs-context-audit`, or `/XYDataLabs-verify-payments`
 >
 > **Prompt reference:** See `.github/prompts/README.md` for when to use each prompt, prerequisites, and operational notes.
 >
