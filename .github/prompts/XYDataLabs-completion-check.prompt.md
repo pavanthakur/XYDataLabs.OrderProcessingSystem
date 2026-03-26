@@ -3,7 +3,46 @@ agent: agent
 description: Completion quality gate — after finishing any feature, task, script, or workflow, verify it has been properly documented, guardrailed, tested, and automated
 ---
 
-Run this after completing any feature, task, script, fix, or workflow change. Work through each category below systematically. For each item, check the actual codebase — do not assume.
+Run this after completing any feature, task, script, fix, or workflow change.
+
+**First: run the automated checks below in the terminal.** Then evaluate the results and work through the manual checklist categories. Do not assume anything passes — run the commands.
+
+---
+
+## Automated Checks — Run These First
+
+### Build
+```powershell
+cd Q:\GIT\TestAppXY_OrderProcessingSystem
+dotnet build XYDataLabs.OrderProcessingSystem.sln --no-incremental -warnaserror
+```
+Expected: 0 errors, 0 warnings. If warnings-as-errors fails, list each warning and fix before continuing.
+
+### Unit Tests
+```powershell
+dotnet test tests/XYDataLabs.OrderProcessingSystem.Domain.Tests --no-build --logger "console;verbosity=normal"
+dotnet test tests/XYDataLabs.OrderProcessingSystem.Application.Tests --no-build --logger "console;verbosity=normal"
+```
+
+### API + Architecture Tests
+```powershell
+dotnet test tests/XYDataLabs.OrderProcessingSystem.API.Tests --no-build --logger "console;verbosity=normal"
+dotnet test tests/XYDataLabs.OrderProcessingSystem.Architecture.Tests --no-build --logger "console;verbosity=normal"
+```
+
+### Secret / Credential Scan
+```powershell
+# Check for any hardcoded passwords, keys, or connection strings with passwords
+Select-String -Path (Get-ChildItem -Recurse -Include *.cs,*.json,*.yml,*.ps1,*.bicep `
+    -Exclude bin,obj,publish,node_modules) `
+    -Pattern 'password\s*=\s*["\x27][^"\x27<>\$\{\[]{6,}|key\s*=\s*["\x27][A-Za-z0-9+/]{20,}' `
+    -CaseSensitive:$false | Where-Object { $_.Path -notmatch '\\tests\\|\.example$|Resources\\Configuration' }
+```
+Expected: no matches. Any match must be investigated — move to Key Vault / user-secrets.
+
+---
+
+Report the pass/fail result of each command above. Then work through:
 
 ## 1. Documentation
 
@@ -25,14 +64,13 @@ Run this after completing any feature, task, script, fix, or workflow change. Wo
 
 - [ ] Does the new/changed domain entity have unit tests in `XYDataLabs.OrderProcessingSystem.Domain.Tests`?
 - [ ] Does the new/changed CQRS handler have unit tests in `XYDataLabs.OrderProcessingSystem.Application.Tests`?
-- [ ] Do existing tests still pass? Run: `dotnet test tests/XYDataLabs.OrderProcessingSystem.Domain.Tests` and `tests/XYDataLabs.OrderProcessingSystem.Application.Tests`
+- [ ] Did the unit test runs above pass with 0 failures?
 
 ## 4. Integration / Architecture Tests
 
 - [ ] Does the new/changed controller have tests in `XYDataLabs.OrderProcessingSystem.API.Tests`?
 - [ ] If an EF Core migration was added: has it been verified against the local DB?
-- [ ] If layer boundaries were changed: does `XYDataLabs.OrderProcessingSystem.Architecture.Tests` still pass?
-- [ ] Run: `dotnet test tests/XYDataLabs.OrderProcessingSystem.Architecture.Tests`
+- [ ] Did the architecture test run above pass (layer boundaries intact)?
 
 ## 5. Automation / CI-CD
 
@@ -52,4 +90,15 @@ For each unchecked item, either:
 - **Fix it now** (preferred) — implement the missing piece, then mark it done
 - **Record it** — add a TODO comment or open a tracking item with a clear owner and reason for deferral
 
-Report a summary of what passed, what was fixed, and what (if anything) was deferred with justification.
+Finish with a summary table:
+
+| Category | Result |
+|---|---|
+| Build | ✅ / ❌ N errors, N warnings |
+| Unit tests | ✅ / ❌ N failed |
+| API + Arch tests | ✅ / ❌ N failed |
+| Secret scan | ✅ clean / ⚠️ N matches |
+| Documentation | ✅ / ⚠️ gaps listed |
+| Guardrails | ✅ / ⚠️ gaps listed |
+| Automation | ✅ / ⚠️ gaps listed |
+| Copilot context | ✅ / ⚠️ gaps listed |
