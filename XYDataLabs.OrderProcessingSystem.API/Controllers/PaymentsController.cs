@@ -1,5 +1,6 @@
 ﻿using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using XYDataLabs.OrderProcessingSystem.API.Extensions;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
@@ -10,6 +11,7 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
     [ApiVersion("1.0")]
     [ApiController]
     [Route("api/v{version:apiVersion}/[controller]")]
+    [EnableRateLimiting("payment-per-tenant")]
     public class PaymentsController : ControllerBase
     {
         private readonly IDispatcher _dispatcher;
