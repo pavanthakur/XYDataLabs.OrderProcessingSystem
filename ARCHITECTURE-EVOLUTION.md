@@ -124,10 +124,11 @@ XYDataLabs.OrderProcessingSystem.sln
 | **6** | Polish & Hardening | CachingBehavior, Redis, API versioning `/api/v1/`, health checks, CancellationToken, TimeProvider | ✅ **COMPLETE** |
 | **7** | Tenant Enforcement & Ops | TenantValidationBehavior, AuditLog, security headers, liveness/readiness checks | 📅 **NEXT** |
 | **8** | Event-Driven Foundation | Domain events, integration events, Outbox pattern, background publisher | 📅 Planned |
+| **8.5** | Multi-Provider Payment Architecture | Stripe migration, per-tenant provider selection, `HttpClient`-based resilience, idempotency keys | 📅 Planned |
 | **9** | YARP Microservices (Local) | Gateway, Orders/Inventory/Notifications APIs, Docker Compose, event-based communication | 📅 Planned |
 | **10** | Azure Container Apps | ACA deployment, ACR, Service Bus, Entra ID + JWT, private networking | 📅 Planned |
 | **11** | Data Ownership & Autonomy | Database per service, remove shared DbContext, eventual consistency | 📅 Planned |
-| **12** | Platform Engineering & DevOps | Azure App Configuration, Polly resilience, per-service CI/CD, observability dashboards | 📅 Planned |
+| **12** | Platform Engineering & DevOps | .NET 10 upgrade, Azure App Configuration, Polly resilience, per-service CI/CD, observability dashboards | 📅 Planned |
 | **13** | Aspire & Final Maturity | .NET Aspire orchestration, service discovery, blue-green/canary deployments | 📅 Planned |
 | **14** | CQRS Read Model (MongoDB) | Separate read/write models, projection handlers, Hangfire, tenant-scoped documents | 📅 Planned |
 
@@ -321,6 +322,88 @@ The Outbox Pattern in Phase 8 resolves this: write an `OutboxMessage` (with the 
 ### Outcome
 
 Loose coupling, async workflows, idempotent delivery, parallel event handling, and a microservice-ready event backbone with versioned schemas.
+
+---
+
+## Phase 8.5 — Multi-Provider Payment Architecture 📅
+
+**Focus:** Add Stripe (`Stripe.net`) as a second payment provider alongside OpenPay. Both adapters run concurrently; each tenant is routed to its configured provider at runtime. No provider is removed.
+
+### Why Add Stripe
+
+| Dimension | OpenPay (`Openpay` 1.0.27) | Stripe (`Stripe.net` v50+) |
+|-----------|---------------------------|---------------------------|
+| .NET support | .NET Framework 4.5.2 target | .NET Standard 2.0+ / .NET 8+ native |
+| Maintenance | Last release April 2024 | Active — releases weekly |
+| Async model | Sync SDK wrapped in `Task.Run()` | Async-first throughout |
+| Resilience | Service-level `ResiliencePipeline<T>` workaround | Direct `Microsoft.Extensions.Http.Resilience` on `HttpClient` |
+| Idempotency keys | Must build manually | First-class `RequestOptions.IdempotencyKey` on every call |
+| 3DS | Per-tenant `Use3DSecure` flag (manual) | Payment Intents API — 3DS handled natively by flow |
+
+Both providers remain registered and fully operational. The architecture goal is per-tenant configurability — not replacement.
+
+### Per-Tenant Provider Selection
+
+The `PaymentProvider` entity already exists with a `Use3DSecure` flag per tenant. Adding a `ProviderType` discriminator enables each tenant to declare its processor independently:
+
+```csharp
+// PaymentProvider entity extension
+public string ProviderType { get; private set; }  // "Stripe" | "OpenPay"
+
+// DI registration — both adapters registered via keyed services (.NET 8+)
+services.AddKeyedScoped<IPaymentAdapterService, StripeAdapterService>("Stripe");
+services.AddKeyedScoped<IPaymentAdapterService, OpenPayAdapterService>("OpenPay");
+
+// Handler resolution — provider resolved per request from tenant config
+var adapter = serviceProvider.GetRequiredKeyedService<IPaymentAdapterService>(
+    tenant.PaymentProvider.ProviderType);
+```
+
+This is a runtime configuration decision — switching a tenant's provider is a single row update in `PaymentProvider`, with no redeploy. New tenants onboard directly to Stripe; existing OpenPay tenants remain on OpenPay until they opt in to migrate.
+
+### Resilience — Per-Provider Strategy
+
+Each adapter registers its own resilience strategy appropriate to its SDK:
+
+**OpenPay** (sync SDK — `Task.Run()` wrapper, existing):
+```csharp
+// Service-level pipeline remains — unchanged from Phase 7
+services.AddResiliencePipeline("openpay", builder => { ... });
+```
+
+**Stripe** (async SDK — `HttpClient`-native):
+```csharp
+// HttpClient-level resilience — cleaner, framework-standard pattern
+services.AddHttpClient<StripeAdapterService>()
+    .AddStandardResilienceHandler();  // Microsoft.Extensions.Http.Resilience
+```
+
+Same retry + circuit breaker semantics for both, but Stripe uses the preferred `IHttpClientBuilder` composition pattern instead of the `Task.Run()` + `ResiliencePipeline<string>` workaround.
+
+### Idempotency Key Strategy (Stripe)
+
+Every Stripe charge carries an idempotency key to prevent double-charging on retries. `AttemptOrderId`, already generated per payment attempt, maps directly onto `RequestOptions.IdempotencyKey`. This is the Phase 8 Outbox Pattern complement: the Outbox guarantees at-least-once delivery to the handler; the idempotency key guarantees Stripe sees each charge attempt exactly once regardless of retry count.
+
+OpenPay does not have native idempotency support — the existing `AttemptOrderId` + `PayinLog` reconciliation pattern remains the safety net for OpenPay tenants.
+
+### What Gets Added
+
+- `XYDataLabs.OpenPayAdapter/StripeAdapterService.cs` — `IPaymentAdapterService` implementation using `Stripe.net`
+- `XYDataLabs.OpenPayAdapter/ServiceCollectionExtensions.cs` — register both adapters as keyed services
+- `PaymentProvider.ProviderType` column + EF migration
+- Handler updated to resolve adapter from keyed DI instead of direct injection
+
+All Application and Domain code above the adapter boundary remains unchanged.
+
+### Builds On
+
+- Phase 4 (multi-tenancy — `PaymentProvider` entity per tenant)
+- Phase 7 (OpenPay resilience pipeline — retained for OpenPay tenants)
+- Phase 8 (Outbox Pattern — `AttemptOrderId` becomes Stripe idempotency key)
+
+### Outcome
+
+Both providers run concurrently. Each tenant's processor is a data-driven runtime decision. New tenants onboard to Stripe (async-native, idempotency-safe, actively maintained). Existing OpenPay tenants continue unaffected. The `IPaymentAdapterService` contract abstracts all provider-specific differences from the application layer.
 
 ---
 
@@ -739,10 +822,11 @@ Independent, fully decoupled services with clear data ownership, Durable Functio
 - **Azure AI Document Intelligence** — extract structured data from uploaded invoices/receipts in Blob Storage; Event Grid triggers Function → Document Intelligence API → enriches order metadata. Demonstrates Azure Cognitive Services integration without over-engineering.
 - **DR / Business Continuity** — documented RTO/RPO targets per service; Azure SQL geo-replication strategy; Cosmos DB multi-region (mention only); backup/restore runbook
 - **Performance / Load Testing** — Azure Load Testing or k6 for baseline performance; SLO validation under realistic load before production
+- **.NET 10 upgrade** — migrate from .NET 8 LTS to .NET 10 LTS (GA: November 2026). Steps: update `global.json` TFM, bump package versions in `Directory.Packages.props`, verify Testcontainers + NetArchTest compatibility, update Dockerfiles and CI pipeline `dotnet-version`. No architecture changes required — runtime upgrade only. .NET 9 (STS, EOL May 2026) is skipped; .NET 8 LTS support runs to November 2026, so this upgrade lands exactly on schedule.
 
 ### Outcome
 
-Scalable, manageable production platform with enterprise-grade operations, advanced resilience, AI-powered document processing, DR planning, and load-tested SLOs.
+Scalable, manageable production platform with enterprise-grade operations, advanced resilience, AI-powered document processing, DR planning, load-tested SLOs, and current LTS runtime.
 
 ---
 
