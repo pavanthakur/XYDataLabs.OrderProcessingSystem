@@ -158,11 +158,22 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
     private async Task<Domain.Entities.PaymentMethod> CreatePaymentMethodAsync(CancellationToken cancellationToken)
     {
         _logger.LogInformation("Creating PaymentMethod...");
+
+        // Resolve the PaymentProviderId from the request-scoped context, which routes to the
+        // tenant's actual DB (dedicated or shared pool). AppMasterData uses the shared DB —
+        // its auto-assigned Id for a dedicated tenant's provider will differ from the Id in
+        // the dedicated DB (which has its own identity sequence starting from 1). Using
+        // _openPayProvider.Id here causes a FK violation on dedicated-tenant DBs.
+        var providerIdInTenantDb = await _context.PaymentProviders
+            .Where(p => p.Name == "OpenPay")
+            .Select(p => p.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
         var openPayMethod = new Domain.Entities.PaymentMethod
         {
             Token = Guid.NewGuid().ToString("N"),
             Status = true,
-            PaymentProviderId = _openPayProvider.Id,
+            PaymentProviderId = providerIdInTenantDb,
             CreatedDate = _timeProvider.GetUtcNow().UtcDateTime
         };
         _context.PaymentMethods.Add(openPayMethod);
