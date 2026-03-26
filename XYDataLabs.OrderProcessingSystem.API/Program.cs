@@ -360,8 +360,7 @@ using (var scope = app.Services.CreateScope())
         var isAzureRuntime = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME"));
         DbInitializer.Initialize(dbContext, app.Configuration, applyMigrations: !isAzureRuntime);
 
-        var appMasterData = scope.ServiceProvider.GetRequiredService<AppMasterData>();
-        Log.Information("Database initialized and AppMasterData loaded successfully during startup");
+        Log.Information("Database initialized successfully during startup");
     }
     catch (Exception ex)
     {

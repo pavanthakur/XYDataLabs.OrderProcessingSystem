@@ -15,6 +15,38 @@ of the previous one.
 
 ---
 
+## Execution checklist
+
+Run every item in this order. Do not skip steps — each query validates a precondition used by the next.
+
+**Step 1 — Pre-flight (both DBs)**
+- [ ] Pre-flight: `OrderProcessingSystem_Local` — note `ThreeDSEnabled` for TenantA and TenantB
+- [ ] Pre-flight: `OrderProcessingSystem_TenantC` — note `ThreeDSEnabled` for TenantC
+
+**Step 2 — Shared-pool DB (`OrderProcessingSystem_Local`)**
+- [ ] Q1 — Tenant baseline (Status, TenantTier)
+- [ ] Q2 — CardTransactions E2E
+- [ ] Q3 — PayinLogs
+- [ ] Q4 — PayinLogDetails (row count depends on ThreeDSEnabled)
+- [ ] Q5 — TransactionStatusHistories (step count depends on ThreeDSEnabled)
+- [ ] Q6 — BillingCustomerKeyInfos
+- [ ] Q6a — PaymentProviders per tenant
+- [ ] Q7 — TenantC row counts (must be **0** for Option B)
+- [ ] Q8 — Cross-tenant bleed check (must be **0 rows**)
+
+**Step 3 — TenantC dedicated DB (`OrderProcessingSystem_TenantC`)** _(Option B only)_
+- [ ] Q2-B — CardTransactions E2E
+- [ ] Q3-B — PayinLogs
+- [ ] Q4-B — PayinLogDetails (row count depends on ThreeDSEnabled)
+- [ ] Q5-B — TransactionStatusHistories (step count depends on ThreeDSEnabled)
+- [ ] Q6-B — BillingCustomerKeyInfos
+- [ ] Q6a-B — PaymentProviders for TenantC
+- [ ] Q7-B — TenantC row counts (must match expected values)
+- [ ] Q8-B — No shared-pool bleed into dedicated DB (must be **0 rows**)
+- [ ] Q9-B — No TenantC bleed into shared DB — run on `OrderProcessingSystem_Local` (must be **0 rows**)
+
+---
+
 ## Pre-flight: verify current 3DS state
 
 Run this **before** executing Q2–Q6 (and Q2-B–Q6-B). The expected values in those queries depend
@@ -42,8 +74,8 @@ Use the `ThreeDSEnabled` column when reading the Expected sections below:
 | `1` | 2 rows (`redirect_issued` + `completed`) | 4-step trail |
 | `0` | 1 row (`not_applicable`) | 2-step trail |
 
-> **API restart required** after changing `Use3DSecure` in the DB — `AppMasterData` is a singleton
-> loaded at startup. See [Per-tenant 3DS toggle](#per-tenant-3ds-toggle) for the UPDATE queries.
+> `AppMasterData` is **scoped** (per-request) — `Use3DSecure` DB changes take effect on the
+> next API request without restart. See [Per-tenant 3DS toggle](#per-tenant-3ds-toggle) for the UPDATE queries.
 
 ---
 
@@ -63,18 +95,17 @@ This is expected and correct.
 
 ## Query 1 — Tenant baseline
 
-Confirm all tenants are seeded, correct tier, and correct `ConnectionString` state.
+Confirm all tenants are seeded with the correct tier.
 
 ```sql
-SELECT Id, Code, Name, Status, TenantTier,
-       CASE WHEN ConnectionString IS NULL THEN 'NULL (SharedPool)' ELSE '*** (Dedicated)' END AS ConnectionString
+SELECT Id, Code, Name, Status, TenantTier
 FROM   dbo.Tenants
 ORDER BY Id;
 ```
 
 **Expected:**
-- TenantA, TenantB → `SharedPool`, `ConnectionString = NULL`
-- TenantC → `Dedicated`, `ConnectionString = *** (set)` — auto-provisioned on first startup via `DedicatedTenantConnectionStrings:TenantC` in `sharedsettings.local.json` + `ApplyDedicatedConnectionStrings()` in `DbInitializer`. No manual `UPDATE` required.
+- TenantA, TenantB → `SharedPool`
+- TenantC → `Dedicated` — dedicated connection string is resolved at runtime from `DedicatedTenantConnectionStrings:TenantC` in `sharedsettings.local.json` (or Key Vault in Azure). Connection strings are never stored in the database (ADR-009).
 
 ---
 
@@ -262,7 +293,7 @@ ORDER BY pp.TenantId;
 
 **Expected:**
 - 1 row per tenant with `Name = OpenPay`, `IsActive = 1`, `IsProduction = 0` (sandbox)
-- `Use3DSecure`: `1` for all tenants by default. Toggle per tenant via DB UPDATE — see [Per-tenant 3DS toggle](#per-tenant-3ds-toggle) section. Requires API restart to take effect (singleton reload).
+- `Use3DSecure`: `1` for all tenants by default. Toggle per tenant via DB UPDATE — see [Per-tenant 3DS toggle](#per-tenant-3ds-toggle) section. Changes take effect on the next request (scoped AppMasterData — ADR-009).
 - `APIUrl = https://sandbox-api.openpay.mx/v1`
 - Each row has the correct `TenantId` matching the `Tenants` table
 - For Option B: TenantC's provider is in `OrderProcessingSystem_TenantC`, not here (run Q6a-B below)
@@ -272,10 +303,10 @@ ORDER BY pp.TenantId;
 ## Query 7 — TenantC row counts
 
 Confirms TenantC (Dedicated) has the expected number of DB writes after a successful payment.
-Before ConnectionString is provisioned, the middleware rejects TenantC requests with `400` and all counts remain 0.
+Before `DedicatedTenantConnectionStrings:TenantC` is configured in appsettings, the middleware rejects TenantC requests with `400` and all counts remain 0.
 
 ```sql
-SELECT 'CardTransactions'           AS [Table], COUNT(*) AS RowCount FROM dbo.CardTransactions          WHERE TenantId = 3
+SELECT 'CardTransactions'           AS TableName, COUNT(*) AS Cnt FROM dbo.CardTransactions          WHERE TenantId = 3
 UNION ALL
 SELECT 'BillingCustomers',           COUNT(*) FROM dbo.BillingCustomers          WHERE TenantId = 3
 UNION ALL
@@ -288,6 +319,8 @@ SELECT 'TransactionStatusHistories', COUNT(*) FROM dbo.TransactionStatusHistorie
 );
 ```
 
+> **Note:** `AS RowCount` is a reserved word in `Invoke-Sqlcmd` and causes a syntax error. Use `AS Cnt` (as above) when running via PowerShell.
+
 **Expected after one successful 3DS payment (Option A — same physical DB as shared pool):**
 - `CardTransactions` = 2 (tokenization + charge)
 - `BillingCustomers` = 1
@@ -297,7 +330,7 @@ SELECT 'TransactionStatusHistories', COUNT(*) FROM dbo.TransactionStatusHistorie
 
 **Expected for Option B (TenantC on dedicated `OrderProcessingSystem_TenantC` DB):** All counts = **0** here — this is correct. TenantC data lives entirely in `OrderProcessingSystem_TenantC`. Run the Option B queries below to verify.
 
-**Expected before ConnectionString is provisioned:** All rows = 0 and middleware rejects TenantC requests with `400`.
+**Expected before `DedicatedTenantConnectionStrings:TenantC` is configured:** All rows = 0 and middleware rejects TenantC requests with `400`.
 
 ---
 
@@ -328,7 +361,7 @@ WHERE  (ct.CustomerOrderId LIKE '%-tA-%' AND ct.TenantId <> 1)
 
 `Use3DSecure` is a per-tenant flag on the `PaymentProviders` table. It controls whether `ProcessPaymentCommand` requests a 3DS redirect flow from OpenPay.
 
-> **Important:** `AppMasterData` is a **singleton** loaded once at API startup. Updating the DB flag takes effect only after the **API is restarted**. No hot-reload is supported.
+> `AppMasterData` is **scoped** (per-request) — updating the DB flag takes effect on the **next API request** without restart (ADR-009).
 
 ### Enable / disable 3DS for a tenant (shared-pool DB)
 
@@ -420,6 +453,8 @@ ORDER BY tsh.Id;
 
 Run these queries connected to **`OrderProcessingSystem_TenantC`** (not `OrderProcessingSystem_Local`).
 All shared-pool tables (TenantA, TenantB) must be absent — TenantC only.
+
+> **Why no Q1-B?** Q1 runs on `OrderProcessingSystem_Local` and already shows TenantC's row (`TenantTier = Dedicated`). The dedicated DB does contain its own `Tenants` table (required for JOINs in Q2-B through Q6-B), but verifying the tenant baseline in the shared DB via Q1 is sufficient.
 
 ### Q2-B — CardTransactions E2E view (dedicated DB)
 
@@ -595,11 +630,26 @@ ORDER BY bck.Id;
 
 ---
 
+### Q6a-B — PaymentProviders on dedicated DB
+
+Confirms TenantC has its own OpenPay provider seeded in the dedicated DB.
+
+```sql
+-- Run against: OrderProcessingSystem_TenantC
+SELECT pp.Id, pp.TenantId, pp.Name, pp.APIUrl, pp.IsProduction, pp.Use3DSecure, pp.IsActive
+FROM   dbo.PaymentProviders pp
+ORDER BY pp.Id;
+```
+
+**Expected:** 1 row with `TenantId = 3`, `Name = OpenPay`, `IsActive = 1`, `IsProduction = 0`. `Use3DSecure` reflects the current setting — verify the value against the [Pre-flight query](#pre-flight-verify-current-3ds-state) rather than expecting a hardcoded value.
+
+---
+
 ### Q7-B — TenantC row counts (dedicated DB)
 
 ```sql
 -- Run against: OrderProcessingSystem_TenantC
-SELECT 'CardTransactions'           AS [Table], COUNT(*) AS RowCount FROM dbo.CardTransactions          WHERE TenantId = 3
+SELECT 'CardTransactions'           AS TableName, COUNT(*) AS Cnt FROM dbo.CardTransactions          WHERE TenantId = 3
 UNION ALL
 SELECT 'BillingCustomers',           COUNT(*) FROM dbo.BillingCustomers          WHERE TenantId = 3
 UNION ALL
@@ -609,6 +659,8 @@ SELECT 'PayinLogs',                  COUNT(*) FROM dbo.PayinLogs                
 UNION ALL
 SELECT 'TransactionStatusHistories', COUNT(*) FROM dbo.TransactionStatusHistories WHERE TenantId = 3;
 ```
+
+> **Note:** `AS RowCount` is a reserved word in `Invoke-Sqlcmd` and causes a syntax error. Use `AS Cnt` (as above) when running via PowerShell.
 
 **Expected after one successful 3DS payment:**
 - `CardTransactions` = 2 (tokenization + charge)
@@ -631,19 +683,6 @@ WHERE  ct.TenantId <> 3;
 ```
 
 **Expected:** 0 rows. Any result is a critical isolation failure.
-
-### Q6a-B — PaymentProviders on dedicated DB
-
-Confirms TenantC has its own OpenPay provider seeded in the dedicated DB.
-
-```sql
--- Run against: OrderProcessingSystem_TenantC
-SELECT pp.Id, pp.TenantId, pp.Name, pp.APIUrl, pp.IsProduction, pp.Use3DSecure, pp.IsActive
-FROM   dbo.PaymentProviders pp
-ORDER BY pp.Id;
-```
-
-**Expected:** 1 row with `TenantId = 3`, `Name = OpenPay`, `IsActive = 1`, `IsProduction = 0`. `Use3DSecure` reflects the current setting — verify the value against the [Pre-flight query](#pre-flight-verify-current-3ds-state) rather than expecting a hardcoded value.
 
 ### Q9-B — No TenantC data leaked into shared DB
 

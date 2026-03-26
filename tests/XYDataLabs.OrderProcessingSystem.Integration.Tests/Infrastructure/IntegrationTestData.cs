@@ -58,12 +58,15 @@ internal static class IntegrationTestData
     /// Creates a Dedicated-tier tenant in the shared (registry) database.
     /// Pass a non-null <paramref name="connectionString"/> to make it resolvable
     /// (routes to that DB); pass null to test the fail-loud unprovisioned path.
+    /// Connection strings are registered in the factory's mutable configuration overlay
+    /// (not stored on the Tenant entity — connection strings are secrets).
     /// </summary>
-    public static Task<TestTenantContext> CreateDedicatedTenantAsync(
+    public static async Task<TestTenantContext> CreateDedicatedTenantAsync(
         IntegrationTestWebAppFactory factory,
         string? connectionString = null,
-        string status = "Active") =>
-        factory.ExecuteDbContextAsync(async dbContext =>
+        string status = "Active")
+    {
+        var result = await factory.ExecuteDbContextAsync(async dbContext =>
         {
             var uniqueSuffix = Guid.NewGuid().ToString("N")[..10];
             var tenant = new Tenant
@@ -73,7 +76,6 @@ internal static class IntegrationTestData
                 Name = $"Dedicated Tenant {uniqueSuffix}",
                 Status = status,
                 TenantTier = TenantTierConstants.Dedicated,
-                ConnectionString = connectionString,
                 CreatedBy = 1,
                 CreatedDate = DateTime.UtcNow
             };
@@ -83,8 +85,15 @@ internal static class IntegrationTestData
 
             return new TestTenantContext(
                 tenant.Id, tenant.Code, tenant.ExternalId, tenant.Name, tenant.Status,
-                tenant.ConnectionString, IsSharedPool: false);
+                connectionString, IsSharedPool: false);
         });
+
+        // Register the connection string in the factory's mutable configuration overlay
+        // so EntityFrameworkTenantResolver can resolve it via IConfiguration.
+        factory.RegisterDedicatedConnectionString(result.TenantCode, connectionString);
+
+        return result;
+    }
 
     public static Task<OrderScenarioSeed> SeedOrderScenarioAsync(
         IntegrationTestWebAppFactory factory,

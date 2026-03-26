@@ -32,7 +32,7 @@ Implement 10 dynamic architecture tests across two test classes, enforced at CI 
 | 1.3 | `All_TenantOwned_Entities_Should_Have_FK_To_Tenants` | MultiTenantSchemaTests | FK from TenantId to Tenants(Id) exists |
 | 1.4 | `IAppDbContext_DbSets_Must_Match_OrderProcessingSystemDbContext_Minus_Tenant` | MultiTenantSchemaTests | IAppDbContext stays in sync with concrete DbContext |
 | 1.5 | `IAppDbContext_Should_Not_Expose_Tenant_DbSet` | MultiTenantSchemaTests | Tenant system entity excluded from application abstraction |
-| 1.6 | `IgnoreQueryFilters_Usage_Must_Be_In_Allow_List_Only` | ArchitectureTests | File-system scan with explicit allow-list (currently: AppMasterData.cs) |
+| 1.6 | `IgnoreQueryFilters_Usage_Must_Be_In_Allow_List_Only` | ArchitectureTests | File-system scan with explicit allow-list (currently empty — see ADR-009) |
 | 1.7 | `All_CQRS_Handlers_Must_Return_Result_T` | ArchitectureTests | Every ICommandHandler/IQueryHandler returns Result<T> |
 | FC3 | `Controllers_Should_Not_Accept_TenantId_Or_TenantCode_Parameters` | ArchitectureTests | No TenantId/TenantCode/TenantExternalId in action params or request DTOs |
 | FC4 | `ITenantProvider_Must_Expose_Hybrid_Routing_Properties` | MultiTenantSchemaTests | ConnectionString + IsSharedPool cannot be removed from ITenantProvider |

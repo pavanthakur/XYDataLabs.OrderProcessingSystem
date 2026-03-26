@@ -29,14 +29,14 @@ These rules are binding for all tenant, payment, DTO, migration, middleware, and
 ## Tenant tier model (hybrid)
 - Two tiers: `SharedPool` (default) and `Dedicated`. Values in `TenantTierConstants`.
 - `Tenant.TenantTier` — nvarchar(20), NOT NULL, default `SharedPool`.
-- `Tenant.ConnectionString` — nvarchar(500), nullable.
-  - `null` = shared pool. Non-null = dedicated DB connection string.
-  - For Managed Identity connections: store the full connection string (no credentials embedded).
-  - For password-based connections: store a Key Vault secret name reference, never the raw password.
-- `TenantA` and `TenantB` are always `SharedPool` with `ConnectionString = null`.
-- `TenantC` is `Dedicated` with `ConnectionString = null` in migration (ops provisions per environment via Key Vault or App Settings).
-- `IsSharedPool` is derived from `TenantTier == SharedPool`, NOT from `ConnectionString == null`.
-- A Dedicated tenant without a provisioned ConnectionString is treated as unresolvable (fail-loud, not silent shared-pool routing).
+- Dedicated tenant connection strings are stored in configuration (`DedicatedTenantConnectionStrings:{Code}` in appsettings / Key Vault), never in the database.
+  - Missing config entry = unresolvable (fail-loud, not silent shared-pool routing).
+  - For Managed Identity connections: use the full connection string (no credentials embedded).
+  - For password-based connections: use a Key Vault secret reference, never the raw password.
+- `TenantA` and `TenantB` are always `SharedPool`.
+- `TenantC` is `Dedicated` with connection string provisioned per environment via config/Key Vault.
+- `IsSharedPool` is derived from `TenantTier == SharedPool`, NOT from connection string presence.
+- A Dedicated tenant without a provisioned connection string config entry is treated as unresolvable (fail-loud).
 
 ## Tenant resolution pipeline (circular dependency rule)
 - `EntityFrameworkTenantResolver` MUST use `TenantRegistryDbContext`, never `OrderProcessingSystemDbContext`.
@@ -102,7 +102,8 @@ These rules are binding for all tenant, payment, DTO, migration, middleware, and
 
 ## IgnoreQueryFilters exemption rule
 - `.IgnoreQueryFilters()` bypasses tenant isolation and is restricted to an architecture-test allow-list.
-- Current approved usages: `AppMasterData.cs` (cross-tenant PaymentProviders reference data).
+- Current approved usages: **none** — the allow-list is empty (ADR-009).
+- `AppMasterData` was removed from the allow-list: it now uses scoped lifetime and respects the tenant query filter.
 - Any new usage requires: (1) a code-review justification documenting why cross-tenant access is safe, and (2) adding the filename to the allow-list in `ArchitectureTests.IgnoreQueryFilters_Usage_Must_Be_In_Allow_List_Only`.
 
 ## EF and migrations
@@ -118,7 +119,7 @@ These rules are binding for all tenant, payment, DTO, migration, middleware, and
 - `DbInitializer`, background jobs, test fixtures, and any out-of-band creation flow must pass `TenantId` explicitly.
 - Never rely on ambient middleware tenant context in non-request code paths.
 - For dedicated-DB seeding, use `NullTenantProvider` (null-object `ITenantProvider` with `HasTenantContext = false`). This causes the EF query filter to short-circuit to `true` (all rows visible), which is correct when physical DB isolation replaces query-filter isolation.
-- `ApplyDedicatedConnectionStrings()` in `DbInitializer` reads `DedicatedTenantConnectionStrings` from config to auto-provision dedicated tenant connection strings on first startup.
+- `DbInitializer.SeedDedicatedTenants()` reads `DedicatedTenantConnectionStrings` from `IConfiguration` to seed dedicated tenant databases. Connection strings are never stored in the `Tenants` table.
 
 ## Required test coverage
 
@@ -129,7 +130,6 @@ These rules are binding for all tenant, payment, DTO, migration, middleware, and
 - Customer-facing DTO identifier surface compliance (no internal IDs exposed)
 - `TenantTierConstants` defines `SharedPool` and `Dedicated` values
 - `Tenant.TenantTier` defaults to `SharedPool`
-- `Tenant.ConnectionString` is nullable (SharedPool = null, Dedicated = provisioned)
 - `TenantRegistryDbContext` has no query filter on Tenant
 
 ### Middleware / integration tests (`TenantMiddlewareTests`)
