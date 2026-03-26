@@ -175,9 +175,9 @@ public class ArchitectureTests
     {
         // Allow-list: files that are APPROVED to call IgnoreQueryFilters.
         // Any new usage must be reviewed for tenant-safety and added here explicitly.
+        // AppMasterData was removed in ADR-009 — it now respects the scoped tenant query filter.
         var allowList = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "AppMasterData.cs"  // Cross-tenant reference data (PaymentProviders) — reviewed and approved
         };
 
         var solutionRoot = FindSolutionRoot();

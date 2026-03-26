@@ -706,10 +706,10 @@ Reusable agent prompts in `.github/prompts/`. Run in VS Code Chat (`Ctrl+Shift+I
 
 | Command | When to use | What it does |
 |---------|-------------|--------------|
-| `/day-complete` | End of every curriculum day | Routes updates to curriculum, commands files, ADRs, memory. Suggests commit. |
-| `/sql-local-access` | After every fresh bootstrap/deploy | Opens/closes Azure SQL firewall for your local IP. Prints SSMS details. |
+| `/XYDataLabs-day-complete` | End of every curriculum day | Routes updates to curriculum, commands files, ADRs, memory. Suggests commit. |
+| `/XYDataLabs-sql-local-access` | After every fresh bootstrap/deploy | Opens/closes Azure SQL firewall for your local IP. Prints SSMS details. |
 
-**How to run:** `Ctrl+Shift+I` → Agent mode → `/day-complete` → answer "What did you complete today?"
+**How to run:** `Ctrl+Shift+I` → Agent mode → `/XYDataLabs-day-complete` → answer "What did you complete today?"
 
 ### **Routing Decision**
 | What you did | Where it goes |
@@ -808,10 +808,10 @@ Reusable agent prompts stored in `.github/prompts/`. Type in VS Code Chat (`Ctrl
 
 | Command | When to use | What it does |
 |---------|-------------|--------------|
-| `/day-complete` | End of every curriculum day | Routes updates to curriculum, commands files, ADRs, memory. Suggests commit. |
-| `/sql-local-access` | After every fresh bootstrap/deploy | Opens/closes Azure SQL firewall for your local IP. Prints SSMS details. |
+| `/XYDataLabs-day-complete` | End of every curriculum day | Routes updates to curriculum, commands files, ADRs, memory. Suggests commit. |
+| `/XYDataLabs-sql-local-access` | After every fresh bootstrap/deploy | Opens/closes Azure SQL firewall for your local IP. Prints SSMS details. |
 
-**How to run:** `Ctrl+Shift+I` → Agent mode → type `/day-complete` → answer "What did you complete today?"
+**How to run:** `Ctrl+Shift+I` → Agent mode → type `/XYDataLabs-day-complete` → answer "What did you complete today?"
 
 ### Routing Decision (quick ref)
 

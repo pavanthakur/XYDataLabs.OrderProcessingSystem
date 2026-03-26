@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Serilog;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
@@ -8,10 +9,12 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Multitenancy;
 public sealed class EntityFrameworkTenantResolver : ITenantResolver
 {
     private readonly TenantRegistryDbContext _registryContext;
+    private readonly IConfiguration _configuration;
 
-    public EntityFrameworkTenantResolver(TenantRegistryDbContext registryContext)
+    public EntityFrameworkTenantResolver(TenantRegistryDbContext registryContext, IConfiguration configuration)
     {
         _registryContext = registryContext;
+        _configuration = configuration;
     }
 
     public async Task<TenantContext?> ResolveTenantAsync(string tenantCode, CancellationToken cancellationToken = default)
@@ -32,15 +35,23 @@ public sealed class EntityFrameworkTenantResolver : ITenantResolver
 
         var isSharedPool = string.Equals(tenant.TenantTier, TenantTierConstants.SharedPool, StringComparison.Ordinal);
 
-        // Fail-safe: dedicated tenant without provisioned DB must not silently route to shared pool
-        if (!isSharedPool && string.IsNullOrWhiteSpace(tenant.ConnectionString))
+        // Dedicated tenants: resolve connection string from configuration (Key Vault / appsettings),
+        // never from the Tenants table. Connection strings are secrets that must not be stored
+        // in application data tables.
+        string? connectionString = null;
+        if (!isSharedPool)
         {
-            Log.Error(
-                "Tenant {TenantCode} is classified as {TenantTier} but has no ConnectionString configured. " +
-                "Returning null to prevent routing to the shared pool database",
-                tenantCode,
-                tenant.TenantTier);
-            return null;
+            connectionString = _configuration[$"DedicatedTenantConnectionStrings:{tenant.Code}"];
+            if (string.IsNullOrWhiteSpace(connectionString))
+            {
+                Log.Error(
+                    "Tenant {TenantCode} is classified as {TenantTier} but has no ConnectionString in " +
+                    "DedicatedTenantConnectionStrings configuration. Returning null to prevent routing " +
+                    "to the shared pool database",
+                    tenantCode,
+                    tenant.TenantTier);
+                return null;
+            }
         }
 
         return new TenantContext(
@@ -49,7 +60,7 @@ public sealed class EntityFrameworkTenantResolver : ITenantResolver
             tenant.ExternalId,
             tenant.Name,
             tenant.Status,
-            isSharedPool ? null : tenant.ConnectionString,
+            connectionString,
             isSharedPool);
     }
 }

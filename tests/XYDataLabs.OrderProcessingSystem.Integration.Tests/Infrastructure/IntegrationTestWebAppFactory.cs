@@ -1,7 +1,9 @@
+using System.Collections.Concurrent;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
@@ -14,6 +16,7 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure
         public const string TenantHeaderName = "X-Tenant-Code";
         private readonly string _connectionString;
         private readonly string? _dedicatedConnectionString;
+        private readonly ConcurrentDictionary<string, string?> _configOverrides = new();
 
         /// <summary>
         /// Creates a factory where all DbContexts use the same connection string.
@@ -38,11 +41,29 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure
             _dedicatedConnectionString = dedicatedConnectionString;
         }
 
+        /// <summary>
+        /// Registers a dedicated tenant connection string in the mutable configuration overlay.
+        /// Call this after creating a tenant (before making HTTP calls) so the
+        /// <see cref="EntityFrameworkTenantResolver"/> can resolve dedicated tenants.
+        /// </summary>
+        public void RegisterDedicatedConnectionString(string tenantCode, string? connectionString)
+        {
+            if (connectionString is not null)
+                _configOverrides[$"DedicatedTenantConnectionStrings:{tenantCode}"] = connectionString;
+        }
+
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             ArgumentNullException.ThrowIfNull(builder);
 
             builder.UseEnvironment("Development");
+
+            // Add a mutable configuration source so tests can register
+            // DedicatedTenantConnectionStrings entries after the host is built.
+            builder.ConfigureAppConfiguration((_, config) =>
+            {
+                config.Add(new MutableConfigSource(_configOverrides));
+            });
 
             builder.ConfigureServices(services =>
             {
@@ -144,6 +165,24 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure
             var descriptor = services.SingleOrDefault(d => d.ServiceType == typeof(T));
             if (descriptor != null)
                 services.Remove(descriptor);
+        }
+
+        // ── Mutable configuration for dynamic DedicatedTenantConnectionStrings ──
+
+        /// <summary>
+        /// Configuration source backed by a <see cref="ConcurrentDictionary{TKey,TValue}"/> so
+        /// tests can add entries after the host is built. IConfiguration reads providers on
+        /// every access (no caching), so new entries are visible immediately.
+        /// </summary>
+        private sealed class MutableConfigSource(ConcurrentDictionary<string, string?> data) : IConfigurationSource
+        {
+            public IConfigurationProvider Build(IConfigurationBuilder builder) => new MutableConfigProvider(data);
+        }
+
+        private sealed class MutableConfigProvider(ConcurrentDictionary<string, string?> data) : ConfigurationProvider
+        {
+            public override bool TryGet(string key, out string? value) => data.TryGetValue(key, out value);
+            public override void Set(string key, string? value) => data[key] = value;
         }
     }
 }
