@@ -11,8 +11,6 @@ Quick links to troubleshooting guides for common issues with the Azure Initial S
 
 **Cause**: GitHub App is not installed on this repository
 
-**Solution**: [TROUBLESHOOTING-GITHUB-APP-404.md](./TROUBLESHOOTING-GITHUB-APP-404.md)
-
 **Quick Fix**:
 1. Go to https://github.com/settings/installations
 2. Configure your GitHub App
@@ -30,8 +28,6 @@ APP_PRIVATE_KEY       : ❌ Missing
 
 **Cause**: Workflow not running in environment context, looking for repository secrets instead of environment secrets
 
-**Solution**: [TROUBLESHOOTING-APP-SECRETS-MISSING.md](./TROUBLESHOOTING-APP-SECRETS-MISSING.md)
-
 **Quick Fix**:
 1. Run workflow with specific environment selected (dev/staging/prod)
 2. Don't select "all" if using environment secrets
@@ -42,9 +38,7 @@ APP_PRIVATE_KEY       : ❌ Missing
 #### ℹ️ "What is APP_INSTALLATION_ID?"
 **Question**: Do I need to configure APP_INSTALLATION_ID as a secret?
 
-**Answer**: **No!** Installation ID is automatically discovered at runtime.
-
-**Details**: [APP_INSTALLATION_ID_EXPLAINED.md](./APP_INSTALLATION_ID_EXPLAINED.md)
+**Answer**: **No!** Installation ID is automatically discovered at runtime. The `actions/create-github-app-token@v1` action auto-discovers the installation ID via the GitHub API — only `APP_ID` and `APP_PRIVATE_KEY` are needed.
 
 ---
 
@@ -199,11 +193,11 @@ If the same error still appears, add `Directory.Read.All`, grant admin consent, 
 ### Initial Setup
 - [QUICK-SETUP-GITHUB-APP.md](./Documentation/03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md) - 4-minute GitHub App setup
 - [GITHUB-APP-AUTHENTICATION.md](./Documentation/03-Configuration-Guides/GITHUB-APP-AUTHENTICATION.md) - Detailed authentication guide
-- [GITHUB-APP-AUTO-DISCOVERY.md](./GITHUB-APP-AUTO-DISCOVERY.md) - How auto-discovery works (2 secrets instead of 3)
+- Auto-discovery: Only 2 secrets needed (`APP_ID` + `APP_PRIVATE_KEY`) — installation ID is discovered at runtime
 
 ### Configuration Confirmation
-- [SETUP-CONFIRMATION.md](./SETUP-CONFIRMATION.md) - Verify your setup is correct
-- [EVALUATION-AZURE-BOOTSTRAP-RESTORATION.md](./EVALUATION-AZURE-BOOTSTRAP-RESTORATION.md) - Azure bootstrap evaluation
+- Use the **Quick Checklist** at the bottom of this page to verify your setup
+- See [QUICK-START-AZURE-BOOTSTRAP.md](./Documentation/QUICK-START-AZURE-BOOTSTRAP.md) for bootstrap evaluation and setup walkthrough
 
 ---
 
@@ -311,7 +305,7 @@ The workflow checks:
 - ✅ GitHub App permissions (Secrets: Read and write)
 
 ### Common Failure Points
-1. **Step 2 (Generate GitHub App Token)** → App not installed → See [TROUBLESHOOTING-GITHUB-APP-404.md](./TROUBLESHOOTING-GITHUB-APP-404.md)
+1. **Step 2 (Generate GitHub App Token)** → App not installed → See "Not Found - GitHub App Token Generation Failed (404)" section above
 2. **Step 1 (Azure Login)** → Device code timeout → Re-run with "Setup OIDC" enabled
 
 ---
@@ -322,7 +316,7 @@ If your issue isn't covered here:
 
 1. **Check workflow logs**: Actions → **Azure Initial Setup** or **Azure Bootstrap & Deploy** → Failed run → View logs
 2. **Review error messages**: Workflow provides detailed troubleshooting in failed steps
-3. **Verify setup**: Compare your setup against [SETUP-CONFIRMATION.md](./SETUP-CONFIRMATION.md)
+3. **Verify setup**: Use the **Quick Checklist** at the bottom of this page
 4. **Check documentation**: Browse [Documentation/03-Configuration-Guides/](./Documentation/03-Configuration-Guides/)
 
 ---

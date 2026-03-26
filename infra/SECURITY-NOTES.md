@@ -336,11 +336,35 @@ For security-related questions or concerns:
 4. Follow the principle of least privilege
 5. When in doubt, be more restrictive
 
+## PowerShell Script Security — Invoke-Expression Usage
+
+### Finding: Command Injection via Invoke-Expression
+
+**Severity**: Medium (mitigated by context)
+**Location**: `Invoke-AzCommandWithRetry` function in `Resources/Azure-Deployment/` scripts (e.g. `enable-managed-identity.ps1`, `populate-keyvault-secrets.ps1`)
+
+**Description**: The retry function uses `Invoke-Expression` to execute Azure CLI commands, which could allow command injection if variables contain malicious content.
+
+### Remediation Status: ACCEPTED AS DESIGNED
+
+**Justification**:
+1. **Administrative tool** — scripts require an authenticated Azure CLI session with admin permissions
+2. **No external input** — all variables come from validated script parameters or Azure CLI output
+3. **PowerShell validation** — `ValidateSet`, `ValidateLength`, `ValidateNotNullOrEmpty` on all parameters
+4. **Azure CLI validation** — resource names, object IDs, and parameters are validated by Azure
+5. **RBAC enforcement** — Azure enforces authorization on all operations
+
+### If Hardening Later
+
+Replace `Invoke-Expression` with PowerShell script blocks or direct `az` invocations via `Start-Process`. This is a low-priority improvement given the current mitigations.
+
+---
+
 ## Summary
 
-✅ **Current implementation is suitable for development and testing**  
-⚠️ **Production deployment requires security hardening**  
-🔐 **Follow the phased hardening roadmap for production**  
-📊 **Regular security assessments are essential**  
+✅ **Current implementation is suitable for development and testing**
+⚠️ **Production deployment requires security hardening**
+🔐 **Follow the phased hardening roadmap for production**
+📊 **Regular security assessments are essential**
 
 The provided infrastructure is a solid foundation that prioritizes ease of development while clearly documenting security considerations for production hardening.
