@@ -1,4 +1,3 @@
-using AutoMapper;
 using Bogus;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Customers.Commands;

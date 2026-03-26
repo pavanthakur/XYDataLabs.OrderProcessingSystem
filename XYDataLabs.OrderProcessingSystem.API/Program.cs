@@ -1,5 +1,4 @@
 using Asp.Versioning;
-using AutoMapper;
 using XYDataLabs.OrderProcessingSystem.API.Middleware;
 using XYDataLabs.OrderProcessingSystem.Application;
 using XYDataLabs.OrderProcessingSystem.Infrastructure;
@@ -234,13 +233,6 @@ builder.Services.AddSwaggerGen(options =>
         Description = isAzure ? $"Azure {environmentName.ToUpper()} Server" : $"{environmentName.ToUpper()} Server"
     });
 });
-
-var mappingConfig = new MapperConfiguration(mapperConfiguration =>
-{
-    mapperConfiguration.AddProfile(new MapperConfigurationProfile());
-});
-IMapper mapper = mappingConfig.CreateMapper();
-builder.Services.AddSingleton(mapper);
 
 // Configure Serilog with environment-aware paths  
 builder.Host.UseSerilog((context, services, loggerConfiguration) =>

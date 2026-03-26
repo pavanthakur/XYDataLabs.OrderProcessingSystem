@@ -98,7 +98,7 @@ The payment provider is wrapped behind `IOpenPayAdapterService`. The application
 | Database | Azure SQL / SQL Server (Testcontainers for integration tests) |
 | CQRS | Hand-rolled (`ICommand`/`IQuery`/`IDispatcher`) |
 | Validation | FluentValidation 11.x |
-| Mapping | AutoMapper 13 |
+| Mapping | Manual extension methods (`Mappings/`) |
 | Logging | Serilog 4.x (Console + File + Application Insights) |
 | Tracing | OpenTelemetry 1.10 -> Azure Monitor |
 | Payment gateway | OpenPay (`Openpay` NuGet 1.0.25) via adapter pattern |

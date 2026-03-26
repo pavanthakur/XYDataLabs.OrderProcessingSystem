@@ -20,11 +20,10 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
             // Arrange
             var newCustomer = GenerateNewCustomerRequestDto(1)[0];
             var customer = GenerateCustomers(1).First();
-            MockMapper.Setup(m => m.Map<Customer>(It.IsAny<CreateCustomerRequestDto>())).Returns(customer);
             MockDbContext.Setup(db => db.Customers.Add(It.IsAny<Customer>()));
             MockDbContext.Setup(db => db.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
 
-            var handler = new CreateCustomerCommandHandler(MockDbContext.Object, MockMapper.Object);
+            var handler = new CreateCustomerCommandHandler(MockDbContext.Object);
 
             // Act
             var result = await handler.HandleAsync(new CreateCustomerCommand(newCustomer.Name, newCustomer.Email));
@@ -40,17 +39,10 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
             // Arrange
             var customers = GenerateCustomers(5).AsQueryable();
             var mockDbSet = GetMockDbSet(customers);
-            IEnumerable<CustomerDto> customerDtos = customers.Select(c => new CustomerDto
-            {
-                CustomerId = c.CustomerId,
-                Name = c.Name,
-                Email = c.Email
-            }).ToList();
 
-            MockMapper.Setup(m => m.Map<IEnumerable<CustomerDto>>(It.IsAny<List<Customer>>())).Returns(customerDtos);
             MockDbContext.Setup(db => db.Customers).Returns(mockDbSet.Object);
 
-            var handler = new GetAllCustomersQueryHandler(MockDbContext.Object, MockMapper.Object);
+            var handler = new GetAllCustomersQueryHandler(MockDbContext.Object);
 
             // Act
             var result = await handler.HandleAsync(new GetAllCustomersQuery());
@@ -66,17 +58,10 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
         {
             // Arrange
             var customer = GenerateCustomers(1).First();
-            var customerDto = new CustomerDto
-            {
-                CustomerId = customer.CustomerId,
-                Name = customer.Name,
-                Email = customer.Email
-            };
-            MockMapper.Setup(m => m.Map<CustomerDto>(customer)).Returns(customerDto);
             MockDbContext.Setup(db => db.Customers.FindAsync(new object[] { 1 }, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(customer);
 
-            var handler = new GetCustomerByIdQueryHandler(MockDbContext.Object, MockMapper.Object);
+            var handler = new GetCustomerByIdQueryHandler(MockDbContext.Object);
 
             // Act
             var result = await handler.HandleAsync(new GetCustomerByIdQuery(1));
@@ -93,7 +78,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
             MockDbContext.Setup(db => db.Customers.FindAsync(new object[] { 1 }, It.IsAny<CancellationToken>()))
                 .ReturnsAsync((Customer?)null);
 
-            var handler = new GetCustomerByIdQueryHandler(MockDbContext.Object, MockMapper.Object);
+            var handler = new GetCustomerByIdQueryHandler(MockDbContext.Object);
 
             // Act
             var result = await handler.HandleAsync(new GetCustomerByIdQuery(1));
@@ -112,24 +97,8 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
             customers.First().CustomerId = customerId;
             var mockDbSet = GetMockDbSet(customers);
 
-            var customerDto = new CustomerDto
-            {
-                CustomerId = customers.First().CustomerId,
-                Name = customers.First().Name,
-                Email = customers.First().Email,
-                OrderDtos = customers.First().Orders.Select(o => new OrderDto
-                {
-                    OrderId = o.OrderId,
-                    OrderDate = o.OrderDate,
-                    CustomerId = customerId,
-                    TotalPrice = o.TotalPrice
-                }).ToList()
-            };
-
             MockDbContext.Setup(db => db.Customers).Returns(mockDbSet.Object);
-            MockMapper.Setup(m => m.Map<CustomerDto>(It.IsAny<Customer>())).Returns(customerDto);
-
-            var handler = new GetCustomerWithOrdersQueryHandler(MockDbContext.Object, MockMapper.Object);
+            var handler = new GetCustomerWithOrdersQueryHandler(MockDbContext.Object);
 
             // Act
             var result = await handler.HandleAsync(new GetCustomerWithOrdersQuery(customerId));
@@ -153,19 +122,10 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
             }).AsQueryable();
             var filteredCustomers = tempCustomers.Where(c => c.Name == "JohnXXX");
             var mockDbSet = GetMockDbSet<Customer>(tempCustomers);
-            var customerDtos = filteredCustomers.Select(c => new CustomerDto
-            {
-                CustomerId = c.CustomerId,
-                Name = c.Name,
-                Email = c.Email
-            }).ToList();
-
-            MockMapper.Setup(m => m.Map<IEnumerable<CustomerDto>>(It.IsAny<List<Customer>>()))
-                .Returns(customerDtos);
 
             MockDbContext.Setup(db => db.Customers).Returns(mockDbSet.Object);
 
-            var handler = new GetCustomersByNameQueryHandler(MockDbContext.Object, MockMapper.Object);
+            var handler = new GetCustomersByNameQueryHandler(MockDbContext.Object);
 
             // Act
             var result = await handler.HandleAsync(new GetCustomersByNameQuery("JohnXXX", 1, 10));
@@ -185,7 +145,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
                 .ReturnsAsync(customer);
             MockDbContext.Setup(db => db.SaveChangesAsync(default)).ReturnsAsync(1);
 
-            var handler = new UpdateCustomerCommandHandler(MockDbContext.Object, MockMapper.Object);
+            var handler = new UpdateCustomerCommandHandler(MockDbContext.Object);
 
             // Act
             var result = await handler.HandleAsync(new UpdateCustomerCommand(1, "John Doe", "test@test1.com"));
@@ -202,7 +162,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
             MockDbContext.Setup(db => db.Customers.FindAsync(new object[] { 1 }, It.IsAny<CancellationToken>()))
                 .ReturnsAsync((Customer?)null);
 
-            var handler = new UpdateCustomerCommandHandler(MockDbContext.Object, MockMapper.Object);
+            var handler = new UpdateCustomerCommandHandler(MockDbContext.Object);
 
             // Act
             var result = await handler.HandleAsync(new UpdateCustomerCommand(1, "Updated Name", "updated@example.com"));

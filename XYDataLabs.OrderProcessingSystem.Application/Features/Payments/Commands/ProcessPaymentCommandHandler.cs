@@ -1,4 +1,3 @@
-using AutoMapper;
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -10,6 +9,7 @@ using XYDataLabs.OpenPayAdapter.Configuration;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
+using XYDataLabs.OrderProcessingSystem.Application.Mappings;
 using XYDataLabs.OrderProcessingSystem.Application.Utilities;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.SharedKernel;
@@ -26,7 +26,6 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
     private readonly ILogger<ProcessPaymentCommandHandler> _logger;
     private readonly string _redirectUrl;
     private readonly IAppDbContext _context;
-    private readonly IMapper _mapper;
     private readonly PaymentProvider _openPayProvider;
     private readonly OpenPayConfig _openPayConfig;
     private readonly TimeProvider _timeProvider;
@@ -37,7 +36,6 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         IOptions<OpenPayConfig> openPayOptions,
         ILogger<ProcessPaymentCommandHandler> logger,
         IAppDbContext context,
-        IMapper mapper,
         AppMasterData appMasterData,
         TimeProvider timeProvider,
         ITenantProvider tenantProvider)
@@ -46,7 +44,6 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         ArgumentNullException.ThrowIfNull(openPayOptions);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(context);
-        ArgumentNullException.ThrowIfNull(mapper);
         ArgumentNullException.ThrowIfNull(appMasterData);
         ArgumentNullException.ThrowIfNull(timeProvider);
         ArgumentNullException.ThrowIfNull(tenantProvider);
@@ -56,7 +53,6 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         _openPayConfig = openPayOptions.Value;
         _redirectUrl = _openPayConfig.RedirectUrl;
         _context = context;
-        _mapper = mapper;
         _timeProvider = timeProvider;
 
         _tenantProvider = tenantProvider;
@@ -222,7 +218,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
 
         _logger.LogInformation("Customer created with ID: {CustomerId}", openpayCustomer.Id);
 
-        var billingCustomer = _mapper.Map<BillingCustomer>(request);
+        var billingCustomer = request.ToBillingCustomer();
         billingCustomer.APICustomerId = openpayCustomer.Id;
         billingCustomer.TwoLetterIsoCode = AppMasterConstant.DefaultCountryCode;
         billingCustomer.PaymentMethodId = paymentMethod.Id;

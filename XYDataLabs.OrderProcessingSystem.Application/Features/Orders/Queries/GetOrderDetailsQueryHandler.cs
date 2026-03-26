@@ -1,8 +1,8 @@
-using AutoMapper;
 using Microsoft.EntityFrameworkCore;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
+using XYDataLabs.OrderProcessingSystem.Application.Mappings;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.Features.Orders.Queries;
@@ -10,12 +10,10 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Features.Orders.Queries;
 public sealed class GetOrderDetailsQueryHandler : IQueryHandler<GetOrderDetailsQuery, Result<OrderDto>>
 {
     private readonly IAppDbContext _context;
-    private readonly IMapper _mapper;
 
-    public GetOrderDetailsQueryHandler(IAppDbContext context, IMapper mapper)
+    public GetOrderDetailsQueryHandler(IAppDbContext context)
     {
         _context = context;
-        _mapper = mapper;
     }
 
     public async Task<Result<OrderDto>> HandleAsync(GetOrderDetailsQuery query, CancellationToken cancellationToken = default)
@@ -28,6 +26,6 @@ public sealed class GetOrderDetailsQueryHandler : IQueryHandler<GetOrderDetailsQ
         if (order is null)
             return Error.NotFound;
 
-        return _mapper.Map<OrderDto>(order);
+        return order.ToDto();
     }
 }
