@@ -564,6 +564,9 @@ function Show-DockerProxyInfo {
     } catch {}
 }
 
+$acquiredLock = $false
+$lockFile = $null
+
 try {
     # Set working directory to the Docker resources folder
     $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -614,7 +617,32 @@ try {
     }
 
     Write-ColoredOutput "Working directory set to: $dockerPath" "Gray" "INFO"
-    
+
+    # Concurrent-launch guard: when Visual Studio starts multiple projects with the same Docker profile
+    # simultaneously, each project spawns a separate PowerShell process running this script. Without a
+    # lock the second process races the first and fails with "container name already in use".
+    # Solution: first process acquires a lock file; subsequent processes detect it and exit gracefully,
+    # letting the first process manage the full lifecycle.
+    $lockFile = Join-Path $env:TEMP "start-docker-$Environment-$Profile.lock"
+    $lockTimeoutSec = 300  # max time to hold lock (safety valve)
+    $acquiredLock = $false
+    if (Test-Path $lockFile) {
+        $lockAge = (Get-Date) - (Get-Item $lockFile).LastWriteTime
+        if ($lockAge.TotalSeconds -lt $lockTimeoutSec) {
+            Write-ColoredOutput "Another instance is already managing this stack ($Environment/$Profile). Exiting — the primary instance will complete startup." "Yellow" "INFO"
+            exit 0
+        } else {
+            Write-ColoredOutput "Stale lock detected (age: $([int]$lockAge.TotalSeconds)s) — removing and continuing." "Yellow" "INFO"
+            Remove-Item $lockFile -Force -ErrorAction SilentlyContinue
+        }
+    }
+    try {
+        New-Item $lockFile -ItemType File -Force | Out-Null
+        $acquiredLock = $true
+    } catch {
+        Write-ColoredOutput "Could not acquire lock file — continuing without lock." "Yellow" "INFO"
+    }
+
     # Enterprise mode initialization
     if ($EnterpriseMode) {
         Write-ColoredOutput "Starting Enterprise Docker Management Mode" "Cyan" "INFO"
@@ -1064,6 +1092,7 @@ try {
     }
     # Explicit success exit to avoid propagating non-zero codes from underlying commands
     try { $global:LASTEXITCODE = 0 } catch {}
+    if ($acquiredLock) { Remove-Item $lockFile -Force -ErrorAction SilentlyContinue }
     exit 0
 }
 catch {
@@ -1071,5 +1100,6 @@ catch {
     if ($EnterpriseMode) {
         Write-ColoredOutput "Check enterprise log file: logs/docker-startup-$(Get-Date -Format 'yyyy-MM-dd').log" "Yellow" "INFO"
     }
+    if ($acquiredLock) { Remove-Item $lockFile -Force -ErrorAction SilentlyContinue }
     exit 1
 }
