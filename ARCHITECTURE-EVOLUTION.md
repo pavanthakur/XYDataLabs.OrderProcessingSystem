@@ -248,6 +248,12 @@ XYDataLabs.OrderProcessingSystem.sln
 
 Secure, observable, tenant-enforced system with rich domain model, standardized error handling — ready for event-driven decoupling.
 
+### Known Risk (resolved in Phase 8)
+
+The current `ProcessPaymentCommandHandler` makes three sequential OpenPay API calls (`CreateCustomerAsync` → `CreateCardTokenAsync` → `CreateChargeAsync`) followed by two DB writes (`CardTransaction` + `PayinLog`) in a single handler. If the process crashes or the DB transaction fails after the charge is successfully created at OpenPay, the charge is real but unrecorded — no reconciliation is possible without manually querying OpenPay by `AttemptOrderId`.
+
+The Outbox Pattern in Phase 8 resolves this: write an `OutboxMessage` (with the charge result) in the same DB transaction as `CardTransaction`. The background publisher then confirms/reconciles asynchronously. Until Phase 8 ships, `AttemptOrderId` in `PayinLog` is the manual reconciliation key — queries to OpenPay's charge API can recover the charge state by that ID.
+
 ---
 
 ## Phase 8 — Event-Driven Foundation 📅
