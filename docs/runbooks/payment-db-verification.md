@@ -87,7 +87,7 @@ Query 2 returns **two rows per payment** by design — one for card tokenization
 |-----|-----------------|-------|---------|-----------|
 | 1 | card token ID | `tokenization_completed` | 0 | NULL |
 | 2 _(3DS, `Use3DSecure=1`)_ | charge ID | `completed` | 1 | OpenPay reference no. |
-| 2 _(non-3DS, `Use3DSecure=0`)_ | charge ID | `not_applicable` | 0 | NULL |
+| 2 _(non-3DS, `Use3DSecure=0`)_ | charge ID | `not_applicable` | 0 | OpenPay reference no. (charge succeeded synchronously) |
 
 This is expected and correct.
 
@@ -138,11 +138,13 @@ JOIN   dbo.Tenants            t   ON t.Id  = ct.TenantId
 ORDER BY ct.TenantId, ct.Id;
 ```
 
-**Expected per successful 3DS payment:**
-- 2 rows per tenant (tokenization + charge) — see design context above
+**Expected per successful payment (both flows):**
+- 2 rows per tenant (tokenization + charge) — same regardless of `Use3DSecure` state; see design context above
 - `IsTransactionSuccess = 1`, final `Status = completed`
 - `MaskedCardNumber` in format `411111******1111` — raw PAN must never appear
 - Different `OpenPayCustomerId` and `CardToken` per tenant — no cross-sharing
+- **If `Use3DSecure = 1`:** charge row has `ThreeDS = 1`, `ThreeDSecureStage = completed`, `OpenPayReference` populated
+- **If `Use3DSecure = 0`:** charge row has `ThreeDS = 0`, `ThreeDSecureStage = not_applicable`, `OpenPayReference` populated (synchronous)
 
 ---
 
@@ -169,7 +171,11 @@ JOIN   dbo.Tenants   t  ON t.Id = pl.TenantId
 ORDER BY pl.TenantId, pl.Id;
 ```
 
-**Expected:** 1 row per tenant, `Result = 1`, `ThreeDSecureStage = completed`.
+**Expected:** 1 row per tenant, `Result = 1`.
+- **If `Use3DSecure = 1`:** `ThreeDSecureStage = completed`
+- **If `Use3DSecure = 0`:** `ThreeDSecureStage = not_applicable`
+
+Check the [Pre-flight query](#pre-flight-verify-current-3ds-state) to know which to expect.
 
 ---
 
@@ -245,7 +251,7 @@ ORDER BY ct.TenantId, ct.Id, tsh.Id;
 | Step | Status | Stage | Reference | Meaning |
 |------|--------|-------|-----------|---------|
 | 1 | `completed` | `tokenization_completed` | NULL | Card tokenized by OpenPay |
-| 2 | `completed` | `not_applicable` | NULL | Charge completed synchronously — no 3DS |
+| 2 | `completed` | `not_applicable` | OpenPay reference no. | Charge completed synchronously — OpenPay still returns a reference number |
 
 ---
 
@@ -487,12 +493,13 @@ WHERE  ct.TenantId = 3
 ORDER BY ct.Id;
 ```
 
-**Expected after one successful 3DS payment:**
+**Expected after one successful payment (both flows):**
 - 2 rows (tokenization row + charge row) — identical to shared-pool behaviour; see design context at top of this runbook
 - Row 1: `OpenPayChargeId` = card token ID, `ThreeDSecureStage = tokenization_completed`, `IsTransactionSuccess = 1`
-- Row 2: `OpenPayChargeId` = charge ID, `ThreeDSecureStage = completed`, `IsTransactionSuccess = 1`
 - `MaskedCardNumber` in format `411111******1111` — raw PAN must never appear
 - `OpenPayCustomerId` must differ from TenantA and TenantB values (no cross-sharing)
+- **If `Use3DSecure = 1`:** Row 2 has `ThreeDS = 1`, `ThreeDSecureStage = completed`, `OpenPayReference` populated
+- **If `Use3DSecure = 0`:** Row 2 has `ThreeDS = 0`, `ThreeDSecureStage = not_applicable`, `OpenPayReference` populated (synchronous)
 
 ---
 
@@ -521,7 +528,11 @@ WHERE  pl.TenantId = 3
 ORDER BY pl.Id;
 ```
 
-**Expected:** 1 row, `Result = 1`, `ThreeDSecureStage = completed`.
+**Expected:** 1 row, `Result = 1`.
+- **If `Use3DSecure = 1`:** `ThreeDSecureStage = completed`
+- **If `Use3DSecure = 0`:** `ThreeDSecureStage = not_applicable`
+
+Check the [Pre-flight query](#pre-flight-verify-current-3ds-state) to know which to expect.
 
 ---
 
@@ -601,7 +612,7 @@ ORDER BY ct.Id, tsh.Id;
 | Step | Status | Stage | Reference | Meaning |
 |------|--------|-------|-----------|---------|
 | 1 | `completed` | `tokenization_completed` | NULL | Card tokenized by OpenPay |
-| 2 | `completed` | `not_applicable` | NULL | Charge completed synchronously — no 3DS |
+| 2 | `completed` | `not_applicable` | OpenPay reference no. | Charge completed synchronously — OpenPay still returns a reference number |
 
 ---
 
