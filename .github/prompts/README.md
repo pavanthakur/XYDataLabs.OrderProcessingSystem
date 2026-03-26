@@ -60,7 +60,7 @@ Use when:
 
 Purpose:
 - Orchestrates end-to-end feature development with multitenant support.
-- Enforces the mandatory 12-step workflow: requirements → entity → DTO → CQRS → DbContext → migration → controller → tests → build → review → commit → context check.
+- Enforces the mandatory 13-step workflow: requirements → entity → DTO → CQRS → DbContext → migration → controller → tests → build → review → commit → context check → payment verification (conditional).
 - References all relevant instruction files at each step.
 
 Use when:
@@ -72,6 +72,25 @@ Workflow:
 2. Steps 2-9 are handled by the **CQRS Backend** agent (entity through build+test).
 3. Step 10: switch to **Code Reviewer** agent for architecture/security review.
 4. Steps 11-12: commit and optionally run `/context-audit`.
+5. Step 13 (conditional): if the feature touched payment code, run `/verify-payments`.
+
+### `/verify-payments`
+
+Purpose:
+- Runs filtered payment DB verification queries scoped to the most recent OR series.
+- Verifies CardTransactions, TransactionStatusHistories, and cross-tenant bleed checks across both shared-pool and dedicated-tenant DBs.
+- Adapts expected values to the current `Use3DSecure` state per tenant (checked via pre-flight query first).
+
+Use when:
+- After any payment test run (manual or via the UI).
+- After a payment-related feature change before committing.
+- When investigating a suspected payment data issue.
+
+Prerequisites:
+- API ran at least one payment cycle for the OR series you're verifying.
+- You know the OR prefix (e.g. `OR-9-26Mar`) — or run the discovery query shown in Step 1.
+
+Note: This prompt generates focused verification queries. For the full reference query set and design context, see `docs/runbooks/payment-db-verification.md`.
 
 ## Which Prompt Should I Use?
 
@@ -81,6 +100,7 @@ Workflow:
 | Finish a learning day | `/day-complete` |
 | Need local SSMS/sqlcmd access to Azure SQL | `/sql-local-access` |
 | Check for stale AI context / memory drift | `/context-audit` |
+| Verify payment DB records after a test run | `/verify-payments` |
 
 ## Typical Workflows
 
@@ -98,6 +118,10 @@ Workflow:
 [After bootstrap or deploy]
 └─ /sql-local-access  →  open firewall + get SSMS connection details
    └─ [When done] /sql-local-access  →  close firewall rule
+
+[After a payment test run or payment feature change]
+└─ /verify-payments  →  filtered DB queries for the most recent OR series
+   └─ Fails? → open docs/runbooks/payment-db-verification.md for full diagnostics
 ```
 
 ## Custom Agents
@@ -118,6 +142,7 @@ Select these in the VS Code Chat agent picker for focused, context-scoped assist
 | `.github/prompts/sql-local-access.prompt.md` | SQL firewall open/close workflow |
 | `.github/prompts/context-audit.prompt.md` | Context drift detection audit |
 | `.github/prompts/new-feature.prompt.md` | End-to-end feature development workflow |
+| `.github/prompts/verify-payments.prompt.md` | Payment DB verification for a specific OR series |
 | `.github/copilot-instructions.md` | Prompt index and quick usage reference |
 
 ## Operational Guidance
