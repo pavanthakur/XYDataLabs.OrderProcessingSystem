@@ -15,6 +15,38 @@ of the previous one.
 
 ---
 
+## Pre-flight: verify current 3DS state
+
+Run this **before** executing Q2–Q6 (and Q2-B–Q6-B). The expected values in those queries depend
+on the `Use3DSecure` flag for each tenant. Misreading the state against hardcoded expectations is the
+most common source of false failures.
+
+```sql
+-- Run against: OrderProcessingSystem_Local (shared-pool tenants — TenantA and TenantB)
+SELECT t.Code AS Tenant, pp.Name AS Provider, pp.Use3DSecure AS ThreeDSEnabled
+FROM   dbo.PaymentProviders pp
+JOIN   dbo.Tenants          t  ON t.Id = pp.TenantId
+ORDER BY pp.TenantId;
+```
+
+```sql
+-- Run against: OrderProcessingSystem_TenantC (dedicated DB)
+SELECT pp.TenantId, pp.Name AS Provider, pp.Use3DSecure AS ThreeDSEnabled
+FROM   dbo.PaymentProviders pp;
+```
+
+Use the `ThreeDSEnabled` column when reading the Expected sections below:
+
+| `ThreeDSEnabled` | Q4 / Q4-B (PayinLogDetails) | Q5 / Q5-B (StatusHistories) |
+|:----------------:|-----------------------------|-----------------------------|
+| `1` | 2 rows (`redirect_issued` + `completed`) | 4-step trail |
+| `0` | 1 row (`not_applicable`) | 2-step trail |
+
+> **API restart required** after changing `Use3DSecure` in the DB — `AppMasterData` is a singleton
+> loaded at startup. See [Per-tenant 3DS toggle](#per-tenant-3ds-toggle) for the UPDATE queries.
+
+---
+
 ## Design context: two CardTransaction rows per payment
 
 Query 2 returns **two rows per payment** by design — one for card tokenization, one for the charge:
@@ -22,7 +54,8 @@ Query 2 returns **two rows per payment** by design — one for card tokenization
 | Row | OpenPayChargeId | Stage | ThreeDS | Reference |
 |-----|-----------------|-------|---------|-----------|
 | 1 | card token ID | `tokenization_completed` | 0 | NULL |
-| 2 | charge ID | `completed` | 1 | OpenPay reference no. |
+| 2 _(3DS, `Use3DSecure=1`)_ | charge ID | `completed` | 1 | OpenPay reference no. |
+| 2 _(non-3DS, `Use3DSecure=0`)_ | charge ID | `not_applicable` | 0 | NULL |
 
 This is expected and correct.
 
@@ -111,7 +144,7 @@ ORDER BY pl.TenantId, pl.Id;
 
 ## Query 4 — PayinLogDetails (raw request/response audit)
 
-Two rows per charge: `redirect_issued` (charge creation) and `completed` (callback reconciliation).
+Row count depends on `Use3DSecure` — check the [Pre-flight query](#pre-flight-verify-current-3ds-state) first.
 
 ```sql
 SELECT
@@ -128,12 +161,18 @@ JOIN   dbo.Tenants         t   ON t.Id  = pl.TenantId
 ORDER BY pl.TenantId, pld.Id;
 ```
 
-**Expected:** 2 rows per tenant per charge:
+**Expected — 3DS flow (`Use3DSecure = 1`):** 2 rows per tenant per charge:
 
 | Stage | PostInfo | Meaning |
 |-------|----------|---------|
 | `redirect_issued` | Charge creation request to OpenPay | 3DS flow initiated |
 | `completed` | Confirm-status request + OpenPay response | Callback reconciled |
+
+**Expected — non-3DS flow (`Use3DSecure = 0`):** 1 row per tenant per charge:
+
+| Stage | PostInfo | Meaning |
+|-------|----------|---------|
+| `not_applicable` | Charge creation request to OpenPay | Charge completed synchronously — no 3DS redirect |
 
 ---
 
@@ -159,7 +198,9 @@ JOIN   dbo.Tenants                    t   ON t.Id  = ct.TenantId
 ORDER BY ct.TenantId, ct.Id, tsh.Id;
 ```
 
-**Expected 4-step trail per tenant:**
+**Expected trail per tenant — depends on `Use3DSecure` state (check [Pre-flight query](#pre-flight-verify-current-3ds-state)):**
+
+**3DS flow (`Use3DSecure = 1`) — 4 steps:**
 
 | Step | Status | Stage | Reference | Meaning |
 |------|--------|-------|-----------|---------|
@@ -167,6 +208,13 @@ ORDER BY ct.TenantId, ct.Id, tsh.Id;
 | 2 | `charge_pending` | `redirect_issued` | NULL | 3DS redirect issued |
 | 3 | `completed` | `callback_received` | 801585 | Browser redirected back |
 | 4 | `completed` | `completed` | 801585 | OpenPay confirmed final status |
+
+**Non-3DS flow (`Use3DSecure = 0`) — 2 steps:**
+
+| Step | Status | Stage | Reference | Meaning |
+|------|--------|-------|-----------|---------|
+| 1 | `completed` | `tokenization_completed` | NULL | Card tokenized by OpenPay |
+| 2 | `completed` | `not_applicable` | NULL | Charge completed synchronously — no 3DS |
 
 ---
 
@@ -444,7 +492,7 @@ ORDER BY pl.Id;
 
 ### Q4-B — PayinLogDetails (raw request/response audit, dedicated DB)
 
-Two audit rows per charge: `redirect_issued` (charge creation) and `completed` (callback reconciliation).
+Row count depends on `Use3DSecure` — check the [Pre-flight query](#pre-flight-verify-current-3ds-state) first.
 
 ```sql
 -- Run against: OrderProcessingSystem_TenantC
@@ -463,12 +511,18 @@ WHERE  pl.TenantId = 3
 ORDER BY pld.Id;
 ```
 
-**Expected:** 2 rows:
+**Expected — 3DS flow (`Use3DSecure = 1`):** 2 rows:
 
 | Stage | Meaning |
 |-------|---------|
 | `redirect_issued` | Charge-creation request sent to OpenPay; 3DS redirect URL issued |
 | `completed` | Confirm-status request + OpenPay final-status response; callback reconciled |
+
+**Expected — non-3DS flow (`Use3DSecure = 0`):** 1 row:
+
+| Stage | Meaning |
+|-------|---------|
+| `not_applicable` | Charge-creation request sent to OpenPay; charge completed synchronously — no redirect |
 
 ---
 
@@ -496,7 +550,9 @@ WHERE  ct.TenantId = 3
 ORDER BY ct.Id, tsh.Id;
 ```
 
-**Expected 4-step trail (same pattern as shared-pool tenants):**
+**Expected trail — depends on `Use3DSecure` state (check [Pre-flight query](#pre-flight-verify-current-3ds-state)):**
+
+**3DS flow (`Use3DSecure = 1`) — 4 steps:**
 
 | Step | Status | Stage | Reference | Meaning |
 |------|--------|-------|-----------|---------|
@@ -504,6 +560,13 @@ ORDER BY ct.Id, tsh.Id;
 | 2 | `charge_pending` | `redirect_issued` | NULL | 3DS redirect issued |
 | 3 | `completed` | `callback_received` | 801585 | Browser redirected back |
 | 4 | `completed` | `completed` | 801585 | OpenPay confirmed final status |
+
+**Non-3DS flow (`Use3DSecure = 0`) — 2 steps:**
+
+| Step | Status | Stage | Reference | Meaning |
+|------|--------|-------|-----------|---------|
+| 1 | `completed` | `tokenization_completed` | NULL | Card tokenized by OpenPay |
+| 2 | `completed` | `not_applicable` | NULL | Charge completed synchronously — no 3DS |
 
 ---
 
@@ -580,7 +643,7 @@ FROM   dbo.PaymentProviders pp
 ORDER BY pp.Id;
 ```
 
-**Expected:** 1 row with `TenantId = 3`, `Name = OpenPay`, `IsActive = 1`, `IsProduction = 0`, `Use3DSecure = 1`.
+**Expected:** 1 row with `TenantId = 3`, `Name = OpenPay`, `IsActive = 1`, `IsProduction = 0`. `Use3DSecure` reflects the current setting — verify the value against the [Pre-flight query](#pre-flight-verify-current-3ds-state) rather than expecting a hardcoded value.
 
 ### Q9-B — No TenantC data leaked into shared DB
 
