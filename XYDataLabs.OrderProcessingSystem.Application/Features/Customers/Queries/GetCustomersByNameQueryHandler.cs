@@ -1,8 +1,8 @@
-using AutoMapper;
 using Microsoft.EntityFrameworkCore;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
+using XYDataLabs.OrderProcessingSystem.Application.Mappings;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
 
@@ -11,12 +11,10 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Features.Customers.Querie
 public sealed class GetCustomersByNameQueryHandler : IQueryHandler<GetCustomersByNameQuery, Result<IEnumerable<CustomerDto>>>
 {
     private readonly IAppDbContext _context;
-    private readonly IMapper _mapper;
 
-    public GetCustomersByNameQueryHandler(IAppDbContext context, IMapper mapper)
+    public GetCustomersByNameQueryHandler(IAppDbContext context)
     {
         _context = context;
-        _mapper = mapper;
     }
 
     public async Task<Result<IEnumerable<CustomerDto>>> HandleAsync(GetCustomersByNameQuery query, CancellationToken cancellationToken = default)
@@ -37,6 +35,6 @@ public sealed class GetCustomersByNameQueryHandler : IQueryHandler<GetCustomersB
             .Take(query.PageSize)
             .ToListAsync(cancellationToken);
 
-        return _mapper.Map<IEnumerable<CustomerDto>>(customers).ToList();
+        return customers.Select(c => c.ToDto()).ToList();
     }
 }

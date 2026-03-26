@@ -1,8 +1,8 @@
-using AutoMapper;
 using Microsoft.EntityFrameworkCore;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
+using XYDataLabs.OrderProcessingSystem.Application.Mappings;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
 
@@ -11,12 +11,10 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Features.Orders.Commands;
 public sealed class CreateOrderCommandHandler : ICommandHandler<CreateOrderCommand, Result<OrderDto>>
 {
     private readonly IAppDbContext _context;
-    private readonly IMapper _mapper;
 
-    public CreateOrderCommandHandler(IAppDbContext context, IMapper mapper)
+    public CreateOrderCommandHandler(IAppDbContext context)
     {
         _context = context;
-        _mapper = mapper;
     }
 
     public async Task<Result<OrderDto>> HandleAsync(CreateOrderCommand command, CancellationToken cancellationToken = default)
@@ -63,6 +61,6 @@ public sealed class CreateOrderCommandHandler : ICommandHandler<CreateOrderComma
         _context.Orders.Add(order);
         await _context.SaveChangesAsync(cancellationToken);
 
-        return _mapper.Map<OrderDto>(order);
+        return order.ToDto();
     }
 }

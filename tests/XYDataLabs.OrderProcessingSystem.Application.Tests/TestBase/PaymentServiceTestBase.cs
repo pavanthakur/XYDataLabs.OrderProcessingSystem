@@ -1,6 +1,5 @@
 using System.Collections;
 using System.Linq.Expressions;
-using AutoMapper;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -57,7 +56,6 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
             }),
             new Mock<ILogger<ProcessPaymentCommandHandler>>().Object,
             MockDbContext.Object,
-            MockMapper.Object,
             appMasterData,
             MockTimeProvider.Object,
             MockTenantProvider.Object);
@@ -114,9 +112,7 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
 
         MockDbContext.Setup(db => db.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
 
-        MockMapper
-            .Setup(m => m.Map<BillingCustomer>(It.IsAny<object>()))
-            .Returns(new BillingCustomer { Name = "John Doe", Email = "john@example.com" });
+
     }
 
     /// <summary>

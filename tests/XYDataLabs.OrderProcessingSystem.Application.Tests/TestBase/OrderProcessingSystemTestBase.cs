@@ -1,4 +1,3 @@
-using AutoMapper;
 using FluentValidation;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
@@ -18,14 +17,12 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase
         protected Mock<ILogger<T1>> MockLogger { get; private set; }
 
         protected readonly Mock<IValidator<Order>> MockOrderValidator;
-        protected Mock<IMapper> MockMapper { get; private set; }
 
         public OrderProcessingSystemTestBase()
         {
             // Initialize Mock DbContext
             MockDbContext = new Mock<IAppDbContext>();
             MockLogger = new Mock<ILogger<T1>>();
-            MockMapper = new Mock<IMapper>();
 
             // Initialize Mock DbSet
             MockCustomerDbSet = new Mock<DbSet<Customer>>();
