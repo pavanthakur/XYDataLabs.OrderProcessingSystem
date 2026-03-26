@@ -138,9 +138,9 @@ function Initialize-LocalDockerSecrets {
     $secretDefinitions = @(
         @{ Name = "LOCAL_SQL_PASSWORD"; Prompt = "Enter LOCAL_SQL_PASSWORD for local Docker SQL" },
         @{ Name = "LOCAL_CERT_PASSWORD"; Prompt = "Enter LOCAL_CERT_PASSWORD for local HTTPS certificate" },
-        @{ Name = "LOCAL_OPENPAY_MERCHANT_ID"; Prompt = "Enter LOCAL_OPENPAY_MERCHANT_ID for local Docker payment flows" },
-        @{ Name = "LOCAL_OPENPAY_PRIVATE_KEY"; Prompt = "Enter LOCAL_OPENPAY_PRIVATE_KEY for local Docker payment flows" },
-        @{ Name = "LOCAL_OPENPAY_DEVICE_SESSION_ID"; Prompt = "Enter LOCAL_OPENPAY_DEVICE_SESSION_ID for local Docker payment flows" }
+        @{ Name = "LOCAL_OPENPAY_MERCHANT_ID"; Prompt = "Enter OpenPay Merchant ID (LOCAL_OPENPAY_MERCHANT_ID)" },
+        @{ Name = "LOCAL_OPENPAY_PRIVATE_KEY"; Prompt = "Enter OpenPay Private Key (LOCAL_OPENPAY_PRIVATE_KEY)" },
+        @{ Name = "LOCAL_OPENPAY_DEVICE_SESSION_ID"; Prompt = "Enter LOCAL_OPENPAY_DEVICE_SESSION_ID (press Enter for default)" }
     )
 
     $fileSecrets = @{}
@@ -170,9 +170,36 @@ function Initialize-LocalDockerSecrets {
         }
 
         Write-ColoredOutput "$secretName not set. Prompting once and storing it in $SecretsFilePath (gitignored)." "Yellow" "INFO"
+
+        # Show detailed instructions for OpenPay credentials
+        if ($secretName -in @('LOCAL_OPENPAY_MERCHANT_ID', 'LOCAL_OPENPAY_PRIVATE_KEY')) {
+            Write-Host ''
+            Write-Host '  ┌─────────────────────────────────────────────────────────────────┐' -ForegroundColor Cyan
+            Write-Host '  │  OpenPay sandbox credentials — manual step required             │' -ForegroundColor Cyan
+            Write-Host '  ├─────────────────────────────────────────────────────────────────┤' -ForegroundColor Cyan
+            Write-Host '  │  1. Open https://sandbox-dashboard.openpay.mx                   │' -ForegroundColor Cyan
+            Write-Host '  │  2. Log in to your sandbox account                              │' -ForegroundColor Cyan
+            Write-Host '  │  3. On the home/dashboard page you will see:                    │' -ForegroundColor Cyan
+            Write-Host '  │       Merchant ID  — a short alphanumeric string (e.g. m...)    │' -ForegroundColor Cyan
+            Write-Host '  │       Private key  — starts with sk_...                         │' -ForegroundColor Cyan
+            Write-Host '  │  4. Paste below. Stored in .env.local — not asked again.        │' -ForegroundColor Cyan
+            Write-Host '  │                                                                 │' -ForegroundColor Cyan
+            Write-Host '  │  To persist for all team machines, run once after pasting:      │' -ForegroundColor Cyan
+            Write-Host '  │    .\Resources\Azure-Deployment\populate-keyvault-secrets.ps1   │' -ForegroundColor Cyan
+            Write-Host '  │        -Environment dev                                         │' -ForegroundColor Cyan
+            Write-Host '  │        -OpenPayMerchantId <id> -OpenPayPrivateKey <key>         │' -ForegroundColor Cyan
+            Write-Host '  └─────────────────────────────────────────────────────────────────┘' -ForegroundColor Cyan
+            Write-Host ''
+        }
+
         $secretValue = Read-Host $definition.Prompt -MaskInput
         if ([string]::IsNullOrWhiteSpace($secretValue)) {
-            throw "$secretName is required for Docker startup."
+            if ($secretName -eq 'LOCAL_OPENPAY_DEVICE_SESSION_ID') {
+                $secretValue = 'default-device-session'
+                Write-ColoredOutput "Using default value for $secretName" "DarkGray" "INFO"
+            } else {
+                throw "$secretName is required for Docker startup."
+            }
         }
 
         $fileSecrets[$secretName] = $secretValue

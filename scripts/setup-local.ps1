@@ -74,9 +74,12 @@ Write-Step 'Docker secrets — Resources/Docker/.env.local'
 
 if ((Test-Path $envLocal) -and -not $Force) {
     Write-Skip '.env.local already exists — reading passwords from it'
-    $envVars      = Read-EnvLocal $envLocal
-    $certPassword = $envVars['LOCAL_CERT_PASSWORD']
-    $sqlPassword  = $envVars['LOCAL_SQL_PASSWORD']
+    $envVars         = Read-EnvLocal $envLocal
+    $certPassword    = $envVars['LOCAL_CERT_PASSWORD']
+    $sqlPassword     = $envVars['LOCAL_SQL_PASSWORD']
+    $openpayMerchant = $envVars['LOCAL_OPENPAY_MERCHANT_ID']
+    $openpayKey      = $envVars['LOCAL_OPENPAY_PRIVATE_KEY']
+    $openpaySession  = $envVars['LOCAL_OPENPAY_DEVICE_SESSION_ID']
 }
 else {
     if (-not (Test-Path $envExample)) {
@@ -90,14 +93,71 @@ else {
     $sqlPassword  = Read-Password '  Choose SQL Server password (LOCAL_SQL_PASSWORD) '
     $certPassword = Read-Password '  Choose HTTPS cert password (LOCAL_CERT_PASSWORD) '
 
+    Write-Host ''
+    Write-Host '  OpenPay sandbox credentials — fetching from Key Vault kv-orderproc-dev...' -ForegroundColor Yellow
+    $openpayMerchant = $null
+    $openpayKey      = $null
+    $openpaySession  = 'default-device-session'
+
+    $azAvailable = Get-Command az -ErrorAction SilentlyContinue
+    if ($azAvailable) {
+        try {
+            $kvMerchant = az keyvault secret show --vault-name kv-orderproc-dev --name 'OpenPay--MerchantId' --query value -o tsv 2>$null
+            $kvKey      = az keyvault secret show --vault-name kv-orderproc-dev --name 'OpenPay--PrivateKey'  --query value -o tsv 2>$null
+            if ($kvMerchant -and $kvKey -and
+                $kvMerchant -notmatch '^set-openpay' -and $kvKey -notmatch '^set-openpay') {
+                $openpayMerchant = $kvMerchant.Trim()
+                $openpayKey      = $kvKey.Trim()
+                Write-Done 'OpenPay credentials fetched from kv-orderproc-dev'
+            } else {
+                Write-Host '  [--]  Key Vault returned placeholder values — falling back to prompt.' -ForegroundColor DarkGray
+            }
+        } catch {
+            Write-Host "  [--]  Could not read from Key Vault: $($_.Exception.Message)" -ForegroundColor DarkGray
+        }
+    } else {
+        Write-Host '  [--]  az CLI not found — skipping Key Vault fetch.' -ForegroundColor DarkGray
+    }
+
+    if (-not $openpayMerchant) {
+        Write-Host ''
+        Write-Host '  ┌─────────────────────────────────────────────────────────────────┐' -ForegroundColor Cyan
+        Write-Host '  │  OpenPay sandbox credentials — manual step required             │' -ForegroundColor Cyan
+        Write-Host '  ├─────────────────────────────────────────────────────────────────┤' -ForegroundColor Cyan
+        Write-Host '  │  1. Open https://sandbox-dashboard.openpay.mx                   │' -ForegroundColor Cyan
+        Write-Host '  │  2. Log in to your sandbox account                              │' -ForegroundColor Cyan
+        Write-Host '  │  3. On the home/dashboard page you will see:                    │' -ForegroundColor Cyan
+        Write-Host '  │       Merchant ID  — a short alphanumeric string (e.g. m...)    │' -ForegroundColor Cyan
+        Write-Host '  │       Private key  — starts with sk_...                         │' -ForegroundColor Cyan
+        Write-Host '  │  4. Paste both below.                                           │' -ForegroundColor Cyan
+        Write-Host '  │                                                                 │' -ForegroundColor Cyan
+        Write-Host '  │  These are stored in .env.local (gitignored) and user-secrets.  │' -ForegroundColor Cyan
+        Write-Host '  │  You will NOT be asked again on subsequent runs.                │' -ForegroundColor Cyan
+        Write-Host '  │                                                                 │' -ForegroundColor Cyan
+        Write-Host '  │  To store them in Azure Key Vault so future team members and    │' -ForegroundColor Cyan
+        Write-Host '  │  machines get them automatically, run once after pasting:       │' -ForegroundColor Cyan
+        Write-Host '  │    .\Resources\Azure-Deployment\populate-keyvault-secrets.ps1   │' -ForegroundColor Cyan
+        Write-Host '  │        -Environment dev                                         │' -ForegroundColor Cyan
+        Write-Host '  │        -OpenPayMerchantId <id> -OpenPayPrivateKey <key>         │' -ForegroundColor Cyan
+        Write-Host '  │                                                                 │' -ForegroundColor Cyan
+        Write-Host '  │  Leave blank to skip — payment calls will fail (error 1002)     │' -ForegroundColor Cyan
+        Write-Host '  │  until credentials are set.                                     │' -ForegroundColor Cyan
+        Write-Host '  └─────────────────────────────────────────────────────────────────┘' -ForegroundColor Cyan
+        Write-Host ''
+        $openpayMerchant = (Read-Host '  OpenPay Merchant ID (LOCAL_OPENPAY_MERCHANT_ID) ').Trim()
+        $openpayKey      = (Read-Host '  OpenPay Private Key (LOCAL_OPENPAY_PRIVATE_KEY)  ').Trim()
+        if ([string]::IsNullOrWhiteSpace($openpayMerchant)) { $openpayMerchant = 'local-sandbox-only' }
+        if ([string]::IsNullOrWhiteSpace($openpayKey))      { $openpayKey      = 'local-sandbox-only' }
+    }
+
     $content = @"
 # Local Docker secrets — auto-generated by setup-local.ps1
 # Gitignored. Re-run setup-local.ps1 -Force to change passwords.
 LOCAL_SQL_PASSWORD=$sqlPassword
 LOCAL_CERT_PASSWORD=$certPassword
-LOCAL_OPENPAY_MERCHANT_ID=local-sandbox-only
-LOCAL_OPENPAY_PRIVATE_KEY=local-sandbox-only
-LOCAL_OPENPAY_DEVICE_SESSION_ID=default-device-session
+LOCAL_OPENPAY_MERCHANT_ID=$openpayMerchant
+LOCAL_OPENPAY_PRIVATE_KEY=$openpayKey
+LOCAL_OPENPAY_DEVICE_SESSION_ID=$openpaySession
 "@
     Set-Content -Path $envLocal -Value $content -Encoding UTF8
     Write-Done 'Created .env.local'
@@ -108,9 +168,9 @@ Write-Step 'dotnet user-secrets — API project'
 
 $apiSecrets = [ordered]@{
     'ApiSettings:API:https:CertPassword' = $certPassword
-    'OpenPay:MerchantId'                 = 'local-sandbox-only'
-    'OpenPay:PrivateKey'                 = 'local-sandbox-only'
-    'OpenPay:DeviceSessionId'            = 'default-device-session'
+    'OpenPay:MerchantId'                 = $openpayMerchant
+    'OpenPay:PrivateKey'                 = $openpayKey
+    'OpenPay:DeviceSessionId'            = $openpaySession
 }
 
 foreach ($kv in $apiSecrets.GetEnumerator()) {
@@ -155,6 +215,8 @@ Write-Host ''
 Write-Host '  Docker dev:'
 Write-Host '    .\Resources\Docker\start-docker.ps1 -Environment dev -Profile http'
 Write-Host ''
-Write-Host '  To use real OpenPay sandbox credentials, edit Resources\Docker\.env.local'
-Write-Host '  and re-run:  dotnet user-secrets set OpenPay:MerchantId <real-id> --project .\XYDataLabs.OrderProcessingSystem.API\...'
+  if ($openpayMerchant -eq 'local-sandbox-only') {
+      Write-Host '  OpenPay sandbox credentials were skipped. To add them later, run:' -ForegroundColor Yellow
+      Write-Host '    .\scripts\setup-local.ps1 -Force' -ForegroundColor DarkGray
+  }
 Write-Host ''
