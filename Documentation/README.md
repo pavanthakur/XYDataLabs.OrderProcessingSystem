@@ -45,19 +45,19 @@ Open VS Code Chat → switch to **Agent mode** → type the command:
 
 | Command | When to use | What it does |
 |---------|------------|--------------|
-| `/xylab-day-complete` | After finishing a curriculum day | Routes updates to curriculum checkboxes, command references, daily logs |
-| `/xylab-sql-local-access` | Need local SSMS access to Azure SQL | Opens/closes firewall rule, prints connection details |
-| `/xylab-context-audit` | Periodically or after major refactors | Detects stale AI context by diffing memory files vs actual codebase |
+| `/XYDataLabs-day-complete` | After finishing a curriculum day | Routes updates to curriculum checkboxes, command references, daily logs |
+| `/XYDataLabs-sql-local-access` | Need local SSMS access to Azure SQL | Opens/closes firewall rule, prints connection details |
+| `/XYDataLabs-context-audit` | Periodically or after major refactors | Detects stale AI context by diffing memory files vs actual codebase |
 
 **Typical workflow**:
 ```
 [After a coding/learning day]
-└─ /xylab-day-complete  →  auto-updates curriculum + command docs
-   └─ [Optional] /xylab-context-audit  →  verify no stale references
+└─ /XYDataLabs-day-complete  →  auto-updates curriculum + command docs
+   └─ [Optional] /XYDataLabs-context-audit  →  verify no stale references
 
 [After bootstrap or deploy]
-└─ /xylab-sql-local-access  →  open firewall + SSMS details
-   └─ [When done] /xylab-sql-local-access  →  close firewall
+└─ /XYDataLabs-sql-local-access  →  open firewall + SSMS details
+   └─ [When done] /XYDataLabs-sql-local-access  →  close firewall
 ```
 
 ### File Locations
@@ -188,7 +188,7 @@ git add -A
 git commit -m "Add Shipment entity with multitenant CQRS and EF migration"
 ```
 
-Then optionally run `/xylab-context-audit` to verify instruction files still reflect the codebase.
+Then optionally run `/XYDataLabs-context-audit` to verify instruction files still reflect the codebase.
 
 #### Summary: Which Agent at Each Step
 
@@ -201,7 +201,7 @@ Then optionally run `/xylab-context-audit` to verify instruction files still ref
 | 5. Tests | **CQRS Backend** | Knows test project conventions |
 | 6. Build + test | **CQRS Backend** | Runs dotnet build/test |
 | 7. Review | **Code Reviewer** | Read-only audit before commit |
-| 8. Context check | `/xylab-context-audit` | Detects stale instruction references |
+| 8. Context check | `/XYDataLabs-context-audit` | Detects stale instruction references |
 
 ---
 

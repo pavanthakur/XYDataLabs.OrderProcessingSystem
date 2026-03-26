@@ -26,7 +26,7 @@ az sql server firewall-rule list --server orderprocessing-sql-dev --resource-gro
 
 ## 🔥 Firewall — Open/Close for Local Development
 
-> **Tip:** Use the `/xylab-sql-local-access` agent prompt instead of running these manually.  
+> **Tip:** Use the `/XYDataLabs-sql-local-access` agent prompt instead of running these manually.  
 > Prompt handles IP detection + open/close in one command. See [../QUICK-COMMAND-REFERENCE.md#copilot-prompts].
 
 ```powershell

@@ -13,12 +13,12 @@ These prompts are intended to reduce missed post-deployment steps, standardize r
 Quick tip:
 
 ```text
-Ctrl+Shift+I → Agent mode → type /xylab-day-complete, /xylab-sql-local-access, or /xylab-context-audit
+Ctrl+Shift+I → Agent mode → type /XYDataLabs-day-complete, /XYDataLabs-sql-local-access, or /XYDataLabs-context-audit
 ```
 
 ## Available Prompts
 
-### `/xylab-day-complete`
+### `/XYDataLabs-day-complete`
 
 Purpose:
 - Routes end-of-day curriculum updates to the correct documents.
@@ -29,7 +29,7 @@ Use when:
 - A curriculum day is finished.
 - You want guided document updates for learning progress.
 
-### `/xylab-sql-local-access`
+### `/XYDataLabs-sql-local-access`
 
 Purpose:
 - Opens or closes the Azure SQL firewall for your current public IP.
@@ -44,7 +44,7 @@ Important notes:
 - Close the firewall rule when done.
 - This is for local SQL access, not App Service runtime access.
 
-### `/xylab-context-audit`
+### `/XYDataLabs-context-audit`
 
 Purpose:
 - Detects stale AI context by diffing memory files and copilot-instructions.md against the actual codebase.
@@ -56,7 +56,7 @@ Use when:
 - After renaming, adding, or removing projects or packages.
 - When Copilot suggestions seem to reference outdated patterns or non-existent code.
 
-### `/xylab-new-feature`
+### `/XYDataLabs-new-feature`
 
 Purpose:
 - Orchestrates end-to-end feature development with multitenant support.
@@ -68,13 +68,13 @@ Use when:
 - You want the agent to follow the established development workflow automatically.
 
 Workflow:
-1. Run `/xylab-new-feature` — it gathers requirements and starts implementation.
+1. Run `/XYDataLabs-new-feature` — it gathers requirements and starts implementation.
 2. Steps 2-9 are handled by the **CQRS Backend** agent (entity through build+test).
 3. Step 10: switch to **Code Reviewer** agent for architecture/security review.
-4. Steps 11-12: commit and optionally run `/xylab-context-audit`.
-5. Step 13 (conditional): if the feature touched payment code, run `/xylab-verify-payments`.
+4. Steps 11-12: commit and optionally run `/XYDataLabs-context-audit`.
+5. Step 13 (conditional): if the feature touched payment code, run `/XYDataLabs-verify-payments`.
 
-### `/xylab-verify-payments`
+### `/XYDataLabs-verify-payments`
 
 Purpose:
 - Runs filtered payment DB verification queries scoped to the most recent OR series.
@@ -96,31 +96,31 @@ Note: This prompt generates focused verification queries. For the full reference
 
 | Scenario | Prompt |
 |----------|--------|
-| Add a new feature end-to-end | `/xylab-new-feature` |
-| Finish a learning day | `/xylab-day-complete` |
-| Need local SSMS/sqlcmd access to Azure SQL | `/xylab-sql-local-access` |
-| Check for stale AI context / memory drift | `/xylab-context-audit` |
-| Verify payment DB records after a test run | `/xylab-verify-payments` |
+| Add a new feature end-to-end | `/XYDataLabs-new-feature` |
+| Finish a learning day | `/XYDataLabs-day-complete` |
+| Need local SSMS/sqlcmd access to Azure SQL | `/XYDataLabs-sql-local-access` |
+| Check for stale AI context / memory drift | `/XYDataLabs-context-audit` |
+| Verify payment DB records after a test run | `/XYDataLabs-verify-payments` |
 
 ## Typical Workflows
 
 ```
 [Starting a new feature]
-└─ /xylab-new-feature  →  gathers requirements, orchestrates 12-step workflow
+└─ /XYDataLabs-new-feature  →  gathers requirements, orchestrates 12-step workflow
    └─ Steps 2-9: CQRS Backend agent (entity → build+test)
    └─ Step 10: Code Reviewer agent (architecture audit)
-   └─ Step 11-12: commit → /xylab-context-audit
+   └─ Step 11-12: commit → /XYDataLabs-context-audit
 
 [After a coding/learning day]
-└─ /xylab-day-complete  →  routes curriculum + command updates
-   └─ [Optional] /xylab-context-audit  →  verify no stale references created
+└─ /XYDataLabs-day-complete  →  routes curriculum + command updates
+   └─ [Optional] /XYDataLabs-context-audit  →  verify no stale references created
 
 [After bootstrap or deploy]
-└─ /xylab-sql-local-access  →  open firewall + get SSMS connection details
-   └─ [When done] /xylab-sql-local-access  →  close firewall rule
+└─ /XYDataLabs-sql-local-access  →  open firewall + get SSMS connection details
+   └─ [When done] /XYDataLabs-sql-local-access  →  close firewall rule
 
 [After a payment test run or payment feature change]
-└─ /xylab-verify-payments  →  filtered DB queries for the most recent OR series
+└─ /XYDataLabs-verify-payments  →  filtered DB queries for the most recent OR series
    └─ Fails? → open docs/runbooks/payment-db-verification.md for full diagnostics
 ```
 
@@ -138,11 +138,11 @@ Select these in the VS Code Chat agent picker for focused, context-scoped assist
 
 | File | Purpose |
 |------|--------|
-| `.github/prompts/xylab-day-complete.prompt.md` | Day completion routing workflow |
-| `.github/prompts/xylab-sql-local-access.prompt.md` | SQL firewall open/close workflow |
-| `.github/prompts/xylab-context-audit.prompt.md` | Context drift detection audit |
-| `.github/prompts/xylab-new-feature.prompt.md` | End-to-end feature development workflow |
-| `.github/prompts/xylab-verify-payments.prompt.md` | Payment DB verification for a specific OR series |
+| `.github/prompts/XYDataLabs-day-complete.prompt.md` | Day completion routing workflow |
+| `.github/prompts/XYDataLabs-sql-local-access.prompt.md` | SQL firewall open/close workflow |
+| `.github/prompts/XYDataLabs-context-audit.prompt.md` | Context drift detection audit |
+| `.github/prompts/XYDataLabs-new-feature.prompt.md` | End-to-end feature development workflow |
+| `.github/prompts/XYDataLabs-verify-payments.prompt.md` | Payment DB verification for a specific OR series |
 | `.github/copilot-instructions.md` | Prompt index and quick usage reference |
 
 ## Operational Guidance

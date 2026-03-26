@@ -44,7 +44,7 @@ Report findings as:
 
 ## Workflow Role
 
-When invoked after `/xylab-new-feature` step 9 (build + test pass), run the full review checklist against all uncommitted changes. Report findings in the severity table format above.
+When invoked after `/XYDataLabs-new-feature` step 9 (build + test pass), run the full review checklist against all uncommitted changes. Report findings in the severity table format above.
 
 ## Constraints
 
