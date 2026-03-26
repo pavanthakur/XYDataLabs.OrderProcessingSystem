@@ -1,4 +1,3 @@
-using AutoMapper;
 using Bogus;
 using FluentValidation;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;

@@ -1,6 +1,7 @@
-using AutoMapper;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
+using XYDataLabs.OrderProcessingSystem.Application.DTO;
+using XYDataLabs.OrderProcessingSystem.Application.Mappings;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.Features.Customers.Commands;
@@ -8,12 +9,10 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Features.Customers.Comman
 public sealed class UpdateCustomerCommandHandler : ICommandHandler<UpdateCustomerCommand, Result<int>>
 {
     private readonly IAppDbContext _context;
-    private readonly IMapper _mapper;
 
-    public UpdateCustomerCommandHandler(IAppDbContext context, IMapper mapper)
+    public UpdateCustomerCommandHandler(IAppDbContext context)
     {
         _context = context;
-        _mapper = mapper;
     }
 
     public async Task<Result<int>> HandleAsync(UpdateCustomerCommand command, CancellationToken cancellationToken = default)
@@ -22,7 +21,7 @@ public sealed class UpdateCustomerCommandHandler : ICommandHandler<UpdateCustome
         if (customer is null)
             return Error.NotFound;
 
-        _mapper.Map(new DTO.UpdateCustomerRequestDto { Name = command.Name, Email = command.Email }, customer);
+        customer.ApplyUpdate(new UpdateCustomerRequestDto { Name = command.Name, Email = command.Email });
         _context.Customers.Update(customer);
         await _context.SaveChangesAsync(cancellationToken);
 

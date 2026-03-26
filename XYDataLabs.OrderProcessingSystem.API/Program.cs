@@ -1,5 +1,7 @@
 using Asp.Versioning;
-using AutoMapper;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 using XYDataLabs.OrderProcessingSystem.API.Middleware;
 using XYDataLabs.OrderProcessingSystem.Application;
 using XYDataLabs.OrderProcessingSystem.Infrastructure;
@@ -167,11 +169,47 @@ builder.Services.AddCors(options =>
 builder.InjectInfrastructureDependencies();
 builder.InjectApplicationDependencies();
 
-// Health checks
+// Health checks — /health/live (liveness), /health/ready (SQL + Redis), /health (backward compat)
 var healthChecksBuilder = builder.Services.AddHealthChecks();
 var dbConnForHealth = builder.Configuration.GetConnectionString(Constants.Configuration.OrderProcessingSystemDbConnectionString);
 if (!string.IsNullOrWhiteSpace(dbConnForHealth))
-    healthChecksBuilder.AddSqlServer(dbConnForHealth, name: "sqlserver");
+    healthChecksBuilder.AddSqlServer(dbConnForHealth, name: "sqlserver", tags: new[] { "ready" });
+var redisConnForHealth = builder.Configuration.GetConnectionString("Redis");
+if (!string.IsNullOrWhiteSpace(redisConnForHealth))
+    healthChecksBuilder.AddRedis(redisConnForHealth, name: "redis", tags: new[] { "ready" });
+
+// Rate limiting — 2-tier fixed window per tenant (keyed on X-Tenant-Code header)
+// TenantMiddleware validates the header first; rate limiting never fires on missing/invalid tenants.
+// payment-per-tenant : 20 req/min  — payment endpoints (card tokenisation, charge creation)
+// api-per-tenant     : 200 req/min — orders and customers
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddPolicy("payment-per-tenant", httpContext =>
+    {
+        var tenantCode = httpContext.Request.Headers["X-Tenant-Code"].FirstOrDefault() ?? "anonymous";
+        return RateLimitPartition.GetFixedWindowLimiter(tenantCode, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 20,
+            Window = TimeSpan.FromMinutes(1),
+            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+            QueueLimit = 0
+        });
+    });
+
+    options.AddPolicy("api-per-tenant", httpContext =>
+    {
+        var tenantCode = httpContext.Request.Headers["X-Tenant-Code"].FirstOrDefault() ?? "anonymous";
+        return RateLimitPartition.GetFixedWindowLimiter(tenantCode, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 200,
+            Window = TimeSpan.FromMinutes(1),
+            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+            QueueLimit = 0
+        });
+    });
+});
 
 builder.Services.AddControllers();
 
@@ -234,13 +272,6 @@ builder.Services.AddSwaggerGen(options =>
         Description = isAzure ? $"Azure {environmentName.ToUpper()} Server" : $"{environmentName.ToUpper()} Server"
     });
 });
-
-var mappingConfig = new MapperConfiguration(mapperConfiguration =>
-{
-    mapperConfiguration.AddProfile(new MapperConfigurationProfile());
-});
-IMapper mapper = mappingConfig.CreateMapper();
-builder.Services.AddSingleton(mapper);
 
 // Configure Serilog with environment-aware paths  
 builder.Host.UseSerilog((context, services, loggerConfiguration) =>
@@ -435,6 +466,11 @@ app.UseAuthorization();
 
 app.UseMiddleware<TenantMiddleware>();
 
+// Rate limiter after TenantMiddleware — tenant is validated first, so the partition key
+// is always a known tenant code. Missing/invalid tenant requests are already rejected
+// 400/403 before any rate-limit counter is evaluated.
+app.UseRateLimiter();
+
 app.UseMiddleware<CorrelationMiddleware>();
 
 app.UseMiddleware<LoggingMiddleware>();
@@ -443,7 +479,12 @@ app.UseMiddleware<ErrorHandlingMiddleware>();
 
 app.MapControllers();
 
-app.MapHealthChecks("/health");
+// Liveness — no dependency checks; always 200 if the process is running (App Service liveness probe)
+app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
+// Readiness — SQL Server + Redis (when configured); only "ready"-tagged checks (App Service readiness probe)
+app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
+// Backward-compat alias — used by manage-appservice-slots.ps1 warmup URL
+app.MapHealthChecks("/health", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
 
 if (isAzure)
 {

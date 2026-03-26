@@ -24,7 +24,7 @@ namespace XYDataLabs.OrderProcessingSystem.UnitTest.ServicesTest
             var mockDbSet = GetMockDbSet(customers);
             MockDbContext.Setup(db => db.Customers).Returns(mockDbSet.Object);
 
-            var handler = new CreateOrderCommandHandler(MockDbContext.Object, MockMapper.Object);
+            var handler = new CreateOrderCommandHandler(MockDbContext.Object);
 
             // Act
             var result = await handler.HandleAsync(new CreateOrderCommand(2, new List<int> { 1, 2 }));
@@ -42,7 +42,7 @@ namespace XYDataLabs.OrderProcessingSystem.UnitTest.ServicesTest
             var mockDbSet = GetMockDbSet(customers);
             MockDbContext.Setup(db => db.Customers).Returns(mockDbSet.Object);
 
-            var handler = new CreateOrderCommandHandler(MockDbContext.Object, MockMapper.Object);
+            var handler = new CreateOrderCommandHandler(MockDbContext.Object);
 
             // Act
             var result = await handler.HandleAsync(new CreateOrderCommand(1, new List<int> { 1, 2 }));
@@ -64,7 +64,7 @@ namespace XYDataLabs.OrderProcessingSystem.UnitTest.ServicesTest
             var mockDbSetProducts = GetMockDbSet(products);
             MockDbContext.Setup(db => db.Products).Returns(mockDbSetProducts.Object);
 
-            var handler = new CreateOrderCommandHandler(MockDbContext.Object, MockMapper.Object);
+            var handler = new CreateOrderCommandHandler(MockDbContext.Object);
 
             // Act
             var result = await handler.HandleAsync(new CreateOrderCommand(1, new List<int> { 1, 2 }));
@@ -90,31 +90,9 @@ namespace XYDataLabs.OrderProcessingSystem.UnitTest.ServicesTest
             var mockDbSetOrders = GetMockDbSet(orders);
             MockDbContext.Setup(db => db.Orders).Returns(mockDbSetOrders.Object);
 
-            var orderDto = new OrderDto
-            {
-                OrderId = orders.First().OrderId,
-                OrderDate = orders.First().OrderDate,
-                CustomerId = CustomerId,
-                TotalPrice = orders.First().TotalPrice,
-                OrderProductDtos = orders.First().OrderProducts.Select(op => new OrderProductDto
-                {
-                    ProductId = op.Product?.ProductId ?? 0,
-                    Quantity = op.Quantity,
-                    Price = op.Price,
-                    ProductDto = op.Product != null ? new ProductDto
-                    {
-                        ProductId = op.Product.ProductId,
-                        Name = op.Product.Name,
-                        Description = op.Product.Description,
-                        Price = op.Product.Price
-                    } : null
-                }).ToList()
-            };
-
-            MockMapper.Setup(m => m.Map<OrderDto>(It.IsAny<Order>())).Returns(orderDto);
             MockDbContext.Setup(db => db.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
 
-            var handler = new CreateOrderCommandHandler(MockDbContext.Object, MockMapper.Object);
+            var handler = new CreateOrderCommandHandler(MockDbContext.Object);
 
             // Act
             var result = await handler.HandleAsync(new CreateOrderCommand(1, new List<int> { 1 }));
@@ -122,7 +100,7 @@ namespace XYDataLabs.OrderProcessingSystem.UnitTest.ServicesTest
             // Assert
             result.IsSuccess.Should().BeTrue();
             result.Value.Should().NotBeNull();
-            result.Value!.CustomerId.Should().Be(orderDto.CustomerId);
+            result.Value!.CustomerId.Should().Be(CustomerId);
         }
 
         [Fact]
@@ -145,30 +123,15 @@ namespace XYDataLabs.OrderProcessingSystem.UnitTest.ServicesTest
             var mockOrderDbSet = GetMockDbSet(new List<Order> { order }.AsQueryable());
             MockDbContext.Setup(c => c.Orders).Returns(mockOrderDbSet.Object);
 
-            var orderDto = new OrderDto
-            {
-                OrderId = orderId,
-                CustomerId = CustomerId,
-                TotalPrice = 100,
-                OrderProductDtos = order.OrderProducts.Select(op => new OrderProductDto
-                {
-                    ProductId = op.ProductId,
-                    Price = op.Price,
-                    Quantity = op.Quantity
-                }).ToList()
-            };
-
-            MockMapper.Setup(m => m.Map<OrderDto>(It.IsAny<Order>())).Returns(orderDto);
-
-            var handler = new GetOrderDetailsQueryHandler(MockDbContext.Object, MockMapper.Object);
+            var handler = new GetOrderDetailsQueryHandler(MockDbContext.Object);
 
             // Act
             var result = await handler.HandleAsync(new GetOrderDetailsQuery(orderId));
 
             // Assert
             result.IsSuccess.Should().BeTrue();
-            result.Value!.OrderId.Should().Be(orderDto.OrderId);
-            result.Value.TotalPrice.Should().Be(orderDto.TotalPrice);
+            result.Value!.OrderId.Should().Be(orderId);
+            result.Value.TotalPrice.Should().Be(100);
         }
 
         [Fact]
@@ -178,7 +141,7 @@ namespace XYDataLabs.OrderProcessingSystem.UnitTest.ServicesTest
             var mockOrderDbSet = GetMockDbSet(new List<Order>().AsQueryable());
             MockDbContext.Setup(c => c.Orders).Returns(mockOrderDbSet.Object);
 
-            var handler = new GetOrderDetailsQueryHandler(MockDbContext.Object, MockMapper.Object);
+            var handler = new GetOrderDetailsQueryHandler(MockDbContext.Object);
 
             // Act
             var result = await handler.HandleAsync(new GetOrderDetailsQuery(999));

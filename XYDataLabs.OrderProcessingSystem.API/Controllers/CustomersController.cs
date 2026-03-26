@@ -1,5 +1,6 @@
 ﻿using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using XYDataLabs.OrderProcessingSystem.API.Extensions;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
@@ -14,6 +15,7 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
     [ApiVersion("1.0")]
     [Route("api/v{version:apiVersion}/[controller]")]
     [ApiController]
+    [EnableRateLimiting("api-per-tenant")]
     public class CustomerController : ControllerBase
     {
         private readonly IDispatcher _dispatcher;

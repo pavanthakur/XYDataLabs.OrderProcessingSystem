@@ -98,12 +98,14 @@ The payment provider is wrapped behind `IOpenPayAdapterService`. The application
 | Database | Azure SQL / SQL Server (Testcontainers for integration tests) |
 | CQRS | Hand-rolled (`ICommand`/`IQuery`/`IDispatcher`) |
 | Validation | FluentValidation 11.x |
-| Mapping | AutoMapper 13 |
+| Mapping | Manual extension methods (`Mappings/`) |
 | Logging | Serilog 4.x (Console + File + Application Insights) |
 | Tracing | OpenTelemetry 1.10 -> Azure Monitor |
 | Payment gateway | OpenPay (`Openpay` NuGet 1.0.25) via adapter pattern |
-| Caching | Redis (`StackExchange.Redis`) |
-| Health checks | `AspNetCore.HealthChecks.SqlServer` |
+| Caching | Redis (`IDistributedCache` — provider-agnostic; backed by StackExchange.Redis in production) |
+| Rate limiting | `Microsoft.AspNetCore.RateLimiting` (built-in) — per-tenant fixed window; 20 req/min (payments), 200 req/min (orders + customers) |
+| Resilience | `Microsoft.Extensions.Resilience` (Polly v8) — retry 3× + circuit breaker on OpenPay SDK calls |
+| Health checks | `/health/live` (liveness) · `/health/ready` (SQL + Redis) — `AspNetCore.HealthChecks.SqlServer` + `AspNetCore.HealthChecks.Redis` |
 | Architecture tests | NetArchTest.Rules 1.3.2 |
 | Integration tests | Testcontainers.MsSql 4.3 + `WebApplicationFactory` |
 | Unit tests | xUnit + Moq + FluentAssertions + Bogus |
@@ -332,7 +334,7 @@ Architecture tests will fail if:
 
 ## CI/CD & Azure Deployment
 
-9 GitHub Actions workflows enforce quality gates before every deployment. Authentication is passwordless OIDC — no secrets stored; GitHub OIDC token exchanges for an Azure AD federated credential.
+9 GitHub Actions workflows enforce quality gates before every deployment. Authentication uses passwordless OIDC — no client secrets stored anywhere; each workflow run exchanges a short-lived GitHub OIDC token for an Azure AD federated credential. This is the production-standard alternative to storing service principal secrets in GitHub.
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|

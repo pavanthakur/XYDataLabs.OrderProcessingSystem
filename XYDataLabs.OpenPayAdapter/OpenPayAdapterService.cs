@@ -1,5 +1,7 @@
 ﻿using XYDataLabs.OpenPayAdapter.Configuration;
 using Microsoft.Extensions.Options;
+using Polly;
+using Polly.Registry;
 using Serilog;
 using Openpay;
 using Openpay.Entities;
@@ -11,12 +13,16 @@ namespace XYDataLabs.OpenPayAdapter
     {
         private readonly OpenpayAPI _openpayApi;
         private readonly ILogger _logger;
+        private readonly ResiliencePipeline _pipeline;
+
         public OpenPayAdapterService(
             IOptions<OpenPayConfig> config,
-            ILogger logger)
+            ILogger logger,
+            ResiliencePipelineProvider<string> pipelineProvider)
         {
             _logger = logger;
             _openpayApi = new OpenpayAPI(config.Value.MerchantId, config.Value.PrivateKey, config.Value.IsProduction);
+            _pipeline = pipelineProvider.GetPipeline("openpay");
         }
 
         public async Task<Customer> CreateCustomerAsync(Customer customer)
@@ -25,7 +31,9 @@ namespace XYDataLabs.OpenPayAdapter
             _logger.Information("Creating customer with email: {Email}", maskedEmail);
             try
             {
-                var createdCustomer = await Task.Run(() => _openpayApi.CustomerService.Create(customer));
+                var createdCustomer = await _pipeline.ExecuteAsync<Customer>(
+                    ct => new ValueTask<Customer>(Task.Run(() => _openpayApi.CustomerService.Create(customer), ct)),
+                    CancellationToken.None);
                 _logger.Information("Successfully created customer with ID: {CustomerId}", createdCustomer.Id);
                 return createdCustomer;
             }
@@ -41,7 +49,9 @@ namespace XYDataLabs.OpenPayAdapter
             _logger.Information("Creating card token for holder: {HolderName}", maskedHolderName);
             try
             {
-                var createdToken = await Task.Run(() => _openpayApi.CardService.Create(card));
+                var createdToken = await _pipeline.ExecuteAsync<Card>(
+                    ct => new ValueTask<Card>(Task.Run(() => _openpayApi.CardService.Create(card), ct)),
+                    CancellationToken.None);
                 _logger.Information("Successfully created card token with ID: {TokenId}", createdToken.Id);
                 return createdToken;
             }
@@ -57,7 +67,9 @@ namespace XYDataLabs.OpenPayAdapter
             _logger.Information("Creating charge for amount: {Amount} {Currency}", request.Amount, request.Currency);
             try
             {
-                var charge = await Task.Run(() => _openpayApi.ChargeService.Create(request));
+                var charge = await _pipeline.ExecuteAsync<Charge>(
+                    ct => new ValueTask<Charge>(Task.Run(() => _openpayApi.ChargeService.Create(request), ct)),
+                    CancellationToken.None);
                 _logger.Information("Successfully created charge with ID: {ChargeId}", charge.Id);
                 return charge;
             }
