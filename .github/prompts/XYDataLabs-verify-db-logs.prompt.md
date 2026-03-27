@@ -23,10 +23,13 @@ Map their answer to the following table:
 
 | Selection | Env tag | API log file | UI log file | Shared DB | TenantC DB |
 |---|---|---|---|---|---|
-| dev docker (http or https) | `dev` | `webapi-dev-{DATE}.log` | `ui-dev-{DATE}.log` | `OrderProcessingSystem_Dev` | `OrderProcessingSystem_TenantC_Dev` |
-| stg docker (http or https) | `stg` | `webapi-stg-{DATE}.log` | `ui-stg-{DATE}.log` | `OrderProcessingSystem_Stg` | `OrderProcessingSystem_TenantC_Stg` |
-| prod docker (http or https) | `prod` | `webapi-prod-{DATE}.log` | `ui-prod-{DATE}.log` | `OrderProcessingSystem_Prod` | `OrderProcessingSystem_TenantC_Prod` |
-| local dotnet run (http or https) | `dev` | `webapi-dev-{DATE}.log` | `ui-dev-{DATE}.log` | `OrderProcessingSystem_Local` | `OrderProcessingSystem_TenantC` |
+| dev http docker | `dev` | `webapi-dev-http-{DATE}.log` | `ui-dev-http-{DATE}.log` | `OrderProcessingSystem_Dev` | `OrderProcessingSystem_TenantC_Dev` |
+| dev https docker | `dev` | `webapi-dev-https-{DATE}.log` | `ui-dev-https-{DATE}.log` | `OrderProcessingSystem_Dev` | `OrderProcessingSystem_TenantC_Dev` |
+| stg http docker | `stg` | `webapi-stg-http-{DATE}.log` | `ui-stg-http-{DATE}.log` | `OrderProcessingSystem_Stg` | `OrderProcessingSystem_TenantC_Stg` |
+| stg https docker | `stg` | `webapi-stg-https-{DATE}.log` | `ui-stg-https-{DATE}.log` | `OrderProcessingSystem_Stg` | `OrderProcessingSystem_TenantC_Stg` |
+| prod http docker | `prod` | `webapi-prod-http-{DATE}.log` | `ui-prod-http-{DATE}.log` | `OrderProcessingSystem_Prod` | `OrderProcessingSystem_TenantC_Prod` |
+| prod https docker | `prod` | `webapi-prod-https-{DATE}.log` | `ui-prod-https-{DATE}.log` | `OrderProcessingSystem_Prod` | `OrderProcessingSystem_TenantC_Prod` |
+| local dotnet run | `dev` | `webapi-dev-http-{DATE}.log` | `ui-dev-http-{DATE}.log` | `OrderProcessingSystem_Local` | `OrderProcessingSystem_TenantC` |
 
 `{DATE}` = today as `YYYYMMDD` (e.g. `20260328`).  
 Log files are in `Q:\GIT\TestAppXY_OrderProcessingSystem\logs\`.
@@ -50,7 +53,7 @@ $dateTag = (Get-Date).ToString("yyyyMMdd")   # e.g. 20260328
 
 Read **API log** — extract only payment-relevant lines:
 ```powershell
-$apiLog  = "Q:\GIT\TestAppXY_OrderProcessingSystem\logs\webapi-{ENV_TAG}-$dateTag.log"
+$apiLog  = "Q:\GIT\TestAppXY_OrderProcessingSystem\logs\webapi-{ENV_TAG}-{PROFILE}-$dateTag.log"
 Get-Content $apiLog |
   Select-String -Pattern "Generated payment|created charge|charge created|callback reconciliation completed|confirm-status responded|Response: 200.*OR-" |
   ForEach-Object { $_.Line.Trim() }
@@ -58,13 +61,13 @@ Get-Content $apiLog |
 
 Read **UI log** — extract only callback lines:
 ```powershell
-$uiLog = "Q:\GIT\TestAppXY_OrderProcessingSystem\logs\ui-{ENV_TAG}-$dateTag.log"
+$uiLog = "Q:\GIT\TestAppXY_OrderProcessingSystem\logs\ui-{ENV_TAG}-{PROFILE}-$dateTag.log"
 Get-Content $uiLog |
   Select-String -Pattern "OR-|callback|payment/callback responded" |
   ForEach-Object { $_.Line.Trim() }
 ```
 
-Replace `{ENV_TAG}` with the env tag from Step 1 (`dev`, `stg`, or `prod`).
+Replace `{ENV_TAG}` with the env tag and `{PROFILE}` with `http` or `https` from Step 1.
 
 If either file does not exist, note this as a finding and proceed with whichever file is available.
 
@@ -115,9 +118,9 @@ Note the `ThreeDSEnabled` per tenant — it controls expected row counts in Q2/Q
 
 ---
 
-## Step 5 — DB queries (today's records only)
+## Step 5 — DB queries
 
-All queries add `AND ct.CreatedDate >= CAST(GETDATE() AS DATE)` to scope to today.
+The `<PREFIX>` is the day-specific OR prefix extracted from the log (e.g. `OR-1-28Mar-tA-http-dock-prod`). No date filter is applied — the prefix already scopes to the correct run and avoids UTC/IST timezone offset issues where IST payments before 05:30 land on the previous UTC date.
 
 ### Q2 — CardTransactions (shared DB)
 
@@ -129,7 +132,6 @@ SELECT t.Code AS Tenant, ct.CustomerOrderId, ct.TransactionId AS ChargeId,
 FROM   dbo.CardTransactions ct
 JOIN   dbo.Tenants t ON t.Id = ct.TenantId
 WHERE  ct.CustomerOrderId LIKE '<PREFIX>%'
-  AND  ct.CreatedDate >= CAST(GETDATE() AS DATE)
 ORDER BY ct.TenantId, ct.CustomerOrderId, ct.Id;
 ```
 
@@ -145,7 +147,6 @@ FROM   dbo.TransactionStatusHistories tsh
 JOIN   dbo.CardTransactions ct ON ct.Id = tsh.TransactionId
 JOIN   dbo.Tenants t ON t.Id = ct.TenantId
 WHERE  ct.CustomerOrderId LIKE '<PREFIX>%'
-  AND  ct.CreatedDate >= CAST(GETDATE() AS DATE)
 ORDER BY ct.TenantId, ct.CustomerOrderId, ct.Id, tsh.Id;
 ```
 
@@ -158,7 +159,6 @@ SELECT ct.CustomerOrderId, ct.TenantId, t.Code
 FROM   dbo.CardTransactions ct
 JOIN   dbo.Tenants t ON t.Id = ct.TenantId
 WHERE  ct.CustomerOrderId LIKE '<PREFIX>%'
-  AND  ct.CreatedDate >= CAST(GETDATE() AS DATE)
   AND  ((ct.CustomerOrderId LIKE '%-tA-%' AND ct.TenantId <> 1)
      OR (ct.CustomerOrderId LIKE '%-tB-%' AND ct.TenantId <> 2));
 ```
@@ -175,7 +175,6 @@ SELECT ct.CustomerOrderId, ct.TransactionId AS ChargeId,
 FROM   dbo.CardTransactions ct
 WHERE  ct.TenantId = 3
   AND  ct.CustomerOrderId LIKE '<PREFIX>%'
-  AND  ct.CreatedDate >= CAST(GETDATE() AS DATE)
 ORDER BY ct.CustomerOrderId, ct.Id;
 ```
 
@@ -190,7 +189,6 @@ FROM   dbo.TransactionStatusHistories tsh
 JOIN   dbo.CardTransactions ct ON ct.Id = tsh.TransactionId
 WHERE  ct.TenantId = 3
   AND  ct.CustomerOrderId LIKE '<PREFIX>%'
-  AND  ct.CreatedDate >= CAST(GETDATE() AS DATE)
 ORDER BY ct.CustomerOrderId, ct.Id, tsh.Id;
 ```
 
@@ -202,8 +200,7 @@ ORDER BY ct.CustomerOrderId, ct.Id, tsh.Id;
 SELECT ct.CustomerOrderId, ct.TenantId
 FROM   dbo.CardTransactions ct
 WHERE  ct.TenantId = 3
-  AND  ct.CustomerOrderId LIKE '<PREFIX>%'
-  AND  ct.CreatedDate >= CAST(GETDATE() AS DATE);
+  AND  ct.CustomerOrderId LIKE '<PREFIX>%';
 ```
 
 **Expected: 0 rows.**
@@ -253,6 +250,6 @@ Output a consolidated pass/fail table:
 
 If **any check fails**:
 - Missing DB rows → check API errors in the log around the same timestamp
-- Missing UI callbacks → possible Serilog file-lock (multiple containers targeting same log file); verify each env uses its own log file name
+- Missing UI callbacks → check you are reading the **correct profile's** log file (`http` vs `https`); each container writes to its own file since the profile suffix fix
 - `Status ≠ completed` → check StatusHistories for the partial trail and compare with OpenPay response in the log
 - For full diagnostic queries (Q1, Q3, Q4, Q6, Q6a, Q7 etc.), open `docs/runbooks/payment-db-verification.md`

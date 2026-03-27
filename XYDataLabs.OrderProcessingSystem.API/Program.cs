@@ -279,7 +279,9 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-// Configure Serilog with environment-aware paths  
+// Configure Serilog with environment-aware paths
+// Include http/https profile in the filename so same-env containers don't share a file lock.
+var profileSuffix = Environment.GetEnvironmentVariable("USE_HTTPS") == "true" ? "https" : "http";
 builder.Host.UseSerilog((context, services, loggerConfiguration) =>
 {
     loggerConfiguration
@@ -300,12 +302,12 @@ builder.Host.UseSerilog((context, services, loggerConfiguration) =>
 
     if (isDocker)
     {
-        // Each environment profile writes to its own file (e.g. webapi-dev-, webapi-prod-) to prevent
+        // Each env+profile writes to its own file (e.g. webapi-prod-http-, webapi-prod-https-) to prevent
         // concurrent write conflicts when multiple Docker profiles run against the same host volume.
         loggerConfiguration
             .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{NewLine}{Exception}")
             .WriteTo.File(
-                path: $"/logs/webapi-{environmentName}-.log",
+                path: $"/logs/webapi-{environmentName}-{profileSuffix}-.log",
                 rollingInterval: RollingInterval.Day,
                 outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{Exception}{NewLine}"
             );
@@ -315,7 +317,7 @@ builder.Host.UseSerilog((context, services, loggerConfiguration) =>
         loggerConfiguration
             .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{NewLine}{Exception}")
             .WriteTo.File(
-                path: $"../logs/webapi-{environmentName}-.log",
+                path: $"../logs/webapi-{environmentName}-{profileSuffix}-.log",
                 rollingInterval: RollingInterval.Day,
                 outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{Exception}{NewLine}"
             );
