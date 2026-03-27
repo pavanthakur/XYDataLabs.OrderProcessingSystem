@@ -144,25 +144,31 @@ builder.Services.AddObservability(
 
 builder.Services.AddCors(options =>
 {
-    //options.AddPolicy("AllowPaymentUI", policy =>
-    //{
-    //    policy.WithOrigins(
-    //            "https://localhost:7112",  // UI HTTPS port
-    //            "http://localhost:5208",   // UI HTTP port
-    //            "https://localhost:32773",  // Additional UI port
-    //            "https://localhost:32775"  // Additional UI port
-    //        )
-    //        .AllowAnyMethod()
-    //        .AllowAnyHeader()
-    //        .AllowCredentials();
-    //});
-
+    // Development / Staging / local Docker: permissive policy for inner-loop convenience.
     options.AddPolicy("AllowAll", policy =>
     {
         policy.SetIsOriginAllowed(_ => true) // Allow any origin
               .AllowAnyMethod()
               .AllowAnyHeader()
               .AllowCredentials();
+    });
+
+    // Production (Azure): restrict to the known UI origin derived from the API site name.
+    // The UI App Service name follows the pattern: replace "-api-xyapp-" with "-ui-xyapp-".
+    var uiOrigin = !string.IsNullOrWhiteSpace(azureSiteName)
+        ? $"https://{azureSiteName.Replace("-api-xyapp-", "-ui-xyapp-", StringComparison.Ordinal)}.azurewebsites.net"
+        : null;
+
+    options.AddPolicy("AllowProductionUI", policy =>
+    {
+        var origins = new List<string>();
+        if (!string.IsNullOrWhiteSpace(uiOrigin))
+            origins.Add(uiOrigin);
+
+        if (origins.Count > 0)
+            policy.WithOrigins([.. origins]).AllowAnyMethod().AllowAnyHeader().AllowCredentials();
+        else
+            policy.SetIsOriginAllowed(_ => false); // no origins configured — block all
     });
 });
 
@@ -418,41 +424,19 @@ if (environmentName == Constants.Environments.Dev || environmentName == Constant
         app.UseExceptionHandler(ConfigureApiExceptionHandler);
     }
 }
-else if (environmentName == "prod")
-{
-    // Production environment configuration
-    
-    // TEMPORARY: Enable Swagger for Production testing
-    // TODO: DISABLE SWAGGER IN PRODUCTION for security reasons
-    // To disable: Comment out the next 6 lines and uncomment the security block below
-    app.UseSwagger();
-    app.UseSwaggerUI(options =>
-    {
-        options.SwaggerEndpoint("/swagger/v1/swagger.json", "OrderProcessingSystem API v1");
-        options.RoutePrefix = "swagger";
-        options.InjectJavascript("/swagger-assets/tenant-selector.js");
-        options.UseRequestInterceptor("(req) => { const t = window.OrderProcessingActiveTenant; if (t) req.headers['X-Tenant-Code'] = t; return req; }");
-    });
-    app.UseExceptionHandler(ConfigureApiExceptionHandler);
-    app.UseHsts();
-    
-    /* PRODUCTION SECURITY CONFIGURATION (currently commented for testing)
-    // Uncomment this block and comment out Swagger above for production security:
-    app.UseExceptionHandler("/Home/Error");
-    app.UseHsts();
-    // Note: Swagger should be disabled in production for security
-    */
-}
 else
 {
-    // Fallback for other environments
+    // Production and any unrecognised environment: Swagger disabled, HSTS enforced.
     app.UseExceptionHandler(ConfigureApiExceptionHandler);
     app.UseHsts();
 }
 
-// Enable CORS before other middleware
-//app.UseCors("AllowPaymentUI");
-app.UseCors("AllowAll");
+// Enable CORS before other middleware.
+// Production (Azure) uses origin-restricted policy; all other environments use AllowAll.
+var corsPolicy = (isAzure && string.Equals(environmentName, Constants.Environments.Production, StringComparison.Ordinal))
+    ? "AllowProductionUI"
+    : "AllowAll";
+app.UseCors(corsPolicy);
 
 // Only use HTTPS redirection if enabled in ApiSettings
 if (activeSettings.HttpsEnabled)
@@ -529,11 +513,3 @@ static string ResolveTenantCodeForLogging(HttpContext httpContext)
 
 // Required for WebApplicationFactory<Program> in integration tests
 public partial class Program { }
-
-#if RELEASE
-// BUILD GUARD: Prevent CORS AllowAll and Swagger in Azure production
-if (isAzure && environmentName == Constants.Environments.Production)
-{
-    throw new InvalidOperationException("SECURITY BLOCK: CORS AllowAll or Swagger must not be enabled in Azure production. See ADR-010.");
-}
-#endif

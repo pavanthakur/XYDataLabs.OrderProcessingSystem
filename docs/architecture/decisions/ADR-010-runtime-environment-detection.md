@@ -82,14 +82,13 @@ when adding any new environment-conditional logic.**
 
 | Feature | Gate condition | VS local | Dev Docker | Stg Docker | Prod Docker | Azure dev | Azure stg | Azure prod |
 |---------|---------------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| Swagger UI | `environmentName == "dev" \|\| "stg"` (+ temp prod) | ✅ | ✅ | ✅ | ✅* | ✅ | ✅ | ✅* |
+| Swagger UI | `environmentName == "dev" \|\| "stg"` | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ |
 | Developer exception page (API) | `IsDevelopment && !isAzure` | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | EF Core auto-migrations | `!isAzureRuntime` (i.e. `!isAzure`) | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| CORS policy | `AllowAll` unless `isAzure && prod` → `AllowProductionUI` | AllowAll | AllowAll | AllowAll | AllowAll | AllowAll | AllowAll | AllowProductionUI |
 | Log sink: file `/logs/webapi-.log` | `isDocker` | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Log sink: local file path | `!isDocker` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Swagger server URL | `isAzure` → Azure domain, else sharedsettings | auto | auto | auto | auto | ✅ | ✅ | ✅ |
-
-> *Swagger in prod is marked TEMPORARY in code — see `TODO: DISABLE SWAGGER IN PRODUCTION`.
 
 ### Payment / OpenPay
 
@@ -106,7 +105,7 @@ when adding any new environment-conditional logic.**
 When writing any code that behaves differently based on runtime context, validate every cell in
 the matrix before merging:
 
-```
+```text
 [ ] VS F5 local (IsDevelopment=true, IsDocker=false, IsAzure=false)
 [ ] Dev Docker  (IsDevelopment=true, IsDocker=true,  IsAzure=false) — docker-compose.dev.yml
 [ ] Stg Docker  (IsDevelopment=false, IsDocker=true, IsAzure=false) — docker-compose.stg.yml
@@ -158,9 +157,9 @@ Do NOT re-read `ASPNETCORE_ENVIRONMENT` directly in controllers — go through `
   explicitly in AKS/ACA pod environment, or introduce a new `DEPLOYMENT_TARGET` variable.
 
 **Future obligations:**
-- When Swagger is disabled in production (see TODO in Program.cs), update the Swagger row above.
 - When deploying to AKS/ACA, re-evaluate the `isAzure` detection strategy and update this ADR.
 - When adding any new environment-conditional feature, add a row to the Feature Gate Inventory.
+- `AllowProductionUI` CORS origin is currently derived from the API site name by replacing `-api-xyapp-` with `-ui-xyapp-`. If that naming convention changes, update `AddCors` in `API/Program.cs` and this ADR.
 
 ---
 
@@ -172,6 +171,9 @@ Do NOT re-read `ASPNETCORE_ENVIRONMENT` directly in controllers — go through `
 | 2026-03-27 | Checklist audit | API migrations block re-read `WEBSITE_SITE_NAME` into `isAzureRuntime` instead of reusing top-level `isAzure` | Fixed in `API/Program.cs` (commit cd02192) |
 | 2026-03-27 | Checklist audit | CORS `AllowAll` policy active in all environments including Azure prod — `AllowPaymentUI` policy commented out | Known tech debt, pre-existing. Needs origin whitelist before Azure prod hardening |
 | 2026-03-27 | Checklist audit | Swagger exposed in Azure prod — `TODO: DISABLE SWAGGER IN PRODUCTION` comment in code | Known tech debt, pre-existing |
+| 2026-03-27 | Code review | CORS `AllowAll` applied to Azure prod — `SetIsOriginAllowed(_ => true)` with `AllowCredentials()` is dangerous in prod (OWASP A05) | Fixed: added `AllowProductionUI` policy restricting origin to UI App Service domain; applied via `corsPolicy` variable at runtime |
+| 2026-03-27 | Code review | Swagger still enabled in Azure prod despite `TODO` comment; `environment == "prod"` block unconditionally called `app.UseSwagger()` | Fixed: prod branch now uses exception handler + HSTS only; `TODO` comment removed |
+| 2026-03-27 | Code review | `#if RELEASE` block appended after `public partial class Program { }` — top-level statements illegal after type declarations (`CS8803`); throw would crash every prod startup | Fixed: block removed entirely |
 | 2026-03-27 | Checklist audit | `MyApiClient` registered with `http://api:{port}` (Docker hostname) — wrong in Azure since `isDocker=true` there. Never consumed by any controller — dead registration | Low risk (unused). Remove when doing HttpClient cleanup |
 | 2026-03-27 | Checklist audit | Log file sink `/logs/webapi-.log` and `/logs/ui-.log` write to ephemeral Azure App Service filesystem | Low risk — App Insights covers Azure logs when connection string present |
 

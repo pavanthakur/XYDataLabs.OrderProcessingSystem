@@ -1,7 +1,6 @@
 # ADR-008: Architecture Test Guardrails for Multitenancy Compliance
 
-## Status
-Accepted
+**Status:** Accepted
 
 ## Context
 The codebase uses a hybrid multitenancy model (ADR-007) with SharedPool and Dedicated tiers.
@@ -33,10 +32,10 @@ Implement 10 dynamic architecture tests across two test classes, enforced at CI 
 | 1.4 | `IAppDbContext_DbSets_Must_Match_OrderProcessingSystemDbContext_Minus_Tenant` | MultiTenantSchemaTests | IAppDbContext stays in sync with concrete DbContext |
 | 1.5 | `IAppDbContext_Should_Not_Expose_Tenant_DbSet` | MultiTenantSchemaTests | Tenant system entity excluded from application abstraction |
 | 1.6 | `IgnoreQueryFilters_Usage_Must_Be_In_Allow_List_Only` | ArchitectureTests | File-system scan with explicit allow-list (currently empty — see ADR-009) |
-| 1.7 | `All_CQRS_Handlers_Must_Return_Result_T` | ArchitectureTests | Every ICommandHandler/IQueryHandler returns Result<T> |
+| 1.7 | `All_CQRS_Handlers_Must_Return_Result_T` | ArchitectureTests | Every ICommandHandler/IQueryHandler returns `Result<T>` |
 | FC3 | `Controllers_Should_Not_Accept_TenantId_Or_TenantCode_Parameters` | ArchitectureTests | No TenantId/TenantCode/TenantExternalId in action params or request DTOs |
 | FC4 | `ITenantProvider_Must_Expose_Hybrid_Routing_Properties` | MultiTenantSchemaTests | ConnectionString + IsSharedPool cannot be removed from ITenantProvider |
-| — | `GetAllTenantOwnedEntityTypes()` | MultiTenantSchemaTests | Shared helper: reflects IAppDbContext DbSet<T> properties |
+| — | `GetAllTenantOwnedEntityTypes()` | MultiTenantSchemaTests | Shared helper: reflects IAppDbContext `DbSet<T>` properties |
 
 ### How it scales
 Tests 1.1–1.5 use `GetAllTenantOwnedEntityTypes()` which reflects all `DbSet<T>` properties from
@@ -58,7 +57,7 @@ per-entity test maintenance.
 - Any new tenant-owned entity that skips ConfigureTenantOwnership, audit base, or IAppDbContext sync will fail CI immediately.
 - IgnoreQueryFilters cannot be added without updating the allow-list — creates an auditable approval trail.
 - Controller tenant parameter violations are caught before merge.
-- CQRS handler consistency is enforced (Result<T> everywhere).
+- CQRS handler consistency is enforced (`Result<T>` everywhere).
 
 **Negative / Trade-offs:**
 - IgnoreQueryFilters test uses file-system scanning — could have false positives if a file contains the string in a comment. Acceptable trade-off: better to flag and review than to miss a real bypass.
