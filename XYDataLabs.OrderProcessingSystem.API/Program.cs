@@ -529,3 +529,11 @@ static string ResolveTenantCodeForLogging(HttpContext httpContext)
 
 // Required for WebApplicationFactory<Program> in integration tests
 public partial class Program { }
+
+#if RELEASE
+// BUILD GUARD: Prevent CORS AllowAll and Swagger in Azure production
+if (isAzure && environmentName == Constants.Environments.Production)
+{
+    throw new InvalidOperationException("SECURITY BLOCK: CORS AllowAll or Swagger must not be enabled in Azure production. See ADR-010.");
+}
+#endif
