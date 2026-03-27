@@ -300,10 +300,12 @@ builder.Host.UseSerilog((context, services, loggerConfiguration) =>
 
     if (isDocker)
     {
+        // Each environment profile writes to its own file (e.g. webapi-dev-, webapi-prod-) to prevent
+        // concurrent write conflicts when multiple Docker profiles run against the same host volume.
         loggerConfiguration
             .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{NewLine}{Exception}")
             .WriteTo.File(
-                path: "/logs/webapi-.log",
+                path: $"/logs/webapi-{environmentName}-.log",
                 rollingInterval: RollingInterval.Day,
                 outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{Exception}{NewLine}"
             );
@@ -313,7 +315,7 @@ builder.Host.UseSerilog((context, services, loggerConfiguration) =>
         loggerConfiguration
             .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{NewLine}{Exception}")
             .WriteTo.File(
-                path: "../logs/webapi-.log",
+                path: $"../logs/webapi-{environmentName}-.log",
                 rollingInterval: RollingInterval.Day,
                 outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{Exception}{NewLine}"
             );
@@ -429,6 +431,52 @@ else
     // Production and any unrecognised environment: Swagger disabled, HSTS enforced.
     app.UseExceptionHandler(ConfigureApiExceptionHandler);
     app.UseHsts();
+
+    // Short-circuit /swagger/* before TenantMiddleware so the caller gets a clear
+    // intentional message rather than the generic "Missing required header 'X-Tenant-Code'" 400.
+    // Derive the dev Swagger URL dynamically — no hardcoded account names.
+    //   Azure:       swap the env segment in WEBSITE_SITE_NAME (same pattern used for CORS origin).
+    //   Docker/Local: read the dev API http port from sharedsettings.dev.json.
+    string devSwaggerUrl;
+    if (isAzure && !string.IsNullOrWhiteSpace(azureSiteName))
+    {
+        // e.g. "myorg-orderprocessing-api-xyapp-prod" → "myorg-orderprocessing-api-xyapp-dev"
+        var devSiteName = azureSiteName.Replace(
+            $"-xyapp-{environmentName}",
+            $"-xyapp-{Constants.Environments.Dev}",
+            StringComparison.Ordinal);
+        devSwaggerUrl = $"https://{devSiteName}.azurewebsites.net/swagger";
+    }
+    else
+    {
+        // Docker: published app root is /app; Local: AppContext.BaseDirectory is bin/Debug/net8.0/.
+        // sharedsettings.dev.json is copied alongside the binary in both cases.
+        var devSettingsPath = Path.Combine(AppContext.BaseDirectory, "Resources", "Configuration",
+            $"sharedsettings.{Constants.Environments.Dev}.json");
+        var devConfig = new ConfigurationBuilder()
+            .AddJsonFile(devSettingsPath, optional: true)
+            .Build();
+        var devApiHttpPort = devConfig.GetValue<int>("ApiSettings:API:http:Port", defaultValue: 5020);
+        devSwaggerUrl = $"http://localhost:{devApiHttpPort}/swagger";
+    }
+
+    app.Use(async (context, next) =>
+    {
+        if (context.Request.Path.StartsWithSegments("/swagger"))
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsJsonAsync(new
+            {
+                message = "Swagger UI is not available in the Production environment.",
+                reason = "API documentation is intentionally disabled in production. Use the dev or staging environment to explore the API.",
+                environment = environmentName,
+                swaggerAvailableAt = devSwaggerUrl
+            });
+            return;
+        }
+        await next(context);
+    });
 }
 
 // Enable CORS before other middleware.
