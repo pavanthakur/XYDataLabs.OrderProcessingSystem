@@ -1,6 +1,14 @@
 ---
 agent: agent
-description: "Verify a payment test run end-to-end: read today's physical log files for the chosen environment/profile, extract charge IDs and OR prefix, then run the DB verification queries and produce a correlated pass/fail report."
+description: |
+  Verify a payment test run end-to-end: read today's physical log files, extract charge IDs,
+  run DB verification queries, and produce a correlated pass/fail report.
+
+  Usage examples:
+    /XYDataLabs-verify-db-logs "prod https docker"
+    /XYDataLabs-verify-db-logs "stg http"
+    /XYDataLabs-verify-db-logs "dev"
+    /XYDataLabs-verify-db-logs                ← agent will ask
 ---
 
 # Verify DB + Physical Logs
@@ -12,12 +20,17 @@ the database. Cover **all three** of: API log → UI log → DB.
 
 ## Step 1 — Resolve environment and profile
 
-If the user did not specify, ask:
-> "Which environment and profile did you run?  
-> Options: `dev http docker` · `dev https docker` · `stg http docker` · `stg https docker` ·  
-> `prod http docker` · `prod https docker` · `local http` · `local https`"
+Parse the user's argument (e.g. `"prod https docker"`, `"stg http"`, `"dev"`).
 
-Accept shorthand (e.g. `"prod https"`, `"stg"`, `"local"`).
+- **env** — one of: `dev`, `stg`, `prod` (default: `dev` if omitted)
+- **profile** — `http` or `https` (default: `http` if omitted)
+- **runtime** — `docker` or `local` (default: `docker` if omitted)
+
+If the argument is omitted entirely, ask:
+> "Which environment and profile did you run?  
+> Examples: `prod https docker` · `stg http` · `dev` · `local https`"
+
+Accept shorthand — fill in the defaults for any part not specified.
 
 Map their answer to the following table:
 
