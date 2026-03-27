@@ -431,6 +431,26 @@ else
     // Production and any unrecognised environment: Swagger disabled, HSTS enforced.
     app.UseExceptionHandler(ConfigureApiExceptionHandler);
     app.UseHsts();
+
+    // Short-circuit /swagger/* before TenantMiddleware so the caller gets a clear
+    // intentional message rather than the generic "Missing required header 'X-Tenant-Code'" 400.
+    app.Use(async (context, next) =>
+    {
+        if (context.Request.Path.StartsWithSegments("/swagger"))
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsJsonAsync(new
+            {
+                message = "Swagger UI is not available in the Production environment.",
+                reason = "API documentation is intentionally disabled in production. Use the dev or staging environment to explore the API.",
+                environment = environmentName,
+                swaggerAvailableAt = "https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net/swagger"
+            });
+            return;
+        }
+        await next(context);
+    });
 }
 
 // Enable CORS before other middleware.
