@@ -21,7 +21,7 @@
         {
             <span class="badge bg-info ms-2">🐳 Docker</span>
         }
-        @if (ViewData["IsDevelopment"] is true)
+        @if (ViewData["IsDevelopment"] is true || ViewData["IsDocker"] is true)
         {
             <label for="tenant-selector" class="ms-3 mb-0 fw-semibold">Tenant</label>
             <select id="tenant-selector" class="form-select form-select-sm d-inline-block w-auto ms-2" aria-label="Select active tenant">
