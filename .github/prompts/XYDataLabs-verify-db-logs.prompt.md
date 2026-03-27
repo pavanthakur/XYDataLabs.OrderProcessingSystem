@@ -36,13 +36,13 @@ Map their answer to the following table:
 
 | Selection | Env tag | API log file | UI log file | Shared DB | TenantC DB |
 |---|---|---|---|---|---|
-| dev http docker | `dev` | `webapi-dev-http-{DATE}.log` | `ui-dev-http-{DATE}.log` | `OrderProcessingSystem_Dev` | `OrderProcessingSystem_TenantC_Dev` |
-| dev https docker | `dev` | `webapi-dev-https-{DATE}.log` | `ui-dev-https-{DATE}.log` | `OrderProcessingSystem_Dev` | `OrderProcessingSystem_TenantC_Dev` |
-| stg http docker | `stg` | `webapi-stg-http-{DATE}.log` | `ui-stg-http-{DATE}.log` | `OrderProcessingSystem_Stg` | `OrderProcessingSystem_TenantC_Stg` |
-| stg https docker | `stg` | `webapi-stg-https-{DATE}.log` | `ui-stg-https-{DATE}.log` | `OrderProcessingSystem_Stg` | `OrderProcessingSystem_TenantC_Stg` |
-| prod http docker | `prod` | `webapi-prod-http-{DATE}.log` | `ui-prod-http-{DATE}.log` | `OrderProcessingSystem_Prod` | `OrderProcessingSystem_TenantC_Prod` |
-| prod https docker | `prod` | `webapi-prod-https-{DATE}.log` | `ui-prod-https-{DATE}.log` | `OrderProcessingSystem_Prod` | `OrderProcessingSystem_TenantC_Prod` |
-| local dotnet run | `dev` | `webapi-dev-http-{DATE}.log` | `ui-dev-http-{DATE}.log` | `OrderProcessingSystem_Local` | `OrderProcessingSystem_TenantC` |
+| dev http docker | `dev` | `webapi-dev-dock-http-{DATE}.log` | `ui-dev-dock-http-{DATE}.log` | `OrderProcessingSystem_Dev` | `OrderProcessingSystem_TenantC_Dev` |
+| dev https docker | `dev` | `webapi-dev-dock-https-{DATE}.log` | `ui-dev-dock-https-{DATE}.log` | `OrderProcessingSystem_Dev` | `OrderProcessingSystem_TenantC_Dev` |
+| stg http docker | `stg` | `webapi-stg-dock-http-{DATE}.log` | `ui-stg-dock-http-{DATE}.log` | `OrderProcessingSystem_Stg` | `OrderProcessingSystem_TenantC_Stg` |
+| stg https docker | `stg` | `webapi-stg-dock-https-{DATE}.log` | `ui-stg-dock-https-{DATE}.log` | `OrderProcessingSystem_Stg` | `OrderProcessingSystem_TenantC_Stg` |
+| prod http docker | `prod` | `webapi-prod-dock-http-{DATE}.log` | `ui-prod-dock-http-{DATE}.log` | `OrderProcessingSystem_Prod` | `OrderProcessingSystem_TenantC_Prod` |
+| prod https docker | `prod` | `webapi-prod-dock-https-{DATE}.log` | `ui-prod-dock-https-{DATE}.log` | `OrderProcessingSystem_Prod` | `OrderProcessingSystem_TenantC_Prod` |
+| local dotnet run | `dev` | `webapi-dev-local-http-{DATE}.log` | `ui-dev-local-http-{DATE}.log` | `OrderProcessingSystem_Local` | `OrderProcessingSystem_TenantC` |
 
 `{DATE}` = today as `YYYYMMDD` (e.g. `20260328`).  
 Log files are in `Q:\GIT\TestAppXY_OrderProcessingSystem\logs\`.
@@ -66,7 +66,7 @@ $dateTag = (Get-Date).ToString("yyyyMMdd")   # e.g. 20260328
 
 Read **API log** — extract only payment-relevant lines:
 ```powershell
-$apiLog  = "Q:\GIT\TestAppXY_OrderProcessingSystem\logs\webapi-{ENV_TAG}-{PROFILE}-$dateTag.log"
+$apiLog  = "Q:\GIT\TestAppXY_OrderProcessingSystem\logs\webapi-{ENV_TAG}-{RUNTIME}-{PROFILE}-$dateTag.log"
 Get-Content $apiLog |
   Select-String -Pattern "Generated payment|created charge|charge created|callback reconciliation completed|confirm-status responded|Response: 200.*OR-" |
   ForEach-Object { $_.Line.Trim() }
@@ -74,13 +74,13 @@ Get-Content $apiLog |
 
 Read **UI log** — extract only callback lines:
 ```powershell
-$uiLog = "Q:\GIT\TestAppXY_OrderProcessingSystem\logs\ui-{ENV_TAG}-{PROFILE}-$dateTag.log"
+$uiLog = "Q:\GIT\TestAppXY_OrderProcessingSystem\logs\ui-{ENV_TAG}-{RUNTIME}-{PROFILE}-$dateTag.log"
 Get-Content $uiLog |
   Select-String -Pattern "OR-|callback|payment/callback responded" |
   ForEach-Object { $_.Line.Trim() }
 ```
 
-Replace `{ENV_TAG}` with the env tag and `{PROFILE}` with `http` or `https` from Step 1.
+Replace `{ENV_TAG}` with the env tag, `{RUNTIME}` with `dock` or `local`, and `{PROFILE}` with `http` or `https` from Step 1.
 
 If either file does not exist, note this as a finding and proceed with whichever file is available.
 

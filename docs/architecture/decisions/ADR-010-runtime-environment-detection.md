@@ -86,8 +86,8 @@ when adding any new environment-conditional logic.**
 | Developer exception page (API) | `IsDevelopment && !isAzure` | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | EF Core auto-migrations | `!isAzureRuntime` (i.e. `!isAzure`) | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | CORS policy | `AllowAll` unless `isAzure && prod` → `AllowProductionUI` | AllowAll | AllowAll | AllowAll | AllowAll | AllowAll | AllowAll | AllowProductionUI |
-| Log sink: file `/logs/webapi-.log` | `isDocker` | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Log sink: local file path | `!isDocker` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Log sink: file `/logs/webapi-{env}-dock-{profile}-.log` | `isDocker` | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Log sink: local file `../logs/webapi-{env}-local-{profile}-.log` | `!isDocker` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Swagger server URL | `isAzure` → Azure domain, else sharedsettings | auto | auto | auto | auto | ✅ | ✅ | ✅ |
 
 ### Payment / OpenPay
@@ -176,6 +176,7 @@ Do NOT re-read `ASPNETCORE_ENVIRONMENT` directly in controllers — go through `
 | 2026-03-27 | Code review | `#if RELEASE` block appended after `public partial class Program { }` — top-level statements illegal after type declarations (`CS8803`); throw would crash every prod startup | Fixed: block removed entirely |
 | 2026-03-27 | Checklist audit | `MyApiClient` registered with `http://api:{port}` (Docker hostname) — wrong in Azure since `isDocker=true` there. Never consumed by any controller — dead registration | Low risk (unused). Remove when doing HttpClient cleanup |
 | 2026-03-27 | Checklist audit | Log file sink `/logs/webapi-.log` and `/logs/ui-.log` write to ephemeral Azure App Service filesystem | Low risk — App Insights covers Azure logs when connection string present |
+| 2026-03-28 | Code review | `local dotnet run` and `docker dev http` both wrote `webapi-dev-http-{date}.log` — file lock conflict when running both simultaneously | Fixed: added `runtimeSuffix` (`dock`/`local`) as third segment. New pattern: `{app}-{env}-{runtime}-{profile}-{date}.log`. Updated `API/Program.cs`, `UI/Program.cs`. |
 
 ## Related
 
