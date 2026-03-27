@@ -73,7 +73,7 @@ when adding any new environment-conditional logic.**
 |---------|---------------|:---:|:---:|:---:|:---:|:---:|
 | Tenant selector dropdown | `!IsAzure && (IsDevelopment \|\| IsDocker)` | ✅ | ✅ | ✅ | ✅ | ❌ |
 | "🐳 Docker" badge in banner | `IsDocker` | ❌ | ✅ | ✅ | ✅ | ✅* |
-| Developer exception page (UI) | `IsDevelopment && !isAzure` | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Developer exception page (UI) | `!IsDevelopment \|\| IsAzure` | ✅ | ✅ | ❌ | ❌ | ❌ |
 
 > *Docker badge shows on Azure too (IsDocker=true). Acceptable — it is informational only.
 > If it must be hidden on Azure, apply the same `!IsAzure` gate.
@@ -163,6 +163,17 @@ Do NOT re-read `ASPNETCORE_ENVIRONMENT` directly in controllers — go through `
 - When adding any new environment-conditional feature, add a row to the Feature Gate Inventory.
 
 ---
+
+## Audit Log
+
+| Date | Auditor | Finding | Action |
+|------|---------|---------|--------|
+| 2026-03-27 | Checklist audit | UI developer exception page used `!IsDevelopment` without `!isAzure` — Azure dev would serve raw stack traces | Fixed in `UI/Program.cs` (commit cd02192) |
+| 2026-03-27 | Checklist audit | API migrations block re-read `WEBSITE_SITE_NAME` into `isAzureRuntime` instead of reusing top-level `isAzure` | Fixed in `API/Program.cs` (commit cd02192) |
+| 2026-03-27 | Checklist audit | CORS `AllowAll` policy active in all environments including Azure prod — `AllowPaymentUI` policy commented out | Known tech debt, pre-existing. Needs origin whitelist before Azure prod hardening |
+| 2026-03-27 | Checklist audit | Swagger exposed in Azure prod — `TODO: DISABLE SWAGGER IN PRODUCTION` comment in code | Known tech debt, pre-existing |
+| 2026-03-27 | Checklist audit | `MyApiClient` registered with `http://api:{port}` (Docker hostname) — wrong in Azure since `isDocker=true` there. Never consumed by any controller — dead registration | Low risk (unused). Remove when doing HttpClient cleanup |
+| 2026-03-27 | Checklist audit | Log file sink `/logs/webapi-.log` and `/logs/ui-.log` write to ephemeral Azure App Service filesystem | Low risk — App Insights covers Azure logs when connection string present |
 
 ## Related
 
