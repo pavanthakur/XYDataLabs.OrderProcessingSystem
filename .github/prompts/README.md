@@ -97,7 +97,7 @@ Workflow:
 2. Steps 2-9 are handled by the **CQRS Backend** agent (entity through build+test).
 3. Step 10: switch to **Code Reviewer** agent for architecture/security review.
 4. Steps 11-12: commit and optionally run `/XYDataLabs-context-audit`.
-5. Step 13 (conditional): if the feature touched payment code, run `/XYDataLabs-verify-payments`.
+5. Step 13 (conditional): if the feature touched payment code, run `/XYDataLabs-verify-db-logs`.
 
 ### `/XYDataLabs-validate-adrs`
 
@@ -116,23 +116,27 @@ Important notes:
 - If `npx` is not available, Step 1 alone is sufficient before committing — markdownlint runs automatically in CI.
 - To enable the CI counterpart: set `ADR_VALIDATION_ENABLED` repo variable to `true` in GitHub Settings → Secrets and variables → Actions → Variables tab → Repository variables. Off by default.
 
-### `/XYDataLabs-verify-payments`
+
+### `/XYDataLabs-verify-db-logs`
 
 Purpose:
-- Runs filtered payment DB verification queries scoped to the most recent OR series.
-- Verifies CardTransactions, TransactionStatusHistories, and cross-tenant bleed checks across both shared-pool and dedicated-tenant DBs.
-- Adapts expected values to the current `Use3DSecure` state per tenant (checked via pre-flight query first).
+- End-to-end verification of a payment test run: physical log files **and** DB — in one pass.
+- Reads today's `webapi-{env}-{date}.log` and `ui-{env}-{date}.log` filtered to today's date.
+- Extracts OR prefix and charge IDs from the log automatically — no need to know the prefix upfront.
+- Runs Q2 / Q5 / Q8 on the shared DB and Q2-B / Q5-B / Q9-B on the TenantC dedicated DB, all scoped to today.
+- Produces a correlated pass/fail table: API log → UI log → DB for every charge ID.
 
 Use when:
-- After any payment test run (manual or via the UI).
-- After a payment-related feature change before committing.
-- When investigating a suspected payment data issue.
+- After any payment test run on any environment/profile combination (dev/stg/prod × http/https docker, local dotnet run).
+- When you want a single command that checks logs **and** DB without knowing the OR prefix in advance.
+- When investigating missing callbacks or DB/log mismatches.
 
 Prerequisites:
-- API ran at least one payment cycle for the OR series you're verifying.
-- You know the OR prefix (e.g. `OR-9-26Mar`) — or run the discovery query shown in Step 1.
+- At least one payment cycle completed today for the chosen environment.
+- Docker containers or dotnet run have written today's log files to `logs/`.
+- SQL Server is running locally (localhost:1433). `Resources/Docker/.env.local` exists with `LOCAL_SQL_PASSWORD`.
 
-Note: This prompt generates focused verification queries. For the full reference query set and design context, see `docs/runbooks/payment-db-verification.md`.
+Note: For deep-dive queries (Q1, Q3, Q4, Q6, Q6a, Q7, Q8-B and per-tenant 3DS toggle), open `docs/runbooks/payment-db-verification.md`.
 
 ## Which Prompt Should I Use?
 
@@ -144,7 +148,7 @@ Note: This prompt generates focused verification queries. For the full reference
 | Set up local dev environment after git clone | `/XYDataLabs-setup-local` |
 | Need local SSMS/sqlcmd access to Azure SQL | `/XYDataLabs-sql-local-access` |
 | Check for stale AI context / memory drift | `/XYDataLabs-context-audit` |
-| Verify payment DB records after a test run | `/XYDataLabs-verify-payments` |
+| Verify payment run: physical logs + DB correlated | `/XYDataLabs-verify-db-logs "prod https docker"` |
 | Validate ADR markdown files before committing | `/XYDataLabs-validate-adrs` |
 
 ## Typical Workflows
@@ -164,9 +168,9 @@ Note: This prompt generates focused verification queries. For the full reference
 └─ /XYDataLabs-sql-local-access  →  open firewall + get SSMS connection details
    └─ [When done] /XYDataLabs-sql-local-access  →  close firewall rule
 
-[After a payment test run or payment feature change]
-└─ /XYDataLabs-verify-payments  →  filtered DB queries for the most recent OR series
-   └─ Fails? → open docs/runbooks/payment-db-verification.md for full diagnostics
+[After a payment test run — log + DB correlation]
+└─ /XYDataLabs-verify-db-logs "prod http docker"  →  reads today’s log files, extracts charge IDs, runs DB queries, correlates all three
+   └─ Any mismatch? → agent flags exact charge ID + likely cause (persistence fail / missed callback / file-lock)
 
 [Before committing ADR changes]
 └─ /XYDataLabs-validate-adrs  →  frontmatter schema check + markdownlint
@@ -199,7 +203,7 @@ Select these in the VS Code Chat agent picker for focused, context-scoped assist
 | `.github/prompts/XYDataLabs-sql-local-access.prompt.md` | SQL firewall open/close workflow |
 | `.github/prompts/XYDataLabs-context-audit.prompt.md` | Context drift detection audit |
 | `.github/prompts/XYDataLabs-new-feature.prompt.md` | End-to-end feature development workflow |
-| `.github/prompts/XYDataLabs-verify-payments.prompt.md` | Payment DB verification for a specific OR series |
+| `.github/prompts/XYDataLabs-verify-db-logs.prompt.md` | End-to-end log + DB correlation for any env/profile combination |
 | `.github/prompts/XYDataLabs-validate-adrs.prompt.md` | ADR frontmatter schema + markdownlint local validation |
 | `.github/copilot-instructions.md` | Prompt index and quick usage reference |
 
