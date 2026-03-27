@@ -300,10 +300,12 @@ builder.Host.UseSerilog((context, services, loggerConfiguration) =>
 
     if (isDocker)
     {
+        // Each environment profile writes to its own file (e.g. webapi-dev-, webapi-prod-) to prevent
+        // concurrent write conflicts when multiple Docker profiles run against the same host volume.
         loggerConfiguration
             .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{NewLine}{Exception}")
             .WriteTo.File(
-                path: "/logs/webapi-.log",
+                path: $"/logs/webapi-{environmentName}-.log",
                 rollingInterval: RollingInterval.Day,
                 outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{Exception}{NewLine}"
             );
@@ -313,7 +315,7 @@ builder.Host.UseSerilog((context, services, loggerConfiguration) =>
         loggerConfiguration
             .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{NewLine}{Exception}")
             .WriteTo.File(
-                path: "../logs/webapi-.log",
+                path: $"../logs/webapi-{environmentName}-.log",
                 rollingInterval: RollingInterval.Day,
                 outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{Exception}{NewLine}"
             );
