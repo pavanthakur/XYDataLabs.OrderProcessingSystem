@@ -17,8 +17,8 @@
     "PrivateKey": "__OPENPAY_PRIVATE_KEY__", 
     "DeviceSessionId": "__OPENPAY_DEVICE_SESSION_ID__",
     "IsProduction": false,
-    "RedirectUrl": "https://production-domain.com/payment/callback",
-    "_Comment": "Resolve production OpenPay credentials from environment variables locally and Azure Key Vault in deployed environments."
+    "RedirectUrl": "",
+    "_Comment": "RedirectUrl is auto-resolved from ApiSettings:UI locally/Docker. In Azure, set via Key Vault (OpenPay--RedirectUrl) to the public domain URL."
   },
   "Observability": {
     "EnableEfSensitiveDataLogging": false

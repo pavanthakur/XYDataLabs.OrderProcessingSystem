@@ -17,7 +17,7 @@
     "PrivateKey": "__OPENPAY_PRIVATE_KEY__",
     "DeviceSessionId": "__OPENPAY_DEVICE_SESSION_ID__",
     "IsProduction": false,
-    "RedirectUrl": "https://stg-domain.com/payment/callback"
+    "RedirectUrl": ""
   },
   "Observability": {
     "EnableEfSensitiveDataLogging": false

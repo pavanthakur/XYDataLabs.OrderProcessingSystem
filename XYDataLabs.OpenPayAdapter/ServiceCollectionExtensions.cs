@@ -21,6 +21,29 @@ namespace XYDataLabs.OpenPayAdapter
                 .Bind(configuration.GetSection("OpenPay"))
                 .ValidateOnStart();
 
+            // When RedirectUrl is not explicitly configured (e.g. Docker), build it
+            // dynamically from ApiSettings:UI using the active profile's host and port.
+            services.PostConfigure<OpenPayConfig>(config =>
+            {
+                if (!string.IsNullOrWhiteSpace(config.RedirectUrl)
+                    && Uri.TryCreate(config.RedirectUrl, UriKind.Absolute, out _))
+                {
+                    return; // Already set via user-secrets, Key Vault, or env var
+                }
+
+                var useHttps = string.Equals(
+                    configuration["USE_HTTPS"], "true", StringComparison.OrdinalIgnoreCase);
+                var profile = useHttps ? "https" : "http";
+                var host = configuration[$"ApiSettings:UI:{profile}:Host"] ?? "localhost";
+                var portStr = configuration[$"ApiSettings:UI:{profile}:Port"];
+                var scheme = useHttps ? "https" : "http";
+
+                if (int.TryParse(portStr, out var port) && port > 0)
+                {
+                    config.RedirectUrl = $"{scheme}://{host}:{port}/payment/callback";
+                }
+            });
+
             // Resilience pipeline for OpenPay SDK calls:
             //   • Retry 3×, exponential backoff + jitter (1s base) on OpenpayException / TimeoutException
             //   • Circuit breaker: open after 5 failures in 30 s; stays open 30 s
