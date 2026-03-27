@@ -193,4 +193,4 @@ If this is a significant feature, run `/XYDataLabs-context-audit` to verify inst
 - `Domain/Entities/CardTransaction*`, `PayinLog*`, `BillingCustomer*`, `PaymentProvider*`, `TransactionStatusHistory*`
 - `Infrastructure/` payment-related data access or seeding
 
-**Action:** Run `/XYDataLabs-verify-payments` to execute the filtered DB verification queries and confirm no data isolation or schema regressions were introduced.
+**Action:** Run `/XYDataLabs-verify-db-logs` to verify logs and DB records and confirm no data isolation or schema regressions were introduced.
