@@ -134,6 +134,7 @@ services:
       - ASPNETCORE_Kestrel__Certificates__Default__Password=${LOCAL_CERT_PASSWORD}
       - ApiSettings__UI__https__CertPassword=${LOCAL_CERT_PASSWORD}
       - ApiSettings__BaseUrl=https://localhost:5041
+      - USE_HTTPS=true
       - Logging__LogLevel__Default=Warning
       - Logging__LogLevel__Microsoft=Warning
       - Logging__LogLevel__System=Error
