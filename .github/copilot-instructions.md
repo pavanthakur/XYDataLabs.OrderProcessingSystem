@@ -352,9 +352,10 @@ This matrix shows which instructions auto-attach for common file locations:
 | SQL Local Access | `/XYDataLabs-sql-local-access` | Opens or closes Azure SQL firewall for local IP after a fresh bootstrap/deploy. Prints SSMS connection details. |
 | Context Audit | `/XYDataLabs-context-audit` | Detects stale AI context by diffing memory files and copilot-instructions against the actual codebase. Run periodically or after major refactors. |
 | Payment Verification | `/XYDataLabs-verify-payments` | After any payment test run or payment-related feature change — runs filtered Q2/Q5/Q2-B/Q5-B/Q8 queries for the most recent OR series against both DBs. |
+| Log + DB Correlation | `/XYDataLabs-verify-db-logs` | After any payment run on any env/profile — reads today's physical log files, extracts charge IDs automatically, runs DB queries, and produces a correlated API log → UI log → DB pass/fail report. |
 | ADR Validation | `/XYDataLabs-validate-adrs` | Before committing changes to any ADR — runs frontmatter schema check + markdownlint locally; documents how to toggle the CI counterpart. |
 
-> **Quick prompt tip:** `Ctrl+Shift+I` → select Agent mode → type `/XYDataLabs-new-feature`, `/XYDataLabs-completion-check`, `/XYDataLabs-setup-local`, `/XYDataLabs-day-complete`, `/XYDataLabs-sql-local-access`, `/XYDataLabs-context-audit`, `/XYDataLabs-verify-payments`, or `/XYDataLabs-validate-adrs`
+> **Quick prompt tip:** `Ctrl+Shift+I` → select Agent mode → type `/XYDataLabs-new-feature`, `/XYDataLabs-completion-check`, `/XYDataLabs-setup-local`, `/XYDataLabs-day-complete`, `/XYDataLabs-sql-local-access`, `/XYDataLabs-context-audit`, `/XYDataLabs-verify-payments`, `/XYDataLabs-verify-db-logs`, or `/XYDataLabs-validate-adrs`
 >
 > **Prompt reference:** See `.github/prompts/README.md` for when to use each prompt, prerequisites, and operational notes.
 >
