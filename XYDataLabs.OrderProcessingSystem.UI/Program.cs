@@ -43,6 +43,8 @@ var configuredActiveTenantCode = "none";
 Console.WriteLine("[EARLIEST DEBUG] Environment name mapping completed...");
 
 // Configure Serilog with environment-aware paths
+// Include http/https profile in the filename so same-env containers don't share a file lock.
+var profileSuffix = Environment.GetEnvironmentVariable("USE_HTTPS") == "true" ? "https" : "http";
 builder.Host.UseSerilog((context, services, loggerConfiguration) =>
 {
     loggerConfiguration
@@ -60,12 +62,12 @@ builder.Host.UseSerilog((context, services, loggerConfiguration) =>
     if (isDocker)
     {
         // Docker: Use console output (primary) + file output.
-        // Each environment profile writes to its own file (e.g. ui-dev-, ui-prod-) to prevent
+        // Each env+profile writes to its own file (e.g. ui-prod-http-, ui-prod-https-) to prevent
         // concurrent write conflicts when multiple Docker profiles run against the same host volume.
         loggerConfiguration
             .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{NewLine}{Exception}")
             .WriteTo.File(
-                path: $"/logs/ui-{environmentName}-.log",
+                path: $"/logs/ui-{environmentName}-{profileSuffix}-.log",
                 rollingInterval: RollingInterval.Day,
                 outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{Exception}{NewLine}"
             );
@@ -76,7 +78,7 @@ builder.Host.UseSerilog((context, services, loggerConfiguration) =>
         loggerConfiguration
             .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{NewLine}{Exception}")
             .WriteTo.File(
-                path: $"../logs/ui-{environmentName}-.log",
+                path: $"../logs/ui-{environmentName}-{profileSuffix}-.log",
                 rollingInterval: RollingInterval.Day,
                 outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{Exception}{NewLine}"
             );
