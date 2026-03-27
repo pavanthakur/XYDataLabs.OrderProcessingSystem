@@ -116,6 +116,7 @@ services:
       - ASPNETCORE_Kestrel__Certificates__Default__Password=${LOCAL_CERT_PASSWORD}
       - ApiSettings__UI__https__CertPassword=${LOCAL_CERT_PASSWORD}
       - ApiSettings__BaseUrl=https://localhost:5031
+      - USE_HTTPS=true
     volumes:
       - ../../Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
       - ../../Resources/Configuration/sharedsettings.stg.json:/app/Resources/Configuration/sharedsettings.stg.json:ro
