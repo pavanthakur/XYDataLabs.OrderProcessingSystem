@@ -204,8 +204,8 @@ Create `bicep/parameters/stg.parameters.json`:
     "appName": {
       "value": "pavanthakur-orderprocessing-api-xyapp-stg"
     },
-    "keyVaultName": {
-      "value": "kv-orderproc-stg"
+    "baseName": {
+      "value": "orderproc"
     },
     "appServicePlanName": {
       "value": "asp-orderprocessing-stg"
@@ -280,8 +280,8 @@ Create `bicep/parameters/prod.parameters.json`:
     "appName": {
       "value": "pavanthakur-orderprocessing-api-xyapp-prod"
     },
-    "keyVaultName": {
-      "value": "kv-orderproc-prod"
+    "baseName": {
+      "value": "orderproc"
     },
     "appServicePlanName": {
       "value": "asp-orderprocessing-prod"
@@ -318,9 +318,9 @@ az keyvault secret set --vault-name kv-orderproc-prod \
 # Run configuration script
 ./scripts/configure-secrets-and-run.ps1 -Environment prod
 
-# Merge uat to main branch to trigger production deployment
+# Merge staging to main branch to trigger production deployment
 git checkout main
-git merge uat
+git merge staging
 git push origin main
 ```
 
@@ -330,7 +330,7 @@ git push origin main
 
 ```bash
 # Set environment variables
-ENV="dev"  # or uat, prod
+ENV="dev"  # or stg, prod
 APP_NAME="pavanthakur-orderprocessing-api-xyapp-$ENV"
 RG_NAME="rg-orderprocessing-$ENV"
 
