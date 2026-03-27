@@ -16,6 +16,7 @@ services:
       - ASPNETCORE_URLS=http://+:5020
       - ASPNETCORE_HTTP_PORTS=5020
       - ConnectionStrings__OrderProcessingSystemDbConnection=Server=host.docker.internal,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
+      - DedicatedTenantConnectionStrings__TenantC=Server=host.docker.internal,1433;Database=OrderProcessingSystem_TenantC_Dev;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
       - OpenPay__MerchantId=${LOCAL_OPENPAY_MERCHANT_ID}
       - OpenPay__PrivateKey=${LOCAL_OPENPAY_PRIVATE_KEY}
       - OpenPay__DeviceSessionId=${LOCAL_OPENPAY_DEVICE_SESSION_ID}
@@ -50,6 +51,7 @@ services:
       - ASPNETCORE_Kestrel__Certificates__Default__Password=${LOCAL_CERT_PASSWORD}
       - ApiSettings__API__https__CertPassword=${LOCAL_CERT_PASSWORD}
       - ConnectionStrings__OrderProcessingSystemDbConnection=Server=host.docker.internal,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
+      - DedicatedTenantConnectionStrings__TenantC=Server=host.docker.internal,1433;Database=OrderProcessingSystem_TenantC_Dev;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
       - OpenPay__MerchantId=${LOCAL_OPENPAY_MERCHANT_ID}
       - OpenPay__PrivateKey=${LOCAL_OPENPAY_PRIVATE_KEY}
       - OpenPay__DeviceSessionId=${LOCAL_OPENPAY_DEVICE_SESSION_ID}

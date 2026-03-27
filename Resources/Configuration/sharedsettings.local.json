@@ -17,7 +17,7 @@
     "PrivateKey": "__OPENPAY_PRIVATE_KEY__",
     "DeviceSessionId": "__OPENPAY_DEVICE_SESSION_ID__",
     "IsProduction": false,
-    "RedirectUrl": "http://localhost:5012/payment/callback"
+    "RedirectUrl": ""
   },
   "Observability": {
     "EnableEfSensitiveDataLogging": true
