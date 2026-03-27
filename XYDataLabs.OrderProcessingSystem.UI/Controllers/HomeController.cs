@@ -64,6 +64,8 @@ namespace XYDataLabs.OrderProcessingSystem.UI.Controllers
         {
             var apiBaseUrl = ResolveApiBaseUrl(environmentName, isDocker);
 
+            var isAzure = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME"));
+
             ViewData["ApiBaseUrl"] = apiBaseUrl;
             ViewData["Environment"] = environmentName.ToUpperInvariant();
             ViewData["IsDevelopment"] = string.Equals(environmentName, Constants.Environments.Dev, StringComparison.Ordinal);
@@ -75,6 +77,7 @@ namespace XYDataLabs.OrderProcessingSystem.UI.Controllers
                 _ => "secondary"
             };
             ViewData["IsDocker"] = isDocker;
+            ViewData["IsAzure"] = isAzure;
         }
 
         private string ResolveApiBaseUrl(string environmentName, bool isDocker)

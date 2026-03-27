@@ -4,6 +4,50 @@
 
 This directory contains automation scripts for configuring and deploying the Order Processing System with secure configuration management, including GitHub App automation tools.
 
+---
+
+## 🖥️ Local Development Bootstrap
+
+### setup-local.ps1
+
+**Run once after a fresh `git clone`** — bootstraps everything needed to develop locally without any manual prompts.
+
+**Purpose**:
+- Creates `Resources/Docker/.env.local` from `.env.local.example` (Docker secrets)
+- Sets `dotnet user-secrets` for VS F5 and `dotnet run` (API + UI projects)
+- Exports and trusts the HTTPS dev certificate
+
+**Usage**:
+```powershell
+# First run — prompts you to choose SQL + cert passwords, saves to .env.local
+.\scripts\setup-local.ps1
+
+# Re-run and overwrite everything (after password change, or clean reset)
+.\scripts\setup-local.ps1 -Force
+```
+
+**Parameters**:
+- `Force` (switch): Re-prompt for passwords, overwrite `.env.local`, user-secrets, and dev cert
+
+**What It Does**:
+1. ✅ Creates `Resources/Docker/.env.local` with Docker secrets (skips if already exists)
+2. ✅ Sets `dotnet user-secrets` for API: `CertPassword`, `OpenPay:MerchantId/PrivateKey/DeviceSessionId`
+3. ✅ Sets `dotnet user-secrets` for UI: `CertPassword`
+4. ✅ Exports `aspnetapp.pfx` and trusts HTTPS dev certificate
+
+**After Running**:
+- Visual Studio F5 on `http`/`https` profile → ready, no prompts
+- Docker: `.\Resources\Docker\start-docker.ps1 -Environment dev -Profile http`
+- To use real OpenPay sandbox credentials: `setup-local.ps1` tries Azure Key Vault first, then prompts interactively. RedirectUrl is auto-resolved from `ApiSettings:UI`.
+
+**Idempotent**: Safe to re-run at any time — skips steps already completed.
+
+**Prerequisites**:
+- .NET 8 SDK installed
+- PowerShell 7+
+
+---
+
 ## 🆕 GitHub App Automation Scripts
 
 ### setup-github-app-from-manifest.ps1

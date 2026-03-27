@@ -240,11 +240,11 @@ ORDER BY ct.TenantId, ct.Id, tsh.Id;
 **3DS flow (`Use3DSecure = 1`) — 4 steps:**
 
 | Step | Status | Stage | Reference | Meaning |
-|------|--------|-------|-----------|---------|
+|------|--------|-------|-----------|----------|
 | 1 | `completed` | `tokenization_completed` | NULL | Card tokenized by OpenPay |
 | 2 | `charge_pending` | `redirect_issued` | NULL | 3DS redirect issued |
-| 3 | `completed` | `callback_received` | 801585 | Browser redirected back |
-| 4 | `completed` | `completed` | 801585 | OpenPay confirmed final status |
+| 3 | `completed` | `callback_received` | populated | Browser redirected back |
+| 4 | `completed` | `completed` | populated | OpenPay confirmed final status |
 
 **Non-3DS flow (`Use3DSecure = 0`) — 2 steps:**
 
@@ -601,11 +601,11 @@ ORDER BY ct.Id, tsh.Id;
 **3DS flow (`Use3DSecure = 1`) — 4 steps:**
 
 | Step | Status | Stage | Reference | Meaning |
-|------|--------|-------|-----------|---------|
+|------|--------|-------|-----------|----------|
 | 1 | `completed` | `tokenization_completed` | NULL | Card tokenized by OpenPay |
 | 2 | `charge_pending` | `redirect_issued` | NULL | 3DS redirect issued |
-| 3 | `completed` | `callback_received` | 801585 | Browser redirected back |
-| 4 | `completed` | `completed` | 801585 | OpenPay confirmed final status |
+| 3 | `completed` | `callback_received` | populated | Browser redirected back |
+| 4 | `completed` | `completed` | populated | OpenPay confirmed final status |
 
 **Non-3DS flow (`Use3DSecure = 0`) — 2 steps:**
 

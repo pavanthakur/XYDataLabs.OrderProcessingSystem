@@ -10,8 +10,10 @@
 *.userosscache
 *.sln.docstates
 
-# VS Code workspace settings
-.vscode/
+# VS Code workspace settings (personal — not committed)
+.vscode/*
+# Exception: tasks.json is workspace-shared (build tasks + runOn:folderOpen bootstrap)
+!.vscode/tasks.json
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
@@ -383,7 +385,8 @@ Resources/Azure-Deployment/generated-migrations-*.sql
 # Temp test run logs from orchestration scripts
 Resources/Azure-Deployment/test-run-*.log
 # VS Code settings
-.vscode/
+.vscode/*
+!.vscode/tasks.json
 
 # Tools and binaries
 actionlint

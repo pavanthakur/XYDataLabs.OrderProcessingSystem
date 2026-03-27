@@ -276,7 +276,10 @@ app.UseMiddleware<CorrelationMiddleware>();
 SharedSettingsLoader.PrintApiSettingsDebug(apiSettings, activeSettings, "UI", isDocker);
 
 // Configure the HTTP request pipeline.
-if (!app.Environment.IsDevelopment())
+// Gate on !isAzure: Azure dev has IsDevelopment=true but must never serve developer exception pages
+// (same pattern as API/Program.cs: builder.Environment.IsDevelopment() && !isAzure)
+var useGenericExceptionPage = !app.Environment.IsDevelopment() || isAzure;
+if (useGenericExceptionPage)
 {
     app.UseExceptionHandler("/Home/Error");
     app.UseHsts();
