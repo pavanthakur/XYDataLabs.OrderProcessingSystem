@@ -141,6 +141,18 @@ If the same error still appears after propagation, add `Directory.Read.All`, gra
 
 ---
 
+## ⚙️ Optional Repository Variables
+
+While here, consider also setting these in **GitHub → Settings → Secrets and variables → Actions → Variables tab → Repository variables**. They are not required for OIDC or deployment to work.
+
+| Variable | Value to set | Effect |
+|----------|-------------|--------|
+| `ADR_VALIDATION_ENABLED` | `true` | Enables the `Validate ADR Markdown` CI check on push/PR. **Off by default** — job is skipped unless this variable is explicitly `true`. |
+
+> **How to add**: Click **New repository variable**, enter the Name and Value from the table, then click **Add variable**.
+
+---
+
 ## 🔍 Troubleshooting
 
 | Symptom | Resolution |

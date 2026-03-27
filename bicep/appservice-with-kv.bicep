@@ -15,7 +15,7 @@ param location string = resourceGroup().location
 @description('App Service Plan SKU')
 param appServiceSku string = 'F1'
 
-@description('Environment name (dev, uat, prod)')
+@description('Environment name (dev, stg, prod)')
 param environment string = 'dev'
 
 // Key Vault name (must be globally unique, max 24 chars)
@@ -26,7 +26,7 @@ var shortBaseName = take(baseName, 15) // Limit base name to 15 chars
 var keyVaultName = 'kv-${shortBaseName}-${environment}'
 
 // Determine ASPNETCORE_ENVIRONMENT based on environment parameter
-var aspNetCoreEnvironment = environment == 'dev' ? 'Development' : (environment == 'uat' ? 'Staging' : 'Production')
+var aspNetCoreEnvironment = environment == 'dev' ? 'Development' : (environment == 'stg' ? 'Staging' : 'Production')
 
 // Map SKU name to tier
 var skuTierMap = {

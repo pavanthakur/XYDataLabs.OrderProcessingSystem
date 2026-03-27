@@ -1,4 +1,4 @@
-# PowerShell script to start Docker Compose with environment-specific configurations and enterprise features
+﻿# PowerShell script to start Docker Compose with environment-specific configurations and enterprise features
 param(
     [Parameter(Mandatory=$false)]
     [ValidateSet("http", "https", "all")]
@@ -138,9 +138,9 @@ function Initialize-LocalDockerSecrets {
     $secretDefinitions = @(
         @{ Name = "LOCAL_SQL_PASSWORD"; Prompt = "Enter LOCAL_SQL_PASSWORD for local Docker SQL" },
         @{ Name = "LOCAL_CERT_PASSWORD"; Prompt = "Enter LOCAL_CERT_PASSWORD for local HTTPS certificate" },
-        @{ Name = "LOCAL_OPENPAY_MERCHANT_ID"; Prompt = "Enter LOCAL_OPENPAY_MERCHANT_ID for local Docker payment flows" },
-        @{ Name = "LOCAL_OPENPAY_PRIVATE_KEY"; Prompt = "Enter LOCAL_OPENPAY_PRIVATE_KEY for local Docker payment flows" },
-        @{ Name = "LOCAL_OPENPAY_DEVICE_SESSION_ID"; Prompt = "Enter LOCAL_OPENPAY_DEVICE_SESSION_ID for local Docker payment flows" }
+        @{ Name = "LOCAL_OPENPAY_MERCHANT_ID"; Prompt = "Enter OpenPay Merchant ID (LOCAL_OPENPAY_MERCHANT_ID)" },
+        @{ Name = "LOCAL_OPENPAY_PRIVATE_KEY"; Prompt = "Enter OpenPay Private Key (LOCAL_OPENPAY_PRIVATE_KEY)" },
+        @{ Name = "LOCAL_OPENPAY_DEVICE_SESSION_ID"; Prompt = "Enter LOCAL_OPENPAY_DEVICE_SESSION_ID (press Enter for default)" }
     )
 
     $fileSecrets = @{}
@@ -170,9 +170,36 @@ function Initialize-LocalDockerSecrets {
         }
 
         Write-ColoredOutput "$secretName not set. Prompting once and storing it in $SecretsFilePath (gitignored)." "Yellow" "INFO"
+
+        # Show detailed instructions for OpenPay credentials
+        if ($secretName -in @('LOCAL_OPENPAY_MERCHANT_ID', 'LOCAL_OPENPAY_PRIVATE_KEY')) {
+            Write-Host ''
+            Write-Host '  ┌─────────────────────────────────────────────────────────────────┐' -ForegroundColor Cyan
+            Write-Host '  │  OpenPay sandbox credentials — manual step required             │' -ForegroundColor Cyan
+            Write-Host '  ├─────────────────────────────────────────────────────────────────┤' -ForegroundColor Cyan
+            Write-Host '  │  1. Open https://sandbox-dashboard.openpay.mx                   │' -ForegroundColor Cyan
+            Write-Host '  │  2. Log in to your sandbox account                              │' -ForegroundColor Cyan
+            Write-Host '  │  3. On the home/dashboard page you will see:                    │' -ForegroundColor Cyan
+            Write-Host '  │       Merchant ID  — a short alphanumeric string (e.g. m...)    │' -ForegroundColor Cyan
+            Write-Host '  │       Private key  — starts with sk_...                         │' -ForegroundColor Cyan
+            Write-Host '  │  4. Paste below. Stored in .env.local — not asked again.        │' -ForegroundColor Cyan
+            Write-Host '  │                                                                 │' -ForegroundColor Cyan
+            Write-Host '  │  To persist for all team machines, run once after pasting:      │' -ForegroundColor Cyan
+            Write-Host '  │    .\Resources\Azure-Deployment\populate-keyvault-secrets.ps1   │' -ForegroundColor Cyan
+            Write-Host '  │        -Environment dev                                         │' -ForegroundColor Cyan
+            Write-Host '  │        -OpenPayMerchantId <id> -OpenPayPrivateKey <key>         │' -ForegroundColor Cyan
+            Write-Host '  └─────────────────────────────────────────────────────────────────┘' -ForegroundColor Cyan
+            Write-Host ''
+        }
+
         $secretValue = Read-Host $definition.Prompt -MaskInput
         if ([string]::IsNullOrWhiteSpace($secretValue)) {
-            throw "$secretName is required for Docker startup."
+            if ($secretName -eq 'LOCAL_OPENPAY_DEVICE_SESSION_ID') {
+                $secretValue = 'default-device-session'
+                Write-ColoredOutput "Using default value for $secretName" "DarkGray" "INFO"
+            } else {
+                throw "$secretName is required for Docker startup."
+            }
         }
 
         $fileSecrets[$secretName] = $secretValue
@@ -564,6 +591,9 @@ function Show-DockerProxyInfo {
     } catch {}
 }
 
+$acquiredLock = $false
+$lockFile = $null
+
 try {
     # Set working directory to the Docker resources folder
     $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -614,7 +644,32 @@ try {
     }
 
     Write-ColoredOutput "Working directory set to: $dockerPath" "Gray" "INFO"
-    
+
+    # Concurrent-launch guard: when Visual Studio starts multiple projects with the same Docker profile
+    # simultaneously, each project spawns a separate PowerShell process running this script. Without a
+    # lock the second process races the first and fails with "container name already in use".
+    # Solution: first process acquires a lock file; subsequent processes detect it and exit gracefully,
+    # letting the first process manage the full lifecycle.
+    $lockFile = Join-Path $env:TEMP "start-docker-$Environment-$Profile.lock"
+    $lockTimeoutSec = 300  # max time to hold lock (safety valve)
+    $acquiredLock = $false
+    if (Test-Path $lockFile) {
+        $lockAge = (Get-Date) - (Get-Item $lockFile).LastWriteTime
+        if ($lockAge.TotalSeconds -lt $lockTimeoutSec) {
+            Write-ColoredOutput "Another instance is already managing this stack ($Environment/$Profile). Exiting — the primary instance will complete startup." "Yellow" "INFO"
+            exit 0
+        } else {
+            Write-ColoredOutput "Stale lock detected (age: $([int]$lockAge.TotalSeconds)s) — removing and continuing." "Yellow" "INFO"
+            Remove-Item $lockFile -Force -ErrorAction SilentlyContinue
+        }
+    }
+    try {
+        New-Item $lockFile -ItemType File -Force | Out-Null
+        $acquiredLock = $true
+    } catch {
+        Write-ColoredOutput "Could not acquire lock file — continuing without lock." "Yellow" "INFO"
+    }
+
     # Enterprise mode initialization
     if ($EnterpriseMode) {
         Write-ColoredOutput "Starting Enterprise Docker Management Mode" "Cyan" "INFO"
@@ -710,10 +765,46 @@ try {
     } else {
         Write-ColoredOutput "SharedSettings file verified: $SharedSettingsPath" "Green"
     }
-    
+
+    # Pre-flight: ensure local SQL Server databases exist so EF migrations succeed on startup.
+    # EF Core's Migrate() can create a database, but if SA is locked (from a previous crash loop)
+    # the connection is refused before Migrate() even runs. Creating DBs via Windows auth here
+    # breaks that cascade. Silently skips if sqlcmd is not installed or SQL Server is unreachable.
+    $dbNames = switch ($Environment) {
+        "dev"  { @("OrderProcessingSystem_Dev",  "OrderProcessingSystem_TenantC_Dev") }
+        "stg"  { @("OrderProcessingSystem_Stg",  "OrderProcessingSystem_TenantC_Stg") }
+        "prod" { @("OrderProcessingSystem_Prod", "OrderProcessingSystem_TenantC_Prod") }
+        default { @() }
+    }
+    if ($dbNames.Count -gt 0) {
+        $sqlcmdExe = Get-Command sqlcmd -ErrorAction SilentlyContinue
+        if ($sqlcmdExe) {
+            Write-ColoredOutput "Pre-flight: ensuring local SQL databases exist for $Environment..." "Cyan" "INFO"
+            foreach ($db in $dbNames) {
+                $sql = "IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = '$db') CREATE DATABASE [$db];"
+                $result = sqlcmd -S "localhost" -E -d master -Q $sql 2>&1
+                if ($LASTEXITCODE -eq 0) {
+                    Write-ColoredOutput "  Database '$db' ready" "Green"
+                } else {
+                    Write-ColoredOutput "  Warning: could not create '$db' (SA may need unlocking or SQL Server not running): $result" "Yellow" "WARNING"
+                }
+            }
+        } else {
+            Write-ColoredOutput "Pre-flight DB check skipped (sqlcmd not found)" "DarkGray"
+        }
+    }
+
     # Determine compose files to use - environment-specific only
     if (Test-Path "docker-compose.$Environment.yml") {
-        $composeFiles = @("-f", "docker-compose.$Environment.yml")
+        # Always include --env-file so docker compose resolves ${LOCAL_*} variables from .env.local
+        # regardless of whether the caller inherited session env vars (e.g. Visual Studio launch,
+        # fresh terminal, or direct docker compose call). Without this, undefined vars default to ""
+        # which causes cert password mismatch and SA lockout on HTTPS profiles.
+        if (Test-Path ".env.local") {
+            $composeFiles = @("--env-file", ".env.local", "-f", "docker-compose.$Environment.yml")
+        } else {
+            $composeFiles = @("-f", "docker-compose.$Environment.yml")
+        }
         Write-ColoredOutput "Using environment-specific compose file: docker-compose.$Environment.yml" "Green"
     } else {
         throw "Environment-specific compose file docker-compose.$Environment.yml not found. Available environments: dev, stg, prod"
@@ -1064,6 +1155,7 @@ try {
     }
     # Explicit success exit to avoid propagating non-zero codes from underlying commands
     try { $global:LASTEXITCODE = 0 } catch {}
+    if ($acquiredLock) { Remove-Item $lockFile -Force -ErrorAction SilentlyContinue }
     exit 0
 }
 catch {
@@ -1071,5 +1163,6 @@ catch {
     if ($EnterpriseMode) {
         Write-ColoredOutput "Check enterprise log file: logs/docker-startup-$(Get-Date -Format 'yyyy-MM-dd').log" "Yellow" "INFO"
     }
+    if ($acquiredLock) { Remove-Item $lockFile -Force -ErrorAction SilentlyContinue }
     exit 1
 }

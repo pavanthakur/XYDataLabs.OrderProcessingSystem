@@ -1,7 +1,6 @@
 # ADR-007: Hybrid Multitenant Model (SharedPool + Dedicated Database)
 
-## Status
-Accepted
+**Status:** Accepted
 
 ## Context
 The application started with a pure Model A (shared database, TenantId discriminator) multitenancy design. All tenants share a single SQL database with row-level isolation via EF Core global query filters.

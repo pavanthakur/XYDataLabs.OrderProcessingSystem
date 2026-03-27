@@ -1,5 +1,20 @@
 [
   {
+    "Name": "Docker Launcher",
+    "Projects": [
+      {
+        "Path": "XYDataLabs.OrderProcessingSystem.API\\XYDataLabs.OrderProcessingSystem.API.csproj",
+        "Action": "Start",
+        "DebugTarget": "docker-launcher"
+      },
+      {
+        "Path": "XYDataLabs.OrderProcessingSystem.UI\\XYDataLabs.OrderProcessingSystem.UI.csproj",
+        "Action": "Start",
+        "DebugTarget": "docker-launcher"
+      }
+    ]
+  },
+  {
     "Name": "Http Profile",
     "Projects": [
       {

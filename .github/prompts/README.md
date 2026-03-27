@@ -13,7 +13,7 @@ These prompts are intended to reduce missed post-deployment steps, standardize r
 Quick tip:
 
 ```text
-Ctrl+Shift+I → Agent mode → type /XYDataLabs-day-complete, /XYDataLabs-sql-local-access, or /XYDataLabs-context-audit
+Ctrl+Shift+I → Agent mode → type /XYDataLabs-day-complete, /XYDataLabs-sql-local-access, /XYDataLabs-context-audit, or /XYDataLabs-validate-adrs
 ```
 
 ## Available Prompts
@@ -43,6 +43,31 @@ Important notes:
 - Uses the `dev-machine` firewall rule name and safely reuses it.
 - Close the firewall rule when done.
 - This is for local SQL access, not App Service runtime access.
+
+### `/XYDataLabs-setup-local`
+
+Purpose:
+- Bootstraps local development environment after a fresh `git clone`.
+- Runs `scripts/setup-local.ps1` — creates `.env.local`, sets `dotnet user-secrets`, trusts HTTPS dev cert.
+- Summarises next steps for VS F5 and Docker.
+
+Use when:
+- Setting up the project on a new or clean machine.
+- `.env.local` is missing or you need to reset local passwords.
+
+### `/XYDataLabs-completion-check`
+
+Purpose:
+- Runs a structured quality gate after completing any feature, task, script, or workflow.
+- Checks six categories: documentation, guardrails, unit tests, integration/architecture tests, automation/CI-CD, and Copilot context.
+- Fixes gaps immediately where possible; records any justified deferrals.
+
+Use when:
+- Finishing any feature, fix, script, or DevOps task before considering it done.
+- You want a systematic answer to: "Have we documented, guardrailed, tested, and automated this properly?"
+- As the final step in any ad-hoc task that doesn't use `/XYDataLabs-new-feature`.
+
+Note: `/XYDataLabs-new-feature` has its own built-in review step (Code Reviewer agent). Run `/XYDataLabs-completion-check` for everything else.
 
 ### `/XYDataLabs-context-audit`
 
@@ -74,6 +99,23 @@ Workflow:
 4. Steps 11-12: commit and optionally run `/XYDataLabs-context-audit`.
 5. Step 13 (conditional): if the feature touched payment code, run `/XYDataLabs-verify-payments`.
 
+### `/XYDataLabs-validate-adrs`
+
+Purpose:
+- Runs both ADR validation checks locally before committing.
+- Step 1: `scripts/validate-adr-frontmatter.ps1` — checks filename pattern, H1 format, `**Status:**` presence, and valid status word for every `ADR-NNN-.md` file.
+- Step 2: `npx markdownlint-cli2` — checks markdown formatting using `.markdownlint.json`.
+
+Use when:
+- Before committing changes to any ADR file.
+- After creating a new ADR and wanting to verify it conforms to the schema.
+- To run the same checks locally that CI runs on push/PR.
+
+Important notes:
+- ADR-000 template is excluded from all checks.
+- If `npx` is not available, Step 1 alone is sufficient before committing — markdownlint runs automatically in CI.
+- To enable the CI counterpart: set `ADR_VALIDATION_ENABLED` repo variable to `true` in GitHub Settings → Secrets and variables → Actions → Variables tab → Repository variables. Off by default.
+
 ### `/XYDataLabs-verify-payments`
 
 Purpose:
@@ -98,9 +140,12 @@ Note: This prompt generates focused verification queries. For the full reference
 |----------|--------|
 | Add a new feature end-to-end | `/XYDataLabs-new-feature` |
 | Finish a learning day | `/XYDataLabs-day-complete` |
+| Verify docs/tests/automation after any task | `/XYDataLabs-completion-check` |
+| Set up local dev environment after git clone | `/XYDataLabs-setup-local` |
 | Need local SSMS/sqlcmd access to Azure SQL | `/XYDataLabs-sql-local-access` |
 | Check for stale AI context / memory drift | `/XYDataLabs-context-audit` |
 | Verify payment DB records after a test run | `/XYDataLabs-verify-payments` |
+| Validate ADR markdown files before committing | `/XYDataLabs-validate-adrs` |
 
 ## Typical Workflows
 
@@ -122,6 +167,18 @@ Note: This prompt generates focused verification queries. For the full reference
 [After a payment test run or payment feature change]
 └─ /XYDataLabs-verify-payments  →  filtered DB queries for the most recent OR series
    └─ Fails? → open docs/runbooks/payment-db-verification.md for full diagnostics
+
+[Before committing ADR changes]
+└─ /XYDataLabs-validate-adrs  →  frontmatter schema check + markdownlint
+   └─ All PASS? → safe to commit
+   └─ Any FAIL? → fix violations listed, re-run
+
+[After any task/fix/script/workflow (not covered by /new-feature)]
+└─ /XYDataLabs-completion-check  →  6-category quality gate
+   └─ Documented? Guardrailed? Unit tested? Integration tested? Automated? Context current?
+
+[Fresh git clone / new machine]
+└─ /XYDataLabs-setup-local  →  runs setup-local.ps1, summarises next steps
 ```
 
 ## Custom Agents
@@ -143,6 +200,7 @@ Select these in the VS Code Chat agent picker for focused, context-scoped assist
 | `.github/prompts/XYDataLabs-context-audit.prompt.md` | Context drift detection audit |
 | `.github/prompts/XYDataLabs-new-feature.prompt.md` | End-to-end feature development workflow |
 | `.github/prompts/XYDataLabs-verify-payments.prompt.md` | Payment DB verification for a specific OR series |
+| `.github/prompts/XYDataLabs-validate-adrs.prompt.md` | ADR frontmatter schema + markdownlint local validation |
 | `.github/copilot-instructions.md` | Prompt index and quick usage reference |
 
 ## Operational Guidance

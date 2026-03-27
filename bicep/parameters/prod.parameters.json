@@ -3,22 +3,22 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
     "appName": {
-      "value": "pavanthakur-orderprocessing-api-xyapp-dev"
+      "value": "pavanthakur-orderprocessing-api-xyapp-prod"
     },
     "baseName": {
       "value": "orderproc"
     },
     "appServicePlanName": {
-      "value": "asp-orderprocessing-dev"
+      "value": "asp-orderprocessing-prod"
     },
     "location": {
       "value": "centralindia"
     },
     "appServiceSku": {
-      "value": "F1"
+      "value": "P1v3"
     },
     "environment": {
-      "value": "dev"
+      "value": "prod"
     }
   }
 }
