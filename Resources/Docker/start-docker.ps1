@@ -1,4 +1,4 @@
-# PowerShell script to start Docker Compose with environment-specific configurations and enterprise features
+﻿# PowerShell script to start Docker Compose with environment-specific configurations and enterprise features
 param(
     [Parameter(Mandatory=$false)]
     [ValidateSet("http", "https", "all")]
@@ -765,10 +765,46 @@ try {
     } else {
         Write-ColoredOutput "SharedSettings file verified: $SharedSettingsPath" "Green"
     }
-    
+
+    # Pre-flight: ensure local SQL Server databases exist so EF migrations succeed on startup.
+    # EF Core's Migrate() can create a database, but if SA is locked (from a previous crash loop)
+    # the connection is refused before Migrate() even runs. Creating DBs via Windows auth here
+    # breaks that cascade. Silently skips if sqlcmd is not installed or SQL Server is unreachable.
+    $dbNames = switch ($Environment) {
+        "dev"  { @("OrderProcessingSystem_Dev",  "OrderProcessingSystem_TenantC_Dev") }
+        "stg"  { @("OrderProcessingSystem_Stg",  "OrderProcessingSystem_TenantC_Stg") }
+        "prod" { @("OrderProcessingSystem_Prod", "OrderProcessingSystem_TenantC_Prod") }
+        default { @() }
+    }
+    if ($dbNames.Count -gt 0) {
+        $sqlcmdExe = Get-Command sqlcmd -ErrorAction SilentlyContinue
+        if ($sqlcmdExe) {
+            Write-ColoredOutput "Pre-flight: ensuring local SQL databases exist for $Environment..." "Cyan" "INFO"
+            foreach ($db in $dbNames) {
+                $sql = "IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = '$db') CREATE DATABASE [$db];"
+                $result = sqlcmd -S "localhost" -E -d master -Q $sql 2>&1
+                if ($LASTEXITCODE -eq 0) {
+                    Write-ColoredOutput "  Database '$db' ready" "Green"
+                } else {
+                    Write-ColoredOutput "  Warning: could not create '$db' (SA may need unlocking or SQL Server not running): $result" "Yellow" "WARNING"
+                }
+            }
+        } else {
+            Write-ColoredOutput "Pre-flight DB check skipped (sqlcmd not found)" "DarkGray"
+        }
+    }
+
     # Determine compose files to use - environment-specific only
     if (Test-Path "docker-compose.$Environment.yml") {
-        $composeFiles = @("-f", "docker-compose.$Environment.yml")
+        # Always include --env-file so docker compose resolves ${LOCAL_*} variables from .env.local
+        # regardless of whether the caller inherited session env vars (e.g. Visual Studio launch,
+        # fresh terminal, or direct docker compose call). Without this, undefined vars default to ""
+        # which causes cert password mismatch and SA lockout on HTTPS profiles.
+        if (Test-Path ".env.local") {
+            $composeFiles = @("--env-file", ".env.local", "-f", "docker-compose.$Environment.yml")
+        } else {
+            $composeFiles = @("-f", "docker-compose.$Environment.yml")
+        }
         Write-ColoredOutput "Using environment-specific compose file: docker-compose.$Environment.yml" "Green"
     } else {
         throw "Environment-specific compose file docker-compose.$Environment.yml not found. Available environments: dev, stg, prod"

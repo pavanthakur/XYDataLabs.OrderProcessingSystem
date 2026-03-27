@@ -1,4 +1,4 @@
-#Requires -Version 7.0
+﻿#Requires -Version 7.0
 <#
 .SYNOPSIS
     Bootstrap local development environment. Run once after a fresh clone.
@@ -192,15 +192,24 @@ if ($PSCmdlet.ShouldProcess("UI user-secrets: ApiSettings:UI:https:CertPassword"
 Write-Step 'HTTPS development certificate'
 
 $certOutput = dotnet dev-certs https --check --quiet 2>&1
-if ($LASTEXITCODE -eq 0 -and -not $Force) {
+$certAlreadyTrusted = ($LASTEXITCODE -eq 0)
+
+# Always (re-)export the PFX with the current LOCAL_CERT_PASSWORD so the file stays
+# in sync with .env.local — even if the system cert is already trusted.
+# Skipping this step when already trusted was the root cause of cert password mismatch
+# on stg/https profiles: the file had an old password but .env.local had a new one.
+if ($PSCmdlet.ShouldProcess('HTTPS dev cert — export to PFX')) {
+    dotnet dev-certs https --export-path $certFile --password $certPassword | Out-Null
+    Write-Done "Cert exported to Resources/Certificates/aspnetapp.pfx (password synced with .env.local)"
+}
+
+if ($certAlreadyTrusted -and -not $Force) {
     Write-Skip 'dev cert already trusted'
 }
 else {
-    # Export to PFX for Docker HTTPS profiles, then trust the system cert
-    if ($PSCmdlet.ShouldProcess('HTTPS dev cert — export and trust')) {
-        dotnet dev-certs https -ep $certFile -p $certPassword --overwrite | Out-Null
+    if ($PSCmdlet.ShouldProcess('HTTPS dev cert — trust')) {
         dotnet dev-certs https --trust
-        Write-Done "Cert exported to Resources/Certificates/aspnetapp.pfx and trusted"
+        Write-Done "Dev cert trusted"
     }
 }
 
