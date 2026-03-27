@@ -434,6 +434,32 @@ else
 
     // Short-circuit /swagger/* before TenantMiddleware so the caller gets a clear
     // intentional message rather than the generic "Missing required header 'X-Tenant-Code'" 400.
+    // Derive the dev Swagger URL dynamically — no hardcoded account names.
+    //   Azure:       swap the env segment in WEBSITE_SITE_NAME (same pattern used for CORS origin).
+    //   Docker/Local: read the dev API http port from sharedsettings.dev.json.
+    string devSwaggerUrl;
+    if (isAzure && !string.IsNullOrWhiteSpace(azureSiteName))
+    {
+        // e.g. "myorg-orderprocessing-api-xyapp-prod" → "myorg-orderprocessing-api-xyapp-dev"
+        var devSiteName = azureSiteName.Replace(
+            $"-xyapp-{environmentName}",
+            $"-xyapp-{Constants.Environments.Dev}",
+            StringComparison.Ordinal);
+        devSwaggerUrl = $"https://{devSiteName}.azurewebsites.net/swagger";
+    }
+    else
+    {
+        // Docker: published app root is /app; Local: AppContext.BaseDirectory is bin/Debug/net8.0/.
+        // sharedsettings.dev.json is copied alongside the binary in both cases.
+        var devSettingsPath = Path.Combine(AppContext.BaseDirectory, "Resources", "Configuration",
+            $"sharedsettings.{Constants.Environments.Dev}.json");
+        var devConfig = new ConfigurationBuilder()
+            .AddJsonFile(devSettingsPath, optional: true)
+            .Build();
+        var devApiHttpPort = devConfig.GetValue<int>("ApiSettings:API:http:Port", defaultValue: 5020);
+        devSwaggerUrl = $"http://localhost:{devApiHttpPort}/swagger";
+    }
+
     app.Use(async (context, next) =>
     {
         if (context.Request.Path.StartsWithSegments("/swagger"))
@@ -445,7 +471,7 @@ else
                 message = "Swagger UI is not available in the Production environment.",
                 reason = "API documentation is intentionally disabled in production. Use the dev or staging environment to explore the API.",
                 environment = environmentName,
-                swaggerAvailableAt = "https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net/swagger"
+                swaggerAvailableAt = devSwaggerUrl
             });
             return;
         }
