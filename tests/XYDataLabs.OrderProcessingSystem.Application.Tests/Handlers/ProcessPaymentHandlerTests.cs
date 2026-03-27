@@ -129,6 +129,29 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
 
     // ------------------------------------------------------------------ Fix 3 regression guard (orphan deactivation)
 
+    // ------------------------------------------------------------------ Fix 6 regression guard
+
+    [Fact]
+    public async Task HandleAsync_3DSecureOff_ShouldPopulateTransactionReferenceIdOnChargeCardTransaction()
+    {
+        // Arrange — 3DS disabled; charge returns immediately as completed with Authorization populated
+        SetupPaymentDbSets();
+        SetupOpenPayHappyPath();
+        var handler = CreateProcessPaymentHandler(use3DSecure: false);
+
+        // Act
+        await handler.HandleAsync(BuildProcessPaymentCommand());
+
+        // Assert — charge CT must carry TransactionReferenceId from charge.Authorization at creation time.
+        // For 3DS=0 there is no subsequent ConfirmPaymentStatus call, so the CT row is the only
+        // opportunity to persist the reference ID returned by OpenPay.
+        CapturedCardTransactions.Should().HaveCount(2);
+        var chargeCt = CapturedCardTransactions.Last();
+        chargeCt.TransactionReferenceId.Should().Be("auth-ref-001",
+            because: "for non-3DS payments the Authorization from the charge response must be " +
+                     "written to CardTransactions.TransactionReferenceId at charge creation time");
+    }
+
     [Fact]
     public async Task HandleAsync_WhenOpenPayChargeFails_ShouldDeactivateOrphanedPaymentMethod()
     {

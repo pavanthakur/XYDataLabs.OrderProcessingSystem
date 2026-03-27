@@ -423,6 +423,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             IsTransactionSuccess = EnumHelper.IsSuccessStatus(normalizedChargeStatus),
             IsThreeDSecureEnabled = isThreeDSecureEnabled,
             ThreeDSecureStage = threeDSecureStage,
+            TransactionReferenceId = charge.Authorization,
             RedirectUrl = charge.PaymentMethod?.Url,
             CreditCardOwnerName = request.Name,
             CreditCardExpireYear = int.Parse(request.ExpirationYear, CultureInfo.InvariantCulture),
