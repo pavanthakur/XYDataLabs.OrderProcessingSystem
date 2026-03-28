@@ -95,6 +95,18 @@ The SQL password comes from Key Vault — read it now so it is ready for Steps 4
 $pass = az keyvault secret show --vault-name kv-orderprocessing-{ENV_TAG} --name sql-admin-password --query value -o tsv
 ```
 
+> **First-time prerequisite:** If you get `Forbidden`, your CLI identity needs `secrets/get` on the KV. Grant it once:
+> ```powershell
+> $oid = az ad signed-in-user show --query id -o tsv
+> az keyvault set-policy --name kv-orderprocessing-{ENV_TAG} --object-id $oid --secret-permissions get list
+> ```
+> Then retry the `az keyvault secret show` command above.
+
+Also ensure the firewall is open before running sqlcmd in Steps 4–5:
+```powershell
+.\Resources\Azure-Deployment\open-local-sql-firewall.ps1 -Environment {env}
+```
+
 Replace `{ENV_TAG}` with the env suffix from Step 1 (`dev`, `stg`, `prod`).
 
 Query App Insights for API-side payment events today (IST midnight = UTC -05:30, so use `ago(24h)` to be safe):
