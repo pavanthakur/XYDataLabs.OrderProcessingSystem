@@ -108,6 +108,7 @@ try {
     $migrationOutput = dotnet ef database update `
         --project XYDataLabs.OrderProcessingSystem.Infrastructure `
         --startup-project XYDataLabs.OrderProcessingSystem.API `
+        --context OrderProcessingSystemDbContext `
         --connection "$connectionString" `
         --verbose 2>&1
     
@@ -131,6 +132,7 @@ try {
     $scriptOut = Join-Path $PSScriptRoot ("generated-migrations-{0}.sql" -f $Environment)
     $genOut = dotnet ef migrations script `
         --project XYDataLabs.OrderProcessingSystem.Infrastructure `
+        --context OrderProcessingSystemDbContext `
         --idempotent `
         --output $scriptOut `
         --verbose 2>&1
@@ -160,6 +162,7 @@ try {
     $appliedMigrations = dotnet ef migrations list `
         --project XYDataLabs.OrderProcessingSystem.Infrastructure `
         --startup-project XYDataLabs.OrderProcessingSystem.API `
+        --context OrderProcessingSystemDbContext `
         --connection "$connectionString" `
         --no-build 2>&1
     
