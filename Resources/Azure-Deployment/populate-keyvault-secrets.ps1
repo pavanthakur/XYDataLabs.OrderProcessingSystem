@@ -225,12 +225,12 @@ try {
     }
 
     if ([string]::IsNullOrWhiteSpace($OpenPayRedirectUrl)) {
-        $OpenPayRedirectUrl = switch ($Environment) {
-            'dev' { 'https://your-domain.com/payment/callback' }
-            'staging' { 'https://stg-domain.com/payment/callback' }
-            'prod' { 'https://production-domain.com/payment/callback' }
-        }
-        Write-Host "  ⚠️  OpenPayRedirectUrl not provided. Using environment default: $OpenPayRedirectUrl" -ForegroundColor Yellow
+        # Derive from the Azure App Service naming convention: {GitHubOwner}-{BaseName}-ui-xyapp-{envSuffix}
+        # This matches bootstrap-enterprise-infra.ps1 and is predictable on any machine.
+        $envSuffix = switch ($Environment) { 'staging' { 'stg' } default { $Environment } }
+        $uiAppName = "$($GitHubOwner.ToLower())-$($BaseName.ToLower())-ui-xyapp-$envSuffix"
+        $OpenPayRedirectUrl = "https://$uiAppName.azurewebsites.net/payment/callback"
+        Write-Host "  ℹ️  OpenPayRedirectUrl derived from naming convention: $OpenPayRedirectUrl" -ForegroundColor Gray
     }
 
     if ([string]::IsNullOrWhiteSpace($ApiHttpsCertPassword)) {
