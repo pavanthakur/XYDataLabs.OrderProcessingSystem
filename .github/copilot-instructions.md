@@ -262,8 +262,13 @@ via the `ASPNETCORE_ENVIRONMENT` variable.
 | `AZUREAPPSERVICE_CLIENTID` | Repository + Environments | OIDC Client ID for Azure login |
 | `AZUREAPPSERVICE_TENANTID` | Repository + Environments | Azure Tenant ID |
 | `AZUREAPPSERVICE_SUBSCRIPTIONID` | Repository + Environments | Azure Subscription ID |
+| `OPENPAY_MERCHANT_ID` | Repository | OpenPay merchant ID — set once via Azure Initial Setup; bootstrap passes to Key Vault |
+| `OPENPAY_PRIVATE_KEY` | Repository | OpenPay private key — set once via Azure Initial Setup; bootstrap passes to Key Vault |
+| `OPENPAY_DEVICE_SESSION_ID` | Repository | OpenPay device session ID — set once via Azure Initial Setup; bootstrap passes to Key Vault |
 
 > **Note**: `APP_INSTALLATION_ID` is **not** required — it is auto-discovered at runtime.
+
+> **Note**: OpenPay secrets are stored as **GitHub repo secrets**, not environment secrets. They are passed from the bootstrap workflow to `populate-keyvault-secrets.ps1`, which writes them into Azure Key Vault. No `.env.local` or manual KV update is needed on any machine.
 
 ### Key Vault integration
 

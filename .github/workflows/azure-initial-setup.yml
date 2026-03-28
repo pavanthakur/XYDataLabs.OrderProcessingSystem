@@ -38,6 +38,18 @@ on:
         required: false
         type: string
         default: 'XYDataLabsGitHubApp'
+      openPayMerchantId:
+        description: '💳 OpenPay Merchant ID | Stored as OPENPAY_MERCHANT_ID repo secret — required for payment flow'
+        required: false
+        type: string
+      openPayPrivateKey:
+        description: '💳 OpenPay Private Key | Stored as OPENPAY_PRIVATE_KEY repo secret'
+        required: false
+        type: string
+      openPayDeviceSessionId:
+        description: '💳 OpenPay Device Session ID | Stored as OPENPAY_DEVICE_SESSION_ID repo secret'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -805,6 +817,9 @@ jobs:
       tenantId: ${{ needs.setup-oidc.outputs.tenantId }}
       subscriptionId: ${{ needs.setup-oidc.outputs.subscriptionId }}
       oidcSpObjectId: ${{ needs.setup-oidc.outputs.spObjectId }}
+      openPayMerchantId: ${{ inputs.openPayMerchantId }}
+      openPayPrivateKey: ${{ inputs.openPayPrivateKey }}
+      openPayDeviceSessionId: ${{ inputs.openPayDeviceSessionId }}
 
   summary:
     name: Initial Setup Summary
