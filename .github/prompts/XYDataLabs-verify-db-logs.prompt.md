@@ -28,7 +28,7 @@ Parse the user's argument (e.g. `"prod https docker"`, `"stg http"`, `"dev"`).
 
 - **env** — one of: `dev`, `stg`, `prod` (default: `dev` if omitted)
 - **profile** — `http` or `https` (default: `http` if omitted)
-- **runtime** — `docker`, `local`, or `azure` (default: `docker` if omitted)
+- **runtime** — `docker`, `local`, or `azure` (default: `local` if omitted)
 
 If the argument is omitted entirely, ask:
 > "Which environment and profile did you run?  
@@ -112,14 +112,14 @@ Also ensure the firewall is open before running sqlcmd in Steps 4–5:
 
 Replace `{ENV_TAG}` with the env suffix from Step 1 (`dev`, `stg`, `prod`).
 
-Query App Insights for API-side payment events today (IST = UTC+5:30; `startofday(now() + 5h30m) - 5h30m` resolves to midnight IST in UTC, preventing missed payments when running before 05:30 UTC):
+Query App Insights for API-side payment events today (IST = UTC+5:30; `startofday(now() + 330m) - 330m` resolves to midnight IST in UTC, preventing missed payments when running before 05:30 UTC):
 ```powershell
 az monitor app-insights query `
   --app ai-orderprocessing-{ENV_TAG} `
   --resource-group rg-orderprocessing-{ENV_TAG} `
   --analytics-query "
     traces
-    | where timestamp >= startofday(now() + 5h30m) - 5h30m
+    | where timestamp >= startofday(now() + 330m) - 330m
     | where cloud_RoleName has 'api'
     | where message has_any('charge created', 'created charge', 'callback reconciliation',
                             'Generated payment', 'confirm-status')
@@ -190,7 +190,7 @@ az monitor app-insights query `
   --resource-group rg-orderprocessing-{ENV_TAG} `
   --analytics-query "
     traces
-    | where timestamp >= startofday(now() + 5h30m) - 5h30m
+    | where timestamp >= startofday(now() + 330m) - 330m
     | where cloud_RoleName has 'ui'
     | where message has '<PREFIX>' or message has 'payment/callback responded'
     | project timestamp, message,
