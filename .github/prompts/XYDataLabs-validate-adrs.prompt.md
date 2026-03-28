@@ -1,9 +1,15 @@
 ---
 agent: agent
-description: Validate all ADR markdown files locally before committing — runs frontmatter schema check and markdownlint
+description: "Before committing ADR or script changes: (1) frontmatter schema — filename, H1 title, **Status:** word; (2) markdownlint format; (3) VS solution sync — all files in tracked dirs (ADRs, workflows, scripts, Azure-Deployment) registered in .sln"
 ---
 
-Run ADR validation locally against all files in `docs/architecture/decisions/`.
+Run the three local validation checks before committing any ADR, script, workflow, or Azure-Deployment file.
+
+| Step | What it checks |
+|------|----------------|
+| 1 | ADR frontmatter — filename pattern, H1 title, `**Status:**` word |
+| 2 | Markdownlint — ADR markdown formatting rules |
+| 3 | VS solution sync — every tracked file registered in `.sln` |
 
 ## Step 1 — Frontmatter schema check
 
@@ -35,11 +41,23 @@ npx markdownlint-cli2 "docs/architecture/decisions/ADR-*.md"
 
 > If Node.js is not installed at all, skip this step — markdownlint runs automatically in CI on every push.
 
+## Step 3 — VS solution sync check
+
+Ensures every file in the four tracked directories is registered in the VS solution file.
+Run only if you added or renamed files in `docs/architecture/decisions/`, `.github/workflows/`, `scripts/`, or `Resources/Azure-Deployment/`.
+
+```powershell
+cd Q:\GIT\TestAppXY_OrderProcessingSystem
+pwsh scripts/sync-check-solution.ps1
+```
+
+The script ignores generated outputs (`.log`, `.tmp`, `.bak`). Any gap is printed with a fix hint.
+
 ## Interpret results
 
-**All PASS + exit 0** — safe to commit. All ADRs conform to the schema.
+**All PASS + exit 0 on all three steps** — safe to commit.
 
-**Any FAIL** — the script lists every violation with the filename and exact rule broken. Fix before committing.
+**Any FAIL** — the script prints every violation with the filename and exact rule broken. Fix before committing.
 
 ## CI workflow toggle
 
