@@ -1,6 +1,6 @@
 ---
 agent: agent
-description: "Run when starting a new feature that needs end-to-end implementation: entity, CQRS handlers, controller, EF migration, tests — all with multitenant support. Orchestrates the full development workflow."
+description: "Mandatory 13-step end-to-end workflow for a new feature — gathers requirements, creates Domain entity (TenantId enforced), CQRS command/query handlers, controller endpoint, EF Core migration, unit + integration tests, architecture test guard, ADR-010 runtime gate, and a commit-ready completion check"
 ---
 
 # New Feature — End-to-End Development Workflow

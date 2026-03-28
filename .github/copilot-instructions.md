@@ -48,7 +48,7 @@ practice Azure cloud deployment, CI/CD automation, and enterprise DevOps pattern
 ├── .github/
 │   ├── app-manifest.json          # GitHub App manifest (permissions config)
 │   ├── copilot-instructions.md    # ← THIS FILE (Copilot context)
-│   └── workflows/                 # 9 GitHub Actions workflows + 7 README docs
+│   └── workflows/                 # 11 GitHub Actions workflows + 8 README docs
 │
 ├── Documentation/                 # All markdown documentation (organised)
 │   ├── README.md                  # Main documentation hub
@@ -92,7 +92,7 @@ practice Azure cloud deployment, CI/CD automation, and enterprise DevOps pattern
 │
 ├── docs/
 │   ├── runbooks/                  # Operations runbooks
-│   └── architecture/decisions/    # ADRs (ADR-001 through ADR-006)
+│   └── architecture/decisions/    # ADRs (ADR-000 through ADR-010)
 │
 ├── TROUBLESHOOTING-INDEX.md       # ← Quick troubleshooting guide with links
 ├── ARCHITECTURE-EVOLUTION.md      # 14-phase monolith → microservices roadmap
@@ -109,7 +109,7 @@ practice Azure cloud deployment, CI/CD automation, and enterprise DevOps pattern
 
 ---
 
-## 4. GitHub Actions Workflows (9 workflows)
+## 4. GitHub Actions Workflows (11 workflows)
 
 All workflows live in `.github/workflows/`. Each has a companion `README-*.md` in the same folder.
 

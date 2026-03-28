@@ -1,6 +1,6 @@
 ---
 agent: agent
-description: Run after completing a curriculum day. Asks what was done and automatically routes updates to the correct documents.
+description: "After a curriculum day: asks what you completed, then auto-routes — marks 1_MASTER_CURRICULUM.md checkboxes, logs CLI commands to QUICK-COMMAND-REFERENCE.md and the matching commands/ topic file, updates DAILY_PROGRESS_TRACKER.md, and appends to ACHIEVEMENT_LOG.md"
 ---
 
 # Day Completion Routing

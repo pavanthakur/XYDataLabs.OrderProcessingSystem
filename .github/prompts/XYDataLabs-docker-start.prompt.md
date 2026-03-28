@@ -1,6 +1,6 @@
 ---
 agent: agent
-description: Interactive Docker/dotnet launcher for the XY Order Processing System — ask which environment and profile to start, then run it
+description: "9-option interactive launcher — choose dev/stg/prod × http/https (Docker) or local dotnet run, or stop a running stack; maps the choice to start-docker-menu.ps1 and prints the correct API/UI URLs after start"
 ---
 
 Ask the user which option they want, using this exact menu:

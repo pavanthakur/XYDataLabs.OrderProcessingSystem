@@ -1,6 +1,6 @@
 ---
 agent: agent
-description: Open or close Azure SQL firewall for local SSMS/sqlcmd access after a fresh bootstrap or deploy
+description: "Opens or closes the Azure SQL firewall rule for your current local IP (dev or staging); runs open-local-sql-firewall.ps1 or the close variant, then prints the SSMS/sqlcmd connection string for that environment"
 ---
 
 Ask the user: "Which environment do you need SQL access for? (dev / staging) — and do you want to open or close the firewall?"
