@@ -237,8 +237,6 @@ Note the `ThreeDSEnabled` per tenant — it controls expected row counts in Q2/Q
 
 > **Tokenization row `ThreeDS` field:** The tokenization row (`Stage=tokenization_completed`) always records `IsThreeDSecureEnabled=0` regardless of tenant configuration — 3DS determination happens after tokenization. This is expected data, not an inconsistency. Only the charge row (`Stage=completed` or `Stage=not_applicable`) reflects the actual 3DS outcome for the tenant.
 
-> **Tokenization row `ThreeDS` field:** The tokenization row (`Stage=tokenization_completed`) always records `IsThreeDSecureEnabled=0` regardless of tenant configuration — 3DS determination happens after tokenization. This is expected and not a data issue. Only the charge row (`Stage=completed` or `not_applicable`) reflects the actual 3DS outcome for the tenant.
-
 > **If either query returns 0 rows or the expected tenants are missing:** the DB has not been seeded or the migration has not run for this environment. Do not proceed to Q2/Q5 — the expected row counts will be undefined. Fix the seeding or migration issue first, then restart the verification from Step 4.
 
 ---
