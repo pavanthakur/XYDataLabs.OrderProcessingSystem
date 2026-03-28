@@ -1,6 +1,6 @@
 ---
 agent: agent
-description: Detect stale context by comparing memory files and copilot-instructions.md against the actual codebase. Run periodically to prevent drift.
+description: "Detects stale AI context — compares .sln project list, NuGet packages, test projects, CQRS patterns, workflows, ADRs, and instruction file applyTo globs against the live codebase; flags anything that has drifted in memory files or copilot-instructions.md"
 ---
 
 # Context Audit — Detect Stale AI Context

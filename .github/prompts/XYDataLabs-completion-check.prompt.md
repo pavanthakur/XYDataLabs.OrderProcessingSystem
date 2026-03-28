@@ -1,6 +1,6 @@
 ---
 agent: agent
-description: Completion quality gate — after finishing any feature, task, script, or workflow, verify it has been properly documented, guardrailed, tested, and automated
+description: "Quality gate after any feature, task, script, or fix — automatically runs build (warnings-as-errors), all unit tests, and a secret/credential scan; then checks 6 categories: documented, guardrailed, unit tested, integration tested, automated in CI, and AI context current"
 ---
 
 Run this after completing any feature, task, script, fix, or workflow change.
