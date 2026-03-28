@@ -68,6 +68,7 @@ else { Write-Host 'SECRET SCAN: clean' -ForegroundColor Green }
 - [ ] If an EF Core migration was added: has it been verified against the local DB?
 - [ ] `API.Tests` passed (from Step 0 results)
 - [ ] `Architecture.Tests` passed — layer boundaries still enforced (from Step 0 results)
+- [ ] If this change touches `Program.cs` environment gates (`isDocker`, `isAzure`, `profileSuffix`, `runtimeSuffix`): gate logic is extracted to a testable helper and all 7 cells in the ADR-010 Runtime Context Matrix have been validated — either by unit test, `WebApplicationFactory` integration test, or physical log verification via `/XYDataLabs-verify-db-logs`. Reference: `docs/architecture/decisions/ADR-010-runtime-environment-detection.md`
 
 ## 5. Automation / CI-CD
 

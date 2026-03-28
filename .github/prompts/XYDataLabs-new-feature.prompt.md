@@ -63,6 +63,8 @@ Rules (from `ef-migrations.instructions.md` + `multitenant-payment-schema.instru
 - Add any entity-specific fluent configuration (e.g. `HasMaxLength()`, composite indexes beyond TenantId)
 - Follow the same configuration pattern as existing entities (e.g., `CardTransaction`, `CustomerOrder`)
 
+> ⚠ **Conditional — startup behavior across environments:** EF auto-migration at startup is gated by `!isAzure` in `Program.cs` — it runs in local and Docker dev/stg/prod contexts but is **suppressed** in Azure (cells 5–7 in the ADR-010 matrix). If this entity relies on seeding data via `DbInitializer` at startup, confirm the Azure case is handled — Azure will not have just run the migration automatically. Reference: `docs/architecture/decisions/ADR-010-runtime-environment-detection.md`.
+
 ## Step 6: EF Migration
 
 Generate and verify the migration.
@@ -138,6 +140,14 @@ Add to `tests/XYDataLabs.OrderProcessingSystem.Architecture.Tests/`:
 - `IgnoreQueryFilters_Usage_Must_Be_In_Allow_List_Only` — catches unapproved filter bypass
 - `All_CQRS_Handlers_Must_Return_Result_T` — ensures Result<T> pattern
 
+> **Conditional — `Program.cs` environment gate change:** If this feature modifies any `isDocker`, `isAzure`, `profileSuffix`, or `runtimeSuffix` gate in `Program.cs`:
+> 1. **Extract** the gate logic to a static helper in `API/Helpers/` or `SharedKernel/` so it is unit-testable (top-level statements cannot be tested directly)
+> 2. **Add `[Theory]` unit tests** covering all relevant boolean input combinations — reference the 7-cell matrix in ADR-010 for the full set
+> 3. **Add `WebApplicationFactory` integration tests** for each behavioral gate (Swagger availability, CORS header content, developer exception page, EF migration trigger) — set `ASPNETCORE_ENVIRONMENT`, `DOTNET_RUNNING_IN_CONTAINER`, `WEBSITE_SITE_NAME` as env vars and assert the output differs as expected per cell
+> 4. **Add a row** to the ADR-010 Feature Gate Inventory for the new gate
+>
+> This is the same class of gap as the `TransactionReferenceId` bug (commit `49077f3`) — a code path with no test. Reference: `docs/architecture/decisions/ADR-010-runtime-environment-detection.md`
+
 ## Step 9: Build + Test
 
 Run the full build and test suite:
@@ -193,4 +203,4 @@ If this is a significant feature, run `/XYDataLabs-context-audit` to verify inst
 - `Domain/Entities/CardTransaction*`, `PayinLog*`, `BillingCustomer*`, `PaymentProvider*`, `TransactionStatusHistory*`
 - `Infrastructure/` payment-related data access or seeding
 
-**Action:** Run `/XYDataLabs-verify-db-logs` to verify logs and DB records and confirm no data isolation or schema regressions were introduced.
+**Action:** Run `/XYDataLabs-verify-db-logs` to verify logs and DB records and confirm no data isolation or schema regressions were introduced. Running this also serves as physical verification of the ADR-010 log filename and sink selection cells for the runtime profile used — confirming the correct log file was written with the correct naming pattern.
