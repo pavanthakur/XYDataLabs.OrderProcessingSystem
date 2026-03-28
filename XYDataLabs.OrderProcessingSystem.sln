@@ -80,6 +80,21 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Azure-Deployment", "Azure-D
 		Resources\Azure-Deployment\validate-parameters-whatif.ps1 = Resources\Azure-Deployment\validate-parameters-whatif.ps1
 		Resources\Azure-Deployment\verify-oidc-credentials.ps1 = Resources\Azure-Deployment\verify-oidc-credentials.ps1
 		Resources\Azure-Deployment\validate-sharedsettings-diff.ps1 = Resources\Azure-Deployment\validate-sharedsettings-diff.ps1
+		Resources\Azure-Deployment\configure-app-environment.ps1 = Resources\Azure-Deployment\configure-app-environment.ps1
+		Resources\Azure-Deployment\diagnose-keyvault-access.ps1 = Resources\Azure-Deployment\diagnose-keyvault-access.ps1
+		Resources\Azure-Deployment\enable-managed-identity.ps1 = Resources\Azure-Deployment\enable-managed-identity.ps1
+		Resources\Azure-Deployment\open-local-sql-firewall.ps1 = Resources\Azure-Deployment\open-local-sql-firewall.ps1
+		Resources\Azure-Deployment\populate-keyvault-secrets.ps1 = Resources\Azure-Deployment\populate-keyvault-secrets.ps1
+		Resources\Azure-Deployment\query-app-insights-errors.ps1 = Resources\Azure-Deployment\query-app-insights-errors.ps1
+		Resources\Azure-Deployment\setup-sql-managed-identity.ps1 = Resources\Azure-Deployment\setup-sql-managed-identity.ps1
+		Resources\Azure-Deployment\test-branch-env-mapping.ps1 = Resources\Azure-Deployment\test-branch-env-mapping.ps1
+		Resources\Azure-Deployment\test-retry-logic.ps1 = Resources\Azure-Deployment\test-retry-logic.ps1
+		Resources\Azure-Deployment\validate-workflow-config.ps1 = Resources\Azure-Deployment\validate-workflow-config.ps1
+		Resources\Azure-Deployment\verify-app-insights.ps1 = Resources\Azure-Deployment\verify-app-insights.ps1
+		Resources\Azure-Deployment\verify-azure-setup.ps1 = Resources\Azure-Deployment\verify-azure-setup.ps1
+		Resources\Azure-Deployment\verify-deployment-endpoints.ps1 = Resources\Azure-Deployment\verify-deployment-endpoints.ps1
+		Resources\Azure-Deployment\README-KEYVAULT-SETUP.md = Resources\Azure-Deployment\README-KEYVAULT-SETUP.md
+		Resources\Azure-Deployment\RETRY-LOGIC-IMPLEMENTATION.md = Resources\Azure-Deployment\RETRY-LOGIC-IMPLEMENTATION.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".github", ".github", "{E1A8B2C9-4D5F-6789-ABCD-123456789DE5}"
@@ -105,6 +120,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{
 		.github\workflows\infra-deploy.yml = .github\workflows\infra-deploy.yml
 		.github\workflows\test-validate-deployment.yml = .github\workflows\test-validate-deployment.yml
 		.github\workflows\validate-deployment.yml = .github\workflows\validate-deployment.yml
+		.github\workflows\validate-adrs.yml = .github\workflows\validate-adrs.yml
+		.github\workflows\README-VALIDATE-ADRS.md = .github\workflows\README-VALIDATE-ADRS.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "infra", "infra", "{E1A8B2CA-4D5F-6789-ABCD-123456789DE6}"
@@ -241,6 +258,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "scripts", "scripts", "{BB00
 		scripts\test-bootstrap-dry-run.ps1 = scripts\test-bootstrap-dry-run.ps1
 		scripts\test-pre-deployment-validation.ps1 = scripts\test-pre-deployment-validation.ps1
 		scripts\test-recommended-next-steps.ps1 = scripts\test-recommended-next-steps.ps1
+		scripts\setup-local.ps1 = scripts\setup-local.ps1
+		scripts\validate-adr-frontmatter.ps1 = scripts\validate-adr-frontmatter.ps1
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{CC000001-0001-0001-0001-000000000001}"
@@ -258,6 +277,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "decisions", "decisions", "{
 		docs\architecture\decisions\ADR-006-passwordless-sql-managed-identity.md = docs\architecture\decisions\ADR-006-passwordless-sql-managed-identity.md
 		docs\architecture\decisions\ADR-007-hybrid-multitenant-model.md = docs\architecture\decisions\ADR-007-hybrid-multitenant-model.md
 		docs\architecture\decisions\ADR-008-architecture-test-guardrails.md = docs\architecture\decisions\ADR-008-architecture-test-guardrails.md
+		docs\architecture\decisions\ADR-009-tenant-isolation-hardening.md = docs\architecture\decisions\ADR-009-tenant-isolation-hardening.md
+		docs\architecture\decisions\ADR-010-runtime-environment-detection.md = docs\architecture\decisions\ADR-010-runtime-environment-detection.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "internal", "internal", "{CC000004-0001-0001-0001-000000000001}"
