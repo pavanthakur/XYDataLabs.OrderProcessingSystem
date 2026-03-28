@@ -14,15 +14,27 @@ public sealed class OpenPayConfigValidator : IValidateOptions<OpenPayConfig>
         {
             failures.Add("OpenPay:MerchantId is required.");
         }
+        else if (options.MerchantId.StartsWith("set-openpay-", StringComparison.OrdinalIgnoreCase))
+        {
+            failures.Add("OpenPay:MerchantId contains a placeholder value (matches bootstrap placeholder prefix 'set-openpay-*'). Set a real credential in Azure Key Vault. Note: this check pattern-matches the current placeholder format only — it is not exhaustive.");
+        }
 
         if (string.IsNullOrWhiteSpace(options.PrivateKey))
         {
             failures.Add("OpenPay:PrivateKey is required.");
         }
+        else if (options.PrivateKey.StartsWith("set-openpay-", StringComparison.OrdinalIgnoreCase))
+        {
+            failures.Add("OpenPay:PrivateKey contains a placeholder value (matches bootstrap placeholder prefix 'set-openpay-*'). Set a real credential in Azure Key Vault. Note: this check pattern-matches the current placeholder format only — it is not exhaustive.");
+        }
 
         if (string.IsNullOrWhiteSpace(options.DeviceSessionId))
         {
             failures.Add("OpenPay:DeviceSessionId is required.");
+        }
+        else if (options.DeviceSessionId.StartsWith("set-openpay-", StringComparison.OrdinalIgnoreCase))
+        {
+            failures.Add("OpenPay:DeviceSessionId contains a placeholder value (matches bootstrap placeholder prefix 'set-openpay-*'). Set a real credential in Azure Key Vault. Note: this check pattern-matches the current placeholder format only — it is not exhaustive.");
         }
 
         if (string.IsNullOrWhiteSpace(options.RedirectUrl))

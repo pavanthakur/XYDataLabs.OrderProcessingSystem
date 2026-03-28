@@ -262,13 +262,13 @@ via the `ASPNETCORE_ENVIRONMENT` variable.
 | `AZUREAPPSERVICE_CLIENTID` | Repository + Environments | OIDC Client ID for Azure login |
 | `AZUREAPPSERVICE_TENANTID` | Repository + Environments | Azure Tenant ID |
 | `AZUREAPPSERVICE_SUBSCRIPTIONID` | Repository + Environments | Azure Subscription ID |
-| `OPENPAY_MERCHANT_ID` | Repository | OpenPay merchant ID — set once via Azure Initial Setup; bootstrap passes to Key Vault |
-| `OPENPAY_PRIVATE_KEY` | Repository | OpenPay private key — set once via Azure Initial Setup; bootstrap passes to Key Vault |
-| `OPENPAY_DEVICE_SESSION_ID` | Repository | OpenPay device session ID — set once via Azure Initial Setup; bootstrap passes to Key Vault |
+| `OPENPAY_MERCHANT_ID` | Repository | OpenPay merchant ID — **set manually** in GitHub Settings → Secrets → Actions by an authorized person; bootstrap validates presence before proceeding |
+| `OPENPAY_PRIVATE_KEY` | Repository | OpenPay private key — **set manually** in GitHub Settings → Secrets → Actions by an authorized person; bootstrap validates presence before proceeding |
+| `OPENPAY_DEVICE_SESSION_ID` | Repository | OpenPay device session ID — **set manually** in GitHub Settings → Secrets → Actions by an authorized person; bootstrap validates presence before proceeding |
 
 > **Note**: `APP_INSTALLATION_ID` is **not** required — it is auto-discovered at runtime.
 
-> **Note**: OpenPay secrets are stored as **GitHub repo secrets**, not environment secrets. They are passed from the bootstrap workflow to `populate-keyvault-secrets.ps1`, which writes them into Azure Key Vault. No `.env.local` or manual KV update is needed on any machine.
+> **Note**: OpenPay secrets must be added manually in GitHub Settings → Secrets → Actions. Workflow dispatch inputs are not masked in logs and are not a secure channel for secrets. The bootstrap workflow validates that all three OpenPay secrets are present before running infrastructure provisioning; if any are missing it fails with an actionable error and a link to the Settings page.
 
 ### Key Vault integration
 
