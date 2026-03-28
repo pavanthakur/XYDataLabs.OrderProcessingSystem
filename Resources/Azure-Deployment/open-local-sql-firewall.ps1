@@ -25,6 +25,7 @@ $envSuffix = switch ($Environment) {
 $sqlServer    = "orderprocessing-sql-$envSuffix"
 $resourceGroup = "rg-orderprocessing-$envSuffix"
 $ruleName     = "dev-machine"
+$envSufDb     = switch ($Environment) { 'staging' { 'Stg' } 'prod' { 'Prod' } default { 'Dev' } }
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  Azure SQL Firewall — $Environment" -ForegroundColor Cyan
@@ -65,7 +66,8 @@ else {
     Write-Host "  SSMS / sqlcmd Connection Details" -ForegroundColor White
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
     Write-Host "  Server   : $sqlServer.database.windows.net" -ForegroundColor Cyan
-    Write-Host "  Database : OrderProcessingSystem_Dev" -ForegroundColor Cyan
+    Write-Host "  Database (main)   : OrderProcessingSystem_$envSufDb" -ForegroundColor Cyan
+    Write-Host "  Database (TenantC): OrderProcessingSystem_TenantC_$envSufDb" -ForegroundColor Cyan
     Write-Host "  Auth     : SQL Server Authentication" -ForegroundColor Cyan
     Write-Host "  Login    : sqladmin" -ForegroundColor Cyan
     $kvName = "kv-orderprocessing-$envSuffix"
