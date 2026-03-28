@@ -40,7 +40,8 @@ public class Tenant
     public string Name { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public string TenantTier { get; set; } = "SharedPool";   // "SharedPool" | "Dedicated"
-    public string? ConnectionString { get; set; }             // null for SharedPool; dedicated DB connection for Dedicated
+    // ConnectionString removed (ADR-009): dedicated DB connections are resolved at runtime
+    // from IConfiguration["DedicatedTenantConnectionStrings:{Code}"], never persisted in the DB.
     public int? CreatedBy { get; set; }
     public DateTime? CreatedDate { get; set; }
     public int? UpdatedBy { get; set; }

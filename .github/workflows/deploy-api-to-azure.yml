@@ -12,6 +12,7 @@ on:
       - 'XYDataLabs.OrderProcessingSystem.Domain/**'
       - 'XYDataLabs.OrderProcessingSystem.Infrastructure/**'
       - 'XYDataLabs.OrderProcessingSystem.SharedKernel/**'
+      - 'XYDataLabs.OpenPayAdapter/**'           # Multitenant payment: ProcessPaymentCommandHandler uses OpenPayAdapterService for per-tenant Use3DSecure routing
       - 'Resources/Configuration/**'
       - '.github/workflows/deploy-api-to-azure.yml'
   workflow_dispatch:
@@ -45,7 +46,15 @@ jobs:
         run: dotnet build ${{ env.PROJECT_PATH }} --configuration Release --no-restore
 
       - name: Run Unit Tests
-        run: dotnet test XYDataLabs.OrderProcessingSystem.UnitTest/XYDataLabs.OrderProcessingSystem.UnitTest.csproj --configuration Release --no-build --verbosity normal
+        run: |
+          dotnet test tests/XYDataLabs.OrderProcessingSystem.Domain.Tests/XYDataLabs.OrderProcessingSystem.Domain.Tests.csproj --configuration Release --verbosity normal
+          dotnet test tests/XYDataLabs.OrderProcessingSystem.Application.Tests/XYDataLabs.OrderProcessingSystem.Application.Tests.csproj --configuration Release --verbosity normal
+          dotnet test tests/XYDataLabs.OrderProcessingSystem.API.Tests/XYDataLabs.OrderProcessingSystem.API.Tests.csproj --configuration Release --verbosity normal
+          dotnet test tests/XYDataLabs.OrderProcessingSystem.Architecture.Tests/XYDataLabs.OrderProcessingSystem.Architecture.Tests.csproj --configuration Release --verbosity normal
+          # Integration tests are excluded here — they use Testcontainers which requires a Docker daemon.
+          # The windows-latest runner used by this workflow does not support Linux containers.
+          # Run integration tests locally or in a dedicated linux-based workflow with Docker enabled.
+          # dotnet test tests/XYDataLabs.OrderProcessingSystem.Integration.Tests/XYDataLabs.OrderProcessingSystem.Integration.Tests.csproj --configuration Release --verbosity normal
 
       - name: Publish
         run: dotnet publish ${{ env.PROJECT_PATH }} --configuration Release --no-build --output ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
@@ -178,6 +187,13 @@ jobs:
           
           $owner = "${{ github.repository_owner }}"
           
+          # MULTITENANT NOTE — shared-pool DB only:
+          # run-database-migrations.ps1 applies EF migrations to the shared-pool DB (OrderProcessingSystemDbContext).
+          # TenantC (Dedicated tier) is migrated and seeded at app startup by DbInitializer.SeedDedicatedTenants().
+          # That phase reads 'DedicatedTenantConnectionStrings--TenantC' from Key Vault at runtime.
+          # If that secret is absent, TenantC requests return HTTP 400 (fail-loud per ADR-009) — no failure surfaces here in CI.
+          # Ensure populate-keyvault-secrets.ps1 has stored 'DedicatedTenantConnectionStrings--TenantC' in Key Vault
+          # before deploying to any environment where TenantC traffic is expected.
           try {
             ./Resources/Azure-Deployment/run-database-migrations.ps1 -Environment $env -BaseName orderprocessing -Owner $owner
             
