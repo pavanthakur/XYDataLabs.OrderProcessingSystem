@@ -22,6 +22,7 @@
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation" />
     <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="Serilog.Sinks.ApplicationInsights" />
     <PackageReference Include="Serilog.Sinks.Console" />
     <PackageReference Include="Serilog.Sinks.File" />
   </ItemGroup>

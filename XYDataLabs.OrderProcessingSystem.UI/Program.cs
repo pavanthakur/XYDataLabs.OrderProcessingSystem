@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using Microsoft.ApplicationInsights.Extensibility;
+using Microsoft.Extensions.Configuration;
 using System.IO;
 using Serilog;
 using Serilog.Context;
@@ -59,6 +60,12 @@ builder.Host.UseSerilog((context, services, loggerConfiguration) =>
         .Enrich.WithProperty("Runtime", isDocker ? "Docker" : "Local")
         .Enrich.WithProperty("TenantCode", configuredActiveTenantCode)
         .Enrich.WithProperty("RequestedTenantCode", "none");
+
+    var telemetryConfiguration = services.GetService<TelemetryConfiguration>();
+    if (telemetryConfiguration is not null)
+    {
+        loggerConfiguration.WriteTo.ApplicationInsights(telemetryConfiguration, TelemetryConverter.Traces);
+    }
 
     if (isDocker)
     {
