@@ -515,12 +515,61 @@ if ($dbExists) {
     }
 }
 
+# Step 4b: Create TenantC dedicated database (ADR-009)
+# TenantC is a Dedicated-tier tenant — it needs its own Azure SQL database on the same server.
+# run-database-migrations.ps1 will apply EF Core migrations against this catalog after this script.
+# setup-sql-managed-identity.ps1 Step 5 will grant managed identity access once the DB exists.
+Write-Host "[4b/7] Creating TenantC dedicated database..." -ForegroundColor Cyan
+$tenantCDbName = "OrderProcessingSystem_TenantC_" + (Get-Culture).TextInfo.ToTitleCase($Environment)
+$tenantCDbExists = $null
+try {
+    $checkResult = az sql db show --name $tenantCDbName --server $sqlServerName --resource-group $rgName --output json 2>$null
+    if ($LASTEXITCODE -eq 0 -and $checkResult) {
+        $tenantCDbExists = $checkResult | ConvertFrom-Json
+    }
+} catch { }
+
+if ($tenantCDbExists) {
+    Write-Host "  [EXISTS] TenantC database '$tenantCDbName' already exists" -ForegroundColor Green
+} else {
+    Write-Host "  [CREATE] Creating TenantC database '$tenantCDbName' (Basic tier)..." -ForegroundColor Yellow
+    Write-Host "  [INFO] This typically takes 1-2 minutes..." -ForegroundColor Gray
+
+    az sql db create `
+        --resource-group $rgName `
+        --server $sqlServerName `
+        --name $tenantCDbName `
+        --service-objective Basic `
+        --max-size 2GB `
+        --zone-redundant false `
+        --backup-storage-redundancy Local `
+        --output json 2>$null | ConvertFrom-Json
+
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "  [OK] TenantC database create accepted" -ForegroundColor Green
+        Write-Host "  [WAIT] Polling for TenantC database readiness (max 5 min)..." -ForegroundColor Gray
+        $tcDbReady = $false
+        $tcDbElapsed = 0
+        while ($tcDbElapsed -lt 300 -and -not $tcDbReady) {
+            Start-Sleep -Seconds 10
+            $tcDbElapsed += 10
+            $tcShow = az sql db show --name $tenantCDbName --server $sqlServerName --resource-group $rgName --output json 2>$null
+            if ($LASTEXITCODE -eq 0 -and $tcShow) { $tcDbReady = $true; Write-Host "    [OK] TenantC database ready after $([math]::Round($tcDbElapsed/60,1)) min" -ForegroundColor Green }
+        }
+        if (-not $tcDbReady) { Write-Host "    [WARN] TenantC database readiness not confirmed after 5 min (continuing)" -ForegroundColor Yellow }
+    } else {
+        Write-Host "  [ERROR] Failed to create TenantC database (CLI exit code $LASTEXITCODE)" -ForegroundColor Red
+        exit 1
+    }
+}
+
 # Step 5: Build connection strings
 Write-Host "[5/7] Building connection strings..." -ForegroundColor Cyan
 $fullyQualifiedDomain = "$sqlServerName.database.windows.net"
 $appConnectionString = "Server=tcp:$fullyQualifiedDomain,1433;Initial Catalog=$dbName;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;Authentication=Active Directory Default;"
 $maskedAdminConnectionString = "Server=tcp:$fullyQualifiedDomain,1433;Initial Catalog=$dbName;User ID=$AdminUsername;Password=***;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
 Write-Host "  [OK] Passwordless app connection string generated" -ForegroundColor Green
+Write-Host "  [OK] TenantC database: $tenantCDbName" -ForegroundColor Green
 
 # Step 6: Configure API App Service
 if (-not $SkipAppServiceConfig) {
@@ -649,8 +698,14 @@ Write-Host "  Portal: https://portal.azure.com"
 Write-Host "  Navigate: SQL databases -> $dbName -> Query editor"
 Write-Host ""
 
+Write-Host "TenantC Dedicated Database:" -ForegroundColor Cyan
+Write-Host "  Database Name:  $tenantCDbName"
+Write-Host "  Tier:           Basic (2GB)"
+Write-Host "  Cost:           ~5 USD/month"
+Write-Host ""
+
 Write-Host "Next Steps:" -ForegroundColor Yellow
-Write-Host "  1. Run database migrations (EF Core or SQL scripts)"
+Write-Host "  1. Run database migrations (EF Core or SQL scripts) — includes TenantC dedicated DB"
 Write-Host "  2. Run setup-sql-managed-identity.ps1 to create the contained DB user for the App Service identity"
 Write-Host "  3. Test API: https://$apiAppName.azurewebsites.net"
 Write-Host "  4. Test UI:  https://$uiAppName.azurewebsites.net"
