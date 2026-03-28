@@ -1,6 +1,6 @@
 ---
 agent: agent
-description: Bootstrap local development environment after a fresh git clone — creates .env.local, sets dotnet user-secrets, trusts HTTPS dev cert
+description: "After a fresh git clone: runs setup-local.ps1 to create .env.local, set dotnet user-secrets, and trust the HTTPS dev cert; then summarises VS F5 ports (API :5010, UI :5012), Docker launch commands, and how OpenPay sandbox credentials are sourced"
 ---
 
 Run the local bootstrap script. It will prompt you to choose SQL Server and HTTPS cert passwords on first run, then save them to `.env.local` for all future runs.

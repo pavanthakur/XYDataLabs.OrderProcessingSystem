@@ -5,12 +5,22 @@ on:
     branches: [ main, dev, staging ]
     paths:
       - 'docs/architecture/decisions/**'
+      - '.github/workflows/**'
+      - 'scripts/**'
+      - 'Resources/Azure-Deployment/**'
+      - 'XYDataLabs.OrderProcessingSystem.sln'
       - 'scripts/validate-adr-frontmatter.ps1'
+      - 'scripts/sync-check-solution.ps1'
       - '.markdownlint.json'
   pull_request:
     paths:
       - 'docs/architecture/decisions/**'
+      - '.github/workflows/**'
+      - 'scripts/**'
+      - 'Resources/Azure-Deployment/**'
+      - 'XYDataLabs.OrderProcessingSystem.sln'
       - 'scripts/validate-adr-frontmatter.ps1'
+      - 'scripts/sync-check-solution.ps1'
       - '.markdownlint.json'
   workflow_dispatch:
 
@@ -43,9 +53,14 @@ jobs:
         shell: pwsh
         run: scripts/validate-adr-frontmatter.ps1
 
+      # Ensures every file in the four tracked directories is registered in the .sln
+      - name: Check solution file sync
+        shell: pwsh
+        run: scripts/sync-check-solution.ps1
+
       - name: Summary
         if: always()
         shell: pwsh
         run: |
           Write-Host 'ADR validation complete. See steps above for details.'
-          Write-Host 'Checks: markdownlint formatting | frontmatter naming + Status field'
+          Write-Host 'Checks: markdownlint formatting | frontmatter naming + Status field | solution sync'
