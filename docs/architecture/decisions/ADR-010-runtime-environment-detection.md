@@ -10,9 +10,9 @@
 
 The application runs in five distinct runtime contexts: local VS, local Docker dev, local Docker
 staging, local Docker prod, and Azure App Service (dev / stg / prod). Several features must behave
-differently depending on the runtime context — for example, the tenant dropdown must never be
-visible in Azure (where a single tenant is implicit per deployment), but must always be visible
-in any local Docker run regardless of the `ASPNETCORE_ENVIRONMENT` value.
+differently depending on the runtime context — for example, the tenant dropdown must always be
+visible in any local Docker run regardless of the `ASPNETCORE_ENVIRONMENT` value, and is also
+shown on Azure (the DB contains multiple tenants that are switchable via X-Tenant-Code).
 
 Three environment variables drive all runtime detection:
 
@@ -71,7 +71,7 @@ when adding any new environment-conditional logic.**
 
 | Feature | Gate condition | VS local | Dev Docker | Stg Docker | Prod Docker | Azure (any) |
 |---------|---------------|:---:|:---:|:---:|:---:|:---:|
-| Tenant selector dropdown | `!IsAzure && (IsDevelopment \|\| IsDocker)` | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Tenant selector dropdown | `IsDevelopment \|\| IsDocker` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | "🐳 Docker" badge in banner | `IsDocker` | ❌ | ✅ | ✅ | ✅ | ✅* |
 | Developer exception page (UI) | `!IsDevelopment \|\| IsAzure` | ✅ | ✅ | ❌ | ❌ | ❌ |
 

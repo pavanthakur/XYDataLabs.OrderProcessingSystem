@@ -33,9 +33,6 @@ param(
 
     [Parameter(Mandatory=$false)]
     [string]$UiHttpsCertPassword,
-
-    [Parameter(Mandatory=$false)]
-    [string]$OpenPayApiKey,
     
     [Parameter(Mandatory=$false)]
     [string]$ApplicationInsightsConnectionString,
@@ -204,33 +201,28 @@ try {
     # 1. Add OpenPay and HTTPS certificate secrets
     Write-Host "🔑 [1/3] Adding OpenPay and HTTPS certificate secrets..." -ForegroundColor Cyan
 
-    if ([string]::IsNullOrWhiteSpace($OpenPayPrivateKey) -and -not [string]::IsNullOrWhiteSpace($OpenPayApiKey)) {
-        Write-Host "  ⚠️  OpenPayApiKey is deprecated. Using it as OpenPayPrivateKey for backward compatibility." -ForegroundColor Yellow
-        $OpenPayPrivateKey = $OpenPayApiKey
-    }
-
     if ([string]::IsNullOrWhiteSpace($OpenPayMerchantId)) {
-        $OpenPayMerchantId = "set-openpay-merchant-id-$Environment"
-        Write-Host "  ⚠️  OpenPayMerchantId not provided. Placeholder secret will be created." -ForegroundColor Yellow
+        Write-Error "❌ OpenPayMerchantId is required and was not provided.`n  • Local invocation: pass -OpenPayMerchantId <value>`n  • Azure bootstrap: add OPENPAY_MERCHANT_ID to GitHub Settings → Secrets → Actions and re-run bootstrap."
+        exit 1
     }
 
     if ([string]::IsNullOrWhiteSpace($OpenPayPrivateKey)) {
-        $OpenPayPrivateKey = "set-openpay-private-key-$Environment"
-        Write-Host "  ⚠️  OpenPayPrivateKey not provided. Placeholder secret will be created." -ForegroundColor Yellow
+        Write-Error "❌ OpenPayPrivateKey is required and was not provided.`n  • Local invocation: pass -OpenPayPrivateKey <value>`n  • Azure bootstrap: add OPENPAY_PRIVATE_KEY to GitHub Settings → Secrets → Actions and re-run bootstrap."
+        exit 1
     }
 
     if ([string]::IsNullOrWhiteSpace($OpenPayDeviceSessionId)) {
-        $OpenPayDeviceSessionId = "set-openpay-device-session-id-$Environment"
-        Write-Host "  ⚠️  OpenPayDeviceSessionId not provided. Placeholder secret will be created." -ForegroundColor Yellow
+        Write-Error "❌ OpenPayDeviceSessionId is required and was not provided.`n  • Local invocation: pass -OpenPayDeviceSessionId <value>`n  • Azure bootstrap: add OPENPAY_DEVICE_SESSION_ID to GitHub Settings → Secrets → Actions and re-run bootstrap."
+        exit 1
     }
 
     if ([string]::IsNullOrWhiteSpace($OpenPayRedirectUrl)) {
-        $OpenPayRedirectUrl = switch ($Environment) {
-            'dev' { 'https://your-domain.com/payment/callback' }
-            'staging' { 'https://stg-domain.com/payment/callback' }
-            'prod' { 'https://production-domain.com/payment/callback' }
-        }
-        Write-Host "  ⚠️  OpenPayRedirectUrl not provided. Using environment default: $OpenPayRedirectUrl" -ForegroundColor Yellow
+        # Derive from the Azure App Service naming convention: {GitHubOwner}-{BaseName}-ui-xyapp-{envSuffix}
+        # This matches bootstrap-enterprise-infra.ps1 and is predictable on any machine.
+        $envSuffix = switch ($Environment) { 'staging' { 'stg' } default { $Environment } }
+        $uiAppName = "$($GitHubOwner.ToLower())-$($BaseName.ToLower())-ui-xyapp-$envSuffix"
+        $OpenPayRedirectUrl = "https://$uiAppName.azurewebsites.net/payment/callback"
+        Write-Host "  ℹ️  OpenPayRedirectUrl derived from naming convention: $OpenPayRedirectUrl" -ForegroundColor Gray
     }
 
     if ([string]::IsNullOrWhiteSpace($ApiHttpsCertPassword)) {
