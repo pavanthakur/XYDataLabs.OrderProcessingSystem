@@ -1,6 +1,6 @@
 ---
 agent: agent
-description: Completion quality gate — after finishing any feature, task, script, or workflow, verify it has been properly documented, guardrailed, tested, and automated
+description: "Quality gate after any feature, task, script, or fix — automatically runs build (warnings-as-errors), all unit tests, and a secret/credential scan; then checks 6 categories: documented, guardrailed, unit tested, integration tested, automated in CI, and AI context current"
 ---
 
 Run this after completing any feature, task, script, fix, or workflow change.
@@ -12,8 +12,9 @@ Run all three blocks in the terminal before evaluating the checklist. Use the re
 **Build (warnings as errors):**
 ```powershell
 cd Q:\GIT\TestAppXY_OrderProcessingSystem
-dotnet build XYDataLabs.OrderProcessingSystem.sln --warnaserror /consoleloggerparameters:NoSummary;ForceNoAlign
+dotnet build XYDataLabs.OrderProcessingSystem.sln --warnaserror /warnnotaserror:NU1701 "/consoleloggerparameters:NoSummary;ForceNoAlign"
 ```
+> `NU1701` is suppressed — it is a known pre-existing warning from `Openpay 1.0.25` (a .NET Framework-only package); all other warnings are errors.
 
 **All test projects:**
 ```powershell
