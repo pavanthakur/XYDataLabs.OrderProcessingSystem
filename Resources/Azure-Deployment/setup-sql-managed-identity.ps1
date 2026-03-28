@@ -354,13 +354,130 @@ $roleGrantSql
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Step 5: Grant managed identity access on TenantC dedicated database (ADR-009)
+# TenantC is a Dedicated-tier tenant. Its database must also have the managed
+# identity user so that DbInitializer.SeedDedicatedTenants() can migrate and
+# seed it at app startup. Without this, TenantC startup seeding fails with a
+# SQL login error even if DedicatedTenantConnectionStrings--TenantC is present
+# in Key Vault.
+# ─────────────────────────────────────────────────────────────────────────────
+Write-Host "Step 5: Granting managed identity access on TenantC dedicated database..." -ForegroundColor Yellow
+
+$tenantCDbName = "OrderProcessingSystem_TenantC_$dbEnvTitle"
+
+Write-Host "  TenantC DB   : $tenantCDbName" -ForegroundColor White
+Write-Host "  SQL Server   : $sqlFqdn" -ForegroundColor White
+
+$tenantCRoleGrantSql = @"
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.database_role_members drm
+    JOIN sys.database_principals r ON r.principal_id = drm.role_principal_id
+    JOIN sys.database_principals m ON m.principal_id = drm.member_principal_id
+    WHERE r.name = 'db_datareader' AND m.name = '$displayName'
+)
+BEGIN
+    ALTER ROLE db_datareader ADD MEMBER [$displayName];
+END
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.database_role_members drm
+    JOIN sys.database_principals r ON r.principal_id = drm.role_principal_id
+    JOIN sys.database_principals m ON m.principal_id = drm.member_principal_id
+    WHERE r.name = 'db_datawriter' AND m.name = '$displayName'
+)
+BEGIN
+    ALTER ROLE db_datawriter ADD MEMBER [$displayName];
+END
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.database_role_members drm
+    JOIN sys.database_principals r ON r.principal_id = drm.role_principal_id
+    JOIN sys.database_principals m ON m.principal_id = drm.member_principal_id
+    WHERE r.name = 'db_ddladmin' AND m.name = '$displayName'
+)
+BEGIN
+    ALTER ROLE db_ddladmin ADD MEMBER [$displayName];
+END
+
+PRINT 'TenantC roles granted: db_datareader, db_datawriter, db_ddladmin'
+"@
+
+if ($UseSqlAuthentication) {
+    $sidHex = Convert-GuidToSqlSidHex -GuidText $managedIdentityAppId
+    $tenantCSqlScript = @"
+IF EXISTS (
+    SELECT 1
+    FROM sys.database_principals
+    WHERE name = '$displayName'
+      AND type = 'E'
+      AND CONVERT(varchar(max), sid, 1) <> '$sidHex'
+)
+BEGIN
+    DROP USER [$displayName];
+    PRINT 'Dropped TenantC contained user with stale SID: $displayName'
+END
+
+IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '$displayName')
+BEGIN
+    CREATE USER [$displayName] WITH SID = $sidHex, TYPE = E;
+    PRINT 'Created TenantC contained user by SID: $displayName'
+END
+ELSE
+BEGIN
+    PRINT 'TenantC user already exists with expected SID (idempotent): $displayName'
+END
+
+$tenantCRoleGrantSql
+"@
+
+    try {
+        Invoke-SqlScriptFile -SqlScript $tenantCSqlScript -SqlServerFqdn $sqlFqdn -DatabaseName $tenantCDbName -Username $sqlAdmin.Username -Password $sqlAdmin.Password -UseSqlAuth
+        Write-Host "  ✅ Managed identity granted access on $tenantCDbName" -ForegroundColor Green
+    }
+    catch {
+        # Non-fatal: TenantC dedicated DB may not exist yet (provisioned separately).
+        # Without access, TenantC startup seeding will fail at runtime, but shared-pool tenants are unaffected.
+        Write-Host "  ⚠️  Could not grant access on $tenantCDbName : $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "      If the TenantC dedicated database does not exist yet, provision it and re-run this script." -ForegroundColor Yellow
+    }
+}
+else {
+    $tenantCSqlScript = @"
+IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '$displayName')
+BEGIN
+    CREATE USER [$displayName] FROM EXTERNAL PROVIDER;
+    PRINT 'Created TenantC contained user: $displayName'
+END
+ELSE
+BEGIN
+    PRINT 'TenantC user already exists (idempotent): $displayName'
+END
+
+$tenantCRoleGrantSql
+"@
+
+    try {
+        Invoke-SqlScriptFile -SqlScript $tenantCSqlScript -SqlServerFqdn $sqlFqdn -DatabaseName $tenantCDbName -AccessToken $token -UseAzureAdToken
+        Write-Host "  ✅ Managed identity granted access on $tenantCDbName" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "  ⚠️  Could not grant access on $tenantCDbName : $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "      If the TenantC dedicated database does not exist yet, provision it and re-run this script." -ForegroundColor Yellow
+    }
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Done
 # ─────────────────────────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "✅  Managed identity setup complete!" -ForegroundColor Green
 Write-Host ""
 Write-Host "Identity '$displayName' now has:" -ForegroundColor White
-Write-Host "  db_datareader, db_datawriter, db_ddladmin on $dbName" -ForegroundColor White
+Write-Host "  db_datareader, db_datawriter, db_ddladmin on $dbName (shared-pool)" -ForegroundColor White
+Write-Host "  db_datareader, db_datawriter, db_ddladmin on $tenantCDbName (TenantC dedicated)" -ForegroundColor White
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Cyan
 Write-Host "  1. Restart App Service:"

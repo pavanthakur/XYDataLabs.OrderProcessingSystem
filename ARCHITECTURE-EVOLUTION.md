@@ -119,7 +119,7 @@ XYDataLabs.OrderProcessingSystem.sln
 | **1** | Structural Foundation | SharedKernel, `Result<T>`, `IAppDbContext`, layer decoupling | ✅ **COMPLETE** |
 | **2** | Hand-Rolled CQRS | Dispatcher, pipeline behaviors, 12 handlers, controller refactoring | ✅ **COMPLETE** |
 | **3** | Observability (OpenTelemetry) | Auto-instrumentation, App Insights + OTLP, custom ActivitySource, correlation | ✅ **COMPLETE** |
-| **4** | Multi-Tenancy Skeleton | `ITenantProvider`, EF global query filters, `X-Tenant-Id` header | ✅ **COMPLETE** |
+| **4** | Multi-Tenancy Skeleton | `ITenantProvider`, EF global query filters, `X-Tenant-Code` header | ✅ **COMPLETE** |
 | **5** | Test Project Restructure | Domain.Tests, Application.Tests, API.Tests, Integration.Tests (Testcontainers) | ✅ **COMPLETE** |
 | **6** | Polish & Hardening | CachingBehavior, Redis, API versioning `/api/v1/`, health checks, CancellationToken, TimeProvider | ✅ **COMPLETE** |
 | **7** | Tenant Enforcement & Ops | TenantValidationBehavior, AuditLog, security headers, liveness/readiness checks | 📅 **NEXT** |
@@ -176,7 +176,7 @@ XYDataLabs.OrderProcessingSystem.sln
 - `TenantId` property added to both `BaseAuditableEntity` and `BaseAuditableCreateEntity` — covers all 13 entities
 - EF Global Query Filters on all 13 entity `DbSet`s with `_tenantProvider == null ||` guard for design-time/test compat
 - `SaveChangesAsync` override auto-stamps `TenantId` on Added entities (both base classes)
-- `TenantMiddleware` extracts `X-Tenant-Id` header (default: `"default"`), stores in `HttpContext.Items`, enriches Serilog `LogContext`
+- `TenantMiddleware` extracts `X-Tenant-Code` header, stores in `HttpContext.Items`, enriches Serilog `LogContext`
 - `HeaderTenantProvider` reads tenant from `HttpContext.Items` at DI scope resolution
 - AppMasterData is scoped (per-request) — reads from tenant-routed DbContext, respects query filter (ADR-009)
 - Wired in API + UI `Program.cs` (Scoped DI, middleware before `CorrelationMiddleware`)
@@ -1013,7 +1013,7 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 - [x] Clean Architecture + CQRS with `Result<T>` pattern
 - [x] `IAppDbContext` abstraction + SharedKernel
 - [x] OpenTelemetry observability (auto-instrumentation + custom ActivitySources)
-- [x] Multi-tenancy skeleton (EF global filters, `X-Tenant-Id` header)
+- [x] Multi-tenancy skeleton (EF global filters, `X-Tenant-Code` header)
 - [x] Structured test projects (Domain, Application, API, Integration)
 - [x] Caching pipeline, API versioning `/api/v1/`, health checks, CancellationToken, TimeProvider
 - [x] Roslyn analyzers (Roslynator, Meziantou, SonarAnalyzer) — build-time code quality enforcement

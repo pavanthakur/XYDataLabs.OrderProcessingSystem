@@ -12,6 +12,7 @@ on:
       - 'XYDataLabs.OrderProcessingSystem.Application/**'
       - 'XYDataLabs.OrderProcessingSystem.Domain/**'
       - 'XYDataLabs.OrderProcessingSystem.Infrastructure/**'
+      - 'XYDataLabs.OpenPayAdapter/**'          # Multitenant payment: per-tenant Use3DSecure and OpenPay adapter changes
       - '.github/workflows/deploy-and-verify.yml'
   workflow_dispatch:
     inputs:
@@ -22,7 +23,7 @@ on:
         type: choice
         options:
           - dev
-          - uat
+          - uat    # NOTE: this workflow uses 'uat'; all other workflows use 'staging'. Align to 'staging' when this workflow is next refactored.
           - prod
 
 permissions:
@@ -103,7 +104,13 @@ jobs:
         run: dotnet build ${{ env.PROJECT_PATH }} --configuration Release --no-restore
 
       - name: Run Unit Tests
-        run: dotnet test XYDataLabs.OrderProcessingSystem.UnitTest/XYDataLabs.OrderProcessingSystem.UnitTest.csproj --configuration Release --no-build --verbosity normal
+        run: |
+          dotnet test tests/XYDataLabs.OrderProcessingSystem.Domain.Tests/XYDataLabs.OrderProcessingSystem.Domain.Tests.csproj --configuration Release --verbosity normal
+          dotnet test tests/XYDataLabs.OrderProcessingSystem.Application.Tests/XYDataLabs.OrderProcessingSystem.Application.Tests.csproj --configuration Release --verbosity normal
+          dotnet test tests/XYDataLabs.OrderProcessingSystem.API.Tests/XYDataLabs.OrderProcessingSystem.API.Tests.csproj --configuration Release --verbosity normal
+          dotnet test tests/XYDataLabs.OrderProcessingSystem.Architecture.Tests/XYDataLabs.OrderProcessingSystem.Architecture.Tests.csproj --configuration Release --verbosity normal
+          # Integration tests excluded: require Testcontainers + Docker daemon (not available on windows-latest)
+          # XYDataLabs.OrderProcessingSystem.UnitTest project was removed; test projects now live under tests/
 
       - name: Publish
         run: dotnet publish ${{ env.PROJECT_PATH }} --configuration Release --no-build --output ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
@@ -326,6 +333,9 @@ jobs:
           OPENPAY_PRIVATE=$(echo "$SETTINGS" | jq -r '.[] | select(.name=="OpenPay__PrivateKey") | .value')
           OPENPAY_DEVICE=$(echo "$SETTINGS" | jq -r '.[] | select(.name=="OpenPay__DeviceSessionId") | .value')
           APP_INSIGHTS=$(echo "$SETTINGS" | jq -r '.[] | select(.name=="APPLICATIONINSIGHTS_CONNECTION_STRING") | .value')
+          # Multitenant: DedicatedTenantConnectionStrings--TenantC must exist in Key Vault for TenantC dedicated DB
+          # seeding at app startup (DbInitializer.SeedDedicatedTenants). Without it TenantC returns HTTP 400 (ADR-009).
+          DEDICATED_TENANTC=$(echo "$SETTINGS" | jq -r '.[] | select(.name=="DedicatedTenantConnectionStrings__TenantC") | .value')
           
           echo "App Settings Check:"
           echo "  ASPNETCORE_ENVIRONMENT: $ASPNETCORE_ENV"
@@ -333,6 +343,7 @@ jobs:
           echo "  OpenPay__PrivateKey: ${OPENPAY_PRIVATE:0:12}..." # Mask secret
           echo "  OpenPay__DeviceSessionId: ${OPENPAY_DEVICE:0:12}..." # Mask secret
           echo "  APPLICATIONINSIGHTS_CONNECTION_STRING: ${APP_INSIGHTS:0:30}..." # Mask secret
+          echo "  DedicatedTenantConnectionStrings__TenantC: ${DEDICATED_TENANTC:0:20}..." # Multitenant dedicated DB
           
           # Verify required settings exist
           MISSING=0
@@ -351,6 +362,11 @@ jobs:
           fi
           if [ -z "$APP_INSIGHTS" ] || [ "$APP_INSIGHTS" = "null" ]; then
             echo "WARNING: APPLICATIONINSIGHTS_CONNECTION_STRING is missing (Key Vault reference may not be configured)"
+          fi
+          if [ -z "$DEDICATED_TENANTC" ] || [ "$DEDICATED_TENANTC" = "null" ]; then
+            echo "WARNING: DedicatedTenantConnectionStrings__TenantC is missing — TenantC requests will return HTTP 400 at runtime (ADR-009 fail-loud). Run populate-keyvault-secrets.ps1 -DedicatedTenantConnectionStringTenantC <cs> to set it."
+          else
+            echo "  DedicatedTenantConnectionStrings__TenantC presence: OK"
           fi
           
           if [ $MISSING -eq 1 ]; then

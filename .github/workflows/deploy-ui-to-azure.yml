@@ -12,6 +12,7 @@ on:
       - 'XYDataLabs.OrderProcessingSystem.Domain/**'
       - 'XYDataLabs.OrderProcessingSystem.Infrastructure/**'
       - 'XYDataLabs.OrderProcessingSystem.SharedKernel/**'
+      - 'XYDataLabs.OpenPayAdapter/**'           # Multitenant payment: UI renders payment pages driven by per-tenant Use3DSecure and payment provider config
       - 'Resources/Configuration/**'
       - '.github/workflows/deploy-ui-to-azure.yml'
   workflow_dispatch:
@@ -42,9 +43,6 @@ jobs:
 
       - name: Build
         run: dotnet build ${{ env.PROJECT_PATH }} --configuration Release --no-restore
-
-      - name: Run Unit Tests
-        run: dotnet test XYDataLabs.OrderProcessingSystem.UnitTest/XYDataLabs.OrderProcessingSystem.UnitTest.csproj --configuration Release --no-build --verbosity normal
 
       - name: Publish
         run: dotnet publish ${{ env.PROJECT_PATH }} --configuration Release --no-build --output ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
@@ -194,6 +192,10 @@ jobs:
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
             exit 1
           }
+
+      # Unit tests (Domain, Application, API, Architecture) are owned by the API workflow.
+      # There are no UI-specific test projects in this solution.
+      # Tests run in deploy-api-to-azure.yml — no duplication needed here.
 
       - name: Deployment Summary
         if: always()

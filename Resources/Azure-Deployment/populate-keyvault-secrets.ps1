@@ -38,7 +38,15 @@ param(
     [string]$OpenPayApiKey,
     
     [Parameter(Mandatory=$false)]
-    [string]$ApplicationInsightsConnectionString
+    [string]$ApplicationInsightsConnectionString,
+
+    # Multitenant — Dedicated tenant connection strings (ADR-009: never stored in DB, must be in Key Vault)
+    # Key Vault secret name: DedicatedTenantConnectionStrings--TenantC
+    # Format: "Server=tcp:<server>.database.windows.net,1433;Initial Catalog=<db>;Encrypt=True;Authentication=Active Directory Default"
+    # Required for DbInitializer.SeedDedicatedTenants() to migrate and seed TenantC dedicated DB at app startup.
+    # Without this secret, TenantC requests return HTTP 400 (fail-loud, per ADR-009).
+    [Parameter(Mandatory=$false)]
+    [string]$DedicatedTenantConnectionStringTenantC
 )
 
 $ErrorActionPreference = 'Stop'
@@ -265,8 +273,39 @@ try {
     
     Write-Host ""
     
-    # 2. Add Application Insights Connection String
-    Write-Host "🔑 [2/3] Adding Application Insights Connection String..." -ForegroundColor Cyan
+    # 2. Add Dedicated Tenant Connection Strings (multitenant architecture — ADR-009)
+    Write-Host "🔑 [2/4] Adding Dedicated Tenant connection strings..." -ForegroundColor Cyan
+    Write-Host "  ℹ️  Required for DbInitializer.SeedDedicatedTenants() to migrate/seed TenantC dedicated DB at startup." -ForegroundColor Gray
+    Write-Host "  ℹ️  Without this, TenantC requests return HTTP 400 (fail-loud per ADR-009)." -ForegroundColor Gray
+
+    if ([string]::IsNullOrWhiteSpace($DedicatedTenantConnectionStringTenantC)) {
+        $envSufTitle = (Get-Culture).TextInfo.ToTitleCase($Environment)
+        $envSufDb    = switch ($Environment) { 'staging' { 'Stg' } default { $envSufTitle } }
+        $DedicatedTenantConnectionStringTenantC = "Server=tcp:$BaseName-sql-$envSuffix.database.windows.net,1433;Initial Catalog=OrderProcessingSystem_TenantC_$envSufDb;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;Authentication=Active Directory Default"
+        Write-Host "  ⚠️  DedicatedTenantConnectionStringTenantC not provided. Managed Identity placeholder will be created." -ForegroundColor Yellow
+        Write-Host "      Value: $DedicatedTenantConnectionStringTenantC" -ForegroundColor Gray
+        Write-Host "      Update this secret in Key Vault once the TenantC dedicated database is provisioned." -ForegroundColor Yellow
+    }
+
+    try {
+        $tcResult = Set-KeyVaultSecretValue -VaultName $kvName -SecretName 'DedicatedTenantConnectionStrings--TenantC' -SecretValue $DedicatedTenantConnectionStringTenantC
+        if ($tcResult.Success) {
+            Write-Host "  ✅ DedicatedTenantConnectionStrings--TenantC added successfully" -ForegroundColor Green
+            $secretsAdded++
+        } else {
+            Write-Host "  ❌ Failed to add DedicatedTenantConnectionStrings--TenantC" -ForegroundColor Red
+            Write-Host "  Error details: $($tcResult.Output)" -ForegroundColor Red
+            $secretsFailed++
+        }
+    } catch {
+        Write-Host "  ❌ Exception adding DedicatedTenantConnectionStrings--TenantC: $($_.Exception.Message)" -ForegroundColor Red
+        $secretsFailed++
+    }
+
+    Write-Host ""
+    
+    # 3. Add Application Insights Connection String
+    Write-Host "🔑 [3/4] Adding Application Insights Connection String..." -ForegroundColor Cyan
     
     if ([string]::IsNullOrWhiteSpace($ApplicationInsightsConnectionString)) {
         # Retrieve from Application Insights resource
@@ -310,7 +349,7 @@ try {
     }
     
     Write-Host ""
-    Write-Host "🔑 [3/3] Key Vault secret population complete." -ForegroundColor Cyan
+    Write-Host "🔑 [4/4] Key Vault secret population complete." -ForegroundColor Cyan
     Write-Host ""
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
     Write-Host "📊 Secret Population Summary:" -ForegroundColor Cyan
