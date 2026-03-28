@@ -198,3 +198,77 @@ Write-Host ""
 
 Write-Host "[SUCCESS] Database migrations completed" -ForegroundColor Green
 Write-Host ""
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TenantC dedicated database migrations (ADR-009)
+# TenantC is a Dedicated-tier tenant. Its database is provisioned by
+# provision-azure-sql.ps1 on the same SQL server. EF Core migrations must be
+# run against it here in CI because Program.cs disables applyMigrations in Azure
+# (applyMigrations: !isAzure) — the schema must exist before app startup.
+# Without this, SeedDedicatedTenants() silently skips TenantC at startup.
+# ─────────────────────────────────────────────────────────────────────────────
+$tenantCDbName = "OrderProcessingSystem_TenantC_" + (Get-Culture).TextInfo.ToTitleCase($Environment)
+
+Write-Host "" -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "TenantC Dedicated Database Migrations" -ForegroundColor White
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  Server:   $fullyQualifiedDomain"
+Write-Host "  Database: $tenantCDbName"
+Write-Host ""
+
+# Check TenantC DB exists before attempting migrations
+$tenantCDbExists = az sql db show --server $sqlServerName --resource-group "rg-$BaseName-$envSuffix" --name $tenantCDbName --query name -o tsv 2>$null
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($tenantCDbExists)) {
+    Write-Warn "  [SKIP] TenantC database '$tenantCDbName' not found on server '$sqlServerName'."
+    Write-Warn "  [SKIP] Run provision-azure-sql.ps1 first to create the TenantC dedicated database."
+    Write-Warn "  [SKIP] TenantC migrations skipped — TenantC requests will return HTTP 400 at runtime."
+} else {
+    Write-Ok "  [FOUND] TenantC database '$tenantCDbName' exists — running migrations..."
+
+    $tenantCConnectionString = "Server=tcp:$fullyQualifiedDomain,1433;Initial Catalog=$tenantCDbName;User ID=$AdminUsername;Password=$AdminPassword;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+
+    try {
+        $tcMigrationOutput = dotnet ef database update `
+            --project XYDataLabs.OrderProcessingSystem.Infrastructure `
+            --startup-project XYDataLabs.OrderProcessingSystem.API `
+            --context OrderProcessingSystemDbContext `
+            --connection "$tenantCConnectionString" `
+            --verbose 2>&1
+
+        if ($LASTEXITCODE -eq 0) {
+            Write-Ok "  [OK] TenantC migrations applied successfully"
+            $tcMigrationOutput | Select-Object -Last 5 | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+        } else {
+            Write-Err "  [ERROR] TenantC migrations failed (EF CLI exit code $LASTEXITCODE)"
+            $tcMigrationOutput | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
+            exit 1
+        }
+    } catch {
+        Write-Err "  [ERROR] TenantC migration exception: $($_.Exception.Message)"
+        exit 1
+    }
+
+    # Verify TenantC migrations
+    try {
+        Write-Info "  [INFO] Verifying TenantC applied migrations..."
+        $tcApplied = dotnet ef migrations list `
+            --project XYDataLabs.OrderProcessingSystem.Infrastructure `
+            --startup-project XYDataLabs.OrderProcessingSystem.API `
+            --context OrderProcessingSystemDbContext `
+            --connection "$tenantCConnectionString" `
+            --no-build 2>&1
+
+        Write-Ok "  [OK] TenantC applied migrations:"
+        $tcApplied | Select-Object -Last 6 | ForEach-Object {
+            if ($_ -match '\d') { Write-Host "    $_" -ForegroundColor Green }
+        }
+    } catch {
+        Write-Warn "  [WARN] Could not list TenantC migrations (non-fatal)"
+    }
+
+    Write-Ok "  [SUCCESS] TenantC database migrations complete"
+}
+
+Write-Host ""
