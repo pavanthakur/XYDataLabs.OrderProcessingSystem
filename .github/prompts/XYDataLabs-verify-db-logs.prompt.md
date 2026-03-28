@@ -173,17 +173,9 @@ If the UI log file does not exist, note this as a finding and proceed with DB qu
 
 ### If runtime = `azure` (App Insights KQL)
 
-> **Note:** Currently only the API app sends telemetry to App Insights (`pavanthakur-orderprocessing-api-xyapp-{ENV_TAG}`). The UI app is not yet instrumented into the shared App Insights workspace. For the UI log check, there are two options:
-> 1. **Skip UI correlation** — note this as a partial check and proceed to DB queries
-> 2. **Use Azure App Service log stream** — stream UI stdout via:
->    ```powershell
->    az webapp log tail --name pavanthakur-orderprocessing-ui-xyapp-{ENV_TAG} --resource-group rg-orderprocessing-{ENV_TAG}
->    ```
->    This shows live stdout but is not scoped by PREFIX. Use it for real-time observation only.
+> **Note:** Both the API (`pavanthakur-orderprocessing-api-xyapp-{ENV_TAG}`) and the UI (`pavanthakur-orderprocessing-ui-xyapp-{ENV_TAG}`) send Serilog traces to App Insights via the `Serilog.Sinks.ApplicationInsights` sink. Query the UI by `cloud_RoleName has 'ui'` and the API by `cloud_RoleName has 'api'`.
 
-If choosing to skip, record: "UI log — App Insights UI instrumentation not yet configured. UI callback check skipped for azure runtime."
-
-If the UI app is later instrumented, query it with:
+Query UI callback traces with:
 ```powershell
 az monitor app-insights query `
   --app ai-orderprocessing-{ENV_TAG} `
