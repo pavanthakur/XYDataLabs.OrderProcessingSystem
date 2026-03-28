@@ -62,7 +62,7 @@ See `ARCHITECTURE-EVOLUTION.md` for full phase details.
 | 4 | Multi-Tenancy Skeleton | – | ✅ Complete |
 | 5 | Test Restructure | Day 80 (auto-✅) | ✅ Complete |
 | 6 | Polish & Hardening | Days 42-43, 71-72, 94 (auto-✅) | ✅ Complete |
-| 7 | Tenant Enforcement & Ops | Days 42–43 | 📅 Next |
+| 7 | Tenant Enforcement & Ops | Days 42–43 (DDD + Ops) | 📅 Next |
 | 8 | Event-Driven Foundation | Days 51, 55–56 | 📅 Planned |
 | 8.5 | Multi-Provider Payment | Days 58–59 | 📅 Planned |
 | 9 | YARP Microservices | Days 74–76, 78 | 📅 Planned |
@@ -371,6 +371,13 @@ After completing today's tasks, you will have:
 > ✅ `/health` with SQL check implemented during Architecture Phase 6 (Polish & Hardening)
 >
 > 🏗️ **Architecture Phase 7a** — Extend this day: `TenantValidationBehavior`, ProblemDetails RFC 9457, global exception middleware
+>
+> **DDD Tactical Patterns (Phase 7 — part 1):**
+> - Aggregate root — `Order` with private constructor, `Create()` factory method returning `Result<Order>`
+> - State machine — `Order.Pay()`, `Ship()`, `Deliver()`, `Cancel()` with `Result<T>` transition methods
+> - Value objects — `Address` and `Money` as immutable `record` types with self-validation
+> - Domain invariants enforced inside aggregate methods (e.g. cannot ship an unpaid order), returning `Result<T>.Failure` — never exceptions for business rules
+> - Aggregate boundary rule — aggregates enforce only their own transactional invariants; no injected infrastructure services
 - [x] Add `Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore` NuGet package
 - [x] Register health checks: `AddHealthChecks().AddDbContextCheck<AppDbContext>()`
 - [x] Map endpoints: `app.MapHealthChecks("/health")` (liveness) and `/health/ready` (readiness + DB check)
@@ -378,6 +385,12 @@ After completing today's tasks, you will have:
 
 #### Day 43: Health Checks — Azure Integration ✅ *(Delivered by Architecture Phase 6)*
 > 🏗️ **Architecture Phase 7b** — Extend this day: Security headers middleware, `AuditLog` table, split `/health/live` + `/health/ready`, enhanced OTel metrics
+>
+> **DDD Tactical Patterns (Phase 7 — part 2):**
+> - Strongly-typed IDs — `OrderId`, `CustomerId`, `ProductId` as `readonly record struct` wrappers around `Guid` + EF Core value converters for transparent persistence
+> - Optimistic concurrency — `RowVersion` (`byte[]` / `[Timestamp]`) on `BaseAuditableEntity`; EF intercepts `DbUpdateConcurrencyException` → wraps as domain `ConcurrencyException`
+> - Architecture tests updated for DDD invariant enforcement (NetArchTest)
+> - `X-Tenant-Code` header rename — earlier phases used `X-Tenant-Id`; Phase 7 adopts the canonical `X-Tenant-Code` per `ARCHITECTURE.md` §3/§14
 - [x] Configure App Service health check probe to use `/health` endpoint
 - [ ] Add custom health check for Service Bus connectivity
 - [x] View health status in Azure Portal → App Service → Health Check
@@ -433,6 +446,10 @@ After completing today's tasks, you will have:
 
 #### Day 51: Event Grid — Reactive Architecture
 > 🏗️ **Architecture Phase 8a** — Replace Event Grid with: Domain events + integration events architecture. Design `IDomainEvent`, `IIntegrationEvent` interfaces and event dispatcher.
+>
+> **Additional Phase 8 deliverables for this day:**
+> - Inbox Pattern — `InboxMessages` table for idempotent consumers (deduplication by `MessageId` before processing)
+> - Event Versioning — envelope with `SchemaVersion` field; convention: `OrderCreatedV1` → `OrderCreatedV2` with backward-compatible projection
 - [ ] Create Event Grid Topic for Azure resource events
 - [ ] Subscribe Azure Function to Event Grid events (blob upload → process)
 - [ ] Compare: Service Bus (command/guaranteed delivery) vs Event Grid (system events/push)
@@ -463,6 +480,10 @@ After completing today's tasks, you will have:
 > **Why now:** Long-running background polling from Service Bus needs a hosted Worker Service
 >
 > 🏗️ **Architecture Phase 8c** — Combine Worker Service with Outbox pattern: background worker reads `OutboxMessage` rows and publishes to Service Bus
+>
+> **Additional Phase 8 deliverables for this day:**
+> - Automatic domain event dispatch — `SaveChangesAsync` override extracts `IDomainEvent`s from `ChangeTracker.Entries<Entity>()` after `base.SaveChangesAsync()` succeeds; events written to Outbox in same transaction
+> - Parallel event handler execution — `EventPublisher` dispatches all `IEventHandler<T>` via `Task.WhenAll`; partial failures collected into `AggregateException`
 - [ ] Create `XYDataLabs.OrderProcessingSystem.Worker` project (Worker Service template)
 - [ ] Implement `BackgroundService` that processes order events via `ServiceBusProcessor`
 - [ ] Register as `IHostedService` in DI
@@ -473,6 +494,12 @@ After completing today's tasks, you will have:
 > **Why now:** Without Outbox, a DB write can succeed but the Service Bus publish can silently fail — losing the event
 >
 > 🏗️ **Architecture Phase 8d** — Test Outbox reliability: simulate Service Bus downtime → order saved → event delivered later when bus recovers
+>
+> **Phase 8 design rules:**
+> - Events are immutable value objects — never modified after creation
+> - Schema changes must be backward-compatible (additive fields only; breaking changes = new version)
+> - Outbox writes in the same transaction as the domain change (no dual-write)
+> - Background publisher is idempotent — Inbox table deduplicates by `MessageId` before handler execution
 - [ ] Add `OutboxMessage` table to SQL database via EF migration
 - [ ] In `PlaceOrder` handler: write to `Orders` + `OutboxMessage` in a single SQL transaction
 - [ ] Create background worker that reads `OutboxMessage` rows, publishes to Service Bus, marks as processed
@@ -568,6 +595,10 @@ After completing today's tasks, you will have:
 
 #### Day 67: Product Catalog Microservice
 > 🏗️ **Architecture Phase 14a** — CQRS read model design: projection handlers, Cosmos DB as read store for denormalized order views
+>
+> **Phase 14 background infrastructure:**
+> - Hangfire background jobs — rebuild projections on demand, fix SQL↔Cosmos inconsistencies, backfill missing data after schema changes
+> - Distributed locking (job-specific) — optional singleton coordination for projection rebuild jobs when duplicate execution would create operational inconsistency
 - [ ] Create new project: `XYDataLabs.OrderProcessingSystem.ProductCatalogAPI`
 - [ ] Use Cosmos DB for product storage
 - [ ] Implement search and filtering endpoints
@@ -577,6 +608,11 @@ After completing today's tasks, you will have:
 
 #### Day 68: Cosmos DB Performance Optimization
 > 🏗️ **Architecture Phase 14b** — Implement MongoDB/Cosmos read projections for Orders (denormalized documents), tenant-scoped read models
+>
+> **Read model versioning:**
+> - `_schemaVersion` integer field per Cosmos DB document — projection handlers write current version; older documents coexist with newer ones
+> - Backward-compatible projections — query code handles missing fields with sensible defaults
+> - On major schema change, Hangfire job rebuilds projection from event history, bumping `_schemaVersion`
 - [ ] Optimize queries with partition keys
 - [ ] Implement indexing policies
 - [ ] Use change feed for event-driven patterns
@@ -594,6 +630,10 @@ After completing today's tasks, you will have:
 
 #### Day 70: Cosmos DB + Functions Integration
 > 🏗️ **Architecture Phase 14c** — Change feed → read model sync, tenant-scoped documents, eventual consistency verification
+>
+> **Projection observability:**
+> - Projection lag metric — OTel gauge tracking seconds between last SQL write and corresponding Cosmos DB update; alert if > threshold
+> - `TenantId` as partition key in every Cosmos DB document — same tenant isolation pattern as EF global filters
 - [ ] Create Cosmos DB-triggered Azure Function
 - [ ] Process change feed events
 - [ ] Sync data between SQL and Cosmos DB
@@ -644,6 +684,14 @@ After completing today's tasks, you will have:
 
 #### Day 74: Migrate Orders API to Aspire
 > 🏗️ **Architecture Phase 9a** — YARP gateway project: routing rules for Orders/Inventory/Notifications APIs
+>
+> **Prerequisite — Module isolation (before extraction):**
+> - Per-module project structure: `Orders.Domain`, `Orders.Features`, `Orders.Infrastructure` (repeat for Inventory, Notifications)
+> - PublicApi contracts: `IOrderModuleApi`, `IInventoryModuleApi` interfaces in dedicated `*.PublicApi` projects — modules depend ONLY on each other’s PublicApi
+> - `AssemblyReference.cs` markers per project for reliable handler discovery
+> - Module self-registration: `AddOrdersModule()`, `AddInventoryModule()` extension methods
+> - Specification pattern — composable query objects (`OrderByStatusSpec`, `ActiveCustomersSpec`) replacing inline LINQ
+> - Per-module DB schemas within shared database (`orders`, `inventory`, `notifications`)
 - [ ] Add Aspire service defaults to Orders API
 - [ ] Register Orders API in App Host
 - [ ] Configure environment variables via Aspire
@@ -654,6 +702,10 @@ After completing today's tasks, you will have:
 
 #### Day 75: Add All Microservices to Aspire
 > 🏗️ **Architecture Phase 9b** — Split Orders API → Orders microservice + Inventory microservice (separate projects, separate data stores)
+>
+> **Additional Phase 9 deliverables:**
+> - Bounded-context and subdomain mapping — Orders, Inventory, Notifications as business contexts with clear responsibilities
+> - Architecture tests (NetArchTest) enforcing inter-module boundaries: modules cannot reference each other’s internals, only PublicApi contracts
 - [ ] Register Inventory API in App Host
 - [ ] Register Notifications API in App Host
 - [ ] Register UI in App Host
@@ -664,6 +716,13 @@ After completing today's tasks, you will have:
 
 #### Day 76: Aspire + SQL Database Integration
 > 🏗️ **Architecture Phase 9c** — Notifications microservice + Docker Compose local orchestration for all services
+>
+> **Gateway cross-cutting concerns (Phase 9):**
+> - CORS policy per downstream service configured in YARP
+> - `System.Threading.RateLimiting` per tenant/client at gateway level
+> - Request/response logging — structured audit trail at gateway entry point
+> - Request size limits — prevent oversized payloads reaching downstream services
+> - Auth token forwarding middleware (prepares for Phase 10 JWT)
 - [ ] Add `Aspire.Hosting.SqlServer` package to App Host
 - [ ] Register SQL Server container in App Host
 - [ ] Connect Orders API to Aspire-managed SQL
@@ -761,6 +820,14 @@ After completing today's tasks, you will have:
 ### Week 12: Azure Container Apps (ACA) with Aspire Deployment — 🏗️ *Architecture Phase 10*
 **Reference:** Containerization-ACA-Aspire-Learning-Path.md → Module 3
 > 🏗️ **Architecture Phase 10** maps 1:1 to this week. ACA deployment IS the architecture phase.
+>
+> **Phase 10 Azure services beyond ACA basics:**
+> - Azure Functions — Service Bus-triggered DLQ reprocessor (isolated process model); timer-triggered projection health checks
+> - Azure Blob Storage — order file attachments (invoices, receipts) with managed identity access + private endpoint; `BlobCreated` events via Event Grid
+> - Private networking — VNet integration, private endpoints for SQL, Key Vault, Redis, and Blob Storage; NSG rules for ACA VNet; private DNS zones
+> - JWT authentication — Entra ID token validation at APIM (policy-based) and YARP gateway, token propagation to downstream services
+> - Cost governance — scale-to-zero on all Container Apps, APIM Consumption tier (pay-per-call), autoscale RU caps on Cosmos DB, Azure Budget alerts per resource group
+> - DLQ handling — alert threshold when DLQ depth exceeds configurable limit; poison message quarantine for messages that fail reprocessing N times
 
 #### Day 87: Log Analytics Workspace
 **Reference:** ACA-Migration-Plan.md → Phase 3
@@ -787,6 +854,7 @@ After completing today's tasks, you will have:
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 #### Day 90: ACA Ingress & Networking
+> 🏗️ **Phase 10 networking** — Private endpoints for SQL/KV/Redis/Blob, VNet integration for ACA environment, NSG rules, private DNS zones for internal service resolution
 - [ ] Configure external ingress for UI and API
 - [ ] Configure internal ingress for Inventory/Notifications APIs
 - [ ] Test service-to-service communication in ACA
@@ -801,6 +869,7 @@ After completing today's tasks, you will have:
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 #### Day 92: Aspire + Azure Resources Integration
+> 🏗️ **Phase 10 services** — Add Azure Blob Storage for order attachments, Azure Functions DLQ reprocessor (Service Bus trigger), Event Grid for blob lifecycle events
 - [ ] Connect to Azure SQL Database (not Aspire-managed)
 - [ ] Connect to Azure Cache for Redis (not Aspire-managed)
 - [ ] Use Azure Key Vault for secrets in ACA
@@ -808,6 +877,7 @@ After completing today's tasks, you will have:
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 #### Day 93: Review & Compare
+> 🏗️ **Phase 10 cost governance** — Scale-to-zero analysis, APIM Consumption tier costing, Azure Budget alerts per resource group, blue-green deployment with ACA revisions, canary release traffic shifting
 - [ ] Compare App Service vs ACA vs Aspire local
 - [ ] Document Aspire benefits (observability, service discovery, config)
 - [ ] Cost analysis: ACA pricing model
@@ -899,13 +969,18 @@ After completing today's tasks, you will have:
 - [x] 🆕 Add `Asp.Versioning.Http` NuGet package (official API versioning for ASP.NET Core)
 - [x] 🆕 Configure `AddApiVersioning()` + `AddApiExplorer()` in `Program.cs`
 - [x] 🆕 Annotate controllers with `[ApiVersion("1.0")]` and `[ApiVersion("2.0")]`
-- [x] 🆕 Implement Problem Details RFC 7807 standardised error responses: `AddProblemDetails()` in `Program.cs`
+- [x] 🆕 Implement Problem Details (RFC 9457) standardised error responses: `AddProblemDetails()` in `Program.cs`
 - [ ] APIM backend updated to route to versioned ACA endpoints
 - [ ] Test: `v1` endpoint returns old schema; `v2` endpoint returns expanded schema
 - [ ] **Time:** 2.5 hours | **Completed:** ✅ (Phase 6 — APIM routing pending)
 
 #### Day 95: Developer Portal
 > 🏗️ **Architecture Phase 12a** — .NET 10 upgrade assessment, Azure App Configuration, Polly v8 resilience hub
+>
+> **Additional Phase 12 deliverables:**
+> - Azure AI Document Intelligence — extract structured data from uploaded invoices/receipts in Blob Storage; Event Grid triggers Function → Document Intelligence API → enriches order metadata
+> - Advanced Polly — bulkhead isolation + fallback policies (retry + circuit breaker already from Phase 9)
+> - Reference `ARCHITECTURE.md` §15 PCI DSS card handling rules when implementing Phase 8.5 payment work
 - [ ] Customize developer portal branding
 - [ ] Publish API documentation
 - [ ] Create products and user groups
@@ -921,6 +996,11 @@ After completing today's tasks, you will have:
 
 #### Day 97: Advanced Monitoring
 > 🏗️ **Architecture Phase 12b** — Per-service CI/CD pipelines, observability dashboards (Grafana or Azure Workbooks)
+>
+> **Additional Phase 12 deliverables:**
+> - DR / Business Continuity — documented RTO/RPO targets per service; Azure SQL geo-replication strategy; backup/restore runbook
+> - Performance / Load Testing — Azure Load Testing or k6 for baseline performance; SLO validation under realistic load
+> - .NET 10 upgrade — update `global.json` TFM, bump `Directory.Packages.props`, verify Testcontainers + NetArchTest compatibility, update Dockerfiles and CI pipeline
 - [ ] Enable Application Insights for APIM
 - [ ] Create custom dashboards for API metrics
 - [ ] Set up alerts for API failures and high latency
@@ -999,6 +1079,12 @@ After completing today's tasks, you will have:
 
 #### Day 100: Canary Deployment
 > 🏗️ **Architecture Phase 11a** — Database per service: remove shared `DbContext`, design eventual consistency across service boundaries
+>
+> **Phase 11 key deliverables:**
+> - `XYDataLabs.OrderProcessingSystem.DurableFunctions` — separate Azure Functions project (isolated process) for Saga/Process Manager orchestrations
+> - `OrderFulfilmentOrchestrator` with compensating rollback activities (`ReserveInventoryActivity`, `ProcessPaymentActivity`, `CompensatePaymentActivity`)
+> - Choreography vs Saga decision: if failure in step N requires undoing steps 1…N-1, use Saga; otherwise choreography is sufficient
+> - Fan-out/fan-in — parallel activity execution (e.g. validate all order line items concurrently)
 - [ ] Deploy canary revision (20% traffic)
 - [ ] Compare metrics: canary vs stable
 - [ ] Rollback if issues detected
@@ -1013,6 +1099,12 @@ After completing today's tasks, you will have:
 
 #### Day 102: Synthetic Monitoring
 > 🏗️ **Architecture Phase 11b** — Cross-service data queries via API composition, no shared DB access between services
+>
+> **Phase 11 operational patterns:**
+> - Database migration strategy — EF Core bundles (`dotnet ef migrations bundle`) + ACA init containers; rollback via `--target` flag
+> - Performance conventions: `AsNoTracking()` on all read queries, indexing review per service DB, `SqlQuery<T>` for complex/reporting queries
+> - `NullTenantProvider` for non-request contexts (dedicated-DB seeding per `ARCHITECTURE.md` §10.1)
+> - Bulk operations — `EFCore.BulkExtensions` or `ExecuteSqlInterpolated` for batch import/export
 - [ ] Create Application Insights availability test
 - [ ] Test API `/health` endpoint every 5 min
 - [ ] Set up alerts for availability drops
@@ -1193,50 +1285,3 @@ Track these weekly:
 - Explore advanced topics: Dapr, KEDA, GitOps
 - Contribute back: document learnings, share templates
 - Obtain Azure certifications: AZ-204, AZ-400
-
----
-
----
-
-## 🚀 QUICK ACTION ITEMS (START HERE)
-
-### 🔥 TODAY'S PRIORITY (Day 32 — Azure SQL Database)
-**Goal:** Provision Azure SQL Database via Bicep and connect the Orders API with passwordless managed identity auth
-
-**MUST DO TODAY:**
-1. ⏳ **Create `infra/modules/sql.bicep`** — SQL Server + database module
-2. ⏳ **Add SQL module to `infra/main.bicep`** with firewall rules
-3. ⏳ **Deploy** via `az deployment group create -g rg-orderprocessing-dev -f infra/main.bicep -p infra/parameters/dev.json`
-4. ⏳ **Configure EF Core migrations** against the deployed Azure SQL instance
-5. ⏳ **Enable Managed Identity** on App Service and grant SQL access
-
-**Why This Matters:**
-- First real Azure data service connected to your app
-- Sets up the passwordless auth pattern (`DefaultAzureCredential`) used for all subsequent Azure services
-- Foundation for Service Bus, Cosmos DB, Key Vault patterns that follow
-
----
-
-### This Week's Focus (Days 32-43: Azure SQL → Polly → Health Checks)
-**Goal:** Connect the API to Azure SQL passwordlessly, add resilience with Polly, and expose health endpoints
-
-**Sequence:**
-1. Days 32-35: Azure SQL via Bicep + EF Core migrations + Managed Identity
-2. Days 36-37: `DefaultAzureCredential` in C# — fully passwordless connection
-3. Days 38-41: Polly retry + circuit breaker for transient failures
-4. Days 42-43: ASP.NET Core Health Checks + App Service health probe integration
-
-**Preparation for Service Bus (Days 48-50):**
-- Azure Service Bus requires a namespace — Bicep template planned for Day 48
-- The pub/sub C# pattern (Day 49) is the most critical .NET-in-Azure skill in this phase
-
-### Resources You Have
-✅ **Migration Strategy:** `Documentation/04-Enterprise-Architecture/ACA-Migration-Plan.md`  
-✅ **Hands-on Guide:** `Documentation/02-Azure-Learning-Guides/Containerization-ACA-Aspire-Learning-Path.md`  
-✅ **Current File:** This master curriculum for daily tracking
-
----
-
-**Last Updated:** March 20, 2026  
-**Next Review:** Weekly on Sundays  
-**Progress:** 31/112 days (28% complete) — Day 32 starting
