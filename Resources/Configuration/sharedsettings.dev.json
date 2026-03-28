@@ -10,6 +10,9 @@
     "OrderProcessingSystemDbConnection": "Server=tcp:orderprocessing-sql-dev.database.windows.net,1433;Initial Catalog=OrderProcessingSystem_Dev;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;Authentication=Active Directory Default",
     "OrderProcessingSystemDbConnection_Local": "Server=localhost,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=__LOCAL_SQL_PASSWORD__;TrustServerCertificate=True;"
   },
+  "DedicatedTenantConnectionStrings": {
+    "TenantC": "Server=tcp:orderprocessing-sql-dev.database.windows.net,1433;Initial Catalog=OrderProcessingSystem_TenantC_Dev;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;Authentication=Active Directory Default"
+  },
   "OpenPay": {
     "MerchantId": "__OPENPAY_MERCHANT_ID__",
     "PrivateKey": "__OPENPAY_PRIVATE_KEY__",
