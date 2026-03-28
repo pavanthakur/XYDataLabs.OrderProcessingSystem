@@ -49,9 +49,11 @@ The **only** place where a human enters credentials to generate an Azure token i
 
 Automates:
 - GitHub App setup guidance and validation
-- Repository secret configuration (Azure OIDC credentials)
+- Repository secret configuration (Azure OIDC credentials: `AZUREAPPSERVICE_CLIENTID`, `AZUREAPPSERVICE_TENANTID`, `AZUREAPPSERVICE_SUBSCRIPTIONID`)
 - Environment secret configuration (dev, staging, prod)
 - Configuration validation
+
+> **Scope**: This workflow configures OIDC credentials and the `OIDC_SP_OBJECT_ID` secret only. It does **not** set OpenPay secrets. OpenPay secrets (`OPENPAY_MERCHANT_ID`, `OPENPAY_PRIVATE_KEY`, `OPENPAY_DEVICE_SESSION_ID`) must be added manually in GitHub Settings → Secrets → Actions — workflow inputs are not a secure channel for credentials (they appear in plain text in workflow logs).
 
 ## Triggers
 

@@ -23,10 +23,27 @@ Before running this workflow, the following must already be in place:
 | `AZUREAPPSERVICE_TENANTID` secret | Azure Initial Setup (Phase 1a + 1b) | `Settings → Secrets → Actions` |
 | `AZUREAPPSERVICE_SUBSCRIPTIONID` secret | Azure Initial Setup (Phase 1a + 1b) | `Settings → Secrets → Actions` |
 | Azure AD App Registration with federated credentials | Azure Initial Setup (Phase 1a) | `az ad app list --display-name "GitHub-Actions-OIDC"` |
+| `OPENPAY_MERCHANT_ID` repo secret | **Set manually** — see below | `Settings → Secrets → Actions` |
+| `OPENPAY_PRIVATE_KEY` repo secret | **Set manually** — see below | `Settings → Secrets → Actions` |
+| `OPENPAY_DEVICE_SESSION_ID` repo secret | **Set manually** — see below | `Settings → Secrets → Actions` |
 
 If any `AZUREAPPSERVICE_*` secret is missing, the `validate-inputs` job will **fail immediately** with guidance to run the Azure Initial Setup workflow first.
 
-See [`README-AZURE-INITIAL-SETUP.md`](README-AZURE-INITIAL-SETUP.md) for the one-time setup instructions.
+If any `OPENPAY_*` secret is missing, the `validate-payment-secrets` job will **fail immediately** before any infrastructure is touched, with the name of the missing secret and a direct link to the Settings page.
+
+### Required OpenPay GitHub Secrets
+
+These three secrets must be added manually in **GitHub Settings → Secrets → Actions** before running bootstrap. They are never passed through workflow inputs — that is not a secure channel (inputs appear in plain text in workflow logs and the GitHub API).
+
+| Secret name | Description |
+|-------------|-------------|
+| `OPENPAY_MERCHANT_ID` | Your OpenPay merchant ID |
+| `OPENPAY_PRIVATE_KEY` | Your OpenPay private key |
+| `OPENPAY_DEVICE_SESSION_ID` | Your OpenPay device session ID |
+
+**How to add**: Go to [GitHub → Settings → Secrets → Actions](../../settings/secrets/actions) → **New repository secret** → add each one.
+
+See [`README-AZURE-INITIAL-SETUP.md`](README-AZURE-INITIAL-SETUP.md) for the one-time OIDC setup instructions.
 
 ---
 
@@ -81,9 +98,18 @@ See [`README-AZURE-INITIAL-SETUP.md`](README-AZURE-INITIAL-SETUP.md) for the one
 
 > **All operations in this workflow require OIDC credentials.** If `AZUREAPPSERVICE_*` secrets don't exist, `validate-inputs` fails immediately with a remediation message — before any other job runs.
 
-### 2. `bootstrap-dev` / `bootstrap-staging` / `bootstrap-prod` (Phase A)
-**Runs when**: `bootstrapInfra=true` AND environment matches  
+### 2. `validate-payment-secrets`
+**Runs when**: `bootstrapInfra=true`
 **Needs**: `validate-inputs`
+
+- Checks that all three `OPENPAY_*` repo secrets are present and non-empty
+- **Fails fast** if any are missing — prints the secret name, the exact GitHub Settings URL, and a Step Summary with a link
+- No environment context needed — reads repo-level secrets only
+- Bootstrap jobs are blocked until this job succeeds
+
+### 3. `bootstrap-dev` / `bootstrap-staging` / `bootstrap-prod` (Phase A)
+**Runs when**: `bootstrapInfra=true` AND environment matches
+**Needs**: `validate-inputs`, `validate-payment-secrets`
 
 **Azure login (3-step pattern per environment)**:
 ```
