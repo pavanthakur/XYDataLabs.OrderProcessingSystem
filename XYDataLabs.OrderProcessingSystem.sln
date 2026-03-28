@@ -260,6 +260,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "scripts", "scripts", "{BB00
 		scripts\test-recommended-next-steps.ps1 = scripts\test-recommended-next-steps.ps1
 		scripts\setup-local.ps1 = scripts\setup-local.ps1
 		scripts\validate-adr-frontmatter.ps1 = scripts\validate-adr-frontmatter.ps1
+		scripts\sync-check-solution.ps1 = scripts\sync-check-solution.ps1
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{CC000001-0001-0001-0001-000000000001}"
