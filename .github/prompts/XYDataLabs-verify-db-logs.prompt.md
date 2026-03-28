@@ -1,20 +1,24 @@
 ---
 agent: agent
 description: |
-  Verify a payment test run end-to-end: read today's physical log files, extract charge IDs,
-  run DB verification queries, and produce a correlated pass/fail report.
+  Verify a payment test run end-to-end: read today's physical log files or App Insights KQL
+  (azure runtime), extract charge IDs, run DB verification queries, and produce a correlated
+  pass/fail report.
 
   Usage examples:
     /XYDataLabs-verify-db-logs "prod https docker"
+    /XYDataLabs-verify-db-logs "dev http azure"
     /XYDataLabs-verify-db-logs "stg http"
     /XYDataLabs-verify-db-logs "dev"
     /XYDataLabs-verify-db-logs                ← agent will ask
 ---
 
-# Verify DB + Physical Logs
+# Verify DB + Logs (Physical or App Insights)
 
-The user wants to verify that a payment test run is fully consistent across physical log files and
+The user wants to verify that a payment test run is fully consistent across log data and
 the database. Cover **all three** of: API log → UI log → DB.
+
+Log source depends on **runtime**: `docker`/`local` read physical files; `azure` queries App Insights KQL via Azure CLI.
 
 ---
 
@@ -24,34 +28,43 @@ Parse the user's argument (e.g. `"prod https docker"`, `"stg http"`, `"dev"`).
 
 - **env** — one of: `dev`, `stg`, `prod` (default: `dev` if omitted)
 - **profile** — `http` or `https` (default: `http` if omitted)
-- **runtime** — `docker` or `local` (default: `docker` if omitted)
+- **runtime** — `docker`, `local`, or `azure` (default: `local` if omitted)
 
 If the argument is omitted entirely, ask:
 > "Which environment and profile did you run?  
-> Examples: `prod https docker` · `stg http` · `dev` · `local https`"
+> Examples: `prod https docker` · `dev http azure` · `stg http` · `dev` · `local https`"
 
 Accept shorthand — fill in the defaults for any part not specified.
 
 Map their answer to the following table:
 
-| Selection | Env tag | API log file | UI log file | Shared DB | TenantC DB |
+| Selection | Env tag | Log source | API log / KQL scope | Shared DB | TenantC DB |
 |---|---|---|---|---|---|
-| dev http docker | `dev` | `webapi-dev-dock-http-{DATE}.log` | `ui-dev-dock-http-{DATE}.log` | `OrderProcessingSystem_Dev` | `OrderProcessingSystem_TenantC_Dev` |
-| dev https docker | `dev` | `webapi-dev-dock-https-{DATE}.log` | `ui-dev-dock-https-{DATE}.log` | `OrderProcessingSystem_Dev` | `OrderProcessingSystem_TenantC_Dev` |
-| stg http docker | `stg` | `webapi-stg-dock-http-{DATE}.log` | `ui-stg-dock-http-{DATE}.log` | `OrderProcessingSystem_Stg` | `OrderProcessingSystem_TenantC_Stg` |
-| stg https docker | `stg` | `webapi-stg-dock-https-{DATE}.log` | `ui-stg-dock-https-{DATE}.log` | `OrderProcessingSystem_Stg` | `OrderProcessingSystem_TenantC_Stg` |
-| prod http docker | `prod` | `webapi-prod-dock-http-{DATE}.log` | `ui-prod-dock-http-{DATE}.log` | `OrderProcessingSystem_Prod` | `OrderProcessingSystem_TenantC_Prod` |
-| prod https docker | `prod` | `webapi-prod-dock-https-{DATE}.log` | `ui-prod-dock-https-{DATE}.log` | `OrderProcessingSystem_Prod` | `OrderProcessingSystem_TenantC_Prod` |
-| local dotnet run | `dev` | `webapi-dev-local-http-{DATE}.log` | `ui-dev-local-http-{DATE}.log` | `OrderProcessingSystem_Local` | `OrderProcessingSystem_TenantC` |
+| dev http docker | `dev` | Physical file | `webapi-dev-dock-http-{DATE}.log` | `OrderProcessingSystem_Dev` | `OrderProcessingSystem_TenantC_Dev` |
+| dev https docker | `dev` | Physical file | `webapi-dev-dock-https-{DATE}.log` | `OrderProcessingSystem_Dev` | `OrderProcessingSystem_TenantC_Dev` |
+| dev http azure | `dev` | App Insights KQL | `ai-orderprocessing-dev` / `rg-orderprocessing-dev` | `orderprocessing-sql-dev` → `OrderProcessingSystem_Dev` | `OrderProcessingSystem_TenantC_Dev` |
+| dev https azure | `dev` | App Insights KQL | same as `dev http azure` — profile does not affect log source | `orderprocessing-sql-dev` → `OrderProcessingSystem_Dev` | `OrderProcessingSystem_TenantC_Dev` |
+| stg http docker | `stg` | Physical file | `webapi-stg-dock-http-{DATE}.log` | `OrderProcessingSystem_Stg` | `OrderProcessingSystem_TenantC_Stg` |
+| stg https docker | `stg` | Physical file | `webapi-stg-dock-https-{DATE}.log` | `OrderProcessingSystem_Stg` | `OrderProcessingSystem_TenantC_Stg` |
+| stg http azure | `stg` | App Insights KQL | `ai-orderprocessing-stg` / `rg-orderprocessing-stg` | `orderprocessing-sql-stg` → `OrderProcessingSystem_Stg` | `OrderProcessingSystem_TenantC_Stg` |
+| stg https azure | `stg` | App Insights KQL | same as `stg http azure` — profile does not affect log source | `orderprocessing-sql-stg` → `OrderProcessingSystem_Stg` | `OrderProcessingSystem_TenantC_Stg` |
+| prod http docker | `prod` | Physical file | `webapi-prod-dock-http-{DATE}.log` | `OrderProcessingSystem_Prod` | `OrderProcessingSystem_TenantC_Prod` |
+| prod https docker | `prod` | Physical file | `webapi-prod-dock-https-{DATE}.log` | `OrderProcessingSystem_Prod` | `OrderProcessingSystem_TenantC_Prod` |
+| prod http azure | `prod` | App Insights KQL | `ai-orderprocessing-prod` / `rg-orderprocessing-prod` | `orderprocessing-sql-prod` → `OrderProcessingSystem_Prod` | `OrderProcessingSystem_TenantC_Prod` |
+| prod https azure | `prod` | App Insights KQL | same as `prod http azure` — profile does not affect log source | `orderprocessing-sql-prod` → `OrderProcessingSystem_Prod` | `OrderProcessingSystem_TenantC_Prod` |
+| local dotnet run | `dev` | Physical file | `webapi-dev-local-http-{DATE}.log` | `OrderProcessingSystem_Local` | `OrderProcessingSystem_TenantC` |
 
 `{DATE}` = today as `YYYYMMDD` (e.g. `20260328`).  
-Log files are in `Q:\GIT\TestAppXY_OrderProcessingSystem\logs\`.
+Physical log files are in `Q:\GIT\TestAppXY_OrderProcessingSystem\logs\`.  
+Azure resource names: `ai-orderprocessing-{envSuffix}` in `rg-orderprocessing-{envSuffix}` (`staging` → `stg`).
 
-> **Local TenantC DB note:** For `local dotnet run`, TenantC's dedicated DB is `OrderProcessingSystem_TenantC` (no environment suffix). All Docker environments follow the `OrderProcessingSystem_TenantC_{Env}` pattern (e.g. `_Dev`, `_Stg`, `_Prod`). Be careful not to query the wrong DB.
+> **Local TenantC DB note:** For `local dotnet run`, TenantC's dedicated DB is `OrderProcessingSystem_TenantC` (no environment suffix). All Docker/Azure environments follow the `OrderProcessingSystem_TenantC_{Env}` pattern (e.g. `_Dev`, `_Stg`, `_Prod`). Be careful not to query the wrong DB.
 
 ---
 
 ## Step 2 — Read the API log (first pass)
+
+### If runtime = `docker` or `local` (physical log)
 
 Read the SQL password:
 ```powershell
@@ -63,7 +76,7 @@ $pass = (Get-Content "Q:\GIT\TestAppXY_OrderProcessingSystem\Resources\Docker\.e
 
 Determine today's date tag:
 ```powershell
-$dateTag = (Get-Date).ToString("yyyyMMdd")   # e.g. 20260328
+$dateTag = (Get-Date).ToString("yyyyMMdd")   # e.g. 20260329
 ```
 
 Read **API log only** in this step — the UI log is read in Step 3 after the PREFIX is confirmed:
@@ -78,10 +91,55 @@ Replace `{ENV_TAG}` with the env tag, `{RUNTIME}` with `dock` or `local`, and `{
 
 If the API log file does not exist, note this as a finding and stop — the UI log and DB queries cannot be meaningfully scoped without it.
 
-**From the API log, extract and record:**
+### If runtime = `azure` (App Insights KQL)
+
+The SQL password comes from Key Vault — read it now so it is ready for Steps 4–5:
+```powershell
+$pass = az keyvault secret show --vault-name kv-orderprocessing-{ENV_TAG} --name sql-admin-password --query value -o tsv
+```
+
+> **First-time prerequisite:** If you get `Forbidden`, your CLI identity needs `secrets/get` on the KV. Grant it once:
+> ```powershell
+> $oid = az ad signed-in-user show --query id -o tsv
+> az keyvault set-policy --name kv-orderprocessing-{ENV_TAG} --object-id $oid --secret-permissions get list
+> ```
+> Then retry the `az keyvault secret show` command above.
+
+Also ensure the firewall is open before running sqlcmd in Steps 4–5:
+```powershell
+.\Resources\Azure-Deployment\open-local-sql-firewall.ps1 -Environment {env}
+```
+
+Replace `{ENV_TAG}` with the env suffix from Step 1 (`dev`, `stg`, `prod`).
+
+Query App Insights for API-side payment events today (IST = UTC+5:30; `startofday(now() + 330m) - 330m` resolves to midnight IST in UTC, preventing missed payments when running before 05:30 UTC):
+```powershell
+az monitor app-insights query `
+  --app ai-orderprocessing-{ENV_TAG} `
+  --resource-group rg-orderprocessing-{ENV_TAG} `
+  --analytics-query "
+    traces
+    | where timestamp >= startofday(now() + 330m) - 330m
+    | where cloud_RoleName has 'api'
+    | where message has_any('charge created', 'created charge', 'callback reconciliation',
+                            'Generated payment', 'confirm-status')
+    | extend orderId  = tostring(customDimensions['CustomerOrderId'])
+    | extend chargeId = iff(isnotempty(tostring(customDimensions['ChargeId'])),
+                            tostring(customDimensions['ChargeId']),
+                            extract(@'charge with ID:\s+(\S+)', 1, message))
+    | project timestamp, message, orderId, chargeId
+    | order by timestamp asc" `
+  --output json
+```
+
+> **Note:** `cloud_RoleName` for this project is `pavanthakur-orderprocessing-api-xyapp-{ENV_TAG}`. The `has 'api'` filter matches it correctly. `chargeId` is extracted from `customDimensions` when populated, otherwise parsed from the message text (some log entries set one but not the other).
+
+Replace `{ENV_TAG}` with the env suffix from Step 1 (`dev`, `stg`, `prod`).
+
+**From the API output, extract and record:**
 - All `CustomerOrderId` values seen (the OR prefix, e.g. `OR-1-28Mar`)
-- All `ChargeId` values created (`created charge with ID: <id>`)
-- All callback completion results (`callback reconciliation completed … Status completed`)
+- All `ChargeId` values created
+- All callback completion results
 
 ---
 
@@ -89,7 +147,7 @@ If the API log file does not exist, note this as a finding and stop — the UI l
 
 **Determine the PREFIX:**
 
-If more than one OR prefix appears in the API log, find the first log timestamp for each prefix and ask the user:
+If more than one OR prefix appears in the API output, find the first timestamp for each prefix and ask the user:
 > "Multiple OR prefixes found today:
 > - `OR-1-28Mar` — first entry at 14:23:05
 > - `OR-3-28Mar` — first entry at 16:47:12
@@ -100,7 +158,8 @@ Showing the timestamp of the first entry is more reliable than listing the prefi
 
 Otherwise use the single prefix found. Use it as `<PREFIX>` for all queries below.
 
-**Now read the UI log with PREFIX-scoped pattern** (second pass, after PREFIX is confirmed):
+### If runtime = `docker` or `local` (physical log)
+
 ```powershell
 $uiLog = "Q:\GIT\TestAppXY_OrderProcessingSystem\logs\ui-{ENV_TAG}-{RUNTIME}-{PROFILE}-$dateTag.log"
 Get-Content $uiLog |
@@ -112,7 +171,36 @@ Replace `<PREFIX>` with the confirmed prefix literal (e.g. `OR-4-28Mar`). Using 
 
 If the UI log file does not exist, note this as a finding and proceed with DB queries only.
 
-**From the UI log, extract and record:**
+### If runtime = `azure` (App Insights KQL)
+
+> **Note:** Currently only the API app sends telemetry to App Insights (`pavanthakur-orderprocessing-api-xyapp-{ENV_TAG}`). The UI app is not yet instrumented into the shared App Insights workspace. For the UI log check, there are two options:
+> 1. **Skip UI correlation** — note this as a partial check and proceed to DB queries
+> 2. **Use Azure App Service log stream** — stream UI stdout via:
+>    ```powershell
+>    az webapp log tail --name pavanthakur-orderprocessing-ui-xyapp-{ENV_TAG} --resource-group rg-orderprocessing-{ENV_TAG}
+>    ```
+>    This shows live stdout but is not scoped by PREFIX. Use it for real-time observation only.
+
+If choosing to skip, record: "UI log — App Insights UI instrumentation not yet configured. UI callback check skipped for azure runtime."
+
+If the UI app is later instrumented, query it with:
+```powershell
+az monitor app-insights query `
+  --app ai-orderprocessing-{ENV_TAG} `
+  --resource-group rg-orderprocessing-{ENV_TAG} `
+  --analytics-query "
+    traces
+    | where timestamp >= startofday(now() + 330m) - 330m
+    | where cloud_RoleName has 'ui'
+    | where message has '<PREFIX>' or message has 'payment/callback responded'
+    | project timestamp, message,
+              chargeId   = tostring(customDimensions['ChargeId']),
+              statusCode = tostring(customDimensions['StatusCode'])
+    | order by timestamp asc" `
+  --output json
+```
+
+**From the UI output, extract and record:**
 - All callback receipts (`OpenPay callback received … for payment <id>`)
 - HTTP response status for each (`/payment/callback responded <N>`)
 
@@ -120,7 +208,11 @@ If the UI log file does not exist, note this as a finding and proceed with DB qu
 
 ## Step 4 — Pre-flight (3DS state)
 
-Read SQL password from Step 2 (`$pass`). Run on both DBs:
+Use `$pass` from Step 2 for sqlcmd authentication against `<SQL_SERVER>.database.windows.net`.
+- **docker/local**: `$pass` is from `.env.local`; SQL server is `localhost` (or connection string in compose)
+- **azure**: `$pass` is from Key Vault; SQL server is `orderprocessing-sql-{ENV_TAG}.database.windows.net` (ensure firewall open via `open-local-sql-firewall.ps1 -Environment {env}` first)
+
+Run on both DBs:
 
 ```sql
 -- Shared DB (<SHARED_DB>)
@@ -142,6 +234,8 @@ Note the `ThreeDSEnabled` per tenant — it controls expected row counts in Q2/Q
 |:---:|---|---|
 | `1` | 2 rows; charge row has `ThreeDS=1`, `Stage=completed`, `Ref` populated | 4 rows: `tokenization_completed → redirect_issued → callback_received → completed` |
 | `0` | 2 rows; charge row has `ThreeDS=0`, `Stage=not_applicable`, `Ref` populated | 2 rows: `tokenization_completed → not_applicable` |
+
+> **Tokenization row `ThreeDS` field:** The tokenization row (`Stage=tokenization_completed`) always records `IsThreeDSecureEnabled=0` regardless of tenant configuration — 3DS determination happens after tokenization. This is expected data, not an inconsistency. Only the charge row (`Stage=completed` or `Stage=not_applicable`) reflects the actual 3DS outcome for the tenant.
 
 > **If either query returns 0 rows or the expected tenants are missing:** the DB has not been seeded or the migration has not run for this environment. Do not proceed to Q2/Q5 — the expected row counts will be undefined. Fix the seeding or migration issue first, then restart the verification from Step 4.
 

@@ -120,21 +120,22 @@ Important notes:
 ### `/XYDataLabs-verify-db-logs`
 
 Purpose:
-- End-to-end verification of a payment test run: physical log files **and** DB — in one pass.
-- Reads today's `webapi-{env}-{date}.log` and `ui-{env}-{date}.log` filtered to today's date.
+- End-to-end verification of a payment test run: log data **and** DB — in one pass.
+- **docker/local**: reads today's `webapi-{env}-{date}.log` and `ui-{env}-{date}.log` physical files.
+- **azure**: queries App Insights KQL (`ai-orderprocessing-{env}`) for API-side traces; UI correlation skipped until UI app is instrumented.
 - Extracts OR prefix and charge IDs from the log automatically — no need to know the prefix upfront.
 - Runs Q2 / Q5 / Q8 on the shared DB and Q2-B / Q5-B / Q9-B on the TenantC dedicated DB, all scoped to today.
 - Produces a correlated pass/fail table: API log → UI log → DB for every charge ID.
 
 Use when:
-- After any payment test run on any environment/profile combination (dev/stg/prod × http/https docker, local dotnet run).
+- After any payment test run on any environment/profile/runtime combination (dev/stg/prod × http/https × docker/local/azure).
 - When you want a single command that checks logs **and** DB without knowing the OR prefix in advance.
 - When investigating missing callbacks or DB/log mismatches.
 
 Prerequisites:
 - At least one payment cycle completed today for the chosen environment.
-- Docker containers or dotnet run have written today's log files to `logs/`.
-- SQL Server is running locally (localhost:1433). `Resources/Docker/.env.local` exists with `LOCAL_SQL_PASSWORD`.
+- **docker/local**: containers or dotnet run have written today's log files to `logs/`; `Resources/Docker/.env.local` exists with `LOCAL_SQL_PASSWORD`; SQL Server running locally (localhost:1433).
+- **azure**: `az login` completed; App Insights resource exists (`ai-orderprocessing-{env}`); firewall open via `open-local-sql-firewall.ps1`; KV `secrets/get` permission granted (first-time only).
 
 Note: For deep-dive queries (Q1, Q3, Q4, Q6, Q6a, Q7, Q8-B and per-tenant 3DS toggle), open `docs/runbooks/payment-db-verification.md`.
 
@@ -148,7 +149,7 @@ Note: For deep-dive queries (Q1, Q3, Q4, Q6, Q6a, Q7, Q8-B and per-tenant 3DS to
 | Set up local dev environment after git clone | `/XYDataLabs-setup-local` |
 | Need local SSMS/sqlcmd access to Azure SQL | `/XYDataLabs-sql-local-access` |
 | Check for stale AI context / memory drift | `/XYDataLabs-context-audit` |
-| Verify payment run: physical logs + DB correlated | `/XYDataLabs-verify-db-logs "prod https docker"` |
+| Verify payment run: physical logs + DB correlated | `/XYDataLabs-verify-db-logs "prod https docker"` or `/XYDataLabs-verify-db-logs "dev http azure"` |
 | Validate ADR markdown files before committing | `/XYDataLabs-validate-adrs` |
 
 ## Typical Workflows
