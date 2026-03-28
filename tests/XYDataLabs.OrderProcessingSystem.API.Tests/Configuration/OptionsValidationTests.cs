@@ -61,4 +61,98 @@ public class OptionsValidationTests
         result.Failed.Should().BeTrue();
         result.Failures.Should().ContainSingle(failure => failure.Contains("absolute URI", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public void OpenPayConfigValidator_Fails_WhenMerchantIdIsEmpty()
+    {
+        var validator = new OpenPayConfigValidator();
+        var settings = new OpenPayConfig
+        {
+            MerchantId = "",
+            PrivateKey = "private-key",
+            DeviceSessionId = "device-session",
+            RedirectUrl = "https://example.com/payment/callback",
+            IsProduction = false
+        };
+
+        var result = validator.Validate(Options.DefaultName, settings);
+
+        result.Failed.Should().BeTrue();
+        result.Failures.Should().ContainSingle(failure => failure.Contains("OpenPay:MerchantId is required", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void OpenPayConfigValidator_Fails_WhenPrivateKeyIsEmpty()
+    {
+        var validator = new OpenPayConfigValidator();
+        var settings = new OpenPayConfig
+        {
+            MerchantId = "merchant",
+            PrivateKey = "",
+            DeviceSessionId = "device-session",
+            RedirectUrl = "https://example.com/payment/callback",
+            IsProduction = false
+        };
+
+        var result = validator.Validate(Options.DefaultName, settings);
+
+        result.Failed.Should().BeTrue();
+        result.Failures.Should().ContainSingle(failure => failure.Contains("OpenPay:PrivateKey is required", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void OpenPayConfigValidator_Fails_WhenDeviceSessionIdIsEmpty()
+    {
+        var validator = new OpenPayConfigValidator();
+        var settings = new OpenPayConfig
+        {
+            MerchantId = "merchant",
+            PrivateKey = "private-key",
+            DeviceSessionId = "",
+            RedirectUrl = "https://example.com/payment/callback",
+            IsProduction = false
+        };
+
+        var result = validator.Validate(Options.DefaultName, settings);
+
+        result.Failed.Should().BeTrue();
+        result.Failures.Should().ContainSingle(failure => failure.Contains("OpenPay:DeviceSessionId is required", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void OpenPayConfigValidator_Fails_WhenMerchantIdIsPlaceholder()
+    {
+        var validator = new OpenPayConfigValidator();
+        var settings = new OpenPayConfig
+        {
+            MerchantId = "set-openpay-merchant-id-dev",
+            PrivateKey = "private-key",
+            DeviceSessionId = "device-session",
+            RedirectUrl = "https://example.com/payment/callback",
+            IsProduction = false
+        };
+
+        var result = validator.Validate(Options.DefaultName, settings);
+
+        result.Failed.Should().BeTrue();
+        result.Failures.Should().ContainSingle(failure => failure.Contains("placeholder", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void OpenPayConfigValidator_Succeeds_WhenAllRequiredFieldsProvided()
+    {
+        var validator = new OpenPayConfigValidator();
+        var settings = new OpenPayConfig
+        {
+            MerchantId = "real-merchant-id",
+            PrivateKey = "real-private-key",
+            DeviceSessionId = "real-device-session",
+            RedirectUrl = "https://example.com/payment/callback",
+            IsProduction = false
+        };
+
+        var result = validator.Validate(Options.DefaultName, settings);
+
+        result.Failed.Should().BeFalse();
+    }
 }

@@ -49,6 +49,8 @@ See [QUICK-SETUP-GITHUB-APP.md](../../Documentation/03-Configuration-Guides/QUIC
 
 After completion, proceed to the **Azure Bootstrap & Deploy** workflow for infrastructure.
 
+> ⚠️ **Before running Bootstrap**: You must also add the three OpenPay secrets manually in **GitHub Settings → Secrets → Actions** (`OPENPAY_MERCHANT_ID`, `OPENPAY_PRIVATE_KEY`, `OPENPAY_DEVICE_SESSION_ID`). These are payment credentials that must never pass through workflow inputs. The bootstrap `validate-payment-secrets` job will fail immediately with guidance if any are missing.
+
 ### Additional Entra Permission For SQL Managed Identity Automation
 
 In some tenants, the existing `GitHub-Actions-OIDC` app registration can authenticate to Azure Resource Manager but still lacks permission to read Microsoft Entra service principal metadata.

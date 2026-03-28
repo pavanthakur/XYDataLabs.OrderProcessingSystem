@@ -254,14 +254,68 @@ jobs:
           Write-Host "✅ PRE-FLIGHT CHECK PASSED — All selected phases have prerequisites met." -ForegroundColor Green
           Write-Host ""
 
+  validate-payment-secrets:
+    name: Validate Payment Secrets
+    if: |
+      !cancelled() &&
+      needs.validate-inputs.result == 'success' &&
+      inputs.bootstrapInfra
+    needs: [validate-inputs]
+    runs-on: windows-latest
+    # No 'environment:' here — this job reads repo-level secrets only.
+    # When a secret is absent, GitHub passes an empty string; IsNullOrWhiteSpace catches both cases.
+    steps:
+      - name: Check OpenPay Secrets Present
+        run: |
+          $missing = @()
+          if ([string]::IsNullOrWhiteSpace('${{ secrets.OPENPAY_MERCHANT_ID }}'))       { $missing += 'OPENPAY_MERCHANT_ID' }
+          if ([string]::IsNullOrWhiteSpace('${{ secrets.OPENPAY_PRIVATE_KEY }}'))       { $missing += 'OPENPAY_PRIVATE_KEY' }
+          if ([string]::IsNullOrWhiteSpace('${{ secrets.OPENPAY_DEVICE_SESSION_ID }}')) { $missing += 'OPENPAY_DEVICE_SESSION_ID' }
+
+          if ($missing.Count -gt 0) {
+            Write-Host ""
+            Write-Host "════════════════════════════════════════════════════" -ForegroundColor Red
+            Write-Host "❌ DEPLOYMENT BLOCKED — MISSING REQUIRED GITHUB SECRETS" -ForegroundColor Red
+            Write-Host "════════════════════════════════════════════════════" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "The following repository secrets are missing:" -ForegroundColor Yellow
+            $missing | ForEach-Object { Write-Host "   • $_" -ForegroundColor Red }
+            Write-Host ""
+            Write-Host "How to fix:" -ForegroundColor Cyan
+            Write-Host "  1. Go to: https://github.com/${{ github.repository }}/settings/secrets/actions" -ForegroundColor White
+            Write-Host "  2. Click 'New repository secret' for each missing secret above" -ForegroundColor White
+            Write-Host "  3. Get values from https://sandbox-dashboard.openpay.mx (sandbox)" -ForegroundColor White
+            Write-Host "     or the live Openpay dashboard (production)" -ForegroundColor White
+            Write-Host "  4. Re-run this workflow" -ForegroundColor White
+            Write-Host ""
+            Write-Host "Tip: Run 'Actions → Azure Initial Setup' first — the Summary tab shows" -ForegroundColor Gray
+            Write-Host "     OpenPay secret status and a direct link to the Settings page." -ForegroundColor Gray
+            Write-Host ""
+
+            "## ❌ Deployment Blocked — Missing OpenPay Secrets" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "The following repository secrets must be added before bootstrap can run:" >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            foreach ($s in $missing) { "- ``$s``" >> $env:GITHUB_STEP_SUMMARY }
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "**How to fix:** Go to [Settings → Secrets → Actions](https://github.com/${{ github.repository }}/settings/secrets/actions) and add each secret." >> $env:GITHUB_STEP_SUMMARY
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "Get values from the [OpenPay sandbox dashboard](https://sandbox-dashboard.openpay.mx) or live dashboard." >> $env:GITHUB_STEP_SUMMARY
+
+            exit 1
+          }
+
+          Write-Host "✅ All OpenPay payment secrets are present — bootstrap may proceed." -ForegroundColor Green
+
   bootstrap-dev:
     name: Bootstrap Dev Environment
     if: |
       !cancelled() &&
       needs.validate-inputs.result == 'success' &&
+      needs.validate-payment-secrets.result == 'success' &&
       inputs.bootstrapInfra &&
       (inputs.environment == 'dev' || inputs.environment == 'all')
-    needs: [validate-inputs]
+    needs: [validate-inputs, validate-payment-secrets]
     runs-on: windows-latest
     environment: dev
     env:
@@ -693,7 +747,15 @@ jobs:
             Write-Host ""
             
             # Populate secrets - script will auto-retrieve App Insights connection string
-            ./Resources/Azure-Deployment/populate-keyvault-secrets.ps1 -Environment dev -BaseName orderprocessing
+            # OPENPAY_MERCHANT_ID / OPENPAY_PRIVATE_KEY / OPENPAY_DEVICE_SESSION_ID must be set
+            # as GitHub repository secrets before running bootstrap. RedirectUrl is derived
+            # automatically from the App Service naming convention.
+            ./Resources/Azure-Deployment/populate-keyvault-secrets.ps1 `
+              -Environment dev `
+              -BaseName orderprocessing `
+              -OpenPayMerchantId "${{ secrets.OPENPAY_MERCHANT_ID }}" `
+              -OpenPayPrivateKey "${{ secrets.OPENPAY_PRIVATE_KEY }}" `
+              -OpenPayDeviceSessionId "${{ secrets.OPENPAY_DEVICE_SESSION_ID }}"
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
@@ -995,9 +1057,10 @@ jobs:
     if: |
       !cancelled() &&
       needs.validate-inputs.result == 'success' &&
+      needs.validate-payment-secrets.result == 'success' &&
       inputs.bootstrapInfra &&
       (inputs.environment == 'staging' || inputs.environment == 'all')
-    needs: [validate-inputs]
+    needs: [validate-inputs, validate-payment-secrets]
     runs-on: windows-latest
     environment: staging
     env:
@@ -1429,7 +1492,12 @@ jobs:
             Write-Host ""
             
             # Populate secrets - script will auto-retrieve App Insights connection string
-            ./Resources/Azure-Deployment/populate-keyvault-secrets.ps1 -Environment staging -BaseName orderprocessing -OpenPayApiKey "${{ secrets.OPENPAY_API_KEY }}"
+            ./Resources/Azure-Deployment/populate-keyvault-secrets.ps1 `
+              -Environment staging `
+              -BaseName orderprocessing `
+              -OpenPayMerchantId "${{ secrets.OPENPAY_MERCHANT_ID }}" `
+              -OpenPayPrivateKey "${{ secrets.OPENPAY_PRIVATE_KEY }}" `
+              -OpenPayDeviceSessionId "${{ secrets.OPENPAY_DEVICE_SESSION_ID }}"
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
@@ -1731,9 +1799,10 @@ jobs:
     if: |
       !cancelled() &&
       needs.validate-inputs.result == 'success' &&
+      needs.validate-payment-secrets.result == 'success' &&
       inputs.bootstrapInfra &&
       (inputs.environment == 'prod' || inputs.environment == 'all')
-    needs: [validate-inputs]
+    needs: [validate-inputs, validate-payment-secrets]
     runs-on: windows-latest
     environment: prod
     env:
@@ -2165,7 +2234,12 @@ jobs:
             Write-Host ""
             
             # Populate secrets - script will auto-retrieve App Insights connection string
-            ./Resources/Azure-Deployment/populate-keyvault-secrets.ps1 -Environment prod -BaseName orderprocessing -OpenPayApiKey "${{ secrets.OPENPAY_API_KEY }}"
+            ./Resources/Azure-Deployment/populate-keyvault-secrets.ps1 `
+              -Environment prod `
+              -BaseName orderprocessing `
+              -OpenPayMerchantId "${{ secrets.OPENPAY_MERCHANT_ID }}" `
+              -OpenPayPrivateKey "${{ secrets.OPENPAY_PRIVATE_KEY }}" `
+              -OpenPayDeviceSessionId "${{ secrets.OPENPAY_DEVICE_SESSION_ID }}"
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""

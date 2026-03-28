@@ -262,8 +262,13 @@ via the `ASPNETCORE_ENVIRONMENT` variable.
 | `AZUREAPPSERVICE_CLIENTID` | Repository + Environments | OIDC Client ID for Azure login |
 | `AZUREAPPSERVICE_TENANTID` | Repository + Environments | Azure Tenant ID |
 | `AZUREAPPSERVICE_SUBSCRIPTIONID` | Repository + Environments | Azure Subscription ID |
+| `OPENPAY_MERCHANT_ID` | Repository | OpenPay merchant ID — **set manually** in GitHub Settings → Secrets → Actions by an authorized person; bootstrap validates presence before proceeding |
+| `OPENPAY_PRIVATE_KEY` | Repository | OpenPay private key — **set manually** in GitHub Settings → Secrets → Actions by an authorized person; bootstrap validates presence before proceeding |
+| `OPENPAY_DEVICE_SESSION_ID` | Repository | OpenPay device session ID — **set manually** in GitHub Settings → Secrets → Actions by an authorized person; bootstrap validates presence before proceeding |
 
 > **Note**: `APP_INSTALLATION_ID` is **not** required — it is auto-discovered at runtime.
+
+> **Note**: OpenPay secrets must be added manually in GitHub Settings → Secrets → Actions. Workflow dispatch inputs are not masked in logs and are not a secure channel for secrets. The bootstrap workflow validates that all three OpenPay secrets are present before running infrastructure provisioning; if any are missing it fails with an actionable error and a link to the Settings page.
 
 ### Key Vault integration
 
