@@ -12,8 +12,9 @@ Run all three blocks in the terminal before evaluating the checklist. Use the re
 **Build (warnings as errors):**
 ```powershell
 cd Q:\GIT\TestAppXY_OrderProcessingSystem
-dotnet build XYDataLabs.OrderProcessingSystem.sln --warnaserror /consoleloggerparameters:NoSummary;ForceNoAlign
+dotnet build XYDataLabs.OrderProcessingSystem.sln --warnaserror /warnnotaserror:NU1701 "/consoleloggerparameters:NoSummary;ForceNoAlign"
 ```
+> `NU1701` is suppressed — it is a known pre-existing warning from `Openpay 1.0.25` (a .NET Framework-only package); all other warnings are errors.
 
 **All test projects:**
 ```powershell
