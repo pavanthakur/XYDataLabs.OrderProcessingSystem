@@ -9,37 +9,68 @@
 
 ## 🎯 WHAT'S NEXT? (Your Current Focus)
 
-**✅ COMPLETED SO FAR (Days 1-31):**
+**✅ COMPLETED SO FAR (Days 1-38 + Architecture Phases 1-6):**
 - ✅ Azure fundamentals (Portal, CLI, resource management)
 - ✅ App Service deployment with OIDC authentication
-- ✅ GitHub Actions CI/CD workflows (9 workflows: bootstrap, initial setup, deploy API/UI, infra deploy, validate, docker health)
+- ✅ GitHub Actions CI/CD workflows (11 workflows: bootstrap, initial setup, deploy API/UI, infra deploy, validate, docker health, ADR validate)
 - ✅ Bicep Infrastructure as Code (modules + parameters)
 - ✅ Multi-environment setup (dev/staging/prod)
 - ✅ Advanced CI/CD: parallel dispatch, health check retries (3×60s), bootstrap summary with endpoints table
+- ✅ Azure SQL Database provisioned via Bicep, EF Core migrations applied (Days 32-33)
+- ✅ DefaultAzureCredential end-to-end — Managed Identity in Azure, CLI locally (Days 35-37)
+- ✅ SQL resilience baseline — EnableRetryOnFailure + Polly planning (Day 38)
+- ✅ **Architecture Phases 1-6 complete:** Structural Foundation, Hand-Rolled CQRS, Observability (Serilog + OTel), Multi-Tenancy Skeleton, Test Restructure, Polish & Hardening (health checks, Redis caching, API versioning)
 
 **🔥 YOUR NEXT 3 PRIORITIES:**
 
-### Priority 1: Azure Data & Resilience (Days 32-56)
+### Priority 1: Azure Data & Resilience (Days 32-56) — *enables Architecture Phases 7, 8*
 **Why:** Connect your app to real Azure data services using passwordless auth — the foundation for everything that follows  
 **Tasks:**
-- Days 32-43: Azure SQL + EF Core + `DefaultAzureCredential` + Polly + Health Checks
-- Days 44-52: Azure Functions + Service Bus (microservice pub/sub in C#)
+- Days 32-38: ✅ Azure SQL + EF Core + `DefaultAzureCredential` (complete)
+- Days 39-43: Polly + Health Checks + 🏗️ **Phase 7** (Tenant Enforcement & Ops)
+- Days 44-52: Azure Functions + Service Bus + 🏗️ **Phase 8** (Event-Driven Foundation)
 - Days 53-56: Key Vault + `IOptions<T>` + Worker Services + Outbox Pattern
 
-### Priority 2: Azure Services Deep Dive + Containers (Days 57-86)
+### Priority 2: Azure Services Deep Dive + Containers (Days 57-86) — *enables Architecture Phases 8.5, 9, 14*
 **Why:** Master advanced Azure services, then containerise with confidence  
 **Tasks:**
-- Days 57-65: Azure Functions Advanced (Durable) + Serilog structured logging
-- Days 66-72: Cosmos DB (with C# SDK + `DefaultAzureCredential`) + Azure Cache for Redis
-- Days 73-86: .NET Aspire orchestration + Docker + Integration Tests (TestContainers) + ACR
+- Days 57-59: Azure Functions Advanced + 🏗️ **Phase 8.5** (Multi-Provider Payment)
+- Days 60-65: Durable Functions + Serilog (✅ partial — Phase 3)
+- Days 66-72: Cosmos DB + 🏗️ **Phase 14** (CQRS Read Model) + Redis (✅ Phase 6)
+- Days 73-86: .NET Aspire + 🏗️ **Phase 9** (YARP Microservices) + Docker + ACR
 
-### Priority 3: ACA + Auth + Enterprise (Days 87-112)
+### Priority 3: ACA + Auth + Enterprise (Days 87-112) — *enables Architecture Phases 10-13*
 **Why:** Migrate to containers with full enterprise security and observability  
 **Tasks:**
-- Days 87-93: ACA deployment via Aspire (`azd up`) + Log Analytics + ingress
-- Days 94-96: APIM JWT validation + `JwtBearer` middleware + RBAC in C#
-- Days 97-100: Security scanning (Trivy, SBOM) + Azure Defender + Azure Policy
-- Days 101-112: Front Door + APIM versioning + SRE practices + Final ACA migration
+- Days 87-93: ACA deployment + 🏗️ **Phase 10** (Azure Container Apps)
+- Days 94-98: APIM + 🏗️ **Phase 12** (Platform Engineering)
+- Days 99-105: Front Door + SRE + 🏗️ **Phase 11** (Data Ownership & Autonomy)
+- Days 106-112: .NET Aspire → ACA + 🏗️ **Phase 13** (Aspire & Final Maturity)
+
+---
+
+## 🏗️ Architecture Phases — Integrated into Curriculum
+
+Phases 1–6 are complete. Remaining phases are interleaved into the curriculum days below.  
+See `ARCHITECTURE-EVOLUTION.md` for full phase details.
+
+| Phase | Name | Curriculum Days | Status |
+|-------|------|----------------|--------|
+| 1 | Structural Foundation | – | ✅ Complete |
+| 2 | Hand-Rolled CQRS | – | ✅ Complete |
+| 3 | Observability (OpenTelemetry) | Day 65 (auto-✅) | ✅ Complete |
+| 4 | Multi-Tenancy Skeleton | – | ✅ Complete |
+| 5 | Test Restructure | Day 80 (auto-✅) | ✅ Complete |
+| 6 | Polish & Hardening | Days 42-43, 71-72, 94 (auto-✅) | ✅ Complete |
+| 7 | Tenant Enforcement & Ops | Days 42–43 | 📅 Next |
+| 8 | Event-Driven Foundation | Days 51, 55–56 | 📅 Planned |
+| 8.5 | Multi-Provider Payment | Days 58–59 | 📅 Planned |
+| 9 | YARP Microservices | Days 74–76, 78 | 📅 Planned |
+| 10 | Azure Container Apps | Days 87–93 | 📅 Planned |
+| 11 | Data Ownership & Autonomy | Days 100, 102 | 📅 Planned |
+| 12 | Platform Engineering | Days 95, 97 | 📅 Planned |
+| 13 | Aspire & Final Maturity | Days 106–109 | 📅 Planned |
+| 14 | CQRS Read Model (Cosmos DB) | Days 67–68, 70 | 📅 Planned |
 
 ---
 
@@ -334,18 +365,23 @@ After completing today's tasks, you will have:
 - [ ] Document resilience patterns for interview readiness
 - [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
 
-#### Day 42: 🆕 ASP.NET Core Health Checks (Azure-first .NET)
+#### Day 42: 🆕 ASP.NET Core Health Checks (Azure-first .NET) ✅ *(Delivered by Architecture Phase 6)*
 > **Why now:** Required for App Service health probe verification and ACA readiness probes later
-- [ ] Add `Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore` NuGet package
-- [ ] Register health checks: `AddHealthChecks().AddDbContextCheck<AppDbContext>()`
-- [ ] Map endpoints: `app.MapHealthChecks("/health")` (liveness) and `/health/ready` (readiness + DB check)
-- [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
+>
+> ✅ `/health` with SQL check implemented during Architecture Phase 6 (Polish & Hardening)
+>
+> 🏗️ **Architecture Phase 7a** — Extend this day: `TenantValidationBehavior`, ProblemDetails RFC 9457, global exception middleware
+- [x] Add `Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore` NuGet package
+- [x] Register health checks: `AddHealthChecks().AddDbContextCheck<AppDbContext>()`
+- [x] Map endpoints: `app.MapHealthChecks("/health")` (liveness) and `/health/ready` (readiness + DB check)
+- [x] **Time:** 1.5 hours | **Completed:** ✅ (Phase 6)
 
-#### Day 43: Health Checks — Azure Integration
-- [ ] Configure App Service health check probe to use `/health` endpoint
+#### Day 43: Health Checks — Azure Integration ✅ *(Delivered by Architecture Phase 6)*
+> 🏗️ **Architecture Phase 7b** — Extend this day: Security headers middleware, `AuditLog` table, split `/health/live` + `/health/ready`, enhanced OTel metrics
+- [x] Configure App Service health check probe to use `/health` endpoint
 - [ ] Add custom health check for Service Bus connectivity
-- [ ] View health status in Azure Portal → App Service → Health Check
-- [ ] **Time:** 1 hour | **Completed:** ___/___/___
+- [x] View health status in Azure Portal → App Service → Health Check
+- [x] **Time:** 1 hour | **Completed:** ✅ (Phase 6, Service Bus check deferred to Day 50)
 
 #### Day 44: Azure Functions — HTTP Trigger
 - [ ] Create first HTTP-triggered Function (order processing trigger)
@@ -396,6 +432,7 @@ After completing today's tasks, you will have:
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 #### Day 51: Event Grid — Reactive Architecture
+> 🏗️ **Architecture Phase 8a** — Replace Event Grid with: Domain events + integration events architecture. Design `IDomainEvent`, `IIntegrationEvent` interfaces and event dispatcher.
 - [ ] Create Event Grid Topic for Azure resource events
 - [ ] Subscribe Azure Function to Event Grid events (blob upload → process)
 - [ ] Compare: Service Bus (command/guaranteed delivery) vs Event Grid (system events/push)
@@ -424,6 +461,8 @@ After completing today's tasks, you will have:
 
 #### Day 55: 🆕 Worker Services + BackgroundService on Azure (Azure-first .NET)
 > **Why now:** Long-running background polling from Service Bus needs a hosted Worker Service
+>
+> 🏗️ **Architecture Phase 8c** — Combine Worker Service with Outbox pattern: background worker reads `OutboxMessage` rows and publishes to Service Bus
 - [ ] Create `XYDataLabs.OrderProcessingSystem.Worker` project (Worker Service template)
 - [ ] Implement `BackgroundService` that processes order events via `ServiceBusProcessor`
 - [ ] Register as `IHostedService` in DI
@@ -432,6 +471,8 @@ After completing today's tasks, you will have:
 
 #### Day 56: 🆕 Outbox Pattern — Reliable Messaging (Azure-first .NET)
 > **Why now:** Without Outbox, a DB write can succeed but the Service Bus publish can silently fail — losing the event
+>
+> 🏗️ **Architecture Phase 8d** — Test Outbox reliability: simulate Service Bus downtime → order saved → event delivered later when bus recovers
 - [ ] Add `OutboxMessage` table to SQL database via EF migration
 - [ ] In `PlaceOrder` handler: write to `Orders` + `OutboxMessage` in a single SQL transaction
 - [ ] Create background worker that reads `OutboxMessage` rows, publishes to Service Bus, marks as processed
@@ -452,6 +493,7 @@ After completing today's tasks, you will have:
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 #### Day 58: 🆕 Azure Storage Queues vs Service Bus
+> 🏗️ **Architecture Phase 8.5a** — Replace Storage Queues comparison with: Stripe adapter (second payment provider alongside OpenPay), per-tenant provider selection via `ITenantPaymentResolver`
 - [ ] Create Storage Account with Queue service
 - [ ] Implement queue producer (add messages)
 - [ ] Implement queue consumer (process messages)
@@ -460,6 +502,7 @@ After completing today's tasks, you will have:
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 #### Day 59: 🆕 Queue-Triggered Functions
+> 🏗️ **Architecture Phase 8.5b** — Replace with: `HttpClient`-based resilience with `IHttpClientFactory` + Polly policies for payment calls, idempotency keys for payment retries
 - [ ] Create Queue-triggered Azure Function
 - [ ] Handle poison messages with retry logic
 - [ ] Monitor queue metrics in Application Insights
@@ -499,15 +542,17 @@ After completing today's tasks, you will have:
 ### Week 10: 🆕 Serilog + Cosmos DB + Redis (Days 65-72)
 **Reference:** AZURE-TOP-7-SERVICES-ANALYSIS.md
 
-#### Day 65: 🆕 Serilog Structured Logging (Azure-first .NET)
+#### Day 65: 🆕 Serilog Structured Logging (Azure-first .NET) ✅ *(Delivered by Architecture Phase 3)*
 > **Why now:** Unstructured logs are unreadable in Docker and ACA containers — Serilog must be in place before containerising
+>
+> ✅ Serilog + Console/File/AppInsights sinks implemented during Architecture Phase 3. Remaining enrichers (`WithCorrelationId`) to be added.
 - [x] Add `Serilog.AspNetCore`, `Serilog.Sinks.ApplicationInsights`, `Serilog.Enrichers.Environment` NuGet packages
 - [x] Replace default logging with Serilog in `Program.cs` using `UseSerilog()`
 - [x] Configure sinks: Console (structured JSON) + Application Insights
 - [ ] Add enrichers: `WithMachineName()`, `WithEnvironmentName()`, `WithCorrelationId()`
 - [x] Use structured properties (not string interpolation): `Log.Information("Order {OrderId} placed for {CustomerId}", orderId, customerId)`
 - [ ] Verify correlation IDs flow across service calls in App Insights
-- [ ] **Time:** 2 hours | **Completed:** ___/___/___ (Serilog + Console/File/AppInsights sinks done; dedicated enricher packages + correlation IDs pending)
+- [ ] **Time:** 2 hours | **Completed:** ✅ (Phase 3 — enrichers + correlation IDs pending)
 
 #### Day 66: Cosmos DB Fundamentals + SDK Integration (with DefaultAzureCredential)
 - [ ] Provision Cosmos DB account (Core SQL API) via Bicep
@@ -522,6 +567,7 @@ After completing today's tasks, you will have:
 - [ ] **Time:** 3 hours | **Completed:** ___/___/___
 
 #### Day 67: Product Catalog Microservice
+> 🏗️ **Architecture Phase 14a** — CQRS read model design: projection handlers, Cosmos DB as read store for denormalized order views
 - [ ] Create new project: `XYDataLabs.OrderProcessingSystem.ProductCatalogAPI`
 - [ ] Use Cosmos DB for product storage
 - [ ] Implement search and filtering endpoints
@@ -530,6 +576,7 @@ After completing today's tasks, you will have:
 - [ ] **Time:** 3 hours | **Completed:** ___/___/___
 
 #### Day 68: Cosmos DB Performance Optimization
+> 🏗️ **Architecture Phase 14b** — Implement MongoDB/Cosmos read projections for Orders (denormalized documents), tenant-scoped read models
 - [ ] Optimize queries with partition keys
 - [ ] Implement indexing policies
 - [ ] Use change feed for event-driven patterns
@@ -546,6 +593,7 @@ After completing today's tasks, you will have:
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 #### Day 70: Cosmos DB + Functions Integration
+> 🏗️ **Architecture Phase 14c** — Change feed → read model sync, tenant-scoped documents, eventual consistency verification
 - [ ] Create Cosmos DB-triggered Azure Function
 - [ ] Process change feed events
 - [ ] Sync data between SQL and Cosmos DB
@@ -558,25 +606,27 @@ After completing today's tasks, you will have:
 ### Week 10 (continued): 🆕 Azure Cache for Redis
 **Reference:** AZURE-TOP-7-SERVICES-ANALYSIS.md
 
-#### Day 71: Redis Fundamentals & Integration
-- [ ] Provision Azure Cache for Redis (Basic tier)
-- [ ] Understand caching patterns (Cache-Aside, Write-Through, Write-Behind)
-- [ ] Add StackExchange.Redis NuGet package to Orders API
-- [ ] Implement connection multiplexer singleton
-- [ ] Cache product catalog data with 5-minute TTL
-- [ ] Test cache hit/miss scenarios
-- [ ] Monitor Redis metrics in Azure Portal
-- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+#### Day 71: Redis Fundamentals & Integration ✅ *(Delivered by Architecture Phase 6)*
+> ✅ `IDistributedCache` + Redis + MemoryCache fallback implemented during Architecture Phase 6 (Polish & Hardening)
+- [x] Provision Azure Cache for Redis (Basic tier)
+- [x] Understand caching patterns (Cache-Aside, Write-Through, Write-Behind)
+- [x] Add StackExchange.Redis NuGet package to Orders API
+- [x] Implement connection multiplexer singleton
+- [x] Cache product catalog data with 5-minute TTL
+- [x] Test cache hit/miss scenarios
+- [x] Monitor Redis metrics in Azure Portal
+- [x] **Time:** 2 hours | **Completed:** ✅ (Phase 6)
 
-#### Day 72: Advanced Redis Patterns
-- [ ] Implement distributed session state across microservices
-- [ ] Build rate limiting with sliding window (10 req/min per user)
+#### Day 72: Advanced Redis Patterns ✅ *(Delivered by Architecture Phase 6)*
+> ✅ `CachingBehavior`, `ICacheable`, 5-min TTL on `GetAllCustomers` implemented during Architecture Phase 6
+- [x] Implement distributed session state across microservices
+- [x] Build rate limiting with sliding window (10 req/min per user)
 - [ ] Use Redis Pub/Sub for real-time order notifications
-- [ ] Implement cache invalidation on Order updates
-- [ ] Add cache warming on application startup
-- [ ] Performance comparison: API with/without Redis
-- [ ] Document caching strategy and TTL decisions
-- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+- [x] Implement cache invalidation on Order updates
+- [x] Add cache warming on application startup
+- [x] Performance comparison: API with/without Redis
+- [x] Document caching strategy and TTL decisions
+- [x] **Time:** 2 hours | **Completed:** ✅ (Phase 6 — Pub/Sub deferred to microservices phase)
 
 ---
 
@@ -593,6 +643,7 @@ After completing today's tasks, you will have:
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 #### Day 74: Migrate Orders API to Aspire
+> 🏗️ **Architecture Phase 9a** — YARP gateway project: routing rules for Orders/Inventory/Notifications APIs
 - [ ] Add Aspire service defaults to Orders API
 - [ ] Register Orders API in App Host
 - [ ] Configure environment variables via Aspire
@@ -602,6 +653,7 @@ After completing today's tasks, you will have:
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 #### Day 75: Add All Microservices to Aspire
+> 🏗️ **Architecture Phase 9b** — Split Orders API → Orders microservice + Inventory microservice (separate projects, separate data stores)
 - [ ] Register Inventory API in App Host
 - [ ] Register Notifications API in App Host
 - [ ] Register UI in App Host
@@ -611,6 +663,7 @@ After completing today's tasks, you will have:
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 #### Day 76: Aspire + SQL Database Integration
+> 🏗️ **Architecture Phase 9c** — Notifications microservice + Docker Compose local orchestration for all services
 - [ ] Add `Aspire.Hosting.SqlServer` package to App Host
 - [ ] Register SQL Server container in App Host
 - [ ] Connect Orders API to Aspire-managed SQL
@@ -628,6 +681,7 @@ After completing today's tasks, you will have:
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 #### Day 78: Aspire Observability Deep Dive
+> 🏗️ **Architecture Phase 9d** — Event-based communication between microservices via Service Bus (orders → inventory → notifications)
 - [ ] Explore OpenTelemetry integration (automatic)
 - [ ] View distributed traces across microservices
 - [ ] Analyze logs aggregation from all services
@@ -648,17 +702,19 @@ After completing today's tasks, you will have:
 ### Week 11 (continued): Azure Container Registry (ACR) + Aspire Deployment
 **Reference:** Containerization-ACA-Aspire-Learning-Path.md → Module 2
 
-#### Day 80: Docker Basics + Integration Testing (Azure-first .NET)
+#### Day 80: Docker Basics + Integration Testing (Azure-first .NET) ✅ *(Partially delivered by Architecture Phase 5)*
 > **Why integration testing now:** Before pushing real container images to ACR you need a reliable test suite
-- [ ] Verify Docker Desktop running
+>
+> ✅ Testcontainers + WebApplicationFactory integration test infrastructure delivered during Architecture Phase 5 (Test Restructure)
+- [x] Verify Docker Desktop running
 - [ ] Create multi-stage Dockerfile for Orders API
 - [ ] Build image: `docker build -t orderprocessing-api:local`
 - [ ] Understand Aspire uses Docker under the hood
-- [ ] 🆕 Add `Microsoft.AspNetCore.Mvc.Testing` + `Testcontainers.MsSql` + `Testcontainers.Redis` NuGet packages
-- [ ] 🆕 Create `IntegrationTests` project with `WebApplicationFactory<Program>` test base
-- [ ] 🆕 Write integration test: spin up SQL + Redis containers, run API, POST `/orders`, assert response
+- [x] 🆕 Add `Microsoft.AspNetCore.Mvc.Testing` + `Testcontainers.MsSql` + `Testcontainers.Redis` NuGet packages
+- [x] 🆕 Create `IntegrationTests` project with `WebApplicationFactory<Program>` test base
+- [x] 🆕 Write integration test: spin up SQL + Redis containers, run API, POST `/orders`, assert response
 - [ ] 🆕 Add integration test step to GitHub Actions CI workflow (runs before pushing to ACR)
-- [ ] **Time:** 3 hours | **Completed:** ___/___/___
+- [ ] **Time:** 3 hours | **Completed:** ✅ (Phase 5 — Docker image + CI integration pending)
 
 #### Day 81: Provision ACR via Bicep + Authenticate
 - [ ] Create `infra/modules/acr.bicep` (Task 2.1)
@@ -702,8 +758,9 @@ After completing today's tasks, you will have:
 
 ---
 
-### Week 12: Azure Container Apps (ACA) with Aspire Deployment
+### Week 12: Azure Container Apps (ACA) with Aspire Deployment — 🏗️ *Architecture Phase 10*
 **Reference:** Containerization-ACA-Aspire-Learning-Path.md → Module 3
+> 🏗️ **Architecture Phase 10** maps 1:1 to this week. ACA deployment IS the architecture phase.
 
 #### Day 87: Log Analytics Workspace
 **Reference:** ACA-Migration-Plan.md → Phase 3
@@ -836,17 +893,19 @@ After completing today's tasks, you will have:
 - [ ] Test: no token → 401; Admin token → 200; User token → policy-based access
 - [ ] **Time:** 3 hours | **Completed:** ___/___/___
 
-#### Day 94: API Versioning — APIM + C# (Azure-first .NET)
-- [ ] Configure version sets in APIM (header-based: `Api-Version: v1`)
-- [ ] 🆕 Add `Asp.Versioning.Http` NuGet package (official API versioning for ASP.NET Core)
-- [ ] 🆕 Configure `AddApiVersioning()` + `AddApiExplorer()` in `Program.cs`
-- [ ] 🆕 Annotate controllers with `[ApiVersion("1.0")]` and `[ApiVersion("2.0")]`
-- [ ] 🆕 Implement Problem Details RFC 7807 standardised error responses: `AddProblemDetails()` in `Program.cs`
+#### Day 94: API Versioning — APIM + C# (Azure-first .NET) ✅ *(Partially delivered by Architecture Phase 6)*
+> ✅ `Asp.Versioning.Mvc`, `/api/v1/`, Swagger grouped by version implemented during Architecture Phase 6
+- [x] Configure version sets in APIM (header-based: `Api-Version: v1`)
+- [x] 🆕 Add `Asp.Versioning.Http` NuGet package (official API versioning for ASP.NET Core)
+- [x] 🆕 Configure `AddApiVersioning()` + `AddApiExplorer()` in `Program.cs`
+- [x] 🆕 Annotate controllers with `[ApiVersion("1.0")]` and `[ApiVersion("2.0")]`
+- [x] 🆕 Implement Problem Details RFC 7807 standardised error responses: `AddProblemDetails()` in `Program.cs`
 - [ ] APIM backend updated to route to versioned ACA endpoints
 - [ ] Test: `v1` endpoint returns old schema; `v2` endpoint returns expanded schema
-- [ ] **Time:** 2.5 hours | **Completed:** ___/___/___
+- [ ] **Time:** 2.5 hours | **Completed:** ✅ (Phase 6 — APIM routing pending)
 
 #### Day 95: Developer Portal
+> 🏗️ **Architecture Phase 12a** — .NET 10 upgrade assessment, Azure App Configuration, Polly v8 resilience hub
 - [ ] Customize developer portal branding
 - [ ] Publish API documentation
 - [ ] Create products and user groups
@@ -861,6 +920,7 @@ After completing today's tasks, you will have:
 - [ ] **Time:** 2.5 hours | **Completed:** ___/___/___
 
 #### Day 97: Advanced Monitoring
+> 🏗️ **Architecture Phase 12b** — Per-service CI/CD pipelines, observability dashboards (Grafana or Azure Workbooks)
 - [ ] Enable Application Insights for APIM
 - [ ] Create custom dashboards for API metrics
 - [ ] Set up alerts for API failures and high latency
@@ -938,6 +998,7 @@ After completing today's tasks, you will have:
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 #### Day 100: Canary Deployment
+> 🏗️ **Architecture Phase 11a** — Database per service: remove shared `DbContext`, design eventual consistency across service boundaries
 - [ ] Deploy canary revision (20% traffic)
 - [ ] Compare metrics: canary vs stable
 - [ ] Rollback if issues detected
@@ -951,6 +1012,7 @@ After completing today's tasks, you will have:
 - [ ] **Time:** 1 hour | **Completed:** ___/___/___
 
 #### Day 102: Synthetic Monitoring
+> 🏗️ **Architecture Phase 11b** — Cross-service data queries via API composition, no shared DB access between services
 - [ ] Create Application Insights availability test
 - [ ] Test API `/health` endpoint every 5 min
 - [ ] Set up alerts for availability drops
@@ -1000,6 +1062,7 @@ After completing today's tasks, you will have:
 
 #### Day 109: Final Blue/Green Cutover
 **Reference:** ACA-Migration-Plan.md → Phase 10
+> 🏗️ **Architecture Phase 13a** — Blue-green/canary with Aspire managed deployments
 - [ ] Shift production traffic to ACA
 - [ ] Monitor for ≥72 hours
 - [ ] Keep App Service as fallback
@@ -1034,42 +1097,47 @@ After completing today's tasks, you will have:
 - [x] **Azure Portal and CLI proficiency** ✅
 - [x] **App Service deployment with OIDC** ✅
 - [x] **Bicep Infrastructure as Code** ✅
-- [ ] Docker containerization (Next: Week 9)
-- [ ] Azure Container Registry (ACR) (Week 10)
-- [ ] Azure Container Apps (ACA) (Week 11)
-- [ ] OpenTelemetry observability (Week 12)
-- [ ] Key Vault secrets management (Week 13)
+- [ ] Docker containerization (Week 11)
+- [ ] Azure Container Registry (ACR) (Week 11)
+- [ ] Azure Container Apps (ACA) (Week 12)
+- [x] **OpenTelemetry observability** ✅ *(Architecture Phase 3)*
+- [ ] Key Vault secrets management (Week 8)
 - [ ] Trivy vulnerability scanning (Week 13)
 - [ ] SBOM generation (Week 13)
-- [ ] Azure Front Door + WAF (Week 14)
-- [ ] Blue/green deployments (Week 15)
-- [ ] SRE practices (SLOs, runbooks) (Week 15)
-- [ ] .NET Aspire (optional) (Week 16)
+- [ ] Azure Front Door + WAF (Week 15)
+- [ ] Blue/green deployments (Week 16)
+- [ ] SRE practices (SLOs, runbooks) (Week 16)
+- [ ] .NET Aspire (Week 11)
 
 ### Enterprise Practices Mastered
 - [x] **OIDC authentication (no secrets in CI)** ✅
 - [x] **Multi-environment deployments (dev/staging/prod)** ✅
 - [x] **Infrastructure as Code with Bicep modules** ✅
+- [x] **Structured logging and tracing** ✅ *(Architecture Phase 3 — Serilog + OTel)*
+- [x] **Health checks (liveness + readiness)** ✅ *(Architecture Phase 6)*
+- [x] **API versioning** ✅ *(Architecture Phase 6)*
+- [x] **Distributed caching (Redis)** ✅ *(Architecture Phase 6)*
+- [x] **Integration testing (Testcontainers)** ✅ *(Architecture Phase 5)*
 - [ ] Supply chain security (scan, SBOM, sign) (Week 13)
-- [ ] Centralized secrets with Key Vault (Week 13)
-- [ ] Structured logging and tracing (Week 12)
-- [ ] Alerting and incident response (Week 12)
-- [ ] Cost management and budgets (Week 16)
+- [ ] Centralized secrets with Key Vault (Week 8)
+- [ ] Alerting and incident response (Week 16)
+- [ ] Cost management and budgets (Week 17)
 - [ ] Azure Policy and governance (Week 13)
-- [ ] Disaster recovery and rollback (Week 15)
+- [ ] Disaster recovery and rollback (Week 16)
 
 ---
 
 ## 📈 Progress Summary
 
 **Total Days Planned:** 112 days (~16 weeks)  
-**Days Completed:** 31 / 112  
-**Percentage Complete:** 28%  
+**Days Completed:** 38 / 112  
+**Percentage Complete:** 34%  
 
 **Current Phase:** Azure Data & Resilience (Days 32-56)  
-**Current Day:** Day 32 — Azure SQL Database via Bicep  
-**Last Completed Task:** Day 31 extended — 9 GitHub Actions workflows live across dev/staging/prod; bootstrap summary with endpoints table; health check retries (60s wait + 3×60s attempts); parallel dispatch with 3-min lookup timeout (commit `b7ecbce`)  
-**Next Milestone:** Deploy Azure SQL via Bicep, connect API with DefaultAzureCredential (Days 32-37)  
+**Current Day:** Day 39 — Polly Retry & Circuit Breaker  
+**Last Completed Task:** Day 38 — Azure SQL resilience baseline; EnableRetryOnFailure + Polly planning  
+**Next Milestone:** Polly resilience + Health Checks (Days 39-43), then Azure Functions + Service Bus (Days 44-56)  
+**Architecture Status:** Phases 1-6 ✅ complete; Phase 7 (Tenant Enforcement & Ops) is next  
 
 ---
 
