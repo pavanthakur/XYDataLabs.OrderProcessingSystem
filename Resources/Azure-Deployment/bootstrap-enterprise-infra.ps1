@@ -933,7 +933,7 @@ foreach ($env in $envList) {
                     $aspnetEnv = Get-AspNetCoreEnvironment -Environment $Environment
                     $job = Start-Job -ScriptBlock {
                         param($rg, $apiApp, $connString, $aspnetEnv, $kvName)
-                        az webapp config appsettings set -g $rg -n $apiApp --settings "APPLICATIONINSIGHTS_CONNECTION_STRING=$connString" "ASPNETCORE_ENVIRONMENT=$aspnetEnv" "KEY_VAULT_NAME=$kvName" 2>$null
+                        az webapp config appsettings set -g $rg -n $apiApp --settings "APPLICATIONINSIGHTS_CONNECTION_STRING=$connString" "ASPNETCORE_ENVIRONMENT=$aspnetEnv" "KEY_VAULT_NAME=$kvName" "ApplicationInsightsAgent_EXTENSION_VERSION=~3" "XDT_MicrosoftApplicationInsights_Mode=recommended" 2>$null
                     } -ArgumentList $rg, $apiApp, $connString, $aspnetEnv, $kvName
                     
                     $timeout = 90
@@ -956,7 +956,7 @@ foreach ($env in $envList) {
                     $aspnetEnv = Get-AspNetCoreEnvironment -Environment $Environment
                     $job = Start-Job -ScriptBlock {
                         param($rg, $uiApp, $connString, $aspnetEnv, $kvName)
-                        az webapp config appsettings set -g $rg -n $uiApp --settings "APPLICATIONINSIGHTS_CONNECTION_STRING=$connString" "ASPNETCORE_ENVIRONMENT=$aspnetEnv" "KEY_VAULT_NAME=$kvName" 2>$null
+                        az webapp config appsettings set -g $rg -n $uiApp --settings "APPLICATIONINSIGHTS_CONNECTION_STRING=$connString" "ASPNETCORE_ENVIRONMENT=$aspnetEnv" "KEY_VAULT_NAME=$kvName" "ApplicationInsightsAgent_EXTENSION_VERSION=~3" "XDT_MicrosoftApplicationInsights_Mode=recommended" 2>$null
                     } -ArgumentList $rg, $uiApp, $connString, $aspnetEnv, $kvName
                     
                     $timeout = 90
