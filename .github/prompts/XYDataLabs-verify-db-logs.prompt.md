@@ -43,12 +43,15 @@ Map their answer to the following table:
 | dev http docker | `dev` | Physical file | `webapi-dev-dock-http-{DATE}.log` | `OrderProcessingSystem_Dev` | `OrderProcessingSystem_TenantC_Dev` |
 | dev https docker | `dev` | Physical file | `webapi-dev-dock-https-{DATE}.log` | `OrderProcessingSystem_Dev` | `OrderProcessingSystem_TenantC_Dev` |
 | dev http azure | `dev` | App Insights KQL | `ai-orderprocessing-dev` / `rg-orderprocessing-dev` | `orderprocessing-sql-dev` → `OrderProcessingSystem_Dev` | `OrderProcessingSystem_TenantC_Dev` |
+| dev https azure | `dev` | App Insights KQL | same as `dev http azure` — profile does not affect log source | `orderprocessing-sql-dev` → `OrderProcessingSystem_Dev` | `OrderProcessingSystem_TenantC_Dev` |
 | stg http docker | `stg` | Physical file | `webapi-stg-dock-http-{DATE}.log` | `OrderProcessingSystem_Stg` | `OrderProcessingSystem_TenantC_Stg` |
 | stg https docker | `stg` | Physical file | `webapi-stg-dock-https-{DATE}.log` | `OrderProcessingSystem_Stg` | `OrderProcessingSystem_TenantC_Stg` |
 | stg http azure | `stg` | App Insights KQL | `ai-orderprocessing-stg` / `rg-orderprocessing-stg` | `orderprocessing-sql-stg` → `OrderProcessingSystem_Stg` | `OrderProcessingSystem_TenantC_Stg` |
+| stg https azure | `stg` | App Insights KQL | same as `stg http azure` — profile does not affect log source | `orderprocessing-sql-stg` → `OrderProcessingSystem_Stg` | `OrderProcessingSystem_TenantC_Stg` |
 | prod http docker | `prod` | Physical file | `webapi-prod-dock-http-{DATE}.log` | `OrderProcessingSystem_Prod` | `OrderProcessingSystem_TenantC_Prod` |
 | prod https docker | `prod` | Physical file | `webapi-prod-dock-https-{DATE}.log` | `OrderProcessingSystem_Prod` | `OrderProcessingSystem_TenantC_Prod` |
 | prod http azure | `prod` | App Insights KQL | `ai-orderprocessing-prod` / `rg-orderprocessing-prod` | `orderprocessing-sql-prod` → `OrderProcessingSystem_Prod` | `OrderProcessingSystem_TenantC_Prod` |
+| prod https azure | `prod` | App Insights KQL | same as `prod http azure` — profile does not affect log source | `orderprocessing-sql-prod` → `OrderProcessingSystem_Prod` | `OrderProcessingSystem_TenantC_Prod` |
 | local dotnet run | `dev` | Physical file | `webapi-dev-local-http-{DATE}.log` | `OrderProcessingSystem_Local` | `OrderProcessingSystem_TenantC` |
 
 `{DATE}` = today as `YYYYMMDD` (e.g. `20260328`).  
@@ -109,14 +112,14 @@ Also ensure the firewall is open before running sqlcmd in Steps 4–5:
 
 Replace `{ENV_TAG}` with the env suffix from Step 1 (`dev`, `stg`, `prod`).
 
-Query App Insights for API-side payment events today (IST midnight = UTC -05:30, so use `ago(24h)` to be safe):
+Query App Insights for API-side payment events today (IST = UTC+5:30; `startofday(now() + 5h30m) - 5h30m` resolves to midnight IST in UTC, preventing missed payments when running before 05:30 UTC):
 ```powershell
 az monitor app-insights query `
   --app ai-orderprocessing-{ENV_TAG} `
   --resource-group rg-orderprocessing-{ENV_TAG} `
   --analytics-query "
     traces
-    | where timestamp > ago(24h)
+    | where timestamp >= startofday(now() + 5h30m) - 5h30m
     | where cloud_RoleName has 'api'
     | where message has_any('charge created', 'created charge', 'callback reconciliation',
                             'Generated payment', 'confirm-status')
@@ -187,7 +190,7 @@ az monitor app-insights query `
   --resource-group rg-orderprocessing-{ENV_TAG} `
   --analytics-query "
     traces
-    | where timestamp > ago(24h)
+    | where timestamp >= startofday(now() + 5h30m) - 5h30m
     | where cloud_RoleName has 'ui'
     | where message has '<PREFIX>' or message has 'payment/callback responded'
     | project timestamp, message,
@@ -231,6 +234,10 @@ Note the `ThreeDSEnabled` per tenant — it controls expected row counts in Q2/Q
 |:---:|---|---|
 | `1` | 2 rows; charge row has `ThreeDS=1`, `Stage=completed`, `Ref` populated | 4 rows: `tokenization_completed → redirect_issued → callback_received → completed` |
 | `0` | 2 rows; charge row has `ThreeDS=0`, `Stage=not_applicable`, `Ref` populated | 2 rows: `tokenization_completed → not_applicable` |
+
+> **Tokenization row `ThreeDS` field:** The tokenization row (`Stage=tokenization_completed`) always records `IsThreeDSecureEnabled=0` regardless of tenant configuration — 3DS determination happens after tokenization. This is expected data, not an inconsistency. Only the charge row (`Stage=completed` or `Stage=not_applicable`) reflects the actual 3DS outcome for the tenant.
+
+> **Tokenization row `ThreeDS` field:** The tokenization row (`Stage=tokenization_completed`) always records `IsThreeDSecureEnabled=0` regardless of tenant configuration — 3DS determination happens after tokenization. This is expected and not a data issue. Only the charge row (`Stage=completed` or `not_applicable`) reflects the actual 3DS outcome for the tenant.
 
 > **If either query returns 0 rows or the expected tenants are missing:** the DB has not been seeded or the migration has not run for this environment. Do not proceed to Q2/Q5 — the expected row counts will be undefined. Fix the seeding or migration issue first, then restart the verification from Step 4.
 
