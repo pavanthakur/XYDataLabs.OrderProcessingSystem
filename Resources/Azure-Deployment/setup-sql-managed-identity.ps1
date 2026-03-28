@@ -487,3 +487,9 @@ Write-Host ""
 Write-Host "To test locally (passwordless via az login):" -ForegroundColor Cyan
 Write-Host "  Connection string:"
 Write-Host "  Server=tcp:$sqlFqdn,1433;Initial Catalog=$dbName;Encrypt=True;Authentication=Active Directory Default" -ForegroundColor Gray
+
+# Explicit exit 0: Step 5 (TenantC) is intentionally non-fatal — the TenantC
+# database may not exist yet. A failed sqlcmd in Step 5 leaves $LASTEXITCODE=1
+# even though we catch the exception. Without this, the bootstrap wrapper
+# misreads the leaked exit code as a script failure.
+exit 0
