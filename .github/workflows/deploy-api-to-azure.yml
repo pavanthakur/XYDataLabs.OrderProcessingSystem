@@ -68,6 +68,7 @@ jobs:
   deploy:
     runs-on: windows-latest
     needs: build
+    timeout-minutes: 30  # Caps approval wait for prod environment gate; job fails if not approved within 30 min
     environment:
       name: ${{ github.ref_name == 'main' && 'prod' || github.ref_name == 'staging' && 'staging' || 'dev' }}
     permissions:
