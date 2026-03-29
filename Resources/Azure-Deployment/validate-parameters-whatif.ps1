@@ -9,20 +9,20 @@
 .PARAMETER All
     Switch to run across dev, staging, prod.
 .PARAMETER ResourceGroupPrefix
-    Base resource group name prefix (e.g. xyorderprocessing). Final name becomes <prefix>-<env>-rg.
+    Base resource group name prefix. Final name becomes <prefix>-<envSuffix> (e.g. rg-orderprocessing-dev).
 .PARAMETER Location
     Azure location (used only if needing to create RG). Default: eastus.
 .EXAMPLE
-    ./validate-parameters-whatif.ps1 -Environment dev -ResourceGroupPrefix xyorderprocessing
+    ./validate-parameters-whatif.ps1 -Environment dev -ResourceGroupPrefix rg-orderprocessing
 .EXAMPLE
-    ./validate-parameters-whatif.ps1 -All -ResourceGroupPrefix xyorderprocessing
+    ./validate-parameters-whatif.ps1 -All -ResourceGroupPrefix rg-orderprocessing
 .NOTES
     Requires: Azure CLI logged in (az login), permission to read resource groups.
 !#>
 [CmdletBinding()] param(
     [string]$Environment,
     [switch]$All,
-    [string]$ResourceGroupPrefix = 'xyorderprocessing',
+    [string]$ResourceGroupPrefix = 'rg-orderprocessing',
     [string]$Location = 'eastus'
 )
 
@@ -52,7 +52,8 @@ function Ensure-ResourceGroup($rgName, $location) {
 function Run-WhatIf($env) {
     $paramFile = Join-Path $paramDir "$env.json"
     if (!(Test-Path $paramFile)) { Write-Warning "Skipping ${env}: parameter file missing ($paramFile)"; return }
-    $rgName = "$ResourceGroupPrefix-$env-rg"
+    $envSuffix = switch ($env) { 'staging' { 'stg' } default { $env } }
+    $rgName = "$ResourceGroupPrefix-$envSuffix"
     Ensure-ResourceGroup $rgName $Location
     Write-Host "\n=== WHAT-IF: $env ($paramFile) ===" -ForegroundColor Cyan
     $raw = az deployment group what-if -g $rgName -f $mainFile -p $paramFile --no-pretty-print --only-show-errors 2>$null
