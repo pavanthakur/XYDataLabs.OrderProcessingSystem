@@ -92,23 +92,42 @@ jobs:
       
       - name: What-If (subscription scope)
         run: |
+          ENV=${{ steps.params.outputs.env }}
+          LOCATION=${{ steps.params.outputs.location }}
+
+          # Resolve param file and KV name (staging uses 'stg' suffix in Azure resource names)
+          if [ "$ENV" = "staging" ]; then ENV_SUFFIX="stg"; else ENV_SUFFIX="$ENV"; fi
+          PARAM_FILE="infra/parameters/${ENV}.json"
+          KV_NAME="kv-orderprocessing-${ENV_SUFFIX}"
+
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            # Manual run with custom parameters
-            az deployment sub what-if \
-              --location ${{ steps.params.outputs.location }} \
-              --template-file infra/main.bicep \
-              --parameters location=${{ steps.params.outputs.location }} \
-                           environment=${{ steps.params.outputs.env }} \
-                           baseName=orderprocessing \
-                           githubOwner=${{ github.repository_owner }} \
-                           appServiceSku=${{ steps.params.outputs.sku }} \
-                           enableIdentity=${{ steps.params.outputs.identity }}
+            # Detect whether Key Vault (and therefore bootstrap) already exists for this environment
+            KV_ID=$(az keyvault show --name "$KV_NAME" --query id -o tsv 2>/dev/null || true)
+            if [ -n "$KV_ID" ]; then
+              echo "Key Vault '$KV_NAME' found — using parameter file (KV reference resolves for sqlAdminPassword)"
+              az deployment sub what-if \
+                --location "$LOCATION" \
+                --template-file infra/main.bicep \
+                --parameters @"${PARAM_FILE}"
+            else
+              echo "Key Vault '$KV_NAME' not found — bootstrap not yet run; using placeholder for sqlAdminPassword (what-if only, nothing deployed)"
+              az deployment sub what-if \
+                --location "$LOCATION" \
+                --template-file infra/main.bicep \
+                --parameters location="$LOCATION" \
+                             environment="$ENV" \
+                             baseName=orderprocessing \
+                             githubOwner=${{ github.repository_owner }} \
+                             appServiceSku=${{ steps.params.outputs.sku }} \
+                             enableIdentity=${{ steps.params.outputs.identity }} \
+                             sqlAdminPassword='WhatIfDryRunOnly1!'
+            fi
           else
-            # PR validation with parameter file
+            # PR validation — always use parameter file
             az deployment sub what-if \
-              --location ${{ steps.params.outputs.location }} \
+              --location "$LOCATION" \
               --template-file infra/main.bicep \
-              --parameters @${{ steps.params.outputs.file }}
+              --parameters @"${{ steps.params.outputs.file }}"
           fi
 
   deploy:
@@ -156,17 +175,17 @@ jobs:
         id: deploy
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            # Manual deployment with custom parameters
+            # Manual deployment using parameter file (contains KV reference for sqlAdminPassword)
+            ENV=${{ steps.params.outputs.env }}
+            if [ "$ENV" = "staging" ]; then PARAM_FILE="infra/parameters/staging.json";
+            elif [ "$ENV" = "prod" ]; then PARAM_FILE="infra/parameters/prod.json";
+            else PARAM_FILE="infra/parameters/dev.json"; fi
             az deployment sub create \
               --name ${{ steps.params.outputs.deploymentName }} \
               --location ${{ steps.params.outputs.location }} \
               --template-file infra/main.bicep \
-              --parameters location=${{ steps.params.outputs.location }} \
-                           environment=${{ steps.params.outputs.env }} \
-                           baseName=orderprocessing \
-                           githubOwner=${{ github.repository_owner }} \
-                           appServiceSku=${{ steps.params.outputs.sku }} \
-                           enableIdentity=${{ steps.params.outputs.identity }}
+              --parameters @${PARAM_FILE} \
+                           appServiceSku=${{ steps.params.outputs.sku }}
           else
             # Automated deployment with parameter file
             az deployment sub create \
