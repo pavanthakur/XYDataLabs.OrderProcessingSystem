@@ -124,7 +124,11 @@
   },
   "Azure": {
     "Local": {
-      "Enabled": false
+      "Enabled": false,
+      "ConnectionStrings": {
+        "DefaultConnection": "Server=localhost,1433;Database=OrderProcessingSystem_Prod;User Id=sa;Password=__LOCAL_SQL_PASSWORD__;TrustServerCertificate=True;",
+        "Redis": "localhost:6379"
+      }
     },
     "Cloud": {
       "Enabled": true,

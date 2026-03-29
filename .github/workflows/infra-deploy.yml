@@ -59,7 +59,7 @@ jobs:
       environment: ${{ inputs.environment }}
       run-whatif: true
       verify-oidc: false
-      check-config: false  # SharedSettings are app config, not infra — drift here must not block Bicep deployment
+      check-config: true   # SharedSettings structural drift is now a hard gate (MissingKeyGroups=0 required; Diffs are expected per-env)
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
       AZURE_TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
