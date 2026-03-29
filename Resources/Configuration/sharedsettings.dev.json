@@ -2,7 +2,9 @@
   "Logging": {
     "LogLevel": {
       "Default": "Information",
-      "Microsoft.AspNetCore": "Warning"
+      "Microsoft.AspNetCore": "Warning",
+      "Microsoft.AspNetCore.Hosting.Diagnostics": "Error",
+      "System": "Warning"
     }
   },
   "AllowedHosts": "*",
@@ -18,7 +20,8 @@
     "PrivateKey": "__OPENPAY_PRIVATE_KEY__",
     "DeviceSessionId": "__OPENPAY_DEVICE_SESSION_ID__",
     "IsProduction": false,
-    "RedirectUrl": ""
+    "RedirectUrl": "",
+    "_Comment": "RedirectUrl is auto-resolved from ApiSettings:UI locally/Docker. In Azure, set via Key Vault (OpenPay--RedirectUrl) to the public domain URL."
   },
   "Observability": {
     "EnableEfSensitiveDataLogging": true
@@ -33,7 +36,8 @@
       "Override": {
         "Microsoft": "Warning",
         "Microsoft.AspNetCore.Hosting.Diagnostics": "Error",
-        "Microsoft.Hosting.Lifetime": "Information"
+        "Microsoft.Hosting.Lifetime": "Information",
+        "System": "Warning"
       }
     },
     "WriteTo": [
@@ -54,7 +58,8 @@
       "Override": {
         "Microsoft": "Warning",
         "Microsoft.AspNetCore.Hosting.Diagnostics": "Error",
-        "Microsoft.Hosting.Lifetime": "Information"
+        "Microsoft.Hosting.Lifetime": "Information",
+        "System": "Warning"
       }
     },
     "WriteTo": [
@@ -126,7 +131,26 @@
       }
     },
     "Cloud": {
-      "Enabled": false
+      "Enabled": false,
+      "ResourceGroup": "rg-orderprocessing-dev",
+      "Location": "centralindia",
+      "WebApps": {
+        "API": {
+          "Name": "pavanthakur-orderprocessing-api-xyapp-dev",
+          "Url": "https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net",
+          "CustomDomain": ""
+        },
+        "UI": {
+          "Name": "pavanthakur-orderprocessing-ui-xyapp-dev",
+          "Url": "https://pavanthakur-orderprocessing-ui-xyapp-dev.azurewebsites.net",
+          "CustomDomain": ""
+        }
+      },
+      "Database": {
+        "ServerName": "orderprocessing-sql-dev.database.windows.net",
+        "DatabaseName": "OrderProcessingSystem_Dev",
+        "Edition": "Basic"
+      }
     }
   },
   "Docker": {
@@ -138,11 +162,15 @@
     "Volumes": {
       "Database": {
         "Name": "orderprocessing_db_dev",
-        "Persistent": true
+        "Persistent": true,
+        "BackupEnabled": false,
+        "BackupSchedule": ""
       },
       "Logs": {
         "Name": "orderprocessing_logs_dev", 
-        "Persistent": true
+        "Persistent": true,
+        "BackupEnabled": false,
+        "BackupSchedule": ""
       }
     }
   }
