@@ -105,12 +105,12 @@ jobs:
             Write-Host "Testing all environments (dev, staging, prod)" -ForegroundColor Yellow
             ./Resources/Azure-Deployment/validate-parameters-whatif.ps1 `
               -All `
-              -ResourceGroupPrefix 'xyorderprocessing'
+              -ResourceGroupPrefix 'rg-orderprocessing'
           } else {
             Write-Host "Testing environment: $env" -ForegroundColor Yellow
             ./Resources/Azure-Deployment/validate-parameters-whatif.ps1 `
               -Environment $env `
-              -ResourceGroupPrefix 'xyorderprocessing'
+              -ResourceGroupPrefix 'rg-orderprocessing'
           }
 
           if ($LASTEXITCODE -eq 0) {

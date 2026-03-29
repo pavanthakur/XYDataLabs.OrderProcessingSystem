@@ -41,10 +41,6 @@ on:
   pull_request:
     paths:
       - 'infra/**'
-  push:
-    branches: [ dev, staging, main ]
-    paths:
-      - 'infra/**'
 
 permissions:
   id-token: write
@@ -53,10 +49,10 @@ permissions:
 jobs:
   pre-validate:
     name: Pre-Deployment Validation
-    if: (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && !inputs.dryRun)
+    if: github.event_name == 'workflow_dispatch' && !inputs.dryRun
     uses: ./.github/workflows/validate-deployment.yml
     with:
-      environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || github.ref_name }}
+      environment: ${{ inputs.environment }}
       run-whatif: true
       verify-oidc: false
       check-config: true

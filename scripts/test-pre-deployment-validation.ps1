@@ -16,7 +16,7 @@
 .PARAMETER CheckConfig
     Validate sharedsettings consistency. Default: true
 .PARAMETER ResourceGroupPrefix
-    Resource group prefix. Default: xyorderprocessing
+    Resource group prefix. Default: rg-orderprocessing
 .EXAMPLE
     .\test-pre-deployment-validation.ps1 -Environment dev
 .EXAMPLE
@@ -33,7 +33,7 @@ param(
     
     [bool]$CheckConfig = $true,
     
-    [string]$ResourceGroupPrefix = 'xyorderprocessing'
+    [string]$ResourceGroupPrefix = 'rg-orderprocessing'
 )
 
 $ErrorActionPreference = 'Continue'
