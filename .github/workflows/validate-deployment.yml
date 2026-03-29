@@ -89,7 +89,7 @@ jobs:
           Write-Host "Running what-if for ${{ inputs.environment }}" -ForegroundColor Cyan
           ./Resources/Azure-Deployment/validate-parameters-whatif.ps1 `
             -Environment ${{ inputs.environment }} `
-            -ResourceGroupPrefix 'xyorderprocessing'
+            -ResourceGroupPrefix 'rg-orderprocessing'
         continue-on-error: false
 
       - name: Verify OIDC Credentials

@@ -288,7 +288,7 @@ Error: Login failed with Error: AADSTS700016
 
 **Symptoms:**
 ```
-Resource group 'xyorderprocessing-dev-rg' could not be found
+Resource group 'rg-orderprocessing-dev' could not be found
 ```
 
 **Solutions:**
