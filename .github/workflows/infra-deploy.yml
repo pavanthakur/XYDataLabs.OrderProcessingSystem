@@ -55,7 +55,7 @@ jobs:
       environment: ${{ inputs.environment }}
       run-whatif: true
       verify-oidc: false
-      check-config: true
+      check-config: false  # SharedSettings are app config, not infra — drift here must not block Bicep deployment
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
       AZURE_TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
