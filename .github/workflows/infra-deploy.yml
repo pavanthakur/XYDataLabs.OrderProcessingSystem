@@ -39,6 +39,7 @@ on:
         default: true
         type: boolean
   pull_request:
+    branches: [main]
     paths:
       - 'infra/**'
 
@@ -49,6 +50,9 @@ permissions:
 jobs:
   pre-validate:
     name: Pre-Deployment Validation
+    # Intentionally independent of the `validate` job — on dryRun=false, `validate` is skipped
+    # by its own condition and `pre-validate` runs alone. They never race because `validate`
+    # only runs when dryRun=true (mutually exclusive with this job's condition).
     if: github.event_name == 'workflow_dispatch' && !inputs.dryRun
     uses: ./.github/workflows/validate-deployment.yml
     with:
@@ -136,6 +140,7 @@ jobs:
     needs: pre-validate
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       
@@ -145,7 +150,8 @@ jobs:
           echo "env=${{ inputs.environment }}" >> $GITHUB_OUTPUT
           echo "location=${{ inputs.location }}" >> $GITHUB_OUTPUT
           echo "sku=${{ inputs.appServiceSku }}" >> $GITHUB_OUTPUT
-          echo "deploymentName=infra-manual-$(date +%s)" >> $GITHUB_OUTPUT
+          echo "identity=${{ inputs.enableIdentity }}" >> $GITHUB_OUTPUT
+          echo "deploymentName=infra-${{ github.run_id }}-${{ github.run_attempt }}" >> $GITHUB_OUTPUT
       
       - name: Azure CLI Login (OIDC)
         uses: azure/login@v2
@@ -153,23 +159,41 @@ jobs:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
-      
+
+      - name: Enable Key Vault for template deployment
+        run: |
+          # ARM needs enabledForTemplateDeployment=true to resolve KV parameter references.
+          # This may be false on first apply (Bicep sets it to true, but can't read the secret
+          # to start the deployment unless it's already true — chicken-and-egg).
+          # Bootstrap must be run before this workflow: KV is created by bootstrap, not by this Bicep.
+          ENV=${{ steps.params.outputs.env }}
+          if [ "$ENV" = "staging" ]; then KV_SUFFIX="stg"; else KV_SUFFIX="$ENV"; fi
+          KV_NAME="kv-orderprocessing-${KV_SUFFIX}"
+          KV_ID=$(az keyvault show --name "$KV_NAME" --query id -o tsv 2>/dev/null || true)
+          if [ -z "$KV_ID" ]; then
+            echo "ERROR: Key Vault '$KV_NAME' not found. Run 'Azure Bootstrap & Deploy' first to provision the environment before running infra deploy."
+            exit 1
+          fi
+          echo "Enabling enabledForTemplateDeployment on $KV_NAME..."
+          az keyvault update --name "$KV_NAME" --enabled-for-template-deployment true
+          echo "Done."
+
       - name: Deploy (subscription scope)
         id: deploy
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            # Manual deployment using parameter file (contains KV reference for sqlAdminPassword)
-            ENV=${{ steps.params.outputs.env }}
-            if [ "$ENV" = "staging" ]; then PARAM_FILE="infra/parameters/staging.json";
-            elif [ "$ENV" = "prod" ]; then PARAM_FILE="infra/parameters/prod.json";
-            else PARAM_FILE="infra/parameters/dev.json"; fi
-            az deployment sub create \
-              --name ${{ steps.params.outputs.deploymentName }} \
-              --location ${{ steps.params.outputs.location }} \
-              --template-file infra/main.bicep \
-              --parameters @${PARAM_FILE} \
-                           appServiceSku=${{ steps.params.outputs.sku }}
-          fi
+          # Job-level if: already guarantees workflow_dispatch && !dryRun — no inner guard needed.
+          # Manual deployment using parameter file (contains KV reference for sqlAdminPassword)
+          ENV=${{ steps.params.outputs.env }}
+          if [ "$ENV" = "staging" ]; then PARAM_FILE="infra/parameters/staging.json";
+          elif [ "$ENV" = "prod" ]; then PARAM_FILE="infra/parameters/prod.json";
+          else PARAM_FILE="infra/parameters/dev.json"; fi
+          az deployment sub create \
+            --name ${{ steps.params.outputs.deploymentName }} \
+            --location ${{ steps.params.outputs.location }} \
+            --template-file infra/main.bicep \
+            --parameters @${PARAM_FILE} \
+                         appServiceSku=${{ steps.params.outputs.sku }} \
+                         enableIdentity=${{ steps.params.outputs.identity }}
       
       - name: Get Deployment Outputs
         id: outputs
@@ -202,6 +226,6 @@ jobs:
           echo "- **App Insights:** ${{ steps.outputs.insights }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### ✅ Next Steps" >> $GITHUB_STEP_SUMMARY
-          echo "1. Verify resources in [Azure Portal](https://portal.azure.com/#@/resource/subscriptions/${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}/resourceGroups/${{ steps.outputs.rg }})" >> $GITHUB_STEP_SUMMARY
+          echo "1. Verify resources in [Azure Portal — Resource Groups](https://portal.azure.com/#view/HubsExtension/BrowseResourceGroups) — search for \`${{ steps.outputs.rg }}\`" >> $GITHUB_STEP_SUMMARY
           echo "2. Deploy application code using API/UI workflows" >> $GITHUB_STEP_SUMMARY
           echo "3. Test endpoints above" >> $GITHUB_STEP_SUMMARY
