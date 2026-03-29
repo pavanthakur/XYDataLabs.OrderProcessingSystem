@@ -1,0 +1,64 @@
+name: CI — Build and Test
+
+on:
+  pull_request:
+    branches:
+      - dev
+      - staging
+      - main
+    paths:
+      - 'XYDataLabs.OrderProcessingSystem.API/**'
+      - 'XYDataLabs.OrderProcessingSystem.UI/**'
+      - 'XYDataLabs.OrderProcessingSystem.Application/**'
+      - 'XYDataLabs.OrderProcessingSystem.Domain/**'
+      - 'XYDataLabs.OrderProcessingSystem.Infrastructure/**'
+      - 'XYDataLabs.OrderProcessingSystem.SharedKernel/**'
+      - 'XYDataLabs.OpenPayAdapter/**'
+      - 'tests/**'
+      - 'Resources/Configuration/**'
+      - 'Directory.Build.props'
+      - 'Directory.Packages.props'
+      - '*.sln'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  DOTNET_VERSION: '8.x'
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        run: dotnet restore XYDataLabs.OrderProcessingSystem.sln
+
+      - name: Build solution
+        run: dotnet build XYDataLabs.OrderProcessingSystem.sln --configuration Release --no-restore
+
+      - name: Test — Domain
+        run: dotnet test tests/XYDataLabs.OrderProcessingSystem.Domain.Tests/XYDataLabs.OrderProcessingSystem.Domain.Tests.csproj --configuration Release --no-build --verbosity normal
+
+      - name: Test — Application
+        run: dotnet test tests/XYDataLabs.OrderProcessingSystem.Application.Tests/XYDataLabs.OrderProcessingSystem.Application.Tests.csproj --configuration Release --no-build --verbosity normal
+
+      - name: Test — API
+        run: dotnet test tests/XYDataLabs.OrderProcessingSystem.API.Tests/XYDataLabs.OrderProcessingSystem.API.Tests.csproj --configuration Release --no-build --verbosity normal
+
+      - name: Test — Architecture
+        run: dotnet test tests/XYDataLabs.OrderProcessingSystem.Architecture.Tests/XYDataLabs.OrderProcessingSystem.Architecture.Tests.csproj --configuration Release --no-build --verbosity normal
+
+        # Integration tests require Testcontainers + Docker daemon (Linux containers).
+        # windows-latest runner does not support Linux containers.
+        # Run locally or promote to a dedicated linux runner when Testcontainers CI is needed.
