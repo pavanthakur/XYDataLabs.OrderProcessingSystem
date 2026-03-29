@@ -20,7 +20,8 @@
     "PrivateKey": "__OPENPAY_PRIVATE_KEY__",
     "DeviceSessionId": "__OPENPAY_DEVICE_SESSION_ID__",
     "IsProduction": false,
-    "RedirectUrl": ""
+    "RedirectUrl": "",
+    "_Comment": "RedirectUrl is auto-resolved from ApiSettings:UI locally/Docker. In Azure, set via Key Vault (OpenPay--RedirectUrl) to the public domain URL."
   },
   "Observability": {
     "EnableEfSensitiveDataLogging": false
@@ -123,7 +124,11 @@
   },
   "Azure": {
     "Local": {
-      "Enabled": false
+      "Enabled": false,
+      "ConnectionStrings": {
+        "DefaultConnection": "Server=localhost,1433;Database=OrderProcessingSystem_Stg;User Id=sa;Password=__LOCAL_SQL_PASSWORD__;TrustServerCertificate=True;",
+        "Redis": "localhost:6379"
+      }
     },
     "Cloud": {
       "Enabled": true,
@@ -132,16 +137,19 @@
       "WebApps": {
         "API": {
           "Name": "wa-orderprocessing-api-stg",
-          "Url": "https://wa-orderprocessing-api-stg.azurewebsites.net"
+          "Url": "https://wa-orderprocessing-api-stg.azurewebsites.net",
+          "CustomDomain": ""
         },
         "UI": {
           "Name": "wa-orderprocessing-ui-stg",
-          "Url": "https://wa-orderprocessing-ui-stg.azurewebsites.net"
+          "Url": "https://wa-orderprocessing-ui-stg.azurewebsites.net",
+          "CustomDomain": ""
         }
       },
       "Database": {
         "ServerName": "sql-orderprocessing-stg.database.windows.net",
-        "DatabaseName": "OrderProcessingSystem_Stg"
+        "DatabaseName": "OrderProcessingSystem_Stg",
+        "Edition": "Standard"
       }
     }
   },
@@ -155,12 +163,14 @@
       "Database": {
         "Name": "orderprocessing_db_stg",
         "Persistent": true,
-        "BackupEnabled": true
+        "BackupEnabled": true,
+        "BackupSchedule": "weekly"
       },
       "Logs": {
         "Name": "orderprocessing_logs_stg",
         "Persistent": true,
-        "BackupEnabled": true
+        "BackupEnabled": true,
+        "BackupSchedule": "weekly"
       }
     }
   }
