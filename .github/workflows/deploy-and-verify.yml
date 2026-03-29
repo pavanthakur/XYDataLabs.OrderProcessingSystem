@@ -5,7 +5,7 @@ on:
     branches:
       - dev
       - main
-      - uat
+      - staging
     paths:
       - 'bicep/**'
       - 'XYDataLabs.OrderProcessingSystem.API/**'
@@ -23,7 +23,7 @@ on:
         type: choice
         options:
           - dev
-          - uat    # NOTE: this workflow uses 'uat'; all other workflows use 'staging'. Align to 'staging' when this workflow is next refactored.
+          - staging
           - prod
 
 permissions:
@@ -49,13 +49,15 @@ jobs:
         id: set-env
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            ENV="${{ inputs.environment }}"
+            RAW_ENV="${{ inputs.environment }}"
+            # Map 'staging' input to 'stg' for Azure resource naming consistency
+            if [ "$RAW_ENV" = "staging" ]; then ENV="stg"; else ENV="$RAW_ENV"; fi
           else
             BRANCH="${{ github.ref_name }}"
             if [ "$BRANCH" = "main" ]; then
               ENV="prod"
-            elif [ "$BRANCH" = "uat" ]; then
-              ENV="uat"
+            elif [ "$BRANCH" = "staging" ]; then
+              ENV="stg"
             else
               ENV="dev"
             fi
@@ -67,8 +69,8 @@ jobs:
           # Map environment to app name suffix
           if [ "$ENV" = "prod" ]; then
             echo "app-name=${{ github.repository_owner }}-orderprocessing-api-xyapp-prod" >> $GITHUB_OUTPUT
-          elif [ "$ENV" = "uat" ]; then
-            echo "app-name=${{ github.repository_owner }}-orderprocessing-api-xyapp-uat" >> $GITHUB_OUTPUT
+          elif [ "$ENV" = "stg" ]; then
+            echo "app-name=${{ github.repository_owner }}-orderprocessing-api-xyapp-stg" >> $GITHUB_OUTPUT
           else
             echo "app-name=${{ github.repository_owner }}-orderprocessing-api-xyapp-dev" >> $GITHUB_OUTPUT
           fi
@@ -76,8 +78,8 @@ jobs:
           # Determine parameter file
           if [ "$ENV" = "prod" ]; then
             echo "parameter-file=bicep/parameters/prod.parameters.json" >> $GITHUB_OUTPUT
-          elif [ "$ENV" = "uat" ]; then
-            echo "parameter-file=bicep/parameters/uat.parameters.json" >> $GITHUB_OUTPUT
+          elif [ "$ENV" = "stg" ]; then
+            echo "parameter-file=bicep/parameters/stg.parameters.json" >> $GITHUB_OUTPUT
           else
             echo "parameter-file=bicep/parameters/dev.parameters.json" >> $GITHUB_OUTPUT
           fi
