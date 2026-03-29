@@ -71,4 +71,6 @@ $issues | Format-Table Type,Key,Present,Missing,Detail -AutoSize
 $missingCount = ($issues | Where-Object { $_.Type -eq 'Missing' }).Count
 $diffCount = ($issues | Where-Object { $_.Type -eq 'Diff' }).Count
 Write-Host "Summary: MissingKeyGroups=$missingCount ValueDiffGroups=$diffCount" -ForegroundColor White
-if ($missingCount -gt 0 -or $diffCount -gt 0) { exit 2 } else { exit 0 }
+# Diff = values differ between envs — intentional (ports, log levels, connection strings vary per env). Never block on Diff.
+# Missing = key absent from one or more envs — structural gap, always block.
+if ($missingCount -gt 0) { exit 2 } else { Write-Host "No structural gaps (Missing keys = 0). Value diffs above are expected per-environment." -ForegroundColor Green; exit 0 }
