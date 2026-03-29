@@ -132,37 +132,20 @@ jobs:
 
   deploy:
     name: Deploy Infrastructure
-    if: (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && !inputs.dryRun)
+    if: github.event_name == 'workflow_dispatch' && !inputs.dryRun
     needs: pre-validate
     runs-on: ubuntu-latest
-    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || github.ref_name }}
+    environment: ${{ inputs.environment }}
     steps:
       - uses: actions/checkout@v4
       
       - name: Determine parameters
         id: params
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "env=${{ inputs.environment }}" >> $GITHUB_OUTPUT
-            echo "location=${{ inputs.location }}" >> $GITHUB_OUTPUT
-            echo "sku=${{ inputs.appServiceSku }}" >> $GITHUB_OUTPUT
-            echo "identity=${{ inputs.enableIdentity }}" >> $GITHUB_OUTPUT
-            echo "deploymentName=infra-manual-$(date +%s)" >> $GITHUB_OUTPUT
-          else
-            # Branch-based deployment
-            BRANCH="${{ github.ref_name }}"
-            echo "env=${BRANCH}" >> $GITHUB_OUTPUT
-            echo "location=centralindia" >> $GITHUB_OUTPUT
-            echo "deploymentName=infra-${BRANCH}-$(date +%s)" >> $GITHUB_OUTPUT
-            
-            if [ "${BRANCH}" = "dev" ]; then 
-              echo "file=infra/parameters/dev.json" >> $GITHUB_OUTPUT
-            elif [ "${BRANCH}" = "staging" ]; then 
-              echo "file=infra/parameters/staging.json" >> $GITHUB_OUTPUT
-            elif [ "${BRANCH}" = "main" ]; then 
-              echo "file=infra/parameters/prod.json" >> $GITHUB_OUTPUT
-            fi
-          fi
+          echo "env=${{ inputs.environment }}" >> $GITHUB_OUTPUT
+          echo "location=${{ inputs.location }}" >> $GITHUB_OUTPUT
+          echo "sku=${{ inputs.appServiceSku }}" >> $GITHUB_OUTPUT
+          echo "deploymentName=infra-manual-$(date +%s)" >> $GITHUB_OUTPUT
       
       - name: Azure CLI Login (OIDC)
         uses: azure/login@v2
@@ -186,13 +169,6 @@ jobs:
               --template-file infra/main.bicep \
               --parameters @${PARAM_FILE} \
                            appServiceSku=${{ steps.params.outputs.sku }}
-          else
-            # Automated deployment with parameter file
-            az deployment sub create \
-              --name ${{ steps.params.outputs.deploymentName }} \
-              --location ${{ steps.params.outputs.location }} \
-              --template-file infra/main.bicep \
-              --parameters @${{ steps.params.outputs.file }}
           fi
       
       - name: Get Deployment Outputs
