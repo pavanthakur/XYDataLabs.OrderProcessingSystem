@@ -153,7 +153,19 @@ jobs:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
-      
+
+      - name: Enable Key Vault for template deployment
+        run: |
+          # ARM needs enabledForTemplateDeployment=true to resolve KV parameter references.
+          # This may be false on first apply (Bicep sets it to true, but can't read the secret
+          # to start the deployment unless it's already true — chicken-and-egg).
+          ENV=${{ steps.params.outputs.env }}
+          if [ "$ENV" = "staging" ]; then KV_SUFFIX="stg"; else KV_SUFFIX="$ENV"; fi
+          KV_NAME="kv-orderprocessing-${KV_SUFFIX}"
+          echo "Enabling enabledForTemplateDeployment on $KV_NAME..."
+          az keyvault update --name "$KV_NAME" --enabled-for-template-deployment true
+          echo "Done."
+
       - name: Deploy (subscription scope)
         id: deploy
         run: |
