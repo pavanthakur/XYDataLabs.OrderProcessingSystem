@@ -93,7 +93,7 @@ az account set --subscription <subscription-id>
 ```powershell
 ./Resources/Azure-Deployment/validate-parameters-whatif.ps1 `
   -Environment dev `
-  -ResourceGroupPrefix 'xyorderprocessing'
+  -ResourceGroupPrefix 'rg-orderprocessing'
 ```
 
 ### Verify OIDC

@@ -6,9 +6,9 @@ description: |
   pass/fail report.
 
   Usage examples:
-    /XYDataLabs-verify-db-logs "prod https docker"
-    /XYDataLabs-verify-db-logs "dev http azure"
-    /XYDataLabs-verify-db-logs "stg http"
+    /XYDataLabs-verify-db-logs "prod docker"
+    /XYDataLabs-verify-db-logs "dev azure"
+    /XYDataLabs-verify-db-logs "stg"
     /XYDataLabs-verify-db-logs "dev"
     /XYDataLabs-verify-db-logs                ← agent will ask
 ---
@@ -27,12 +27,12 @@ Log source depends on **runtime**: `docker`/`local` read physical files; `azure`
 Parse the user's argument (e.g. `"prod https docker"`, `"stg http"`, `"dev"`).
 
 - **env** — one of: `dev`, `stg`, `prod` (default: `dev` if omitted)
-- **profile** — `http` or `https` (default: `http` if omitted)
+- **profile** — `http` or `https` (default: `https` for `azure`; `http` for `docker`/`local`)
 - **runtime** — `docker`, `local`, or `azure` (default: `local` if omitted)
 
 If the argument is omitted entirely, ask:
 > "Which environment and profile did you run?  
-> Examples: `prod https docker` · `dev http azure` · `stg http` · `dev` · `local https`"
+> Examples: `prod docker` · `dev azure` · `stg` · `dev` · `local https`"
 
 Accept shorthand — fill in the defaults for any part not specified.
 
