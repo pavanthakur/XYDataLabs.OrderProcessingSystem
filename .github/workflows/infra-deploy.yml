@@ -93,7 +93,7 @@ jobs:
       - name: What-If (subscription scope)
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            # Manual run with custom parameters
+            # Manual run with custom parameters (sqlAdminPassword is a placeholder - what-if does not deploy)
             az deployment sub what-if \
               --location ${{ steps.params.outputs.location }} \
               --template-file infra/main.bicep \
@@ -102,7 +102,8 @@ jobs:
                            baseName=orderprocessing \
                            githubOwner=${{ github.repository_owner }} \
                            appServiceSku=${{ steps.params.outputs.sku }} \
-                           enableIdentity=${{ steps.params.outputs.identity }}
+                           enableIdentity=${{ steps.params.outputs.identity }} \
+                           sqlAdminPassword='WhatIfDryRunOnly1!'
           else
             # PR validation with parameter file
             az deployment sub what-if \
@@ -156,17 +157,17 @@ jobs:
         id: deploy
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            # Manual deployment with custom parameters
+            # Manual deployment using parameter file (contains KV reference for sqlAdminPassword)
+            ENV=${{ steps.params.outputs.env }}
+            if [ "$ENV" = "staging" ]; then PARAM_FILE="infra/parameters/staging.json";
+            elif [ "$ENV" = "prod" ]; then PARAM_FILE="infra/parameters/prod.json";
+            else PARAM_FILE="infra/parameters/dev.json"; fi
             az deployment sub create \
               --name ${{ steps.params.outputs.deploymentName }} \
               --location ${{ steps.params.outputs.location }} \
               --template-file infra/main.bicep \
-              --parameters location=${{ steps.params.outputs.location }} \
-                           environment=${{ steps.params.outputs.env }} \
-                           baseName=orderprocessing \
-                           githubOwner=${{ github.repository_owner }} \
-                           appServiceSku=${{ steps.params.outputs.sku }} \
-                           enableIdentity=${{ steps.params.outputs.identity }}
+              --parameters @${PARAM_FILE} \
+                           appServiceSku=${{ steps.params.outputs.sku }}
           else
             # Automated deployment with parameter file
             az deployment sub create \
