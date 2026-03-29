@@ -2,6 +2,7 @@
 
 > A production-grade, multi-tenant order and payment processing platform built with Clean Architecture, .NET 8, and Azure.
 
+[![CI](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/ci.yml/badge.svg)](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/ci.yml)
 [![Deploy API to Azure](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/deploy-api-to-azure.yml/badge.svg?branch=dev)](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/deploy-api-to-azure.yml)
 [![Deploy UI to Azure](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/deploy-ui-to-azure.yml/badge.svg?branch=dev)](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/deploy-ui-to-azure.yml)
 [![Docker Health](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/docker-health.yml/badge.svg)](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/docker-health.yml)
