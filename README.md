@@ -4,7 +4,6 @@
 
 [![Deploy API to Azure](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/deploy-api-to-azure.yml/badge.svg?branch=dev)](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/deploy-api-to-azure.yml)
 [![Deploy UI to Azure](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/deploy-ui-to-azure.yml/badge.svg?branch=dev)](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/deploy-ui-to-azure.yml)
-[![Infrastructure Deploy](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/infra-deploy.yml/badge.svg?branch=dev)](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/infra-deploy.yml)
 [![Docker Health](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/docker-health.yml/badge.svg)](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/docker-health.yml)
 
 **Live dev environment:**
