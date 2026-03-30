@@ -27,13 +27,13 @@ param(
     [Parameter(Mandatory=$false)]
     [string]$Environments = "",
 
-    # GitHub organization or username owning the repository
+    # GitHub organization or username owning the repository. Auto-detected from GITHUB_REPOSITORY or git origin when omitted.
     [Parameter(Mandatory=$false)]
-    [string]$GitHubOwner = "pavanthakur",
+    [string]$GitHubOwner = "",
 
-    # Repository name
+    # Repository name. Auto-detected from GITHUB_REPOSITORY or git origin when omitted.
     [Parameter(Mandatory=$false)]
-    [string]$Repository = "XYDataLabs.OrderProcessingSystem",
+    [string]$Repository = "",
 
     # Optional: Role name to assign (default Contributor). Could use Website Contributor for tighter scope.
     [Parameter(Mandatory=$false)]
@@ -43,6 +43,49 @@ param(
 Write-Host "=====================================" -ForegroundColor Cyan
 Write-Host "GitHub Actions OIDC Setup" -ForegroundColor Cyan
 Write-Host "=====================================" -ForegroundColor Cyan
+
+function Resolve-GitHubRepositoryContext {
+    param(
+        [string]$Owner,
+        [string]$Repository,
+        [string]$DefaultOwner = 'pavanthakur',
+        [string]$DefaultRepository = 'XYDataLabs.OrderProcessingSystem'
+    )
+
+    $resolvedOwner = $Owner
+    $resolvedRepository = $Repository
+
+    if ([string]::IsNullOrWhiteSpace($resolvedOwner) -or [string]::IsNullOrWhiteSpace($resolvedRepository)) {
+        $repoFromEnv = $env:GITHUB_REPOSITORY
+        if (-not [string]::IsNullOrWhiteSpace($repoFromEnv) -and $repoFromEnv -match '^(?<owner>[^/]+)/(?<repo>.+)$') {
+            if ([string]::IsNullOrWhiteSpace($resolvedOwner)) { $resolvedOwner = $Matches.owner }
+            if ([string]::IsNullOrWhiteSpace($resolvedRepository)) { $resolvedRepository = $Matches.repo }
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($resolvedOwner) -or [string]::IsNullOrWhiteSpace($resolvedRepository)) {
+        try {
+            $originUrl = git config --get remote.origin.url 2>$null
+            if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($originUrl)) {
+                $originUrl = $originUrl.Trim()
+                if ($originUrl -match 'github\.com[:/](?<owner>[^/]+)/(?<repo>[^/]+?)(?:\.git)?$') {
+                    if ([string]::IsNullOrWhiteSpace($resolvedOwner)) { $resolvedOwner = $Matches.owner }
+                    if ([string]::IsNullOrWhiteSpace($resolvedRepository)) { $resolvedRepository = $Matches.repo }
+                }
+            }
+        }
+        catch { }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($resolvedOwner)) { $resolvedOwner = $DefaultOwner }
+    if ([string]::IsNullOrWhiteSpace($resolvedRepository)) { $resolvedRepository = $DefaultRepository }
+
+    return @{ Owner = $resolvedOwner; Repository = $resolvedRepository }
+}
+
+$repoContext = Resolve-GitHubRepositoryContext -Owner $GitHubOwner -Repository $Repository
+$GitHubOwner = $repoContext.Owner
+$Repository = $repoContext.Repository
 
 # DEBUG: Log all received parameters
 Write-Host "`n[DEBUG] Parameters received by script:" -ForegroundColor Magenta

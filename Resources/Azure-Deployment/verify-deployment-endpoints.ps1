@@ -1,6 +1,6 @@
 # verify-deployment-endpoints.ps1
 # Verify all deployment endpoints are accessible
-# Usage: ./verify-deployment-endpoints.ps1 -Environment dev -GitHubOwner pavanthakur
+# Usage: ./verify-deployment-endpoints.ps1 -Environment dev [-GitHubOwner pavanthakur]
 
 param(
     [Parameter(Mandatory=$false)]
@@ -11,10 +11,33 @@ param(
     [string]$BaseName = 'orderprocessing',
     
     [Parameter(Mandatory=$false)]
-    [string]$GitHubOwner = 'pavanthakur'
+    [string]$GitHubOwner = ''
 )
 
 $ErrorActionPreference = 'Stop'  # Stop on unexpected errors
+
+function Resolve-GitHubOwner {
+    param(
+        [string]$Owner,
+        [string]$DefaultOwner = 'pavanthakur'
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($Owner)) { return $Owner }
+    if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_REPOSITORY) -and $env:GITHUB_REPOSITORY -match '^(?<owner>[^/]+)/.+$') { return $Matches.owner }
+
+    try {
+        $originUrl = git config --get remote.origin.url 2>$null
+        if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($originUrl)) {
+            $originUrl = $originUrl.Trim()
+            if ($originUrl -match 'github\.com[:/](?<owner>[^/]+)/[^/]+?(?:\.git)?$') { return $Matches.owner }
+        }
+    }
+    catch { }
+
+    return $DefaultOwner
+}
+
+$GitHubOwner = Resolve-GitHubOwner -Owner $GitHubOwner
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "Deployment Endpoint Verification" -ForegroundColor White

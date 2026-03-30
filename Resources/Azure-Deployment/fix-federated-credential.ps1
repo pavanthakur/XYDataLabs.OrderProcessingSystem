@@ -1,6 +1,57 @@
 # Fix Federated Credential for GitHub-Actions-OIDC
 # This adds the missing federated credential to the correct app registration
 
+param(
+    [Parameter(Mandatory=$false)]
+    [string]$GitHubOwner = '',
+
+    [Parameter(Mandatory=$false)]
+    [string]$Repository = ''
+)
+
+function Resolve-GitHubRepositoryContext {
+    param(
+        [string]$Owner,
+        [string]$Repository,
+        [string]$DefaultOwner = 'pavanthakur',
+        [string]$DefaultRepository = 'XYDataLabs.OrderProcessingSystem'
+    )
+
+    $resolvedOwner = $Owner
+    $resolvedRepository = $Repository
+
+    if ([string]::IsNullOrWhiteSpace($resolvedOwner) -or [string]::IsNullOrWhiteSpace($resolvedRepository)) {
+        $repoFromEnv = $env:GITHUB_REPOSITORY
+        if (-not [string]::IsNullOrWhiteSpace($repoFromEnv) -and $repoFromEnv -match '^(?<owner>[^/]+)/(?<repo>.+)$') {
+            if ([string]::IsNullOrWhiteSpace($resolvedOwner)) { $resolvedOwner = $Matches.owner }
+            if ([string]::IsNullOrWhiteSpace($resolvedRepository)) { $resolvedRepository = $Matches.repo }
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($resolvedOwner) -or [string]::IsNullOrWhiteSpace($resolvedRepository)) {
+        try {
+            $originUrl = git config --get remote.origin.url 2>$null
+            if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($originUrl)) {
+                $originUrl = $originUrl.Trim()
+                if ($originUrl -match 'github\.com[:/](?<owner>[^/]+)/(?<repo>[^/]+?)(?:\.git)?$') {
+                    if ([string]::IsNullOrWhiteSpace($resolvedOwner)) { $resolvedOwner = $Matches.owner }
+                    if ([string]::IsNullOrWhiteSpace($resolvedRepository)) { $resolvedRepository = $Matches.repo }
+                }
+            }
+        }
+        catch { }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($resolvedOwner)) { $resolvedOwner = $DefaultOwner }
+    if ([string]::IsNullOrWhiteSpace($resolvedRepository)) { $resolvedRepository = $DefaultRepository }
+
+    return @{ Owner = $resolvedOwner; Repository = $resolvedRepository }
+}
+
+$repoContext = Resolve-GitHubRepositoryContext -Owner $GitHubOwner -Repository $Repository
+$GitHubOwner = $repoContext.Owner
+$Repository = $repoContext.Repository
+
 Write-Host "=====================================" -ForegroundColor Cyan
 Write-Host "Fix Federated Credential" -ForegroundColor Cyan
 Write-Host "=====================================" -ForegroundColor Cyan
@@ -51,7 +102,7 @@ Write-Host "`n[3/3] Adding federated credential for branch: main" -ForegroundCol
 $credentialJson = @{
     name = "github-main-oidc"
     issuer = "https://token.actions.githubusercontent.com"
-    subject = "repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/main"
+    subject = "repo:${GitHubOwner}/${Repository}:ref:refs/heads/main"
     audiences = @("api://AzureADTokenExchange")
 } | ConvertTo-Json
 
@@ -63,7 +114,7 @@ try {
     az ad app federated-credential create --id $appObjectId --parameters $tempFile | Out-Null
     Write-Host "   ✅ Federated credential created successfully!" -ForegroundColor Green
     Write-Host "      Name: github-main-oidc" -ForegroundColor White
-    Write-Host "      Subject: repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/main" -ForegroundColor Gray
+    Write-Host "      Subject: repo:${GitHubOwner}/${Repository}:ref:refs/heads/main" -ForegroundColor Gray
 } catch {
     Write-Host "   ❌ Error creating federated credential: $($_.Exception.Message)" -ForegroundColor Red
     exit 1

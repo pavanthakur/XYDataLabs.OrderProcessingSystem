@@ -4,8 +4,57 @@
 param(
     [Parameter(Mandatory=$false)]
     [ValidateSet('dev', 'staging', 'prod', 'all')]
-    [string]$Environment = 'dev'
+    [string]$Environment = 'dev',
+
+    [Parameter(Mandatory=$false)]
+    [string]$GitHubOwner = '',
+
+    [Parameter(Mandatory=$false)]
+    [string]$Repository = ''
 )
+
+function Resolve-GitHubRepositoryContext {
+    param(
+        [string]$Owner,
+        [string]$Repository,
+        [string]$DefaultOwner = 'pavanthakur',
+        [string]$DefaultRepository = 'XYDataLabs.OrderProcessingSystem'
+    )
+
+    $resolvedOwner = $Owner
+    $resolvedRepository = $Repository
+
+    if ([string]::IsNullOrWhiteSpace($resolvedOwner) -or [string]::IsNullOrWhiteSpace($resolvedRepository)) {
+        $repoFromEnv = $env:GITHUB_REPOSITORY
+        if (-not [string]::IsNullOrWhiteSpace($repoFromEnv) -and $repoFromEnv -match '^(?<owner>[^/]+)/(?<repo>.+)$') {
+            if ([string]::IsNullOrWhiteSpace($resolvedOwner)) { $resolvedOwner = $Matches.owner }
+            if ([string]::IsNullOrWhiteSpace($resolvedRepository)) { $resolvedRepository = $Matches.repo }
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($resolvedOwner) -or [string]::IsNullOrWhiteSpace($resolvedRepository)) {
+        try {
+            $originUrl = git config --get remote.origin.url 2>$null
+            if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($originUrl)) {
+                $originUrl = $originUrl.Trim()
+                if ($originUrl -match 'github\.com[:/](?<owner>[^/]+)/(?<repo>[^/]+?)(?:\.git)?$') {
+                    if ([string]::IsNullOrWhiteSpace($resolvedOwner)) { $resolvedOwner = $Matches.owner }
+                    if ([string]::IsNullOrWhiteSpace($resolvedRepository)) { $resolvedRepository = $Matches.repo }
+                }
+            }
+        }
+        catch { }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($resolvedOwner)) { $resolvedOwner = $DefaultOwner }
+    if ([string]::IsNullOrWhiteSpace($resolvedRepository)) { $resolvedRepository = $DefaultRepository }
+
+    return @{ Owner = $resolvedOwner; Repository = $resolvedRepository }
+}
+
+$repoContext = Resolve-GitHubRepositoryContext -Owner $GitHubOwner -Repository $Repository
+$GitHubOwner = $repoContext.Owner
+$Repository = $repoContext.Repository
 
 Write-Host "=====================================" -ForegroundColor Cyan
 Write-Host "Branch-Environment Mapping Dry Run" -ForegroundColor Cyan
@@ -19,24 +68,24 @@ $branchMapping = @{
         Environment = 'dev'
         ParameterFile = 'infra/parameters/dev.json'
         ResourceGroup = 'rg-orderprocessing-dev'
-        BranchOIDCSubject = 'repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev'
-        EnvironmentOIDCSubject = 'repo:pavanthakur/XYDataLabs.OrderProcessingSystem:environment:dev'
+        BranchOIDCSubject = "repo:${GitHubOwner}/${Repository}:ref:refs/heads/dev"
+        EnvironmentOIDCSubject = "repo:${GitHubOwner}/${Repository}:environment:dev"
     }
     'staging' = @{
         Branch = 'staging'
         Environment = 'staging'
         ParameterFile = 'infra/parameters/staging.json'
         ResourceGroup = 'rg-orderprocessing-stg'
-        BranchOIDCSubject = 'repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/staging'
-        EnvironmentOIDCSubject = 'repo:pavanthakur/XYDataLabs.OrderProcessingSystem:environment:staging'
+        BranchOIDCSubject = "repo:${GitHubOwner}/${Repository}:ref:refs/heads/staging"
+        EnvironmentOIDCSubject = "repo:${GitHubOwner}/${Repository}:environment:staging"
     }
     'prod' = @{
         Branch = 'main'
         Environment = 'prod'
         ParameterFile = 'infra/parameters/prod.json'
         ResourceGroup = 'rg-orderprocessing-prod'
-        BranchOIDCSubject = 'repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/main'
-        EnvironmentOIDCSubject = 'repo:pavanthakur/XYDataLabs.OrderProcessingSystem:environment:prod'
+        BranchOIDCSubject = "repo:${GitHubOwner}/${Repository}:ref:refs/heads/main"
+        EnvironmentOIDCSubject = "repo:${GitHubOwner}/${Repository}:environment:prod"
     }
 }
 

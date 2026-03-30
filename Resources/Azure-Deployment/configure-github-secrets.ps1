@@ -5,7 +5,7 @@
   Retrieves Azure OIDC credentials and automatically adds them as GitHub repository secrets.
   Requires GitHub CLI (gh) to be installed and authenticated.
 .PARAMETER Repository
-    GitHub repository in format owner/repo (e.g., pavanthakur/XYDataLabs.OrderProcessingSystem)
+    GitHub repository in format owner/repo. Auto-detected from GITHUB_REPOSITORY or git origin when omitted.
 .PARAMETER Force
   Overwrite existing secrets without prompting
 .EXAMPLE
@@ -13,7 +13,7 @@
 #>
 param(
     [Parameter(Mandatory=$false)]
-        [string]$Repository = "pavanthakur/XYDataLabs.OrderProcessingSystem",
+        [string]$Repository = "",
     
     [Parameter(Mandatory=$false)]
     [switch]$Force,
@@ -24,6 +24,36 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $isCiEnvironment = ($env:GITHUB_ACTIONS -eq 'true') -or ($env:CI -eq 'true')
+
+function Resolve-GitHubRepository {
+    param(
+        [string]$Repository,
+        [string]$DefaultRepository = 'pavanthakur/XYDataLabs.OrderProcessingSystem'
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($Repository)) {
+        return $Repository
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_REPOSITORY)) {
+        return $env:GITHUB_REPOSITORY
+    }
+
+    try {
+        $originUrl = git config --get remote.origin.url 2>$null
+        if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($originUrl)) {
+            $originUrl = $originUrl.Trim()
+            if ($originUrl -match 'github\.com[:/](?<owner>[^/]+)/(?<repo>[^/]+?)(?:\.git)?$') {
+                return "$($Matches.owner)/$($Matches.repo)"
+            }
+        }
+    }
+    catch { }
+
+    return $DefaultRepository
+}
+
+$Repository = Resolve-GitHubRepository -Repository $Repository
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "GitHub Secrets Configuration" -ForegroundColor White

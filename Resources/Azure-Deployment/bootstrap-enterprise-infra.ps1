@@ -22,7 +22,9 @@
 .PARAMETER ProductionSku
   Plan sku for production (default 'P1v3')
 .PARAMETER GitHubOwner
-  GitHub repository owner/organization name (default 'pavanthakur')
+    GitHub repository owner/organization name. Auto-detected from GITHUB_REPOSITORY or git origin when omitted.
+.PARAMETER GitHubRepository
+    GitHub repository name. Auto-detected from GITHUB_REPOSITORY or git origin when omitted.
 #>
 
 param(
@@ -35,14 +37,55 @@ param(
     [Parameter(Mandatory = $false)] [string]$DevSku = 'F1',
     [Parameter(Mandatory = $false)] [string]$StagingSku = 'B1',
     [Parameter(Mandatory = $false)] [string]$ProductionSku = 'P1v3',
-    [Parameter(Mandatory = $false)] [string]$GitHubOwner = 'pavanthakur',
+    [Parameter(Mandatory = $false)] [string]$GitHubOwner = '',
+    [Parameter(Mandatory = $false)] [string]$GitHubRepository = '',
     [Parameter(Mandatory = $false)] [switch]$DryRun,
     [Parameter(Mandatory = $false)] [ValidateSet('text','json')] [string]$LogFormat = 'text',
     [Parameter(Mandatory = $false)] [string]$OidcSpObjectId = ''
 )
 
-# Repository name (fixed for this project)
-$GitHubRepo = 'XYDataLabs.OrderProcessingSystem'
+function Resolve-GitHubRepositoryContext {
+    param(
+        [string]$Owner,
+        [string]$Repository,
+        [string]$DefaultOwner = 'pavanthakur',
+        [string]$DefaultRepository = 'XYDataLabs.OrderProcessingSystem'
+    )
+
+    $resolvedOwner = $Owner
+    $resolvedRepository = $Repository
+
+    if ([string]::IsNullOrWhiteSpace($resolvedOwner) -or [string]::IsNullOrWhiteSpace($resolvedRepository)) {
+        $repoFromEnv = $env:GITHUB_REPOSITORY
+        if (-not [string]::IsNullOrWhiteSpace($repoFromEnv) -and $repoFromEnv -match '^(?<owner>[^/]+)/(?<repo>.+)$') {
+            if ([string]::IsNullOrWhiteSpace($resolvedOwner)) { $resolvedOwner = $Matches.owner }
+            if ([string]::IsNullOrWhiteSpace($resolvedRepository)) { $resolvedRepository = $Matches.repo }
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($resolvedOwner) -or [string]::IsNullOrWhiteSpace($resolvedRepository)) {
+        try {
+            $originUrl = git config --get remote.origin.url 2>$null
+            if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($originUrl)) {
+                $originUrl = $originUrl.Trim()
+                if ($originUrl -match 'github\.com[:/](?<owner>[^/]+)/(?<repo>[^/]+?)(?:\.git)?$') {
+                    if ([string]::IsNullOrWhiteSpace($resolvedOwner)) { $resolvedOwner = $Matches.owner }
+                    if ([string]::IsNullOrWhiteSpace($resolvedRepository)) { $resolvedRepository = $Matches.repo }
+                }
+            }
+        }
+        catch { }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($resolvedOwner)) { $resolvedOwner = $DefaultOwner }
+    if ([string]::IsNullOrWhiteSpace($resolvedRepository)) { $resolvedRepository = $DefaultRepository }
+
+    return @{ Owner = $resolvedOwner; Repository = $resolvedRepository }
+}
+
+$repoContext = Resolve-GitHubRepositoryContext -Owner $GitHubOwner -Repository $GitHubRepository
+$GitHubOwner = $repoContext.Owner
+$GitHubRepo = $repoContext.Repository
 
 # Structured logging support
 $global:BootstrapLog = @()
