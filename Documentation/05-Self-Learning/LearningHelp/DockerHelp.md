@@ -6,7 +6,7 @@ Follow these steps to start the dev environment reliably:
 
 1) Navigate to the Docker scripts folder
 ```powershell
-Set-Location R:\GitGetPavan\TestAppXY_OrderProcessingSystem\Resources\Docker
+Set-Location Q:\GIT\TestAppXY_OrderProcessingSystem\Resources\Docker
 ```
 
 2) Fresh rebuild and start (recommended after image deletion)

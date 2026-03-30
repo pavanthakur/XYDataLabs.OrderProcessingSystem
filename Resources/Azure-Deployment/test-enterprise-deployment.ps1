@@ -49,6 +49,10 @@ $ErrorActionPreference = 'Continue'
 $scriptDir = $PSScriptRoot
 $logFile = Join-Path $scriptDir "test-run-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
 
+. (Join-Path $scriptDir 'branch-policy.ps1')
+$branchPolicy = Get-GitHubBranchPolicy
+$productionBranch = (Get-GitHubBranchPolicyEntry -Policy $branchPolicy -EnvironmentKey 'prod').branch
+
 function Write-Log {
   param([string]$Message, [string]$Level = 'INFO')
   $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
@@ -85,7 +89,6 @@ $rg = "rg-$BaseName-$Environment"
 $plan = "asp-$BaseName-$Environment"
 $apiApp = "$BaseName-api-xyapp-$Environment"
 $uiApp = "$BaseName-ui-xyapp-$Environment"
-$aiName = "ai-$BaseName-$Environment"
 $aiApi = "ai-$BaseName-api-$Environment"
 $aiUi  = "ai-$BaseName-ui-$Environment"
 
@@ -124,7 +127,7 @@ if (-not $SkipInfraProvision) {
 if (-not $SkipOidcSetup) {
   $step2 = Test-Step "Setup OIDC & RBAC" `
     -Action {
-      & "$scriptDir\setup-github-oidc.ps1" -ResourceGroupName $rg -Branches "main" -RoleName "Website Contributor"
+      & "$scriptDir\setup-github-oidc.ps1" -ResourceGroupName $rg -Branches $productionBranch -RoleName "Website Contributor"
     } `
     -Validation {
       $app = az ad app list --display-name "GitHub-Actions-OIDC" | ConvertFrom-Json
@@ -136,11 +139,13 @@ if (-not $SkipOidcSetup) {
 }
 
 # Step 3: Verify OIDC
-$step3 = Test-Step "Verify OIDC Configuration" `
+if (-not (Test-Step "Verify OIDC Configuration" `
   -Action {
     & "$scriptDir\check-app-registration.ps1"
   } `
-  -Validation { $true }
+  -Validation { $true })) {
+  Write-Log "OIDC verification failed" 'ERROR'
+}
 
 # Step 4: Azure SQL Provisioning
 ${step4} = Test-Step "Provision Azure SQL (server, db, connection strings)" `
@@ -204,20 +209,23 @@ if ($UpgradeToB1) {
 if (-not $SkipSlotTest -and $UpgradeToB1) {
   $slotName = "staging"
   
-  $step6a = Test-Step "Create Staging Slot" `
+  if (-not (Test-Step "Create Staging Slot" `
     -Action {
       & "$scriptDir\manage-appservice-slots.ps1" -ResourceGroup $rg -WebAppName $apiApp -Action create -SlotName $slotName
     } `
     -Validation {
       $slots = az webapp deployment slot list -g $rg -n $apiApp | ConvertFrom-Json
       ($slots | Where-Object { $_.name -eq $slotName }).Count -gt 0
-    }
+    })) {
+    Write-Log "Slot creation failed" 'ERROR'
+    exit 1
+  }
   
-  $step6b = Test-Step "List Slots" `
+  [void](Test-Step "List Slots" `
     -Action {
       & "$scriptDir\manage-appservice-slots.ps1" -ResourceGroup $rg -WebAppName $apiApp -Action list
     } `
-    -Validation { $true }
+    -Validation { $true })
   
   # Note: Deploy/warmup/swap skipped (requires build artifacts)
   Write-Log "Slot created. Deploy/swap/rollback require build artifacts (manual or CI/CD)." 'INFO'
@@ -227,7 +235,7 @@ if (-not $SkipSlotTest -and $UpgradeToB1) {
 }
 
 # Step 9: Endpoint Validation
-$step9 = Test-Step "Validate App Endpoints" `
+[void](Test-Step "Validate App Endpoints" `
   -Action {
     $apiUrl = "https://$apiApp.azurewebsites.net"
     $uiUrl = "https://$uiApp.azurewebsites.net"
@@ -246,11 +254,11 @@ $step9 = Test-Step "Validate App Endpoints" `
       Write-Log "UI not yet deployed or warming up: $($_.Exception.Message)" 'WARN'
     }
   } `
-  -Validation { $true }
+  -Validation { $true })
 
 # Step 10: Downgrade (if requested)
 if ($DowngradeAfterTest -and $UpgradeToB1) {
-  $step10a = Test-Step "Delete Slots Before Downgrade" `
+  if (-not (Test-Step "Delete Slots Before Downgrade" `
     -Action {
       $slots = az webapp deployment slot list -g $rg -n $apiApp | ConvertFrom-Json
       foreach ($slot in $slots) {
@@ -261,16 +269,19 @@ if ($DowngradeAfterTest -and $UpgradeToB1) {
     -Validation {
       $slots = az webapp deployment slot list -g $rg -n $apiApp | ConvertFrom-Json
       $slots.Count -eq 0
-    }
+    })) {
+    Write-Log "Slot cleanup failed" 'ERROR'
+    exit 1
+  }
   
-  $step10b = Test-Step "Disable Always-On" `
+  [void](Test-Step "Disable Always-On" `
     -Action {
       az webapp config set -g $rg -n $apiApp --always-on false | Out-Null
       az webapp config set -g $rg -n $uiApp --always-on false | Out-Null
     } `
-    -Validation { $true }
+    -Validation { $true })
   
-  $step10c = Test-Step "Downgrade to F1" `
+  if (-not (Test-Step "Downgrade to F1" `
     -Action {
       az appservice plan update -n $plan -g $rg --sku F1 | Out-Null
       Write-Log "Downgraded to F1"
@@ -278,7 +289,10 @@ if ($DowngradeAfterTest -and $UpgradeToB1) {
     -Validation {
       $planCheck = az appservice plan show -n $plan -g $rg | ConvertFrom-Json
       $planCheck.sku.name -eq 'F1'
-    }
+    })) {
+    Write-Log "Plan downgrade failed" 'ERROR'
+    exit 1
+  }
 }
 
 # Summary

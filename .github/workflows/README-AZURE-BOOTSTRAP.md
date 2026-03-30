@@ -70,6 +70,8 @@ See [`README-AZURE-INITIAL-SETUP.md`](README-AZURE-INITIAL-SETUP.md) for the one
 4. Click **Run workflow**
 
 > **Branch must match environment**: `dev` branch → dev, `staging` branch → staging, `main` branch → prod. This is strictly enforced — mismatches are rejected.
+>
+> Azure deployment scripts use the same default mapping from `Resources/Azure-Deployment/branch-policy.json`; if you ever change branch governance, keep the workflow checks and that shared policy file aligned.
 
 ---
 
@@ -92,6 +94,7 @@ See [`README-AZURE-INITIAL-SETUP.md`](README-AZURE-INITIAL-SETUP.md) for the one
 
 - Validates `environment` selection
 - **Enforces strict branch/environment match** — `dev` branch for dev, `staging` for staging, `main` for prod
+- Mirrors the shared script-side policy in `Resources/Azure-Deployment/branch-policy.json`
 - **Checks OIDC secrets directly** (`${{ secrets.AZUREAPPSERVICE_CLIENTID }}`, etc.)
 - Prints a **Phase Readiness Pre-Flight Summary** showing what will run and whether prerequisites are met
 - **Fails fast** when OIDC secrets are missing — prints clear guidance to run the Azure Initial Setup workflow first

@@ -229,7 +229,7 @@ After completing today's tasks, you will have:
 **Reference:** AZURE_DEPLOYMENT_GUIDE.md
 - [x] Run `setup-github-oidc.ps1` script
 - [x] Create App Registration in Entra ID
-- [x] Add federated credentials for dev/staging/main
+- [x] Add federated credentials for the default branch policy (`dev`/`staging`/`main`)
 - [x] **Time:** 1.5 hours | **Completed:** ✅ Done
 
 #### Day 18: OIDC Setup (Part 2) & GitHub Secrets ✅
@@ -279,7 +279,7 @@ After completing today's tasks, you will have:
 #### Day 31: GitHub Actions - Infra Deployment ✅ (Extended)
 **Reference:** `.github/workflows/infra-deploy.yml` + `README-INFRA-DEPLOY.md` + `AZURE_DEPLOYMENT_GUIDE.md` (Manual workflow trigger & dry run parameters section)
 - [x] Add what-if step for PR reviews
-- [x] Deploy on branch push (dev/staging/main)
+- [x] Implement GitHub Actions infra deployment across dev/staging/prod environments
 - [x] Validate deployments
 - [x] **Enhanced:** Added workflow_dispatch for manual runs
 - [x] **Enhanced:** Interactive parameter selection via GitHub UI

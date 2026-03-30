@@ -11,7 +11,7 @@ This directory contains GitHub Actions workflows for automated CI/CD deployment 
 | `azure-initial-setup.yml` | Manual | One-time setup | **[See README-AZURE-INITIAL-SETUP.md](./README-AZURE-INITIAL-SETUP.md)** - Phase 0 (GitHub App), Phase 1a (OIDC), Phase 1b (secrets) |
 | `azure-bootstrap.yml` | Manual | Infrastructure + deploy | **[See README-AZURE-BOOTSTRAP.md](./README-AZURE-BOOTSTRAP.md)** - Phase 2 (infrastructure), API/UI deploy, Phase X (cleanup) |
 | `configure-github-secrets.yml` | Called by initial-setup | Secret configuration | **[See README-CONFIGURE-GITHUB-SECRETS.md](./README-CONFIGURE-GITHUB-SECRETS.md)** - GitHub App setup and secret management (can run independently) |
-| `infra-deploy.yml` | Infrastructure changes or manual | dev/staging/prod | **[See README-INFRA-DEPLOY.md](./README-INFRA-DEPLOY.md)** - Deploys Bicep infrastructure with manual workflow dispatch |
+| `infra-deploy.yml` | Manual | dev/staging/prod | **[See README-INFRA-DEPLOY.md](./README-INFRA-DEPLOY.md)** - Deploys Bicep infrastructure with manual workflow dispatch |
 | `validate-deployment.yml` | Called by infra-deploy | Reusable workflow | **[See README-VALIDATE-DEPLOYMENT.md](./README-VALIDATE-DEPLOYMENT.md)** - Pre-deployment validation workflow |
 | `test-validate-deployment.yml` | Manual or PR changes | Test only | **[Quick Start](./QUICK-START-TEST-VALIDATION.md)** \| **[Full Docs](./README-TEST-VALIDATE-DEPLOYMENT.md)** - Tests validation workflow independently |
 | `deploy-api-to-azure.yml` | API/Backend code changes | All branches (dev/staging/main) | Builds and deploys API to environment-specific Azure Web App |
@@ -26,6 +26,9 @@ This directory contains GitHub Actions workflows for automated CI/CD deployment 
 | `dev` | orderprocessing-api-xyapp-dev | orderprocessing-ui-xyapp-dev |
 | `staging` | orderprocessing-api-xyapp-stg | orderprocessing-ui-xyapp-stg |
 | `main` | orderprocessing-api-xyapp-prod | orderprocessing-ui-xyapp-prod |
+
+Workflow YAML still enforces this policy explicitly.
+Azure deployment scripts consume the same defaults from `Resources/Azure-Deployment/branch-policy.json`; if governance changes, update the workflow guards and the shared policy file together.
 
 ---
 
@@ -239,7 +242,7 @@ permissions:
 The OIDC service principal has:
 - **Role**: Contributor
 - **Scope**: Resource Group level only (not subscription-wide)
-- **Branches**: Separate federated credentials for dev, staging, main
+- **Branches**: Separate federated credentials derived from the shared branch policy (currently dev, staging, main)
 
 ---
 
@@ -277,7 +280,7 @@ act push -W .github/workflows/deploy-dev.yml
 **Problem**: Pushed to branch but workflow didn't run
 
 **Solutions**:
-1. ✅ Check branch name matches workflow trigger exactly (`dev`, `staging`, `main`)
+1. ✅ Check branch name matches the enforced workflow mapping (`dev`, `staging`, `main` by default)
 2. ✅ Verify push succeeded: `git push origin dev --verbose`
 3. ✅ Check if changes were in ignored paths (Documentation, .md files)
 4. ✅ View Actions tab for any disabled workflows

@@ -2,12 +2,12 @@
 .SYNOPSIS
     Verifies GitHub OIDC federated credentials exist for expected environments.
 .DESCRIPTION
-    Checks Azure AD application (service principal) federated identity credentials for dev, staging, main (prod) or a supplied list.
+    Checks Azure AD application federated identity credentials for the environment subjects defined in branch-policy.json, or a supplied list.
     Useful when manual changes or bootstrap script failures suspected.
 .PARAMETER AppObjectId
     The Azure AD application object Id hosting federated credentials.
 .PARAMETER ExpectedEnvironments
-    Array of environment names expected (default: dev, staging, main).
+    Array of environment names expected (default: dev, staging, prod).
 .EXAMPLE
     ./verify-oidc-credentials.ps1 -AppObjectId 00000000-0000-0000-0000-000000000000
 .NOTES
@@ -15,9 +15,16 @@
 !#>
 [CmdletBinding()] param(
     [Parameter(Mandatory=$true)][string]$AppObjectId,
-    [string[]]$ExpectedEnvironments = @('dev','staging','main')
+    [string[]]$ExpectedEnvironments = @()
 )
 $ErrorActionPreference = 'Stop'
+
+. (Join-Path $PSScriptRoot 'branch-policy.ps1')
+
+if ($ExpectedEnvironments.Count -eq 0) {
+    $branchPolicy = Get-GitHubBranchPolicy
+    $ExpectedEnvironments = Get-GitHubEnvironmentList -Policy $branchPolicy
+}
 
 Write-Host "Querying federated credentials for AppObjectId: $AppObjectId" -ForegroundColor Cyan
 $raw = az ad app federated-credential list --id $AppObjectId --only-show-errors 2>$null

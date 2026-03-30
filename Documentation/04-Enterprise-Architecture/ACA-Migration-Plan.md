@@ -120,7 +120,7 @@ sequenceDiagram
     participant KV as Key Vault
     participant LAW as Log Analytics
     
-    Dev->>GH: Push to dev/staging/main
+    Dev->>GH: Push to dev/staging/main (branch policy for app workflows)
     GH->>GH: OIDC Login (Federated Creds)
     GH->>GH: Build .NET 8 Projects
     GH->>GH: Docker Build (API/UI)
