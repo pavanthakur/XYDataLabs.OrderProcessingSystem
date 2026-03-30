@@ -23,6 +23,71 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+function Invoke-AzCliWithRetry {
+    param(
+        [Parameter(Mandatory=$true)]
+        [scriptblock]$Command,
+
+        [Parameter(Mandatory=$true)]
+        [string]$Operation,
+
+        [Parameter(Mandatory=$false)]
+        [int]$MaxAttempts = 3,
+
+        [Parameter(Mandatory=$false)]
+        [int]$DelaySeconds = 5
+    )
+
+    $lastOutput = $null
+
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        $lastOutput = & $Command 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            return $lastOutput
+        }
+
+        if ($attempt -lt $MaxAttempts) {
+            Write-Host "  ⚠️  $Operation failed on attempt ${attempt}/${MaxAttempts}. Retrying in $DelaySeconds second(s)..." -ForegroundColor Yellow
+            Start-Sleep -Seconds $DelaySeconds
+        }
+    }
+
+    $message = if ($lastOutput) { ($lastOutput | Out-String).Trim() } else { 'No output returned.' }
+    throw "$Operation failed after $MaxAttempts attempt(s). $message"
+}
+
+function Invoke-AzCliJson {
+    param(
+        [Parameter(Mandatory=$true)]
+        [scriptblock]$Command,
+
+        [Parameter(Mandatory=$true)]
+        [string]$Operation
+    )
+
+    $output = Invoke-AzCliWithRetry -Command $Command -Operation $Operation
+    $jsonText = ($output | Out-String).Trim()
+
+    if ([string]::IsNullOrWhiteSpace($jsonText)) {
+        return $null
+    }
+
+    return $jsonText | ConvertFrom-Json
+}
+
+function Invoke-AzCliText {
+    param(
+        [Parameter(Mandatory=$true)]
+        [scriptblock]$Command,
+
+        [Parameter(Mandatory=$true)]
+        [string]$Operation
+    )
+
+    $output = Invoke-AzCliWithRetry -Command $Command -Operation $Operation
+    return ($output | Out-String).Trim()
+}
+
 function Resolve-GitHubOwner {
     param(
         [string]$Owner,
@@ -67,11 +132,13 @@ $allChecks = $true
 # Check 1: App Insights resource exists
 Write-Host "[1/4] Checking Application Insights resource..." -ForegroundColor Cyan
 try {
-    $aiResource = az monitor app-insights component show `
-        --app $aiName `
-        --resource-group $rgName `
-        --query '{name:name, provisioningState:provisioningState, instrumentationKey:instrumentationKey, connectionString:connectionString}' `
-        -o json 2>$null | ConvertFrom-Json
+    $aiResource = Invoke-AzCliJson -Operation 'Retrieve Application Insights resource' -Command {
+        az monitor app-insights component show `
+            --app $aiName `
+            --resource-group $rgName `
+            --query '{name:name, provisioningState:provisioningState, instrumentationKey:instrumentationKey, connectionString:connectionString}' `
+            -o json
+    }
     
     if ($aiResource -and $aiResource.provisioningState -eq 'Succeeded') {
         Write-Host "  ✅ Application Insights exists and is provisioned" -ForegroundColor Green
@@ -95,11 +162,13 @@ try {
 Write-Host ""
 Write-Host "[2/4] Checking API app configuration..." -ForegroundColor Cyan
 try {
-    $apiSettings = az webapp config appsettings list `
-        --name $apiAppName `
-        --resource-group $rgName `
-        --query "[?name=='APPLICATIONINSIGHTS_CONNECTION_STRING'].value" `
-        -o tsv 2>$null
+    $apiSettings = Invoke-AzCliText -Operation 'Retrieve API app settings' -Command {
+        az webapp config appsettings list `
+            --name $apiAppName `
+            --resource-group $rgName `
+            --query "[?name=='APPLICATIONINSIGHTS_CONNECTION_STRING'].value" `
+            -o tsv
+    }
     
     if ($apiSettings) {
         Write-Host "  ✅ App Insights connection string is configured on API app" -ForegroundColor Green
@@ -126,11 +195,13 @@ try {
 Write-Host ""
 Write-Host "[3/4] Checking UI app configuration..." -ForegroundColor Cyan
 try {
-    $uiSettings = az webapp config appsettings list `
-        --name $uiAppName `
-        --resource-group $rgName `
-        --query "[?name=='APPLICATIONINSIGHTS_CONNECTION_STRING'].value" `
-        -o tsv 2>$null
+    $uiSettings = Invoke-AzCliText -Operation 'Retrieve UI app settings' -Command {
+        az webapp config appsettings list `
+            --name $uiAppName `
+            --resource-group $rgName `
+            --query "[?name=='APPLICATIONINSIGHTS_CONNECTION_STRING'].value" `
+            -o tsv
+    }
     
     if ($uiSettings) {
         Write-Host "  ✅ App Insights connection string is configured on UI app" -ForegroundColor Green
@@ -162,11 +233,13 @@ if ($CheckTelemetry) {
         $query = "union requests, traces, exceptions, dependencies | where timestamp > ago(1h) | count"
         
         Write-Host "  Running query to check for recent telemetry..." -ForegroundColor Gray
-        $result = az monitor app-insights query `
-            --app $aiName `
-            --resource-group $rgName `
-            --analytics-query $query `
-            -o json 2>$null | ConvertFrom-Json
+        $result = Invoke-AzCliJson -Operation 'Query recent Application Insights telemetry' -Command {
+            az monitor app-insights query `
+                --app $aiName `
+                --resource-group $rgName `
+                --analytics-query $query `
+                -o json
+        }
         
         if ($result -and $result.tables -and $result.tables.Count -gt 0 -and $result.tables[0].rows -and $result.tables[0].rows.Count -gt 0) {
             $count = $result.tables[0].rows[0][0]
