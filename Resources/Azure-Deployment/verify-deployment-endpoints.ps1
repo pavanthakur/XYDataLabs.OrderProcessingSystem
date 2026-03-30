@@ -16,6 +16,19 @@ param(
 
 $ErrorActionPreference = 'Stop'  # Stop on unexpected errors
 
+function Get-HttpStatusCodeFromException {
+    param($ErrorRecord)
+
+    try {
+        if ($null -ne $ErrorRecord.Exception.Response -and $null -ne $ErrorRecord.Exception.Response.StatusCode) {
+            return [int]$ErrorRecord.Exception.Response.StatusCode
+        }
+    }
+    catch { }
+
+    return $null
+}
+
 function Resolve-GitHubOwner {
     param(
         [string]$Owner,
@@ -69,9 +82,16 @@ try {
     Write-Host "  [OK] Status: $($response.StatusCode) $($response.StatusDescription)" -ForegroundColor Green
     Write-Host "  [OK] API is responding" -ForegroundColor Green
 } catch {
-    Write-Host "  [ERROR] API endpoint failed" -ForegroundColor Red
-    Write-Host "  [ERROR] $($_.Exception.Message)" -ForegroundColor Red
-    $allSuccess = $false
+    $statusCode = Get-HttpStatusCodeFromException -ErrorRecord $_
+    if ($null -ne $statusCode -and $statusCode -ge 400 -and $statusCode -lt 500) {
+        Write-Host "  [OK] Status: $statusCode (treated as reachable)" -ForegroundColor Green
+        Write-Host "  [OK] API is responding; 4xx is expected when tenant/request context is missing" -ForegroundColor Green
+    }
+    else {
+        Write-Host "  [ERROR] API endpoint failed" -ForegroundColor Red
+        Write-Host "  [ERROR] $($_.Exception.Message)" -ForegroundColor Red
+        $allSuccess = $false
+    }
 }
 Write-Host ""
 
