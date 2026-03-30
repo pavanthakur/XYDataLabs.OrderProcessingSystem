@@ -1134,9 +1134,18 @@ if ($oidcResult.Success) {
             $credentialJson = @{ name = $credName; issuer = "https://token.actions.githubusercontent.com"; subject = $subject; audiences = @("api://AzureADTokenExchange") } | ConvertTo-Json
             $tempFile = [System.IO.Path]::GetTempFileName()
             $credentialJson | Out-File -FilePath $tempFile -Encoding UTF8
-            az ad app federated-credential create --id $oidcResult.AppObjectId --parameters $tempFile 2>$null | Out-Null
+            $createResult = az ad app federated-credential create --id $oidcResult.AppObjectId --parameters $tempFile 2>&1
+            $createSucceeded = $LASTEXITCODE -eq 0
             Remove-Item $tempFile -ErrorAction SilentlyContinue
-            Write-Host "    [$credName] Created (branch: $branch)" -ForegroundColor Green
+            if ($createSucceeded) {
+                Write-Host "    [$credName] Created (branch: $branch)" -ForegroundColor Green
+            }
+            else {
+                Write-Host "    [$credName] Failed to create (branch: $branch)" -ForegroundColor Yellow
+                if (-not [string]::IsNullOrWhiteSpace("$createResult")) {
+                    Write-Host "      Details: $createResult" -ForegroundColor DarkYellow
+                }
+            }
         } else { Write-Host "    [$credName] Already exists (branch: $branch)" -ForegroundColor Gray }
     }
 
