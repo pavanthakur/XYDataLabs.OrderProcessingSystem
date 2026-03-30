@@ -3,7 +3,7 @@
 #
 # IMPORTANT: After running this script, you MUST:
 # 1. Add the three secrets to GitHub repository secrets (Settings → Secrets and variables → Actions)
-# 2. The federated credential is configured for the 'main' branch
+# 2. The federated credential is configured for the production branch defined in branch-policy.json
 #
 # For complete instructions, see: Documentation/02-Azure-Learning-Guides/AZURE_DEPLOYMENT_GUIDE.md
 
@@ -19,9 +19,10 @@ param(
     [Parameter(Mandatory=$false)]
     [string]$AppDisplayName = "GitHub-Actions-OIDC",
 
-    # Comma-separated list of branches to create branch-based federated credentials for
+    # Comma-separated list of branches to create branch-based federated credentials for.
+    # When omitted, the values come from branch-policy.json.
     [Parameter(Mandatory=$false)]
-    [string]$Branches = "main",
+    [string]$Branches = "",
 
     # Comma-separated list of GitHub environment names to create environment-based federated credentials for (optional)
     [Parameter(Mandatory=$false)]
@@ -43,6 +44,9 @@ param(
 Write-Host "=====================================" -ForegroundColor Cyan
 Write-Host "GitHub Actions OIDC Setup" -ForegroundColor Cyan
 Write-Host "=====================================" -ForegroundColor Cyan
+
+. (Join-Path $PSScriptRoot 'branch-policy.ps1')
+$branchPolicy = Get-GitHubBranchPolicy
 
 function Resolve-GitHubRepositoryContext {
     param(
@@ -86,6 +90,10 @@ function Resolve-GitHubRepositoryContext {
 $repoContext = Resolve-GitHubRepositoryContext -Owner $GitHubOwner -Repository $Repository
 $GitHubOwner = $repoContext.Owner
 $Repository = $repoContext.Repository
+
+if ([string]::IsNullOrWhiteSpace($Branches)) {
+    $Branches = (Get-GitHubBranchList -Policy $branchPolicy) -join ','
+}
 
 # DEBUG: Log all received parameters
 Write-Host "`n[DEBUG] Parameters received by script:" -ForegroundColor Magenta

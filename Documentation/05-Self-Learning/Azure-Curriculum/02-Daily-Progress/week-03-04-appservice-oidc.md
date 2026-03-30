@@ -23,7 +23,7 @@
 **Reference:** AZURE_DEPLOYMENT_GUIDE.md
 - [x] Run `setup-github-oidc.ps1` script
 - [x] Create App Registration in Entra ID
-- [x] Add federated credentials for dev/staging/main
+- [x] Add federated credentials for the default branch policy (`dev`/`staging`/`main`)
 - [x] **Time:** 1.5 hours | **Completed:** ✅ Done
 
 #### Day 18: OIDC Setup (Part 2) & GitHub Secrets ✅

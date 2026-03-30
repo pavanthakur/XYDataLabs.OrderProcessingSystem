@@ -46,6 +46,8 @@ az ad app federated-credential list --id <app-object-id>
 ./Resources/Azure-Deployment/validate-workflow-config.ps1
 ```
 
+The dry-run mapping script reads the current default branch policy from `Resources/Azure-Deployment/branch-policy.json`.
+
 ---
 
 ## 🔑 GitHub Secrets Management

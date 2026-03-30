@@ -58,7 +58,7 @@ az deployment group create \
 
 The deployment is automated via the `.github/workflows/deploy-and-verify.yml` workflow:
 - Pushes to `dev` branch → deploys to dev environment
-- Pushes to `uat` branch → deploys to uat environment
+- Pushes to `staging` branch → deploys to staging environment
 - Pushes to `main` branch → deploys to prod environment
 
 ### Validation

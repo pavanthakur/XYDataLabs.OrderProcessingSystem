@@ -130,7 +130,6 @@ Run the OIDC setup script:
 
 ```powershell
 ./Resources/Azure-Deployment/setup-github-oidc.ps1 `
-  -Branches "dev,staging,main" `
   -Environments "dev,staging,prod" `
   -GitHubOwner "YOUR_GITHUB_USERNAME" `
   -Repository "YOUR_REPO_NAME" `
@@ -138,6 +137,7 @@ Run the OIDC setup script:
 ```
 
 This creates the Azure AD application and federated credentials.
+When `-Branches` is omitted, the script uses the shared defaults from `Resources/Azure-Deployment/branch-policy.json`.
 
 #### Step 2: Get Your Azure Credentials
 

@@ -111,7 +111,7 @@ If the same error still appears after propagation, add `Directory.Read.All`, gra
 **Actions**:
 1. Logs in to Azure (OIDC or device code)
 2. Runs `setup-github-oidc.ps1` to create/update the Entra ID App Registration
-3. Configures federated credentials for branches (`dev`, `staging`, `main`) and environments (`dev`, `staging`, `prod`)
+3. Configures federated credentials from the shared script policy in `Resources/Azure-Deployment/branch-policy.json` (default branches: `dev`, `staging`, `main`; default environments: `dev`, `staging`, `prod`)
 4. Outputs `clientId`, `tenantId`, `subscriptionId` for Phase 1b
 
 ### 3. `configure-github-secrets` (Phase 1b — calls `configure-github-secrets.yml`)

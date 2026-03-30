@@ -44,6 +44,9 @@ param(
     [Parameter(Mandatory = $false)] [string]$OidcSpObjectId = ''
 )
 
+. (Join-Path $PSScriptRoot 'branch-policy.ps1')
+$branchPolicy = Get-GitHubBranchPolicy
+
 function Resolve-GitHubRepositoryContext {
     param(
         [string]$Owner,
@@ -111,7 +114,7 @@ if ($DryRun) {
     Write-Host "API WebApp      : $apiApp" -ForegroundColor Gray
     Write-Host "UI WebApp       : $uiApp" -ForegroundColor Gray
     Write-Host "App Insights    : $aiName" -ForegroundColor Gray
-    Write-Host "OIDC App        : GitHub-Actions-OIDC (branches: dev, stg, main)" -ForegroundColor Gray
+    Write-Host "OIDC App        : GitHub-Actions-OIDC (branches: $((Get-GitHubBranchList -Policy $branchPolicy) -join ', '))" -ForegroundColor Gray
     Add-LogEntry -Phase 'plan' -Action 'dry-run' -Status 'ok' -Detail "rg=$rg;plan=$plan;api=$apiApp;ui=$uiApp;ai=$aiName"
     if ($LogFormat -eq 'json') {
         $dryLog = Join-Path $PSScriptRoot "logs/bootstrap-dryrun-$(Get-Date -Format 'yyyyMMdd-HHmmss').json"
@@ -943,7 +946,6 @@ foreach ($env in $envList) {
 
     # Verify resource details
     Write-Host "`n  [VERIFY] Running comprehensive resource verification..." -ForegroundColor Cyan
-    $allResourcesReady = $true
         
     # Verify App Service Plan status
     $planStatus = az appservice plan show -g $rg -n $plan --query '{Name:name, Status:status, State:provisioningState, Sku:sku.name}' -o json 2>$null | ConvertFrom-Json
@@ -1123,7 +1125,7 @@ if ($oidcResult.Success) {
     # Configure OIDC branches
     $existingCreds = az ad app federated-credential list --id $oidcResult.AppObjectId 2>$null | ConvertFrom-Json
     if (-not $existingCreds) { $existingCreds = @() }
-    $branches = @('main','staging','dev')
+    $branches = Get-GitHubBranchList -Policy $branchPolicy
     foreach ($branch in $branches) {
         $credName = "github-$branch-oidc"
         $exists = $existingCreds | Where-Object { $_.name -eq $credName }

@@ -144,6 +144,8 @@ git reset --hard <commit-hash>
 ./Resources/Azure-Deployment/validate-workflow-config.ps1
 ```
 
+`test-branch-env-mapping.ps1` reads its defaults from `Resources/Azure-Deployment/branch-policy.json`.
+
 ### **Azure CLI Commands**
 ```powershell
 # Login to Azure

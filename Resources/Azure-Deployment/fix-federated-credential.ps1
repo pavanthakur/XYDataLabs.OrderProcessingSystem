@@ -9,6 +9,10 @@ param(
     [string]$Repository = ''
 )
 
+. (Join-Path $PSScriptRoot 'branch-policy.ps1')
+$branchPolicy = Get-GitHubBranchPolicy
+$productionBranch = (Get-GitHubBranchPolicyEntry -Policy $branchPolicy -EnvironmentKey 'prod').branch
+
 function Resolve-GitHubRepositoryContext {
     param(
         [string]$Owner,
@@ -84,7 +88,7 @@ if ($appId -ne $expectedClientId) {
 Write-Host "`n[2/3] Checking existing federated credentials..." -ForegroundColor Yellow
 $existingCreds = az ad app federated-credential list --id $appObjectId | ConvertFrom-Json
 
-$credName = "github-main-oidc"
+$credName = "github-$productionBranch-oidc"
 $credExists = $existingCreds | Where-Object { $_.name -eq $credName }
 
 if ($credExists) {
@@ -96,13 +100,13 @@ if ($credExists) {
 
 Write-Host "   Creating federated credential..." -ForegroundColor Yellow
 
-Write-Host "`n[3/3] Adding federated credential for branch: main" -ForegroundColor Yellow
+Write-Host "`n[3/3] Adding federated credential for branch: $productionBranch" -ForegroundColor Yellow
 
 # Create credential JSON
 $credentialJson = @{
-    name = "github-main-oidc"
+    name = $credName
     issuer = "https://token.actions.githubusercontent.com"
-    subject = "repo:${GitHubOwner}/${Repository}:ref:refs/heads/main"
+    subject = "repo:${GitHubOwner}/${Repository}:ref:refs/heads/$productionBranch"
     audiences = @("api://AzureADTokenExchange")
 } | ConvertTo-Json
 
@@ -113,8 +117,8 @@ $credentialJson | Out-File -FilePath $tempFile -Encoding UTF8
 try {
     az ad app federated-credential create --id $appObjectId --parameters $tempFile | Out-Null
     Write-Host "   ✅ Federated credential created successfully!" -ForegroundColor Green
-    Write-Host "      Name: github-main-oidc" -ForegroundColor White
-    Write-Host "      Subject: repo:${GitHubOwner}/${Repository}:ref:refs/heads/main" -ForegroundColor Gray
+    Write-Host "      Name: $credName" -ForegroundColor White
+    Write-Host "      Subject: repo:${GitHubOwner}/${Repository}:ref:refs/heads/$productionBranch" -ForegroundColor Gray
 } catch {
     Write-Host "   ❌ Error creating federated credential: $($_.Exception.Message)" -ForegroundColor Red
     exit 1
