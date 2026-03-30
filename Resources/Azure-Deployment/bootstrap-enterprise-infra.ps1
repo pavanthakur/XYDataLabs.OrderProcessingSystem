@@ -220,11 +220,11 @@ function Test-WebEndpoint {
                 }
 
                 if ($attempt -lt $MaxAttempts) {
-                    Write-Log "[TEST] $Name not responding on attempt $attempt/$MaxAttempts: $($_.Exception.Message). Retrying in $RetryDelaySeconds s..." "WARN" "Yellow"
+                    Write-Log "[TEST] $Name not responding on attempt $($attempt)/$($MaxAttempts): $($_.Exception.Message). Retrying in $RetryDelaySeconds s..." "WARN" "Yellow"
                     Start-Sleep -Seconds $RetryDelaySeconds
                 }
                 else {
-                    Write-Log "[TEST] $Name not responding after $MaxAttempts attempts: $($_.Exception.Message)" "WARN" "Red"
+                    Write-Log "[TEST] $Name not responding after $($MaxAttempts) attempts: $($_.Exception.Message)" "WARN" "Red"
                 }
             }
         }
