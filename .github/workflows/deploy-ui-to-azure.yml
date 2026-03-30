@@ -56,7 +56,8 @@ jobs:
   deploy:
     runs-on: windows-latest
     needs: build
-    timeout-minutes: 10  # Caps approval wait for prod environment gate; job fails if not approved within 10 min
+    timeout-minutes: 30  # Covers approval wait + deploy + health check (~8 min worst case on F1)
+    # Prod approval window: set via GitHub Settings → Environments → prod → Required reviewers timeout
     environment:
       name: ${{ github.ref_name == 'main' && 'prod' || github.ref_name == 'staging' && 'staging' || 'dev' }}
     permissions:
