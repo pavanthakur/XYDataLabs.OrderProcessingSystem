@@ -51,7 +51,7 @@ Write-Host "`n[3/3] Adding federated credential for branch: main" -ForegroundCol
 $credentialJson = @{
     name = "github-main-oidc"
     issuer = "https://token.actions.githubusercontent.com"
-    subject = "repo:getpavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/main"
+    subject = "repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/main"
     audiences = @("api://AzureADTokenExchange")
 } | ConvertTo-Json
 
@@ -63,7 +63,7 @@ try {
     az ad app federated-credential create --id $appObjectId --parameters $tempFile | Out-Null
     Write-Host "   ✅ Federated credential created successfully!" -ForegroundColor Green
     Write-Host "      Name: github-main-oidc" -ForegroundColor White
-    Write-Host "      Subject: repo:getpavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/main" -ForegroundColor Gray
+    Write-Host "      Subject: repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/main" -ForegroundColor Gray
 } catch {
     Write-Host "   ❌ Error creating federated credential: $($_.Exception.Message)" -ForegroundColor Red
     exit 1

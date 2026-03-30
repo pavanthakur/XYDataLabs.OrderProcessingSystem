@@ -42,7 +42,7 @@ param(
 )
 
 # Repository name (fixed for this project)
-$GitHubRepo = 'TestAppXY_OrderProcessingSystem'
+$GitHubRepo = 'XYDataLabs.OrderProcessingSystem'
 
 # Structured logging support
 $global:BootstrapLog = @()

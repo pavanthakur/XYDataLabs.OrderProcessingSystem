@@ -5,15 +5,15 @@
   Retrieves Azure OIDC credentials and automatically adds them as GitHub repository secrets.
   Requires GitHub CLI (gh) to be installed and authenticated.
 .PARAMETER Repository
-  GitHub repository in format owner/repo (e.g., getpavanthakur/TestAppXY_OrderProcessingSystem)
+    GitHub repository in format owner/repo (e.g., pavanthakur/XYDataLabs.OrderProcessingSystem)
 .PARAMETER Force
   Overwrite existing secrets without prompting
 .EXAMPLE
-  ./configure-github-secrets.ps1 -Repository getpavanthakur/TestAppXY_OrderProcessingSystem
+    ./configure-github-secrets.ps1 -Repository pavanthakur/XYDataLabs.OrderProcessingSystem
 #>
 param(
     [Parameter(Mandatory=$false)]
-    [string]$Repository = "getpavanthakur/TestAppXY_OrderProcessingSystem",
+        [string]$Repository = "pavanthakur/XYDataLabs.OrderProcessingSystem",
     
     [Parameter(Mandatory=$false)]
     [switch]$Force,
