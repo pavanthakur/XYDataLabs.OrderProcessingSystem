@@ -181,17 +181,55 @@ function New-WebAppWithSuperRetry {
     return @{ Success = $false; Error = $lastErr }
 }
 
+    # Treat HTTP 2xx-4xx as "reachable" for bootstrap purposes.
+    # Bootstrap provisions infrastructure and app settings; it does not guarantee the app root returns 200.
+    # In this repo the API root commonly returns 400 without X-Tenant-Code, which still proves the app is up.
+    function Get-HttpStatusCodeFromException {
+        param($ErrorRecord)
+
+        try {
+            if ($null -ne $ErrorRecord.Exception.Response -and $null -ne $ErrorRecord.Exception.Response.StatusCode) {
+                return [int]$ErrorRecord.Exception.Response.StatusCode
+            }
+        }
+        catch { }
+
+        return $null
+    }
+
 # Post-deploy self-test
 function Test-WebEndpoint {
-    param([string]$Url, [string]$Name)
-    try {
-        $r = Invoke-WebRequest -Uri $Url -TimeoutSec 10 -ErrorAction Stop
-        Write-Log "[TEST] $Name responded HTTP $($r.StatusCode)" "INFO" "Green"
-        return $true
-    } catch {
-        Write-Log "[TEST] $Name not responding: $($_.Exception.Message)" "WARN" "Red"
+        param(
+            [string]$Url,
+            [string]$Name,
+            [int]$TimeoutSec = 10,
+            [int]$MaxAttempts = 3,
+            [int]$RetryDelaySeconds = 20
+        )
+
+        for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+            try {
+                $r = Invoke-WebRequest -Uri $Url -TimeoutSec $TimeoutSec -ErrorAction Stop
+                Write-Log "[TEST] $Name responded HTTP $($r.StatusCode)" "INFO" "Green"
+                return $true
+            } catch {
+                $statusCode = Get-HttpStatusCodeFromException -ErrorRecord $_
+                if ($null -ne $statusCode -and $statusCode -ge 400 -and $statusCode -lt 500) {
+                    Write-Log "[TEST] $Name responded HTTP $statusCode (treated as reachable during bootstrap)" "INFO" "Green"
+                    return $true
+                }
+
+                if ($attempt -lt $MaxAttempts) {
+                    Write-Log "[TEST] $Name not responding on attempt $attempt/$MaxAttempts: $($_.Exception.Message). Retrying in $RetryDelaySeconds s..." "WARN" "Yellow"
+                    Start-Sleep -Seconds $RetryDelaySeconds
+                }
+                else {
+                    Write-Log "[TEST] $Name not responding after $MaxAttempts attempts: $($_.Exception.Message)" "WARN" "Red"
+                }
+            }
+        }
+
         return $false
-    }
 }
 
 # Ensure Add-StepStatus exists
@@ -801,9 +839,12 @@ foreach ($env in $envList) {
                 $httpOk = $false
                 try {
                     $resp = Invoke-WebRequest -Uri $apiUrl -Method Get -TimeoutSec 8 -ErrorAction SilentlyContinue
-                    if ($resp -and ($resp.StatusCode -eq 200 -or $resp.StatusCode -eq 404)) { $httpOk = $true }
+                        if ($resp -and $resp.StatusCode -ge 200 -and $resp.StatusCode -lt 500) { $httpOk = $true }
                 }
-                catch { }
+                    catch {
+                        $statusCode = Get-HttpStatusCodeFromException -ErrorRecord $_
+                        if ($null -ne $statusCode -and $statusCode -ge 400 -and $statusCode -lt 500) { $httpOk = $true }
+                    }
                 if ($apiExistsNow.state -eq 'Running' -and $httpOk) {
                     $apiReady = $true
                     Write-Host "`n  [OK] API ready (state=Running + HTTP responding) after $([math]::Round($elapsed/60,1)) min" -ForegroundColor Green
@@ -824,9 +865,12 @@ foreach ($env in $envList) {
                 $httpOk = $false
                 try {
                     $resp = Invoke-WebRequest -Uri $uiUrl -Method Get -TimeoutSec 8 -ErrorAction SilentlyContinue
-                    if ($resp -and ($resp.StatusCode -eq 200 -or $resp.StatusCode -eq 404)) { $httpOk = $true }
+                        if ($resp -and $resp.StatusCode -ge 200 -and $resp.StatusCode -lt 500) { $httpOk = $true }
                 }
-                catch { }
+                    catch {
+                        $statusCode = Get-HttpStatusCodeFromException -ErrorRecord $_
+                        if ($null -ne $statusCode -and $statusCode -ge 400 -and $statusCode -lt 500) { $httpOk = $true }
+                    }
                 if ($uiExistsNow.state -eq 'Running' -and $httpOk) {
                     $uiReady = $true
                     Write-Host "`n  [OK] UI ready (state=Running + HTTP responding) after $([math]::Round($elapsed/60,1)) min" -ForegroundColor Green
@@ -1111,8 +1155,8 @@ AZUREAPPSERVICE_SUBSCRIPTIONID:  $($oidcResult.SubscriptionId)
 Write-Log "Starting Post-Deployment Self-Test..." "INFO" "Cyan"
 $apiUrl = "https://$apiApp.azurewebsites.net"
 $uiUrl = "https://$uiApp.azurewebsites.net"
-$apiHealthy = Test-WebEndpoint -Url $apiUrl -Name "API ($apiApp)"
-$uiHealthy = Test-WebEndpoint -Url $uiUrl -Name "UI ($uiApp)"
+$apiHealthy = Test-WebEndpoint -Url $apiUrl -Name "API ($apiApp)" -TimeoutSec 10 -MaxAttempts 5 -RetryDelaySeconds 20
+$uiHealthy = Test-WebEndpoint -Url $uiUrl -Name "UI ($uiApp)" -TimeoutSec 10 -MaxAttempts 5 -RetryDelaySeconds 20
 if ($apiHealthy -and $uiHealthy) { Add-StepStatus -Name "Self-Test" -Status "Success" -Details "API+UI healthy"; Write-Log "Post-Deployment Self-Test PASSED" "INFO" "Green" }
 else { Add-StepStatus -Name "Self-Test" -Status "Failed" -Details "APIHealthy=$apiHealthy UIHealthy=$uiHealthy"; Write-Log "Post-Deployment Self-Test FAILED" "WARN" "Yellow" }
 
