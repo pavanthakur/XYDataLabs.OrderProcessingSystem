@@ -1,0 +1,14 @@
+{
+  "dev": {
+    "branch": "dev",
+    "environment": "dev"
+  },
+  "staging": {
+    "branch": "staging",
+    "environment": "staging"
+  },
+  "prod": {
+    "branch": "main",
+    "environment": "prod"
+  }
+}

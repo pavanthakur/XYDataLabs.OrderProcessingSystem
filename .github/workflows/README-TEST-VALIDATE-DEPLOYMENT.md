@@ -224,7 +224,7 @@ Config Validation: ❌ DRIFT DETECTED
 
 **Failure Scenarios:**
 - OIDC app not found
-- Missing credentials for dev/staging/main
+- Missing credentials for the expected environments from `Resources/Azure-Deployment/branch-policy.json` (default: dev/staging/prod)
 - Incorrect subject patterns
 - Azure AD permissions insufficient
 

@@ -331,6 +331,8 @@ Navigate to: **GitHub → Actions → Azure Bootstrap & Deploy → Run workflow*
 
 > Phase 2/X parameters. This workflow **enforces branch–environment matching**: the **“Use workflow from”** branch must match the environment (`dev`→`dev`, `staging`→`staging`, `main`→`prod`). Use any branch for `environment: all`.
 
+> Azure deployment scripts use the same default mapping from `Resources/Azure-Deployment/branch-policy.json`. Keep the workflow rules and that shared policy file aligned if branch governance changes.
+
 ### 🎯 `environment` — Target Environment *(always required)*
 | | |
 |---|---|

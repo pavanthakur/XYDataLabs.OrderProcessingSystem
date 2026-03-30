@@ -12,9 +12,8 @@ Reusable workflow that runs validation checks before infrastructure or applicati
 ## Integration
 
 ### Automated (Integrated with infra-deploy.yml)
-Pre-validation runs automatically before infrastructure deployments on:
-- Push to `dev`, `staging`, or `main` branches
-- Manual workflow dispatch (when dry-run disabled)
+Pre-validation runs automatically before manual infrastructure deployments triggered by `infra-deploy.yml`.
+It can also be run directly for targeted checks.
 
 ### Manual Trigger
 ```bash
@@ -70,7 +69,7 @@ jobs:
 
 ### OIDC Verification
 - **Exit 0**: All expected credentials present
-- **Exit 2**: Missing credentials for dev/staging/main
+- **Exit 2**: Missing credentials for one or more expected environments from `Resources/Azure-Deployment/branch-policy.json` (default: dev/staging/prod)
 - **Workflow**: Continues on error (warning only)
 
 ### Config Validation
@@ -101,6 +100,8 @@ az account set --subscription <subscription-id>
 $appId = az ad app list --display-name "GitHub-Actions-OIDC" --query "[0].id" -o tsv
 ./Resources/Azure-Deployment/verify-oidc-credentials.ps1 -AppObjectId $appId
 ```
+
+By default, `verify-oidc-credentials.ps1` reads expected environment subjects from `Resources/Azure-Deployment/branch-policy.json`.
 
 ### Check Config Drift
 ```powershell

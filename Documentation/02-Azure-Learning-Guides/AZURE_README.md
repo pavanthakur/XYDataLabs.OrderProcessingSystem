@@ -350,7 +350,7 @@ az role assignment list --assignee $(az ad signed-in-user show --query id -o tsv
   -Environments stg `
   -StgSku B1
 
-# OIDC already configured for main,staging,dev branches (automatic)
+# OIDC already configured automatically from `Resources/Azure-Deployment/branch-policy.json` (current defaults: dev, staging, main branches)
 ```
 
 **Reference**: [AZURE_DEPLOYMENT_GUIDE.md - Enterprise Strategy](./AZURE_DEPLOYMENT_GUIDE.md#enterprise-production-strategy-multi-environment)

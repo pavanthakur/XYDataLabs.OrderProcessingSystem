@@ -3,7 +3,7 @@
 #
 # IMPORTANT: After running this script, you MUST:
 # 1. Add the three secrets to GitHub repository secrets (Settings → Secrets and variables → Actions)
-# 2. The federated credential is configured for the 'main' branch
+# 2. The federated credential is configured for the production branch defined in branch-policy.json
 #
 # For complete instructions, see: Documentation/02-Azure-Learning-Guides/AZURE_DEPLOYMENT_GUIDE.md
 
@@ -19,21 +19,22 @@ param(
     [Parameter(Mandatory=$false)]
     [string]$AppDisplayName = "GitHub-Actions-OIDC",
 
-    # Comma-separated list of branches to create branch-based federated credentials for
+    # Comma-separated list of branches to create branch-based federated credentials for.
+    # When omitted, the values come from branch-policy.json.
     [Parameter(Mandatory=$false)]
-    [string]$Branches = "main",
+    [string]$Branches = "",
 
     # Comma-separated list of GitHub environment names to create environment-based federated credentials for (optional)
     [Parameter(Mandatory=$false)]
     [string]$Environments = "",
 
-    # GitHub organization or username owning the repository
+    # GitHub organization or username owning the repository. Auto-detected from GITHUB_REPOSITORY or git origin when omitted.
     [Parameter(Mandatory=$false)]
-    [string]$GitHubOwner = "pavanthakur",
+    [string]$GitHubOwner = "",
 
-    # Repository name
+    # Repository name. Auto-detected from GITHUB_REPOSITORY or git origin when omitted.
     [Parameter(Mandatory=$false)]
-    [string]$Repository = "XYDataLabs.OrderProcessingSystem",
+    [string]$Repository = "",
 
     # Optional: Role name to assign (default Contributor). Could use Website Contributor for tighter scope.
     [Parameter(Mandatory=$false)]
@@ -43,6 +44,56 @@ param(
 Write-Host "=====================================" -ForegroundColor Cyan
 Write-Host "GitHub Actions OIDC Setup" -ForegroundColor Cyan
 Write-Host "=====================================" -ForegroundColor Cyan
+
+. (Join-Path $PSScriptRoot 'branch-policy.ps1')
+$branchPolicy = Get-GitHubBranchPolicy
+
+function Resolve-GitHubRepositoryContext {
+    param(
+        [string]$Owner,
+        [string]$Repository,
+        [string]$DefaultOwner = 'pavanthakur',
+        [string]$DefaultRepository = 'XYDataLabs.OrderProcessingSystem'
+    )
+
+    $resolvedOwner = $Owner
+    $resolvedRepository = $Repository
+
+    if ([string]::IsNullOrWhiteSpace($resolvedOwner) -or [string]::IsNullOrWhiteSpace($resolvedRepository)) {
+        $repoFromEnv = $env:GITHUB_REPOSITORY
+        if (-not [string]::IsNullOrWhiteSpace($repoFromEnv) -and $repoFromEnv -match '^(?<owner>[^/]+)/(?<repo>.+)$') {
+            if ([string]::IsNullOrWhiteSpace($resolvedOwner)) { $resolvedOwner = $Matches.owner }
+            if ([string]::IsNullOrWhiteSpace($resolvedRepository)) { $resolvedRepository = $Matches.repo }
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($resolvedOwner) -or [string]::IsNullOrWhiteSpace($resolvedRepository)) {
+        try {
+            $originUrl = git config --get remote.origin.url 2>$null
+            if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($originUrl)) {
+                $originUrl = $originUrl.Trim()
+                if ($originUrl -match 'github\.com[:/](?<owner>[^/]+)/(?<repo>[^/]+?)(?:\.git)?$') {
+                    if ([string]::IsNullOrWhiteSpace($resolvedOwner)) { $resolvedOwner = $Matches.owner }
+                    if ([string]::IsNullOrWhiteSpace($resolvedRepository)) { $resolvedRepository = $Matches.repo }
+                }
+            }
+        }
+        catch { }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($resolvedOwner)) { $resolvedOwner = $DefaultOwner }
+    if ([string]::IsNullOrWhiteSpace($resolvedRepository)) { $resolvedRepository = $DefaultRepository }
+
+    return @{ Owner = $resolvedOwner; Repository = $resolvedRepository }
+}
+
+$repoContext = Resolve-GitHubRepositoryContext -Owner $GitHubOwner -Repository $Repository
+$GitHubOwner = $repoContext.Owner
+$Repository = $repoContext.Repository
+
+if ([string]::IsNullOrWhiteSpace($Branches)) {
+    $Branches = (Get-GitHubBranchList -Policy $branchPolicy) -join ','
+}
 
 # DEBUG: Log all received parameters
 Write-Host "`n[DEBUG] Parameters received by script:" -ForegroundColor Magenta
