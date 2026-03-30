@@ -342,7 +342,7 @@ Architecture tests will fail if:
 | `azure-bootstrap.yml` | Manual | Provision Azure resources (App Service, SQL, Key Vault) |
 | `deploy-api-to-azure.yml` | Push to dev/staging/main | Build -> test -> deploy API |
 | `deploy-ui-to-azure.yml` | Push to dev/staging/main | Build -> test -> deploy UI |
-| `infra-deploy.yml` | Push to dev/staging/main | Bicep what-if + deploy |
+| `infra-deploy.yml` | Manual | Bicep what-if + deploy |
 | `validate-deployment.yml` | Reusable | Bicep what-if, OIDC verification |
 | `deploy-and-verify.yml` | Push / manual | Full end-to-end: infra + apps + health checks |
 | `docker-health.yml` | Push to main / PR | Docker startup smoke test |
@@ -354,6 +354,9 @@ Architecture tests will fail if:
 | `dev` | dev | `-dev` |
 | `staging` | staging | `-stg` |
 | `main` | prod | `-prod` |
+
+Workflow guardrails still enforce this mapping explicitly in GitHub Actions.
+Azure deployment scripts now read the same default mapping from `Resources/Azure-Deployment/branch-policy.json`.
 
 See [.github/workflows/README.md](.github/workflows/README.md) for first-time setup.
 

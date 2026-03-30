@@ -34,7 +34,7 @@
 #### Day 31: GitHub Actions - Infra Deployment ✅ (Extended)
 **Reference:** `.github/workflows/infra-deploy.yml` + `README-INFRA-DEPLOY.md` + `AZURE_DEPLOYMENT_GUIDE.md` (Manual workflow trigger & dry run parameters section)
 - [x] Add what-if step for PR reviews
-- [x] Deploy on branch push (dev/staging/main)
+- [x] Implement GitHub Actions infra deployment across dev/staging/prod environments
 - [x] Validate deployments
 - [x] **Enhanced:** Added workflow_dispatch for manual runs
 - [x] **Enhanced:** Interactive parameter selection via GitHub UI
@@ -46,7 +46,7 @@
 
 **Detailed Activity:**
 - Added `what-if` step in `infra-deploy.yml` so PR reviewers can see planned changes before merge
-- Configured path-based push triggers for dev/staging/main branches (only fires when `infra/` changes)
+- Standardized infra deployment workflow targeting dev/staging/prod with PR what-if and manual dispatch support
 - Added `workflow_dispatch` with input dropdowns — lets you trigger manually from GitHub UI without editing YAML
 - Added `dryRun` boolean input: when `true`, runs `--what-if` only and skips real deployment
 - Tested: triggered from Actions tab → selected environment=dev, dryRun=true → saw what-if diff in logs ✅

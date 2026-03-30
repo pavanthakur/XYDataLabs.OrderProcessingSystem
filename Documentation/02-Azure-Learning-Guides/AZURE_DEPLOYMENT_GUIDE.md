@@ -432,20 +432,21 @@ This ensures global uniqueness of Azure Web App names by prefixing with the GitH
 
 | Resource Type | Resource Name | Configuration |
 |--------------|---------------|---------------|
-| App Registration | `GitHub-Actions-OIDC` | OIDC federated credentials for dev/staging/main |
+| App Registration | `GitHub-Actions-OIDC` | OIDC federated credentials sourced from `Resources/Azure-Deployment/branch-policy.json` (default: dev/staging/main branches; dev/staging/prod environments) |
 | Service Principal | Auto-generated | Contributor role on all resource groups |
 
 ---
 
 ## Branch Strategy
 
-This project uses a **three-branch workflow** that maps directly to Azure environments:
+This project uses a **three-branch workflow** that maps directly to Azure environments.
+Workflow YAML enforces this mapping explicitly, and Azure deployment scripts consume the same defaults from `Resources/Azure-Deployment/branch-policy.json`.
 
 | Branch | Purpose | Azure Resources | Federated Credential | Auto-Deploy |
 |--------|---------|-----------------|---------------------|-------------|
-| `dev` | Testing & Development | `rg-orderprocessing-dev`<br>`pavanthakur-orderprocessing-api-xyapp-dev`<br>`pavanthakur-orderprocessing-ui-xyapp-dev` | `github-dev-oidc`<br>Subject: `repo:pavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/dev` | ✅ Yes |
-| `staging` | Pre-production Validation | `rg-orderprocessing-staging`<br>`orderprocessing-api-xyapp-staging`<br>`orderprocessing-ui-xyapp-staging` | `github-staging-oidc`<br>Subject: `repo:pavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/staging` | ✅ Yes |
-| `main` | Production | (Future production resources) | (Not created yet) | ⚠️ Manual approval recommended |
+| `dev` | Testing & Development | `rg-orderprocessing-dev`<br>`pavanthakur-orderprocessing-api-xyapp-dev`<br>`pavanthakur-orderprocessing-ui-xyapp-dev` | `github-dev-oidc`<br>Subject: `repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev` | ✅ Yes |
+| `staging` | Pre-production Validation | `rg-orderprocessing-stg`<br>`pavanthakur-orderprocessing-api-xyapp-stg`<br>`pavanthakur-orderprocessing-ui-xyapp-stg` | `github-staging-oidc`<br>Subject: `repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/staging` | ✅ Yes |
+| `main` | Production | `rg-orderprocessing-prod`<br>`pavanthakur-orderprocessing-api-xyapp-prod`<br>`pavanthakur-orderprocessing-ui-xyapp-prod` | `github-main-oidc`<br>Subject: `repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/main` | ✅ Yes |
 
 ### Branch Workflow
 
@@ -560,12 +561,12 @@ graph TD
 {
   "name": "github-dev-oidc",
   "issuer": "https://token.actions.githubusercontent.com",
-  "subject": "repo:getpavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/dev",
+  "subject": "repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev",
   "audiences": ["api://AzureADTokenExchange"]
 }
 ```
 
-Similar credentials created for `staging` and `main` branches.
+Similar credentials are created for the other default branches from `Resources/Azure-Deployment/branch-policy.json`.
 
 | **9** | Assign RBAC roles | Contributor on all resource groups |
 
@@ -575,7 +576,8 @@ Similar credentials created for `staging` and `main` branches.
 
 ```powershell
 # Automatic execution during bootstrap (line 717-726)
-& $configScriptPath -Repository "pavanthakur/TestAppXY_OrderProcessingSystem" -Force
+# Repository/owner can be auto-detected; explicit repository shown here for clarity.
+& $configScriptPath -Repository "pavanthakur/XYDataLabs.OrderProcessingSystem" -Force
 ```
 
 **Secrets Configured:**
@@ -590,7 +592,7 @@ Similar credentials created for `staging` and `main` branches.
 
 ```powershell
 # View configured secrets
-gh secret list --repo pavanthakur/TestAppXY_OrderProcessingSystem
+gh secret list --repo pavanthakur/XYDataLabs.OrderProcessingSystem
 
 # Expected output:
 # AZUREAPPSERVICE_CLIENTID        Updated 2025-11-17
@@ -682,7 +684,7 @@ Bootstrap Start (0 min)
 **Solution**: Verify App Registration exists and Client ID matches secret:
 ```powershell
 az ad app list --display-name "GitHub-Actions-OIDC" --query "[].{name:displayName, clientId:appId}"
-gh secret list --repo pavanthakur/TestAppXY_OrderProcessingSystem
+gh secret list --repo pavanthakur/XYDataLabs.OrderProcessingSystem
 ```
 
 **Issue**: Secrets not configured automatically
@@ -690,7 +692,7 @@ gh secret list --repo pavanthakur/TestAppXY_OrderProcessingSystem
 **Solution**: Run manual configuration:
 ```powershell
 cd Resources/Azure-Deployment
-./configure-github-secrets.ps1 -Repository "pavanthakur/TestAppXY_OrderProcessingSystem" -Force
+./configure-github-secrets.ps1 -Repository "pavanthakur/XYDataLabs.OrderProcessingSystem" -Force
 ```
 
 ---
@@ -800,12 +802,11 @@ The repository includes an automated setup script: `Resources/Azure-Deployment/s
    - Automatically generated from app registration
    - Enables authentication for GitHub Actions
 
-3. **Configures Federated Credential**
-   - **Name**: `github-main-oidc`
-   - **Issuer**: `https://token.actions.githubusercontent.com`
-   - **Subject**: `repo:getpavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/main`
-   - **Audience**: `api://AzureADTokenExchange`
-   - This allows GitHub Actions running from the `main` branch to authenticate
+3. **Configures Federated Credentials**
+   - Uses the shared defaults from `Resources/Azure-Deployment/branch-policy.json`
+   - Default branch credential names: `github-dev-oidc`, `github-staging-oidc`, `github-main-oidc`
+   - Subject pattern: `repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/{branch}`
+   - This allows GitHub Actions running from the mapped branch to authenticate
 
 4. **Assigns Permissions**
    - Grants **Contributor** role to service principal
@@ -835,7 +836,7 @@ GitHub Actions OIDC Setup
   Service principal created
 
 [4/7] Configuring federated credentials...
-  Federated credential created for main branch (github-main-oidc)
+  Federated credentials created for branch-policy defaults (github-dev-oidc, github-staging-oidc, github-main-oidc)
 
 [5/7] Assigning Contributor role...
   Contributor role assigned to resource group: rg-orderprocessing-dev
@@ -875,11 +876,11 @@ az ad sp create --id <APP_ID>
 3. Go to: **Certificates & secrets** → **Federated credentials** → **Add credential**
 4. Configure:
    - **Federated credential scenario**: GitHub Actions deploying Azure resources
-   - **Organization**: `getpavanthakur` (your GitHub username)
-   - **Repository**: `TestAppXY_OrderProcessingSystem`
+   - **Organization**: `pavanthakur` (your GitHub username)
+   - **Repository**: `XYDataLabs.OrderProcessingSystem`
    - **Entity type**: `Branch`
-   - **Branch name**: `main` (case-sensitive)
-   - **Name**: `github-main-oidc`
+   - **Branch name**: use the mapped branch from `Resources/Azure-Deployment/branch-policy.json` (default production branch: `main`)
+   - **Name**: `github-<branch>-oidc`
 5. Click **Add**
 
 **CLI Method** (Alternative):
@@ -889,7 +890,7 @@ Create a JSON file `federated-credential.json`:
 {
   "name": "github-main-oidc",
   "issuer": "https://token.actions.githubusercontent.com",
-  "subject": "repo:getpavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/main",
+  "subject": "repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/main",
   "audiences": ["api://AzureADTokenExchange"]
 }
 ```
@@ -942,7 +943,7 @@ Branch: dev     → Federated Credential: github-dev-oidc     → Deploys to: rg
 **How it works**:
 1. Push to `dev` branch
 2. Workflow uses repository secret `AZUREAPPSERVICE_CLIENTID`
-3. GitHub Actions generates token with subject: `repo:pavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/dev`
+3. GitHub Actions generates token with subject: `repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev`
 4. Azure validates against `github-dev-oidc` federated credential
 5. Deployment succeeds to dev resources
 
@@ -989,7 +990,7 @@ If you need approval workflows or separate credentials per environment, you can 
    ```
 5. Create environment-based federated credentials:
    ```
-   Subject: repo:getpavanthakur/TestAppXY_OrderProcessingSystem:environment:Production
+   Subject: repo:pavanthakur/XYDataLabs.OrderProcessingSystem:environment:Production
    ```
 
 **When to Use Environment Secrets**:
@@ -1129,13 +1130,13 @@ Include optional gating for UI only (shorter timeout):
 ### 5.1 Manual Deployment
 
 **API Deployment**:
-1. Navigate to: https://github.com/getpavanthakur/TestAppXY_OrderProcessingSystem/actions/workflows/deploy-api-to-azure.yml
+1. Navigate to: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/deploy-api-to-azure.yml
 2. Click **"Run workflow"** button
 3. Select **main** branch
 4. Click **"Run workflow"**
 
 **UI Deployment**:
-1. Navigate to: https://github.com/getpavanthakur/TestAppXY_OrderProcessingSystem/actions/workflows/deploy-ui-to-azure.yml
+1. Navigate to: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/deploy-ui-to-azure.yml
 2. Click **"Run workflow"** button
 3. Select **main** branch
 4. Click **"Run workflow"**
@@ -1163,7 +1164,7 @@ git push
 ### 5.3 Monitor Deployment
 
 1. **GitHub Actions UI**:
-   - Navigate to: https://github.com/pavanthakur/TestAppXY_OrderProcessingSystem/actions
+   - Navigate to: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions
    - Click on the running workflow
    - Expand build and deploy jobs to view logs
 
@@ -1326,9 +1327,8 @@ To execute a from-scratch dev environment setup, including SQL, migrations, and 
 
 ```powershell
 Set-ExecutionPolicy -Scope Process RemoteSigned
-Set-Location R:\GitGetPavan\TestAppXY_OrderProcessingSystem
-.
-Resources\Azure-Deployment\test-enterprise-deployment.ps1 -Environment dev
+Set-Location Q:\GIT\TestAppXY_OrderProcessingSystem
+.\Resources\Azure-Deployment\test-enterprise-deployment.ps1 -Environment dev
 ```
 
 This runs:
@@ -1368,7 +1368,7 @@ Checklist:
 **Error during GitHub Actions deployment**:
 ```
 Error: AADSTS700213: No matching federated identity record found for presented assertion 
-subject 'repo:getpavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/dev'
+subject 'repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev'
 ```
 
 **Root Cause**: Federated credential subject is malformed - missing repository name between owner and branch reference
@@ -1382,7 +1382,7 @@ az ad app federated-credential list --id $appId --query "[].{Name:name, Subject:
 
 **Look for malformed subjects**:
 - ❌ **INCORRECT**: `repo:pavanthakur//heads/dev` (missing repo name)
-- ✅ **CORRECT**: `repo:pavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/dev`
+- ✅ **CORRECT**: `repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev`
 
 **Solution - Delete and Recreate Credentials**:
 ```powershell
@@ -1397,7 +1397,7 @@ az ad app federated-credential delete --id $appId --federated-credential-id gith
 $credentialJson = @{
     name = "github-dev-oidc"
     issuer = "https://token.actions.githubusercontent.com"
-    subject = "repo:getpavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/dev"
+    subject = "repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev"
     audiences = @("api://AzureADTokenExchange")
 } | ConvertTo-Json
 
@@ -1410,7 +1410,7 @@ Remove-Item $tempFile
 $credentialJson = @{
     name = "github-staging-oidc"
     issuer = "https://token.actions.githubusercontent.com"
-    subject = "repo:getpavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/staging"
+    subject = "repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/staging"
     audiences = @("api://AzureADTokenExchange")
 } | ConvertTo-Json
 
@@ -1430,9 +1430,9 @@ az ad app federated-credential list --id $appId --query "[].{Name:name, Subject:
 ```
 Name                 Subject
 -------------------  ------------------------------------------------------------------
-github-dev-oidc      repo:pavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/dev
-github-staging-oidc  repo:pavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/staging
-github-main-oidc     repo:pavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/main
+github-dev-oidc      repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev
+github-staging-oidc  repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/staging
+github-main-oidc     repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/main
 ```
 
 ---
@@ -1459,9 +1459,9 @@ AADSTS70025: The client has no configured federated identity credentials
    ```
 
 3. Subject must match your branch:
-   - For `dev` branch: `repo:getpavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/dev`
-   - For `staging` branch: `repo:getpavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/staging`
-   - For `main` branch: `repo:getpavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/main`
+   - For `dev` branch: `repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev`
+   - For `staging` branch: `repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/staging`
+   - For `main` branch: `repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/main`
 
 4. Ensure **branch name is case-sensitive** - must match exactly
 
@@ -1544,14 +1544,14 @@ az webapp log download --name orderprocessing-api-xyapp --resource-group rg-orde
 ### Federated Credential Scoping
 
 The federated credential is scoped to:
-- **Repository**: `pavanthakur/TestAppXY_OrderProcessingSystem`
+- **Repository**: `pavanthakur/XYDataLabs.OrderProcessingSystem`
 - **Environment**: `Production`
 - **Branch**: Any (can be restricted further)
 
 **To restrict to specific branch**:
 ```json
 {
-  "subject": "repo:pavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/main"
+  "subject": "repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/main"
 }
 ```
 
@@ -1589,7 +1589,7 @@ az role assignment create `
 ### View Deployment History
 
 **GitHub Actions**:
-- https://github.com/pavanthakur/TestAppXY_OrderProcessingSystem/actions
+- https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions
 
 **Azure Portal**:
 1. Open App Service
@@ -1765,12 +1765,12 @@ git push origin main
 ```
 
 Or trigger deployment manually without code changes:
-1. Navigate to: https://github.com/getpavanthakur/TestAppXY_OrderProcessingSystem/actions
+1. Navigate to: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions
 2. Select **Deploy API to Azure App Service** → **Run workflow** → **main** → **Run workflow**
 3. Select **Deploy UI to Azure App Service** → **Run workflow** → **main** → **Run workflow**
 
 **Step 4: Monitor Deployment**
-1. Navigate to: https://github.com/pavanthakur/TestAppXY_OrderProcessingSystem/actions
+1. Navigate to: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions
 2. Watch for two workflows to start:
    - **Deploy API to Azure App Service**
    - **Deploy UI to Azure App Service**
@@ -2089,10 +2089,11 @@ Extended setup script now supports multiple branches and environment subjects:
 ```powershell
 ./Resources/Azure-Deployment/setup-github-oidc.ps1 `
   -ResourceGroupName rg-orderprocessing-prod `
-  -Branches "main,staging,dev" `
   -Environments "Production" `
   -RoleName "Website Contributor"
 ```
+
+Omit `-Branches` to use the shared defaults from `Resources/Azure-Deployment/branch-policy.json`.
 
 Flags:
 - `-Branches`: Creates branch-based federated credentials (preferred for build-driven promotions).
@@ -2102,10 +2103,10 @@ Flags:
 ### Federated Credential Patterns
 | Type | Example Name | Subject Example |
 |------|--------------|-----------------|
-| Branch | `github-main-oidc` | `repo:pavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/main` |
-| Branch | `github-staging-oidc` | `repo:pavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/staging` |
-| Branch | `github-dev-oidc` | `repo:pavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/dev` |
-| Environment | `github-env-Production-oidc` | `repo:pavanthakur/TestAppXY_OrderProcessingSystem:environment:Production` |
+| Branch | `github-main-oidc` | `repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/main` |
+| Branch | `github-staging-oidc` | `repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/staging` |
+| Branch | `github-dev-oidc` | `repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev` |
+| Environment | `github-env-Production-oidc` | `repo:pavanthakur/XYDataLabs.OrderProcessingSystem:environment:Production` |
 
 ### GitHub Workflow Adjustments
 Workflows updated to:
@@ -2271,7 +2272,7 @@ The bootstrap script now handles complete infrastructure AND OIDC setup in a sin
    - `AZUREAPPSERVICE_TENANTID` = Tenant ID
    - `AZUREAPPSERVICE_SUBSCRIPTIONID` = Subscription ID
    
-   Add them at: `https://github.com/getpavanthakur/TestAppXY_OrderProcessingSystem/settings/secrets/actions`
+   Add them at: `https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/settings/secrets/actions`
 
 4. **Verify Setup** (Optional):
    ```powershell
@@ -2297,7 +2298,7 @@ If you need to configure OIDC separately or customize settings:
 2. Set up OIDC & federated credentials (repeat per environment RG if assigning RBAC separately):
   ```powershell
   # Production
-  ./Resources/Azure-Deployment/setup-github-oidc.ps1 -ResourceGroupName rg-orderprocessing-prod -Branches "main,staging,dev" -RoleName "Website Contributor"
+  ./Resources/Azure-Deployment/setup-github-oidc.ps1 -ResourceGroupName rg-orderprocessing-prod -RoleName "Website Contributor"
   # (Optional) Staging RBAC tightening
   ./Resources/Azure-Deployment/setup-github-oidc.ps1 -ResourceGroupName rg-orderprocessing-stg -Branches "staging" -RoleName "Website Contributor"
   # (Optional) Dev RBAC
@@ -2305,7 +2306,7 @@ If you need to configure OIDC separately or customize settings:
   ```
     Multi-RG single invocation example (assign RBAC to all at once):
     ```powershell
-    ./Resources/Azure-Deployment/setup-github-oidc.ps1 -ResourceGroupNames "rg-orderprocessing-dev,rg-orderprocessing-stg,rg-orderprocessing-prod" -Branches "main,staging,dev" -RoleName "Website Contributor"
+    ./Resources/Azure-Deployment/setup-github-oidc.ps1 -ResourceGroupNames "rg-orderprocessing-dev,rg-orderprocessing-stg,rg-orderprocessing-prod" -RoleName "Website Contributor"
     ```
   > Single App Registration strategy: run against each RG to grant scoped RBAC; credentials are created only once per name.
 
@@ -2364,7 +2365,7 @@ If you need to configure OIDC separately or customize settings:
 ### Condensed Sequence (Cheat Sheet)
 1. az login + az account set --subscription <SUB_ID>
 2. Bootstrap infra: `bootstrap-enterprise-infra.ps1 -Environments dev,stg,prod`
-3. OIDC + RBAC (multi-RG): `setup-github-oidc.ps1 -ResourceGroupNames "rg-orderprocessing-dev,rg-orderprocessing-stg,rg-orderprocessing-prod" -Branches "main,staging,dev"`
+3. OIDC + RBAC (multi-RG): `setup-github-oidc.ps1 -ResourceGroupNames "rg-orderprocessing-dev,rg-orderprocessing-stg,rg-orderprocessing-prod"`
 4. Add / update GitHub repository secrets (CLIENTID, TENANTID, SUBSCRIPTIONID)
 5. Verify identity & credentials: `check-app-registration.ps1`
 6. Push code to dev / staging / main → branch-triggered deployments
@@ -2388,7 +2389,7 @@ If you need to configure OIDC separately or customize settings:
 ```powershell
 az group delete --name rg-orderprocessing-prod --yes --no-wait
 ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environments prod
-./Resources/Azure-Deployment/setup-github-oidc.ps1 -ResourceGroupName rg-orderprocessing-prod -Branches main
+./Resources/Azure-Deployment/setup-github-oidc.ps1 -ResourceGroupName rg-orderprocessing-prod
 ./Resources/Azure-Deployment/check-app-registration.ps1
 git push origin main   # triggers redeploy
 ```
@@ -2398,7 +2399,7 @@ To recycle production only:
 ```powershell
 az group delete --name rg-orderprocessing-prod --yes --no-wait
 ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1 -Environments prod
-./Resources/Azure-Deployment/setup-github-oidc.ps1 -ResourceGroupName rg-orderprocessing-prod -Branches main
+./Resources/Azure-Deployment/setup-github-oidc.ps1 -ResourceGroupName rg-orderprocessing-prod
 ./Resources/Azure-Deployment/check-app-registration.ps1
 ```
 

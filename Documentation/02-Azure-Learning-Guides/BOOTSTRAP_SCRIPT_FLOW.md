@@ -686,9 +686,11 @@ if ($oidcResult.Success) {
 # List existing credentials
 $existingCreds = az ad app federated-credential list --id {AppObjectId} 2>$null | ConvertFrom-Json
 
-$branches = @('main', 'staging', 'dev')
-$githubOwner = 'getpavanthakur'
-$repository = 'TestAppXY_OrderProcessingSystem'
+. (Join-Path $PSScriptRoot 'branch-policy.ps1')
+$branchPolicy = Get-GitHubBranchPolicy
+$branches = Get-GitHubBranchList -Policy $branchPolicy
+$githubOwner = 'pavanthakur'
+$repository = 'XYDataLabs.OrderProcessingSystem'
 
 foreach ($branch in $branches) {
     $credName = "github-$branch-oidc"  # e.g., "github-main-oidc"
@@ -723,22 +725,22 @@ foreach ($branch in $branches) {
 ```
 
 **Created Credentials**:
-- `github-main-oidc` → Subject: `repo:getpavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/main`
-- `github-staging-oidc` → Subject: `repo:getpavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/staging`
-- `github-dev-oidc` → Subject: `repo:getpavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/dev`
+- `github-main-oidc` → Subject: `repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/main`
+- `github-staging-oidc` → Subject: `repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/staging`
+- `github-dev-oidc` → Subject: `repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev`
 
 **Branch-to-Environment Mapping**:
 
 | Git Branch | Federated Credential | Subject Pattern | Deploys To |
 |-----------|---------------------|-----------------|------------|
-| `main` | `github-main-oidc` | `ref:refs/heads/main` | Production resources (future) |
-| `staging` | `github-staging-oidc` | `ref:refs/heads/staging` | `rg-orderprocessing-staging`<br>`orderprocessing-api-xyapp-staging`<br>`orderprocessing-ui-xyapp-staging` |
-| `dev` | `github-dev-oidc` | `ref:refs/heads/dev` | `rg-orderprocessing-dev`<br>`orderprocessing-api-xyapp-dev`<br>`orderprocessing-ui-xyapp-dev` |
+| `main` | `github-main-oidc` | `ref:refs/heads/main` | `rg-orderprocessing-prod`<br>`pavanthakur-orderprocessing-api-xyapp-prod`<br>`pavanthakur-orderprocessing-ui-xyapp-prod` |
+| `staging` | `github-staging-oidc` | `ref:refs/heads/staging` | `rg-orderprocessing-stg`<br>`pavanthakur-orderprocessing-api-xyapp-stg`<br>`pavanthakur-orderprocessing-ui-xyapp-stg` |
+| `dev` | `github-dev-oidc` | `ref:refs/heads/dev` | `rg-orderprocessing-dev`<br>`pavanthakur-orderprocessing-api-xyapp-dev`<br>`pavanthakur-orderprocessing-ui-xyapp-dev` |
 
 **How Branch-Based OIDC Works**:
 1. Developer pushes code to `dev` branch
 2. GitHub Actions workflow triggers
-3. Workflow requests OIDC token with subject: `repo:getpavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/dev`
+3. Workflow requests OIDC token with subject: `repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev`
 4. Azure validates token against `github-dev-oidc` federated credential
 5. Azure grants access to deploy to dev resource group
 6. Deployment proceeds to dev WebApps automatically
@@ -774,7 +776,7 @@ foreach ($rg in $rgList) {
 **3.5: Display GitHub Secrets** (Lines 703-713)
 ```
   [GitHub Secrets] Add these to repository secrets:
-    https://github.com/getpavanthakur/TestAppXY_OrderProcessingSystem/settings/secrets/actions
+    https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/settings/secrets/actions
 
     AZUREAPPSERVICE_CLIENTID:        xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
     AZUREAPPSERVICE_TENANTID:        xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
@@ -1023,7 +1025,7 @@ Expected: Connection string configured
 ### GitHub Repository Checks
 
 **Add Secrets**:
-1. Navigate to: `https://github.com/getpavanthakur/TestAppXY_OrderProcessingSystem/settings/secrets/actions`
+1. Navigate to: `https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/settings/secrets/actions`
 2. Add three repository secrets:
    - `AZUREAPPSERVICE_CLIENTID`
    - `AZUREAPPSERVICE_TENANTID`
@@ -1138,7 +1140,6 @@ az role assignment list --assignee $(az ad signed-in-user show --query id -o tsv
 # Manual OIDC setup
 ./Resources/Azure-Deployment/setup-github-oidc.ps1 `
   -ResourceGroupNames "rg-orderprocessing-dev,rg-orderprocessing-stg,rg-orderprocessing-prod" `
-  -Branches "main,staging,dev" `
   -RoleName "Contributor"
 ```
 
@@ -1156,7 +1157,7 @@ az role assignment list --assignee $(az ad signed-in-user show --query id -o tsv
 **Symptom**: GitHub Actions workflow fails at "Login to Azure" step with error:
 ```
 Error: AADSTS700213: No matching federated identity record found for presented assertion 
-subject 'repo:getpavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/dev'
+subject 'repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev'
 ```
 
 **Action**:
@@ -1166,8 +1167,8 @@ $appId = "dcb3394d-cc23-422d-b525-9ecf872949b7"  # Your App ID
 az ad app federated-credential list --id $appId --query "[].{Name:name, Subject:subject}" -o table
 
 # 2. Check for malformed subjects (missing repo name):
-# ❌ BAD:  repo:getpavanthakur//heads/dev
-# ✅ GOOD: repo:getpavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/dev
+# ❌ BAD:  repo:pavanthakur//heads/dev
+# ✅ GOOD: repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev
 
 # 3. Delete malformed credentials
 az ad app federated-credential delete --id $appId --federated-credential-id github-dev-oidc
@@ -1177,7 +1178,7 @@ az ad app federated-credential delete --id $appId --federated-credential-id gith
 $credentialJson = @{
     name = "github-dev-oidc"
     issuer = "https://token.actions.githubusercontent.com"
-    subject = "repo:getpavanthakur/TestAppXY_OrderProcessingSystem:ref:refs/heads/dev"
+    subject = "repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev"
     audiences = @("api://AzureADTokenExchange")
 } | ConvertTo-Json
 

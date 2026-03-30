@@ -44,7 +44,7 @@ az deployment sub show --name <deploymentName> --query "properties.outputs"
 ## GitHub Actions
 Workflow: `.github/workflows/infra-deploy.yml`
 - PR changes to `infra/**` trigger a `what-if`.
-- Push to `dev`, `staging`, `main` branches triggers deployment using the corresponding parameter file.
+- Manual workflow dispatch performs infrastructure deployment using the selected environment parameter file.
 
 ## Identity Notes
 The `identity.bicep` module uses `deploymentScripts` and expects a user-assigned managed identity with necessary Graph permissions for production. For now, directory-wide permissions may be required to allow app registration and federated credential creation.

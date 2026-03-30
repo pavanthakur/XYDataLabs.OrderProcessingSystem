@@ -11,7 +11,7 @@ param(
     [string]$BaseName = 'orderprocessing',
     
     [Parameter(Mandatory=$false)]
-    [string]$GitHubOwner = 'pavanthakur',
+    [string]$GitHubOwner = '',
     
     [Parameter(Mandatory=$false)]
     [string]$OpenPayMerchantId,
@@ -47,6 +47,29 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+function Resolve-GitHubOwner {
+    param(
+        [string]$Owner,
+        [string]$DefaultOwner = 'pavanthakur'
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($Owner)) { return $Owner }
+    if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_REPOSITORY) -and $env:GITHUB_REPOSITORY -match '^(?<owner>[^/]+)/.+$') { return $Matches.owner }
+
+    try {
+        $originUrl = git config --get remote.origin.url 2>$null
+        if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($originUrl)) {
+            $originUrl = $originUrl.Trim()
+            if ($originUrl -match 'github\.com[:/](?<owner>[^/]+)/[^/]+?(?:\.git)?$') { return $Matches.owner }
+        }
+    }
+    catch { }
+
+    return $DefaultOwner
+}
+
+$GitHubOwner = Resolve-GitHubOwner -Owner $GitHubOwner
 
 # Retry function for Azure CLI commands with exponential backoff
 function Invoke-AzCommandWithRetry {

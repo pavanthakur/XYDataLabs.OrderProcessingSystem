@@ -1,4 +1,8 @@
 # Enhanced script to inspect OIDC App Registration and enumerate federated credentials
+. (Join-Path $PSScriptRoot 'branch-policy.ps1')
+$branchPolicy = Get-GitHubBranchPolicy
+$recommendedBranches = (Get-GitHubBranchList -Policy $branchPolicy) -join ','
+
 Write-Host "=====================================" -ForegroundColor Cyan
 Write-Host "App Registration Verification" -ForegroundColor Cyan
 Write-Host "=====================================" -ForegroundColor Cyan
@@ -49,7 +53,7 @@ Write-Host "     AZUREAPPSERVICE_SUBSCRIPTIONID = <SUBSCRIPTION_ID>" -Foreground
 
 Write-Host "`n--- Recommendations ---" -ForegroundColor Cyan
 if ($branchCreds.Count -eq 0) {
-    Write-Host "  Add branch credentials: re-run setup-github-oidc.ps1 with -Branches main,staging,dev" -ForegroundColor Yellow
+    Write-Host "  Add branch credentials: re-run setup-github-oidc.ps1 with -Branches $recommendedBranches" -ForegroundColor Yellow
 }
 if ($envCreds.Count -eq 0) {
     Write-Host "  Optional: add environment credentials via -Environments Production,QA if approvals desired." -ForegroundColor DarkYellow
