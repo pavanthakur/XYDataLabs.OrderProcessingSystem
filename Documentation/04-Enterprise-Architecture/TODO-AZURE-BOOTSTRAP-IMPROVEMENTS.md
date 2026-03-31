@@ -59,7 +59,7 @@
 - [ ] Update Key Vault with the new values (do NOT commit new values to repo)
 
 **Step 2 — Store all secrets in Azure Key Vault**
-- [ ] Add secrets to Key Vault (`kv-orderproc-{dev|stg|prod}`): `SqlAdminPassword`, `OpenPayMerchantId`, `OpenPayPrivateKey`, `OpenPayDeviceSessionId`, `CertPassword`
+- [ ] Add secrets to Key Vault (`kv-orderprocessing-{dev|stg|prod}`): `SqlAdminPassword`, `OpenPayMerchantId`, `OpenPayPrivateKey`, `OpenPayDeviceSessionId`, `CertPassword`
 - [ ] Use `populate-keyvault-secrets.ps1` or `az keyvault secret set` (ensure script itself does not hardcode secrets — pass via pipeline variables or interactive prompt)
 
 **Step 3 — Replace hardcoded values with placeholders in config files**
@@ -67,7 +67,7 @@
 - [ ] Keep `sharedsettings.local.json` with developer-safe defaults (e.g. `localdb` no password) or `"<<SET-IN-USER-SECRETS>>"`
 
 **Step 4 — Configure App Service to read from Key Vault**
-- [ ] Add app settings with Key Vault references: `@Microsoft.KeyVault(SecretUri=https://kv-orderproc-{env}.vault.azure.net/secrets/{name})`
+- [ ] Add app settings with Key Vault references: `@Microsoft.KeyVault(SecretUri=https://kv-orderprocessing-{env}.vault.azure.net/secrets/{name})`
 - [ ] Ensure App Service managed identity has `Key Vault Secrets User` role (see SEC-03)
 
 **Step 5 — Use Bicep `reference()` or `getSecret()` for SQL password in IaC**

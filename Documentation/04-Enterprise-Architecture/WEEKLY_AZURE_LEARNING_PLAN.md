@@ -190,7 +190,7 @@ public class ServiceBusPublisher : IMessagePublisher
 ```powershell
 # Store Service Bus connection string in Key Vault
 az keyvault secret set `
-  --vault-name kv-orderproc-dev `
+  --vault-name kv-orderprocessing-dev `
   --name ServiceBusConnectionString `
   --value "<connection-string-from-day-1>"
 
@@ -198,7 +198,7 @@ az keyvault secret set `
 az webapp config appsettings set `
   --name pavanthakur-orderprocessing-api-xyapp-dev `
   --resource-group rg-orderprocessing-dev `
-  --settings ServiceBus__ConnectionString="@Microsoft.KeyVault(SecretUri=https://kv-orderproc-dev.vault.azure.net/secrets/ServiceBusConnectionString/)"
+  --settings ServiceBus__ConnectionString="@Microsoft.KeyVault(SecretUri=https://kv-orderprocessing-dev.vault.azure.net/secrets/ServiceBusConnectionString/)"
 ```
 
 **Testing**:
@@ -470,12 +470,12 @@ func azure functionapp publish func-orderprocessing-dev
 az functionapp config appsettings set `
   --name func-orderprocessing-dev `
   --resource-group rg-orderprocessing-dev `
-  --settings ServiceBusConnectionString="@Microsoft.KeyVault(SecretUri=https://kv-orderproc-dev.vault.azure.net/secrets/ServiceBusConnectionString/)"
+  --settings ServiceBusConnectionString="@Microsoft.KeyVault(SecretUri=https://kv-orderprocessing-dev.vault.azure.net/secrets/ServiceBusConnectionString/)"
 
 # Grant Function App access to Key Vault
 $functionIdentity = az functionapp identity show --name func-orderprocessing-dev --resource-group rg-orderprocessing-dev --query principalId -o tsv
 az keyvault set-policy `
-  --name kv-orderproc-dev `
+  --name kv-orderprocessing-dev `
   --object-id $functionIdentity `
   --secret-permissions get list
 ```
@@ -589,7 +589,7 @@ az storage account show-connection-string `
 
 # Store in Key Vault
 az keyvault secret set `
-  --vault-name kv-orderproc-dev `
+  --vault-name kv-orderprocessing-dev `
   --name StorageConnectionString `
   --value "<connection-string>"
 ```
@@ -1196,9 +1196,9 @@ az containerapp create `
     "ApplicationInsights__ConnectionString=secretref:appinsightsconnectionstring" `
     "ServiceBus__ConnectionString=secretref:servicebusconnectionstring" `
   --secrets `
-    sqlconnectionstring="$(az keyvault secret show --vault-name kv-orderproc-dev --name SqlConnectionString --query value -o tsv)" `
-    appinsightsconnectionstring="$(az keyvault secret show --vault-name kv-orderproc-dev --name AppInsightsConnectionString --query value -o tsv)" `
-    servicebusconnectionstring="$(az keyvault secret show --vault-name kv-orderproc-dev --name ServiceBusConnectionString --query value -o tsv)" `
+    sqlconnectionstring="$(az keyvault secret show --vault-name kv-orderprocessing-dev --name SqlConnectionString --query value -o tsv)" `
+    appinsightsconnectionstring="$(az keyvault secret show --vault-name kv-orderprocessing-dev --name AppInsightsConnectionString --query value -o tsv)" `
+    servicebusconnectionstring="$(az keyvault secret show --vault-name kv-orderprocessing-dev --name ServiceBusConnectionString --query value -o tsv)" `
   --min-replicas 1 `
   --max-replicas 5 `
   --cpu 0.5 `

@@ -60,7 +60,7 @@ PRINCIPAL_ID="<principalId from output>"
 
 # 2. Grant Key Vault access
 az keyvault set-policy \
-  -n kv-orderproc-dev \
+  -n kv-orderprocessing-dev \
   --object-id $PRINCIPAL_ID \
   --secret-permissions get list
 
@@ -68,7 +68,7 @@ az keyvault set-policy \
 az webapp config appsettings set \
   -g rg-orderprocessing-dev \
   -n pavanthakur-orderprocessing-api-xyapp-dev \
-  --settings KEY_VAULT_NAME=kv-orderproc-dev
+  --settings KEY_VAULT_NAME=kv-orderprocessing-dev
 
 # 4. Restart the app
 az webapp restart \
@@ -201,7 +201,7 @@ This matches the configuration section structure in `appsettings.json`.
    ```bash
    az keyvault list -g rg-orderprocessing-dev --query "[].name" -o tsv
    ```
-2. Verify the name matches the pattern: `kv-orderproc-dev` (shortened base name)
+2. Verify the name matches the pattern: `kv-orderprocessing-dev`
 3. If it doesn't exist, deploy infrastructure:
    ```bash
    az deployment sub create \
@@ -227,12 +227,12 @@ Run the enable-managed-identity script:
 **Solution:**
 1. Check Key Vault network settings:
    ```bash
-   az keyvault show -n kv-orderproc-dev -g rg-orderprocessing-dev \
+   az keyvault show -n kv-orderprocessing-dev -g rg-orderprocessing-dev \
      --query properties.networkAcls
    ```
 2. If firewall is enabled, add your IP or allow Azure services:
    ```bash
-   az keyvault network-rule add -n kv-orderproc-dev \
+   az keyvault network-rule add -n kv-orderprocessing-dev \
      --ip-address <your-ip>
    ```
 
@@ -278,7 +278,7 @@ az webapp log tail \
 1. **Update OpenPayAdapter API Key:**
    ```powershell
    az keyvault secret set \
-     --vault-name kv-orderproc-prod \
+     --vault-name kv-orderprocessing-prod \
      --name "OpenPay--PrivateKey" \
      --value "<production-openpay-private-key>"
    ```
@@ -304,7 +304,7 @@ To rotate a secret:
 ```bash
 # Add new version
 az keyvault secret set \
-  --vault-name kv-orderproc-prod \
+  --vault-name kv-orderprocessing-prod \
   --name "OpenPay--PrivateKey" \
   --value "<new-production-openpay-private-key>"
 
@@ -333,10 +333,10 @@ az keyvault secret set \
 | Enable Managed Identity | `.\Resources\Azure-Deployment\enable-managed-identity.ps1 -Environment dev` |
 | Populate Secrets | `.\Resources\Azure-Deployment\populate-keyvault-secrets.ps1 -Environment dev` |
 | Verify Setup | `.\Resources\Azure-Deployment\verify-azure-setup.ps1` |
-| List Secrets | `az keyvault secret list --vault-name kv-orderproc-dev --query "[].name"` |
-| Update Secret | `az keyvault secret set --vault-name kv-orderproc-dev --name "SecretName" --value "value"` |
+| List Secrets | `az keyvault secret list --vault-name kv-orderprocessing-dev --query "[].name"` |
+| Update Secret | `az keyvault secret set --vault-name kv-orderprocessing-dev --name "SecretName" --value "value"` |
 | Check MI Principal ID | `az webapp identity show -g rg-orderprocessing-dev -n pavanthakur-orderprocessing-api-xyapp-dev` |
-| Check Access Policies | `az keyvault show -n kv-orderproc-dev --query properties.accessPolicies` |
+| Check Access Policies | `az keyvault show -n kv-orderprocessing-dev --query properties.accessPolicies` |
 | Restart App | `az webapp restart -g rg-orderprocessing-dev -n pavanthakur-orderprocessing-api-xyapp-dev` |
 
 ## Support
