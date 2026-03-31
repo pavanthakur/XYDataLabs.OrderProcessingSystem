@@ -1018,7 +1018,7 @@ If you delete and recreate the app registration:
 
 ### 3.4 Verify Secret Configuration
 
-Run a manual workflow and confirm the `azure/login@v2` step succeeds with OIDC (look for “Federated credentials detected”).
+Run a manual workflow and confirm the `azure/login@v3` step succeeds with OIDC (look for “Federated credentials detected”).
 
 ---
 
@@ -1060,7 +1060,7 @@ Example (API deploy job excerpt):
       steps:
          - uses: actions/checkout@v4
          - name: Azure Login (OIDC)
-            uses: azure/login@v2
+            uses: azure/login@v3
             with:
                client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
                tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}

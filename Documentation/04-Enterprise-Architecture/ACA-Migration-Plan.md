@@ -500,7 +500,7 @@ Acceptance:
 ---
 
 ## CI/CD Notes (GitHub Actions)
-- Prefer OIDC with `azure/login@v2`
+- Prefer OIDC with `azure/login@v3`
 - Steps:
   1. Checkout; setup .NET
   2. Login to Azure (OIDC)
