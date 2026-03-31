@@ -386,7 +386,7 @@ jobs:
       appObjectId: ${{ steps.oidc-setup.outputs.appObjectId || steps.oidc-passthrough.outputs.appObjectId }}
       spObjectId: ${{ steps.oidc-setup.outputs.spObjectId || steps.oidc-passthrough.outputs.spObjectId }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Auth Check
         id: auth-check

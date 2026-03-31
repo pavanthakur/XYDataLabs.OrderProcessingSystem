@@ -92,10 +92,10 @@ jobs:
     needs: determine-environment
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
@@ -133,7 +133,7 @@ jobs:
       app-service-hostname: ${{ steps.deploy-bicep.outputs.appServiceHostName }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Azure CLI Login (OIDC)
         uses: azure/login@v3
