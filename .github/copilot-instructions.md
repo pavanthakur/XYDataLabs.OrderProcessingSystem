@@ -188,7 +188,7 @@ permissions:
   id-token: write   # request OIDC token
   contents: read
 steps:
-  - uses: azure/login@v2
+  - uses: azure/login@v3
     with:
       client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
       tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
@@ -272,11 +272,11 @@ via the `ASPNETCORE_ENVIRONMENT` variable.
 
 ### Key Vault integration
 
-Key Vault (`kv-orderproc-{dev|stg|prod}`) holds application secrets at runtime. The API uses managed
+Key Vault (`kv-orderprocessing-{dev|stg|prod}`) holds application secrets at runtime. The API uses managed
 identity to access Key Vault without credentials in config files.
 
 > **Note**: Azure resource names for staging use the abbreviated suffix `stg` (e.g. `rg-orderprocessing-stg`,
-> `kv-orderproc-stg`), not `staging`. The workflow environment name remains `staging` but all scripts
+> `kv-orderprocessing-stg`), not `staging`. The workflow environment name remains `staging` but all scripts
 > map it internally via `$envSuffix = switch ($Environment) { 'staging' { 'stg' } default { $Environment } }`.
 
 ---

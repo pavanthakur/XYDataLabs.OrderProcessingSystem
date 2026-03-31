@@ -22,7 +22,7 @@ The GitHub App (`APP_ID` + `APP_PRIVATE_KEY`) is used **only to write `AZUREAPPS
 The `AZUREAPPSERVICE_*` secrets (`CLIENTID`, `TENANTID`, `SUBSCRIPTIONID`) are the output of Phase 1a. They represent an Azure identity (Entra ID App Registration with federated credentials).
 
 - **This workflow (Phase 1b) does NOT use these to authenticate to Azure.** It only stores their values as GitHub secrets.
-- Phase A (bootstrap infra) and Deploy workflows use `azure/login@v2` with these secrets to authenticate to Azure.
+- Phase A (bootstrap infra) and Deploy workflows use `azure/login@v3` with these secrets to authenticate to Azure.
 
 ### Why Phase 1b "depends on" OIDC credentials
 
@@ -30,18 +30,18 @@ Phase 1b needs the OIDC credential **values** to store them — not to authentic
 - **First run**: Phase 1a outputs `clientId`/`tenantId`/`subscriptionId` and passes them to this workflow.
 - **Re-runs**: The `AZUREAPPSERVICE_*` secrets already exist in GitHub from a previous Phase 1b run. This workflow writes them again if new values are passed.
 
-### How `azure/login@v2` is shared across phases
+### How `azure/login@v3` is shared across phases
 
-`azure/login@v2` is the **single, consistent Azure authentication action** used by every workflow job that needs to interact with Azure:
+`azure/login@v3` is the **single, consistent Azure authentication action** used by every workflow job that needs to interact with Azure:
 
-| Job | Uses `azure/login@v2`? | Notes |
+| Job | Uses `azure/login@v3`? | Notes |
 |-----|------------------------|-------|
 | **Phase 1b (this workflow)** | ❌ No | GitHub App token only |
 | Phase 1a (re-run) | ✅ Yes | Same credentials as Phase A |
 | Phase A (bootstrap-dev/staging/prod) | ✅ Yes | 3-step pattern: Validate → Login → Verify |
 | Deploy (deploy-api/ui) | ✅ Yes | 2-step pattern: Check → Login (conditional) |
 
-Each job calls `azure/login@v2` independently because GitHub Actions jobs run on isolated runners and cannot share login state.
+Each job calls `azure/login@v3` independently because GitHub Actions jobs run on isolated runners and cannot share login state.
 
 The **only** place where a human enters credentials to generate an Azure token is Phase 1a's first-time device-code step. All other Azure logins (Phase 1a re-run, Phase A, Deploy workflows) are fully automated using the stored OIDC credentials.
 
@@ -352,7 +352,7 @@ useExistingSecrets  = false → fresh credentials
 ### Step 8 — `configure-secrets` — Generate GitHub App Token
 
 ```
-APP_ID + APP_PRIVATE_KEY → actions/create-github-app-token@v1
+APP_ID + APP_PRIVATE_KEY → actions/create-github-app-token@v3
   → short-lived GitHub App installation token (valid 1 hour, auto-rotated)
   → used as GH_TOKEN for all subsequent gh CLI calls
 ```
@@ -409,7 +409,7 @@ On the next run (e.g., credential rotation or adding `staging`):
 ```
 Step 2 — Auth Check:
   EXISTING_CLIENT_ID = "clt-789" ✅
-  useOidc = true  → azure/login@v2 (no device code, fully automated)
+  useOidc = true  → azure/login@v3 (no device code, fully automated)
 
 Step 7 — Prerequisites:
   If new clientId/tenantId/subscriptionId passed:

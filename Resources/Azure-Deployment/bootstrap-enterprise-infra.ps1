@@ -1177,9 +1177,17 @@ AZUREAPPSERVICE_SUBSCRIPTIONID:  $($oidcResult.SubscriptionId)
 
 =================================
 "@
-    $secretsOutput | Set-Clipboard -ErrorAction SilentlyContinue
-    Write-Host "  [OK] Secrets copied to clipboard!" -ForegroundColor Green
     $isGitHubActionsRun = $env:GITHUB_ACTIONS -eq 'true'
+    if ($isGitHubActionsRun) {
+        Write-Host "  [INFO] Clipboard is not available in GitHub Actions; use the values shown above" -ForegroundColor Gray
+    } else {
+        try {
+            $secretsOutput | Set-Clipboard -ErrorAction Stop
+            Write-Host "  [OK] Secrets copied to clipboard!" -ForegroundColor Green
+        } catch {
+            Write-Host "  [WARN] Could not copy secrets to clipboard automatically" -ForegroundColor Yellow
+        }
+    }
     # Automatic GitHub secrets configuration (if helper script is present)
     Write-Host "`n  [AUTOMATION] Configuring GitHub secrets automatically..." -ForegroundColor Cyan
     $configScriptPath = Join-Path $PSScriptRoot "configure-github-secrets.ps1"
@@ -1234,8 +1242,8 @@ foreach ($s in $global:StepStatus) {
 
 Write-Host "\nNext Steps:" -ForegroundColor Yellow
 if ($oidcResult.Success) {
-    Write-Host "  1. Add the repository secrets copied above to GitHub (if not already)." -ForegroundColor White
-    Write-Host "  2. Push to branches to trigger deployments." -ForegroundColor White
+    Write-Host "  1. Add the repository secrets shown above to GitHub (if not already)." -ForegroundColor White
+    Write-Host "  2. Trigger deploy workflows manually, or push to deployment branches if you want branch-triggered deploys." -ForegroundColor White
 }
 Write-Host "  3. Review .github/prompts/README.md for required manual post-deploy prompts and follow-up steps." -ForegroundColor White
 
