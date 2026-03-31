@@ -37,7 +37,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # markdownlint-cli2: checks formatting rules defined in .markdownlint.json
       # Disabled rules: MD013 (line length — tables exceed 80 chars), MD036 (**bold** as pseudo-heading)

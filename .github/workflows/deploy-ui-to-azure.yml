@@ -31,10 +31,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
@@ -146,8 +146,46 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
 
-      - name: Deploy to Azure Web App
+      - name: Check Target Infrastructure Exists
         if: steps.check-credentials.outputs.credentialsConfigured == 'true'
+        id: check-target
+        shell: pwsh
+        run: |
+          $ref = "${{ github.ref }}"
+          if ($ref -eq 'refs/heads/main') { $targetEnv = 'prod'; $envSuffix = 'prod' }
+          elseif ($ref -eq 'refs/heads/staging') { $targetEnv = 'staging'; $envSuffix = 'stg' }
+          elseif ($ref -eq 'refs/heads/dev') { $targetEnv = 'dev'; $envSuffix = 'dev' }
+          else { $branch = $ref.Replace('refs/heads/',''); $targetEnv = $branch; $envSuffix = $branch }
+
+          $rgName = "rg-orderprocessing-$envSuffix"
+          $appName = "${{ env.AZURE_WEBAPP_NAME }}"
+
+          "resourceGroupName=$rgName" >> $env:GITHUB_OUTPUT
+          "targetEnvironment=$targetEnv" >> $env:GITHUB_OUTPUT
+
+          $groupExists = az group exists --name $rgName
+          if ($groupExists -ne 'true') {
+            Write-Host "⚠️  Target resource group '$rgName' does not exist. Skipping deployment." -ForegroundColor Yellow
+            Write-Host "ℹ️  Bootstrap the $targetEnv environment before merging branch changes that should deploy there." -ForegroundColor Yellow
+            "infraReady=false" >> $env:GITHUB_OUTPUT
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## Deployment Skipped - Environment Not Bootstrapped`n- Target environment: $targetEnv`n- Resource group missing: $rgName`n- Expected app service: $appName`n- Run Azure Bootstrap & Deploy with bootstrapInfra=true for this environment, then re-run deployment.`n"
+            exit 0
+          }
+
+          $webAppId = az webapp show --name $appName --resource-group $rgName --query id -o tsv 2>$null
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($webAppId)) {
+            Write-Host "⚠️  Target app service '$appName' does not exist in '$rgName'. Skipping deployment." -ForegroundColor Yellow
+            Write-Host "ℹ️  Bootstrap may not have been run for $targetEnv, or the app was deleted separately." -ForegroundColor Yellow
+            "infraReady=false" >> $env:GITHUB_OUTPUT
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## Deployment Skipped - App Service Missing`n- Target environment: $targetEnv`n- Resource group: $rgName`n- Missing app service: $appName`n- Run Azure Bootstrap & Deploy with bootstrapInfra=true for this environment, then re-run deployment.`n"
+            exit 0
+          }
+
+          Write-Host "✅ Target infrastructure exists: $rgName / $appName" -ForegroundColor Green
+          "infraReady=true" >> $env:GITHUB_OUTPUT
+
+      - name: Deploy to Azure Web App
+        if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'
         id: deploy-to-webapp
         uses: azure/webapps-deploy@v3
         with:
@@ -155,7 +193,7 @@ jobs:
           package: .
 
       - name: Health Check
-        if: steps.check-credentials.outputs.credentialsConfigured == 'true'
+        if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'
         shell: pwsh
         run: |
           Write-Host "Waiting 60 seconds for app to start (cold-start buffer)..." -ForegroundColor Yellow
@@ -198,7 +236,7 @@ jobs:
           }
 
       - name: Manual Dispatch Test Ownership Note
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && steps.check-target.outputs.infraReady == 'true'
         shell: pwsh
         run: |
           Write-Host "⚠️  This UI workflow does not run solution tests." -ForegroundColor Yellow
@@ -215,14 +253,31 @@ jobs:
         run: |
           $ref    = "${{ github.ref_name }}"
           $app    = "${{ env.AZURE_WEBAPP_NAME }}"
+          $rg     = "${{ steps.check-target.outputs.resourceGroupName }}"
           $run    = "${{ github.run_id }}"
           $repo   = "${{ github.repository }}"
           $actor  = "${{ github.actor }}"
           $event  = "${{ github.event_name }}"
           $sha    = "${{ github.sha }}".Substring(0, 7)
-          $appUrl = if ($app) { "https://$app.azurewebsites.net" } else { "(app name not set — credentials missing)" }
+          $credentialsConfigured = "${{ steps.check-credentials.outputs.credentialsConfigured }}"
+          $infraReady = "${{ steps.check-target.outputs.infraReady }}"
+          $appUrl = if ($credentialsConfigured -ne 'true') {
+            "(app name not set — credentials missing)"
+          } elseif ($infraReady -ne 'true') {
+            "(deployment skipped — target app not provisioned)"
+          } else {
+            "https://$app.azurewebsites.net"
+          }
 
-          $status = if ('${{ job.status }}' -eq 'success') { '✅ SUCCESS' } else { '❌ FAILED' }
+          $status = if ($credentialsConfigured -ne 'true') {
+            '⏭️ SKIPPED - credentials missing'
+          } elseif ($infraReady -ne 'true') {
+            '⏭️ SKIPPED - environment not bootstrapped'
+          } elseif ('${{ job.status }}' -eq 'success') {
+            '✅ SUCCESS'
+          } else {
+            '❌ FAILED'
+          }
 
           "## 🚀 UI Deployment Summary" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
@@ -232,8 +287,14 @@ jobs:
           "| Branch | ``$ref`` |" >> $env:GITHUB_STEP_SUMMARY
           "| Commit | ``$sha`` |" >> $env:GITHUB_STEP_SUMMARY
           "| Triggered by | $actor ($event) |" >> $env:GITHUB_STEP_SUMMARY
+          "| Resource Group | ``$rg`` |" >> $env:GITHUB_STEP_SUMMARY
           "| App Service | ``$app`` |" >> $env:GITHUB_STEP_SUMMARY
           "| URL | $appUrl |" >> $env:GITHUB_STEP_SUMMARY
           "| Run | [View run](https://github.com/$repo/actions/runs/$run) |" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
           "> Note: This workflow does not run solution tests. API workflow owns Domain/Application/API/Architecture test execution." >> $env:GITHUB_STEP_SUMMARY
+
+          if ($infraReady -ne 'true' -and $credentialsConfigured -eq 'true') {
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "> Run Azure Bootstrap & Deploy with bootstrapInfra=true for this branch environment before expecting push-based deployments to succeed." >> $env:GITHUB_STEP_SUMMARY
+          }

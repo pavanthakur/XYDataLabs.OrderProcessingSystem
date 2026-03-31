@@ -323,7 +323,7 @@ jobs:
       TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
       SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       
       - name: Generate GitHub App Token
         id: app-token
@@ -1068,7 +1068,7 @@ jobs:
       TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
       SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       
       - name: Generate GitHub App Token
         id: app-token
@@ -1810,7 +1810,7 @@ jobs:
       TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
       SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       
       - name: Generate GitHub App Token
         id: app-token
@@ -2557,7 +2557,7 @@ jobs:
       TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
       SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Azure Login
         timeout-minutes: 3
@@ -2644,7 +2644,7 @@ jobs:
       TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
       SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Azure Login
         timeout-minutes: 3
@@ -2727,7 +2727,7 @@ jobs:
       TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
       SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Azure Login
         timeout-minutes: 3
