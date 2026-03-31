@@ -105,7 +105,7 @@ If the same error still appears after propagation, add `Directory.Read.All`, gra
 
 | Condition | Login method |
 |-----------|-------------|
-| `AZUREAPPSERVICE_*` secrets already exist (re-run) | `azure/login@v2` — non-interactive |
+| `AZUREAPPSERVICE_*` secrets already exist (re-run) | `azure/login@v3` — non-interactive |
 | No existing credentials (first-time) | `az login --use-device-code` — user input required once |
 
 **Actions**:

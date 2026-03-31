@@ -109,17 +109,19 @@ jobs:
             Write-Host "📋 TO FIX THIS:" -ForegroundColor Cyan
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
             Write-Host ""
-            Write-Host "1. Run the Azure Bootstrap workflow to set up infrastructure:" -ForegroundColor White
-            Write-Host "   https://github.com/${{ github.repository }}/actions/workflows/azure-bootstrap.yml" -ForegroundColor Gray
+            Write-Host "1. Run the Azure Initial Setup workflow to configure OIDC and GitHub secrets:" -ForegroundColor White
+            Write-Host "   https://github.com/${{ github.repository }}/actions/workflows/azure-initial-setup.yml" -ForegroundColor Gray
             Write-Host ""
             Write-Host "2. Select 'Run workflow' and configure:" -ForegroundColor White
-            Write-Host "   - Environment: dev (or staging/prod as needed)" -ForegroundColor Gray
-            Write-Host "   - Setup Azure OIDC: true (first time)" -ForegroundColor Gray
-            Write-Host "   - Setup GitHub App: true (first time)" -ForegroundColor Gray
+            Write-Host "   - Environment: all (recommended)" -ForegroundColor Gray
+            Write-Host "   - Setup GitHub App: true only if APP_ID / APP_PRIVATE_KEY are missing" -ForegroundColor Gray
+            Write-Host "   - Setup Azure OIDC: true" -ForegroundColor Gray
             Write-Host "   - Configure secrets: true" -ForegroundColor Gray
-            Write-Host "   - Bootstrap infrastructure: true" -ForegroundColor Gray
             Write-Host ""
-            Write-Host "3. After bootstrap completes, re-run this deployment" -ForegroundColor White
+            Write-Host "3. If the target app or resource group does not exist yet, run Azure Bootstrap & Deploy with Bootstrap Infrastructure checked" -ForegroundColor White
+            Write-Host "   https://github.com/${{ github.repository }}/actions/workflows/azure-bootstrap.yml" -ForegroundColor Gray
+            Write-Host "" 
+            Write-Host "4. Re-run this deployment" -ForegroundColor White
             Write-Host ""
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
             Write-Host ""
@@ -150,7 +152,7 @@ jobs:
 
       - name: Login to Azure
         if: steps.check-credentials.outputs.credentialsConfigured == 'true'
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}

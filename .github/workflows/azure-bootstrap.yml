@@ -221,7 +221,7 @@ jobs:
           $phase2Icon = if ($doBootstrap) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }
           Write-Host "  Phase A — Bootstrap Infrastructure : $phase2Icon" -ForegroundColor $(if ($doBootstrap) { 'Cyan' } else { 'DarkGray' })
           if ($doBootstrap) {
-            Write-Host "             └─ Azure auth: AZUREAPPSERVICE_* secrets → azure/login@v2 (OIDC) ✅" -ForegroundColor Green
+            Write-Host "             └─ Azure auth: AZUREAPPSERVICE_* secrets → azure/login@v3 (OIDC) ✅" -ForegroundColor Green
             Write-Host "             └─ Deploy API: $(if ($doDeployApi) { '✅ Yes' } else { 'No' })" -ForegroundColor Gray
             Write-Host "             └─ Deploy UI : $(if ($doDeployUi)  { '✅ Yes' } else { 'No' })" -ForegroundColor Gray
           }
@@ -229,11 +229,11 @@ jobs:
           # Standalone deploy phases (only shown when bootstrap is not selected)
           if ($doDeployApi -and -not $doBootstrap) {
             Write-Host "  Deploy API                          : 🔵 WILL RUN" -ForegroundColor Cyan
-            Write-Host "             └─ Azure auth: environment secrets → azure/login@v2 (OIDC) ✅" -ForegroundColor Green
+            Write-Host "             └─ Azure auth: environment secrets → azure/login@v3 (OIDC) ✅" -ForegroundColor Green
           }
           if ($doDeployUi -and -not $doBootstrap) {
             Write-Host "  Deploy UI                           : 🔵 WILL RUN" -ForegroundColor Cyan
-            Write-Host "             └─ Azure auth: environment secrets → azure/login@v2 (OIDC) ✅" -ForegroundColor Green
+            Write-Host "             └─ Azure auth: environment secrets → azure/login@v3 (OIDC) ✅" -ForegroundColor Green
           }
 
           # Phase X: Cleanup Infrastructure — DESTRUCTIVE
@@ -331,7 +331,7 @@ jobs:
         continue-on-error: true
         env:
           APP_ID: ${{ secrets.APP_ID }}
-        uses: actions/create-github-app-token@v1
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
@@ -400,7 +400,7 @@ jobs:
       - name: Azure Login (OIDC or Secrets)
         id: azure-login
         timeout-minutes: 3
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ env.CLIENT_ID }}
           tenant-id: ${{ env.TENANT_ID }}
@@ -576,7 +576,7 @@ jobs:
       # A fresh login here ensures the password can be written (or recovered) before SQL provisioning reads it.
       - name: Refresh Azure Login Before SQL Operations
         timeout-minutes: 3
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ env.CLIENT_ID }}
           tenant-id: ${{ env.TENANT_ID }}
@@ -726,7 +726,7 @@ jobs:
       
       - name: Refresh Azure Login for Key Vault Operations
         timeout-minutes: 3
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ env.CLIENT_ID }}
           tenant-id: ${{ env.TENANT_ID }}
@@ -1076,7 +1076,7 @@ jobs:
         continue-on-error: true
         env:
           APP_ID: ${{ secrets.APP_ID }}
-        uses: actions/create-github-app-token@v1
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
@@ -1145,7 +1145,7 @@ jobs:
       - name: Azure Login (OIDC or Secrets)
         id: azure-login
         timeout-minutes: 3
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ env.CLIENT_ID }}
           tenant-id: ${{ env.TENANT_ID }}
@@ -1321,7 +1321,7 @@ jobs:
       # A fresh login here ensures the password can be written (or recovered) before SQL provisioning reads it.
       - name: Refresh Azure Login Before SQL Operations
         timeout-minutes: 3
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ env.CLIENT_ID }}
           tenant-id: ${{ env.TENANT_ID }}
@@ -1471,7 +1471,7 @@ jobs:
       
       - name: Refresh Azure Login for Key Vault Operations
         timeout-minutes: 3
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ env.CLIENT_ID }}
           tenant-id: ${{ env.TENANT_ID }}
@@ -1818,7 +1818,7 @@ jobs:
         continue-on-error: true
         env:
           APP_ID: ${{ secrets.APP_ID }}
-        uses: actions/create-github-app-token@v1
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
@@ -1887,7 +1887,7 @@ jobs:
       - name: Azure Login (OIDC or Secrets)
         id: azure-login
         timeout-minutes: 3
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ env.CLIENT_ID }}
           tenant-id: ${{ env.TENANT_ID }}
@@ -2063,7 +2063,7 @@ jobs:
       # A fresh login here ensures the password can be written (or recovered) before SQL provisioning reads it.
       - name: Refresh Azure Login Before SQL Operations
         timeout-minutes: 3
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ env.CLIENT_ID }}
           tenant-id: ${{ env.TENANT_ID }}
@@ -2213,7 +2213,7 @@ jobs:
       
       - name: Refresh Azure Login for Key Vault Operations
         timeout-minutes: 3
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ env.CLIENT_ID }}
           tenant-id: ${{ env.TENANT_ID }}
@@ -2561,7 +2561,7 @@ jobs:
 
       - name: Azure Login
         timeout-minutes: 3
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ env.CLIENT_ID }}
           tenant-id: ${{ env.TENANT_ID }}
@@ -2648,7 +2648,7 @@ jobs:
 
       - name: Azure Login
         timeout-minutes: 3
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ env.CLIENT_ID }}
           tenant-id: ${{ env.TENANT_ID }}
@@ -2731,7 +2731,7 @@ jobs:
 
       - name: Azure Login
         timeout-minutes: 3
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ env.CLIENT_ID }}
           tenant-id: ${{ env.TENANT_ID }}

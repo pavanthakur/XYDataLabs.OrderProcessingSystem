@@ -44,7 +44,7 @@ The deployment uses the following security model:
 ENVIRONMENT="dev"
 LOCATION="centralindia"
 RG_NAME="rg-orderprocessing-$ENVIRONMENT"
-KV_NAME="kv-orderproc-$ENVIRONMENT"
+KV_NAME="kv-orderprocessing-$ENVIRONMENT"
 
 # Create resource group if it doesn't exist
 az group create --name $RG_NAME --location $LOCATION
@@ -65,7 +65,7 @@ az keyvault show --name $KV_NAME --resource-group $RG_NAME --query id -o tsv
 
 ```bash
 # Set Key Vault name
-KV_NAME="kv-orderproc-dev"
+KV_NAME="kv-orderprocessing-dev"
 
 # Add OpenPay secrets (replace with actual values)
 az keyvault secret set \
@@ -167,7 +167,7 @@ echo "App Service Principal ID: $PRINCIPAL_ID"
 
 # Verify Key Vault access policies
 az keyvault show \
-  --name kv-orderproc-dev \
+  --name kv-orderprocessing-dev \
   --resource-group $RG_NAME \
   --query properties.accessPolicies
 ```
@@ -180,7 +180,7 @@ Once dev is validated, repeat the process for Staging:
 
 ```bash
 ENVIRONMENT="stg"
-KV_NAME="kv-orderproc-stg"
+KV_NAME="kv-orderprocessing-stg"
 RG_NAME="rg-orderprocessing-stg"
 
 az group create --name $RG_NAME --location centralindia
@@ -227,16 +227,16 @@ Create `bicep/parameters/stg.parameters.json`:
 
 ```bash
 # Add secrets to Staging Key Vault
-az keyvault secret set --vault-name kv-orderproc-stg \
+az keyvault secret set --vault-name kv-orderprocessing-stg \
   --name "OpenPay--MerchantId" --value "<stg-openpay-merchant-id>"
 
-az keyvault secret set --vault-name kv-orderproc-stg \
+az keyvault secret set --vault-name kv-orderprocessing-stg \
   --name "OpenPay--PrivateKey" --value "<stg-openpay-private-key>"
 
-az keyvault secret set --vault-name kv-orderproc-stg \
+az keyvault secret set --vault-name kv-orderprocessing-stg \
   --name "OpenPay--DeviceSessionId" --value "<stg-openpay-device-session-id>"
 
-az keyvault secret set --vault-name kv-orderproc-stg \
+az keyvault secret set --vault-name kv-orderprocessing-stg \
   --name "ApplicationInsights--ConnectionString" --value "stg-app-insights-connection-string"
 
 # Run configuration script
@@ -256,7 +256,7 @@ After staging validation, deploy to production:
 
 ```bash
 ENVIRONMENT="prod"
-KV_NAME="kv-orderproc-prod"
+KV_NAME="kv-orderprocessing-prod"
 RG_NAME="rg-orderprocessing-prod"
 
 az group create --name $RG_NAME --location centralindia
@@ -303,16 +303,16 @@ Create `bicep/parameters/prod.parameters.json`:
 
 ```bash
 # Add secrets to Production Key Vault
-az keyvault secret set --vault-name kv-orderproc-prod \
+az keyvault secret set --vault-name kv-orderprocessing-prod \
   --name "OpenPay--MerchantId" --value "<prod-openpay-merchant-id>"
 
-az keyvault secret set --vault-name kv-orderproc-prod \
+az keyvault secret set --vault-name kv-orderprocessing-prod \
   --name "OpenPay--PrivateKey" --value "<prod-openpay-private-key>"
 
-az keyvault secret set --vault-name kv-orderproc-prod \
+az keyvault secret set --vault-name kv-orderprocessing-prod \
   --name "OpenPay--DeviceSessionId" --value "<prod-openpay-device-session-id>"
 
-az keyvault secret set --vault-name kv-orderproc-prod \
+az keyvault secret set --vault-name kv-orderprocessing-prod \
   --name "ApplicationInsights--ConnectionString" --value "production-app-insights-connection-string"
 
 # Run configuration script

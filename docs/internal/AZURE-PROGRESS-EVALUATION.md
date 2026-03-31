@@ -61,7 +61,7 @@ Monolithic Application on Azure App Service
 - ✅ Dev environment fully deployed and operational
 - ✅ Azure SQL Database configured and working
 - ✅ Application Insights monitoring active
-- ✅ Key Vault created (kv-orderproc-dev)
+- ✅ Key Vault created (kv-orderprocessing-dev)
 - ✅ Payment API resolved and working
 - ✅ CI/CD pipelines with GitHub Actions (OIDC)
 - ✅ Docker Compose for local development (API + UI)
@@ -187,7 +187,7 @@ Before starting microservices, finish the monolith infrastructure setup.
 **Required Actions:**
 ```powershell
 # 1. Grant yourself Key Vault permissions
-az keyvault set-policy --name kv-orderproc-dev `
+az keyvault set-policy --name kv-orderprocessing-dev `
   --upn pavan.thakur@gmail.com `
   --secret-permissions get list set delete
 
@@ -203,7 +203,7 @@ $apiIdentity = az webapp identity show `
   --query principalId -o tsv
 
 # 4. Grant API access to Key Vault
-az keyvault set-policy --name kv-orderproc-dev `
+az keyvault set-policy --name kv-orderprocessing-dev `
   --object-id $apiIdentity `
   --secret-permissions get list
 
@@ -217,12 +217,12 @@ $uiIdentity = az webapp identity show `
   --resource-group rg-orderprocessing-dev `
   --query principalId -o tsv
 
-az keyvault set-policy --name kv-orderproc-dev `
+az keyvault set-policy --name kv-orderprocessing-dev `
   --object-id $uiIdentity `
   --secret-permissions get list
 
 # 6. Verify access
-az keyvault secret list --vault-name kv-orderproc-dev --query "[].name" -o table
+az keyvault secret list --vault-name kv-orderprocessing-dev --query "[].name" -o table
 
 # 7. Restart App Services to pick up new identities
 az webapp restart --name pavanthakur-orderprocessing-api-xyapp-dev --resource-group rg-orderprocessing-dev

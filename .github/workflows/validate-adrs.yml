@@ -42,7 +42,7 @@ jobs:
       # markdownlint-cli2: checks formatting rules defined in .markdownlint.json
       # Disabled rules: MD013 (line length — tables exceed 80 chars), MD036 (**bold** as pseudo-heading)
       - name: Lint ADR markdown
-        uses: DavidAnson/markdownlint-cli2-action@v16
+        uses: DavidAnson/markdownlint-cli2-action@v23
         with:
           globs: 'docs/architecture/decisions/ADR-*.md'
           config: '.markdownlint.json'

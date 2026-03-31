@@ -94,7 +94,7 @@ else {
     $certPassword = Read-Password '  Choose HTTPS cert password (LOCAL_CERT_PASSWORD) '
 
     Write-Host ''
-    Write-Host '  OpenPay sandbox credentials — fetching from Key Vault kv-orderproc-dev...' -ForegroundColor Yellow
+    Write-Host '  OpenPay sandbox credentials — fetching from Key Vault kv-orderprocessing-dev...' -ForegroundColor Yellow
     $openpayMerchant = $null
     $openpayKey      = $null
     $openpaySession  = 'default-device-session'
@@ -102,13 +102,13 @@ else {
     $azAvailable = Get-Command az -ErrorAction SilentlyContinue
     if ($azAvailable) {
         try {
-            $kvMerchant = az keyvault secret show --vault-name kv-orderproc-dev --name 'OpenPay--MerchantId' --query value -o tsv 2>$null
-            $kvKey      = az keyvault secret show --vault-name kv-orderproc-dev --name 'OpenPay--PrivateKey'  --query value -o tsv 2>$null
+            $kvMerchant = az keyvault secret show --vault-name kv-orderprocessing-dev --name 'OpenPay--MerchantId' --query value -o tsv 2>$null
+            $kvKey      = az keyvault secret show --vault-name kv-orderprocessing-dev --name 'OpenPay--PrivateKey'  --query value -o tsv 2>$null
             if ($kvMerchant -and $kvKey -and
                 $kvMerchant -notmatch '^set-openpay' -and $kvKey -notmatch '^set-openpay') {
                 $openpayMerchant = $kvMerchant.Trim()
                 $openpayKey      = $kvKey.Trim()
-                Write-Done 'OpenPay credentials fetched from kv-orderproc-dev'
+                Write-Done 'OpenPay credentials fetched from kv-orderprocessing-dev'
             } else {
                 Write-Host '  [--]  Key Vault returned placeholder values — falling back to prompt.' -ForegroundColor DarkGray
             }
