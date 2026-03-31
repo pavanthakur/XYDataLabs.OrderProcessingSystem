@@ -117,7 +117,7 @@ See [`README-AZURE-INITIAL-SETUP.md`](README-AZURE-INITIAL-SETUP.md) for the one
 **Azure login (3-step pattern per environment)**:
 ```
 Step 1: Validate that CLIENT_ID / TENANT_ID / SUBSCRIPTION_ID are present
-Step 2: azure/login@v2  — passwordless OIDC authentication
+Step 2: azure/login@v3  — passwordless OIDC authentication
 Step 3: az account show — verify login succeeded before making changes
 ```
 
@@ -393,8 +393,8 @@ gh secret list --repo pavanthakur/XYDataLabs.OrderProcessingSystem
 
 | Operation | Method | Interactive? |
 |-----------|--------|-------------|
-| Phase A (bootstrap) | `azure/login@v2` (OIDC) | ❌ No — fully automated |
-| Phase X (cleanup) | `azure/login@v2` (OIDC) | ❌ No — fully automated |
+| Phase A (bootstrap) | `azure/login@v3` (OIDC) | ❌ No — fully automated |
+| Phase X (cleanup) | `azure/login@v3` (OIDC) | ❌ No — fully automated |
 | Deploy triggers | `GITHUB_TOKEN` | ❌ No — automatic |
 
 No passwords, PATs, or certificates are stored. Azure authentication uses OIDC token exchange via `AZUREAPPSERVICE_*` environment secrets.
@@ -415,7 +415,7 @@ This workflow reads secrets — it does **not** create or modify them. Secret ma
 
 | Secret | Used by | Purpose |
 |--------|---------|---------|
-| `AZUREAPPSERVICE_CLIENTID` | Bootstrap + cleanup jobs | OIDC client ID for `azure/login@v2` |
+| `AZUREAPPSERVICE_CLIENTID` | Bootstrap + cleanup jobs | OIDC client ID for `azure/login@v3` |
 | `AZUREAPPSERVICE_TENANTID` | Bootstrap + cleanup jobs | Azure tenant ID |
 | `AZUREAPPSERVICE_SUBSCRIPTIONID` | Bootstrap + cleanup jobs | Azure subscription ID |
 | `APP_ID` | Bootstrap jobs (optional) | GitHub App token generation for enhanced operations |

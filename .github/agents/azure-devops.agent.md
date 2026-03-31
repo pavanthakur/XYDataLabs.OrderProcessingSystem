@@ -22,7 +22,7 @@ Always follow the rules in these instruction files when they apply:
 
 ## Key Conventions
 
-- **OIDC only** — no stored service principal secrets. All workflows use `azure/login@v2` with federated credentials.
+- **OIDC only** — no stored service principal secrets. All workflows use `azure/login@v3` with federated credentials.
 - **Branch→Environment mapping**: `dev`→dev, `staging`→staging, `main`→prod. Reject cross-environment deploys.
 - **Staging suffix is `stg`** in Azure resource names (not `staging`). Scripts map via `$envSuffix = switch ($Environment) { 'staging' { 'stg' } default { $Environment } }`.
 - **Two-workflow split**: `azure-initial-setup.yml` (one-time OIDC/secrets) vs `azure-bootstrap.yml` (day-to-day infra + deploy).

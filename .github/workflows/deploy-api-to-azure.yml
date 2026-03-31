@@ -152,7 +152,7 @@ jobs:
 
       - name: Login to Azure
         if: steps.check-credentials.outputs.credentialsConfigured == 'true'
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}

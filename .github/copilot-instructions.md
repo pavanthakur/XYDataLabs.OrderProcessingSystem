@@ -188,7 +188,7 @@ permissions:
   id-token: write   # request OIDC token
   contents: read
 steps:
-  - uses: azure/login@v2
+  - uses: azure/login@v3
     with:
       client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
       tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}

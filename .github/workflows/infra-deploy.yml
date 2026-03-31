@@ -88,7 +88,7 @@ jobs:
           fi
       
       - name: Azure CLI Login (OIDC)
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
@@ -154,7 +154,7 @@ jobs:
           echo "deploymentName=infra-${{ github.run_id }}-${{ github.run_attempt }}" >> $GITHUB_OUTPUT
       
       - name: Azure CLI Login (OIDC)
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
@@ -220,12 +220,12 @@ jobs:
           echo "**Deployment:** ${{ steps.params.outputs.deploymentName }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📦 Resources Created" >> $GITHUB_STEP_SUMMARY
-          echo "- **Resource Group:** ${{ steps.outputs.rg }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **API:** https://${{ steps.outputs.api }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **UI:** https://${{ steps.outputs.ui }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **App Insights:** ${{ steps.outputs.insights }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Resource Group:** ${{ steps.outputs.outputs.rg }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **API:** https://${{ steps.outputs.outputs.api }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **UI:** https://${{ steps.outputs.outputs.ui }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **App Insights:** ${{ steps.outputs.outputs.insights }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### ✅ Next Steps" >> $GITHUB_STEP_SUMMARY
-          echo "1. Verify resources in [Azure Portal — Resource Groups](https://portal.azure.com/#view/HubsExtension/BrowseResourceGroups) — search for \`${{ steps.outputs.rg }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "1. Verify resources in [Azure Portal — Resource Groups](https://portal.azure.com/#view/HubsExtension/BrowseResourceGroups) — search for \`${{ steps.outputs.outputs.rg }}\`" >> $GITHUB_STEP_SUMMARY
           echo "2. Deploy application code using API/UI workflows" >> $GITHUB_STEP_SUMMARY
           echo "3. Test endpoints above" >> $GITHUB_STEP_SUMMARY
