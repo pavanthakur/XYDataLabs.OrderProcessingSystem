@@ -379,7 +379,7 @@ az group list --query "[?starts_with(name, 'rg-orderprocessing')].name"
 az webapp list --query "[?contains(name, 'orderprocessing')].{Name:name, State:state}" -o table
 
 # Check Key Vault
-az keyvault list --query "[?starts_with(name, 'kv-orderproc')].{Name:name, Location:location}" -o table
+az keyvault list --query "[?starts_with(name, 'kv-orderprocessing')].{Name:name, Location:location}" -o table
 
 # Verify OIDC secrets are configured (prerequisites)
 gh secret list --repo pavanthakur/XYDataLabs.OrderProcessingSystem
@@ -491,7 +491,7 @@ After bootstrap succeeds:
 - [ ] Resource groups `rg-orderprocessing-dev` / `rg-orderprocessing-stg` / `rg-orderprocessing-prod` created in Azure
 - [ ] App Service Plans and Web Apps provisioned
 - [ ] Azure SQL Server + Database provisioned
-- [ ] Key Vault (`kv-orderproc-{dev|stg|prod}`) provisioned
+- [ ] Key Vault (`kv-orderprocessing-{dev|stg|prod}`) provisioned
 - [ ] Application Insights created
 - [ ] System-assigned managed identity enabled on App Services
 - [ ] RBAC (Contributor) assigned to OIDC service principal

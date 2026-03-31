@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide explains how OpenPay secrets are securely stored and accessed using Azure Key Vault across different environments (dev, uat, prod).
+This guide explains how OpenPay secrets are securely stored and accessed using Azure Key Vault across different environments (dev, stg, prod).
 
 > **Note**: Key Vault secrets are **automatically populated** during CI/CD deployment. See [KEYVAULT-SECRET-AUTOMATION.md](../../KEYVAULT-SECRET-AUTOMATION.md) for automation details.
 
@@ -12,7 +12,7 @@ This guide explains how OpenPay secrets are securely stored and accessed using A
 
 Each environment has its own dedicated Key Vault:
 - **Dev**: `kv-orderprocessing-dev`
-- **Staging**: `kv-orderprocessing-staging`
+- **Staging**: `kv-orderprocessing-stg`
 - **Prod**: `kv-orderprocessing-prod`
 
 ### Secret Naming Convention
