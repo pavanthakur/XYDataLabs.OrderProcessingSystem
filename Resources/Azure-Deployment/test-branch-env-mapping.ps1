@@ -59,6 +59,14 @@ $repoContext = Resolve-GitHubRepositoryContext -Owner $GitHubOwner -Repository $
 $GitHubOwner = $repoContext.Owner
 $Repository = $repoContext.Repository
 
+$aliasChecks = @(
+    @{ Input = 'dev'; ExpectedPolicyKey = 'dev' },
+    @{ Input = 'staging'; ExpectedPolicyKey = 'staging' },
+    @{ Input = 'stg'; ExpectedPolicyKey = 'staging' },
+    @{ Input = 'prod'; ExpectedPolicyKey = 'prod' },
+    @{ Input = 'main'; ExpectedPolicyKey = 'prod' }
+)
+
 Write-Host "=====================================" -ForegroundColor Cyan
 Write-Host "Branch-Environment Mapping Dry Run" -ForegroundColor Cyan
 Write-Host "=====================================" -ForegroundColor Cyan
@@ -73,24 +81,36 @@ $branchMapping = @{
     'dev' = @{
         Branch = $devPolicy.branch
         Environment = $devPolicy.environment
+        ResourceSuffix = $devPolicy.resourceSuffix
+        AzureSqlDatabaseSuffix = $devPolicy.azureSqlDatabaseSuffix
         ParameterFile = 'infra/parameters/dev.json'
-        ResourceGroup = 'rg-orderprocessing-dev'
+        ResourceGroup = "rg-orderprocessing-$($devPolicy.resourceSuffix)"
+        SharedDatabase = "OrderProcessingSystem_$($devPolicy.azureSqlDatabaseSuffix)"
+        DedicatedTenantDatabase = "OrderProcessingSystem_TenantC_$($devPolicy.azureSqlDatabaseSuffix)"
         BranchOIDCSubject = "repo:${GitHubOwner}/${Repository}:ref:refs/heads/$($devPolicy.branch)"
         EnvironmentOIDCSubject = "repo:${GitHubOwner}/${Repository}:environment:$($devPolicy.environment)"
     }
     'staging' = @{
         Branch = $stagingPolicy.branch
         Environment = $stagingPolicy.environment
+        ResourceSuffix = $stagingPolicy.resourceSuffix
+        AzureSqlDatabaseSuffix = $stagingPolicy.azureSqlDatabaseSuffix
         ParameterFile = 'infra/parameters/staging.json'
-        ResourceGroup = 'rg-orderprocessing-stg'
+        ResourceGroup = "rg-orderprocessing-$($stagingPolicy.resourceSuffix)"
+        SharedDatabase = "OrderProcessingSystem_$($stagingPolicy.azureSqlDatabaseSuffix)"
+        DedicatedTenantDatabase = "OrderProcessingSystem_TenantC_$($stagingPolicy.azureSqlDatabaseSuffix)"
         BranchOIDCSubject = "repo:${GitHubOwner}/${Repository}:ref:refs/heads/$($stagingPolicy.branch)"
         EnvironmentOIDCSubject = "repo:${GitHubOwner}/${Repository}:environment:$($stagingPolicy.environment)"
     }
     'prod' = @{
         Branch = $prodPolicy.branch
         Environment = $prodPolicy.environment
+        ResourceSuffix = $prodPolicy.resourceSuffix
+        AzureSqlDatabaseSuffix = $prodPolicy.azureSqlDatabaseSuffix
         ParameterFile = 'infra/parameters/prod.json'
-        ResourceGroup = 'rg-orderprocessing-prod'
+        ResourceGroup = "rg-orderprocessing-$($prodPolicy.resourceSuffix)"
+        SharedDatabase = "OrderProcessingSystem_$($prodPolicy.azureSqlDatabaseSuffix)"
+        DedicatedTenantDatabase = "OrderProcessingSystem_TenantC_$($prodPolicy.azureSqlDatabaseSuffix)"
         BranchOIDCSubject = "repo:${GitHubOwner}/${Repository}:ref:refs/heads/$($prodPolicy.branch)"
         EnvironmentOIDCSubject = "repo:${GitHubOwner}/${Repository}:environment:$($prodPolicy.environment)"
     }
@@ -102,6 +122,22 @@ $envsToTest = if ($Environment -eq 'all') { @('dev', 'staging', 'prod') } else {
 Write-Host "Testing Environment: $Environment" -ForegroundColor Yellow
 Write-Host ""
 
+Write-Host "Alias Resolution Checks:" -ForegroundColor Cyan
+foreach ($aliasCheck in $aliasChecks) {
+    try {
+        $resolvedPolicyKey = Resolve-GitHubBranchPolicyKey -Policy $branchPolicy -EnvironmentLike $aliasCheck.Input
+        if ($resolvedPolicyKey -eq $aliasCheck.ExpectedPolicyKey) {
+            Write-Host "   [OK] '$($aliasCheck.Input)' resolves to '$resolvedPolicyKey'" -ForegroundColor Green
+        } else {
+            Write-Host "   [ERROR] '$($aliasCheck.Input)' resolved to '$resolvedPolicyKey' (expected '$($aliasCheck.ExpectedPolicyKey)')" -ForegroundColor Red
+        }
+    } catch {
+        Write-Host "   [ERROR] '$($aliasCheck.Input)' threw: $($_.Exception.Message)" -ForegroundColor Red
+    }
+}
+
+Write-Host ""
+
 # Test each environment
 foreach ($env in $envsToTest) {
     $config = $branchMapping[$env]
@@ -109,10 +145,29 @@ foreach ($env in $envsToTest) {
     Write-Host "Environment: $env" -ForegroundColor Cyan
     Write-Host "   Branch:              $($config.Branch)" -ForegroundColor Gray
     Write-Host "   Environment:         $($config.Environment)" -ForegroundColor Gray
+    Write-Host "   Resource Suffix:     $($config.ResourceSuffix)" -ForegroundColor Gray
+    Write-Host "   Azure SQL Suffix:    $($config.AzureSqlDatabaseSuffix)" -ForegroundColor Gray
     Write-Host "   Parameter File:      $($config.ParameterFile)" -ForegroundColor Gray
     Write-Host "   Resource Group:      $($config.ResourceGroup)" -ForegroundColor Gray
+    Write-Host "   Shared Database:     $($config.SharedDatabase)" -ForegroundColor Gray
+    Write-Host "   TenantC Database:    $($config.DedicatedTenantDatabase)" -ForegroundColor Gray
     Write-Host "   Branch OIDC:         $($config.BranchOIDCSubject)" -ForegroundColor Gray
     Write-Host "   Environment OIDC:    $($config.EnvironmentOIDCSubject)" -ForegroundColor Gray
+
+    $expectedResourceGroup = "rg-orderprocessing-$($config.ResourceSuffix)"
+    if ($config.ResourceGroup -eq $expectedResourceGroup) {
+        Write-Host "   [OK] Resource group matches resource suffix" -ForegroundColor Green
+    } else {
+        Write-Host "   [ERROR] Resource group mismatch: expected $expectedResourceGroup, found $($config.ResourceGroup)" -ForegroundColor Red
+    }
+
+    $expectedSharedDb = "OrderProcessingSystem_$($config.AzureSqlDatabaseSuffix)"
+    $expectedTenantDb = "OrderProcessingSystem_TenantC_$($config.AzureSqlDatabaseSuffix)"
+    if ($config.SharedDatabase -eq $expectedSharedDb -and $config.DedicatedTenantDatabase -eq $expectedTenantDb) {
+        Write-Host "   [OK] Azure SQL database names match policy suffix" -ForegroundColor Green
+    } else {
+        Write-Host "   [ERROR] Azure SQL database naming mismatch" -ForegroundColor Red
+    }
     
     # Validate parameter file exists
     $paramFilePath = Join-Path $PSScriptRoot "..\..\$($config.ParameterFile)"
@@ -156,6 +211,6 @@ Write-Host "[OK] Dry run complete - mapping validated!" -ForegroundColor Green
 Write-Host ""
 Write-Host "Summary:" -ForegroundColor Cyan
 Write-Host "   - $($devPolicy.branch) branch -> $($devPolicy.environment) environment -> dev.json" -ForegroundColor Gray
-Write-Host "   - $($stagingPolicy.branch) branch -> $($stagingPolicy.environment) environment -> staging.json" -ForegroundColor Gray
+Write-Host "   - $($stagingPolicy.branch) branch -> $($stagingPolicy.environment) environment -> staging.json -> resource suffix $($stagingPolicy.resourceSuffix) -> Azure SQL suffix $($stagingPolicy.azureSqlDatabaseSuffix)" -ForegroundColor Gray
 Write-Host "   - $($prodPolicy.branch) branch -> $($prodPolicy.environment) environment -> prod.json" -ForegroundColor Gray
 Write-Host ""

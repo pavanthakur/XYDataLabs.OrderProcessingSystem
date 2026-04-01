@@ -1,14 +1,32 @@
 {
   "dev": {
     "branch": "dev",
-    "environment": "dev"
+    "environment": "dev",
+    "canonicalKey": "dev",
+    "resourceSuffix": "dev",
+    "configSuffix": "dev",
+    "databaseSuffix": "Dev",
+    "azureSqlDatabaseSuffix": "Dev",
+    "displayName": "Development"
   },
   "staging": {
     "branch": "staging",
-    "environment": "staging"
+    "environment": "staging",
+    "canonicalKey": "stg",
+    "resourceSuffix": "stg",
+    "configSuffix": "stg",
+    "databaseSuffix": "Stg",
+    "azureSqlDatabaseSuffix": "Staging",
+    "displayName": "Staging"
   },
   "prod": {
     "branch": "main",
-    "environment": "prod"
+    "environment": "prod",
+    "canonicalKey": "prod",
+    "resourceSuffix": "prod",
+    "configSuffix": "prod",
+    "databaseSuffix": "Prod",
+    "azureSqlDatabaseSuffix": "Prod",
+    "displayName": "Production"
   }
 }

@@ -48,6 +48,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot 'branch-policy.ps1')
+$branchPolicy = Get-GitHubBranchPolicy
+
 function Resolve-GitHubOwner {
     param(
         [string]$Owner,
@@ -70,6 +73,7 @@ function Resolve-GitHubOwner {
 }
 
 $GitHubOwner = Resolve-GitHubOwner -Owner $GitHubOwner
+$environmentDescriptor = Get-GitHubEnvironmentDescriptor -Policy $branchPolicy -EnvironmentKey $Environment
 
 # Retry function for Azure CLI commands with exponential backoff
 function Invoke-AzCommandWithRetry {
@@ -160,8 +164,8 @@ if ([string]::IsNullOrWhiteSpace($GitHubOwner)) {
     exit 1
 }
 
-# Map environment name to Azure resource suffix (staging uses abbreviated 'stg' to match bootstrap)
-$envSuffix = switch ($Environment) { 'staging' { 'stg' } default { $Environment } }
+# Map environment names through the shared policy so staging stays aligned with the canonical stg suffix.
+$envSuffix = $environmentDescriptor.ResourceSuffix
 
 # Resource names
 $rgName = "rg-$BaseName-$envSuffix"
@@ -242,7 +246,6 @@ try {
     if ([string]::IsNullOrWhiteSpace($OpenPayRedirectUrl)) {
         # Derive from the Azure App Service naming convention: {GitHubOwner}-{BaseName}-ui-xyapp-{envSuffix}
         # This matches bootstrap-enterprise-infra.ps1 and is predictable on any machine.
-        $envSuffix = switch ($Environment) { 'staging' { 'stg' } default { $Environment } }
         $uiAppName = "$($GitHubOwner.ToLower())-$($BaseName.ToLower())-ui-xyapp-$envSuffix"
         $OpenPayRedirectUrl = "https://$uiAppName.azurewebsites.net/payment/callback"
         Write-Host "  ℹ️  OpenPayRedirectUrl derived from naming convention: $OpenPayRedirectUrl" -ForegroundColor Gray
@@ -294,8 +297,7 @@ try {
     Write-Host "  ℹ️  Without this, TenantC requests return HTTP 400 (fail-loud per ADR-009)." -ForegroundColor Gray
 
     if ([string]::IsNullOrWhiteSpace($DedicatedTenantConnectionStringTenantC)) {
-        $envSufTitle = (Get-Culture).TextInfo.ToTitleCase($Environment)
-        $envSufDb    = switch ($Environment) { 'staging' { 'Stg' } default { $envSufTitle } }
+        $envSufDb = $environmentDescriptor.AzureSqlDatabaseSuffix
         $DedicatedTenantConnectionStringTenantC = "Server=tcp:$BaseName-sql-$envSuffix.database.windows.net,1433;Initial Catalog=OrderProcessingSystem_TenantC_$envSufDb;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;Authentication=Active Directory Default"
         Write-Host "  ⚠️  DedicatedTenantConnectionStringTenantC not provided. Managed Identity placeholder will be created." -ForegroundColor Yellow
         Write-Host "      Value: $DedicatedTenantConnectionStringTenantC" -ForegroundColor Gray
