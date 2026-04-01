@@ -20,9 +20,12 @@ This workflow (`azure-initial-setup.yml`) handles all **one-time prerequisite se
 > `GITHUB_TOKEN` does NOT have permission to write repository secrets — only a GitHub App installation token can write `AZUREAPPSERVICE_*` secrets.
 
 1. Create a GitHub App at `https://github.com/settings/apps/new` with these permissions:
-   - **Secrets**: Read and write ✅
-   - **Environments**: Read and write ✅
-   - **Actions**, **Workflows**, **Contents**, **Metadata**: as needed
+   - **Actions**: write ✅
+   - **Secrets**: write ✅
+   - **Workflows**: write ✅
+   - **Environments**: write ✅
+   - **Contents**: read ✅
+   - **Metadata**: read ✅
 2. Generate and download the private key (`.pem` file)
 3. Install the app on this repository
 4. Add two repository secrets: `APP_ID` (numeric app ID) and `APP_PRIVATE_KEY` (full `.pem` contents)
@@ -43,9 +46,11 @@ See [QUICK-SETUP-GITHUB-APP.md](../../Documentation/03-Configuration-Guides/QUIC
 4. Click **Run workflow**
 5. When Phase 1a prompts for device-code authentication (first time only):
    - The step prints a code and URL in the workflow logs
-   - Open https://microsoft.com/devicelogin in your browser
+   - Open https://login.microsoft.com/device in your browser
    - Enter the code and sign in with your Azure account
    - The step continues automatically once authenticated
+
+> ℹ️ Some Azure CLI versions still show the older alias `https://microsoft.com/devicelogin`. Either URL is valid.
 
 After completion, proceed to the **Azure Bootstrap & Deploy** workflow for infrastructure.
 
@@ -161,6 +166,7 @@ While here, consider also setting these in **GitHub → Settings → Secrets and
 |---------|------------|
 | Phase 1a device-code prompt doesn't appear | Check the "Setup Azure OIDC" job logs for the device code URL and code |
 | `AADSTS700016` during Phase 1a | App Registration doesn't exist — let Phase 1a create it |
+| `Skip output 'clientIdB64' since it may contain secret` warnings | Expected GitHub masking heuristic for encoded cross-job outputs. If Phase 1b succeeds, ignore the warning. |
 | Phase 1b fails with "APP_ID missing" | Complete Phase 0 first — add `APP_ID` + `APP_PRIVATE_KEY` secrets |
 | `APP_INSTALLATION_ID` errors | Not needed — auto-discovered at runtime; remove any manual config |
 | Need to re-run for a specific environment | Set `environment` to that env instead of `all` |

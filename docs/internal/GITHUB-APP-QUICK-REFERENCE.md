@@ -112,7 +112,7 @@ GitHub App must have these permissions:
 → Ensure "Secrets: Read and write" permission is set
 
 ### Environment secrets failed
-→ Add "Administration: Read and write" permission
+→ Add "Environments: Read and write" permission
 → Re-approve permissions on installation page
 
 ### Validation shows failures
@@ -131,13 +131,16 @@ GitHub App must have these permissions:
 # 2. Validate
 .\scripts\validate-github-app-config.ps1 -Detailed
 
-# 3. Run Bootstrap (via GitHub Actions UI)
+# 3. Run Azure Initial Setup (via GitHub Actions UI)
 #    - Environment: all
 #    - Setup OIDC: true
 #    - Configure Secrets: true
+
+# 4. Run Azure Bootstrap & Deploy
+#    - Environment: dev
 #    - Bootstrap Infra: true
 
-# 4. Validate again
+# 5. Validate again
 .\scripts\validate-github-app-config.ps1 -Detailed
 
 # 5. Deploy (via GitHub Actions or automatic triggers)

@@ -210,7 +210,6 @@ jobs:
               Write-Host "        2. App name: $appName (or your chosen name)" -ForegroundColor White
               Write-Host "        3. Set REQUIRED permissions:" -ForegroundColor White
               Write-Host "           • Actions: write   • Secrets: write   • Workflows: write" -ForegroundColor Gray
-              Write-Host "           • Pull requests: write   • Administration: write" -ForegroundColor Gray
               Write-Host "           • Environments: write   • Contents: read   • Metadata: read" -ForegroundColor Gray
               Write-Host "        4. Generate a private key (saves a .pem file)" -ForegroundColor White
               Write-Host "        5. Note the App ID from the General settings page" -ForegroundColor White
@@ -836,7 +835,7 @@ jobs:
     if: |
       !cancelled() &&
       needs.validate-inputs.result == 'success' &&
-      needs.setup-oidc.result == 'success' &&
+      (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped') &&
       (inputs.configureSecrets || inputs.setupGitHubApp)
     uses: ./.github/workflows/configure-github-secrets.yml
     secrets: inherit
