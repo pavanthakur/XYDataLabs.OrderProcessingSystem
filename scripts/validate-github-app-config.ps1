@@ -5,7 +5,7 @@
 
 .DESCRIPTION
     This script validates that the GitHub App is properly configured with all required:
-    - Permissions (Actions, Administration, Contents, Environments, Metadata, Pull Requests, Secrets, Workflows)
+    - Permissions (Actions, Contents, Environments, Metadata, Secrets, Workflows)
     - Installation on the repository
     - Secrets (APP_ID, APP_PRIVATE_KEY)
     - Ability to generate installation tokens
@@ -273,13 +273,13 @@ Write-Host "  https://github.com/settings/apps" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Required permissions:" -ForegroundColor $colors.Header
 Write-Host "  ✓ Actions: Read and write" -ForegroundColor $colors.Info
-Write-Host "  ✓ Administration: Read and write" -ForegroundColor $colors.Info
 Write-Host "  ✓ Contents: Read" -ForegroundColor $colors.Info
 Write-Host "  ✓ Environments: Read and write (CRITICAL - for environment secrets)" -ForegroundColor $colors.Info
 Write-Host "  ✓ Metadata: Read (mandatory)" -ForegroundColor $colors.Info
-Write-Host "  ✓ Pull requests: Read and write" -ForegroundColor $colors.Info
 Write-Host "  ✓ Secrets: Read and write (CRITICAL)" -ForegroundColor $colors.Info
 Write-Host "  ✓ Workflows: Read and write" -ForegroundColor $colors.Info
+Write-Host ""
+Write-Host "APP_INSTALLATION_ID is not required - it is auto-discovered at runtime." -ForegroundColor $colors.Info
 Write-Host ""
 
 # Summary
@@ -307,6 +307,6 @@ if ($validationResults.Failed -eq 0) {
     Write-Host "  2. Authenticate: gh auth login" -ForegroundColor $colors.Info
     Write-Host "  3. Add secrets: https://github.com/$Repository/settings/secrets/actions" -ForegroundColor $colors.Info
     Write-Host "  4. Install app: https://github.com/settings/installations" -ForegroundColor $colors.Info
-    Write-Host "  5. Run bootstrap workflow with 'Configure Secrets' enabled" -ForegroundColor $colors.Info
+    Write-Host "  5. Run 'Azure Initial Setup' with 'Setup Azure OIDC' and 'Configure Secrets' enabled" -ForegroundColor $colors.Info
     exit 1
 }
