@@ -1046,7 +1046,7 @@ jobs:
       
       - name: Upload Bootstrap Log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: bootstrap-log-dev
           path: Resources/Azure-Deployment/logs/bootstrap-*.log
@@ -1265,7 +1265,9 @@ jobs:
             Write-Host "" -ForegroundColor Gray
             Write-Host "📋 Configuration:" -ForegroundColor Yellow
             Write-Host "  Branch: staging" -ForegroundColor Gray
-            Write-Host "  Environment: stg" -ForegroundColor Gray
+              Write-Host "  GitHub Environment: staging" -ForegroundColor Gray
+              Write-Host "  Azure Resource Suffix: stg" -ForegroundColor Gray
+              Write-Host "  Azure SQL Database Suffix: Staging (temporary compatibility)" -ForegroundColor Gray
             Write-Host "  Parameter File: infra/parameters/staging.json" -ForegroundColor Gray
             Write-Host "  Resource Group: rg-orderprocessing-stg" -ForegroundColor Gray
             Write-Host "  OIDC Subject: repo:${{ github.repository }}:ref:refs/heads/staging" -ForegroundColor Gray
@@ -1284,7 +1286,8 @@ jobs:
               Write-Host ""
               Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Red
               Write-Host "Script: ./Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1" -ForegroundColor Gray
-              Write-Host "Environment: staging" -ForegroundColor Gray
+              Write-Host "GitHub Environment: staging" -ForegroundColor Gray
+              Write-Host "Azure Resource Suffix: stg" -ForegroundColor Gray
               Write-Host ""
               Write-Host "Check the bootstrap log artifact for detailed error information." -ForegroundColor Yellow
               Write-Host ""
@@ -1382,7 +1385,9 @@ jobs:
             Write-Host "🗄️  Provisioning SQL Database and configuring connection strings for staging environment..." -ForegroundColor Cyan
             Write-Host ""
             Write-Host "📋 Configuration:" -ForegroundColor Yellow
-            Write-Host "  Environment: staging" -ForegroundColor Gray
+            Write-Host "  GitHub Environment: staging" -ForegroundColor Gray
+            Write-Host "  Azure Resource Suffix: stg" -ForegroundColor Gray
+            Write-Host "  Azure SQL Database Suffix: Staging (temporary compatibility)" -ForegroundColor Gray
             Write-Host "  Resource Group: rg-orderprocessing-stg" -ForegroundColor Gray
             Write-Host "  SQL Server: orderprocessing-sql-stg" -ForegroundColor Gray
             Write-Host "  Database: OrderProcessingSystem_Staging" -ForegroundColor Gray
@@ -1551,7 +1556,9 @@ jobs:
             Write-Host "🔄 Running Entity Framework migrations for staging environment..." -ForegroundColor Cyan
             Write-Host ""
             Write-Host "📋 Configuration:" -ForegroundColor Yellow
-            Write-Host "  Environment: staging" -ForegroundColor Gray
+            Write-Host "  GitHub Environment: staging" -ForegroundColor Gray
+            Write-Host "  Azure Resource Suffix: stg" -ForegroundColor Gray
+            Write-Host "  Azure SQL Database Suffix: Staging (temporary compatibility)" -ForegroundColor Gray
             Write-Host "  SQL Server: orderprocessing-sql-stg.database.windows.net" -ForegroundColor Gray
             Write-Host "  Database: OrderProcessingSystem_Staging" -ForegroundColor Gray
             Write-Host ""
@@ -1788,7 +1795,7 @@ jobs:
       
       - name: Upload Bootstrap Log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: bootstrap-log-staging
           path: Resources/Azure-Deployment/logs/bootstrap-*.log
@@ -2530,7 +2537,7 @@ jobs:
       
       - name: Upload Bootstrap Log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: bootstrap-log-prod
           path: Resources/Azure-Deployment/logs/bootstrap-*.log
@@ -2802,6 +2809,14 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Generate Summary
+        env:
+          API_RUN_NUMBER: ${{ needs.trigger-deployments.outputs.api_run_number }}
+          API_RUN_URL: ${{ needs.trigger-deployments.outputs.api_run_url }}
+          UI_RUN_NUMBER: ${{ needs.trigger-deployments.outputs.ui_run_number }}
+          UI_RUN_URL: ${{ needs.trigger-deployments.outputs.ui_run_url }}
+          API_URL: ${{ needs.trigger-deployments.outputs.api_url }}
+          UI_URL: ${{ needs.trigger-deployments.outputs.ui_url }}
+          DEPLOY_ERRORS: ${{ needs.trigger-deployments.outputs.errors }}
         run: |
           "## 📊 Bootstrap Workflow Summary" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
@@ -2886,8 +2901,8 @@ jobs:
             "|---------|----------|-----|--------|" >> $env:GITHUB_STEP_SUMMARY
 
             if ($deployApi) {
-              $apiRunNum = '${{ needs.trigger-deployments.outputs.api_run_number }}'
-              $apiRunUrl = '${{ needs.trigger-deployments.outputs.api_run_url }}'
+              $apiRunNum = $env:API_RUN_NUMBER
+              $apiRunUrl = $env:API_RUN_URL
               $apiStatus = if ($apiRunNum) { "✅ success" } elseif ($triggerDeployments -eq "skipped") { "⏭️ skipped" } else { "❌ failed" }
               $apiRun    = if ($apiRunUrl) { "[#$apiRunNum]($apiRunUrl)" } else { "—" }
               "| API | ✅ yes | $apiRun | $apiStatus |" >> $env:GITHUB_STEP_SUMMARY
@@ -2896,8 +2911,8 @@ jobs:
             }
 
             if ($deployUi) {
-              $uiRunNum = '${{ needs.trigger-deployments.outputs.ui_run_number }}'
-              $uiRunUrl = '${{ needs.trigger-deployments.outputs.ui_run_url }}'
+              $uiRunNum = $env:UI_RUN_NUMBER
+              $uiRunUrl = $env:UI_RUN_URL
               $uiStatus = if ($uiRunNum) { "✅ success" } elseif ($triggerDeployments -eq "skipped") { "⏭️ skipped" } else { "❌ failed" }
               $uiRun    = if ($uiRunUrl) { "[#$uiRunNum]($uiRunUrl)" } else { "—" }
               "| UI  | ✅ yes | $uiRun | $uiStatus |" >> $env:GITHUB_STEP_SUMMARY
@@ -2908,8 +2923,8 @@ jobs:
             "" >> $env:GITHUB_STEP_SUMMARY
 
             # Endpoint URLs — only when at least one deploy succeeded
-            $apiUrl = '${{ needs.trigger-deployments.outputs.api_url }}'
-            $uiUrl  = '${{ needs.trigger-deployments.outputs.ui_url }}'
+            $apiUrl = $env:API_URL
+            $uiUrl  = $env:UI_URL
             if ($apiUrl -or $uiUrl) {
               "#### 🔗 Deployed Endpoints" >> $env:GITHUB_STEP_SUMMARY
               "" >> $env:GITHUB_STEP_SUMMARY
@@ -2921,7 +2936,7 @@ jobs:
             }
 
             # Error detail — surfaces the dispatch error message inline
-            $deployErrors = '${{ needs.trigger-deployments.outputs.errors }}'
+            $deployErrors = $env:DEPLOY_ERRORS
             if ($deployErrors) {
               "> [!CAUTION]" >> $env:GITHUB_STEP_SUMMARY
               "> **Deployment errors:**" >> $env:GITHUB_STEP_SUMMARY

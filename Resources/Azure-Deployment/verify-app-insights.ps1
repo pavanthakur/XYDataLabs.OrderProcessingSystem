@@ -23,6 +23,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot 'branch-policy.ps1')
+$branchPolicy = Get-GitHubBranchPolicy
+
 function Invoke-AzCliWithRetry {
     param(
         [Parameter(Mandatory=$true)]
@@ -110,6 +113,7 @@ function Resolve-GitHubOwner {
 }
 
 $GitHubOwner = Resolve-GitHubOwner -Owner $GitHubOwner
+$environmentDescriptor = Get-GitHubEnvironmentDescriptor -Policy $branchPolicy -EnvironmentKey $Environment
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "Application Insights Verification" -ForegroundColor White
@@ -118,8 +122,8 @@ Write-Host ""
 Write-Host "Environment: $Environment" -ForegroundColor Yellow
 Write-Host ""
 
-# Map environment name to Azure resource suffix (staging uses abbreviated 'stg' to match bootstrap)
-$envSuffix = switch ($Environment) { 'staging' { 'stg' } default { $Environment } }
+# Resolve resource naming through the shared policy.
+$envSuffix = $environmentDescriptor.ResourceSuffix
 
 # Resource names
 $rgName = "rg-$BaseName-$envSuffix"

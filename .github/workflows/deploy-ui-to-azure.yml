@@ -48,7 +48,7 @@ jobs:
         run: dotnet publish ${{ env.PROJECT_PATH }} --configuration Release --no-build --output ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ui-dotnet-app
           path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
@@ -134,7 +134,7 @@ jobs:
 
       - name: Download artifact
         if: steps.check-credentials.outputs.credentialsConfigured == 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ui-dotnet-app
 
@@ -162,13 +162,16 @@ jobs:
 
           "resourceGroupName=$rgName" >> $env:GITHUB_OUTPUT
           "targetEnvironment=$targetEnv" >> $env:GITHUB_OUTPUT
+          "resourceSuffix=$envSuffix" >> $env:GITHUB_OUTPUT
+
+          Write-Host "Resolved target: GitHub environment '$targetEnv' / Azure resource suffix '$envSuffix'" -ForegroundColor Cyan
 
           $groupExists = az group exists --name $rgName
           if ($groupExists -ne 'true') {
             Write-Host "⚠️  Target resource group '$rgName' does not exist. Skipping deployment." -ForegroundColor Yellow
             Write-Host "ℹ️  Bootstrap the $targetEnv environment before merging branch changes that should deploy there." -ForegroundColor Yellow
             "infraReady=false" >> $env:GITHUB_OUTPUT
-            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## Deployment Skipped - Environment Not Bootstrapped`n- Target environment: $targetEnv`n- Resource group missing: $rgName`n- Expected app service: $appName`n- Run Azure Bootstrap & Deploy with bootstrapInfra=true for this environment, then re-run deployment.`n"
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## Deployment Skipped - Environment Not Bootstrapped`n- GitHub environment: $targetEnv`n- Azure resource suffix: $envSuffix`n- Resource group missing: $rgName`n- Expected app service: $appName`n- Run Azure Bootstrap & Deploy with bootstrapInfra=true for this environment, then re-run deployment.`n"
             exit 0
           }
 
@@ -177,7 +180,7 @@ jobs:
             Write-Host "⚠️  Target app service '$appName' does not exist in '$rgName'. Skipping deployment." -ForegroundColor Yellow
             Write-Host "ℹ️  Bootstrap may not have been run for $targetEnv, or the app was deleted separately." -ForegroundColor Yellow
             "infraReady=false" >> $env:GITHUB_OUTPUT
-            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## Deployment Skipped - App Service Missing`n- Target environment: $targetEnv`n- Resource group: $rgName`n- Missing app service: $appName`n- Run Azure Bootstrap & Deploy with bootstrapInfra=true for this environment, then re-run deployment.`n"
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## Deployment Skipped - App Service Missing`n- GitHub environment: $targetEnv`n- Azure resource suffix: $envSuffix`n- Resource group: $rgName`n- Missing app service: $appName`n- Run Azure Bootstrap & Deploy with bootstrapInfra=true for this environment, then re-run deployment.`n"
             exit 0
           }
 
@@ -254,6 +257,8 @@ jobs:
           $ref    = "${{ github.ref_name }}"
           $app    = "${{ env.AZURE_WEBAPP_NAME }}"
           $rg     = "${{ steps.check-target.outputs.resourceGroupName }}"
+          $targetEnv = "${{ steps.check-target.outputs.targetEnvironment }}"
+          $envSuffix = "${{ steps.check-target.outputs.resourceSuffix }}"
           $run    = "${{ github.run_id }}"
           $repo   = "${{ github.repository }}"
           $actor  = "${{ github.actor }}"
@@ -287,6 +292,8 @@ jobs:
           "| Branch | ``$ref`` |" >> $env:GITHUB_STEP_SUMMARY
           "| Commit | ``$sha`` |" >> $env:GITHUB_STEP_SUMMARY
           "| Triggered by | $actor ($event) |" >> $env:GITHUB_STEP_SUMMARY
+          "| GitHub Environment | ``$targetEnv`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| Azure Resource Suffix | ``$envSuffix`` |" >> $env:GITHUB_STEP_SUMMARY
           "| Resource Group | ``$rg`` |" >> $env:GITHUB_STEP_SUMMARY
           "| App Service | ``$app`` |" >> $env:GITHUB_STEP_SUMMARY
           "| URL | $appUrl |" >> $env:GITHUB_STEP_SUMMARY
