@@ -275,10 +275,10 @@ Result:
 az login --use-device-code
   ↓
 Workflow logs print:
-  "To sign in, use a web browser to open https://microsoft.com/devicelogin
+  "To sign in, use a web browser to open https://login.microsoft.com/device
    and enter the code ABCD-EFGH to authenticate."
   ↓
-User opens https://microsoft.com/devicelogin, enters ABCD-EFGH, signs in
+User opens https://login.microsoft.com/device, enters ABCD-EFGH, signs in
   ↓
 Azure returns an access token bound to the user's account
   ↓
@@ -286,6 +286,7 @@ Azure CLI session is now authenticated
 ```
 
 > ⏱️ Timeout: 3 minutes. If the code is not entered in time, re-run the workflow.
+> ℹ️ Azure may still print the older alias `https://microsoft.com/devicelogin` in some environments. Either URL is valid for the device-code flow.
 
 ### Step 4 — `setup-oidc` — Setup OIDC App Registration
 
@@ -339,6 +340,8 @@ configure-github-secrets:
     tenantIdB64:       ${{ needs.setup-oidc.outputs.tenantIdB64 }}       # base64("tnt-456")
     subscriptionIdB64: ${{ needs.setup-oidc.outputs.subscriptionIdB64 }} # base64("sub-123")
 ```
+
+GitHub may emit annotations such as `Skip output 'clientIdB64' since it may contain secret.` when these encoded values are written. In a successful run, those warnings are expected masking heuristics, not a failure. Phase 1b still receives the values, which is confirmed when `Configure Secrets` succeeds and writes the `AZUREAPPSERVICE_*` secrets.
 
 ### Step 7 — `configure-secrets` — Validate Prerequisites
 
@@ -512,12 +515,12 @@ configure-github-secrets.yml:
 
 **Common Causes:**
 1. Environment doesn't exist
-2. Missing "Administration: Read and write" permission
+2. Missing "Environments: write" permission
 3. Repository access restrictions
 
 **Solutions:**
 1. Create environment manually or let workflow create it
-2. Add "Administration: Read and write" permission to GitHub App
+2. Add "Environments: write" permission to GitHub App
 3. Verify app has access to repository
 
 ### Missing OIDC Credentials
