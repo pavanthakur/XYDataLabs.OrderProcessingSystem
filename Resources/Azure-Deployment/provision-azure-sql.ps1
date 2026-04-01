@@ -34,6 +34,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot 'branch-policy.ps1')
+$branchPolicy = Get-GitHubBranchPolicy
+
 function Resolve-GitHubOwner {
     param(
         [string]$Owner,
@@ -56,6 +59,7 @@ function Resolve-GitHubOwner {
 }
 
 $GitHubOwner = Resolve-GitHubOwner -Owner $GitHubOwner
+$environmentDescriptor = Get-GitHubEnvironmentDescriptor -Policy $branchPolicy -EnvironmentKey $Environment
 
 function Convert-SecureStringToPlainText {
     param(
@@ -189,13 +193,15 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "Azure SQL Database Provisioning" -ForegroundColor White
 Write-Host "========================================" -ForegroundColor Cyan
 
-# Map environment name to Azure resource suffix (staging uses abbreviated 'stg' to match bootstrap)
-$envSuffix = switch ($Environment) { 'staging' { 'stg' } default { $Environment } }
+# Resolve environment naming through the shared policy. Staging keeps the current Azure SQL DB suffix
+# until the dedicated cutover phase, while resource names already use the canonical stg suffix.
+$envSuffix = $environmentDescriptor.ResourceSuffix
+$dbSuffix = $environmentDescriptor.AzureSqlDatabaseSuffix
 
 # Generate resource names (must match bootstrap-enterprise-infra.ps1)
 $rgName = "rg-$BaseName-$envSuffix"
 $sqlServerName = "$BaseName-sql-$envSuffix"
-$dbName = "OrderProcessingSystem_" + (Get-Culture).TextInfo.ToTitleCase($Environment)
+$dbName = "OrderProcessingSystem_$dbSuffix"
 # Prepend GitHub owner to webapp names for global uniqueness (matches bootstrap script)
 $apiAppName = "$GitHubOwner-$BaseName-api-xyapp-$envSuffix"
 $uiAppName = "$GitHubOwner-$BaseName-ui-xyapp-$envSuffix"
@@ -543,7 +549,7 @@ if ($dbExists) {
 # run-database-migrations.ps1 will apply EF Core migrations against this catalog after this script.
 # setup-sql-managed-identity.ps1 Step 5 will grant managed identity access once the DB exists.
 Write-Host "[4b/7] Creating TenantC dedicated database..." -ForegroundColor Cyan
-$tenantCDbName = "OrderProcessingSystem_TenantC_" + (Get-Culture).TextInfo.ToTitleCase($Environment)
+$tenantCDbName = "OrderProcessingSystem_TenantC_$dbSuffix"
 $tenantCDbExists = $null
 try {
     $checkResult = az sql db show --name $tenantCDbName --server $sqlServerName --resource-group $rgName --output json 2>$null

@@ -50,6 +50,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot 'branch-policy.ps1')
+$branchPolicy = Get-GitHubBranchPolicy
+
 function Resolve-GitHubOwner {
     param(
         [string]$Owner,
@@ -72,6 +75,7 @@ function Resolve-GitHubOwner {
 }
 
 $GitHubOwner = Resolve-GitHubOwner -Owner $GitHubOwner
+$environmentDescriptor = Get-GitHubEnvironmentDescriptor -Policy $branchPolicy -EnvironmentKey $Environment
 
 function Get-InfraParameterFilePath {
     param([string]$Environment)
@@ -186,9 +190,10 @@ Write-Host "║       SQL MANAGED IDENTITY SETUP — DAY 35               ║" -
 Write-Host "╚══════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
 Write-Host ""
 
-# Map environment to Azure resource suffix (staging uses abbreviated 'stg')
-$envSuffix  = switch ($Environment) { 'staging' { 'stg' } default { $Environment } }
-$dbEnvTitle = switch ($Environment) { 'dev' { 'Dev' } 'staging' { 'Staging' } 'prod' { 'Prod' } }
+# Resolve environment naming through the shared policy. Resource names use the canonical suffix,
+# while live Azure SQL DB names stay on the current suffix until the staging cutover phase.
+$envSuffix  = $environmentDescriptor.ResourceSuffix
+$dbEnvTitle = $environmentDescriptor.AzureSqlDatabaseSuffix
 
 $rgName     = "rg-$BaseName-$envSuffix"
 $sqlFqdn    = "$BaseName-sql-$envSuffix.database.windows.net"

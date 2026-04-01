@@ -18,6 +18,10 @@ $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding          = [System.Text.Encoding]::UTF8
 
+. (Join-Path $PSScriptRoot 'branch-policy.ps1')
+$branchPolicy = Get-GitHubBranchPolicy
+$environmentDescriptor = Get-GitHubEnvironmentDescriptor -Policy $branchPolicy -EnvironmentKey $Environment
+
 # ANSI color helper — writes to stdout (capturable) with color in ANSI terminals.
 # Write-Host writes to the PowerShell host stream which is not captured by tools/redirects.
 function Msg {
@@ -27,16 +31,13 @@ function Msg {
     [Console]::WriteLine("`e[${code}m${Text}`e[0m")
 }
 
-# Map environment to Azure resource suffix (staging → stg)
-$envSuffix = switch ($Environment) {
-    'staging' { 'stg' }
-    default   { $Environment }
-}
+# Map environment through the shared policy so resource suffixes are centralized.
+$envSuffix = $environmentDescriptor.ResourceSuffix
 
 $sqlServer    = "orderprocessing-sql-$envSuffix"
 $resourceGroup = "rg-orderprocessing-$envSuffix"
 $ruleName     = "dev-machine"
-$envSufDb     = switch ($Environment) { 'staging' { 'Stg' } 'prod' { 'Prod' } default { 'Dev' } }
+$envSufDb     = $environmentDescriptor.AzureSqlDatabaseSuffix
 
 Msg "========================================" Cyan
 Msg "  Azure SQL Firewall — $Environment" Cyan
