@@ -81,6 +81,8 @@ Inputs:
 
 Called by `azure-initial-setup.yml` after OIDC setup (Phase 1a → Phase 1b):
 
+The caller passes base64-encoded values to avoid GitHub dropping cross-job outputs that resemble secrets.
+
 ```yaml
 configure-github-secrets:
   uses: ./.github/workflows/configure-github-secrets.yml
@@ -88,9 +90,9 @@ configure-github-secrets:
     environment: ${{ inputs.environment }}
     setupGitHubApp: ${{ inputs.setupGitHubApp }}
     configureSecrets: ${{ inputs.configureSecrets }}
-    clientId: ${{ needs.setup-oidc.outputs.clientId }}
-    tenantId: ${{ needs.setup-oidc.outputs.tenantId }}
-    subscriptionId: ${{ needs.setup-oidc.outputs.subscriptionId }}
+    clientIdB64: ${{ needs.setup-oidc.outputs.clientIdB64 }}
+    tenantIdB64: ${{ needs.setup-oidc.outputs.tenantIdB64 }}
+    subscriptionIdB64: ${{ needs.setup-oidc.outputs.subscriptionIdB64 }}
 ```
 
 ## Workflow Jobs
@@ -333,9 +335,9 @@ configure-github-secrets:
   with:
     environment:    dev
     configureSecrets: true
-    clientId:       ${{ needs.setup-oidc.outputs.clientId }}       # "clt-789"
-    tenantId:       ${{ needs.setup-oidc.outputs.tenantId }}       # "tnt-456"
-    subscriptionId: ${{ needs.setup-oidc.outputs.subscriptionId }} # "sub-123"
+    clientIdB64:       ${{ needs.setup-oidc.outputs.clientIdB64 }}       # base64("clt-789")
+    tenantIdB64:       ${{ needs.setup-oidc.outputs.tenantIdB64 }}       # base64("tnt-456")
+    subscriptionIdB64: ${{ needs.setup-oidc.outputs.subscriptionIdB64 }} # base64("sub-123")
 ```
 
 ### Step 7 — `configure-secrets` — Validate Prerequisites
