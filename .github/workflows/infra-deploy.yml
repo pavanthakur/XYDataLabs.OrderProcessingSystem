@@ -78,11 +78,15 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "env=${{ inputs.environment }}" >> $GITHUB_OUTPUT
+            if [ "${{ inputs.environment }}" = "staging" ]; then ENV_SUFFIX="stg"; else ENV_SUFFIX="${{ inputs.environment }}"; fi
+            echo "envSuffix=${ENV_SUFFIX}" >> $GITHUB_OUTPUT
+            echo "file=infra/parameters/${{ inputs.environment }}.json" >> $GITHUB_OUTPUT
             echo "location=${{ inputs.location }}" >> $GITHUB_OUTPUT
             echo "sku=${{ inputs.appServiceSku }}" >> $GITHUB_OUTPUT
             echo "identity=${{ inputs.enableIdentity }}" >> $GITHUB_OUTPUT
           else
             echo "env=dev" >> $GITHUB_OUTPUT
+            echo "envSuffix=dev" >> $GITHUB_OUTPUT
             echo "location=centralindia" >> $GITHUB_OUTPUT
             echo "file=infra/parameters/dev.json" >> $GITHUB_OUTPUT
           fi
@@ -97,11 +101,11 @@ jobs:
       - name: What-If (subscription scope)
         run: |
           ENV=${{ steps.params.outputs.env }}
+          ENV_SUFFIX=${{ steps.params.outputs.envSuffix }}
           LOCATION=${{ steps.params.outputs.location }}
 
-          # Resolve param file and KV name (staging uses 'stg' suffix in Azure resource names)
-          if [ "$ENV" = "staging" ]; then ENV_SUFFIX="stg"; else ENV_SUFFIX="$ENV"; fi
-          PARAM_FILE="infra/parameters/${ENV}.json"
+          # Resolve param file and KV name using the shared workflow mapping.
+          PARAM_FILE="${{ steps.params.outputs.file }}"
           KV_NAME="kv-orderprocessing-${ENV_SUFFIX}"
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -148,6 +152,9 @@ jobs:
         id: params
         run: |
           echo "env=${{ inputs.environment }}" >> $GITHUB_OUTPUT
+          if [ "${{ inputs.environment }}" = "staging" ]; then ENV_SUFFIX="stg"; else ENV_SUFFIX="${{ inputs.environment }}"; fi
+          echo "envSuffix=${ENV_SUFFIX}" >> $GITHUB_OUTPUT
+          echo "file=infra/parameters/${{ inputs.environment }}.json" >> $GITHUB_OUTPUT
           echo "location=${{ inputs.location }}" >> $GITHUB_OUTPUT
           echo "sku=${{ inputs.appServiceSku }}" >> $GITHUB_OUTPUT
           echo "identity=${{ inputs.enableIdentity }}" >> $GITHUB_OUTPUT
@@ -166,9 +173,7 @@ jobs:
           # This may be false on first apply (Bicep sets it to true, but can't read the secret
           # to start the deployment unless it's already true — chicken-and-egg).
           # Bootstrap must be run before this workflow: KV is created by bootstrap, not by this Bicep.
-          ENV=${{ steps.params.outputs.env }}
-          if [ "$ENV" = "staging" ]; then KV_SUFFIX="stg"; else KV_SUFFIX="$ENV"; fi
-          KV_NAME="kv-orderprocessing-${KV_SUFFIX}"
+          KV_NAME="kv-orderprocessing-${{ steps.params.outputs.envSuffix }}"
           KV_ID=$(az keyvault show --name "$KV_NAME" --query id -o tsv 2>/dev/null || true)
           if [ -z "$KV_ID" ]; then
             echo "ERROR: Key Vault '$KV_NAME' not found. Run 'Azure Bootstrap & Deploy' first to provision the environment before running infra deploy."
@@ -183,15 +188,11 @@ jobs:
         run: |
           # Job-level if: already guarantees workflow_dispatch && !dryRun — no inner guard needed.
           # Manual deployment using parameter file (contains KV reference for sqlAdminPassword)
-          ENV=${{ steps.params.outputs.env }}
-          if [ "$ENV" = "staging" ]; then PARAM_FILE="infra/parameters/staging.json";
-          elif [ "$ENV" = "prod" ]; then PARAM_FILE="infra/parameters/prod.json";
-          else PARAM_FILE="infra/parameters/dev.json"; fi
           az deployment sub create \
             --name ${{ steps.params.outputs.deploymentName }} \
             --location ${{ steps.params.outputs.location }} \
             --template-file infra/main.bicep \
-            --parameters @${PARAM_FILE} \
+            --parameters @${{ steps.params.outputs.file }} \
                          appServiceSku=${{ steps.params.outputs.sku }} \
                          enableIdentity=${{ steps.params.outputs.identity }}
       
@@ -215,7 +216,9 @@ jobs:
         run: |
           echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Environment:** ${{ steps.params.outputs.env }}" >> $GITHUB_STEP_SUMMARY
+          echo "**GitHub Environment:** ${{ steps.params.outputs.env }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Azure Resource Suffix:** ${{ steps.params.outputs.envSuffix }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Parameter File:** ${{ steps.params.outputs.file }}" >> $GITHUB_STEP_SUMMARY
           echo "**Location:** ${{ steps.params.outputs.location }}" >> $GITHUB_STEP_SUMMARY
           echo "**Deployment:** ${{ steps.params.outputs.deploymentName }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY

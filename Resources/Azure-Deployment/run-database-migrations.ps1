@@ -22,6 +22,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot 'branch-policy.ps1')
+$branchPolicy = Get-GitHubBranchPolicy
+$environmentDescriptor = Get-GitHubEnvironmentDescriptor -Policy $branchPolicy -EnvironmentKey $Environment
+
 function Write-Info($m){ Write-Host $m -ForegroundColor Cyan }
 function Write-Ok($m){ Write-Host $m -ForegroundColor Green }
 function Write-Warn($m){ Write-Host $m -ForegroundColor Yellow }
@@ -54,12 +58,14 @@ Write-Host "Database Migrations - Azure SQL" -ForegroundColor White
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Map environment name to Azure resource suffix (staging uses abbreviated 'stg' to match bootstrap)
-$envSuffix = switch ($Environment) { 'staging' { 'stg' } default { $Environment } }
+# Resolve environment naming through the shared policy. Resource suffixes already use stg,
+# while the live staging Azure SQL DB names keep the current Staging suffix until cutover.
+$envSuffix = $environmentDescriptor.ResourceSuffix
+$dbSuffix = $environmentDescriptor.AzureSqlDatabaseSuffix
 
 # Generate resource names
 $sqlServerName = "$BaseName-sql-$envSuffix"
-$dbName = "OrderProcessingSystem_" + (Get-Culture).TextInfo.ToTitleCase($Environment)
+$dbName = "OrderProcessingSystem_$dbSuffix"
 $fullyQualifiedDomain = "$sqlServerName.database.windows.net"
 
 Write-Host "Configuration:" -ForegroundColor Yellow
@@ -207,7 +213,7 @@ Write-Host ""
 # (applyMigrations: !isAzure) — the schema must exist before app startup.
 # Without this, SeedDedicatedTenants() silently skips TenantC at startup.
 # ─────────────────────────────────────────────────────────────────────────────
-$tenantCDbName = "OrderProcessingSystem_TenantC_" + (Get-Culture).TextInfo.ToTitleCase($Environment)
+$tenantCDbName = "OrderProcessingSystem_TenantC_$dbSuffix"
 
 Write-Host "" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan

@@ -57,8 +57,8 @@ Write-Host ""
 
 # Test 2: Verify bootstrap-staging has correct environment
 Write-Host "Test 2: Bootstrap-staging configuration" -ForegroundColor Cyan
-if ($content -match '(?s)bootstrap-staging:.*?name: Bootstrap Staging Infrastructure.*?-Environment staging') {
-    Write-Host "  PASS: Script call: -Environment staging" -ForegroundColor Green
+if ($content -match '(?s)bootstrap-staging:.*?name: Bootstrap Staging Infrastructure.*?-Environment stg') {
+    Write-Host "  PASS: Script call: -Environment stg" -ForegroundColor Green
 } else {
     Write-Host "  FAIL: WRONG script call in bootstrap-staging job" -ForegroundColor Red
     $ErrorCount++
@@ -71,10 +71,24 @@ if ($content -match '(?s)bootstrap-staging:.*?Write-Host "  Branch: staging"') {
     $ErrorCount++
 }
 
-if ($content -match '(?s)bootstrap-staging:.*?Write-Host "  Environment: staging"') {
-    Write-Host "  PASS: Logging: Environment: staging" -ForegroundColor Green
+if ($content -match '(?s)bootstrap-staging:.*?Write-Host "  GitHub Environment: staging"') {
+    Write-Host "  PASS: Logging: GitHub Environment: staging" -ForegroundColor Green
 } else {
-    Write-Host "  FAIL: WRONG environment logging in bootstrap-staging job" -ForegroundColor Red
+    Write-Host "  FAIL: WRONG GitHub environment logging in bootstrap-staging job" -ForegroundColor Red
+    $ErrorCount++
+}
+
+if ($content -match '(?s)bootstrap-staging:.*?Write-Host "  Azure Resource Suffix: stg"') {
+    Write-Host "  PASS: Logging: Azure Resource Suffix: stg" -ForegroundColor Green
+} else {
+    Write-Host "  FAIL: WRONG Azure resource suffix logging in bootstrap-staging job" -ForegroundColor Red
+    $ErrorCount++
+}
+
+if ($content -match '(?s)bootstrap-staging:.*?Write-Host "  Azure SQL Database Suffix: Staging') {
+    Write-Host "  PASS: Logging: Azure SQL Database Suffix: Staging" -ForegroundColor Green
+} else {
+    Write-Host "  FAIL: WRONG Azure SQL database suffix logging in bootstrap-staging job" -ForegroundColor Red
     $ErrorCount++
 }
 
@@ -119,37 +133,37 @@ if ($content -match '(?s)bootstrap-prod:.*?infra/parameters/prod\.json') {
 
 Write-Host ""
 
-# Test 4: Verify OIDC setup uses inputs.environment
-Write-Host "Test 4: OIDC setup dynamic configuration" -ForegroundColor Cyan
-if ($content -match '\$selectedEnv = "\$\{\{ inputs\.environment \}\}"') {
-    Write-Host "  PASS: OIDC setup uses inputs.environment" -ForegroundColor Green
+# Test 4: Verify deployment guard uses inputs.environment
+Write-Host "Test 4: Deployment guard dynamic configuration" -ForegroundColor Cyan
+if ($content -match 'TARGET_ENV: \$\{\{ inputs\.environment \}\}') {
+    Write-Host "  PASS: Deployment dispatch uses inputs.environment" -ForegroundColor Green
 } else {
-    Write-Host "  FAIL: OIDC setup not using inputs.environment" -ForegroundColor Red
+    Write-Host "  FAIL: Deployment dispatch not using inputs.environment" -ForegroundColor Red
     $ErrorCount++
 }
 
-if ($content -match 'if \(\$selectedEnv -eq "all"\) \{') {
-    Write-Host "  PASS: OIDC has conditional logic for 'all' environment" -ForegroundColor Green
+if ($content -match "inputs\.environment == 'all' &&") {
+    Write-Host "  PASS: Deployment guard handles 'all' environment" -ForegroundColor Green
 } else {
-    Write-Host "  FAIL: OIDC missing conditional for 'all' environment" -ForegroundColor Red
+    Write-Host "  FAIL: Deployment guard missing 'all' environment handling" -ForegroundColor Red
     $ErrorCount++
 }
 
 Write-Host ""
 
-# Test 5: Verify configure-secrets uses inputs.environment
-Write-Host "Test 5: Configure-secrets dynamic configuration" -ForegroundColor Cyan
-if ($content -match '(?s)configure-secrets:.*?\$selectedEnv = "\$\{\{ inputs\.environment \}\}"') {
-    Write-Host "  PASS: Configure-secrets uses inputs.environment" -ForegroundColor Green
+# Test 5: Verify trigger-deployments handles environment=all intentionally
+Write-Host "Test 5: Trigger-deployments all-environment handling" -ForegroundColor Cyan
+if ($content -match 'if: inputs\.environment != ''all''') {
+    Write-Host "  PASS: Deployment dispatch skips workflow dispatch when environment=all" -ForegroundColor Green
 } else {
-    Write-Host "  FAIL: Configure-secrets not using inputs.environment" -ForegroundColor Red
+    Write-Host "  FAIL: Deployment dispatch missing environment=all skip logic" -ForegroundColor Red
     $ErrorCount++
 }
 
-if ($content -match '(?s)configure-secrets:.*?\$envList = if \(\$selectedEnv -eq "all"\)') {
-    Write-Host "  PASS: Configure-secrets handles 'all' environment" -ForegroundColor Green
+if ($content -match '- name: environment=all notice(?s).*?if: inputs\.environment == ''all''') {
+    Write-Host "  PASS: environment=all has explicit summary notice" -ForegroundColor Green
 } else {
-    Write-Host "  FAIL: Configure-secrets missing 'all' environment handling" -ForegroundColor Red
+    Write-Host "  FAIL: Missing explicit environment=all summary notice" -ForegroundColor Red
     $ErrorCount++
 }
 

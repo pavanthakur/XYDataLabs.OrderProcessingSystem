@@ -118,7 +118,7 @@ jobs:
         run: dotnet publish ${{ env.PROJECT_PATH }} --configuration Release --no-build --output ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: dotnet-app
           path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
@@ -269,7 +269,7 @@ jobs:
     environment: ${{ needs.determine-environment.outputs.environment }}
     steps:
       - name: Download artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: dotnet-app
 

@@ -12,6 +12,8 @@
   Azure region (default: centralindia).
 .PARAMETER Environment
   Single environment to test (default: dev).
+.PARAMETER GitHubOwner
+  GitHub repository owner/organization name. Auto-detected from GITHUB_REPOSITORY or git origin when omitted.
 .PARAMETER SkipInfraProvision
   Skip infrastructure bootstrap (assumes already provisioned).
 .PARAMETER SkipOidcSetup
@@ -36,6 +38,7 @@ param(
   [string]$BaseName = 'orderprocessing',
   [string]$Location = 'centralindia',
   [string]$Environment = 'dev',
+  [string]$GitHubOwner = '',
   [switch]$SkipInfraProvision,
   [switch]$SkipOidcSetup,
   [switch]$SkipAppInsights,
@@ -51,7 +54,27 @@ $logFile = Join-Path $scriptDir "test-run-$(Get-Date -Format 'yyyyMMdd-HHmmss').
 
 . (Join-Path $scriptDir 'branch-policy.ps1')
 $branchPolicy = Get-GitHubBranchPolicy
-$productionBranch = (Get-GitHubBranchPolicyEntry -Policy $branchPolicy -EnvironmentKey 'prod').branch
+
+function Resolve-GitHubOwner {
+  param(
+    [string]$Owner,
+    [string]$DefaultOwner = 'pavanthakur'
+  )
+
+  if (-not [string]::IsNullOrWhiteSpace($Owner)) { return $Owner }
+  if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_REPOSITORY) -and $env:GITHUB_REPOSITORY -match '^(?<owner>[^/]+)/.+$') { return $Matches.owner }
+
+  try {
+    $originUrl = git config --get remote.origin.url 2>$null
+    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($originUrl)) {
+      $originUrl = $originUrl.Trim()
+      if ($originUrl -match 'github\.com[:/](?<owner>[^/]+)/[^/]+?(?:\.git)?$') { return $Matches.owner }
+    }
+  }
+  catch { }
+
+  return $DefaultOwner
+}
 
 function Write-Log {
   param([string]$Message, [string]$Level = 'INFO')
@@ -85,12 +108,21 @@ Write-Log "Enterprise Deployment Test Orchestrator" 'INFO'
 Write-Log "========================================" 'INFO'
 Write-Log "Environment: $Environment | Location: $Location | DryRun: $DryRun" 'INFO'
 
-$rg = "rg-$BaseName-$Environment"
-$plan = "asp-$BaseName-$Environment"
-$apiApp = "$BaseName-api-xyapp-$Environment"
-$uiApp = "$BaseName-ui-xyapp-$Environment"
-$aiApi = "ai-$BaseName-api-$Environment"
-$aiUi  = "ai-$BaseName-ui-$Environment"
+$GitHubOwner = Resolve-GitHubOwner -Owner $GitHubOwner
+$environmentDescriptor = Get-GitHubEnvironmentDescriptor -Policy $branchPolicy -EnvironmentKey $Environment
+$envSuffix = $environmentDescriptor.ResourceSuffix
+$dbSuffix = $environmentDescriptor.AzureSqlDatabaseSuffix
+$oidcBranch = $environmentDescriptor.Branch
+$githubEnvironmentName = $environmentDescriptor.GitHubEnvironment
+
+Write-Log "Resolved environment: $($environmentDescriptor.DisplayName) | resource suffix: $envSuffix | Azure SQL suffix: $dbSuffix" 'INFO'
+Write-Log "Resolved GitHub owner: $GitHubOwner" 'INFO'
+
+$rg = "rg-$BaseName-$envSuffix"
+$plan = "asp-$BaseName-$envSuffix"
+$apiApp = "$GitHubOwner-$BaseName-api-xyapp-$envSuffix"
+$uiApp = "$GitHubOwner-$BaseName-ui-xyapp-$envSuffix"
+$aiName = "ai-$BaseName-$envSuffix"
 
 # Step 0: Azure Context
 $step0 = Test-Step "Verify Azure Authentication" `
@@ -108,15 +140,16 @@ if (-not $step0) { Write-Log "Authentication failed. Run: az login" 'ERROR'; exi
 if (-not $SkipInfraProvision) {
   $step1 = Test-Step "Provision Infrastructure (RG, Plan, Apps)" `
     -Action {
-      $cmd = "$scriptDir\bootstrap-enterprise-infra.ps1 -BaseName $BaseName -Location $Location -Environments $Environment"
+      $cmd = "$scriptDir\bootstrap-enterprise-infra.ps1 -BaseName $BaseName -Location $Location -Environment $envSuffix -GitHubOwner $GitHubOwner"
       Write-Log "Running: $cmd"
-      & "$scriptDir\bootstrap-enterprise-infra.ps1" -BaseName $BaseName -Location $Location -Environments $Environment
+      & "$scriptDir\bootstrap-enterprise-infra.ps1" -BaseName $BaseName -Location $Location -Environment $envSuffix -GitHubOwner $GitHubOwner
     } `
     -Validation {
       $rgExists = az group exists -n $rg
       $planExists = az appservice plan show -n $plan -g $rg 2>$null
       $apiExists = az webapp show -n $apiApp -g $rg 2>$null
-      ($rgExists -eq 'true') -and $planExists -and $apiExists
+      $uiExists = az webapp show -n $uiApp -g $rg 2>$null
+      ($rgExists -eq 'true') -and $planExists -and $apiExists -and $uiExists
     }
   if (-not $step1) { Write-Log "Infrastructure provisioning failed" 'ERROR'; exit 1 }
 } else {
@@ -127,11 +160,19 @@ if (-not $SkipInfraProvision) {
 if (-not $SkipOidcSetup) {
   $step2 = Test-Step "Setup OIDC & RBAC" `
     -Action {
-      & "$scriptDir\setup-github-oidc.ps1" -ResourceGroupName $rg -Branches $productionBranch -RoleName "Website Contributor"
+      & "$scriptDir\setup-github-oidc.ps1" -ResourceGroupName $rg -Branches $oidcBranch -Environments $githubEnvironmentName -GitHubOwner $GitHubOwner -RoleName "Website Contributor"
     } `
     -Validation {
       $app = az ad app list --display-name "GitHub-Actions-OIDC" | ConvertFrom-Json
-      $app.Count -gt 0
+      if (-not $app -or $app.Count -eq 0) { return $false }
+
+      $creds = az ad app federated-credential list --id $app[0].id | ConvertFrom-Json
+      if (-not $creds) { return $false }
+
+      $hasBranchCredential = @($creds | Where-Object { $_.subject -like "*:ref:refs/heads/$oidcBranch" }).Count -gt 0
+      $hasEnvironmentCredential = @($creds | Where-Object { $_.subject -like "*:environment:$githubEnvironmentName" }).Count -gt 0
+
+      $hasBranchCredential -and $hasEnvironmentCredential
     }
   if (-not $step2) { Write-Log "OIDC setup failed" 'ERROR' }
 } else {
@@ -150,11 +191,11 @@ if (-not (Test-Step "Verify OIDC Configuration" `
 # Step 4: Azure SQL Provisioning
 ${step4} = Test-Step "Provision Azure SQL (server, db, connection strings)" `
   -Action {
-    & "$scriptDir\provision-azure-sql.ps1" -Environment $Environment -BaseName $BaseName -Location $Location
+    & "$scriptDir\provision-azure-sql.ps1" -Environment $githubEnvironmentName -BaseName $BaseName -Location $Location -GitHubOwner $GitHubOwner
   } `
   -Validation {
-    $sqlServer = "$BaseName-sql-$Environment"
-    $dbName = "OrderProcessingSystem_" + (Get-Culture).TextInfo.ToTitleCase($Environment)
+    $sqlServer = "$BaseName-sql-$envSuffix"
+    $dbName = "OrderProcessingSystem_$dbSuffix"
     $db = az sql db show --name $dbName --server $sqlServer --resource-group $rg 2>$null
     $conn = az webapp config connection-string list -g $rg -n $apiApp --query "[?name=='OrderProcessingSystemDbConnection']" -o tsv 2>$null
     $db -and $conn
@@ -164,19 +205,22 @@ if (-not ${step4}) { Write-Log "Azure SQL provisioning failed" 'ERROR'; exit 1 }
 # Step 5: Apply EF Core Migrations
 ${step5} = Test-Step "Apply EF Core migrations (with fallback)" `
   -Action {
-    & "$scriptDir\run-database-migrations.ps1" -Environment $Environment -BaseName $BaseName
+    & "$scriptDir\run-database-migrations.ps1" -Environment $githubEnvironmentName -BaseName $BaseName -Owner $GitHubOwner
   } `
   -Validation { $LASTEXITCODE -eq 0 }
 if (-not ${step5}) { Write-Log "EF migrations failed" 'ERROR'; exit 1 }
 
 # Step 6: Application Insights
 if (-not $SkipAppInsights) {
-  $step6 = Test-Step "Provision Application Insights (workspace-based)" `
+  $step6 = Test-Step "Verify Application Insights configuration" `
     -Action {
-      & "$scriptDir\setup-appinsights-dev.ps1" -ResourceGroup $rg -Location $Location -WorkspaceName "logs-$BaseName-$Environment" -ApiAppName $apiApp -UiAppName $uiApp -ApiAppInsights $aiApi -UiAppInsights $aiUi
+      Write-Log "Validating App Insights resource '$aiName' and app settings on '$apiApp' and '$uiApp'"
     } `
     -Validation {
-      ($null -ne (az monitor app-insights component show -a $aiApi -g $rg 2>$null)) -and ($null -ne (az monitor app-insights component show -a $aiUi -g $rg 2>$null))
+      $aiExists = az monitor app-insights component show --app $aiName --resource-group $rg 2>$null
+      $apiSetting = az webapp config appsettings list --name $apiApp --resource-group $rg --query "[?name=='APPLICATIONINSIGHTS_CONNECTION_STRING'].value" -o tsv 2>$null
+      $uiSetting = az webapp config appsettings list --name $uiApp --resource-group $rg --query "[?name=='APPLICATIONINSIGHTS_CONNECTION_STRING'].value" -o tsv 2>$null
+      $aiExists -and -not [string]::IsNullOrWhiteSpace($apiSetting) -and -not [string]::IsNullOrWhiteSpace($uiSetting)
     }
   if (-not $step6) { Write-Log "App Insights provisioning failed" 'ERROR' }
 } else {
