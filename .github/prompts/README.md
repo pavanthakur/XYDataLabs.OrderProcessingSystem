@@ -122,8 +122,10 @@ Important notes:
 Purpose:
 - End-to-end verification of a payment test run: log data **and** DB — in one pass.
 - **docker/local**: reads today's `webapi-{env}-{date}.log` and `ui-{env}-{date}.log` physical files.
-- **azure**: queries App Insights KQL (`ai-orderprocessing-{env}`) for API-side traces; UI correlation skipped until UI app is instrumented.
+- **azure**: queries App Insights KQL (`ai-orderprocessing-{env}`) for both API and UI callback traces.
 - Extracts OR prefix and charge IDs from the log automatically — no need to know the prefix upfront.
+- In Azure mode, derives a shared logical run prefix (for example `OR-1-2ndApr`) before running DB queries.
+- In Azure mode, filters API/UI traces using both `cloud_RoleName` and the structured `customDimensions['Application']` property to reduce cross-app noise.
 - Runs Q2 / Q5 / Q8 on the shared DB and Q2-B / Q5-B / Q9-B on the TenantC dedicated DB, all scoped to today.
 - Produces a correlated pass/fail table: API log → UI log → DB for every charge ID.
 
@@ -136,6 +138,12 @@ Prerequisites:
 - At least one payment cycle completed today for the chosen environment.
 - **docker/local**: containers or dotnet run have written today's log files to `logs/`; `Resources/Docker/.env.local` exists with `LOCAL_SQL_PASSWORD`; SQL Server running locally (localhost:1433).
 - **azure**: `az login` completed; App Insights resource exists (`ai-orderprocessing-{env}`); firewall open via `open-local-sql-firewall.ps1`; KV `secrets/get` permission granted (first-time only).
+
+Azure-specific note:
+- UI callback evidence is required only for tenants whose `Use3DSecure = 1`; non-3DS tenants are expected to complete with `ThreeDSecureStage = not_applicable` and may have no UI callback entry.
+
+Repeat Azure rerun note:
+- For deterministic reruns outside chat, use `scripts/verify-payment-run-azure.ps1` instead of rebuilding the App Insights and SQL commands by hand.
 
 Note: For deep-dive queries (Q1, Q3, Q4, Q6, Q6a, Q7, Q8-B and per-tenant 3DS toggle), open `docs/runbooks/payment-db-verification.md`.
 
