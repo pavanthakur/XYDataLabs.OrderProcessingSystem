@@ -159,7 +159,8 @@ jobs:
             Write-Host "    Expected: AZUREAPPSERVICE_CLIENTID, AZUREAPPSERVICE_TENANTID, AZUREAPPSERVICE_SUBSCRIPTIONID" -ForegroundColor Gray
             Write-Host "" -ForegroundColor Gray
             if ($configSecrets -eq "true") {
-              Write-Host "    ✅ Phase 1b selected — environment secrets will be verified and updated if needed." -ForegroundColor Green
+              Write-Host "    ✅ Phase 1b selected — 1b-only preflight will verify a reusable OIDC source or an already-complete target baseline." -ForegroundColor Green
+              Write-Host "       If neither exists, enable Phase 1a + 1b together." -ForegroundColor Gray
             } else {
               Write-Host "    ✅ Assuming environment secrets exist from a previous Phase 1a/1b run." -ForegroundColor Green
               Write-Host "       If bootstrap or deploy fails with AADSTS errors, re-run with Phase 1a + 1b enabled." -ForegroundColor Gray
@@ -251,6 +252,160 @@ jobs:
           Write-Host "✅ Input validation passed - proceeding..." -ForegroundColor Green
           exit 0
 
+      - name: Generate Phase 1b Guard Token
+        id: phase1b-guard-token
+        if: ${{ inputs.configureSecrets && !inputs.setupOidc }}
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Validate Phase 1b-Only Baseline
+        if: ${{ inputs.configureSecrets && !inputs.setupOidc }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ steps.phase1b-guard-token.outputs.token }}
+        run: |
+          function Get-EnvironmentSecretState {
+            param(
+              [Parameter(Mandatory = $true)]
+              [string]$EnvironmentName
+            )
+
+            $listOutput = gh secret list --repo '${{ github.repository }}' --env $EnvironmentName 2>&1 | Out-String
+            $exitCode = $LASTEXITCODE
+
+            if ($exitCode -ne 0) {
+              $envCheckOutput = gh api -H "Accept: application/vnd.github+json" "repos/${{ github.repository }}/environments/$EnvironmentName" 2>&1 | Out-String
+              $envCheckExitCode = $LASTEXITCODE
+              $notFound = ($envCheckExitCode -ne 0) -and ($envCheckOutput -match '404|Not Found')
+
+              return @{
+                Readable = $false
+                Exists = if ($notFound) { $false } else { $true }
+                NotFound = $notFound
+                ClientId = $false
+                TenantId = $false
+                SubscriptionId = $false
+                Complete = $false
+                Output = if ($notFound) { $envCheckOutput } else { @($listOutput.Trim(), $envCheckOutput.Trim()) -join [Environment]::NewLine }
+              }
+            }
+
+            $hasClientId = $listOutput -match 'AZUREAPPSERVICE_CLIENTID'
+            $hasTenantId = $listOutput -match 'AZUREAPPSERVICE_TENANTID'
+            $hasSubscriptionId = $listOutput -match 'AZUREAPPSERVICE_SUBSCRIPTIONID'
+
+            return @{
+              Readable = $true
+              Exists = $true
+              NotFound = $false
+              ClientId = $hasClientId
+              TenantId = $hasTenantId
+              SubscriptionId = $hasSubscriptionId
+              Complete = ($hasClientId -and $hasTenantId -and $hasSubscriptionId)
+              Output = $listOutput
+            }
+          }
+
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║      PHASE 1b-ONLY BASELINE VALIDATION                       ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+
+          if ([string]::IsNullOrWhiteSpace($env:GH_TOKEN)) {
+            Write-Host "❌ Cannot validate the Phase 1b-only baseline because a GitHub App token was not generated." -ForegroundColor Red
+            Write-Host "   Fix Phase 0 (APP_ID + APP_PRIVATE_KEY and GitHub App installation), or enable Phase 1a + Phase 1b together." -ForegroundColor Yellow
+            Write-Error "Phase 1b-only guard could not verify environment secrets because GitHub App authentication is unavailable."
+            exit 1
+          }
+
+          $targetEnv = "${{ inputs.environment }}"
+          $targetEnvironments = if ($targetEnv -eq 'all') { @('dev', 'staging', 'prod') } else { @($targetEnv) }
+          $sourceEnvironment = 'dev'
+          $missingEnvs = @()
+          $configuredEnvs = @()
+          $unreadableEnvs = @()
+
+          Write-Host "Checking reusable OIDC source baseline in shared environment context: $sourceEnvironment" -ForegroundColor Cyan
+          $sourceState = Get-EnvironmentSecretState -EnvironmentName $sourceEnvironment
+          if ($sourceState.Readable) {
+            Write-Host "  [$sourceEnvironment] CLIENTID      : $(if ($sourceState.ClientId) { '✅' } else { '❌' })" -ForegroundColor $(if ($sourceState.ClientId) { 'Green' } else { 'Red' })
+            Write-Host "  [$sourceEnvironment] TENANTID      : $(if ($sourceState.TenantId) { '✅' } else { '❌' })" -ForegroundColor $(if ($sourceState.TenantId) { 'Green' } else { 'Red' })
+            Write-Host "  [$sourceEnvironment] SUBSCRIPTIONID: $(if ($sourceState.SubscriptionId) { '✅' } else { '❌' })" -ForegroundColor $(if ($sourceState.SubscriptionId) { 'Green' } else { 'Red' })
+          } else {
+            Write-Host "  [$sourceEnvironment] ⚠️  Could not read environment secrets" -ForegroundColor Yellow
+            if (-not [string]::IsNullOrWhiteSpace($sourceState.Output)) {
+              Write-Host "     gh output: $($sourceState.Output.Trim())" -ForegroundColor DarkGray
+            }
+            Write-Host "     Phase 1b-only can still proceed if all selected target environments are already complete." -ForegroundColor Gray
+          }
+          Write-Host ""
+
+          Write-Host "Checking environment secret baseline for: $($targetEnvironments -join ', ')" -ForegroundColor Cyan
+          foreach ($envName in $targetEnvironments) {
+            $envState = Get-EnvironmentSecretState -EnvironmentName $envName
+            if (-not $envState.Readable) {
+              if ($envState.NotFound) {
+                Write-Host "  [$envName] ⬜ Environment does not exist yet — Phase 1b can create it if credentials are available" -ForegroundColor Yellow
+                $missingEnvs += $envName
+              } else {
+                Write-Host "  [$envName] ❌ Could not read environment secrets" -ForegroundColor Red
+                if (-not [string]::IsNullOrWhiteSpace($envState.Output)) {
+                  Write-Host "     gh output: $($envState.Output.Trim())" -ForegroundColor DarkGray
+                }
+                $unreadableEnvs += $envName
+              }
+              continue
+            }
+
+            Write-Host "  [$envName] CLIENTID      : $(if ($envState.ClientId) { '✅' } else { '❌' })" -ForegroundColor $(if ($envState.ClientId) { 'Green' } else { 'Red' })
+            Write-Host "  [$envName] TENANTID      : $(if ($envState.TenantId) { '✅' } else { '❌' })" -ForegroundColor $(if ($envState.TenantId) { 'Green' } else { 'Red' })
+            Write-Host "  [$envName] SUBSCRIPTIONID: $(if ($envState.SubscriptionId) { '✅' } else { '❌' })" -ForegroundColor $(if ($envState.SubscriptionId) { 'Green' } else { 'Red' })
+
+            if ($envState.Complete) {
+              $configuredEnvs += $envName
+            } else {
+              $missingEnvs += $envName
+            }
+          }
+
+          Write-Host ""
+          if ($unreadableEnvs.Count -gt 0) {
+            Write-Host "❌ Phase 1b-only guard could not verify one or more target environments." -ForegroundColor Red
+            Write-Host "   Unreadable : $($unreadableEnvs -join ', ')" -ForegroundColor Red
+            Write-Host "   This usually indicates a GitHub App permission, installation, or transient GitHub API issue." -ForegroundColor Yellow
+            Write-Error "Phase 1b-only guard could not read all target environments to verify baseline state."
+            exit 1
+          }
+
+          $sourceReusable = $sourceState.Readable -and $sourceState.Complete
+          $allTargetsConfigured = $missingEnvs.Count -eq 0
+          if (-not $sourceReusable -and -not $allTargetsConfigured) {
+            Write-Host "❌ Phase 1b-only is blocked because there is no reusable OIDC source baseline and not all target environments are already complete." -ForegroundColor Red
+            Write-Host "   Shared source environment ($sourceEnvironment): $(if ($sourceState.Readable) { 'incomplete' } else { 'not readable' })" -ForegroundColor Red
+            if ($configuredEnvs.Count -gt 0) {
+              Write-Host "   Configured : $($configuredEnvs -join ', ')" -ForegroundColor Green
+            }
+            if ($missingEnvs.Count -gt 0) {
+              Write-Host "   Missing    : $($missingEnvs -join ', ')" -ForegroundColor Red
+            }
+            Write-Host ""
+            Write-Host "Use Phase 1a + Phase 1b together to create or refresh the shared OIDC source and then write missing environment secrets." -ForegroundColor Yellow
+            Write-Error "Phase 1b-only requires either a reusable shared OIDC source baseline or a fully configured target baseline."
+            exit 1
+          }
+
+          if ($sourceReusable -and $missingEnvs.Count -gt 0) {
+            Write-Host "✅ Phase 1b-only baseline confirmed — shared source environment '$sourceEnvironment' can repair missing target environments." -ForegroundColor Green
+            Write-Host "   Missing target environments to be updated: $($missingEnvs -join ', ')" -ForegroundColor Yellow
+          } elseif ($allTargetsConfigured) {
+            Write-Host "✅ Phase 1b-only baseline confirmed — all target environments already have complete OIDC secrets." -ForegroundColor Green
+          } else {
+            Write-Host "✅ Phase 1b-only baseline confirmed — shared source environment '$sourceEnvironment' is complete." -ForegroundColor Green
+          }
+
       - name: Phase Readiness Pre-Flight Summary
         run: |
           Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
@@ -303,9 +458,15 @@ jobs:
           # Phase 1a: Setup OIDC
           $effectiveSetupOidc = $doSetupOidc -or $doConfigSecrets
           $phase1aIcon   = if ($effectiveSetupOidc) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }
-          $phase1aAuth   = if ($oidcConfigured) { 'non-interactive (OIDC)' } else { 'interactive (device code — first-time)' }
+          $phase1aAuth   = if ($doSetupOidc) {
+            'interactive (device code — App Registration management)'
+          } elseif ($oidcConfigured) {
+            'non-interactive (OIDC)'
+          } else {
+            'interactive (device code — no existing OIDC)'
+          }
           $phase1aNote   = if (-not $doSetupOidc -and $doConfigSecrets) {
-            " (auto-triggered by Phase 1b)"
+            " (passthrough mode — verifying existing credentials for Phase 1b)"
           } else { '' }
           Write-Host "  Phase 1a — Setup Azure OIDC        : $phase1aIcon$phase1aNote" -ForegroundColor $(if ($effectiveSetupOidc) { 'Cyan' } else { 'DarkGray' })
           if ($effectiveSetupOidc) {
@@ -412,9 +573,15 @@ jobs:
             Write-Host "✅ Existing OIDC credentials found — will use non-interactive login" -ForegroundColor Green
             "useExistingOidc=true" >> $env:GITHUB_OUTPUT
           } else {
-            Write-Host "⚠️  No existing OIDC credentials — will use device code login" -ForegroundColor Yellow
-            Write-Host "   This is expected for first-time setup." -ForegroundColor Gray
-            "useExistingOidc=false" >> $env:GITHUB_OUTPUT
+            # setupOidc=false and no OIDC credentials exist.
+            # This job is acting as a passthrough relay only (reading dev env secrets for Phase 1b).
+            # No Azure login is required — the passthrough step reads from the GitHub Actions
+            # environment context, not from Azure.  Skipping login avoids a confusing
+            # 5-minute device-code timeout for a no-op relay run.
+            Write-Host "ℹ️  setupOidc=false and no existing OIDC credentials found." -ForegroundColor Cyan
+            Write-Host "   Running in passthrough mode — no Azure login required." -ForegroundColor Gray
+            Write-Host "   (If Phase 1a is needed, re-run with setupOidc=true.)" -ForegroundColor Gray
+            "useExistingOidc=skip" >> $env:GITHUB_OUTPUT
           }
         env:
           CLIENTID: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
@@ -659,17 +826,28 @@ jobs:
           $subscription   = az account show | ConvertFrom-Json
           $tenantId       = $subscription.tenantId
           $subscriptionId = $subscription.id
+          try {
+            $spInfo = az ad sp list --filter "appId eq '$clientId'" 2>&1 | ConvertFrom-Json -ErrorAction Stop
+            $spObjectId = if ($spInfo -and $spInfo.Count -gt 0) { $spInfo[0].id } else { "" }
+          } catch {
+            Write-Host "  ⚠️  Could not retrieve service principal object ID: $($_.Exception.Message)" -ForegroundColor Yellow
+            $spObjectId = ""
+          }
           
           "clientId=$clientId"              >> $env:GITHUB_OUTPUT
           "tenantId=$tenantId"              >> $env:GITHUB_OUTPUT
           "subscriptionId=$subscriptionId"  >> $env:GITHUB_OUTPUT
           "appObjectId=$appObjectId"        >> $env:GITHUB_OUTPUT
+          "spObjectId=$spObjectId"          >> $env:GITHUB_OUTPUT
           
           Write-Host ""
           Write-Host "✅ OIDC App Registration configured successfully" -ForegroundColor Green
           Write-Host "  Client ID: $clientId" -ForegroundColor Gray
           Write-Host "  Tenant ID: $tenantId" -ForegroundColor Gray
           Write-Host "  Subscription ID: $subscriptionId" -ForegroundColor Gray
+          if (-not [string]::IsNullOrWhiteSpace($spObjectId)) {
+            Write-Host "  Service Principal Object ID: $spObjectId" -ForegroundColor Gray
+          }
 
       - name: Verify Federated Credentials
         if: ${{ inputs.setupOidc }}
@@ -775,6 +953,54 @@ jobs:
 
           Write-Host "✅ Encoded OIDC values prepared for downstream jobs" -ForegroundColor Green
 
+      - name: Prepare Deterministic OIDC Handoff Artifact
+        continue-on-error: true
+        if: success() && (steps.oidc-setup.outcome == 'success' || steps.oidc-passthrough.outcome == 'success')
+        shell: pwsh
+        run: |
+          $clientId = "${{ steps.oidc-setup.outputs.clientId }}"
+          if ([string]::IsNullOrWhiteSpace($clientId)) {
+            $clientId = "${{ steps.oidc-passthrough.outputs.clientId }}"
+          }
+
+          $tenantId = "${{ steps.oidc-setup.outputs.tenantId }}"
+          if ([string]::IsNullOrWhiteSpace($tenantId)) {
+            $tenantId = "${{ steps.oidc-passthrough.outputs.tenantId }}"
+          }
+
+          $subscriptionId = "${{ steps.oidc-setup.outputs.subscriptionId }}"
+          if ([string]::IsNullOrWhiteSpace($subscriptionId)) {
+            $subscriptionId = "${{ steps.oidc-passthrough.outputs.subscriptionId }}"
+          }
+
+          $spObjectId = "${{ steps.oidc-setup.outputs.spObjectId }}"
+          if ([string]::IsNullOrWhiteSpace($spObjectId)) {
+            $spObjectId = "${{ steps.oidc-passthrough.outputs.spObjectId }}"
+          }
+
+          $handoffDir = Join-Path $env:RUNNER_TEMP 'oidc-handoff'
+          $handoffFile = Join-Path $handoffDir 'oidc-handoff.json'
+          New-Item -ItemType Directory -Path $handoffDir -Force | Out-Null
+
+          @{
+            clientId = $clientId
+            tenantId = $tenantId
+            subscriptionId = $subscriptionId
+            spObjectId = $spObjectId
+          } | ConvertTo-Json | Set-Content -Path $handoffFile -Encoding UTF8
+
+          Write-Host "✅ Deterministic OIDC handoff artifact prepared" -ForegroundColor Green
+
+      - name: Upload OIDC Handoff Artifact
+        continue-on-error: true
+        if: success() && (steps.oidc-setup.outcome == 'success' || steps.oidc-passthrough.outcome == 'success')
+        uses: actions/upload-artifact@v6
+        with:
+          name: oidc-handoff-${{ github.run_id }}
+          path: ${{ runner.temp }}/oidc-handoff/oidc-handoff.json
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Create Setup Summary
         if: always()
         run: |
@@ -798,7 +1024,6 @@ jobs:
               "|--------|-------|" >> $env:GITHUB_STEP_SUMMARY
               "| Client ID | ``$clientId`` |" >> $env:GITHUB_STEP_SUMMARY
               "| Tenant ID | ``$tenantId`` |" >> $env:GITHUB_STEP_SUMMARY
-              "| Subscription ID | ``$subscriptionId`` |" >> $env:GITHUB_STEP_SUMMARY
             } else {
               "**OIDC App Registration**: ❌ Failed" >> $env:GITHUB_STEP_SUMMARY
               "**Environment Scope**: ``$env``" >> $env:GITHUB_STEP_SUMMARY
@@ -824,7 +1049,6 @@ jobs:
               "| Client ID (stored secret — stale) | ``$storedId`` |" >> $env:GITHUB_STEP_SUMMARY
             }
             "| Tenant ID | ``${{ steps.oidc-passthrough.outputs.tenantId }}`` |" >> $env:GITHUB_STEP_SUMMARY
-            "| Subscription ID | ``${{ steps.oidc-passthrough.outputs.subscriptionId }}`` |" >> $env:GITHUB_STEP_SUMMARY
           } else {
             "**OIDC Setup**: Skipped (using existing credentials)" >> $env:GITHUB_STEP_SUMMARY
           }
@@ -845,6 +1069,7 @@ jobs:
       setupGitHubApp: ${{ inputs.setupGitHubApp }}
       githubAppName: ${{ inputs.githubAppName }}
       configureSecrets: ${{ inputs.configureSecrets }}
+      expectOidcHandoff: ${{ inputs.setupOidc || needs.setup-oidc.outputs.clientIdB64 != '' }}
       clientIdB64: ${{ needs.setup-oidc.outputs.clientIdB64 }}
       tenantIdB64: ${{ needs.setup-oidc.outputs.tenantIdB64 }}
       subscriptionIdB64: ${{ needs.setup-oidc.outputs.subscriptionIdB64 }}
