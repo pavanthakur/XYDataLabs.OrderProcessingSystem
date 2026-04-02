@@ -86,6 +86,12 @@ jobs:
           SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
         run: |
           # Check if credentials are available via environment variables
+          $ref = "${{ github.ref }}"
+          if ($ref -eq 'refs/heads/main') { $targetEnv = 'prod'; $envSuffix = 'prod' }
+          elseif ($ref -eq 'refs/heads/staging') { $targetEnv = 'staging'; $envSuffix = 'stg' }
+          elseif ($ref -eq 'refs/heads/dev') { $targetEnv = 'dev'; $envSuffix = 'dev' }
+          else { $branch = $ref.Replace('refs/heads/',''); $targetEnv = $branch; $envSuffix = $branch }
+
           $hasClientId = -not [string]::IsNullOrWhiteSpace($env:CLIENT_ID)
           $hasTenantId = -not [string]::IsNullOrWhiteSpace($env:TENANT_ID)
           $hasSubscriptionId = -not [string]::IsNullOrWhiteSpace($env:SUBSCRIPTION_ID)
@@ -100,7 +106,7 @@ jobs:
             Write-Host ""
             Write-Host "⚠️  Deployment cannot proceed - Azure credentials are missing" -ForegroundColor Yellow
             Write-Host ""
-            Write-Host "Required secrets for the '${{ github.ref }}' environment:" -ForegroundColor Cyan
+            Write-Host "Required secrets for the '$targetEnv' GitHub environment (Azure suffix '$envSuffix'):" -ForegroundColor Cyan
             Write-Host "  AZUREAPPSERVICE_CLIENTID       : $(if ($hasClientId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasClientId) { "Green" } else { "Red" })
             Write-Host "  AZUREAPPSERVICE_TENANTID       : $(if ($hasTenantId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasTenantId) { "Green" } else { "Red" })
             Write-Host "  AZUREAPPSERVICE_SUBSCRIPTIONID : $(if ($hasSubscriptionId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasSubscriptionId) { "Green" } else { "Red" })
@@ -391,10 +397,18 @@ jobs:
         shell: pwsh
         run: |
           $ref    = "${{ github.ref_name }}"
-          $app    = "${{ env.AZURE_WEBAPP_NAME }}"
-          $rg     = "${{ steps.check-target.outputs.resourceGroupName }}"
-          $targetEnv = "${{ steps.check-target.outputs.targetEnvironment }}"
-          $envSuffix = "${{ steps.check-target.outputs.resourceSuffix }}"
+          $owner  = "${{ github.repository_owner }}"
+          if ($ref -eq 'main') { $defaultTargetEnv = 'prod'; $defaultEnvSuffix = 'prod' }
+          elseif ($ref -eq 'staging') { $defaultTargetEnv = 'staging'; $defaultEnvSuffix = 'stg' }
+          elseif ($ref -eq 'dev') { $defaultTargetEnv = 'dev'; $defaultEnvSuffix = 'dev' }
+          else { $defaultTargetEnv = $ref; $defaultEnvSuffix = $ref }
+
+          $defaultApp = "$owner-orderprocessing-api-xyapp-$defaultEnvSuffix"
+          $defaultRg = "rg-orderprocessing-$defaultEnvSuffix"
+          $app = if ([string]::IsNullOrWhiteSpace("${{ env.AZURE_WEBAPP_NAME }}")) { $defaultApp } else { "${{ env.AZURE_WEBAPP_NAME }}" }
+          $rg = if ([string]::IsNullOrWhiteSpace("${{ steps.check-target.outputs.resourceGroupName }}")) { $defaultRg } else { "${{ steps.check-target.outputs.resourceGroupName }}" }
+          $targetEnv = if ([string]::IsNullOrWhiteSpace("${{ steps.check-target.outputs.targetEnvironment }}")) { $defaultTargetEnv } else { "${{ steps.check-target.outputs.targetEnvironment }}" }
+          $envSuffix = if ([string]::IsNullOrWhiteSpace("${{ steps.check-target.outputs.resourceSuffix }}")) { $defaultEnvSuffix } else { "${{ steps.check-target.outputs.resourceSuffix }}" }
           $run    = "${{ github.run_id }}"
           $repo   = "${{ github.repository }}"
           $actor  = "${{ github.actor }}"
@@ -403,9 +417,9 @@ jobs:
           $credentialsConfigured = "${{ steps.check-credentials.outputs.credentialsConfigured }}"
           $infraReady = "${{ steps.check-target.outputs.infraReady }}"
           $appUrl = if ($credentialsConfigured -ne 'true') {
-            "(app name not set — credentials missing)"
+            "https://$app.azurewebsites.net/swagger (target URL; deployment skipped before Azure login)"
           } elseif ($infraReady -ne 'true') {
-            "(deployment skipped — target app not provisioned)"
+            "https://$app.azurewebsites.net/swagger (target URL; app not provisioned yet)"
           } else {
             "https://$app.azurewebsites.net/swagger"
           }
@@ -438,4 +452,7 @@ jobs:
           if ($infraReady -ne 'true' -and $credentialsConfigured -eq 'true') {
             "" >> $env:GITHUB_STEP_SUMMARY
             "> Run Azure Bootstrap & Deploy with bootstrapInfra=true for this branch environment before expecting push-based deployments to succeed." >> $env:GITHUB_STEP_SUMMARY
+          } elseif ($credentialsConfigured -ne 'true') {
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "> Run Azure Initial Setup with Setup Azure OIDC=true and Configure GitHub Secrets=true before rerunning this deployment." >> $env:GITHUB_STEP_SUMMARY
           }

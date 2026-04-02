@@ -789,11 +789,16 @@ foreach ($env in $envList) {
                 # Generate cryptographically random password — nobody will ever know this value
                 $bytes = [System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32)
                 $sqlAdminPassword = ([System.Convert]::ToBase64String($bytes)).Substring(0, 28) + "Aa1!"
-                az keyvault secret set --vault-name $kvName --name "sql-admin-password" --value $sqlAdminPassword | Out-Null
+                $setOutput = az keyvault secret set --vault-name $kvName --name "sql-admin-password" --value $sqlAdminPassword 2>&1
                 if ($LASTEXITCODE -eq 0) {
                     Write-Host "  [OK] New sql-admin-password generated and stored in Key Vault" -ForegroundColor Green
+                } elseif ($setOutput -match 'AADSTS700024') {
+                    Write-Host "  [WARN] Could not store sql-admin-password in Key Vault because the OIDC assertion expired during the long-running bootstrap step" -ForegroundColor Yellow
+                    if ($env:GITHUB_ACTIONS -eq 'true') {
+                        Write-Host "  [INFO] The bootstrap workflow re-authenticates immediately after this step and ensures the secret is present before SQL provisioning continues" -ForegroundColor Cyan
+                    }
                 } else {
-                    Write-Host "  [WARN] Could not store sql-admin-password in Key Vault" -ForegroundColor Yellow
+                    Write-Host "  [WARN] Could not store sql-admin-password in Key Vault: $setOutput" -ForegroundColor Yellow
                 }
             }
         } catch {
@@ -1104,6 +1109,7 @@ Write-Host "`n[OIDC Setup] Configuring GitHub Actions OIDC..." -ForegroundColor 
 $oidcJob | Wait-Job | Out-Null
 $oidcResult = Receive-Job -Job $oidcJob
 Remove-Job -Job $oidcJob
+$isGitHubActionsRun = $env:GITHUB_ACTIONS -eq 'true'
 
 if ($oidcResult.Success) {
   if ($oidcResult.SkipAAD) {
@@ -1162,7 +1168,11 @@ if ($oidcResult.Success) {
     }
 
     # GitHub secrets display
-    Write-Host "`n  [GitHub Secrets] Add these to repository secrets:" -ForegroundColor Cyan
+    if ($isGitHubActionsRun) {
+        Write-Host "`n  [GitHub OIDC Values] Azure Initial Setup should already have stored these secrets; values shown below are for verification only:" -ForegroundColor Cyan
+    } else {
+        Write-Host "`n  [GitHub Secrets] Add these to repository secrets:" -ForegroundColor Cyan
+    }
     Write-Host "    https://github.com/$GitHubOwner/$GitHubRepo/settings/secrets/actions" -ForegroundColor Gray
     Write-Host "\n    AZUREAPPSERVICE_CLIENTID:        $($oidcResult.AppId)" -ForegroundColor White
     Write-Host "    AZUREAPPSERVICE_TENANTID:        $($oidcResult.TenantId)" -ForegroundColor White
@@ -1177,9 +1187,8 @@ AZUREAPPSERVICE_SUBSCRIPTIONID:  $($oidcResult.SubscriptionId)
 
 =================================
 "@
-    $isGitHubActionsRun = $env:GITHUB_ACTIONS -eq 'true'
     if ($isGitHubActionsRun) {
-        Write-Host "  [INFO] Clipboard is not available in GitHub Actions; use the values shown above" -ForegroundColor Gray
+        Write-Host "  [INFO] Clipboard is not available in GitHub Actions; Azure Initial Setup owns secret configuration for workflow runs" -ForegroundColor Gray
     } else {
         try {
             $secretsOutput | Set-Clipboard -ErrorAction Stop
@@ -1189,11 +1198,11 @@ AZUREAPPSERVICE_SUBSCRIPTIONID:  $($oidcResult.SubscriptionId)
         }
     }
     # Automatic GitHub secrets configuration (if helper script is present)
-    Write-Host "`n  [AUTOMATION] Configuring GitHub secrets automatically..." -ForegroundColor Cyan
+    Write-Host "`n  [AUTOMATION] Evaluating GitHub secret configuration..." -ForegroundColor Cyan
     $configScriptPath = Join-Path $PSScriptRoot "configure-github-secrets.ps1"
     if ($isGitHubActionsRun) {
-        Write-Host "  [SKIP] Skipping GitHub secret automation in GitHub Actions to avoid interactive login prompts during deployment" -ForegroundColor Yellow
-        Add-StepStatus -Name "Auto-configure GitHub Secrets" -Status "Skipped" -Details "GitHub Actions run detected; secrets must be configured outside deployment"
+        Write-Host "  [SKIP] Skipping GitHub secret automation in GitHub Actions because Azure Initial Setup owns secret configuration for workflow runs" -ForegroundColor Yellow
+        Add-StepStatus -Name "Auto-configure GitHub Secrets" -Status "Skipped" -Details "GitHub Actions run detected; Azure Initial Setup owns secret configuration"
     } elseif (Test-Path $configScriptPath) {
         try {
             & $configScriptPath -Repository "$GitHubOwner/$GitHubRepo" -Force -ErrorAction Stop
@@ -1242,7 +1251,11 @@ foreach ($s in $global:StepStatus) {
 
 Write-Host "\nNext Steps:" -ForegroundColor Yellow
 if ($oidcResult.Success) {
-    Write-Host "  1. Add the repository secrets shown above to GitHub (if not already)." -ForegroundColor White
+    if ($isGitHubActionsRun) {
+        Write-Host "  1. If Azure OIDC secrets are ever missing or stale, rerun Azure Initial Setup with Phase 1a and Phase 1b enabled." -ForegroundColor White
+    } else {
+        Write-Host "  1. Add the repository secrets shown above to GitHub (if not already)." -ForegroundColor White
+    }
     Write-Host "  2. Trigger deploy workflows manually, or push to deployment branches if you want branch-triggered deploys." -ForegroundColor White
 }
 Write-Host "  3. Review .github/prompts/README.md for required manual post-deploy prompts and follow-up steps." -ForegroundColor White
