@@ -4,10 +4,11 @@ This directory contains GitHub Actions workflows for automated CI/CD deployment 
 
 ## 📋 Overview
 
-**Component-based deployment workflows** that automatically build, test, and deploy when specific parts of the codebase change:
+This repo uses a small set of primary operational workflows, with additional support workflows for setup, validation, and troubleshooting.
 
 | Workflow | Triggers On | Deploys To | Description |
 |----------|-------------|------------|-------------|
+| `ci.yml` | Pull requests to dev/staging/main | Validation only | PR build-and-test gate for the solution and test projects |
 | `azure-initial-setup.yml` | Manual | One-time setup | **[See README-AZURE-INITIAL-SETUP.md](./README-AZURE-INITIAL-SETUP.md)** - Phase 0 (GitHub App), Phase 1a (OIDC), Phase 1b (secrets) |
 | `azure-bootstrap.yml` | Manual | Infrastructure + deploy | **[See README-AZURE-BOOTSTRAP.md](./README-AZURE-BOOTSTRAP.md)** - Phase 2 (infrastructure), API/UI deploy, Phase X (cleanup) |
 | `configure-github-secrets.yml` | Called by initial-setup | Secret configuration | **[See README-CONFIGURE-GITHUB-SECRETS.md](./README-CONFIGURE-GITHUB-SECRETS.md)** - GitHub App setup and secret management (can run independently) |
@@ -16,8 +17,29 @@ This directory contains GitHub Actions workflows for automated CI/CD deployment 
 | `test-validate-deployment.yml` | Manual or PR changes | Test only | **[Quick Start](./QUICK-START-TEST-VALIDATION.md)** \| **[Full Docs](./README-TEST-VALIDATE-DEPLOYMENT.md)** - Tests validation workflow independently |
 | `deploy-api-to-azure.yml` | API/Backend code changes | All branches (dev/staging/main) | Builds and deploys API to environment-specific Azure Web App |
 | `deploy-ui-to-azure.yml` | UI/Frontend code changes | All branches (dev/staging/main) | Builds and deploys UI to environment-specific Azure Web App |
-| `docker-health.yml` | Docker script changes | main branch only | Validates Docker startup scripts |
 | `validate-adrs.yml` | ADR file, script, or lint config changes | Push/PR to main/dev/staging, or manual | **[See README-VALIDATE-ADRS.md](./README-VALIDATE-ADRS.md)** — Validates ADR filename pattern, H1 heading, `**Status:**` frontmatter, and markdownlint rules |
+
+### Workflow Categories
+
+**Primary workflows** are the workflows the team should think about first for normal delivery and operations:
+
+| Workflow | Role |
+|----------|------|
+| `ci.yml` | PR gate for build and unit/architecture test validation |
+| `azure-initial-setup.yml` | One-time repository and OIDC bootstrap |
+| `azure-bootstrap.yml` | Main day-to-day environment bootstrap and coordinated deployment entrypoint |
+| `deploy-api-to-azure.yml` | Normal API deployment path for code changes |
+| `deploy-ui-to-azure.yml` | Normal UI deployment path for code changes |
+
+**Support workflows** exist for specialized validation, secondary entrypoints, or troubleshooting rather than the default delivery path:
+
+| Workflow | Role |
+|----------|------|
+| `configure-github-secrets.yml` | Secondary/manual secret configuration and GitHub App troubleshooting path |
+| `infra-deploy.yml` | Infra-only Bicep deployment entrypoint |
+| `validate-deployment.yml` | Reusable preflight validation called by infra deployment |
+| `test-validate-deployment.yml` | Independent test harness for validation workflow changes |
+| `validate-adrs.yml` | Documentation governance for ADR changes |
 
 ### Branch-to-Environment Mapping
 
@@ -96,10 +118,6 @@ git push origin dev  # Deploys both API and UI to dev environment
 - `XYDataLabs.OrderProcessingSystem.Domain/**`
 - `XYDataLabs.OrderProcessingSystem.Infrastructure/**`
 - `XYDataLabs.OrderProcessingSystem.SharedKernel/**`
-
-**Docker Workflow** (`docker-health.yml`) triggers on:
-- Any push to `main` branch
-- Pull requests targeting `main` branch
 
 ### Pull Request Behavior
 
