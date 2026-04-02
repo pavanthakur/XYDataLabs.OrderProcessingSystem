@@ -409,7 +409,7 @@ The wrapper script:
 
 - [Bicep Templates](../bicep/README.md) - Infrastructure as Code
 - [Runbook](../docs/runbooks/keyvault-managed-identity-deploy.md) - Deployment runbook
-- [GitHub Workflow](../.github/workflows/deploy-and-verify.yml) - CI/CD pipeline
+- [Workflow Overview](../.github/workflows/README.md) - Current CI/CD and deployment workflows
 
 ---
 

@@ -56,10 +56,10 @@ az deployment group create \
 
 #### Using GitHub Actions
 
-The deployment is automated via the `.github/workflows/deploy-and-verify.yml` workflow:
-- Pushes to `dev` branch → deploys to dev environment
-- Pushes to `staging` branch → deploys to staging environment
-- Pushes to `main` branch → deploys to prod environment
+Use the current deployment workflows instead of the retired combined pipeline:
+- `.github/workflows/azure-bootstrap.yml` for environment bootstrap and coordinated deploys
+- `.github/workflows/infra-deploy.yml` for infra-only Bicep what-if and deploy runs
+- `.github/workflows/deploy-api-to-azure.yml` and `.github/workflows/deploy-ui-to-azure.yml` for normal component deployments
 
 ### Validation
 
