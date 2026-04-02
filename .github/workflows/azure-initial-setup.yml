@@ -262,6 +262,7 @@ jobs:
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
       - name: Validate Phase 1b-Only Baseline
+        id: phase1b-baseline
         if: ${{ inputs.configureSecrets && !inputs.setupOidc }}
         shell: pwsh
         env:
@@ -372,6 +373,18 @@ jobs:
           }
 
           Write-Host ""
+          $sourceReusable = $sourceState.Readable -and $sourceState.Complete
+          $allTargetsConfigured = $missingEnvs.Count -eq 0
+
+          "sourceEnvironment=$sourceEnvironment" >> $env:GITHUB_OUTPUT
+          "targetEnvironmentsCsv=$($targetEnvironments -join ',')" >> $env:GITHUB_OUTPUT
+          "configuredEnvsCsv=$($configuredEnvs -join ',')" >> $env:GITHUB_OUTPUT
+          "missingEnvsCsv=$($missingEnvs -join ',')" >> $env:GITHUB_OUTPUT
+          "unreadableEnvsCsv=$($unreadableEnvs -join ',')" >> $env:GITHUB_OUTPUT
+          "sourceReadable=$($sourceState.Readable.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          "sourceReusable=$($sourceReusable.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          "allTargetsConfigured=$($allTargetsConfigured.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+
           if ($unreadableEnvs.Count -gt 0) {
             Write-Host "❌ Phase 1b-only guard could not verify one or more target environments." -ForegroundColor Red
             Write-Host "   Unreadable : $($unreadableEnvs -join ', ')" -ForegroundColor Red
@@ -380,8 +393,6 @@ jobs:
             exit 1
           }
 
-          $sourceReusable = $sourceState.Readable -and $sourceState.Complete
-          $allTargetsConfigured = $missingEnvs.Count -eq 0
           if (-not $sourceReusable -and -not $allTargetsConfigured) {
             Write-Host "❌ Phase 1b-only is blocked because there is no reusable OIDC source baseline and not all target environments are already complete." -ForegroundColor Red
             Write-Host "   Shared source environment ($sourceEnvironment): $(if ($sourceState.Readable) { 'incomplete' } else { 'not readable' })" -ForegroundColor Red
@@ -415,12 +426,6 @@ jobs:
           Write-Host "This step shows what will run and whether prerequisites are met." -ForegroundColor Gray
           Write-Host ""
 
-          # ── Detect credential availability ────────────────────────────────
-          $hasClientId     = "${{ secrets.AZUREAPPSERVICE_CLIENTID }}"   -ne ""
-          $hasTenantId     = "${{ secrets.AZUREAPPSERVICE_TENANTID }}"   -ne ""
-          $hasSubscriptionId = "${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}" -ne ""
-          $oidcConfigured  = $hasClientId -and $hasTenantId -and $hasSubscriptionId
-
           $hasAppId        = "${{ secrets.APP_ID }}"          -ne ""
           $hasPrivateKey   = "${{ secrets.APP_PRIVATE_KEY }}" -ne ""
           $appConfigured   = $hasAppId -and $hasPrivateKey
@@ -429,16 +434,47 @@ jobs:
           $doSetupOidc     = "${{ inputs.setupOidc }}"        -eq "true"
           $doSetupGhApp    = "${{ inputs.setupGitHubApp }}"   -eq "true"
           $doConfigSecrets = "${{ inputs.configureSecrets }}" -eq "true"
+          $phase1bBaselineStepRan = (-not $doSetupOidc -and $doConfigSecrets)
+          $sharedSourceEnv = "${{ steps.phase1b-baseline.outputs.sourceEnvironment }}"
+          $targetEnvCsv = "${{ steps.phase1b-baseline.outputs.targetEnvironmentsCsv }}"
+          $configuredEnvCsv = "${{ steps.phase1b-baseline.outputs.configuredEnvsCsv }}"
+          $missingEnvCsv = "${{ steps.phase1b-baseline.outputs.missingEnvsCsv }}"
+          $sourceReadable = "${{ steps.phase1b-baseline.outputs.sourceReadable }}" -eq "true"
+          $sourceReusable = "${{ steps.phase1b-baseline.outputs.sourceReusable }}" -eq "true"
+          $allTargetsConfigured = "${{ steps.phase1b-baseline.outputs.allTargetsConfigured }}" -eq "true"
+          $oidcConfigured = if ($phase1bBaselineStepRan) { $sourceReusable -or $allTargetsConfigured } else { $false }
 
           # ── Credential summary ───────────────────────────────────────────
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
           Write-Host "🔐 CREDENTIAL STATUS" -ForegroundColor Yellow
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
           Write-Host ""
-          Write-Host "  Azure OIDC (AZUREAPPSERVICE_*):" -ForegroundColor Cyan
-          Write-Host "    CLIENTID      : $(if ($hasClientId)       { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasClientId) { 'Green' } else { 'Red' })
-          Write-Host "    TENANTID      : $(if ($hasTenantId)       { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasTenantId) { 'Green' } else { 'Red' })
-          Write-Host "    SUBSCRIPTIONID: $(if ($hasSubscriptionId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasSubscriptionId) { 'Green' } else { 'Red' })
+          if ($phase1bBaselineStepRan) {
+            Write-Host "  Azure OIDC (verified Phase 1b baseline):" -ForegroundColor Cyan
+            $sourceLabel = if ($sourceReusable) {
+              '✅ Reusable shared source baseline present'
+            } elseif ($sourceReadable) {
+              '⚠️  Shared source environment is readable but incomplete'
+            } else {
+              '⚠️  Shared source environment was not readable'
+            }
+            Write-Host "    Shared source ($sharedSourceEnv): $sourceLabel" -ForegroundColor $(if ($sourceReusable) { 'Green' } elseif ($sourceReadable) { 'Yellow' } else { 'Yellow' })
+
+            if ($allTargetsConfigured) {
+              Write-Host "    Target baseline ($targetEnvCsv): ✅ Complete in all selected environments" -ForegroundColor Green
+            } else {
+              Write-Host "    Target baseline ($targetEnvCsv): ⚠️  Missing in $missingEnvCsv" -ForegroundColor Yellow
+              if (-not [string]::IsNullOrWhiteSpace($configuredEnvCsv)) {
+                Write-Host "    Already configured         : $configuredEnvCsv" -ForegroundColor Gray
+              }
+            }
+          } elseif ($doSetupOidc) {
+            Write-Host "  Azure OIDC (Phase 1a):" -ForegroundColor Cyan
+            Write-Host "    Setup Azure OIDC is selected — credentials will be created or refreshed in this run." -ForegroundColor Green
+          } else {
+            Write-Host "  Azure OIDC:" -ForegroundColor Cyan
+            Write-Host "    No direct environment-secret verification is performed in this pre-flight mode." -ForegroundColor Gray
+          }
           Write-Host ""
           Write-Host "  GitHub App (Phase 0 credentials):" -ForegroundColor Cyan
           Write-Host "    APP_ID        : $(if ($hasAppId)      { '✅ Present' } else { '⬜ Missing' })" -ForegroundColor $(if ($hasAppId) { 'Green' } else { 'Yellow' })
@@ -460,6 +496,10 @@ jobs:
           $phase1aIcon   = if ($effectiveSetupOidc) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }
           $phase1aAuth   = if ($doSetupOidc) {
             'interactive (device code — App Registration management)'
+          } elseif ($phase1bBaselineStepRan -and $sourceReusable) {
+            'non-interactive (OIDC via shared dev environment)'
+          } elseif ($phase1bBaselineStepRan -and $allTargetsConfigured) {
+            'no Azure login (verification only — all selected targets already complete)'
           } elseif ($oidcConfigured) {
             'non-interactive (OIDC)'
           } else {
@@ -477,11 +517,15 @@ jobs:
           $phase1bPrereq  = $appConfigured
           $phase1bEnabled = $doConfigSecrets -or $doSetupGhApp
           $phase1bIcon    = if ($phase1bEnabled) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }
-          $oidcAvailableForPhase1b = $effectiveSetupOidc -or $oidcConfigured
+          $oidcAvailableForPhase1b = if ($phase1bBaselineStepRan) { $sourceReusable -or $allTargetsConfigured } else { $effectiveSetupOidc -or $oidcConfigured }
           $phase1bReady   = (-not $phase1bEnabled) -or ($phase1bPrereq -and $oidcAvailableForPhase1b)
           Write-Host "  Phase 1b — Configure GitHub Secrets: $phase1bIcon" -ForegroundColor $(if ($phase1bEnabled) { 'Cyan' } else { 'DarkGray' })
           if ($phase1bEnabled) {
-            if ($effectiveSetupOidc) {
+            if ($phase1bBaselineStepRan -and $allTargetsConfigured) {
+              Write-Host "             └─ OIDC source: all selected target environments already have existing AZUREAPPSERVICE_* secrets ✅" -ForegroundColor Green
+            } elseif ($phase1bBaselineStepRan -and $sourceReusable) {
+              Write-Host "             └─ OIDC source: shared source environment '$sharedSourceEnv' is reusable$(if (-not [string]::IsNullOrWhiteSpace($missingEnvCsv)) { " — missing targets: $missingEnvCsv" } else { '' })" -ForegroundColor Green
+            } elseif ($effectiveSetupOidc) {
               Write-Host "             └─ OIDC source: fresh credentials from Phase 1a$(if (-not $doSetupOidc) { ' (auto-triggered)' } else { '' })" -ForegroundColor Gray
             } elseif ($oidcConfigured) {
               Write-Host "             └─ OIDC source: existing AZUREAPPSERVICE_* secrets ✅" -ForegroundColor Green
