@@ -13,6 +13,104 @@ of the previous one.
 - After a production deployment to confirm seeded data and schema are correct
 - During incident triage to trace a specific payment
 
+**Runtime note:** The SQL queries in this runbook are runtime-agnostic. Only the way you identify the payment run differs:
+- `docker` / `local`: read the physical API/UI log files first, then use the derived prefix with the SQL queries below.
+- `azure`: use App Insights to derive the logical run prefix and callback evidence first, then run the same SQL queries below.
+- This Azure refinement does **not** change the non-Azure verification flow.
+
+---
+
+## Azure / App Insights quick path
+
+Use this entry path when the payment run happened on Azure App Service and logs live in Application Insights.
+
+For repeat Azure reruns, prefer the script path over manual terminal reconstruction:
+
+```powershell
+.\scripts\verify-payment-run-azure.ps1 -Environment <env> -RunPrefix <RUN_PREFIX>
+```
+
+The script performs the same App Insights + SQL correlation described below, but does it in one deterministic pass.
+
+### 1. Identify the logical run prefix from API traces
+
+Query only payment-specific API events and derive the shared logical run prefix (for example `OR-1-2ndApr`) from the tenant-specific `CustomerOrderId` values:
+
+```powershell
+$apiQuery = @"
+traces
+| where timestamp >= startofday(now() + 330m) - 330m
+| where message has_any('Generated payment attempt order id',
+                                                'Charge created with ID',
+                                                'Payment callback reconciliation completed',
+                                                'confirm-status responded')
+| extend application = tostring(customDimensions['Application'])
+| where cloud_RoleName has 'api' or application == 'API'
+| extend tenant = tostring(customDimensions['TenantCode'])
+| extend customerOrderId = coalesce(
+        tostring(customDimensions['CustomerOrderId']),
+        extract(@'customer order id\s+(\S+)', 1, message),
+        extract(@'customer order\s+(\S+)', 1, message))
+| extend runPrefix = extract(@'^(OR-\d+-[^-]+)', 1, customerOrderId)
+| extend chargeId = coalesce(
+        tostring(customDimensions['ChargeId']),
+        extract(@'Charge created with ID:\s+(\S+)', 1, message),
+        extract(@'payment\s+(\S+)\. Status', 1, message),
+        extract(@'/payments/(\S+)/confirm-status', 1, message))
+| project timestamp, tenant, customerOrderId, runPrefix, chargeId, message
+| order by timestamp asc
+"@
+
+$api = az monitor app-insights query `
+    --app ai-orderprocessing-{ENV_TAG} `
+    --resource-group rg-orderprocessing-{ENV_TAG} `
+    --analytics-query $apiQuery `
+    --output json | ConvertFrom-Json
+
+$apiRows = foreach ($row in $api.tables[0].rows) {
+    [PSCustomObject]@{
+        Timestamp       = $row[0]
+        Tenant          = $row[1]
+        CustomerOrderId = $row[2]
+        RunPrefix       = $row[3]
+        ChargeId        = $row[4]
+        Message         = $row[5]
+    }
+}
+```
+
+If more than one `RunPrefix` appears for the day, split them by first timestamp and verify one run at a time.
+
+Replace `{ENV_TAG}` with the env suffix (`dev`, `stg`, `prod`).
+
+### 2. Check UI callback traces narrowly
+
+Do **not** query all UI traces for the day. Query callback-only lines:
+
+```powershell
+$uiQuery = @"
+traces
+| where timestamp >= startofday(now() + 330m) - 330m
+| where message has_any('OpenPay callback received', 'payment/callback responded')
+| extend application = tostring(customDimensions['Application'])
+| where cloud_RoleName has 'ui' or application == 'UI'
+| project timestamp, message
+| order by timestamp asc
+"@
+```
+
+Interpret UI callbacks with the 3DS state from the pre-flight SQL query below:
+- `Use3DSecure = 1`: callback evidence is expected in UI traces
+- `Use3DSecure = 0`: callback evidence is **not** required; the charge is expected to complete synchronously with `ThreeDSecureStage = not_applicable`
+
+Use OR logic (`cloud_RoleName has 'ui' or application == 'UI'`) rather than AND — either property may be absent on some traces. In practice this keeps API and UI traces separated when both apps write to the same App Insights resource.
+
+### 3. Then run the SQL queries in this runbook
+
+Use the shared logical run prefix in the SQL filters below:
+- Example: `OR-1-2ndApr%` for a multi-tenant Azure run
+- Example: `OR-4-28Mar-tA-http-dock-prod%` for a single-tenant physical-log run
+
 ---
 
 ## Execution checklist

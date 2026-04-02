@@ -5,6 +5,10 @@ description: |
   (azure runtime), extract charge IDs, run DB verification queries, and produce a correlated
   pass/fail report.
 
+  Azure mode must derive a shared logical run prefix, narrow UI callback analysis to callback-only
+  traces, and treat UI callbacks as required only for 3DS-enabled tenants. Docker/local behavior
+  stays unchanged and continues to use physical log files.
+
   Usage examples:
     /XYDataLabs-verify-db-logs "prod docker"
     /XYDataLabs-verify-db-logs "dev azure"
@@ -19,6 +23,10 @@ The user wants to verify that a payment test run is fully consistent across log 
 the database. Cover **all three** of: API log → UI log → DB.
 
 Log source depends on **runtime**: `docker`/`local` read physical files; `azure` queries App Insights KQL via Azure CLI.
+
+> **Guardrail:** Any Azure-specific narrowing, parsing, or callback expectations in this prompt apply
+> only to the `azure` runtime. Do not change the `docker` or `local` verification flow when updating
+> the App Insights path.
 
 ---
 
@@ -112,43 +120,68 @@ Also ensure the firewall is open before running sqlcmd in Steps 4–5:
 
 Replace `{ENV_TAG}` with the env suffix from Step 1 (`dev`, `stg`, `prod`).
 
-Query App Insights for API-side payment events today (IST = UTC+5:30; `startofday(now() + 330m) - 330m` resolves to midnight IST in UTC, preventing missed payments when running before 05:30 UTC):
+Query App Insights for API-side payment events today with a **narrow payment-event query** (IST = UTC+5:30; `startofday(now() + 330m) - 330m` resolves to midnight IST in UTC, preventing missed payments when running before 05:30 UTC). Parse the JSON rows into PowerShell objects so the output is structured instead of a raw App Insights array dump:
 ```powershell
-az monitor app-insights query `
+$apiQuery = @"
+traces
+| where timestamp >= startofday(now() + 330m) - 330m
+| where message has_any('Generated payment attempt order id',
+                        'Charge created with ID',
+                        'Payment callback reconciliation completed',
+                        'confirm-status responded')
+| extend application = tostring(customDimensions['Application'])
+| where cloud_RoleName has 'api' or application == 'API'
+| extend tenant = tostring(customDimensions['TenantCode'])
+| extend customerOrderId = coalesce(
+    tostring(customDimensions['CustomerOrderId']),
+    extract(@'customer order id\s+(\S+)', 1, message),
+    extract(@'customer order\s+(\S+)', 1, message))
+| extend runPrefix = extract(@'^(OR-\d+-[^-]+)', 1, customerOrderId)
+| extend chargeId = coalesce(
+    tostring(customDimensions['ChargeId']),
+    extract(@'Charge created with ID:\s+(\S+)', 1, message),
+    extract(@'payment\s+(\S+)\. Status', 1, message),
+    extract(@'/payments/(\S+)/confirm-status', 1, message))
+| project timestamp, tenant, customerOrderId, runPrefix, chargeId, message
+| order by timestamp asc
+"@
+
+$api = az monitor app-insights query `
   --app ai-orderprocessing-{ENV_TAG} `
   --resource-group rg-orderprocessing-{ENV_TAG} `
-  --analytics-query "
-    traces
-    | where timestamp >= startofday(now() + 330m) - 330m
-    | where cloud_RoleName has 'api'
-    | where message has_any('charge created', 'created charge', 'callback reconciliation',
-                            'Generated payment', 'confirm-status')
-    | extend orderId  = tostring(customDimensions['CustomerOrderId'])
-    | extend chargeId = iff(isnotempty(tostring(customDimensions['ChargeId'])),
-                            tostring(customDimensions['ChargeId']),
-                            extract(@'charge with ID:\s+(\S+)', 1, message))
-    | project timestamp, message, orderId, chargeId
-    | order by timestamp asc" `
-  --output json
+  --analytics-query $apiQuery `
+  --output json | ConvertFrom-Json
+
+$apiRows = foreach ($row in $api.tables[0].rows) {
+  [PSCustomObject]@{
+    Timestamp       = $row[0]
+    Tenant          = $row[1]
+    CustomerOrderId = $row[2]
+    RunPrefix       = $row[3]
+    ChargeId        = $row[4]
+    Message         = $row[5]
+  }
+}
 ```
 
-> **Note:** `cloud_RoleName` for this project is `pavanthakur-orderprocessing-api-xyapp-{ENV_TAG}`. The `has 'api'` filter matches it correctly. `chargeId` is extracted from `customDimensions` when populated, otherwise parsed from the message text (some log entries set one but not the other).
+> **Note:** `cloud_RoleName` for this project is `pavanthakur-orderprocessing-api-xyapp-{ENV_TAG}`, and the structured `customDimensions['Application']` property is `API` for API traces and `UI` for UI traces. Use OR logic (`cloud_RoleName has 'api' or application == 'API'`) rather than AND — either property may be absent on some traces, and OR ensures no data is silently dropped. `chargeId` is extracted from `customDimensions` when populated, otherwise parsed from the message text. `runPrefix` is the shared logical prefix (e.g. today's run would be scoped by the date portion of the prefix) and is what should scope the DB verification for a multi-tenant Azure test run.
 
 Replace `{ENV_TAG}` with the env suffix from Step 1 (`dev`, `stg`, `prod`).
 
 **From the API output, extract and record:**
-- All `CustomerOrderId` values seen (the OR prefix, e.g. `OR-1-28Mar`)
+- Distinct `RunPrefix` candidates (for example `OR-1-2ndApr`)
+- Tenant-specific `CustomerOrderId` values seen
 - All `ChargeId` values created
 - All callback completion results
 
 ---
 
-## Step 3 — Confirm the OR prefix, then read the UI log
+## Step 3 — Confirm the run prefix, then read the UI log
 
-**Determine the PREFIX:**
+**Determine the RUN_PREFIX:**
 
-If more than one OR prefix appears in the API output, find the first timestamp for each prefix and ask the user:
-> "Multiple OR prefixes found today:
+If more than one logical run prefix appears in the API output, find the first timestamp for each and ask the user:
+> "Multiple payment run prefixes found today:
 > - `OR-1-28Mar` — first entry at 14:23:05
 > - `OR-3-28Mar` — first entry at 16:47:12
 >
@@ -156,24 +189,26 @@ If more than one OR prefix appears in the API output, find the first timestamp f
 
 Showing the timestamp of the first entry is more reliable than listing the prefix strings alone — the user can identify the correct run by time rather than by memory of the prefix counter.
 
-Otherwise use the single prefix found. Use it as `<PREFIX>` for all queries below.
+Otherwise use the single prefix found. Use it as `<RUN_PREFIX>` for all queries below.
 
 ### If runtime = `docker` or `local` (physical log)
 
 ```powershell
 $uiLog = "Q:\GIT\TestAppXY_OrderProcessingSystem\logs\ui-{ENV_TAG}-{RUNTIME}-{PROFILE}-$dateTag.log"
 Get-Content $uiLog |
-  Select-String -Pattern "<PREFIX>|payment/callback responded" |
+  Select-String -Pattern "<RUN_PREFIX>|payment/callback responded" |
   ForEach-Object { $_.Line.Trim() }
 ```
 
-Replace `<PREFIX>` with the confirmed prefix literal (e.g. `OR-4-28Mar`). Using the exact PREFIX rather than the broad `callback` keyword ensures that same-day retry runs earlier in the same log file do not contaminate the extraction.
+Replace `<RUN_PREFIX>` with the confirmed prefix literal (e.g. `OR-4-28Mar`). Using the exact prefix rather than the broad `callback` keyword ensures that same-day retry runs earlier in the same log file do not contaminate the extraction.
 
 If the UI log file does not exist, note this as a finding and proceed with DB queries only.
 
 ### If runtime = `azure` (App Insights KQL)
 
 > **Note:** Both the API (`pavanthakur-orderprocessing-api-xyapp-{ENV_TAG}`) and the UI (`pavanthakur-orderprocessing-ui-xyapp-{ENV_TAG}`) send Serilog traces to App Insights via the `Serilog.Sinks.ApplicationInsights` sink. Query the UI by `cloud_RoleName has 'ui'` and the API by `cloud_RoleName has 'api'`.
+
+Query UI callback traces with a **callback-only** filter. Do not treat absence of a UI callback as failure for non-3DS tenants; callback evidence is required only when Step 4 shows `ThreeDSEnabled = 1` for that tenant.
 
 Query UI callback traces with:
 ```powershell
@@ -183,8 +218,9 @@ az monitor app-insights query `
   --analytics-query "
     traces
     | where timestamp >= startofday(now() + 330m) - 330m
-    | where cloud_RoleName has 'ui'
-    | where message has '<PREFIX>' or message has 'payment/callback responded'
+    | where message has_any('OpenPay callback received', 'payment/callback responded')
+    | extend application = tostring(customDimensions['Application'])
+    | where cloud_RoleName has 'ui' or application == 'UI'
     | project timestamp, message,
               chargeId   = tostring(customDimensions['ChargeId']),
               statusCode = tostring(customDimensions['StatusCode'])
@@ -195,6 +231,7 @@ az monitor app-insights query `
 **From the UI output, extract and record:**
 - All callback receipts (`OpenPay callback received … for payment <id>`)
 - HTTP response status for each (`/payment/callback responded <N>`)
+- Which `chargeId` values from Step 2 appear in the UI callback log
 
 ---
 
@@ -235,7 +272,7 @@ Note the `ThreeDSEnabled` per tenant — it controls expected row counts in Q2/Q
 
 ## Step 5 — DB queries
 
-The `<PREFIX>` is the day-specific OR prefix extracted from the log (e.g. `OR-1-28Mar-tA-http-dock-prod`). No date filter is applied — the prefix already scopes to the correct run and avoids UTC/IST timezone offset issues where IST payments before 05:30 land on the previous UTC date.
+The `<RUN_PREFIX>` is the logical run prefix extracted from the log. For a single-tenant physical-log run it may be the full customer-order prefix (for example `OR-1-28Mar-tA-http-dock-prod`). For a multi-tenant Azure run it is often the shared prefix before `-tA-/-tB-/-tC-` (for example `OR-1-2ndApr`). No date filter is applied — the prefix already scopes to the correct run and avoids UTC/IST timezone offset issues where IST payments before 05:30 land on the previous UTC date.
 
 ### Q2 — CardTransactions (shared DB)
 
@@ -246,7 +283,7 @@ SELECT t.Code AS Tenant, ct.CustomerOrderId, ct.TransactionId AS ChargeId,
        ct.IsTransactionSuccess AS OK, ct.CreatedDate
 FROM   dbo.CardTransactions ct
 JOIN   dbo.Tenants t ON t.Id = ct.TenantId
-WHERE  ct.CustomerOrderId LIKE '<PREFIX>%'
+WHERE  ct.CustomerOrderId LIKE '<RUN_PREFIX>%'
 ORDER BY ct.TenantId, ct.CustomerOrderId, ct.Id;
 ```
 
@@ -261,7 +298,7 @@ SELECT t.Code AS Tenant, ct.CustomerOrderId, tsh.Status,
 FROM   dbo.TransactionStatusHistories tsh
 JOIN   dbo.CardTransactions ct ON ct.Id = tsh.TransactionId
 JOIN   dbo.Tenants t ON t.Id = ct.TenantId
-WHERE  ct.CustomerOrderId LIKE '<PREFIX>%'
+WHERE  ct.CustomerOrderId LIKE '<RUN_PREFIX>%'
 ORDER BY ct.TenantId, ct.CustomerOrderId, ct.Id, tsh.Id;
 ```
 
@@ -273,7 +310,7 @@ ORDER BY ct.TenantId, ct.CustomerOrderId, ct.Id, tsh.Id;
 SELECT ct.CustomerOrderId, ct.TenantId, t.Code
 FROM   dbo.CardTransactions ct
 JOIN   dbo.Tenants t ON t.Id = ct.TenantId
-WHERE  ct.CustomerOrderId LIKE '<PREFIX>%'
+WHERE  ct.CustomerOrderId LIKE '<RUN_PREFIX>%'
   AND  ((ct.CustomerOrderId LIKE '%-tA-%' AND ct.TenantId <> 1)
      OR (ct.CustomerOrderId LIKE '%-tB-%' AND ct.TenantId <> 2));
 ```
@@ -291,7 +328,7 @@ SELECT ct.CustomerOrderId, ct.TransactionId AS ChargeId,
        ct.IsTransactionSuccess AS OK, ct.CreatedDate
 FROM   dbo.CardTransactions ct
 WHERE  ct.TenantId = 3
-  AND  ct.CustomerOrderId LIKE '<PREFIX>%'
+  AND  ct.CustomerOrderId LIKE '<RUN_PREFIX>%'
 ORDER BY ct.CustomerOrderId, ct.Id;
 ```
 
@@ -305,7 +342,7 @@ SELECT ct.CustomerOrderId, tsh.Status, tsh.ThreeDSecureStage AS Stage,
 FROM   dbo.TransactionStatusHistories tsh
 JOIN   dbo.CardTransactions ct ON ct.Id = tsh.TransactionId
 WHERE  ct.TenantId = 3
-  AND  ct.CustomerOrderId LIKE '<PREFIX>%'
+  AND  ct.CustomerOrderId LIKE '<RUN_PREFIX>%'
 ORDER BY ct.CustomerOrderId, ct.Id, tsh.Id;
 ```
 
@@ -317,7 +354,7 @@ ORDER BY ct.CustomerOrderId, ct.Id, tsh.Id;
 SELECT ct.CustomerOrderId, ct.TenantId
 FROM   dbo.CardTransactions ct
 WHERE  ct.TenantId = 3
-  AND  ct.CustomerOrderId LIKE '<PREFIX>%';
+  AND  ct.CustomerOrderId LIKE '<RUN_PREFIX>%';
 ```
 
 **Expected: 0 rows.**
@@ -334,15 +371,15 @@ For each charge ID seen in the API log, confirm it also appears in the DB (Q2 / 
 |---|---|---|---|---|---|
 | `<id>` | TenantA/B/C | ✅/❌ | completed/… | completed/… | ✅/❌ |
 
-For each charge ID, confirm the UI log received the callback (`/payment/callback responded 200`):
+For each charge ID, confirm the UI log received the callback **when a callback is expected**:
 
-| Charge ID | UI callback logged? | HTTP status |
-|---|---|---|
-| `<id>` | ✅/❌ | 200/… |
+| Charge ID | Tenant | 3DS enabled? | UI callback expected? | UI callback logged? | HTTP status |
+|---|---|---|---|---|---|
+| `<id>` | TenantA/B/C | 1/0 | ✅ / N/A | ✅/❌/N/A | 200/… |
 
 Flag any charge ID that:
 - Is in the API log but **missing from the DB** → persistence failure
-- Is in the DB but **missing from the UI callback log** → possible Serilog file-lock issue or missed callback
+- Is in the DB but **missing from the UI callback log when `ThreeDSEnabled = 1`** → possible UI/App Insights logging gap or missed callback
 - Has `Status ≠ completed` in the DB → incomplete payment flow
 
 ---
@@ -365,7 +402,7 @@ Output a consolidated pass/fail table:
 | Q5-B TenantC steps | 4 or 2 | … | ✅/❌ |
 | Q9-B TenantC bleed | 0 | … | ✅/❌ |
 | API log → DB charge IDs | all match | … | ✅/❌ |
-| UI log → callbacks present | all 200 | … | ✅/❌ |
+| UI log → callbacks present where expected | 3DS tenants only | … | ✅/❌ |
 
 > **Scope note:** This runbook covers `CardTransactions` and `TransactionStatusHistories` only. `PayinLog` and `PayinLogDetails` tables are intentionally out of scope here — they require the full diagnostic query set. See `docs/runbooks/payment-db-verification.md` for Q1, Q3, Q4, Q6, Q6a, Q7 and the PayinLog queries.
 

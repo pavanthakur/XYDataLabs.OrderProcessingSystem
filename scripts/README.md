@@ -50,6 +50,44 @@ This directory contains automation scripts for configuring and deploying the Ord
 
 ## 🆕 GitHub App Automation Scripts
 
+### verify-payment-run-azure.ps1
+
+Deterministic Azure payment verification for the `verify-db-logs` workflow.
+
+**Purpose**:
+- Queries Azure App Insights API traces and UI callback traces in one pass
+- Resolves the logical run prefix automatically when only one prefix exists for the day
+- Queries both Azure SQL databases directly without ad hoc `sqlcmd` parsing in the terminal
+- Produces a consolidated API -> UI -> DB pass/fail report for a selected run prefix
+
+**Usage**:
+```powershell
+# Auto-resolve the only run prefix found today
+.\scripts\verify-payment-run-azure.ps1 -Environment dev
+
+# Verify a specific logical run prefix
+.\scripts\verify-payment-run-azure.ps1 -Environment dev -RunPrefix OR-1-2ndApr
+
+# Emit structured JSON for later processing
+.\scripts\verify-payment-run-azure.ps1 -Environment dev -RunPrefix OR-1-2ndApr -OutputFormat Json
+```
+
+**Parameters**:
+- `Environment` (optional): `dev`, `stg`, or `prod` (default: `dev`)
+- `RunPrefix` (optional): logical run prefix such as `OR-1-2ndApr`
+- `OutputFormat` (optional): `Table` or `Json` (default: `Table`)
+- `SkipFirewallOpen` (switch): skip the Azure SQL firewall helper call
+
+**Prerequisites**:
+- `az login` completed
+- Key Vault access to `sql-admin-password`
+- Local machine allowed through Azure SQL firewall, or allow the script to open it automatically
+
+**Notes**:
+- This script is Azure-only. Docker/local verification still uses the physical log flow documented in `docs/runbooks/payment-db-verification.md` and the `/XYDataLabs-verify-db-logs` prompt.
+- If multiple run prefixes exist for the day, the script stops and asks you to rerun with `-RunPrefix`.
+- If App Insights returns no scoped payment rows but you already know the logical prefix, rerun with `-RunPrefix` and the script will continue with DB verification while marking log-side checks as inconclusive.
+
 ### setup-github-app-from-manifest.ps1
 
 **NEW** - Streamlines GitHub App creation using a declarative manifest configuration.
