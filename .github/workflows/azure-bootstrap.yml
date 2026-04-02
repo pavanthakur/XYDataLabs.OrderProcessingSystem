@@ -593,7 +593,7 @@ jobs:
             $showExit = $LASTEXITCODE
             # Separate the value (tsv) from any error messages in the combined output
             if ($showExit -eq 0 -and -not [string]::IsNullOrWhiteSpace($existingPw) -and $existingPw -notmatch "^ERROR:") {
-              Write-Host "  [OK] sql-admin-password already present in Key Vault (bootstrap wrote it successfully)" -ForegroundColor Green
+              Write-Host "  [OK] sql-admin-password already present in Key Vault" -ForegroundColor Green
             } else {
               # Distinguish between "secret not found" (expected on first run) and "vault/access error" (unexpected)
               $errText = if ($existingPw -match "^ERROR:") { $existingPw } else { "" }
@@ -1341,7 +1341,7 @@ jobs:
             $showExit = $LASTEXITCODE
             # Separate the value (tsv) from any error messages in the combined output
             if ($showExit -eq 0 -and -not [string]::IsNullOrWhiteSpace($existingPw) -and $existingPw -notmatch "^ERROR:") {
-              Write-Host "  [OK] sql-admin-password already present in Key Vault (bootstrap wrote it successfully)" -ForegroundColor Green
+              Write-Host "  [OK] sql-admin-password already present in Key Vault" -ForegroundColor Green
             } else {
               # Distinguish between "secret not found" (expected on first run) and "vault/access error" (unexpected)
               $errText = if ($existingPw -match "^ERROR:") { $existingPw } else { "" }
@@ -2087,7 +2087,7 @@ jobs:
             $showExit = $LASTEXITCODE
             # Separate the value (tsv) from any error messages in the combined output
             if ($showExit -eq 0 -and -not [string]::IsNullOrWhiteSpace($existingPw) -and $existingPw -notmatch "^ERROR:") {
-              Write-Host "  [OK] sql-admin-password already present in Key Vault (bootstrap wrote it successfully)" -ForegroundColor Green
+              Write-Host "  [OK] sql-admin-password already present in Key Vault" -ForegroundColor Green
             } else {
               # Distinguish between "secret not found" (expected on first run) and "vault/access error" (unexpected)
               $errText = if ($existingPw -match "^ERROR:") { $existingPw } else { "" }
@@ -3098,7 +3098,7 @@ jobs:
       - name: Dispatch and Await Deployments
         id: dispatch
         if: inputs.environment != 'all'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           DEPLOY_API: ${{ inputs.deployApi }}
           DEPLOY_UI:  ${{ inputs.deployUi }}
