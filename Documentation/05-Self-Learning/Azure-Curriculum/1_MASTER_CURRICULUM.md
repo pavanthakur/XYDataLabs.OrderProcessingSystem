@@ -12,7 +12,7 @@
 **✅ COMPLETED SO FAR (Days 1-38 + Architecture Phases 1-6):**
 - ✅ Azure fundamentals (Portal, CLI, resource management)
 - ✅ App Service deployment with OIDC authentication
-- ✅ GitHub Actions CI/CD workflows (11 workflows: bootstrap, initial setup, deploy API/UI, infra deploy, validate, docker health, ADR validate)
+- ✅ GitHub Actions CI/CD workflows (10 workflows: bootstrap, initial setup, deploy API/UI, infra deploy, validate, ADR validate)
 - ✅ Bicep Infrastructure as Code (modules + parameters)
 - ✅ Multi-environment setup (dev/staging/prod)
 - ✅ Advanced CI/CD: parallel dispatch, health check retries (3×60s), bootstrap summary with endpoints table

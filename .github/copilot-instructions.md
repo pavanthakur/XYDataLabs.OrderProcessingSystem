@@ -109,12 +109,13 @@ practice Azure cloud deployment, CI/CD automation, and enterprise DevOps pattern
 
 ---
 
-## 4. GitHub Actions Workflows (11 workflows)
+## 4. GitHub Actions Workflows (10 workflows)
 
 All workflows live in `.github/workflows/`. Each has a companion `README-*.md` in the same folder.
 
 | Workflow file | Name | Trigger | Purpose |
 |---------------|------|---------|---------|
+| `ci.yml` | CI - Build and Test | Pull requests to dev/staging/main | PR validation gate: restore, build, and run unit/architecture tests before merge. |
 | `azure-initial-setup.yml` | Azure Initial Setup | Manual dispatch | **One-time setup**: Phase 0 (GitHub App), Phase 1a (OIDC), Phase 1b (secrets). Run once per repository. |
 | `azure-bootstrap.yml` | Azure Bootstrap & Deploy | Manual dispatch | **Day-to-day**: Phase 2 (infrastructure), API/UI deploy, Phase X (cleanup). Requires Initial Setup first. |
 | `configure-github-secrets.yml` | Configure GitHub Secrets | Called by initial-setup | GitHub App validation, OIDC secret configuration (can run independently for troubleshooting). |
@@ -123,9 +124,14 @@ All workflows live in `.github/workflows/`. Each has a companion `README-*.md` i
 | `test-validate-deployment.yml` | Test Pre-Deployment Validation | Manual or PR | Tests the validation workflow independently. |
 | `deploy-api-to-azure.yml` | Deploy API to Azure App Service | Push to dev/staging/main (API paths) | Build → test → publish → Azure OIDC login → deploy → health check |
 | `deploy-ui-to-azure.yml` | Deploy UI to Azure App Service | Push to dev/staging/main (UI paths) | Build → test → publish → Azure OIDC login → deploy → health check |
-| `deploy-and-verify.yml` | Deploy and Verify (Secure Config) | Push to dev/main/stg or manual | Full end-to-end: infra + app deploy + post-deploy health verification |
-| `docker-health.yml` | Docker Startup Health | Push to main, PR to main | Validates `Resources/Docker/start-docker.ps1` smoke test |
 | `validate-adrs.yml` | Validate ADR Markdown | Push/PR (ADR/script/config paths) or manual | Markdownlint format + frontmatter schema (filename, H1, `**Status:**`, valid status word) |
+
+### Workflow Categories
+
+| Category | Workflows | Usage |
+|----------|-----------|-------|
+| **Primary** | `ci.yml`, `azure-initial-setup.yml`, `azure-bootstrap.yml`, `deploy-api-to-azure.yml`, `deploy-ui-to-azure.yml` | Default paths for PR validation, initial setup, day-to-day deployment, and normal API/UI delivery |
+| **Support** | `configure-github-secrets.yml`, `infra-deploy.yml`, `validate-deployment.yml`, `test-validate-deployment.yml`, `validate-adrs.yml` | Secondary validation, infra-only entrypoints, troubleshooting, and documentation governance |
 
 ### Branch → Environment Mapping
 
@@ -206,7 +212,7 @@ Required for GitHub App token (set in Phase 0 of Azure Initial Setup): `APP_ID`,
 | Folder | Scope | Used by |
 |--------|-------|---------|
 | `infra/` | Subscription-level | `infra-deploy.yml`, `validate-deployment.yml` |
-| `bicep/` | Resource-group-level | `deploy-and-verify.yml` |
+| `bicep/` | Resource-group-level | Manual or ad hoc App Service/Key Vault deployments |
 
 Parameter files follow the pattern `{environment}.json` / `{environment}.parameters.json`.
 
