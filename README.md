@@ -5,7 +5,6 @@
 [![CI](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/ci.yml/badge.svg)](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/ci.yml)
 [![Deploy API to Azure](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/deploy-api-to-azure.yml/badge.svg?branch=dev)](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/deploy-api-to-azure.yml)
 [![Deploy UI to Azure](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/deploy-ui-to-azure.yml/badge.svg?branch=dev)](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/deploy-ui-to-azure.yml)
-[![Docker Health](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/docker-health.yml/badge.svg)](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/docker-health.yml)
 
 **Live dev environment:**
 - API (Swagger): https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net/swagger
@@ -344,8 +343,6 @@ Architecture tests will fail if:
 | `deploy-ui-to-azure.yml` | Push to dev/staging/main | Build -> test -> deploy UI |
 | `infra-deploy.yml` | Manual | Bicep what-if + deploy |
 | `validate-deployment.yml` | Reusable | Bicep what-if, OIDC verification |
-| `deploy-and-verify.yml` | Push / manual | Full end-to-end: infra + apps + health checks |
-| `docker-health.yml` | Push to main / PR | Docker startup smoke test |
 
 **Branch to environment mapping:**
 
