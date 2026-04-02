@@ -38,7 +38,12 @@ param(
 
     # Optional: Role name to assign (default Contributor). Could use Website Contributor for tighter scope.
     [Parameter(Mandatory=$false)]
-    [string]$RoleName = "Contributor"
+    [string]$RoleName = "Contributor",
+
+    # When true, this script is being run inside Azure Initial Setup and the follow-up
+    # Configure GitHub Secrets phase will write AZUREAPPSERVICE_* automatically.
+    [Parameter(Mandatory=$false)]
+    [bool]$GitHubSecretsManagedByWorkflow = $false
 )
 
 Write-Host "=====================================" -ForegroundColor Cyan
@@ -386,8 +391,14 @@ if ($rgList.Count -gt 0) {
 }
 
 # Step 6: Display GitHub Secrets
-Write-Host "`n[6/7] GitHub Repository Secrets Configuration" -ForegroundColor Yellow
-Write-Host "  Add these secrets to: https://github.com/$GitHubOwner/$Repository/settings/secrets/actions" -ForegroundColor Cyan
+if ($GitHubSecretsManagedByWorkflow) {
+    Write-Host "`n[6/7] GitHub OIDC Values For Phase 1b" -ForegroundColor Yellow
+    Write-Host "  Azure Initial Setup will pass these values to the Configure GitHub Secrets job automatically." -ForegroundColor Cyan
+    Write-Host "  Repository secrets page (for verification only): https://github.com/$GitHubOwner/$Repository/settings/secrets/actions" -ForegroundColor Gray
+} else {
+    Write-Host "`n[6/7] GitHub Repository Secrets Configuration" -ForegroundColor Yellow
+    Write-Host "  Add these secrets to: https://github.com/$GitHubOwner/$Repository/settings/secrets/actions" -ForegroundColor Cyan
+}
 Write-Host ""
 Write-Host "  AZUREAPPSERVICE_CLIENTID:        $appId" -ForegroundColor White
 Write-Host "  AZUREAPPSERVICE_TENANTID:        $tenantId" -ForegroundColor White
@@ -398,14 +409,20 @@ Write-Host ""
 Write-Host "[7/7] Setup complete!" -ForegroundColor Green
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Yellow
-Write-Host "  1. Add the secrets above to GitHub repository secrets:" -ForegroundColor White
-Write-Host "     https://github.com/$GitHubOwner/$Repository/settings/secrets/actions" -ForegroundColor Cyan
-Write-Host "     GitHub → Settings → Secrets and variables → Actions → New repository secret" -ForegroundColor Gray
-Write-Host ""
-Write-Host "  2. Update workflow files to include branches/environments you just configured (if not already)." -ForegroundColor White
-Write-Host "  3. Run the workflow manually or push changes to a configured branch to trigger deployment." -ForegroundColor White
-Write-Host "  4. (Optional) Re-run with -ResourceGroupNames to grant RBAC for additional environments." -ForegroundColor White
-Write-Host "     https://github.com/$GitHubOwner/$Repository/actions" -ForegroundColor Cyan
+if ($GitHubSecretsManagedByWorkflow) {
+    Write-Host "  1. Azure Initial Setup will now hand these values to the 'Configure GitHub Secrets' job." -ForegroundColor White
+    Write-Host "  2. Review the downstream job summary to confirm dev/staging/prod environment secrets were updated." -ForegroundColor White
+    Write-Host "  3. After Initial Setup completes, run Azure Bootstrap & Deploy for your target environment." -ForegroundColor White
+} else {
+    Write-Host "  1. Add the secrets above to GitHub repository secrets:" -ForegroundColor White
+    Write-Host "     https://github.com/$GitHubOwner/$Repository/settings/secrets/actions" -ForegroundColor Cyan
+    Write-Host "     GitHub → Settings → Secrets and variables → Actions → New repository secret" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "  2. Update workflow files to include branches/environments you just configured (if not already)." -ForegroundColor White
+    Write-Host "  3. Run the workflow manually or push changes to a configured branch to trigger deployment." -ForegroundColor White
+    Write-Host "  4. (Optional) Re-run with -ResourceGroupNames to grant RBAC for additional environments." -ForegroundColor White
+    Write-Host "     https://github.com/$GitHubOwner/$Repository/actions" -ForegroundColor Cyan
+}
 Write-Host ""
 Write-Host "=====================================" -ForegroundColor Cyan
 
@@ -421,5 +438,9 @@ AZUREAPPSERVICE_SUBSCRIPTIONID:  $subscriptionId
 ===========================================
 "@
 
-$output | Set-Clipboard -ErrorAction SilentlyContinue
-Write-Host "Secrets copied to clipboard!" -ForegroundColor Green
+if ($env:GITHUB_ACTIONS -eq 'true') {
+    Write-Host "OIDC values are available in the workflow log and GITHUB_OUTPUT for downstream jobs." -ForegroundColor Cyan
+} else {
+    $output | Set-Clipboard -ErrorAction SilentlyContinue
+    Write-Host "Secrets copied to clipboard!" -ForegroundColor Green
+}

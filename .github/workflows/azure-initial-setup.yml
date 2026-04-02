@@ -633,6 +633,7 @@ jobs:
             Environments   = $environments
             GitHubOwner    = "${{ github.repository_owner }}"
             Repository     = "${{ github.event.repository.name }}"
+            GitHubSecretsManagedByWorkflow = ("${{ inputs.configureSecrets }}" -eq "true")
           }
           
           Write-Host "📋 Parameters:" -ForegroundColor Yellow
@@ -830,7 +831,7 @@ jobs:
           "" >> $env:GITHUB_STEP_SUMMARY
 
   configure-github-secrets:
-    name: Configure GitHub Secrets
+    name: Run GitHub Secrets Setup Workflow
     needs: [validate-inputs, setup-oidc]
     if: |
       !cancelled() &&
