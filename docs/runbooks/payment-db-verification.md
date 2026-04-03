@@ -105,6 +105,44 @@ Interpret UI callbacks with the 3DS state from the pre-flight SQL query below:
 
 Use OR logic (`cloud_RoleName has 'ui' or application == 'UI'`) rather than AND — either property may be absent on some traces. In practice this keeps API and UI traces separated when both apps write to the same App Insights resource.
 
+### 2a. Optional: inspect richer UI payment telemetry
+
+The UI now persists client-originated payment events through `POST /payment/client-event`, so App Insights contains a deeper event stream than the older callback-only traces. Use this query when you need to prove where the browser-side flow stopped before or after 3DS:
+
+```powershell
+$uiPaymentTelemetryQuery = @"
+traces
+| where timestamp >= startofday(now() + 330m) - 330m
+| where message startswith 'UI payment event'
+| extend application = tostring(customDimensions['Application'])
+| where cloud_RoleName has 'ui' or application == 'UI'
+| extend uiEventName = tostring(customDimensions['UiEventName'])
+| extend tenant = tostring(customDimensions['TenantCode'])
+| extend customerOrderId = tostring(customDimensions['CustomerOrderId'])
+| extend attemptOrderId = tostring(customDimensions['AttemptOrderId'])
+| extend paymentId = tostring(customDimensions['PaymentId'])
+| extend flowId = tostring(customDimensions['ClientFlowId'])
+| project timestamp, uiEventName, tenant, customerOrderId, attemptOrderId, paymentId, flowId, message
+| order by timestamp asc
+"@
+```
+
+Common event names in this stream:
+- `ui_payment_submit_started`
+- `ui_payment_token_created`
+- `ui_payment_processing_requested`
+- `ui_payment_3ds_redirect_started`
+- `ui_payment_completed`
+- `ui_payment_processing_failed`
+- `ui_payment_callback_loaded`
+- `ui_payment_callback_confirmation_requested`
+- `ui_payment_callback_confirmed`
+- `ui_payment_callback_confirmation_failed`
+
+Use this query as a supplement, not a replacement, for the callback-only query above:
+- callback traces remain the minimum signal for 3DS callback evidence used by the main Azure verification flow
+- `ui_payment_*` traces provide finer-grained browser timing and failure context when callback evidence alone is not enough
+
 ### 3. Then run the SQL queries in this runbook
 
 Use the shared logical run prefix in the SQL filters below:

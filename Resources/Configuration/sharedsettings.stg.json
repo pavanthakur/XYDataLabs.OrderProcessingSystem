@@ -27,7 +27,10 @@
     "EnableEfSensitiveDataLogging": false
   },
   "TenantConfiguration": {
-    "ActiveTenantCode": "TenantA"
+    "ActiveTenantCode": "TenantA",
+    "UiSelectorEnabled": true,
+    "UiTenantOverrideEnabled": true,
+    "SwaggerSelectorEnabled": true
   },
   "Serilog": {
     "Using": [ "Serilog.Sinks.File" ],

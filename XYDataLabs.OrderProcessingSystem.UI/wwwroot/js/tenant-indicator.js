@@ -1,8 +1,10 @@
 window.OrderProcessingTenant = (() => {
     const tenantStorageKey = 'order-processing:selected-tenant';
+    const bodyDataset = document.body?.dataset || {};
     const indicator = document.getElementById('tenant-indicator');
     const selector = document.getElementById('tenant-selector');
-    const apiBaseUrl = document.body?.dataset?.apiBaseUrl?.replace(/\/$/, '');
+    const apiBaseUrl = bodyDataset.apiBaseUrl?.replace(/\/$/, '');
+    const uiTenantOverrideEnabled = bodyDataset.uiTenantOverrideEnabled === 'true';
     const runtimeConfigurationUrl = apiBaseUrl
         ? `${apiBaseUrl}/api/v1/info/runtime-configuration`
         : null;
@@ -10,7 +12,19 @@ window.OrderProcessingTenant = (() => {
     let state = null;
     let readyPromise = null;
 
+    const clearStoredTenantCode = () => {
+        try {
+            localStorage.removeItem(tenantStorageKey);
+        } catch (error) {
+            console.warn('Unable to clear stored tenant selection.', error);
+        }
+    };
+
     const getStoredTenantCode = () => {
+        if (!uiTenantOverrideEnabled) {
+            return null;
+        }
+
         try {
             return localStorage.getItem(tenantStorageKey);
         } catch (error) {
@@ -20,6 +34,11 @@ window.OrderProcessingTenant = (() => {
     };
 
     const persistTenantCode = tenantCode => {
+        if (!uiTenantOverrideEnabled) {
+            clearStoredTenantCode();
+            return;
+        }
+
         try {
             if (!tenantCode) {
                 localStorage.removeItem(tenantStorageKey);
@@ -65,7 +84,7 @@ window.OrderProcessingTenant = (() => {
             selector.appendChild(option);
         }
 
-        selector.disabled = false;
+        selector.disabled = !uiTenantOverrideEnabled;
         if (state?.selectedTenantCode) {
             selector.value = state.selectedTenantCode;
         }
@@ -111,11 +130,14 @@ window.OrderProcessingTenant = (() => {
         const urlParams = new URLSearchParams(window.location.search);
         const urlTenantCode = urlParams.get('tenantCode')?.trim() || null;
         if (urlTenantCode) {
-            persistTenantCode(urlTenantCode);
+            if (uiTenantOverrideEnabled) {
+                persistTenantCode(urlTenantCode);
+            }
+
             history.replaceState({}, '', window.location.pathname);
         }
 
-        const preferredTenantCode = getStoredTenantCode();
+        const preferredTenantCode = urlTenantCode || getStoredTenantCode();
         const headers = {
             'Accept': 'application/json'
         };
@@ -153,6 +175,14 @@ window.OrderProcessingTenant = (() => {
 
     if (selector) {
         selector.addEventListener('change', event => {
+            if (!uiTenantOverrideEnabled) {
+                if (state?.selectedTenantCode) {
+                    selector.value = state.selectedTenantCode;
+                }
+
+                return;
+            }
+
             const selectedTenantCode = event.target.value || null;
             if (!state) {
                 return;
