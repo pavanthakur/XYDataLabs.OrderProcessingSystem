@@ -1,5 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using XYDataLabs.OrderProcessingSystem.SharedKernel;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Configuration;
 using System;
 using XYDataLabs.OrderProcessingSystem.UI.Models;
 
@@ -8,10 +10,15 @@ namespace XYDataLabs.OrderProcessingSystem.UI.Controllers
     public class HomeController : Controller
     {
         private readonly ILogger<HomeController> _logger;
+        private readonly TenantConfigurationOptions _tenantConfigurationOptions;
 
-        public HomeController(ILogger<HomeController> logger)
+        public HomeController(
+            ILogger<HomeController> logger,
+            IOptions<TenantConfigurationOptions> tenantConfigurationOptions)
         {
             _logger = logger;
+            ArgumentNullException.ThrowIfNull(tenantConfigurationOptions);
+            _tenantConfigurationOptions = tenantConfigurationOptions.Value;
         }
 
         public IActionResult Index()
@@ -52,12 +59,102 @@ namespace XYDataLabs.OrderProcessingSystem.UI.Controllers
             ViewData["TenantCode"] = tenantCode;
 
             _logger.LogInformation(
-                "OpenPay callback received with raw status {Status} for payment {PaymentId} and attempt order {AttemptOrderId}",
+                "OpenPay callback received with raw status {Status} for payment {PaymentId}, attempt order {AttemptOrderId}, tenant {TenantCode}, and {CallbackParameterCount} callback parameters",
                 model.Status,
                 model.PaymentId,
-                attemptOrderId);
+                attemptOrderId,
+                tenantCode ?? "none",
+                parameters.Count);
 
             return View(model);
+        }
+
+        [HttpPost("/payment/client-event")]
+        public IActionResult LogPaymentClientEvent([FromBody] PaymentClientEventRequest? request)
+        {
+            if (request is null || string.IsNullOrWhiteSpace(request.EventName))
+            {
+                return BadRequest();
+            }
+
+            if (!ModelState.IsValid)
+            {
+                return ValidationProblem(ModelState);
+            }
+
+            var eventName = NormalizeLogValue(request.EventName, 100) ?? "ui_payment_event";
+            var severity = NormalizeLogValue(request.Severity, 16) ?? "information";
+            var tenantCode = NormalizeLogValue(request.TenantCode, 64) ?? "none";
+            var clientFlowId = NormalizeLogValue(request.ClientFlowId, 64) ?? "none";
+            var customerOrderId = NormalizeLogValue(request.CustomerOrderId, 128) ?? "none";
+            var attemptOrderId = NormalizeLogValue(request.AttemptOrderId, 128) ?? "none";
+            var paymentId = NormalizeLogValue(request.PaymentId, 128) ?? "none";
+            var paymentStatus = NormalizeLogValue(request.PaymentStatus, 64) ?? "none";
+            var statusCategory = NormalizeLogValue(request.StatusCategory, 32) ?? "none";
+            var errorCode = NormalizeLogValue(request.ErrorCode, 64) ?? "none";
+            var errorMessage = NormalizeLogValue(request.ErrorMessage, 512) ?? "none";
+            var pagePath = NormalizeLogValue(request.PagePath, 256) ?? "unknown";
+            var clientTimestampUtc = NormalizeLogValue(request.ClientTimestampUtc, 64) ?? "none";
+
+            var logMessage =
+                "UI payment event {UiEventName} on {PagePath} for tenant {TenantCode} customer order {CustomerOrderId} attempt {AttemptOrderId} payment {PaymentId} status {PaymentStatus} category {StatusCategory} http {HttpStatus} flow {ClientFlowId} client time {ClientTimestampUtc} error code {ErrorCode} message {ClientMessage}";
+
+            switch (severity.ToUpperInvariant())
+            {
+                case "ERROR":
+                    _logger.LogError(
+                        logMessage,
+                        eventName,
+                        pagePath,
+                        tenantCode,
+                        customerOrderId,
+                        attemptOrderId,
+                        paymentId,
+                        paymentStatus,
+                        statusCategory,
+                        request.HttpStatus,
+                        clientFlowId,
+                        clientTimestampUtc,
+                        errorCode,
+                        errorMessage);
+                    break;
+                case "WARNING":
+                    _logger.LogWarning(
+                        logMessage,
+                        eventName,
+                        pagePath,
+                        tenantCode,
+                        customerOrderId,
+                        attemptOrderId,
+                        paymentId,
+                        paymentStatus,
+                        statusCategory,
+                        request.HttpStatus,
+                        clientFlowId,
+                        clientTimestampUtc,
+                        errorCode,
+                        errorMessage);
+                    break;
+                default:
+                    _logger.LogInformation(
+                        logMessage,
+                        eventName,
+                        pagePath,
+                        tenantCode,
+                        customerOrderId,
+                        attemptOrderId,
+                        paymentId,
+                        paymentStatus,
+                        statusCategory,
+                        request.HttpStatus,
+                        clientFlowId,
+                        clientTimestampUtc,
+                        errorCode,
+                        errorMessage);
+                    break;
+            }
+
+            return NoContent();
         }
 
         private void PopulateCommonViewData(string environmentName, bool isDocker)
@@ -78,6 +175,8 @@ namespace XYDataLabs.OrderProcessingSystem.UI.Controllers
             };
             ViewData["IsDocker"] = isDocker;
             ViewData["IsAzure"] = isAzure;
+            ViewData["UiSelectorEnabled"] = _tenantConfigurationOptions.UiSelectorEnabled;
+            ViewData["UiTenantOverrideEnabled"] = _tenantConfigurationOptions.UiTenantOverrideEnabled;
         }
 
         private string ResolveApiBaseUrl(string environmentName, bool isDocker)
@@ -150,6 +249,19 @@ namespace XYDataLabs.OrderProcessingSystem.UI.Controllers
             }
 
             return null;
+        }
+
+        private static string? NormalizeLogValue(string? value, int maxLength)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return null;
+            }
+
+            var trimmed = value.Trim();
+            return trimmed.Length <= maxLength
+                ? trimmed
+                : trimmed[..maxLength];
         }
     }
 }

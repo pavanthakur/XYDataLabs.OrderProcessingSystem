@@ -44,6 +44,9 @@ jobs:
       - name: Build
         run: dotnet build ${{ env.PROJECT_PATH }} --configuration Release --no-restore
 
+      - name: Run UI Unit Tests
+        run: dotnet test tests/XYDataLabs.OrderProcessingSystem.UI.Tests/XYDataLabs.OrderProcessingSystem.UI.Tests.csproj --configuration Release --verbosity normal
+
       - name: Publish
         run: dotnet publish ${{ env.PROJECT_PATH }} --configuration Release --no-build --output ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
 

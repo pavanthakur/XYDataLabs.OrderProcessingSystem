@@ -413,11 +413,15 @@ if (environmentName == Constants.Environments.Dev || environmentName == Constant
         // Use relative path for Docker compatibility
         options.SwaggerEndpoint("/swagger/v1/swagger.json", "OrderProcessingSystem API v1");
         options.RoutePrefix = "swagger"; // Set Swagger UI to /swagger/index.html
-        options.InjectJavascript("/swagger-assets/tenant-selector.js");
-        // Inject X-Tenant-Code on every Swagger request using the value set by the
-        // top-bar dropdown (window.OrderProcessingActiveTenant). When login is added,
-        // that code will set the same global — no other changes needed here.
-        options.UseRequestInterceptor("(req) => { const t = window.OrderProcessingActiveTenant; if (t) req.headers['X-Tenant-Code'] = t; return req; }");
+
+        if (tenantConfigurationOptions.SwaggerSelectorEnabled)
+        {
+            options.InjectJavascript("/swagger-assets/tenant-selector.js");
+            // Inject X-Tenant-Code on every Swagger request using the value set by the
+            // top-bar dropdown (window.OrderProcessingActiveTenant). When login is added,
+            // that code will set the same global — no other changes needed here.
+            options.UseRequestInterceptor("(req) => { const t = window.OrderProcessingActiveTenant; if (t) req.headers['X-Tenant-Code'] = t; return req; }");
+        }
     });
     
     if (useDeveloperExceptionPage)

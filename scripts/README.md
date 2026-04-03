@@ -87,6 +87,7 @@ Deterministic Azure payment verification for the `verify-db-logs` workflow.
 - This script is Azure-only. Docker/local verification still uses the physical log flow documented in `docs/runbooks/payment-db-verification.md` and the `/XYDataLabs-verify-db-logs` prompt.
 - If multiple run prefixes exist for the day, the script stops and asks you to rerun with `-RunPrefix`.
 - If App Insights returns no scoped payment rows but you already know the logical prefix, rerun with `-RunPrefix` and the script will continue with DB verification while marking log-side checks as inconclusive.
+- The pass/fail summary still scopes UI checks to callback evidence. Richer browser-originated `ui_payment_*` telemetry is available in App Insights for deeper triage and is documented in `docs/runbooks/payment-db-verification.md`.
 
 ### setup-github-app-from-manifest.ps1
 
