@@ -89,6 +89,35 @@ Deterministic Azure payment verification for the `verify-db-logs` workflow.
 - If App Insights returns no scoped payment rows but you already know the logical prefix, rerun with `-RunPrefix` and the script will continue with DB verification while marking log-side checks as inconclusive.
 - The pass/fail summary still scopes UI checks to callback evidence. Richer browser-originated `ui_payment_*` telemetry is available in App Insights for deeper triage and is documented in `docs/runbooks/payment-db-verification.md`.
 
+### test-verify-payment-run-azure.ps1
+
+Regression runner for `verify-payment-run-azure.ps1`.
+
+**Purpose**:
+- Replays the Azure verifier as a child script and asserts expected behavior from structured JSON output
+- Guards the staging SQL pass path and, when App Insights evidence is still available, the full log correlation path end-to-end
+- Guards the sparse/no-App-Insights fallback path so missing evidence degrades to `INCONCLUSIVE` instead of crashing
+
+**Usage**:
+```powershell
+# Run the staging happy-path regression
+.\scripts\test-verify-payment-run-azure.ps1
+
+# Run staging and the optional dev sparse-evidence regression
+.\scripts\test-verify-payment-run-azure.ps1 -Scenario stg-pass,dev-fallback -DevRunPrefix OR-1-2ndApr
+```
+
+**Parameters**:
+- `Scenario` (optional): one or more of `stg-pass`, `dev-fallback` (default: `stg-pass`)
+- `StagingRunPrefix` (optional): explicit staging run prefix if auto-resolution would be ambiguous
+- `DevRunPrefix` (optional): dev run prefix used to exercise the fallback scenario
+- `SkipFirewallOpen` (switch): skip the Azure SQL firewall helper call
+
+**Notes**:
+- This is a repo-style script validation runner, not a Pester suite.
+- The default `stg-pass` scenario depends on an unambiguous live staging run for the current day. If none exists, the runner skips the scenario and tells you to supply `-StagingRunPrefix`.
+- The `dev-fallback` scenario is opt-in because it depends on a known logical prefix from an existing dev Azure run.
+
 ### setup-github-app-from-manifest.ps1
 
 **NEW** - Streamlines GitHub App creation using a declarative manifest configuration.
