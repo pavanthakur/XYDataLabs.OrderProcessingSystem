@@ -62,12 +62,12 @@ $sqlServerName = "orderprocessing-sql-$envSuffix"
 $sqlServerFqdn = "$sqlServerName.database.windows.net"
 $sharedDbName = switch ($Environment) {
     'dev' { 'OrderProcessingSystem_Dev' }
-    'stg' { 'OrderProcessingSystem_Stg' }
+    'stg' { 'OrderProcessingSystem_Staging' }
     'prod' { 'OrderProcessingSystem_Prod' }
 }
 $tenantCDbName = switch ($Environment) {
     'dev' { 'OrderProcessingSystem_TenantC_Dev' }
-    'stg' { 'OrderProcessingSystem_TenantC_Stg' }
+    'stg' { 'OrderProcessingSystem_TenantC_Staging' }
     'prod' { 'OrderProcessingSystem_TenantC_Prod' }
 }
 
@@ -282,6 +282,61 @@ function Ensure-AzureSqlFirewallAccess {
     Write-Host "Azure SQL firewall open for $publicIp via rule $ruleName." -ForegroundColor Green
 }
 
+function Get-MinimumTimeDeltaSeconds {
+    param(
+        [Parameter(Mandatory = $true)]
+        [datetimeoffset] $CandidateTimestamp,
+
+        [Parameter(Mandatory = $true)]
+        [datetimeoffset[]] $ReferenceTimestamps
+    )
+
+    if ($ReferenceTimestamps.Count -eq 0) {
+        return [double]::PositiveInfinity
+    }
+
+    $minimum = [double]::PositiveInfinity
+    foreach ($referenceTimestamp in $ReferenceTimestamps) {
+        $deltaSeconds = [math]::Abs(($CandidateTimestamp - $referenceTimestamp).TotalSeconds)
+        if ($deltaSeconds -lt $minimum) {
+            $minimum = $deltaSeconds
+        }
+    }
+
+    return $minimum
+}
+
+function Get-ScopedUiEvents {
+    param(
+        [Parameter(Mandatory = $false)]
+        [AllowEmptyCollection()]
+        [object[]] $Events,
+
+        [Parameter(Mandatory = $false)]
+        [string[]] $KnownChargeIds = @(),
+
+        [Parameter(Mandatory = $false)]
+        [string[]] $KnownTenants = @(),
+
+        [Parameter(Mandatory = $false)]
+        [string[]] $KnownCustomerOrders = @()
+    )
+
+    if ($null -eq $Events -or $Events.Count -eq 0) {
+        return @()
+    }
+
+    return @(
+        $Events |
+            Where-Object {
+                ($_.ChargeId -and ($KnownChargeIds -contains $_.ChargeId)) -or
+                ($_.Tenant -and ($KnownTenants -contains $_.Tenant)) -or
+                ($_.CustomerOrderId -and ($KnownCustomerOrders -contains $_.CustomerOrderId))
+            } |
+            Sort-Object Timestamp
+    )
+}
+
 function Convert-CheckResult {
     param(
         [Parameter(Mandatory = $true)] [string] $Expected,
@@ -419,24 +474,37 @@ Write-Step "Querying App Insights UI traces"
 $uiQuery = @"
 traces
 | where timestamp >= startofday(now() + 330m) - 330m
-| where message has_any('OpenPay callback received', 'payment/callback responded')
+| where message has_any('OpenPay callback received',
+                        'payment/callback responded',
+                        'ui_payment_callback_confirmation_requested',
+                        'ui_payment_callback_confirmed',
+                        'ui_payment_callback_confirmation_failed')
 | extend application = tostring(customDimensions['Application'])
-| extend chargeId = coalesce(tostring(customDimensions['ChargeId']), extract(@'payment\s+(\S+)', 1, message))
+| extend tenant = coalesce(tostring(customDimensions['TenantCode']), extract(@'for tenant\s+([^,\s]+)', 1, message))
+| extend customerOrderId = tostring(customDimensions['CustomerOrderId'])
+| extend uiEventName = coalesce(tostring(customDimensions['UiEventName']), extract(@'UI payment event\s+(\S+)\s+on', 1, message))
+| extend chargeId = coalesce(tostring(customDimensions['ChargeId']), tostring(customDimensions['PaymentId']), extract(@'for payment\s+([^,\s]+)', 1, message), extract(@'payment\s+([^,\s]+)', 1, message))
 | extend statusCode = tostring(customDimensions['StatusCode'])
 | where cloud_RoleName has 'ui' or application == 'UI'
-| project timestamp, chargeId, statusCode, message
+| project timestamp, tenant, customerOrderId, uiEventName, chargeId, statusCode, message
 | order by timestamp asc
 "@
 
 $uiRows = Convert-AppInsightsRows -Response (Invoke-AppInsightsQuery -Query $uiQuery)
-$uiEvents = foreach ($row in $uiRows) {
+$uiEvents = @(
+foreach ($row in $uiRows) {
     [PSCustomObject] @{
         Timestamp = [datetimeoffset] $row.timestamp
+        Tenant = [string] $row.tenant
+        CustomerOrderId = [string] $row.customerOrderId
+        UiEventName = [string] $row.uiEventName
         ChargeId = [string] $row.chargeId
         StatusCode = [string] $row.statusCode
         Message = [string] $row.message
+        EventKey = "{0}|{1}|{2}|{3}|{4}|{5}" -f [string] $row.timestamp, [string] $row.chargeId, [string] $row.tenant, [string] $row.customerOrderId, [string] $row.uiEventName, [string] $row.message
     }
 }
+)
 
 Write-Step "Querying Azure SQL"
 $preflightShared = Invoke-AzureSqlQuery -Database $sharedDbName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
@@ -536,6 +604,15 @@ if ($expectedOrdersByTenant.Count -eq 0) {
 $sharedDbChargeIds = @($q2Shared | Select-Object -ExpandProperty ChargeId)
 $tenantCDbChargeIds = @($q2TenantC | Select-Object -ExpandProperty ChargeId)
 $allDbChargeIds = @($sharedDbChargeIds + $tenantCDbChargeIds)
+$expectedUiTenants = @($expectedOrdersByTenant.Keys | Sort-Object -Unique)
+$expectedUiCustomerOrders = @(
+    foreach ($tenantName in $expectedOrdersByTenant.Keys) {
+        foreach ($customerOrderId in @($expectedOrdersByTenant[$tenantName])) {
+            [string] $customerOrderId
+        }
+    }
+)
+$expectedUiCustomerOrders = @($expectedUiCustomerOrders | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)
 
 if (@($apiChargeEvents).Count -eq 0 -and @($allDbChargeIds).Count -gt 0) {
     $dbChargeIdList = Get-KqlQuotedValues -Values $allDbChargeIds
@@ -608,14 +685,8 @@ traces
 }
 
 $apiChargeIds = @($apiChargeEvents | Select-Object -ExpandProperty ChargeId -Unique)
-$selectedUiEvents = @(
-    $uiEvents |
-        Where-Object {
-            ($_.ChargeId -and ($apiChargeIds -contains $_.ChargeId)) -or
-            ($_.Message -match 'payment/callback responded')
-        } |
-        Sort-Object Timestamp
-)
+$knownUiChargeIds = @($apiChargeIds + $allDbChargeIds | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)
+$selectedUiEvents = @(Get-ScopedUiEvents -Events @($uiEvents) -KnownChargeIds $knownUiChargeIds -KnownTenants $expectedUiTenants -KnownCustomerOrders $expectedUiCustomerOrders)
 
 if ($selectedUiEvents.Count -eq 0) {
     $evidenceChargeIds = if ($apiChargeIds.Count -gt 0) { $apiChargeIds } else { @($allDbChargeIds | Sort-Object -Unique) }
@@ -624,27 +695,41 @@ if ($selectedUiEvents.Count -eq 0) {
         $fallbackUiQuery = @"
 traces
 | where timestamp >= ago(7d)
-| where message has_any('OpenPay callback received', 'payment/callback responded')
+| where message has_any('OpenPay callback received',
+                        'payment/callback responded',
+                        'ui_payment_callback_confirmation_requested',
+                        'ui_payment_callback_confirmed',
+                        'ui_payment_callback_confirmation_failed')
 | extend application = tostring(customDimensions['Application'])
-| extend chargeId = coalesce(tostring(customDimensions['ChargeId']), extract(@'payment\s+(\S+)', 1, message))
+| extend tenant = coalesce(tostring(customDimensions['TenantCode']), extract(@'for tenant\s+([^,\s]+)', 1, message))
+| extend customerOrderId = tostring(customDimensions['CustomerOrderId'])
+| extend uiEventName = coalesce(tostring(customDimensions['UiEventName']), extract(@'UI payment event\s+(\S+)\s+on', 1, message))
+| extend chargeId = coalesce(tostring(customDimensions['ChargeId']), tostring(customDimensions['PaymentId']), extract(@'for payment\s+([^,\s]+)', 1, message), extract(@'payment\s+([^,\s]+)', 1, message))
 | extend statusCode = tostring(customDimensions['StatusCode'])
 | where cloud_RoleName has 'ui' or application == 'UI'
-| where chargeId in ($evidenceChargeIdList) or message has 'payment/callback responded'
-| project timestamp, chargeId, statusCode, message
+| where chargeId in ($evidenceChargeIdList)
+   or tenant in ({0})
+| project timestamp, tenant, customerOrderId, uiEventName, chargeId, statusCode, message
 | order by timestamp asc
-"@
+"@ -f (Get-KqlQuotedValues -Values $expectedUiTenants)
 
         $fallbackUiRows = Convert-AppInsightsRows -Response (Invoke-AppInsightsQuery -Query $fallbackUiQuery)
-        $selectedUiEvents = @(
+        $fallbackUiEvents = @(
             foreach ($row in $fallbackUiRows) {
                 [PSCustomObject] @{
                     Timestamp = [datetimeoffset] $row.timestamp
+                    Tenant = [string] $row.tenant
+                    CustomerOrderId = [string] $row.customerOrderId
+                    UiEventName = [string] $row.uiEventName
                     ChargeId = [string] $row.chargeId
                     StatusCode = [string] $row.statusCode
                     Message = [string] $row.message
+                    EventKey = "{0}|{1}|{2}|{3}|{4}|{5}" -f [string] $row.timestamp, [string] $row.chargeId, [string] $row.tenant, [string] $row.customerOrderId, [string] $row.uiEventName, [string] $row.message
                 }
             }
         )
+
+        $selectedUiEvents = @(Get-ScopedUiEvents -Events @($fallbackUiEvents) -KnownChargeIds $knownUiChargeIds -KnownTenants $expectedUiTenants -KnownCustomerOrders $expectedUiCustomerOrders)
     }
 }
 
@@ -653,11 +738,75 @@ if ($selectedApiEvents.Count -gt 0 -or $selectedUiEvents.Count -gt 0) {
 }
 
 $globalUiStatusCodes = @($selectedUiEvents | Where-Object { -not [string]::IsNullOrWhiteSpace($_.StatusCode) } | Select-Object -ExpandProperty StatusCode -Unique)
+$matchedUiEventKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+$usedFallbackUiEventKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
 
 $chargeCorrelation = @(
 foreach ($chargeEvent in $apiChargeEvents) {
     $uiMatches = @($selectedUiEvents | Where-Object { $_.ChargeId -eq $chargeEvent.ChargeId })
+    foreach ($uiMatch in $uiMatches) {
+        $null = $matchedUiEventKeys.Add($uiMatch.EventKey)
+    }
+
+    $uiCorrelationMode = if ($uiMatches.Count -gt 0) { 'chargeId' } else { 'none' }
+
+    if ($uiMatches.Count -eq 0 -and $threeDsByTenant[$chargeEvent.Tenant] -eq 1) {
+        $candidateApiEvents = @(
+            $selectedApiEvents |
+                Where-Object {
+                    ($_.ChargeId -eq $chargeEvent.ChargeId) -or
+                    ($_.Tenant -eq $chargeEvent.Tenant -and $_.ResolvedCustomerOrderId -eq $chargeEvent.ResolvedCustomerOrderId)
+                }
+        )
+
+        $referenceTimestamps = @(
+            $candidateApiEvents |
+                Where-Object { $_.Message -match 'Payment callback reconciliation completed|confirm-status responded' } |
+                Select-Object -ExpandProperty Timestamp
+        )
+
+        if ($referenceTimestamps.Count -eq 0) {
+            $referenceTimestamps = @($candidateApiEvents | Select-Object -ExpandProperty Timestamp)
+        }
+
+        if ($referenceTimestamps.Count -eq 0) {
+            $referenceTimestamps = @($chargeEvent.Timestamp)
+        }
+
+        $fallbackMatch = @(
+            $selectedUiEvents |
+                Where-Object {
+                    -not $usedFallbackUiEventKeys.Contains($_.EventKey) -and
+                    [string]::IsNullOrWhiteSpace($_.ChargeId) -and
+                    (
+                        ($_.Tenant -eq $chargeEvent.Tenant) -or
+                        (
+                            -not [string]::IsNullOrWhiteSpace($_.CustomerOrderId) -and
+                            $_.CustomerOrderId -eq $chargeEvent.ResolvedCustomerOrderId
+                        )
+                    )
+                } |
+                ForEach-Object {
+                    [PSCustomObject] @{
+                        UiEvent = $_
+                        DeltaSeconds = Get-MinimumTimeDeltaSeconds -CandidateTimestamp $_.Timestamp -ReferenceTimestamps $referenceTimestamps
+                    }
+                } |
+                Where-Object { $_.DeltaSeconds -le 600 } |
+                Sort-Object DeltaSeconds, @{ Expression = { $_.UiEvent.Timestamp } } |
+                Select-Object -First 1
+            )
+
+        if ($fallbackMatch.Count -gt 0 -and $null -ne $fallbackMatch[0]) {
+            $uiMatches = @($fallbackMatch[0].UiEvent)
+            $uiCorrelationMode = 'tenant+time'
+            $null = $usedFallbackUiEventKeys.Add($fallbackMatch[0].UiEvent.EventKey)
+            $null = $matchedUiEventKeys.Add($fallbackMatch[0].UiEvent.EventKey)
+        }
+    }
+
     $uiStatusCodes = @($uiMatches | Where-Object { -not [string]::IsNullOrWhiteSpace($_.StatusCode) } | Select-Object -ExpandProperty StatusCode -Unique)
+    $uiEventNames = @($uiMatches | Where-Object { -not [string]::IsNullOrWhiteSpace($_.UiEventName) } | Select-Object -ExpandProperty UiEventName -Unique)
 
     if ($uiStatusCodes.Count -eq 0 -and $globalUiStatusCodes.Count -gt 0 -and $apiChargeEvents.Count -eq 1) {
         $uiStatusCodes = $globalUiStatusCodes
@@ -683,10 +832,19 @@ foreach ($chargeEvent in $apiChargeEvents) {
         ThreeDSEnabled = $threeDsByTenant[$chargeEvent.Tenant]
         UiCallbackExpected = ($threeDsByTenant[$chargeEvent.Tenant] -eq 1)
         UiCallbackLogged = ($uiMatches.Count -gt 0)
+        UiCorrelationMode = $uiCorrelationMode
+        UiEventNames = @($uiEventNames)
         UiStatusCodes = @($uiStatusCodes)
     }
 }
 )
+
+$reportedUiEvents = if ($matchedUiEventKeys.Count -gt 0) {
+    @($selectedUiEvents | Where-Object { $matchedUiEventKeys.Contains($_.EventKey) } | Sort-Object Timestamp)
+}
+else {
+    @($selectedUiEvents)
+}
 
 $expectedTenantARows = if ($expectedOrdersByTenant.ContainsKey('TenantA')) { $expectedOrdersByTenant['TenantA'].Count * 2 } else { 0 }
 $expectedTenantBRows = if ($expectedOrdersByTenant.ContainsKey('TenantB')) { $expectedOrdersByTenant['TenantB'].Count * 2 } else { 0 }
@@ -731,7 +889,7 @@ $report = [PSCustomObject] @{
     AppInsightsAvailable = $appInsightsAvailable
     AppInsights = [PSCustomObject] @{
         ApiEvidence = @($selectedApiEvents | Select-Object Timestamp, Tenant, ResolvedCustomerOrderId, ChargeId, Message)
-        UiEvidence = @($selectedUiEvents | Select-Object Timestamp, ChargeId, StatusCode, Message)
+        UiEvidence = @($reportedUiEvents | Select-Object Timestamp, Tenant, CustomerOrderId, UiEventName, ChargeId, StatusCode, Message)
     }
     Preflight = [PSCustomObject] @{
         TenantA = $threeDsByTenant['TenantA']
@@ -773,7 +931,7 @@ if ($selectedUiEvents.Count -eq 0) {
 }
 else {
     $selectedUiEvents |
-        Select-Object Timestamp, ChargeId, StatusCode, Message |
+    Select-Object Timestamp, Tenant, CustomerOrderId, UiEventName, ChargeId, StatusCode, Message |
         Format-Table -AutoSize |
         Out-String -Width 500 |
         Write-Host
@@ -785,7 +943,7 @@ if (@($chargeCorrelation).Count -eq 0) {
 }
 else {
     $chargeCorrelation |
-        Select-Object ChargeId, Tenant, CustomerOrderId, InDb, DbStatus, DbStage, ThreeDSEnabled, UiCallbackExpected, UiCallbackLogged, @{ Name = 'UiStatusCodes'; Expression = { ($_.UiStatusCodes -join ',') } } |
+    Select-Object ChargeId, Tenant, CustomerOrderId, InDb, DbStatus, DbStage, ThreeDSEnabled, UiCallbackExpected, UiCallbackLogged, UiCorrelationMode, @{ Name = 'UiEventNames'; Expression = { ($_.UiEventNames -join ',') } }, @{ Name = 'UiStatusCodes'; Expression = { ($_.UiStatusCodes -join ',') } } |
         Format-Table -AutoSize |
         Out-String -Width 500 |
         Write-Host
