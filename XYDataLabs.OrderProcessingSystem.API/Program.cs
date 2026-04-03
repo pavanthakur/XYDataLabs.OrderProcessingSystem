@@ -401,6 +401,7 @@ app.UseSerilogRequestLogging(options =>
 });
 
 var useDeveloperExceptionPage = builder.Environment.IsDevelopment() && !isAzure;
+var swaggerTenantSelectorScriptPath = GetVersionedWebAssetPath(app, "swagger-assets/tenant-selector.js");
 
 // Configure the HTTP request pipeline.
 // Environment-specific middleware configuration using our simplified profile names
@@ -416,7 +417,7 @@ if (environmentName == Constants.Environments.Dev || environmentName == Constant
 
         if (tenantConfigurationOptions.SwaggerSelectorEnabled)
         {
-            options.InjectJavascript("/swagger-assets/tenant-selector.js");
+            options.InjectJavascript(swaggerTenantSelectorScriptPath);
             // Inject X-Tenant-Code on every Swagger request using the value set by the
             // top-bar dropdown (window.OrderProcessingActiveTenant). When login is added,
             // that code will set the same global — no other changes needed here.
@@ -564,6 +565,20 @@ static string ResolveTenantCodeForLogging(HttpContext httpContext)
     return string.Equals(httpContext.Request.Path.Value, "/api/v1/info/runtime-configuration", StringComparison.OrdinalIgnoreCase)
         ? "bootstrap"
         : "none";
+}
+
+static string GetVersionedWebAssetPath(WebApplication app, string relativePath)
+{
+    var normalizedRelativePath = relativePath.Replace('\\', '/').TrimStart('/');
+    var assetPath = $"/{normalizedRelativePath}";
+    var assetInfo = app.Environment.WebRootFileProvider.GetFileInfo(normalizedRelativePath);
+
+    if (!assetInfo.Exists)
+    {
+        return assetPath;
+    }
+
+    return $"{assetPath}?v={assetInfo.LastModified.ToUnixTimeMilliseconds()}";
 }
 
 // Required for WebApplicationFactory<Program> in integration tests
