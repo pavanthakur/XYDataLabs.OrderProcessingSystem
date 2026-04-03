@@ -56,6 +56,9 @@ jobs:
       - name: Test — API
         run: dotnet test tests/XYDataLabs.OrderProcessingSystem.API.Tests/XYDataLabs.OrderProcessingSystem.API.Tests.csproj --configuration Release --no-build --verbosity normal
 
+      - name: Test — UI
+        run: dotnet test tests/XYDataLabs.OrderProcessingSystem.UI.Tests/XYDataLabs.OrderProcessingSystem.UI.Tests.csproj --configuration Release --no-build --verbosity normal
+
       - name: Test — Architecture
         run: dotnet test tests/XYDataLabs.OrderProcessingSystem.Architecture.Tests/XYDataLabs.OrderProcessingSystem.Architecture.Tests.csproj --configuration Release --no-build --verbosity normal
 

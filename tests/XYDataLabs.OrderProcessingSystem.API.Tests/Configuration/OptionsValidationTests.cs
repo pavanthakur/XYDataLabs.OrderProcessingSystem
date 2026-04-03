@@ -20,6 +20,45 @@ public class OptionsValidationTests
     }
 
     [Fact]
+    public void TenantConfigurationValidator_Fails_WhenUiOverrideEnabledButSelectorHidden()
+    {
+        var validator = new TenantConfigurationOptionsValidator();
+
+        var result = validator.Validate(
+            Options.DefaultName,
+            new TenantConfigurationOptions
+            {
+                ActiveTenantCode = "TenantA",
+                UiSelectorEnabled = false,
+                UiTenantOverrideEnabled = true,
+                SwaggerSelectorEnabled = true
+            });
+
+        result.Failed.Should().BeTrue();
+        result.Failures.Should().ContainSingle(failure =>
+            failure.Contains(Constants.Configuration.UiTenantOverrideEnabled, StringComparison.Ordinal)
+            && failure.Contains(Constants.Configuration.UiSelectorEnabled, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void TenantConfigurationValidator_Succeeds_WhenTenantUiPolicyIsConsistent()
+    {
+        var validator = new TenantConfigurationOptionsValidator();
+
+        var result = validator.Validate(
+            Options.DefaultName,
+            new TenantConfigurationOptions
+            {
+                ActiveTenantCode = "TenantA",
+                UiSelectorEnabled = false,
+                UiTenantOverrideEnabled = false,
+                SwaggerSelectorEnabled = false
+            });
+
+        result.Failed.Should().BeFalse();
+    }
+
+    [Fact]
     public void ApiSettingsValidator_Fails_WhenPortIsInvalid()
     {
         var validator = new ApiSettingsValidator();
