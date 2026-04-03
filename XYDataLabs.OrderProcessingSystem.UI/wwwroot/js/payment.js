@@ -4,6 +4,9 @@ const payButton = document.getElementById('pay-button');
 const pendingPaymentStorageKeyPrefix = 'pending-payment:';
 let runtimeConfigurationPromise;
 
+const trackPaymentEvent = (payload, options) =>
+    window.OrderProcessingUiTelemetry?.track(payload, options) || Promise.resolve(false);
+
 const setPayButtonState = (enabled, text) => {
     if (!payButton) {
         return;
@@ -29,7 +32,8 @@ const persistPendingPaymentContext = payment => {
     try {
         sessionStorage.setItem(`${pendingPaymentStorageKeyPrefix}${payment.id}`, JSON.stringify({
             attemptOrderId: payment.attemptOrderId || null,
-            customerOrderId: payment.customerOrderId || null
+            customerOrderId: payment.customerOrderId || null,
+            clientFlowId: payment.clientFlowId || null
         }));
     } catch (error) {
         console.warn('Unable to persist pending payment context before 3DS redirect.', error);
@@ -45,6 +49,11 @@ if (payButton) {
         })
         .catch(error => {
             setPayButtonState(false, 'Tenant configuration unavailable');
+            void trackPaymentEvent({
+                eventName: 'ui_payment_runtime_unavailable',
+                severity: 'warning',
+                errorMessage: error.message || 'Tenant runtime configuration unavailable.'
+            });
             console.error('Unable to load tenant runtime configuration from API:', error);
             throw error;
         });
@@ -59,6 +68,11 @@ window.addEventListener('load', function () {
         deviceSessionId = OpenPay.deviceData.setup("payment-form", "deviceIdHiddenFieldName");
         console.log("Device session ID created:", deviceSessionId);
     } catch (error) {
+        void trackPaymentEvent({
+            eventName: 'ui_payment_device_setup_failed',
+            severity: 'error',
+            errorMessage: error.message || 'OpenPay device setup failed.'
+        });
         console.error("Error setting up device session:", error);
     }
 });
@@ -66,10 +80,18 @@ window.addEventListener('load', function () {
 document.getElementById('payment-form').addEventListener('submit', async function (e) {
     e.preventDefault();
 
+    const clientFlowId = window.OrderProcessingUiTelemetry?.createFlowId?.() || null;
+
     let runtimeConfiguration;
     try {
         runtimeConfiguration = await runtimeConfigurationPromise;
     } catch (error) {
+        void trackPaymentEvent({
+            eventName: 'ui_payment_submit_blocked',
+            severity: 'warning',
+            clientFlowId,
+            errorMessage: error.message || 'Tenant configuration unavailable.'
+        });
         alert(error.message || 'API tenant configuration is missing.');
         return;
     }
@@ -94,6 +116,14 @@ document.getElementById('payment-form').addEventListener('submit', async functio
         device_session_id: deviceSessionId
     };
 
+    void trackPaymentEvent({
+        eventName: 'ui_payment_submit_started',
+        severity: 'information',
+        tenantCode,
+        clientFlowId,
+        customerOrderId: cardData.customerOrderId
+    });
+
     //console.log("Creating token with data:", {
     //    ...cardData,
     //    card_number: '****' + cardData.card_number.slice(-4),
@@ -106,6 +136,14 @@ document.getElementById('payment-form').addEventListener('submit', async functio
         function (response) {
             console.log("Token created successfully:", response.data.id);
 
+            void trackPaymentEvent({
+                eventName: 'ui_payment_token_created',
+                severity: 'information',
+                tenantCode,
+                clientFlowId,
+                customerOrderId: cardData.customerOrderId
+            });
+
             const paymentData = {
                 "token": response.data.id,
                 "name": cardData.holder_name,
@@ -117,6 +155,14 @@ document.getElementById('payment-form').addEventListener('submit', async functio
                 "customerOrderId": cardData.customerOrderId,
                 "deviceSessionId": cardData.device_session_id
             };
+
+            void trackPaymentEvent({
+                eventName: 'ui_payment_processing_requested',
+                severity: 'information',
+                tenantCode,
+                clientFlowId,
+                customerOrderId: cardData.customerOrderId
+            });
 
             // Call your API endpoint
             fetch(API_BASE_URL + '/api/v1/payments/processpayment', {
@@ -135,7 +181,9 @@ document.getElementById('payment-form').addEventListener('submit', async functio
 
                     if (!response.ok) {
                         const message = data?.message || `Payment request failed with status ${response.status}`;
-                        throw new Error(message);
+                        const requestError = new Error(message);
+                        requestError.httpStatus = response.status;
+                        throw requestError;
                     }
 
                     return data;
@@ -146,15 +194,38 @@ document.getElementById('payment-form').addEventListener('submit', async functio
                     }
 
                     const payment = apiResponse.data;
+                    payment.clientFlowId = clientFlowId;
                     const paymentStatus = (payment.status || '').toLowerCase();
 
                     if (paymentStatus === 'charge_pending' && payment.threeDSecureUrl) {
                         persistPendingPaymentContext(payment);
+                        void trackPaymentEvent({
+                            eventName: 'ui_payment_3ds_redirect_started',
+                            severity: 'information',
+                            tenantCode,
+                            clientFlowId,
+                            customerOrderId: payment.customerOrderId || cardData.customerOrderId,
+                            attemptOrderId: payment.attemptOrderId,
+                            paymentId: payment.id,
+                            paymentStatus: payment.status,
+                            statusCategory: payment.statusCategory
+                        }, { useBeacon: true });
                         window.location.assign(payment.threeDSecureUrl);
                         return;
                     }
 
                     if (paymentStatus && paymentStatus !== 'unknown') {
+                        void trackPaymentEvent({
+                            eventName: 'ui_payment_completed',
+                            severity: 'information',
+                            tenantCode,
+                            clientFlowId,
+                            customerOrderId: payment.customerOrderId || cardData.customerOrderId,
+                            attemptOrderId: payment.attemptOrderId,
+                            paymentId: payment.id,
+                            paymentStatus: payment.status,
+                            statusCategory: payment.statusCategory
+                        });
                         alert('Payment processed successfully!');
                         document.getElementById('payment-form').reset();
                         return;
@@ -163,6 +234,15 @@ document.getElementById('payment-form').addEventListener('submit', async functio
                     throw new Error(payment.errorMessage || apiResponse.message || 'Payment failed.');
                 })
                 .catch(error => {
+                    void trackPaymentEvent({
+                        eventName: 'ui_payment_processing_failed',
+                        severity: 'warning',
+                        tenantCode,
+                        clientFlowId,
+                        customerOrderId: cardData.customerOrderId,
+                        httpStatus: Number.isInteger(error.httpStatus) ? error.httpStatus : null,
+                        errorMessage: error.message || 'Payment processing failed.'
+                    });
                     console.error('Error processing payment:', error);
                     alert(error.message || 'An error occurred while processing the payment.');
                 })
@@ -173,6 +253,18 @@ document.getElementById('payment-form').addEventListener('submit', async functio
                 });
         },
         function (error) {
+            const providerErrorCode = error?.data?.error_code || error?.data?.errorCode || null;
+            const providerErrorDescription = error?.data?.description || null;
+
+            void trackPaymentEvent({
+                eventName: 'ui_payment_token_failed',
+                severity: 'warning',
+                tenantCode,
+                clientFlowId,
+                customerOrderId: cardData.customerOrderId,
+                errorCode: providerErrorCode,
+                errorMessage: providerErrorDescription || error?.message || 'OpenPay token creation failed.'
+            });
             console.error('Error creating token:', error);
             let errorMessage = 'Error creating payment token. Please check your card details.';
 

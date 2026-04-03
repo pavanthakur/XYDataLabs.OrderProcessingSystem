@@ -10,9 +10,15 @@
 
 The application runs in five distinct runtime contexts: local VS, local Docker dev, local Docker
 staging, local Docker prod, and Azure App Service (dev / stg / prod). Several features must behave
-differently depending on the runtime context — for example, the tenant dropdown must always be
-visible in any local Docker run regardless of the `ASPNETCORE_ENVIRONMENT` value, and is also
-shown on Azure (the DB contains multiple tenants that are switchable via X-Tenant-Code).
+differently depending on the runtime context. Runtime detection is still required for concerns such
+as developer exception pages, Azure-only behavior, and local-vs-cloud infrastructure choices.
+
+During staging validation on 2026-04-03, the tenant selector exposed a design flaw: the UI policy
+was being inferred from `IsDevelopment` / `IsDocker`, while the desired behavior is a deployment
+policy decision that varies by environment and audience. Staging must allow tenant switching for
+QA and release verification, while production customer UI must hide that surface and rely on the
+configured active tenant unless a system-carried tenant code is supplied as part of a controlled
+flow such as payment callback return.
 
 Three environment variables drive all runtime detection:
 
@@ -46,6 +52,32 @@ var isAzure = !string.IsNullOrWhiteSpace(azureSiteName);
 In the UI, these are also exposed as `ViewData` keys (`IsDocker`, `IsAzure`, `IsDevelopment`) by
 `HomeController.PopulateCommonViewData()` for use in Razor views.
 
+Tenant policy flags (`UiSelectorEnabled`, `UiTenantOverrideEnabled`) are also passed through
+`ViewData`, but they come from `TenantConfiguration`, not from runtime detection.
+
+Tenant selector behavior is no longer derived from those booleans. It is controlled by
+`TenantConfiguration` so the same deployment can intentionally enable or disable tenant switching
+without adding more environment-specific branching in Razor or JavaScript.
+
+```json
+"TenantConfiguration": {
+  "ActiveTenantCode": "TenantA",
+  "UiSelectorEnabled": true,
+  "UiTenantOverrideEnabled": true,
+  "SwaggerSelectorEnabled": true
+}
+```
+
+Policy semantics:
+
+| Key | Purpose |
+|-----|---------|
+| `ActiveTenantCode` | Default tenant when no explicit tenant selection is supplied |
+| `UiSelectorEnabled` | Renders the MVC tenant selector + indicator in the banner |
+| `UiTenantOverrideEnabled` | Allows browser-persisted user override; must be `false` if selector is hidden |
+| `SwaggerSelectorEnabled` | Injects the Swagger top-bar tenant selector in API Swagger UI |
+| URL `tenantCode` query param | Still honored as a request-scoped tenant hint for callback flows, even when browser override is disabled |
+
 ---
 
 ## Runtime Context Matrix
@@ -69,13 +101,16 @@ when adding any new environment-conditional logic.**
 
 ### UI Features (`_Layout.cshtml` / controllers)
 
-| Feature | Gate condition | VS local | Dev Docker | Stg Docker | Prod Docker | Azure (any) |
-|---------|---------------|:---:|:---:|:---:|:---:|:---:|
-| Tenant selector dropdown | `IsDevelopment \|\| IsDocker` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| "🐳 Docker" badge in banner | `IsDocker` | ❌ | ✅ | ✅ | ✅ | ✅* |
-| Developer exception page (UI) | `!IsDevelopment \|\| IsAzure` | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Feature | Gate condition | VS local | Dev Docker | Stg Docker | Prod Docker | Azure dev | Azure stg | Azure prod |
+|---------|---------------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| Tenant selector + indicator | `TenantConfiguration:UiSelectorEnabled` | ✅* | ✅* | ✅* | configurable | ✅* | ✅* | configurable |
+| Browser tenant override | `TenantConfiguration:UiTenantOverrideEnabled` | ✅* | ✅* | ✅* | configurable | ✅* | ✅* | configurable |
+| "🐳 Docker" badge in banner | `IsDocker` | ❌ | ✅ | ✅ | ✅ | ✅* | ✅* | ✅* |
+| Developer exception page (UI) | `!IsDevelopment \|\| IsAzure` | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
-> *Docker badge shows on Azure too (IsDocker=true). Acceptable — it is informational only.
+> *Current shipped policy in shared settings: local/dev/stg = enabled, prod = disabled.
+
+> Docker badge shows on Azure too (IsDocker=true). Acceptable — it is informational only.
 > If it must be hidden on Azure, apply the same `!IsAzure` gate.
 
 ### API Features (`API/Program.cs`)
@@ -83,6 +118,7 @@ when adding any new environment-conditional logic.**
 | Feature | Gate condition | VS local | Dev Docker | Stg Docker | Prod Docker | Azure dev | Azure stg | Azure prod |
 |---------|---------------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | Swagger UI | `environmentName == "dev" \|\| "stg"` | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ |
+| Swagger tenant selector | `TenantConfiguration:SwaggerSelectorEnabled` | ✅* | ✅* | ✅* | N/A | ✅* | ✅* | N/A |
 | Developer exception page (API) | `IsDevelopment && !isAzure` | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | EF Core auto-migrations | `!isAzureRuntime` (i.e. `!isAzure`) | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | CORS policy | `AllowAll` unless `isAzure && prod` → `AllowProductionUI` | AllowAll | AllowAll | AllowAll | AllowAll | AllowAll | AllowAll | AllowProductionUI |
@@ -123,6 +159,7 @@ the matrix before merging:
 | "Hide on Azure" but also hide on local prod Docker | `!IsDevelopment` | `IsAzure` |
 | "Only in Docker" thinking it excludes Azure | `IsDocker` | `IsDocker && !IsAzure` |
 | "Detect Azure" | `IsDocker` ← WRONG, it's true locally too | `IsAzure` (WEBSITE_SITE_NAME) |
+| "Tenant switching follows runtime" | `IsDevelopment`, `IsDocker`, or `IsAzure` in Razor/JS | `TenantConfiguration:*` policy keys |
 
 ---
 
@@ -137,6 +174,8 @@ var isAzure = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("WEB
 ViewData["IsDocker"] = isDocker;
 ViewData["IsAzure"] = isAzure;
 ViewData["IsDevelopment"] = string.Equals(environmentName, Constants.Environments.Dev, StringComparison.Ordinal);
+ViewData["UiSelectorEnabled"] = tenantConfigurationOptions.UiSelectorEnabled;
+ViewData["UiTenantOverrideEnabled"] = tenantConfigurationOptions.UiTenantOverrideEnabled;
 ```
 
 Do NOT re-read `ASPNETCORE_ENVIRONMENT` directly in controllers — go through `ResolveExecutionContext()`.
@@ -146,15 +185,18 @@ Do NOT re-read `ASPNETCORE_ENVIRONMENT` directly in controllers — go through `
 ## Consequences
 
 **Positive:**
-- Single source of truth for all runtime detection logic.
-- Checklist prevents the stg Docker blind spot (the bug that triggered this ADR).
+- Single source of truth for runtime detection logic.
+- Tenant switching policy is explicit, testable, and environment-configurable across VS local, Docker, and Azure.
+- Checklist prevents the stg Docker blind spot and separates runtime concerns from tenancy policy.
 - Feature gate inventory makes auditing straightforward.
 
 **Negative / Trade-offs:**
 - `WEBSITE_SITE_NAME` is Azure App Service-specific. If the app is ever deployed to AKS or
   Azure Container Apps, this variable is not set automatically — `isAzure` would be `false` and
-  local-only features (e.g. tenant dropdown) would become visible. Must set `WEBSITE_SITE_NAME`
-  explicitly in AKS/ACA pod environment, or introduce a new `DEPLOYMENT_TARGET` variable.
+  Azure-specific behavior would need a new deployment-target signal.
+- Tenant selector policy now depends on shared settings correctness. Invalid combinations are
+  guarded by startup validation, but misconfigured values still become an operational issue rather
+  than a code-path default.
 
 **Future obligations:**
 - When deploying to AKS/ACA, re-evaluate the `isAzure` detection strategy and update this ADR.
@@ -177,12 +219,15 @@ Do NOT re-read `ASPNETCORE_ENVIRONMENT` directly in controllers — go through `
 | 2026-03-27 | Checklist audit | `MyApiClient` registered with `http://api:{port}` (Docker hostname) — wrong in Azure since `isDocker=true` there. Never consumed by any controller — dead registration | Low risk (unused). Remove when doing HttpClient cleanup |
 | 2026-03-27 | Checklist audit | Log file sink `/logs/webapi-.log` and `/logs/ui-.log` write to ephemeral Azure App Service filesystem | Low risk — App Insights covers Azure logs when connection string present |
 | 2026-03-28 | Code review | `local dotnet run` and `docker dev http` both wrote `webapi-dev-http-{date}.log` — file lock conflict when running both simultaneously | Fixed: added `runtimeSuffix` (`dock`/`local`) as third segment. New pattern: `{app}-{env}-{runtime}-{profile}-{date}.log`. Updated `API/Program.cs`, `UI/Program.cs`. |
+| 2026-04-03 | Staging verification | Tenant selector policy was hard-coded to `IsDevelopment \|\| IsDocker`, causing code/doc drift and hiding the selector in Azure staging customer UI | Fixed: moved tenant selector and Swagger selector policy into `TenantConfiguration` (`UiSelectorEnabled`, `UiTenantOverrideEnabled`, `SwaggerSelectorEnabled`) and updated shared settings + UI/API gating |
 
 ## Related
 
 - `XYDataLabs.OrderProcessingSystem.UI/Controllers/HomeController.cs` — `PopulateCommonViewData()`
-- `XYDataLabs.OrderProcessingSystem.UI/Views/Home/_Layout.cshtml` — tenant dropdown gate
+- `XYDataLabs.OrderProcessingSystem.UI/Views/Home/_Layout.cshtml` — tenant selector policy gate
+- `XYDataLabs.OrderProcessingSystem.UI/wwwroot/js/tenant-indicator.js` — browser override policy
 - `XYDataLabs.OrderProcessingSystem.API/Program.cs` — all API-side gates
+- `Resources/Configuration/sharedsettings.{local,dev,stg,prod}.json` — tenant selector policy by environment
 - `XYDataLabs.OrderProcessingSystem.UI/Dockerfile` — `ENV DOTNET_RUNNING_IN_CONTAINER=true`
 - ADR-007: Hybrid multi-tenant model
 - ADR-009: Tenant isolation hardening

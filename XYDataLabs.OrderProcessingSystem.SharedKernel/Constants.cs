@@ -22,6 +22,9 @@ namespace XYDataLabs.OrderProcessingSystem.SharedKernel
             public const string OpenPayDeviceSessionId = "OpenPay:DeviceSessionId";
             public const string EnableEfSensitiveDataLogging = "Observability:EnableEfSensitiveDataLogging";
             public const string ActiveTenantCode = "TenantConfiguration:ActiveTenantCode";
+            public const string UiSelectorEnabled = "TenantConfiguration:UiSelectorEnabled";
+            public const string UiTenantOverrideEnabled = "TenantConfiguration:UiTenantOverrideEnabled";
+            public const string SwaggerSelectorEnabled = "TenantConfiguration:SwaggerSelectorEnabled";
         }
 
         /// <summary>
