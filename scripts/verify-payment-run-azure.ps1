@@ -53,7 +53,6 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$root = Split-Path $PSScriptRoot -Parent
 $envSuffix = $Environment
 $resourceGroup = "rg-orderprocessing-$envSuffix"
 $appInsightsName = "ai-orderprocessing-$envSuffix"
@@ -158,24 +157,83 @@ function Convert-AppInsightsRows {
 }
 
 function Invoke-AppInsightsQuery {
-    param([Parameter(Mandatory = $true)] [string] $Query)
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Query,
 
-    # Collapse multi-line KQL to a single line before passing to az.
-    # PowerShell 7.4+ 'Windows' native argument passing mode mangles
-    # multi-line string arguments, causing az to ignore the KQL entirely.
-    $normalizedQuery = ($Query -split '\r?\n' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) -join ' '
+        [Parameter(Mandatory = $false)]
+        [int] $MaxAttempts = 3
+    )
 
-    $raw = az monitor app-insights query `
-        --app $appInsightsName `
-        --resource-group $resourceGroup `
-        --analytics-query $normalizedQuery `
-        --output json
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        try {
+            # Collapse multi-line KQL to a single line before passing to az.
+            # PowerShell 7.4+ 'Windows' native argument passing mode mangles
+            # multi-line string arguments, causing az to ignore the KQL entirely.
+            $normalizedQuery = ($Query -split '\r?\n' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) -join ' '
 
-    if (-not $raw) {
-        throw "App Insights query returned no response."
+            $raw = az monitor app-insights query `
+                --app $appInsightsName `
+                --resource-group $resourceGroup `
+                --analytics-query $normalizedQuery `
+                --output json
+
+            if (-not $raw) {
+                throw "App Insights query returned no response."
+            }
+
+            return $raw | ConvertFrom-Json
+        }
+        catch {
+            if ($attempt -ge $MaxAttempts) {
+                throw
+            }
+
+            Write-Host "App Insights query attempt $attempt of $MaxAttempts failed: $($_.Exception.Message)" -ForegroundColor Yellow
+            Start-Sleep -Seconds $attempt
+        }
     }
 
-    return $raw | ConvertFrom-Json
+    throw 'App Insights query failed unexpectedly.'
+}
+
+function Invoke-AzureCliText {
+    param(
+        [Parameter(Mandatory = $true)]
+        [scriptblock] $Command,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Operation,
+
+        [Parameter(Mandatory = $false)]
+        [int] $MaxAttempts = 3
+    )
+
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        try {
+            $result = & $Command 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                throw (($result | ForEach-Object { [string] $_ }) -join [Environment]::NewLine)
+            }
+
+            $text = (($result | ForEach-Object { [string] $_ }) -join [Environment]::NewLine).Trim()
+            if ([string]::IsNullOrWhiteSpace($text)) {
+                throw "$Operation returned no response."
+            }
+
+            return $text
+        }
+        catch {
+            if ($attempt -ge $MaxAttempts) {
+                throw "${Operation} failed after $MaxAttempts attempt(s). $($_.Exception.Message)"
+            }
+
+            Write-Host "$Operation attempt $attempt of $MaxAttempts failed: $($_.Exception.Message)" -ForegroundColor Yellow
+            Start-Sleep -Seconds $attempt
+        }
+    }
+
+    throw "$Operation failed unexpectedly."
 }
 
 function Invoke-AzureSqlQuery {
@@ -354,8 +412,13 @@ function Convert-CheckResult {
 }
 
 Write-Step "Resolving Azure resources and credentials for $Environment"
-$sqlAdminUser = az sql server show --name $sqlServerName --resource-group $resourceGroup --query administratorLogin -o tsv
-$sqlAdminPassword = az keyvault secret show --vault-name $keyVaultName --name sql-admin-password --query value -o tsv
+$sqlAdminUser = Invoke-AzureCliText -Operation 'Resolve SQL administrator login' -Command {
+    az sql server show --name $sqlServerName --resource-group $resourceGroup --query administratorLogin -o tsv
+}
+
+$sqlAdminPassword = Invoke-AzureCliText -Operation 'Resolve sql-admin-password from Key Vault' -Command {
+    az keyvault secret show --vault-name $keyVaultName --name sql-admin-password --query value -o tsv
+}
 
 if ([string]::IsNullOrWhiteSpace($sqlAdminUser)) {
     throw "Failed to resolve SQL administrator login for $sqlServerName."
@@ -388,7 +451,25 @@ traces
 | order by timestamp asc
 "@
 
-$apiRows = Convert-AppInsightsRows -Response (Invoke-AppInsightsQuery -Query $apiQuery)
+$appInsightsWarnings = @()
+$apiRows = @()
+$uiRows = @()
+$apiQueryFailed = $false
+$uiQueryFailed = $false
+
+try {
+    $apiRows = Convert-AppInsightsRows -Response (Invoke-AppInsightsQuery -Query $apiQuery)
+}
+catch {
+    $apiQueryFailed = $true
+    $appInsightsWarnings += "API trace query failed: $($_.Exception.Message)"
+    if ([string]::IsNullOrWhiteSpace($RunPrefix)) {
+        throw "API trace query failed and -RunPrefix was not supplied. $($_.Exception.Message)"
+    }
+
+    Write-Host "App Insights API query failed; continuing with DB-only verification for run prefix $RunPrefix." -ForegroundColor Yellow
+}
+
 $apiEvents = foreach ($row in $apiRows) {
     [PSCustomObject] @{
         Timestamp = [datetimeoffset] $row.timestamp
@@ -403,32 +484,32 @@ $apiEvents = foreach ($row in $apiRows) {
 $apiEvents = @($apiEvents | Sort-Object Timestamp)
 
 $tenantState = @{}
-$resolvedApiEvents = foreach ($event in $apiEvents) {
-    $resolvedCustomerOrderId = $event.CustomerOrderId
-    $resolvedRunPrefix = $event.RunPrefix
+$resolvedApiEvents = foreach ($apiEvent in $apiEvents) {
+    $resolvedCustomerOrderId = $apiEvent.CustomerOrderId
+    $resolvedRunPrefix = $apiEvent.RunPrefix
 
-    if (-not [string]::IsNullOrWhiteSpace($event.Tenant)) {
-        if (-not [string]::IsNullOrWhiteSpace($event.CustomerOrderId)) {
-            $tenantState[$event.Tenant] = [PSCustomObject] @{
-                CustomerOrderId = $event.CustomerOrderId
-                RunPrefix = $event.RunPrefix
+    if (-not [string]::IsNullOrWhiteSpace($apiEvent.Tenant)) {
+        if (-not [string]::IsNullOrWhiteSpace($apiEvent.CustomerOrderId)) {
+            $tenantState[$apiEvent.Tenant] = [PSCustomObject] @{
+                CustomerOrderId = $apiEvent.CustomerOrderId
+                RunPrefix = $apiEvent.RunPrefix
             }
         }
-        elseif ($tenantState.ContainsKey($event.Tenant)) {
-            $resolvedCustomerOrderId = $tenantState[$event.Tenant].CustomerOrderId
-            $resolvedRunPrefix = $tenantState[$event.Tenant].RunPrefix
+        elseif ($tenantState.ContainsKey($apiEvent.Tenant)) {
+            $resolvedCustomerOrderId = $tenantState[$apiEvent.Tenant].CustomerOrderId
+            $resolvedRunPrefix = $tenantState[$apiEvent.Tenant].RunPrefix
         }
     }
 
     [PSCustomObject] @{
-        Timestamp = $event.Timestamp
-        Tenant = $event.Tenant
-        CustomerOrderId = $event.CustomerOrderId
+        Timestamp = $apiEvent.Timestamp
+        Tenant = $apiEvent.Tenant
+        CustomerOrderId = $apiEvent.CustomerOrderId
         ResolvedCustomerOrderId = $resolvedCustomerOrderId
-        RunPrefix = $event.RunPrefix
+        RunPrefix = $apiEvent.RunPrefix
         ResolvedRunPrefix = $resolvedRunPrefix
-        ChargeId = $event.ChargeId
-        Message = $event.Message
+        ChargeId = $apiEvent.ChargeId
+        Message = $apiEvent.Message
     }
 }
 
@@ -490,7 +571,15 @@ traces
 | order by timestamp asc
 "@
 
-$uiRows = Convert-AppInsightsRows -Response (Invoke-AppInsightsQuery -Query $uiQuery)
+try {
+    $uiRows = Convert-AppInsightsRows -Response (Invoke-AppInsightsQuery -Query $uiQuery)
+}
+catch {
+    $uiQueryFailed = $true
+    $appInsightsWarnings += "UI trace query failed: $($_.Exception.Message)"
+    Write-Host 'App Insights UI query failed; continuing with DB-only verification for UI evidence.' -ForegroundColor Yellow
+}
+
 $uiEvents = @(
 foreach ($row in $uiRows) {
     [PSCustomObject] @{
@@ -737,6 +826,10 @@ if ($selectedApiEvents.Count -gt 0 -or $selectedUiEvents.Count -gt 0) {
     $appInsightsAvailable = $true
 }
 
+if (($apiQueryFailed -or $uiQueryFailed) -and $selectedApiEvents.Count -eq 0 -and $selectedUiEvents.Count -eq 0) {
+    $appInsightsAvailable = $false
+}
+
 $globalUiStatusCodes = @($selectedUiEvents | Where-Object { -not [string]::IsNullOrWhiteSpace($_.StatusCode) } | Select-Object -ExpandProperty StatusCode -Unique)
 $matchedUiEventKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
 $usedFallbackUiEventKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
@@ -887,6 +980,7 @@ $report = [PSCustomObject] @{
     Runtime = 'azure'
     RunPrefix = $selectedRunPrefix
     AppInsightsAvailable = $appInsightsAvailable
+    Warnings = @($appInsightsWarnings)
     AppInsights = [PSCustomObject] @{
         ApiEvidence = @($selectedApiEvents | Select-Object Timestamp, Tenant, ResolvedCustomerOrderId, ChargeId, Message)
         UiEvidence = @($reportedUiEvents | Select-Object Timestamp, Tenant, CustomerOrderId, UiEventName, ChargeId, StatusCode, Message)
