@@ -54,8 +54,8 @@ Map their answer to the following table:
 | dev https azure | `dev` | App Insights KQL | same as `dev http azure` — profile does not affect log source | `orderprocessing-sql-dev` → `OrderProcessingSystem_Dev` | `OrderProcessingSystem_TenantC_Dev` |
 | stg http docker | `stg` | Physical file | `webapi-stg-dock-http-{DATE}.log` | `OrderProcessingSystem_Stg` | `OrderProcessingSystem_TenantC_Stg` |
 | stg https docker | `stg` | Physical file | `webapi-stg-dock-https-{DATE}.log` | `OrderProcessingSystem_Stg` | `OrderProcessingSystem_TenantC_Stg` |
-| stg http azure | `stg` | App Insights KQL | `ai-orderprocessing-stg` / `rg-orderprocessing-stg` | `orderprocessing-sql-stg` → `OrderProcessingSystem_Stg` | `OrderProcessingSystem_TenantC_Stg` |
-| stg https azure | `stg` | App Insights KQL | same as `stg http azure` — profile does not affect log source | `orderprocessing-sql-stg` → `OrderProcessingSystem_Stg` | `OrderProcessingSystem_TenantC_Stg` |
+| stg http azure | `stg` | App Insights KQL | `ai-orderprocessing-stg` / `rg-orderprocessing-stg` | `orderprocessing-sql-stg` → `OrderProcessingSystem_Staging` | `OrderProcessingSystem_TenantC_Staging` |
+| stg https azure | `stg` | App Insights KQL | same as `stg http azure` — profile does not affect log source | `orderprocessing-sql-stg` → `OrderProcessingSystem_Staging` | `OrderProcessingSystem_TenantC_Staging` |
 | prod http docker | `prod` | Physical file | `webapi-prod-dock-http-{DATE}.log` | `OrderProcessingSystem_Prod` | `OrderProcessingSystem_TenantC_Prod` |
 | prod https docker | `prod` | Physical file | `webapi-prod-dock-https-{DATE}.log` | `OrderProcessingSystem_Prod` | `OrderProcessingSystem_TenantC_Prod` |
 | prod http azure | `prod` | App Insights KQL | `ai-orderprocessing-prod` / `rg-orderprocessing-prod` | `orderprocessing-sql-prod` → `OrderProcessingSystem_Prod` | `OrderProcessingSystem_TenantC_Prod` |
@@ -66,7 +66,9 @@ Map their answer to the following table:
 Physical log files are in `Q:\GIT\TestAppXY_OrderProcessingSystem\logs\`.  
 Azure resource names: `ai-orderprocessing-{envSuffix}` in `rg-orderprocessing-{envSuffix}` (`staging` → `stg`).
 
-> **Local TenantC DB note:** For `local dotnet run`, TenantC's dedicated DB is `OrderProcessingSystem_TenantC` (no environment suffix). All Docker/Azure environments follow the `OrderProcessingSystem_TenantC_{Env}` pattern (e.g. `_Dev`, `_Stg`, `_Prod`). Be careful not to query the wrong DB.
+> **Staging Azure DB note:** Docker staging uses the local/container DB names `OrderProcessingSystem_Stg` and `OrderProcessingSystem_TenantC_Stg`, but Azure staging currently uses `OrderProcessingSystem_Staging` and `OrderProcessingSystem_TenantC_Staging` on `orderprocessing-sql-stg`. Be careful not to mix the Docker `stg` DB names with the Azure staging DB names.
+
+> **Local TenantC DB note:** For `local dotnet run`, TenantC's dedicated DB is `OrderProcessingSystem_TenantC` (no environment suffix). Non-local environments do not all share the same suffixing convention, so use the table above instead of assuming `_Dev`, `_Stg`, or `_Prod`.
 
 ---
 
