@@ -1,31 +1,16 @@
 (function () {
-    const tenantStorageKey = 'order-processing:selected-tenant';
     const runtimeConfigurationUrl = '/api/v1/info/runtime-configuration';
     // window.OrderProcessingActiveTenant is read by the Swagger UI requestInterceptor
     // (configured in Program.cs UseSwaggerUI) to inject X-Tenant-Code on every API call.
-    // When login is added, the auth module sets the same global — no JS changes needed here.
+    // When login is added, the auth module sets the same global.
     let selectedTenantCode = null;
     let availableTenants = [];
 
-    const getStoredTenantCode = () => {
+    const clearLegacyStoredTenantCode = () => {
         try {
-            return window.localStorage.getItem(tenantStorageKey);
+            window.localStorage.removeItem('order-processing:selected-tenant');
         } catch (error) {
-            console.warn('Unable to read stored Swagger tenant selection.', error);
-            return null;
-        }
-    };
-
-    const persistTenantCode = tenantCode => {
-        try {
-            if (!tenantCode) {
-                window.localStorage.removeItem(tenantStorageKey);
-                return;
-            }
-
-            window.localStorage.setItem(tenantStorageKey, tenantCode);
-        } catch (error) {
-            console.warn('Unable to persist Swagger tenant selection.', error);
+            console.warn('Unable to clear legacy Swagger tenant selection.', error);
         }
     };
 
@@ -33,16 +18,8 @@
         window.OrderProcessingActiveTenant = tenantCode || null;
     };
 
-    const resolveTenantCode = (payload, preferredTenantCode) => {
+    const resolveTenantCode = payload => {
         const tenants = Array.isArray(payload?.availableTenants) ? payload.availableTenants : [];
-        const preferredMatch = tenants.find(tenant =>
-            typeof preferredTenantCode === 'string'
-            && preferredTenantCode.length > 0
-            && tenant.tenantCode.toLowerCase() === preferredTenantCode.toLowerCase());
-
-        if (preferredMatch) {
-            return preferredMatch.tenantCode;
-        }
 
         if (payload?.activeTenantCode) {
             return payload.activeTenantCode;
@@ -88,7 +65,6 @@
                 }
 
                 selectedTenantCode = newTenantCode;
-                persistTenantCode(selectedTenantCode);
                 setActiveTenant(selectedTenantCode);
             });
 
@@ -133,23 +109,11 @@
     };
 
     const initialize = async () => {
-        const preferredTenantCode = getStoredTenantCode();
+        clearLegacyStoredTenantCode();
 
-        // Pre-set the global immediately from localStorage so the Swagger UI requestInterceptor
-        // already has the correct tenant for any request fired before our init completes.
-        // The server call below confirms the stored tenant is still valid and may override it.
-        if (preferredTenantCode) {
-            setActiveTenant(preferredTenantCode);
-        }
-
-        // Include the stored tenant in the initialization fetch so the server returns data
-        // in the context of the preferred tenant rather than the configured default.
-        // Note: requestInterceptor is Swagger UI-only — it does not apply to raw window.fetch.
-        const initHeaders = preferredTenantCode
-            ? { 'Accept': 'application/json', 'X-Tenant-Code': preferredTenantCode }
-            : { 'Accept': 'application/json' };
-
-        const response = await window.fetch(runtimeConfigurationUrl, { headers: initHeaders });
+        const response = await window.fetch(runtimeConfigurationUrl, {
+            headers: { 'Accept': 'application/json' }
+        });
         const payload = await response.json();
 
         if (!response.ok || !payload?.activeTenantCode) {
@@ -157,9 +121,8 @@
         }
 
         availableTenants = Array.isArray(payload.availableTenants) ? payload.availableTenants : [];
-        selectedTenantCode = resolveTenantCode(payload, preferredTenantCode);
-        persistTenantCode(selectedTenantCode);
-        setActiveTenant(selectedTenantCode); // Re-confirm with server-validated value
+        selectedTenantCode = resolveTenantCode(payload);
+        setActiveTenant(selectedTenantCode);
         ensureSelector();
     };
 
