@@ -1,5 +1,4 @@
 window.OrderProcessingTenant = (() => {
-    const tenantStorageKey = 'order-processing:selected-tenant';
     const bodyDataset = document.body?.dataset || {};
     const indicator = document.getElementById('tenant-indicator');
     const selector = document.getElementById('tenant-selector');
@@ -12,43 +11,27 @@ window.OrderProcessingTenant = (() => {
     let state = null;
     let readyPromise = null;
 
-    const clearStoredTenantCode = () => {
+    const clearLegacyStoredTenantCode = () => {
         try {
-            localStorage.removeItem(tenantStorageKey);
+            localStorage.removeItem('order-processing:selected-tenant');
         } catch (error) {
-            console.warn('Unable to clear stored tenant selection.', error);
+            console.warn('Unable to clear legacy stored tenant selection.', error);
         }
     };
 
-    const getStoredTenantCode = () => {
-        if (!uiTenantOverrideEnabled) {
-            return null;
-        }
-
-        try {
-            return localStorage.getItem(tenantStorageKey);
-        } catch (error) {
-            console.warn('Unable to read stored tenant selection.', error);
-            return null;
-        }
+    const getUrlTenantCode = () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get('tenantCode')?.trim() || null;
     };
 
-    const persistTenantCode = tenantCode => {
-        if (!uiTenantOverrideEnabled) {
-            clearStoredTenantCode();
+    const stripTenantCodeFromUrl = () => {
+        const url = new URL(window.location.href);
+        if (!url.searchParams.has('tenantCode')) {
             return;
         }
 
-        try {
-            if (!tenantCode) {
-                localStorage.removeItem(tenantStorageKey);
-                return;
-            }
-
-            localStorage.setItem(tenantStorageKey, tenantCode);
-        } catch (error) {
-            console.warn('Unable to persist selected tenant.', error);
-        }
+        url.searchParams.delete('tenantCode');
+        history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
     };
 
     const setIndicatorState = (text, badgeClass) => {
@@ -90,8 +73,16 @@ window.OrderProcessingTenant = (() => {
         }
     };
 
-    const reloadPageForTenantChange = () => {
-        window.location.reload();
+    const reloadPageForTenantChange = tenantCode => {
+        const url = new URL(window.location.href);
+
+        if (tenantCode) {
+            url.searchParams.set('tenantCode', tenantCode);
+        } else {
+            url.searchParams.delete('tenantCode');
+        }
+
+        window.location.assign(`${url.pathname}${url.search}${url.hash}`);
     };
 
     const emitTenantChange = () => {
@@ -124,20 +115,9 @@ window.OrderProcessingTenant = (() => {
             throw new Error('API base URL is not available in the UI layout.');
         }
 
-        // Absorb tenantCode from URL query param (carried by post-3DS return navigations).
-        // The server middleware already reads this param for log context; here we sync it
-        // into localStorage so the API call below uses the correct tenant immediately.
-        const urlParams = new URLSearchParams(window.location.search);
-        const urlTenantCode = urlParams.get('tenantCode')?.trim() || null;
-        if (urlTenantCode) {
-            if (uiTenantOverrideEnabled) {
-                persistTenantCode(urlTenantCode);
-            }
+        clearLegacyStoredTenantCode();
 
-            history.replaceState({}, '', window.location.pathname);
-        }
-
-        const preferredTenantCode = urlTenantCode || getStoredTenantCode();
+        const preferredTenantCode = getUrlTenantCode();
         const headers = {
             'Accept': 'application/json'
         };
@@ -165,7 +145,7 @@ window.OrderProcessingTenant = (() => {
             availableTenants: Array.isArray(payload.availableTenants) ? payload.availableTenants : []
         };
 
-        persistTenantCode(selectedTenantCode);
+        stripTenantCodeFromUrl();
         syncSelector(state.availableTenants);
         setIndicatorState(`Tenant: ${selectedTenantCode || 'unavailable'}`, 'bg-primary');
         emitTenantChange();
@@ -197,9 +177,8 @@ window.OrderProcessingTenant = (() => {
                 selectedTenantCode
             };
 
-            persistTenantCode(selectedTenantCode);
             setIndicatorState('Tenant: switching...', 'bg-dark');
-            reloadPageForTenantChange();
+            reloadPageForTenantChange(selectedTenantCode);
         });
     }
 
