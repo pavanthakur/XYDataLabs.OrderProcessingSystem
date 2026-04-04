@@ -37,6 +37,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "BuildConfiguration", "Build
 	ProjectSection(SolutionItems) = preProject
 		Resources\BuildConfiguration\BannedSymbols.txt = Resources\BuildConfiguration\BannedSymbols.txt
 		Resources\BuildConfiguration\CodeAnalysis.ruleset = Resources\BuildConfiguration\CodeAnalysis.ruleset
+		Resources\BuildConfiguration\DOCKER_ENTERPRISE_QUICK_REFERENCE.md = Resources\BuildConfiguration\DOCKER_ENTERPRISE_QUICK_REFERENCE.md
+		Resources\BuildConfiguration\enterprise-check.ps1 = Resources\BuildConfiguration\enterprise-check.ps1
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Certificates", "Certificates", "{E1A8B2C5-4D5F-6789-ABCD-123456789DE1}"
@@ -54,7 +56,9 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Configuration", "Configurat
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Docker", "Docker", "{E1A8B2C7-4D5F-6789-ABCD-123456789DE3}"
 	ProjectSection(SolutionItems) = preProject
+		Resources\Docker\.env.local.example = Resources\Docker\.env.local.example
 		Resources\Docker\start-docker.ps1 = Resources\Docker\start-docker.ps1
+		Resources\Docker\start-docker-menu.ps1 = Resources\Docker\start-docker-menu.ps1
 		Resources\Docker\docker-compose.database.yml = Resources\Docker\docker-compose.database.yml
 		Resources\Docker\docker-compose.dev.yml = Resources\Docker\docker-compose.dev.yml
 		Resources\Docker\docker-compose.prod.yml = Resources\Docker\docker-compose.prod.yml
@@ -100,6 +104,43 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Azure-Deployment", "Azure-D
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".github", ".github", "{E1A8B2C9-4D5F-6789-ABCD-123456789DE5}"
+	ProjectSection(SolutionItems) = preProject
+		.github\app-manifest.json = .github\app-manifest.json
+		.github\copilot-instructions.md = .github\copilot-instructions.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "agents", "agents", "{E1A8B2D0-4D5F-6789-ABCD-123456789DE7}"
+	ProjectSection(SolutionItems) = preProject
+		.github\agents\azure-devops.agent.md = .github\agents\azure-devops.agent.md
+		.github\agents\code-reviewer.agent.md = .github\agents\code-reviewer.agent.md
+		.github\agents\cqrs-backend.agent.md = .github\agents\cqrs-backend.agent.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "instructions", "instructions", "{E1A8B2D1-4D5F-6789-ABCD-123456789DE8}"
+	ProjectSection(SolutionItems) = preProject
+		.github\instructions\architecture.instructions.md = .github\instructions\architecture.instructions.md
+		.github\instructions\azure-workflows.instructions.md = .github\instructions\azure-workflows.instructions.md
+		.github\instructions\bicep.instructions.md = .github\instructions\bicep.instructions.md
+		.github\instructions\clean-architecture.instructions.md = .github\instructions\clean-architecture.instructions.md
+		.github\instructions\curriculum.instructions.md = .github\instructions\curriculum.instructions.md
+		.github\instructions\documentation-governance.instructions.md = .github\instructions\documentation-governance.instructions.md
+		.github\instructions\ef-migrations.instructions.md = .github\instructions\ef-migrations.instructions.md
+		.github\instructions\multitenant-payment-schema.instructions.md = .github\instructions\multitenant-payment-schema.instructions.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "prompts", "prompts", "{E1A8B2D2-4D5F-6789-ABCD-123456789DE9}"
+	ProjectSection(SolutionItems) = preProject
+		.github\prompts\README.md = .github\prompts\README.md
+		.github\prompts\XYDataLabs-completion-check.prompt.md = .github\prompts\XYDataLabs-completion-check.prompt.md
+		.github\prompts\XYDataLabs-context-audit.prompt.md = .github\prompts\XYDataLabs-context-audit.prompt.md
+		.github\prompts\XYDataLabs-day-complete.prompt.md = .github\prompts\XYDataLabs-day-complete.prompt.md
+		.github\prompts\XYDataLabs-docker-start.prompt.md = .github\prompts\XYDataLabs-docker-start.prompt.md
+		.github\prompts\XYDataLabs-new-feature.prompt.md = .github\prompts\XYDataLabs-new-feature.prompt.md
+		.github\prompts\XYDataLabs-setup-local.prompt.md = .github\prompts\XYDataLabs-setup-local.prompt.md
+		.github\prompts\XYDataLabs-sql-local-access.prompt.md = .github\prompts\XYDataLabs-sql-local-access.prompt.md
+		.github\prompts\XYDataLabs-validate-adrs.prompt.md = .github\prompts\XYDataLabs-validate-adrs.prompt.md
+		.github\prompts\XYDataLabs-verify-db-logs.prompt.md = .github\prompts\XYDataLabs-verify-db-logs.prompt.md
+	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{E1A8B2C9-4D5F-6789-ABCD-123456789DE6}"
 	ProjectSection(SolutionItems) = preProject
@@ -159,6 +200,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Documentation", "Documentat
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "05-Self-Learning", "05-Self-Learning", "{D5C1234A-5678-9012-3456-789ABCDEF128}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Azure-Curriculum", "Azure-Curriculum", "{D5C1234B-5678-9012-3456-789ABCDEF129}"
 	ProjectSection(SolutionItems) = preProject
 		Documentation\05-Self-Learning\Azure-Curriculum\1_MASTER_CURRICULUM.md = Documentation\05-Self-Learning\Azure-Curriculum\1_MASTER_CURRICULUM.md
 	EndProjectSection
@@ -197,6 +240,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "scripts", "scripts", "{BB00
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{CC000001-0001-0001-0001-000000000001}"
+	ProjectSection(SolutionItems) = preProject
+		docs\DEVELOPER-OPERATING-MODEL.md = docs\DEVELOPER-OPERATING-MODEL.md
+		docs\README.md = docs\README.md
+	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "architecture", "architecture", "{CC000002-0001-0001-0001-000000000001}"
 EndProject
@@ -223,6 +270,17 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "internal", "internal", "{CC
 		docs\internal\AZURE-PROGRESS-EVALUATION.md = docs\internal\AZURE-PROGRESS-EVALUATION.md
 		docs\internal\README.md = docs\internal\README.md
 		docs\internal\azure-bootstrap-improvements-backlog.md = docs\internal\azure-bootstrap-improvements-backlog.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "archive", "archive", "{CC000006-0001-0001-0001-000000000001}"
+	ProjectSection(SolutionItems) = preProject
+		docs\archive\README.md = docs\archive\README.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "historical-notes", "historical-notes", "{CC000007-0001-0001-0001-000000000001}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "internal", "internal", "{CC000008-0001-0001-0001-000000000001}"
+	ProjectSection(SolutionItems) = preProject
 		docs\archive\historical-notes\internal\AZURE-TOP-7-SERVICES-ANALYSIS.md = docs\archive\historical-notes\internal\AZURE-TOP-7-SERVICES-ANALYSIS.md
 		docs\archive\historical-notes\internal\GITHUB-APP-DELETION-SUMMARY.md = docs\archive\historical-notes\internal\GITHUB-APP-DELETION-SUMMARY.md
 		docs\archive\historical-notes\internal\GITHUB-APP-QUICK-REFERENCE.md = docs\archive\historical-notes\internal\GITHUB-APP-QUICK-REFERENCE.md
@@ -431,10 +489,14 @@ Global
 		{E1A8B2C6-4D5F-6789-ABCD-123456789DE2} = {E1A8B2C3-4D5F-6789-ABCD-123456789DEF}
 		{E1A8B2C7-4D5F-6789-ABCD-123456789DE3} = {E1A8B2C3-4D5F-6789-ABCD-123456789DEF}
 		{E1A8B2C8-4D5F-6789-ABCD-123456789DE4} = {E1A8B2C3-4D5F-6789-ABCD-123456789DEF}
+		{E1A8B2D0-4D5F-6789-ABCD-123456789DE7} = {E1A8B2C9-4D5F-6789-ABCD-123456789DE5}
+		{E1A8B2D1-4D5F-6789-ABCD-123456789DE8} = {E1A8B2C9-4D5F-6789-ABCD-123456789DE5}
+		{E1A8B2D2-4D5F-6789-ABCD-123456789DE9} = {E1A8B2C9-4D5F-6789-ABCD-123456789DE5}
 		{E1A8B2C9-4D5F-6789-ABCD-123456789DE6} = {E1A8B2C9-4D5F-6789-ABCD-123456789DE5}
 		{E1A8B2CB-4D5F-6789-ABCD-123456789DE7} = {E1A8B2CA-4D5F-6789-ABCD-123456789DE6}
 		{E1A8B2CC-4D5F-6789-ABCD-123456789DE8} = {E1A8B2CA-4D5F-6789-ABCD-123456789DE6}
 		{D5C1234A-5678-9012-3456-789ABCDEF128} = {D0C1234A-5678-9012-3456-789ABCDEF123}
+		{D5C1234B-5678-9012-3456-789ABCDEF129} = {D5C1234A-5678-9012-3456-789ABCDEF128}
 		{F5548781-50F1-4152-942A-88B795A88953} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{D4315B79-068A-401E-924E-FC3AC597994C} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{D7349574-850D-4FE5-97F4-92EEF6641EBA} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
@@ -443,6 +505,9 @@ Global
 		{605F0822-01EC-40C7-9129-ED6687CE972B} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{CC000002-0001-0001-0001-000000000001} = {CC000001-0001-0001-0001-000000000001}
 		{CC000003-0001-0001-0001-000000000001} = {CC000002-0001-0001-0001-000000000001}
+		{CC000006-0001-0001-0001-000000000001} = {CC000001-0001-0001-0001-000000000001}
+		{CC000007-0001-0001-0001-000000000001} = {CC000006-0001-0001-0001-000000000001}
+		{CC000008-0001-0001-0001-000000000001} = {CC000007-0001-0001-0001-000000000001}
 		{CC000004-0001-0001-0001-000000000001} = {CC000001-0001-0001-0001-000000000001}
 		{CC000005-0001-0001-0001-000000000001} = {CC000001-0001-0001-0001-000000000001}
 		{DD000002-0001-0001-0001-000000000001} = {DD000001-0001-0001-0001-000000000001}
