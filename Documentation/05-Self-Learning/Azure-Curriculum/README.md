@@ -13,7 +13,7 @@
 4. Fill in completion date
 
 ### **For Weekly Tracking:**
-- Check `AZURE-PROGRESS-EVALUATION.md` (project root)
+- Check `docs/internal/AZURE-PROGRESS-EVALUATION.md`
 - Review weekly milestones and achievements
 
 ---
@@ -23,11 +23,8 @@
 ```
 Azure-Curriculum/
 ├── 1_MASTER_CURRICULUM.md      # ⭐ MAIN: Day-by-day learning (Days 1-114)
-├── README.md                   # This navigation guide
-├── 02-Daily-Progress/          # Your daily learning logs
-├── 03-Certifications/          # Certification preparation
-├── 04-Resources/               # Templates and references
-└── 05-Portfolio/               # Project showcase
+├── IMPLEMENTATION_NOTES.md     # Detailed execution notes for completed days (Days 29-38)
+└── README.md                   # This navigation guide
 ```
 
 ---
@@ -51,39 +48,9 @@ Azure-Curriculum/
 
 ---
 
-### **📁 02-Daily-Progress/**
-**Purpose:** Document your daily learning and reflections
-### **📁 02-Daily-Progress/**
-**Purpose:** Document your daily learning and reflections
-**Structure:** Organized by month (e.g., `January-2026/`, `February-2026/`)
-**Usage:** Create daily notes to track what you learned
-
----
-
-### **📁 03-Certifications/**
-**Purpose:** Azure certification preparation materials
-**Planned Certifications:**
-- AZ-204: Azure Developer Associate
-- AZ-400: DevOps Engineer Expert
-- AZ-305: Azure Solutions Architect Expert
-
----
-
-### **📁 04-Resources/**
-**Purpose:** Templates, references, and learning materials
-**Contents:**
-- Documentation templates
-- Code snippets and examples
-- Reference links and guides
-
----
-
-### **📁 05-Portfolio/**
-**Purpose:** Showcase your completed projects and achievements
-**Contents:**
-- Project demonstrations
-- Architecture diagrams
-- Technical presentations
+### **� IMPLEMENTATION_NOTES.md**
+**Purpose:** Detailed execution evidence for completed days — commands run, verification output, gotchas, and implementation nuance beyond the checklist level in `1_MASTER_CURRICULUM.md`.
+**Coverage:** Days 29-38 (Bicep modules, SQL provisioning, EF migrations, Managed Identity, passwordless SQL, resilience baseline)
 
 ---
 
@@ -93,10 +60,10 @@ Azure-Curriculum/
 1. **Morning:** Open `1_MASTER_CURRICULUM.md` → Find today's day number
 2. **Learning:** Execute 1-2 hour learning session
 3. **Evening:** Check off completed tasks in `1_MASTER_CURRICULUM.md`
-4. **Optional:** Create daily log in `02-Daily-Progress/`
+4. **Optional:** Add execution detail to `IMPLEMENTATION_NOTES.md` for the completed day
 
 ### **Weekly Review:**
-1. Check `AZURE-PROGRESS-EVALUATION.md` (project root)
+1. Check `docs/internal/AZURE-PROGRESS-EVALUATION.md`
 2. Mark week as complete in roadmap table
 3. Prepare for next week's tasks
 
@@ -104,11 +71,13 @@ Azure-Curriculum/
 
 ## 📊 **Current Learning Status**
 
-**Week 4 Checkpoint (January 26, 2026)**
-- ✅ **Completed:** Weeks 1-4 (Days 1-31)
-- 📍 **Current:** Day 32 - Key Vault Access Configuration
-- 📅 **Next:** Days 33-40 - SQL Database & Key Vault mastery
-- 🎯 **Future:** Week 5-6 - YARP microservices (Days 41-56)
+**April 2026 Checkpoint**
+- ✅ **Completed:** Days 1-38 (Architecture Phases 1-6 complete)
+  - Phases 1-6: Structural Foundation → CQRS → Observability → Multi-tenancy → Test Restructure → Polish & Hardening
+  - Azure SQL + Managed Identity + DefaultAzureCredential + EF Core resilience baseline
+- 📍 **Current:** Day 39 — Polly retry/circuit-breaker + 🏗️ Architecture Phase 7 (Tenant Enforcement & DDD tactical patterns)
+- 📅 **Next:** Days 39-43 — Phase 7: TenantValidationBehavior, DDD aggregate patterns, Problem Details, security headers
+- 🎯 **Future:** Days 44-56 — Azure Functions, Service Bus, Outbox Pattern (Phase 8)
 
 ---
 
@@ -116,9 +85,9 @@ Azure-Curriculum/
 
 | Document | Location | Purpose |
 |----------|----------|---------|
-| **Weekly Roadmap** | `AZURE-PROGRESS-EVALUATION.md` (root) | 15-week milestone tracker |
-| **Architecture Guide** | `ARCHITECTURE-EVOLUTION.md` (root) | Phase 1/2/3 comparison |
-| **Service Coverage** | `AZURE-TOP-7-SERVICES-ANALYSIS.md` (root) | Azure services analysis |
+| **Weekly Roadmap** | `docs/internal/AZURE-PROGRESS-EVALUATION.md` | 15-week milestone tracker |
+| **Architecture Guide** | `ARCHITECTURE-EVOLUTION.md` (root) | 14-phase monolith → microservices roadmap (Phases 1-6 ✅) |
+| **Service Coverage** | `1_MASTER_CURRICULUM.md` (inline table) | Azure services analysis |
 | **Main Documentation** | `Documentation/README.md` | Project documentation hub |
 
 ---
@@ -133,5 +102,5 @@ Azure-Curriculum/
 
 ---
 
-**Last Updated:** January 26, 2026  
-**Current Focus:** Week 4 - Key Vault & SQL Database Mastery
+**Last Updated:** April 3, 2026  
+**Current Focus:** Day 39 — Polly + Phase 7 Tenant Enforcement & DDD

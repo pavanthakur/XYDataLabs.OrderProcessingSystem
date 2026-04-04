@@ -1197,7 +1197,7 @@ _Every factor is already covered across the 14-phase plan — documented here fo
 ## References
 
 ### Documentation
-- [AZURE-PROGRESS-EVALUATION.md](./AZURE-PROGRESS-EVALUATION.md) - Detailed learning plan
+- [AZURE-PROGRESS-EVALUATION.md](./docs/internal/AZURE-PROGRESS-EVALUATION.md) - Detailed learning plan
 - [Documentation/README.md](./Documentation/README.md) - Central documentation hub
 - [Documentation/04-Enterprise-Architecture/ACA-Migration-Plan.md](./Documentation/04-Enterprise-Architecture/ACA-Migration-Plan.md) - Container Apps operational runbook (13-phase)
 
