@@ -325,7 +325,7 @@ Contains main project documentation and overview files:
 | Document | Purpose | Audience | Status |
 |----------|---------|----------|--------|
 | **1_MASTER_CURRICULUM.md** | 18-week comprehensive Azure learning plan (Days 1-126) | Learners, Junior Devs | ✅ Active |
-| **AZURE_PROGRESS_EVALUATION.md** (Root) | Current progress tracker & next steps (Weeks 1-10) | Everyone | ✅ Updated Dec 2025 ⭐ |
+| **AZURE-PROGRESS-EVALUATION.md** (docs/internal) | Current progress tracker & next steps (Weeks 1-10) | Everyone | ✅ Updated Dec 2025 ⭐ |
 | **00_MASTER_PLAN.md** | Strategic 18-week microservices migration roadmap | Architects, Senior Devs | ✅ Complete |
 | **WEEKLY_AZURE_LEARNING_PLAN.md** | Week-by-week breakdown with daily tasks | Daily learners | ✅ Active |
 
@@ -346,8 +346,8 @@ Contains main project documentation and overview files:
 
 **Quick Links by Learning Stage**:
 - 🎓 **Start learning** → [1_MASTER_CURRICULUM.md](./05-Self-Learning/Azure-Curriculum/1_MASTER_CURRICULUM.md)
-- 📊 **Check progress** → [AZURE_PROGRESS_EVALUATION.md](../AZURE-PROGRESS-EVALUATION.md)
-- 🏗️ **YARP implementation** → [AZURE_PROGRESS_EVALUATION.md - APPENDIX](../AZURE-PROGRESS-EVALUATION.md#appendix-yarp-implementation-guide-days-41-56)
+- 📊 **Check progress** → [AZURE-PROGRESS-EVALUATION.md](../docs/internal/AZURE-PROGRESS-EVALUATION.md)
+- 🏗️ **YARP implementation** → [AZURE-PROGRESS-EVALUATION.md - APPENDIX](../docs/internal/AZURE-PROGRESS-EVALUATION.md#appendix-yarp-implementation-guide-days-41-56)
 - 🎯 **Weekly tasks** → [WEEKLY_AZURE_LEARNING_PLAN.md](./04-Enterprise-Architecture/WEEKLY_AZURE_LEARNING_PLAN.md)
 
 **Latest Updates (December 2025)**:

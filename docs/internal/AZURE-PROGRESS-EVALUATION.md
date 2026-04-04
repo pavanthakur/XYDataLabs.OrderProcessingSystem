@@ -1,6 +1,55 @@
 # Azure Learning Progress Evaluation & Next Steps
 
-**Evaluation Date:** December 6, 2025  
+> **⚠️ Progress Update — 28 March 2026**
+> This document was last fully written on 6 December 2025 (Days 1-31). The section below reflects
+> the current state as of March 2026. The historical detail below the divider remains accurate
+> for Phases 1-3; Phases 4-6 are summarised in the update block.
+
+---
+
+## 🟢 Current State (March 2026) — Days 1-38 Complete, Phase 7 Next
+
+### Architecture Phases Completed
+
+| Phase | Name | Days | Status |
+|-------|------|------|--------|
+| Phase 1 | Monolith → Azure App Service (dev/stg/prod) | Days 1-28 | ✅ Complete |
+| Phase 2 | Hand-rolled CQRS + Pipeline Behaviors | Days 29-31 | ✅ Complete |
+| Phase 3 | Observability — Serilog + OpenTelemetry + App Insights | Days 32-33 | ✅ Complete |
+| Phase 4 | Multi-tenancy — Hybrid model (path + header + config) | Days 34-35 | ✅ Complete |
+| Phase 5 | OpenPay Payment Integration (multi-tenant, per-tenant config) | Days 36-37 | ✅ Complete |
+| Phase 6 | Resilience baseline — EF Core retry, Polly, Redis caching pipeline, rate limiting | Day 38 | ✅ Complete |
+| **Phase 7** | **Tenant Enforcement & DDD tactical patterns** | **Days 39-43** | **📅 Next** |
+
+### Deployed Azure Resources (Dev Environment)
+- API: `https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net/swagger`
+- UI: `https://pavanthakur-orderprocessing-ui-xyapp-dev.azurewebsites.net`
+- SQL: `Azure SQL — OrderProcessingSystem_Dev`
+- Key Vault: `kv-orderprocessing-dev` (Managed Identity access, no stored credentials)
+- App Insights: `ai-orderprocessing-dev` — active, confirmed traces + metrics
+
+### Architecture Decisions Recorded (ADR-000 → ADR-013)
+- ADR-001: Clean Architecture, ADR-002: OIDC, ADR-003: Subscription-scope Bicep
+- ADR-004: EF Core + Azure SQL, ADR-005: Serilog, ADR-006: Passwordless SQL
+- ADR-007: Hybrid multi-tenancy, ADR-008: Architecture test guardrails
+- ADR-009: Tenant isolation hardening, ADR-010: Runtime environment detection
+- ADR-011: Hand-rolled CQRS (new), ADR-012: OTel dual-export (new), ADR-013: Redis caching (new)
+
+### Phase 7 — Next Deliverables
+- `TenantValidationBehavior<TRequest, TResult>` — CQRS pipeline tenant enforcement
+- `AuditLog` table (tenant-scoped, immutable)
+- `Order` aggregate: private ctor, `Create()` factory, state machine with `Result<T>` transitions
+- Value objects: `Address`, `Money` as immutable `record` types
+- Strongly-typed IDs: `OrderId`, `CustomerId`, `ProductId` as `readonly record struct` + EF converters
+- Optimistic concurrency: `RowVersion` on `BaseAuditableEntity`
+- Problem Details (RFC 9457) on all error responses
+- Global exception middleware
+- Security headers: `X-Content-Type-Options`, `X-Frame-Options`, HSTS
+- Split `/health` → `/health/live` (liveness) + `/health/ready` (readiness + DB)
+
+---
+
+**Evaluation Date:** December 6, 2025 (original)
 **Current Status:** Weeks 1-3 Complete, Payment API Issue Resolved
 
 ---
@@ -337,7 +386,7 @@ az webapp restart --name pavanthakur-orderprocessing-ui-xyapp-dev --resource-gro
 **Action:** No update required - weekly plan is on track
 
 ### 4. Create Progress Checkpoint Document ✅ (Recommended)
-**Suggested Location:** `Documentation/05-Self-Learning/Azure-Curriculum/02-Daily-Progress/December-2025/06-Dec-2025-Checkpoint.md`
+**Suggested Location:** `Documentation/05-Self-Learning/Azure-Curriculum/IMPLEMENTATION_NOTES.md` — add a dated section for any new checkpoint entries
 
 **Content to Include:**
 - Summary of Weeks 1-3 completion

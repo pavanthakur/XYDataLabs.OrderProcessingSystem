@@ -829,7 +829,67 @@ Reusable agent prompts stored in `.github/prompts/`. Type in VS Code Chat (`Ctrl
 
 ---
 
-## 💰 Cost-Saving Rules
+## � GitHub App Commands
+
+### Validate & Setup
+```powershell
+# Validate existing GitHub App configuration
+.\scripts\validate-github-app-config.ps1 -Detailed
+
+# Create new GitHub App from manifest
+.\scripts\setup-github-app-from-manifest.ps1
+```
+
+### Workflows
+- **Azure Initial Setup:** Environment = `all`, Setup OIDC = `true` (first time), Configure Secrets = `true`
+- **Azure Bootstrap & Deploy:** Environment = `dev`/`staging`/`prod`, Bootstrap Infrastructure = `true`, Deploy API/UI = `true`
+
+### Required Permissions
+
+| Permission | Level | Notes |
+|------------|-------|-------|
+| Actions | Read and write | |
+| **Secrets** | **Read and write** | **⚠️ CRITICAL** |
+| Workflows | Read and write | |
+| Pull requests | Read and write | |
+| Administration | Read and write | |
+| **Environments** | **Read and write** | **⚠️ CRITICAL** |
+| Contents | Read | |
+| Metadata | Read | Automatic |
+
+### Required Secrets
+
+**Repository level (once):** `APP_ID`, `APP_PRIVATE_KEY`, `AZUREAPPSERVICE_CLIENTID`, `AZUREAPPSERVICE_TENANTID`, `AZUREAPPSERVICE_SUBSCRIPTIONID`
+
+**Per environment (dev, staging, prod):** `AZUREAPPSERVICE_CLIENTID`, `AZUREAPPSERVICE_TENANTID`, `AZUREAPPSERVICE_SUBSCRIPTIONID`
+
+### Delete & Recreate Flow
+1. **Backup:** `.\scripts\validate-github-app-config.ps1 -Detailed > backup.txt`
+2. **Delete:** https://github.com/settings/apps → Advanced → Delete
+3. **Recreate:** `.\scripts\setup-github-app-from-manifest.ps1`
+4. **Update Secrets:** `APP_ID` and `APP_PRIVATE_KEY`
+5. **Reinstall:** Install app on repository
+6. **Configure:** Run Azure Initial Setup workflow
+7. **Validate:** `.\scripts\validate-github-app-config.ps1 -Detailed`
+
+### Troubleshooting
+- **App token generation failed** → Check app is installed on repository, verify `APP_ID`/`APP_PRIVATE_KEY`, ensure "Secrets: Read and write" permission
+- **Environment secrets failed** → Add "Environments: Read and write" permission, re-approve on installation page
+- **Validation shows failures** → Run `gh auth login`, check https://github.com/settings/installations
+
+### Important URLs
+
+| Resource | URL |
+|----------|-----|
+| Create GitHub App | https://github.com/settings/apps/new |
+| Manage Apps | https://github.com/settings/apps |
+| App Installations | https://github.com/settings/installations |
+| Repository Secrets | Repository → Settings → Secrets → Actions |
+| Environments | Repository → Settings → Environments |
+
+---
+
+## �💰 Cost-Saving Rules
 
 1. ✅ Always validate before committing workflow changes
 2. ✅ Always dry-run before Azure deployments
