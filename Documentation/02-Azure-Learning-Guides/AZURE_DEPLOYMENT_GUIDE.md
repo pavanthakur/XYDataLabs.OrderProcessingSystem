@@ -186,7 +186,7 @@ curl https://pavanthakur-orderprocessing-ui-xyapp-dev.azurewebsites.net
 
 **Save to:** 
 - Personal learning journal, or
-- `Documentation/05-Self-Learning/Azure-Curriculum/02-Daily-Progress/November-2025/21-Nov-2025.md`
+- `Documentation/05-Self-Learning/Azure-Curriculum/IMPLEMENTATION_NOTES.md`
 
 **Commit reference:**
 ```powershell

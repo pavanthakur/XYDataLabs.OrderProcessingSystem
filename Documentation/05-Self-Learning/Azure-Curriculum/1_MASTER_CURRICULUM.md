@@ -72,6 +72,18 @@ See `ARCHITECTURE-EVOLUTION.md` for full phase details.
 | 13 | Aspire & Final Maturity | Days 106–109 | 📅 Planned |
 | 14 | CQRS Read Model (Cosmos DB) | Days 67–68, 70 | 📅 Planned |
 
+### Azure Service Coverage (Jan 2026 analysis snapshot)
+
+| Service | Status | Curriculum Days |
+|---------|--------|-----------------|
+| App Service / Container Apps | ✅ Excellent | Week 1-4, 11 |
+| Key Vault | ✅ Excellent | Week 4, 13 |
+| Azure Functions | ✅ Good | Week 7 |
+| Service Bus / Queues | ⚠️ Partial | Week 7 (add Storage Queues) |
+| Azure SQL Database | ✅ Excellent | Week 4 |
+| Cosmos DB (NoSQL) | ✅ Added | Week 8 (Days 66-70) |
+| API Management (APIM) | ✅ Added | Week 14 (Days 94-101) |
+
 ---
 
 ## 📝 TODAY'S STEP-BY-STEP GUIDE
@@ -108,7 +120,7 @@ curl https://pavanthakur-orderprocessing-ui-xyapp-dev.azurewebsites.net
 - 💡 What did you learn?
 - 📝 Screenshots of workflow run
 
-**Save to:** Personal learning journal or `Documentation/05-Self-Learning/Azure-Curriculum/02-Daily-Progress/November-2025/21-Nov-2025.md`
+**Save to:** Personal learning journal
 
 ---
 
@@ -134,22 +146,21 @@ After completing today's tasks, you will have:
 **This is your ONE source of truth.** Track all progress here.
 
 ### Primary Learning Documents
-1. **This Document (MASTER_CURRICULUM.md)** - Your daily tracker and curriculum overview
-2. **[Azure_Learning_Guide_Complete.md](./Azure_Learning_Guide_Complete.md)** - Foundational Azure concepts and early deployment
-3. **[ACA Migration Plan](../../04-Enterprise-Architecture/ACA-Migration-Plan.md)** - Enterprise migration roadmap (17 phases)
-4. **[Containerization Learning Path](../../02-Azure-Learning-Guides/Containerization-ACA-Aspire-Learning-Path.md)** - Hands-on Docker, ACR, ACA (8 modules)
-5. **[Quick Command Reference](../../../QUICK-COMMAND-REFERENCE.md)** - All essential commands: Git, Azure CLI, Azure SQL, EF Core migrations, Docker, GitHub Actions, troubleshooting
+1. **This Document (MASTER_CURRICULUM.md)** - Your daily tracker and curriculum overview (all foundational Azure concepts are inline below)
+2. **[ACA Migration Plan](../../04-Enterprise-Architecture/ACA-Migration-Plan.md)** - Enterprise migration roadmap (17 phases)
+3. **[Containerization Learning Path](../../02-Azure-Learning-Guides/Containerization-ACA-Aspire-Learning-Path.md)** - Hands-on Docker, ACR, ACA (8 modules)
+4. **[Quick Command Reference](../../../QUICK-COMMAND-REFERENCE.md)** - All essential commands: Git, Azure CLI, Azure SQL, EF Core, Docker, GitHub App, troubleshooting
 
 ---
 
 ## 🎯 Learning Path Overview
 
 ### Phase 1: Azure Fundamentals (Weeks 1-4)
-**Source:** `Azure_Learning_Guide_Complete.md`  
+**Source:** Inline curriculum (Days 1-14)  
 **Focus:** Core Azure concepts, CLI, Portal, basic deployments
 
 ### Phase 2: Enterprise App Service Deployment (Weeks 5-8)
-**Source:** `Azure_Learning_Guide_Complete.md` + `AZURE_DEPLOYMENT_GUIDE.md`  
+**Source:** Inline curriculum (Days 15-28) + `AZURE_DEPLOYMENT_GUIDE.md`  
 **Focus:** OIDC, CI/CD, App Service, Bicep basics
 
 ### Phase 3: Container & ACA Transition (Weeks 9-16)
@@ -160,8 +171,7 @@ After completing today's tasks, you will have:
 
 ## 📅 Daily Progress Tracker
 
-### ✅ Weeks 1-2: Azure Fundamentals (Days 1-14) — [Daily Progress](02-Daily-Progress/week-01-02-azure-fundamentals.md)
-**Reference:** Azure_Learning_Guide_Complete.md (Days 1-14)
+### ✅ Weeks 1-2: Azure Fundamentals (Days 1-14) — Complete
 
 #### Day 1: Azure Portal & Resource Groups ✅
 - [x] Read Azure Portal overview
@@ -206,12 +216,11 @@ After completing today's tasks, you will have:
 - [x] Document learnings in personal notes
 - [x] **Time:** 2-3 hours | **Completed:** ✅ Done
 
-*(Continue Days 8-14 per Azure_Learning_Guide_Complete.md)*
+*(Days 8-14: continue Azure fundamentals — ARM templates, cost analysis, governance basics, IaC principles)*
 
 ---
 
-### ✅ Weeks 3-4: App Service & OIDC Deployment (Days 15-28) — [Daily Progress](02-Daily-Progress/week-03-04-appservice-oidc.md)
-**Reference:** Azure_Learning_Guide_Complete.md (Days 15-28)
+### ✅ Weeks 3-4: App Service & OIDC Deployment (Days 15-28) — Complete
 
 #### Day 15: App Service Plans Overview ✅
 - [x] Understand SKUs (Free, Basic, Standard, Premium)
@@ -257,12 +266,12 @@ After completing today's tasks, you will have:
 - [x] **Time:** 1.5 hours | **Completed:** ✅ Done
 
 #### Day 22-28: Complete App Service Module
-*(Refer to Azure_Learning_Guide_Complete.md Days 22-28 for serverless functions, event-driven patterns)*
+*(Days 22-28: advanced App Service — deployment slots, scaling, monitoring, diagnostics)*
 
 ---
 
-### ✅ Weeks 5-8: IaC, CI/CD + Azure SQL Baseline (Days 29-34) — [Daily Progress](02-Daily-Progress/week-05-08-iac-data.md)
-**Reference:** Azure_Learning_Guide_Complete.md + infra/ folder
+### ✅ Weeks 5-8: IaC, CI/CD + Azure SQL Baseline (Days 29-34) — [Implementation Notes](IMPLEMENTATION_NOTES.md)
+**Reference:** `infra/` folder + `AZURE_DEPLOYMENT_GUIDE.md`
 
 #### Day 29: Bicep Modules ✅
 - [x] Understand module structure
@@ -302,7 +311,7 @@ After completing today's tasks, you will have:
 
 #### Day 34: Environment-Specific SQL Configuration + Copilot Infrastructure ✅
 - [x] Configure SQL connection strings in `Resources/Configuration/sharedsettings.{dev,staging,prod}.json`
-- [x] Enable SQL logging in development (`LogTo`, `EnableSensitiveDataLogging`, `EnableDetailedErrors` guarded by `IsDevelopment()`)
+- [x] Enable SQL logging in development (`LogTo`, `EnableSensitiveDataLogging`, `EnableDetailedErrors` gated by `Observability:EnableEfSensitiveDataLogging` config flag in `ObservabilityOptions`)
 - [x] Set up `.github/instructions/` skill files (ef-migrations, azure-workflows, bicep, curriculum, architecture)
 - [x] Created `docs/architecture/decisions/` ADR framework (ADR-000 template + ADR-001 to ADR-005)
 - [x] Created `/memories/architect-patterns.md` — career-wide Azure/.NET/Angular/Docker patterns
@@ -318,7 +327,7 @@ After completing today's tasks, you will have:
 #### Day 35: SQL Security — Enable Managed Identity
 - [x] Enable system-assigned managed identity on App Service
 - [x] Create SQL contained user: `CREATE USER [<app-service-name>] FROM EXTERNAL PROVIDER`
-- [x] Grant roles: `ALTER ROLE db_datareader ADD MEMBER [<app-service-name>]`
+- [x] Grant roles: `ALTER ROLE db_datareader ADD MEMBER [<app-service-name>]`, `ALTER ROLE db_datawriter ADD MEMBER [<app-service-name>]`, `ALTER ROLE db_ddladmin ADD MEMBER [<app-service-name>]`
 - [x] Verify passwordless connection from Azure App Service logs
 - [x] **Time:** 1.5 hours | **Completed:** 2026-03-20
 
@@ -333,7 +342,7 @@ After completing today's tasks, you will have:
 
 #### Day 37: Connect API to Azure SQL — Passwordless End-to-End
 - [x] Update `DbContext` to supply `DefaultAzureCredential` access token for Azure SQL
-- [x] Verify no SQL username/password anywhere in config or environment variables
+- [x] Verify Azure SQL access is passwordless (`Authentication=Active Directory Default`); local/Docker fallback configs retain placeholder admin credentials for break-glass tooling only
 - [x] Deploy updated API and confirm successful connection in Application Insights
 - [x] **Time:** 2 hours | **Completed:** 2026-03-20
 
@@ -567,7 +576,7 @@ After completing today's tasks, you will have:
 ---
 
 ### Week 10: 🆕 Serilog + Cosmos DB + Redis (Days 65-72)
-**Reference:** AZURE-TOP-7-SERVICES-ANALYSIS.md
+**Reference:** See *Azure Service Coverage* table above
 
 #### Day 65: 🆕 Serilog Structured Logging (Azure-first .NET) ✅ *(Delivered by Architecture Phase 3)*
 > **Why now:** Unstructured logs are unreadable in Docker and ACA containers — Serilog must be in place before containerising
@@ -644,7 +653,7 @@ After completing today's tasks, you will have:
 ---
 
 ### Week 10 (continued): 🆕 Azure Cache for Redis
-**Reference:** AZURE-TOP-7-SERVICES-ANALYSIS.md
+**Reference:** See *Azure Service Coverage* table above
 
 #### Day 71: Redis Fundamentals & Integration ✅ *(Delivered by Architecture Phase 6)*
 > ✅ `IDistributedCache` + Redis + MemoryCache fallback implemented during Architecture Phase 6 (Polish & Hardening)
@@ -935,7 +944,7 @@ After completing today's tasks, you will have:
 ---
 
 ### Week 14: 🆕 Azure API Management (APIM)
-**Reference:** AZURE-TOP-7-SERVICES-ANALYSIS.md
+**Reference:** See *Azure Service Coverage* table above
 > **Sequence note:** This section follows ACA completion (Day 93). Days 91-98 here map to calendar Days 94-101 in the overall plan.
 
 #### Day 91 (→94): APIM Fundamentals

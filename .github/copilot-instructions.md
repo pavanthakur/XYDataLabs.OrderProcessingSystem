@@ -56,12 +56,14 @@ practice Azure cloud deployment, CI/CD automation, and enterprise DevOps pattern
 │   ├── 02-Azure-Learning-Guides/  # Azure deployment, Docker, App Insights
 │   ├── 03-Configuration-Guides/   # GitHub App, Key Vault, secrets setup
 │   ├── 04-Enterprise-Architecture/# ACA migration plan, weekly learning plan
-│   ├── 05-Self-Learning/          # 18-week Azure curriculum + progress tracking
+│   ├── 05-Self-Learning/          # Azure curriculum + progress tracking
+│   │   ├── Azure-Curriculum/      # 1_MASTER_CURRICULUM.md (SSoT) + Archive/
+│   │   └── Archive/               # Historical TODO plans + LearningHelp
+│   ├── commands/                  # Quick-reference command cheat sheets (azure, git, docker)
 │   ├── GITHUB-WORKFLOW-SEPARATION-ARCHITECTURE.md  # Workflow separation rationale
 │   ├── Operations-Quick-Links-README.md             # Quick operations reference links
 │   ├── QUICK-COMMAND-REFERENCE.md                  # Command cheat sheet
-│   ├── QUICK-START-AZURE-BOOTSTRAP.md              # Quick-start bootstrap guide
-│   └── Archive/                   # Historical / superseded documentation
+│   └── QUICK-START-AZURE-BOOTSTRAP.md              # Quick-start bootstrap guide
 │
 ├── Resources/
 │   ├── Azure-Deployment/          # 27 PowerShell automation scripts (see §6)
@@ -83,24 +85,21 @@ practice Azure cloud deployment, CI/CD automation, and enterprise DevOps pattern
 │   ├── configure-secrets-and-run.ps1
 │   └── validate-github-app-config.ps1
 │
-├── tests/                         # All test projects (5 projects)
+├── tests/                         # All test projects (6 projects)
 │   ├── XYDataLabs.OrderProcessingSystem.Domain.Tests/
 │   ├── XYDataLabs.OrderProcessingSystem.Application.Tests/
 │   ├── XYDataLabs.OrderProcessingSystem.API.Tests/
 │   ├── XYDataLabs.OrderProcessingSystem.Integration.Tests/
-│   └── XYDataLabs.OrderProcessingSystem.Architecture.Tests/
+│   ├── XYDataLabs.OrderProcessingSystem.Architecture.Tests/
+│   └── XYDataLabs.OrderProcessingSystem.UI.Tests/
 │
 ├── docs/
 │   ├── runbooks/                  # Operations runbooks
-│   └── architecture/decisions/    # ADRs (ADR-000 through ADR-010)
+│   ├── internal/                  # AZURE-PROGRESS-EVALUATION.md + Archive/
+│   └── architecture/decisions/    # ADRs (ADR-000 through ADR-013)
 │
 ├── TROUBLESHOOTING-INDEX.md       # ← Quick troubleshooting guide with links
 ├── ARCHITECTURE-EVOLUTION.md      # 14-phase monolith → microservices roadmap
-├── AZURE-PROGRESS-EVALUATION.md   # Learning progress tracker (weeks 1–10)
-├── AZURE-TOP-7-SERVICES-ANALYSIS.md  # Analysis of 7 key Azure services
-├── GITHUB-APP-DELETION-SUMMARY.md    # GitHub App automation and deletion procedures
-├── GITHUB-APP-QUICK-REFERENCE.md  # GitHub App commands quick reference
-├── IMPLEMENTATION-COMPLETE.md     # GitHub App implementation summary
 ├── test-bootstrap-dry-run.ps1     # Dry-run test for bootstrap workflow
 ├── test-pre-deployment-validation.ps1  # Local test for pre-deployment validation
 ├── test-recommended-next-steps.ps1     # Test recommended next steps after bootstrap
@@ -382,13 +381,9 @@ This matrix shows which instructions auto-attach for common file locations:
 | `TROUBLESHOOTING-INDEX.md` | Root | Quick links for common GitHub App / OIDC / workflow errors |
 | `ARCHITECTURE.md` | Root | Binding tenant, payment identifier, migration, and test standard for future model creation |
 | `ARCHITECTURE-EVOLUTION.md` | Root | 14-phase roadmap: Phases 1-6 ✅ complete, Phase 7 next 📅 |
-| `AZURE-PROGRESS-EVALUATION.md` | Root | Learning progress weeks 1–10, next-step guides |
-| `AZURE-TOP-7-SERVICES-ANALYSIS.md` | Root | Analysis of 7 key Azure services used in this project |
-| `GITHUB-APP-DELETION-SUMMARY.md` | Root | GitHub App automation and deletion procedures |
-| `GITHUB-APP-QUICK-REFERENCE.md` | Root | GitHub App CLI commands cheat sheet |
-| `IMPLEMENTATION-COMPLETE.md` | Root | GitHub App implementation summary |
+| `docs/internal/AZURE-PROGRESS-EVALUATION.md` | docs/internal | Learning progress weeks 1–10, next-step guides |
+| `Documentation/QUICK-COMMAND-REFERENCE.md` | Documentation/ | Command cheat sheet for Azure, Git, Docker, GitHub App |
 | `.github/workflows/README.md` | Workflows | Workflow overview, secrets, path triggers |
-| `.github/workflows/README-AZURE-BOOTSTRAP.md` | Workflows | Bootstrap & Deploy workflow deep-dive |
 | `.github/workflows/README-AZURE-INITIAL-SETUP.md` | Workflows | Initial Setup workflow (Phase 0/1a/1b) |
 | `.github/workflows/README-AZURE-BOOTSTRAP-SETUP.md` | Workflows | Step-by-step bootstrap setup guide |
 | `.github/workflows/README-CONFIGURE-GITHUB-SECRETS.md` | Workflows | Secrets workflow detail |
@@ -397,7 +392,7 @@ This matrix shows which instructions auto-attach for common file locations:
 | `.github/workflows/README-TEST-VALIDATE-DEPLOYMENT.md` | Workflows | Test pre-deployment validation workflow detail |
 | `Documentation/README.md` | Documentation/ | Documentation hub with links to all guides |
 | `Documentation/Operations-Quick-Links-README.md` | Documentation/ | Quick reference links for operations tasks |
-| `Documentation/QUICK-COMMAND-REFERENCE.md` | Documentation/ | Command cheat sheet for Azure, Git, Docker |
+| `Documentation/QUICK-COMMAND-REFERENCE.md` | Documentation/ | Command cheat sheet for Azure, Git, Docker, GitHub App |
 | `Documentation/QUICK-START-AZURE-BOOTSTRAP.md` | Documentation/ | Quick-start guide for Azure bootstrap process |
 | `Documentation/02-Azure-Learning-Guides/AZURE_DEPLOYMENT_GUIDE.md` | Documentation/ | Complete Azure deployment strategy |
 | `Documentation/03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md` | Documentation/ | GitHub App quick setup guide |

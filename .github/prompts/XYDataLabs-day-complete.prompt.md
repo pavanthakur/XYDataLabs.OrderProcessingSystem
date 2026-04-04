@@ -48,21 +48,13 @@ Then, based on their answer, apply the following routing rules automatically —
    - Add to `/memories/repo/workflow-split.md`
 
 8. **If a full week is now complete** (all days in the week have ✅ Completed dates):
-   - Move that week's block from `1_MASTER_CURRICULUM.md` to:
-     `Documentation/05-Self-Learning/Azure-Curriculum/02-Daily-Progress/week-NN-name.md`
-   - Use this file header:
-     ```markdown
-     # Daily Progress: Weeks N-N — <Title> (Days X-Y)
-     **Archived:** DD/MM/YYYY | **Status:** ✅ All Complete
-     **Source:** 1_MASTER_CURRICULUM.md — Week N-N block
-     ```
-   - Replace the archived block in master with one summary line:
-     `### ✅ Weeks N-N: <Week Name> (Days X-Y) — [Daily Progress](02-Daily-Progress/week-NN-name.md)`
+   - Update the week heading in `1_MASTER_CURRICULUM.md` to add `— Complete` suffix:
+     `### ✅ Weeks N-N: <Week Name> (Days X-Y) — Complete`
    - Update the **COMPLETED SO FAR** bullet at the top of the master file if it exists
 
-9. **Always: Add Detailed Activity to Daily Progress file**
-   - Open the corresponding `02-Daily-Progress/week-NN-name.md` file for the current week
-   - Under the completed day's heading, add a `**Detailed Activity:**` block after the `**Time:**` line
+9. **Always: Record unique implementation detail for the completed day**
+   - Open `Documentation/05-Self-Learning/Azure-Curriculum/IMPLEMENTATION_NOTES.md`
+   - Add a `## Day N: <Title>` section if the day had notable implementation nuance
    - Include:
      - What was built, configured, or verified — step by step
      - Important commands run with any notable output
@@ -70,6 +62,7 @@ Then, based on their answer, apply the following routing rules automatically —
      - What this enables for the next day
    - Use numbered sub-headings (e.g. `**1. Topic**`) when the day had multiple distinct activities
    - Include code blocks for any actual code added or console output confirmed
+   - Skip this step if the day was purely checklist tasks with no unique detail worth preserving
 
 10. **If any multi-environment file was modified** (Bicep modules, parameter files, sharedsettings, workflows):
     - Verify the change is applied to ALL three environments — dev + staging + prod:
