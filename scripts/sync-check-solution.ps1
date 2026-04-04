@@ -99,38 +99,139 @@ function Get-SolutionFolderPath {
     return ($segments -join '\')
 }
 
-# Maintained surfaces — relative to repo root and expected Solution Explorer folder path.
-# Checks are intentionally non-recursive per surface; nested surfaces are declared separately.
-$trackedSurfaces = @(
-    @{ Path = '.github'; SolutionFolderPath = @('.github') }
-    @{ Path = '.github\agents'; SolutionFolderPath = @('.github', 'agents') }
-    @{ Path = '.github\instructions'; SolutionFolderPath = @('.github', 'instructions') }
-    @{ Path = '.github\prompts'; SolutionFolderPath = @('.github', 'prompts') }
-    @{ Path = '.github\workflows'; SolutionFolderPath = @('.github', 'workflows') }
-    @{ Path = 'scripts'; SolutionFolderPath = @('scripts') }
-    @{ Path = 'Resources\Azure-Deployment'; SolutionFolderPath = @('Resources', 'Azure-Deployment') }
-    @{ Path = 'Resources\BuildConfiguration'; SolutionFolderPath = @('Resources', 'BuildConfiguration') }
-    @{ Path = 'Resources\Certificates'; SolutionFolderPath = @('Resources', 'Certificates') }
-    @{ Path = 'Resources\Configuration'; SolutionFolderPath = @('Resources', 'Configuration') }
-    @{ Path = 'Resources\Docker'; SolutionFolderPath = @('Resources', 'Docker') }
-    @{ Path = 'Documentation'; SolutionFolderPath = @('Documentation') }
-    @{ Path = 'Documentation\05-Self-Learning\Azure-Curriculum'; SolutionFolderPath = @('Documentation', '05-Self-Learning', 'Azure-Curriculum') }
-    @{ Path = 'docs'; SolutionFolderPath = @('docs') }
-    @{ Path = 'docs\architecture\decisions'; SolutionFolderPath = @('docs', 'architecture', 'decisions') }
-    @{ Path = 'docs\internal'; SolutionFolderPath = @('docs', 'internal') }
-    @{ Path = 'docs\archive'; SolutionFolderPath = @('docs', 'archive') }
-    @{ Path = 'docs\archive\historical-notes\internal'; SolutionFolderPath = @('docs', 'archive', 'historical-notes', 'internal') }
-    @{ Path = 'docs\runbooks'; SolutionFolderPath = @('docs', 'runbooks') }
-    @{ Path = 'infra'; SolutionFolderPath = @('infra') }
-    @{ Path = 'infra\parameters'; SolutionFolderPath = @('infra', 'parameters') }
-    @{ Path = 'infra\modules'; SolutionFolderPath = @('infra', 'modules') }
-    @{ Path = 'bicep'; SolutionFolderPath = @('bicep') }
-    @{ Path = 'bicep\parameters'; SolutionFolderPath = @('bicep', 'parameters') }
-)
+function Get-ExpectedProjectFolderPath {
+    param(
+        [Parameter(Mandatory)]
+        [string]$ProjectPath
+    )
 
-# File extensions to ignore — generated outputs, not source files
-$excludeExtensions = @('.log', '.tmp', '.bak', '.user', '.dcproj')
-$excludeFileNames = @('.env.local')
+    if ($ProjectPath -eq 'Resources\Docker\docker-compose.dcproj') {
+        return 'Resources\Docker'
+    }
+
+    if ($ProjectPath -like 'tests\*') {
+        return 'tests'
+    }
+
+    return $null
+}
+
+function Get-ParentSolutionFolderPath {
+    param(
+        [Parameter(Mandatory)]
+        [psobject]$Project,
+
+        [Parameter(Mandatory)]
+        [hashtable]$Projects,
+
+        [Parameter(Mandatory)]
+        [hashtable]$NestedParents
+    )
+
+    if (-not $NestedParents.ContainsKey($Project.Guid)) {
+        return $null
+    }
+
+    $parentGuid = $NestedParents[$Project.Guid]
+    if (-not $Projects.ContainsKey($parentGuid)) {
+        return $null
+    }
+
+    if ($Projects[$parentGuid].TypeGuid -ne $solutionFolderTypeGuid) {
+        return $null
+    }
+
+    return (Get-SolutionFolderPath -ProjectGuid $parentGuid -Projects $Projects -NestedParents $NestedParents)
+}
+
+function Test-ExcludedRelativePath {
+    param(
+        [Parameter(Mandatory)]
+        [string]$RelativePath,
+
+        [Parameter(Mandatory)]
+        [string[]]$ExcludedDirectoryNames,
+
+        [Parameter(Mandatory)]
+        [string[]]$ExcludedPathPrefixes
+    )
+
+    foreach ($excludedPathPrefix in $ExcludedPathPrefixes) {
+        if ($RelativePath -eq $excludedPathPrefix -or $RelativePath.StartsWith("$excludedPathPrefix\")) {
+            return $true
+        }
+    }
+
+    foreach ($segment in ($RelativePath -split '\\')) {
+        if ($ExcludedDirectoryNames -contains $segment) {
+            return $true
+        }
+    }
+
+    return $false
+}
+
+function Get-MirroredFilesystemState {
+    param(
+        [Parameter(Mandatory)]
+        [string]$RepositoryRoot
+    )
+
+    $mirroredRootFolders = @('.github', 'Resources', 'Documentation', 'docs', 'infra', 'bicep', 'scripts')
+    $excludedDirectoryNames = @('bin', 'obj', '.git', '.vs', '.vscode', 'node_modules')
+    $excludedPathPrefixes = @('Resources\Azure-Deployment\logs')
+    $excludedExtensions = @('.log', '.tmp', '.bak', '.user', '.zip', '.csproj', '.dcproj')
+    $excludedFileNames = @('.env.local', 'XYDataLabs.OrderProcessingSystem.sln')
+    $mirroredFiles = [System.Collections.Generic.List[string]]::new()
+    $mirroredFolders = [System.Collections.Generic.List[string]]::new()
+
+    $rootFiles = Get-ChildItem -Path $RepositoryRoot -Force -File
+    foreach ($rootFile in $rootFiles) {
+        if ($excludedFileNames -contains $rootFile.Name -or $excludedExtensions -contains $rootFile.Extension.ToLowerInvariant()) {
+            continue
+        }
+
+        Add-UniqueListItem -List $mirroredFiles -Value $rootFile.Name
+    }
+
+    foreach ($mirroredRootFolder in $mirroredRootFolders) {
+        $absoluteMirroredRoot = Join-Path $RepositoryRoot $mirroredRootFolder
+        if (-not (Test-Path $absoluteMirroredRoot)) {
+            continue
+        }
+
+        Add-UniqueListItem -List $mirroredFolders -Value $mirroredRootFolder
+
+        $directories = Get-ChildItem -Path $absoluteMirroredRoot -Force -Recurse -Directory
+        foreach ($directory in $directories) {
+            $relativeDirectoryPath = Normalize-RelativePath -Path $directory.FullName.Substring($RepositoryRoot.Length + 1)
+            if (Test-ExcludedRelativePath -RelativePath $relativeDirectoryPath -ExcludedDirectoryNames $excludedDirectoryNames -ExcludedPathPrefixes $excludedPathPrefixes) {
+                continue
+            }
+
+            Add-UniqueListItem -List $mirroredFolders -Value $relativeDirectoryPath
+        }
+
+        $files = Get-ChildItem -Path $absoluteMirroredRoot -Force -Recurse -File
+        foreach ($file in $files) {
+            $relativeFilePath = Normalize-RelativePath -Path $file.FullName.Substring($RepositoryRoot.Length + 1)
+            if (Test-ExcludedRelativePath -RelativePath $relativeFilePath -ExcludedDirectoryNames $excludedDirectoryNames -ExcludedPathPrefixes $excludedPathPrefixes) {
+                continue
+            }
+
+            if ($excludedFileNames -contains $file.Name -or $excludedExtensions -contains $file.Extension.ToLowerInvariant()) {
+                continue
+            }
+
+            Add-UniqueListItem -List $mirroredFiles -Value $relativeFilePath
+        }
+    }
+
+    return [pscustomobject]@{
+        Files   = $mirroredFiles
+        Folders = $mirroredFolders
+    }
+}
 
 $projects = @{}
 $nestedParents = @{}
@@ -216,68 +317,103 @@ foreach ($project in $projects.Values) {
     }
 }
 
+$mirroredFilesystemState = Get-MirroredFilesystemState -RepositoryRoot $repoRoot
+$trackedRepositoryFiles = $mirroredFilesystemState.Files
+$expectedFolderPaths = [System.Collections.Generic.List[string]]::new()
+
+foreach ($mirroredFolder in $mirroredFilesystemState.Folders) {
+    Add-UniqueListItem -List $expectedFolderPaths -Value ([string]$mirroredFolder)
+}
+
+Add-UniqueListItem -List $expectedFolderPaths -Value 'Solution Items'
+Add-UniqueListItem -List $expectedFolderPaths -Value 'tests'
+$expectedFileLocations = @{}
+
+foreach ($trackedRepositoryFile in $trackedRepositoryFiles) {
+    $expectedFolderPath = [System.IO.Path]::GetDirectoryName([string]$trackedRepositoryFile)
+    if (-not [string]::IsNullOrEmpty($expectedFolderPath)) {
+        $expectedFolderPath = Normalize-RelativePath -Path $expectedFolderPath
+    }
+
+    if ([string]::IsNullOrEmpty($expectedFolderPath)) {
+        $expectedFolderPath = 'Solution Items'
+    }
+
+    $expectedFileLocations[[string]$trackedRepositoryFile] = $expectedFolderPath
+}
+
 $missing = [System.Collections.Generic.List[string]]::new()
 $stale = [System.Collections.Generic.List[string]]::new()
 $misplaced = [System.Collections.Generic.List[string]]::new()
 $missingFolders = [System.Collections.Generic.List[string]]::new()
 $unexpectedFolderEntries = [System.Collections.Generic.List[string]]::new()
+$unexpectedFolders = [System.Collections.Generic.List[string]]::new()
+$misplacedProjects = [System.Collections.Generic.List[string]]::new()
 
-foreach ($surface in $trackedSurfaces) {
-    $relDir = Normalize-RelativePath -Path $surface.Path
-    $expectedSolutionFolderPath = ($surface.SolutionFolderPath -join '\')
-    $absDir = Join-Path $repoRoot $relDir
-
-    if (-not (Test-Path $absDir)) { continue }
-
-    if (-not $solutionFoldersByPath.ContainsKey($expectedSolutionFolderPath)) {
-        Add-UniqueListItem -List $missingFolders -Value $expectedSolutionFolderPath
+foreach ($expectedFolderPath in $expectedFolderPaths) {
+    if (-not $solutionFoldersByPath.ContainsKey($expectedFolderPath)) {
+        Add-UniqueListItem -List $missingFolders -Value $expectedFolderPath
     }
+}
 
-    $files = Get-ChildItem -Path $absDir -File |
-             Where-Object {
-                 $excludeExtensions -notcontains $_.Extension.ToLower() -and
-                 $excludeFileNames -notcontains $_.Name
-             } |
-             Select-Object -ExpandProperty Name
+foreach ($trackedRepositoryFile in $trackedRepositoryFiles) {
+    $expectedFolderPath = $expectedFileLocations[[string]$trackedRepositoryFile]
 
-    foreach ($file in $files) {
-        $slnEntry = "$relDir\$file"
-
-        if ($solutionItemLocations.ContainsKey($slnEntry)) {
-            $registeredFolders = @($solutionItemLocations[$slnEntry])
-
-            if ($registeredFolders -contains $expectedSolutionFolderPath) {
-                continue
-            }
-
-            Add-UniqueListItem -List $misplaced -Value ("{0} -> {1}" -f $slnEntry, ($registeredFolders -join ', '))
-            continue
-        }
-
-        Add-UniqueListItem -List $missing -Value $slnEntry
-    }
-
-    if (-not $solutionFoldersByPath.ContainsKey($expectedSolutionFolderPath)) {
+    if (-not $solutionItemLocations.ContainsKey([string]$trackedRepositoryFile)) {
+        Add-UniqueListItem -List $missing -Value ([string]$trackedRepositoryFile)
         continue
     }
 
-    foreach ($entry in ($solutionFoldersByPath[$expectedSolutionFolderPath].SolutionItems | Sort-Object -Unique)) {
-        $entryPath = Join-Path $repoRoot $entry
-        if (-not (Test-Path $entryPath)) {
+    $registeredFolders = @($solutionItemLocations[[string]$trackedRepositoryFile])
+    if ($registeredFolders -notcontains $expectedFolderPath) {
+        Add-UniqueListItem -List $misplaced -Value ("{0} -> {1}" -f [string]$trackedRepositoryFile, ($registeredFolders -join ', '))
+    }
+}
+
+foreach ($solutionFolderPath in ($solutionFoldersByPath.Keys | Sort-Object)) {
+    $topLevelSegment = $solutionFolderPath.Split('\')[0]
+    $isTrackedSolutionFolder = $solutionFolderPath -eq 'Solution Items' -or @('.github', 'Resources', 'Documentation', 'docs', 'infra', 'bicep', 'scripts', 'tests') -contains $topLevelSegment
+
+    if (-not $isTrackedSolutionFolder) {
+        continue
+    }
+
+    if ($expectedFolderPaths -notcontains $solutionFolderPath) {
+        Add-UniqueListItem -List $unexpectedFolders -Value $solutionFolderPath
+        continue
+    }
+
+    foreach ($entry in ($solutionFoldersByPath[$solutionFolderPath].SolutionItems | Sort-Object -Unique)) {
+        if (-not $expectedFileLocations.ContainsKey($entry)) {
             Add-UniqueListItem -List $stale -Value $entry
             continue
         }
 
-        $entryDir = Normalize-RelativePath -Path ([System.IO.Path]::GetDirectoryName($entry))
-        if ($entryDir -ne $relDir) {
-            Add-UniqueListItem -List $unexpectedFolderEntries -Value ("{0} -> {1}" -f $entry, $expectedSolutionFolderPath)
+        if ($expectedFileLocations[$entry] -ne $solutionFolderPath) {
+            Add-UniqueListItem -List $unexpectedFolderEntries -Value ("{0} -> {1}" -f $entry, $solutionFolderPath)
         }
     }
 }
 
-if ($missing.Count -gt 0 -or $stale.Count -gt 0 -or $misplaced.Count -gt 0 -or $missingFolders.Count -gt 0 -or $unexpectedFolderEntries.Count -gt 0) {
+foreach ($project in $projects.Values) {
+    if ($project.TypeGuid -eq $solutionFolderTypeGuid) {
+        continue
+    }
+
+    $expectedProjectFolderPath = Get-ExpectedProjectFolderPath -ProjectPath $project.Path
+    if ([string]::IsNullOrEmpty($expectedProjectFolderPath)) {
+        continue
+    }
+
+    $actualProjectFolderPath = Get-ParentSolutionFolderPath -Project $project -Projects $projects -NestedParents $nestedParents
+    if ($actualProjectFolderPath -ne $expectedProjectFolderPath) {
+        Add-UniqueListItem -List $misplacedProjects -Value ("{0} -> {1}" -f $project.Path, ($actualProjectFolderPath ?? '<root>'))
+    }
+}
+
+if ($missing.Count -gt 0 -or $stale.Count -gt 0 -or $misplaced.Count -gt 0 -or $missingFolders.Count -gt 0 -or $unexpectedFolderEntries.Count -gt 0 -or $unexpectedFolders.Count -gt 0 -or $misplacedProjects.Count -gt 0) {
     Write-Host ''
-    Write-Host 'Solution sync check FAILED — tracked solution-item surfaces are out of sync:' -ForegroundColor Red
+    Write-Host 'Solution sync check FAILED — tracked repository structure and .sln hierarchy are out of sync:' -ForegroundColor Red
 
     if ($missingFolders.Count -gt 0) {
         Write-Host 'Expected solution folder chains missing from .sln:' -ForegroundColor Yellow
@@ -291,6 +427,14 @@ if ($missing.Count -gt 0 -or $stale.Count -gt 0 -or $misplaced.Count -gt 0 -or $
         Write-Host 'Files on disk not registered in .sln:' -ForegroundColor Yellow
         foreach ($item in ($missing | Sort-Object)) {
             Write-Host "  MISSING  $item" -ForegroundColor Yellow
+        }
+        Write-Host ''
+    }
+
+    if ($unexpectedFolders.Count -gt 0) {
+        Write-Host 'Solution folders present in .sln but not backed by tracked repository structure:' -ForegroundColor Yellow
+        foreach ($item in ($unexpectedFolders | Sort-Object)) {
+            Write-Host "  EXTRA    $item" -ForegroundColor Yellow
         }
         Write-Host ''
     }
@@ -319,9 +463,17 @@ if ($missing.Count -gt 0 -or $stale.Count -gt 0 -or $misplaced.Count -gt 0 -or $
         Write-Host ''
     }
 
-    Write-Host 'Fix: add missing solution folders, move entries to the correct ProjectSection(SolutionItems) block, and remove stale paths from XYDataLabs.OrderProcessingSystem.sln.' -ForegroundColor Cyan
+    if ($misplacedProjects.Count -gt 0) {
+        Write-Host 'Projects nested under the wrong solution folder:' -ForegroundColor Yellow
+        foreach ($item in ($misplacedProjects | Sort-Object)) {
+            Write-Host "  PROJECT  $item" -ForegroundColor Yellow
+        }
+        Write-Host ''
+    }
+
+    Write-Host 'Fix: mirror tracked repository folders/files in the .sln, move entries to the correct ProjectSection(SolutionItems) block, and correct project nesting in XYDataLabs.OrderProcessingSystem.sln.' -ForegroundColor Cyan
     exit 1
 }
 
-Write-Host 'Solution sync check PASSED — tracked solution-item surfaces and solution-folder hierarchy are in sync with .sln.' -ForegroundColor Green
+Write-Host 'Solution sync check PASSED — tracked repository structure and .sln hierarchy are in sync.' -ForegroundColor Green
 exit 0
