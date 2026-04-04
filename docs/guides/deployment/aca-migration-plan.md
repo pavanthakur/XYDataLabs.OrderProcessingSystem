@@ -25,7 +25,7 @@ Move the Order Processing System from Azure App Service (Web Apps) to Azure Cont
 - Identity: GitHub OIDC for CI; User-Assigned Managed Identity (UAMI) for deployments/runtime where needed
 - CI/CD: Build/push containers to ACR; deploy to ACA via Bicep or `azd`
 
-Architecture diagram reference: `Documentation/04-Enterprise-Architecture/ACA-Target-Architecture.png`
+Architecture diagram reference: `assets/ACA-Target-Architecture.png`
 
 ### Architecture Evolution Diagram
 
@@ -495,7 +495,7 @@ Rollback:
 - Add ops runbooks: release, rollback, incident, cost, DR
 
 Acceptance:
-- Docs published in `Documentation/` and referenced from repo root README.
+- Docs published in `docs/` and referenced from the canonical documentation hub.
 
 ---
 

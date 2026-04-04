@@ -45,21 +45,21 @@ summary → trigger-deployments
 ### 📚 Related Documentation
 
 For detailed step-by-step execution flow of the bootstrap script:
-- **[BOOTSTRAP_SCRIPT_FLOW.md](./BOOTSTRAP_SCRIPT_FLOW.md)** - Complete optimized flow documentation for junior developers and code reviewers
+- **[bootstrap-script-flow.md](../../docs/guides/deployment/bootstrap-script-flow.md)** - Complete optimized flow documentation for junior developers and code reviewers
 
 For GitHub Actions automation and secret management:
-- **[AUTOMATED-BOOTSTRAP-GUIDE.md](../03-Configuration-Guides/AUTOMATED-BOOTSTRAP-GUIDE.md)** - Complete end-to-end automation setup (Azure OIDC + GitHub App)
-- **[QUICK-SETUP-GITHUB-APP.md](../03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md)** - 5-minute GitHub App setup guide (eliminates PAT expiration)
-- **[GITHUB-APP-AUTHENTICATION.md](../03-Configuration-Guides/GITHUB-APP-AUTHENTICATION.md)** - Technical deep-dive on GitHub App authentication
-- **[GITHUB-SECRETS-FIX.md](../03-Configuration-Guides/GITHUB-SECRETS-FIX.md)** - GitHub secrets configuration troubleshooting
-- **[WORKFLOW-AUTOMATION-VISUAL-GUIDE.md](../03-Configuration-Guides/WORKFLOW-AUTOMATION-VISUAL-GUIDE.md)** - Visual workflow automation flow diagrams
+- **[quick-start-azure-bootstrap.md](../../docs/guides/deployment/quick-start-azure-bootstrap.md)** - Complete end-to-end automation setup (Azure OIDC + GitHub App)
+- **[quick-setup-github-app.md](../../docs/guides/configuration/quick-setup-github-app.md)** - 5-minute GitHub App setup guide (eliminates PAT expiration)
+- **[github-app-authentication.md](../../docs/guides/configuration/github-app-authentication.md)** - Technical deep-dive on GitHub App authentication
+- **[TROUBLESHOOTING-INDEX.md](../../TROUBLESHOOTING-INDEX.md)** - GitHub secrets configuration troubleshooting
+- **[workflow-automation-visual-guide.md](../../docs/guides/configuration/workflow-automation-visual-guide.md)** - Visual workflow automation flow diagrams
 
 For Application Insights monitoring and observability:
-- **[APP_INSIGHTS_AUTOMATED_SETUP.md](./APP_INSIGHTS_AUTOMATED_SETUP.md)** ⭐ **NEW** - Automated environment-wise App Insights configuration (enterprise approach)
-- **[APPLICATION_INSIGHTS_SETUP.md](./APPLICATION_INSIGHTS_SETUP.md)** - Manual setup reference (legacy)
+- **[app-insights-automated-setup.md](../../docs/guides/configuration/app-insights-automated-setup.md)** ⭐ **NEW** - Automated environment-wise App Insights configuration (enterprise approach)
+- **[app-insights-automated-setup.md](../../docs/guides/configuration/app-insights-automated-setup.md#manual-setup-legacy---for-reference-only)** - Manual setup reference (legacy)
 
 For Infrastructure and Database deployment:
-- **[/DEPLOYMENT-FIX-SUMMARY.md](../../DEPLOYMENT-FIX-SUMMARY.md)** ⭐ **NEW** - Complete deployment fix guide including SQL Database provisioning, Application Insights verification, and troubleshooting
+- **[TROUBLESHOOTING-INDEX.md](../../TROUBLESHOOTING-INDEX.md)** ⭐ **NEW** - Troubleshooting and remediation guide including deployment validation pointers
 - **[/infra/README.md](../../infra/README.md)** - Bicep infrastructure modules documentation
 - **[/infra/SECURITY-NOTES.md](../../infra/SECURITY-NOTES.md)** ⭐ **NEW** - Security considerations, hardening roadmap, and production best practices
 
@@ -1251,7 +1251,7 @@ Notes:
 
 **As of November 2025**, Application Insights is now automatically configured per environment during the Azure Bootstrap workflow. This is the recommended approach for enterprise deployments.
 
-**See**: **[APP_INSIGHTS_AUTOMATED_SETUP.md](./APP_INSIGHTS_AUTOMATED_SETUP.md)** for complete documentation on the automated approach.
+**See**: **[app-insights-automated-setup.md](../../docs/guides/configuration/app-insights-automated-setup.md)** for complete documentation on the automated approach.
 
 **What happens automatically:**
 1. App Insights resource created per environment via Bicep (IaC)
@@ -1317,7 +1317,7 @@ AppServiceHTTPLogs
 | summarize count()
 ```
 
-**For more KQL examples and troubleshooting**, see [APP_INSIGHTS_AUTOMATED_SETUP.md](./APP_INSIGHTS_AUTOMATED_SETUP.md#kql-query-examples)
+**For more KQL examples and troubleshooting**, see [app-insights-automated-setup.md](../../docs/guides/configuration/app-insights-automated-setup.md#kql-query-examples)
 
 ---
 

@@ -452,7 +452,7 @@ For comprehensive information about GitHub App automation, including:
 - ✅ Secret management best practices
 - ✅ Troubleshooting guide
 
-See: [Documentation/03-Configuration-Guides/GITHUB-APP-AUTOMATION.md](../Documentation/03-Configuration-Guides/GITHUB-APP-AUTOMATION.md)
+See: [github-app-authentication.md](../docs/guides/configuration/github-app-authentication.md) and [workflow-automation-visual-guide.md](../docs/guides/configuration/workflow-automation-visual-guide.md)
 
 ### Quick Reference
 

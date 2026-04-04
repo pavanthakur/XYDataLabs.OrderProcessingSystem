@@ -178,7 +178,7 @@ yamllint -d relaxed .github/workflows/azure-bootstrap.yml
 
 ### Issue: GitHub App Setup Unclear
 **Solution:** Follow detailed guide:
-- Documentation: `Documentation/03-Configuration-Guides/GITHUB-APP-AUTHENTICATION.md`
+- Documentation: `docs/guides/configuration/github-app-authentication.md`
 - Takes 5 minutes one-time setup
 - Skip if you prefer using PAT (requires renewal)
 
@@ -215,9 +215,9 @@ yamllint -d relaxed .github/workflows/azure-bootstrap.yml
 
 ## Related Documentation
 
-- **Quick Start Guide:** `Documentation/QUICK-START-AZURE-BOOTSTRAP.md`
-- **GitHub App Setup:** `Documentation/03-Configuration-Guides/GITHUB-APP-AUTHENTICATION.md`
-- **Workflow Summary:** `Documentation/Bootstrap-Workflow-Summary.md`
+- **Quick Start Guide:** `docs/guides/deployment/quick-start-azure-bootstrap.md`
+- **GitHub App Setup:** `docs/guides/configuration/github-app-authentication.md`
+- **Workflow Summary:** `.github/workflows/README.md`
 - **Bootstrap Script:** `Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1`
 - **OIDC Setup Script:** `Resources/Azure-Deployment/setup-github-oidc.ps1`
 

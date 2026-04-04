@@ -56,8 +56,8 @@ practice Azure cloud deployment, CI/CD automation, and enterprise DevOps pattern
 │   ├── 02-Azure-Learning-Guides/  # Azure deployment, Docker, App Insights
 │   ├── 03-Configuration-Guides/   # GitHub App, Key Vault, secrets setup
 │   ├── 04-Enterprise-Architecture/# ACA migration plan, weekly learning plan
-│   ├── 05-Self-Learning/          # Azure curriculum + progress tracking
-│   │   ├── Azure-Curriculum/      # 1_MASTER_CURRICULUM.md (SSoT) + Archive/
+│   ├── 05-Self-Learning/          # Legacy curriculum redirects + historical learning material
+│   │   ├── Azure-Curriculum/      # Legacy redirects after canonical curriculum move
 │   │   └── Archive/               # Historical TODO plans + LearningHelp
 │   ├── commands/                  # Quick-reference command cheat sheets (azure, git, docker)
 │   ├── GITHUB-WORKFLOW-SEPARATION-ARCHITECTURE.md  # Workflow separation rationale
@@ -321,6 +321,7 @@ Port allocations: Local VS (5010–5013) · Docker dev (5020–5023) · Docker s
 | `.github/instructions/multitenant-payment-schema.instructions.md` | `**/Domain/Entities/**/*.cs`, `**/Application/DTO/**/*.cs`, `**/Application/Features/Payments/**/*.cs`, `**/Infrastructure/**/*.cs`, related UI/API/test files |
 | `.github/instructions/azure-workflows.instructions.md` | `**/.github/workflows/**` |
 | `.github/instructions/bicep.instructions.md` | `**/infra/**`, `**/*.bicep` |
+| `.github/instructions/documentation-governance.instructions.md` | `**/docs/*.md`, `**/docs/**/*.md`, `**/Documentation/**/*.md` |
 | `.github/instructions/curriculum.instructions.md` | `**/*CURRICULUM*`, `**/05-Self-Learning/**` |
 | `.github/instructions/architecture.instructions.md` | `**/docs/architecture/**`, `**/*ADR*` |
 
@@ -329,20 +330,23 @@ Port allocations: Local VS (5010–5013) · Docker dev (5020–5023) · Docker s
 When editing a file, multiple instruction files may fire simultaneously based on overlapping `applyTo` patterns.
 This matrix shows which instructions auto-attach for common file locations:
 
-| File location | clean-arch | ef-migrations | multitenant | azure-workflows | bicep | architecture | curriculum |
-|---------------|:----------:|:-------------:|:-----------:|:---------------:|:-----:|:------------:|:----------:|
-| `Domain/Entities/*.cs` | ✓ | | ✓ | | | | |
-| `Application/Features/**/*.cs` | ✓ | | ✓ | | | | |
-| `Application/DTO/**/*.cs` | ✓ | | ✓ | | | | |
-| `Infrastructure/**/*.cs` | ✓ | ✓ | ✓ | | | | |
-| `Infrastructure/Migrations/*` | ✓ | ✓ | ✓ | | | | |
-| `API/Controllers/*.cs` | ✓ | | ✓ | | | | |
-| `SharedKernel/**/*.cs` | ✓ | | | | | | |
-| `tests/Architecture.Tests/*.cs` | ✓ | | ✓ | | | | |
-| `.github/workflows/*.yml` | | | | ✓ | | | |
-| `infra/**/*.bicep` | | | | | ✓ | | |
-| `docs/architecture/decisions/*` | | | | | | ✓ | |
-| `Documentation/05-Self-Learning/*` | | | | | | | ✓ |
+| File location | clean-arch | ef-migrations | multitenant | azure-workflows | bicep | docs-governance | architecture | curriculum |
+|---------------|:----------:|:-------------:|:-----------:|:---------------:|:-----:|:---------------:|:------------:|:----------:|
+| `Domain/Entities/*.cs` | ✓ | | ✓ | | | | | |
+| `Application/Features/**/*.cs` | ✓ | | ✓ | | | | | |
+| `Application/DTO/**/*.cs` | ✓ | | ✓ | | | | | |
+| `Infrastructure/**/*.cs` | ✓ | ✓ | ✓ | | | | | |
+| `Infrastructure/Migrations/*` | ✓ | ✓ | ✓ | | | | | |
+| `API/Controllers/*.cs` | ✓ | | ✓ | | | | | |
+| `SharedKernel/**/*.cs` | ✓ | | | | | | | |
+| `tests/Architecture.Tests/*.cs` | ✓ | | ✓ | | | | | |
+| `.github/workflows/*.yml` | | | | ✓ | | | | |
+| `infra/**/*.bicep` | | | | | ✓ | | | |
+| `docs/*.md` | | | | | | ✓ | | |
+| `docs/**/*.md` | | | | | | ✓ | | |
+| `docs/architecture/decisions/*` | | | | | | ✓ | ✓ | |
+| `Documentation/**/*.md` | | | | | | ✓ | | |
+| `Documentation/05-Self-Learning/*` | | | | | | ✓ | | ✓ |
 
 ### Custom agents (select in VS Code Chat agent picker)
 
@@ -382,21 +386,21 @@ This matrix shows which instructions auto-attach for common file locations:
 | `ARCHITECTURE.md` | Root | Binding tenant, payment identifier, migration, and test standard for future model creation |
 | `ARCHITECTURE-EVOLUTION.md` | Root | 14-phase roadmap: Phases 1-6 ✅ complete, Phase 7 next 📅 |
 | `docs/internal/AZURE-PROGRESS-EVALUATION.md` | docs/internal | Learning progress weeks 1–10, next-step guides |
-| `Documentation/QUICK-COMMAND-REFERENCE.md` | Documentation/ | Command cheat sheet for Azure, Git, Docker, GitHub App |
+| `docs/reference/quick-command-reference.md` | docs/ | Command cheat sheet for Azure, Git, Docker, GitHub App |
 | `.github/workflows/README.md` | Workflows | Workflow overview, secrets, path triggers |
 | `.github/workflows/README-AZURE-INITIAL-SETUP.md` | Workflows | Initial Setup workflow (Phase 0/1a/1b) |
-| `.github/workflows/README-AZURE-BOOTSTRAP-SETUP.md` | Workflows | Step-by-step bootstrap setup guide |
+| `.github/workflows/README-AZURE-BOOTSTRAP.md` | Workflows | Bootstrap and deploy workflow guide |
 | `.github/workflows/README-CONFIGURE-GITHUB-SECRETS.md` | Workflows | Secrets workflow detail |
 | `.github/workflows/README-INFRA-DEPLOY.md` | Workflows | Infrastructure deployment workflow guide |
 | `.github/workflows/README-VALIDATE-DEPLOYMENT.md` | Workflows | Pre-deployment validation workflow detail |
 | `.github/workflows/README-TEST-VALIDATE-DEPLOYMENT.md` | Workflows | Test pre-deployment validation workflow detail |
-| `Documentation/README.md` | Documentation/ | Documentation hub with links to all guides |
-| `Documentation/Operations-Quick-Links-README.md` | Documentation/ | Quick reference links for operations tasks |
-| `Documentation/QUICK-COMMAND-REFERENCE.md` | Documentation/ | Command cheat sheet for Azure, Git, Docker, GitHub App |
-| `Documentation/QUICK-START-AZURE-BOOTSTRAP.md` | Documentation/ | Quick-start guide for Azure bootstrap process |
-| `Documentation/02-Azure-Learning-Guides/AZURE_DEPLOYMENT_GUIDE.md` | Documentation/ | Complete Azure deployment strategy |
-| `Documentation/03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md` | Documentation/ | GitHub App quick setup guide |
-| `Documentation/GITHUB-WORKFLOW-SEPARATION-ARCHITECTURE.md` | Documentation/ | Why bootstrap is split into separate workflows |
+| `docs/README.md` | docs/ | Documentation hub with links to all guides |
+| `docs/reference/operations-quick-links.md` | docs/ | Quick reference links for operations tasks |
+| `docs/reference/quick-command-reference.md` | docs/ | Command cheat sheet for Azure, Git, Docker, GitHub App |
+| `docs/guides/deployment/quick-start-azure-bootstrap.md` | docs/ | Quick-start guide for Azure bootstrap process |
+| `docs/guides/deployment/azure-deployment-guide.md` | docs/ | Complete Azure deployment strategy |
+| `docs/guides/configuration/quick-setup-github-app.md` | docs/ | GitHub App quick setup guide |
+| `docs/guides/deployment/workflow-separation-architecture.md` | docs/ | Why bootstrap is split into separate workflows |
 | `Resources/Azure-Deployment/README.md` | Resources/ | Script index and usage |
 
 ---

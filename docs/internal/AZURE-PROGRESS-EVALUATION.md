@@ -187,7 +187,7 @@ YARP Microservices Architecture (Local Development)
 **Status:** Comprehensive runbook exists and covers ALL immediate needs
 
 ### 2. Master Curriculum (1_MASTER_CURRICULUM.md) ✅
-**Location:** `Documentation/05-Self-Learning/Azure-Curriculum/1_MASTER_CURRICULUM.md`
+**Location:** `docs/learning/curriculum/1_MASTER_CURRICULUM.md`
 
 **Coverage:**
 - ✅ Days 1-31 marked as completed
@@ -199,27 +199,26 @@ YARP Microservices Architecture (Local Development)
 
 **Status:** Curriculum is complete and up-to-date
 
-### 3. Weekly Azure Learning Plan ✅
-**Location:** `Documentation/04-Enterprise-Architecture/WEEKLY_AZURE_LEARNING_PLAN.md`
+### 3. Weekly Azure Learning Plan (Archived)
+**Location:** `docs/archive/historical-notes/self-learning/weekly-plans/WEEKLY_AZURE_LEARNING_PLAN.md`
 
 **Coverage:**
-- ✅ Week 1: Azure Foundation (completed)
-- ✅ Week 2: Container Apps Deployment (planned)
-- ✅ Week 3+: Production Deployment & Enterprise Security
-- ✅ Daily habits for enterprise standards maintenance
-- ✅ Monthly enterprise review checklist
+- Historical week-by-week Azure learning breakdown from the earlier planning phase
+- Useful as archival context only
 
-**Status:** Detailed weekly breakdown exists
+**Status:** Archived because active execution is now governed by `1_MASTER_CURRICULUM.md` and this progress tracker
 
-### 4. Master Plan (00_MASTER_PLAN.md) ✅
-**Location:** `Documentation/05-Self-Learning/Azure-Curriculum/00-Foundation/00_MASTER_PLAN.md`
+### 4. Strategic Roadmap Documents ✅
+**Primary Locations:** `ARCHITECTURE-EVOLUTION.md` and `docs/guides/deployment/aca-migration-plan.md`
 
 **Coverage:**
 - ✅ Strategic roadmap for microservices migration
-- ✅ 18-week comprehensive curriculum
+- ✅ Phase-based architecture evolution roadmap
 - ✅ Azure services stack
 - ✅ Migration phases
 - ✅ Technical best practices
+
+**Status:** Active long-range planning now lives in the architecture evolution and ACA migration documents; daily execution remains in `1_MASTER_CURRICULUM.md`
 
 **Status:** Strategic plan is comprehensive
 
@@ -377,16 +376,16 @@ az webapp restart --name pavanthakur-orderprocessing-ui-xyapp-dev --resource-gro
 **Current Status:** Already shows Days 1-31 as complete and Days 32+ as next steps
 **Action:** No update required - curriculum is accurate
 
-### 2. Update 00_MASTER_PLAN.md ❓ (Review recommended)
-**Current Status:** Shows strategic roadmap but doesn't track daily progress
-**Action:** No update required - strategic plan is separate from daily tracking
+### 2. Review strategic roadmap documents ✅
+**Current Status:** Long-range planning now lives in `ARCHITECTURE-EVOLUTION.md` and `docs/guides/deployment/aca-migration-plan.md`
+**Action:** Update those only when target-state architecture or migration sequencing changes
 
-### 3. Update WEEKLY_AZURE_LEARNING_PLAN.md ✅ (No changes needed)
-**Current Status:** Week 1 completed, Week 2+ planned
-**Action:** No update required - weekly plan is on track
+### 3. Weekly plan archival decision ✅
+**Current Status:** Weekly plan archived as a historical planning artifact
+**Action:** No active maintenance required - use `1_MASTER_CURRICULUM.md` and this document instead
 
 ### 4. Create Progress Checkpoint Document ✅ (Recommended)
-**Suggested Location:** `Documentation/05-Self-Learning/Azure-Curriculum/IMPLEMENTATION_NOTES.md` — add a dated section for any new checkpoint entries
+**Suggested Location:** `docs/learning/implementation-notes/implementation-notes-days-29-38.md` — add a dated section for any new checkpoint entries
 
 **Content to Include:**
 - Summary of Weeks 1-3 completion
@@ -626,14 +625,14 @@ This establishes the architectural foundation that makes all future work easier:
 
 ### Primary Documents
 1. **Immediate Actions:** `docs/runbooks/keyvault-managed-identity-deploy.md`
-2. **Daily Tracker:** `Documentation/05-Self-Learning/Azure-Curriculum/1_MASTER_CURRICULUM.md`
-3. **Weekly Plan:** `Documentation/04-Enterprise-Architecture/WEEKLY_AZURE_LEARNING_PLAN.md`
-4. **Strategic Roadmap:** `Documentation/05-Self-Learning/Azure-Curriculum/00-Foundation/00_MASTER_PLAN.md`
+2. **Daily Tracker:** `docs/learning/curriculum/1_MASTER_CURRICULUM.md`
+3. **Archived Weekly Plan:** `docs/archive/historical-notes/self-learning/weekly-plans/WEEKLY_AZURE_LEARNING_PLAN.md`
+4. **Strategic Roadmap:** `ARCHITECTURE-EVOLUTION.md` and `docs/guides/deployment/aca-migration-plan.md`
 
 ### Support Documents
-- Azure Deployment Guide: `Documentation/02-Azure-Learning-Guides/AZURE_DEPLOYMENT_GUIDE.md`
-- ACA Migration Plan: `Documentation/04-Enterprise-Architecture/ACA-Migration-Plan.md`
-- Containerization Learning Path: `Documentation/02-Azure-Learning-Guides/Containerization-ACA-Aspire-Learning-Path.md`
+- Azure Deployment Guide: `docs/guides/deployment/azure-deployment-guide.md`
+- ACA Migration Plan: `docs/guides/deployment/aca-migration-plan.md`
+- Containerization Learning Path: `docs/learning/reference/containerization-aca-aspire-learning-path.md`
 
 ---
 

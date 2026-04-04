@@ -4,10 +4,10 @@ applyTo: "**/*CURRICULUM*,**/05-Self-Learning/**"
 # Curriculum Conventions — XYDataLabs.OrderProcessingSystem
 
 ## Master Curriculum File
-`Documentation/05-Self-Learning/Azure-Curriculum/1_MASTER_CURRICULUM.md`
+`docs/learning/curriculum/1_MASTER_CURRICULUM.md`
 
 ## Current Progress (as of April 2026)
-- Days 1-38: ✅ Complete (implementation detail in `Azure-Curriculum/IMPLEMENTATION_NOTES.md`)
+- Days 1-38: ✅ Complete (implementation detail in `docs/learning/implementation-notes/implementation-notes-days-29-38.md`)
 - Architecture Phases 1-6: ✅ Complete
 - Days 39+: ❌ Not started (next: Polly + Phase 7 Tenant Enforcement & DDD tactical patterns)
 
@@ -28,16 +28,16 @@ When marking a day complete:
 Example: `Day 34: Enable EF Core SQL logging in Development environment`
 
 ## Related Commands Documents
-`Documentation/QUICK-COMMAND-REFERENCE.md` — index only (links to topic files below).
-All hands-on commands go to the appropriate topic file in `Documentation/commands/`:
-- `commands/git-workflow.md` — git, validation, daily workflow
-- `commands/azure-infra.md` — Azure CLI, Bicep, OIDC, GitHub workflows
-- `commands/azure-sql-ef.md` — Azure SQL, EF Core, sqlcmd, firewall
-- `commands/local-dev.md` — local dev, dotnet run, Docker, SQL logging
+`docs/reference/quick-command-reference.md` — canonical index and routing hub.
+All hands-on commands go to the appropriate canonical topic file in `docs/reference/`:
+- `docs/reference/git-workflow.md` — git, validation, daily workflow
+- `docs/reference/azure-infra.md` — Azure CLI, Bicep, OIDC, GitHub workflows
+- `docs/reference/azure-sql-ef.md` — Azure SQL, EF Core, sqlcmd, firewall
+- `docs/reference/local-dev.md` — local dev, dotnet run, Docker, SQL logging
 
 ## Daily Progress Convention
-Completed weeks: mark all items `[x]` in the master, update the `**Completed:**` dates, and summarise any unique implementation detail in `Documentation/05-Self-Learning/Azure-Curriculum/IMPLEMENTATION_NOTES.md`.
-Master file keeps the full checklist for all weeks; completed weeks have a `— Complete` or `— [Implementation Notes](IMPLEMENTATION_NOTES.md)` suffix on the heading line.
+Completed weeks: mark all items `[x]` in the master, update the `**Completed:**` dates, and summarise any unique implementation detail in `docs/learning/implementation-notes/implementation-notes-days-29-38.md`.
+Master file keeps the full checklist for all weeks; completed weeks have a `— Complete` or `— [Implementation Notes](../../../docs/learning/implementation-notes/implementation-notes-days-29-38.md)` suffix on the heading line.
 
 ---
 
@@ -48,7 +48,7 @@ When completing a curriculum day or implementing something new, use this decisio
 | What you learned / did | Update this document |
 |------------------------|---------------------|
 | Completed a checklist item | `1_MASTER_CURRICULUM.md` — mark `[x]`, update Completed date |
-| Ran a new CLI command (az, dotnet ef, git, sqlcmd) | `Documentation/commands/<topic>.md` — git-workflow / azure-infra / azure-sql-ef / local-dev |
+| Ran a new CLI command (az, dotnet ef, git, sqlcmd) | `docs/reference/<topic>.md` — git-workflow / azure-infra / azure-sql-ef / local-dev |
 | Made a technology choice (why X over Y) | New `docs/architecture/decisions/ADR-NNN-title.md` |
 | Discovered a reusable pattern for any future project | `/memories/architect-patterns.md` — add to relevant section |
 | New Azure resource name / FQDN / credentials detail | `/memories/repo/azure-resources.md` |
@@ -65,7 +65,7 @@ update ALL four status locations together — never update one without checking 
 | File | What to update |
 |------|----------------|
 | `1_MASTER_CURRICULUM.md` | `WHAT'S NEXT?` block — completed items, next 3 priorities |
-| `Documentation/05-Self-Learning/Azure-Curriculum/README.md` | `Current Learning Status` section + `Last Updated` / `Current Focus` footer |
+| `docs/learning/curriculum/README.md` | `Current Learning Status` section + `Last Updated` / `Current Focus` footer |
 | `docs/internal/AZURE-PROGRESS-EVALUATION.md` | Top-of-file progress block (the `🟢 Current State` section) |
 | `curriculum.instructions.md` (this file) | `Current Progress` block at the top |
 

@@ -1,14 +1,14 @@
 # Quick Command Reference Guide
 **Last Updated:** March 20, 2026 (Day 34 + Copilot infrastructure session)
 
-All commands in one place. Also available as topic-specific deep dives in `Documentation/commands/`:
+All commands in one place. Canonical topic-specific deep dives now live in `docs/reference/`:
 
 | Topic | File |
 |-------|------|
-| Git, validation, daily workflow | [commands/git-workflow.md](commands/git-workflow.md) |
-| Azure CLI, Bicep, OIDC, GitHub workflows | [commands/azure-infra.md](commands/azure-infra.md) |
-| Azure SQL, EF Core, sqlcmd | [commands/azure-sql-ef.md](commands/azure-sql-ef.md) |
-| Local dev, dotnet run, Docker | [commands/local-dev.md](commands/local-dev.md) |
+| Git, validation, daily workflow | [docs/reference/git-workflow.md](../docs/reference/git-workflow.md) |
+| Azure CLI, Bicep, OIDC, GitHub workflows | [docs/reference/azure-infra.md](../docs/reference/azure-infra.md) |
+| Azure SQL, EF Core, sqlcmd | [docs/reference/azure-sql-ef.md](../docs/reference/azure-sql-ef.md) |
+| Local dev, dotnet run, Docker | [docs/reference/local-dev.md](../docs/reference/local-dev.md) |
 
 ---
 
@@ -717,7 +717,7 @@ Reusable agent prompts in `.github/prompts/`. Run in VS Code Chat (`Ctrl+Shift+I
 | What you did | Where it goes |
 |--------------|---------------|
 | Completed checklist item | `1_MASTER_CURRICULUM.md` |
-| Ran a CLI command | `Documentation/commands/<topic>.md` |
+| Ran a CLI command | `docs/reference/<topic>.md` |
 | Chose technology X over Y | New `docs/architecture/decisions/ADR-NNN.md` |
 | Learned reusable pattern | `/memories/architect-patterns.md` |
 | New Azure resource/FQDN | `/memories/repo/azure-resources.md` |
@@ -800,7 +800,7 @@ git push origin dev
 - ❌ Parameter file (`dev.json`) doesn't match environment name
 - ❌ Branch name (`main`) doesn't match job name `bootstrap-dev`
 
-> See [commands/git-workflow.md](commands/git-workflow.md) for full troubleshooting steps.
+> See [docs/reference/git-workflow.md](../docs/reference/git-workflow.md) for full troubleshooting steps.
 
 ---
 
@@ -820,7 +820,7 @@ Reusable agent prompts stored in `.github/prompts/`. Type in VS Code Chat (`Ctrl
 | What you did | Where it goes |
 |--------------|---------------|
 | Completed checklist item | `1_MASTER_CURRICULUM.md` |
-| Ran a CLI command | `Documentation/commands/<topic>.md` |
+| Ran a CLI command | `docs/reference/<topic>.md` |
 | Chose technology X over Y | New `docs/architecture/decisions/ADR-NNN.md` |
 | Learned reusable pattern | `/memories/architect-patterns.md` |
 | New Azure resource/FQDN | `/memories/repo/azure-resources.md` |
@@ -911,7 +911,7 @@ Reusable agent prompts stored in `.github/prompts/`. Type in VS Code Chat (`Ctrl
 
 ## 📚 Related Documentation
 
-- `Documentation/commands/` — all detailed command reference files (this index points here)
+- `docs/reference/` — all detailed command reference files (canonical location)
 - `Resources/Azure-Deployment/` — all Azure automation scripts
 - `Resources/Configuration/` — sharedsettings per environment
 - `.github/workflows/README.md` — workflow overview and secrets

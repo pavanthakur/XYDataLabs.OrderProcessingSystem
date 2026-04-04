@@ -18,6 +18,7 @@ This repo uses a small set of primary operational workflows, with additional sup
 | `deploy-api-to-azure.yml` | API/Backend code changes | All branches (dev/staging/main) | Builds and deploys API to environment-specific Azure Web App |
 | `deploy-ui-to-azure.yml` | UI/Frontend code changes | All branches (dev/staging/main) | Builds and deploys UI to environment-specific Azure Web App |
 | `validate-adrs.yml` | ADR file, script, or lint config changes | Push/PR to main/dev/staging, or manual | **[See README-VALIDATE-ADRS.md](./README-VALIDATE-ADRS.md)** — Validates ADR filename pattern, H1 heading, `**Status:**` frontmatter, and markdownlint rules |
+| `validate-doc-links.yml` | Docs or validator changes | Push/PR to main/dev/staging, or manual | Validates local markdown links and heading anchors for the canonical `docs/` tree |
 
 ### Workflow Categories
 
@@ -40,6 +41,7 @@ This repo uses a small set of primary operational workflows, with additional sup
 | `validate-deployment.yml` | Reusable preflight validation called by infra deployment |
 | `test-validate-deployment.yml` | Independent test harness for validation workflow changes |
 | `validate-adrs.yml` | Documentation governance for ADR changes |
+| `validate-doc-links.yml` | Lightweight guardrail for canonical docs navigation integrity |
 
 ### Branch-to-Environment Mapping
 
@@ -216,7 +218,7 @@ Workflows use **path-based triggering** - they only run when relevant code chang
 # Result: BOTH workflows run (API and UI depend on Domain) ✅
 
 # Scenario 4: Documentation updated
-# Changed: Documentation/README.md
+# Changed: docs/README.md
 # Result: NO workflows run (documentation changes ignored) ✅
 ```
 
@@ -350,9 +352,9 @@ act push -W .github/workflows/deploy-dev.yml
 
 ### Internal Documentation
 - **[Infrastructure Deployment Guide](./README-INFRA-DEPLOY.md)** ⭐ Manual Bicep deployment with dry run
-- [Bootstrap Workflow Summary](../../Documentation/Bootstrap-Workflow-Summary.md)
-- [Azure Deployment Guide](../../Documentation/02-Azure-Learning-Guides/AZURE_DEPLOYMENT_GUIDE.md)
-- [Master Curriculum](../../Documentation/05-Self-Learning/Azure-Curriculum/1_MASTER_CURRICULUM.md)
+- [Quick Start Azure Bootstrap](../../docs/guides/deployment/quick-start-azure-bootstrap.md)
+- [Azure Deployment Guide](../../docs/guides/deployment/azure-deployment-guide.md)
+- [Master Curriculum](../../docs/learning/curriculum/1_MASTER_CURRICULUM.md)
 
 ---
 
@@ -408,5 +410,5 @@ After infrastructure is deployed:
 - Validation Testing: See [README-TEST-VALIDATE-DEPLOYMENT.md](./README-TEST-VALIDATE-DEPLOYMENT.md)
 - Pre-Deployment Validation: See [README-VALIDATE-DEPLOYMENT.md](./README-VALIDATE-DEPLOYMENT.md)
 - Infrastructure: See [README-INFRA-DEPLOY.md](./README-INFRA-DEPLOY.md)
-- Application Deployment: Check [Bootstrap Workflow Summary](../../Documentation/Bootstrap-Workflow-Summary.md)
-- Full Learning Path: [Master Curriculum](../../Documentation/05-Self-Learning/Azure-Curriculum/1_MASTER_CURRICULUM.md)
+- Application Deployment: Check [Quick Start Azure Bootstrap](../../docs/guides/deployment/quick-start-azure-bootstrap.md)
+- Full Learning Path: [Master Curriculum](../../docs/learning/curriculum/1_MASTER_CURRICULUM.md)

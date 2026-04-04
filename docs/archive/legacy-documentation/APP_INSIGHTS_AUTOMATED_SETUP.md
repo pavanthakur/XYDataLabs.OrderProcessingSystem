@@ -322,10 +322,10 @@ requests
 
 ## Related Documentation
 
-- **[AZURE_DEPLOYMENT_GUIDE.md](./AZURE_DEPLOYMENT_GUIDE.md)** - Complete Azure deployment guide
-- **[QUICK-START-AZURE-BOOTSTRAP.md](../QUICK-START-AZURE-BOOTSTRAP.md)** - Bootstrap workflow quick start
-- **[Bootstrap-Workflow-Summary.md](../Bootstrap-Workflow-Summary.md)** - Detailed workflow documentation
-- **[APPLICATION_INSIGHTS_SETUP.md](./APPLICATION_INSIGHTS_SETUP.md)** - Legacy manual setup (deprecated)
+- **[azure-deployment-guide.md](../../docs/guides/deployment/azure-deployment-guide.md)** - Complete Azure deployment guide
+- **[quick-start-azure-bootstrap.md](../../docs/guides/deployment/quick-start-azure-bootstrap.md)** - Bootstrap workflow quick start
+- **[README.md](../../.github/workflows/README.md)** - Detailed workflow documentation
+- **[app-insights-automated-setup.md](../../docs/guides/configuration/app-insights-automated-setup.md)** - Canonical automated Application Insights setup guide
 
 ---
 

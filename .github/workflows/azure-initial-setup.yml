@@ -1114,7 +1114,7 @@ jobs:
           Write-Host "Solution: Install the app at https://github.com/settings/installations" -ForegroundColor Cyan
           Write-Host ""
           Write-Host "See documentation for details:" -ForegroundColor Gray
-          Write-Host "  • Documentation/03-Configuration-Guides/GITHUB-APP-AUTOMATION.md" -ForegroundColor White
+          Write-Host "  • docs/guides/configuration/workflow-automation-visual-guide.md" -ForegroundColor White
           Write-Host ""
           Write-Error "GitHub App token generation failed"
           exit 1
@@ -1698,7 +1698,7 @@ jobs:
             "- **Option A** (Recommended): ``.\scripts\setup-github-app-from-manifest.ps1``" >> $env:GITHUB_STEP_SUMMARY
             "- **Option B** (Manual): [Create at github.com/settings/apps/new](https://github.com/settings/apps/new)" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
-            "> 📖 **Detailed guide**: [QUICK-SETUP-GITHUB-APP.md](../blob/${{ github.ref_name }}/Documentation/03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md)" >> $env:GITHUB_STEP_SUMMARY
+            "> 📖 **Detailed guide**: [quick-setup-github-app.md](../blob/${{ github.ref_name }}/docs/guides/configuration/quick-setup-github-app.md)" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
             "---" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY

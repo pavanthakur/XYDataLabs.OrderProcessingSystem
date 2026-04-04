@@ -14,19 +14,19 @@ Then, based on their answer, apply the following routing rules automatically —
 ## Routing Rules
 
 1. **Always: Mark curriculum checkboxes**
-   - Open `Documentation/05-Self-Learning/Azure-Curriculum/1_MASTER_CURRICULUM.md`
+   - Open `docs/learning/curriculum/1_MASTER_CURRICULUM.md`
    - Mark completed items `[x]`, update the `**Completed:**` date line
 
 2. **If any CLI commands were run** (az, dotnet ef, git, sqlcmd, docker, pwsh):
-   - Add them to the matching section in `Documentation/QUICK-COMMAND-REFERENCE.md`
-   - Also add them to the appropriate topic file under `Documentation/commands/`:
+   - Add them to the matching section in `docs/reference/quick-command-reference.md`
+   - Also add them to the appropriate canonical topic file under `docs/reference/`:
 
      | Topic | File |
      |-------|------|
-     | Git, validation, daily workflow | `commands/git-workflow.md` |
-     | Azure CLI, Bicep, infra, OIDC | `commands/azure-infra.md` |
-     | Azure SQL, EF Core, sqlcmd, firewall | `commands/azure-sql-ef.md` |
-     | Local dev, dotnet run, Docker | `commands/local-dev.md` |
+   | Git, validation, daily workflow | `docs/reference/git-workflow.md` |
+   | Azure CLI, Bicep, infra, OIDC | `docs/reference/azure-infra.md` |
+   | Azure SQL, EF Core, sqlcmd, firewall | `docs/reference/azure-sql-ef.md` |
+   | Local dev, dotnet run, Docker | `docs/reference/local-dev.md` |
 
    - Create a new section in both files if the topic doesn't exist yet
 
@@ -53,7 +53,7 @@ Then, based on their answer, apply the following routing rules automatically —
    - Update the **COMPLETED SO FAR** bullet at the top of the master file if it exists
 
 9. **Always: Record unique implementation detail for the completed day**
-   - Open `Documentation/05-Self-Learning/Azure-Curriculum/IMPLEMENTATION_NOTES.md`
+   - Open `docs/learning/implementation-notes/implementation-notes-days-29-38.md`
    - Add a `## Day N: <Title>` section if the day had notable implementation nuance
    - Include:
      - What was built, configured, or verified — step by step

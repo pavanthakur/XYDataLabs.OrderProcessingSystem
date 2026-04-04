@@ -584,8 +584,8 @@ The workflow automatically validates configuration at the end:
 
 ## Documentation
 
-- **Automation Guide**: `Documentation/03-Configuration-Guides/GITHUB-APP-AUTOMATION.md`
-- **Quick Setup**: `Documentation/03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md`
+- **Automation Guide**: `docs/guides/configuration/workflow-automation-visual-guide.md`
+- **Quick Setup**: `docs/guides/configuration/quick-setup-github-app.md`
 - **Setup Script**: `scripts/setup-github-app-from-manifest.ps1`
 - **Validation Script**: `scripts/validate-github-app-config.ps1`
 - **App Manifest**: `.github/app-manifest.json`

@@ -708,7 +708,7 @@ Module-isolated, working microservices locally with proven PublicApi boundaries 
 - **Blue-green deployments** — zero-downtime with ACA revisions; switch traffic after health check passes
 - **Canary releases** — gradual traffic shifting (e.g. 10% → 50% → 100%) with automatic rollback on error-rate spike
 
-> **Operational Detail:** See [ACA-Migration-Plan.md](./Documentation/04-Enterprise-Architecture/ACA-Migration-Plan.md) for the 13-phase operational runbook covering governance, identity hardening, ACR setup, canary deployments, and decommissioning.
+> **Operational Detail:** See [docs/guides/deployment/aca-migration-plan.md](./docs/guides/deployment/aca-migration-plan.md) for the 13-phase operational runbook covering governance, identity hardening, ACR setup, canary deployments, and decommissioning.
 
 ### Outcome
 
@@ -1198,8 +1198,8 @@ _Every factor is already covered across the 14-phase plan — documented here fo
 
 ### Documentation
 - [AZURE-PROGRESS-EVALUATION.md](./docs/internal/AZURE-PROGRESS-EVALUATION.md) - Detailed learning plan
-- [Documentation/README.md](./Documentation/README.md) - Central documentation hub
-- [Documentation/04-Enterprise-Architecture/ACA-Migration-Plan.md](./Documentation/04-Enterprise-Architecture/ACA-Migration-Plan.md) - Container Apps operational runbook (13-phase)
+- [docs/README.md](./docs/README.md) - Central documentation hub
+- [docs/guides/deployment/aca-migration-plan.md](./docs/guides/deployment/aca-migration-plan.md) - Container Apps operational runbook (13-phase)
 
 ### Azure Resources
 - **Current Deployment:** https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net

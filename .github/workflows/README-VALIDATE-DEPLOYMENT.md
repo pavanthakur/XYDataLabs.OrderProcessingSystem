@@ -135,4 +135,4 @@ By default, `verify-oidc-credentials.ps1` reads expected environment subjects fr
 ## Related Documentation
 - [Validation Scripts](../../Resources/Azure-Deployment/README.md)
 - [Infrastructure Deployment](./README-INFRA-DEPLOY.md)
-- [Operations Quick Links](../../Documentation/Operations-Quick-Links-README.md)
+- [Operations Quick Links](../../docs/reference/operations-quick-links.md)

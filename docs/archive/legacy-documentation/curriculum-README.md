@@ -88,7 +88,7 @@ Azure-Curriculum/
 | **Weekly Roadmap** | `docs/internal/AZURE-PROGRESS-EVALUATION.md` | 15-week milestone tracker |
 | **Architecture Guide** | `ARCHITECTURE-EVOLUTION.md` (root) | 14-phase monolith → microservices roadmap (Phases 1-6 ✅) |
 | **Service Coverage** | `1_MASTER_CURRICULUM.md` (inline table) | Azure services analysis |
-| **Main Documentation** | `Documentation/README.md` | Project documentation hub |
+| **Main Documentation** | `docs/README.md` | Project documentation hub |
 
 ---
 

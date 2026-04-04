@@ -105,7 +105,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{
 	ProjectSection(SolutionItems) = preProject
 		.github\workflows\README.md = .github\workflows\README.md
 		.github\workflows\README-AZURE-BOOTSTRAP.md = .github\workflows\README-AZURE-BOOTSTRAP.md
-		.github\workflows\README-AZURE-BOOTSTRAP-SETUP.md = .github\workflows\README-AZURE-BOOTSTRAP-SETUP.md
 		.github\workflows\README-AZURE-INITIAL-SETUP.md = .github\workflows\README-AZURE-INITIAL-SETUP.md
 		.github\workflows\README-CONFIGURE-GITHUB-SECRETS.md = .github\workflows\README-CONFIGURE-GITHUB-SECRETS.md
 		.github\workflows\README-INFRA-DEPLOY.md = .github\workflows\README-INFRA-DEPLOY.md
@@ -121,6 +120,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{
 		.github\workflows\test-validate-deployment.yml = .github\workflows\test-validate-deployment.yml
 		.github\workflows\validate-deployment.yml = .github\workflows\validate-deployment.yml
 		.github\workflows\validate-adrs.yml = .github\workflows\validate-adrs.yml
+		.github\workflows\validate-doc-links.yml = .github\workflows\validate-doc-links.yml
 		.github\workflows\README-VALIDATE-ADRS.md = .github\workflows\README-VALIDATE-ADRS.md
 		.github\workflows\ci.yml = .github\workflows\ci.yml
 	EndProjectSection
@@ -153,60 +153,14 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "modules", "modules", "{E1A8
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Documentation", "Documentation", "{D0C1234A-5678-9012-3456-789ABCDEF123}"
 	ProjectSection(SolutionItems) = preProject
+		Documentation\DOCUMENTATION-AUDIT.md = Documentation\DOCUMENTATION-AUDIT.md
 		Documentation\README.md = Documentation\README.md
-		Documentation\GITHUB-WORKFLOW-SEPARATION-ARCHITECTURE.md = Documentation\GITHUB-WORKFLOW-SEPARATION-ARCHITECTURE.md
-		Documentation\Operations-Quick-Links-README.md = Documentation\Operations-Quick-Links-README.md
-		Documentation\QUICK-COMMAND-REFERENCE.md = Documentation\QUICK-COMMAND-REFERENCE.md
 		Documentation\QUICK-START-AZURE-BOOTSTRAP.md = Documentation\QUICK-START-AZURE-BOOTSTRAP.md
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "01-Project-Overview", "01-Project-Overview", "{D1C1234A-5678-9012-3456-789ABCDEF124}"
-	ProjectSection(SolutionItems) = preProject
-		Documentation\01-Project-Overview\README.md = Documentation\01-Project-Overview\README.md
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "02-Azure-Learning-Guides", "02-Azure-Learning-Guides", "{D2C1234A-5678-9012-3456-789ABCDEF125}"
-	ProjectSection(SolutionItems) = preProject
-		Documentation\02-Azure-Learning-Guides\APP_INSIGHTS_AUTOMATED_SETUP.md = Documentation\02-Azure-Learning-Guides\APP_INSIGHTS_AUTOMATED_SETUP.md
-		Documentation\02-Azure-Learning-Guides\AZURE_DEPLOYMENT_GUIDE.md = Documentation\02-Azure-Learning-Guides\AZURE_DEPLOYMENT_GUIDE.md
-		Documentation\02-Azure-Learning-Guides\AZURE_README.md = Documentation\02-Azure-Learning-Guides\AZURE_README.md
-		Documentation\02-Azure-Learning-Guides\BOOTSTRAP_SCRIPT_FLOW.md = Documentation\02-Azure-Learning-Guides\BOOTSTRAP_SCRIPT_FLOW.md
-		Documentation\02-Azure-Learning-Guides\Containerization-ACA-Aspire-Learning-Path.md = Documentation\02-Azure-Learning-Guides\Containerization-ACA-Aspire-Learning-Path.md
-		Documentation\02-Azure-Learning-Guides\DOCKER_COMPREHENSIVE_GUIDE.md = Documentation\02-Azure-Learning-Guides\DOCKER_COMPREHENSIVE_GUIDE.md
-		Documentation\02-Azure-Learning-Guides\VISUAL_STUDIO_DOCKER_PROFILES.md = Documentation\02-Azure-Learning-Guides\VISUAL_STUDIO_DOCKER_PROFILES.md
-		Documentation\02-Azure-Learning-Guides\SKU_UPGRADE_SLOT_TESTING.md = Documentation\02-Azure-Learning-Guides\SKU_UPGRADE_SLOT_TESTING.md
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "03-Configuration-Guides", "03-Configuration-Guides", "{D3C1234A-5678-9012-3456-789ABCDEF126}"
-	ProjectSection(SolutionItems) = preProject
-		Documentation\03-Configuration-Guides\AZURE-APPSERVICE-SECRETS-GUIDE.md = Documentation\03-Configuration-Guides\AZURE-APPSERVICE-SECRETS-GUIDE.md
-		Documentation\03-Configuration-Guides\GITHUB-APP-AUTHENTICATION.md = Documentation\03-Configuration-Guides\GITHUB-APP-AUTHENTICATION.md
-		Documentation\03-Configuration-Guides\KEY-VAULT-INTEGRATION.md = Documentation\03-Configuration-Guides\KEY-VAULT-INTEGRATION.md
-		Documentation\03-Configuration-Guides\QUICK-SETUP-GITHUB-APP.md = Documentation\03-Configuration-Guides\QUICK-SETUP-GITHUB-APP.md
-		Documentation\03-Configuration-Guides\WORKFLOW-AUTOMATION-VISUAL-GUIDE.md = Documentation\03-Configuration-Guides\WORKFLOW-AUTOMATION-VISUAL-GUIDE.md
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "04-Enterprise-Architecture", "04-Enterprise-Architecture", "{D4C1234A-5678-9012-3456-789ABCDEF127}"
-	ProjectSection(SolutionItems) = preProject
-		Documentation\04-Enterprise-Architecture\ACA-Migration-Plan.md = Documentation\04-Enterprise-Architecture\ACA-Migration-Plan.md
-		Documentation\04-Enterprise-Architecture\ACA-Target-Architecture.png = Documentation\04-Enterprise-Architecture\ACA-Target-Architecture.png
-		Documentation\04-Enterprise-Architecture\WEEKLY_AZURE_LEARNING_PLAN.md = Documentation\04-Enterprise-Architecture\WEEKLY_AZURE_LEARNING_PLAN.md
-		Documentation\04-Enterprise-Architecture\TODO-AZURE-BOOTSTRAP-IMPROVEMENTS.md = Documentation\04-Enterprise-Architecture\TODO-AZURE-BOOTSTRAP-IMPROVEMENTS.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "05-Self-Learning", "05-Self-Learning", "{D5C1234A-5678-9012-3456-789ABCDEF128}"
 	ProjectSection(SolutionItems) = preProject
 		Documentation\05-Self-Learning\Azure-Curriculum\1_MASTER_CURRICULUM.md = Documentation\05-Self-Learning\Azure-Curriculum\1_MASTER_CURRICULUM.md
-		Documentation\05-Self-Learning\Azure-Curriculum\IMPLEMENTATION_NOTES.md = Documentation\05-Self-Learning\Azure-Curriculum\IMPLEMENTATION_NOTES.md
-		Documentation\05-Self-Learning\Azure-Curriculum\README.md = Documentation\05-Self-Learning\Azure-Curriculum\README.md
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "commands", "commands", "{D6C1234A-5678-9012-3456-789ABCDEF129}"
-	ProjectSection(SolutionItems) = preProject
-		Documentation\commands\azure-infra.md = Documentation\commands\azure-infra.md
-		Documentation\commands\azure-sql-ef.md = Documentation\commands\azure-sql-ef.md
-		Documentation\commands\git-workflow.md = Documentation\commands\git-workflow.md
-		Documentation\commands\local-dev.md = Documentation\commands\local-dev.md
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XYDataLabs.OrderProcessingSystem.SharedKernel", "XYDataLabs.OrderProcessingSystem.SharedKernel\XYDataLabs.OrderProcessingSystem.SharedKernel.csproj", "{DFC0BB5F-D671-DE7D-4A5D-D10E77984910}"
@@ -236,6 +190,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "scripts", "scripts", "{BB00
 		scripts\test-recommended-next-steps.ps1 = scripts\test-recommended-next-steps.ps1
 		scripts\setup-local.ps1 = scripts\setup-local.ps1
 		scripts\validate-adr-frontmatter.ps1 = scripts\validate-adr-frontmatter.ps1
+		scripts\validate-doc-links.js = scripts\validate-doc-links.js
 		scripts\sync-check-solution.ps1 = scripts\sync-check-solution.ps1
 		scripts\verify-payment-run-azure.ps1 = scripts\verify-payment-run-azure.ps1
 		scripts\test-verify-payment-run-azure.ps1 = scripts\test-verify-payment-run-azure.ps1
@@ -266,10 +221,12 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "internal", "internal", "{CC000004-0001-0001-0001-000000000001}"
 	ProjectSection(SolutionItems) = preProject
 		docs\internal\AZURE-PROGRESS-EVALUATION.md = docs\internal\AZURE-PROGRESS-EVALUATION.md
-		docs\internal\Archive\AZURE-TOP-7-SERVICES-ANALYSIS.md = docs\internal\Archive\AZURE-TOP-7-SERVICES-ANALYSIS.md
-		docs\internal\Archive\GITHUB-APP-DELETION-SUMMARY.md = docs\internal\Archive\GITHUB-APP-DELETION-SUMMARY.md
-		docs\internal\Archive\GITHUB-APP-QUICK-REFERENCE.md = docs\internal\Archive\GITHUB-APP-QUICK-REFERENCE.md
-		docs\internal\Archive\IMPLEMENTATION-COMPLETE.md = docs\internal\Archive\IMPLEMENTATION-COMPLETE.md
+		docs\internal\README.md = docs\internal\README.md
+		docs\internal\azure-bootstrap-improvements-backlog.md = docs\internal\azure-bootstrap-improvements-backlog.md
+		docs\archive\historical-notes\internal\AZURE-TOP-7-SERVICES-ANALYSIS.md = docs\archive\historical-notes\internal\AZURE-TOP-7-SERVICES-ANALYSIS.md
+		docs\archive\historical-notes\internal\GITHUB-APP-DELETION-SUMMARY.md = docs\archive\historical-notes\internal\GITHUB-APP-DELETION-SUMMARY.md
+		docs\archive\historical-notes\internal\GITHUB-APP-QUICK-REFERENCE.md = docs\archive\historical-notes\internal\GITHUB-APP-QUICK-REFERENCE.md
+		docs\archive\historical-notes\internal\IMPLEMENTATION-COMPLETE.md = docs\archive\historical-notes\internal\IMPLEMENTATION-COMPLETE.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "runbooks", "runbooks", "{CC000005-0001-0001-0001-000000000001}"
@@ -477,12 +434,7 @@ Global
 		{E1A8B2C9-4D5F-6789-ABCD-123456789DE6} = {E1A8B2C9-4D5F-6789-ABCD-123456789DE5}
 		{E1A8B2CB-4D5F-6789-ABCD-123456789DE7} = {E1A8B2CA-4D5F-6789-ABCD-123456789DE6}
 		{E1A8B2CC-4D5F-6789-ABCD-123456789DE8} = {E1A8B2CA-4D5F-6789-ABCD-123456789DE6}
-		{D1C1234A-5678-9012-3456-789ABCDEF124} = {D0C1234A-5678-9012-3456-789ABCDEF123}
-		{D2C1234A-5678-9012-3456-789ABCDEF125} = {D0C1234A-5678-9012-3456-789ABCDEF123}
-		{D3C1234A-5678-9012-3456-789ABCDEF126} = {D0C1234A-5678-9012-3456-789ABCDEF123}
-		{D4C1234A-5678-9012-3456-789ABCDEF127} = {D0C1234A-5678-9012-3456-789ABCDEF123}
 		{D5C1234A-5678-9012-3456-789ABCDEF128} = {D0C1234A-5678-9012-3456-789ABCDEF123}
-		{D6C1234A-5678-9012-3456-789ABCDEF129} = {D0C1234A-5678-9012-3456-789ABCDEF123}
 		{F5548781-50F1-4152-942A-88B795A88953} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{D4315B79-068A-401E-924E-FC3AC597994C} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{D7349574-850D-4FE5-97F4-92EEF6641EBA} = {0AB3BF05-4346-4AA6-1389-037BE0695223}

@@ -257,10 +257,10 @@ This ensures global uniqueness for App Service names.
 
 ## 📚 Related Documentation
 
-- **Migration Plan:** `Documentation/04-Enterprise-Architecture/ACA-Migration-Plan.md`
+- **Migration Plan:** `docs/guides/deployment/aca-migration-plan.md`
 - **Bicep README:** `infra/README.md`
 - **OIDC Setup:** `Resources/Azure-Deployment/README.md`
-- **Master Curriculum:** `Documentation/05-Self-Learning/Azure-Curriculum/1_MASTER_CURRICULUM.md`
+- **Master Curriculum:** `docs/learning/curriculum/1_MASTER_CURRICULUM.md`
 
 ---
 

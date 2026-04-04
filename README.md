@@ -417,8 +417,8 @@ Any deviation from ARCHITECTURE.md requires an Architecture Decision Record (ADR
 | **Architecture standard** (binding) | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | Architecture evolution (14-phase roadmap) | [ARCHITECTURE-EVOLUTION.md](ARCHITECTURE-EVOLUTION.md) |
 | Architecture Decision Records | [docs/architecture/decisions/](docs/architecture/decisions/) |
-| Azure deployment guide | [Documentation/02-Azure-Learning-Guides/AZURE_DEPLOYMENT_GUIDE.md](Documentation/02-Azure-Learning-Guides/AZURE_DEPLOYMENT_GUIDE.md) |
-| Quick start (bootstrap) | [Documentation/QUICK-START-AZURE-BOOTSTRAP.md](Documentation/QUICK-START-AZURE-BOOTSTRAP.md) |
+| Azure deployment guide | [docs/guides/deployment/azure-deployment-guide.md](docs/guides/deployment/azure-deployment-guide.md) |
+| Quick start (bootstrap) | [docs/guides/deployment/quick-start-azure-bootstrap.md](docs/guides/deployment/quick-start-azure-bootstrap.md) |
 | CI/CD workflow guide | [.github/workflows/README.md](.github/workflows/README.md) |
 | PowerShell scripts reference | [Resources/Azure-Deployment/README.md](Resources/Azure-Deployment/README.md) |
 | Troubleshooting | [TROUBLESHOOTING-INDEX.md](TROUBLESHOOTING-INDEX.md) |
