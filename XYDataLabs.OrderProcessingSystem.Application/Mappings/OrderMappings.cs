@@ -11,6 +11,7 @@ public static class OrderMappings
         OrderDate = order.OrderDate,
         CustomerId = order.CustomerId,
         TotalPrice = order.TotalPrice,
+        Status = order.Status.ToString(),
         IsFulfilled = order.IsFulfilled,
         OrderProductDtos = order.OrderProducts
             .Select(op => op.ToDto())

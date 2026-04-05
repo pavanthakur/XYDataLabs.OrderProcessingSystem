@@ -4,6 +4,8 @@ using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using XYDataLabs.OrderProcessingSystem.Domain.Identifiers;
+using XYDataLabs.OrderProcessingSystem.Domain.ValueObjects;
 
 namespace XYDataLabs.OrderProcessingSystem.Domain.Entities
 {
@@ -11,12 +13,12 @@ namespace XYDataLabs.OrderProcessingSystem.Domain.Entities
     {
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public int SysId { get; set; }
-        public int OrderId { get; set; }
-        public int ProductId { get; set; }
+        public OrderId OrderId { get; set; }
+        public ProductId ProductId { get; set; }
         public int Quantity { get; set; }
 
         [Column(TypeName = "decimal(18,2)")]
-        public decimal Price => (Product?.Price ?? 0) * Quantity;
+        public Money Price => (Product?.Price ?? Money.Zero) * Quantity;
 
         public Order? Order { get; set; }
         public Product? Product { get; set; }

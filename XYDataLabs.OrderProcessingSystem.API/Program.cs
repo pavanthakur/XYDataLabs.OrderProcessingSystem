@@ -1,6 +1,7 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using System.Threading.RateLimiting;
 using XYDataLabs.OrderProcessingSystem.API.Middleware;
 using XYDataLabs.OrderProcessingSystem.Application;
@@ -174,6 +175,7 @@ builder.Services.AddCors(options =>
 
 builder.InjectInfrastructureDependencies();
 builder.InjectApplicationDependencies();
+builder.Services.AddProblemDetails();
 
 // Health checks — /health/live (liveness), /health/ready (SQL + Redis), /health (backward compat)
 var healthChecksBuilder = builder.Services.AddHealthChecks();
@@ -351,16 +353,6 @@ else
 
 var app = builder.Build();
 
-static void ConfigureApiExceptionHandler(IApplicationBuilder errorApp)
-{
-    errorApp.Run(async context =>
-    {
-        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-        context.Response.ContentType = "application/json";
-        await context.Response.WriteAsJsonAsync(new { message = "An unexpected error occurred. Please try again later." });
-    });
-}
-
 // Initialize database and AppMasterData during startup
 using (var scope = app.Services.CreateScope())
 {
@@ -383,6 +375,8 @@ SharedSettingsLoader.PrintApiSettingsDebug(apiSettings, activeSettings, "API", i
 
 app.UseStaticFiles();
 
+app.UseMiddleware<SecurityHeadersMiddleware>();
+
 // Add Serilog request logging
 app.UseSerilogRequestLogging(options =>
 {
@@ -400,7 +394,6 @@ app.UseSerilogRequestLogging(options =>
     };
 });
 
-var useDeveloperExceptionPage = builder.Environment.IsDevelopment() && !isAzure;
 var swaggerTenantSelectorScriptPath = GetVersionedWebAssetPath(app, "swagger-assets/tenant-selector.js");
 
 // Configure the HTTP request pipeline.
@@ -425,19 +418,10 @@ if (environmentName == Constants.Environments.Dev || environmentName == Constant
         }
     });
     
-    if (useDeveloperExceptionPage)
-    {
-        app.UseDeveloperExceptionPage();
-    }
-    else
-    {
-        app.UseExceptionHandler(ConfigureApiExceptionHandler);
-    }
 }
 else
 {
     // Production and any unrecognised environment: Swagger disabled, HSTS enforced.
-    app.UseExceptionHandler(ConfigureApiExceptionHandler);
     app.UseHsts();
 
     // Short-circuit /swagger/* before TenantMiddleware so the caller gets a clear
@@ -487,6 +471,8 @@ else
     });
 }
 
+app.UseMiddleware<ErrorHandlingMiddleware>();
+
 // Enable CORS before other middleware.
 // Production (Azure) uses origin-restricted policy; all other environments use AllowAll.
 var corsPolicy = (isAzure && string.Equals(environmentName, Constants.Environments.Production, StringComparison.Ordinal))
@@ -513,16 +499,25 @@ app.UseMiddleware<CorrelationMiddleware>();
 
 app.UseMiddleware<LoggingMiddleware>();
 
-app.UseMiddleware<ErrorHandlingMiddleware>();
-
 app.MapControllers();
+
+var readinessHealthCheckOptions = new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready"),
+    ResultStatusCodes =
+    {
+        [HealthStatus.Healthy] = StatusCodes.Status200OK,
+        [HealthStatus.Degraded] = StatusCodes.Status503ServiceUnavailable,
+        [HealthStatus.Unhealthy] = StatusCodes.Status503ServiceUnavailable
+    }
+};
 
 // Liveness — no dependency checks; always 200 if the process is running (App Service liveness probe)
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
-// Readiness — SQL Server + Redis (when configured); only "ready"-tagged checks (App Service readiness probe)
-app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
+// Readiness — SQL Server + Redis (when configured); degrade/unhealthy both fail HTTP readiness.
+app.MapHealthChecks("/health/ready", readinessHealthCheckOptions);
 // Backward-compat alias — used by manage-appservice-slots.ps1 warmup URL
-app.MapHealthChecks("/health", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
+app.MapHealthChecks("/health", readinessHealthCheckOptions);
 
 if (isAzure)
 {

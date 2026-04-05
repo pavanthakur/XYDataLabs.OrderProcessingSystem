@@ -2,6 +2,7 @@ using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
 using XYDataLabs.OrderProcessingSystem.Application.Mappings;
+using XYDataLabs.OrderProcessingSystem.Domain.Identifiers;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.Features.Customers.Commands;
@@ -25,6 +26,6 @@ public sealed class UpdateCustomerCommandHandler : ICommandHandler<UpdateCustome
         _context.Customers.Update(customer);
         await _context.SaveChangesAsync(cancellationToken);
 
-        return customer.CustomerId;
+        return customer.CustomerId.Value;
     }
 }

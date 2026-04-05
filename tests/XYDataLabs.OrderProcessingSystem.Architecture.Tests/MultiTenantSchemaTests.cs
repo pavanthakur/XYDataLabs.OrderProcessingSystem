@@ -18,10 +18,32 @@ public class MultiTenantSchemaTests
         using var context = CreateDbContext();
         var model = context.Model;
 
+        HasIndex(model.FindEntityType(typeof(AuditLog)), nameof(AuditLog.TenantId), nameof(AuditLog.EntityName), nameof(AuditLog.EntityId)).Should().BeTrue();
+        HasIndex(model.FindEntityType(typeof(AuditLog)), nameof(AuditLog.CreatedDate)).Should().BeTrue();
+        HasIndex(model.FindEntityType(typeof(Order)), nameof(Order.TenantId), nameof(Order.CustomerId), nameof(Order.Status)).Should().BeTrue();
         HasIndex(model.FindEntityType(typeof(CardTransaction)), nameof(CardTransaction.TenantId), nameof(CardTransaction.CustomerOrderId)).Should().BeTrue();
         HasIndex(model.FindEntityType(typeof(CardTransaction)), nameof(CardTransaction.TenantId), nameof(CardTransaction.AttemptOrderId)).Should().BeTrue();
         HasIndex(model.FindEntityType(typeof(PayinLog)), nameof(PayinLog.TenantId), nameof(PayinLog.AttemptOrderId)).Should().BeTrue();
         HasIndex(model.FindEntityType(typeof(TransactionStatusHistory)), nameof(TransactionStatusHistory.TenantId), nameof(TransactionStatusHistory.AttemptOrderId)).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Order_Should_Use_RowVersion_Concurrency_Token()
+    {
+        using var context = CreateDbContext();
+        var orderEntity = context.Model.FindEntityType(typeof(Order));
+
+        orderEntity.Should().NotBeNull();
+
+        var rowVersionProperty = orderEntity!.FindProperty(nameof(Order.RowVersion));
+        rowVersionProperty.Should().NotBeNull();
+        rowVersionProperty!.IsConcurrencyToken.Should().BeTrue();
+        rowVersionProperty.ValueGenerated.Should().Be(ValueGenerated.OnAddOrUpdate);
+
+        var statusProperty = orderEntity.FindProperty(nameof(Order.Status));
+        statusProperty.Should().NotBeNull();
+        statusProperty!.GetMaxLength().Should().Be(32);
+        statusProperty.IsNullable.Should().BeFalse();
     }
 
     [Fact]
@@ -40,9 +62,22 @@ public class MultiTenantSchemaTests
     {
         using var context = CreateDbContext();
 
+        context.Model.FindEntityType(typeof(AuditLog))!.GetQueryFilter().Should().NotBeNull();
         context.Model.FindEntityType(typeof(CardTransaction))!.GetQueryFilter().Should().NotBeNull();
         context.Model.FindEntityType(typeof(PayinLog))!.GetQueryFilter().Should().NotBeNull();
         context.Model.FindEntityType(typeof(TransactionStatusHistory))!.GetQueryFilter().Should().NotBeNull();
+    }
+
+    [Fact]
+    public void AuditLog_Query_Should_Contain_Tenant_Filter_Predicate()
+    {
+        using var context = CreateDbContext(new TestTenantProvider(42, "TenantA"));
+
+        var sql = context.AuditLogs
+            .Where(item => item.EntityName == "Customer")
+            .ToQueryString();
+
+        sql.Should().MatchRegex("WHERE[\\s\\S]*TenantId[\\s\\S]*=[\\s\\S]*");
     }
 
     [Fact]
@@ -324,12 +359,35 @@ public class MultiTenantSchemaTests
             .Any(index => index.Properties.Select(property => property.Name).SequenceEqual(propertyNames));
     }
 
-    private static OrderProcessingSystemDbContext CreateDbContext()
+    private static OrderProcessingSystemDbContext CreateDbContext(ITenantProvider? tenantProvider = null)
     {
         var options = new DbContextOptionsBuilder<OrderProcessingSystemDbContext>()
             .UseSqlServer("Server=(localdb)\\mssqllocaldb;Database=SchemaTests_DoNotConnect;Trusted_Connection=True;")
             .Options;
 
-        return new OrderProcessingSystemDbContext(options);
+        return tenantProvider is null
+            ? new OrderProcessingSystemDbContext(options)
+            : new OrderProcessingSystemDbContext(options, tenantProvider);
+    }
+
+    private sealed class TestTenantProvider : ITenantProvider
+    {
+        public TestTenantProvider(int tenantId, string tenantCode)
+        {
+            TenantId = tenantId;
+            TenantCode = tenantCode;
+        }
+
+        public bool HasTenantContext => true;
+
+        public int TenantId { get; }
+
+        public string TenantCode { get; }
+
+        public string TenantExternalId => $"ext-{TenantCode}";
+
+        public string? ConnectionString => null;
+
+        public bool IsSharedPool => true;
     }
 }

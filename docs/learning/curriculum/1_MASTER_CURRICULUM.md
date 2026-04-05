@@ -27,7 +27,7 @@
 **Why:** Connect your app to real Azure data services using passwordless auth — the foundation for everything that follows  
 **Tasks:**
 - Days 32-38: ✅ Azure SQL + EF Core + `DefaultAzureCredential` (complete)
-- Days 39-43: Polly + Health Checks + 🏗️ **Phase 7** (Tenant Enforcement & Ops)
+- Days 39-43: 🔄 Polly + Health Checks + 🏗️ **Phase 7** (tenant enforcement active; audit logging in progress)
 - Days 44-52: Azure Functions + Service Bus + 🏗️ **Phase 8** (Event-Driven Foundation)
 - Days 53-56: Key Vault + `IOptions<T>` + Worker Services + Outbox Pattern
 
@@ -62,7 +62,7 @@ See `ARCHITECTURE-EVOLUTION.md` for full phase details.
 | 4 | Multi-Tenancy Skeleton | – | ✅ Complete |
 | 5 | Test Restructure | Day 80 (auto-✅) | ✅ Complete |
 | 6 | Polish & Hardening | Days 42-43, 71-72, 94 (auto-✅) | ✅ Complete |
-| 7 | Tenant Enforcement & Ops | Days 42–43 (DDD + Ops) | 📅 Next |
+| 7 | Tenant Enforcement & Ops | Days 42–43 (DDD + Ops) | 🔄 In Progress |
 | 8 | Event-Driven Foundation | Days 51, 55–56 | 📅 Planned |
 | 8.5 | Multi-Provider Payment | Days 58–59 | 📅 Planned |
 | 9 | YARP Microservices | Days 74–76, 78 | 📅 Planned |
@@ -382,10 +382,16 @@ After completing today's tasks, you will have:
 > ✅ `/health` with SQL check implemented during Architecture Phase 6 (Polish & Hardening)
 >
 > 🏗️ **Architecture Phase 7a** — Extend this day: `TenantValidationBehavior`, ProblemDetails RFC 9457, global exception middleware
+> 
+> **Status:** ✅ Implemented in code and covered by focused unit/integration tests.
 >
 > **DDD Tactical Patterns (Phase 7 — part 1):**
-> - Aggregate root — `Order` with private constructor, `Create()` factory method returning `Result<Order>`
-> - State machine — `Order.Pay()`, `Ship()`, `Deliver()`, `Cancel()` with `Result<T>` transition methods
+> 
+> **Status:** ✅ `Order` aggregate now uses a private constructor, `Create()` factory, and explicit `Created → Paid → Shipped → Delivered → Cancelled` transitions backed by a domain-local result primitive.
+>
+> **DDD Tactical Patterns (Phase 7 — part 1):**
+> - Aggregate root — `Order` with private constructor, `Create()` factory method returning a domain-local result
+> - State machine — `Order.Pay()`, `Ship()`, `Deliver()`, `Cancel()` with explicit transition methods
 > - Value objects — `Address` and `Money` as immutable `record` types with self-validation
 > - Domain invariants enforced inside aggregate methods (e.g. cannot ship an unpaid order), returning `Result<T>.Failure` — never exceptions for business rules
 > - Aggregate boundary rule — aggregates enforce only their own transactional invariants; no injected infrastructure services
@@ -396,10 +402,12 @@ After completing today's tasks, you will have:
 
 #### Day 43: Health Checks — Azure Integration ✅ *(Delivered by Architecture Phase 6)*
 > 🏗️ **Architecture Phase 7b** — Extend this day: Security headers middleware, `AuditLog` table, split `/health/live` + `/health/ready`, enhanced OTel metrics
+> 
+> **Status:** 🔄 Security headers, `AuditLog` table, query/API surface, migration, and tenant-isolation tests are implemented; enhanced OTel metrics remain pending.
 >
 > **DDD Tactical Patterns (Phase 7 — part 2):**
 > - Strongly-typed IDs — `OrderId`, `CustomerId`, `ProductId` as `readonly record struct` wrappers around `Guid` + EF Core value converters for transparent persistence
-> - Optimistic concurrency — `RowVersion` (`byte[]` / `[Timestamp]`) on `BaseAuditableEntity`; EF intercepts `DbUpdateConcurrencyException` → wraps as domain `ConcurrencyException`
+> - Optimistic concurrency — `RowVersion` (`byte[]` / `[Timestamp]`) is implemented on `Order`; broader rollout remains pending
 > - Architecture tests updated for DDD invariant enforcement (NetArchTest)
 > - `X-Tenant-Code` header rename — earlier phases used `X-Tenant-Id`; Phase 7 adopts the canonical `X-Tenant-Code` per `ARCHITECTURE.md` §3/§14
 - [x] Configure App Service health check probe to use `/health` endpoint

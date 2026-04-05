@@ -163,7 +163,7 @@ Both API and UI workflows execute in 2 stages:
 - ✅ Login to Azure using OIDC (passwordless authentication)
 - ✅ Deploy to environment-specific Azure Web App
 - ✅ Wait 30 seconds for service stabilization
-- ✅ Run health checks (API: `/` + `/swagger`, UI: `/`)
+- ✅ Run health checks (API: `/health/ready`, UI: `/`)
 - ✅ Display deployment URLs
 
 ---

@@ -212,7 +212,7 @@ XYDataLabs.OrderProcessingSystem.sln
 
 ---
 
-## Phase 7 — Tenant Enforcement & Operational Discipline 📅
+## Phase 7 — Tenant Enforcement & Operational Discipline 🔄
 
 **Focus:** Make the system secure, tenant-safe, and production-ready.
 
@@ -223,6 +223,7 @@ XYDataLabs.OrderProcessingSystem.sln
 - Structured logging enrichment: `TenantId`, `TraceId`, request name on every log line
 - **Problem Details (RFC 9457)** — standardized error responses (`type`, `title`, `status`, `detail`, `traceId`, `tenantId`) on all endpoints
 - **Global exception middleware** — catch-all that converts unhandled exceptions → `ProblemDetails` (no stack traces in production)
+- **Order aggregate hardening** — `Order` now uses a private constructor, `Create()` factory, explicit status transitions, and optimistic concurrency token
 - Security headers middleware:
   - `X-Content-Type-Options: nosniff`
   - `X-Frame-Options: DENY`
@@ -232,11 +233,11 @@ XYDataLabs.OrderProcessingSystem.sln
 
 ### DDD Tactical Patterns
 
-- **Aggregate root** — `Order` entity with private constructor, `Create()` factory method returning `Result<Order>`
-- **State machine** — `Order` status transitions: `Created → Paid → Shipped → Delivered → Cancelled` with explicit transition methods (`Pay()`, `Ship()`, `Deliver()`, `Cancel()`) each returning `Result<T>` — invalid transitions return failure, never throw
+- **Aggregate root** — `Order` entity with private constructor, `Create()` factory method returning a domain-local `DomainResult<Order>` so Domain keeps zero project references
+- **State machine** — `Order` status transitions: `Created → Paid → Shipped → Delivered → Cancelled` with explicit transition methods (`Pay()`, `Ship()`, `Deliver()`, `Cancel()`) returning a domain-local result; invalid transitions return failure, never throw
 - **Value objects** — `Address` and `Money` as immutable `record` types with self-validation in constructor
 - **Strongly-typed IDs** — `OrderId`, `CustomerId`, `ProductId` as `readonly record struct` wrappers around `Guid`; eliminates parameter-swap bugs (`Guid orderId, Guid customerId` → `OrderId orderId, CustomerId customerId`); EF Core value converters for transparent persistence
-- **Optimistic concurrency** — `RowVersion` (`byte[]` / `[Timestamp]`) on `BaseAuditableEntity`; EF Core intercepts `DbUpdateConcurrencyException` in `SaveChangesAsync` → wraps as domain `ConcurrencyException`; command handlers catch and return `Result.Failure(Errors.Conflict)` with retry guidance
+- **Optimistic concurrency** — `RowVersion` (`byte[]` / `[Timestamp]`) is now applied to `Order`; future slices can generalize this if broader aggregate coverage is needed
 - **Domain invariants** — enforced inside aggregate methods (e.g. cannot ship an unpaid order), returning `Result<T>.Failure` with descriptive `Error` — no exceptions for business rules
 - **Aggregate boundary rule** — aggregates enforce only their own transactional invariants and do not depend on injected infrastructure services. External collaboration (payment gateways, inventory lookups, messaging, persistence orchestration) remains in application handlers, process managers, or domain policies — keeps aggregate behavior focused and predictable
 

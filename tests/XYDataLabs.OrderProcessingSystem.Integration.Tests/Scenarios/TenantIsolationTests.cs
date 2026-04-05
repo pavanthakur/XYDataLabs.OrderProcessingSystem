@@ -40,10 +40,10 @@ public sealed class TenantIsolationTests : IAsyncLifetime
         {
             CustomerEmails = await dbContext.Customers.OrderBy(item => item.CustomerId).Select(item => item.Email).ToListAsync(),
             ProductNames = await dbContext.Products.OrderBy(item => item.ProductId).Select(item => item.Name).ToListAsync(),
-            OrderIds = await dbContext.Orders.OrderBy(item => item.OrderId).Select(item => item.OrderId).ToListAsync(),
+            OrderIds = await dbContext.Orders.OrderBy(item => item.OrderId).Select(item => item.OrderId.Value).ToListAsync(),
             OrderProducts = await dbContext.OrderProducts
                 .OrderBy(item => item.OrderId)
-                .Select(item => $"{item.OrderId}:{item.ProductId}")
+                .Select(item => $"{item.OrderId.Value}:{item.ProductId.Value}")
                 .ToListAsync(),
             PaymentProviderNames = await dbContext.PaymentProviders.OrderBy(item => item.Id).Select(item => item.Name).ToListAsync(),
             PaymentMethodTokens = await dbContext.PaymentMethods.OrderBy(item => item.Id).Select(item => item.Token).ToListAsync()
