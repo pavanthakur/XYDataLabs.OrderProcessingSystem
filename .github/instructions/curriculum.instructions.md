@@ -1,5 +1,5 @@
 ---
-applyTo: "**/*CURRICULUM*,**/05-Self-Learning/**"
+applyTo: "**/*CURRICULUM*,**/docs/learning/curriculum/**"
 ---
 # Curriculum Conventions — XYDataLabs.OrderProcessingSystem
 

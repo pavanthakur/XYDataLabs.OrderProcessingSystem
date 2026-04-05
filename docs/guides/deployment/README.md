@@ -2,7 +2,7 @@
 
 Canonical deployment and infrastructure guidance for Azure bootstrap, provisioning, and validation.
 
-Current documents in this subtree:
+Use these documents:
 
 - `quick-start-azure-bootstrap.md` — fast-start orientation for the two-workflow bootstrap model
 - `azure-deployment-guide.md` — detailed Azure App Service and infrastructure deployment guide
@@ -15,8 +15,3 @@ Current documents in this subtree:
 - `infrastructure-overview.md` — infrastructure-as-code overview for the canonical infra subtree
 - `bicep-overview.md` — Bicep deployment overview for the canonical Bicep subtree
 - `retry-logic-implementation.md` — deployment retry strategy and implementation reference
-
-Migration note:
-
-- This subtree is the active canonical home for deployment and infrastructure guidance.
-- Retired legacy source files are archived incrementally as each deployment-guide family is validated.

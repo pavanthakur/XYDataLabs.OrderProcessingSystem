@@ -50,21 +50,6 @@ practice Azure cloud deployment, CI/CD automation, and enterprise DevOps pattern
 │   ├── copilot-instructions.md    # ← THIS FILE (Copilot context)
 │   └── workflows/                 # 11 GitHub Actions workflows + 8 README docs
 │
-├── Documentation/                 # All markdown documentation (organised)
-│   ├── README.md                  # Main documentation hub
-│   ├── 01-Project-Overview/       # Project setup and how-to-run
-│   ├── 02-Azure-Learning-Guides/  # Azure deployment, Docker, App Insights
-│   ├── 03-Configuration-Guides/   # GitHub App, Key Vault, secrets setup
-│   ├── 04-Enterprise-Architecture/# ACA migration plan, weekly learning plan
-│   ├── 05-Self-Learning/          # Legacy curriculum redirects + historical learning material
-│   │   ├── Azure-Curriculum/      # Legacy redirects after canonical curriculum move
-│   │   └── Archive/               # Historical TODO plans + LearningHelp
-│   ├── commands/                  # Quick-reference command cheat sheets (azure, git, docker)
-│   ├── GITHUB-WORKFLOW-SEPARATION-ARCHITECTURE.md  # Workflow separation rationale
-│   ├── Operations-Quick-Links-README.md             # Quick operations reference links
-│   ├── QUICK-COMMAND-REFERENCE.md                  # Command cheat sheet
-│   └── QUICK-START-AZURE-BOOTSTRAP.md              # Quick-start bootstrap guide
-│
 ├── Resources/
 │   ├── Azure-Deployment/          # 27 PowerShell automation scripts (see §6)
 │   ├── BuildConfiguration/        # BannedSymbols, CodeAnalysis.ruleset, MSBuild props
@@ -94,9 +79,14 @@ practice Azure cloud deployment, CI/CD automation, and enterprise DevOps pattern
 │   └── XYDataLabs.OrderProcessingSystem.UI.Tests/
 │
 ├── docs/
-│   ├── runbooks/                  # Operations runbooks
-│   ├── internal/                  # AZURE-PROGRESS-EVALUATION.md + Archive/
-│   └── architecture/decisions/    # ADRs (ADR-000 through ADR-013)
+│   ├── README.md                  # Canonical documentation hub
+│   ├── DEVELOPER-OPERATING-MODEL.md # Guided reading order and maintenance rules
+│   ├── architecture/decisions/    # ADRs (ADR-000 through ADR-013)
+│   ├── guides/                    # Deployment, configuration, and development guides
+│   ├── internal/                  # Active progress tracker and internal backlog
+│   ├── learning/                  # Curriculum, implementation notes, learning reference
+│   ├── reference/                 # Quick commands and operations navigation
+│   └── runbooks/                  # Operational runbooks
 │
 ├── TROUBLESHOOTING-INDEX.md       # ← Quick troubleshooting guide with links
 ├── ARCHITECTURE-EVOLUTION.md      # 14-phase monolith → microservices roadmap
@@ -321,8 +311,8 @@ Port allocations: Local VS (5010–5013) · Docker dev (5020–5023) · Docker s
 | `.github/instructions/multitenant-payment-schema.instructions.md` | `**/Domain/Entities/**/*.cs`, `**/Application/DTO/**/*.cs`, `**/Application/Features/Payments/**/*.cs`, `**/Infrastructure/**/*.cs`, related UI/API/test files |
 | `.github/instructions/azure-workflows.instructions.md` | `**/.github/workflows/**` |
 | `.github/instructions/bicep.instructions.md` | `**/infra/**`, `**/*.bicep` |
-| `.github/instructions/documentation-governance.instructions.md` | `**/docs/*.md`, `**/docs/**/*.md`, `**/Documentation/**/*.md` |
-| `.github/instructions/curriculum.instructions.md` | `**/*CURRICULUM*`, `**/05-Self-Learning/**` |
+| `.github/instructions/documentation-governance.instructions.md` | `**/docs/*.md`, `**/docs/**/*.md` |
+| `.github/instructions/curriculum.instructions.md` | `**/*CURRICULUM*`, `**/docs/learning/curriculum/**` |
 | `.github/instructions/architecture.instructions.md` | `**/docs/architecture/**`, `**/*ADR*` |
 
 ### Instruction auto-injection matrix
@@ -345,8 +335,7 @@ This matrix shows which instructions auto-attach for common file locations:
 | `docs/*.md` | | | | | | ✓ | | |
 | `docs/**/*.md` | | | | | | ✓ | | |
 | `docs/architecture/decisions/*` | | | | | | ✓ | ✓ | |
-| `Documentation/**/*.md` | | | | | | ✓ | | |
-| `Documentation/05-Self-Learning/*` | | | | | | ✓ | | ✓ |
+| `docs/learning/curriculum/*` | | | | | | ✓ | | ✓ |
 
 ### Custom agents (select in VS Code Chat agent picker)
 

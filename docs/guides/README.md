@@ -1,14 +1,11 @@
 # Guides Hub
 
-This subtree is the canonical home for operational and engineering guides that support delivery, configuration, and local development.
+Canonical hub for operational and engineering guides.
 
-Current guide families:
+Use these guide families:
 
 - `deployment/` — Azure deployment, bootstrap, and infrastructure execution guidance
 - `configuration/` — secrets, Key Vault, and environment configuration guidance
 - `development/` — local setup, Docker, and day-to-day developer workflows
 
-Migration note:
-
-- This subtree is the active canonical home for guide content.
-- Legacy `Documentation/` copies are retained only where archive history or redirect compatibility is still required.
+Rule: update the canonical guide here instead of creating parallel copies elsewhere.

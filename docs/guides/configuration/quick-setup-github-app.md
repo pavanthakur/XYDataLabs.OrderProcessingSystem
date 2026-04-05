@@ -153,10 +153,8 @@ Using GitHub App authentication
 If you're currently using `GH_PAT`:
 
 1. Complete Steps 1-4 above (add GitHub App secrets)
-2. **Optional**: Delete `GH_PAT` secret (workflow will automatically prefer GitHub App)
+2. Delete `GH_PAT` so the repository matches the current maintained authentication path
 3. Run workflow - it will use GitHub App authentication
-
-**Both can coexist** - workflow prefers GitHub App, falls back to PAT if App not configured.
 
 ## 🆚 Comparison
 
@@ -212,7 +210,7 @@ If you're currently using `GH_PAT`:
 
 ### Still using PAT after setup?
 
-**Fix**: Workflow run may have been cached. Clear workflow cache or trigger a new run.
+**Fix**: remove stale `GH_PAT`, verify `APP_ID` and `APP_PRIVATE_KEY` are set, then rerun the workflow. The maintained workflow path uses GitHub App authentication.
 
 ## 📚 Full Documentation
 
@@ -221,7 +219,7 @@ If you're currently using `GH_PAT`:
 ## 💡 Tips
 
 - **Organization-wide**: Create app at org level for multiple repos
-- **Shared secrets**: Use organization secrets for `GH_APP_*` values
+- **Shared secrets**: Use organization secrets for `APP_ID` and `APP_PRIVATE_KEY`
 - **Security**: Private key is like a password — keep it secret!
 - **Audit**: All actions logged in GitHub audit log
 

@@ -1,8 +1,8 @@
 # Reference Hub
 
-This subtree is the canonical home for quick-reference operational commands and navigation material.
+Canonical hub for quick-reference commands and operational navigation.
 
-Current reference sets:
+Use these reference sets:
 
 - `quick-command-reference.md` — consolidated command catalog
 - `operations-quick-links.md` — high-value operational navigation links
@@ -11,8 +11,3 @@ Current reference sets:
 - `azure-sql-ef.md` — Azure SQL and EF Core commands
 - `azure-infra.md` — Azure infrastructure and workflow commands
 - `docker-enterprise-quick-reference.md` — Docker enterprise operating quick reference
-
-Migration note:
-
-- This subtree is the active canonical home for quick-reference and navigation material.
-- Retired legacy source files are archived as each reference family is validated.

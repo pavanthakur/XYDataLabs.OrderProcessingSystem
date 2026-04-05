@@ -302,7 +302,7 @@ act push -W .github/workflows/deploy-dev.yml
 **Solutions**:
 1. ✅ Check branch name matches the enforced workflow mapping (`dev`, `staging`, `main` by default)
 2. ✅ Verify push succeeded: `git push origin dev --verbose`
-3. ✅ Check if changes were in ignored paths (Documentation, .md files)
+3. ✅ Check if changes were only in ignored documentation paths (`docs/` or other `.md` files)
 4. ✅ View Actions tab for any disabled workflows
 
 ### Authentication Failed

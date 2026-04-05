@@ -199,16 +199,7 @@ YARP Microservices Architecture (Local Development)
 
 **Status:** Curriculum is complete and up-to-date
 
-### 3. Weekly Azure Learning Plan (Archived)
-**Location:** `docs/archive/historical-notes/self-learning/weekly-plans/WEEKLY_AZURE_LEARNING_PLAN.md`
-
-**Coverage:**
-- Historical week-by-week Azure learning breakdown from the earlier planning phase
-- Useful as archival context only
-
-**Status:** Archived because active execution is now governed by `1_MASTER_CURRICULUM.md` and this progress tracker
-
-### 4. Strategic Roadmap Documents ✅
+### 3. Strategic Roadmap Documents ✅
 **Primary Locations:** `ARCHITECTURE-EVOLUTION.md` and `docs/guides/deployment/aca-migration-plan.md`
 
 **Coverage:**
@@ -380,9 +371,9 @@ az webapp restart --name pavanthakur-orderprocessing-ui-xyapp-dev --resource-gro
 **Current Status:** Long-range planning now lives in `ARCHITECTURE-EVOLUTION.md` and `docs/guides/deployment/aca-migration-plan.md`
 **Action:** Update those only when target-state architecture or migration sequencing changes
 
-### 3. Weekly plan archival decision ✅
-**Current Status:** Weekly plan archived as a historical planning artifact
-**Action:** No active maintenance required - use `1_MASTER_CURRICULUM.md` and this document instead
+### 3. Execution source consolidation ✅
+**Current Status:** Weekly planning is fully consolidated into `1_MASTER_CURRICULUM.md` and this document
+**Action:** Do not maintain a separate weekly planning document
 
 ### 4. Create Progress Checkpoint Document ✅ (Recommended)
 **Suggested Location:** `docs/learning/implementation-notes/implementation-notes-days-29-38.md` — add a dated section for any new checkpoint entries
@@ -626,8 +617,7 @@ This establishes the architectural foundation that makes all future work easier:
 ### Primary Documents
 1. **Immediate Actions:** `docs/runbooks/keyvault-managed-identity-deploy.md`
 2. **Daily Tracker:** `docs/learning/curriculum/1_MASTER_CURRICULUM.md`
-3. **Archived Weekly Plan:** `docs/archive/historical-notes/self-learning/weekly-plans/WEEKLY_AZURE_LEARNING_PLAN.md`
-4. **Strategic Roadmap:** `ARCHITECTURE-EVOLUTION.md` and `docs/guides/deployment/aca-migration-plan.md`
+3. **Strategic Roadmap:** `ARCHITECTURE-EVOLUTION.md` and `docs/guides/deployment/aca-migration-plan.md`
 
 ### Support Documents
 - Azure Deployment Guide: `docs/guides/deployment/azure-deployment-guide.md`

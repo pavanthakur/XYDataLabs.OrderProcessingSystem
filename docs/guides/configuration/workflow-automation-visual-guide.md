@@ -59,7 +59,6 @@
 │                                                                  │
 │  Workflow Checks:                                               │
 │  • APP_ID secret exists?                                      │
-│  • APP_INSTALLATION_ID secret exists?                         │
 │  • APP_PRIVATE_KEY secret exists?                             │
 │                                                                  │
 │  IF ALL EXIST:                                                  │
@@ -95,11 +94,10 @@
 │  │                                                 │            │
 │  │ 3. Install App                                 │            │
 │  │    • Install on repository                     │            │
-│  │    • Copy Installation ID from URL             │            │
+│  │    • Installation is auto-discovered later     │            │
 │  │                                                 │            │
 │  │ 4. Add Secrets                                 │            │
 │  │    • APP_ID                                 │            │
-│  │    • APP_INSTALLATION_ID                    │            │
 │  │    • APP_PRIVATE_KEY                        │            │
 │  └────────────────────────────────────────────────┘            │
 │                                                                  │
@@ -132,7 +130,7 @@
 │  4. Set environment secrets (dev/staging/prod) ✅                │
 │                                                                  │
 │  Authentication:                                                │
-│  🔐 GitHub App (preferred) or PAT (fallback)                     │
+│  🔐 GitHub App                                                   │
 │                                                                  │
 │  Time: 1 minute                                                 │
 └─────────────────────────────────────────────────────────────────┘
@@ -221,14 +219,14 @@ Day 1:
 │ Create PAT                      │
 │ • Set expiration (max 1 year)   │
 │ • Grant repo scope              │
-│ • Add as GH_PAT secret          │
+│ • Add as repository secret      │
 └─────────────────────────────────┘
 
 Day 30-365: (calendar reminder)
 ┌─────────────────────────────────┐
 │ ⚠️ PAT EXPIRING SOON             │
 │ • Create new PAT                │
-│ • Update GH_PAT secret          │
+│ • Update repository secret      │
 │ • Update calendar reminder      │
 │ • Hope you don't forget         │
 └─────────────────────────────────┘
@@ -248,7 +246,7 @@ If forgotten:
 Day 1: (one-time setup)
 ┌─────────────────────────────────┐
 │ Create GitHub App               │
-│ • Add GH_APP_* secrets          │
+│ • Add APP_ID + APP_PRIVATE_KEY  │
 │ • Done forever                  │
 └─────────────────────────────────┘
 
@@ -357,7 +355,7 @@ Forever:
 | Secret | Set By | Purpose |
 |--------|--------|---------|
 | **APP_ID** | Manual (one-time) | GitHub App authentication |
-| **APP_INSTALLATION_ID** | Manual (one-time) | GitHub App installation |
+| **APP_INSTALLATION_ID** | Auto-discovered | No manual secret required |
 | **APP_PRIVATE_KEY** | Manual (one-time) | GitHub App private key |
 | **AZUREAPPSERVICE_CLIENTID** | Workflow (automated) | Azure OIDC client ID |
 | **AZUREAPPSERVICE_TENANTID** | Workflow (automated) | Azure AD tenant ID |

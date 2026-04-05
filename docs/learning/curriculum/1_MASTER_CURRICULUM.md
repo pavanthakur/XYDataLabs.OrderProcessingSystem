@@ -74,6 +74,8 @@ See `ARCHITECTURE-EVOLUTION.md` for full phase details.
 
 ### Azure Service Coverage (Jan 2026 analysis snapshot)
 
+Rationale for this coverage model: `docs/architecture/decisions/ADR-014-azure-service-coverage-rationale.md`
+
 | Service | Status | Curriculum Days |
 |---------|--------|-----------------|
 | App Service / Container Apps | ✅ Excellent | Week 1-4, 11 |

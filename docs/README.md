@@ -1,27 +1,20 @@
 # Documentation Hub
 
-This folder is the canonical front door for human-facing project documentation.
+Canonical hub for human-facing project documentation.
 
 ## Start Here
 
 Choose the path that matches your intent:
 
-1. Open the guided developer operating model
-	- `DEVELOPER-OPERATING-MODEL.md` — one-page reading order, chapter map, guardrails, and daily working flow
-2. Learn the platform and current roadmap
-	- `learning/curriculum/1_MASTER_CURRICULUM.md` — active source of truth for the learning journey
-3. Deploy or operate Azure environments
-	- `guides/deployment/README.md`
-4. Configure secrets, identity, and environments
-	- `guides/configuration/README.md`
-5. Run commands quickly
-	- `reference/quick-command-reference.md`
-6. Understand architecture and non-negotiable decisions
-	- `architecture/decisions/`
-7. Track active internal progress and backlog items
-	- `internal/README.md`
+1. `DEVELOPER-OPERATING-MODEL.md` — reading order and update rules
+2. `learning/curriculum/1_MASTER_CURRICULUM.md` — active execution source of truth
+3. `guides/deployment/README.md` — deployment and infrastructure guidance
+4. `guides/configuration/README.md` — secrets, identity, and environment guidance
+5. `reference/quick-command-reference.md` — daily commands and validation
+6. `architecture/decisions/` — architecture constraints and ADRs
+7. `internal/README.md` — active internal trackers and backlog
 
-## Canonical Areas
+## Areas
 
 - `architecture/` — ADRs and formal architecture material
 - `guides/` — deployment, configuration, and development guides
@@ -29,23 +22,11 @@ Choose the path that matches your intent:
 - `runbooks/` — operational procedures
 - `learning/` — curriculum, implementation evidence, and learning support material
 - `internal/` — active internal tracking and backlogs
-- `archive/` — retired and historical material retained for traceability
 
 ## Rules
 
 1. Human-facing documentation lives under `docs/`.
 2. `.github/` remains the canonical home for workflow, tooling, prompt, and agent documentation.
-3. Retired material is archived, not deleted.
+3. Retired material is deleted after any still-useful guidance is merged into the canonical page that owns it.
 4. The active learning source of truth is `docs/learning/curriculum/1_MASTER_CURRICULUM.md`.
 5. Follow `DEVELOPER-OPERATING-MODEL.md` as the lightweight working agreement for what to update, when to update it, and what to leave alone.
-
-## High-Value Locations
-
-- `DEVELOPER-OPERATING-MODEL.md` — guided index page for new contributors and future work
-- `learning/curriculum/1_MASTER_CURRICULUM.md` — primary learning execution document
-- `learning/curriculum/README.md` — curriculum navigation and current status
-- `learning/implementation-notes/` — execution evidence and detailed notes
-- `guides/deployment/` — Azure deployment and infrastructure guidance
-- `reference/operations-quick-links.md` — fast operational navigation
-- `archive/logs/documentation-rationalization-summary.md` — implementation trace for the documentation cleanup
-- `archive/logs/documentation-audit.md` — baseline audit and governance record for the documentation rationalization effort

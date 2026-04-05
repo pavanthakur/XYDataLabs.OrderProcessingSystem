@@ -6,7 +6,9 @@ applyTo: "**/docs/*.md,**/docs/**/*.md"
 ## Canonical Documentation Rule
 - `docs/` is the only active human-facing documentation tree.
 - The legacy `Documentation/` tree has been retired.
+- The former `docs/archive/` tree has also been retired.
 - Do not recreate or reintroduce a parallel `Documentation/` content tree.
+- Do not recreate a replacement historical documentation tree for normal work.
 
 ## Read This First
 Before making documentation changes, use these pages as the operating model:
@@ -19,14 +21,13 @@ Before making documentation changes, use these pages as the operating model:
 - Commands and validation: `docs/reference/quick-command-reference.md`
 - Procedures and how-to guidance: `docs/guides/`
 - Architecture decisions: `docs/architecture/decisions/`
-- Historical context only: `docs/archive/`
 
 ## Editing Rules
 1. Update the minimum number of documents necessary.
 2. Prefer updating an existing canonical page over creating a new page.
 3. Do not duplicate the same guidance in multiple places.
 4. If a page already owns the topic, update that page instead of adding a side note elsewhere.
-5. Treat `docs/archive/` as read-only for normal work.
+5. Delete stale material after any still-useful guidance has been merged into the canonical page that owns it.
 
 ## Routing Rules
 - "What should I do next?" → `docs/learning/curriculum/1_MASTER_CURRICULUM.md`
@@ -47,5 +48,5 @@ This validator is the lightweight guardrail for local markdown links and heading
 When in doubt, simplify:
 - link instead of copy
 - update instead of duplicate
-- archive instead of leaving stale active content
+- delete stale content once useful guidance is preserved in the owning canonical page
 - use short navigation pages instead of sprawling summaries
