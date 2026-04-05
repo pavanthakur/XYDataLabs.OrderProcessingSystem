@@ -252,6 +252,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "decisions", "decisions", "{
 		docs\architecture\decisions\ADR-011-hand-rolled-cqrs.md = docs\architecture\decisions\ADR-011-hand-rolled-cqrs.md
 		docs\architecture\decisions\ADR-012-opentelemetry-dual-export.md = docs\architecture\decisions\ADR-012-opentelemetry-dual-export.md
 		docs\architecture\decisions\ADR-013-redis-caching-behavior.md = docs\architecture\decisions\ADR-013-redis-caching-behavior.md
+		docs\architecture\decisions\ADR-014-azure-service-coverage-rationale.md = docs\architecture\decisions\ADR-014-azure-service-coverage-rationale.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "guides", "guides", "{CC000009-0001-0001-0001-000000000001}"
