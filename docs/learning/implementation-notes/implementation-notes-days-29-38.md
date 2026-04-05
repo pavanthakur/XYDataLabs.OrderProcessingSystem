@@ -152,3 +152,91 @@ Next step (Day 39): Add Polly policies - retry with exponential backoff + jitter
 Transition note:
 
 - This file is the active canonical implementation-evidence document for curriculum days 29-38.
+- It also carries detailed evidence for later day closures when the work is tightly coupled to the same Azure SQL / health-check / CI-CD foundation and does not justify a second partial notes file.
+
+---
+
+## Day 42-43: Phase 7 Closure - Typed Boundaries + Deployment Readiness
+
+Phase 7 closed with two final slices that were easy to get wrong if treated as cosmetic refactors.
+
+**1. Strongly typed IDs were pushed to the caller-facing boundary**
+
+- `CustomerId`, `OrderId`, and `ProductId` were already in the Domain and EF Core mapping layer.
+- The remaining leak was at the application contract boundary (`CreateOrderCommand`, `GetOrderDetailsQuery`, customer commands/queries) and API controller construction layer.
+- The final slice changed command/query records to accept typed IDs directly, updated controllers to construct typed IDs at the boundary, and added `IParsable<T>` on the typed ID wrappers so ASP.NET route binding could parse `CustomerId` and `OrderId` directly from route segments.
+- Verification was deliberately not limited to compile-time success; the suite already proved SQL translation for typed IDs and was extended earlier in the session to prove route binding through HTTP for `GET /api/v1/Order/{id}`.
+
+Representative code added during the boundary slice:
+
+```csharp
+public readonly record struct OrderId(int Value) : IComparable<OrderId>, IParsable<OrderId>
+
+public sealed record GetOrderDetailsQuery(OrderId OrderId) : IQuery<Result<OrderDto>>;
+
+[HttpGet("{id}", Name = nameof(GetOrderDetailsById))]
+public async Task<ActionResult> GetOrderDetailsById(OrderId id, CancellationToken cancellationToken)
+```
+
+**2. Deployment readiness semantics were corrected at the HTTP contract, not just in the workflow URL**
+
+- The deployment workflow originally probed Swagger with a retry loop and treated any HTTP 200 as success.
+- Before switching the workflow URL, the health-check mapping in `Program.cs` was inspected. The trap was real: default `MapHealthChecks()` semantics return HTTP 200 for `HealthStatus.Degraded` unless `ResultStatusCodes` is overridden.
+- That meant swapping the workflow URL from Swagger to `/health/ready` without changing the endpoint mapping could have created false confidence: the workflow would report success even when dependencies were degraded.
+- The fix was applied at both layers:
+  - `Program.cs` now maps both degraded and unhealthy readiness results to HTTP 503.
+  - `deploy-api-to-azure.yml` now probes `/health/ready` instead of `/swagger`, preserving the existing cold-start wait, retry count, retry delay, and timeout behavior.
+
+Representative readiness mapping:
+
+```csharp
+var readinessHealthCheckOptions = new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready"),
+    ResultStatusCodes =
+    {
+        [HealthStatus.Healthy] = StatusCodes.Status200OK,
+        [HealthStatus.Degraded] = StatusCodes.Status503ServiceUnavailable,
+        [HealthStatus.Unhealthy] = StatusCodes.Status503ServiceUnavailable
+    }
+};
+
+app.MapHealthChecks("/health/ready", readinessHealthCheckOptions);
+app.MapHealthChecks("/health", readinessHealthCheckOptions);
+```
+
+Representative workflow probe:
+
+```powershell
+$readinessUrl = "$apiUrl/health/ready"
+$readinessResponse = Invoke-WebRequest -Uri $readinessUrl -Method Get -TimeoutSec 60 -ErrorAction Stop
+```
+
+**3. Commands run and observed outputs**
+
+Build and regression commands run during the close-out:
+
+```powershell
+dotnet build .\XYDataLabs.OrderProcessingSystem.sln /property:GenerateFullPaths=true "/consoleloggerparameters:NoSummary;ForceNoAlign"
+dotnet test .\tests\XYDataLabs.OrderProcessingSystem.Application.Tests\XYDataLabs.OrderProcessingSystem.Application.Tests.csproj --no-build --logger "console;verbosity=minimal"
+dotnet test .\tests\XYDataLabs.OrderProcessingSystem.Integration.Tests\XYDataLabs.OrderProcessingSystem.Integration.Tests.csproj --logger "console;verbosity=minimal"
+```
+
+Verified outcomes:
+
+```text
+Build succeeded
+Passed!  - Failed: 0, Passed: 37, Skipped: 0, Total: 37
+Passed!  - Failed: 0, Passed: 29, Skipped: 0, Total: 29
+```
+
+**4. Key gotchas discovered**
+
+- `IParsable<T>` was required for controller route binding once typed IDs were pushed to action parameters; otherwise the change would compile but route binding would remain primitive-only.
+- The first integration rerun after adding a new test used `--no-build`; that was corrected before closing so the new test was actually compiled and executed.
+- Readiness probes must fail closed. `/health/ready` with default ASP.NET Core status-code mapping is not a safe deployment gate if degraded dependencies should block traffic.
+
+**5. What this enables next**
+
+- Phase 7 is now closed with tenant enforcement, audit trail, aggregate hardening, value object adoption (`Money`), strongly typed IDs, typed contract boundaries, and correct deployment readiness semantics all verified.
+- The next safe architecture slice is Phase 8a: define domain/integration event primitives and the transactional seam that writes aggregate changes and outbox rows in the same database transaction.

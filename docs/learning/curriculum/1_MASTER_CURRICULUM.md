@@ -9,7 +9,7 @@
 
 ## 🎯 WHAT'S NEXT? (Your Current Focus)
 
-**✅ COMPLETED SO FAR (Days 1-38 + Architecture Phases 1-6):**
+**✅ COMPLETED SO FAR (Days 1-43 + Architecture Phases 1-7):**
 - ✅ Azure fundamentals (Portal, CLI, resource management)
 - ✅ App Service deployment with OIDC authentication
 - ✅ GitHub Actions CI/CD workflows (10 workflows: bootstrap, initial setup, deploy API/UI, infra deploy, validate, ADR validate)
@@ -19,7 +19,7 @@
 - ✅ Azure SQL Database provisioned via Bicep, EF Core migrations applied (Days 32-33)
 - ✅ DefaultAzureCredential end-to-end — Managed Identity in Azure, CLI locally (Days 35-37)
 - ✅ SQL resilience baseline — EnableRetryOnFailure + Polly planning (Day 38)
-- ✅ **Architecture Phases 1-6 complete:** Structural Foundation, Hand-Rolled CQRS, Observability (Serilog + OTel), Multi-Tenancy Skeleton, Test Restructure, Polish & Hardening (health checks, Redis caching, API versioning)
+- ✅ **Architecture Phases 1-7 complete:** Structural Foundation, Hand-Rolled CQRS, Observability (Serilog + OTel), Multi-Tenancy Skeleton, Test Restructure, Polish & Hardening, Tenant Enforcement & DDD tactical patterns
 
 **🔥 YOUR NEXT 3 PRIORITIES:**
 
@@ -27,7 +27,7 @@
 **Why:** Connect your app to real Azure data services using passwordless auth — the foundation for everything that follows  
 **Tasks:**
 - Days 32-38: ✅ Azure SQL + EF Core + `DefaultAzureCredential` (complete)
-- Days 39-43: 🔄 Polly + Health Checks + 🏗️ **Phase 7** (tenant enforcement active; audit logging in progress)
+- Days 39-43: ✅ Polly + Health Checks + 🏗️ **Phase 7** complete (tenant enforcement, audit trail, DDD tactical patterns, typed boundaries, readiness semantics)
 - Days 44-52: Azure Functions + Service Bus + 🏗️ **Phase 8** (Event-Driven Foundation)
 - Days 53-56: Key Vault + `IOptions<T>` + Worker Services + Outbox Pattern
 
@@ -62,7 +62,7 @@ See `ARCHITECTURE-EVOLUTION.md` for full phase details.
 | 4 | Multi-Tenancy Skeleton | – | ✅ Complete |
 | 5 | Test Restructure | Day 80 (auto-✅) | ✅ Complete |
 | 6 | Polish & Hardening | Days 42-43, 71-72, 94 (auto-✅) | ✅ Complete |
-| 7 | Tenant Enforcement & Ops | Days 42–43 (DDD + Ops) | 🔄 In Progress |
+| 7 | Tenant Enforcement & Ops | Days 42–43 (DDD + Ops) | ✅ Complete |
 | 8 | Event-Driven Foundation | Days 51, 55–56 | 📅 Planned |
 | 8.5 | Multi-Provider Payment | Days 58–59 | 📅 Planned |
 | 9 | YARP Microservices | Days 74–76, 78 | 📅 Planned |
@@ -387,12 +387,12 @@ After completing today's tasks, you will have:
 >
 > **DDD Tactical Patterns (Phase 7 — part 1):**
 > 
-> **Status:** ✅ `Order` aggregate now uses a private constructor, `Create()` factory, and explicit `Created → Paid → Shipped → Delivered → Cancelled` transitions backed by a domain-local result primitive.
+> **Status:** ✅ `Order` aggregate now uses a private constructor, `Create()` factory, explicit `Created → Paid → Shipped → Delivered → Cancelled` transitions, `Money` is implemented and validated explicitly, and `Address` is intentionally deferred until a real aggregate or request boundary needs it.
 >
 > **DDD Tactical Patterns (Phase 7 — part 1):**
 > - Aggregate root — `Order` with private constructor, `Create()` factory method returning a domain-local result
 > - State machine — `Order.Pay()`, `Ship()`, `Deliver()`, `Cancel()` with explicit transition methods
-> - Value objects — `Address` and `Money` as immutable `record` types with self-validation
+> - Value objects — `Money` is implemented as an immutable value object with explicit validator coverage; `Address` is intentionally deferred until a concrete aggregate or request boundary requires it
 > - Domain invariants enforced inside aggregate methods (e.g. cannot ship an unpaid order), returning `Result<T>.Failure` — never exceptions for business rules
 > - Aggregate boundary rule — aggregates enforce only their own transactional invariants; no injected infrastructure services
 - [x] Add `Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore` NuGet package
@@ -403,17 +403,19 @@ After completing today's tasks, you will have:
 #### Day 43: Health Checks — Azure Integration ✅ *(Delivered by Architecture Phase 6)*
 > 🏗️ **Architecture Phase 7b** — Extend this day: Security headers middleware, `AuditLog` table, split `/health/live` + `/health/ready`, enhanced OTel metrics
 > 
-> **Status:** 🔄 Security headers, `AuditLog` table, query/API surface, migration, and tenant-isolation tests are implemented; enhanced OTel metrics remain pending.
+> **Status:** ✅ Security headers, tenant-scoped audit trail, strongly typed IDs, typed contract/controller boundaries, and deployment readiness semantics are implemented and verified; enhanced OTel metrics are deferred to a later observability slice and do not block Phase 7 closure.
 >
 > **DDD Tactical Patterns (Phase 7 — part 2):**
-> - Strongly-typed IDs — `OrderId`, `CustomerId`, `ProductId` as `readonly record struct` wrappers around `Guid` + EF Core value converters for transparent persistence
+> - Strongly-typed IDs — `OrderId`, `CustomerId`, `ProductId` as `readonly record struct` wrappers around `int`, with EF Core value converters for transparent persistence and `IParsable<T>` support for controller route binding
 > - Optimistic concurrency — `RowVersion` (`byte[]` / `[Timestamp]`) is implemented on `Order`; broader rollout remains pending
+> - Typed ID propagation — application command/query contracts and controller construction now accept typed IDs directly; route binding is verified end-to-end with integration tests
 > - Architecture tests updated for DDD invariant enforcement (NetArchTest)
 > - `X-Tenant-Code` header rename — earlier phases used `X-Tenant-Id`; Phase 7 adopts the canonical `X-Tenant-Code` per `ARCHITECTURE.md` §3/§14
 - [x] Configure App Service health check probe to use `/health` endpoint
+- [x] Change deployment workflow probe to use `/health/ready` and make degraded/unhealthy readiness return HTTP 503
 - [ ] Add custom health check for Service Bus connectivity
 - [x] View health status in Azure Portal → App Service → Health Check
-- [x] **Time:** 1 hour | **Completed:** ✅ (Phase 6, Service Bus check deferred to Day 50)
+- [x] **Time:** 1 hour | **Completed:** 05/04/2026 (Phase 6 foundation; Phase 7 readiness semantics and typed-boundary verification completed)
 
 #### Day 44: Azure Functions — HTTP Trigger
 - [ ] Create first HTTP-triggered Function (order processing trigger)
@@ -1241,14 +1243,14 @@ After completing today's tasks, you will have:
 ## 📈 Progress Summary
 
 **Total Days Planned:** 112 days (~16 weeks)  
-**Days Completed:** 38 / 112  
-**Percentage Complete:** 34%  
+**Days Completed:** 43 / 112  
+**Percentage Complete:** 38%  
 
 **Current Phase:** Azure Data & Resilience (Days 32-56)  
-**Current Day:** Day 39 — Polly Retry & Circuit Breaker  
-**Last Completed Task:** Day 38 — Azure SQL resilience baseline; EnableRetryOnFailure + Polly planning  
-**Next Milestone:** Polly resilience + Health Checks (Days 39-43), then Azure Functions + Service Bus (Days 44-56)  
-**Architecture Status:** Phases 1-6 ✅ complete; Phase 7 (Tenant Enforcement & Ops) is next  
+**Current Day:** Day 44 — Azure Functions HTTP Trigger  
+**Last Completed Task:** Day 43 — Phase 7 closure; typed ID propagation and deployment readiness semantics  
+**Next Milestone:** Azure Functions + Service Bus (Days 44-56), then Phase 8 Event-Driven Foundation  
+**Architecture Status:** Phases 1-7 ✅ complete; Phase 8 (Event-Driven Foundation) is next  
 
 ---
 

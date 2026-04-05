@@ -1,5 +1,5 @@
 # Quick Command Reference Guide
-**Last Updated:** March 20, 2026 (Day 34 + Copilot infrastructure session)
+**Last Updated:** April 5, 2026 (Phase 7 closure and deployment-readiness verification)
 
 All commands in one place. Also available as topic-specific deep dives in this canonical `docs/reference/` subtree:
 
@@ -62,6 +62,21 @@ dotnet build XYDataLabs.OrderProcessingSystem.sln
 
 # 6. Run unit tests (before committing code)
 dotnet test XYDataLabs.OrderProcessingSystem.UnitTest/
+```
+
+### **Focused Verification Commands (Phase 7 close-out)**
+```powershell
+# Build with CI-style full paths and compact console output
+dotnet build .\XYDataLabs.OrderProcessingSystem.sln /property:GenerateFullPaths=true "/consoleloggerparameters:NoSummary;ForceNoAlign"
+
+# Re-run application-layer tests after CQRS/domain/controller changes
+dotnet test .\tests\XYDataLabs.OrderProcessingSystem.Application.Tests\XYDataLabs.OrderProcessingSystem.Application.Tests.csproj --no-build --logger "console;verbosity=minimal"
+
+# Run the SQL-backed integration suite after behavioral or deployment-readiness changes
+dotnet test .\tests\XYDataLabs.OrderProcessingSystem.Integration.Tests\XYDataLabs.OrderProcessingSystem.Integration.Tests.csproj --logger "console;verbosity=minimal"
+
+# Use the no-build variant after a successful solution build to shorten reruns
+dotnet test .\tests\XYDataLabs.OrderProcessingSystem.Integration.Tests\XYDataLabs.OrderProcessingSystem.Integration.Tests.csproj --no-build --logger "console;verbosity=minimal"
 ```
 
 ### **Exit Code Interpretation**

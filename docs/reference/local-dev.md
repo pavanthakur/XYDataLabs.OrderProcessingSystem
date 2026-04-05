@@ -1,7 +1,7 @@
 # Local Development Commands
 
 **Part of:** [quick-command-reference.md](./quick-command-reference.md)  
-**Last Updated:** March 20, 2026
+**Last Updated:** April 5, 2026
 
 ---
 
@@ -29,6 +29,20 @@ dotnet test --filter "FullyQualifiedName~TestMethodName"
 
 # Generate test coverage report
 dotnet test /p:CollectCoverage=true /p:CoverletOutputFormat=opencover
+```
+
+### **Focused verification used for Phase 7 closure**
+
+```powershell
+# Full solution build with CI-style path output
+dotnet build .\XYDataLabs.OrderProcessingSystem.sln /property:GenerateFullPaths=true "/consoleloggerparameters:NoSummary;ForceNoAlign"
+
+# Application-layer regression pass
+dotnet test .\tests\XYDataLabs.OrderProcessingSystem.Application.Tests\XYDataLabs.OrderProcessingSystem.Application.Tests.csproj --no-build --logger "console;verbosity=minimal"
+
+# SQL Server-backed integration verification
+dotnet test .\tests\XYDataLabs.OrderProcessingSystem.Integration.Tests\XYDataLabs.OrderProcessingSystem.Integration.Tests.csproj --logger "console;verbosity=minimal"
+dotnet test .\tests\XYDataLabs.OrderProcessingSystem.Integration.Tests\XYDataLabs.OrderProcessingSystem.Integration.Tests.csproj --no-build --logger "console;verbosity=minimal"
 ```
 
 ---
