@@ -9,6 +9,7 @@ Archive principles:
 3. Merged source documents are archived after their canonical destination is verified.
 4. Superseded documents are archived rather than deleted.
 5. Every implemented move or merge is logged in `logs/documentation-rationalization-summary.md`.
+6. The canonical audit record for the rationalization effort lives in `logs/documentation-audit.md`.
 
 Subtrees:
 
@@ -16,7 +17,7 @@ Subtrees:
 - `merged-sources/` — source documents merged into canonical documents
 - `superseded/` — documents replaced by newer authoritative versions
 - `historical-notes/` — historical plans, TODOs, and archived notes
-- `logs/` — implementation logs and archive traceability
+- `logs/` — implementation logs, audit records, and archive traceability
 
 Current implementation batch:
 

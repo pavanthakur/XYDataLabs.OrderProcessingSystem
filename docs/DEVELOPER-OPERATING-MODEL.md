@@ -77,7 +77,7 @@ docs/README.md
 - Phase 7 is the next active engineering phase.
 - The canonical learning source of truth is `docs/learning/curriculum/1_MASTER_CURRICULUM.md`.
 - The canonical milestone tracker is `docs/internal/AZURE-PROGRESS-EVALUATION.md`.
-- The legacy `Documentation/` tree is no longer an active content tree; it is now governance, redirect, and compatibility surface only.
+- The legacy `Documentation/` tree has been retired; documentation traceability now lives under `docs/archive/logs/`.
 
 ## What To Update And When
 
@@ -102,7 +102,7 @@ docs/README.md
 4. Prefer updating one canonical page instead of duplicating the same guidance in multiple places.
 5. Use `reference/quick-command-reference.md` before commits or deployments.
 6. Use `architecture/decisions/` when changing architecture constraints, not ad hoc notes.
-7. Use `archive/logs/documentation-rationalization-summary.md` and `Documentation/DOCUMENTATION-AUDIT.md` only for traceability and audit.
+7. Use `archive/logs/documentation-rationalization-summary.md` and `archive/logs/documentation-audit.md` only for traceability and audit.
 
 ## Simple Process Rules
 
@@ -186,7 +186,7 @@ When documentation starts to feel noisy, choose simplification by default:
 - `docs/reference/quick-command-reference.md`
 - `docs/guides/deployment/README.md`
 - `docs/archive/logs/documentation-rationalization-summary.md`
-- `Documentation/DOCUMENTATION-AUDIT.md`
+- `docs/archive/logs/documentation-audit.md`
 
 ## Practical Next Move
 

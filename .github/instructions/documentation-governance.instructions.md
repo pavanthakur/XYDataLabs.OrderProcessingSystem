@@ -1,12 +1,12 @@
 ---
-applyTo: "**/docs/*.md,**/docs/**/*.md,**/Documentation/**/*.md"
+applyTo: "**/docs/*.md,**/docs/**/*.md"
 ---
 # Documentation Governance — XYDataLabs.OrderProcessingSystem
 
 ## Canonical Documentation Rule
 - `docs/` is the only active human-facing documentation tree.
-- `Documentation/` is transitional, audit, redirect, or compatibility surface only.
-- Do not introduce new active content under `Documentation/`.
+- The legacy `Documentation/` tree has been retired.
+- Do not recreate or reintroduce a parallel `Documentation/` content tree.
 
 ## Read This First
 Before making documentation changes, use these pages as the operating model:

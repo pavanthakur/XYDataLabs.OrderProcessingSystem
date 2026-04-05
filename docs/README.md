@@ -48,3 +48,4 @@ Choose the path that matches your intent:
 - `guides/deployment/` — Azure deployment and infrastructure guidance
 - `reference/operations-quick-links.md` — fast operational navigation
 - `archive/logs/documentation-rationalization-summary.md` — implementation trace for the documentation cleanup
+- `archive/logs/documentation-audit.md` — baseline audit and governance record for the documentation rationalization effort

@@ -399,7 +399,7 @@ If we adjust the "Top 7" based on microservices architecture patterns:
 
 **References:**
 - [AZURE-PROGRESS-EVALUATION.md](../AZURE-PROGRESS-EVALUATION.md)
-- [1_MASTER_CURRICULUM.md](../../../Documentation/05-Self-Learning/Azure-Curriculum/1_MASTER_CURRICULUM.md)
+- [1_MASTER_CURRICULUM.md](../../../learning/curriculum/1_MASTER_CURRICULUM.md)
 - [ARCHITECTURE-EVOLUTION.md](../../../ARCHITECTURE-EVOLUTION.md)
 
 **Last Updated:** January 26, 2026

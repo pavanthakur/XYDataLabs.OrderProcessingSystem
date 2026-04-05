@@ -29,11 +29,9 @@ if (-not (Test-Path $slnPath)) {
     exit 1
 }
 
-$slnContent = Get-Content $slnPath -Raw
-
 $solutionFolderTypeGuid = '{2150E333-8FDC-42A3-9474-1A3956D46DE8}'
 
-function Normalize-RelativePath {
+function ConvertTo-RelativePath {
     param(
         [Parameter(Mandatory)]
         [string]$Path
@@ -177,7 +175,7 @@ function Get-MirroredFilesystemState {
         [string]$RepositoryRoot
     )
 
-    $mirroredRootFolders = @('.github', 'Resources', 'Documentation', 'docs', 'infra', 'bicep', 'scripts')
+    $mirroredRootFolders = @('.github', 'Resources', 'docs', 'infra', 'bicep', 'scripts')
     $excludedDirectoryNames = @('bin', 'obj', '.git', '.vs', '.vscode', 'node_modules')
     $excludedPathPrefixes = @('Resources\Azure-Deployment\logs')
     $excludedExtensions = @('.log', '.tmp', '.bak', '.user', '.zip', '.csproj', '.dcproj')
@@ -204,7 +202,7 @@ function Get-MirroredFilesystemState {
 
         $directories = Get-ChildItem -Path $absoluteMirroredRoot -Force -Recurse -Directory
         foreach ($directory in $directories) {
-            $relativeDirectoryPath = Normalize-RelativePath -Path $directory.FullName.Substring($RepositoryRoot.Length + 1)
+            $relativeDirectoryPath = ConvertTo-RelativePath -Path $directory.FullName.Substring($RepositoryRoot.Length + 1)
             if (Test-ExcludedRelativePath -RelativePath $relativeDirectoryPath -ExcludedDirectoryNames $excludedDirectoryNames -ExcludedPathPrefixes $excludedPathPrefixes) {
                 continue
             }
@@ -214,7 +212,7 @@ function Get-MirroredFilesystemState {
 
         $files = Get-ChildItem -Path $absoluteMirroredRoot -Force -Recurse -File
         foreach ($file in $files) {
-            $relativeFilePath = Normalize-RelativePath -Path $file.FullName.Substring($RepositoryRoot.Length + 1)
+            $relativeFilePath = ConvertTo-RelativePath -Path $file.FullName.Substring($RepositoryRoot.Length + 1)
             if (Test-ExcludedRelativePath -RelativePath $relativeFilePath -ExcludedDirectoryNames $excludedDirectoryNames -ExcludedPathPrefixes $excludedPathPrefixes) {
                 continue
             }
@@ -244,7 +242,7 @@ for ($lineIndex = 0; $lineIndex -lt $slnLines.Count; $lineIndex++) {
         $projectGuid = $Matches.guid.ToUpperInvariant()
         $projectTypeGuid = $Matches.typeGuid.ToUpperInvariant()
         $projectName = $Matches.name
-        $projectPath = Normalize-RelativePath -Path $Matches.path
+        $projectPath = ConvertTo-RelativePath -Path $Matches.path
         $solutionItems = [System.Collections.Generic.List[string]]::new()
         $insideSolutionItems = $false
 
@@ -267,7 +265,7 @@ for ($lineIndex = 0; $lineIndex -lt $slnLines.Count; $lineIndex++) {
             }
 
             if ($insideSolutionItems -and $projectLine -match '^\s*(?<path>[^=\r\n]+?)\s*=') {
-                $solutionItems.Add((Normalize-RelativePath -Path $Matches.path))
+                $solutionItems.Add((ConvertTo-RelativePath -Path $Matches.path))
             }
         }
 
@@ -332,7 +330,7 @@ $expectedFileLocations = @{}
 foreach ($trackedRepositoryFile in $trackedRepositoryFiles) {
     $expectedFolderPath = [System.IO.Path]::GetDirectoryName([string]$trackedRepositoryFile)
     if (-not [string]::IsNullOrEmpty($expectedFolderPath)) {
-        $expectedFolderPath = Normalize-RelativePath -Path $expectedFolderPath
+        $expectedFolderPath = ConvertTo-RelativePath -Path $expectedFolderPath
     }
 
     if ([string]::IsNullOrEmpty($expectedFolderPath)) {
@@ -372,7 +370,7 @@ foreach ($trackedRepositoryFile in $trackedRepositoryFiles) {
 
 foreach ($solutionFolderPath in ($solutionFoldersByPath.Keys | Sort-Object)) {
     $topLevelSegment = $solutionFolderPath.Split('\')[0]
-    $isTrackedSolutionFolder = $solutionFolderPath -eq 'Solution Items' -or @('.github', 'Resources', 'Documentation', 'docs', 'infra', 'bicep', 'scripts', 'tests') -contains $topLevelSegment
+    $isTrackedSolutionFolder = $solutionFolderPath -eq 'Solution Items' -or @('.github', 'Resources', 'docs', 'infra', 'bicep', 'scripts', 'tests') -contains $topLevelSegment
 
     if (-not $isTrackedSolutionFolder) {
         continue

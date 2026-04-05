@@ -195,20 +195,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "modules", "modules", "{E1A8
 		infra\modules\sql.json = infra\modules\sql.json
 	EndProjectSection
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Documentation", "Documentation", "{D0C1234A-5678-9012-3456-789ABCDEF123}"
-	ProjectSection(SolutionItems) = preProject
-		Documentation\DOCUMENTATION-AUDIT.md = Documentation\DOCUMENTATION-AUDIT.md
-		Documentation\README.md = Documentation\README.md
-		Documentation\QUICK-START-AZURE-BOOTSTRAP.md = Documentation\QUICK-START-AZURE-BOOTSTRAP.md
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "05-Self-Learning", "05-Self-Learning", "{D5C1234A-5678-9012-3456-789ABCDEF128}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Azure-Curriculum", "Azure-Curriculum", "{D5C1234B-5678-9012-3456-789ABCDEF129}"
-	ProjectSection(SolutionItems) = preProject
-		Documentation\05-Self-Learning\Azure-Curriculum\1_MASTER_CURRICULUM.md = Documentation\05-Self-Learning\Azure-Curriculum\1_MASTER_CURRICULUM.md
-	EndProjectSection
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XYDataLabs.OrderProcessingSystem.SharedKernel", "XYDataLabs.OrderProcessingSystem.SharedKernel\XYDataLabs.OrderProcessingSystem.SharedKernel.csproj", "{DFC0BB5F-D671-DE7D-4A5D-D10E77984910}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
@@ -275,6 +261,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "archive", "archive", "{CC00
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "logs", "logs", "{CC00001E-0001-0001-0001-000000000001}"
 	ProjectSection(SolutionItems) = preProject
+		docs\archive\logs\documentation-audit.md = docs\archive\logs\documentation-audit.md
 		docs\archive\logs\documentation-rationalization-summary.md = docs\archive\logs\documentation-rationalization-summary.md
 	EndProjectSection
 EndProject
@@ -682,8 +669,6 @@ Global
 		{E1A8B2C9-4D5F-6789-ABCD-123456789DE6} = {E1A8B2C9-4D5F-6789-ABCD-123456789DE5}
 		{E1A8B2CB-4D5F-6789-ABCD-123456789DE7} = {E1A8B2CA-4D5F-6789-ABCD-123456789DE6}
 		{E1A8B2CC-4D5F-6789-ABCD-123456789DE8} = {E1A8B2CA-4D5F-6789-ABCD-123456789DE6}
-		{D5C1234A-5678-9012-3456-789ABCDEF128} = {D0C1234A-5678-9012-3456-789ABCDEF123}
-		{D5C1234B-5678-9012-3456-789ABCDEF129} = {D5C1234A-5678-9012-3456-789ABCDEF128}
 		{F5548781-50F1-4152-942A-88B795A88953} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{D4315B79-068A-401E-924E-FC3AC597994C} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{D7349574-850D-4FE5-97F4-92EEF6641EBA} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
