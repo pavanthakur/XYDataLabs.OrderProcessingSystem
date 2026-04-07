@@ -18,6 +18,7 @@ This repo uses a small set of primary operational workflows, with additional sup
 | `deploy-api-to-azure.yml` | API/Backend code changes | All branches (dev/staging/main) | Builds and deploys API to environment-specific Azure Web App |
 | `deploy-ui-to-azure.yml` | UI/Frontend code changes | All branches (dev/staging/main) | Builds and deploys UI to environment-specific Azure Web App |
 | `validate-adrs.yml` | ADR file, script, or lint config changes | Push/PR to main/dev/staging, or manual | **[See README-VALIDATE-ADRS.md](./README-VALIDATE-ADRS.md)** — Validates ADR filename pattern, H1 heading, `**Status:**` frontmatter, and markdownlint rules |
+| `validate-ai-customization.yml` | Shared AI customization changes | Push/PR to main/dev/staging, or manual | Validates shared Copilot instructions, prompts, agents, operating-model docs, and their discovery surfaces |
 | `validate-doc-links.yml` | Docs or validator changes | Push/PR to main/dev/staging, or manual | Validates local markdown links and heading anchors for the canonical `docs/` tree |
 
 ### Workflow Categories
@@ -41,6 +42,7 @@ This repo uses a small set of primary operational workflows, with additional sup
 | `validate-deployment.yml` | Reusable preflight validation called by infra deployment |
 | `test-validate-deployment.yml` | Independent test harness for validation workflow changes |
 | `validate-adrs.yml` | Documentation governance for ADR changes |
+| `validate-ai-customization.yml` | Governance guardrail for shared AI operating assets |
 | `validate-doc-links.yml` | Lightweight guardrail for canonical docs navigation integrity |
 
 ### Branch-to-Environment Mapping

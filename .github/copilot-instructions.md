@@ -98,7 +98,7 @@ practice Azure cloud deployment, CI/CD automation, and enterprise DevOps pattern
 
 ---
 
-## 4. GitHub Actions Workflows (10 workflows)
+## 4. GitHub Actions Workflows (11 workflows)
 
 All workflows live in `.github/workflows/`. Each has a companion `README-*.md` in the same folder.
 
@@ -113,6 +113,7 @@ All workflows live in `.github/workflows/`. Each has a companion `README-*.md` i
 | `test-validate-deployment.yml` | Test Pre-Deployment Validation | Manual or PR | Tests the validation workflow independently. |
 | `deploy-api-to-azure.yml` | Deploy API to Azure App Service | Push to dev/staging/main (API paths) | Build → test → publish → Azure OIDC login → deploy → health check |
 | `deploy-ui-to-azure.yml` | Deploy UI to Azure App Service | Push to dev/staging/main (UI paths) | Build → test → publish → Azure OIDC login → deploy → health check |
+| `validate-ai-customization.yml` | Validate AI Customization | Push/PR (shared AI asset paths) or manual | Validates shared Copilot instructions, prompts, agents, and AI governance docs/scripts stay in sync |
 | `validate-adrs.yml` | Validate ADR Markdown | Push/PR (ADR/script/config paths) or manual | Markdownlint format + frontmatter schema (filename, H1, `**Status:**`, valid status word) |
 
 ### Workflow Categories
@@ -120,7 +121,7 @@ All workflows live in `.github/workflows/`. Each has a companion `README-*.md` i
 | Category | Workflows | Usage |
 |----------|-----------|-------|
 | **Primary** | `ci.yml`, `azure-initial-setup.yml`, `azure-bootstrap.yml`, `deploy-api-to-azure.yml`, `deploy-ui-to-azure.yml` | Default paths for PR validation, initial setup, day-to-day deployment, and normal API/UI delivery |
-| **Support** | `configure-github-secrets.yml`, `infra-deploy.yml`, `validate-deployment.yml`, `test-validate-deployment.yml`, `validate-adrs.yml` | Secondary validation, infra-only entrypoints, troubleshooting, and documentation governance |
+| **Support** | `configure-github-secrets.yml`, `infra-deploy.yml`, `validate-deployment.yml`, `test-validate-deployment.yml`, `validate-ai-customization.yml`, `validate-adrs.yml` | Secondary validation, infra-only entrypoints, troubleshooting, and governance guardrails |
 
 ### Branch → Environment Mapping
 
@@ -301,7 +302,7 @@ Port allocations: Local VS (5010–5013) · Docker dev (5020–5023) · Docker s
 
 ---
 
-## 9. Copilot Prompts, Instructions & Agents
+## 9. Copilot Prompts, Instructions, Skills & Agents
 
 ### Instruction files (auto-attach by file pattern)
 | File | Applies to |
@@ -345,12 +346,19 @@ This matrix shows which instructions auto-attach for common file locations:
 | CQRS Backend | `.github/agents/cqrs-backend.agent.md` | Working on C# domain/application/infrastructure code, CQRS patterns, EF Core |
 | Code Reviewer | `.github/agents/code-reviewer.agent.md` | Reviewing changes for architecture compliance, security, tenant safety (read-only) |
 
+### Repo-owned skills
+
+| Skill | File | Use when |
+|-------|------|----------|
+| Azure Deployment Operations | `.github/skills/azure-deployment-operations/SKILL.md` | Working on Azure bootstrap, deployment workflows, OIDC validation, App Service rollout checks, Bicep preflight, or deployment troubleshooting |
+
 ### Reusable agent prompts (type in VS Code Chat → Agent mode)
 | Prompt | Command | Purpose |
 |--------|---------|--------|
 | New Feature Workflow | `/XYDataLabs-new-feature` | Orchestrates end-to-end feature development: entity → CQRS → migration → controller → tests → review → commit → payment verification (conditional). Enforces mandatory 13-step workflow with multitenant support. |
 | Day Complete Router | `/XYDataLabs-day-complete` | After each curriculum day — routes updates to all correct documents, suggests commit |
 | Completion Check | `/XYDataLabs-completion-check` | After any feature, task, script, or fix — 6-category quality gate: documented? guardrailed? unit tested? integration tested? automated? context current? |
+| Docker Start | `/XYDataLabs-docker-start` | Launches the supported Docker and local runtime profiles from one interactive entry point and prints the correct API/UI URLs. |
 | Local Setup | `/XYDataLabs-setup-local` | After a fresh git clone — runs setup-local.ps1, summarises VS F5 and Docker next steps |
 | SQL Local Access | `/XYDataLabs-sql-local-access` | Opens or closes Azure SQL firewall for local IP after a fresh bootstrap/deploy. Prints SSMS connection details. |
 | Context Audit | `/XYDataLabs-context-audit` | Detects stale AI context by diffing memory files and copilot-instructions against the actual codebase. Run periodically or after major refactors. |
@@ -358,12 +366,19 @@ This matrix shows which instructions auto-attach for common file locations:
 | Log + DB Correlation | `/XYDataLabs-verify-db-logs` | After any payment run on any env/profile — reads today's physical log files (docker/local) or queries App Insights KQL (azure), extracts charge IDs automatically, runs DB queries, and produces a correlated API log → UI log → DB pass/fail report. |
 | ADR Validation | `/XYDataLabs-validate-adrs` | Before committing changes to any ADR — runs frontmatter schema check + markdownlint locally; documents how to toggle the CI counterpart. |
 
-> **Quick prompt tip:** `Ctrl+Shift+I` → select Agent mode → type `/XYDataLabs-new-feature`, `/XYDataLabs-completion-check`, `/XYDataLabs-setup-local`, `/XYDataLabs-day-complete`, `/XYDataLabs-sql-local-access`, `/XYDataLabs-context-audit`, `/XYDataLabs-verify-db-logs`, or `/XYDataLabs-validate-adrs`
+> **Quick prompt tip:** `Ctrl+Shift+I` → select Agent mode → type `/XYDataLabs-new-feature`, `/XYDataLabs-completion-check`, `/XYDataLabs-docker-start`, `/XYDataLabs-setup-local`, `/XYDataLabs-day-complete`, `/XYDataLabs-sql-local-access`, `/XYDataLabs-context-audit`, `/XYDataLabs-verify-db-logs`, or `/XYDataLabs-validate-adrs`
 >
 > **Prompt reference:** See `.github/prompts/README.md` for when to use each prompt, prerequisites, and operational notes.
 >
+> **Skill reference:** See `.github/skills/README.md` for the repo-owned skills catalog and authoring rules.
+>
 > **Maintenance rule:** When adding or changing any reusable prompt in `.github/prompts/`, also update `.github/prompts/README.md` and any operational docs that point users to required manual post-deploy steps.
 > When adding or changing any agent in `.github/agents/`, also update the Custom agents table above.
+> When adding or changing any skill in `.github/skills/`, also update `.github/skills/README.md` and the skills table above.
+>
+> **AI operating model:** See `docs/AI-OPERATING-MODEL.md` for the canonical protocol covering prompts, agents, instructions, deferrals, and future hooks/skills/MCP adoption.
+>
+> **Validation rule:** When changing `.github/copilot-instructions.md`, `.github/instructions/`, `.github/prompts/`, `.github/agents/`, or `.github/skills/`, run `pwsh scripts/validate-ai-customization.ps1` and keep the discovery surfaces in sync.
 
 ---
 
@@ -375,6 +390,8 @@ This matrix shows which instructions auto-attach for common file locations:
 | `ARCHITECTURE.md` | Root | Binding tenant, payment identifier, migration, and test standard for future model creation |
 | `ARCHITECTURE-EVOLUTION.md` | Root | 14-phase roadmap: Phases 1-6 ✅ complete, Phase 7 next 📅 |
 | `docs/internal/AZURE-PROGRESS-EVALUATION.md` | docs/internal | Learning progress weeks 1–10, next-step guides |
+| `docs/AI-OPERATING-MODEL.md` | docs/ | Canonical protocol for shared AI customization and governance |
+| `docs/internal/DEFERRED-WORK-LOG.md` | docs/internal | Shared register for justified deferred work |
 | `docs/reference/quick-command-reference.md` | docs/ | Command cheat sheet for Azure, Git, Docker, GitHub App |
 | `.github/workflows/README.md` | Workflows | Workflow overview, secrets, path triggers |
 | `.github/workflows/README-AZURE-INITIAL-SETUP.md` | Workflows | Initial Setup workflow (Phase 0/1a/1b) |
@@ -383,6 +400,7 @@ This matrix shows which instructions auto-attach for common file locations:
 | `.github/workflows/README-INFRA-DEPLOY.md` | Workflows | Infrastructure deployment workflow guide |
 | `.github/workflows/README-VALIDATE-DEPLOYMENT.md` | Workflows | Pre-deployment validation workflow detail |
 | `.github/workflows/README-TEST-VALIDATE-DEPLOYMENT.md` | Workflows | Test pre-deployment validation workflow detail |
+| `.github/completion-check-rubric.md` | .github | Non-negotiable versus deferrable rubric for `/XYDataLabs-completion-check` |
 | `docs/README.md` | docs/ | Documentation hub with links to all guides |
 | `docs/reference/operations-quick-links.md` | docs/ | Quick reference links for operations tasks |
 | `docs/reference/quick-command-reference.md` | docs/ | Command cheat sheet for Azure, Git, Docker, GitHub App |

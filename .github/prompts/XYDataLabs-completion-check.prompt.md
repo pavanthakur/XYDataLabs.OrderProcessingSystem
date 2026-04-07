@@ -5,6 +5,9 @@ description: "Quality gate after any feature, task, script, or fix — automatic
 
 Run this after completing any feature, task, script, fix, or workflow change.
 
+Use `.github/completion-check-rubric.md` to decide whether a gap is non-negotiable or can be deferred.
+If a gap is deferred, record it in `docs/internal/DEFERRED-WORK-LOG.md` with owner, rationale, risk, review date, and closure trigger before closing the task.
+
 ## Step 0 — Run automated checks first
 
 Run all three blocks in the terminal before evaluating the checklist. Use the results to fill in categories 2, 3, and 4 below.
@@ -87,7 +90,7 @@ else { Write-Host 'SECRET SCAN: clean' -ForegroundColor Green }
 
 For each unchecked item, either:
 - **Fix it now** (preferred) — implement the missing piece, then mark it done
-- **Record it** — add a TODO comment with a clear owner and reason for deferral
+- **Record it** — add an entry to `docs/internal/DEFERRED-WORK-LOG.md` with a clear owner, reason, risk, review date, and closure trigger
 
 ## Summary
 
