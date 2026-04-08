@@ -1,13 +1,49 @@
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
+using XYDataLabs.OrderProcessingSystem.Domain.Identifiers;
+using XYDataLabs.OrderProcessingSystem.Domain.ValueObjects;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using System.Diagnostics;
+using System.Text.Json;
 
 namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
 {
     public class OrderProcessingSystemDbContext : DbContext, IAppDbContext
     {
+        private static readonly JsonSerializerOptions AuditJsonSerializerOptions = new(JsonSerializerDefaults.Web);
+        private static readonly HashSet<string> ExcludedAuditPropertyNames = new(StringComparer.OrdinalIgnoreCase)
+        {
+            nameof(BaseAuditableEntity.TenantId),
+            nameof(BaseAuditableEntity.CreatedBy),
+            nameof(BaseAuditableEntity.CreatedDate),
+            nameof(BaseAuditableEntity.UpdatedBy),
+            nameof(BaseAuditableEntity.UpdatedDate),
+            nameof(BaseAuditableCreateEntity.TenantId),
+            nameof(BaseAuditableCreateEntity.CreatedBy),
+            nameof(BaseAuditableCreateEntity.CreatedDate),
+            nameof(AuditLog.Id),
+            nameof(AuditLog.EntityName),
+            nameof(AuditLog.EntityId),
+            nameof(AuditLog.Operation),
+            nameof(AuditLog.TraceId),
+            nameof(AuditLog.CorrelationId),
+            nameof(AuditLog.OldValues),
+            nameof(AuditLog.NewValues),
+            nameof(CardTransaction.CreditCardOwnerName),
+            nameof(CardTransaction.MaskedCardNumber),
+            nameof(PayinLog.LastFourCardNbr),
+            nameof(PayinLog.CardOwnerName),
+            nameof(PaymentMethod.Token),
+            "PostInfo",
+            "RespInfo",
+            "AdditionalInfo"
+        };
+
         private readonly ITenantProvider? _tenantProvider;
+        private bool _isSavingAuditLogs;
 
         public OrderProcessingSystemDbContext()
         {
@@ -29,6 +65,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
         public virtual DbSet<Tenant> Tenants { get; set; }
 
         // Existing DbSets
+        public virtual DbSet<AuditLog> AuditLogs { get; set; }
         public virtual DbSet<Customer> Customers { get; set; }
         public virtual DbSet<Product> Products { get; set; }
         public virtual DbSet<Order> Orders { get; set; }
@@ -46,6 +83,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
+            ArgumentNullException.ThrowIfNull(optionsBuilder);
+
             if (!optionsBuilder.IsConfigured)
             {
                 optionsBuilder.UseSqlServer("OrderProcessingSystemDbConnection");
@@ -54,6 +93,13 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            ArgumentNullException.ThrowIfNull(modelBuilder);
+
+            var customerIdConverter = new ValueConverter<CustomerId, int>(id => id.Value, value => new CustomerId(value));
+            var orderIdConverter = new ValueConverter<OrderId, int>(id => id.Value, value => new OrderId(value));
+            var productIdConverter = new ValueConverter<ProductId, int>(id => id.Value, value => new ProductId(value));
+            var moneyConverter = new ValueConverter<Money, decimal>(money => money.Value, value => Money.From(value));
+
             base.OnModelCreating(modelBuilder);
 
             modelBuilder.Entity<Tenant>()
@@ -68,6 +114,43 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
             modelBuilder.Entity<OrderProduct>()
                 .HasKey(op => new { op.OrderId, op.ProductId });
 
+            modelBuilder.Entity<Customer>()
+                .Property(customer => customer.CustomerId)
+                .HasConversion(customerIdConverter)
+                .ValueGeneratedOnAdd();
+
+            modelBuilder.Entity<Product>()
+                .Property(product => product.ProductId)
+                .HasConversion(productIdConverter)
+                .ValueGeneratedOnAdd();
+
+            modelBuilder.Entity<Product>()
+                .Property(product => product.Price)
+                .HasConversion(moneyConverter)
+                .HasColumnType("decimal(18,2)");
+
+            modelBuilder.Entity<Order>()
+                .Property(order => order.OrderId)
+                .HasConversion(orderIdConverter)
+                .ValueGeneratedOnAdd();
+
+            modelBuilder.Entity<Order>()
+                .Property(order => order.CustomerId)
+                .HasConversion(customerIdConverter);
+
+            modelBuilder.Entity<Order>()
+                .Property(order => order.TotalPrice)
+                .HasConversion(moneyConverter)
+                .HasColumnType("decimal(18,2)");
+
+            modelBuilder.Entity<OrderProduct>()
+                .Property(orderProduct => orderProduct.OrderId)
+                .HasConversion(orderIdConverter);
+
+            modelBuilder.Entity<OrderProduct>()
+                .Property(orderProduct => orderProduct.ProductId)
+                .HasConversion(productIdConverter);
+
             modelBuilder.Entity<OrderProduct>()
                 .HasOne(op => op.Order)
                 .WithMany(o => o.OrderProducts)
@@ -77,6 +160,19 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
                 .HasOne(op => op.Product)
                 .WithMany(p => p.OrderProducts)
                 .HasForeignKey(op => op.ProductId);
+
+            modelBuilder.Entity<Order>()
+                .Property(order => order.Status)
+                .HasConversion<string>()
+                .HasMaxLength(32)
+                .HasDefaultValue(OrderStatus.Created);
+
+            modelBuilder.Entity<Order>()
+                .Property(order => order.RowVersion)
+                .IsRowVersion();
+
+            modelBuilder.Entity<Order>()
+                .HasIndex(order => new { order.TenantId, order.CustomerId, order.Status });
 
             // New Payment-related configurations
             modelBuilder.Entity<BillingCustomer>()
@@ -152,9 +248,35 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
             modelBuilder.Entity<TransactionStatusHistory>()
                 .HasIndex(tsh => new { tsh.TenantId, tsh.TransactionReferenceId });
 
+            modelBuilder.Entity<AuditLog>()
+                .HasIndex(auditLog => new { auditLog.TenantId, auditLog.EntityName, auditLog.EntityId });
+
+            modelBuilder.Entity<AuditLog>()
+                .HasIndex(auditLog => auditLog.CreatedDate);
+
             modelBuilder.Entity<PaymentMethod>()
                 .HasIndex(pm => pm.Token)
                 .IsUnique();
+
+            modelBuilder.Entity<AuditLog>()
+                .Property(auditLog => auditLog.EntityName)
+                .HasMaxLength(128);
+
+            modelBuilder.Entity<AuditLog>()
+                .Property(auditLog => auditLog.EntityId)
+                .HasMaxLength(64);
+
+            modelBuilder.Entity<AuditLog>()
+                .Property(auditLog => auditLog.Operation)
+                .HasMaxLength(16);
+
+            modelBuilder.Entity<AuditLog>()
+                .Property(auditLog => auditLog.TraceId)
+                .HasMaxLength(64);
+
+            modelBuilder.Entity<AuditLog>()
+                .Property(auditLog => auditLog.CorrelationId)
+                .HasMaxLength(128);
 
             modelBuilder.Entity<CardTransaction>()
                 .Property(ct => ct.MaskedCardNumber)
@@ -212,6 +334,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
                 .Property(tsh => tsh.AttemptOrderId)
                 .HasMaxLength(128);
 
+            ConfigureTenantOwnership<AuditLog>(modelBuilder);
             ConfigureTenantOwnership<Customer>(modelBuilder);
             ConfigureTenantOwnership<Order>(modelBuilder);
             ConfigureTenantOwnership<Product>(modelBuilder);
@@ -228,14 +351,71 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
 
         public override int SaveChanges()
         {
-            StampTenantOnAddedEntities();
-            return base.SaveChanges();
+            if (_isSavingAuditLogs)
+            {
+                return base.SaveChanges();
+            }
+
+            if (Database.CurrentTransaction is not null)
+            {
+                return SaveChangesWithAudit();
+            }
+
+            var executionStrategy = Database.CreateExecutionStrategy();
+            return executionStrategy.Execute(SaveChangesWithOwnedTransaction);
         }
 
         public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
+            if (_isSavingAuditLogs)
+            {
+                return await base.SaveChangesAsync(cancellationToken);
+            }
+
+            if (Database.CurrentTransaction is not null)
+            {
+                return await SaveChangesWithAuditAsync(cancellationToken);
+            }
+
+            var executionStrategy = Database.CreateExecutionStrategy();
+            return await executionStrategy.ExecuteAsync(
+                async () => await SaveChangesWithOwnedTransactionAsync(cancellationToken));
+        }
+
+        private int SaveChangesWithOwnedTransaction()
+        {
+            using var transaction = Database.BeginTransaction();
+            var result = SaveChangesWithAudit();
+            transaction.Commit();
+            return result;
+        }
+
+        private async Task<int> SaveChangesWithOwnedTransactionAsync(CancellationToken cancellationToken)
+        {
+            await using var transaction = await Database.BeginTransactionAsync(cancellationToken);
+            var result = await SaveChangesWithAuditAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return result;
+        }
+
+        private int SaveChangesWithAudit()
+        {
             StampTenantOnAddedEntities();
-            return await base.SaveChangesAsync(cancellationToken);
+
+            var pendingAuditLogs = CreatePendingAuditLogs();
+            var result = base.SaveChanges();
+            PersistAuditLogs(pendingAuditLogs);
+            return result;
+        }
+
+        private async Task<int> SaveChangesWithAuditAsync(CancellationToken cancellationToken)
+        {
+            StampTenantOnAddedEntities();
+
+            var pendingAuditLogs = CreatePendingAuditLogs();
+            var result = await base.SaveChangesAsync(cancellationToken);
+            await PersistAuditLogsAsync(pendingAuditLogs, cancellationToken);
+            return result;
         }
 
         private void StampTenantOnAddedEntities()
@@ -261,6 +441,265 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
             }
         }
 
+        private List<PendingAuditLog> CreatePendingAuditLogs()
+        {
+            if (_tenantProvider is null || !_tenantProvider.HasTenantContext)
+            {
+                return new List<PendingAuditLog>();
+            }
+
+            var tenantId = _tenantProvider.TenantId;
+            if (tenantId <= 0)
+            {
+                return new List<PendingAuditLog>();
+            }
+
+            var pendingAuditLogs = new List<PendingAuditLog>();
+
+            foreach (var entry in ChangeTracker.Entries())
+            {
+                if (!ShouldAuditEntry(entry))
+                {
+                    continue;
+                }
+
+                var operation = entry.State switch
+                {
+                    EntityState.Added => "Created",
+                    EntityState.Modified => "Updated",
+                    EntityState.Deleted => "Deleted",
+                    _ => string.Empty
+                };
+
+                if (string.IsNullOrWhiteSpace(operation))
+                {
+                    continue;
+                }
+
+                Dictionary<string, object?>? oldValues = null;
+                Dictionary<string, object?>? newValues = null;
+
+                if (entry.State == EntityState.Modified)
+                {
+                    oldValues = GetPropertyValues(entry, useOriginalValues: true, changedPropertiesOnly: true);
+                    newValues = GetPropertyValues(entry, useOriginalValues: false, changedPropertiesOnly: true);
+
+                    if (oldValues.Count == 0 && newValues.Count == 0)
+                    {
+                        continue;
+                    }
+                }
+                else if (entry.State == EntityState.Deleted)
+                {
+                    oldValues = GetPropertyValues(entry, useOriginalValues: true, changedPropertiesOnly: false);
+                }
+
+                pendingAuditLogs.Add(new PendingAuditLog(
+                    entry,
+                    tenantId,
+                    entry.Metadata.ClrType.Name,
+                    entry.State == EntityState.Added ? null : GetEntityIdentifier(entry),
+                    operation,
+                    oldValues,
+                    newValues));
+            }
+
+            return pendingAuditLogs;
+        }
+
+        private void PersistAuditLogs(List<PendingAuditLog> pendingAuditLogs)
+        {
+            if (pendingAuditLogs.Count == 0)
+            {
+                return;
+            }
+
+            var auditLogs = MaterializeAuditLogs(pendingAuditLogs);
+            if (auditLogs.Count == 0)
+            {
+                return;
+            }
+
+            _isSavingAuditLogs = true;
+            try
+            {
+                AuditLogs.AddRange(auditLogs);
+                base.SaveChanges();
+            }
+            finally
+            {
+                _isSavingAuditLogs = false;
+            }
+        }
+
+        private async Task PersistAuditLogsAsync(List<PendingAuditLog> pendingAuditLogs, CancellationToken cancellationToken)
+        {
+            if (pendingAuditLogs.Count == 0)
+            {
+                return;
+            }
+
+            var auditLogs = MaterializeAuditLogs(pendingAuditLogs);
+            if (auditLogs.Count == 0)
+            {
+                return;
+            }
+
+            _isSavingAuditLogs = true;
+            try
+            {
+                AuditLogs.AddRange(auditLogs);
+                await base.SaveChangesAsync(cancellationToken);
+            }
+            finally
+            {
+                _isSavingAuditLogs = false;
+            }
+        }
+
+        private List<AuditLog> MaterializeAuditLogs(List<PendingAuditLog> pendingAuditLogs)
+        {
+            var createdAt = DateTime.UtcNow;
+            var traceId = Activity.Current?.TraceId.ToString();
+            var correlationId = Activity.Current?.Id;
+            var auditLogs = new List<AuditLog>(pendingAuditLogs.Count);
+
+            foreach (var pendingAuditLog in pendingAuditLogs)
+            {
+                if (pendingAuditLog.Operation == "Created")
+                {
+                    pendingAuditLog.NewValues = GetPropertyValues(pendingAuditLog.Entry, useOriginalValues: false, changedPropertiesOnly: false);
+                }
+
+                var entityId = pendingAuditLog.EntityId;
+                if (string.IsNullOrWhiteSpace(entityId) && pendingAuditLog.Entry.State != EntityState.Detached)
+                {
+                    entityId = GetEntityIdentifier(pendingAuditLog.Entry);
+                }
+
+                if (string.IsNullOrWhiteSpace(entityId))
+                {
+                    continue;
+                }
+
+                auditLogs.Add(new AuditLog
+                {
+                    TenantId = pendingAuditLog.TenantId,
+                    EntityName = pendingAuditLog.EntityName,
+                    EntityId = entityId,
+                    Operation = pendingAuditLog.Operation,
+                    TraceId = traceId,
+                    CorrelationId = correlationId,
+                    OldValues = SerializeAuditValues(pendingAuditLog.OldValues),
+                    NewValues = SerializeAuditValues(pendingAuditLog.NewValues),
+                    CreatedDate = createdAt
+                });
+            }
+
+            return auditLogs;
+        }
+
+        private static bool ShouldAuditEntry(EntityEntry entry)
+        {
+            if (entry.Entity is AuditLog)
+            {
+                return false;
+            }
+
+            if (entry.State is not EntityState.Added and not EntityState.Modified and not EntityState.Deleted)
+            {
+                return false;
+            }
+
+            return entry.Entity is BaseAuditableEntity or BaseAuditableCreateEntity;
+        }
+
+        private static Dictionary<string, object?> GetPropertyValues(EntityEntry entry, bool useOriginalValues, bool changedPropertiesOnly)
+        {
+            var propertyValues = new Dictionary<string, object?>(StringComparer.Ordinal);
+
+            foreach (var property in entry.Properties)
+            {
+                if (ShouldSkipAuditProperty(property, changedPropertiesOnly))
+                {
+                    continue;
+                }
+
+                var value = useOriginalValues
+                    ? property.OriginalValue
+                    : property.CurrentValue;
+
+                propertyValues[property.Metadata.Name] = value;
+            }
+
+            return propertyValues;
+        }
+
+        private static bool ShouldSkipAuditProperty(PropertyEntry property, bool changedPropertiesOnly)
+        {
+            if (property.Metadata.IsShadowProperty() || property.Metadata.IsPrimaryKey())
+            {
+                return true;
+            }
+
+            if (changedPropertiesOnly && !property.IsModified)
+            {
+                return true;
+            }
+
+            if (property.Metadata.IsForeignKey())
+            {
+                return false;
+            }
+
+            if (!IsSupportedAuditType(property.Metadata.ClrType))
+            {
+                return true;
+            }
+
+            return ExcludedAuditPropertyNames.Contains(property.Metadata.Name);
+        }
+
+        private static bool IsSupportedAuditType(Type clrType)
+        {
+            var actualType = Nullable.GetUnderlyingType(clrType) ?? clrType;
+
+            return actualType.IsPrimitive
+                || actualType.IsEnum
+                || actualType == typeof(string)
+                || actualType == typeof(decimal)
+                || actualType == typeof(DateTime)
+                || actualType == typeof(DateTimeOffset)
+                || actualType == typeof(Guid)
+                || actualType == typeof(TimeSpan)
+                || actualType == typeof(bool);
+        }
+
+        private static string? SerializeAuditValues(Dictionary<string, object?>? values)
+        {
+            if (values is null || values.Count == 0)
+            {
+                return null;
+            }
+
+            return JsonSerializer.Serialize(values, AuditJsonSerializerOptions);
+        }
+
+        private static string GetEntityIdentifier(EntityEntry entry)
+        {
+            var primaryKey = entry.Metadata.FindPrimaryKey();
+            if (primaryKey is null)
+            {
+                return string.Empty;
+            }
+
+            var parts = primaryKey.Properties
+                .Select(property => $"{property.Name}={entry.Property(property.Name).CurrentValue}")
+                .ToArray();
+
+            return string.Join("|", parts);
+        }
+
         private void ConfigureTenantOwnership<TEntity>(ModelBuilder modelBuilder)
             where TEntity : class
         {
@@ -278,6 +717,41 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
             where TEntity : class
         {
             return entity => _tenantProvider == null || !_tenantProvider.HasTenantContext || EF.Property<int>(entity, "TenantId") == _tenantProvider.TenantId;
+        }
+
+        private sealed class PendingAuditLog
+        {
+            public PendingAuditLog(
+                EntityEntry entry,
+                int tenantId,
+                string entityName,
+                string? entityId,
+                string operation,
+                Dictionary<string, object?>? oldValues,
+                Dictionary<string, object?>? newValues)
+            {
+                Entry = entry;
+                TenantId = tenantId;
+                EntityName = entityName;
+                EntityId = entityId;
+                Operation = operation;
+                OldValues = oldValues;
+                NewValues = newValues;
+            }
+
+            public EntityEntry Entry { get; }
+
+            public int TenantId { get; }
+
+            public string EntityName { get; }
+
+            public string? EntityId { get; }
+
+            public string Operation { get; }
+
+            public Dictionary<string, object?>? OldValues { get; }
+
+            public Dictionary<string, object?>? NewValues { get; set; }
         }
     }
 }

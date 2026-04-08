@@ -4,6 +4,8 @@ This folder contains reusable VS Code Chat agent prompts for common operational 
 
 These prompts are intended to reduce missed post-deployment steps, standardize repeated workflows, and give a consistent entry point for tasks that are easy to forget during Azure setup, validation, and daily learning progress updates.
 
+For repo-shared AI governance, use [docs/AI-OPERATING-MODEL.md](../../docs/AI-OPERATING-MODEL.md) as the canonical protocol and [docs/internal/DEFERRED-WORK-LOG.md](../../docs/internal/DEFERRED-WORK-LOG.md) as the shared deferral register.
+
 ## How To Use
 
 1. Open VS Code Chat.
@@ -13,7 +15,7 @@ These prompts are intended to reduce missed post-deployment steps, standardize r
 Quick tip:
 
 ```text
-Ctrl+Shift+I → Agent mode → type /XYDataLabs-day-complete, /XYDataLabs-sql-local-access, /XYDataLabs-context-audit, or /XYDataLabs-validate-adrs
+Ctrl+Shift+I → Agent mode → type /XYDataLabs-day-complete, /XYDataLabs-docker-start, /XYDataLabs-sql-local-access, /XYDataLabs-context-audit, or /XYDataLabs-validate-adrs
 ```
 
 ## Available Prompts
@@ -22,11 +24,12 @@ Ctrl+Shift+I → Agent mode → type /XYDataLabs-day-complete, /XYDataLabs-sql-l
 
 Purpose:
 - Routes end-of-day curriculum updates to the correct documents.
-- Ensures progress tracking stays consistent.
+- Ensures progress tracking stays consistent, including architecture phase status surfaces.
 - Helps prevent missing updates in curriculum, daily progress, and related docs.
 
 Use when:
 - A curriculum day is finished.
+- A phase is being closed or frozen and all status surfaces must be aligned.
 - You want guided document updates for learning progress.
 
 ### `/XYDataLabs-sql-local-access`
@@ -55,19 +58,34 @@ Use when:
 - Setting up the project on a new or clean machine.
 - `.env.local` is missing or you need to reset local passwords.
 
+### `/XYDataLabs-docker-start`
+
+Purpose:
+- Launches the standard local run matrix through one interactive prompt.
+- Maps operator intent to the supported Docker or local `dotnet run` startup profiles.
+- Prints the correct API and UI URLs after startup.
+
+Use when:
+- You want the fastest supported way to start dev, staging-style, prod-style, or local profiles without remembering the exact command.
+- You need to stop a running Docker stack from the same entry point.
+
 ### `/XYDataLabs-completion-check`
 
 Purpose:
 - Runs a structured quality gate after completing any feature, task, script, or workflow.
 - Checks six categories: documentation, guardrails, unit tests, integration/architecture tests, automation/CI-CD, and Copilot context.
-- Fixes gaps immediately where possible; records any justified deferrals.
+- Fixes gaps immediately where possible; records any justified deferrals in `docs/internal/DEFERRED-WORK-LOG.md`.
 
 Use when:
 - Finishing any feature, fix, script, or DevOps task before considering it done.
 - You want a systematic answer to: "Have we documented, guardrailed, tested, and automated this properly?"
 - As the final step in any ad-hoc task that doesn't use `/XYDataLabs-new-feature`.
+- After a phase close/freeze when you want a second guardrail that status and roadmap surfaces stayed aligned.
 
 Note: `/XYDataLabs-new-feature` has its own built-in review step (Code Reviewer agent). Run `/XYDataLabs-completion-check` for everything else.
+
+Governance note:
+- Use `.github/completion-check-rubric.md` to decide whether a gap is non-negotiable or can be deferred.
 
 ### `/XYDataLabs-context-audit`
 
@@ -80,6 +98,7 @@ Use when:
 - Periodically (every few sessions or after major refactors).
 - After renaming, adding, or removing projects or packages.
 - When Copilot suggestions seem to reference outdated patterns or non-existent code.
+- After a phase close/freeze if you want a direct audit for phase-status and roadmap drift.
 
 ### `/XYDataLabs-new-feature`
 
@@ -153,6 +172,7 @@ Note: For deep-dive queries (Q1, Q3, Q4, Q6, Q6a, Q7, Q8-B and per-tenant 3DS to
 |----------|--------|
 | Add a new feature end-to-end | `/XYDataLabs-new-feature` |
 | Finish a learning day | `/XYDataLabs-day-complete` |
+| Start Docker or local run profiles | `/XYDataLabs-docker-start` |
 | Verify docs/tests/automation after any task | `/XYDataLabs-completion-check` |
 | Set up local dev environment after git clone | `/XYDataLabs-setup-local` |
 | Need local SSMS/sqlcmd access to Azure SQL | `/XYDataLabs-sql-local-access` |
@@ -170,7 +190,7 @@ Note: For deep-dive queries (Q1, Q3, Q4, Q6, Q6a, Q7, Q8-B and per-tenant 3DS to
    └─ Step 11-12: commit → /XYDataLabs-context-audit
 
 [After a coding/learning day]
-└─ /XYDataLabs-day-complete  →  routes curriculum + command updates
+└─ /XYDataLabs-day-complete  →  routes curriculum + command + roadmap updates
    └─ [Optional] /XYDataLabs-context-audit  →  verify no stale references created
 
 [After bootstrap or deploy]
@@ -190,8 +210,17 @@ Note: For deep-dive queries (Q1, Q3, Q4, Q6, Q6a, Q7, Q8-B and per-tenant 3DS to
 └─ /XYDataLabs-completion-check  →  6-category quality gate
    └─ Documented? Guardrailed? Unit tested? Integration tested? Automated? Context current?
 
+[After a phase close/freeze]
+└─ /XYDataLabs-day-complete  →  routes curriculum + roadmap + status-surface updates
+   └─ /XYDataLabs-completion-check  →  mandatory quality gate before commit
+   └─ /XYDataLabs-context-audit  →  mandatory drift audit before commit
+
 [Fresh git clone / new machine]
 └─ /XYDataLabs-setup-local  →  runs setup-local.ps1, summarises next steps
+
+[Start a local runtime profile]
+└─ /XYDataLabs-docker-start  →  choose dev/stg/prod Docker or local dotnet run
+   └─ Agent prints the correct API and UI URLs for the chosen option
 ```
 
 ## Custom Agents
@@ -208,7 +237,11 @@ Select these in the VS Code Chat agent picker for focused, context-scoped assist
 
 | File | Purpose |
 |------|--------|
+| `docs/AI-OPERATING-MODEL.md` | Canonical protocol for shared AI customization, validation, and deferrals |
+| `docs/internal/DEFERRED-WORK-LOG.md` | Shared register for justified deferred work |
+| `.github/completion-check-rubric.md` | Pass/defer rubric for `/XYDataLabs-completion-check` |
 | `.github/prompts/XYDataLabs-day-complete.prompt.md` | Day completion routing workflow |
+| `.github/prompts/XYDataLabs-docker-start.prompt.md` | Interactive launcher for Docker and local runtime profiles |
 | `.github/prompts/XYDataLabs-sql-local-access.prompt.md` | SQL firewall open/close workflow |
 | `.github/prompts/XYDataLabs-context-audit.prompt.md` | Context drift detection audit |
 | `.github/prompts/XYDataLabs-new-feature.prompt.md` | End-to-end feature development workflow |
@@ -221,3 +254,4 @@ Select these in the VS Code Chat agent picker for focused, context-scoped assist
 - Start with `dev` before promoting changes to `staging` and `main`.
 - Use prompts to avoid missing required manual post-deploy steps.
 - When a prompt is added or its behavior changes, update this README and any bootstrap or troubleshooting docs that reference manual command sequences.
+- When a prompt, agent, or instruction changes, run `pwsh scripts/validate-ai-customization.ps1` before merge.

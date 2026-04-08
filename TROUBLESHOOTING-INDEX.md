@@ -191,13 +191,13 @@ If the same error still appears, add `Directory.Read.All`, grant admin consent, 
 ## 📚 Setup Guides
 
 ### Initial Setup
-- [QUICK-SETUP-GITHUB-APP.md](./Documentation/03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md) - 4-minute GitHub App setup
-- [GITHUB-APP-AUTHENTICATION.md](./Documentation/03-Configuration-Guides/GITHUB-APP-AUTHENTICATION.md) - Detailed authentication guide
+- [quick-setup-github-app.md](./docs/guides/configuration/quick-setup-github-app.md) - 4-minute GitHub App setup
+- [github-app-authentication.md](./docs/guides/configuration/github-app-authentication.md) - Detailed authentication guide
 - Auto-discovery: Only 2 secrets needed (`APP_ID` + `APP_PRIVATE_KEY`) — installation ID is discovered at runtime
 
 ### Configuration Confirmation
 - Use the **Quick Checklist** at the bottom of this page to verify your setup
-- See [QUICK-START-AZURE-BOOTSTRAP.md](./Documentation/QUICK-START-AZURE-BOOTSTRAP.md) for bootstrap evaluation and setup walkthrough
+- See [quick-start-azure-bootstrap.md](./docs/guides/deployment/quick-start-azure-bootstrap.md) for bootstrap evaluation and setup walkthrough
 
 ---
 
@@ -285,7 +285,7 @@ The device-code step in Phase 1a (`az login --use-device-code`) is the single po
 - **Phase X (cleanup jobs)**: Same 3-step pattern as bootstrap.
 - **Deploy jobs**: 2-step — `Check Azure Credentials` (sets a conditional flag) → `Login to Azure` (only runs if credentials are present). All subsequent deploy steps are gated on the same flag.
 
-See: [Documentation/QUICK-START-AZURE-BOOTSTRAP.md — Azure OIDC Login IS Commonized section](./Documentation/QUICK-START-AZURE-BOOTSTRAP.md)
+See: [quick-start-azure-bootstrap.md](./docs/guides/deployment/quick-start-azure-bootstrap.md) — Azure OIDC Login IS Commonized section
 
 ---
 
@@ -317,7 +317,7 @@ If your issue isn't covered here:
 1. **Check workflow logs**: Actions → **Azure Initial Setup** or **Azure Bootstrap & Deploy** → Failed run → View logs
 2. **Review error messages**: Workflow provides detailed troubleshooting in failed steps
 3. **Verify setup**: Use the **Quick Checklist** at the bottom of this page
-4. **Check documentation**: Browse [Documentation/03-Configuration-Guides/](./Documentation/03-Configuration-Guides/)
+4. **Check documentation**: Browse [docs/guides/configuration/README.md](./docs/guides/configuration/README.md)
 
 ---
 

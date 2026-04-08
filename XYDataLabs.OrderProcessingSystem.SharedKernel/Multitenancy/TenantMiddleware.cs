@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Serilog;
 using Serilog.Context;
-using System.Text.Json;
 
 namespace XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 
@@ -42,7 +42,13 @@ public sealed class TenantMiddleware
                 context.Request.Method,
                 context.Request.Path,
                 TenantHeaderName);
-            await WriteFailureAsync(context, StatusCodes.Status400BadRequest, $"Missing required header '{TenantHeaderName}'.");
+            await WriteFailureAsync(
+                context,
+                StatusCodes.Status400BadRequest,
+                "Tenant header is required.",
+                $"Missing required header '{TenantHeaderName}'.",
+                "urn:xydatalabs:problem:tenant-header-required",
+                requestedTenantCode);
             return;
         }
 
@@ -54,7 +60,13 @@ public sealed class TenantMiddleware
                 context.Request.Method,
                 context.Request.Path,
                 requestedTenantCode);
-            await WriteFailureAsync(context, StatusCodes.Status400BadRequest, $"Tenant code '{requestedTenantCode}' is not recognized.");
+            await WriteFailureAsync(
+                context,
+                StatusCodes.Status400BadRequest,
+                "Tenant code is not recognized.",
+                $"Tenant code '{requestedTenantCode}' is not recognized.",
+                "urn:xydatalabs:problem:tenant-code-unknown",
+                requestedTenantCode);
             return;
         }
 
@@ -66,7 +78,13 @@ public sealed class TenantMiddleware
                 context.Request.Path,
                 tenantContext.TenantCode,
                 tenantContext.TenantStatus);
-            await WriteFailureAsync(context, StatusCodes.Status403Forbidden, $"Tenant '{tenantContext.TenantCode}' is not active.");
+            await WriteFailureAsync(
+                context,
+                StatusCodes.Status403Forbidden,
+                "Tenant is not active.",
+                $"Tenant '{tenantContext.TenantCode}' is not active.",
+                "urn:xydatalabs:problem:tenant-not-active",
+                requestedTenantCode);
             return;
         }
 
@@ -92,11 +110,38 @@ public sealed class TenantMiddleware
         return string.Equals(requestPath.Value, RuntimeConfigurationPath, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static async Task WriteFailureAsync(HttpContext context, int statusCode, string message)
+    private static async Task WriteFailureAsync(
+        HttpContext context,
+        int statusCode,
+        string title,
+        string detail,
+        string type,
+        string? requestedTenantCode)
     {
         context.Response.StatusCode = statusCode;
-        context.Response.ContentType = "application/json";
+        context.Response.ContentType = "application/problem+json";
 
-        await context.Response.WriteAsync(JsonSerializer.Serialize(new { message }));
+        var problemDetails = new ProblemDetails
+        {
+            Status = statusCode,
+            Title = title,
+            Detail = detail,
+            Type = type,
+            Instance = context.Request.Path
+        };
+
+        problemDetails.Extensions["traceId"] = context.TraceIdentifier;
+        problemDetails.Extensions["tenantHeaderName"] = TenantHeaderName;
+
+        if (!string.IsNullOrWhiteSpace(requestedTenantCode))
+        {
+            problemDetails.Extensions["requestedTenantCode"] = requestedTenantCode;
+        }
+
+        await context.Response.WriteAsJsonAsync(
+            value: problemDetails,
+            type: problemDetails.GetType(),
+            options: null,
+            contentType: "application/problem+json");
     }
 }

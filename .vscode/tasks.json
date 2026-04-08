@@ -54,6 +54,56 @@
                 "focus": true
             },
             "problemMatcher": []
+        },
+        {
+            "label": "Validate: AI customization",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/validate-ai-customization.ps1"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Validate: Docs links",
+            "type": "shell",
+            "command": "node",
+            "args": [
+                "scripts/validate-doc-links.js"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Validate: AI governance bundle",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Validate: AI customization",
+                "Validate: Docs links"
+            ],
+            "group": "test",
+            "problemMatcher": []
         }
     ]
 }

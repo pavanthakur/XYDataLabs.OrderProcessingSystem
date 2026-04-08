@@ -234,6 +234,48 @@ public sealed class DedicatedTenantTests : IAsyncLifetime
         countInDedicated.Should().Be(0, because: "shared-pool data must not appear in the dedicated tenant database");
     }
 
+    [Fact]
+    public async Task DedicatedTenant_AuditLogs_Are_Written_To_Dedicated_Database()
+    {
+        var dedicatedTenant = await IntegrationTestData.CreateDedicatedTenantAsync(
+            _routingFactory, connectionString: _fixture.DedicatedDbConnectionString);
+
+        await SeedTenantRowInDedicatedDbAsync(dedicatedTenant);
+
+        var entityId = await _routingFactory.ExecuteTenantDbContextAsync(
+            dedicatedTenant.ToTenantContext(),
+            async dbContext =>
+            {
+                var customer = new Customer
+                {
+                    Name = "Dedicated Audit Customer",
+                    Email = $"dedicated-audit-{Guid.NewGuid():N}@test.com",
+                    TenantId = dedicatedTenant.TenantId,
+                    CreatedBy = 1,
+                    CreatedDate = DateTime.UtcNow
+                };
+
+                dbContext.Customers.Add(customer);
+                await dbContext.SaveChangesAsync();
+                return $"CustomerId={customer.CustomerId}";
+            });
+
+        var dedicatedAuditCount = await CountAuditLogsAsync(
+            _fixture.DedicatedDbConnectionString,
+            "Customer",
+            entityId,
+            "Created");
+
+        var sharedAuditCount = await CountAuditLogsAsync(
+            _fixture.ConnectionString,
+            "Customer",
+            entityId,
+            "Created");
+
+        dedicatedAuditCount.Should().Be(1, because: "dedicated tenant audit rows must be written to the dedicated database");
+        sharedAuditCount.Should().Be(0, because: "dedicated tenant audit rows must not leak into the shared-pool database");
+    }
+
     // ──────────────────────────────────────── Helpers ──
 
     /// <summary>
@@ -284,6 +326,29 @@ public sealed class DedicatedTenantTests : IAsyncLifetime
         command.Connection = connection;
         command.CommandText = sql;
         command.Parameters.AddWithValue("@Email", email);
+
+        var result = await command.ExecuteScalarAsync();
+        return Convert.ToInt32(result, System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private static async Task<int> CountAuditLogsAsync(string connectionString, string entityName, string entityId, string operation)
+    {
+        const string sql = @"
+            SELECT COUNT(*)
+            FROM [AuditLogs]
+            WHERE [EntityName] = @EntityName
+              AND [EntityId] = @EntityId
+              AND [Operation] = @Operation";
+
+        using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync();
+
+        using var command = new SqlCommand();
+        command.Connection = connection;
+        command.CommandText = sql;
+        command.Parameters.AddWithValue("@EntityName", entityName);
+        command.Parameters.AddWithValue("@EntityId", entityId);
+        command.Parameters.AddWithValue("@Operation", operation);
 
         var result = await command.ExecuteScalarAsync();
         return Convert.ToInt32(result, System.Globalization.CultureInfo.InvariantCulture);

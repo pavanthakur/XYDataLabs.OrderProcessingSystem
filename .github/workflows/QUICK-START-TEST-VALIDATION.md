@@ -123,7 +123,7 @@ oidc-app-name: xydatalabsgithubapp  # If you named your app differently
 
 - **Full Documentation:** [README-TEST-VALIDATE-DEPLOYMENT.md](./README-TEST-VALIDATE-DEPLOYMENT.md)
 - **Validation Details:** [README-VALIDATE-DEPLOYMENT.md](./README-VALIDATE-DEPLOYMENT.md)
-- **Operations Guide:** [Operations-Quick-Links-README.md](../../Documentation/Operations-Quick-Links-README.md)
+- **Operations Guide:** [operations-quick-links.md](../../docs/reference/operations-quick-links.md)
 
 ---
 

@@ -6,7 +6,7 @@ public sealed class UpdateCustomerCommandValidator : AbstractValidator<UpdateCus
 {
     public UpdateCustomerCommandValidator()
     {
-        RuleFor(x => x.CustomerId).GreaterThan(0).WithMessage("Customer ID must be greater than zero.");
+        RuleFor(x => x.CustomerId.Value).GreaterThan(0).WithMessage("Customer ID must be greater than zero.");
         RuleFor(x => x.Name).NotEmpty().WithMessage("Name is required.");
         RuleFor(x => x.Email).NotEmpty().WithMessage("Email is required.")
                               .EmailAddress().WithMessage("Invalid email format.");

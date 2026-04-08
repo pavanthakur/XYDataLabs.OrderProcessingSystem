@@ -1,10 +1,5 @@
-using Bogus;
-using FluentValidation;
-using XYDataLabs.OrderProcessingSystem.Application.DTO;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Orders.Commands;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
-using Microsoft.EntityFrameworkCore;
-using Moq;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase
 {
@@ -19,105 +14,132 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase
         {
             Customer = GenerateCustomer();
             Products = GenerateProducts(3);
-            ProductIds = Products.Select(p => p.ProductId).ToList();
+            ProductIds = Products.Select(p => p.ProductId.Value).ToList();
         }
 
         protected Customer GenerateCustomer()
         {
-            return new Faker<Customer>()
-                .RuleFor(c => c.CustomerId, f => f.IndexFaker + 1)
-                .RuleFor(c => c.Name, f => f.Name.FullName())
-                .RuleFor(c => c.Email, f => f.Internet.Email())
-                .RuleFor(c => c.Orders, f => new List<Order>())
-                .Generate();
+            return new Customer
+            {
+                CustomerId = CustomerId,
+                Name = "Test Customer",
+                Email = "customer@test.com",
+                Orders = new List<Order>()
+            };
         }
 
         protected List<Product> GenerateProducts(int count)
         {
-            return new Faker<Product>()
-                .RuleFor(p => p.ProductId, f => f.IndexFaker + 1)
-                .RuleFor(p => p.Name, f => f.Commerce.ProductName())
-                .RuleFor(p => p.Description, f => f.Commerce.ProductDescription())
-                .RuleFor(p => p.Price, f => f.Finance.Amount(10, 100))
-                .Generate(count);
+            var products = new List<Product>();
+
+            for (var index = 1; index <= count; index++)
+            {
+                products.Add(new Product
+                {
+                    ProductId = index,
+                    Name = $"Product {index}",
+                    Description = $"Description {index}",
+                    Price = 10m * index
+                });
+            }
+
+            return products;
         }
 
         protected List<Order> GenerateOrders(int customerId, int count)
         {
-            var orderId = 1;
-            return new Faker<Order>()
-                .RuleFor(o => o.OrderId, _ => orderId++)
-                .RuleFor(o => o.CustomerId, customerId)
-                .RuleFor(o => o.OrderDate, f => f.Date.Past())
-                .RuleFor(o => o.TotalPrice, f => f.Finance.Amount(50, 500))
-                .RuleFor(o => o.IsFulfilled, f => f.Random.Bool())
-                .RuleFor(o => o.OrderProducts, f => new List<OrderProduct>(new Faker<OrderProduct>()
-                    .RuleFor(op => op.OrderId, _ => orderId)
-                    .RuleFor(op => op.ProductId, f => f.Random.Int(1, 100))
-                    .RuleFor(op => op.Quantity, f => f.Random.Int(1, 10))
-                    .RuleFor(op => op.Price, f => f.Finance.Amount(10, 100))
-                    .RuleFor(op => op.Product, f => new Product
-                    {
-                        ProductId = f.Random.Int(1, 100),
-                        Name = f.Commerce.ProductName(),
-                        Description = f.Commerce.ProductDescription(),
-                        Price = f.Finance.Amount(10, 100)
-                    })
-                    .Generate(f.Random.Int(1, 5))))
-                .Generate(count);
+            var orders = new List<Order>();
+
+            for (var index = 1; index <= count; index++)
+            {
+                var order = CreateOrder(customerId, GenerateProducts(1), index % 2 == 0 ? OrderStatus.Delivered : OrderStatus.Created, index);
+                orders.Add(order);
+            }
+
+            return orders;
         }
 
         protected Order CreateTestOrder(int orderId)
         {
-            return new Faker<Order>()
-                .RuleFor(c => c.OrderId, orderId)
-                .RuleFor(c => c.CustomerId, CustomerId)
-                .RuleFor(p => p.TotalPrice, f => f.Finance.Amount(10, 100))
-                .RuleFor(c => c.OrderProducts, f => new List<OrderProduct>())
-                .Generate();
+            return CreateOrder(CustomerId, GenerateProducts(1), OrderStatus.Created, orderId);
         }
 
         protected List<Customer> GenerateCustomersWithOrders(int customerCount, int orderCount, int? customerId = 1)
         {
-            var orderId = 1;
-            var customerFaker = new Faker<Customer>()
-                .RuleFor(c => c.CustomerId, f => customerId ?? f.IndexFaker + 1)
-                .RuleFor(c => c.Name, f => f.Name.FullName())
-                .RuleFor(c => c.Email, f => f.Internet.Email())
-                .RuleFor(c => c.Orders, f => new List<Order>(new Faker<Order>()
-                    .RuleFor(o => o.OrderId, _ => orderId++)
-                    .RuleFor(o => o.CustomerId, (f, c) => c.CustomerId)
-                    .RuleFor(o => o.TotalPrice, f => f.Finance.Amount(50, 500))
-                    .RuleFor(o => o.OrderProducts, (f, o) => new List<OrderProduct>(new Faker<OrderProduct>()
-                        .RuleFor(op => op.OrderId, _ => o.OrderId)
-                        .RuleFor(op => op.ProductId, f => f.Random.Int(1, 100))
-                        .RuleFor(op => op.Quantity, f => f.Random.Int(1, 10))
-                        .Generate(f.Random.Int(1, 5))))
-                    .Generate(f.Random.Int(1, orderCount))));
-
-            return customerFaker.Generate(customerCount);
+            return GenerateCustomers(customerCount, orderCount, customerId, OrderStatus.Created);
         }
 
         protected List<Customer> GenerateCustomersWithFulFilledOrders(int customerCount, int orderCount, int? customerId = 1)
         {
-            var orderId = 1;
-            var customerFaker = new Faker<Customer>()
-                .RuleFor(c => c.CustomerId, f => customerId ?? f.IndexFaker + 1)
-                .RuleFor(c => c.Name, f => f.Name.FullName())
-                .RuleFor(c => c.Email, f => f.Internet.Email())
-                .RuleFor(c => c.Orders, f => new List<Order>(new Faker<Order>()
-                    .RuleFor(o => o.OrderId, _ => orderId++)
-                    .RuleFor(o => o.CustomerId, (f, c) => c.CustomerId)
-                    .RuleFor(o => o.TotalPrice, f => f.Finance.Amount(50, 500))
-                    .RuleFor(o => o.IsFulfilled, true)
-                    .RuleFor(o => o.OrderProducts, (f, o) => new List<OrderProduct>(new Faker<OrderProduct>()
-                        .RuleFor(op => op.OrderId, _ => o.OrderId)
-                        .RuleFor(op => op.ProductId, f => f.Random.Int(1, 100))
-                        .RuleFor(op => op.Quantity, f => f.Random.Int(1, 10))
-                        .Generate(f.Random.Int(1, 5))))
-                    .Generate(f.Random.Int(1, orderCount))));
+            return GenerateCustomers(customerCount, orderCount, customerId, OrderStatus.Delivered);
+        }
 
-            return customerFaker.Generate(customerCount);
+        private List<Customer> GenerateCustomers(int customerCount, int orderCount, int? customerId, OrderStatus orderStatus)
+        {
+            var customers = new List<Customer>();
+            var nextOrderId = 1;
+
+            for (var customerIndex = 0; customerIndex < customerCount; customerIndex++)
+            {
+                var resolvedCustomerId = customerId ?? customerIndex + 1;
+                var orders = new List<Order>();
+
+                for (var orderIndex = 0; orderIndex < orderCount; orderIndex++)
+                {
+                    orders.Add(CreateOrder(resolvedCustomerId, GenerateProducts(1), orderStatus, nextOrderId++));
+                }
+
+                customers.Add(new Customer
+                {
+                    CustomerId = resolvedCustomerId,
+                    Name = $"Customer {resolvedCustomerId}",
+                    Email = $"customer{resolvedCustomerId}@test.com",
+                    Orders = orders
+                });
+            }
+
+            return customers;
+        }
+
+        private static Order CreateOrder(int customerId, IReadOnlyCollection<Product> products, OrderStatus status, int orderId)
+        {
+            var orderResult = Order.Create(customerId, products, DateTime.UtcNow.AddDays(-1));
+            if (orderResult.IsFailure || orderResult.Value is null)
+            {
+                throw new InvalidOperationException(orderResult.Error.Description);
+            }
+
+            var order = orderResult.Value;
+            order.OrderId = orderId;
+
+            ApplyStatus(order, status);
+            return order;
+        }
+
+        private static void ApplyStatus(Order order, OrderStatus status)
+        {
+            switch (status)
+            {
+                case OrderStatus.Created:
+                    return;
+                case OrderStatus.Paid:
+                    order.Pay();
+                    return;
+                case OrderStatus.Shipped:
+                    order.Pay();
+                    order.Ship();
+                    return;
+                case OrderStatus.Delivered:
+                    order.Pay();
+                    order.Ship();
+                    order.Deliver();
+                    return;
+                case OrderStatus.Cancelled:
+                    order.Cancel();
+                    return;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(status), status, null);
+            }
         }
     }
 }

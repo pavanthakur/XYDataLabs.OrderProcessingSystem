@@ -40,8 +40,6 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                 SeedTenantSampleData(context, seedTenant);
             }
 
-            UpdateOrderTotalPrices(context, startupSeedTenants.Select(seedTenant => seedTenant.TenantId).ToArray());
-
             // Phase 2: seed dedicated-tier tenants into their own DB connection.
             // Connection strings are read from IConfiguration (Key Vault / appsettings),
             // not from the Tenants table — connection strings are secrets.
@@ -85,11 +83,6 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
             {
                 SeedOrders(context, seedTenant);
             }
-
-            if (!context.OrderProducts.Any(orderProduct => orderProduct.TenantId == seedTenant.TenantId))
-            {
-                SeedOrderProducts(context, seedTenant);
-            }
         }
 
         private static void SeedCustomers(OrderProcessingSystemDbContext context, StartupSeedTenant seedTenant)
@@ -128,34 +121,14 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                 .OrderBy(product => product.ProductId)
                 .ToList();
 
+            var createdAt = DateTime.UtcNow;
             var orders = new List<Order>
-                {
-                    new Order { OrderDate = DateTime.UtcNow, CustomerId = customers[0].CustomerId, TotalPrice = products.Sum(product => product.Price), TenantId = seedTenant.TenantId },
-                    new Order { OrderDate = DateTime.UtcNow, CustomerId = customers[1].CustomerId, TenantId = seedTenant.TenantId }
-                };
+            {
+                CreateSeedOrder(customers[0].CustomerId, new[] { products[0], products[1] }, seedTenant.TenantId, createdAt),
+                CreateSeedOrder(customers[1].CustomerId, new[] { products[2] }, seedTenant.TenantId, createdAt)
+            };
+
             context.Orders.AddRange(orders);
-            context.SaveChanges();
-        }
-
-        private static void SeedOrderProducts(OrderProcessingSystemDbContext context, StartupSeedTenant seedTenant)
-        {
-            var orders = context.Orders
-                .Where(order => order.TenantId == seedTenant.TenantId)
-                .OrderBy(order => order.OrderId)
-                .ToList();
-
-            var products = context.Products
-                .Where(product => product.TenantId == seedTenant.TenantId)
-                .OrderBy(product => product.ProductId)
-                .ToList();
-
-            var orderProducts = new List<OrderProduct>
-                {
-                    new OrderProduct { OrderId = orders[0].OrderId, ProductId = products[0].ProductId, Quantity = 1, TenantId = seedTenant.TenantId },
-                    new OrderProduct { OrderId = orders[0].OrderId, ProductId = products[1].ProductId, Quantity = 2, TenantId = seedTenant.TenantId },
-                    new OrderProduct { OrderId = orders[1].OrderId, ProductId = products[2].ProductId, Quantity = 1, TenantId = seedTenant.TenantId }
-                };
-            context.OrderProducts.AddRange(orderProducts);
             context.SaveChanges();
         }
 
@@ -187,40 +160,6 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                 context.PaymentProviders.Add(openPayProvider);
             }
 
-            context.SaveChanges();
-        }
-
-        private static void UpdateOrderTotalPrices(OrderProcessingSystemDbContext context, params int[] tenantIds)
-        {
-            // Perform the LINQ query to calculate the total price for each order
-            var orderTotalPrices = context.Orders
-                .Where(order => tenantIds.Contains(order.TenantId))
-                .Join(context.OrderProducts,
-                    o => o.OrderId,
-                    op => op.OrderId,
-                    (o, op) => new { o, op })
-                .Join(context.Products,
-                    o_op => o_op.op.ProductId,
-                    p => p.ProductId,
-                    (o_op, p) => new { o_op.o, TotalPrice = p.Price * o_op.op.Quantity })
-                .GroupBy(o_p => o_p.o.OrderId)
-                .Select(g => new
-                {
-                    OrderId = g.Key,
-                    TotalPrice = g.Sum(x => x.TotalPrice) // Sum the prices of the matched products
-                })
-                .ToList();
-
-            // Update each order with the calculated total price
-            foreach (var orderTotal in orderTotalPrices)
-            {
-                var order = context.Orders.Find(orderTotal.OrderId);
-                if (order != null)
-                {
-                    order.TotalPrice = orderTotal.TotalPrice;
-                }
-            }
-            // Save the changes to the database
             context.SaveChanges();
         }
 
@@ -288,8 +227,30 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                 SeedOpenpayProviders(dedicatedContext, new[] { seedTenant });
 
                 SeedTenantSampleData(dedicatedContext, seedTenant);
-                UpdateOrderTotalPrices(dedicatedContext, seedTenant.TenantId);
             }
+        }
+
+        private static Order CreateSeedOrder(int customerId, IReadOnlyCollection<Product> products, int tenantId, DateTime createdAt)
+        {
+            var orderResult = Order.Create(customerId, products, createdAt);
+            if (orderResult.IsFailure || orderResult.Value is null)
+            {
+                throw new InvalidOperationException(orderResult.Error.Description);
+            }
+
+            var order = orderResult.Value;
+            order.TenantId = tenantId;
+            order.CreatedBy = 1;
+            order.CreatedDate = createdAt;
+
+            foreach (var orderProduct in order.OrderProducts)
+            {
+                orderProduct.TenantId = tenantId;
+                orderProduct.CreatedBy = 1;
+                orderProduct.CreatedDate = createdAt;
+            }
+
+            return order;
         }
 
         /// <summary>

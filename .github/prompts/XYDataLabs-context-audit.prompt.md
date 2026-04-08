@@ -54,6 +54,19 @@ Audit all AI context files against the actual codebase to detect drift. Do NOT a
 - List `docs/architecture/decisions/` contents.
 - Check that `architect-patterns.md` ADR references are consistent with actual ADR files.
 
+### 10. Architecture Status Surface Consistency
+- Read the active-status surfaces:
+	- `ARCHITECTURE-EVOLUTION.md`
+	- `docs/learning/curriculum/1_MASTER_CURRICULUM.md`
+	- `docs/learning/curriculum/README.md`
+	- `docs/internal/AZURE-PROGRESS-EVALUATION.md`
+	- `docs/learning/implementation-notes/implementation-notes-days-29-38.md` or the active implementation-notes file
+	- `docs/DEVELOPER-OPERATING-MODEL.md`
+	- `.github/instructions/curriculum.instructions.md`
+	- `.github/copilot-instructions.md`
+- Compare the current phase complete/next-phase snapshots across those files.
+- Flag: any mismatch in completed phase count, active phase, next phase, or freeze/closeout wording that would mislead humans or Copilot.
+
 ## Output Format
 
 Present findings as a table:

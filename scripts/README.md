@@ -50,6 +50,36 @@ This directory contains automation scripts for configuring and deploying the Ord
 
 ## 🆕 GitHub App Automation Scripts
 
+### validate-ai-customization.ps1
+
+Deterministic validator for shared Copilot customization assets.
+
+**Purpose**:
+- Validates repo-shared AI governance files and discovery surfaces
+- Checks instruction/prompt/agent/skill frontmatter requirements
+- Verifies prompt, agent, and skill discoverability in the shared README and Copilot index surfaces
+- Confirms `/XYDataLabs-completion-check` references the shared rubric and deferred-work register
+
+**Usage**:
+```powershell
+pwsh .\scripts\validate-ai-customization.ps1
+```
+
+**When to Use**:
+- After changing `.github/copilot-instructions.md`
+- After adding or editing files under `.github/instructions/`, `.github/prompts/`, `.github/agents/`, or `.github/skills/`
+- Before merging AI-governance documentation updates such as `docs/AI-OPERATING-MODEL.md`
+
+**VS Code Tasks**:
+- `Validate: AI customization` — runs the AI customization validator only
+- `Validate: AI governance bundle` — runs AI customization validation, then docs link validation in sequence
+
+**Related Files**:
+- `docs/AI-OPERATING-MODEL.md`
+- `docs/internal/DEFERRED-WORK-LOG.md`
+- `.github/completion-check-rubric.md`
+- `.github/workflows/validate-ai-customization.yml`
+
 ### verify-payment-run-azure.ps1
 
 Deterministic Azure payment verification for the `verify-db-logs` workflow.
@@ -452,7 +482,7 @@ For comprehensive information about GitHub App automation, including:
 - ✅ Secret management best practices
 - ✅ Troubleshooting guide
 
-See: [Documentation/03-Configuration-Guides/GITHUB-APP-AUTOMATION.md](../Documentation/03-Configuration-Guides/GITHUB-APP-AUTOMATION.md)
+See: [github-app-authentication.md](../docs/guides/configuration/github-app-authentication.md) and [workflow-automation-visual-guide.md](../docs/guides/configuration/workflow-automation-visual-guide.md)
 
 ### Quick Reference
 

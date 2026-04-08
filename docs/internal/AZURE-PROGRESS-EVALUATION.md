@@ -7,7 +7,7 @@
 
 ---
 
-## 🟢 Current State (March 2026) — Days 1-38 Complete, Phase 7 Next
+## 🟢 Current State (April 2026) — Days 1-43 Complete, Phase 7 Complete
 
 ### Architecture Phases Completed
 
@@ -19,7 +19,7 @@
 | Phase 4 | Multi-tenancy — Hybrid model (path + header + config) | Days 34-35 | ✅ Complete |
 | Phase 5 | OpenPay Payment Integration (multi-tenant, per-tenant config) | Days 36-37 | ✅ Complete |
 | Phase 6 | Resilience baseline — EF Core retry, Polly, Redis caching pipeline, rate limiting | Day 38 | ✅ Complete |
-| **Phase 7** | **Tenant Enforcement & DDD tactical patterns** | **Days 39-43** | **📅 Next** |
+| **Phase 7** | **Tenant Enforcement & DDD tactical patterns** | **Days 39-43** | **✅ Complete** |
 
 ### Deployed Azure Resources (Dev Environment)
 - API: `https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net/swagger`
@@ -28,24 +28,34 @@
 - Key Vault: `kv-orderprocessing-dev` (Managed Identity access, no stored credentials)
 - App Insights: `ai-orderprocessing-dev` — active, confirmed traces + metrics
 
-### Architecture Decisions Recorded (ADR-000 → ADR-013)
+### Architecture Decisions Recorded (ADR-000 → ADR-015)
 - ADR-001: Clean Architecture, ADR-002: OIDC, ADR-003: Subscription-scope Bicep
 - ADR-004: EF Core + Azure SQL, ADR-005: Serilog, ADR-006: Passwordless SQL
 - ADR-007: Hybrid multi-tenancy, ADR-008: Architecture test guardrails
 - ADR-009: Tenant isolation hardening, ADR-010: Runtime environment detection
-- ADR-011: Hand-rolled CQRS (new), ADR-012: OTel dual-export (new), ADR-013: Redis caching (new)
+- ADR-011: Hand-rolled CQRS, ADR-012: OTel dual-export, ADR-013: Redis caching
+- ADR-014: Azure service coverage rationale, ADR-015: deployment readiness probes use `/health/ready`
 
-### Phase 7 — Next Deliverables
-- `TenantValidationBehavior<TRequest, TResult>` — CQRS pipeline tenant enforcement
-- `AuditLog` table (tenant-scoped, immutable)
-- `Order` aggregate: private ctor, `Create()` factory, state machine with `Result<T>` transitions
-- Value objects: `Address`, `Money` as immutable `record` types
-- Strongly-typed IDs: `OrderId`, `CustomerId`, `ProductId` as `readonly record struct` + EF converters
-- Optimistic concurrency: `RowVersion` on `BaseAuditableEntity`
-- Problem Details (RFC 9457) on all error responses
-- Global exception middleware
-- Security headers: `X-Content-Type-Options`, `X-Frame-Options`, HSTS
-- Split `/health` → `/health/live` (liveness) + `/health/ready` (readiness + DB)
+### Phase 7 — Completed Deliverables
+- ✅ `TenantValidationBehavior<TRequest, TResult>` — CQRS pipeline tenant enforcement
+- ✅ Problem Details (RFC 9457) for middleware/unhandled error paths
+- ✅ Global exception middleware
+- ✅ Security headers: `X-Content-Type-Options`, `X-Frame-Options`
+- ✅ `AuditLog` table (tenant-scoped, immutable) + migration
+- ✅ Audit history query/API surface
+- ✅ SharedPool and Dedicated audit verification tests
+- ✅ Split `/health` → `/health/live` (liveness) + `/health/ready` (readiness + DB)
+- ✅ Deployment workflow readiness probe now targets `/health/ready`; degraded/unhealthy readiness results fail closed with HTTP 503
+- ✅ `Order` aggregate: private ctor, `Create()` factory, explicit status transitions, and handler-driven invariant orchestration
+- ✅ `Order` optimistic concurrency via `RowVersion` + EF schema/index guardrails
+- ✅ `Money` value object + validator coverage
+- ✅ Strongly-typed IDs: `OrderId`, `CustomerId`, `ProductId` as `readonly record struct` + EF converters
+- ✅ Typed ID propagation to command/query contracts and controller route binding
+
+### Deferred / Follow-Up Items
+- ⬜ `Address` value object — intentionally deferred until a concrete aggregate or request boundary requires it
+- ⬜ Broaden optimistic concurrency beyond `Order` if wider aggregate coverage is required
+- ⬜ Enhanced OTel metrics for the Phase 7 hardening slice (moved out of the Phase 7 completion gate)
 
 ---
 
@@ -187,7 +197,7 @@ YARP Microservices Architecture (Local Development)
 **Status:** Comprehensive runbook exists and covers ALL immediate needs
 
 ### 2. Master Curriculum (1_MASTER_CURRICULUM.md) ✅
-**Location:** `Documentation/05-Self-Learning/Azure-Curriculum/1_MASTER_CURRICULUM.md`
+**Location:** `docs/learning/curriculum/1_MASTER_CURRICULUM.md`
 
 **Coverage:**
 - ✅ Days 1-31 marked as completed
@@ -199,27 +209,17 @@ YARP Microservices Architecture (Local Development)
 
 **Status:** Curriculum is complete and up-to-date
 
-### 3. Weekly Azure Learning Plan ✅
-**Location:** `Documentation/04-Enterprise-Architecture/WEEKLY_AZURE_LEARNING_PLAN.md`
-
-**Coverage:**
-- ✅ Week 1: Azure Foundation (completed)
-- ✅ Week 2: Container Apps Deployment (planned)
-- ✅ Week 3+: Production Deployment & Enterprise Security
-- ✅ Daily habits for enterprise standards maintenance
-- ✅ Monthly enterprise review checklist
-
-**Status:** Detailed weekly breakdown exists
-
-### 4. Master Plan (00_MASTER_PLAN.md) ✅
-**Location:** `Documentation/05-Self-Learning/Azure-Curriculum/00-Foundation/00_MASTER_PLAN.md`
+### 3. Strategic Roadmap Documents ✅
+**Primary Locations:** `ARCHITECTURE-EVOLUTION.md` and `docs/guides/deployment/aca-migration-plan.md`
 
 **Coverage:**
 - ✅ Strategic roadmap for microservices migration
-- ✅ 18-week comprehensive curriculum
+- ✅ Phase-based architecture evolution roadmap
 - ✅ Azure services stack
 - ✅ Migration phases
 - ✅ Technical best practices
+
+**Status:** Active long-range planning now lives in the architecture evolution and ACA migration documents; daily execution remains in `1_MASTER_CURRICULUM.md`
 
 **Status:** Strategic plan is comprehensive
 
@@ -377,16 +377,16 @@ az webapp restart --name pavanthakur-orderprocessing-ui-xyapp-dev --resource-gro
 **Current Status:** Already shows Days 1-31 as complete and Days 32+ as next steps
 **Action:** No update required - curriculum is accurate
 
-### 2. Update 00_MASTER_PLAN.md ❓ (Review recommended)
-**Current Status:** Shows strategic roadmap but doesn't track daily progress
-**Action:** No update required - strategic plan is separate from daily tracking
+### 2. Review strategic roadmap documents ✅
+**Current Status:** Long-range planning now lives in `ARCHITECTURE-EVOLUTION.md` and `docs/guides/deployment/aca-migration-plan.md`
+**Action:** Update those only when target-state architecture or migration sequencing changes
 
-### 3. Update WEEKLY_AZURE_LEARNING_PLAN.md ✅ (No changes needed)
-**Current Status:** Week 1 completed, Week 2+ planned
-**Action:** No update required - weekly plan is on track
+### 3. Execution source consolidation ✅
+**Current Status:** Weekly planning is fully consolidated into `1_MASTER_CURRICULUM.md` and this document
+**Action:** Do not maintain a separate weekly planning document
 
 ### 4. Create Progress Checkpoint Document ✅ (Recommended)
-**Suggested Location:** `Documentation/05-Self-Learning/Azure-Curriculum/IMPLEMENTATION_NOTES.md` — add a dated section for any new checkpoint entries
+**Suggested Location:** `docs/learning/implementation-notes/implementation-notes-days-29-38.md` — add a dated section for any new checkpoint entries
 
 **Content to Include:**
 - Summary of Weeks 1-3 completion
@@ -626,14 +626,13 @@ This establishes the architectural foundation that makes all future work easier:
 
 ### Primary Documents
 1. **Immediate Actions:** `docs/runbooks/keyvault-managed-identity-deploy.md`
-2. **Daily Tracker:** `Documentation/05-Self-Learning/Azure-Curriculum/1_MASTER_CURRICULUM.md`
-3. **Weekly Plan:** `Documentation/04-Enterprise-Architecture/WEEKLY_AZURE_LEARNING_PLAN.md`
-4. **Strategic Roadmap:** `Documentation/05-Self-Learning/Azure-Curriculum/00-Foundation/00_MASTER_PLAN.md`
+2. **Daily Tracker:** `docs/learning/curriculum/1_MASTER_CURRICULUM.md`
+3. **Strategic Roadmap:** `ARCHITECTURE-EVOLUTION.md` and `docs/guides/deployment/aca-migration-plan.md`
 
 ### Support Documents
-- Azure Deployment Guide: `Documentation/02-Azure-Learning-Guides/AZURE_DEPLOYMENT_GUIDE.md`
-- ACA Migration Plan: `Documentation/04-Enterprise-Architecture/ACA-Migration-Plan.md`
-- Containerization Learning Path: `Documentation/02-Azure-Learning-Guides/Containerization-ACA-Aspire-Learning-Path.md`
+- Azure Deployment Guide: `docs/guides/deployment/azure-deployment-guide.md`
+- ACA Migration Plan: `docs/guides/deployment/aca-migration-plan.md`
+- Containerization Learning Path: `docs/learning/reference/containerization-aca-aspire-learning-path.md`
 
 ---
 

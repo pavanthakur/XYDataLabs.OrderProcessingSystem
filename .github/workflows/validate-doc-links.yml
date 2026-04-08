@@ -1,0 +1,43 @@
+name: Validate Documentation Links
+
+on:
+  push:
+    branches: [ main, dev, staging ]
+    paths:
+      - 'docs/**'
+      - 'scripts/validate-doc-links.js'
+      - '.github/workflows/validate-doc-links.yml'
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'scripts/validate-doc-links.js'
+      - '.github/workflows/validate-doc-links.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-doc-links:
+    name: Validate markdown local links
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: Validate local markdown links
+        run: node scripts/validate-doc-links.js
+
+      - name: Summary
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host 'Documentation link validation complete.'
+          Write-Host 'Scope: canonical docs tree under docs/.'
+          Write-Host 'Checks: relative markdown file links and in-page heading anchors.'
