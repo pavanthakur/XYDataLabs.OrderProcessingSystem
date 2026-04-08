@@ -8,6 +8,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Validator
 {
     using FluentValidation;
     using XYDataLabs.OrderProcessingSystem.Domain.Entities;
+    using XYDataLabs.OrderProcessingSystem.Domain.Identifiers;
     using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
     using Microsoft.EntityFrameworkCore;
 
@@ -19,14 +20,23 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Validator
         {
             _context = context;
 
-            RuleFor(x => x.CustomerId).MustAsync(HasUnfulfilledPreviousOrder).WithMessage("Customer has an unfulfilled previous order.");
+            RuleFor(x => x.CustomerId)
+                .MustAsync(HasNoOpenPreviousOrder)
+                .WithMessage("Customer has an unfulfilled previous order.");
+
+            RuleFor(x => x.TotalPrice.Value)
+                .GreaterThan(0m)
+                .WithMessage("Order total must be greater than zero.");
         }
 
-        private async Task<bool> HasUnfulfilledPreviousOrder(int customerId, CancellationToken cancellationToken)
+        private async Task<bool> HasNoOpenPreviousOrder(CustomerId customerId, CancellationToken cancellationToken)
         {
-            return await _context.Orders
-                .Where(o => o.CustomerId == customerId && !o.IsFulfilled)
-                .AnyAsync(cancellationToken);
+            return !await _context.Orders
+                .AnyAsync(
+                    o => o.CustomerId == customerId
+                        && o.Status != OrderStatus.Delivered
+                        && o.Status != OrderStatus.Cancelled,
+                    cancellationToken);
         }
     }
 

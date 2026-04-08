@@ -34,6 +34,7 @@ public static class CustomerMappings
         OrderDate = order.OrderDate,
         CustomerId = order.CustomerId,
         TotalPrice = order.TotalPrice,
+        Status = order.Status.ToString(),
         IsFulfilled = order.IsFulfilled
     };
 }

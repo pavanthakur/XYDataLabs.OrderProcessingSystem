@@ -412,16 +412,13 @@ Any deviation from ARCHITECTURE.md requires an Architecture Decision Record (ADR
 
 ## Documentation Index
 
-| Document | Location |
-|----------|----------|
-| **Architecture standard** (binding) | [ARCHITECTURE.md](ARCHITECTURE.md) |
-| Architecture evolution (14-phase roadmap) | [ARCHITECTURE-EVOLUTION.md](ARCHITECTURE-EVOLUTION.md) |
-| Architecture Decision Records | [docs/architecture/decisions/](docs/architecture/decisions/) |
-| Azure deployment guide | [Documentation/02-Azure-Learning-Guides/AZURE_DEPLOYMENT_GUIDE.md](Documentation/02-Azure-Learning-Guides/AZURE_DEPLOYMENT_GUIDE.md) |
-| Quick start (bootstrap) | [Documentation/QUICK-START-AZURE-BOOTSTRAP.md](Documentation/QUICK-START-AZURE-BOOTSTRAP.md) |
-| CI/CD workflow guide | [.github/workflows/README.md](.github/workflows/README.md) |
-| PowerShell scripts reference | [Resources/Azure-Deployment/README.md](Resources/Azure-Deployment/README.md) |
-| Troubleshooting | [TROUBLESHOOTING-INDEX.md](TROUBLESHOOTING-INDEX.md) |
+Start here instead of navigating individual documents ad hoc:
+
+- [docs/README.md](docs/README.md) — canonical documentation hub
+- [docs/DEVELOPER-OPERATING-MODEL.md](docs/DEVELOPER-OPERATING-MODEL.md) — reading order and update rules
+- [ARCHITECTURE.md](ARCHITECTURE.md) — binding architecture standard
+- [.github/workflows/README.md](.github/workflows/README.md) — workflow behavior and deployment automation
+- [TROUBLESHOOTING-INDEX.md](TROUBLESHOOTING-INDEX.md) — first stop when setup, auth, or deployment fails
 
 ---
 

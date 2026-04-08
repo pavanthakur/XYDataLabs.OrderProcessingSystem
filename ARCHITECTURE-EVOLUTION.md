@@ -1,7 +1,7 @@
 # Architecture Evolution: Monolith to Enterprise Microservices
 
-**Last Updated:** March 22, 2026  
-**Current Status:** Phases 1-6 Complete ✅ | Phase 7 Next 📅 | Phases 8-14 Planned 📅
+**Last Updated:** April 9, 2026  
+**Current Status:** Phases 1-7 Complete ✅ | Phase 8 Next 📅 | Phases 8.5-14 Planned 📅
 
 ---
 
@@ -122,7 +122,7 @@ XYDataLabs.OrderProcessingSystem.sln
 | **4** | Multi-Tenancy Skeleton | `ITenantProvider`, EF global query filters, `X-Tenant-Code` header | ✅ **COMPLETE** |
 | **5** | Test Project Restructure | Domain.Tests, Application.Tests, API.Tests, Integration.Tests (Testcontainers) | ✅ **COMPLETE** |
 | **6** | Polish & Hardening | CachingBehavior, Redis, API versioning `/api/v1/`, health checks, CancellationToken, TimeProvider | ✅ **COMPLETE** |
-| **7** | Tenant Enforcement & Ops | TenantValidationBehavior, AuditLog, security headers, liveness/readiness checks | 📅 **NEXT** |
+| **7** | Tenant Enforcement & Ops | TenantValidationBehavior, AuditLog, security headers, liveness/readiness checks | ✅ **COMPLETE** |
 | **8** | Event-Driven Foundation | Domain events, integration events, Outbox pattern, background publisher | 📅 Planned |
 | **8.5** | Multi-Provider Payment Architecture | Stripe migration, per-tenant provider selection, `HttpClient`-based resilience, idempotency keys | 📅 Planned |
 | **9** | YARP Microservices (Local) | Gateway, Orders/Inventory/Notifications APIs, Docker Compose, event-based communication | 📅 Planned |
@@ -212,7 +212,9 @@ XYDataLabs.OrderProcessingSystem.sln
 
 ---
 
-## Phase 7 — Tenant Enforcement & Operational Discipline 📅
+## Phase 7 — Tenant Enforcement & Operational Discipline ✅
+
+- **Completed:** April 5, 2026
 
 **Focus:** Make the system secure, tenant-safe, and production-ready.
 
@@ -223,6 +225,7 @@ XYDataLabs.OrderProcessingSystem.sln
 - Structured logging enrichment: `TenantId`, `TraceId`, request name on every log line
 - **Problem Details (RFC 9457)** — standardized error responses (`type`, `title`, `status`, `detail`, `traceId`, `tenantId`) on all endpoints
 - **Global exception middleware** — catch-all that converts unhandled exceptions → `ProblemDetails` (no stack traces in production)
+- **Order aggregate hardening** — `Order` now uses a private constructor, `Create()` factory, explicit status transitions, and optimistic concurrency token
 - Security headers middleware:
   - `X-Content-Type-Options: nosniff`
   - `X-Frame-Options: DENY`
@@ -232,11 +235,11 @@ XYDataLabs.OrderProcessingSystem.sln
 
 ### DDD Tactical Patterns
 
-- **Aggregate root** — `Order` entity with private constructor, `Create()` factory method returning `Result<Order>`
-- **State machine** — `Order` status transitions: `Created → Paid → Shipped → Delivered → Cancelled` with explicit transition methods (`Pay()`, `Ship()`, `Deliver()`, `Cancel()`) each returning `Result<T>` — invalid transitions return failure, never throw
+- **Aggregate root** — `Order` entity with private constructor, `Create()` factory method returning a domain-local `DomainResult<Order>` so Domain keeps zero project references
+- **State machine** — `Order` status transitions: `Created → Paid → Shipped → Delivered → Cancelled` with explicit transition methods (`Pay()`, `Ship()`, `Deliver()`, `Cancel()`) returning a domain-local result; invalid transitions return failure, never throw
 - **Value objects** — `Address` and `Money` as immutable `record` types with self-validation in constructor
 - **Strongly-typed IDs** — `OrderId`, `CustomerId`, `ProductId` as `readonly record struct` wrappers around `Guid`; eliminates parameter-swap bugs (`Guid orderId, Guid customerId` → `OrderId orderId, CustomerId customerId`); EF Core value converters for transparent persistence
-- **Optimistic concurrency** — `RowVersion` (`byte[]` / `[Timestamp]`) on `BaseAuditableEntity`; EF Core intercepts `DbUpdateConcurrencyException` in `SaveChangesAsync` → wraps as domain `ConcurrencyException`; command handlers catch and return `Result.Failure(Errors.Conflict)` with retry guidance
+- **Optimistic concurrency** — `RowVersion` (`byte[]` / `[Timestamp]`) is now applied to `Order`; future slices can generalize this if broader aggregate coverage is needed
 - **Domain invariants** — enforced inside aggregate methods (e.g. cannot ship an unpaid order), returning `Result<T>.Failure` with descriptive `Error` — no exceptions for business rules
 - **Aggregate boundary rule** — aggregates enforce only their own transactional invariants and do not depend on injected infrastructure services. External collaboration (payment gateways, inventory lookups, messaging, persistence orchestration) remains in application handlers, process managers, or domain policies — keeps aggregate behavior focused and predictable
 
@@ -708,7 +711,7 @@ Module-isolated, working microservices locally with proven PublicApi boundaries 
 - **Blue-green deployments** — zero-downtime with ACA revisions; switch traffic after health check passes
 - **Canary releases** — gradual traffic shifting (e.g. 10% → 50% → 100%) with automatic rollback on error-rate spike
 
-> **Operational Detail:** See [ACA-Migration-Plan.md](./Documentation/04-Enterprise-Architecture/ACA-Migration-Plan.md) for the 13-phase operational runbook covering governance, identity hardening, ACR setup, canary deployments, and decommissioning.
+> **Operational Detail:** See [docs/guides/deployment/aca-migration-plan.md](./docs/guides/deployment/aca-migration-plan.md) for the 13-phase operational runbook covering governance, identity hardening, ACR setup, canary deployments, and decommissioning.
 
 ### Outcome
 
@@ -1198,8 +1201,8 @@ _Every factor is already covered across the 14-phase plan — documented here fo
 
 ### Documentation
 - [AZURE-PROGRESS-EVALUATION.md](./docs/internal/AZURE-PROGRESS-EVALUATION.md) - Detailed learning plan
-- [Documentation/README.md](./Documentation/README.md) - Central documentation hub
-- [Documentation/04-Enterprise-Architecture/ACA-Migration-Plan.md](./Documentation/04-Enterprise-Architecture/ACA-Migration-Plan.md) - Container Apps operational runbook (13-phase)
+- [docs/README.md](./docs/README.md) - Central documentation hub
+- [docs/guides/deployment/aca-migration-plan.md](./docs/guides/deployment/aca-migration-plan.md) - Container Apps operational runbook (13-phase)
 
 ### Azure Resources
 - **Current Deployment:** https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net
@@ -1267,5 +1270,5 @@ All technical skills from a typical Azure .NET senior role are fully covered or 
 
 ---
 
-**Last Updated:** March 22, 2026  
-**Status:** Phases 1-6 Complete ✅ | Phase 7 Next 📅 | Phases 8-14 Planned 📅
+**Last Updated:** April 9, 2026  
+**Status:** Phases 1-7 Complete ✅ | Phase 8 Next 📅 | Phases 8.5-14 Planned 📅

@@ -30,7 +30,7 @@ This workflow (`azure-initial-setup.yml`) handles all **one-time prerequisite se
 3. Install the app on this repository
 4. Add two repository secrets: `APP_ID` (numeric app ID) and `APP_PRIVATE_KEY` (full `.pem` contents)
 
-See [QUICK-SETUP-GITHUB-APP.md](../../Documentation/03-Configuration-Guides/QUICK-SETUP-GITHUB-APP.md) for the complete walkthrough.
+See [quick-setup-github-app.md](../../docs/guides/configuration/quick-setup-github-app.md) for the complete walkthrough.
 
 > **`APP_INSTALLATION_ID` is not required** — it is auto-discovered at runtime.
 

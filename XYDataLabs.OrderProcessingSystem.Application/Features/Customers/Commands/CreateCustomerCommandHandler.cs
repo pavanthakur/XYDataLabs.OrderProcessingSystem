@@ -22,7 +22,7 @@ public sealed class CreateCustomerCommandHandler : ICommandHandler<CreateCustome
         _context.Customers.Add(customer);
 
         if (await _context.SaveChangesAsync(cancellationToken) > 0)
-            return customer.CustomerId;
+            return customer.CustomerId.Value;
 
         return Error.Create("CreateFailed", "Failed to create customer.");
     }

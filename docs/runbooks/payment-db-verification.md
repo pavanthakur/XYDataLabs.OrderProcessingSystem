@@ -7,7 +7,7 @@ deployment, or incident investigation. Run these in order — each query builds 
 of the previous one.
 
 **Target database (shared-pool tenants):** `OrderProcessingSystem_Local` (dev) · adjust connection for stg/prod.  
-**Target database (TenantC Option B):** `OrderProcessingSystem_TenantC` — use the dedicated-DB queries in the [Option B section](#option-b--tenantc-dedicated-db-verification) at the end of this runbook.  
+**Target database (TenantC Option B):** `OrderProcessingSystem_TenantC` — use the dedicated-DB queries in the [Option B section](#option-b-tenantc-dedicated-db-verification) at the end of this runbook.  
 **When to run:**
 - After a full end-to-end payment test (manual or automated)
 - After a production deployment to confirm seeded data and schema are correct

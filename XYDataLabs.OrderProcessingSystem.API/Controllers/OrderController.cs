@@ -6,6 +6,7 @@ using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Orders.Commands;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Orders.Queries;
+using XYDataLabs.OrderProcessingSystem.Domain.Identifiers;
 
 namespace XYDataLabs.OrderProcessingSystem.API.Controllers
 {
@@ -36,7 +37,10 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
         public async Task<ActionResult> CreateOrder(CreateOrderRequestDto createOrderRequestDto, CancellationToken cancellationToken)
         {
             var result = await _dispatcher.SendAsync(
-                new CreateOrderCommand(createOrderRequestDto.CustomerId, createOrderRequestDto.ProductIds), cancellationToken);
+                new CreateOrderCommand(
+                    new CustomerId(createOrderRequestDto.CustomerId),
+                    createOrderRequestDto.ProductIds.Select(static productId => new ProductId(productId)).ToArray()),
+                cancellationToken);
             return result.ToCreatedResult(nameof(CreateOrder), new { id = result.Value?.OrderId });
         }
 
@@ -46,7 +50,7 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
         /// <param name="id">Order id</param>
         /// <returns>Order</returns>
         [HttpGet("{id}", Name = nameof(GetOrderDetailsById))]
-        public async Task<ActionResult> GetOrderDetailsById(int id, CancellationToken cancellationToken)
+        public async Task<ActionResult> GetOrderDetailsById(OrderId id, CancellationToken cancellationToken)
         {
             var result = await _dispatcher.QueryAsync(new GetOrderDetailsQuery(id), cancellationToken);
             return result.ToActionResult();

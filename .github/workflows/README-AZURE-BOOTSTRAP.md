@@ -8,7 +8,7 @@ This workflow (`azure-bootstrap.yml`) handles **infrastructure and deployment op
 
 > ⚠️ **Prerequisite**: The [Azure Initial Setup](README-AZURE-INITIAL-SETUP.md) workflow must have completed successfully before this workflow can run. That workflow handles Phase 0 (GitHub App), Phase 1a (OIDC), and Phase 1b (GitHub secrets) — all one-time setup steps.
 
-> 📖 **Full guide**: See [`Documentation/QUICK-START-AZURE-BOOTSTRAP.md`](../../Documentation/QUICK-START-AZURE-BOOTSTRAP.md) for the complete reference including architecture diagrams, parameter reference, and step-by-step sequences.
+> 📖 **Full guide**: See [`docs/guides/deployment/quick-start-azure-bootstrap.md`](../../docs/guides/deployment/quick-start-azure-bootstrap.md) for the complete reference including architecture diagrams, parameter reference, and step-by-step sequences.
 
 ---
 
@@ -508,10 +508,10 @@ After deployment triggers succeed:
 | Document | Location |
 |----------|----------|
 | **Azure Initial Setup** (prerequisite) | [`README-AZURE-INITIAL-SETUP.md`](README-AZURE-INITIAL-SETUP.md) |
-| Full Quick Start Guide | [`Documentation/QUICK-START-AZURE-BOOTSTRAP.md`](../../Documentation/QUICK-START-AZURE-BOOTSTRAP.md) |
-| Workflow Separation Architecture | [`Documentation/GITHUB-WORKFLOW-SEPARATION-ARCHITECTURE.md`](../../Documentation/GITHUB-WORKFLOW-SEPARATION-ARCHITECTURE.md) |
+| Full Quick Start Guide | [`docs/guides/deployment/quick-start-azure-bootstrap.md`](../../docs/guides/deployment/quick-start-azure-bootstrap.md) |
+| Workflow Separation Architecture | [`docs/guides/deployment/workflow-separation-architecture.md`](../../docs/guides/deployment/workflow-separation-architecture.md) |
 | Configure GitHub Secrets | [`README-CONFIGURE-GITHUB-SECRETS.md`](README-CONFIGURE-GITHUB-SECRETS.md) |
-| Azure Deployment Guide | [`Documentation/02-Azure-Learning-Guides/AZURE_DEPLOYMENT_GUIDE.md`](../../Documentation/02-Azure-Learning-Guides/AZURE_DEPLOYMENT_GUIDE.md) |
+| Azure Deployment Guide | [`docs/guides/deployment/azure-deployment-guide.md`](../../docs/guides/deployment/azure-deployment-guide.md) |
 | Bootstrap Script | `Resources/Azure-Deployment/bootstrap-enterprise-infra.ps1` |
 | Troubleshooting Index | [`TROUBLESHOOTING-INDEX.md`](../../TROUBLESHOOTING-INDEX.md) |
 

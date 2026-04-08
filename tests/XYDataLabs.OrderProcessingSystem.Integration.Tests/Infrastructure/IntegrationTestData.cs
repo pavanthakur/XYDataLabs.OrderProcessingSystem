@@ -170,28 +170,26 @@ internal static class IntegrationTestData
             dbContext.PaymentProviders.Add(paymentProvider);
             await dbContext.SaveChangesAsync();
 
-            var order = new Order
+            var orderResult = Order.Create(customer.CustomerId, new[] { product }, createdAt);
+            if (orderResult.IsFailure || orderResult.Value is null)
             {
-                CustomerId = customer.CustomerId,
-                OrderDate = createdAt,
-                TotalPrice = product.Price,
-                TenantId = tenantId,
-                CreatedBy = 1,
-                CreatedDate = createdAt
-            };
+                throw new InvalidOperationException(orderResult.Error.Description);
+            }
+
+            var order = orderResult.Value;
+            order.TenantId = tenantId;
+            order.CreatedBy = 1;
+            order.CreatedDate = createdAt;
+
+            foreach (var orderProduct in order.OrderProducts)
+            {
+                orderProduct.TenantId = tenantId;
+                orderProduct.CreatedBy = 1;
+                orderProduct.CreatedDate = createdAt;
+            }
 
             dbContext.Orders.Add(order);
             await dbContext.SaveChangesAsync();
-
-            var orderProduct = new OrderProduct
-            {
-                OrderId = order.OrderId,
-                ProductId = product.ProductId,
-                Quantity = 1,
-                TenantId = tenantId,
-                CreatedBy = 1,
-                CreatedDate = createdAt
-            };
 
             var paymentMethod = new PaymentMethod
             {
@@ -203,7 +201,6 @@ internal static class IntegrationTestData
                 CreatedDate = createdAt
             };
 
-            dbContext.OrderProducts.Add(orderProduct);
             dbContext.PaymentMethods.Add(paymentMethod);
             await dbContext.SaveChangesAsync();
 

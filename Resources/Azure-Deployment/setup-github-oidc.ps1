@@ -5,7 +5,7 @@
 # 1. Add the three secrets to GitHub repository secrets (Settings → Secrets and variables → Actions)
 # 2. The federated credential is configured for the production branch defined in branch-policy.json
 #
-# For complete instructions, see: Documentation/02-Azure-Learning-Guides/AZURE_DEPLOYMENT_GUIDE.md
+# For complete instructions, see: docs/guides/deployment/azure-deployment-guide.md
 
 param(
     # Single resource group (backward compatible). Use -ResourceGroupNames for multiple.
