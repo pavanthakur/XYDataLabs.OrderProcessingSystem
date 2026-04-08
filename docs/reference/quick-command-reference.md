@@ -1,5 +1,5 @@
 # Quick Command Reference Guide
-**Last Updated:** April 5, 2026 (Phase 7 closure and deployment-readiness verification)
+**Last Updated:** April 9, 2026 (Phase 7 freeze routing and architecture-status sync updates)
 
 All commands in one place. Also available as topic-specific deep dives in this canonical `docs/reference/` subtree:
 
@@ -726,7 +726,7 @@ Reusable agent prompts in `.github/prompts/`. Run in VS Code Chat (`Ctrl+Shift+I
 
 | Command | When to use | What it does |
 |---------|-------------|--------------|
-| `/XYDataLabs-day-complete` | End of every curriculum day | Routes updates to curriculum, commands files, ADRs, memory. Suggests commit. |
+| `/XYDataLabs-day-complete` | End of every curriculum day or phase freeze | Routes updates to curriculum, commands files, architecture roadmap/status surfaces, ADRs, and memory; phase-freeze closeout must then run `/XYDataLabs-completion-check` and `/XYDataLabs-context-audit` before commit. |
 | `/XYDataLabs-sql-local-access` | After every fresh bootstrap/deploy | Opens/closes Azure SQL firewall for your local IP. Prints SSMS details. |
 
 **How to run:** `Ctrl+Shift+I` → Agent mode → `/XYDataLabs-day-complete` → answer "What did you complete today?"
@@ -808,6 +808,13 @@ git push origin dev
 - [ ] Documentation updated
 - [ ] Rollback procedure documented
 
+### Before Committing A Phase Freeze (MANDATORY)
+- [ ] `/XYDataLabs-day-complete` run and all phase-status surfaces updated
+- [ ] `/XYDataLabs-completion-check` run and any non-deferred gaps fixed
+- [ ] `/XYDataLabs-context-audit` run and any HIGH/MEDIUM drift fixed
+- [ ] `node scripts/validate-doc-links.js` passes if docs changed
+- [ ] `pwsh scripts/validate-ai-customization.ps1` passes if prompts/instructions/agents/skills changed
+
 ---
 
 ## ⚠️ Red Flags (Workflow Misconfiguration)
@@ -828,7 +835,7 @@ Reusable agent prompts stored in `.github/prompts/`. Type in VS Code Chat (`Ctrl
 
 | Command | When to use | What it does |
 |---------|-------------|--------------|
-| `/XYDataLabs-day-complete` | End of every curriculum day | Routes updates to curriculum, commands files, ADRs, memory. Suggests commit. |
+| `/XYDataLabs-day-complete` | End of every curriculum day or phase freeze | Routes updates to curriculum, commands files, architecture roadmap/status surfaces, ADRs, and memory; phase-freeze closeout must then run `/XYDataLabs-completion-check` and `/XYDataLabs-context-audit` before commit. |
 | `/XYDataLabs-sql-local-access` | After every fresh bootstrap/deploy | Opens/closes Azure SQL firewall for your local IP. Prints SSMS details. |
 
 **How to run:** `Ctrl+Shift+I` → Agent mode → type `/XYDataLabs-day-complete` → answer "What did you complete today?"

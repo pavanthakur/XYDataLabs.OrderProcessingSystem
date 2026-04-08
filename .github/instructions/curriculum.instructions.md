@@ -7,9 +7,9 @@ applyTo: "**/*CURRICULUM*,**/docs/learning/curriculum/**"
 `docs/learning/curriculum/1_MASTER_CURRICULUM.md`
 
 ## Current Progress (as of April 2026)
-- Days 1-38: ✅ Complete (implementation detail in `docs/learning/implementation-notes/implementation-notes-days-29-38.md`)
-- Architecture Phases 1-6: ✅ Complete
-- Days 39+: 🔄 In progress (tenant enforcement, ProblemDetails, security headers, and AuditLog slice implemented; remaining Polly + DDD tactical patterns still pending)
+- Days 1-43: ✅ Complete (implementation detail in `docs/learning/implementation-notes/implementation-notes-days-29-38.md`)
+- Architecture Phases 1-7: ✅ Complete
+- Days 44+: 📅 Next (Phase 8 event-driven foundation, worker services, and messaging/outbox follow-on work)
 
 ## Checkbox Marking Convention
 - `[x]` = done

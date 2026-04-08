@@ -24,11 +24,12 @@ Ctrl+Shift+I → Agent mode → type /XYDataLabs-day-complete, /XYDataLabs-docke
 
 Purpose:
 - Routes end-of-day curriculum updates to the correct documents.
-- Ensures progress tracking stays consistent.
+- Ensures progress tracking stays consistent, including architecture phase status surfaces.
 - Helps prevent missing updates in curriculum, daily progress, and related docs.
 
 Use when:
 - A curriculum day is finished.
+- A phase is being closed or frozen and all status surfaces must be aligned.
 - You want guided document updates for learning progress.
 
 ### `/XYDataLabs-sql-local-access`
@@ -79,6 +80,7 @@ Use when:
 - Finishing any feature, fix, script, or DevOps task before considering it done.
 - You want a systematic answer to: "Have we documented, guardrailed, tested, and automated this properly?"
 - As the final step in any ad-hoc task that doesn't use `/XYDataLabs-new-feature`.
+- After a phase close/freeze when you want a second guardrail that status and roadmap surfaces stayed aligned.
 
 Note: `/XYDataLabs-new-feature` has its own built-in review step (Code Reviewer agent). Run `/XYDataLabs-completion-check` for everything else.
 
@@ -96,6 +98,7 @@ Use when:
 - Periodically (every few sessions or after major refactors).
 - After renaming, adding, or removing projects or packages.
 - When Copilot suggestions seem to reference outdated patterns or non-existent code.
+- After a phase close/freeze if you want a direct audit for phase-status and roadmap drift.
 
 ### `/XYDataLabs-new-feature`
 
@@ -187,7 +190,7 @@ Note: For deep-dive queries (Q1, Q3, Q4, Q6, Q6a, Q7, Q8-B and per-tenant 3DS to
    └─ Step 11-12: commit → /XYDataLabs-context-audit
 
 [After a coding/learning day]
-└─ /XYDataLabs-day-complete  →  routes curriculum + command updates
+└─ /XYDataLabs-day-complete  →  routes curriculum + command + roadmap updates
    └─ [Optional] /XYDataLabs-context-audit  →  verify no stale references created
 
 [After bootstrap or deploy]
@@ -206,6 +209,11 @@ Note: For deep-dive queries (Q1, Q3, Q4, Q6, Q6a, Q7, Q8-B and per-tenant 3DS to
 [After any task/fix/script/workflow (not covered by /new-feature)]
 └─ /XYDataLabs-completion-check  →  6-category quality gate
    └─ Documented? Guardrailed? Unit tested? Integration tested? Automated? Context current?
+
+[After a phase close/freeze]
+└─ /XYDataLabs-day-complete  →  routes curriculum + roadmap + status-surface updates
+   └─ /XYDataLabs-completion-check  →  mandatory quality gate before commit
+   └─ /XYDataLabs-context-audit  →  mandatory drift audit before commit
 
 [Fresh git clone / new machine]
 └─ /XYDataLabs-setup-local  →  runs setup-local.ps1, summarises next steps

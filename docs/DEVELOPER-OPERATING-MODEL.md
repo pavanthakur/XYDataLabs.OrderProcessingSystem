@@ -84,6 +84,7 @@ Keep maintenance simple:
   - If the task changed shared AI assets, run `pwsh scripts/validate-ai-customization.ps1`
   - Optional local shortcut: run the VS Code task `Validate: AI governance bundle`
   - If the task created a justified deferral, add it to `docs/internal/DEFERRED-WORK-LOG.md`
+  - If the task closes or freezes an architecture phase: run `/XYDataLabs-day-complete`, then `/XYDataLabs-completion-check`, then `/XYDataLabs-context-audit` before committing
 - Once per week
   - Spend 10 minutes checking for obvious broken links, duplicate guidance, or stale navigation
   - Fix only real issues; do not restart broad cleanup work
@@ -100,6 +101,16 @@ Before closing a feature, day, or infra task, use this short rule:
 4. No duplicate or side-note document was introduced.
 5. If `docs/` changed, `node scripts/validate-doc-links.js` passes.
 6. If shared AI assets changed, `pwsh scripts/validate-ai-customization.ps1` passes.
+
+## Definition Of Done For Phase Freeze
+
+Before committing a phase close/freeze:
+
+1. Run `/XYDataLabs-day-complete` to route curriculum, roadmap, implementation-note, and status-surface updates.
+2. Run `/XYDataLabs-completion-check` and resolve any non-deferred gaps.
+3. Run `/XYDataLabs-context-audit` and resolve any HIGH or MEDIUM roadmap/status drift.
+4. If `docs/` changed, `node scripts/validate-doc-links.js` passes.
+5. If shared AI assets changed, `pwsh scripts/validate-ai-customization.ps1` passes.
 
 ## Change Routing Rule
 

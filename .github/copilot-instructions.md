@@ -356,7 +356,7 @@ This matrix shows which instructions auto-attach for common file locations:
 | Prompt | Command | Purpose |
 |--------|---------|--------|
 | New Feature Workflow | `/XYDataLabs-new-feature` | Orchestrates end-to-end feature development: entity → CQRS → migration → controller → tests → review → commit → payment verification (conditional). Enforces mandatory 13-step workflow with multitenant support. |
-| Day Complete Router | `/XYDataLabs-day-complete` | After each curriculum day — routes updates to all correct documents, suggests commit |
+| Day Complete Router | `/XYDataLabs-day-complete` | After each curriculum day or phase-freeze closeout — routes updates to all correct documents, syncs architecture status surfaces, and requires completion-check/context-audit before a phase-close commit |
 | Completion Check | `/XYDataLabs-completion-check` | After any feature, task, script, or fix — 6-category quality gate: documented? guardrailed? unit tested? integration tested? automated? context current? |
 | Docker Start | `/XYDataLabs-docker-start` | Launches the supported Docker and local runtime profiles from one interactive entry point and prints the correct API/UI URLs. |
 | Local Setup | `/XYDataLabs-setup-local` | After a fresh git clone — runs setup-local.ps1, summarises VS F5 and Docker next steps |
@@ -388,7 +388,7 @@ This matrix shows which instructions auto-attach for common file locations:
 |------|-------|---------------|
 | `TROUBLESHOOTING-INDEX.md` | Root | Quick links for common GitHub App / OIDC / workflow errors |
 | `ARCHITECTURE.md` | Root | Binding tenant, payment identifier, migration, and test standard for future model creation |
-| `ARCHITECTURE-EVOLUTION.md` | Root | 14-phase roadmap: Phases 1-6 ✅ complete, Phase 7 next 📅 |
+| `ARCHITECTURE-EVOLUTION.md` | Root | 14-phase roadmap: Phases 1-7 ✅ complete, Phase 8 next 📅 |
 | `docs/internal/AZURE-PROGRESS-EVALUATION.md` | docs/internal | Learning progress weeks 1–10, next-step guides |
 | `docs/AI-OPERATING-MODEL.md` | docs/ | Canonical protocol for shared AI customization and governance |
 | `docs/internal/DEFERRED-WORK-LOG.md` | docs/internal | Shared register for justified deferred work |

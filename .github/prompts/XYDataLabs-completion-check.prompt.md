@@ -49,6 +49,7 @@ else { Write-Host 'SECRET SCAN: clean' -ForegroundColor Green }
 - [ ] If a new workflow was added: does `.github/workflows/README.md` reference it?
 - [ ] If a new prompt was added: does `.github/prompts/README.md` document it, and is it listed in `copilot-instructions.md` §9?
 - [ ] If a new architectural decision was made: is there an ADR in `docs/architecture/decisions/`?
+- [ ] If this task closed or materially advanced a curriculum/architecture phase: are all phase-status surfaces aligned (`ARCHITECTURE-EVOLUTION.md`, `docs/learning/curriculum/1_MASTER_CURRICULUM.md`, `docs/learning/curriculum/README.md`, `docs/internal/AZURE-PROGRESS-EVALUATION.md`, active implementation notes, `.github/instructions/curriculum.instructions.md`, `docs/DEVELOPER-OPERATING-MODEL.md` when focus changed, and `.github/copilot-instructions.md` if it contains a phase snapshot)?
 
 ## 2. Guardrails *(use secret scan results from Step 0)*
 
@@ -85,6 +86,7 @@ else { Write-Host 'SECRET SCAN: clean' -ForegroundColor Green }
 
 - [ ] Is `copilot-instructions.md` still accurate? (Run `/XYDataLabs-context-audit` if unsure)
 - [ ] Are relevant `/memories/repo/` files up to date with any new resource names or conventions?
+- [ ] If this task changed current phase or next-phase status: has `/XYDataLabs-context-audit` been run, or has equivalent manual verification confirmed there is no status-surface drift?
 
 ---
 

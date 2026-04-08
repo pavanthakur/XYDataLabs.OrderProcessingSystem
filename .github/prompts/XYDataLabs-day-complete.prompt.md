@@ -1,13 +1,13 @@
 ---
 agent: agent
-description: "After a curriculum day: asks what you completed, then auto-routes — marks 1_MASTER_CURRICULUM.md checkboxes, logs CLI commands to QUICK-COMMAND-REFERENCE.md and the matching commands/ topic file, updates DAILY_PROGRESS_TRACKER.md, and appends to ACHIEVEMENT_LOG.md"
+description: "After a curriculum day or phase-freeze closeout: asks what you completed, then auto-routes — updates curriculum, roadmap/status surfaces, reference docs, memory, and implementation evidence"
 ---
 
 # Day Completion Routing
 
-The user has just completed or partially completed a curriculum day.
+The user has just completed or partially completed a curriculum day, or is closing out / freezing an architecture phase.
 
-Ask the user: "What did you complete today? Describe what you built, ran, or decided."
+Ask the user: "What did you complete today? Describe what you built, ran, verified, or froze."
 
 Then, based on their answer, apply the following routing rules automatically — do NOT ask for permission for each one, just do them all:
 
@@ -52,7 +52,25 @@ Then, based on their answer, apply the following routing rules automatically —
      `### ✅ Weeks N-N: <Week Name> (Days X-Y) — Complete`
    - Update the **COMPLETED SO FAR** bullet at the top of the master file if it exists
 
-9. **Always: Record unique implementation detail for the completed day**
+9. **If the day's work closes or materially advances an architecture phase:**
+    - Update `ARCHITECTURE-EVOLUTION.md` so the strategic roadmap matches repo truth
+    - Sync all architecture status and navigation surfaces that summarize the active phase or current milestone, including:
+       - `docs/learning/curriculum/1_MASTER_CURRICULUM.md`
+       - `docs/learning/curriculum/README.md`
+       - `docs/internal/AZURE-PROGRESS-EVALUATION.md`
+       - `docs/learning/implementation-notes/implementation-notes-days-29-38.md` or the active implementation-notes file
+       - `.github/instructions/curriculum.instructions.md`
+       - `docs/DEVELOPER-OPERATING-MODEL.md` when the active phase/current focus changed
+       - `.github/copilot-instructions.md` if it contains a current phase snapshot
+    - Update all of the following in `ARCHITECTURE-EVOLUTION.md` when applicable:
+       - top-level `Current Status`
+       - roadmap table status column
+       - the affected phase heading/status block
+       - any repeated summary/status snapshot near the end of the file
+    - Treat architecture-status drift across these files as a blocking inconsistency to fix before finishing
+    - If the work is a phase freeze/closeout, do not stop at the checklist change; confirm the phase now reads consistently as complete/next across all status surfaces in the same session
+
+10. **Always: Record unique implementation detail for the completed day**
    - Open `docs/learning/implementation-notes/implementation-notes-days-29-38.md`
    - Add a `## Day N: <Title>` section if the day had notable implementation nuance
    - Include:
@@ -64,7 +82,7 @@ Then, based on their answer, apply the following routing rules automatically —
    - Include code blocks for any actual code added or console output confirmed
    - Skip this step if the day was purely checklist tasks with no unique detail worth preserving
 
-10. **If any multi-environment file was modified** (Bicep modules, parameter files, sharedsettings, workflows):
+11. **If any multi-environment file was modified** (Bicep modules, parameter files, sharedsettings, workflows):
     - Verify the change is applied to ALL three environments — dev + staging + prod:
       - `infra/parameters/dev.json` → `staging.json` → `prod.json`
       - `sharedsettings.dev.json` → `sharedsettings.stg.json` → `sharedsettings.prod.json`
@@ -73,6 +91,9 @@ Then, based on their answer, apply the following routing rules automatically —
     - Flag any environment that was missed and apply the missing change before committing
 
 ## After Routing
+- If the work is a phase freeze/closeout or changed roadmap/status surfaces, run `/XYDataLabs-completion-check` (or perform its equivalent quality gate) before suggesting a commit; fix any non-deferred gaps first
+- If the work is a phase freeze/closeout or changed roadmap/status surfaces, run `/XYDataLabs-context-audit` (or perform its equivalent status-surface audit) before suggesting a commit; fix any HIGH or MEDIUM drift first
+- For a phase freeze/closeout, do not ask "Ready to commit?" until both mandatory checks above are complete in the same session
 - Summarise what was updated and where
 - Suggest a commit message in the format: `Day <N>: <what was done>`
 - Ask: "Ready to commit?"
