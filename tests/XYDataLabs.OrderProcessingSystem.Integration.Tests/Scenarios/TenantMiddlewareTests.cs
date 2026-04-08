@@ -1,6 +1,9 @@
 using System.Net;
 using System.Text.Json;
 using FluentAssertions;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure;
 using Xunit;
 
@@ -36,10 +39,11 @@ public sealed class TenantMiddlewareTests : IAsyncLifetime
         using var client = _factory.CreateClient();
 
         var response = await client.GetAsync("/health");
-        var body = await response.Content.ReadAsStringAsync();
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        body.Should().Contain("Missing required header");
+        body.RootElement.GetProperty("title").GetString().Should().Be("Tenant header is required.");
+        body.RootElement.GetProperty("detail").GetString().Should().Contain("Missing required header");
     }
 
     [Fact]
@@ -98,10 +102,23 @@ public sealed class TenantMiddlewareTests : IAsyncLifetime
         using var client = _factory.CreateTenantClient($"UNKNOWN-{Guid.NewGuid():N}"[..18]);
 
         var response = await client.GetAsync("/health");
-        var body = await response.Content.ReadAsStringAsync();
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        body.Should().Contain("is not recognized");
+        body.RootElement.GetProperty("title").GetString().Should().Be("Tenant code is not recognized.");
+        body.RootElement.GetProperty("detail").GetString().Should().Contain("is not recognized");
+    }
+
+    [Fact]
+    public async Task ReadyHealthCheck_WithDegradedReadyDependency_ReturnsServiceUnavailable()
+    {
+        await using var degradedFactory = new DegradedReadinessIntegrationTestFactory(_fixture.ConnectionString);
+        var tenant = await IntegrationTestData.CreateTenantAsync(degradedFactory);
+        using var client = degradedFactory.CreateTenantClient(tenant.TenantCode);
+
+        var response = await client.GetAsync("/health/ready");
+
+        response.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
     }
 
     [Theory]
@@ -113,9 +130,28 @@ public sealed class TenantMiddlewareTests : IAsyncLifetime
         using var client = _factory.CreateTenantClient(tenant.TenantCode);
 
         var response = await client.GetAsync("/health");
-        var body = await response.Content.ReadAsStringAsync();
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-        body.Should().Contain("is not active");
+        body.RootElement.GetProperty("title").GetString().Should().Be("Tenant is not active.");
+        body.RootElement.GetProperty("detail").GetString().Should().Contain("is not active");
+    }
+}
+
+internal sealed class DegradedReadinessIntegrationTestFactory(string connectionString)
+    : IntegrationTestWebAppFactory(connectionString)
+{
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        base.ConfigureWebHost(builder);
+
+        builder.ConfigureServices(services =>
+        {
+            services.AddHealthChecks()
+                .AddCheck(
+                    "synthetic-degraded-ready-check",
+                    () => HealthCheckResult.Degraded("Synthetic degraded dependency for readiness probe verification."),
+                    tags: new[] { "ready" });
+        });
     }
 }

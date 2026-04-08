@@ -4,6 +4,7 @@ using FluentValidation;
 using FluentValidation.Results;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Orders.Commands;
+using XYDataLabs.OrderProcessingSystem.Domain.Identifiers;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Orders.Queries;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
@@ -27,7 +28,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
             var handler = new CreateOrderCommandHandler(MockDbContext.Object);
 
             // Act
-            var result = await handler.HandleAsync(new CreateOrderCommand(2, new List<int> { 1, 2 }));
+            var result = await handler.HandleAsync(new CreateOrderCommand(2, new List<ProductId> { 1, 2 }));
 
             // Assert
             result.IsFailure.Should().BeTrue();
@@ -45,9 +46,37 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
             var handler = new CreateOrderCommandHandler(MockDbContext.Object);
 
             // Act
-            var result = await handler.HandleAsync(new CreateOrderCommand(1, new List<int> { 1, 2 }));
+            var result = await handler.HandleAsync(new CreateOrderCommand(1, new List<ProductId> { 1, 2 }));
 
             // Assert
+            result.IsFailure.Should().BeTrue();
+            result.Error.Code.Should().Be("Validation");
+        }
+
+        [Fact]
+        public async Task CreateOrderCommand_ZeroTotalPrice_ReturnsValidation()
+        {
+            var customers = GenerateCustomersWithFulFilledOrders(1, 1).AsQueryable();
+            var mockDbSetCustomers = GetMockDbSet(customers);
+            MockDbContext.Setup(db => db.Customers).Returns(mockDbSetCustomers.Object);
+
+            var products = new List<Product>
+            {
+                new()
+                {
+                    ProductId = 1,
+                    Name = "Free Product",
+                    Description = "No charge",
+                    Price = 0m
+                }
+            }.AsQueryable();
+            var mockDbSetProducts = GetMockDbSet(products);
+            MockDbContext.Setup(db => db.Products).Returns(mockDbSetProducts.Object);
+
+            var handler = new CreateOrderCommandHandler(MockDbContext.Object);
+
+            var result = await handler.HandleAsync(new CreateOrderCommand(1, new List<ProductId> { 1 }));
+
             result.IsFailure.Should().BeTrue();
             result.Error.Code.Should().Be("Validation");
         }
@@ -67,7 +96,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
             var handler = new CreateOrderCommandHandler(MockDbContext.Object);
 
             // Act
-            var result = await handler.HandleAsync(new CreateOrderCommand(1, new List<int> { 1, 2 }));
+            var result = await handler.HandleAsync(new CreateOrderCommand(1, new List<ProductId> { 1, 2 }));
 
             // Assert
             result.IsFailure.Should().BeTrue();
@@ -95,7 +124,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
             var handler = new CreateOrderCommandHandler(MockDbContext.Object);
 
             // Act
-            var result = await handler.HandleAsync(new CreateOrderCommand(1, new List<int> { 1 }));
+            var result = await handler.HandleAsync(new CreateOrderCommand(1, new List<ProductId> { 1 }));
 
             // Assert
             result.IsSuccess.Should().BeTrue();
@@ -108,17 +137,15 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
         {
             // Arrange
             var orderId = 1;
-            var order = new Order
+            var products = new List<Product>
             {
-                OrderId = orderId,
-                CustomerId = CustomerId,
-                TotalPrice = 100,
-                OrderProducts = new List<OrderProduct>
-                {
-                    new OrderProduct { ProductId = 1, Quantity = 1 },
-                    new OrderProduct { ProductId = 2, Quantity = 1 }
-                }
+                new() { ProductId = 1, Name = "Product 1", Description = "Description 1", Price = 40m },
+                new() { ProductId = 2, Name = "Product 2", Description = "Description 2", Price = 60m }
             };
+            var orderResult = Order.Create(CustomerId, products, DateTime.UtcNow.AddDays(-1));
+            orderResult.IsSuccess.Should().BeTrue();
+            var order = orderResult.Value!;
+            order.OrderId = orderId;
 
             var mockOrderDbSet = GetMockDbSet(new List<Order> { order }.AsQueryable());
             MockDbContext.Setup(c => c.Orders).Returns(mockOrderDbSet.Object);
@@ -132,6 +159,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
             result.IsSuccess.Should().BeTrue();
             result.Value!.OrderId.Should().Be(orderId);
             result.Value.TotalPrice.Should().Be(100);
+            result.Value.Status.Should().Be(OrderStatus.Created.ToString());
         }
 
         [Fact]

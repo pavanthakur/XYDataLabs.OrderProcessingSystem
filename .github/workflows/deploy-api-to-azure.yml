@@ -346,20 +346,20 @@ jobs:
           Write-Host "Waiting 60 seconds for app to start (cold-start buffer)..." -ForegroundColor Yellow
           Start-Sleep -Seconds 60
 
-          $apiUrl     = "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net"
-          $swaggerUrl = "$apiUrl/swagger"
+          $apiUrl       = "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net"
+          $readinessUrl = "$apiUrl/health/ready"
 
-          # Primary check: Swagger endpoint (APIs may not have a root route).
+          # Primary check: readiness endpoint.
           # Retry up to 3 times with 30 s between attempts; 60 s timeout each.
           # Azure App Service cold starts can take 60–90 s after deployment.
-          Write-Host "Testing Swagger endpoint: $swaggerUrl" -ForegroundColor Cyan
-          $swaggerOk   = $false
+          Write-Host "Testing readiness endpoint: $readinessUrl" -ForegroundColor Cyan
+          $readinessOk = $false
           $maxAttempts = 3
           for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
             try {
-              $swaggerResponse = Invoke-WebRequest -Uri $swaggerUrl -Method Get -TimeoutSec 60
-              Write-Host "✅ Swagger UI responded with status: $($swaggerResponse.StatusCode)" -ForegroundColor Green
-              $swaggerOk = $true
+              $readinessResponse = Invoke-WebRequest -Uri $readinessUrl -Method Get -TimeoutSec 60 -ErrorAction Stop
+              Write-Host "✅ Readiness endpoint responded with status: $($readinessResponse.StatusCode)" -ForegroundColor Green
+              $readinessOk = $true
               break
             } catch {
               Write-Host "  Attempt $attempt/$maxAttempts failed: $($_.Exception.Message)" -ForegroundColor Yellow
@@ -369,8 +369,8 @@ jobs:
               }
             }
           }
-          if (-not $swaggerOk) {
-            Write-Host "❌ Swagger health check FAILED after $maxAttempts attempts" -ForegroundColor Red
+          if (-not $readinessOk) {
+            Write-Host "❌ Readiness health check FAILED after $maxAttempts attempts" -ForegroundColor Red
           }
 
           # Informational: root endpoint (may return 404 if no default route — not a failure)
@@ -382,12 +382,12 @@ jobs:
             Write-Host "ℹ️  API root returned non-200 (expected if no default route): $($_.Exception.Message)" -ForegroundColor Yellow
           }
 
-          if (-not $swaggerOk) {
+          if (-not $readinessOk) {
             Write-Host "" -ForegroundColor Gray
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
             Write-Host "❌ DEPLOYMENT HEALTH CHECK FAILED" -ForegroundColor Red
-            Write-Host "   The API did not respond after deployment. Check App Service logs." -ForegroundColor Red
-            Write-Host "   URL: $apiUrl" -ForegroundColor Red
+            Write-Host "   The API readiness endpoint did not report ready after deployment. Check App Service logs and dependency health." -ForegroundColor Red
+            Write-Host "   URL: $readinessUrl" -ForegroundColor Red
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
             exit 1
           }
@@ -417,11 +417,11 @@ jobs:
           $credentialsConfigured = "${{ steps.check-credentials.outputs.credentialsConfigured }}"
           $infraReady = "${{ steps.check-target.outputs.infraReady }}"
           $appUrl = if ($credentialsConfigured -ne 'true') {
-            "https://$app.azurewebsites.net/swagger (target URL; deployment skipped before Azure login)"
+            "https://$app.azurewebsites.net/health/ready (target URL; deployment skipped before Azure login)"
           } elseif ($infraReady -ne 'true') {
-            "https://$app.azurewebsites.net/swagger (target URL; app not provisioned yet)"
+            "https://$app.azurewebsites.net/health/ready (target URL; app not provisioned yet)"
           } else {
-            "https://$app.azurewebsites.net/swagger"
+            "https://$app.azurewebsites.net/health/ready"
           }
 
           $status = if ($credentialsConfigured -ne 'true') {

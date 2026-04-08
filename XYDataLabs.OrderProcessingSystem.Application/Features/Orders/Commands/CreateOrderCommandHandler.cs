@@ -4,6 +4,8 @@ using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
 using XYDataLabs.OrderProcessingSystem.Application.Mappings;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
+using XYDataLabs.OrderProcessingSystem.Domain.Identifiers;
+using XYDataLabs.OrderProcessingSystem.Domain.Results;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.Features.Orders.Commands;
@@ -20,17 +22,18 @@ public sealed class CreateOrderCommandHandler : ICommandHandler<CreateOrderComma
     public async Task<Result<OrderDto>> HandleAsync(CreateOrderCommand command, CancellationToken cancellationToken = default)
     {
         using var activity = OrderActivitySource.Source.StartActivity("CreateOrder");
-        activity?.SetTag("order.customer_id", command.CustomerId);
+        activity?.SetTag("order.customer_id", command.CustomerId.Value);
         activity?.SetTag("order.product_count", command.ProductIds.Count);
+
         var customer = await _context.Customers
             .Include(c => c.Orders)
             .FirstOrDefaultAsync(c => c.CustomerId == command.CustomerId, cancellationToken);
 
         if (customer is null)
-            return Error.Create("NotFound", $"Customer with ID {command.CustomerId} not found.");
+            return Error.Create("NotFound", $"Customer with ID {command.CustomerId.Value} not found.");
 
         // Validate customer order history: check for unfulfilled orders
-        if (customer.Orders is not null && customer.Orders.Any(o => !o.IsFulfilled))
+        if (customer.Orders is not null && customer.Orders.Any(o => !o.IsClosed))
             return Error.Create("Validation", "Customer cannot place a new order until their previous order is fulfilled.");
 
         // Retrieve products
@@ -41,26 +44,19 @@ public sealed class CreateOrderCommandHandler : ICommandHandler<CreateOrderComma
         if (products.Count != command.ProductIds.Count)
             return Error.Create("NotFound", "One or more products not found.");
 
-        // Create order with line items
-        var order = new Order
+        var orderResult = Order.Create(command.CustomerId, products);
+        if (orderResult.IsFailure || orderResult.Value is null)
         {
-            CustomerId = command.CustomerId,
-            OrderProducts = products.Select(p => new OrderProduct
-            {
-                ProductId = p.ProductId,
-                Product = p,
-                Quantity = 1
-            }).ToList()
-        };
+            return ToApplicationError(orderResult.Error);
+        }
 
-        order.TotalPrice = order.OrderProducts.Sum(oi => oi.Quantity * oi.Price);
-
-        if (order.TotalPrice <= 0)
-            return Error.Create("Validation", "The total price must be greater than zero.");
+        var order = orderResult.Value;
 
         _context.Orders.Add(order);
         await _context.SaveChangesAsync(cancellationToken);
 
         return order.ToDto();
     }
+
+    private static Error ToApplicationError(DomainError error) => Error.Create(error.Code, error.Description);
 }

@@ -6,6 +6,7 @@ using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Customers.Commands;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Customers.Queries;
+using XYDataLabs.OrderProcessingSystem.Domain.Identifiers;
 
 namespace XYDataLabs.OrderProcessingSystem.API.Controllers
 {
@@ -58,7 +59,7 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
         /// <param name="id">Customer id</param>
         /// <returns>Customer</returns>
         [HttpGet("{id}", Name = nameof(GetCustomerById))]
-        public async Task<ActionResult> GetCustomerById(int id, CancellationToken cancellationToken)
+        public async Task<ActionResult> GetCustomerById(CustomerId id, CancellationToken cancellationToken)
         {
             var result = await _dispatcher.QueryAsync(new GetCustomerWithOrdersQuery(id), cancellationToken);
             return result.ToActionResult();
@@ -83,7 +84,7 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
         /// <param name="customerRequestDto">customer</param>
         /// <returns>Customer</returns>
         [HttpPut("{id}")]
-        public async Task<ActionResult> UpdateCustomer(int id, UpdateCustomerRequestDto customerRequestDto, CancellationToken cancellationToken)
+        public async Task<ActionResult> UpdateCustomer(CustomerId id, UpdateCustomerRequestDto customerRequestDto, CancellationToken cancellationToken)
         {
             var result = await _dispatcher.SendAsync(new UpdateCustomerCommand(id, customerRequestDto.Name, customerRequestDto.Email), cancellationToken);
             return result.ToActionResult();
@@ -95,7 +96,7 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
         /// <param name="id">Customer id</param>
         /// <returns>Customer</returns>
         [HttpDelete("{id}")]
-        public async Task<ActionResult> DeleteCustomer(int id, CancellationToken cancellationToken)
+        public async Task<ActionResult> DeleteCustomer(CustomerId id, CancellationToken cancellationToken)
         {
             var result = await _dispatcher.SendAsync(new DeleteCustomerCommand(id), cancellationToken);
             return result.ToActionResult();

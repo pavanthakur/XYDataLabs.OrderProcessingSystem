@@ -4,6 +4,7 @@ using XYDataLabs.OrderProcessingSystem.Application.DTO;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Customers.Commands;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Customers.Queries;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
+using XYDataLabs.OrderProcessingSystem.Domain.Identifiers;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
 using XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase;
 using Microsoft.EntityFrameworkCore;
@@ -58,7 +59,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
         {
             // Arrange
             var customer = GenerateCustomers(1).First();
-            MockDbContext.Setup(db => db.Customers.FindAsync(new object[] { 1 }, It.IsAny<CancellationToken>()))
+            MockDbContext.Setup(db => db.Customers.FindAsync(new object[] { new CustomerId(1) }, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(customer);
 
             var handler = new GetCustomerByIdQueryHandler(MockDbContext.Object);
@@ -75,7 +76,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
         public async Task GetCustomerByIdQuery_ShouldReturnNotFound_WhenCustomerDoesNotExist()
         {
             // Arrange
-            MockDbContext.Setup(db => db.Customers.FindAsync(new object[] { 1 }, It.IsAny<CancellationToken>()))
+            MockDbContext.Setup(db => db.Customers.FindAsync(new object[] { new CustomerId(1) }, It.IsAny<CancellationToken>()))
                 .ReturnsAsync((Customer?)null);
 
             var handler = new GetCustomerByIdQueryHandler(MockDbContext.Object);
@@ -141,7 +142,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
         {
             // Arrange
             var customer = GenerateCustomers(1).First();
-            MockDbContext.Setup(db => db.Customers.FindAsync(new object[] { 1 }, It.IsAny<CancellationToken>()))
+            MockDbContext.Setup(db => db.Customers.FindAsync(new object[] { new CustomerId(1) }, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(customer);
             MockDbContext.Setup(db => db.SaveChangesAsync(default)).ReturnsAsync(1);
 
@@ -159,7 +160,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
         public async Task UpdateCustomerCommand_ShouldReturnNotFound_WhenCustomerDoesNotExist()
         {
             // Arrange
-            MockDbContext.Setup(db => db.Customers.FindAsync(new object[] { 1 }, It.IsAny<CancellationToken>()))
+            MockDbContext.Setup(db => db.Customers.FindAsync(new object[] { new CustomerId(1) }, It.IsAny<CancellationToken>()))
                 .ReturnsAsync((Customer?)null);
 
             var handler = new UpdateCustomerCommandHandler(MockDbContext.Object);
@@ -177,7 +178,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
         {
             // Arrange
             var customer = GenerateCustomers(1).First();
-            MockDbContext.Setup(db => db.Customers.FindAsync(new object[] { 1 }, It.IsAny<CancellationToken>()))
+            MockDbContext.Setup(db => db.Customers.FindAsync(new object[] { new CustomerId(1) }, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(customer);
             MockDbContext.Setup(db => db.Customers.Remove(It.IsAny<Customer>()));
             MockDbContext.Setup(db => db.SaveChangesAsync(default)).ReturnsAsync(1);
@@ -196,7 +197,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
         public async Task DeleteCustomerCommand_ShouldReturnNotFound_WhenCustomerDoesNotExist()
         {
             // Arrange
-            MockDbContext.Setup(db => db.Customers.FindAsync(new object[] { 1 }, It.IsAny<CancellationToken>()))
+            MockDbContext.Setup(db => db.Customers.FindAsync(new object[] { new CustomerId(1) }, It.IsAny<CancellationToken>()))
                 .ReturnsAsync((Customer?)null);
 
             var handler = new DeleteCustomerCommandHandler(MockDbContext.Object);
