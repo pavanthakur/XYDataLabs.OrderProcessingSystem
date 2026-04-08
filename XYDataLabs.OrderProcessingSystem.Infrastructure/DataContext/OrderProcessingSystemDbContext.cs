@@ -356,17 +356,13 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
                 return base.SaveChanges();
             }
 
-            StampTenantOnAddedEntities();
+            if (Database.CurrentTransaction is not null)
+            {
+                return SaveChangesWithAudit();
+            }
 
-            var pendingAuditLogs = CreatePendingAuditLogs();
-            var startedTransaction = Database.CurrentTransaction is null;
-            using var transaction = startedTransaction ? Database.BeginTransaction() : null;
-
-            var result = base.SaveChanges();
-            PersistAuditLogs(pendingAuditLogs);
-
-            transaction?.Commit();
-            return result;
+            var executionStrategy = Database.CreateExecutionStrategy();
+            return executionStrategy.Execute(SaveChangesWithOwnedTransaction);
         }
 
         public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
@@ -376,20 +372,49 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
                 return await base.SaveChangesAsync(cancellationToken);
             }
 
+            if (Database.CurrentTransaction is not null)
+            {
+                return await SaveChangesWithAuditAsync(cancellationToken);
+            }
+
+            var executionStrategy = Database.CreateExecutionStrategy();
+            return await executionStrategy.ExecuteAsync(
+                async () => await SaveChangesWithOwnedTransactionAsync(cancellationToken));
+        }
+
+        private int SaveChangesWithOwnedTransaction()
+        {
+            using var transaction = Database.BeginTransaction();
+            var result = SaveChangesWithAudit();
+            transaction.Commit();
+            return result;
+        }
+
+        private async Task<int> SaveChangesWithOwnedTransactionAsync(CancellationToken cancellationToken)
+        {
+            await using var transaction = await Database.BeginTransactionAsync(cancellationToken);
+            var result = await SaveChangesWithAuditAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return result;
+        }
+
+        private int SaveChangesWithAudit()
+        {
             StampTenantOnAddedEntities();
 
             var pendingAuditLogs = CreatePendingAuditLogs();
-            var startedTransaction = Database.CurrentTransaction is null;
-            await using var transaction = startedTransaction ? await Database.BeginTransactionAsync(cancellationToken) : null;
+            var result = base.SaveChanges();
+            PersistAuditLogs(pendingAuditLogs);
+            return result;
+        }
 
+        private async Task<int> SaveChangesWithAuditAsync(CancellationToken cancellationToken)
+        {
+            StampTenantOnAddedEntities();
+
+            var pendingAuditLogs = CreatePendingAuditLogs();
             var result = await base.SaveChangesAsync(cancellationToken);
             await PersistAuditLogsAsync(pendingAuditLogs, cancellationToken);
-
-            if (transaction is not null)
-            {
-                await transaction.CommitAsync(cancellationToken);
-            }
-
             return result;
         }
 
