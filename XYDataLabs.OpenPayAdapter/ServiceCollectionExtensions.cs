@@ -12,6 +12,15 @@ namespace XYDataLabs.OpenPayAdapter
 {
     public static class ServiceCollectionExtensions
     {
+        private static bool LooksLikePrivateKey(string? value) =>
+            !string.IsNullOrWhiteSpace(value) && value.StartsWith("sk_", StringComparison.OrdinalIgnoreCase);
+
+        private static bool LooksLikeMerchantId(string? value) =>
+            !string.IsNullOrWhiteSpace(value)
+            && !LooksLikePrivateKey(value)
+            && value.All(ch => char.IsLetterOrDigit(ch))
+            && value.Length >= 10;
+
         public static IServiceCollection AddOpenPayAdapter(
             this IServiceCollection services,
             IConfiguration configuration)
@@ -25,6 +34,16 @@ namespace XYDataLabs.OpenPayAdapter
             // dynamically from ApiSettings:UI using the active profile's host and port.
             services.PostConfigure<OpenPayConfig>(config =>
             {
+                // The Openpay SDK constructor order is (api_key, merchant_id, production).
+                // Some legacy sources stored these values under the opposite names; normalize
+                // them once at binding time so runtime behavior stays correct while the source
+                // of truth is being cleaned up.
+                if (LooksLikePrivateKey(config.MerchantId) && LooksLikeMerchantId(config.PrivateKey))
+                {
+                    Console.WriteLine("[WARN] OpenPay configuration appears to have MerchantId and PrivateKey reversed. Normalizing values for backward compatibility.");
+                    (config.MerchantId, config.PrivateKey) = (config.PrivateKey, config.MerchantId);
+                }
+
                 if (!string.IsNullOrWhiteSpace(config.RedirectUrl)
                     && Uri.TryCreate(config.RedirectUrl, UriKind.Absolute, out _))
                 {

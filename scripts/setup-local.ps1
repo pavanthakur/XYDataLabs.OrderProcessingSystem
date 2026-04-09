@@ -77,6 +77,31 @@ function Test-LooksLikeOpenPayMerchantId([string] $value) {
     return -not [string]::IsNullOrWhiteSpace($value) -and $value -notmatch '^sk_' -and $value -match '^[a-z0-9]{10,}$'
 }
 
+function Normalize-OpenPayCredentials {
+    param(
+        [string] $MerchantId,
+        [string] $PrivateKey,
+        [string] $SourceLabel
+    )
+
+    $normalizedMerchant = $MerchantId
+    $normalizedPrivateKey = $PrivateKey
+    $swapped = (Test-LooksLikeOpenPayPrivateKey $normalizedMerchant) -and (Test-LooksLikeOpenPayMerchantId $normalizedPrivateKey)
+
+    if ($swapped) {
+        Write-Host "    [!!] Detected swapped OpenPay Merchant ID and Private Key from $SourceLabel - normalizing values." -ForegroundColor Yellow
+        $originalMerchant = $normalizedMerchant
+        $normalizedMerchant = $normalizedPrivateKey
+        $normalizedPrivateKey = $originalMerchant
+    }
+
+    [PSCustomObject] @{
+        MerchantId = $normalizedMerchant
+        PrivateKey = $normalizedPrivateKey
+        WasSwapped = $swapped
+    }
+}
+
 function New-EnvLocalContent {
     param(
         [Parameter(Mandatory = $true)] [string] $SqlPassword,
@@ -129,12 +154,15 @@ if ((Test-Path $envLocal) -and -not $Force) {
     $openpayKey      = $envVars['LOCAL_OPENPAY_PRIVATE_KEY']
     $openpaySession  = $envVars['LOCAL_OPENPAY_DEVICE_SESSION_ID']
 
-    if ((Test-LooksLikeOpenPayPrivateKey $openpayMerchant) -and (Test-LooksLikeOpenPayMerchantId $openpayKey)) {
-        Write-Host '    [!!] Detected legacy .env.local values with OpenPay Merchant ID and Private Key swapped - normalizing file.' -ForegroundColor Yellow
-        $originalMerchant = $openpayMerchant
-        $openpayMerchant = $openpayKey
-        $openpayKey = $originalMerchant
+    $normalizedEnvCredentials = Normalize-OpenPayCredentials `
+        -MerchantId $openpayMerchant `
+        -PrivateKey $openpayKey `
+        -SourceLabel '.env.local'
 
+    $openpayMerchant = $normalizedEnvCredentials.MerchantId
+    $openpayKey = $normalizedEnvCredentials.PrivateKey
+
+    if ($normalizedEnvCredentials.WasSwapped) {
         Write-EnvLocal `
             -Path $envLocal `
             -SqlPassword $sqlPassword `
@@ -171,8 +199,16 @@ else {
             $kvKey      = az keyvault secret show --vault-name kv-orderprocessing-dev --name 'OpenPay--PrivateKey'  --query value -o tsv 2>$null
             if ($kvMerchant -and $kvKey -and
                 $kvMerchant -notmatch '^set-openpay' -and $kvKey -notmatch '^set-openpay') {
-                $openpayMerchant = $kvMerchant.Trim()
-                $openpayKey      = $kvKey.Trim()
+                $normalizedKvCredentials = Normalize-OpenPayCredentials `
+                    -MerchantId $kvMerchant.Trim() `
+                    -PrivateKey $kvKey.Trim() `
+                    -SourceLabel 'Key Vault kv-orderprocessing-dev'
+
+                $openpayMerchant = $normalizedKvCredentials.MerchantId
+                $openpayKey      = $normalizedKvCredentials.PrivateKey
+                if ($normalizedKvCredentials.WasSwapped) {
+                    Write-Host '    [!!] kv-orderprocessing-dev still stores OpenPay--MerchantId and OpenPay--PrivateKey under the wrong names. Local setup will continue with normalized values, but the Key Vault source should be corrected separately.' -ForegroundColor Yellow
+                }
                 Write-Done 'OpenPay credentials fetched from kv-orderprocessing-dev'
             } else {
                 Write-Host '  [--]  Key Vault returned placeholder values — falling back to prompt.' -ForegroundColor DarkGray
