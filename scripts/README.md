@@ -119,6 +119,45 @@ Deterministic Azure payment verification for the `verify-db-logs` workflow.
 - If App Insights returns no scoped payment rows but you already know the logical prefix, rerun with `-RunPrefix` and the script will continue with DB verification while marking log-side checks as inconclusive.
 - The pass/fail summary still scopes UI checks to callback evidence. Richer browser-originated `ui_payment_*` telemetry is available in App Insights for deeper triage and is documented in `docs/runbooks/payment-db-verification.md`.
 
+### verify-payment-run-physical.ps1
+
+Deterministic local/Docker payment verification for the `verify-db-logs` workflow.
+
+**Purpose**:
+- Reads today's physical API and UI log files in one pass
+- Resolves the logical run prefix automatically when only one prefix exists for the day
+- Queries both local SQL databases directly without ad hoc `sqlcmd` parsing in the terminal
+- Produces the same consolidated API -> UI -> DB pass/fail report shape used by the Azure verifier
+
+**Usage**:
+```powershell
+# Verify today's Docker dev/http run
+.\scripts\verify-payment-run-physical.ps1 -Runtime docker -Environment dev -Profile http
+
+# Verify a specific local run prefix
+.\scripts\verify-payment-run-physical.ps1 -Runtime local -Profile http -RunPrefix OR-1-9thApr
+
+# Emit structured JSON for later processing
+.\scripts\verify-payment-run-physical.ps1 -Runtime docker -Environment dev -Profile http -OutputFormat Json
+```
+
+**Parameters**:
+- `Runtime` (optional): `local` or `docker` (default: `local`)
+- `Environment` (optional): `dev`, `stg`, or `prod` (default: `dev`); `local` supports only `dev`
+- `Profile` (optional): `http` or `https` (default: `http`)
+- `RunPrefix` (optional): logical run prefix such as `OR-1-9thApr`
+- `OutputFormat` (optional): `Table` or `Json` (default: `Table`)
+
+**Prerequisites**:
+- Today's physical log files exist under `logs/`
+- `Resources/Docker/.env.local` exists for Docker SQL authentication
+- SQL Server is reachable on `localhost`
+
+**Notes**:
+- This script is physical-log only. Azure verification continues to use `verify-payment-run-azure.ps1`.
+- If multiple run prefixes exist for the day, the script stops and asks you to rerun with `-RunPrefix`.
+- The pass/fail summary scopes UI callback evidence to 3DS-enabled tenants only.
+
 ### test-verify-payment-run-azure.ps1
 
 Regression runner for `verify-payment-run-azure.ps1`.
@@ -147,6 +186,55 @@ Regression runner for `verify-payment-run-azure.ps1`.
 - This is a repo-style script validation runner, not a Pester suite.
 - The default `stg-pass` scenario depends on an unambiguous live staging run for the current day. If none exists, the runner skips the scenario and tells you to supply `-StagingRunPrefix`.
 - The `dev-fallback` scenario is opt-in because it depends on a known logical prefix from an existing dev Azure run.
+
+### Payment verification coverage strategy
+
+The payment verifier intentionally uses two entry scripts:
+- `verify-payment-run-physical.ps1` for `local` and `docker`
+- `verify-payment-run-azure.ps1` for `azure`
+
+They stay separate because the acquisition paths are different:
+- physical mode reads file-based API/UI evidence plus local SQL
+- Azure mode reads App Insights, Key Vault, firewall, and Azure SQL
+
+What must stay aligned across both scripts is the output contract:
+- identical check names where the same business rule is being evaluated
+- the same charge-correlation shape
+- the same pass/fail semantics for 3DS callback expectations
+
+Current coverage model:
+- `test-verify-payment-run-azure.ps1` is the deterministic regression runner for the Azure path
+- `verify-payment-run-physical.ps1` is currently validated by executing the script directly against known local or Docker payment runs
+- if report-shape or pass/fail logic begins to drift in both scripts, add a narrow shared helper for contract construction only; do not merge the acquisition paths
+
+### Payment verification command matrix
+
+Use these commands after at least one payment cycle has completed for the target runtime.
+
+```powershell
+# Local dev (dotnet run / VS)
+.\scripts\verify-payment-run-physical.ps1 -Runtime local -Environment dev -Profile http
+
+# Docker dev
+.\scripts\verify-payment-run-physical.ps1 -Runtime docker -Environment dev -Profile http
+
+# Docker staging-style
+.\scripts\verify-payment-run-physical.ps1 -Runtime docker -Environment stg -Profile http
+
+# Docker prod-style
+.\scripts\verify-payment-run-physical.ps1 -Runtime docker -Environment prod -Profile http
+
+# Azure dev
+.\scripts\verify-payment-run-azure.ps1 -Environment dev
+
+# Azure staging
+.\scripts\verify-payment-run-azure.ps1 -Environment stg
+
+# Azure prod
+.\scripts\verify-payment-run-azure.ps1 -Environment prod
+```
+
+Add `-RunPrefix <OR-prefix>` when more than one payment run exists for the day. Add `-OutputFormat Json` when you want structured output for follow-up checks.
 
 ### setup-github-app-from-manifest.ps1
 

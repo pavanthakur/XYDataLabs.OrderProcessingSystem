@@ -79,6 +79,30 @@ dotnet test .\tests\XYDataLabs.OrderProcessingSystem.Integration.Tests\XYDataLab
 dotnet test .\tests\XYDataLabs.OrderProcessingSystem.Integration.Tests\XYDataLabs.OrderProcessingSystem.Integration.Tests.csproj --no-build --logger "console;verbosity=minimal"
 ```
 
+### **Payment Verification Commands**
+```powershell
+# Local dev runtime
+.\scripts\verify-payment-run-physical.ps1 -Runtime local -Environment dev -Profile http
+
+# Docker runtimes
+.\scripts\verify-payment-run-physical.ps1 -Runtime docker -Environment dev -Profile http
+.\scripts\verify-payment-run-physical.ps1 -Runtime docker -Environment stg -Profile http
+.\scripts\verify-payment-run-physical.ps1 -Runtime docker -Environment prod -Profile http
+
+# Azure runtimes
+.\scripts\verify-payment-run-azure.ps1 -Environment dev
+.\scripts\verify-payment-run-azure.ps1 -Environment stg
+.\scripts\verify-payment-run-azure.ps1 -Environment prod
+
+# Azure regression runner
+.\scripts\test-verify-payment-run-azure.ps1
+```
+
+Notes:
+- Add `-RunPrefix <OR-prefix>` when more than one payment run exists for the day.
+- Add `-OutputFormat Json` when you want machine-readable output.
+- Physical and Azure verification stay in separate scripts by design; keep the output contract aligned, not the acquisition code.
+
 ### **Exit Code Interpretation**
 - **Exit Code 0** = ✅ PASS - Safe to proceed
 - **Exit Code 1** = ❌ FAIL - Fix issues before committing

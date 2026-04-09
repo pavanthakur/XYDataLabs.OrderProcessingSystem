@@ -65,7 +65,7 @@ Every inbound request follows exactly one of these outcomes:
 2. Unknown `X-Tenant-Code` -> HTTP 400 and stop immediately.
 3. Resolved tenant with `Suspended` or `Decommissioned` status -> HTTP 403 and stop immediately.
 4. Resolved `Active` tenant -> continue with canonical tenant context.
-5. The only approved headerless bootstrap path is `GET /api/v1/info/runtime-configuration`.
+5. Approved headerless operational paths are `GET /api/v1/info/runtime-configuration`, `GET /health`, `GET /health/live`, and `GET /health/ready`.
 6. UI/browser code must acquire the active tenant code from API runtime configuration, never from UI-local configuration.
 
 Required runtime contract:
@@ -315,11 +315,12 @@ The UI must bootstrap tenant context from API-owned runtime configuration.
 Rules:
 
 1. The API owns the active tenant bootstrap contract.
-2. The approved endpoint is `GET /api/v1/info/runtime-configuration`.
+2. The approved UI bootstrap endpoint is `GET /api/v1/info/runtime-configuration`.
 3. That endpoint may be called without `X-Tenant-Code`.
-4. No other business endpoint may bypass tenant middleware for UI convenience.
-5. UI-local configuration such as `UI:DefaultTenantCode` must not be used as the runtime tenant source.
-6. The runtime configuration payload may include non-sensitive bootstrap metadata only, such as `ActiveTenantCode` and `TenantHeaderName`.
+4. Operational health endpoints `GET /health`, `GET /health/live`, and `GET /health/ready` may also bypass tenant middleware.
+5. No other business endpoint may bypass tenant middleware for UI convenience.
+6. UI-local configuration such as `UI:DefaultTenantCode` must not be used as the runtime tenant source.
+7. The runtime configuration payload may include non-sensitive bootstrap metadata only, such as `ActiveTenantCode` and `TenantHeaderName`.
 
 ## 14. Quick Reference
 
@@ -330,6 +331,7 @@ Rules:
 | Suspended or decommissioned tenant | HTTP 403 |
 | Resolved active tenant | continue |
 | Headerless bootstrap endpoint | `GET /api/v1/info/runtime-configuration` |
+| Headerless operational endpoints | `GET /health`, `GET /health/live`, `GET /health/ready` |
 | UI tenant source | API runtime configuration |
 | Internal tenant key | `Tenant.Id` |
 | External tenant key | `Tenant.ExternalId` |
