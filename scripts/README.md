@@ -39,6 +39,7 @@ This directory contains automation scripts for configuring and deploying the Ord
 - Visual Studio F5 on `http`/`https` profile → ready, no prompts
 - Docker: `.\Resources\Docker\start-docker.ps1 -Environment dev -Profile http`
 - To use real OpenPay sandbox credentials: `setup-local.ps1` tries Azure Key Vault first, then prompts interactively. RedirectUrl is auto-resolved from `ApiSettings:UI`.
+- If legacy local values or dev Key Vault secret names are swapped (`MerchantId`/`PrivateKey`), `setup-local.ps1` normalizes them before writing `.env.local` and API user-secrets.
 
 **Idempotent**: Safe to re-run at any time — skips steps already completed.
 
