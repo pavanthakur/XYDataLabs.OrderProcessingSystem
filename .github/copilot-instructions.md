@@ -363,7 +363,7 @@ This matrix shows which instructions auto-attach for common file locations:
 | SQL Local Access | `/XYDataLabs-sql-local-access` | Opens or closes Azure SQL firewall for local IP after a fresh bootstrap/deploy. Prints SSMS connection details. |
 | Context Audit | `/XYDataLabs-context-audit` | Detects stale AI context by diffing memory files and copilot-instructions against the actual codebase. Run periodically or after major refactors. |
 
-| Log + DB Correlation | `/XYDataLabs-verify-db-logs` | After any payment run on any env/profile — script-first by runtime: calls `scripts/verify-payment-run-physical.ps1` for docker/local or `scripts/verify-payment-run-azure.ps1` for azure, then falls back to manual investigation only when needed. |
+| Log + DB Correlation | `/XYDataLabs-verify-db-logs` | After any payment run on any env/profile — script-first by runtime: calls `scripts/verify-payment-run-physical.ps1` for docker/local or `scripts/verify-payment-run-azure.ps1` for azure, returns the formatted table summary by default, and falls back to manual investigation only when needed. |
 | ADR Validation | `/XYDataLabs-validate-adrs` | Before committing changes to any ADR — runs frontmatter schema check + markdownlint locally; documents how to toggle the CI counterpart. |
 
 > **Quick prompt tip:** `Ctrl+Shift+I` → select Agent mode → type `/XYDataLabs-new-feature`, `/XYDataLabs-completion-check`, `/XYDataLabs-docker-start`, `/XYDataLabs-setup-local`, `/XYDataLabs-day-complete`, `/XYDataLabs-sql-local-access`, `/XYDataLabs-context-audit`, `/XYDataLabs-verify-db-logs`, or `/XYDataLabs-validate-adrs`

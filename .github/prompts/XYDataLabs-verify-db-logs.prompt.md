@@ -74,6 +74,10 @@ Azure resource names: `ai-orderprocessing-{envSuffix}` in `rg-orderprocessing-{e
 
 After resolving `env`, `profile`, and `runtime`, prefer the deterministic script path instead of rebuilding the verification flow manually inside chat.
 
+- Default to the verifier's human-readable table output for the user-facing result.
+- Do not use `-OutputFormat Json` unless the user explicitly asks for machine-readable output or you need temporary internal parsing.
+- If you use JSON internally to disambiguate or inspect details, still present the final answer as the same formatted pass/fail table plus the key findings.
+
 - If `runtime = docker` or `runtime = local`, run:
 ```powershell
 .\scripts\verify-payment-run-physical.ps1 -Runtime <local|docker> -Environment <env> -Profile <profile>
@@ -431,6 +435,8 @@ Output a consolidated pass/fail table:
 | Q9-B TenantC bleed | 0 | … | ✅/❌ |
 | API log → DB charge IDs | all match | … | ✅/❌ |
 | UI log → callbacks present where expected | 3DS tenants only | … | ✅/❌ |
+
+When the verifier script is used, mirror its table-style summary in the chat response. Only surface raw JSON when the user explicitly asks for JSON or machine-readable output.
 
 > **Scope note:** This runbook covers `CardTransactions` and `TransactionStatusHistories` only. `PayinLog` and `PayinLogDetails` tables are intentionally out of scope here — they require the full diagnostic query set. See `docs/runbooks/payment-db-verification.md` for Q1, Q3, Q4, Q6, Q6a, Q7 and the PayinLog queries.
 
