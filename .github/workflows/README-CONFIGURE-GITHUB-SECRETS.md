@@ -508,13 +508,15 @@ configure-github-secrets.yml:
 
 **Common Causes:**
 1. Environment doesn't exist
-2. Missing "Environments: write" permission
-3. Repository access restrictions
+2. Missing `Administration: write` permission on the GitHub App when the workflow tries to create a missing environment
+3. Updated app permissions were not re-approved on the installation
+4. Repository access restrictions
 
 **Solutions:**
-1. Create environment manually or let workflow create it
-2. Add "Environments: write" permission to GitHub App
-3. Verify app has access to repository
+1. Create the environment manually in `Settings -> Environments` and re-run
+2. Add `Administration: write` permission to the GitHub App if you want the workflow to auto-create missing environments
+3. Re-approve the updated permission set on the app installation
+4. Verify app has access to repository
 
 ### Missing OIDC Credentials
 

@@ -23,7 +23,7 @@ This workflow (`azure-initial-setup.yml`) handles all **one-time prerequisite se
    - **Actions**: write ✅
    - **Secrets**: write ✅
    - **Workflows**: write ✅
-   - **Environments**: write ✅
+   - **Administration**: write ✅ if you want the workflow to auto-create missing `staging` / `prod` environments
    - **Contents**: read ✅
    - **Metadata**: read ✅
 2. Generate and download the private key (`.pem` file)
@@ -31,6 +31,8 @@ This workflow (`azure-initial-setup.yml`) handles all **one-time prerequisite se
 4. Add two repository secrets: `APP_ID` (numeric app ID) and `APP_PRIVATE_KEY` (full `.pem` contents)
 
 See [quick-setup-github-app.md](../../docs/guides/configuration/quick-setup-github-app.md) for the complete walkthrough.
+
+If you do not want to grant `Administration: write`, create the `dev`, `staging`, and `prod` GitHub environments manually before running Phase 1b.
 
 > **`APP_INSTALLATION_ID` is not required** — it is auto-discovered at runtime.
 
