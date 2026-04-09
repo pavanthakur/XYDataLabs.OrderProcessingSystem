@@ -21,7 +21,7 @@ namespace XYDataLabs.OpenPayAdapter
             ResiliencePipelineProvider<string> pipelineProvider)
         {
             _logger = logger;
-            _openpayApi = new OpenpayAPI(config.Value.MerchantId, config.Value.PrivateKey, config.Value.IsProduction);
+            _openpayApi = new OpenpayAPI(config.Value.PrivateKey, config.Value.MerchantId, config.Value.IsProduction);
             _pipeline = pipelineProvider.GetPipeline("openpay");
         }
 
