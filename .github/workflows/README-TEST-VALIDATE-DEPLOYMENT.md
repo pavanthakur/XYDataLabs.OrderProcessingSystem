@@ -137,6 +137,7 @@ Tests validation scripts directly by executing them in sequence:
 #### 2. `test-reusable-workflow` (Integration Testing)
 Tests the actual reusable validation workflow used by deployments:
 - Calls `validate-deployment.yml` as a reusable workflow
+- Relies on the target GitHub environment for `AZUREAPPSERVICE_*` secrets
 - Tests with same parameters as actual deployments
 - Validates end-to-end integration
 - Skipped when `test-all-environments: true`

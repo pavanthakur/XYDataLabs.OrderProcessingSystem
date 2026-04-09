@@ -60,10 +60,6 @@ jobs:
       run-whatif: true
       verify-oidc: false
       check-config: true   # SharedSettings structural drift is now a hard gate (MissingKeyGroups=0 required; Diffs are expected per-env)
-    secrets:
-      AZURE_CLIENT_ID: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
-      AZURE_TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
-      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
 
   validate:
     name: Bicep What-If (Dry Run)
