@@ -503,20 +503,24 @@ configure-github-secrets.yml:
 
 **Symptom:**
 ```
+❌ Environment 'staging' does not exist
+```
+or
+```
 ❌ Failed to set environment secret
 ```
 
 **Common Causes:**
-1. Environment doesn't exist
-2. Missing `Administration: write` permission on the GitHub App when the workflow tries to create a missing environment
-3. Updated app permissions were not re-approved on the installation
-4. Repository access restrictions
+1. An `ensure-env-*` job (dev/staging/prod) failed or was skipped unexpectedly, so the environment was not created before secrets were written
+2. GitHub App missing `Secrets: write` permission
+3. Repository access restrictions
 
 **Solutions:**
-1. Create the environment manually in `Settings -> Environments` and re-run
-2. Add `Administration: write` permission to the GitHub App if you want the workflow to auto-create missing environments
-3. Re-approve the updated permission set on the app installation
-4. Verify app has access to repository
+1. Re-run the workflow — the `ensure-env-*` jobs will retry environment creation via the job reference mechanism (no `Administration: write` needed)
+2. Verify the GitHub App has `Secrets: write` at `https://github.com/settings/apps`
+3. Verify app has access to the repository at `https://github.com/settings/installations`
+
+> **How environment auto-creation works**: GitHub automatically creates an environment when a workflow job references it via `environment: <name>`. The `ensure-env-dev/staging/prod` jobs use this mechanism — no API call, no elevated permissions.
 
 ### Missing OIDC Credentials
 

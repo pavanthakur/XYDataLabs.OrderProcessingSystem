@@ -211,7 +211,6 @@ jobs:
               Write-Host "        2. App name: $appName (or your chosen name)" -ForegroundColor White
               Write-Host "        3. Set REQUIRED permissions:" -ForegroundColor White
               Write-Host "           • Actions: write   • Secrets: write   • Workflows: write" -ForegroundColor Gray
-              Write-Host "           • Administration: write (for auto-creating missing environments)" -ForegroundColor Gray
               Write-Host "           • Contents: read   • Metadata: read" -ForegroundColor Gray
               Write-Host "        4. Generate a private key (saves a .pem file)" -ForegroundColor White
               Write-Host "        5. Note the App ID from the General settings page" -ForegroundColor White
@@ -1053,13 +1052,60 @@ jobs:
           }
           "" >> $env:GITHUB_STEP_SUMMARY
 
+  # These three jobs exist solely to ensure each GitHub environment exists before
+  # Phase 1b tries to write secrets into it. A workflow job that references an
+  # environment via `environment:` causes GitHub to auto-create it if it is missing —
+  # no Administration: write permission required. The jobs contain a single trivial
+  # step; all real work happens in configure-secrets.
+  ensure-env-dev:
+    name: Ensure dev Environment Exists
+    if: |
+      github.event_name == 'workflow_dispatch' &&
+      inputs.configureSecrets &&
+      (inputs.environment == 'dev' || inputs.environment == 'all')
+    needs: [validate-inputs]
+    runs-on: windows-latest
+    environment: dev
+    steps:
+      - name: Environment Ready
+        run: Write-Host "✅ dev environment exists (auto-created by GitHub if needed)" -ForegroundColor Green
+
+  ensure-env-staging:
+    name: Ensure staging Environment Exists
+    if: |
+      github.event_name == 'workflow_dispatch' &&
+      inputs.configureSecrets &&
+      (inputs.environment == 'staging' || inputs.environment == 'all')
+    needs: [validate-inputs]
+    runs-on: windows-latest
+    environment: staging
+    steps:
+      - name: Environment Ready
+        run: Write-Host "✅ staging environment exists (auto-created by GitHub if needed)" -ForegroundColor Green
+
+  ensure-env-prod:
+    name: Ensure prod Environment Exists
+    if: |
+      github.event_name == 'workflow_dispatch' &&
+      inputs.configureSecrets &&
+      (inputs.environment == 'prod' || inputs.environment == 'all')
+    needs: [validate-inputs]
+    runs-on: windows-latest
+    environment: prod
+    steps:
+      - name: Environment Ready
+        run: Write-Host "✅ prod environment exists (auto-created by GitHub if needed)" -ForegroundColor Green
+
   configure-secrets:
     name: Configure GitHub Secrets
-    needs: [validate-inputs, setup-oidc]
+    needs: [validate-inputs, setup-oidc, ensure-env-dev, ensure-env-staging, ensure-env-prod]
     if: |
       !cancelled() &&
       needs.validate-inputs.result == 'success' &&
       (needs.setup-oidc.result == 'success' || needs.setup-oidc.result == 'skipped') &&
+      (needs.ensure-env-dev.result == 'success' || needs.ensure-env-dev.result == 'skipped') &&
+      (needs.ensure-env-staging.result == 'success' || needs.ensure-env-staging.result == 'skipped') &&
+      (needs.ensure-env-prod.result == 'success' || needs.ensure-env-prod.result == 'skipped') &&
       inputs.configureSecrets
     runs-on: windows-latest
     steps:
@@ -1437,6 +1483,9 @@ jobs:
               exit 1
             }
 
+            # Verify environment exists. The ensure-env-* jobs above should have caused
+            # GitHub to auto-create it. If this check still fails, it means a prior job
+            # failed or was skipped unexpectedly.
             Write-Host "    Checking if environment exists..." -ForegroundColor Gray
             $checkOutput = gh api -H 'Accept: application/vnd.github+json' "repos/$owner/$repo/environments/$env_name" 2>&1
             $checkCode = $LASTEXITCODE
@@ -1444,19 +1493,13 @@ jobs:
             if ($checkCode -eq 0) {
               Write-Host "      ✅ Environment exists" -ForegroundColor Green
             } else {
-              Write-Host "      ➕ Environment not found (exit $checkCode) — creating..." -ForegroundColor Yellow
-              $createOutput = gh api --method PUT -H 'Accept: application/vnd.github+json' "repos/$owner/$repo/environments/$env_name" 2>&1
-              $createCode = $LASTEXITCODE
-              if ($createCode -eq 0) {
-                Write-Host "      ✅ Environment '$env_name' created" -ForegroundColor Green
-              } else {
-                Write-Host "      ❌ Could not create environment '$env_name' (exit $createCode)" -ForegroundColor Red
-                Write-Host "         API response: $createOutput" -ForegroundColor Red
-                $totalFail += 3
-                $failedEnvs += $env_name
-                Write-Host ""
-                continue
-              }
+              Write-Host "      ❌ Environment '$env_name' does not exist (exit $checkCode)" -ForegroundColor Red
+              Write-Host "         This is unexpected — the ensure-env-$env_name job should have created it." -ForegroundColor Yellow
+              Write-Host "         Check whether the ensure-env-$env_name job succeeded in this run." -ForegroundColor Yellow
+              $totalFail += 3
+              $failedEnvs += $env_name
+              Write-Host ""
+              continue
             }
 
             $secretsToSet = @{
