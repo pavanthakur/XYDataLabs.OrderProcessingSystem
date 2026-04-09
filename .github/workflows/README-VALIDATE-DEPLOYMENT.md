@@ -36,11 +36,9 @@ jobs:
       verify-oidc: false
       check-config: true
       oidc-app-name: 'GitHub-Actions-OIDC'  # Optional: use custom app name if needed
-    secrets:
-      AZURE_CLIENT_ID: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
-      AZURE_TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
-      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
 ```
+
+The reusable workflow reads `AZUREAPPSERVICE_*` directly from the target GitHub environment. No caller-side secret mapping is required.
 
 ## Inputs
 
@@ -52,13 +50,13 @@ jobs:
 | `check-config` | boolean | No | true | Validate sharedsettings consistency |
 | `oidc-app-name` | string | No | GitHub-Actions-OIDC | Azure AD App Registration name for OIDC |
 
-## Secrets
+## Environment Secrets
 
-| Secret | Description |
-|--------|-------------|
-| `AZURE_CLIENT_ID` | Azure AD application (service principal) client ID |
-| `AZURE_TENANT_ID` | Azure AD tenant ID |
-| `AZURE_SUBSCRIPTION_ID` | Target Azure subscription ID |
+The target GitHub environment must contain:
+
+- `AZUREAPPSERVICE_CLIENTID`
+- `AZUREAPPSERVICE_TENANTID`
+- `AZUREAPPSERVICE_SUBSCRIPTIONID`
 
 ## Exit Codes & Failure Handling
 

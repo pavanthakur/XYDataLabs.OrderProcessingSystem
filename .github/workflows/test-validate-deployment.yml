@@ -232,10 +232,6 @@ jobs:
       verify-oidc: ${{ inputs.verify-oidc != false }}
       check-config: ${{ inputs.check-config != false }}
       oidc-app-name: ${{ inputs.oidc-app-name || 'GitHub-Actions-OIDC' }}
-    secrets:
-      AZURE_CLIENT_ID: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
-      AZURE_TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
-      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
 
   summary:
     name: Test Summary

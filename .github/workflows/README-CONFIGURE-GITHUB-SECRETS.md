@@ -8,11 +8,11 @@ This workflow handles GitHub App setup and secret configuration. It was separate
 
 This workflow is the intersection of two completely independent authentication systems. Understanding the difference is essential for troubleshooting.
 
-### GitHub App Token — writes GitHub secrets
+### GitHub App Token — writes GitHub environment secrets
 
-The GitHub App (`APP_ID` + `APP_PRIVATE_KEY`) is used **only to write `AZUREAPPSERVICE_*` secrets into GitHub**. 
+The GitHub App (`APP_ID` + `APP_PRIVATE_KEY`) is used **only to write `AZUREAPPSERVICE_*` secrets into GitHub environments**.
 
-- `GITHUB_TOKEN` (the built-in workflow token) does **not** have permission to write repository secrets — this is a GitHub security constraint.
+- `GITHUB_TOKEN` (the built-in workflow token) does **not** have permission to write environment secrets — this is a GitHub security constraint.
 - A GitHub App installation token (generated from `APP_ID` + `APP_PRIVATE_KEY`) **does** have `Secrets: write` permission.
 - The token is short-lived (1 hour), auto-rotates, and never expires like a PAT would.
 - **The GitHub App token never touches Azure.** It is purely a GitHub API credential.
@@ -49,11 +49,10 @@ The **only** place where a human enters credentials to generate an Azure token i
 
 Automates:
 - GitHub App setup guidance and validation
-- Repository secret configuration (Azure OIDC credentials: `AZUREAPPSERVICE_CLIENTID`, `AZUREAPPSERVICE_TENANTID`, `AZUREAPPSERVICE_SUBSCRIPTIONID`)
-- Environment secret configuration (dev, staging, prod)
+- Environment secret configuration (Azure OIDC credentials for dev, staging, and prod)
 - Configuration validation
 
-> **Scope**: This workflow configures OIDC credentials and the `OIDC_SP_OBJECT_ID` secret only. It does **not** set OpenPay secrets. OpenPay secrets (`OPENPAY_MERCHANT_ID`, `OPENPAY_PRIVATE_KEY`, `OPENPAY_DEVICE_SESSION_ID`) must be added manually in GitHub Settings → Secrets → Actions — workflow inputs are not a secure channel for credentials (they appear in plain text in workflow logs).
+> **Scope**: This workflow configures OIDC environment credentials and the `OIDC_SP_OBJECT_ID` secret only. It does **not** set OpenPay secrets. OpenPay secrets (`OPENPAY_MERCHANT_ID`, `OPENPAY_PRIVATE_KEY`, `OPENPAY_DEVICE_SESSION_ID`) must be added manually in GitHub Settings → Environments — workflow inputs are not a secure channel for credentials (they appear in plain text in workflow logs).
 
 ## Triggers
 
@@ -122,18 +121,13 @@ Provides GitHub App setup guidance and validates existing configuration.
 - When APP_ID or APP_PRIVATE_KEY secrets are missing
 
 ### 3. configure-secrets
-Configures repository and environment secrets using GitHub App authentication.
+Configures environment secrets using GitHub App authentication.
 
 **Prerequisites:**
 - GitHub App must be configured (APP_ID and APP_PRIVATE_KEY secrets)
 - Azure OIDC credentials must be provided (via inputs)
 
 **Configures:**
-- **Repository secrets:**
-  - AZUREAPPSERVICE_CLIENTID
-  - AZUREAPPSERVICE_TENANTID
-  - AZUREAPPSERVICE_SUBSCRIPTIONID
-
 - **Environment secrets** (per environment):
   - AZUREAPPSERVICE_CLIENTID
   - AZUREAPPSERVICE_TENANTID
@@ -146,7 +140,6 @@ Configures repository and environment secrets using GitHub App authentication.
 **Actions:**
 - Validates OIDC credentials are provided
 - Generates GitHub App installation token
-- Sets repository-level secrets
 - Creates environments if they don't exist
 - Sets environment-specific secrets
 - Reports success/failure for each secret
@@ -183,7 +176,7 @@ outputs:
 - `APP_ID`: GitHub App ID
 - `APP_PRIVATE_KEY`: GitHub App private key (PEM format)
 
-### Automatically Configured
+### Automatically Configured Environment Secrets
 - `AZUREAPPSERVICE_CLIENTID`: Azure OIDC Client ID
 - `AZUREAPPSERVICE_TENANTID`: Azure Tenant ID
 - `AZUREAPPSERVICE_SUBSCRIPTIONID`: Azure Subscription ID

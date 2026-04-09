@@ -191,7 +191,7 @@ steps:
       subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
 ```
 
-Required repository secrets (set by Azure Initial Setup): `AZUREAPPSERVICE_CLIENTID`, `AZUREAPPSERVICE_TENANTID`, `AZUREAPPSERVICE_SUBSCRIPTIONID`.
+Required GitHub environment secrets (set by Azure Initial Setup): `AZUREAPPSERVICE_CLIENTID`, `AZUREAPPSERVICE_TENANTID`, `AZUREAPPSERVICE_SUBSCRIPTIONID`.
 
 Required for GitHub App token (set in Phase 0 of Azure Initial Setup): `APP_ID`, `APP_PRIVATE_KEY`.
 
@@ -255,16 +255,16 @@ via the `ASPNETCORE_ENVIRONMENT` variable.
 |--------|-------|---------|
 | `APP_ID` | Repository | GitHub App numeric ID (for token generation) |
 | `APP_PRIVATE_KEY` | Repository | GitHub App private key (.pem content) |
-| `AZUREAPPSERVICE_CLIENTID` | Repository + Environments | OIDC Client ID for Azure login |
-| `AZUREAPPSERVICE_TENANTID` | Repository + Environments | Azure Tenant ID |
-| `AZUREAPPSERVICE_SUBSCRIPTIONID` | Repository + Environments | Azure Subscription ID |
-| `OPENPAY_MERCHANT_ID` | Repository | OpenPay merchant ID — **set manually** in GitHub Settings → Secrets → Actions by an authorized person; bootstrap validates presence before proceeding |
-| `OPENPAY_PRIVATE_KEY` | Repository | OpenPay private key — **set manually** in GitHub Settings → Secrets → Actions by an authorized person; bootstrap validates presence before proceeding |
-| `OPENPAY_DEVICE_SESSION_ID` | Repository | OpenPay device session ID — **set manually** in GitHub Settings → Secrets → Actions by an authorized person; bootstrap validates presence before proceeding |
+| `AZUREAPPSERVICE_CLIENTID` | Environments | OIDC Client ID for Azure login |
+| `AZUREAPPSERVICE_TENANTID` | Environments | Azure Tenant ID |
+| `AZUREAPPSERVICE_SUBSCRIPTIONID` | Environments | Azure Subscription ID |
+| `OPENPAY_MERCHANT_ID` | Environments | OpenPay merchant ID — **set manually** in GitHub Settings → Environments by an authorized person; bootstrap validates the target environment before proceeding |
+| `OPENPAY_PRIVATE_KEY` | Environments | OpenPay private key — **set manually** in GitHub Settings → Environments by an authorized person; bootstrap validates the target environment before proceeding |
+| `OPENPAY_DEVICE_SESSION_ID` | Environments | OpenPay device session ID — **set manually** in GitHub Settings → Environments by an authorized person; bootstrap validates the target environment before proceeding |
 
 > **Note**: `APP_INSTALLATION_ID` is **not** required — it is auto-discovered at runtime.
 
-> **Note**: OpenPay secrets must be added manually in GitHub Settings → Secrets → Actions. Workflow dispatch inputs are not masked in logs and are not a secure channel for secrets. The bootstrap workflow validates that all three OpenPay secrets are present before running infrastructure provisioning; if any are missing it fails with an actionable error and a link to the Settings page.
+> **Note**: OpenPay secrets must be added manually in GitHub Settings → Environments. Workflow dispatch inputs are not masked in logs and are not a secure channel for secrets. The target bootstrap job validates that all three OpenPay secrets are present in the selected environment before running infrastructure provisioning; if any are missing it fails with an actionable error and a link to the Environments page.
 
 ### Key Vault integration
 

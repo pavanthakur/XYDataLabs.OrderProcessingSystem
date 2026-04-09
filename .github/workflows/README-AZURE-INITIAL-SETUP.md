@@ -17,7 +17,7 @@ This workflow (`azure-initial-setup.yml`) handles all **one-time prerequisite se
 ## ⚠️ Prerequisites (Phase 0 — Manual, One-Time)
 
 > **A GitHub App is required before Phase 1b can succeed.**
-> `GITHUB_TOKEN` does NOT have permission to write repository secrets — only a GitHub App installation token can write `AZUREAPPSERVICE_*` secrets.
+> `GITHUB_TOKEN` does NOT have permission to write environment secrets — only a GitHub App installation token can write `AZUREAPPSERVICE_*` secrets into the GitHub environments.
 
 1. Create a GitHub App at `https://github.com/settings/apps/new` with these permissions:
    - **Actions**: write ✅
@@ -54,7 +54,7 @@ See [quick-setup-github-app.md](../../docs/guides/configuration/quick-setup-gith
 
 After completion, proceed to the **Azure Bootstrap & Deploy** workflow for infrastructure.
 
-> ⚠️ **Before running Bootstrap**: You must also add the three OpenPay secrets manually in **GitHub Settings → Secrets → Actions** (`OPENPAY_MERCHANT_ID`, `OPENPAY_PRIVATE_KEY`, `OPENPAY_DEVICE_SESSION_ID`). These are payment credentials that must never pass through workflow inputs. The bootstrap `validate-payment-secrets` job will fail immediately with guidance if any are missing.
+> ⚠️ **Before running Bootstrap**: You must also add the three OpenPay secrets manually to each target **GitHub environment** (`OPENPAY_MERCHANT_ID`, `OPENPAY_PRIVATE_KEY`, `OPENPAY_DEVICE_SESSION_ID`). These are payment credentials that must never pass through workflow inputs. The target bootstrap job will fail immediately with guidance if any are missing.
 
 ### Additional Entra Permission For SQL Managed Identity Automation
 
@@ -90,7 +90,7 @@ If the same error still appears after propagation, add `Directory.Read.All`, gra
 | `setupGitHubApp` | boolean | `true` | **Phase 0** — Shows GitHub App setup instructions if `APP_ID`/`APP_PRIVATE_KEY` are missing. Does not create the app. |
 | `setupOidc` | boolean | `true` | **Phase 1a** — Creates Microsoft Entra ID App Registration + OIDC federated credentials. First run requires device-code login. |
 | `oidcAppName` | string | `GitHub-Actions-OIDC` | Name of the Azure AD App Registration to create/update. |
-| `configureSecrets` | boolean | `true` | **Phase 1b** — Writes `AZUREAPPSERVICE_*` secrets to GitHub repo + environment secrets. Requires Phase 0 complete. |
+| `configureSecrets` | boolean | `true` | **Phase 1b** — Writes `AZUREAPPSERVICE_*` secrets to GitHub environments. Requires Phase 0 complete. |
 | `githubAppName` | string | `XYDataLabsGitHubApp` | Your GitHub App name (used in instructions and validation). |
 
 ---
@@ -127,7 +127,7 @@ If the same error still appears after propagation, add `Directory.Read.All`, gra
 
 **Actions**:
 1. Generates a GitHub App installation token from `APP_ID` + `APP_PRIVATE_KEY`
-2. Writes `AZUREAPPSERVICE_CLIENTID`, `AZUREAPPSERVICE_TENANTID`, `AZUREAPPSERVICE_SUBSCRIPTIONID` as repository + environment secrets
+2. Writes `AZUREAPPSERVICE_CLIENTID`, `AZUREAPPSERVICE_TENANTID`, `AZUREAPPSERVICE_SUBSCRIPTIONID` as environment secrets for `dev`, `staging`, and `prod`
 3. Creates GitHub environments (`dev`, `staging`, `prod`) if they don't exist
 
 ### 4. `summary`
