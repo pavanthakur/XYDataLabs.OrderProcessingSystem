@@ -170,6 +170,7 @@ Repeat physical rerun note:
 
 Prompt routing note:
 - `/XYDataLabs-verify-db-logs` should call the same runtime-specific verifier script internally unless the user explicitly asks for the raw manual investigation path or the script needs debugging.
+- User-facing output should be the formatted pass/fail table first; use JSON only when the user explicitly asks for machine-readable output or when temporary parsing is needed behind the scenes.
 
 Note: For deep-dive queries (Q1, Q3, Q4, Q6, Q6a, Q7, Q8-B and per-tenant 3DS toggle), open `docs/runbooks/payment-db-verification.md`.
 
