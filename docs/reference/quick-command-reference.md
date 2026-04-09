@@ -100,7 +100,8 @@ dotnet test .\tests\XYDataLabs.OrderProcessingSystem.Integration.Tests\XYDataLab
 
 Notes:
 - Add `-RunPrefix <OR-prefix>` when more than one payment run exists for the day.
-- Add `-OutputFormat Json` when you want machine-readable output.
+- Default output is the human-readable pass/fail table.
+- Add `-OutputFormat Json` only when you want machine-readable output.
 - Physical and Azure verification stay in separate scripts by design; keep the output contract aligned, not the acquisition code.
 
 ### **Exit Code Interpretation**

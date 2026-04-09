@@ -37,6 +37,7 @@ For repeat Azure reruns, prefer the script path over manual terminal reconstruct
 ```
 
 The script performs the same App Insights + SQL correlation described below, but does it in one deterministic pass.
+Its default output is a human-readable pass/fail table. Add `-OutputFormat Json` only for machine-readable automation or deeper parsing.
 
 ## Verification entry points by runtime
 
@@ -53,6 +54,7 @@ Use the verifier that matches where the evidence lives:
 | azure prod | `./scripts/verify-payment-run-azure.ps1 -Environment prod` | Uses production App Insights and Azure SQL |
 
 Add `-RunPrefix <RUN_PREFIX>` when the script finds more than one run for the day.
+Add `-OutputFormat Json` only when you need structured machine-readable output; table output is the default operator view.
 
 ### Coverage note
 
