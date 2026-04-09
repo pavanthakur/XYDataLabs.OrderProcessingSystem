@@ -159,41 +159,13 @@ jobs:
             Write-Host "  ✅ Branch matches target environment" -ForegroundColor Green
           }
 
-          # Check OIDC secrets exist (required for all operations in this workflow)
-          Write-Host "`n  🔐 OIDC Secrets Check:" -ForegroundColor Cyan
-
-          $hasClientId       = "${{ secrets.AZUREAPPSERVICE_CLIENTID }}"       -ne ""
-          $hasTenantId       = "${{ secrets.AZUREAPPSERVICE_TENANTID }}"       -ne ""
-          $hasSubscriptionId = "${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}" -ne ""
-
-          Write-Host "    AZUREAPPSERVICE_CLIENTID      : $(if ($hasClientId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasClientId) { "Green" } else { "Red" })
-          Write-Host "    AZUREAPPSERVICE_TENANTID      : $(if ($hasTenantId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasTenantId) { "Green" } else { "Red" })
-          Write-Host "    AZUREAPPSERVICE_SUBSCRIPTIONID: $(if ($hasSubscriptionId) { '✅ Present' } else { '❌ Missing' })" -ForegroundColor $(if ($hasSubscriptionId) { "Green" } else { "Red" })
-
-          if (-not $hasClientId -or -not $hasTenantId -or -not $hasSubscriptionId) {
-            Write-Host "" -ForegroundColor Gray
-            Write-Host "    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-            Write-Host "    ❌ OIDC SECRETS MISSING — Cannot proceed!" -ForegroundColor Red
-            Write-Host "    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-            Write-Host "" -ForegroundColor Gray
-            Write-Host "    All operations in this workflow require Azure OIDC credentials." -ForegroundColor Red
-            Write-Host "    These are created by the 'Azure Initial Setup' workflow (one-time)." -ForegroundColor Yellow
-            Write-Host "" -ForegroundColor Gray
-            Write-Host "    TO FIX — Run the Azure Initial Setup workflow:" -ForegroundColor Cyan
-            Write-Host "      1. Go to Actions → 'Azure Initial Setup' → Run workflow" -ForegroundColor White
-            Write-Host "      2. All defaults are correct (environment='all', OIDC + secrets enabled)" -ForegroundColor White
-            Write-Host "      3. Click 'Run workflow' and wait for completion" -ForegroundColor White
-            Write-Host "" -ForegroundColor Gray
-            Write-Host "    After Azure Initial Setup completes, re-run this workflow." -ForegroundColor Yellow
-            Write-Host "    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-            Write-Error "OIDC secrets not configured. Run the 'Azure Initial Setup' workflow first."
-            exit 1
-          }
-          Write-Host "    ✅ All OIDC secrets present" -ForegroundColor Green
+          Write-Host "`n  🔐 Environment Secret Validation:" -ForegroundColor Cyan
+          Write-Host "    Azure OIDC and OpenPay secrets are validated inside each environment-bound" -ForegroundColor Gray
+          Write-Host "    bootstrap or cleanup job. This pre-flight step only validates inputs and branch policy." -ForegroundColor Gray
 
           Write-Host "`n" -ForegroundColor Gray
           Write-Host ("=" * 70) -ForegroundColor Gray
-          Write-Host "✅ Input validation passed - proceeding..." -ForegroundColor Green
+          Write-Host "✅ Input and branch validation passed - proceeding..." -ForegroundColor Green
           exit 0
 
       - name: Phase Readiness Pre-Flight Summary
@@ -202,7 +174,7 @@ jobs:
           Write-Host "║      PHASE READINESS PRE-FLIGHT SUMMARY (DRY-RUN CHECK)       ║" -ForegroundColor Cyan
           Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
           Write-Host ""
-          Write-Host "This step shows what will run. OIDC credentials are already validated." -ForegroundColor Gray
+          Write-Host "This step shows what will run. Environment-bound jobs validate their own secrets before touching Azure." -ForegroundColor Gray
           Write-Host ""
 
           # ── Read selected inputs ────────────────────────────────────────
@@ -221,7 +193,7 @@ jobs:
           $phase2Icon = if ($doBootstrap) { '🔵 WILL RUN' } else { '⏭️  SKIPPED' }
           Write-Host "  Phase A — Bootstrap Infrastructure : $phase2Icon" -ForegroundColor $(if ($doBootstrap) { 'Cyan' } else { 'DarkGray' })
           if ($doBootstrap) {
-            Write-Host "             └─ Azure auth: AZUREAPPSERVICE_* secrets → azure/login@v3 (OIDC) ✅" -ForegroundColor Green
+            Write-Host "             └─ Azure auth: environment-scoped AZUREAPPSERVICE_* secrets → azure/login@v3 (OIDC)" -ForegroundColor Green
             Write-Host "             └─ Deploy API: $(if ($doDeployApi) { '✅ Yes' } else { 'No' })" -ForegroundColor Gray
             Write-Host "             └─ Deploy UI : $(if ($doDeployUi)  { '✅ Yes' } else { 'No' })" -ForegroundColor Gray
           }
@@ -242,7 +214,7 @@ jobs:
           if ($doCleanup) {
             Write-Host "             └─ ⚠️  Deletes: UI App Service, API App Service, then entire Resource Group" -ForegroundColor Red
             Write-Host "             └─ All SQL, Key Vault, App Insights, ASP removed with Resource Group" -ForegroundColor Red
-            Write-Host "             └─ Azure auth: AZUREAPPSERVICE_* secrets ✅" -ForegroundColor Green
+            Write-Host "             └─ Azure auth: environment-scoped AZUREAPPSERVICE_* secrets" -ForegroundColor Green
             if ($doBootstrap) {
               Write-Host "             └─ ⚠️  WARNING: Bootstrap is also selected — avoid running both together!" -ForegroundColor Red
             }
@@ -254,76 +226,65 @@ jobs:
           Write-Host "✅ PRE-FLIGHT CHECK PASSED — All selected phases have prerequisites met." -ForegroundColor Green
           Write-Host ""
 
-  validate-payment-secrets:
-    name: Validate Payment Secrets
-    if: |
-      !cancelled() &&
-      needs.validate-inputs.result == 'success' &&
-      inputs.bootstrapInfra
-    needs: [validate-inputs]
-    runs-on: windows-latest
-    # No 'environment:' here — this job reads repo-level secrets only.
-    # When a secret is absent, GitHub passes an empty string; IsNullOrWhiteSpace catches both cases.
-    steps:
-      - name: Check OpenPay Secrets Present
-        run: |
-          $missing = @()
-          if ([string]::IsNullOrWhiteSpace('${{ secrets.OPENPAY_MERCHANT_ID }}'))       { $missing += 'OPENPAY_MERCHANT_ID' }
-          if ([string]::IsNullOrWhiteSpace('${{ secrets.OPENPAY_PRIVATE_KEY }}'))       { $missing += 'OPENPAY_PRIVATE_KEY' }
-          if ([string]::IsNullOrWhiteSpace('${{ secrets.OPENPAY_DEVICE_SESSION_ID }}')) { $missing += 'OPENPAY_DEVICE_SESSION_ID' }
-
-          if ($missing.Count -gt 0) {
-            Write-Host ""
-            Write-Host "════════════════════════════════════════════════════" -ForegroundColor Red
-            Write-Host "❌ DEPLOYMENT BLOCKED — MISSING REQUIRED GITHUB SECRETS" -ForegroundColor Red
-            Write-Host "════════════════════════════════════════════════════" -ForegroundColor Red
-            Write-Host ""
-            Write-Host "The following repository secrets are missing:" -ForegroundColor Yellow
-            $missing | ForEach-Object { Write-Host "   • $_" -ForegroundColor Red }
-            Write-Host ""
-            Write-Host "How to fix:" -ForegroundColor Cyan
-            Write-Host "  1. Go to: https://github.com/${{ github.repository }}/settings/secrets/actions" -ForegroundColor White
-            Write-Host "  2. Click 'New repository secret' for each missing secret above" -ForegroundColor White
-            Write-Host "  3. Get values from https://sandbox-dashboard.openpay.mx (sandbox)" -ForegroundColor White
-            Write-Host "     or the live Openpay dashboard (production)" -ForegroundColor White
-            Write-Host "  4. Re-run this workflow" -ForegroundColor White
-            Write-Host ""
-            Write-Host "Tip: Run 'Actions → Azure Initial Setup' first — the Summary tab shows" -ForegroundColor Gray
-            Write-Host "     OpenPay secret status and a direct link to the Settings page." -ForegroundColor Gray
-            Write-Host ""
-
-            "## ❌ Deployment Blocked — Missing OpenPay Secrets" >> $env:GITHUB_STEP_SUMMARY
-            "" >> $env:GITHUB_STEP_SUMMARY
-            "The following repository secrets must be added before bootstrap can run:" >> $env:GITHUB_STEP_SUMMARY
-            "" >> $env:GITHUB_STEP_SUMMARY
-            foreach ($s in $missing) { "- ``$s``" >> $env:GITHUB_STEP_SUMMARY }
-            "" >> $env:GITHUB_STEP_SUMMARY
-            "**How to fix:** Go to [Settings → Secrets → Actions](https://github.com/${{ github.repository }}/settings/secrets/actions) and add each secret." >> $env:GITHUB_STEP_SUMMARY
-            "" >> $env:GITHUB_STEP_SUMMARY
-            "Get values from the [OpenPay sandbox dashboard](https://sandbox-dashboard.openpay.mx) or live dashboard." >> $env:GITHUB_STEP_SUMMARY
-
-            exit 1
-          }
-
-          Write-Host "✅ All OpenPay payment secrets are present — bootstrap may proceed." -ForegroundColor Green
-
   bootstrap-dev:
     name: Bootstrap Dev Environment
     if: |
       !cancelled() &&
       needs.validate-inputs.result == 'success' &&
-      needs.validate-payment-secrets.result == 'success' &&
       inputs.bootstrapInfra &&
       (inputs.environment == 'dev' || inputs.environment == 'all')
-    needs: [validate-inputs, validate-payment-secrets]
+    needs: [validate-inputs]
     runs-on: windows-latest
     environment: dev
     env:
       CLIENT_ID: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
       TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
       SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+      OPENPAY_MERCHANT_ID: ${{ secrets[format('OPENPAY_{0}', 'MERCHANT_ID')] }}
+      OPENPAY_PRIVATE_KEY: ${{ secrets[format('OPENPAY_{0}', 'PRIVATE_KEY')] }}
+      OPENPAY_DEVICE_SESSION_ID: ${{ secrets[format('OPENPAY_{0}_{1}', 'DEVICE', 'SESSION_ID')] }}
     steps:
       - uses: actions/checkout@v6
+
+      - name: Validate OpenPay Secrets
+        run: |
+          $missing = @()
+          if ([string]::IsNullOrWhiteSpace($env:OPENPAY_MERCHANT_ID))       { $missing += 'OPENPAY_MERCHANT_ID' }
+          if ([string]::IsNullOrWhiteSpace($env:OPENPAY_PRIVATE_KEY))       { $missing += 'OPENPAY_PRIVATE_KEY' }
+          if ([string]::IsNullOrWhiteSpace($env:OPENPAY_DEVICE_SESSION_ID)) { $missing += 'OPENPAY_DEVICE_SESSION_ID' }
+
+          if ($missing.Count -gt 0) {
+            $envUrl = 'https://github.com/${{ github.repository }}/settings/environments'
+            Write-Host ''
+            Write-Host '════════════════════════════════════════════════════' -ForegroundColor Red
+            Write-Host '❌ DEPLOYMENT BLOCKED — MISSING ENVIRONMENT OPENPAY SECRETS' -ForegroundColor Red
+            Write-Host '════════════════════════════════════════════════════' -ForegroundColor Red
+            Write-Host ''
+            Write-Host 'Target GitHub environment: dev' -ForegroundColor Yellow
+            Write-Host 'The following environment secrets are missing:' -ForegroundColor Yellow
+            $missing | ForEach-Object { Write-Host "   • $_" -ForegroundColor Red }
+            Write-Host ''
+            Write-Host 'How to fix:' -ForegroundColor Cyan
+            Write-Host "  1. Go to: $envUrl" -ForegroundColor White
+            Write-Host '  2. Open the dev environment' -ForegroundColor White
+            Write-Host '  3. Add each missing secret under Environment secrets' -ForegroundColor White
+            Write-Host '  4. Re-run this workflow' -ForegroundColor White
+            Write-Host ''
+
+            '## ❌ Deployment Blocked — Missing OpenPay Environment Secrets' >> $env:GITHUB_STEP_SUMMARY
+            '' >> $env:GITHUB_STEP_SUMMARY
+            '**GitHub environment**: `dev`' >> $env:GITHUB_STEP_SUMMARY
+            '' >> $env:GITHUB_STEP_SUMMARY
+            'The following environment secrets must be added before bootstrap can run:' >> $env:GITHUB_STEP_SUMMARY
+            '' >> $env:GITHUB_STEP_SUMMARY
+            foreach ($s in $missing) { "- ``$s``" >> $env:GITHUB_STEP_SUMMARY }
+            '' >> $env:GITHUB_STEP_SUMMARY
+            "**How to fix:** Go to [Settings → Environments]($envUrl), open the `dev` environment, and add each missing secret under Environment secrets." >> $env:GITHUB_STEP_SUMMARY
+
+            exit 1
+          }
+
+          Write-Host '✅ All OpenPay environment secrets are present for dev — bootstrap may proceed.' -ForegroundColor Green
       
       - name: Generate GitHub App Token
         id: app-token
@@ -753,9 +714,9 @@ jobs:
             ./Resources/Azure-Deployment/populate-keyvault-secrets.ps1 `
               -Environment dev `
               -BaseName orderprocessing `
-              -OpenPayMerchantId "${{ secrets.OPENPAY_MERCHANT_ID }}" `
-              -OpenPayPrivateKey "${{ secrets.OPENPAY_PRIVATE_KEY }}" `
-              -OpenPayDeviceSessionId "${{ secrets.OPENPAY_DEVICE_SESSION_ID }}"
+              -OpenPayMerchantId "${{ env.OPENPAY_MERCHANT_ID }}" `
+              -OpenPayPrivateKey "${{ env.OPENPAY_PRIVATE_KEY }}" `
+              -OpenPayDeviceSessionId "${{ env.OPENPAY_DEVICE_SESSION_ID }}"
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
@@ -1057,18 +1018,60 @@ jobs:
     if: |
       !cancelled() &&
       needs.validate-inputs.result == 'success' &&
-      needs.validate-payment-secrets.result == 'success' &&
       inputs.bootstrapInfra &&
       (inputs.environment == 'staging' || inputs.environment == 'all')
-    needs: [validate-inputs, validate-payment-secrets]
+    needs: [validate-inputs]
     runs-on: windows-latest
     environment: staging
     env:
       CLIENT_ID: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
       TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
       SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+      OPENPAY_MERCHANT_ID: ${{ secrets[format('OPENPAY_{0}', 'MERCHANT_ID')] }}
+      OPENPAY_PRIVATE_KEY: ${{ secrets[format('OPENPAY_{0}', 'PRIVATE_KEY')] }}
+      OPENPAY_DEVICE_SESSION_ID: ${{ secrets[format('OPENPAY_{0}_{1}', 'DEVICE', 'SESSION_ID')] }}
     steps:
       - uses: actions/checkout@v6
+
+      - name: Validate OpenPay Secrets
+        run: |
+          $missing = @()
+          if ([string]::IsNullOrWhiteSpace($env:OPENPAY_MERCHANT_ID))       { $missing += 'OPENPAY_MERCHANT_ID' }
+          if ([string]::IsNullOrWhiteSpace($env:OPENPAY_PRIVATE_KEY))       { $missing += 'OPENPAY_PRIVATE_KEY' }
+          if ([string]::IsNullOrWhiteSpace($env:OPENPAY_DEVICE_SESSION_ID)) { $missing += 'OPENPAY_DEVICE_SESSION_ID' }
+
+          if ($missing.Count -gt 0) {
+            $envUrl = 'https://github.com/${{ github.repository }}/settings/environments'
+            Write-Host ''
+            Write-Host '════════════════════════════════════════════════════' -ForegroundColor Red
+            Write-Host '❌ DEPLOYMENT BLOCKED — MISSING ENVIRONMENT OPENPAY SECRETS' -ForegroundColor Red
+            Write-Host '════════════════════════════════════════════════════' -ForegroundColor Red
+            Write-Host ''
+            Write-Host 'Target GitHub environment: staging' -ForegroundColor Yellow
+            Write-Host 'The following environment secrets are missing:' -ForegroundColor Yellow
+            $missing | ForEach-Object { Write-Host "   • $_" -ForegroundColor Red }
+            Write-Host ''
+            Write-Host 'How to fix:' -ForegroundColor Cyan
+            Write-Host "  1. Go to: $envUrl" -ForegroundColor White
+            Write-Host '  2. Open the staging environment' -ForegroundColor White
+            Write-Host '  3. Add each missing secret under Environment secrets' -ForegroundColor White
+            Write-Host '  4. Re-run this workflow' -ForegroundColor White
+            Write-Host ''
+
+            '## ❌ Deployment Blocked — Missing OpenPay Environment Secrets' >> $env:GITHUB_STEP_SUMMARY
+            '' >> $env:GITHUB_STEP_SUMMARY
+            '**GitHub environment**: `staging`' >> $env:GITHUB_STEP_SUMMARY
+            '' >> $env:GITHUB_STEP_SUMMARY
+            'The following environment secrets must be added before bootstrap can run:' >> $env:GITHUB_STEP_SUMMARY
+            '' >> $env:GITHUB_STEP_SUMMARY
+            foreach ($s in $missing) { "- ``$s``" >> $env:GITHUB_STEP_SUMMARY }
+            '' >> $env:GITHUB_STEP_SUMMARY
+            "**How to fix:** Go to [Settings → Environments]($envUrl), open the `staging` environment, and add each missing secret under Environment secrets." >> $env:GITHUB_STEP_SUMMARY
+
+            exit 1
+          }
+
+          Write-Host '✅ All OpenPay environment secrets are present for staging — bootstrap may proceed.' -ForegroundColor Green
       
       - name: Generate GitHub App Token
         id: app-token
@@ -1500,9 +1503,9 @@ jobs:
             ./Resources/Azure-Deployment/populate-keyvault-secrets.ps1 `
               -Environment staging `
               -BaseName orderprocessing `
-              -OpenPayMerchantId "${{ secrets.OPENPAY_MERCHANT_ID }}" `
-              -OpenPayPrivateKey "${{ secrets.OPENPAY_PRIVATE_KEY }}" `
-              -OpenPayDeviceSessionId "${{ secrets.OPENPAY_DEVICE_SESSION_ID }}"
+              -OpenPayMerchantId "${{ env.OPENPAY_MERCHANT_ID }}" `
+              -OpenPayPrivateKey "${{ env.OPENPAY_PRIVATE_KEY }}" `
+              -OpenPayDeviceSessionId "${{ env.OPENPAY_DEVICE_SESSION_ID }}"
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
@@ -1806,18 +1809,60 @@ jobs:
     if: |
       !cancelled() &&
       needs.validate-inputs.result == 'success' &&
-      needs.validate-payment-secrets.result == 'success' &&
       inputs.bootstrapInfra &&
       (inputs.environment == 'prod' || inputs.environment == 'all')
-    needs: [validate-inputs, validate-payment-secrets]
+    needs: [validate-inputs]
     runs-on: windows-latest
     environment: prod
     env:
       CLIENT_ID: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
       TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
       SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+      OPENPAY_MERCHANT_ID: ${{ secrets[format('OPENPAY_{0}', 'MERCHANT_ID')] }}
+      OPENPAY_PRIVATE_KEY: ${{ secrets[format('OPENPAY_{0}', 'PRIVATE_KEY')] }}
+      OPENPAY_DEVICE_SESSION_ID: ${{ secrets[format('OPENPAY_{0}_{1}', 'DEVICE', 'SESSION_ID')] }}
     steps:
       - uses: actions/checkout@v6
+
+      - name: Validate OpenPay Secrets
+        run: |
+          $missing = @()
+          if ([string]::IsNullOrWhiteSpace($env:OPENPAY_MERCHANT_ID))       { $missing += 'OPENPAY_MERCHANT_ID' }
+          if ([string]::IsNullOrWhiteSpace($env:OPENPAY_PRIVATE_KEY))       { $missing += 'OPENPAY_PRIVATE_KEY' }
+          if ([string]::IsNullOrWhiteSpace($env:OPENPAY_DEVICE_SESSION_ID)) { $missing += 'OPENPAY_DEVICE_SESSION_ID' }
+
+          if ($missing.Count -gt 0) {
+            $envUrl = 'https://github.com/${{ github.repository }}/settings/environments'
+            Write-Host ''
+            Write-Host '════════════════════════════════════════════════════' -ForegroundColor Red
+            Write-Host '❌ DEPLOYMENT BLOCKED — MISSING ENVIRONMENT OPENPAY SECRETS' -ForegroundColor Red
+            Write-Host '════════════════════════════════════════════════════' -ForegroundColor Red
+            Write-Host ''
+            Write-Host 'Target GitHub environment: prod' -ForegroundColor Yellow
+            Write-Host 'The following environment secrets are missing:' -ForegroundColor Yellow
+            $missing | ForEach-Object { Write-Host "   • $_" -ForegroundColor Red }
+            Write-Host ''
+            Write-Host 'How to fix:' -ForegroundColor Cyan
+            Write-Host "  1. Go to: $envUrl" -ForegroundColor White
+            Write-Host '  2. Open the prod environment' -ForegroundColor White
+            Write-Host '  3. Add each missing secret under Environment secrets' -ForegroundColor White
+            Write-Host '  4. Re-run this workflow' -ForegroundColor White
+            Write-Host ''
+
+            '## ❌ Deployment Blocked — Missing OpenPay Environment Secrets' >> $env:GITHUB_STEP_SUMMARY
+            '' >> $env:GITHUB_STEP_SUMMARY
+            '**GitHub environment**: `prod`' >> $env:GITHUB_STEP_SUMMARY
+            '' >> $env:GITHUB_STEP_SUMMARY
+            'The following environment secrets must be added before bootstrap can run:' >> $env:GITHUB_STEP_SUMMARY
+            '' >> $env:GITHUB_STEP_SUMMARY
+            foreach ($s in $missing) { "- ``$s``" >> $env:GITHUB_STEP_SUMMARY }
+            '' >> $env:GITHUB_STEP_SUMMARY
+            "**How to fix:** Go to [Settings → Environments]($envUrl), open the `prod` environment, and add each missing secret under Environment secrets." >> $env:GITHUB_STEP_SUMMARY
+
+            exit 1
+          }
+
+          Write-Host '✅ All OpenPay environment secrets are present for prod — bootstrap may proceed.' -ForegroundColor Green
       
       - name: Generate GitHub App Token
         id: app-token
@@ -2244,9 +2289,9 @@ jobs:
             ./Resources/Azure-Deployment/populate-keyvault-secrets.ps1 `
               -Environment prod `
               -BaseName orderprocessing `
-              -OpenPayMerchantId "${{ secrets.OPENPAY_MERCHANT_ID }}" `
-              -OpenPayPrivateKey "${{ secrets.OPENPAY_PRIVATE_KEY }}" `
-              -OpenPayDeviceSessionId "${{ secrets.OPENPAY_DEVICE_SESSION_ID }}"
+              -OpenPayMerchantId "${{ env.OPENPAY_MERCHANT_ID }}" `
+              -OpenPayPrivateKey "${{ env.OPENPAY_PRIVATE_KEY }}" `
+              -OpenPayDeviceSessionId "${{ env.OPENPAY_DEVICE_SESSION_ID }}"
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""

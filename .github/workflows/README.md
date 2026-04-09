@@ -60,27 +60,36 @@ Azure deployment scripts consume the same defaults from `Resources/Azure-Deploym
 
 ## 🔐 Required GitHub Secrets
 
-Before workflows can execute, the following repository secrets **must be configured**:
+Before workflows can execute, the following secrets must be configured:
+
+**Repository secrets**
 
 | Secret Name | Description | How to Get |
 |-------------|-------------|------------|
-| `AZUREAPPSERVICE_CLIENTID` | Azure AD App Registration Client ID | Run `bootstrap-enterprise-infra.ps1` (auto-configured) |
-| `AZUREAPPSERVICE_TENANTID` | Azure AD Tenant ID | From Azure subscription |
-| `AZUREAPPSERVICE_SUBSCRIPTIONID` | Azure Subscription ID | From Azure subscription |
+| `APP_ID` | GitHub App ID | GitHub App setup |
+| `APP_PRIVATE_KEY` | GitHub App private key | GitHub App setup |
+
+**Environment secrets** (`dev`, `staging`, `prod`)
+
+| Secret Name | Description | How to Get |
+|-------------|-------------|------------|
+| `AZUREAPPSERVICE_CLIENTID` | Azure AD App Registration Client ID | Azure Initial Setup (Phase 1b) |
+| `AZUREAPPSERVICE_TENANTID` | Azure AD Tenant ID | Azure Initial Setup (Phase 1b) |
+| `AZUREAPPSERVICE_SUBSCRIPTIONID` | Azure Subscription ID | Azure Initial Setup (Phase 1b) |
 
 ### Automatic Secret Configuration
 
-If you ran `bootstrap-enterprise-infra.ps1` with GitHub CLI installed and authenticated, secrets are **already configured**.
+If you ran Azure Initial Setup successfully, the environment OIDC secrets are **already configured**.
 
-Verify at: https://github.com/getpavanthakur/TestAppXY_OrderProcessingSystem/settings/secrets/actions
+Verify at: `Settings → Environments → dev/staging/prod`
 
 ### Manual Secret Configuration
 
 If automatic configuration failed:
 
-1. **Copy secrets** (they were copied to clipboard during bootstrap script execution)
-2. **Navigate to**: Repository → Settings → Secrets and variables → Actions → New repository secret
-3. **Add each secret** with exact names shown above
+1. Run **Azure Initial Setup** with `configureSecrets=true`
+2. **Navigate to**: Repository → Settings → Environments
+3. **Open each environment** and confirm the three `AZUREAPPSERVICE_*` secrets are present
 
 ---
 

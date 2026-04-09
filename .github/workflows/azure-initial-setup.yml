@@ -1751,51 +1751,35 @@ jobs:
             "" >> $env:GITHUB_STEP_SUMMARY
           }
 
-          # OpenPay payment secrets — informational status (non-blocking, must be set manually)
-          $hasOpenPayMerchant  = '${{ secrets.OPENPAY_MERCHANT_ID }}'    -ne ''
-          $hasOpenPayKey       = '${{ secrets.OPENPAY_PRIVATE_KEY }}'    -ne ''
-          $hasOpenPaySession   = '${{ secrets.OPENPAY_DEVICE_SESSION_ID }}' -ne ''
-          $secretsUrl = "https://github.com/${{ github.repository }}/settings/secrets/actions"
+          # OpenPay payment secrets — informational reminder only. These are environment-scoped
+          # and must be added manually by an authorized person in GitHub Settings.
+          $environmentsUrl = "https://github.com/${{ github.repository }}/settings/environments"
 
           "" >> $env:GITHUB_STEP_SUMMARY
           "---" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
-          "## 💳 OpenPay Payment Secrets Status" >> $env:GITHUB_STEP_SUMMARY
+          "## 💳 OpenPay Payment Secrets" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
-          "> These secrets must be present **before running Azure Bootstrap & Deploy**. They are set manually by an authorized person in GitHub Settings — they are never written by this workflow." >> $env:GITHUB_STEP_SUMMARY
+          "> These secrets must be present **before running Azure Bootstrap & Deploy**. They are environment-scoped, set manually by an authorized person, and never written by this workflow." >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
-          "| Secret | Status |" >> $env:GITHUB_STEP_SUMMARY
-          "|--------|--------|" >> $env:GITHUB_STEP_SUMMARY
-          $merchantIcon  = if ($hasOpenPayMerchant) { "✅ Present" } else { "❌ **MISSING**" }
-          $keyIcon       = if ($hasOpenPayKey)       { "✅ Present" } else { "❌ **MISSING**" }
-          $sessionIcon   = if ($hasOpenPaySession)   { "✅ Present" } else { "❌ **MISSING**" }
-          "| ``OPENPAY_MERCHANT_ID``     | $merchantIcon |" >> $env:GITHUB_STEP_SUMMARY
-          "| ``OPENPAY_PRIVATE_KEY``     | $keyIcon |" >> $env:GITHUB_STEP_SUMMARY
-          "| ``OPENPAY_DEVICE_SESSION_ID`` | $sessionIcon |" >> $env:GITHUB_STEP_SUMMARY
+          "Add these three environment secrets to each target GitHub environment you plan to bootstrap:" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
-          if (-not ($hasOpenPayMerchant -and $hasOpenPayKey -and $hasOpenPaySession)) {
-            "### ⚠️ Action Required — Add OpenPay Secrets Before Running Bootstrap" >> $env:GITHUB_STEP_SUMMARY
-            "" >> $env:GITHUB_STEP_SUMMARY
-            "1. Go to **[Settings → Secrets and variables → Actions]($secretsUrl)**" >> $env:GITHUB_STEP_SUMMARY
-            "2. Click **New repository secret** for each missing secret above" >> $env:GITHUB_STEP_SUMMARY
-            "3. Get values from [sandbox-dashboard.openpay.mx](https://sandbox-dashboard.openpay.mx) (sandbox) or the live dashboard (production)" >> $env:GITHUB_STEP_SUMMARY
-            "4. Then run **Azure Bootstrap & Deploy** — it will validate these secrets before proceeding" >> $env:GITHUB_STEP_SUMMARY
-          } else {
-            "> ✅ All OpenPay secrets present. Bootstrap can proceed." >> $env:GITHUB_STEP_SUMMARY
-          }
+          "- ``OPENPAY_MERCHANT_ID``" >> $env:GITHUB_STEP_SUMMARY
+          "- ``OPENPAY_PRIVATE_KEY``" >> $env:GITHUB_STEP_SUMMARY
+          "- ``OPENPAY_DEVICE_SESSION_ID``" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "### ⚠️ Action Required — Add OpenPay Secrets Before Running Bootstrap" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "1. Go to **[Settings → Environments]($environmentsUrl)**" >> $env:GITHUB_STEP_SUMMARY
+          "2. Open each target environment (``dev``, ``staging``, and/or ``prod``)" >> $env:GITHUB_STEP_SUMMARY
+          "3. Add the three OpenPay values under **Environment secrets**" >> $env:GITHUB_STEP_SUMMARY
+          "4. Then run **Azure Bootstrap & Deploy** — the target bootstrap job validates its environment secrets before proceeding" >> $env:GITHUB_STEP_SUMMARY
 
           # Console output mirror
           Write-Host ""
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
           Write-Host "💳 OpenPay Payment Secrets" -ForegroundColor Cyan
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
-          $icons = @{ $true = "✅"; $false = "❌ MISSING" }
-          Write-Host "  OPENPAY_MERCHANT_ID      : $($icons[$hasOpenPayMerchant])"     -ForegroundColor $(if ($hasOpenPayMerchant) { 'Green' } else { 'Red' })
-          Write-Host "  OPENPAY_PRIVATE_KEY      : $($icons[$hasOpenPayKey])"          -ForegroundColor $(if ($hasOpenPayKey)       { 'Green' } else { 'Red' })
-          Write-Host "  OPENPAY_DEVICE_SESSION_ID: $($icons[$hasOpenPaySession])"      -ForegroundColor $(if ($hasOpenPaySession)   { 'Green' } else { 'Red' })
-          if (-not ($hasOpenPayMerchant -and $hasOpenPayKey -and $hasOpenPaySession)) {
-            Write-Host ""
-            Write-Host "  ⚠️  One or more OpenPay secrets are missing." -ForegroundColor Yellow
-            Write-Host "  Add them at: $secretsUrl" -ForegroundColor Yellow
-            Write-Host "  Bootstrap will validate these before proceeding and fail with a clear error." -ForegroundColor Gray
-          }
+          Write-Host "  OpenPay secrets are environment-scoped and must be added manually." -ForegroundColor Yellow
+          Write-Host "  Add them at: $environmentsUrl" -ForegroundColor Yellow
+          Write-Host "  Each bootstrap job validates the target environment before proceeding." -ForegroundColor Gray

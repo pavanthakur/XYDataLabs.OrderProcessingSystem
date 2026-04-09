@@ -87,7 +87,7 @@ oidc-app-name: xydatalabsgithubapp  # If you named your app differently
 
 ### "Azure Login Failed"
 **Fix:** Check GitHub secrets are configured
-- Go to: Settings → Secrets → Actions
+- Go to: Settings → Environments → dev/staging/prod
 - Verify: `AZUREAPPSERVICE_CLIENTID`, `AZUREAPPSERVICE_TENANTID`, `AZUREAPPSERVICE_SUBSCRIPTIONID`
 
 ### "Config Drift Detected"
