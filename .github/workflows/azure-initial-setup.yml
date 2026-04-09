@@ -211,7 +211,8 @@ jobs:
               Write-Host "        2. App name: $appName (or your chosen name)" -ForegroundColor White
               Write-Host "        3. Set REQUIRED permissions:" -ForegroundColor White
               Write-Host "           • Actions: write   • Secrets: write   • Workflows: write" -ForegroundColor Gray
-              Write-Host "           • Environments: write   • Contents: read   • Metadata: read" -ForegroundColor Gray
+              Write-Host "           • Administration: write (for auto-creating missing environments)" -ForegroundColor Gray
+              Write-Host "           • Contents: read   • Metadata: read" -ForegroundColor Gray
               Write-Host "        4. Generate a private key (saves a .pem file)" -ForegroundColor White
               Write-Host "        5. Note the App ID from the General settings page" -ForegroundColor White
               Write-Host "        6. Install app on: ${{ github.repository }}" -ForegroundColor White
