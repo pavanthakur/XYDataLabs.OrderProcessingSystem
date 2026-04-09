@@ -40,11 +40,9 @@ Actions → "Azure Bootstrap & Deploy" → Run workflow:
 - API: `pavanthakur-orderprocessing-api-xyapp-dev`
 - UI: `pavanthakur-orderprocessing-ui-xyapp-dev`
 
-## Required Repository Secrets
-- `AZUREAPPSERVICE_CLIENTID` — OIDC client ID
-- `AZUREAPPSERVICE_TENANTID` — Azure tenant ID
-- `AZUREAPPSERVICE_SUBSCRIPTIONID` — subscription ID
-- `APP_ID` + `APP_PRIVATE_KEY` — GitHub App (for configure-github-secrets workflow)
+## Required Secrets
+- GitHub environment secrets: `AZUREAPPSERVICE_CLIENTID`, `AZUREAPPSERVICE_TENANTID`, `AZUREAPPSERVICE_SUBSCRIPTIONID`
+- GitHub repository secrets: `APP_ID` + `APP_PRIVATE_KEY` — GitHub App (for configure-github-secrets workflow)
 
 ## Deployment Guard
 API/UI deploys are blocked if bootstrap job fails. Fix OIDC/bootstrap first.
