@@ -11,6 +11,9 @@ public sealed class TenantMiddleware
     public const string TenantHeaderName = "X-Tenant-Code";
     internal const string HttpContextItemKey = "TenantContext";
     private const string RuntimeConfigurationPath = "/api/v1/info/runtime-configuration";
+    private const string HealthPath = "/health";
+    private const string HealthLivePath = "/health/live";
+    private const string HealthReadyPath = "/health/ready";
 
     public TenantMiddleware(RequestDelegate next)
     {
@@ -28,9 +31,11 @@ public sealed class TenantMiddleware
             "RequestedTenantCode",
             string.IsNullOrWhiteSpace(requestedTenantCode) ? "none" : requestedTenantCode);
 
-        if (IsRuntimeConfigurationRequest(context.Request.Path))
+        if (IsTenantOptionalRequest(context.Request.Path))
         {
-            using var bootstrapTenantScope = LogContext.PushProperty("TenantCode", "bootstrap");
+            using var bootstrapTenantScope = LogContext.PushProperty(
+                "TenantCode",
+                IsHealthRequest(context.Request.Path) ? "infrastructure" : "bootstrap");
             await _next(context);
             return;
         }
@@ -105,9 +110,21 @@ public sealed class TenantMiddleware
             || string.Equals(tenantStatus, "Decommissioned", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static bool IsTenantOptionalRequest(PathString requestPath)
+    {
+        return IsRuntimeConfigurationRequest(requestPath) || IsHealthRequest(requestPath);
+    }
+
     private static bool IsRuntimeConfigurationRequest(PathString requestPath)
     {
         return string.Equals(requestPath.Value, RuntimeConfigurationPath, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsHealthRequest(PathString requestPath)
+    {
+        return string.Equals(requestPath.Value, HealthPath, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(requestPath.Value, HealthLivePath, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(requestPath.Value, HealthReadyPath, StringComparison.OrdinalIgnoreCase);
     }
 
     private static async Task WriteFailureAsync(

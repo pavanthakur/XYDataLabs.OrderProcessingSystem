@@ -33,17 +33,17 @@ public sealed class TenantMiddlewareTests : IAsyncLifetime
         await _factory.DisposeAsync();
     }
 
-    [Fact]
-    public async Task HealthCheck_WithoutTenantHeader_ReturnsBadRequest()
+    [Theory]
+    [InlineData("/health", HttpStatusCode.OK)]
+    [InlineData("/health/live", HttpStatusCode.OK)]
+    [InlineData("/health/ready", HttpStatusCode.OK)]
+    public async Task HealthChecks_WithoutTenantHeader_ReturnExpectedStatus(string path, HttpStatusCode expectedStatus)
     {
         using var client = _factory.CreateClient();
 
-        var response = await client.GetAsync("/health");
-        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var response = await client.GetAsync(path);
 
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        body.RootElement.GetProperty("title").GetString().Should().Be("Tenant header is required.");
-        body.RootElement.GetProperty("detail").GetString().Should().Contain("Missing required header");
+        response.StatusCode.Should().Be(expectedStatus);
     }
 
     [Fact]
@@ -97,11 +97,11 @@ public sealed class TenantMiddlewareTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task HealthCheck_WithUnknownTenantCode_ReturnsBadRequest()
+    public async Task TenantProtectedEndpoint_WithUnknownTenantCode_ReturnsBadRequest()
     {
         using var client = _factory.CreateTenantClient($"UNKNOWN-{Guid.NewGuid():N}"[..18]);
 
-        var response = await client.GetAsync("/health");
+        var response = await client.GetAsync("/api/v1/Customer/GetAllCustomers");
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -124,12 +124,12 @@ public sealed class TenantMiddlewareTests : IAsyncLifetime
     [Theory]
     [InlineData("Suspended")]
     [InlineData("Decommissioned")]
-    public async Task HealthCheck_WithBlockedTenantStatus_ReturnsForbidden(string tenantStatus)
+    public async Task TenantProtectedEndpoint_WithBlockedTenantStatus_ReturnsForbidden(string tenantStatus)
     {
         var tenant = await IntegrationTestData.CreateTenantAsync(_factory, tenantStatus);
         using var client = _factory.CreateTenantClient(tenant.TenantCode);
 
-        var response = await client.GetAsync("/health");
+        var response = await client.GetAsync("/api/v1/Customer/GetAllCustomers");
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);

@@ -142,6 +142,7 @@ Purpose:
 - End-to-end verification of a payment test run: log data **and** DB — in one pass.
 - **docker/local**: reads today's `webapi-{env}-{date}.log` and `ui-{env}-{date}.log` physical files.
 - **azure**: queries App Insights KQL (`ai-orderprocessing-{env}`) for both API and UI callback traces.
+- The prompt is script-first by runtime: it should delegate to the matching verifier script before falling back to manual investigation steps.
 - Extracts OR prefix and charge IDs from the log automatically — no need to know the prefix upfront.
 - In Azure mode, derives a shared logical run prefix (for example `OR-1-2ndApr`) before running DB queries.
 - In Azure mode, filters API/UI traces using both `cloud_RoleName` and the structured `customDimensions['Application']` property to reduce cross-app noise.
@@ -163,6 +164,12 @@ Azure-specific note:
 
 Repeat Azure rerun note:
 - For deterministic reruns outside chat, use `scripts/verify-payment-run-azure.ps1` instead of rebuilding the App Insights and SQL commands by hand.
+
+Repeat physical rerun note:
+- For deterministic reruns outside chat, use `scripts/verify-payment-run-physical.ps1` for `docker` and `local` runtimes.
+
+Prompt routing note:
+- `/XYDataLabs-verify-db-logs` should call the same runtime-specific verifier script internally unless the user explicitly asks for the raw manual investigation path or the script needs debugging.
 
 Note: For deep-dive queries (Q1, Q3, Q4, Q6, Q6a, Q7, Q8-B and per-tenant 3DS toggle), open `docs/runbooks/payment-db-verification.md`.
 
@@ -247,6 +254,8 @@ Select these in the VS Code Chat agent picker for focused, context-scoped assist
 | `.github/prompts/XYDataLabs-new-feature.prompt.md` | End-to-end feature development workflow |
 | `.github/prompts/XYDataLabs-verify-db-logs.prompt.md` | End-to-end log + DB correlation for any env/profile combination |
 | `.github/prompts/XYDataLabs-validate-adrs.prompt.md` | ADR frontmatter schema + markdownlint local validation |
+| `scripts/verify-payment-run-physical.ps1` | Deterministic physical-log rerun for docker/local payment verification |
+| `scripts/verify-payment-run-azure.ps1` | Deterministic Azure rerun for App Insights + Azure SQL payment verification |
 | `.github/copilot-instructions.md` | Prompt index and quick usage reference |
 
 ## Operational Guidance

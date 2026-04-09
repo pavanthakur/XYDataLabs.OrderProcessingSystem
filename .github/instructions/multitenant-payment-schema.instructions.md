@@ -23,7 +23,7 @@ These rules are binding for all tenant, payment, DTO, migration, middleware, and
 - Resolved `Suspended` or `Decommissioned` tenant → HTTP 403.
 - No null tenant context may flow downstream.
 - `ITenantProvider` must expose `HasTenantContext`, `TenantId`, `TenantCode`, `TenantExternalId`, `ConnectionString`, and `IsSharedPool`.
-- The only approved headerless bootstrap path is `GET /api/v1/info/runtime-configuration`.
+- Approved headerless paths are `GET /api/v1/info/runtime-configuration`, `GET /health`, `GET /health/live`, and `GET /health/ready`.
 - UI/browser code must read the active tenant from API runtime configuration, not UI-local configuration.
 
 ## Tenant tier model (hybrid)
