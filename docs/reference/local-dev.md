@@ -1,7 +1,7 @@
 # Local Development Commands
 
 **Part of:** [quick-command-reference.md](./quick-command-reference.md)  
-**Last Updated:** April 5, 2026
+**Last Updated:** April 10, 2026
 
 ---
 
@@ -44,6 +44,20 @@ dotnet test .\tests\XYDataLabs.OrderProcessingSystem.Application.Tests\XYDataLab
 dotnet test .\tests\XYDataLabs.OrderProcessingSystem.Integration.Tests\XYDataLabs.OrderProcessingSystem.Integration.Tests.csproj --logger "console;verbosity=minimal"
 dotnet test .\tests\XYDataLabs.OrderProcessingSystem.Integration.Tests\XYDataLabs.OrderProcessingSystem.Integration.Tests.csproj --no-build --logger "console;verbosity=minimal"
 ```
+
+### **Payment verification — physical logs + DB correlation**
+
+```powershell
+# Local dev runtime
+.\scripts\verify-payment-run-physical.ps1 -Runtime local -Environment dev -Profile http
+
+# Docker dev runtime
+.\scripts\verify-payment-run-physical.ps1 -Runtime docker -Environment dev -Profile http
+```
+
+Notes:
+- Add `-RunPrefix <OR-prefix>` when more than one payment run exists for the day.
+- The verifier proves API log -> UI log -> DB for the same charge IDs and is the preferred path over manually rebuilding the log/SQL correlation flow.
 
 ---
 

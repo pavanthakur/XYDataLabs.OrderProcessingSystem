@@ -240,3 +240,74 @@ Passed!  - Failed: 0, Passed: 29, Skipped: 0, Total: 29
 
 - Phase 7 is now closed with tenant enforcement, audit trail, aggregate hardening, value object adoption (`Money`), strongly typed IDs, typed contract boundaries, and correct deployment readiness semantics all verified.
 - The next safe architecture slice is Phase 8a: define domain/integration event primitives and the transactional seam that writes aggregate changes and outbox rows in the same database transaction.
+
+---
+
+## Day 43 Freeze Validation: Cross-Runtime Payment Proof + Azure Bootstrap (April 10, 2026)
+
+Phase 7 was not treated as closed solely because unit and integration tests passed. The final freeze validation proved the current baseline on all three runtime paths plus the Azure control-plane setup that the next phase depends on.
+
+**1. Azure Initial Setup and bootstrap were proven end-to-end**
+
+- `Azure Initial Setup` succeeded with Phase 1a + 1b on the latest workflow code.
+- The run confirmed all six federated credentials (branch + environment subjects), wrote environment-scoped `AZUREAPPSERVICE_CLIENTID`, `AZUREAPPSERVICE_TENANTID`, and `AZUREAPPSERVICE_SUBSCRIPTIONID` to `dev`, `staging`, and `prod`, and stored `OIDC_SP_OBJECT_ID` as a repo secret.
+- `Azure Bootstrap & Deploy` then succeeded for `dev`, proving the full control-plane path from initial setup → infra bootstrap → API deploy → UI deploy.
+
+Observed deployed endpoints:
+
+```text
+API: https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net/swagger
+UI:  https://pavanthakur-orderprocessing-ui-xyapp-dev.azurewebsites.net
+```
+
+**2. Payment verification was re-run against all supported runtime paths**
+
+Commands executed:
+
+```powershell
+.\scripts\verify-payment-run-physical.ps1 -Runtime local -Environment dev -Profile http
+.\scripts\verify-payment-run-physical.ps1 -Runtime docker -Environment dev -Profile http
+.\scripts\verify-payment-run-azure.ps1 -Environment dev
+```
+
+All three executions converged on the same logical payment run prefix:
+
+```text
+RunPrefix: OR-3-9thApr
+```
+
+All three executions finished with the same verifier contract result:
+
+```text
+Pass/fail summary: 13/13 PASS
+```
+
+**3. Important runtime-specific finding**
+
+- The verifier did not assume the same tenant has 3DS enabled on every runtime.
+- `local` dev showed TenantA as the 3DS tenant.
+- `docker` dev and `azure` dev showed TenantB as the 3DS tenant.
+- This difference is acceptable because the verifier reads `PaymentProviders.Use3DSecure` from the actual target database before asserting expected callback/history counts.
+- The important invariant is that each runtime remained internally consistent: API evidence, UI callback evidence, and DB rows all matched for the same charge IDs.
+
+**4. SQL access verification for Azure dev**
+
+Temporary local firewall access to Azure SQL was opened using the repo-owned script:
+
+```powershell
+.\Resources\Azure-Deployment\open-local-sql-firewall.ps1 -Environment dev
+```
+
+This confirmed the dev SQL server/FQDN and supported direct SSMS or `sqlcmd` validation against:
+
+```text
+orderprocessing-sql-dev.database.windows.net
+OrderProcessingSystem_Dev
+OrderProcessingSystem_TenantC_Dev
+```
+
+**5. What this freeze enables next**
+
+- Phase 7 now has current runtime proof on local, Docker, and Azure, not just code-level tests.
+- Azure OIDC setup, GitHub environment secret automation, and bootstrap deployment are proven on the latest workflow design.
+- The next engineering slice can move to Phase 8 (event-driven foundation) without carrying uncertainty about the frozen Phase 7 baseline.
