@@ -19,8 +19,8 @@ Canonical curriculum navigation for the learning track.
 ## Current Learning Status
 
 - Completed: Days 1-43 and Architecture Phases 1-7
-- Current: Phase 7 is closed; Phase 8 planning and implementation are next
+- Current: Phase 7 is closed and verification-frozen; Phase 8 implementation is next
 - Next: Days 44-56 event-driven foundation work, worker services, and outbox/messaging slices
 
-Last Updated: April 9, 2026
+Last Updated: April 10, 2026
 Current Focus: Phase 8 event-driven foundation on top of the frozen Phase 7 baseline

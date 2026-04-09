@@ -1,7 +1,7 @@
 # Azure SQL & EF Core Commands
 
 **Part of:** [quick-command-reference.md](./quick-command-reference.md)  
-**Last Updated:** March 20, 2026
+**Last Updated:** April 10, 2026
 
 ---
 
@@ -117,6 +117,25 @@ sqlcmd -S orderprocessing-sql-dev.database.windows.net `
 | Auth | SQL Server Authentication |
 | Login | `sqladmin` |
 | Password | `az keyvault secret show --vault-name kv-orderprocessing-dev --name sql-admin-password --query value -o tsv` |
+
+---
+
+## 🔎 Azure Payment Verification (App Insights + Azure SQL)
+
+```powershell
+# Open firewall for your current machine first
+.\Resources\Azure-Deployment\open-local-sql-firewall.ps1 -Environment dev
+
+# Run the Azure verifier (App Insights API/UI traces + Azure SQL correlation)
+.\scripts\verify-payment-run-azure.ps1 -Environment dev
+
+# Close firewall when done
+.\Resources\Azure-Deployment\open-local-sql-firewall.ps1 -Environment dev -Close
+```
+
+Notes:
+- `verify-payment-run-azure.ps1` queries App Insights for API and UI evidence, then validates Azure SQL rows for the same logical run prefix.
+- Add `-RunPrefix <OR-prefix>` for deterministic reruns when more than one payment run exists for the day.
 
 ---
 

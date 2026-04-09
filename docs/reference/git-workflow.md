@@ -1,7 +1,7 @@
 # Git Workflow & Validation Commands
 
 **Part of:** [quick-command-reference.md](./quick-command-reference.md)  
-**Last Updated:** March 20, 2026
+**Last Updated:** April 10, 2026
 
 ---
 
@@ -53,6 +53,26 @@ dotnet build XYDataLabs.OrderProcessingSystem.sln
 # 5. Run unit tests (before committing code)
 dotnet test XYDataLabs.OrderProcessingSystem.UnitTest/
 ```
+
+### **Completion-Check / Phase Freeze Gate**
+```powershell
+# Strict build gate used by /XYDataLabs-completion-check
+dotnet build XYDataLabs.OrderProcessingSystem.sln --warnaserror /warnnotaserror:NU1701 "/consoleloggerparameters:NoSummary;ForceNoAlign"
+
+# Targeted test gate used during closeout
+dotnet test tests/XYDataLabs.OrderProcessingSystem.Domain.Tests --no-build --logger "console;verbosity=minimal"
+dotnet test tests/XYDataLabs.OrderProcessingSystem.Application.Tests --no-build --logger "console;verbosity=minimal"
+dotnet test tests/XYDataLabs.OrderProcessingSystem.API.Tests --no-build --logger "console;verbosity=minimal"
+dotnet test tests/XYDataLabs.OrderProcessingSystem.Architecture.Tests --no-build --logger "console;verbosity=minimal"
+
+# Patch hygiene + AI customization validation
+git diff --check
+pwsh scripts/validate-ai-customization.ps1
+```
+
+Notes:
+- Use this gate for phase freezes, workflow closeout, and repo-shared AI customization changes.
+- `validate-ai-customization.ps1` must stay green whenever `.github/copilot-instructions.md`, `.github/instructions/`, `.github/prompts/`, `.github/agents/`, or `.github/skills/` changes.
 
 ### **Exit Code Interpretation**
 - **Exit Code 0** = ✅ PASS — Safe to proceed
