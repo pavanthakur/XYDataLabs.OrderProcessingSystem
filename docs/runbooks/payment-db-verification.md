@@ -18,6 +18,12 @@ of the previous one.
 - `azure`: use App Insights to derive the logical run prefix and callback evidence first, then run the same SQL queries below.
 - This Azure refinement does **not** change the non-Azure verification flow.
 
+For repeat physical-log reruns, prefer the script path over manual terminal reconstruction:
+
+```powershell
+.\scripts\verify-payment-run-physical.ps1 -Runtime <local|docker> -Environment <env> -Profile <profile> -RunPrefix <RUN_PREFIX>
+```
+
 ---
 
 ## Azure / App Insights quick path
@@ -31,6 +37,26 @@ For repeat Azure reruns, prefer the script path over manual terminal reconstruct
 ```
 
 The script performs the same App Insights + SQL correlation described below, but does it in one deterministic pass.
+
+## Verification entry points by runtime
+
+Use the verifier that matches where the evidence lives:
+
+| Runtime | Command | Notes |
+|---|---|---|
+| local dev | `./scripts/verify-payment-run-physical.ps1 -Runtime local -Environment dev -Profile http` | Reads physical log files under `logs/` and local SQL on `localhost` |
+| docker dev | `./scripts/verify-payment-run-physical.ps1 -Runtime docker -Environment dev -Profile http` | Reads physical log files plus Docker SQL on `localhost` |
+| docker stg | `./scripts/verify-payment-run-physical.ps1 -Runtime docker -Environment stg -Profile http` | Uses staging-style local containers and DB names |
+| docker prod | `./scripts/verify-payment-run-physical.ps1 -Runtime docker -Environment prod -Profile http` | Uses prod-style local containers and DB names |
+| azure dev | `./scripts/verify-payment-run-azure.ps1 -Environment dev` | Requires `az login`, KV access, and Azure SQL firewall access |
+| azure stg | `./scripts/verify-payment-run-azure.ps1 -Environment stg` | Uses `ai-orderprocessing-stg` and Azure staging SQL |
+| azure prod | `./scripts/verify-payment-run-azure.ps1 -Environment prod` | Uses production App Insights and Azure SQL |
+
+Add `-RunPrefix <RUN_PREFIX>` when the script finds more than one run for the day.
+
+### Coverage note
+
+The local/Docker and Azure verifiers are intentionally separate because they solve different acquisition problems. Keep their report contract aligned, but do not merge the physical-log and Azure-specific auth/query paths into one large script.
 
 ### 1. Identify the logical run prefix from API traces
 
