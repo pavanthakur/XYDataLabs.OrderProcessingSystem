@@ -112,7 +112,7 @@ The payment provider is wrapped behind `IOpenPayAdapterService`. The application
 | IaC | Azure Bicep (subscription + resource group scope) |
 | Hosting | Azure App Service (API + UI) — dev/staging/prod |
 | Secrets | Azure Key Vault + Managed Identity (`DefaultAzureCredential`) |
-| CI/CD | GitHub Actions (9 workflows) + OIDC (passwordless) |
+| CI/CD | GitHub Actions (11 workflows) + OIDC (passwordless) |
 | Containers | Docker (multi-stage) + docker-compose per environment |
 
 ---
@@ -333,7 +333,7 @@ Architecture tests will fail if:
 
 ## CI/CD & Azure Deployment
 
-9 GitHub Actions workflows enforce quality gates before every deployment. Authentication uses passwordless OIDC — no client secrets stored anywhere; each workflow run exchanges a short-lived GitHub OIDC token for an Azure AD federated credential. This is the production-standard alternative to storing service principal secrets in GitHub.
+11 GitHub Actions workflows enforce quality gates before every deployment. Authentication uses passwordless OIDC — no client secrets stored anywhere; each workflow run exchanges a short-lived GitHub OIDC token for an Azure AD federated credential. This is the production-standard alternative to storing service principal secrets in GitHub.
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|

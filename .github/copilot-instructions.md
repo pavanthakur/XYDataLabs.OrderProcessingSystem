@@ -81,7 +81,7 @@ practice Azure cloud deployment, CI/CD automation, and enterprise DevOps pattern
 ├── docs/
 │   ├── README.md                  # Canonical documentation hub
 │   ├── DEVELOPER-OPERATING-MODEL.md # Guided reading order and maintenance rules
-│   ├── architecture/decisions/    # ADRs (ADR-000 through ADR-013)
+│   ├── architecture/decisions/    # ADRs (ADR-000 through ADR-015)
 │   ├── guides/                    # Deployment, configuration, and development guides
 │   ├── internal/                  # Active progress tracker and internal backlog
 │   ├── learning/                  # Curriculum, implementation notes, learning reference

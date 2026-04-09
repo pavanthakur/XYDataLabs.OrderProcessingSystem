@@ -104,6 +104,16 @@ Notes:
 - Add `-OutputFormat Json` only when you want machine-readable output.
 - Physical and Azure verification stay in separate scripts by design; keep the output contract aligned, not the acquisition code.
 
+### **Completion-Check Gate Commands**
+```powershell
+# Strict build gate used by /XYDataLabs-completion-check
+dotnet build XYDataLabs.OrderProcessingSystem.sln --warnaserror /warnnotaserror:NU1701 "/consoleloggerparameters:NoSummary;ForceNoAlign"
+
+# Patch hygiene + AI customization validation
+git diff --check
+pwsh scripts/validate-ai-customization.ps1
+```
+
 ### **Exit Code Interpretation**
 - **Exit Code 0** = ✅ PASS - Safe to proceed
 - **Exit Code 1** = ❌ FAIL - Fix issues before committing
