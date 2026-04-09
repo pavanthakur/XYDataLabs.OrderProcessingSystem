@@ -70,6 +70,27 @@ Azure resource names: `ai-orderprocessing-{envSuffix}` in `rg-orderprocessing-{e
 
 > **Local TenantC DB note:** For `local dotnet run`, TenantC's dedicated DB is `OrderProcessingSystem_TenantC` (no environment suffix). Non-local environments do not all share the same suffixing convention, so use the table above instead of assuming `_Dev`, `_Stg`, or `_Prod`.
 
+### Primary execution path — use the verifier scripts first
+
+After resolving `env`, `profile`, and `runtime`, prefer the deterministic script path instead of rebuilding the verification flow manually inside chat.
+
+- If `runtime = docker` or `runtime = local`, run:
+```powershell
+.\scripts\verify-payment-run-physical.ps1 -Runtime <local|docker> -Environment <env> -Profile <profile>
+```
+
+- If `runtime = azure`, run:
+```powershell
+.\scripts\verify-payment-run-azure.ps1 -Environment <env>
+```
+
+Add `-RunPrefix <RUN_PREFIX>` when the user already knows the logical run prefix or when the script reports multiple run prefixes for the day.
+
+Only fall back to the manual log/KQL/SQL steps below when:
+- the user explicitly asks for the raw manual investigation flow
+- the verifier script fails and you need to diagnose why
+- you are auditing or changing the verifier itself
+
 ---
 
 ## Step 2 — Read the API log (first pass)
@@ -98,6 +119,11 @@ Get-Content $apiLog |
 ```
 
 Replace `{ENV_TAG}` with the env tag, `{RUNTIME}` with `dock` or `local`, and `{PROFILE}` with `http` or `https` from Step 1.
+
+For deterministic reruns outside chat, prefer the script path over rebuilding the log and SQL commands by hand:
+```powershell
+.\scripts\verify-payment-run-physical.ps1 -Runtime <local|docker> -Environment <env> -Profile <profile> -RunPrefix <RUN_PREFIX>
+```
 
 If the API log file does not exist, note this as a finding and stop — the UI log and DB queries cannot be meaningfully scoped without it.
 
