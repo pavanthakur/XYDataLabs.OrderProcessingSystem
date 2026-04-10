@@ -31,10 +31,10 @@
 - U2: scaffold `frontend/`, React web, generated API SDK, and tenant bootstrap package
 - U3: replace MVC browser journeys by feature slice
 - U4-U5: rehome MVC-owned server endpoints to API ownership and retire MVC from the active deployment model
-- U6: add React Native / mobile only after the web contract is stable
+- U6: add React Native / mobile only after the web cutover and outside the pre-Phase-8 gate
 
-### Priority 2: Azure Data & Resilience (Days 44-56) — *backend Phase 8 follows Track U U2*
-**Why:** Keep the backend event-foundation plan ready without starting implementation until the new frontend boundary exists
+### Priority 2: Azure Data & Resilience (Days 44-56) — *backend Phase 8 follows Track U U5*
+**Why:** Keep the backend event-foundation plan ready without starting implementation until the React web cutover and MVC retirement gate is complete
 **Tasks:**
 - Days 44-50: Azure Functions + Service Bus + DLQ operating model preparation (learning and infrastructure prep only; production transport swap remains Phase 10)
 - Days 51-56: 🏗️ **Phase 8** event foundation inside the monolith — contracts, mapper, outbox/inbox, `PaymentAttempt`, reconciliation, and separate workers
@@ -55,8 +55,9 @@
 
 ### Track U Gate
 
-- **Track U** reduces frontend migration risk: contract freeze, generated SDK, React web foundation, API ownership of callback/telemetry, and MVC removal rules
-- **Backend Phase 8** begins after Track U Phase U2 is complete
+- **Track U** reduces frontend migration risk: contract freeze, generated SDK, React web replacement, API ownership of callback/telemetry, and MVC removal rules
+- **Backend Phase 8** begins after Track U Phase U5 is complete
+- **Mobile (U6)** follows the web cutover and does not block backend Phase 8
 
 ---
 
@@ -1272,7 +1273,7 @@ After completing today's tasks, you will have:
 **Current Phase:** Track U — UI Modernization Program (pre-Phase-8 gate)
 **Current Day:** Track U1 — contract freeze and MVC replacement planning
 **Last Completed Task:** Day 43 — Phase 7 closure; typed ID propagation and deployment readiness semantics  
-**Next Milestone:** Track U2 React web foundation, then backend Phase 8 Event-Driven Foundation
+**Next Milestone:** Track U2 React web foundation, then U3-U5 web cutover before backend Phase 8 Event-Driven Foundation
 **Architecture Status:** Phases 1-7 ✅ complete; Track U active; backend Phase 8 remains next
 
 ---

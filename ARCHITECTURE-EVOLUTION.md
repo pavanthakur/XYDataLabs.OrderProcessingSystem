@@ -138,7 +138,7 @@ XYDataLabs.OrderProcessingSystem.sln
 
 Track U is a parallel UI replacement program and does **not** renumber backend Phases 8-14.
 
-**Status:** Active planning and implementation-prep track before backend Phase 8 begins.
+**Status:** Active planning and implementation track for React web replacement and MVC retirement before backend Phase 8 begins.
 
 **Purpose:** Replace the MVC UI with React web first, remove MVC from the active runtime, and
 then enable React Native / mobile on the same API contract.
@@ -155,7 +155,7 @@ then enable React Native / mobile on the same API contract.
 ### Track U Gate
 
 Backend Phase 8 remains the next backend phase, but its implementation starts only after Track U
-Phase U2 is complete.
+Phase U5 is complete.
 
 **Canonical references:**
 
