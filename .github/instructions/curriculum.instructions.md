@@ -9,7 +9,7 @@ applyTo: "**/*CURRICULUM*,**/docs/learning/curriculum/**"
 ## Current Progress (as of April 2026)
 - Days 1-43: ✅ Complete (implementation detail in `docs/learning/implementation-notes/implementation-notes-days-29-38.md`; verification freeze completed 2026-04-10 across local, Docker, and Azure)
 - Architecture Phases 1-7: ✅ Complete
-- Days 44+: 📅 Next (Phase 8 event-driven foundation, worker services, and messaging/outbox follow-on work)
+- Days 44+: 📅 Next (Phase 8 event foundation + payment recovery first; Phase 9 module extraction with Payments included second; Phase 10 Bicep-only Azure transport + DLQ operations third)
 
 ## Checkbox Marking Convention
 - `[x]` = done

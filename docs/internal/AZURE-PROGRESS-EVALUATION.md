@@ -16,6 +16,12 @@
 - ✅ Azure Initial Setup now proven end-to-end: OIDC app registration, 6 federated credentials, environment-scoped `AZUREAPPSERVICE_*` secrets across dev/staging/prod, and repo-level `OIDC_SP_OBJECT_ID`
 - ✅ Azure Bootstrap & Deploy for dev succeeded end-to-end: infrastructure provisioned, API deployed, UI deployed, endpoints live
 
+### April 10, 2026 Planning Freeze — Phases 8-10
+
+- ✅ **Phase 8 frozen as in-monolith event foundation work**: contracts in Application, explicit `IDomainEventToIntegrationEventMapper`, deterministic `AttemptOrderId`, `PaymentAttempt` lifecycle, outbox/inbox persistence, separate publisher and reconciliation workers, and no Service Bus code in Phase 8 runtime paths
+- ✅ **Phase 9 frozen as boundary extraction work**: Orders, Inventory, Notifications, and Payments become first-class modules with `PublicApi` contracts, architecture-test enforcement, local YARP routing, and a concrete distributed tracing acceptance bar before Azure rollout starts
+- ✅ **Phase 10 frozen as Azure transport and operations work**: Service Bus topology remains Bicep-only, DLQ behaviour is centralised and observable from day one, and ingress/security work is gated behind transport failure drills
+
 ### Architecture Phases Completed
 
 | Phase | Name | Days | Status |
@@ -63,6 +69,7 @@
 - ⬜ `Address` value object — intentionally deferred until a concrete aggregate or request boundary requires it
 - ⬜ Broaden optimistic concurrency beyond `Order` if wider aggregate coverage is required
 - ⬜ Enhanced OTel metrics for the Phase 7 hardening slice (moved out of the Phase 7 completion gate)
+- ⬜ Phase 8 implementation must freeze the DomainEvent → IntegrationEvent mapper registration strategy before the first outbox payload is written; that schema carries forward into Phase 10 Service Bus message bodies
 
 ---
 
