@@ -154,7 +154,15 @@ function Get-AspNetCoreEnvironment {
 
 # Super retry synchronous webapp creation helper
 function New-WebAppWithSuperRetry {
-    param([string]$ResourceGroup, [string]$PlanName, [string]$AppName, [int]$MaxAttempts = 5, [int]$InitialWaitMinutes = 2, [int]$RetryDelaySeconds = 60)
+    param(
+        [string]$ResourceGroup,
+        [string]$PlanName,
+        [string]$AppName,
+        [string]$RuntimeStack = "",
+        [string]$NetFrameworkVersion = "",
+        [int]$MaxAttempts = 5,
+        [int]$InitialWaitMinutes = 2,
+        [int]$RetryDelaySeconds = 60)
     $lastErr = $null
     # Try Azure CLI first, fallback to PowerShell REST API
     for ($i = 1; $i -le $MaxAttempts; $i++) {
@@ -162,7 +170,11 @@ function New-WebAppWithSuperRetry {
         
         if ($i -le 2) {
             # Try Azure CLI first
-            $result = az webapp create -g $ResourceGroup -p $PlanName -n $AppName --runtime "dotnet:8" 2>&1
+            if (-not [string]::IsNullOrWhiteSpace($RuntimeStack)) {
+                $result = az webapp create -g $ResourceGroup -p $PlanName -n $AppName --runtime $RuntimeStack 2>&1
+            } else {
+                $result = az webapp create -g $ResourceGroup -p $PlanName -n $AppName 2>&1
+            }
             if ($LASTEXITCODE -eq 0) {
                 Write-Log "WebApp '$AppName' created via Azure CLI - waiting ${InitialWaitMinutes} minutes..." "INFO" "Cyan"
                 Write-Host "  [WAIT] Allowing Azure time to provision webapp (${InitialWaitMinutes} min)..." -ForegroundColor Yellow
@@ -189,14 +201,24 @@ function New-WebAppWithSuperRetry {
                 $subscription = az account show --query id -o tsv
                 $headers = @{ Authorization = "Bearer $token"; "Content-Type" = "application/json" }
                 $serverFarmId = "/subscriptions/$subscription/resourceGroups/$ResourceGroup/providers/Microsoft.Web/serverfarms/$PlanName"
+                $siteConfig = @{}
+                if (-not [string]::IsNullOrWhiteSpace($NetFrameworkVersion)) {
+                    $siteConfig.netFrameworkVersion = $NetFrameworkVersion
+                }
+
+                $properties = @{
+                    serverFarmId = $serverFarmId
+                    reserved = $false
+                }
+
+                if ($siteConfig.Count -gt 0) {
+                    $properties.siteConfig = $siteConfig
+                }
+
                 $body = @{
                     location = "centralindia"
                     kind = "app"
-                    properties = @{
-                        serverFarmId = $serverFarmId
-                        reserved = $false
-                        siteConfig = @{ netFrameworkVersion = "v8.0" }
-                    }
+                    properties = $properties
                 } | ConvertTo-Json -Depth 10
                 $uri = "https://management.azure.com/subscriptions/$subscription/resourceGroups/$ResourceGroup/providers/Microsoft.Web/sites/${AppName}?api-version=2023-12-01"
                 $result = Invoke-RestMethod -Method Put -Uri $uri -Headers $headers -Body $body
@@ -569,13 +591,13 @@ foreach ($env in $envList) {
     else {
         Write-Host "  Starting API webapp creation: $apiApp..." -ForegroundColor Yellow
         Write-Host "  [COMMAND] $apiCreateCmd" -ForegroundColor Magenta
-        $apiResult = New-WebAppWithSuperRetry -ResourceGroup $rg -PlanName $plan -AppName $apiApp
+        $apiResult = New-WebAppWithSuperRetry -ResourceGroup $rg -PlanName $plan -AppName $apiApp -RuntimeStack 'dotnet:8' -NetFrameworkVersion 'v8.0'
         if ($apiResult.Success) { Write-Host "  [OK] API created: $apiApp" -ForegroundColor Green; Add-StepStatus -Name "Create API Web App ($apiApp)" -Status "Success" -Details "Created" } else { Write-Host "  [FAIL] Could not create API: $($apiResult.Error)" -ForegroundColor Red; Add-StepStatus -Name "Create API Web App ($apiApp)" -Status "Failed" -Details "$($apiResult.Error)" }
     }
 
     # UI Web App
     $uiExists = $null
-    $uiCreateCmd = "az webapp create -g $rg -p $plan -n $uiApp --runtime 'dotnet:8'"
+    $uiCreateCmd = "az webapp create -g $rg -p $plan -n $uiApp"
     try { $uiExists = az webapp show -g $rg -n $uiApp --query "name" -o tsv 2>$null; if ($LASTEXITCODE -ne 0) { $uiExists = $null } } catch { $uiExists = $null }
     if ($uiExists -eq $uiApp) { Write-Host "  UI WebApp already exists: $uiApp" -ForegroundColor Green; Add-StepStatus -Name "Create UI Web App ($uiApp)" -Status "Success" -Details "Already existed" }
     else {
@@ -1045,25 +1067,7 @@ foreach ($env in $envList) {
                 
                 $uiVerified = az webapp show -g $rg -n $uiApp --query "name" -o tsv 2>$null
                 if ($uiVerified -eq $uiApp) {
-                    Write-Host "    [PROCESSING] Configuring UI app settings..." -ForegroundColor Gray
-                    # Determine ASPNETCORE_ENVIRONMENT value based on environment
-                    $aspnetEnv = Get-AspNetCoreEnvironment -Environment $Environment
-                    $job = Start-Job -ScriptBlock {
-                        param($rg, $uiApp, $connString, $aspnetEnv, $kvName)
-                        az webapp config appsettings set -g $rg -n $uiApp --settings "APPLICATIONINSIGHTS_CONNECTION_STRING=$connString" "ASPNETCORE_ENVIRONMENT=$aspnetEnv" "KEY_VAULT_NAME=$kvName" "ApplicationInsightsAgent_EXTENSION_VERSION=~3" "XDT_MicrosoftApplicationInsights_Mode=recommended" 2>$null
-                    } -ArgumentList $rg, $uiApp, $connString, $aspnetEnv, $kvName
-                    
-                    $timeout = 90
-                    $completed = Wait-Job -Job $job -Timeout $timeout
-                    if ($completed) {
-                        $result = Receive-Job -Job $job
-                        Remove-Job -Job $job
-                        Write-Host "    [OK] App Insights and Key Vault configured for UI: $uiApp" -ForegroundColor Green
-                    } else {
-                        Stop-Job -Job $job
-                        Remove-Job -Job $job
-                        Write-Host "    [WARN] App Insights configuration for UI timed out after ${timeout}s - will retry later" -ForegroundColor Yellow
-                    }
+                    Write-Host "    [OK] UI app preserved as a static frontend host; bootstrap skips .NET-specific app settings." -ForegroundColor Green
                 }
             } else {
                 Write-Host "    [WARN] Could not retrieve App Insights connection string" -ForegroundColor Yellow
@@ -1075,7 +1079,7 @@ foreach ($env in $envList) {
         Write-Log "Failed to configure App Insights connection string: $($_.Exception.Message)" "WARN" "Yellow"
     }
 
-    # Runtime check & attempt config to .NET 8 if needed (for both API & UI)
+    # Runtime check & attempt config to .NET 8 if needed (API only)
     try {
         if ($apiCheckFinal -eq $apiApp) {
             $runtime = az webapp config show -g $rg -n $apiApp --query "netFrameworkVersion" -o tsv 2>$null
@@ -1089,13 +1093,11 @@ foreach ($env in $envList) {
         }
         if ($uiCheckFinal -eq $uiApp) {
             $runtime = az webapp config show -g $rg -n $uiApp --query "netFrameworkVersion" -o tsv 2>$null
-            if ($runtime -ne "v8.0") {
-                Write-Host "  [WARN] UI runtime: $runtime (expected v8.0), configuring .NET 8..." -ForegroundColor Yellow
-                az webapp config set -g $rg -n $uiApp --net-framework-version "v8.0" 2>$null | Out-Null
-                Start-Sleep -Seconds 3
-                $runtimeCheck = az webapp config show -g $rg -n $uiApp --query "netFrameworkVersion" -o tsv 2>$null
-                if ($runtimeCheck -eq "v8.0") { Write-Host "    [OK] UI runtime configured to .NET 8" -ForegroundColor Green } else { Write-Host "    [FAIL] UI runtime configuration failed; verify manually" -ForegroundColor Red }
-            } else { Write-Host "    [OK] UI runtime: .NET 8" -ForegroundColor Green }
+            if ([string]::IsNullOrWhiteSpace($runtime)) {
+                Write-Host "    [OK] UI runtime left unpinned for static React hosting" -ForegroundColor Green
+            } else {
+                Write-Host "    [OK] UI runtime left unchanged for static React hosting (current netFrameworkVersion: $runtime)" -ForegroundColor Green
+            }
         }
     } catch {
         Write-Log "Runtime config check failed: $($_.Exception.Message)" "WARN" "Yellow"

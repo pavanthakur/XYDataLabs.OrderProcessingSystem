@@ -162,7 +162,9 @@ into the MVC project.
 - The legacy MVC payment entry route now redirects to the React payment route.
 - The legacy MVC callback route remains only as a compatibility redirect to the React callback route.
 - Razor payment views, layout files, and UI-host browser assets have been removed from the active system design.
-- Deployment and environment cutover work is still required before U5 is complete.
+- `deploy-ui-to-azure.yml` now builds and deploys the React frontend to the Azure UI App Service.
+- Azure provisioning no longer pins the UI App Service to a .NET runtime for new environments.
+- U5 is complete; backend Phase 8 is no longer blocked by the web cutover gate.
 
 **Exit criteria:**
 

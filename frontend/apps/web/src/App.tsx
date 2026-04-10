@@ -13,7 +13,9 @@ import { PaymentCallbackPage } from "./pages/PaymentCallbackPage";
 import { PaymentPage } from "./pages/PaymentPage";
 
 const tenantSession = createTenantSession();
+const configuredApiBaseUrl = (import.meta.env.VITE_ORDERPROCESSING_API_BASE_URL ?? "").trim();
 const apiClient = createOrderProcessingApiClient({
+  baseUrl: configuredApiBaseUrl.length > 0 ? configuredApiBaseUrl.replace(/\/$/, "") : "",
   getTenantCode: () => tenantSession.getActiveTenantCode(),
   getTenantHeaderName: () => tenantSession.getTenantHeaderName()
 });

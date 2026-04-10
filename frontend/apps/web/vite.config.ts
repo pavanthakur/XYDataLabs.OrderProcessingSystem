@@ -2,7 +2,7 @@ import path from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-const apiProxyTarget = process.env.ORDERPROCESSING_API_BASE_URL ?? "http://localhost:5010";
+const apiProxyTarget = process.env.ORDERPROCESSING_API_BASE_URL ?? process.env.VITE_ORDERPROCESSING_API_BASE_URL ?? "http://localhost:5010";
 
 export default defineConfig({
   plugins: [react()],

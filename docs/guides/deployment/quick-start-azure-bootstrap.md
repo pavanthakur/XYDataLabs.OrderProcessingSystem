@@ -58,7 +58,7 @@ The bootstrap process uses **two GitHub Actions workflows** that together take a
 | GitHub OIDC Secrets (`AZUREAPPSERVICE_*`) | ✅ Fully automated | Phase 1 (`configureSecrets`) | Azure Initial Setup |
 | Azure Resource Groups, App Services, SQL | ✅ Fully automated | Phase 2 (`bootstrapInfra`) | Azure Bootstrap & Deploy |
 | Deploy API code to Azure App Service | ✅ Fully automated | Phase 2 (`deployApi`) | Azure Bootstrap & Deploy |
-| Deploy UI code to Azure App Service | ✅ Fully automated | Phase 2 (`deployUi`) | Azure Bootstrap & Deploy |
+| Deploy React frontend to Azure App Service | ✅ Fully automated | Phase 2 (`deployUi`) | Azure Bootstrap & Deploy |
 | **GitHub App** (`APP_ID` + `APP_PRIVATE_KEY`) | ⚠️ **Manual one-time** | Phase 0 | Azure Initial Setup (guidance) |
 
 ---
@@ -182,7 +182,8 @@ Each cleanup job (dev, staging, prod) uses the same **3-step Azure login sequenc
 
 #### Login Pattern in Deploy Workflows
 
-The deploy workflows (`deploy-api-to-azure.yml`, `deploy-ui-to-azure.yml`) use a **2-step pattern** with conditional gating:
+The deploy workflows (`deploy-api-to-azure.yml`, `deploy-ui-to-azure.yml`) use a **2-step pattern** with conditional gating.
+`deploy-ui-to-azure.yml` builds and deploys the React web app to the Azure UI App Service:
 
 ```
 Step 1: Check Azure Credentials
@@ -362,13 +363,13 @@ Navigate to: **GitHub → Actions → Azure Bootstrap & Deploy → Run workflow*
 | **When to enable** | After infrastructure is bootstrapped. Enable to deploy the latest API code. |
 | **What it does** | Triggers the `deploy-api-to-azure.yml` workflow for the selected environment after bootstrap completes. |
 
-### `deployUi` — Deploy UI
+### `deployUi` — Deploy React Frontend
 | | |
 |---|---|
 | **Type** | Boolean (default: `false`) |
 | **Phase** | 🔄 Phase 2 — day-to-day |
-| **When to enable** | After infrastructure is bootstrapped. Enable to deploy the latest UI code. |
-| **What it does** | Triggers the `deploy-ui-to-azure.yml` workflow for the selected environment after bootstrap completes. |
+| **When to enable** | After infrastructure is bootstrapped. Enable to deploy React web changes in `frontend/`. |
+| **What it does** | Triggers the `deploy-ui-to-azure.yml` workflow for the selected environment after bootstrap completes. The workflow builds the SPA with the environment-specific API base URL and deploys it to the Azure UI App Service. |
 
 ---
 
@@ -529,7 +530,7 @@ Add `APP_ID` and `APP_PRIVATE_KEY` to repository secrets before proceeding.
 | `environment` | `dev` | |
 | `bootstrapInfra` ✅ | `true` | 🔄 Phase 2 — creates/updates Azure resources |
 | `deployApi` | `false` (or `true`) | 🔄 Phase 2 — enable to deploy API code immediately |
-| `deployUi` | `false` (or `true`) | 🔄 Phase 2 — enable to deploy UI code immediately |
+| `deployUi` | `false` (or `true`) | 🔄 Phase 2 — enable to deploy the React frontend immediately |
 | `cleanupInfra` | `false` | 🗑️ Phase X — not tearing down |
 
 4. Click **Run workflow**
@@ -545,7 +546,7 @@ Add `APP_ID` and `APP_PRIVATE_KEY` to repository secrets before proceeding.
 After infrastructure is ready, deploy application code:
 - **Via Azure Bootstrap & Deploy**: Run workflow with `deployApi = true` and/or `deployUi = true`
 - **Via push**: Push to the `dev` branch — deployment workflows trigger automatically
-- **Via manual dispatch**: Run `deploy-api-to-azure.yml` or `deploy-ui-to-azure.yml` directly
+- **Via manual dispatch**: Run `deploy-api-to-azure.yml` or `deploy-ui-to-azure.yml` directly. The UI workflow deploys the React frontend.
 
 ---
 

@@ -30,12 +30,15 @@
 - ✅ **Backend sequencing tightened**: backend Phase 8 begins only after Track U Phase U5 completes; U2 is no longer the backend gate
 - ✅ **Canonical planning docs created**: `docs/guides/development/api-contract-audit.md` and `docs/guides/development/ui-modernization-plan.md`
 
-### April 11, 2026 Track U U5 Progress — UI Host Reduced To Redirect Layer
+### April 11, 2026 Track U U5 Complete — React Frontend Owns Azure UI Deployment
 
 - ✅ Legacy MVC payment entry now redirects to the React payment route instead of serving the old Razor payment form
 - ✅ Legacy MVC callback path remains only as a compatibility redirect to the React callback status route
 - ✅ Razor payment views, layout files, and UI-host browser assets were removed from `XYDataLabs.OrderProcessingSystem.UI`
-- ⏳ U5 remains open until deployment workflows and operational docs stop treating the MVC/UI App Service as the active frontend
+- ✅ PR validation now includes React workspace typecheck/build via `frontend/` in `ci.yml`
+- ✅ `deploy-ui-to-azure.yml` now builds and deploys the React frontend to the Azure UI App Service
+- ✅ Azure provisioning no longer treats the UI App Service as a required .NET 8 presentation host for new environments
+- ✅ U5 exit criteria are satisfied; backend Phase 8 is no longer blocked on the web cutover gate
 
 ### Architecture Phases Completed
 
