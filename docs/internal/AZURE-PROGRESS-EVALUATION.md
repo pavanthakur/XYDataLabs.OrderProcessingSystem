@@ -22,6 +22,13 @@
 - ✅ **Phase 9 frozen as boundary extraction work**: Orders, Inventory, Notifications, and Payments become first-class modules with `PublicApi` contracts, architecture-test enforcement, local YARP routing, and a concrete distributed tracing acceptance bar before Azure rollout starts
 - ✅ **Phase 10 frozen as Azure transport and operations work**: Service Bus topology remains Bicep-only, DLQ behaviour is centralised and observable from day one, and ingress/security work is gated behind transport failure drills
 
+### April 10, 2026 Planning Freeze — Track U (UI Modernization Program)
+
+- ✅ **Track U introduced as a parallel UI replacement program**: React web replaces the MVC UI before MVC retirement; mobile follows the web contract and is not a gate for backend Phase 8
+- ✅ **Migration-window contract frozen**: React clients bootstrap from `GET /api/v1/Info/runtime-configuration` and use `X-Tenant-Code`; Entra ID / JWT is explicitly deferred out of Track U
+- ✅ **MVC retirement gates frozen**: `GET /payment/callback` and `POST /payment/client-event` must move to API ownership before the MVC app can be removed
+- ✅ **Canonical planning docs created**: `docs/guides/development/api-contract-audit.md` and `docs/guides/development/ui-modernization-plan.md`
+
 ### Architecture Phases Completed
 
 | Phase | Name | Days | Status |
