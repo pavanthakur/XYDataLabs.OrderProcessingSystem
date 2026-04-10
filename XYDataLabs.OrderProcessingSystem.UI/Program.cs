@@ -239,8 +239,7 @@ else
 }
 
 // Add services to the container.
-builder.Services.AddControllersWithViews();
-builder.Services.AddRazorPages().AddRazorRuntimeCompilation();
+builder.Services.AddControllers();
 
 builder.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
 
@@ -293,7 +292,15 @@ SharedSettingsLoader.PrintApiSettingsDebug(apiSettings, activeSettings, "UI", is
 var useGenericExceptionPage = !app.Environment.IsDevelopment() || isAzure;
 if (useGenericExceptionPage)
 {
-    app.UseExceptionHandler("/Home/Error");
+    app.UseExceptionHandler(errorApp =>
+    {
+        errorApp.Run(async context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            context.Response.ContentType = "text/plain";
+            await context.Response.WriteAsync("UI redirect host failed.");
+        });
+    });
     app.UseHsts();
 }
 
@@ -307,12 +314,9 @@ if (activeSettings.HttpsEnabled)
     app.UseHttpsRedirection();
 }
 
-app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthorization();
-app.MapControllerRoute(
-    name: "default",
-    pattern: "{controller=Home}/{action=Index}/{id?}");
+app.MapControllers();
 
 try
 {

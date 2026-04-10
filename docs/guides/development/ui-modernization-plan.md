@@ -157,6 +157,13 @@ After cutover, the MVC host is removed from the active deployment model. The exi
 resource may be repurposed for the React web deployment, but React code must not be merged back
 into the MVC project.
 
+**Current implementation status (April 11, 2026):**
+
+- The legacy MVC payment entry route now redirects to the React payment route.
+- The legacy MVC callback route remains only as a compatibility redirect to the React callback route.
+- Razor payment views, layout files, and UI-host browser assets have been removed from the active system design.
+- Deployment and environment cutover work is still required before U5 is complete.
+
 **Exit criteria:**
 
 1. No user traffic depends on MVC.

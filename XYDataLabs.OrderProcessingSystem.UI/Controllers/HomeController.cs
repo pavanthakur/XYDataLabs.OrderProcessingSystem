@@ -1,225 +1,65 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Configuration;
 using XYDataLabs.OrderProcessingSystem.SharedKernel;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Configuration;
 using System;
-using XYDataLabs.OrderProcessingSystem.UI.Models;
 
 namespace XYDataLabs.OrderProcessingSystem.UI.Controllers
 {
+    [Route("")]
     public class HomeController : Controller
     {
+        private const string PaymentEntryPath = "/payments/new";
+        private const string PaymentCallbackResultPath = "/payments/callback";
+
+        private readonly IConfiguration _configuration;
         private readonly ILogger<HomeController> _logger;
-        private readonly TenantConfigurationOptions _tenantConfigurationOptions;
 
         public HomeController(
-            ILogger<HomeController> logger,
-            IOptions<TenantConfigurationOptions> tenantConfigurationOptions)
+            IConfiguration configuration,
+            ILogger<HomeController> logger)
         {
+            ArgumentNullException.ThrowIfNull(configuration);
+            ArgumentNullException.ThrowIfNull(logger);
             _logger = logger;
-            ArgumentNullException.ThrowIfNull(tenantConfigurationOptions);
-            _tenantConfigurationOptions = tenantConfigurationOptions.Value;
+            _configuration = configuration;
         }
 
-        public IActionResult Index()
+        [HttpGet("")]
+        public IActionResult Index([FromQuery] string? tenantCode = null)
         {
-            var (environmentName, isDocker) = ResolveExecutionContext();
+            var frontendBaseUrl = ResolveFrontendBaseUrl();
+            var redirectUrl = BuildFrontendUrl(frontendBaseUrl, PaymentEntryPath, Request.QueryString);
 
-            // Log home page access (business event)
-            _logger.LogInformation("User accessed home page in {Environment} environment", environmentName);
-            PopulateCommonViewData(environmentName, isDocker);
+            _logger.LogInformation(
+                "Legacy UI payment entry requested for tenant {TenantCode}. Redirecting to {RedirectUrl}",
+                string.IsNullOrWhiteSpace(tenantCode) ? "none" : tenantCode,
+                redirectUrl);
 
-            _logger.LogInformation("Rendering home page with API base URL: {ApiBaseUrl}", ViewData["ApiBaseUrl"]);
-
-            return View();
+            return Redirect(redirectUrl);
         }
 
-        [HttpGet("/payment/callback")]
+        [HttpGet("payment/callback")]
         public IActionResult PaymentCallback()
         {
-            var (environmentName, isDocker) = ResolveExecutionContext();
-            PopulateCommonViewData(environmentName, isDocker);
-
             var parameters = Request.Query.ToDictionary(
                 item => item.Key,
                 item => item.Value.ToString(),
                 StringComparer.OrdinalIgnoreCase);
-            var attemptOrderId = GetFirstValue(parameters, "order_id", "orderId");
+            var paymentId = GetFirstValue(parameters, "id", "transaction_id", "payment_id") ?? "none";
+            var callbackStatus = GetFirstValue(parameters, "status", "transaction_status", "operation_status") ?? "unknown";
             var tenantCode = GetFirstValue(parameters, "tenantCode");
-
-            var model = new PaymentCallbackViewModel
-            {
-                PaymentId = GetFirstValue(parameters, "id", "transaction_id", "payment_id"),
-                Status = GetFirstValue(parameters, "status", "transaction_status", "operation_status") ?? "unknown",
-                ErrorMessage = GetFirstValue(parameters, "error_message", "error", "message", "description"),
-                Parameters = parameters
-            };
-
-            ViewData["AttemptOrderId"] = attemptOrderId;
-            ViewData["TenantCode"] = tenantCode;
+            var frontendBaseUrl = ResolveFrontendBaseUrl();
+            var redirectUrl = BuildFrontendUrl(frontendBaseUrl, PaymentCallbackResultPath, Request.QueryString);
 
             _logger.LogInformation(
-                "OpenPay callback received with raw status {Status} for payment {PaymentId}, attempt order {AttemptOrderId}, tenant {TenantCode}, and {CallbackParameterCount} callback parameters",
-                model.Status,
-                model.PaymentId,
-                attemptOrderId,
+                "Legacy UI payment callback received with raw status {Status} for payment {PaymentId} and tenant {TenantCode}. Redirecting to {RedirectUrl}",
+                callbackStatus,
+                paymentId,
                 tenantCode ?? "none",
-                parameters.Count);
+                redirectUrl);
 
-            return View(model);
-        }
-
-        [HttpPost("/payment/client-event")]
-        public IActionResult LogPaymentClientEvent([FromBody] PaymentClientEventRequest? request)
-        {
-            if (request is null || string.IsNullOrWhiteSpace(request.EventName))
-            {
-                return BadRequest();
-            }
-
-            if (!ModelState.IsValid)
-            {
-                return ValidationProblem(ModelState);
-            }
-
-            var eventName = NormalizeLogValue(request.EventName, 100) ?? "ui_payment_event";
-            var severity = NormalizeLogValue(request.Severity, 16) ?? "information";
-            var tenantCode = NormalizeLogValue(request.TenantCode, 64) ?? "none";
-            var clientFlowId = NormalizeLogValue(request.ClientFlowId, 64) ?? "none";
-            var customerOrderId = NormalizeLogValue(request.CustomerOrderId, 128) ?? "none";
-            var attemptOrderId = NormalizeLogValue(request.AttemptOrderId, 128) ?? "none";
-            var paymentId = NormalizeLogValue(request.PaymentId, 128) ?? "none";
-            var paymentStatus = NormalizeLogValue(request.PaymentStatus, 64) ?? "none";
-            var statusCategory = NormalizeLogValue(request.StatusCategory, 32) ?? "none";
-            var errorCode = NormalizeLogValue(request.ErrorCode, 64) ?? "none";
-            var errorMessage = NormalizeLogValue(request.ErrorMessage, 512) ?? "none";
-            var pagePath = NormalizeLogValue(request.PagePath, 256) ?? "unknown";
-            var clientTimestampUtc = NormalizeLogValue(request.ClientTimestampUtc, 64) ?? "none";
-
-            var logMessage =
-                "UI payment event {UiEventName} on {PagePath} for tenant {TenantCode} customer order {CustomerOrderId} attempt {AttemptOrderId} payment {PaymentId} status {PaymentStatus} category {StatusCategory} http {HttpStatus} flow {ClientFlowId} client time {ClientTimestampUtc} error code {ErrorCode} message {ClientMessage}";
-
-            switch (severity.ToUpperInvariant())
-            {
-                case "ERROR":
-                    _logger.LogError(
-                        logMessage,
-                        eventName,
-                        pagePath,
-                        tenantCode,
-                        customerOrderId,
-                        attemptOrderId,
-                        paymentId,
-                        paymentStatus,
-                        statusCategory,
-                        request.HttpStatus,
-                        clientFlowId,
-                        clientTimestampUtc,
-                        errorCode,
-                        errorMessage);
-                    break;
-                case "WARNING":
-                    _logger.LogWarning(
-                        logMessage,
-                        eventName,
-                        pagePath,
-                        tenantCode,
-                        customerOrderId,
-                        attemptOrderId,
-                        paymentId,
-                        paymentStatus,
-                        statusCategory,
-                        request.HttpStatus,
-                        clientFlowId,
-                        clientTimestampUtc,
-                        errorCode,
-                        errorMessage);
-                    break;
-                default:
-                    _logger.LogInformation(
-                        logMessage,
-                        eventName,
-                        pagePath,
-                        tenantCode,
-                        customerOrderId,
-                        attemptOrderId,
-                        paymentId,
-                        paymentStatus,
-                        statusCategory,
-                        request.HttpStatus,
-                        clientFlowId,
-                        clientTimestampUtc,
-                        errorCode,
-                        errorMessage);
-                    break;
-            }
-
-            return NoContent();
-        }
-
-        private void PopulateCommonViewData(string environmentName, bool isDocker)
-        {
-            var apiBaseUrl = ResolveApiBaseUrl(environmentName, isDocker);
-
-            var isAzure = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME"));
-
-            ViewData["ApiBaseUrl"] = apiBaseUrl;
-            ViewData["Environment"] = environmentName.ToUpperInvariant();
-            ViewData["IsDevelopment"] = string.Equals(environmentName, Constants.Environments.Dev, StringComparison.Ordinal);
-            ViewData["EnvironmentColor"] = environmentName switch
-            {
-                Constants.Environments.Dev => "success",
-                Constants.Environments.Staging => "warning",
-                Constants.Environments.Production => "danger",
-                _ => "secondary"
-            };
-            ViewData["IsDocker"] = isDocker;
-            ViewData["IsAzure"] = isAzure;
-            ViewData["UiSelectorEnabled"] = _tenantConfigurationOptions.UiSelectorEnabled;
-            ViewData["UiTenantOverrideEnabled"] = _tenantConfigurationOptions.UiTenantOverrideEnabled;
-        }
-
-        private string ResolveApiBaseUrl(string environmentName, bool isDocker)
-        {
-            var azureSiteName = Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME");
-            var isAzure = !string.IsNullOrWhiteSpace(azureSiteName);
-            var apiBaseUrlEnv = Environment.GetEnvironmentVariable("API_BASE_URL");
-
-            if (!string.IsNullOrWhiteSpace(apiBaseUrlEnv))
-            {
-                var apiBaseUrl = apiBaseUrlEnv.TrimEnd('/');
-                _logger.LogInformation("Using API_BASE_URL from environment variable: {ApiBaseUrl}", apiBaseUrl);
-                return apiBaseUrl;
-            }
-
-            if (isAzure)
-            {
-                var apiSiteName = azureSiteName!.Replace("-ui-", "-api-");
-                if (!string.Equals(apiSiteName, azureSiteName, StringComparison.Ordinal))
-                {
-                    var apiBaseUrl = $"https://{apiSiteName}.azurewebsites.net";
-                    _logger.LogInformation("Using derived Azure API URL: {ApiBaseUrl}", apiBaseUrl);
-                    return apiBaseUrl;
-                }
-
-                _logger.LogWarning("Could not derive API site name from UI site name '{UiSiteName}'. Using fallback.", azureSiteName);
-                return $"https://{azureSiteName}-api.azurewebsites.net";
-            }
-
-            var builder = new ConfigurationBuilder();
-            bool useHttps;
-            ApiSettings apiSettings;
-            var apiSection = SharedSettingsLoader.AddAndBindSettings(
-                services: null,
-                builder: builder,
-                environmentName: environmentName,
-                isDocker: isDocker,
-                groupSelector: s => s.API,
-                apiSettings: out apiSettings,
-                useHttps: out useHttps);
-
-            var scheme = useHttps ? "https" : "http";
-            return $"{scheme}://{apiSection.Host}:{apiSection.Port}";
+            return Redirect(redirectUrl);
         }
 
         private static (string EnvironmentName, bool IsDocker) ResolveExecutionContext()
@@ -251,17 +91,63 @@ namespace XYDataLabs.OrderProcessingSystem.UI.Controllers
             return null;
         }
 
-        private static string? NormalizeLogValue(string? value, int maxLength)
+        private string ResolveFrontendBaseUrl()
         {
-            if (string.IsNullOrWhiteSpace(value))
+            var configuredBaseUrl = _configuration["Frontend:WebBaseUrl"]?.Trim();
+            if (Uri.TryCreate(configuredBaseUrl, UriKind.Absolute, out var configuredUri))
             {
-                return null;
+                return configuredUri.ToString().TrimEnd('/');
             }
 
-            var trimmed = value.Trim();
-            return trimmed.Length <= maxLength
-                ? trimmed
-                : trimmed[..maxLength];
+            var requestHost = Request.Host.Value;
+            if (!string.IsNullOrWhiteSpace(requestHost))
+            {
+                return $"{Request.Scheme}://{requestHost}";
+            }
+
+            var azureSiteName = Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME");
+            if (!string.IsNullOrWhiteSpace(azureSiteName))
+            {
+                return $"https://{azureSiteName}.azurewebsites.net";
+            }
+
+            var (environmentName, isDocker) = ResolveExecutionContext();
+            var builder = new ConfigurationBuilder();
+            bool useHttps;
+            ApiSettings apiSettings;
+            var uiSection = SharedSettingsLoader.AddAndBindSettings(
+                services: null,
+                builder: builder,
+                environmentName: environmentName,
+                isDocker: isDocker,
+                groupSelector: s => s.UI,
+                apiSettings: out apiSettings,
+                useHttps: out useHttps);
+
+            var scheme = useHttps ? "https" : "http";
+            return $"{scheme}://{uiSection.Host}:{uiSection.Port}";
+        }
+
+        private static string BuildFrontendUrl(string frontendBaseUrl, string targetPath, QueryString queryString)
+        {
+            var frontendUri = new Uri(frontendBaseUrl, UriKind.Absolute);
+            var builder = new UriBuilder(frontendUri)
+            {
+                Path = CombinePath(frontendUri.AbsolutePath, targetPath),
+                Query = queryString.HasValue ? queryString.Value![1..] : string.Empty
+            };
+
+            return builder.Uri.ToString();
+        }
+
+        private static string CombinePath(string basePath, string relativePath)
+        {
+            var normalizedBasePath = string.IsNullOrWhiteSpace(basePath) || string.Equals(basePath, "/", StringComparison.Ordinal)
+                ? string.Empty
+                : basePath.TrimEnd('/');
+            var normalizedRelativePath = relativePath.TrimStart('/');
+
+            return $"{normalizedBasePath}/{normalizedRelativePath}";
         }
     }
 }
