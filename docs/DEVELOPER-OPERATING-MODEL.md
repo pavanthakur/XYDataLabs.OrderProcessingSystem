@@ -43,10 +43,12 @@ docs/README.md
 ## Current State
 
 - Days 1-43 are complete.
-- Phase 8 is the next active engineering phase.
+- Track U (UI Modernization Program) is the active implementation-prep track.
+- Backend Phase 8 remains the next backend engineering phase and begins after Track U Phase U2.
 - The canonical learning source of truth is `docs/learning/curriculum/1_MASTER_CURRICULUM.md`.
 - The canonical milestone tracker is `docs/internal/AZURE-PROGRESS-EVALUATION.md`.
 - Only the active `docs/` tree remains.
+- The canonical UI planning pages are `docs/guides/development/api-contract-audit.md` and `docs/guides/development/ui-modernization-plan.md`.
 
 ## Update Routing
 

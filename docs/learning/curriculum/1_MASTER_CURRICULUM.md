@@ -24,15 +24,22 @@
 
 **🔥 YOUR NEXT 3 PRIORITIES:**
 
-### Priority 1: Azure Data & Resilience (Days 32-56) — *enables Architecture Phases 7, 8*
-**Why:** Connect your app to real Azure data services using passwordless auth — the foundation for everything that follows  
+### Priority 1: Track U — UI Modernization Program (pre-Phase-8 gate)
+**Why:** Replace the MVC UI before more end-user functionality accumulates on a host that is already targeted for retirement
 **Tasks:**
-- Days 32-38: ✅ Azure SQL + EF Core + `DefaultAzureCredential` (complete)
-- Days 39-43: ✅ Polly + Health Checks + 🏗️ **Phase 7** complete (tenant enforcement, audit trail, DDD tactical patterns, typed boundaries, readiness semantics)
+- U1: freeze the frontend contract, auth model, and MVC retirement rules
+- U2: scaffold `frontend/`, React web, generated API SDK, and tenant bootstrap package
+- U3: replace MVC browser journeys by feature slice
+- U4-U5: rehome MVC-owned server endpoints to API ownership and retire MVC from the active deployment model
+- U6: add React Native / mobile only after the web contract is stable
+
+### Priority 2: Azure Data & Resilience (Days 44-56) — *backend Phase 8 follows Track U U2*
+**Why:** Keep the backend event-foundation plan ready without starting implementation until the new frontend boundary exists
+**Tasks:**
 - Days 44-50: Azure Functions + Service Bus + DLQ operating model preparation (learning and infrastructure prep only; production transport swap remains Phase 10)
 - Days 51-56: 🏗️ **Phase 8** event foundation inside the monolith — contracts, mapper, outbox/inbox, `PaymentAttempt`, reconciliation, and separate workers
 
-### Priority 2: Azure Services Deep Dive + Containers (Days 57-86) — *enables Architecture Phases 8.5, 9, 14*
+### Priority 3: Azure Services Deep Dive + Containers (Days 57-86) — *enables Architecture Phases 8.5, 9, 14*
 **Why:** Master advanced Azure services, then containerise with confidence  
 **Tasks:**
 - Days 57-59: Azure Functions Advanced + 🏗️ **Phase 8.5** (Multi-Provider Payment)
@@ -40,19 +47,16 @@
 - Days 66-72: Cosmos DB + 🏗️ **Phase 14** (CQRS Read Model) + Redis (✅ Phase 6)
 - Days 73-86: .NET Aspire + 🏗️ **Phase 9** (YARP Microservices) + Docker + ACR, with Orders, Inventory, Notifications, and Payments treated as first-class modules
 
-### Priority 3: ACA + Auth + Enterprise (Days 87-112) — *enables Architecture Phases 10-13*
-**Why:** Migrate to containers with full enterprise security and observability  
-**Tasks:**
-- Days 87-93: ACA deployment + 🏗️ **Phase 10** (Azure Container Apps), including Bicep-only Service Bus topology, central DLQ intake, and transport failure drills before ingress/security sign-off
-- Days 94-98: APIM + 🏗️ **Phase 12** (Platform Engineering)
-- Days 99-105: Front Door + SRE + 🏗️ **Phase 11** (Data Ownership & Autonomy)
-- Days 106-112: .NET Aspire → ACA + 🏗️ **Phase 13** (Aspire & Final Maturity)
-
 ### Frozen Sequencing For Phases 8-10
 
 - **Phase 8** reduces business and data-loss risk: contracts, outbox/inbox, deterministic payment recovery, in-process dispatch
 - **Phase 9** reduces structural risk: four first-class modules, `PublicApi` boundaries, local deployability, tracing acceptance bar
 - **Phase 10** reduces transport and operational risk: Service Bus swap, central DLQ intake, Bicep-only topology, failure drills before ingress/security
+
+### Track U Gate
+
+- **Track U** reduces frontend migration risk: contract freeze, generated SDK, React web foundation, API ownership of callback/telemetry, and MVC removal rules
+- **Backend Phase 8** begins after Track U Phase U2 is complete
 
 ---
 
@@ -70,6 +74,7 @@ See `ARCHITECTURE-EVOLUTION.md` for full phase details.
 | 5 | Test Restructure | Day 80 (auto-✅) | ✅ Complete |
 | 6 | Polish & Hardening | Days 42-43, 71-72, 94 (auto-✅) | ✅ Complete |
 | 7 | Tenant Enforcement & Ops | Days 42–43 (DDD + Ops) | ✅ Complete |
+| Track U | UI Modernization Program | U1-U6 (parallel, pre-Phase-8 gate) | 📅 Active |
 | 8 | Event-Driven Foundation | Days 51, 55–56 (Days 48–50 are Service Bus/DLQ preparation only) | 📅 Planned |
 | 8.5 | Multi-Provider Payment | Days 58–59 | 📅 Planned |
 | 9 | YARP Microservices | Days 74–79 | 📅 Planned |
@@ -1264,11 +1269,11 @@ After completing today's tasks, you will have:
 **Days Completed:** 43 / 112  
 **Percentage Complete:** 38%  
 
-**Current Phase:** Azure Data & Resilience (Days 32-56)  
-**Current Day:** Day 44 — Azure Functions HTTP Trigger  
+**Current Phase:** Track U — UI Modernization Program (pre-Phase-8 gate)
+**Current Day:** Track U1 — contract freeze and MVC replacement planning
 **Last Completed Task:** Day 43 — Phase 7 closure; typed ID propagation and deployment readiness semantics  
-**Next Milestone:** Azure Functions + Service Bus (Days 44-56), then Phase 8 Event-Driven Foundation  
-**Architecture Status:** Phases 1-7 ✅ complete; Phase 8 (Event-Driven Foundation) is next  
+**Next Milestone:** Track U2 React web foundation, then backend Phase 8 Event-Driven Foundation
+**Architecture Status:** Phases 1-7 ✅ complete; Track U active; backend Phase 8 remains next
 
 ---
 

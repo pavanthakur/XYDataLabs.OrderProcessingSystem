@@ -19,8 +19,8 @@ Canonical curriculum navigation for the learning track.
 ## Current Learning Status
 
 - Completed: Days 1-43 and Architecture Phases 1-7
-- Current: Phase 7 is closed and verification-frozen; the Phase 8-10 implementation plan is now frozen
-- Next: Phase 8 contracts and recovery first, then Phase 9 module extraction, then Phase 10 Azure transport + DLQ operations behind hard entry gates
+- Current: Phase 7 is closed and verification-frozen; Track U is now the active implementation-prep track before backend Phase 8 begins
+- Next: Track U U1-U2 first, then backend Phase 8 event foundation, then Phase 9 module extraction, then Phase 10 Azure transport + DLQ operations behind hard entry gates
 
 Last Updated: April 10, 2026
-Current Focus: Phase 8 in-monolith event foundation on top of the frozen Phase 7 baseline
+Current Focus: Track U contract freeze and React web foundation planning on top of the frozen Phase 7 baseline

@@ -109,6 +109,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".github", ".github", "{E1A8B2C9-4D5F-6789-ABCD-123456789DE5}"
 	ProjectSection(SolutionItems) = preProject
 		.github\app-manifest.json = .github\app-manifest.json
+		.github\completion-check-rubric.md = .github\completion-check-rubric.md
 		.github\copilot-instructions.md = .github\copilot-instructions.md
 	EndProjectSection
 EndProject
@@ -145,6 +146,16 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "prompts", "prompts", "{E1A8
 		.github\prompts\XYDataLabs-verify-db-logs.prompt.md = .github\prompts\XYDataLabs-verify-db-logs.prompt.md
 	EndProjectSection
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "skills", "skills", "{E1A8B2D3-4D5F-6789-ABCD-123456789DEA}"
+	ProjectSection(SolutionItems) = preProject
+		.github\skills\README.md = .github\skills\README.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "azure-deployment-operations", "azure-deployment-operations", "{E1A8B2D4-4D5F-6789-ABCD-123456789DEB}"
+	ProjectSection(SolutionItems) = preProject
+		.github\skills\azure-deployment-operations\SKILL.md = .github\skills\azure-deployment-operations\SKILL.md
+	EndProjectSection
+EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{E1A8B2C9-4D5F-6789-ABCD-123456789DE6}"
 	ProjectSection(SolutionItems) = preProject
 		.github\workflows\README.md = .github\workflows\README.md
@@ -162,6 +173,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{
 		.github\workflows\deploy-ui-to-azure.yml = .github\workflows\deploy-ui-to-azure.yml
 		.github\workflows\infra-deploy.yml = .github\workflows\infra-deploy.yml
 		.github\workflows\test-validate-deployment.yml = .github\workflows\test-validate-deployment.yml
+		.github\workflows\validate-ai-customization.yml = .github\workflows\validate-ai-customization.yml
 		.github\workflows\validate-deployment.yml = .github\workflows\validate-deployment.yml
 		.github\workflows\validate-adrs.yml = .github\workflows\validate-adrs.yml
 		.github\workflows\validate-doc-links.yml = .github\workflows\validate-doc-links.yml
@@ -222,14 +234,17 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "scripts", "scripts", "{BB00
 		scripts\test-recommended-next-steps.ps1 = scripts\test-recommended-next-steps.ps1
 		scripts\setup-local.ps1 = scripts\setup-local.ps1
 		scripts\validate-adr-frontmatter.ps1 = scripts\validate-adr-frontmatter.ps1
+		scripts\validate-ai-customization.ps1 = scripts\validate-ai-customization.ps1
 		scripts\validate-doc-links.js = scripts\validate-doc-links.js
 		scripts\sync-check-solution.ps1 = scripts\sync-check-solution.ps1
 		scripts\verify-payment-run-azure.ps1 = scripts\verify-payment-run-azure.ps1
+		scripts\verify-payment-run-physical.ps1 = scripts\verify-payment-run-physical.ps1
 		scripts\test-verify-payment-run-azure.ps1 = scripts\test-verify-payment-run-azure.ps1
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{CC000001-0001-0001-0001-000000000001}"
 	ProjectSection(SolutionItems) = preProject
+		docs\AI-OPERATING-MODEL.md = docs\AI-OPERATING-MODEL.md
 		docs\DEVELOPER-OPERATING-MODEL.md = docs\DEVELOPER-OPERATING-MODEL.md
 		docs\README.md = docs\README.md
 	EndProjectSection
@@ -253,6 +268,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "decisions", "decisions", "{
 		docs\architecture\decisions\ADR-012-opentelemetry-dual-export.md = docs\architecture\decisions\ADR-012-opentelemetry-dual-export.md
 		docs\architecture\decisions\ADR-013-redis-caching-behavior.md = docs\architecture\decisions\ADR-013-redis-caching-behavior.md
 		docs\architecture\decisions\ADR-014-azure-service-coverage-rationale.md = docs\architecture\decisions\ADR-014-azure-service-coverage-rationale.md
+		docs\architecture\decisions\ADR-015-deployment-readiness-probes.md = docs\architecture\decisions\ADR-015-deployment-readiness-probes.md
+		docs\architecture\decisions\ADR-016-client-rendered-react-spa.md = docs\architecture\decisions\ADR-016-client-rendered-react-spa.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "guides", "guides", "{CC000009-0001-0001-0001-000000000001}"
@@ -297,15 +314,18 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "development", "development", "{CC00000D-0001-0001-0001-000000000001}"
 	ProjectSection(SolutionItems) = preProject
 		docs\guides\development\README.md = docs\guides\development\README.md
+		docs\guides\development\api-contract-audit.md = docs\guides\development\api-contract-audit.md
 		docs\guides\development\docker-comprehensive-guide.md = docs\guides\development\docker-comprehensive-guide.md
 		docs\guides\development\project-overview.md = docs\guides\development\project-overview.md
 		docs\guides\development\scripts-overview.md = docs\guides\development\scripts-overview.md
+		docs\guides\development\ui-modernization-plan.md = docs\guides\development\ui-modernization-plan.md
 		docs\guides\development\visual-studio-docker-profiles.md = docs\guides\development\visual-studio-docker-profiles.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "internal", "internal", "{CC000004-0001-0001-0001-000000000001}"
 	ProjectSection(SolutionItems) = preProject
 		docs\internal\AZURE-PROGRESS-EVALUATION.md = docs\internal\AZURE-PROGRESS-EVALUATION.md
+		docs\internal\DEFERRED-WORK-LOG.md = docs\internal\DEFERRED-WORK-LOG.md
 		docs\internal\README.md = docs\internal\README.md
 		docs\internal\azure-bootstrap-improvements-backlog.md = docs\internal\azure-bootstrap-improvements-backlog.md
 	EndProjectSection
@@ -551,6 +571,8 @@ Global
 		{E1A8B2D0-4D5F-6789-ABCD-123456789DE7} = {E1A8B2C9-4D5F-6789-ABCD-123456789DE5}
 		{E1A8B2D1-4D5F-6789-ABCD-123456789DE8} = {E1A8B2C9-4D5F-6789-ABCD-123456789DE5}
 		{E1A8B2D2-4D5F-6789-ABCD-123456789DE9} = {E1A8B2C9-4D5F-6789-ABCD-123456789DE5}
+		{E1A8B2D3-4D5F-6789-ABCD-123456789DEA} = {E1A8B2C9-4D5F-6789-ABCD-123456789DE5}
+		{E1A8B2D4-4D5F-6789-ABCD-123456789DEB} = {E1A8B2D3-4D5F-6789-ABCD-123456789DEA}
 		{E1A8B2C9-4D5F-6789-ABCD-123456789DE6} = {E1A8B2C9-4D5F-6789-ABCD-123456789DE5}
 		{E1A8B2CB-4D5F-6789-ABCD-123456789DE7} = {E1A8B2CA-4D5F-6789-ABCD-123456789DE6}
 		{E1A8B2CC-4D5F-6789-ABCD-123456789DE8} = {E1A8B2CA-4D5F-6789-ABCD-123456789DE6}
