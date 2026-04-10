@@ -2,8 +2,8 @@ using System.Net;
 using System.Text.Json;
 using FluentAssertions;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
 using XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure;
 using Xunit;
 
@@ -57,6 +57,23 @@ public sealed class TenantMiddlewareTests : IAsyncLifetime
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         body.Should().Contain("activeTenantCode");
         body.Should().Contain("X-Tenant-Code");
+    }
+
+    [Fact]
+    public async Task PaymentCallback_WithoutTenantHeader_RedirectsToFrontendCallback()
+    {
+        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+
+        var response = await client.GetAsync("/payment/callback?id=pay_123&status=charge_pending&tenantCode=TenantA");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+        response.Headers.Location.Should().NotBeNull();
+        response.Headers.Location!.ToString().Should().StartWith("http://localhost:5173/payments/callback");
+        response.Headers.Location!.Query.Should().Contain("id=pay_123");
+        response.Headers.Location!.Query.Should().Contain("tenantCode=TenantA");
     }
 
     [Fact]
@@ -135,23 +152,5 @@ public sealed class TenantMiddlewareTests : IAsyncLifetime
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
         body.RootElement.GetProperty("title").GetString().Should().Be("Tenant is not active.");
         body.RootElement.GetProperty("detail").GetString().Should().Contain("is not active");
-    }
-}
-
-internal sealed class DegradedReadinessIntegrationTestFactory(string connectionString)
-    : IntegrationTestWebAppFactory(connectionString)
-{
-    protected override void ConfigureWebHost(IWebHostBuilder builder)
-    {
-        base.ConfigureWebHost(builder);
-
-        builder.ConfigureServices(services =>
-        {
-            services.AddHealthChecks()
-                .AddCheck(
-                    "synthetic-degraded-ready-check",
-                    () => HealthCheckResult.Degraded("Synthetic degraded dependency for readiness probe verification."),
-                    tags: new[] { "ready" });
-        });
     }
 }

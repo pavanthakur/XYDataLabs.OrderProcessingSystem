@@ -557,6 +557,12 @@ static string ResolveTenantCodeForLogging(HttpContext httpContext)
         return requestedTenantCode.Trim();
     }
 
+    if (string.Equals(httpContext.Request.Path.Value, "/payment/callback", StringComparison.OrdinalIgnoreCase))
+    {
+        var callbackTenantCode = httpContext.Request.Query["tenantCode"].FirstOrDefault()?.Trim();
+        return string.IsNullOrWhiteSpace(callbackTenantCode) ? "callback" : callbackTenantCode;
+    }
+
     return string.Equals(httpContext.Request.Path.Value, "/api/v1/info/runtime-configuration", StringComparison.OrdinalIgnoreCase)
         ? "bootstrap"
         : "none";

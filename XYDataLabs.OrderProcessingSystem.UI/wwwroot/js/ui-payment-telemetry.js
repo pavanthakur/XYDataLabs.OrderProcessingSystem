@@ -1,6 +1,10 @@
 window.OrderProcessingUiTelemetry = (() => {
-    const endpointPath = '/payment/client-event';
     const defaultTenantHeaderName = 'X-Tenant-Code';
+    const resolveApiBaseUrl = () => document.body?.dataset?.apiBaseUrl?.replace(/\/$/, '') || '';
+    const resolveEndpointPath = () => {
+        const apiBaseUrl = resolveApiBaseUrl();
+        return apiBaseUrl ? `${apiBaseUrl}/payment/client-event` : '/payment/client-event';
+    };
 
     const createFlowId = () => {
         if (window.crypto?.randomUUID) {
@@ -48,15 +52,6 @@ window.OrderProcessingUiTelemetry = (() => {
 
         const body = JSON.stringify(normalizedPayload);
 
-        if (options.useBeacon && navigator.sendBeacon) {
-            try {
-                const blob = new Blob([body], { type: 'application/json' });
-                return Promise.resolve(navigator.sendBeacon(endpointPath, blob));
-            } catch (error) {
-                console.warn('Unable to send UI payment telemetry via beacon.', error);
-            }
-        }
-
         const tenantHeaderName = window.OrderProcessingTenant?.getTenantHeaderName?.() || defaultTenantHeaderName;
         const headers = {
             'Content-Type': 'application/json'
@@ -66,11 +61,11 @@ window.OrderProcessingUiTelemetry = (() => {
             headers[tenantHeaderName] = normalizedPayload.tenantCode;
         }
 
-        return fetch(endpointPath, {
+        return fetch(resolveEndpointPath(), {
             method: 'POST',
             headers,
             body,
-            keepalive: options.keepalive === true
+            keepalive: options.keepalive === true || options.useBeacon === true
         })
             .then(() => true)
             .catch(error => {

@@ -28,6 +28,9 @@
     "UiTenantOverrideEnabled": true,
     "SwaggerSelectorEnabled": true
   },
+  "Frontend": {
+    "WebBaseUrl": "http://localhost:5173"
+  },
   "Serilog": {
     "Using": [ "Serilog.Sinks.File" ],
     "MinimumLevel": {

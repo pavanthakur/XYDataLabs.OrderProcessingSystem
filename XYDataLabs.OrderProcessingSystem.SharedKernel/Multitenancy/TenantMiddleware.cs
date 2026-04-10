@@ -14,6 +14,7 @@ public sealed class TenantMiddleware
     private const string HealthPath = "/health";
     private const string HealthLivePath = "/health/live";
     private const string HealthReadyPath = "/health/ready";
+    private const string PaymentCallbackPath = "/payment/callback";
 
     public TenantMiddleware(RequestDelegate next)
     {
@@ -35,7 +36,7 @@ public sealed class TenantMiddleware
         {
             using var bootstrapTenantScope = LogContext.PushProperty(
                 "TenantCode",
-                IsHealthRequest(context.Request.Path) ? "infrastructure" : "bootstrap");
+                ResolveOptionalTenantCode(context));
             await _next(context);
             return;
         }
@@ -112,7 +113,9 @@ public sealed class TenantMiddleware
 
     private static bool IsTenantOptionalRequest(PathString requestPath)
     {
-        return IsRuntimeConfigurationRequest(requestPath) || IsHealthRequest(requestPath);
+        return IsRuntimeConfigurationRequest(requestPath)
+            || IsHealthRequest(requestPath)
+            || IsPaymentCallbackRequest(requestPath);
     }
 
     private static bool IsRuntimeConfigurationRequest(PathString requestPath)
@@ -125,6 +128,27 @@ public sealed class TenantMiddleware
         return string.Equals(requestPath.Value, HealthPath, StringComparison.OrdinalIgnoreCase)
             || string.Equals(requestPath.Value, HealthLivePath, StringComparison.OrdinalIgnoreCase)
             || string.Equals(requestPath.Value, HealthReadyPath, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsPaymentCallbackRequest(PathString requestPath)
+    {
+        return string.Equals(requestPath.Value, PaymentCallbackPath, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ResolveOptionalTenantCode(HttpContext context)
+    {
+        if (IsHealthRequest(context.Request.Path))
+        {
+            return "infrastructure";
+        }
+
+        if (IsPaymentCallbackRequest(context.Request.Path))
+        {
+            var callbackTenantCode = context.Request.Query["tenantCode"].FirstOrDefault()?.Trim();
+            return string.IsNullOrWhiteSpace(callbackTenantCode) ? "callback" : callbackTenantCode;
+        }
+
+        return "bootstrap";
     }
 
     private static async Task WriteFailureAsync(
