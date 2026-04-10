@@ -29,8 +29,8 @@
 **Tasks:**
 - Days 32-38: ✅ Azure SQL + EF Core + `DefaultAzureCredential` (complete)
 - Days 39-43: ✅ Polly + Health Checks + 🏗️ **Phase 7** complete (tenant enforcement, audit trail, DDD tactical patterns, typed boundaries, readiness semantics)
-- Days 44-52: Azure Functions + Service Bus + 🏗️ **Phase 8** (Event-Driven Foundation)
-- Days 53-56: Key Vault + `IOptions<T>` + Worker Services + Outbox Pattern
+- Days 44-50: Azure Functions + Service Bus + DLQ operating model preparation (learning and infrastructure prep only; production transport swap remains Phase 10)
+- Days 51-56: 🏗️ **Phase 8** event foundation inside the monolith — contracts, mapper, outbox/inbox, `PaymentAttempt`, reconciliation, and separate workers
 
 ### Priority 2: Azure Services Deep Dive + Containers (Days 57-86) — *enables Architecture Phases 8.5, 9, 14*
 **Why:** Master advanced Azure services, then containerise with confidence  
@@ -38,15 +38,21 @@
 - Days 57-59: Azure Functions Advanced + 🏗️ **Phase 8.5** (Multi-Provider Payment)
 - Days 60-65: Durable Functions + Serilog (✅ partial — Phase 3)
 - Days 66-72: Cosmos DB + 🏗️ **Phase 14** (CQRS Read Model) + Redis (✅ Phase 6)
-- Days 73-86: .NET Aspire + 🏗️ **Phase 9** (YARP Microservices) + Docker + ACR
+- Days 73-86: .NET Aspire + 🏗️ **Phase 9** (YARP Microservices) + Docker + ACR, with Orders, Inventory, Notifications, and Payments treated as first-class modules
 
 ### Priority 3: ACA + Auth + Enterprise (Days 87-112) — *enables Architecture Phases 10-13*
 **Why:** Migrate to containers with full enterprise security and observability  
 **Tasks:**
-- Days 87-93: ACA deployment + 🏗️ **Phase 10** (Azure Container Apps)
+- Days 87-93: ACA deployment + 🏗️ **Phase 10** (Azure Container Apps), including Bicep-only Service Bus topology, central DLQ intake, and transport failure drills before ingress/security sign-off
 - Days 94-98: APIM + 🏗️ **Phase 12** (Platform Engineering)
 - Days 99-105: Front Door + SRE + 🏗️ **Phase 11** (Data Ownership & Autonomy)
 - Days 106-112: .NET Aspire → ACA + 🏗️ **Phase 13** (Aspire & Final Maturity)
+
+### Frozen Sequencing For Phases 8-10
+
+- **Phase 8** reduces business and data-loss risk: contracts, outbox/inbox, deterministic payment recovery, in-process dispatch
+- **Phase 9** reduces structural risk: four first-class modules, `PublicApi` boundaries, local deployability, tracing acceptance bar
+- **Phase 10** reduces transport and operational risk: Service Bus swap, central DLQ intake, Bicep-only topology, failure drills before ingress/security
 
 ---
 
@@ -64,10 +70,10 @@ See `ARCHITECTURE-EVOLUTION.md` for full phase details.
 | 5 | Test Restructure | Day 80 (auto-✅) | ✅ Complete |
 | 6 | Polish & Hardening | Days 42-43, 71-72, 94 (auto-✅) | ✅ Complete |
 | 7 | Tenant Enforcement & Ops | Days 42–43 (DDD + Ops) | ✅ Complete |
-| 8 | Event-Driven Foundation | Days 51, 55–56 | 📅 Planned |
+| 8 | Event-Driven Foundation | Days 51, 55–56 (Days 48–50 are Service Bus/DLQ preparation only) | 📅 Planned |
 | 8.5 | Multi-Provider Payment | Days 58–59 | 📅 Planned |
-| 9 | YARP Microservices | Days 74–76, 78 | 📅 Planned |
-| 10 | Azure Container Apps | Days 87–93 | 📅 Planned |
+| 9 | YARP Microservices | Days 74–79 | 📅 Planned |
+| 10 | Azure Container Apps | Days 87–93 (transport drills gate ingress/security) | 📅 Planned |
 | 11 | Data Ownership & Autonomy | Days 100, 102 | 📅 Planned |
 | 12 | Platform Engineering | Days 95, 97 | 📅 Planned |
 | 13 | Aspire & Final Maturity | Days 106–109 | 📅 Planned |
@@ -450,31 +456,33 @@ After completing today's tasks, you will have:
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 #### Day 49: 🆕 Microservice Pub/Sub in C# via Service Bus (Azure-first .NET)
-> **Why now:** Real service-to-service decoupling — replace direct HTTP calls between microservices
-- [ ] Add `Azure.Messaging.ServiceBus` NuGet package
-- [ ] **Orders API (Publisher):** Use `ServiceBusClient` + `ServiceBusSender` with `DefaultAzureCredential` to publish `OrderPlacedEvent` to `order-events` Topic
-- [ ] **Inventory API (Subscriber):** Use `ServiceBusProcessor` on `inventory-sub` to consume events
-- [ ] **Notifications API (Subscriber):** Use `ServiceBusProcessor` on `notifications-sub`
-- [ ] All three use `DefaultAzureCredential` — no connection strings in code
-- [ ] Test end-to-end: place order → both APIs receive event independently
+> **Why now:** Learn the eventual Phase 10 transport without polluting Phase 8 runtime code
+>
+> **Guardrail:** This is a Service Bus sandbox / spike slice only. Do **not** replace the Phase 8 in-process dispatcher in production code yet.
+- [ ] Add `Azure.Messaging.ServiceBus` NuGet package in a transport spike or sandbox host
+- [ ] Publish a sample `OrderPlacedEvent` to `order-events` using `ServiceBusClient` + `ServiceBusSender` with `DefaultAzureCredential`
+- [ ] Consume the sample event from `inventory-sub` and `notifications-sub` in isolated subscribers
+- [ ] Document which transport concerns stay out of Phase 8 production paths (`ServiceBusProcessor`, DLQ handling, subscription wiring)
+- [ ] Verify `DefaultAzureCredential` works end-to-end with no connection strings in code
 - [ ] **Time:** 3 hours | **Completed:** ___/___/___
 
 #### Day 50: Service Bus — Dead Letter, Retry & Monitoring
-- [ ] Implement dead-letter queue handling for failed messages
-- [ ] Configure max delivery count (3 retries before dead-lettering)
-- [ ] Monitor message counts (active, dead-lettered) in Azure Portal
-- [ ] Verify end-to-end: order placed → Inventory updated + Notification sent
+- [ ] Inspect active + dead-lettered message counts in Azure Portal and document the current operational baseline
+- [ ] Set and explain the DLQ rules that will become mandatory in Phase 10: `deadLetteringOnMessageExpiration = true`, explicit `maxDeliveryCount`, central intake, and mandatory reason + description on application dead-lettering
+- [ ] Compare transient vs poison vs expired vs rejected message handling paths
+- [ ] Define the alerts that will be required later: DLQ depth and oldest message age
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
-#### Day 51: Event Grid — Reactive Architecture
-> 🏗️ **Architecture Phase 8a** — Replace Event Grid with: Domain events + integration events architecture. Design `IDomainEvent`, `IIntegrationEvent` interfaces and event dispatcher.
+#### Day 51: Event Foundation — Contracts, Envelope & Mapping
+> 🏗️ **Architecture Phase 8a** — Freeze the event contract layer in Application and keep Domain free of transport vocabulary.
 >
 > **Additional Phase 8 deliverables for this day:**
 > - Inbox Pattern — `InboxMessages` table for idempotent consumers (deduplication by `MessageId` before processing)
 > - Event Versioning — envelope with `SchemaVersion` field; convention: `OrderCreatedV1` → `OrderCreatedV2` with backward-compatible projection
-- [ ] Create Event Grid Topic for Azure resource events
-- [ ] Subscribe Azure Function to Event Grid events (blob upload → process)
-- [ ] Compare: Service Bus (command/guaranteed delivery) vs Event Grid (system events/push)
+- [ ] Define `IDomainEvent`, `IIntegrationEvent`, `EventEnvelope`, `IEventHandler<T>`, `IEventPublisher`, and `IIdempotencyGuard` in Application
+- [ ] Freeze `DeliveryFailureCategory` in Application, not Domain
+- [ ] Define the explicit `IDomainEventToIntegrationEventMapper<TDomain, TIntegration>` strategy and document how it is registered
+- [ ] Record the frozen rule: Domain raises → Application maps → Infrastructure persists
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 #### Day 52: Decision Matrix — Event Grid vs Service Bus vs Storage Queue
@@ -499,33 +507,36 @@ After completing today's tasks, you will have:
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 #### Day 55: 🆕 Worker Services + BackgroundService on Azure (Azure-first .NET)
-> **Why now:** Long-running background polling from Service Bus needs a hosted Worker Service
+> **Why now:** Phase 8 needs recoverability and reliable background processing before any Azure transport swap
 >
-> 🏗️ **Architecture Phase 8c** — Combine Worker Service with Outbox pattern: background worker reads `OutboxMessage` rows and publishes to Service Bus
+> 🏗️ **Architecture Phase 8c** — Add separate workers for outbox publishing and payment reconciliation while transport remains in-process
 >
 > **Additional Phase 8 deliverables for this day:**
-> - Automatic domain event dispatch — `SaveChangesAsync` override extracts `IDomainEvent`s from `ChangeTracker.Entries<Entity>()` after `base.SaveChangesAsync()` succeeds; events written to Outbox in same transaction
+> - Automatic domain event dispatch — `SaveChangesAsync` override extracts `IDomainEvent`s from `ChangeTracker.Entries<Entity>()`, maps them to integration events, and writes Outbox rows in the same transaction
 > - Parallel event handler execution — `EventPublisher` dispatches all `IEventHandler<T>` via `Task.WhenAll`; partial failures collected into `AggregateException`
 - [ ] Create `XYDataLabs.OrderProcessingSystem.Worker` project (Worker Service template)
-- [ ] Implement `BackgroundService` that processes order events via `ServiceBusProcessor`
+- [ ] Implement `OutboxPublisherWorker` that reads `OutboxMessage` rows and dispatches them through the in-memory `IEventPublisher`
+- [ ] Implement `PaymentReconciliationWorker` that resolves `UnknownNeedsReconciliation` payment attempts
 - [ ] Register as `IHostedService` in DI
-- [ ] Deploy as a separate Azure App Service (Worker)
+- [ ] Verify the two workers remain separate and are not merged into one operational path
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 #### Day 56: 🆕 Outbox Pattern — Reliable Messaging (Azure-first .NET)
-> **Why now:** Without Outbox, a DB write can succeed but the Service Bus publish can silently fail — losing the event
+> **Why now:** Without Outbox and a persisted payment-attempt lifecycle, a provider call can succeed while local state remains unrecoverable
 >
-> 🏗️ **Architecture Phase 8d** — Test Outbox reliability: simulate Service Bus downtime → order saved → event delivered later when bus recovers
+> 🏗️ **Architecture Phase 8d** — Test rollback, replay, and reconciliation semantics before introducing Azure transport
 >
 > **Phase 8 design rules:**
 > - Events are immutable value objects — never modified after creation
 > - Schema changes must be backward-compatible (additive fields only; breaking changes = new version)
 > - Outbox writes in the same transaction as the domain change (no dual-write)
 > - Background publisher is idempotent — Inbox table deduplicates by `MessageId` before handler execution
-- [ ] Add `OutboxMessage` table to SQL database via EF migration
-- [ ] In `PlaceOrder` handler: write to `Orders` + `OutboxMessage` in a single SQL transaction
-- [ ] Create background worker that reads `OutboxMessage` rows, publishes to Service Bus, marks as processed
-- [ ] Test: simulate Service Bus downtime — order saved, event delivered later when bus recovers
+- [ ] Add `OutboxMessages`, `InboxMessages`, and `PaymentAttempts` tables to SQL via EF migration
+- [ ] Add indexes up front: `OutboxMessages(ProcessedAt, LockExpiry, OccurredUtc)`, `InboxMessages(MessageId)` unique, `PaymentAttempts(AttemptOrderId)` unique
+- [ ] Persist `PaymentAttempt` before the provider call and make `AttemptOrderId` deterministic (`OrderId + AttemptNumber`)
+- [ ] Implement the five-state payment lifecycle: `PendingProviderCall`, `ProviderAccepted`, `Succeeded`, `Failed`, `UnknownNeedsReconciliation`
+- [ ] Write business change + mapped integration event envelope to the Outbox in a single SQL transaction
+- [ ] Test: rollback leaves no outbox row; duplicate message is harmless; publisher restart replays rows; reconciliation resolves `UnknownNeedsReconciliation`; cross-tenant isolation is preserved
 - [ ] **Time:** 3 hours | **Completed:** ___/___/___
 
 ---
@@ -708,10 +719,10 @@ After completing today's tasks, you will have:
 > 🏗️ **Architecture Phase 9a** — YARP gateway project: routing rules for Orders/Inventory/Notifications APIs
 >
 > **Prerequisite — Module isolation (before extraction):**
-> - Per-module project structure: `Orders.Domain`, `Orders.Features`, `Orders.Infrastructure` (repeat for Inventory, Notifications)
+> - Per-module project structure: `Orders`, `Inventory`, `Notifications`, and `Payments` each get `.Domain`, `.Features`, `.Infrastructure`, and `.PublicApi`
 > - PublicApi contracts: `IOrderModuleApi`, `IInventoryModuleApi` interfaces in dedicated `*.PublicApi` projects — modules depend ONLY on each other’s PublicApi
 > - `AssemblyReference.cs` markers per project for reliable handler discovery
-> - Module self-registration: `AddOrdersModule()`, `AddInventoryModule()` extension methods
+> - Module self-registration: `AddOrdersModule()`, `AddInventoryModule()`, `AddNotificationsModule()`, `AddPaymentsModule()`
 > - Specification pattern — composable query objects (`OrderByStatusSpec`, `ActiveCustomersSpec`) replacing inline LINQ
 > - Per-module DB schemas within shared database (`orders`, `inventory`, `notifications`)
 - [ ] Add Aspire service defaults to Orders API
@@ -726,8 +737,9 @@ After completing today's tasks, you will have:
 > 🏗️ **Architecture Phase 9b** — Split Orders API → Orders microservice + Inventory microservice (separate projects, separate data stores)
 >
 > **Additional Phase 9 deliverables:**
-> - Bounded-context and subdomain mapping — Orders, Inventory, Notifications as business contexts with clear responsibilities
+> - Bounded-context and subdomain mapping — Orders, Inventory, Notifications, and Payments as business contexts with clear responsibilities
 > - Architecture tests (NetArchTest) enforcing inter-module boundaries: modules cannot reference each other’s internals, only PublicApi contracts
+- [ ] Add Payments module projects and register their infrastructure alongside Orders, Inventory, and Notifications
 - [ ] Register Inventory API in App Host
 - [ ] Register Notifications API in App Host
 - [ ] Register UI in App Host
@@ -762,12 +774,13 @@ After completing today's tasks, you will have:
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 #### Day 78: Aspire Observability Deep Dive
-> 🏗️ **Architecture Phase 9d** — Event-based communication between microservices via Service Bus (orders → inventory → notifications)
+> 🏗️ **Architecture Phase 9d** — Freeze the tracing acceptance bar before Azure rollout
 - [ ] Explore OpenTelemetry integration (automatic)
 - [ ] View distributed traces across microservices
 - [ ] Analyze logs aggregation from all services
 - [ ] Monitor metrics (HTTP requests, database calls)
 - [ ] Export telemetry to Application Insights
+- [ ] Prove the acceptance bar: one request flowing Orders → Inventory → Notifications yields one trace with all module spans and the envelope `CorrelationId` attached to each span
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 #### Day 79: Aspire Deployment Preparation
@@ -847,9 +860,9 @@ After completing today's tasks, you will have:
 > - Azure Functions — Service Bus-triggered DLQ reprocessor (isolated process model); timer-triggered projection health checks
 > - Azure Blob Storage — order file attachments (invoices, receipts) with managed identity access + private endpoint; `BlobCreated` events via Event Grid
 > - Private networking — VNet integration, private endpoints for SQL, Key Vault, Redis, and Blob Storage; NSG rules for ACA VNet; private DNS zones
-> - JWT authentication — Entra ID token validation at APIM (policy-based) and YARP gateway, token propagation to downstream services
+> - JWT authentication — Entra ID token validation at APIM (policy-based) and YARP gateway, token propagation to downstream services after transport failure drills pass
 > - Cost governance — scale-to-zero on all Container Apps, APIM Consumption tier (pay-per-call), autoscale RU caps on Cosmos DB, Azure Budget alerts per resource group
-> - DLQ handling — alert threshold when DLQ depth exceeds configurable limit; poison message quarantine for messages that fail reprocessing N times
+> - DLQ handling — central intake, alert threshold on DLQ depth and oldest message age, explicit dead-letter reason/description, poison message quarantine, and no blind bulk replay
 
 #### Day 87: Log Analytics Workspace
 **Reference:** ACA-Migration-Plan.md → Phase 3
@@ -872,12 +885,13 @@ After completing today's tasks, you will have:
 - [ ] Generate deployment manifest: `dotnet run --publisher manifest`
 - [ ] Convert manifest to Bicep (manual or tool-assisted)
 - [ ] Understand Aspire-generated resource definitions
+- [ ] Author the dedicated `servicebus.bicep` topology module with per-environment parameters for TTL, `maxDeliveryCount`, forwarding, and `deadLetteringOnMessageExpiration`
 - [ ] Compare `azd up` (automated) vs manual Bicep deployment
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 #### Day 90: ACA Ingress & Networking
 > 🏗️ **Phase 10 networking** — Private endpoints for SQL/KV/Redis/Blob, VNet integration for ACA environment, NSG rules, private DNS zones for internal service resolution
-- [ ] Configure external ingress for UI and API
+- [ ] Prepare ingress and networking configuration, but do not enable public ingress/sign-off until transport failure drills pass
 - [ ] Configure internal ingress for Inventory/Notifications APIs
 - [ ] Test service-to-service communication in ACA
 - [ ] View distributed traces in Application Insights
@@ -895,6 +909,7 @@ After completing today's tasks, you will have:
 - [ ] Connect to Azure SQL Database (not Aspire-managed)
 - [ ] Connect to Azure Cache for Redis (not Aspire-managed)
 - [ ] Use Azure Key Vault for secrets in ACA
+- [ ] Wire the central DLQ intake Azure Function and map forwarded dead-letter traffic to `DeliveryFailureCategory`
 - [ ] Test production-ready configuration
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
@@ -904,6 +919,8 @@ After completing today's tasks, you will have:
 - [ ] Document Aspire benefits (observability, service discovery, config)
 - [ ] Cost analysis: ACA pricing model
 - [ ] Decide: Aspire for development, ACA for production
+- [ ] Run the mandatory transport failure drills: subscription failure → DLQ, alert fires, intake classifies, operator inspects reason, transient replays, poison quarantines, business flow resumes
+- [ ] Confirm ingress and security rollout remain blocked until the drills above pass
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 > **Observability note:** OpenTelemetry, distributed tracing, custom metrics, KQL queries, alerts, and workbooks are covered as part of the .NET Aspire observability deep-dive in Days 78-79 and the ACA Log Analytics work in Day 87. The Aspire Service Defaults project wires OTel automatically.
