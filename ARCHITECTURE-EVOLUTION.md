@@ -1,7 +1,7 @@
 # Architecture Evolution: Monolith to Enterprise Microservices
 
 **Last Updated:** April 10, 2026
-**Current Status:** Phases 1-7 Complete ✅ | Phase 8 Next 📅 | Phases 8.5-14 Planned 📅
+**Current Status:** Phases 1-7 Complete ✅ | Track U Active 📅 | Backend Phase 8 Next 📅 | Phases 8.5-14 Planned 📅
 
 ---
 
@@ -131,6 +131,36 @@ XYDataLabs.OrderProcessingSystem.sln
 | **12** | Platform Engineering & DevOps | .NET 10 upgrade, Azure App Configuration, Polly resilience, per-service CI/CD, observability dashboards | 📅 Planned |
 | **13** | Aspire & Final Maturity | .NET Aspire orchestration, service discovery, blue-green/canary deployments | 📅 Planned |
 | **14** | CQRS Read Model (MongoDB) | Separate read/write models, projection handlers, Hangfire, tenant-scoped documents | 📅 Planned |
+
+---
+
+## Parallel Track U — UI Modernization Program 📅
+
+Track U is a parallel UI replacement program and does **not** renumber backend Phases 8-14.
+
+**Status:** Active planning and implementation-prep track before backend Phase 8 begins.
+
+**Purpose:** Replace the MVC UI with React web first, remove MVC from the active runtime, and
+then enable React Native / mobile on the same API contract.
+
+### Track U Phases
+
+- **U1** — contract freeze and migration rules
+- **U2** — React web foundation (`frontend/`, generated SDK, tenant bootstrap)
+- **U3** — feature-slice replacement of MVC browser journeys
+- **U4** — API rehoming of MVC-owned server endpoints (`/payment/callback`, `/payment/client-event`)
+- **U5** — MVC cutover and removal from the active deployment model
+- **U6** — mobile enablement on the stabilized web contract
+
+### Track U Gate
+
+Backend Phase 8 remains the next backend phase, but its implementation starts only after Track U
+Phase U2 is complete.
+
+**Canonical references:**
+
+- `docs/guides/development/api-contract-audit.md`
+- `docs/guides/development/ui-modernization-plan.md`
 
 ---
 
@@ -1013,7 +1043,9 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
      │
      ├── Phases 1-6  ─── ✅ Internal modernization (CQRS, OTel, tenancy, caching)
      │
-     ├── Phase 7     ─── 📅 Tenant enforcement & security hardening
+  ├── Phase 7     ─── ✅ Tenant enforcement & security hardening
+  │
+  ├── Track U     ─── 📅 React web replacement + MVC retirement + mobile follow-on
      │
      ├── Phase 8     ─── 📅 Event-driven core (Outbox + events inside monolith)
      │
@@ -1306,5 +1338,5 @@ All technical skills from a typical Azure .NET senior role are fully covered or 
 
 ---
 
-**Last Updated:** April 9, 2026  
-**Status:** Phases 1-7 Complete ✅ | Phase 8 Next 📅 | Phases 8.5-14 Planned 📅
+**Last Updated:** April 10, 2026
+**Status:** Phases 1-7 Complete ✅ | Track U Active 📅 | Backend Phase 8 Next 📅 | Phases 8.5-14 Planned 📅
