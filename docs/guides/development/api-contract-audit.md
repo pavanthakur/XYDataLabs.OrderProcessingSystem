@@ -13,7 +13,7 @@ real API and MVC surface that exists today.
 
 1. React web replaces the current MVC presentation layer.
 2. React Native / mobile follows the web contract and is not the gate for MVC retirement.
-3. Backend Phase 8 starts after Track U Phase U2 is complete.
+3. Backend Phase 8 starts only after Track U Phase U5 is complete.
 4. During Track U, the runtime security model stays on the current platform contract:
    `GET /api/v1/Info/runtime-configuration` plus `X-Tenant-Code`. Entra ID / JWT is not part of
    this migration window.
@@ -137,3 +137,4 @@ Track U1 is complete only when all of the following are true:
 4. The generated SDK approach for `/swagger/v1/swagger.json` is chosen.
 5. The API ownership plan for payment callback and browser telemetry is frozen.
 6. The React web scaffold has not started yet; this document is the gate for Track U2.
+7. This audit governs the pre-Phase-8 web replacement path; mobile is explicitly outside that gate.

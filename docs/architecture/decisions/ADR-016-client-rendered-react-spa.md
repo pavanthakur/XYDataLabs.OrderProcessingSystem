@@ -33,7 +33,7 @@ root as part of a parallel UI Modernization Program (`Track U`).
 The decision includes these binding rules:
 
 1. React web replaces the current MVC presentation layer.
-2. React Native / mobile follows the web contract and is not a gate for backend Phase 8.
+2. React Native / mobile follows the web contract and is not a gate for MVC retirement or backend Phase 8.
 3. The UI implementation lives outside `XYDataLabs.OrderProcessingSystem.UI`.
 4. The first React cut uses a direct API integration model with no BFF.
 5. The migration-window security model stays on the current runtime contract:
@@ -42,6 +42,7 @@ The decision includes these binding rules:
 6. `GET /payment/callback` and `POST /payment/client-event` must move to API ownership before
    the MVC application is retired.
 7. Phases 8-14 keep their current numbering. Track U does not renumber the backend roadmap.
+8. Backend Phase 8 implementation starts after the React web cutover and MVC retirement gate (U5), not after the initial frontend scaffold.
 
 ## Rationale (optional — use for non-obvious choices)
 | Option | Pros | Cons | Verdict |

@@ -6,7 +6,8 @@ its replacement with React web first, followed by a mobile client on the same co
 ## Objective
 
 Replace the current MVC presentation layer with React web, remove MVC from the deployment and
-runtime path, and then add React Native / mobile on top of the stabilized API contract.
+runtime path before backend Phase 8 begins, and then add React Native / mobile on top of the
+stabilized API contract as a later workstream.
 
 This plan does **not** renumber backend Phases 8-14. It creates a parallel UI Modernization
 Program (`Track U`) that runs before backend Phase 8 implementation begins.
@@ -19,13 +20,13 @@ Program (`Track U`) that runs before backend Phase 8 implementation begins.
 - API contract freeze for browser and mobile consumers
 - Rehoming MVC-owned server endpoints to the API
 - MVC shutdown and deployment removal
-- React Native / mobile enablement after the web contract is stable
+- React Native / mobile enablement after the web cutover is complete
 
 ### Out of scope
 
 - Entra ID / JWT rollout during the migration window
 - A BFF in the first implementation cut
-- Backend Phase 8 event-foundation implementation work
+- Backend Phase 8 event-foundation implementation work until React web replacement and MVC retirement are complete
 - Route normalization of the existing v1 API surface
 
 ## Initial Code Layout
@@ -67,7 +68,7 @@ there is implementation evidence that they are needed:
 
 1. The React migration is based on the audited contract, not assumptions.
 2. The team agrees that mobile is not the gate for MVC retirement.
-3. Backend Phase 8 remains untouched until U2 is complete.
+3. Backend Phase 8 remains untouched until U5 is complete.
 
 ### Phase U2 — React Web Foundation
 
@@ -86,11 +87,11 @@ there is implementation evidence that they are needed:
 
 1. React web can load its shell and call the API successfully.
 2. Tenant bootstrap and header injection work without MVC.
-3. The team can begin backend Phase 8 after U2 completes.
+3. The team can proceed to U3 feature migration without changing backend Phase 8 scope.
 
 **Gate opened by U2:**
 
-- Backend Phase 8 implementation may begin after U2, even while U3-U6 continue.
+- U3 feature-slice replacement may begin once the React web foundation is proven.
 
 ### Phase U3 — React Web Feature Replacement
 
@@ -164,7 +165,7 @@ into the MVC project.
 
 ### Phase U6 — React Native / Mobile Enablement
 
-**Goal:** Add mobile on the stable contract created by U1-U5.
+**Goal:** Add mobile on the stable contract created by U1-U5 after the web cutover is complete.
 
 **Deliverables:**
 
@@ -176,6 +177,7 @@ into the MVC project.
 **Rules:**
 
 - Mobile is not a prerequisite for MVC retirement.
+- Mobile is not part of the pre-Phase-8 gate.
 - Mobile does not get its own contract fork without an explicit ADR.
 - If mobile needs materially different API payloads, the change is owned as a backend contract
   decision, not a frontend shortcut.
@@ -196,15 +198,17 @@ MVC is not considered retired until every item below is true:
 5. No deployment workflow treats `XYDataLabs.OrderProcessingSystem.UI` as the active frontend.
 6. Documentation status surfaces no longer describe MVC as the active UI.
 7. Mobile, if present, is treated as an additional client and not as a hidden dependency for web cutover.
+8. Backend Phase 8 does not begin until U5 is complete.
 
 ## Dependency And Gate Summary
 
 | Gate | Requirement | Opens |
 |------|-------------|-------|
 | G1 | U1 complete | U2 frontend scaffold |
-| G2 | U2 complete | Backend Phase 8 implementation |
-| G3 | U3 and U4 complete | MVC cutover |
-| G4 | U5 complete | Mobile enablement on stable contract |
+| G2 | U2 complete | U3 feature replacement |
+| G3 | U3 and U4 complete | U5 MVC cutover |
+| G4 | U5 complete | Backend Phase 8 implementation |
+| G5 | U5 complete | Mobile enablement on stable contract |
 
 ## Canonical References
 
