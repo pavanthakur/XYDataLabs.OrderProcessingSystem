@@ -263,7 +263,8 @@ The Outbox Pattern in Phase 8 resolves this: write an `OutboxMessage` (with the 
 
 ## Phase 8 — Event-Driven Foundation 📅
 
-**Focus:** Decouple the system using events — foundation for microservices.
+**Focus:** Freeze event contracts inside the monolith, make business state changes recoverable,
+and keep transport in-process until Phase 10.
 
 ### Architecture Diagram
 
@@ -305,15 +306,16 @@ The Outbox Pattern in Phase 8 resolves this: write an `OutboxMessage` (with the 
 
 ### Key Deliverables
 
-- **Domain Events** — `OrderCreatedDomainEvent`, `PaymentProcessedDomainEvent`
-- **Integration Events** — `OrderCreatedIntegrationEvent`, `InventoryReservedIntegrationEvent`, `NotificationRequestedIntegrationEvent`
-- **Outbox Pattern** — `OutboxMessages` table, transaction-safe event storage (same DB transaction as entity writes)
-- **Inbox Pattern** — `InboxMessages` table for idempotent consumers (deduplication by `MessageId` before processing)
-- **Background Publisher** — `IHostedService` that polls `OutboxMessages` and dispatches to the event bus
-- **Event Dispatcher** — in-memory implementation (pluggable interface; swapped to Azure Service Bus in Phase 10)
-- **Event Versioning** — envelope with `SchemaVersion` field; convention: `OrderCreatedV1` → `OrderCreatedV2` with backward-compatible projection
-- **Parallel event handler execution** — `EventPublisher` dispatches all `IEventHandler<T>` via `Task.WhenAll`; partial failures collected into `AggregateException` — one handler failing does not skip remaining handlers
-- **Automatic domain event dispatch** — `SaveChangesAsync` override extracts `IDomainEvent`s from `ChangeTracker.Entries<Entity>()` after `base.SaveChangesAsync()` succeeds; events are either published in-process (Phase 8) or written to the Outbox table in the same transaction — ensures events only fire after successful persistence, never on rollback
+- **Event contracts in Application** — `IDomainEvent`, `IIntegrationEvent`, `EventEnvelope`, `IEventHandler<T>`, `IEventPublisher`, `IIdempotencyGuard`, and `DeliveryFailureCategory` live above Infrastructure. Domain remains free of messaging and transport vocabulary.
+- **Aggregate event collection** — aggregate roots accumulate domain events internally and clear them only after successful persistence.
+- **Explicit mapper layer** — `IDomainEventToIntegrationEventMapper<TDomain, TIntegration>` lives in Application. Domain raises events, Application maps them, Infrastructure persists integration event envelopes. Raw domain events are never written to the Outbox.
+- **Payment recovery model** — `PaymentAttempt` is persisted before the provider call. `AttemptOrderId` becomes deterministic (`OrderId + AttemptNumber`) and drives a five-state lifecycle: `PendingProviderCall`, `ProviderAccepted`, `Succeeded`, `Failed`, `UnknownNeedsReconciliation`.
+- **Persistence primitives** — `OutboxMessages`, `InboxMessages`, and `PaymentAttempts` live in the same database in Phase 8 with indexes defined up front.
+- **DbContext save hook** — extract domain events, map them to integration events, and write `OutboxMessages` in the same SQL transaction as the business change.
+- **Separate workers** — `OutboxPublisherWorker` owns event dispatch; `PaymentReconciliationWorker` owns recovery of payment outcomes. They are separate operational concerns and must not be merged.
+- **In-memory dispatcher** — `IEventPublisher` is backed by an in-process dispatcher only. Azure Service Bus is explicitly deferred to Phase 10.
+- **Initial event flows** — wire `OrderCreated`, `PaymentProcessed`, `InventoryReservationRequested`, `NotificationRequested`, and payment reconciliation outcome flows first.
+- **Phase 8 test bar** — rollback leaves no outbox row; duplicate message is harmless; parallel handlers remain independent; publisher restart replays rows; reconciliation resolves `UnknownNeedsReconciliation`; cross-tenant isolation is preserved.
 
 ### Rules
 
@@ -322,10 +324,22 @@ The Outbox Pattern in Phase 8 resolves this: write an `OutboxMessage` (with the 
 - Background publisher is **idempotent** — Inbox table deduplicates by `MessageId` before handler execution
 - **Event schema changes** must be backward-compatible (additive fields only; breaking changes = new version)
 - **Parallel dispatch** — all handlers for a given event execute concurrently; failures are aggregated, not swallowed
+- **Layering rule** — no Infrastructure type may be referenced from Domain or Application; architecture tests must enforce this before Phase 9 begins.
+- **Transport rule** — no Service Bus publisher, receiver, processor, or DLQ concept is introduced in Phase 8 code.
+
+### Entry Gate To Phase 9
+
+- Event envelope fields and mapper strategy are frozen in writing before code begins.
+- `PaymentAttempt` lifecycle and deterministic `AttemptOrderId` generation are frozen.
+- Outbox and inbox work end-to-end.
+- `OutboxPublisherWorker` and `PaymentReconciliationWorker` both run reliably.
+- No Infrastructure type is referenced from Domain or Application.
+- Architecture tests enforcing the boundary above are green.
+- All six Phase 8 test categories pass.
 
 ### Outcome
 
-Loose coupling, async workflows, idempotent delivery, parallel event handling, and a microservice-ready event backbone with versioned schemas.
+Loose coupling, recoverable payment workflows, idempotent delivery, and a transport-agnostic event backbone that can be swapped to Azure Service Bus later without redesigning contracts.
 
 ---
 
@@ -413,7 +427,8 @@ Both providers run concurrently. Each tenant's processor is a data-driven runtim
 
 ## Phase 9 — YARP Microservices Architecture (Local) 📅
 
-**Focus:** Module isolation within the monolith, then service extraction with event-based communication.
+**Focus:** Create extractable module boundaries and local deployability without changing the
+event semantics frozen in Phase 8.
 
 ### Module Isolation (First Step — Before Extraction)
 
@@ -423,12 +438,13 @@ Before extracting to separate deployables, restructure the monolith into isolate
   - `Orders.Domain`, `Orders.Features`, `Orders.Infrastructure`
   - `Inventory.Domain`, `Inventory.Features`, `Inventory.Infrastructure`
   - `Notifications.Domain`, `Notifications.Features`, `Notifications.Infrastructure`
+-  - `Payments.Domain`, `Payments.Features`, `Payments.Infrastructure`
 - **PublicApi contracts** — `IOrderModuleApi`, `IInventoryModuleApi` interfaces in dedicated `*.PublicApi` projects with strongly-typed request/response records. Modules depend ONLY on each other's PublicApi — never internal Domain/Features/Infrastructure
-- **Per-module DB schemas** — each module owns its own SQL schema (`orders`, `inventory`, `notifications`) within the shared database. Phase 11's "split databases" then becomes a connection string change, not a data migration
+- **Per-module DB schemas** — each module owns its own SQL schema (`orders`, `inventory`, `notifications`, `payments`) within the shared database. Phase 11's "split databases" then becomes a connection string change, not a data migration
 - **Per-module database migrators** — `IModuleDatabaseMigrator` interface; each module owns its `DbContext` and independent migration history. Startup runs all migrators sequentially
-- **Module self-registration** — `AddOrdersModule()`, `AddInventoryModule()`, `AddNotificationsModule()` extension methods chain API registration, infrastructure setup, and assembly scanning. `Program.cs` stays clean as project count grows
+- **Module self-registration** — `AddOrdersModule()`, `AddInventoryModule()`, `AddNotificationsModule()`, and `AddPaymentsModule()` chain API registration, infrastructure setup, and assembly scanning. `Program.cs` stays clean as project count grows
 - **`AssemblyReference.cs` markers** — static class per project exposing `Assembly` for reliable handler discovery, endpoint registration, and architecture test scanning
-- **Bounded-context and subdomain mapping** — before extraction, explicitly model Orders, Inventory, and Notifications as business contexts with clear responsibilities, upstream/downstream relationships, and published contracts. Module boundaries should follow business capability boundaries, not just technical packaging
+- **Bounded-context and subdomain mapping** — before extraction, explicitly model Orders, Inventory, Notifications, and Payments as business contexts with clear responsibilities, upstream/downstream relationships, and published contracts. Payments is elevated because reconciliation and recovery logic must not remain in a shared blob.
 - **Architecture tests updated** — `NetArchTest.Rules` (from Phase 5) now enforces inter-module boundaries: modules cannot reference each other's internals, only PublicApi contracts
 - **Specification pattern** — composable query objects (`OrderByStatusSpec`, `ActiveCustomersSpec`) encapsulating EF Core `Where`/`Include`/`OrderBy` logic; reusable across handlers within a module. Introduced alongside per-module repositories — specifications replace scattered inline LINQ with testable, named query definitions
 
@@ -475,7 +491,7 @@ Before extracting to separate deployables, restructure the monolith into isolate
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### Solution Structure (11 Projects)
+### Representative Solution Structure (Expanded)
 
 ```
 XYDataLabs.OrderProcessingSystem.sln
@@ -496,6 +512,7 @@ XYDataLabs.OrderProcessingSystem.sln
 ├── XYDataLabs.OrderProcessingSystem.Orders.PublicApi  (NEW - IOrderModuleApi + request/response records)
 ├── XYDataLabs.OrderProcessingSystem.Inventory.PublicApi (NEW - IInventoryModuleApi + contracts)
 ├── XYDataLabs.OrderProcessingSystem.Notifications.PublicApi (NEW - INotificationModuleApi + contracts)
+├── XYDataLabs.OrderProcessingSystem.Payments.PublicApi (NEW - IPaymentModuleApi + contracts)
 ├── XYDataLabs.OrderProcessingSystem.UI               (Existing - Updated routing)
 ├── XYDataLabs.OrderProcessingSystem.Orders.Domain     (Split from shared Domain)
 ├── XYDataLabs.OrderProcessingSystem.Orders.Features   (Split from shared Application)
@@ -506,6 +523,9 @@ XYDataLabs.OrderProcessingSystem.sln
 ├── XYDataLabs.OrderProcessingSystem.Notifications.Domain (NEW)
 ├── XYDataLabs.OrderProcessingSystem.Notifications.Features (NEW)
 ├── XYDataLabs.OrderProcessingSystem.Notifications.Infrastructure (NEW)
+├── XYDataLabs.OrderProcessingSystem.Payments.Domain (NEW)
+├── XYDataLabs.OrderProcessingSystem.Payments.Features (NEW)
+├── XYDataLabs.OrderProcessingSystem.Payments.Infrastructure (NEW)
 ├── XYDataLabs.OrderProcessingSystem.SharedKernel     (Shared)
 └── XYDataLabs.OpenPayAdapter                         (Shared)
 ```
@@ -599,15 +619,24 @@ services:
 - **Structured concurrency** — `Task.WhenAll` for parallel scatter-gather queries through gateway
 - **Testcontainers snapshots** — pre-seeded Docker images for integration tests: build a custom SQL Server image with migrations + seed data baked in, so each test run skips migration/seed overhead; apply when test suite runtime becomes a CI bottleneck across multiple per-module DBs
 
+### Entry Gate To Phase 10
+
+- Orders, Inventory, Notifications, and Payments compile independently.
+- PublicApi boundaries are enforced by architecture tests.
+- Local end-to-end flow works through the YARP gateway.
+- One request flowing Orders → Inventory → Notifications produces one trace in Application Insights with all module spans present and the envelope `CorrelationId` attached to each span.
+- Event envelope, handler signatures, and retry semantics are identical to Phase 8 — no drift during extraction.
+
 ### Outcome
 
-Module-isolated, working microservices locally with proven PublicApi boundaries and correct event-based communication model.
+Module-isolated, locally deployable services with proven PublicApi boundaries, a first-class Payments module, and unchanged event semantics ready for the Phase 10 transport swap.
 
 ---
 
 ## Phase 10 — Azure Container Apps Migration 📅
 
-**Focus:** Cloud-native deployment with managed messaging and identity.
+**Focus:** Introduce durable Azure transport and DLQ operations without changing the
+contracts frozen in Phase 8.
 
 ### Architecture Diagram
 
@@ -674,38 +703,44 @@ Module-isolated, working microservices locally with proven PublicApi boundaries 
 ### Key Deliverables
 
 - Deploy to **Azure Container Apps** (managed environment, auto-scaling, scale-to-zero)
-- **Azure API Management (APIM)** — Consumption tier as public-facing gateway; subscription keys, external rate limiting, developer portal, API analytics. YARP becomes the internal east-west proxy behind APIM: `Internet → APIM → ACA Ingress → YARP → Services`
+- **Azure API Management (APIM)** — Consumption tier as public-facing gateway; subscription keys, external rate limiting, developer portal, API analytics. YARP becomes the internal east-west proxy behind APIM: `Internet → APIM → ACA Ingress → YARP → Services`. This rollout starts only after transport failure drills pass.
 - **Azure Container Registry (ACR)** — build and push container images
-- **Azure Service Bus** — replace in-memory event bus with durable topics + subscriptions
+- **Azure Service Bus** — replace the in-memory event bus behind `IEventPublisher` with durable topics + subscriptions; handlers and envelopes remain unchanged
 - **Azure Event Grid** — platform/infrastructure event routing (deployment notifications, blob lifecycle); Service Bus remains for domain events. Decision rule: Event Grid = reactive fan-out, Service Bus = reliable delivery with sessions/DLQ
-- **Azure Functions** — Service Bus-triggered Function for DLQ reprocessing (isolated process model); timer-triggered Function for scheduled projection health checks (Phase 14)
+- **Azure Functions** — central DLQ intake processor (isolated process model) that categorises failures before any replay action; timer-triggered Function for scheduled projection health checks (Phase 14)
 - **Azure Blob Storage** — order file attachments (invoices, receipts, proof of delivery); managed identity access, private endpoint. `BlobCreated` events routed via Event Grid to trigger downstream processing (e.g. Document Intelligence extraction in Phase 12)
 - **Azure Cache for Redis** — managed Redis replacing local container; used for distributed cache and session state
-- **Observability** — App Insights + OpenTelemetry distributed tracing across all services; `traceparent` propagated through Service Bus message headers
+- **Observability** — App Insights + OpenTelemetry distributed tracing across all services; `traceparent`, `CorrelationId`, `CausationId`, `TenantId`, and `MessageId` propagate through every message so dead-lettered events can be traced back to the originating order and tenant
 - **Secrets** — Azure Key Vault with managed identity (no credentials in config)
 - **Private networking** — VNet integration, private endpoints for SQL, Key Vault, Redis, and Blob Storage
 - **Cost governance** — scale-to-zero on all Container Apps, APIM Consumption tier (pay-per-call), autoscale RU caps on Cosmos DB, Azure Budget alerts per resource group
+- **Bicep-only topology** — Azure infrastructure remains Bicep-authored end to end. Service Bus topology is declared in a dedicated `servicebus.bicep` module with per-environment parameters; no portal drift and no Terraform split.
 
 ### Security
 
 - **Identity:** Azure Entra ID (Azure AD) for authentication
-- **JWT auth** — token validation at APIM (policy-based) and YARP gateway, token propagation to downstream services
+- **JWT auth** — token validation at APIM (policy-based) and YARP gateway, token propagation to downstream services. Security rollout begins only after transport failure drills pass in lower environments.
 - **Managed Identity** — services access Key Vault and SQL without stored credentials
 - **OIDC** — GitHub Actions deploys via federated credentials (existing pattern)
 - **WAF / Network Security** — Azure Front Door or WAF policy in front of APIM; NSG rules for ACA VNet; private DNS zones for internal service resolution
 
 ### Messaging Backbone
 
-- **Azure Service Bus** replaces the in-memory event dispatcher from Phase 8
+- **Azure Service Bus** replaces the in-memory event dispatcher from Phase 8 without changing envelope or handler contracts
+- Topology is authored only in `servicebus.bicep` with per-environment settings for topics, subscriptions, forwarding, TTL, `maxDeliveryCount`, and `deadLetteringOnMessageExpiration`
 - Topics: `order-events`, `inventory-events`, `notification-events`
 - Each service subscribes to relevant topics
-- Dead-letter queues for failed message processing
+- DLQ forwarding to central intake is enabled where topology supports `forwardDeadLetteredMessagesTo`
 
 ### Dead-Letter Queue (DLQ) Handling
 
-- **Alert threshold** — Azure Monitor alert when DLQ depth exceeds configurable limit
-- **Azure Function (DLQ reprocessor)** — Service Bus-triggered Function replays dead-lettered messages back to source topic (replaces admin API endpoint — Functions are the natural fit for stateless, event-triggered processing)
-- **Poison message quarantine** — messages that fail reprocessing N times are moved to a poison store for manual review
+- **Expiration handling is explicit** — `deadLetteringOnMessageExpiration = true` is set on every queue and subscription
+- **Delivery count is explicit** — `maxDeliveryCount` is parameterised per environment and justified in Bicep comments; no default is accepted silently
+- **Application rejections are inspectable** — every `DeadLetterMessageAsync` call sets both `DeadLetterReason` and `DeadLetterErrorDescription`
+- **Central intake** — Azure Function consumes the forwarded DLQ stream, maps it to `DeliveryFailureCategory`, and decides whether the message is transient, poison, expired, or rejected
+- **Poison quarantine** — poison payloads are quarantined for manual review and are never bulk-replayed automatically
+- **Operational alerts** — Azure Monitor alerts fire on central DLQ depth and oldest DLQ message age, not just active queue depth
+- **Failure drill policy** — subscription failure, DLQ routing, alert firing, operator inspection, transient replay, poison quarantine, and business-flow recovery must all be demonstrated before sign-off
 
 ### Advanced Deployment Patterns
 
@@ -716,7 +751,7 @@ Module-isolated, working microservices locally with proven PublicApi boundaries 
 
 ### Outcome
 
-Secure, scalable cloud-native microservices with APIM as public gateway, durable messaging (Service Bus + Event Grid), Azure Functions for DLQ reprocessing, managed Redis, and zero-downtime deployments.
+Secure, scalable cloud-native microservices with durable Azure transport, controlled and observable DLQ operations, Bicep-governed topology, and ingress/security enabled only after transport recovery has been proven.
 
 ---
 
