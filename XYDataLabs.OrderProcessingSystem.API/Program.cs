@@ -18,6 +18,7 @@ using XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData;
 using Microsoft.ApplicationInsights.Extensibility;
 using System.Globalization;
 using System.Text.RegularExpressions;
+using System.Runtime.CompilerServices;
 using XYDataLabs.OrderProcessingSystem.Application.Utilities;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Configuration;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
@@ -47,7 +48,15 @@ var isDocker = string.Equals(
 // Detect Azure App Service using WEBSITE_SITE_NAME environment variable
 var azureSiteName = Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME");
 var isAzure = !string.IsNullOrWhiteSpace(azureSiteName);
-var runtimeLabel = isAzure ? "Azure" : (isDocker ? "Docker" : "Local");
+var runtimeLabel = "Local";
+if (isAzure)
+{
+    runtimeLabel = "Azure";
+}
+else if (isDocker)
+{
+    runtimeLabel = "Docker";
+}
 
 // Map .NET environment names to our simplified profile names
 var environmentName = builder.Environment.EnvironmentName switch
@@ -59,15 +68,15 @@ var environmentName = builder.Environment.EnvironmentName switch
 };
 
 // Log configuration initialization
-Console.WriteLine("═══════════════════════════════════════════════════════════════");
-Console.WriteLine($"[CONFIG] API Initialization - Environment: {environmentName}");
-Console.WriteLine($"[CONFIG] Azure App Service: {(isAzure ? "YES" : "NO")}");
-Console.WriteLine($"[CONFIG] Docker Container: {(isDocker ? "YES" : "NO")}");
+Log.Information("{ConfigBanner}", "═══════════════════════════════════════════════════════════════");
+Log.Information("[CONFIG] API Initialization - Environment: {EnvironmentName}", environmentName);
+Log.Information("[CONFIG] Azure App Service: {IsAzure}", isAzure ? "YES" : "NO");
+Log.Information("[CONFIG] Docker Container: {IsDocker}", isDocker ? "YES" : "NO");
 if (isAzure)
 {
-    Console.WriteLine($"[CONFIG] Key Vault is REQUIRED for Azure deployments (enterprise security policy)");
+    Log.Information("[CONFIG] Key Vault is REQUIRED for Azure deployments (enterprise security policy)");
 }
-Console.WriteLine("═══════════════════════════════════════════════════════════════");
+Log.Information("{ConfigBanner}", "═══════════════════════════════════════════════════════════════");
 
 // Centralized loading, binding, and active ApiSettings selection
 // IMPORTANT: For Azure deployments, this will fail if Key Vault is not properly configured
@@ -87,25 +96,32 @@ try
     
     if (isAzure)
     {
-        Console.WriteLine("[CONFIG] ✅ Configuration loaded successfully from Azure Key Vault");
+        Log.Information("[CONFIG] Configuration loaded successfully from Azure Key Vault");
     }
 }
 catch (Exception ex)
 {
-    Console.WriteLine($"[FATAL] Configuration initialization failed: {ex.Message}");
-    throw; // Re-throw to stop application startup
+    Log.Fatal(ex, "[FATAL] Configuration initialization failed during startup");
+    throw new InvalidOperationException("Configuration initialization failed during startup.", ex);
 }
 
 // Verify DB connection string presence (mask password before logging)
 var dbConn = builder.Configuration.GetConnectionString(Constants.Configuration.OrderProcessingSystemDbConnectionString);
 if (string.IsNullOrWhiteSpace(dbConn))
 {
-    Console.WriteLine($"[CONFIG ERROR] ConnectionStrings:{Constants.Configuration.OrderProcessingSystemDbConnectionString} is missing or empty. Check sharedsettings.dev.json at solution root.");
+    Log.Warning(
+        "[CONFIG ERROR] ConnectionStrings:{ConnectionStringName} is missing or empty. Check sharedsettings.dev.json at solution root.",
+        Constants.Configuration.OrderProcessingSystemDbConnectionString);
 }
 else
 {
-    var masked = Regex.Replace(dbConn, @"(?i)(Password|Pwd)=([^;]+)", "$1=***");
-    Console.WriteLine($"[CONFIG] Resolved DB connection: {masked}");
+    var masked = Regex.Replace(
+        dbConn,
+        @"(?<key>Password|Pwd)=(?<value>[^;]+)",
+        "${key}=***",
+        RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture,
+        TimeSpan.FromSeconds(1));
+    Log.Information("[CONFIG] Resolved DB connection: {MaskedConnectionString}", masked);
 }
 
 builder.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>(); // Required for LoggingMiddleware
@@ -343,7 +359,7 @@ Log.Information("Serilog is now configured and working for API in {Environment} 
 // Kestrel HTTPS configuration using ApiSettings
 if (activeSettings.HttpsEnabled && !string.IsNullOrWhiteSpace(activeSettings.CertPath) && !string.IsNullOrWhiteSpace(activeSettings.CertPassword))
 {
-    Console.WriteLine($"[Kestrel] HTTPS enabled: Using certificate at {activeSettings.CertPath}");
+    Log.Information("[Kestrel] HTTPS enabled: Using certificate at {CertificatePath}", activeSettings.CertPath);
     builder.WebHost.ConfigureKestrel(options =>
     {
         options.ListenAnyIP(activeSettings.Port, listenOptions =>
@@ -355,7 +371,7 @@ if (activeSettings.HttpsEnabled && !string.IsNullOrWhiteSpace(activeSettings.Cer
 }
 else
 {
-    Console.WriteLine("[Kestrel] HTTPS NOT enabled: Only HTTP will be used.");
+    Log.Information("[Kestrel] HTTPS NOT enabled: Only HTTP will be used.");
     builder.WebHost.ConfigureKestrel(options =>
     {
         options.ListenAnyIP(activeSettings.Port); // HTTP only using configured port
@@ -378,7 +394,7 @@ using (var scope = app.Services.CreateScope())
     catch (Exception ex)
     {
         Log.Fatal(ex, "Failed to initialize database during startup");
-        throw;
+        throw new InvalidOperationException("Database initialization failed during startup.", ex);
     }
 }
 
@@ -548,7 +564,7 @@ try
 catch (Exception ex)
 {
     Log.Fatal(ex, "API application terminated unexpectedly");
-    throw;
+    throw new InvalidOperationException("API application terminated unexpectedly during host execution.", ex);
 }
 finally
 {
@@ -595,4 +611,10 @@ static string GetVersionedWebAssetPath(WebApplication app, string relativePath)
 }
 
 // Required for WebApplicationFactory<Program> in integration tests
-public partial class Program { }
+public partial class Program
+{
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    protected Program()
+    {
+    }
+}

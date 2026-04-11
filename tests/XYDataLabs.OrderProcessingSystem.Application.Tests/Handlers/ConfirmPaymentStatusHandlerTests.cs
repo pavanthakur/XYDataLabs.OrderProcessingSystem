@@ -193,13 +193,15 @@ public class ConfirmPaymentStatusHandlerTests : PaymentServiceTestBase
             });
 
         var handler = CreateConfirmPaymentHandler();
+        var callbackParameters = new Dictionary<string, string>(capacity: 2, comparer: StringComparer.Ordinal)
+        {
+            ["source"] = "direct",
+            ["status"] = "completed"
+        };
+
         var command = BuildConfirmPaymentCommand(
             callbackStatus: "completed",
-            callbackParameters: new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["source"] = "direct",
-                ["status"] = "completed"
-            });
+            callbackParameters: callbackParameters);
 
         // Act
         var result = await handler.HandleAsync(command);

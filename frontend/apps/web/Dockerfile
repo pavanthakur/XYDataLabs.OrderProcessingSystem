@@ -1,4 +1,4 @@
-FROM node:20-alpine AS build
+FROM cgr.dev/chainguard/node:latest-dev AS build
 
 WORKDIR /app
 
@@ -8,7 +8,7 @@ COPY frontend/apps/web/package.json ./apps/web/package.json
 COPY frontend/packages/api-sdk/package.json ./packages/api-sdk/package.json
 COPY frontend/packages/tenant-session/package.json ./packages/tenant-session/package.json
 
-RUN npm ci
+RUN npm ci --ignore-scripts
 
 COPY frontend/ ./
 
@@ -17,7 +17,7 @@ ENV VITE_ORDERPROCESSING_API_BASE_URL=$VITE_ORDERPROCESSING_API_BASE_URL
 
 RUN npm run build --workspace @xydatalabs/orderprocessing-web
 
-FROM node:20-alpine AS final
+FROM cgr.dev/chainguard/node:latest AS final
 
 WORKDIR /app
 
