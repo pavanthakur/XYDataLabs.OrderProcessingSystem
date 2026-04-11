@@ -448,6 +448,7 @@ dotnet run
 ```
 
 > **Visual Studio (recommended for debugging):** Press F5 — sets `ASPNETCORE_ENVIRONMENT=Development` automatically.
+> **Workspace standard:** use Visual Studio for the .NET solution and run the React UI from the separate `frontend/` npm workspace.
 
 ### **Port Allocations**
 | Mode | API | Web |

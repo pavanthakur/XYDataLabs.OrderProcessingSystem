@@ -83,6 +83,7 @@ dotnet run
 
 > **Visual Studio (recommended for API debugging):** Press F5 for the API, then run `npm --prefix .\frontend run dev:web` for the React frontend.  
 > **VS Code:** Set `"env": { "ASPNETCORE_ENVIRONMENT": "Development" }` in `launch.json`.
+> **Workspace standard:** Keep `XYDataLabs.OrderProcessingSystem.sln` focused on .NET projects, tests, infrastructure, and repo-owned assets. Run the React UI from the separate `frontend/` workspace with `npm --prefix .\frontend run dev:web`; do not add the React workspace to the Visual Studio solution unless a deliberate tooling requirement justifies it.
 
 ### **Port Allocations**
 | Mode | API | Web |
