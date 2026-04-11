@@ -195,7 +195,7 @@ public class ConfirmPaymentStatusHandlerTests : PaymentServiceTestBase
         var handler = CreateConfirmPaymentHandler();
         var command = BuildConfirmPaymentCommand(
             callbackStatus: "completed",
-            callbackParameters: new Dictionary<string, string>
+            callbackParameters: new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["source"] = "direct",
                 ["status"] = "completed"
@@ -245,7 +245,7 @@ public class ConfirmPaymentStatusHandlerTests : PaymentServiceTestBase
     public async Task HandleAsync_RemoteChargeCreationDate_ShouldBeNormalisedToUtcInReturnDto()
     {
         // Arrange — OpenPay returns a DateTimeKind.Unspecified date (CDMx local time)
-        var openPayLocalTime = new DateTime(2024, 3, 1, 4, 0, 0); // no Kind = Unspecified
+        var openPayLocalTime = new DateTime(2024, 3, 1, 4, 0, 0, DateTimeKind.Unspecified);
         var transaction = BuildStubCardTransaction();
         SetupConfirmPaymentDbSets(existingTransaction: transaction);
         MockOpenPayAdapter

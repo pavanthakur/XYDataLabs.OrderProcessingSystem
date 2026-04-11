@@ -1,7 +1,7 @@
 # Architecture Evolution: Monolith to Enterprise Microservices
 
-**Last Updated:** April 10, 2026
-**Current Status:** Phases 1-7 Complete ✅ | Track U Active 📅 | Backend Phase 8 Next 📅 | Phases 8.5-14 Planned 📅
+**Last Updated:** April 11, 2026
+**Current Status:** Phases 1-7 Complete ✅ | Track U U5 Complete ✅ | Backend Phase 8 Active Next 📅 | Phases 8.5-14 Planned 📅
 
 ---
 
@@ -16,6 +16,10 @@ with MongoDB.
 ---
 
 ## Baseline: Monolith on Azure App Service ✅ DEPLOYED
+
+Historical note: the diagram below captures the original phase-1 baseline. The same UI App Service
+now serves the React frontend after Track U U5; the MVC web host is retained here only as
+historical context for the migration path.
 
 ### Timeline
 - **Duration:** Weeks 1-4 (Days 1-31)
@@ -108,7 +112,7 @@ XYDataLabs.OrderProcessingSystem.sln
 ### URLs
 
 - **API Swagger:** https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net/swagger
-- **Web:** https://pavanthakur-orderprocessing-ui-xyapp-dev.azurewebsites.net
+- **Web (React):** https://pavanthakur-orderprocessing-ui-xyapp-dev.azurewebsites.net
 
 ---
 
@@ -1342,5 +1346,5 @@ All technical skills from a typical Azure .NET senior role are fully covered or 
 
 ---
 
-**Last Updated:** April 10, 2026
-**Status:** Phases 1-7 Complete ✅ | Track U Active 📅 | Backend Phase 8 Next 📅 | Phases 8.5-14 Planned 📅
+**Last Updated:** April 11, 2026
+**Status:** Phases 1-7 Complete ✅ | Track U U5 Complete ✅ | Backend Phase 8 Active Next 📅 | Phases 8.5-14 Planned 📅

@@ -30,17 +30,17 @@
 - ✅ **Backend sequencing tightened**: backend Phase 8 begins only after Track U Phase U5 completes; U2 is no longer the backend gate
 - ✅ **Canonical planning docs created**: `docs/guides/development/api-contract-audit.md` and `docs/guides/development/ui-modernization-plan.md`
 
-### April 11, 2026 Track U U5 Complete — Azure Cutover Done, MVC Deletion Follow-Up Pending
+### April 11, 2026 Track U U5 Complete — React Cutover and MVC Retirement Complete
 
-- ✅ Legacy MVC payment entry now redirects to the React payment route instead of serving the old Razor payment form
-- ✅ Legacy MVC callback path remains only as a compatibility redirect to the React callback status route
-- ✅ Razor payment views, layout files, and UI-host browser assets were removed from `XYDataLabs.OrderProcessingSystem.UI`
+- ✅ `frontend/apps/web` is now the sole active web client for local, Docker, and Azure UI runtime paths
+- ✅ Payment callback, runtime configuration, and client telemetry now remain under API ownership for the React-first flow
+- ✅ Legacy MVC payment entry, callback handling, Razor views, layouts, and browser assets were removed with the retired UI host
 - ✅ PR validation now includes React workspace typecheck/build via `frontend/` in `ci.yml`
 - ✅ `deploy-ui-to-azure.yml` now builds and deploys the React frontend to the Azure UI App Service
 - ✅ Azure provisioning no longer treats the UI App Service as a required .NET 8 presentation host for new environments
-- ✅ Local HTTP and Docker UI launch paths now target the React frontend workspace
-- ✅ `XYDataLabs.OrderProcessingSystem.UI` and `XYDataLabs.OrderProcessingSystem.UI.Tests` were removed from the solution/runtime path
-- ✅ Backend Phase 8 gate remains satisfied under the original Track U plan
+- ✅ Local HTTP/HTTPS and Docker HTTP/HTTPS UI launch paths now target the React frontend workspace
+- ✅ `XYDataLabs.OrderProcessingSystem.UI` and `XYDataLabs.OrderProcessingSystem.UI.Tests` were removed physically and from the solution/runtime path
+- ✅ Backend Phase 8 is now unblocked under the completed Track U plan
 
 ### Architecture Phases Completed
 

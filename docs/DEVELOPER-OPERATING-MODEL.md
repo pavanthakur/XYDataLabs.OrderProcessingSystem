@@ -43,9 +43,9 @@ docs/README.md
 ## Current State
 
 - Days 1-43 are complete.
-- Track U (UI Modernization Program) is the active implementation-prep track.
-- Backend Phase 8 remains the next backend engineering phase and begins after Track U Phase U5.
-- The recommended next cleanup slice before deleting MVC is local HTTP validation, Docker UI validation, then MVC deletion.
+- Track U Phase U5 is complete: the React web cutover is live and the legacy MVC UI has been retired from the runtime and solution.
+- Backend Phase 8 is now the next active backend engineering phase.
+- Local and Docker UI validation for the React-first runtime are complete on the supported execution paths.
 - The canonical learning source of truth is `docs/learning/curriculum/1_MASTER_CURRICULUM.md`.
 - The canonical milestone tracker is `docs/internal/AZURE-PROGRESS-EVALUATION.md`.
 - Only the active `docs/` tree remains.

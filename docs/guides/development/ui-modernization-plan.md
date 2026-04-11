@@ -1,16 +1,20 @@
 # UI Modernization Plan
 
-Canonical implementation-prep plan for complete retirement of the ASP.NET Core MVC web host and
+Canonical Track U plan and completion record for retirement of the ASP.NET Core MVC web host and
 its replacement with React web first, followed by a mobile client on the same contract.
+
+Track U U5 is complete as of April 11, 2026. React web now owns the active runtime and deployment
+path; U6 mobile work remains future and does not block backend Phase 8.
 
 ## Objective
 
 Replace the current MVC presentation layer with React web, remove MVC from the deployment and
-runtime path before backend Phase 8 begins, and then add React Native / mobile on top of the
-stabilized API contract as a later workstream.
+runtime path before backend Phase 8, and then add React Native / mobile on top of the stabilized
+API contract as a later workstream. The pre-Phase-8 gate is now complete.
 
 This plan does **not** renumber backend Phases 8-14. It creates a parallel UI Modernization
-Program (`Track U`) that runs before backend Phase 8 implementation begins.
+Program (`Track U`) that ran as the pre-Phase-8 gate. U5 is complete; only U6 remains future
+mobile work.
 
 ## Scope Boundaries
 
@@ -197,6 +201,8 @@ web deployment, but React code must not be merged back into a server-rendered MV
 2. No backend contract drift exists between web and mobile clients.
 
 ## Complete MVC Removal Checklist
+
+Status: satisfied for Track U U5.
 
 MVC is not considered retired until every item below is true:
 

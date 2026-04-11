@@ -19,8 +19,8 @@ Canonical curriculum navigation for the learning track.
 ## Current Learning Status
 
 - Completed: Days 1-43 and Architecture Phases 1-7
-- Current: Phase 7 is closed and verification-frozen; Track U is now the active implementation-prep track before backend Phase 8 begins
-- Next: the original gate is met; recommended follow-up is local HTTP + Docker React validation and MVC deletion, then backend Phase 8 event foundation, then Phase 9 module extraction, then Phase 10 Azure transport + DLQ operations behind hard entry gates
+- Current: Phase 7 is closed and verification-frozen; Track U U5 is complete and the React-first web cutover plus MVC retirement are done
+- Next: backend Phase 8 event foundation, then Phase 9 module extraction, then Phase 10 Azure transport + DLQ operations behind hard entry gates
 
-Last Updated: April 10, 2026
-Current Focus: Track U contract freeze and React web-first cutover planning on top of the frozen Phase 7 baseline
+Last Updated: April 11, 2026
+Current Focus: Backend Phase 8 preparation and execution on top of the completed React-first cutover baseline

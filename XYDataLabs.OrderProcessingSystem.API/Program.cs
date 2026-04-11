@@ -16,6 +16,7 @@ using Microsoft.Extensions.Configuration;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData;
 using Microsoft.ApplicationInsights.Extensibility;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using XYDataLabs.OrderProcessingSystem.Application.Utilities;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Configuration;
@@ -38,7 +39,10 @@ Log.Logger = new LoggerConfiguration()
 
 var builder = WebApplication.CreateBuilder(args);
 
-var isDocker = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true";
+var isDocker = string.Equals(
+    Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"),
+    "true",
+    StringComparison.OrdinalIgnoreCase);
 
 // Detect Azure App Service using WEBSITE_SITE_NAME environment variable
 var azureSiteName = Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME");
@@ -262,9 +266,9 @@ builder.Services.AddSwaggerGen(options =>
     // Optionally, you can customize the Swagger UI or API info
     options.SwaggerDoc("v1", new OpenApiInfo
     {
-        Title = $"OrderProcessingSystem API - {environmentName.ToUpper()} Environment",
+        Title = $"OrderProcessingSystem API - {environmentName.ToUpper(CultureInfo.InvariantCulture)} Environment",
         Version = "v1",
-        Description = $"OrderProcessingSystem API with Customer, Order endpoints running in {environmentName.ToUpper()} environment" + 
+        Description = $"OrderProcessingSystem API with Customer, Order endpoints running in {environmentName.ToUpper(CultureInfo.InvariantCulture)} environment" + 
                      $" [{runtimeLabel}]" +
                      $" | Active Tenant: {tenantConfigurationOptions.ActiveTenantCode}",
     });
@@ -277,13 +281,20 @@ builder.Services.AddSwaggerGen(options =>
     options.AddServer(new OpenApiServer 
     { 
         Url = serverUrl,
-        Description = isAzure ? $"Azure {environmentName.ToUpper()} Server" : $"{environmentName.ToUpper()} Server"
+        Description = isAzure
+            ? $"Azure {environmentName.ToUpper(CultureInfo.InvariantCulture)} Server"
+            : $"{environmentName.ToUpper(CultureInfo.InvariantCulture)} Server"
     });
 });
 
 // Configure Serilog with environment-aware paths
 // Include runtime context and http/https profile in the filename so same-env containers and local runs don't share a file lock.
-var profileSuffix = Environment.GetEnvironmentVariable("USE_HTTPS") == "true" ? "https" : "http";
+var profileSuffix = string.Equals(
+    Environment.GetEnvironmentVariable("USE_HTTPS"),
+    "true",
+    StringComparison.OrdinalIgnoreCase)
+    ? "https"
+    : "http";
 var runtimeSuffix = isDocker ? "dock" : "local";
 builder.Host.UseSerilog((context, services, loggerConfiguration) =>
 {
@@ -398,7 +409,8 @@ var swaggerTenantSelectorScriptPath = GetVersionedWebAssetPath(app, "swagger-ass
 
 // Configure the HTTP request pipeline.
 // Environment-specific middleware configuration using our simplified profile names
-if (environmentName == Constants.Environments.Dev || environmentName == Constants.Environments.Staging)
+if (string.Equals(environmentName, Constants.Environments.Dev, StringComparison.Ordinal) ||
+    string.Equals(environmentName, Constants.Environments.Staging, StringComparison.Ordinal))
 {
     // Enable Swagger for Development and Staging environments
     app.UseSwagger();
@@ -454,7 +466,7 @@ else
 
     app.Use(async (context, next) =>
     {
-        if (context.Request.Path.StartsWithSegments("/swagger"))
+        if (context.Request.Path.StartsWithSegments("/swagger", StringComparison.OrdinalIgnoreCase))
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;
             context.Response.ContentType = "application/json";
@@ -531,7 +543,7 @@ else
 try
 {
     Log.Information("Starting API web host - Branch-based deployment enabled");
-    app.Run();
+    await app.RunAsync();
 }
 catch (Exception ex)
 {
@@ -540,7 +552,7 @@ catch (Exception ex)
 }
 finally
 {
-    Log.CloseAndFlush();
+    await Log.CloseAndFlushAsync();
 }
 
 static string ResolveTenantCodeForLogging(HttpContext httpContext)

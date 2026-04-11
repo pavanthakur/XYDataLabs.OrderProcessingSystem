@@ -26,15 +26,15 @@ public sealed class TenantMiddleware
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(tenantResolver);
 
-        var requestedTenantCode = context.Request.Headers[TenantHeaderName].FirstOrDefault()?.Trim();
+        string? requestedTenantCode = context.Request.Headers[TenantHeaderName].FirstOrDefault()?.Trim();
 
-        using var requestedTenantScope = LogContext.PushProperty(
+        using IDisposable requestedTenantScope = LogContext.PushProperty(
             "RequestedTenantCode",
             string.IsNullOrWhiteSpace(requestedTenantCode) ? "none" : requestedTenantCode);
 
         if (IsTenantOptionalRequest(context.Request.Path, requestedTenantCode))
         {
-            using var bootstrapTenantScope = LogContext.PushProperty(
+            using IDisposable bootstrapTenantScope = LogContext.PushProperty(
                 "TenantCode",
                 ResolveOptionalTenantCode(context));
             await _next(context);
@@ -58,7 +58,7 @@ public sealed class TenantMiddleware
             return;
         }
 
-        var tenantContext = await tenantResolver.ResolveTenantAsync(requestedTenantCode, context.RequestAborted);
+        TenantContext? tenantContext = await tenantResolver.ResolveTenantAsync(requestedTenantCode, context.RequestAborted);
         if (tenantContext is null)
         {
             Log.Warning(
@@ -147,7 +147,7 @@ public sealed class TenantMiddleware
 
         if (IsPaymentCallbackRequest(context.Request.Path))
         {
-            var callbackTenantCode = context.Request.Query["tenantCode"].FirstOrDefault()?.Trim();
+            string? callbackTenantCode = context.Request.Query["tenantCode"].FirstOrDefault()?.Trim();
             return string.IsNullOrWhiteSpace(callbackTenantCode) ? "callback" : callbackTenantCode;
         }
 

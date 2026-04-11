@@ -32,9 +32,9 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
     protected readonly Mock<TimeProvider> MockTimeProvider = new();
 
     // --- capture lists filled by SetupPaymentDbSets() ---
-    protected List<CardTransaction> CapturedCardTransactions { get; private set; } = [];
-    protected List<TransactionStatusHistory> CapturedTsh { get; private set; } = [];
-    protected List<PayinLogDetails> CapturedPayinLogDetails { get; private set; } = [];
+    protected ICollection<CardTransaction> CapturedCardTransactions { get; private set; } = [];
+    protected ICollection<TransactionStatusHistory> CapturedTsh { get; private set; } = [];
+    protected ICollection<PayinLogDetails> CapturedPayinLogDetails { get; private set; } = [];
 
     public PaymentServiceTestBase()
     {
