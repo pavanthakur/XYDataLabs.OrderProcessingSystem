@@ -28,13 +28,16 @@ See [scripts/README.md](../../../scripts/README.md#local-development-bootstrap) 
 > dotnet dev-certs https --trust
 > # VS / dotnet run secrets
 > dotnet user-secrets set "ApiSettings:API:https:CertPassword" "<local-cert-password>" --project .\XYDataLabs.OrderProcessingSystem.API\XYDataLabs.OrderProcessingSystem.API.csproj
-> dotnet user-secrets set "ApiSettings:UI:https:CertPassword" "<local-cert-password>" --project .\XYDataLabs.OrderProcessingSystem.UI\XYDataLabs.OrderProcessingSystem.UI.csproj
 > dotnet user-secrets set "OpenPay:MerchantId" "<local-openpay-merchant-id>" --project .\XYDataLabs.OrderProcessingSystem.API\XYDataLabs.OrderProcessingSystem.API.csproj
 > dotnet user-secrets set "OpenPay:PrivateKey" "<local-openpay-private-key>" --project .\XYDataLabs.OrderProcessingSystem.API\XYDataLabs.OrderProcessingSystem.API.csproj
 > dotnet user-secrets set "OpenPay:DeviceSessionId" "<local-openpay-device-session-id>" --project .\XYDataLabs.OrderProcessingSystem.API\XYDataLabs.OrderProcessingSystem.API.csproj
 > # Docker secrets
 > Copy-Item Resources\Docker\.env.local.example Resources\Docker\.env.local
 > # Edit .env.local to set your passwords
+> # Frontend HTTPS dev server (when needed)
+> $env:ORDERPROCESSING_DEV_SERVER_USE_HTTPS = "true"
+> $env:ORDERPROCESSING_DEV_SERVER_PFX_PATH = ".\Resources\Certificates\aspnetapp.pfx"
+> $env:ORDERPROCESSING_DEV_SERVER_PFX_PASSWORD = "<local-cert-password>"
 > ```
 
 # 🏃‍♂️ How to Run the Project

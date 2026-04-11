@@ -152,10 +152,8 @@ server-owned responsibilities and must be owned by the API.
 
 **Operational rule:**
 
-The current `XYDataLabs.OrderProcessingSystem.UI` deployment remains alive until U4 is complete.
-After cutover, the MVC host is removed from the active deployment model. The existing UI hosting
-resource may be repurposed for the React web deployment, but React code must not be merged back
-into the MVC project.
+The former `XYDataLabs.OrderProcessingSystem.UI` hosting resource may be repurposed for the React
+web deployment, but React code must not be merged back into a server-rendered MVC host.
 
 **Current implementation status (April 11, 2026):**
 
@@ -164,7 +162,9 @@ into the MVC project.
 - Razor payment views, layout files, and UI-host browser assets have been removed from the active system design.
 - `deploy-ui-to-azure.yml` now builds and deploys the React frontend to the Azure UI App Service.
 - Azure provisioning no longer pins the UI App Service to a .NET runtime for new environments.
-- U5 is complete; backend Phase 8 is no longer blocked by the web cutover gate.
+- U5 is complete for the original gate: React now owns the active runtime and deployment path.
+- Local HTTP/Docker UI launch paths now target the React frontend workspace instead of MVC.
+- `XYDataLabs.OrderProcessingSystem.UI` and its test project have been removed from the solution and local runtime scaffolding.
 
 **Exit criteria:**
 
@@ -208,6 +208,14 @@ MVC is not considered retired until every item below is true:
 6. Documentation status surfaces no longer describe MVC as the active UI.
 7. Mobile, if present, is treated as an additional client and not as a hidden dependency for web cutover.
 8. Backend Phase 8 does not begin until U5 is complete.
+
+## Recommended Next Slice After U5
+
+The original Track U gate is satisfied and the cleanup slice has been completed:
+
+1. Local HTTP UI launch paths were replaced with React and validated.
+2. Docker web launch paths were replaced with React and validated.
+3. `XYDataLabs.OrderProcessingSystem.UI` and related local runtime scaffolding were removed.
 
 ## Dependency And Gate Summary
 

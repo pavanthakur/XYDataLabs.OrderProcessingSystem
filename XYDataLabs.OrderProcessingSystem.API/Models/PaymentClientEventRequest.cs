@@ -6,8 +6,6 @@ public sealed class PaymentClientEventRequest
 
     public string? Severity { get; init; }
 
-    public string? TenantCode { get; init; }
-
     public string? ClientFlowId { get; init; }
 
     public string? CustomerOrderId { get; init; }

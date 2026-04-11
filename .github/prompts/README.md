@@ -140,14 +140,14 @@ Important notes:
 
 Purpose:
 - End-to-end verification of a payment test run: log data **and** DB — in one pass.
-- **docker/local**: reads today's `webapi-{env}-{date}.log` and `ui-{env}-{date}.log` physical files.
+- **docker/local**: reads today's `webapi-{env}-{date}.log` physical API log and derives UI evidence from browser-originated `ui_payment_*` telemetry captured in that same API log.
 - **azure**: queries App Insights KQL (`ai-orderprocessing-{env}`) for both API and UI callback traces.
 - The prompt is script-first by runtime: it should delegate to the matching verifier script before falling back to manual investigation steps.
 - Extracts OR prefix and charge IDs from the log automatically — no need to know the prefix upfront.
 - In Azure mode, derives a shared logical run prefix (for example `OR-1-2ndApr`) before running DB queries.
 - In Azure mode, filters API/UI traces using both `cloud_RoleName` and the structured `customDimensions['Application']` property to reduce cross-app noise.
 - Runs Q2 / Q5 / Q8 on the shared DB and Q2-B / Q5-B / Q9-B on the TenantC dedicated DB, all scoped to today.
-- Produces a correlated pass/fail table: API log → UI log → DB for every charge ID.
+- Produces a correlated pass/fail table: API log → UI telemetry → DB for every charge ID.
 
 Use when:
 - After any payment test run on any environment/profile/runtime combination (dev/stg/prod × http/https × docker/local/azure).
@@ -185,7 +185,7 @@ Note: For deep-dive queries (Q1, Q3, Q4, Q6, Q6a, Q7, Q8-B and per-tenant 3DS to
 | Set up local dev environment after git clone | `/XYDataLabs-setup-local` |
 | Need local SSMS/sqlcmd access to Azure SQL | `/XYDataLabs-sql-local-access` |
 | Check for stale AI context / memory drift | `/XYDataLabs-context-audit` |
-| Verify payment run: physical logs + DB correlated | `/XYDataLabs-verify-db-logs "prod https docker"` or `/XYDataLabs-verify-db-logs "dev http azure"` |
+| Verify payment run: API log + UI telemetry + DB correlated | `/XYDataLabs-verify-db-logs "prod https docker"` or `/XYDataLabs-verify-db-logs "dev http azure"` |
 | Validate ADR markdown files before committing | `/XYDataLabs-validate-adrs` |
 
 ## Typical Workflows
@@ -206,7 +206,7 @@ Note: For deep-dive queries (Q1, Q3, Q4, Q6, Q6a, Q7, Q8-B and per-tenant 3DS to
    └─ [When done] /XYDataLabs-sql-local-access  →  close firewall rule
 
 [After a payment test run — log + DB correlation]
-└─ /XYDataLabs-verify-db-logs "prod http docker"  →  reads today’s log files, extracts charge IDs, runs DB queries, correlates all three
+└─ /XYDataLabs-verify-db-logs "prod http docker"  →  reads today’s API log, correlates browser UI telemetry, runs DB queries, correlates all three
    └─ Any mismatch? → agent flags exact charge ID + likely cause (persistence fail / missed callback / file-lock)
 
 [Before committing ADR changes]

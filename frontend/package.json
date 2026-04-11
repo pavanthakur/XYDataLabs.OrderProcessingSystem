@@ -10,7 +10,8 @@
     "build": "npm run generate:api-sdk && npm run build --workspace @xydatalabs/orderprocessing-web",
     "dev:web": "npm run dev --workspace @xydatalabs/orderprocessing-web",
     "generate:api-sdk": "npm run generate --workspace @xydatalabs/orderprocessing-api-sdk",
-    "typecheck": "npm run typecheck --workspace @xydatalabs/orderprocessing-web"
+    "typecheck": "npm run typecheck --workspace @xydatalabs/orderprocessing-web",
+    "test:web": "npm run test --workspace @xydatalabs/orderprocessing-web"
   },
   "engines": {
     "node": ">=20"

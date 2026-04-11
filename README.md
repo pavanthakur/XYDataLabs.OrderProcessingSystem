@@ -382,7 +382,7 @@ Any deviation from ARCHITECTURE.md requires an Architecture Decision Record (ADR
 +-- XYDataLabs.OrderProcessingSystem.Domain/
 +-- XYDataLabs.OrderProcessingSystem.Infrastructure/
 +-- XYDataLabs.OrderProcessingSystem.SharedKernel/
-+-- XYDataLabs.OrderProcessingSystem.UI/
++-- frontend/
 +-- XYDataLabs.OpenPayAdapter/
 |
 +-- tests/

@@ -216,8 +216,8 @@ Workflows use **path-based triggering** - they only run when relevant code chang
 # Changed: XYDataLabs.OrderProcessingSystem.API/Controllers/OrderController.cs
 # Result: Only deploy-api-to-azure.yml runs ✅
 
-# Scenario 2: Only UI code changed  
-# Changed: XYDataLabs.OrderProcessingSystem.UI/Pages/Index.razor
+# Scenario 2: Only web frontend code changed  
+# Changed: frontend/apps/web/src/App.tsx
 # Result: Only deploy-ui-to-azure.yml runs ✅
 
 # Scenario 3: Shared domain model changed

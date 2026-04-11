@@ -4,9 +4,9 @@
 Accepted
 
 ## Context
-The current UI is an ASP.NET Core MVC application in `XYDataLabs.OrderProcessingSystem.UI`.
-It still owns user-facing Razor views plus two server-owned endpoints that are required for the
-current payment journey:
+The previous UI was an ASP.NET Core MVC application in `XYDataLabs.OrderProcessingSystem.UI`.
+It originally owned user-facing Razor views plus two server-owned endpoints that were required for the
+payment journey:
 
 - `GET /payment/callback` in `HomeController`
 - `POST /payment/client-event` in `HomeController`
@@ -32,9 +32,9 @@ root as part of a parallel UI Modernization Program (`Track U`).
 
 The decision includes these binding rules:
 
-1. React web replaces the current MVC presentation layer.
+1. React web replaces the former MVC presentation layer.
 2. React Native / mobile follows the web contract and is not a gate for MVC retirement or backend Phase 8.
-3. The UI implementation lives outside `XYDataLabs.OrderProcessingSystem.UI`.
+3. The UI implementation lives outside the retired `XYDataLabs.OrderProcessingSystem.UI` project.
 4. The first React cut uses a direct API integration model with no BFF.
 5. The migration-window security model stays on the current runtime contract:
    `GET /api/v1/Info/runtime-configuration` for bootstrap plus `X-Tenant-Code` for tenant
@@ -67,7 +67,7 @@ The decision includes these binding rules:
 **Future obligations:**
 - Keep `X-Tenant-Code` as the tenant header until a later auth track formally replaces it.
 - Keep Swagger valid enough for generated client consumption.
-- Do not merge React implementation code into `XYDataLabs.OrderProcessingSystem.UI`.
+- Do not reintroduce React implementation code into a server-rendered MVC host.
 - Do not treat mobile completion as a gate for backend Phase 8 or MVC retirement.
 
 ## Related

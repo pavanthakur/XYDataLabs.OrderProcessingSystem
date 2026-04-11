@@ -97,6 +97,123 @@ public class ConfirmPaymentStatusHandlerTests : PaymentServiceTestBase
             because: "without a browser callback only the resolved-status TSH row is written");
     }
 
+    [Fact]
+    public async Task HandleAsync_RepeatedThreeDSCallback_ShouldNotWriteDuplicateAuditRows()
+    {
+        // Arrange — the second reconciliation should see the rows written by the first one.
+        var transaction = BuildStubCardTransaction(billingCustomerId: 42);
+        var payinLog = BuildStubPayinLog(billingCustomerId: 42);
+        SetupConfirmPaymentDbSets(existingTransaction: transaction, existingPayinLog: payinLog);
+        MockOpenPayAdapter
+            .Setup(s => s.GetChargeAsync(It.IsAny<string>(), It.IsAny<string?>()))
+            .ReturnsAsync(new Charge
+            {
+                Id = "charge-001",
+                Status = "completed",
+                Amount = 100m,
+                Authorization = "auth-ref-001"
+            });
+
+        var handler = CreateConfirmPaymentHandler();
+        var command = BuildConfirmPaymentCommand(callbackStatus: "completed");
+
+        // Act — first pass records the callback audit trail.
+        var firstResult = await handler.HandleAsync(command);
+        CapturedTsh.Should().HaveCount(2);
+        CapturedPayinLogDetails.Should().HaveCount(1);
+
+        CapturedTsh.Clear();
+        CapturedPayinLogDetails.Clear();
+
+        var secondResult = await handler.HandleAsync(command);
+
+        // Assert — a repeated confirm-status call is idempotent.
+        firstResult.IsSuccess.Should().BeTrue();
+        secondResult.IsSuccess.Should().BeTrue();
+        secondResult.Value!.CallbackRecorded.Should().BeTrue();
+        CapturedTsh.Should().BeEmpty(
+            because: "callback_received and completed were already written during the first reconciliation");
+        CapturedPayinLogDetails.Should().BeEmpty(
+            because: "the final reconciliation detail row must not be duplicated on refresh or retry");
+    }
+
+    [Fact]
+    public async Task HandleAsync_DirectNon3DSStatusLookup_ShouldNotWriteCallbackAuditRows()
+    {
+        // Arrange — non-3DS charges are already final after ProcessPayment and direct status lookups must stay read-only.
+        var transaction = BuildStubCardTransaction(billingCustomerId: 42, isThreeDSecureEnabled: false);
+        transaction.TransactionStatus = "completed";
+        transaction.ThreeDSecureStage = "not_applicable";
+        transaction.TransactionReferenceId = "auth-ref-001";
+
+        var payinLog = BuildStubPayinLog(billingCustomerId: 42, isThreeDSecureEnabled: false);
+        payinLog.Result = 1;
+        payinLog.OpenPayAuthorizationId = "auth-ref-001";
+
+        var existingHistories = new[]
+        {
+            new TransactionStatusHistory
+            {
+                Id = 1,
+                TransactionId = transaction.Id,
+                AttemptOrderId = transaction.AttemptOrderId,
+                Status = "completed",
+                ThreeDSecureStage = "tokenization_completed",
+                IsThreeDSecureEnabled = false,
+                CreatedBy = transaction.BillingCustomerId,
+                CreatedDate = UtcNow
+            },
+            new TransactionStatusHistory
+            {
+                Id = 2,
+                TransactionId = transaction.Id,
+                AttemptOrderId = transaction.AttemptOrderId,
+                Status = "completed",
+                ThreeDSecureStage = "not_applicable",
+                IsThreeDSecureEnabled = false,
+                TransactionReferenceId = "auth-ref-001",
+                CreatedBy = transaction.BillingCustomerId,
+                CreatedDate = UtcNow
+            }
+        };
+
+        SetupConfirmPaymentDbSets(
+            existingTransaction: transaction,
+            existingPayinLog: payinLog,
+            existingTransactionStatusHistories: existingHistories);
+
+        MockOpenPayAdapter
+            .Setup(s => s.GetChargeAsync(It.IsAny<string>(), It.IsAny<string?>()))
+            .ReturnsAsync(new Charge
+            {
+                Id = "charge-001",
+                Status = "completed",
+                Amount = 100m,
+                Authorization = "auth-ref-001"
+            });
+
+        var handler = CreateConfirmPaymentHandler();
+        var command = BuildConfirmPaymentCommand(
+            callbackStatus: "completed",
+            callbackParameters: new Dictionary<string, string>
+            {
+                ["source"] = "direct",
+                ["status"] = "completed"
+            });
+
+        // Act
+        var result = await handler.HandleAsync(command);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        result.Value!.CallbackRecorded.Should().BeFalse();
+        result.Value.ThreeDSecureStage.Should().Be("not_applicable");
+        CapturedTsh.Should().BeEmpty(
+            because: "direct summary-page lookups for non-3DS payments must not append callback or final-status history rows");
+        CapturedPayinLogDetails.Should().BeEmpty(
+            because: "the not_applicable PayinLogDetails row already exists from the original charge creation");
+    }
+
     // ------------------------------------------------------------------ Fix 1 regression guard
 
     [Fact]

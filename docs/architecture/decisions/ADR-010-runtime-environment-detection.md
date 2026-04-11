@@ -223,11 +223,10 @@ Do NOT re-read `ASPNETCORE_ENVIRONMENT` directly in controllers — go through `
 
 ## Related
 
-- `XYDataLabs.OrderProcessingSystem.UI/Controllers/HomeController.cs` — `PopulateCommonViewData()`
-- `XYDataLabs.OrderProcessingSystem.UI/Views/Home/_Layout.cshtml` — tenant selector policy gate
-- `XYDataLabs.OrderProcessingSystem.UI/wwwroot/js/tenant-indicator.js` — browser override policy
+- `frontend/apps/web/src/App.tsx` — tenant bootstrap and shell policy gate
+- `frontend/apps/web/src/payment-flow.ts` — browser callback telemetry and API-bound tenant header usage
 - `XYDataLabs.OrderProcessingSystem.API/Program.cs` — all API-side gates
 - `Resources/Configuration/sharedsettings.{local,dev,stg,prod}.json` — tenant selector policy by environment
-- `XYDataLabs.OrderProcessingSystem.UI/Dockerfile` — `ENV DOTNET_RUNNING_IN_CONTAINER=true`
+- `frontend/apps/web/Dockerfile` — containerized React web runtime
 - ADR-007: Hybrid multi-tenant model
 - ADR-009: Tenant isolation hardening

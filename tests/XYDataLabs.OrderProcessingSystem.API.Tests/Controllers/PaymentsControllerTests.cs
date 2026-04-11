@@ -5,6 +5,7 @@ using Xunit;
 using XYDataLabs.OrderProcessingSystem.API.Controllers;
 using XYDataLabs.OrderProcessingSystem.API.Models;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 
 namespace XYDataLabs.OrderProcessingSystem.API.Tests.Controllers;
 
@@ -14,9 +15,14 @@ public class PaymentsControllerTests
 
     public PaymentsControllerTests()
     {
+        var tenantProvider = new Mock<ITenantProvider>();
+        tenantProvider.SetupGet(provider => provider.HasTenantContext).Returns(true);
+        tenantProvider.SetupGet(provider => provider.TenantCode).Returns("TenantA");
+
         _controller = new PaymentsController(
             Mock.Of<IDispatcher>(),
-            Mock.Of<ILogger<PaymentsController>>());
+            Mock.Of<ILogger<PaymentsController>>(),
+            tenantProvider.Object);
     }
 
     [Fact]
@@ -33,7 +39,6 @@ public class PaymentsControllerTests
         var result = _controller.LogPaymentClientEvent(new PaymentClientEventRequest
         {
             EventName = "ui_payment_completed",
-            TenantCode = "TenantA",
             PaymentId = "pay_123",
             PaymentStatus = "completed"
         });

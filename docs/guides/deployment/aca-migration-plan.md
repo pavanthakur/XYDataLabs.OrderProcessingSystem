@@ -351,9 +351,9 @@ Rollback:
 
 ---
 
-## Phase 6 — Containerize UI Service
-- Add multi-stage Dockerfile under `XYDataLabs.OrderProcessingSystem.UI/`
-- Build locally; verify static/site hosting strategy
+## Phase 6 — Containerize Web Frontend
+- Add multi-stage Dockerfile under `frontend/apps/web/`
+- Build locally; verify React static/site hosting strategy
 
 Acceptance:
 - Image builds; renders basic UI; API URL configurable via env.
@@ -519,7 +519,7 @@ Acceptance:
   - `infra/parameters/dev-aca.json`, `staging-aca.json`, `prod-aca.json`
 - App Dockerfiles:
   - `XYDataLabs.OrderProcessingSystem.API/Dockerfile`
-  - `XYDataLabs.OrderProcessingSystem.UI/Dockerfile`
+  - `frontend/apps/web/Dockerfile`
 - Workflows:
   - `.github/workflows/app-build-deploy-aca.yml`
 

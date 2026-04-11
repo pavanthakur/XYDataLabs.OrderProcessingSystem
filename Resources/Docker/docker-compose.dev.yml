@@ -75,19 +75,16 @@ services:
     image: xydatalabs-orderprocessingsystem-ui-http:dev
     build:
       context: ../..
-      dockerfile: XYDataLabs.OrderProcessingSystem.UI/Dockerfile
+      dockerfile: frontend/apps/web/Dockerfile
       target: final
+      args:
+        VITE_ORDERPROCESSING_API_BASE_URL: http://localhost:5020
     ports:
       - "5022:5022"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=http://+:5022
-      - ASPNETCORE_HTTP_PORTS=5022
-      - ApiSettings__BaseUrl=http://localhost:5020
+      - HOST=0.0.0.0
+      - PORT=5022
       - USE_HTTPS=false
-    volumes:
-      - ../../logs:/logs
-      - ../../Resources/Configuration/sharedsettings.dev.json:/app/Resources/Configuration/sharedsettings.dev.json:ro
     networks:
       - xy-dev-network
       - xy-database-network
@@ -96,7 +93,7 @@ services:
       api-dev-http:
         condition: service_healthy
     healthcheck:
-      test: curl --fail http://localhost:5022 --insecure || exit 1
+      test: curl --fail http://localhost:5022/customers --insecure || exit 1
       interval: 30s
       timeout: 10s
       retries: 2
@@ -106,22 +103,20 @@ services:
     image: xydatalabs-orderprocessingsystem-ui-https:dev
     build:
       context: ../..
-      dockerfile: XYDataLabs.OrderProcessingSystem.UI/Dockerfile
+      dockerfile: frontend/apps/web/Dockerfile
       target: final
+      args:
+        VITE_ORDERPROCESSING_API_BASE_URL: https://localhost:5021
     ports:
       - "5023:5023"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=https://+:5023
-      - ASPNETCORE_HTTPS_PORTS=5023
-      - ASPNETCORE_Kestrel__Certificates__Default__Password=${LOCAL_CERT_PASSWORD}
-      - ApiSettings__UI__https__CertPassword=${LOCAL_CERT_PASSWORD}
-      - ApiSettings__BaseUrl=https://localhost:5021
+      - HOST=0.0.0.0
+      - PORT=5023
       - USE_HTTPS=true
+      - PFX_PATH=/https/aspnetapp.pfx
+      - PFX_PASSWORD=${LOCAL_CERT_PASSWORD}
     volumes:
-      - ../../logs:/logs
       - ../../Resources/Certificates/aspnetapp.pfx:/https/aspnetapp.pfx:ro
-      - ../../Resources/Configuration/sharedsettings.dev.json:/app/Resources/Configuration/sharedsettings.dev.json:ro
     networks:
       - xy-dev-network
       - xy-database-network
@@ -130,7 +125,7 @@ services:
       api-dev-https:
         condition: service_healthy
     healthcheck:
-      test: curl --fail https://localhost:5023 --insecure || exit 1
+      test: curl --fail https://localhost:5023/customers --insecure || exit 1
       interval: 30s
       timeout: 10s
       retries: 2

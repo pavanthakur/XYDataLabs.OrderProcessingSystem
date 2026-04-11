@@ -1,7 +1,7 @@
 # Local Development Commands
 
 **Part of:** [quick-command-reference.md](./quick-command-reference.md)  
-**Last Updated:** April 10, 2026
+**Last Updated:** April 11, 2026
 
 ---
 
@@ -57,20 +57,19 @@ dotnet test .\tests\XYDataLabs.OrderProcessingSystem.Integration.Tests\XYDataLab
 
 Notes:
 - Add `-RunPrefix <OR-prefix>` when more than one payment run exists for the day.
-- The verifier proves API log -> UI log -> DB for the same charge IDs and is the preferred path over manually rebuilding the log/SQL correlation flow.
+- The verifier proves API log -> UI telemetry -> DB for the same charge IDs and is the preferred path over manually rebuilding the log/SQL correlation flow.
 
 ---
 
 ## 🚀 Run Applications Locally
 
 ```powershell
-# Run API (default: https://localhost:5001)
+# Run API
 cd XYDataLabs.OrderProcessingSystem.API
-dotnet run
+dotnet run --launch-profile http
 
-# Run UI (default: https://localhost:5002)
-cd XYDataLabs.OrderProcessingSystem.UI
-dotnet run
+# Run React web frontend
+npm --prefix .\frontend run dev:web
 
 # Run with specific environment
 dotnet run --environment Development
@@ -82,15 +81,15 @@ $env:ASPNETCORE_ENVIRONMENT = "Development"
 dotnet run
 ```
 
-> **Visual Studio (recommended for debugging):** Press F5 — sets `ASPNETCORE_ENVIRONMENT=Development` automatically.  
+> **Visual Studio (recommended for API debugging):** Press F5 for the API, then run `npm --prefix .\frontend run dev:web` for the React frontend.  
 > **VS Code:** Set `"env": { "ASPNETCORE_ENVIRONMENT": "Development" }` in `launch.json`.
 
 ### **Port Allocations**
-| Mode | API | UI |
+| Mode | API | Web |
 |------|-----|-----|
-| Local VS (F5) | http://localhost:5010 | http://localhost:5012 |
+| Local API + Vite | http://localhost:5010 | http://localhost:5173 |
 | Docker dev | http://localhost:5020 | http://localhost:5022 |
-| Docker UAT | http://localhost:5030 | http://localhost:5032 |
+| Docker stg | http://localhost:5030 | http://localhost:5032 |
 
 ---
 

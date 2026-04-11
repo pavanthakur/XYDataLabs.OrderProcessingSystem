@@ -72,7 +72,7 @@ XYDataLabs.OrderProcessingSystem.sln
 ├── XYDataLabs.OrderProcessingSystem.Domain       (Entities — zero deps)
 ├── XYDataLabs.OrderProcessingSystem.Infrastructure (EF Core, DbContext)
 ├── XYDataLabs.OrderProcessingSystem.SharedKernel  (Result<T>, ApiResponse<T>)
-├── XYDataLabs.OrderProcessingSystem.UI           (MVC Web App)
+├── frontend/apps/web                            (React Web App)
 └── XYDataLabs.OpenPayAdapter                     (Payment Integration)
 ```
 
@@ -99,7 +99,7 @@ XYDataLabs.OrderProcessingSystem.sln
 | Component | Resource Name | Status |
 |-----------|---------------|--------|
 | **API** | `pavanthakur-orderprocessing-api-xyapp-dev` | ✅ Running |
-| **UI** | `pavanthakur-orderprocessing-ui-xyapp-dev` | ✅ Running |
+| **Web** | `pavanthakur-orderprocessing-ui-xyapp-dev` | ✅ Running |
 | **Database** | `orderprocessing-sql-dev / OrderProcessingSystem_Dev` | ✅ Active |
 | **Monitoring** | `ai-orderprocessing-dev` | ✅ Active |
 | **Secrets** | `kv-orderprocessing-dev` | ⚠️ Created (needs access config) |
@@ -108,7 +108,7 @@ XYDataLabs.OrderProcessingSystem.sln
 ### URLs
 
 - **API Swagger:** https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net/swagger
-- **UI:** https://pavanthakur-orderprocessing-ui-xyapp-dev.azurewebsites.net
+- **Web:** https://pavanthakur-orderprocessing-ui-xyapp-dev.azurewebsites.net
 
 ---
 
@@ -138,7 +138,7 @@ XYDataLabs.OrderProcessingSystem.sln
 
 Track U is a parallel UI replacement program and does **not** renumber backend Phases 8-14.
 
-**Status:** Active planning and implementation track for React web replacement and MVC retirement before backend Phase 8 begins.
+**Status:** React web now owns the active runtime and deployment path; backend Phase 8 is no longer blocked by the MVC retirement gate.
 
 **Purpose:** Replace the MVC UI with React web first, remove MVC from the active runtime, and
 then enable React Native / mobile on the same API contract.
@@ -156,6 +156,9 @@ then enable React Native / mobile on the same API contract.
 
 Backend Phase 8 remains the next backend phase, but its implementation starts only after Track U
 Phase U5 is complete.
+
+The local HTTP path, Docker web profiles, and Azure deployment path now target the React frontend.
+`XYDataLabs.OrderProcessingSystem.UI` has been removed from the active runtime and solution graph.
 
 **Canonical references:**
 
@@ -543,7 +546,7 @@ XYDataLabs.OrderProcessingSystem.sln
 ├── XYDataLabs.OrderProcessingSystem.Inventory.PublicApi (NEW - IInventoryModuleApi + contracts)
 ├── XYDataLabs.OrderProcessingSystem.Notifications.PublicApi (NEW - INotificationModuleApi + contracts)
 ├── XYDataLabs.OrderProcessingSystem.Payments.PublicApi (NEW - IPaymentModuleApi + contracts)
-├── XYDataLabs.OrderProcessingSystem.UI               (Existing - Updated routing)
+├── frontend/apps/web                                 (React SPA)
 ├── XYDataLabs.OrderProcessingSystem.Orders.Domain     (Split from shared Domain)
 ├── XYDataLabs.OrderProcessingSystem.Orders.Features   (Split from shared Application)
 ├── XYDataLabs.OrderProcessingSystem.Orders.Infrastructure (Split from shared Infrastructure)
@@ -556,6 +559,7 @@ XYDataLabs.OrderProcessingSystem.sln
 ├── XYDataLabs.OrderProcessingSystem.Payments.Domain (NEW)
 ├── XYDataLabs.OrderProcessingSystem.Payments.Features (NEW)
 ├── XYDataLabs.OrderProcessingSystem.Payments.Infrastructure (NEW)
+├── frontend/apps/web                                 (React SPA)
 ├── XYDataLabs.OrderProcessingSystem.SharedKernel     (Shared)
 └── XYDataLabs.OpenPayAdapter                         (Shared)
 ```

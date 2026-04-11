@@ -30,7 +30,7 @@
 - ✅ **Backend sequencing tightened**: backend Phase 8 begins only after Track U Phase U5 completes; U2 is no longer the backend gate
 - ✅ **Canonical planning docs created**: `docs/guides/development/api-contract-audit.md` and `docs/guides/development/ui-modernization-plan.md`
 
-### April 11, 2026 Track U U5 Complete — React Frontend Owns Azure UI Deployment
+### April 11, 2026 Track U U5 Complete — Azure Cutover Done, MVC Deletion Follow-Up Pending
 
 - ✅ Legacy MVC payment entry now redirects to the React payment route instead of serving the old Razor payment form
 - ✅ Legacy MVC callback path remains only as a compatibility redirect to the React callback status route
@@ -38,7 +38,9 @@
 - ✅ PR validation now includes React workspace typecheck/build via `frontend/` in `ci.yml`
 - ✅ `deploy-ui-to-azure.yml` now builds and deploys the React frontend to the Azure UI App Service
 - ✅ Azure provisioning no longer treats the UI App Service as a required .NET 8 presentation host for new environments
-- ✅ U5 exit criteria are satisfied; backend Phase 8 is no longer blocked on the web cutover gate
+- ✅ Local HTTP and Docker UI launch paths now target the React frontend workspace
+- ✅ `XYDataLabs.OrderProcessingSystem.UI` and `XYDataLabs.OrderProcessingSystem.UI.Tests` were removed from the solution/runtime path
+- ✅ Backend Phase 8 gate remains satisfied under the original Track U plan
 
 ### Architecture Phases Completed
 
@@ -133,20 +135,19 @@ Monolithic Application on Azure App Service
 │   ├── Customer Management  
 │   ├── Payment Processing (OpenPay integration)
 │   └── Swagger Documentation
-├── UI Service (MVC Web App)
+├── Web Frontend (React App Service)
 ├── Azure SQL Database (OrderProcessingSystem_Dev)
 ├── Application Insights (ai-orderprocessing-dev)
 └── Key Vault (kv-orderprocessing-dev)
 ```
 
-**Solution Projects (7 total):**
+**Solution Projects (6 total):**
 1. `XYDataLabs.OrderProcessingSystem.API` - Monolithic API
-2. `XYDataLabs.OrderProcessingSystem.UI` - MVC UI
-3. `XYDataLabs.OrderProcessingSystem.Application` - Business logic
-4. `XYDataLabs.OrderProcessingSystem.Domain` - Entities
-5. `XYDataLabs.OrderProcessingSystem.Infrastructure` - Data access
-6. `XYDataLabs.OrderProcessingSystem.SharedKernel` - Shared kernel / cross-cutting concerns
-7. `XYDataLabs.OpenPayAdapter` - Payment adapter
+2. `XYDataLabs.OrderProcessingSystem.Application` - Business logic
+3. `XYDataLabs.OrderProcessingSystem.Domain` - Entities
+4. `XYDataLabs.OrderProcessingSystem.Infrastructure` - Data access
+5. `XYDataLabs.OrderProcessingSystem.SharedKernel` - Shared kernel / cross-cutting concerns
+6. `XYDataLabs.OpenPayAdapter` - Payment adapter
 
 ### Current Environment Status
 - ✅ Dev environment fully deployed and operational
@@ -1111,7 +1112,7 @@ services:
   ui:
     build:
       context: .
-      dockerfile: XYDataLabs.OrderProcessingSystem.UI/Dockerfile
+      dockerfile: frontend/apps/web/Dockerfile
     container_name: ui
     environment:
       - ASPNETCORE_URLS=http://+:8080

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BrowserRouter, Navigate, NavLink, Route, Routes } from "react-router-dom";
 import {
   createOrderProcessingApiClient,
@@ -27,6 +27,10 @@ export default function App() {
   const [activeTenantCode, setActiveTenantCode] = useState("");
   const [bootstrapState, setBootstrapState] = useState<LoadState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const requestedBootstrapTenantCode = useMemo(
+    () => resolveRequestedBootstrapTenantCode(window.location.pathname, window.location.search),
+    []
+  );
 
   useEffect(() => {
     let isCancelled = false;
@@ -36,8 +40,15 @@ export default function App() {
       setErrorMessage(null);
 
       try {
-        const bootstrap = await apiClient.getRuntimeConfiguration();
-        const sessionState = tenantSession.initialize(bootstrap);
+        const bootstrap = await apiClient.getRuntimeConfiguration(requestedBootstrapTenantCode ?? undefined);
+        let sessionState = tenantSession.initialize(bootstrap);
+
+        if (
+          requestedBootstrapTenantCode
+          && sessionState.activeTenantCode.localeCompare(requestedBootstrapTenantCode, undefined, { sensitivity: "accent" }) !== 0
+        ) {
+          sessionState = tenantSession.setActiveTenantCode(requestedBootstrapTenantCode);
+        }
 
         if (isCancelled) {
           return;
@@ -61,7 +72,7 @@ export default function App() {
     return () => {
       isCancelled = true;
     };
-  }, []);
+  }, [requestedBootstrapTenantCode]);
 
   function handleTenantChange(nextTenantCode: string) {
     const sessionState = tenantSession.setActiveTenantCode(nextTenantCode);
@@ -71,44 +82,25 @@ export default function App() {
   return (
     <BrowserRouter>
       <main className="app-shell">
-        <section className="hero-panel">
-          <p className="eyebrow">Track U Order Slice</p>
-          <h1>React browser routes now cover customer browsing, order execution, and payment initiation.</h1>
-          <p className="lede">
-            The shell now carries tenant bootstrap, customer browsing, order detail, order creation,
-            payment initiation, and callback result rendering on the existing v1 API while the
-            provider return path remains server-owned on the API callback surface.
-          </p>
-        </section>
-
-        <section className="status-grid" aria-label="Bootstrap status">
-          <article className="status-card">
-            <span>Bootstrap</span>
-            <strong>{bootstrapState}</strong>
-          </article>
-          <article className="status-card">
-            <span>Resolved Tenant</span>
-            <strong>{activeTenantCode || "pending"}</strong>
-          </article>
-          <article className="status-card">
-            <span>Tenant Header</span>
-            <strong>{runtimeConfiguration?.tenantHeaderName ?? "pending"}</strong>
-          </article>
-          <article className="status-card">
-            <span>Route Surface</span>
-            <strong>Customers + Orders + Payments + Callback</strong>
-          </article>
-        </section>
-
         {errorMessage ? <p className="error-banner">{errorMessage}</p> : null}
 
-        <section className="shell-toolbar panel">
-          <div>
-            <p className="eyebrow">Navigation</p>
-            <h2>Tenant-aware browser shell</h2>
+        <section className="shell-header panel">
+          <div className="shell-copy">
+            <p className="eyebrow">Order Processing Portal</p>
+            <h1>Customers, orders, and card payments</h1>
+            <p className="shell-lede">
+              All actions are scoped to the selected tenant, so agents can move from customer lookup to payment collection without leaving the same browser workspace.
+            </p>
+            <p className="shell-meta">
+              {bootstrapState === "ready"
+                ? `Active tenant: ${activeTenantCode}`
+                : bootstrapState === "loading"
+                  ? "Preparing tenant session..."
+                  : "Tenant session needs attention."}
+            </p>
           </div>
 
-          <div className="shell-actions">
+          <div className="shell-actions shell-actions-compact">
             <nav className="shell-nav" aria-label="Primary">
               <NavLink
                 to="/customers"
@@ -125,7 +117,7 @@ export default function App() {
             </nav>
 
             <label className="tenant-picker">
-              <span>Active tenant</span>
+              <span>Tenant</span>
               <select
                 value={activeTenantCode}
                 onChange={(event) => handleTenantChange(event.target.value)}
@@ -187,4 +179,15 @@ export default function App() {
       </main>
     </BrowserRouter>
   );
+}
+
+function resolveRequestedBootstrapTenantCode(pathname: string, search: string): string | null {
+  const trimmedPath = pathname.trim();
+  if (!trimmedPath.startsWith("/payments/")) {
+    return null;
+  }
+
+  const searchParams = new URLSearchParams(search);
+  const tenantCode = searchParams.get("tenantCode")?.trim();
+  return tenantCode || null;
 }

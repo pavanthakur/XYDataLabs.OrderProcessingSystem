@@ -17,17 +17,21 @@ practice Azure cloud deployment, CI/CD automation, and enterprise DevOps pattern
 
 ---
 
-## 2. Solution — .NET Projects
+## 2. Solution — .NET Projects + Frontend Workspace
 
 | Project | Role |
 |---------|------|
 | `XYDataLabs.OrderProcessingSystem.API` | ASP.NET Core Web API — thin controllers, composition root, Swagger |
-| `XYDataLabs.OrderProcessingSystem.UI` | ASP.NET Core MVC — presentation layer |
 | `XYDataLabs.OrderProcessingSystem.Application` | Hand-rolled CQRS (ICommand/IQuery/IDispatcher), DTOs, pipeline behaviors |
 | `XYDataLabs.OrderProcessingSystem.Domain` | Core entities, domain logic (DDD) — zero dependencies |
 | `XYDataLabs.OrderProcessingSystem.Infrastructure` | EF Core, SQL Server, data access |
 | `XYDataLabs.OrderProcessingSystem.SharedKernel` | Result<T>, constants, observability, multi-tenancy |
 | `XYDataLabs.OpenPayAdapter` | OpenPay payment integration |
+
+Frontend workspace:
+- `frontend/apps/web` — React + Vite + TypeScript SPA deployed to the Azure UI App Service
+- `frontend/packages/api-sdk` — generated API client
+- `frontend/packages/tenant-session` — runtime bootstrap and tenant header support
 
 ### Test Projects (under `tests/`)
 
@@ -70,13 +74,16 @@ practice Azure cloud deployment, CI/CD automation, and enterprise DevOps pattern
 │   ├── configure-secrets-and-run.ps1
 │   └── validate-github-app-config.ps1
 │
-├── tests/                         # All test projects (6 projects)
+├── frontend/                      # React web/mobile workspace + shared packages
+│   ├── apps/
+│   └── packages/
+│
+├── tests/                         # All test projects (5 projects)
 │   ├── XYDataLabs.OrderProcessingSystem.Domain.Tests/
 │   ├── XYDataLabs.OrderProcessingSystem.Application.Tests/
 │   ├── XYDataLabs.OrderProcessingSystem.API.Tests/
 │   ├── XYDataLabs.OrderProcessingSystem.Integration.Tests/
-│   ├── XYDataLabs.OrderProcessingSystem.Architecture.Tests/
-│   └── XYDataLabs.OrderProcessingSystem.UI.Tests/
+│   └── XYDataLabs.OrderProcessingSystem.Architecture.Tests/
 │
 ├── docs/
 │   ├── README.md                  # Canonical documentation hub

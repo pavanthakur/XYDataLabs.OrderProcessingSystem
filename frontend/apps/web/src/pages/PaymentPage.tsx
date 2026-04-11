@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import type { OrderDetail, OrderProcessingApiClient, PaymentResult } from "@xydatalabs/orderprocessing-api-sdk";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import type { OrderDetail, OrderProcessingApiClient } from "@xydatalabs/orderprocessing-api-sdk";
 import { createFlowId, persistPendingPaymentContext, trackPaymentEvent } from "../payment-flow";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
-type SubmitState = "idle" | "submitting" | "success" | "error";
+type SubmitState = "idle" | "submitting" | "redirecting" | "success" | "error";
 
 interface PaymentPageProps {
   activeTenantCode: string;
@@ -21,10 +21,18 @@ interface PaymentFormState {
   cvv2: string;
 }
 
+interface ThreeDSRedirectState {
+  targetUrl: string;
+  paymentId: string;
+  customerOrderId: string;
+}
+
 const openPayMerchantId = "mt2ummntdjhxgoeycbgj";
 const openPayPublicKey = "pk_4881b1c79b064f7397685d7d491c7338";
+const threeDSecureRedirectDelayMs = 1200;
 
 export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
+  const navigate = useNavigate();
   const params = useParams<{ customerId: string; orderId: string }>();
   const customerId = Number(params.customerId);
   const orderId = Number(params.orderId);
@@ -36,8 +44,8 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [submitState, setSubmitState] = useState<SubmitState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
-  const [paymentResult, setPaymentResult] = useState<PaymentResult | null>(null);
+  const [threeDSRedirectState, setThreeDSRedirectState] = useState<ThreeDSRedirectState | null>(null);
+  const [redirectCountdownMs, setRedirectCountdownMs] = useState<number>(0);
   const [formState, setFormState] = useState<PaymentFormState>({
     name: "",
     email: "",
@@ -47,6 +55,7 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
     expirationYear: "",
     cvv2: ""
   });
+  const isManualFlow = !hasValidOrderContext;
 
   useEffect(() => {
     if (!hasOrderRouteContext) {
@@ -132,6 +141,30 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
 
   const totalPrice = useMemo(() => order?.totalPrice ?? 0, [order]);
 
+  useEffect(() => {
+    if (!threeDSRedirectState) {
+      setRedirectCountdownMs(0);
+      return;
+    }
+
+    const redirectStartedAt = Date.now();
+    setRedirectCountdownMs(threeDSecureRedirectDelayMs);
+
+    const countdownIntervalId = window.setInterval(() => {
+      const elapsedMs = Date.now() - redirectStartedAt;
+      setRedirectCountdownMs(Math.max(0, threeDSecureRedirectDelayMs - elapsedMs));
+    }, 100);
+
+    const redirectTimeoutId = window.setTimeout(() => {
+      window.location.assign(threeDSRedirectState.targetUrl);
+    }, threeDSecureRedirectDelayMs);
+
+    return () => {
+      window.clearInterval(countdownIntervalId);
+      window.clearTimeout(redirectTimeoutId);
+    };
+  }, [threeDSRedirectState]);
+
   function updateFormState<K extends keyof PaymentFormState>(key: K, value: PaymentFormState[K]) {
     setFormState((current) => ({
       ...current,
@@ -156,8 +189,7 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
 
     setSubmitState("submitting");
     setErrorMessage(null);
-    setPaymentMessage(null);
-    setPaymentResult(null);
+    setThreeDSRedirectState(null);
 
     void trackPaymentEvent({
       eventName: "ui_payment_submit_started",
@@ -178,18 +210,17 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
         cvv2: formState.cvv2,
         customerOrderId: formState.customerOrderId
       });
-      setPaymentResult(payment);
+
+      persistPendingPaymentContext(payment.id, {
+        customerOrderId: payment.customerOrderId,
+        clientFlowId,
+        customerId: hasValidCustomerContext ? customerId : null,
+        orderId: hasValidOrderContext ? orderId : null
+      });
 
       const normalizedStatus = (payment.status || "").toLowerCase();
 
       if (normalizedStatus === "charge_pending" && payment.threeDSecureUrl) {
-        persistPendingPaymentContext(payment.id, {
-          customerOrderId: payment.customerOrderId,
-          clientFlowId,
-          customerId: hasValidCustomerContext ? customerId : null,
-          orderId: hasValidOrderContext ? orderId : null
-        });
-
         void trackPaymentEvent({
           eventName: "ui_payment_3ds_redirect_started",
           severity: "information",
@@ -201,13 +232,16 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
           statusCategory: payment.threeDSecureStage
         }, { useBeacon: true });
 
-        setPaymentMessage("3D Secure verification is required. Redirecting to the provider now.");
-        window.location.assign(payment.threeDSecureUrl);
+        setSubmitState("redirecting");
+        setThreeDSRedirectState({
+          targetUrl: payment.threeDSecureUrl,
+          paymentId: payment.id,
+          customerOrderId: payment.customerOrderId
+        });
         return;
       }
 
       setSubmitState("success");
-      setPaymentMessage(`Payment request completed with status ${payment.status}.`);
 
       void trackPaymentEvent({
         eventName: "ui_payment_completed",
@@ -219,6 +253,18 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
         paymentStatus: payment.status,
         statusCategory: payment.threeDSecureStage
       });
+
+      const summarySearchParams = new URLSearchParams({
+        tenantCode: activeTenantCode,
+        id: payment.id,
+        source: "direct"
+      });
+
+      if (payment.status) {
+        summarySearchParams.set("status", payment.status);
+      }
+
+      navigate(`/payments/callback?${summarySearchParams.toString()}`, { replace: true });
     } catch (error) {
       setSubmitState("error");
       const nextErrorMessage = error instanceof Error ? error.message : "Payment processing failed.";
@@ -239,9 +285,14 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
     <section className="route-panel detail-layout">
       <article className="panel">
         <header className="panel-header">
-          <div>
-            <p className="eyebrow">Payment Initiation</p>
-            <h2>{order ? `Charge order #${order.orderId}` : "React payment workspace"}</h2>
+          <div className="payment-header-copy">
+            <p className="eyebrow">Card Payment</p>
+            <h2>{order ? `Collect payment for order #${order.orderId}` : "Take a card payment"}</h2>
+            <p className="subtle-copy">
+              {order
+                ? "Review the order amount, capture the card details, and continue through secure verification only when the provider requires it."
+                : "Create a standalone card payment with a clear customer reference and a secure provider-managed verification step when needed."}
+            </p>
           </div>
           <div className="detail-actions">
             {hasValidOrderContext && hasValidCustomerContext ? (
@@ -257,181 +308,248 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
           </div>
         </header>
 
-        <dl className="definition-list definition-list-compact">
-          <div>
-            <dt>Resolved tenant</dt>
-            <dd>{activeTenantCode || "pending"}</dd>
-          </div>
-          <div>
-            <dt>Order state</dt>
-            <dd>{loadState}</dd>
-          </div>
-          <div>
-            <dt>Payment mode</dt>
-            <dd>{hasValidOrderContext ? "Order-linked" : "Manual"}</dd>
-          </div>
-          <div>
-            <dt>Submit state</dt>
-            <dd>{submitState}</dd>
-          </div>
-          <div>
-            <dt>Device session</dt>
-            <dd>{deviceSessionId ? "ready" : "pending"}</dd>
-          </div>
-        </dl>
-
         {errorMessage ? <p className="error-banner">{errorMessage}</p> : null}
-        {paymentMessage ? <p className="success-banner">{paymentMessage}</p> : null}
 
-        <form id="payment-form" className="payment-layout" onSubmit={handleSubmit}>
-          <section className="detail-card">
-            <h3>Payment information</h3>
-            <p className="subtle-copy">
-              {hasValidOrderContext
-                ? "This route replaces the old MVC payment entry from an order context and posts directly to the existing Payments API."
-                : "This manual payment route replaces the old standalone MVC payment form while keeping the provider return path on the server-owned /payment surface."}
-            </p>
-            <div className="field-grid">
-              <label className="search-field">
-                <span>Cardholder name</span>
-                <input
-                  value={formState.name}
-                  onChange={(event) => updateFormState("name", event.target.value)}
-                  autoComplete="cc-name"
-                  required
-                />
-              </label>
-              <label className="search-field">
-                <span>Email</span>
-                <input
-                  type="email"
-                  value={formState.email}
-                  onChange={(event) => updateFormState("email", event.target.value)}
-                  autoComplete="email"
-                  required
-                />
-              </label>
-              <label className="search-field field-span-full">
-                <span>Customer order id</span>
-                <input
-                  value={formState.customerOrderId}
-                  onChange={(event) => updateFormState("customerOrderId", event.target.value)}
-                  required
-                />
-              </label>
-              <label className="search-field field-span-full">
-                <span>Card number</span>
-                <input
-                  value={formState.cardNumber}
-                  onChange={(event) => updateFormState("cardNumber", formatCardNumber(event.target.value))}
-                  autoComplete="cc-number"
-                  inputMode="numeric"
-                  required
-                />
-              </label>
-              <label className="search-field">
-                <span>Expiry month</span>
-                <input
-                  value={formState.expirationMonth}
-                  onChange={(event) => updateFormState("expirationMonth", normalizeMonth(event.target.value))}
-                  autoComplete="cc-exp-month"
-                  inputMode="numeric"
-                  maxLength={2}
-                  required
-                />
-              </label>
-              <label className="search-field">
-                <span>Expiry year</span>
-                <input
-                  value={formState.expirationYear}
-                  onChange={(event) => updateFormState("expirationYear", normalizeYear(event.target.value))}
-                  autoComplete="cc-exp-year"
-                  inputMode="numeric"
-                  maxLength={2}
-                  required
-                />
-              </label>
-              <label className="search-field">
-                <span>CVV</span>
-                <input
-                  value={formState.cvv2}
-                  onChange={(event) => updateFormState("cvv2", event.target.value.replace(/\D/g, "").slice(0, 4))}
-                  autoComplete="cc-csc"
-                  inputMode="numeric"
-                  maxLength={4}
-                  required
-                />
-              </label>
+        {threeDSRedirectState ? (
+          <section className="redirect-transition-card detail-card" role="status" aria-live="polite">
+            <div className="loading-progress-panel">
+              <span className="loading-spinner" aria-hidden="true" />
+              <div>
+                <p className="eyebrow">3D Secure Redirect</p>
+                <h3>Opening the provider OTP challenge</h3>
+                <p className="subtle-copy">
+                  Secure verification is required for this payment. The browser will move to the provider challenge automatically in {formatRedirectCountdown(redirectCountdownMs)} seconds.
+                </p>
+              </div>
             </div>
-          </section>
 
-          <aside className="detail-card order-summary-card">
-            <h3>Charge summary</h3>
-            <dl className="definition-list definition-list-single">
+            <dl className="definition-list definition-list-single redirect-transition-list">
               <div>
-                <dt>Customer id</dt>
-                <dd>{hasValidCustomerContext ? customerId : "Manual flow"}</dd>
+                <dt>Payment id</dt>
+                <dd>{threeDSRedirectState.paymentId}</dd>
               </div>
               <div>
-                <dt>Order id</dt>
-                <dd>{hasValidOrderContext ? orderId : "Manual flow"}</dd>
-              </div>
-              <div>
-                <dt>Total amount</dt>
-                <dd>{hasValidOrderContext ? formatCurrency(totalPrice) : "Calculated by payment provider"}</dd>
+                <dt>Customer order id</dt>
+                <dd>{threeDSRedirectState.customerOrderId}</dd>
               </div>
             </dl>
 
-            <p className="subtle-copy">
-              Client telemetry posts to the API-owned `/payment/client-event` endpoint, and provider callbacks return through API-owned `/payment/callback` before landing on the React status route.
-            </p>
+            <a href={threeDSRedirectState.targetUrl} className="action-button-link action-button-link-primary">
+              Continue to secure verification now
+            </a>
+          </section>
+        ) : (
+          <form id="payment-form" className="payment-layout" onSubmit={handleSubmit}>
+            <section className="detail-card">
+              <div className="form-section">
+                <p className="section-kicker">Contact</p>
+                <h3>Payer details</h3>
+                <div className="field-grid">
+                  <label className="search-field">
+                    <span>Cardholder name</span>
+                    <input
+                      value={formState.name}
+                      onChange={(event) => updateFormState("name", event.target.value)}
+                      autoComplete="cc-name"
+                      required
+                    />
+                  </label>
+                  <label className="search-field">
+                    <span>Email</span>
+                    <input
+                      type="email"
+                      value={formState.email}
+                      onChange={(event) => updateFormState("email", event.target.value)}
+                      autoComplete="email"
+                      required
+                    />
+                  </label>
+                </div>
+              </div>
 
-            <button
-              type="submit"
-              className="action-button action-button-primary"
-              disabled={submitState === "submitting" || !deviceSessionId || loadState !== "ready"}
-            >
-              {submitState === "submitting" ? "Processing payment..." : "Process payment"}
-            </button>
-          </aside>
-        </form>
+              <div className="form-section">
+                <p className="section-kicker">Reference</p>
+                <h3>Payment reference</h3>
+                <p className="subtle-copy">
+                  Use a reference your operations team can trace later in reconciliation, statements, and callback reviews.
+                </p>
+                <div className="field-grid">
+                  <label className="search-field field-span-full">
+                    <span>Customer order id</span>
+                    <input
+                      value={formState.customerOrderId}
+                      onChange={(event) => updateFormState("customerOrderId", event.target.value)}
+                      required
+                    />
+                  </label>
+                </div>
+              </div>
 
-        {paymentResult ? (
-          <section className="result-panel detail-grid">
-            <article className="detail-card">
-              <h3>Payment result</h3>
+              <div className="form-section">
+                <p className="section-kicker">Card details</p>
+                <h3>Payment information</h3>
+                <div className="field-grid">
+                  <label className="search-field field-span-full">
+                    <span>Card number</span>
+                    <input
+                      value={formState.cardNumber}
+                      onChange={(event) => updateFormState("cardNumber", formatCardNumber(event.target.value))}
+                      autoComplete="cc-number"
+                      inputMode="numeric"
+                      required
+                    />
+                  </label>
+                  <label className="search-field">
+                    <span>Expiry month</span>
+                    <input
+                      value={formState.expirationMonth}
+                      onChange={(event) => updateFormState("expirationMonth", sanitizeMonthInput(event.target.value))}
+                      onBlur={(event) => updateFormState("expirationMonth", normalizeMonth(event.target.value))}
+                      autoComplete="cc-exp-month"
+                      inputMode="numeric"
+                      maxLength={2}
+                      required
+                    />
+                  </label>
+                  <label className="search-field">
+                    <span>Expiry year</span>
+                    <input
+                      value={formState.expirationYear}
+                      onChange={(event) => updateFormState("expirationYear", normalizeYear(event.target.value))}
+                      autoComplete="cc-exp-year"
+                      inputMode="numeric"
+                      maxLength={2}
+                      required
+                    />
+                  </label>
+                  <label className="search-field">
+                    <span>CVV</span>
+                    <input
+                      value={formState.cvv2}
+                      onChange={(event) => updateFormState("cvv2", event.target.value.replace(/\D/g, "").slice(0, 4))}
+                      autoComplete="cc-csc"
+                      inputMode="numeric"
+                      maxLength={4}
+                      required
+                    />
+                  </label>
+                </div>
+              </div>
+            </section>
+
+            <aside className="detail-card order-summary-card">
+              <p className="section-kicker">Summary</p>
+              <h3>Payment summary</h3>
+              <p className="subtle-copy">
+                The cardholder is sent to an additional verification step only when the provider requests 3D Secure for this transaction.
+              </p>
               <dl className="definition-list definition-list-single">
                 <div>
-                  <dt>Payment id</dt>
-                  <dd>{paymentResult.id}</dd>
+                  <dt>Reference</dt>
+                  <dd>{formState.customerOrderId}</dd>
                 </div>
                 <div>
-                  <dt>Customer order id</dt>
-                  <dd>{paymentResult.customerOrderId}</dd>
+                  <dt>Customer context</dt>
+                  <dd>{hasValidCustomerContext ? `Customer #${customerId}` : "Standalone payment"}</dd>
                 </div>
                 <div>
-                  <dt>Status</dt>
-                  <dd>{paymentResult.status}</dd>
+                  <dt>Order context</dt>
+                  <dd>{hasValidOrderContext ? `Order #${orderId}` : "Standalone payment"}</dd>
                 </div>
                 <div>
-                  <dt>3DS stage</dt>
-                  <dd>{paymentResult.threeDSecureStage || "not-required"}</dd>
+                  <dt>Amount</dt>
+                  <dd>{hasValidOrderContext ? formatCurrency(totalPrice) : "Determined by the payment provider"}</dd>
+                </div>
+                <div>
+                  <dt>Verification</dt>
+                  <dd>3D Secure when required</dd>
                 </div>
               </dl>
-            </article>
-            <article className="detail-card">
-              <h3>Next step</h3>
-              <p className="subtle-copy">
-                {paymentResult.threeDSecureUrl
-                  ? "The provider may redirect this browser through 3D Secure verification. The browser will return through the API-owned callback path and land on the React callback route for final status rendering."
-                  : "This payment completed without a provider redirect. The React page now holds the immediate result state instead of handing the user back to the old MVC form."}
+
+              <p className="subtle-copy payment-trust-copy">
+                Card details stay inside the secure payment flow, and the callback page brings the browser back with the final payment result.
               </p>
-            </article>
-          </section>
-        ) : null}
+
+              <button
+                type="submit"
+                className="action-button action-button-primary"
+                disabled={submitState === "submitting" || submitState === "redirecting" || !deviceSessionId || loadState !== "ready"}
+              >
+                {submitState === "submitting"
+                  ? "Processing payment..."
+                  : submitState === "redirecting"
+                    ? "Opening 3D Secure..."
+                    : "Process payment"}
+              </button>
+            </aside>
+          </form>
+        )}
+
+        <details className="technical-details">
+          <summary>Technical details</summary>
+          <dl className="definition-list definition-list-single technical-details-list">
+            <div>
+              <dt>Resolved tenant</dt>
+              <dd>{activeTenantCode || "Pending"}</dd>
+            </div>
+            <div>
+              <dt>Order load state</dt>
+              <dd>{formatLoadState(loadState)}</dd>
+            </div>
+            <div>
+              <dt>Payment mode</dt>
+              <dd>{isManualFlow ? "Standalone" : "Order-linked"}</dd>
+            </div>
+            <div>
+              <dt>Submission state</dt>
+              <dd>{formatSubmitState(submitState)}</dd>
+            </div>
+            <div>
+              <dt>Device session</dt>
+              <dd>{deviceSessionId ? "Ready" : "Pending"}</dd>
+            </div>
+          </dl>
+        </details>
       </article>
     </section>
   );
+}
+
+function formatRedirectCountdown(valueMs: number): string {
+  const seconds = Math.max(0, valueMs) / 1000;
+  return seconds.toFixed(seconds >= 1 ? 1 : 1);
+}
+
+function formatLoadState(value: LoadState): string {
+  switch (value) {
+    case "idle":
+      return "Not started";
+    case "loading":
+      return "Loading";
+    case "ready":
+      return "Ready";
+    case "error":
+      return "Needs attention";
+    default:
+      return value;
+  }
+}
+
+function formatSubmitState(value: SubmitState): string {
+  switch (value) {
+    case "idle":
+      return "Ready";
+    case "submitting":
+      return "Submitting";
+    case "redirecting":
+      return "Redirecting to 3D Secure";
+    case "success":
+      return "Completed";
+    case "error":
+      return "Needs attention";
+    default:
+      return value;
+  }
 }
 
 function buildCustomerOrderId(orderId: number, hasOrderRouteContext: boolean): string {
@@ -451,9 +569,18 @@ function formatCardNumber(value: string): string {
 }
 
 function normalizeMonth(value: string): string {
-  const digitsOnly = value.replace(/\D/g, "").slice(0, 2);
+  const digitsOnly = sanitizeMonthInput(value);
   if (digitsOnly.length === 0) {
     return "";
+  }
+
+  if (digitsOnly.length === 1) {
+    const singleDigitMonth = Number(digitsOnly);
+    if (Number.isNaN(singleDigitMonth) || singleDigitMonth <= 0) {
+      return "01";
+    }
+
+    return digitsOnly.padStart(2, "0");
   }
 
   const month = Number(digitsOnly);
@@ -462,6 +589,10 @@ function normalizeMonth(value: string): string {
   }
 
   return String(Math.min(month, 12)).padStart(2, "0");
+}
+
+function sanitizeMonthInput(value: string): string {
+  return value.replace(/\D/g, "").slice(0, 2);
 }
 
 function normalizeYear(value: string): string {

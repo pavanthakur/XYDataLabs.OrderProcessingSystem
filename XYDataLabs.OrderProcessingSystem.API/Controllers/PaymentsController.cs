@@ -6,6 +6,7 @@ using XYDataLabs.OrderProcessingSystem.API.Models;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Payments.Commands;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 
 namespace XYDataLabs.OrderProcessingSystem.API.Controllers
 {
@@ -17,11 +18,13 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
     {
         private readonly IDispatcher _dispatcher;
         private readonly ILogger<PaymentsController> _logger;
+        private readonly ITenantProvider _tenantProvider;
 
-        public PaymentsController(IDispatcher dispatcher, ILogger<PaymentsController> logger)
+        public PaymentsController(IDispatcher dispatcher, ILogger<PaymentsController> logger, ITenantProvider tenantProvider)
         {
             _dispatcher = dispatcher;
             _logger = logger;
+            _tenantProvider = tenantProvider;
         }
 
         /// <summary>
@@ -100,7 +103,7 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
 
             var eventName = NormalizeLogValue(request.EventName, 100) ?? "ui_payment_event";
             var severity = NormalizeLogValue(request.Severity, 16) ?? "information";
-            var tenantCode = NormalizeLogValue(request.TenantCode, 64) ?? "none";
+            var tenantCode = GetResolvedTenantCode();
             var clientFlowId = NormalizeLogValue(request.ClientFlowId, 64) ?? "none";
             var customerOrderId = NormalizeLogValue(request.CustomerOrderId, 128) ?? "none";
             var attemptOrderId = NormalizeLogValue(request.AttemptOrderId, 128) ?? "none";
@@ -171,6 +174,16 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
             }
 
             return NoContent();
+        }
+
+        private string GetResolvedTenantCode()
+        {
+            if (!_tenantProvider.HasTenantContext)
+            {
+                return "none";
+            }
+
+            return NormalizeLogValue(_tenantProvider.TenantCode, 64) ?? "none";
         }
 
         private static string? NormalizeLogValue(string? value, int maxLength)

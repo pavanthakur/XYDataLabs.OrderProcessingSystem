@@ -6,6 +6,7 @@ export interface PendingPaymentContext {
 }
 
 const pendingPaymentStorageKeyPrefix = "pending-payment:";
+const configuredApiBaseUrl = (import.meta.env.VITE_ORDERPROCESSING_API_BASE_URL ?? "").trim().replace(/\/$/, "");
 
 export function createFlowId(): string {
   if (window.crypto?.randomUUID) {
@@ -58,10 +59,10 @@ export function trackPaymentEvent(
   payload: Record<string, unknown>,
   options?: { useBeacon?: boolean }
 ): Promise<boolean> {
+  const tenantCode = trimValue(payload.tenantCode, 64);
   const body = JSON.stringify({
     eventName: trimValue(payload.eventName, 100),
     severity: trimValue(payload.severity ?? "information", 16),
-    tenantCode: trimValue(payload.tenantCode, 64),
     clientFlowId: trimValue(payload.clientFlowId, 64),
     customerOrderId: trimValue(payload.customerOrderId, 128),
     attemptOrderId: trimValue(payload.attemptOrderId, 128),
@@ -78,12 +79,11 @@ export function trackPaymentEvent(
     "Content-Type": "application/json"
   };
 
-  const tenantCode = trimValue(payload.tenantCode, 64);
   if (tenantCode) {
     headers["X-Tenant-Code"] = tenantCode;
   }
 
-  return fetch("/payment/client-event", {
+  return fetch(resolveApiUrl("/payment/client-event"), {
     method: "POST",
     headers,
     body,
@@ -91,6 +91,10 @@ export function trackPaymentEvent(
   })
     .then(() => true)
     .catch(() => false);
+}
+
+function resolveApiUrl(path: string): string {
+  return configuredApiBaseUrl ? `${configuredApiBaseUrl}${path}` : path;
 }
 
 function trimValue(value: unknown, maxLength: number): string | null {

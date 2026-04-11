@@ -4,8 +4,9 @@
     Verifies a local or Docker payment run end to end across physical log files and SQL databases.
 
 .DESCRIPTION
-    Reads today's API and UI log files for the selected runtime/profile, resolves a logical run prefix,
-    queries the shared and TenantC dedicated databases directly, and emits a consolidated pass/fail report.
+    Reads today's API log for payment events plus browser-originated UI telemetry captured through
+    /payment/client-event, resolves a logical run prefix, queries the shared and TenantC dedicated
+    databases directly, and emits a consolidated pass/fail report.
 
     This script is the deterministic rerun path for the physical-log branch of the
     /XYDataLabs-verify-db-logs prompt flow.
@@ -70,7 +71,6 @@ $dateTag = (Get-Date).ToString('yyyyMMdd')
 $envTag = if ($Runtime -eq 'local') { 'dev' } else { $Environment }
 $runtimeTag = if ($Runtime -eq 'docker') { 'dock' } else { 'local' }
 $apiLogPath = Join-Path $repoRoot "logs\webapi-$envTag-$runtimeTag-$Profile-$dateTag.log"
-$uiLogPath = Join-Path $repoRoot "logs\ui-$envTag-$runtimeTag-$Profile-$dateTag.log"
 $envLocalPath = Join-Path $repoRoot 'Resources\Docker\.env.local'
 
 $sharedDbName = if ($Runtime -eq 'local') {
@@ -466,30 +466,33 @@ $apiChargeEvents = @(
 )
 
 $warnings = [System.Collections.Generic.List[string]]::new()
-$uiLogExists = Test-Path $uiLogPath
 $uiEvents = @()
 $selectedUiEvents = @()
 
-if ($uiLogExists) {
-    Write-Step "Reading UI log from $uiLogPath"
-    $uiLogLines = Get-Content $uiLogPath |
-        Select-String -Pattern ($selectedRunPrefix, 'payment/callback responded', 'OpenPay callback received', 'ui_payment_callback_') |
-        ForEach-Object { $_.Line.Trim() }
+Write-Step "Reading browser UI telemetry from $apiLogPath"
+$uiEvidenceLines = Get-Content $apiLogPath |
+    Select-String -Pattern $selectedRunPrefix |
+    ForEach-Object { $_.Line.Trim() } |
+    Where-Object {
+        $_ -match 'UI payment event' -or
+        $_ -match 'OpenPay callback received' -or
+        $_ -match 'payment/callback responded'
+    }
 
-    $uiEvents = Convert-UiLogLinesToEvents -Lines @($uiLogLines)
+if (@($uiEvidenceLines).Count -gt 0) {
+    $uiEvents = Convert-UiLogLinesToEvents -Lines @($uiEvidenceLines)
     $knownChargeIds = @($apiChargeEvents | Select-Object -ExpandProperty ChargeId -Unique)
     $selectedUiEvents = @(
         $uiEvents |
             Where-Object {
                 ($_.CustomerOrderId -like "$selectedRunPrefix*") -or
-                (-not [string]::IsNullOrWhiteSpace($_.ChargeId) -and ($knownChargeIds -contains $_.ChargeId)) -or
-                (Test-IsCallbackEvent -Event $_)
+                (-not [string]::IsNullOrWhiteSpace($_.ChargeId) -and ($knownChargeIds -contains $_.ChargeId))
             } |
             Sort-Object Timestamp
     )
 }
 else {
-    $warnings.Add("UI log file not found: $uiLogPath")
+    $warnings.Add("No browser UI telemetry matched run prefix '$selectedRunPrefix' in API log: $apiLogPath")
 }
 
 Write-Step 'Querying SQL databases'
@@ -695,11 +698,11 @@ else {
 
 $expectedUiCallbacks = @($chargeCorrelation | Where-Object UiCallbackExpected).Count
 $actualUiCallbacks = @($chargeCorrelation | Where-Object { $_.UiCallbackExpected -and $_.UiCallbackLogged }).Count
-if (-not $uiLogExists -and $expectedUiCallbacks -gt 0) {
-    $checks['UI log -> callbacks present where expected'] = Convert-CheckResult -Expected ([string] $expectedUiCallbacks) -Actual 'UI log file missing' -Outcome 'INCONCLUSIVE'
+if ($expectedUiCallbacks -gt 0 -and $uiEvents.Count -eq 0) {
+    $checks['UI telemetry -> callbacks present where expected'] = Convert-CheckResult -Expected ([string] $expectedUiCallbacks) -Actual 'No browser UI telemetry matched the selected run prefix' -Outcome 'FAIL'
 }
 else {
-    $checks['UI log -> callbacks present where expected'] = Convert-CheckResult -Expected ([string] $expectedUiCallbacks) -Actual ([string] $actualUiCallbacks) -Outcome $(if ($actualUiCallbacks -eq $expectedUiCallbacks) { 'PASS' } else { 'FAIL' })
+    $checks['UI telemetry -> callbacks present where expected'] = Convert-CheckResult -Expected ([string] $expectedUiCallbacks) -Actual ([string] $actualUiCallbacks) -Outcome $(if ($actualUiCallbacks -eq $expectedUiCallbacks) { 'PASS' } else { 'FAIL' })
 }
 
 $report = [PSCustomObject] @{

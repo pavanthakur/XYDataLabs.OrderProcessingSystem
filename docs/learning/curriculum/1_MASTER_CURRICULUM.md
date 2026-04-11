@@ -30,7 +30,7 @@
 - U1: freeze the frontend contract, auth model, and MVC retirement rules
 - U2: scaffold `frontend/`, React web, generated API SDK, and tenant bootstrap package
 - U3: replace MVC browser journeys by feature slice
-- U4-U5: rehome MVC-owned server endpoints to API ownership and retire MVC from the active deployment model
+- U4-U5: rehome MVC-owned server endpoints to API ownership and cut Azure to React; local HTTP/Docker React validation plus MVC deletion remain the immediate follow-up cleanup slice
 - U6: add React Native / mobile only after the web cutover and outside the pre-Phase-8 gate
 
 ### Priority 2: Azure Data & Resilience (Days 44-56) — *backend Phase 8 follows Track U U5*
@@ -57,6 +57,7 @@
 
 - **Track U** reduces frontend migration risk: contract freeze, generated SDK, React web replacement, API ownership of callback/telemetry, and MVC removal rules
 - **Backend Phase 8** begins after Track U Phase U5 is complete
+- **Recommended next cleanup slice before deleting MVC**: local HTTP validation, Docker UI validation, then MVC removal
 - **Mobile (U6)** follows the web cutover and does not block backend Phase 8
 
 ---

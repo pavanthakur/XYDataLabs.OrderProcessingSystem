@@ -32,7 +32,7 @@ public sealed class TenantMiddleware
             "RequestedTenantCode",
             string.IsNullOrWhiteSpace(requestedTenantCode) ? "none" : requestedTenantCode);
 
-        if (IsTenantOptionalRequest(context.Request.Path))
+        if (IsTenantOptionalRequest(context.Request.Path, requestedTenantCode))
         {
             using var bootstrapTenantScope = LogContext.PushProperty(
                 "TenantCode",
@@ -111,11 +111,14 @@ public sealed class TenantMiddleware
             || string.Equals(tenantStatus, "Decommissioned", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool IsTenantOptionalRequest(PathString requestPath)
+    private static bool IsTenantOptionalRequest(PathString requestPath, string? requestedTenantCode)
     {
-        return IsRuntimeConfigurationRequest(requestPath)
-            || IsHealthRequest(requestPath)
-            || IsPaymentCallbackRequest(requestPath);
+        if (IsRuntimeConfigurationRequest(requestPath) || IsPaymentCallbackRequest(requestPath))
+        {
+            return true;
+        }
+
+        return IsHealthRequest(requestPath) && string.IsNullOrWhiteSpace(requestedTenantCode);
     }
 
     private static bool IsRuntimeConfigurationRequest(PathString requestPath)

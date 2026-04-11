@@ -3,7 +3,7 @@
     Interactive launcher for the XY Order Processing System.
     Works from Visual Studio F5, VS Code terminal, or double-click.
     Shows a numbered menu — pick a number, press Enter — the script
-    starts both API and UI for you automatically.
+    starts the API and web frontend for you automatically.
 
 .PARAMETER Choice
     Pre-select a menu option (1-8, 0, Q) without the interactive prompt.
@@ -64,36 +64,36 @@ function Show-Menu {
     Write-Host "  -- DOCKER  (full containers, matches Azure deployment) -------------" -ForegroundColor DarkCyan
     Write-Host ""
     Write-Host "  [1]  Dev . HTTP    API: http://localhost:5020/swagger" -ForegroundColor White
-    Write-Host "                     UI:  http://localhost:5022" -ForegroundColor DarkGray
+    Write-Host "                     Web: http://localhost:5022" -ForegroundColor DarkGray
     Write-Host "       ^ Recommended for daily development" -ForegroundColor Green
     Write-Host ""
     Write-Host "  [2]  Dev . HTTPS   API: https://localhost:5021/swagger" -ForegroundColor White
-    Write-Host "                     UI:  https://localhost:5023" -ForegroundColor DarkGray
+    Write-Host "                     Web: https://localhost:5023" -ForegroundColor DarkGray
     Write-Host "       Use when testing HTTPS-specific behaviour" -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  [3]  Stg . HTTP    API: http://localhost:5030/swagger" -ForegroundColor White
-    Write-Host "                     UI:  http://localhost:5032" -ForegroundColor DarkGray
+    Write-Host "                     Web: http://localhost:5032" -ForegroundColor DarkGray
     Write-Host "       Staging config -- validate before pushing to Azure staging" -ForegroundColor DarkYellow
     Write-Host ""
     Write-Host "  [4]  Stg . HTTPS   API: https://localhost:5031/swagger" -ForegroundColor White
-    Write-Host "                     UI:  https://localhost:5033" -ForegroundColor DarkGray
+    Write-Host "                     Web: https://localhost:5033" -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  [5]  Prod . HTTP   API: http://localhost:5040/swagger   /!\ prod config" -ForegroundColor Yellow
-    Write-Host "                     UI:  http://localhost:5042" -ForegroundColor DarkGray
+    Write-Host "                     Web: http://localhost:5042" -ForegroundColor DarkGray
     Write-Host "       Only for local prod smoke-testing -- uses production settings" -ForegroundColor DarkRed
     Write-Host ""
     Write-Host "  [6]  Prod . HTTPS  API: https://localhost:5041/swagger  /!\ prod config" -ForegroundColor Yellow
-    Write-Host "                     UI:  https://localhost:5043" -ForegroundColor DarkGray
+    Write-Host "                     Web: https://localhost:5043" -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  -- PLAIN .NET  (no Docker, fastest startup, full VS debugger) -----" -ForegroundColor DarkBlue
     Write-Host ""
     Write-Host "  [7]  Local . HTTP   API: http://localhost:5010/swagger" -ForegroundColor White
-    Write-Host "                      UI:  http://localhost:5012" -ForegroundColor DarkGray
-    Write-Host "       Opens two terminal windows (dotnet run for API + UI)" -ForegroundColor DarkGray
+    Write-Host "                      Web: http://localhost:5173" -ForegroundColor DarkGray
+    Write-Host "       Opens two terminal windows (dotnet run for API + Vite frontend)" -ForegroundColor DarkGray
     Write-Host "       For breakpoints/hot-reload: use VS F5 'Http Profile' instead" -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  [8]  Local . HTTPS  API: https://localhost:5011/swagger" -ForegroundColor White
-    Write-Host "                      UI:  https://localhost:5013" -ForegroundColor DarkGray
+    Write-Host "                      Web: https://localhost:5174" -ForegroundColor DarkGray
     Write-Host "       For breakpoints/hot-reload: use VS F5 'Https Profile' instead" -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  -- STOP / QUIT --------------------------------------------------- " -ForegroundColor DarkGray
@@ -121,17 +121,33 @@ function Invoke-Docker {
 function Start-PlainDotNet {
     param([string]$LaunchProfile)
 
-    $apiProject = Join-Path $solutionRoot "XYDataLabs.OrderProcessingSystem.API"
-    $uiProject  = Join-Path $solutionRoot "XYDataLabs.OrderProcessingSystem.UI"
-    $apiUrl     = if ($LaunchProfile -eq "http") { "http://localhost:5010/swagger"  } else { "https://localhost:5011/swagger" }
-    $uiUrl      = if ($LaunchProfile -eq "http") { "http://localhost:5012"          } else { "https://localhost:5013" }
+    $apiProject   = Join-Path $solutionRoot "XYDataLabs.OrderProcessingSystem.API"
+    $frontendRoot = Join-Path $solutionRoot "frontend"
+    $certFile     = Join-Path $solutionRoot "Resources\Certificates\aspnetapp.pfx"
+    $envLocal     = Join-Path $solutionRoot "Resources\Docker\.env.local"
+    $apiUrl       = if ($LaunchProfile -eq "http") { "http://localhost:5010/swagger"  } else { "https://localhost:5011/swagger" }
+    $apiBaseUrl   = if ($LaunchProfile -eq "http") { "http://localhost:5010"          } else { "https://localhost:5011" }
+    $webUrl       = if ($LaunchProfile -eq "http") { "http://localhost:5173"          } else { "https://localhost:5174" }
+    $webPort      = if ($LaunchProfile -eq "http") { "5173"                           } else { "5174" }
+    $useHttps     = if ($LaunchProfile -eq "http") { "false"                          } else { "true" }
+    $certPassword = ""
+
+    if (Test-Path $envLocal) {
+        $certPasswordLine = Get-Content $envLocal |
+            Where-Object { $_ -like 'LOCAL_CERT_PASSWORD=*' } |
+            Select-Object -First 1
+
+        if ($certPasswordLine) {
+            $certPassword = $certPasswordLine.Split('=', 2)[1]
+        }
+    }
 
     Write-Host ""
-    Write-Host "  Starting API and UI in separate terminal windows..." -ForegroundColor Cyan
+    Write-Host "  Starting API and React web frontend in separate terminal windows..." -ForegroundColor Cyan
 
     # Write temp launcher scripts so quoting stays clean across process boundaries
     $apiScript = [System.IO.Path]::GetTempFileName() + ".ps1"
-    $uiScript  = [System.IO.Path]::GetTempFileName() + ".ps1"
+    $webScript = [System.IO.Path]::GetTempFileName() + ".ps1"
 
     Set-Content -Path $apiScript -Value @"
 `$host.UI.RawUI.WindowTitle = 'XY API ($LaunchProfile)'
@@ -145,28 +161,31 @@ Write-Host '  API process ended. Press any key to close...' -ForegroundColor Yel
 `$null = `$Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
 "@
 
-    Set-Content -Path $uiScript -Value @"
-`$host.UI.RawUI.WindowTitle = 'XY UI ($LaunchProfile)'
-Write-Host '  XY Order Processing -- UI ($LaunchProfile)' -ForegroundColor Cyan
-Write-Host '  $uiUrl' -ForegroundColor White
+    Set-Content -Path $webScript -Value @"
+`$host.UI.RawUI.WindowTitle = 'XY Web ($LaunchProfile)'
+Write-Host '  XY Order Processing -- React Web ($LaunchProfile)' -ForegroundColor Cyan
+Write-Host '  $webUrl' -ForegroundColor White
 Write-Host ''
-Set-Location '$solutionRoot'
-dotnet run --project '$uiProject' --launch-profile $LaunchProfile
+Set-Location '$frontendRoot'
+`$env:ORDERPROCESSING_API_BASE_URL = '$apiBaseUrl'
+`$env:ORDERPROCESSING_DEV_SERVER_USE_HTTPS = '$useHttps'
+`$env:ORDERPROCESSING_DEV_SERVER_PFX_PATH = '$certFile'
+`$env:ORDERPROCESSING_DEV_SERVER_PFX_PASSWORD = '$certPassword'
+npm run dev:web -- --host localhost --port $webPort --strictPort
 Write-Host ''
-Write-Host '  UI process ended. Press any key to close...' -ForegroundColor Yellow
+Write-Host '  Web process ended. Press any key to close...' -ForegroundColor Yellow
 `$null = `$Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
 "@
 
     Start-Process powershell.exe -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $apiScript
     Start-Sleep -Seconds 2   # slight stagger -- prevents both processes racing DB init
-    Start-Process powershell.exe -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $uiScript
+    Start-Process powershell.exe -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $webScript
 
     Write-Host ""
     Write-Host "  API  -->  $apiUrl" -ForegroundColor White
-    Write-Host "  UI   -->  $uiUrl" -ForegroundColor White
+    Write-Host "  Web  -->  $webUrl" -ForegroundColor White
     Write-Host ""
-    Write-Host "  TIP: For VS debugger (breakpoints, hot reload, diagnostics):" -ForegroundColor Yellow
-    Write-Host "       Close those windows and use VS F5 with '$LaunchProfile' profile instead." -ForegroundColor Yellow
+    Write-Host "  TIP: For the API debugger use VS F5, then run the frontend from a terminal when needed." -ForegroundColor Yellow
 }
 
 # --- Stop sub-menu -------------------------------------------------------------
