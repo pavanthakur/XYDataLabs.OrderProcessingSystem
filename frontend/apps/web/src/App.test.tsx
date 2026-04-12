@@ -1,8 +1,67 @@
 import { render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 
+afterEach(() => {
+  localStorage.clear();
+  window.history.pushState({}, "", "/");
+  vi.restoreAllMocks();
+});
+
 describe("App callback bootstrap", () => {
+  it("uses the API bootstrap tenant for the standard shell even when a stale tenant is persisted", async () => {
+    localStorage.setItem("orderprocessing.activeTenantCode", "TenantC");
+    window.history.pushState({}, "", "/customers");
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const requestUrl = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+
+      if (requestUrl.includes("/api/v1/Info/runtime-configuration")) {
+        expect(init?.headers).not.toMatchObject({ "X-Tenant-Code": "TenantC" });
+
+        return jsonResponse({
+          activeTenantCode: "TenantA",
+          configuredActiveTenantCode: "TenantA",
+          tenantHeaderName: "X-Tenant-Code",
+          availableTenants: [
+            { tenantId: 1, tenantCode: "TenantA", tenantName: "Tenant A" },
+            { tenantId: 3, tenantCode: "TenantC", tenantName: "Tenant C" }
+          ]
+        });
+      }
+
+      if (requestUrl.includes("/api/v1/Customer/GetAllCustomers")) {
+        expect(init?.headers).toMatchObject({ "X-Tenant-Code": "TenantA" });
+
+        return jsonResponse({
+          success: true,
+          data: [
+            {
+              customerId: 101,
+              name: "Alice Tenant A",
+              email: "alice@tenant-a.local",
+              orderDtos: []
+            }
+          ],
+          message: null,
+          errors: null
+        });
+      }
+
+      throw new Error(`Unexpected fetch request: ${requestUrl}`);
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Tenant")).toHaveValue("TenantA");
+    });
+
+    expect(await screen.findByText("Alice Tenant A")).toBeInTheDocument();
+    expect(screen.getByText("Configured tenant")).toBeInTheDocument();
+    expect(fetchSpy).toHaveBeenCalled();
+  });
+
   it("boots the shell against the callback tenant and renders the payment status after a direct 3DS return", async () => {
     localStorage.setItem("orderprocessing.activeTenantCode", "TenantB");
     window.history.pushState({}, "", "/payments/callback?tenantCode=TenantA&id=truseqg7dswfmkp6fg1o");

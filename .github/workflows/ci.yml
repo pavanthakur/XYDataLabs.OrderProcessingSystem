@@ -57,6 +57,10 @@ jobs:
         working-directory: frontend
         run: npm run typecheck
 
+      - name: Test frontend workspace
+        working-directory: frontend
+        run: npm run test:web
+
       - name: Build frontend workspace
         working-directory: frontend
         run: npm run build

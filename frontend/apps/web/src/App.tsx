@@ -41,14 +41,7 @@ export default function App() {
 
       try {
         const bootstrap = await apiClient.getRuntimeConfiguration(requestedBootstrapTenantCode ?? undefined);
-        let sessionState = tenantSession.initialize(bootstrap);
-
-        if (
-          requestedBootstrapTenantCode
-          && sessionState.activeTenantCode.localeCompare(requestedBootstrapTenantCode, undefined, { sensitivity: "accent" }) !== 0
-        ) {
-          sessionState = tenantSession.setActiveTenantCode(requestedBootstrapTenantCode);
-        }
+        const sessionState = tenantSession.initialize(bootstrap, requestedBootstrapTenantCode);
 
         if (isCancelled) {
           return;

@@ -7,8 +7,34 @@ Track U React web implementation lives here.
 ```powershell
 cd frontend
 npm install
+npm run test:web
 npm run build
 npm run dev:web
+```
+
+## Tenant Bootstrap Smoke Checks
+
+The browser smoke test seeds a stale tenant into local storage and verifies the UI still resolves the
+runtime bootstrap tenant returned by the API, then confirms follow-up customer requests use that same tenant.
+
+Examples:
+
+```powershell
+# Current local HTTP shell
+npm run smoke:web:tenant -- --url http://localhost:5173/customers
+
+# Current Docker dev HTTP shell
+npm run smoke:web:tenant -- --url http://localhost:5022/customers
+
+# Current Azure dev deployment
+npm run smoke:web:tenant -- --url https://pavanthakur-orderprocessing-ui-xyapp-dev.azurewebsites.net/customers
+```
+
+Or use the PowerShell wrapper for named targets:
+
+```powershell
+pwsh -File .\scripts\test-frontend-tenant-bootstrap.ps1 -ListTargets
+pwsh -File .\scripts\test-frontend-tenant-bootstrap.ps1 -Target all-docker -InstallBrowser
 ```
 
 ## Local API Connectivity

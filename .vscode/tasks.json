@@ -108,7 +108,7 @@
             "problemMatcher": []
         },
         {
-            "label": "1 Run: 02 Local Http Profile",
+            "label": "1 Run: 04 VS-Style Local Http Launch",
             "dependsOrder": "sequence",
             "dependsOn": [
                 "Internal: Stop local dev sessions",
@@ -118,7 +118,7 @@
             "problemMatcher": []
         },
         {
-            "label": "1 Run: 03 Local Https Profile",
+            "label": "1 Run: 05 VS-Style Local Https Launch",
             "dependsOrder": "sequence",
             "dependsOn": [
                 "Internal: Stop local dev sessions",
@@ -274,7 +274,7 @@
             "label": "2 Stop: 01 Local Http Profile",
             "dependsOrder": "sequence",
             "dependsOn": [
-                "2 Stop: 00 Local Dev Sessions"
+                "Internal: Stop local http profile"
             ],
             "group": "none",
             "problemMatcher": []
@@ -283,7 +283,7 @@
             "label": "2 Stop: 02 Local Https Profile",
             "dependsOrder": "sequence",
             "dependsOn": [
-                "2 Stop: 00 Local Dev Sessions"
+                "Internal: Stop local https profile"
             ],
             "group": "none",
             "problemMatcher": []
@@ -428,8 +428,62 @@
             "command": "pwsh",
             "args": [
                 "-NoProfile",
-                "-Command",
-                    "$ports = @(5010, 5011, 5173, 5174); $processIds = foreach ($port in $ports) { Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique }; $processIds = $processIds | Where-Object { $_ } | Sort-Object -Unique; if (-not $processIds) { Write-Host 'No local dev sessions found.'; exit 0 }; foreach ($processId in $processIds) { try { Stop-Process -Id $processId -Force -ErrorAction Stop; Write-Host \"Stopped process $processId\" } catch { Write-Warning \"Failed to stop process ${processId}: $($_.Exception.Message)\" } }"
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/stop-local-dev-sessions.ps1",
+                "-Profile",
+                "all"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "hide": true,
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Internal: Stop local http profile",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/stop-local-dev-sessions.ps1",
+                "-Profile",
+                "http"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "hide": true,
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Internal: Stop local https profile",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/stop-local-dev-sessions.ps1",
+                "-Profile",
+                "https"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
@@ -445,22 +499,58 @@
         },
         {
             "label": "Internal: Start local http profile",
-            "dependsOrder": "parallel",
-            "dependsOn": [
-                "Internal: API http profile",
-                "Internal: React web frontend (HTTP API proxy)"
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/start-local-profile.ps1",
+                "-Profile",
+                "http"
             ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "isBackground": true,
+            "runOptions": {
+                "instanceLimit": 2
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
             "hide": true,
             "group": "none",
             "problemMatcher": []
         },
         {
             "label": "Internal: Start local https profile",
-            "dependsOrder": "parallel",
-            "dependsOn": [
-                "Internal: API https profile",
-                "Internal: React web frontend (HTTPS API proxy)"
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/start-local-profile.ps1",
+                "-Profile",
+                "https"
             ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "isBackground": true,
+            "runOptions": {
+                "instanceLimit": 2
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
             "hide": true,
             "group": "none",
             "problemMatcher": []

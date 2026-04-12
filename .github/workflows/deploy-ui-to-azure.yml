@@ -62,6 +62,10 @@ jobs:
         working-directory: frontend
         run: npm run typecheck
 
+      - name: Test frontend workspace
+        working-directory: frontend
+        run: npm run test:web
+
       - name: Build frontend artifact
         working-directory: frontend
         env:
@@ -87,6 +91,9 @@ jobs:
       contents: read
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
       - name: Check Azure Credentials
         id: check-credentials
         shell: pwsh
@@ -266,9 +273,33 @@ jobs:
             exit 1
           }
 
-      # Unit tests (Domain, Application, API, Architecture) are owned by the API workflow.
-      # There are no UI-specific test projects in this solution.
-      # Tests run in deploy-api-to-azure.yml — no duplication needed here.
+      - name: Set up Node.js for browser smoke test
+        if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies for browser smoke test
+        if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'
+        working-directory: frontend/apps/web
+        run: npx playwright install chromium
+
+      - name: Browser Smoke Test - Tenant Bootstrap
+        if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'
+        working-directory: frontend
+        run: npm run smoke:web:tenant -- --url "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/customers"
+
+      # Backend tests remain owned by deploy-api-to-azure.yml.
+      # Frontend regression tests run in the build job above so tenant bootstrap issues
+      # are blocked before artifact upload and deployment, and the browser smoke test
+      # above validates the deployed UI respects runtime bootstrap tenants.
 
       - name: Deployment Summary
         if: always()

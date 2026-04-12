@@ -8,7 +8,7 @@ This repo uses a small set of primary operational workflows, with additional sup
 
 | Workflow | Triggers On | Deploys To | Description |
 |----------|-------------|------------|-------------|
-| `ci.yml` | Pull requests to dev/staging/main | Validation only | PR build/test gate for the .NET solution plus React frontend typecheck/build |
+| `ci.yml` | Pull requests to dev/staging/main | Validation only | PR build/test gate for the .NET solution plus React frontend typecheck, tests, and build |
 | `azure-initial-setup.yml` | Manual | One-time setup | **[See README-AZURE-INITIAL-SETUP.md](./README-AZURE-INITIAL-SETUP.md)** - Phase 0 (GitHub App), Phase 1a (OIDC), Phase 1b (secrets) |
 | `azure-bootstrap.yml` | Manual | Infrastructure + deploy | **[See README-AZURE-BOOTSTRAP.md](./README-AZURE-BOOTSTRAP.md)** - Phase 2 (infrastructure), API/UI deploy, Phase X (cleanup) |
 | `configure-github-secrets.yml` | Called by initial-setup | Secret configuration | **[See README-CONFIGURE-GITHUB-SECRETS.md](./README-CONFIGURE-GITHUB-SECRETS.md)** - GitHub App setup and secret management (can run independently) |
@@ -16,7 +16,7 @@ This repo uses a small set of primary operational workflows, with additional sup
 | `validate-deployment.yml` | Called by infra-deploy | Reusable workflow | **[See README-VALIDATE-DEPLOYMENT.md](./README-VALIDATE-DEPLOYMENT.md)** - Pre-deployment validation workflow |
 | `test-validate-deployment.yml` | Manual or PR changes | Test only | **[Quick Start](./QUICK-START-TEST-VALIDATION.md)** \| **[Full Docs](./README-TEST-VALIDATE-DEPLOYMENT.md)** - Tests validation workflow independently |
 | `deploy-api-to-azure.yml` | API/Backend code changes | All branches (dev/staging/main) | Builds and deploys API to environment-specific Azure Web App |
-| `deploy-ui-to-azure.yml` | React frontend changes | All branches (dev/staging/main) | Builds and deploys the React frontend to the environment-specific Azure UI App Service |
+| `deploy-ui-to-azure.yml` | React frontend changes | All branches (dev/staging/main) | Builds and deploys the React frontend to the environment-specific Azure UI App Service, then runs a browser smoke check against the deployed tenant bootstrap flow |
 | `validate-adrs.yml` | ADR file, script, or lint config changes | Push/PR to main/dev/staging, or manual | **[See README-VALIDATE-ADRS.md](./README-VALIDATE-ADRS.md)** — Validates ADR filename pattern, H1 heading, `**Status:**` frontmatter, and markdownlint rules |
 | `validate-ai-customization.yml` | Shared AI customization changes | Push/PR to main/dev/staging, or manual | Validates shared Copilot instructions, prompts, agents, operating-model docs, and their discovery surfaces |
 | `validate-doc-links.yml` | Docs or validator changes | Push/PR to main/dev/staging, or manual | Validates local markdown links and heading anchors for the canonical `docs/` tree |
@@ -162,6 +162,7 @@ The API workflow and the React frontend workflow execute in 2 stages:
 - ✅ Setup Node.js 20
 - ✅ Restore npm workspace dependencies
 - ✅ Run frontend typecheck
+- ✅ Run frontend regression tests
 - ✅ Build the React production artifact with the environment-specific API base URL
 - ✅ Upload build artifact
 
@@ -171,6 +172,7 @@ The API workflow and the React frontend workflow execute in 2 stages:
 - ✅ Login to Azure using OIDC (passwordless authentication)
 - ✅ Deploy to environment-specific Azure Web App
 - ✅ Run SPA route health checks (API: `/health/ready`, frontend: `/customers`)
+- ✅ Run a browser smoke check that seeds a stale tenant and verifies the deployed UI still resolves the API bootstrap tenant
 - ✅ Display deployment URLs
 
 ---
