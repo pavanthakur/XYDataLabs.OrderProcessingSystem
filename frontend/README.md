@@ -64,6 +64,12 @@ npm run build
 The generated build artifact also includes an IIS `web.config` so Azure App Service rewrites client
 routes back to `index.html`.
 
+Important note:
+
+- `apps/web/public/web.config` is an intentional source file and should stay committed.
+- `apps/web/dist/web.config` is generated build output copied from `public/` and should remain ignored with the rest of `dist/`.
+- This file matters only because the Azure UI deployment runs on App Service/IIS-style hosting, where SPA route rewrites are needed for deep links such as `/customers` or `/payments/new`.
+
 ## OpenAPI Snapshot
 
 `packages/api-sdk/openapi/order-processing.v1.json` is the checked-in contract snapshot for the

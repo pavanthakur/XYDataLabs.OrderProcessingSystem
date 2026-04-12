@@ -7,6 +7,8 @@ on:
       - staging
       - main
     paths:
+      - '.github/workflows/ci.yml'
+      - '.gitignore'
       - 'XYDataLabs.OrderProcessingSystem.API/**'
       - 'XYDataLabs.OrderProcessingSystem.Application/**'
       - 'XYDataLabs.OrderProcessingSystem.Domain/**'
@@ -14,6 +16,8 @@ on:
       - 'XYDataLabs.OrderProcessingSystem.SharedKernel/**'
       - 'XYDataLabs.OpenPayAdapter/**'
       - 'frontend/**'
+      - 'frontend/.gitignore'
+      - 'scripts/validate-tracked-generated-artifacts.ps1'
       - 'tests/**'
       - 'Resources/Configuration/**'
       - 'Directory.Build.props'
@@ -36,6 +40,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+
+      - name: Validate tracked generated artifacts
+        shell: pwsh
+        run: scripts/validate-tracked-generated-artifacts.ps1
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v5

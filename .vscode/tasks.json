@@ -96,6 +96,28 @@
             },
             "problemMatcher": []
         },
+        {
+            "label": "Validate: Tracked generated artifacts",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/validate-tracked-generated-artifacts.ps1"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
         // Run: Local
         {
             "label": "1 Run: 01 Frontend only",

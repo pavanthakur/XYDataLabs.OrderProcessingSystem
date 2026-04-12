@@ -51,16 +51,19 @@ git branch --show-current
 # 2. Test branch-to-environment mapping (for infrastructure changes)
 ./Resources/Azure-Deployment/test-branch-env-mapping.ps1 -Environment dev
 
-# 3. Validate documentation local links (when docs/ changed)
+# 3. Validate tracked generated artifacts (frontend dist/publish/report hygiene)
+pwsh scripts/validate-tracked-generated-artifacts.ps1
+
+# 4. Validate documentation local links (when docs/ changed)
 node scripts/validate-doc-links.js
 
-# 4. Validate shared settings consistency (before config changes)
+# 5. Validate shared settings consistency (before config changes)
 ./Resources/Azure-Deployment/validate-sharedsettings-diff.ps1
 
-# 5. Check for errors in solution (before committing code)
+# 6. Check for errors in solution (before committing code)
 dotnet build XYDataLabs.OrderProcessingSystem.sln
 
-# 6. Run unit tests (before committing code)
+# 7. Run unit tests (before committing code)
 dotnet test XYDataLabs.OrderProcessingSystem.UnitTest/
 ```
 
