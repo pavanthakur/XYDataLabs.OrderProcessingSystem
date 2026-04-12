@@ -8,7 +8,11 @@
     "run": "tsx ./src/cli/run-payment-automation.ts",
     "run:dry": "tsx ./src/cli/run-payment-automation.ts --target local-http --tenant TenantA --dry-run",
     "run:local:matrix": "tsx ./src/cli/run-local-matrix.ts",
-    "run:local:matrix:dry": "tsx ./src/cli/run-local-matrix.ts --dry-run"
+    "run:local:matrix:dry": "tsx ./src/cli/run-local-matrix.ts --dry-run",
+    "run:docker:matrix": "tsx ./src/cli/run-docker-matrix.ts",
+    "run:docker:matrix:dry": "tsx ./src/cli/run-docker-matrix.ts --dry-run",
+    "run:azure:matrix": "tsx ./src/cli/run-azure-matrix.ts",
+    "run:azure:matrix:dry": "tsx ./src/cli/run-azure-matrix.ts --dry-run"
   },
   "devDependencies": {
     "@types/node": "^24.7.2",

@@ -73,12 +73,14 @@ Use when:
 
 Purpose:
 - Launches the separate payment automation workspace from one standard interactive entry point.
-- Maps operator intent to supported local-http, local-https, or full local-matrix automation runs.
-- Supports dry runs, single-tenant runs, multi-tenant runs, headed mode, and optional keep-local-sessions behavior.
+- Maps operator intent to supported local, Docker, and Azure single-target runs plus local, Docker, and Azure matrix automation runs.
+- Supports dry runs, tenant filtering, headed mode, and optional keep-local-sessions behavior for local targets.
 
 Use when:
 - You want to run the automation workspace without remembering the exact npm command and flags.
 - You want a repeatable path for local payment-journey execution before or during backend Phase 8 work.
+- You want the same entry point to run `docker-dev-*`, `docker-stg-*`, or `docker-prod-*` payment automation targets directly.
+- You want the same entry point to run `azure-dev`, `azure-stg`, or `azure-prod` payment automation targets after Azure deployment and validate via App Insights/Azure SQL.
 - You want the slash-workflow companion to the existing `/XYDataLabs-verify-db-logs` evidence prompt.
 
 ### `/XYDataLabs-completion-check`
@@ -244,7 +246,7 @@ Note: For deep-dive queries (Q1, Q3, Q4, Q6, Q6a, Q7, Q8-B and per-tenant 3DS to
    └─ Agent prints the correct API and UI URLs for the chosen option
 
 [Run payment automation]
-└─ /XYDataLabs-payment-automation  →  choose local-http/local-https or local matrix mode
+└─ /XYDataLabs-payment-automation  →  choose local target, Docker target, local matrix, or Docker matrix mode
    └─ Agent runs the correct automation workspace command with tenant and headed/keep-session options
    └─ For post-run evidence correlation, follow with /XYDataLabs-verify-db-logs when needed
 ```

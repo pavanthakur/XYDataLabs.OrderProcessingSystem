@@ -1,5 +1,7 @@
 FROM cgr.dev/chainguard/node:latest-dev AS build
 
+USER root
+
 WORKDIR /app
 
 COPY frontend/package.json ./package.json
@@ -31,4 +33,4 @@ COPY frontend/apps/web/server.mjs ./server.mjs
 
 EXPOSE 5022
 
-CMD ["node", "server.mjs"]
+CMD ["server.mjs"]

@@ -367,7 +367,7 @@ This matrix shows which instructions auto-attach for common file locations:
 | Day Complete Router | `/XYDataLabs-day-complete` | After each curriculum day or phase-freeze closeout — routes updates to all correct documents, syncs architecture status surfaces, and requires completion-check/context-audit before a phase-close commit |
 | Completion Check | `/XYDataLabs-completion-check` | After any feature, task, script, or fix — 6-category quality gate: documented? guardrailed? unit tested? integration tested? automated? context current? |
 | Docker Start | `/XYDataLabs-docker-start` | Launches the supported Docker and local runtime profiles from one interactive entry point and prints the correct API/UI URLs. |
-| Payment Automation | `/XYDataLabs-payment-automation` | Launches the separate payment automation workspace from one interactive entry point for local-http, local-https, or full local-matrix runs, including dry-run and tenant selection support. |
+| Payment Automation | `/XYDataLabs-payment-automation` | Launches the separate payment automation workspace from one interactive entry point for local, Docker, and Azure targets plus local/Docker/Azure matrix runs, including dry-run and tenant selection support. |
 | Local Setup | `/XYDataLabs-setup-local` | After a fresh git clone — runs setup-local.ps1, summarises VS F5 and Docker next steps |
 | SQL Local Access | `/XYDataLabs-sql-local-access` | Opens or closes Azure SQL firewall for local IP after a fresh bootstrap/deploy. Prints SSMS connection details. |
 | Context Audit | `/XYDataLabs-context-audit` | Detects stale AI context by diffing memory files and copilot-instructions against the actual codebase. Run periodically or after major refactors. |
