@@ -24,6 +24,7 @@ export interface ExecutePaymentAutomationRunOptions {
   tenantTimeoutMs: number;
   runPrefix?: string;
   startedAt?: Date;
+  autoStartLocalSessions?: boolean;
   autoStopLocalSessions?: boolean;
   logger?: (message: string) => void;
 }
@@ -61,7 +62,16 @@ export async function executePaymentAutomationRun(
 
   await mkdir(reportDirectory, { recursive: true });
   log(`Starting payment automation run ${runId} with prefix ${runPrefix}.`);
-  await waitForTargetReadiness(`${target.baseUrl}${target.paymentPagePath}`, target.ignoreHttpsErrors, log);
+
+  const targetUrl = `${target.baseUrl}${target.paymentPagePath}`;
+  if (!options.dryRun) {
+    if (target.runtime === "local" && options.autoStartLocalSessions !== false) {
+      await ensureLocalTargetReady(target.profile, targetUrl, target.ignoreHttpsErrors, log);
+    }
+    else {
+      await waitForTargetReadiness(targetUrl, target.ignoreHttpsErrors, log);
+    }
+  }
 
   const rows: ExecutiveSummaryRow[] = [];
   for (const tenantCode of tenantPlan.resolvedTenantCodes) {
@@ -215,17 +225,37 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: s
   }
 }
 
-async function waitForTargetReadiness(
+async function ensureLocalTargetReady(
+  profile: "http" | "https",
   targetUrl: string,
   ignoreHttpsErrors: boolean,
   log: (message: string) => void
 ): Promise<void> {
-  const deadline = Date.now() + 30000;
+  if (await isUrlReachable(targetUrl, ignoreHttpsErrors)) {
+    return;
+  }
+
+  log(`Local ${profile} target is not reachable yet; starting the profile automatically.`);
+  await startLocalProfile(profile, log);
+
+  const targetBecameReady = await waitForTargetReadiness(targetUrl, ignoreHttpsErrors, log, 60000);
+  if (!targetBecameReady) {
+    throw new Error(`Local ${profile} target did not become ready after automatic startup.`);
+  }
+}
+
+async function waitForTargetReadiness(
+  targetUrl: string,
+  ignoreHttpsErrors: boolean,
+  log: (message: string) => void,
+  timeoutMs = 30000
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
   let reportedWait = false;
 
   while (Date.now() < deadline) {
     if (await isUrlReachable(targetUrl, ignoreHttpsErrors)) {
-      return;
+      return true;
     }
 
     if (!reportedWait) {
@@ -237,6 +267,7 @@ async function waitForTargetReadiness(
   }
 
   log(`Target readiness check timed out for ${targetUrl}; continuing with browser navigation.`);
+  return false;
 }
 
 async function isUrlReachable(targetUrl: string, ignoreHttpsErrors: boolean): Promise<boolean> {
@@ -269,6 +300,74 @@ async function isUrlReachable(targetUrl: string, ignoreHttpsErrors: boolean): Pr
 async function sleep(milliseconds: number): Promise<void> {
   await new Promise((resolve) => {
     setTimeout(resolve, milliseconds);
+  });
+}
+
+export async function startLocalProfile(profile: "http" | "https", log: (message: string) => void): Promise<void> {
+  const scriptPath = path.resolve(automationRoot, "..", "scripts", "start-local-profile.ps1");
+
+  log(`Starting local ${profile} profile.`);
+
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn("pwsh", [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      scriptPath,
+      "-Profile",
+      profile
+    ], {
+      cwd: path.resolve(automationRoot, ".."),
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+
+    let settled = false;
+    let stdout = "";
+    let stderr = "";
+
+    const finalizeReady = () => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      resolve();
+    };
+
+    child.stdout.on("data", (chunk: Buffer | string) => {
+      const text = chunk.toString();
+      stdout += text;
+
+      if (text.includes("Local '") || text.includes("profile is running.")) {
+        finalizeReady();
+      }
+    });
+
+    child.stderr.on("data", (chunk: Buffer | string) => {
+      stderr += chunk.toString();
+    });
+
+    child.on("error", (error) => {
+      if (!settled) {
+        settled = true;
+        reject(error);
+      }
+    });
+
+    child.on("exit", (exitCode) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      const combinedOutput = [stdout.trim(), stderr.trim()].filter(Boolean).join("\n");
+      reject(new Error(combinedOutput || `Local ${profile} profile exited unexpectedly with code ${exitCode}.`));
+    });
+
+    setTimeout(() => {
+      finalizeReady();
+    }, 3000);
   });
 }
 

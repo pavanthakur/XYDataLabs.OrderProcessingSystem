@@ -1,10 +1,9 @@
 import { mkdir, writeFile } from "node:fs/promises";
-import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { JsonRuntimeTargetCatalog } from "../catalog/json-runtime-target-catalog.js";
 import type { ExecutePaymentAutomationRunOptions, PaymentAutomationRunOutput } from "../orchestrator/payment-automation-executor.js";
-import { executePaymentAutomationRun } from "../orchestrator/payment-automation-executor.js";
+import { executePaymentAutomationRun, startLocalProfile } from "../orchestrator/payment-automation-executor.js";
 import { FileReportComposer } from "../report/file-report-composer.js";
 import { buildRunPrefix } from "../support/customer-order-id.js";
 
@@ -179,74 +178,6 @@ function parseCliOptions(argumentsList: string[]): LocalMatrixOptions {
     tenantTimeoutMs,
     autoStopLocalSessions
   };
-}
-
-async function startLocalProfile(profile: "http" | "https", log: (message: string) => void): Promise<void> {
-  const scriptPath = path.resolve(automationRoot, "..", "scripts", "start-local-profile.ps1");
-
-  log(`Starting local ${profile} profile for matrix target.`);
-
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn("pwsh", [
-      "-NoProfile",
-      "-ExecutionPolicy",
-      "Bypass",
-      "-File",
-      scriptPath,
-      "-Profile",
-      profile
-    ], {
-      cwd: path.resolve(automationRoot, ".."),
-      stdio: ["ignore", "pipe", "pipe"]
-    });
-
-    let settled = false;
-    let stdout = "";
-    let stderr = "";
-
-    const finalizeReady = () => {
-      if (settled) {
-        return;
-      }
-
-      settled = true;
-      resolve();
-    };
-
-    child.stdout.on("data", (chunk: Buffer | string) => {
-      const text = chunk.toString();
-      stdout += text;
-
-      if (text.includes("Local '") || text.includes("profile is running.")) {
-        finalizeReady();
-      }
-    });
-
-    child.stderr.on("data", (chunk: Buffer | string) => {
-      stderr += chunk.toString();
-    });
-
-    child.on("error", (error) => {
-      if (!settled) {
-        settled = true;
-        reject(error);
-      }
-    });
-
-    child.on("exit", (exitCode) => {
-      if (settled) {
-        return;
-      }
-
-      settled = true;
-      const combinedOutput = [stdout.trim(), stderr.trim()].filter(Boolean).join("\n");
-      reject(new Error(combinedOutput || `Local ${profile} profile exited unexpectedly with code ${exitCode}.`));
-    });
-
-    setTimeout(() => {
-      finalizeReady();
-    }, 3000);
-  });
 }
 
 void main().catch((error: unknown) => {

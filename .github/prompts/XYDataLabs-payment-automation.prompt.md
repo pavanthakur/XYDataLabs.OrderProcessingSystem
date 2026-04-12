@@ -22,6 +22,12 @@ Accept either the number or a natural-language equivalent such as:
 - `matrix dry`
 - `full matrix`
 
+If the user does not specify a profile, default to the HTTPS path for simplicity:
+- ambiguous `single tenant` → option `2`
+- ambiguous `multi-tenant` or `all tenants` → option `4`
+- ambiguous `local payment automation` → option `4`
+- explicit matrix requests remain `5` or `6`
+
 After the user chooses a mode, gather any missing inputs concisely:
 
 - For options `1` and `2`: ask which tenant code to use. Default to `TenantA` if they do not care.

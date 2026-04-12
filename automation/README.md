@@ -70,7 +70,7 @@ Notes:
 - Verification stays script-first through `scripts/verify-payment-run-physical.ps1`
 - Sandbox OTP defaults to `999` when the provider challenge accepts arbitrary three-digit codes
 - Reports are written under `automation/reports/<runId>/`
-- Local runs now stop the exercised local profile automatically after verification; use `--keep-local-sessions` to leave local sessions running
+- Single-target local runs auto-start the selected local profile when needed and stop it automatically after verification; use `--keep-local-sessions` to leave local sessions running
 - Local matrix runs stop all exercised local profiles automatically after the matrix completes; use `--keep-local-sessions` to opt out
 
 ## Canonical Planning Reference
