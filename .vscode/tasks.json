@@ -1,6 +1,7 @@
 {
     "version": "2.0.0",
     "tasks": [
+        // Workspace
         {
             "label": "build",
             "command": "dotnet",
@@ -91,6 +92,520 @@
             "presentation": {
                 "reveal": "always",
                 "panel": "shared",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        // Run: Local
+        {
+            "label": "1 Run: 01 Frontend only",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Internal: Stop local dev sessions",
+                "Internal: React web frontend (standalone)"
+            ],
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: 02 Local Http Profile",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Internal: Stop local dev sessions",
+                "Internal: Start local http profile"
+            ],
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: 03 Local Https Profile",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Internal: Stop local dev sessions",
+                "Internal: Start local https profile"
+            ],
+            "group": "none",
+            "problemMatcher": []
+        },
+        // Run: Docker
+        {
+            "label": "1 Run: 11 Docker Dev Http Profile",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "& '.\\Resources\\Docker\\start-docker.ps1' -Environment dev -Profile http -Reset -NoPrePull"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: 12 Docker Dev Https Profile",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "& '.\\Resources\\Docker\\start-docker.ps1' -Environment dev -Profile https -Reset -NoPrePull"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: 21 Docker Stg Http Profile",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "& '.\\Resources\\Docker\\start-docker.ps1' -Environment stg -Profile http -Reset -NoPrePull"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: 22 Docker Stg Https Profile",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "& '.\\Resources\\Docker\\start-docker.ps1' -Environment stg -Profile https -Reset -NoPrePull"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: 31 Docker Prod Http Profile",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "& '.\\Resources\\Docker\\start-docker.ps1' -Environment prod -Profile http -Reset -NoPrePull"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: 32 Docker Prod Https Profile",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "& '.\\Resources\\Docker\\start-docker.ps1' -Environment prod -Profile https -Reset -NoPrePull"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        // Stop: Local
+        {
+            "label": "2 Stop: 00 Local Dev Sessions",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Internal: Stop local dev sessions"
+            ],
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "2 Stop: 01 Local Http Profile",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "2 Stop: 00 Local Dev Sessions"
+            ],
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "2 Stop: 02 Local Https Profile",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "2 Stop: 00 Local Dev Sessions"
+            ],
+            "group": "none",
+            "problemMatcher": []
+        },
+        // Cleanup: Docker
+        {
+            "label": "3 Cleanup: 11 Docker Dev Http Profile",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "& '.\\Resources\\Docker\\start-docker.ps1' -Environment dev -Profile http -Down; $images = @('xydatalabs-orderprocessingsystem-api-http:dev', 'xydatalabs-orderprocessingsystem-ui-http:dev'); foreach ($image in $images) { $imageId = docker images -q $image 2>$null; if ($imageId) { docker rmi -f $image | Out-Null; Write-Host \"Removed image $image\" } else { Write-Host \"Image not found: $image\" } }"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "3 Cleanup: 12 Docker Dev Https Profile",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "& '.\\Resources\\Docker\\start-docker.ps1' -Environment dev -Profile https -Down; $images = @('xydatalabs-orderprocessingsystem-api-https:dev', 'xydatalabs-orderprocessingsystem-ui-https:dev'); foreach ($image in $images) { $imageId = docker images -q $image 2>$null; if ($imageId) { docker rmi -f $image | Out-Null; Write-Host \"Removed image $image\" } else { Write-Host \"Image not found: $image\" } }"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "3 Cleanup: 21 Docker Stg Http Profile",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "& '.\\Resources\\Docker\\start-docker.ps1' -Environment stg -Profile http -Down; $images = @('xydatalabs-orderprocessingsystem-api-http:stg', 'xydatalabs-orderprocessingsystem-ui-http:stg'); foreach ($image in $images) { $imageId = docker images -q $image 2>$null; if ($imageId) { docker rmi -f $image | Out-Null; Write-Host \"Removed image $image\" } else { Write-Host \"Image not found: $image\" } }"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "3 Cleanup: 22 Docker Stg Https Profile",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "& '.\\Resources\\Docker\\start-docker.ps1' -Environment stg -Profile https -Down; $images = @('xydatalabs-orderprocessingsystem-api-https:stg', 'xydatalabs-orderprocessingsystem-ui-https:stg'); foreach ($image in $images) { $imageId = docker images -q $image 2>$null; if ($imageId) { docker rmi -f $image | Out-Null; Write-Host \"Removed image $image\" } else { Write-Host \"Image not found: $image\" } }"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "3 Cleanup: 31 Docker Prod Http Profile",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "& '.\\Resources\\Docker\\start-docker.ps1' -Environment prod -Profile http -Down; $images = @('xydatalabs-orderprocessingsystem-api-http:prod', 'xydatalabs-orderprocessingsystem-ui-http:prod'); foreach ($image in $images) { $imageId = docker images -q $image 2>$null; if ($imageId) { docker rmi -f $image | Out-Null; Write-Host \"Removed image $image\" } else { Write-Host \"Image not found: $image\" } }"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "3 Cleanup: 32 Docker Prod Https Profile",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "& '.\\Resources\\Docker\\start-docker.ps1' -Environment prod -Profile https -Down; $images = @('xydatalabs-orderprocessingsystem-api-https:prod', 'xydatalabs-orderprocessingsystem-ui-https:prod'); foreach ($image in $images) { $imageId = docker images -q $image 2>$null; if ($imageId) { docker rmi -f $image | Out-Null; Write-Host \"Removed image $image\" } else { Write-Host \"Image not found: $image\" } }"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        // Internal helpers
+        {
+            "label": "Internal: Stop local dev sessions",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-Command",
+                    "$ports = @(5010, 5011, 5173); $processIds = foreach ($port in $ports) { Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique }; $processIds = $processIds | Where-Object { $_ } | Sort-Object -Unique; if (-not $processIds) { Write-Host 'No local dev sessions found.'; exit 0 }; foreach ($processId in $processIds) { try { Stop-Process -Id $processId -Force -ErrorAction Stop; Write-Host \"Stopped process $processId\" } catch { Write-Warning \"Failed to stop process ${processId}: $($_.Exception.Message)\" } }"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "hide": true,
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Internal: Start local http profile",
+            "dependsOrder": "parallel",
+            "dependsOn": [
+                "Internal: API http profile",
+                "Internal: React web frontend (HTTP API proxy)"
+            ],
+            "hide": true,
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "Internal: Start local https profile",
+            "dependsOrder": "parallel",
+            "dependsOn": [
+                "Internal: API https profile",
+                "Internal: React web frontend (HTTPS API proxy)"
+            ],
+            "hide": true,
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "Internal: React web frontend (standalone)",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/start-local-frontend-profile.ps1",
+                "-Profile",
+                "standalone"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "hide": true,
+            "group": "none",
+            "isBackground": true,
+            "runOptions": {
+                "instanceLimit": 2
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Internal: API http profile",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/start-local-api-profile.ps1",
+                "-Profile",
+                "http"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "hide": true,
+            "group": "none",
+            "isBackground": true,
+            "runOptions": {
+                "instanceLimit": 2
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Internal: API https profile",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/start-local-api-profile.ps1",
+                "-Profile",
+                "https"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "hide": true,
+            "group": "none",
+            "isBackground": true,
+            "runOptions": {
+                "instanceLimit": 2
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Internal: React web frontend (HTTP API proxy)",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/start-local-frontend-profile.ps1",
+                "-Profile",
+                "http"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "hide": true,
+            "group": "none",
+            "isBackground": true,
+            "runOptions": {
+                "instanceLimit": 2
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Internal: React web frontend (HTTPS API proxy)",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/start-local-frontend-profile.ps1",
+                "-Profile",
+                "https"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "hide": true,
+            "group": "none",
+            "isBackground": true,
+            "runOptions": {
+                "instanceLimit": 2
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
                 "focus": false
             },
             "problemMatcher": []

@@ -26,16 +26,6 @@
       "dotnetRunMessages": true,
       "applicationUrl": "https://localhost:5011"
     },
-    "docker-launcher": {
-      "commandName": "Executable",
-      "executablePath": "powershell.exe",
-      "commandLineArgs": "-NoProfile -ExecutionPolicy Bypass -File \"$(SolutionDir)Resources\\Docker\\start-docker-menu.ps1\"",
-      "workingDirectory": "$(SolutionDir)Resources\\Docker",
-      "launchBrowser": false,
-      "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
-      }
-    },
     "docker-dev-http": {
       "commandName": "Executable",
       "executablePath": "powershell.exe",

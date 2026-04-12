@@ -78,15 +78,5 @@
         "DebugTarget": "docker-prod-https"
       }
     ]
-  },
-  {
-    "Name": "Docker Launcher",
-    "Projects": [
-      {
-        "Path": "XYDataLabs.OrderProcessingSystem.API\\XYDataLabs.OrderProcessingSystem.API.csproj",
-        "Action": "Start",
-        "DebugTarget": "docker-launcher"
-      }
-    ]
   }
 ]

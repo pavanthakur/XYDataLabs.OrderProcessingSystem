@@ -553,7 +553,10 @@ if (isAzure)
 }
 else
 {
-    Console.WriteLine($"[DEBUG] API is running and listening on https://{activeSettings.Host}:{activeSettings.Port} (or http://{activeSettings.Host}:{apiSettings.API.http.Port})");
+    var activeBaseUrl = activeSettings.GetBaseUrl();
+    Console.WriteLine(activeSettings.HttpsEnabled
+        ? $"[DEBUG] API is running and listening on {activeBaseUrl} (HTTP profile available at {apiSettings.API.http.GetBaseUrl()})"
+        : $"[DEBUG] API is running and listening on {activeBaseUrl}");
 }
 
 try
