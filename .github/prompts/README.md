@@ -15,7 +15,7 @@ For repo-shared AI governance, use [docs/AI-OPERATING-MODEL.md](../../docs/AI-OP
 Quick tip:
 
 ```text
-Ctrl+Shift+I → Agent mode → type /XYDataLabs-day-complete, /XYDataLabs-docker-start, /XYDataLabs-sql-local-access, /XYDataLabs-context-audit, or /XYDataLabs-validate-adrs
+Ctrl+Shift+I → Agent mode → type /XYDataLabs-day-complete, /XYDataLabs-docker-start, /XYDataLabs-payment-automation, /XYDataLabs-sql-local-access, /XYDataLabs-context-audit, or /XYDataLabs-validate-adrs
 ```
 
 ## Available Prompts
@@ -68,6 +68,18 @@ Purpose:
 Use when:
 - You want the fastest supported way to start dev, staging-style, prod-style, or local profiles without remembering the exact command.
 - You need to stop a running Docker stack from the same entry point.
+
+### `/XYDataLabs-payment-automation`
+
+Purpose:
+- Launches the separate payment automation workspace from one standard interactive entry point.
+- Maps operator intent to supported local-http, local-https, or full local-matrix automation runs.
+- Supports dry runs, single-tenant runs, multi-tenant runs, headed mode, and optional keep-local-sessions behavior.
+
+Use when:
+- You want to run the automation workspace without remembering the exact npm command and flags.
+- You want a repeatable path for local payment-journey execution before or during backend Phase 8 work.
+- You want the slash-workflow companion to the existing `/XYDataLabs-verify-db-logs` evidence prompt.
 
 ### `/XYDataLabs-completion-check`
 
@@ -181,6 +193,7 @@ Note: For deep-dive queries (Q1, Q3, Q4, Q6, Q6a, Q7, Q8-B and per-tenant 3DS to
 | Add a new feature end-to-end | `/XYDataLabs-new-feature` |
 | Finish a learning day | `/XYDataLabs-day-complete` |
 | Start Docker or local run profiles | `/XYDataLabs-docker-start` |
+| Run payment automation workspace flows | `/XYDataLabs-payment-automation` |
 | Verify docs/tests/automation after any task | `/XYDataLabs-completion-check` |
 | Set up local dev environment after git clone | `/XYDataLabs-setup-local` |
 | Need local SSMS/sqlcmd access to Azure SQL | `/XYDataLabs-sql-local-access` |
@@ -229,6 +242,11 @@ Note: For deep-dive queries (Q1, Q3, Q4, Q6, Q6a, Q7, Q8-B and per-tenant 3DS to
 [Start a local runtime profile]
 └─ /XYDataLabs-docker-start  →  choose dev/stg/prod Docker or local dotnet run
    └─ Agent prints the correct API and UI URLs for the chosen option
+
+[Run payment automation]
+└─ /XYDataLabs-payment-automation  →  choose local-http/local-https or local matrix mode
+   └─ Agent runs the correct automation workspace command with tenant and headed/keep-session options
+   └─ For post-run evidence correlation, follow with /XYDataLabs-verify-db-logs when needed
 ```
 
 ## Custom Agents
@@ -250,6 +268,7 @@ Select these in the VS Code Chat agent picker for focused, context-scoped assist
 | `.github/completion-check-rubric.md` | Pass/defer rubric for `/XYDataLabs-completion-check` |
 | `.github/prompts/XYDataLabs-day-complete.prompt.md` | Day completion routing workflow |
 | `.github/prompts/XYDataLabs-docker-start.prompt.md` | Interactive launcher for Docker and local runtime profiles |
+| `.github/prompts/XYDataLabs-payment-automation.prompt.md` | Interactive launcher for the separate payment automation workspace |
 | `.github/prompts/XYDataLabs-sql-local-access.prompt.md` | SQL firewall open/close workflow |
 | `.github/prompts/XYDataLabs-context-audit.prompt.md` | Context drift detection audit |
 | `.github/prompts/XYDataLabs-new-feature.prompt.md` | End-to-end feature development workflow |
