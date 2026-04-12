@@ -81,6 +81,32 @@ pwsh .\scripts\validate-ai-customization.ps1
 - `.github/completion-check-rubric.md`
 - `.github/workflows/validate-ai-customization.yml`
 
+### validate-tracked-generated-artifacts.ps1
+
+Deterministic guardrail against committed generated output.
+
+**Purpose**:
+- Audits tracked repository paths via `git ls-files`
+- Fails when generated frontend `dist/` output, `publish/` folders, or automation report output are tracked
+- Preserves intentional source assets that participate in packaging, such as `frontend/apps/web/public/web.config`
+
+**Usage**:
+```powershell
+pwsh .\scripts\validate-tracked-generated-artifacts.ps1
+```
+
+**When to Use**:
+- Before merging changes that touched frontend packaging or gitignore rules
+- After accidental local builds or publish runs when you want to confirm no generated output was committed
+- In CI as an early repository hygiene check
+
+**VS Code Task**:
+- `Validate: Tracked generated artifacts` — runs the tracked-artifact validator only
+
+**Notes**:
+- The source file `frontend/apps/web/public/web.config` is expected to stay tracked for Azure App Service packaging
+- The copied output under `frontend/apps/web/dist/` is expected to stay ignored
+
 ### verify-payment-run-azure.ps1
 
 Deterministic Azure payment verification for the `verify-db-logs` workflow.
