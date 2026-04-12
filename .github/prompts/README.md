@@ -246,7 +246,7 @@ Note: For deep-dive queries (Q1, Q3, Q4, Q6, Q6a, Q7, Q8-B and per-tenant 3DS to
    └─ Agent prints the correct API and UI URLs for the chosen option
 
 [Run payment automation]
-└─ /XYDataLabs-payment-automation  →  choose local target, Docker target, local matrix, or Docker matrix mode
+└─ /XYDataLabs-payment-automation  →  choose local, Docker, or Azure target mode, or local/Docker/Azure matrix mode
    └─ Agent runs the correct automation workspace command with tenant and headed/keep-session options
    └─ For post-run evidence correlation, follow with /XYDataLabs-verify-db-logs when needed
 ```
