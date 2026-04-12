@@ -1,4 +1,4 @@
-name: CI — Build and Test
+name: CI — Build, Test, and Frontend Validation
 
 on:
   pull_request:
@@ -8,12 +8,12 @@ on:
       - main
     paths:
       - 'XYDataLabs.OrderProcessingSystem.API/**'
-      - 'XYDataLabs.OrderProcessingSystem.UI/**'
       - 'XYDataLabs.OrderProcessingSystem.Application/**'
       - 'XYDataLabs.OrderProcessingSystem.Domain/**'
       - 'XYDataLabs.OrderProcessingSystem.Infrastructure/**'
       - 'XYDataLabs.OrderProcessingSystem.SharedKernel/**'
       - 'XYDataLabs.OpenPayAdapter/**'
+      - 'frontend/**'
       - 'tests/**'
       - 'Resources/Configuration/**'
       - 'Directory.Build.props'
@@ -26,6 +26,7 @@ permissions:
 
 env:
   DOTNET_VERSION: '8.x'
+  NODE_VERSION: '20.x'
 
 jobs:
   build-and-test:
@@ -41,6 +42,29 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Validate frontend type safety
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Test frontend workspace
+        working-directory: frontend
+        run: npm run test:web
+
+      - name: Build frontend workspace
+        working-directory: frontend
+        run: npm run build
+
       - name: Restore dependencies
         run: dotnet restore XYDataLabs.OrderProcessingSystem.sln
 
@@ -55,9 +79,6 @@ jobs:
 
       - name: Test — API
         run: dotnet test tests/XYDataLabs.OrderProcessingSystem.API.Tests/XYDataLabs.OrderProcessingSystem.API.Tests.csproj --configuration Release --no-build --verbosity normal
-
-      - name: Test — UI
-        run: dotnet test tests/XYDataLabs.OrderProcessingSystem.UI.Tests/XYDataLabs.OrderProcessingSystem.UI.Tests.csproj --configuration Release --no-build --verbosity normal
 
       - name: Test — Architecture
         run: dotnet test tests/XYDataLabs.OrderProcessingSystem.Architecture.Tests/XYDataLabs.OrderProcessingSystem.Architecture.Tests.csproj --configuration Release --no-build --verbosity normal

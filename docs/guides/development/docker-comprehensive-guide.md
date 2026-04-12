@@ -872,7 +872,7 @@ docker logs ui-uat-https-1
 
 | **Development Mode** | **Database Name** | **Server** | **Ports** | **Configuration File** | **Launch Method** |
 |---------------------|-------------------|------------|-----------|----------------------|-------------------|
-| **Visual Studio Non-Docker** | `OrderProcessingSystem_Local` | `localhost,1433` | 5010-5013 | `sharedsettings.local.json` | F5 → http/https profile |
+| **Visual Studio Non-Docker** | `OrderProcessingSystem_Local` | `localhost,1433` | API 5010/5011, UI 5173/5174 | `sharedsettings.local.json` | F5 → http/https profile |
 | **Docker Dev** | `OrderProcessingSystem_Dev` | `host.docker.internal,1433` | 5020-5023 | `sharedsettings.dev.json` | F5 → docker-dev-* profile |
 | **Docker UAT** | `OrderProcessingSystem_UAT` | `host.docker.internal,1433` | 5030-5033 | `sharedsettings.uat.json` | F5 → docker-uat-* profile |
 | **Docker Prod** | `OrderProcessingSystem_Prod` | `host.docker.internal,1433` | 5040-5043 | `sharedsettings.prod.json` | F5 → docker-prod-* profile |
@@ -888,12 +888,12 @@ When you select **http** or **https** profile in Visual Studio:
    # Local development configuration
    API_HTTP_PORT=5010
    API_HTTPS_PORT=5011
-   UI_HTTP_PORT=5012
-   UI_HTTPS_PORT=5013
+  UI_HTTP_PORT=5173
+  UI_HTTPS_PORT=5174
    ConnectionStrings__OrderProcessingSystemDbConnection=Server=localhost,1433;Database=OrderProcessingSystem_Local;...
    ```
 3. **Database**: `OrderProcessingSystem_Local` created on localhost SQL Server
-4. **Launch**: Application starts on ports 5010-5013
+4. **Launch**: Application starts on API 5010/5011 and UI 5173/5174
 
 #### **Docker (Visual Studio F5)**
 When you select **docker-dev-http** or similar profile in Visual Studio:
@@ -1452,7 +1452,7 @@ docker network ls | Select-String "xy-" | ForEach-Object { $_.ToString().Split()
 
 | Environment | HTTP | HTTPS | F5 Debug | Database | Networks | Visual Studio |
 |-------------|------|-------|----------|----------|----------|---------------|
-| **Local (Non-Docker)** | ✅ 5010/5012 | ✅ 5011/5013 | ✅ Working | ✅ OrderProcessingSystem_Local | ✅ localhost | ✅ http/https |
+| **Local (Non-Docker)** | ✅ 5010/5173 | ✅ 5011/5174 | ✅ Working | ✅ OrderProcessingSystem_Local | ✅ localhost | ✅ http/https |
 | **Dev (Docker)** | ✅ 5020/5022 | ✅ 5021/5023 | ✅ Working | ✅ OrderProcessingSystem_Dev | ✅ xy-dev-network | ✅ docker-dev-* |
 | **UAT (Docker)** | ✅ 5030/5032 | ✅ 5031/5033 | ✅ Working | ✅ OrderProcessingSystem_UAT | ✅ xy-uat-network | ✅ docker-uat-* |
 | **Prod (Docker)** | ✅ 5040/5042 | ✅ 5041/5043 | ✅ Working | ✅ OrderProcessingSystem_Prod | ✅ xy-prod-network | ✅ docker-prod-* |

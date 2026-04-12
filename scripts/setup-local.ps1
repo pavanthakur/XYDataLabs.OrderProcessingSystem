@@ -7,18 +7,18 @@
     Performs all first-time setup needed to develop and run this project locally:
       1. Creates Resources/Docker/.env.local — prompts for passwords on first run,
          reads them from the existing file on subsequent runs.
-      2. Sets dotnet user-secrets for VS F5 and dotnet run (API + UI projects)
-      3. Trusts the HTTPS development certificate
+    2. Sets dotnet user-secrets for the API project
+    3. Trusts the HTTPS development certificate used by both API and frontend
 
     .env.local is the single source of truth for local passwords. All steps derive
     passwords from it — no hardcoded defaults, no parameters to pass.
 
     This script is idempotent: re-running it reads from the existing .env.local and
-    re-applies user-secrets and cert without prompting again.
+    re-applies API user-secrets and cert without prompting again.
     Use -Force to re-prompt for passwords and overwrite everything.
 
 .PARAMETER Force
-    Re-prompt for passwords, recreate .env.local, and overwrite dotnet user-secrets
+    Re-prompt for passwords, recreate .env.local, and overwrite API user-secrets
     and the dev certificate even if they already exist.
 
 .EXAMPLE
@@ -48,7 +48,6 @@ $envExample = Join-Path $root 'Resources\Docker\.env.local.example'
 $envLocal   = Join-Path $root 'Resources\Docker\.env.local'
 $certFile   = Join-Path $root 'Resources\Certificates\aspnetapp.pfx'
 $apiCsproj  = Join-Path $root 'XYDataLabs.OrderProcessingSystem.API\XYDataLabs.OrderProcessingSystem.API.csproj'
-$uiCsproj   = Join-Path $root 'XYDataLabs.OrderProcessingSystem.UI\XYDataLabs.OrderProcessingSystem.UI.csproj'
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 function Write-Step([string] $msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
@@ -279,15 +278,7 @@ foreach ($kv in $apiSecrets.GetEnumerator()) {
     }
 }
 
-# ─── 3. dotnet user-secrets (UI) ──────────────────────────────────────────────
-Write-Step 'dotnet user-secrets — UI project'
-
-if ($PSCmdlet.ShouldProcess("UI user-secrets: ApiSettings:UI:https:CertPassword")) {
-    dotnet user-secrets set 'ApiSettings:UI:https:CertPassword' $certPassword --project $uiCsproj | Out-Null
-    Write-Done "UI   ApiSettings:UI:https:CertPassword"
-}
-
-# ─── 4. HTTPS dev certificate ─────────────────────────────────────────────────
+# ─── 3. HTTPS dev certificate ─────────────────────────────────────────────────
 Write-Step 'HTTPS development certificate'
 
 dotnet dev-certs https --check --quiet 2>$null | Out-Null
@@ -318,7 +309,7 @@ Write-Host '  Local setup complete!' -ForegroundColor Green
 Write-Host ''
 Write-Host '  Visual Studio F5 (http/https profile — no docker-* profiles):'
 Write-Host '    API  http://localhost:5010/swagger'
-Write-Host '    UI   http://localhost:5012'
+Write-Host '    Web  http://localhost:5173   |   https://localhost:5174'
 Write-Host ''
 Write-Host '  Docker dev:'
 Write-Host '    .\Resources\Docker\start-docker.ps1 -Environment dev -Profile http'

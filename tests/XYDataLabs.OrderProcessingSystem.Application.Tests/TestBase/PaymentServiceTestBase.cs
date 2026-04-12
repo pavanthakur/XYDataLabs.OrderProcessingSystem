@@ -23,6 +23,10 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase;
 /// </summary>
 public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPaymentCommandHandler>
 {
+    private readonly List<CardTransaction> _capturedCardTransactions = [];
+    private readonly List<TransactionStatusHistory> _capturedTsh = [];
+    private readonly List<PayinLogDetails> _capturedPayinLogDetails = [];
+
     // --- fixed reference time ---
     protected static readonly DateTime UtcNow = new(2024, 3, 1, 10, 0, 0, DateTimeKind.Utc);
 
@@ -32,8 +36,9 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
     protected readonly Mock<TimeProvider> MockTimeProvider = new();
 
     // --- capture lists filled by SetupPaymentDbSets() ---
-    protected List<CardTransaction> CapturedCardTransactions { get; private set; } = [];
-    protected List<TransactionStatusHistory> CapturedTsh { get; private set; } = [];
+    protected IList<CardTransaction> CapturedCardTransactions => _capturedCardTransactions;
+    protected IList<TransactionStatusHistory> CapturedTsh => _capturedTsh;
+    protected IList<PayinLogDetails> CapturedPayinLogDetails => _capturedPayinLogDetails;
 
     public PaymentServiceTestBase()
     {
@@ -78,8 +83,8 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
     /// </summary>
     protected void SetupPaymentDbSets(IEnumerable<BillingCustomer>? existingBillingCustomers = null)
     {
-        CapturedCardTransactions = [];
-        CapturedTsh = [];
+        _capturedCardTransactions.Clear();
+        _capturedTsh.Clear();
 
         // PaymentMethods —FindAsync returns a stable PM (needed by UpdatePaymentMethodByBillingCustomerId)
         var stubPm = new Domain.Entities.PaymentMethod { Id = 0, Token = "pm-token", Status = true, PaymentProviderId = 1 };
@@ -96,13 +101,13 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
         // CardTransactions — capture adds
         var mockCtSet = new Mock<DbSet<CardTransaction>>();
         mockCtSet.Setup(s => s.Add(It.IsAny<CardTransaction>()))
-            .Callback<CardTransaction>(ct => CapturedCardTransactions.Add(ct));
+            .Callback<CardTransaction>(ct => _capturedCardTransactions.Add(ct));
         MockDbContext.Setup(db => db.CardTransactions).Returns(mockCtSet.Object);
 
         // TransactionStatusHistories — capture adds
         var mockTshSet = new Mock<DbSet<TransactionStatusHistory>>();
         mockTshSet.Setup(s => s.Add(It.IsAny<TransactionStatusHistory>()))
-            .Callback<TransactionStatusHistory>(tsh => CapturedTsh.Add(tsh));
+            .Callback<TransactionStatusHistory>(tsh => _capturedTsh.Add(tsh));
         MockDbContext.Setup(db => db.TransactionStatusHistories).Returns(mockTshSet.Object);
 
         // No-op mocks for remaining write targets
@@ -127,9 +132,11 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
     /// </summary>
     protected void SetupConfirmPaymentDbSets(
         CardTransaction? existingTransaction = null,
-        PayinLog? existingPayinLog = null)
+        PayinLog? existingPayinLog = null,
+        IEnumerable<TransactionStatusHistory>? existingTransactionStatusHistories = null)
     {
-        CapturedTsh = [];
+        _capturedTsh.Clear();
+        _capturedPayinLogDetails.Clear();
 
         var transactions = existingTransaction is null
             ? Enumerable.Empty<CardTransaction>()
@@ -143,12 +150,25 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
         MockDbContext.Setup(db => db.PayinLogs)
             .Returns(GetMockDbSet(payinLogs.AsQueryable()).Object);
 
-        var mockTshSet = new Mock<DbSet<TransactionStatusHistory>>();
+        var transactionStatusHistories = (existingTransactionStatusHistories ?? Enumerable.Empty<TransactionStatusHistory>()).ToList();
+        var mockTshSet = GetMockDbSet(transactionStatusHistories.AsQueryable());
         mockTshSet.Setup(s => s.Add(It.IsAny<TransactionStatusHistory>()))
-            .Callback<TransactionStatusHistory>(tsh => CapturedTsh.Add(tsh));
+            .Callback<TransactionStatusHistory>(tsh =>
+            {
+                transactionStatusHistories.Add(tsh);
+                _capturedTsh.Add(tsh);
+            });
         MockDbContext.Setup(db => db.TransactionStatusHistories).Returns(mockTshSet.Object);
 
-        MockDbContext.Setup(db => db.PayinLogDetails).Returns(new Mock<DbSet<PayinLogDetails>>().Object);
+        var payinLogDetails = new List<PayinLogDetails>();
+        var mockPayinLogDetailsSet = new Mock<DbSet<PayinLogDetails>>();
+        mockPayinLogDetailsSet.Setup(s => s.Add(It.IsAny<PayinLogDetails>()))
+            .Callback<PayinLogDetails>(detail =>
+            {
+                payinLogDetails.Add(detail);
+                _capturedPayinLogDetails.Add(detail);
+            });
+        MockDbContext.Setup(db => db.PayinLogDetails).Returns(mockPayinLogDetailsSet.Object);
         MockDbContext.Setup(db => db.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
     }
 
@@ -212,6 +232,22 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
             IsTransactionSuccess = false,
             TransactionDate = UtcNow,
             TransactionReferenceId = "ref-001"
+        };
+
+    protected static PayinLog BuildStubPayinLog(int billingCustomerId = 42, bool isThreeDSecureEnabled = true) =>
+        new()
+        {
+            Id = 1,
+            AttemptOrderId = "attempt-001",
+            OpenPayChargeId = "charge-001",
+            PaymentTraceId = "trace-001",
+            Result = 0,
+            IsThreeDSecureEnabled = isThreeDSecureEnabled,
+            ThreeDSecureStage = isThreeDSecureEnabled
+                ? "redirect_issued"
+                : "not_applicable",
+            CreatedBy = billingCustomerId,
+            CreatedDate = UtcNow
         };
 
     // ------------------------------------------------------------------ AppMasterData helper

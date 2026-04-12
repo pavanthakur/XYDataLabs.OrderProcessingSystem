@@ -94,7 +94,8 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
                 ExpirationYear = command.ExpirationYear,
                 ExpirationMonth = command.ExpirationMonth,
                 Cvv2 = command.Cvv2,
-                CustomerOrderId = customerOrderId
+                CustomerOrderId = customerOrderId,
+                ClientCallbackOrigin = command.ClientCallbackOrigin
             };
 
             _logger.LogInformation(
@@ -104,9 +105,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
                 customerOrderId);
 
             var tenantCode = _tenantProvider.TenantCode;
-            var redirectUrl = string.IsNullOrWhiteSpace(tenantCode)
-                ? _redirectUrl
-                : $"{_redirectUrl}?tenantCode={Uri.EscapeDataString(tenantCode)}";
+            var redirectUrl = BuildRedirectUrl(_redirectUrl, tenantCode, command.ClientCallbackOrigin);
 
             paymentMethod = await CreatePaymentMethodAsync(cancellationToken);
             var (openpayCustomer, billingCustomerId) = await CreateCustomerAsync(request, paymentMethod, cancellationToken);
@@ -179,6 +178,30 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         await _context.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("PaymentMethod created with ID: {PaymentMethodId}", openPayMethod.Id);
         return openPayMethod;
+    }
+
+    private static string BuildRedirectUrl(string baseRedirectUrl, string? tenantCode, string? clientCallbackOrigin)
+    {
+        var builder = new UriBuilder(baseRedirectUrl);
+        var queryParameters = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(builder.Query))
+        {
+            queryParameters.Add(builder.Query.TrimStart('?'));
+        }
+
+        if (!string.IsNullOrWhiteSpace(tenantCode))
+        {
+            queryParameters.Add($"tenantCode={Uri.EscapeDataString(tenantCode)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(clientCallbackOrigin))
+        {
+            queryParameters.Add($"clientCallbackOrigin={Uri.EscapeDataString(clientCallbackOrigin)}");
+        }
+
+        builder.Query = string.Join("&", queryParameters.Where(static value => !string.IsNullOrWhiteSpace(value)));
+        return builder.Uri.ToString();
     }
 
     private async Task UpdatePaymentMethodByBillingCustomerIdAsync(int paymentMethodId, int billingCustomerId, CancellationToken cancellationToken)

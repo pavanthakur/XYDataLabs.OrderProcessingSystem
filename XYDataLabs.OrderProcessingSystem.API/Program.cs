@@ -16,7 +16,9 @@ using Microsoft.Extensions.Configuration;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData;
 using Microsoft.ApplicationInsights.Extensibility;
+using System.Globalization;
 using System.Text.RegularExpressions;
+using System.Runtime.CompilerServices;
 using XYDataLabs.OrderProcessingSystem.Application.Utilities;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Configuration;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
@@ -38,12 +40,23 @@ Log.Logger = new LoggerConfiguration()
 
 var builder = WebApplication.CreateBuilder(args);
 
-var isDocker = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true";
+var isDocker = string.Equals(
+    Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"),
+    "true",
+    StringComparison.OrdinalIgnoreCase);
 
 // Detect Azure App Service using WEBSITE_SITE_NAME environment variable
 var azureSiteName = Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME");
 var isAzure = !string.IsNullOrWhiteSpace(azureSiteName);
-var runtimeLabel = isAzure ? "Azure" : (isDocker ? "Docker" : "Local");
+var runtimeLabel = "Local";
+if (isAzure)
+{
+    runtimeLabel = "Azure";
+}
+else if (isDocker)
+{
+    runtimeLabel = "Docker";
+}
 
 // Map .NET environment names to our simplified profile names
 var environmentName = builder.Environment.EnvironmentName switch
@@ -55,15 +68,15 @@ var environmentName = builder.Environment.EnvironmentName switch
 };
 
 // Log configuration initialization
-Console.WriteLine("═══════════════════════════════════════════════════════════════");
-Console.WriteLine($"[CONFIG] API Initialization - Environment: {environmentName}");
-Console.WriteLine($"[CONFIG] Azure App Service: {(isAzure ? "YES" : "NO")}");
-Console.WriteLine($"[CONFIG] Docker Container: {(isDocker ? "YES" : "NO")}");
+Log.Information("{ConfigBanner}", "═══════════════════════════════════════════════════════════════");
+Log.Information("[CONFIG] API Initialization - Environment: {EnvironmentName}", environmentName);
+Log.Information("[CONFIG] Azure App Service: {IsAzure}", isAzure ? "YES" : "NO");
+Log.Information("[CONFIG] Docker Container: {IsDocker}", isDocker ? "YES" : "NO");
 if (isAzure)
 {
-    Console.WriteLine($"[CONFIG] Key Vault is REQUIRED for Azure deployments (enterprise security policy)");
+    Log.Information("[CONFIG] Key Vault is REQUIRED for Azure deployments (enterprise security policy)");
 }
-Console.WriteLine("═══════════════════════════════════════════════════════════════");
+Log.Information("{ConfigBanner}", "═══════════════════════════════════════════════════════════════");
 
 // Centralized loading, binding, and active ApiSettings selection
 // IMPORTANT: For Azure deployments, this will fail if Key Vault is not properly configured
@@ -83,25 +96,32 @@ try
     
     if (isAzure)
     {
-        Console.WriteLine("[CONFIG] ✅ Configuration loaded successfully from Azure Key Vault");
+        Log.Information("[CONFIG] Configuration loaded successfully from Azure Key Vault");
     }
 }
 catch (Exception ex)
 {
-    Console.WriteLine($"[FATAL] Configuration initialization failed: {ex.Message}");
-    throw; // Re-throw to stop application startup
+    Log.Fatal(ex, "[FATAL] Configuration initialization failed during startup");
+    throw new InvalidOperationException("Configuration initialization failed during startup.", ex);
 }
 
 // Verify DB connection string presence (mask password before logging)
 var dbConn = builder.Configuration.GetConnectionString(Constants.Configuration.OrderProcessingSystemDbConnectionString);
 if (string.IsNullOrWhiteSpace(dbConn))
 {
-    Console.WriteLine($"[CONFIG ERROR] ConnectionStrings:{Constants.Configuration.OrderProcessingSystemDbConnectionString} is missing or empty. Check sharedsettings.dev.json at solution root.");
+    Log.Warning(
+        "[CONFIG ERROR] ConnectionStrings:{ConnectionStringName} is missing or empty. Check sharedsettings.dev.json at solution root.",
+        Constants.Configuration.OrderProcessingSystemDbConnectionString);
 }
 else
 {
-    var masked = Regex.Replace(dbConn, @"(?i)(Password|Pwd)=([^;]+)", "$1=***");
-    Console.WriteLine($"[CONFIG] Resolved DB connection: {masked}");
+    var masked = Regex.Replace(
+        dbConn,
+        @"(?<key>Password|Pwd)=(?<value>[^;]+)",
+        "${key}=***",
+        RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture,
+        TimeSpan.FromSeconds(1));
+    Log.Information("[CONFIG] Resolved DB connection: {MaskedConnectionString}", masked);
 }
 
 builder.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>(); // Required for LoggingMiddleware
@@ -262,9 +282,9 @@ builder.Services.AddSwaggerGen(options =>
     // Optionally, you can customize the Swagger UI or API info
     options.SwaggerDoc("v1", new OpenApiInfo
     {
-        Title = $"OrderProcessingSystem API - {environmentName.ToUpper()} Environment",
+        Title = $"OrderProcessingSystem API - {environmentName.ToUpper(CultureInfo.InvariantCulture)} Environment",
         Version = "v1",
-        Description = $"OrderProcessingSystem API with Customer, Order endpoints running in {environmentName.ToUpper()} environment" + 
+        Description = $"OrderProcessingSystem API with Customer, Order endpoints running in {environmentName.ToUpper(CultureInfo.InvariantCulture)} environment" + 
                      $" [{runtimeLabel}]" +
                      $" | Active Tenant: {tenantConfigurationOptions.ActiveTenantCode}",
     });
@@ -277,13 +297,20 @@ builder.Services.AddSwaggerGen(options =>
     options.AddServer(new OpenApiServer 
     { 
         Url = serverUrl,
-        Description = isAzure ? $"Azure {environmentName.ToUpper()} Server" : $"{environmentName.ToUpper()} Server"
+        Description = isAzure
+            ? $"Azure {environmentName.ToUpper(CultureInfo.InvariantCulture)} Server"
+            : $"{environmentName.ToUpper(CultureInfo.InvariantCulture)} Server"
     });
 });
 
 // Configure Serilog with environment-aware paths
 // Include runtime context and http/https profile in the filename so same-env containers and local runs don't share a file lock.
-var profileSuffix = Environment.GetEnvironmentVariable("USE_HTTPS") == "true" ? "https" : "http";
+var profileSuffix = string.Equals(
+    Environment.GetEnvironmentVariable("USE_HTTPS"),
+    "true",
+    StringComparison.OrdinalIgnoreCase)
+    ? "https"
+    : "http";
 var runtimeSuffix = isDocker ? "dock" : "local";
 builder.Host.UseSerilog((context, services, loggerConfiguration) =>
 {
@@ -332,7 +359,7 @@ Log.Information("Serilog is now configured and working for API in {Environment} 
 // Kestrel HTTPS configuration using ApiSettings
 if (activeSettings.HttpsEnabled && !string.IsNullOrWhiteSpace(activeSettings.CertPath) && !string.IsNullOrWhiteSpace(activeSettings.CertPassword))
 {
-    Console.WriteLine($"[Kestrel] HTTPS enabled: Using certificate at {activeSettings.CertPath}");
+    Log.Information("[Kestrel] HTTPS enabled: Using certificate at {CertificatePath}", activeSettings.CertPath);
     builder.WebHost.ConfigureKestrel(options =>
     {
         options.ListenAnyIP(activeSettings.Port, listenOptions =>
@@ -344,7 +371,7 @@ if (activeSettings.HttpsEnabled && !string.IsNullOrWhiteSpace(activeSettings.Cer
 }
 else
 {
-    Console.WriteLine("[Kestrel] HTTPS NOT enabled: Only HTTP will be used.");
+    Log.Information("[Kestrel] HTTPS NOT enabled: Only HTTP will be used.");
     builder.WebHost.ConfigureKestrel(options =>
     {
         options.ListenAnyIP(activeSettings.Port); // HTTP only using configured port
@@ -367,7 +394,7 @@ using (var scope = app.Services.CreateScope())
     catch (Exception ex)
     {
         Log.Fatal(ex, "Failed to initialize database during startup");
-        throw;
+        throw new InvalidOperationException("Database initialization failed during startup.", ex);
     }
 }
 
@@ -398,7 +425,8 @@ var swaggerTenantSelectorScriptPath = GetVersionedWebAssetPath(app, "swagger-ass
 
 // Configure the HTTP request pipeline.
 // Environment-specific middleware configuration using our simplified profile names
-if (environmentName == Constants.Environments.Dev || environmentName == Constants.Environments.Staging)
+if (string.Equals(environmentName, Constants.Environments.Dev, StringComparison.Ordinal) ||
+    string.Equals(environmentName, Constants.Environments.Staging, StringComparison.Ordinal))
 {
     // Enable Swagger for Development and Staging environments
     app.UseSwagger();
@@ -454,7 +482,7 @@ else
 
     app.Use(async (context, next) =>
     {
-        if (context.Request.Path.StartsWithSegments("/swagger"))
+        if (context.Request.Path.StartsWithSegments("/swagger", StringComparison.OrdinalIgnoreCase))
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;
             context.Response.ContentType = "application/json";
@@ -525,22 +553,25 @@ if (isAzure)
 }
 else
 {
-    Console.WriteLine($"[DEBUG] API is running and listening on https://{activeSettings.Host}:{activeSettings.Port} (or http://{activeSettings.Host}:{apiSettings.API.http.Port})");
+    var activeBaseUrl = activeSettings.GetBaseUrl();
+    Console.WriteLine(activeSettings.HttpsEnabled
+        ? $"[DEBUG] API is running and listening on {activeBaseUrl} (HTTP profile available at {apiSettings.API.http.GetBaseUrl()})"
+        : $"[DEBUG] API is running and listening on {activeBaseUrl}");
 }
 
 try
 {
     Log.Information("Starting API web host - Branch-based deployment enabled");
-    app.Run();
+    await app.RunAsync();
 }
 catch (Exception ex)
 {
     Log.Fatal(ex, "API application terminated unexpectedly");
-    throw;
+    throw new InvalidOperationException("API application terminated unexpectedly during host execution.", ex);
 }
 finally
 {
-    Log.CloseAndFlush();
+    await Log.CloseAndFlushAsync();
 }
 
 static string ResolveTenantCodeForLogging(HttpContext httpContext)
@@ -555,6 +586,12 @@ static string ResolveTenantCodeForLogging(HttpContext httpContext)
     if (!string.IsNullOrWhiteSpace(requestedTenantCode))
     {
         return requestedTenantCode.Trim();
+    }
+
+    if (string.Equals(httpContext.Request.Path.Value, "/payment/callback", StringComparison.OrdinalIgnoreCase))
+    {
+        var callbackTenantCode = httpContext.Request.Query["tenantCode"].FirstOrDefault()?.Trim();
+        return string.IsNullOrWhiteSpace(callbackTenantCode) ? "callback" : callbackTenantCode;
     }
 
     return string.Equals(httpContext.Request.Path.Value, "/api/v1/info/runtime-configuration", StringComparison.OrdinalIgnoreCase)
@@ -577,4 +614,10 @@ static string GetVersionedWebAssetPath(WebApplication app, string relativePath)
 }
 
 // Required for WebApplicationFactory<Program> in integration tests
-public partial class Program { }
+public partial class Program
+{
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    protected Program()
+    {
+    }
+}

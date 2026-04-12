@@ -28,13 +28,16 @@ See [scripts/README.md](../../../scripts/README.md#local-development-bootstrap) 
 > dotnet dev-certs https --trust
 > # VS / dotnet run secrets
 > dotnet user-secrets set "ApiSettings:API:https:CertPassword" "<local-cert-password>" --project .\XYDataLabs.OrderProcessingSystem.API\XYDataLabs.OrderProcessingSystem.API.csproj
-> dotnet user-secrets set "ApiSettings:UI:https:CertPassword" "<local-cert-password>" --project .\XYDataLabs.OrderProcessingSystem.UI\XYDataLabs.OrderProcessingSystem.UI.csproj
 > dotnet user-secrets set "OpenPay:MerchantId" "<local-openpay-merchant-id>" --project .\XYDataLabs.OrderProcessingSystem.API\XYDataLabs.OrderProcessingSystem.API.csproj
 > dotnet user-secrets set "OpenPay:PrivateKey" "<local-openpay-private-key>" --project .\XYDataLabs.OrderProcessingSystem.API\XYDataLabs.OrderProcessingSystem.API.csproj
 > dotnet user-secrets set "OpenPay:DeviceSessionId" "<local-openpay-device-session-id>" --project .\XYDataLabs.OrderProcessingSystem.API\XYDataLabs.OrderProcessingSystem.API.csproj
 > # Docker secrets
 > Copy-Item Resources\Docker\.env.local.example Resources\Docker\.env.local
 > # Edit .env.local to set your passwords
+> # Frontend HTTPS dev server (when needed)
+> $env:ORDERPROCESSING_DEV_SERVER_USE_HTTPS = "true"
+> $env:ORDERPROCESSING_DEV_SERVER_PFX_PATH = ".\Resources\Certificates\aspnetapp.pfx"
+> $env:ORDERPROCESSING_DEV_SERVER_PFX_PASSWORD = "<local-cert-password>"
 > ```
 
 # 🏃‍♂️ How to Run the Project
@@ -47,7 +50,7 @@ See [scripts/README.md](../../../scripts/README.md#local-development-bootstrap) 
 3. Choose **http** or **https** profile (NOT docker-* profiles)
 4. Press **F5** to start debugging
    - **API**: http://localhost:5010/swagger (or https://localhost:5011/swagger)
-   - **UI**: http://localhost:5012 (or https://localhost:5013)
+   - **UI**: http://localhost:5173 (or https://localhost:5174)
    - **Database**: `OrderProcessingSystem_Local` created automatically
 
 ### **Option 2: Docker Development**
@@ -99,7 +102,7 @@ See [scripts/README.md](../../../scripts/README.md#local-development-bootstrap) 
 
 | **Mode** | **Database** | **Server** | **Ports** | **Use Case** |
 |----------|-------------|------------|-----------|--------------|
-| **Visual Studio F5** | `OrderProcessingSystem_Local` | localhost:1433 | 5010-5013 | Local development & debugging |
+| **Visual Studio F5** | `OrderProcessingSystem_Local` | localhost:1433 | API 5010/5011, UI 5173/5174 | Local development & debugging |
 | **Docker Dev** | `OrderProcessingSystem_Dev` | host.docker.internal:1433 | 5020-5023 | Container development |
 | **Docker UAT** | `OrderProcessingSystem_UAT` | host.docker.internal:1433 | 5030-5033 | Testing environment |
 | **Docker Prod** | `OrderProcessingSystem_Prod` | host.docker.internal:1433 | 5040-5043 | Production simulation |
@@ -115,7 +118,7 @@ See [scripts/README.md](../../../scripts/README.md#local-development-bootstrap) 
 ### **Visual Studio F5 Debugging (Non-Docker)**
 - **API**: Select http/https profile → F5 → Breakpoints work directly
 - **UI**: Select http/https profile → F5 → Breakpoints work directly
-- **Ports**: 5010-5013 series
+- **Ports**: API 5010/5011, UI 5173/5174
 - **Database**: OrderProcessingSystem_Local
 
 ### **Docker Container Debugging**
@@ -136,7 +139,7 @@ See [scripts/README.md](../../../scripts/README.md#local-development-bootstrap) 
    - Run and Debug → Launch Chrome (UI 5022)
 
 ### **Current Port Allocation**
-- **Local (Non-Docker)**: API 5010/5011, UI 5012/5013
+- **Local (Non-Docker)**: API 5010/5011, UI 5173/5174
 - **Docker Dev**: API 5020/5021, UI 5022/5023  
 - **Docker UAT**: API 5030/5031, UI 5032/5033
 - **Docker Prod**: API 5040/5041, UI 5042/5043

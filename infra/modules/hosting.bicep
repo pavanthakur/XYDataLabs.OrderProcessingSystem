@@ -99,17 +99,6 @@ resource uiApp 'Microsoft.Web/sites@2023-12-01' = {
   }
   properties: {
     serverFarmId: plan.id
-    siteConfig: {
-      netFrameworkVersion: 'v8.0'
-      appSettings: appInsightsSettings
-      connectionStrings: !empty(sqlConnectionString) ? [
-        {
-          name: 'OrderProcessingSystemDbConnection'
-          connectionString: sqlConnectionString
-          type: 'SQLAzure'
-        }
-      ] : []
-    }
     httpsOnly: true
   }
   tags: {

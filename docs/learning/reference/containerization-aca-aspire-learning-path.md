@@ -81,33 +81,34 @@ Expected Outcome: API responds at `http://localhost:8080`, health check passes.
 
 ---
 
-### Task 1.2: Create Dockerfile for UI
-Location: `XYDataLabs.OrderProcessingSystem.UI/Dockerfile`
+### Task 1.2: Create Dockerfile for React Web Frontend
+Location: `frontend/apps/web/Dockerfile`
 
 ```dockerfile
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
-WORKDIR /src
-COPY ["XYDataLabs.OrderProcessingSystem.UI/XYDataLabs.OrderProcessingSystem.UI.csproj", "XYDataLabs.OrderProcessingSystem.UI/"]
-RUN dotnet restore "XYDataLabs.OrderProcessingSystem.UI/XYDataLabs.OrderProcessingSystem.UI.csproj"
-COPY . .
-WORKDIR "/src/XYDataLabs.OrderProcessingSystem.UI"
-RUN dotnet build "XYDataLabs.OrderProcessingSystem.UI.csproj" -c Release -o /app/build
-RUN dotnet publish "XYDataLabs.OrderProcessingSystem.UI.csproj" -c Release -o /app/publish /p:UseAppHost=false
-
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+FROM node:20-alpine AS build
 WORKDIR /app
+COPY frontend/package.json ./package.json
+COPY frontend/package-lock.json ./package-lock.json
+COPY frontend/apps/web/package.json ./apps/web/package.json
+RUN npm ci
+COPY frontend/ ./
+ARG VITE_ORDERPROCESSING_API_BASE_URL=
+ENV VITE_ORDERPROCESSING_API_BASE_URL=$VITE_ORDERPROCESSING_API_BASE_URL
+RUN npm run build --workspace @xydatalabs/orderprocessing-web
+
+FROM node:20-alpine AS runtime
+WORKDIR /app
+COPY --from=build /app/apps/web/dist ./dist
+COPY frontend/apps/web/server.mjs ./server.mjs
+ENV PORT=8080
 EXPOSE 8080
-COPY --from=publish /app/publish .
-ENV API_BASE_URL=http://localhost:8080
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD curl --fail http://localhost:8080/ || exit 1
-ENTRYPOINT ["dotnet", "XYDataLabs.OrderProcessingSystem.UI.dll"]
+ENTRYPOINT ["node", "server.mjs"]
 ```
 
 Validation:
 ```powershell
-docker build -t orderprocessing-ui:local -f XYDataLabs.OrderProcessingSystem.UI/Dockerfile .
-docker run -d -p 8081:8080 --name ui-test -e API_BASE_URL=http://host.docker.internal:8080 orderprocessing-ui:local
+docker build -t orderprocessing-ui:local -f frontend/apps/web/Dockerfile .
+docker run -d -p 8081:8080 --name ui-test -e VITE_ORDERPROCESSING_API_BASE_URL=http://host.docker.internal:8080 orderprocessing-ui:local
 curl http://localhost:8081
 docker stop ui-test; docker rm ui-test
 ```
@@ -138,11 +139,11 @@ services:
   ui:
     build:
       context: .
-      dockerfile: XYDataLabs.OrderProcessingSystem.UI/Dockerfile
+      dockerfile: frontend/apps/web/Dockerfile
     ports:
       - "8081:8080"
     environment:
-      - API_BASE_URL=http://api:8080
+      - VITE_ORDERPROCESSING_API_BASE_URL=http://api:8080
     depends_on:
       - api
 ```
@@ -268,7 +269,7 @@ jobs:
 
       - name: Build and Push UI
         run: |
-          docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/orderprocessing-ui:${{ github.sha }} -f XYDataLabs.OrderProcessingSystem.UI/Dockerfile .
+          docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/orderprocessing-ui:${{ github.sha }} -f frontend/apps/web/Dockerfile .
           docker tag ${{ secrets.ACR_LOGIN_SERVER }}/orderprocessing-ui:${{ github.sha }} ${{ secrets.ACR_LOGIN_SERVER }}/orderprocessing-ui:latest
           docker push ${{ secrets.ACR_LOGIN_SERVER }}/orderprocessing-ui:${{ github.sha }}
           docker push ${{ secrets.ACR_LOGIN_SERVER }}/orderprocessing-ui:latest

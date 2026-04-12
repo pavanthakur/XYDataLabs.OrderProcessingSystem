@@ -1,0 +1,227 @@
+using Microsoft.AspNetCore.Mvc;
+
+namespace XYDataLabs.OrderProcessingSystem.API.Controllers;
+
+[ApiController]
+public sealed class PaymentCallbackController : ControllerBase
+{
+    private const string PaymentCallbackPath = "/payment/callback";
+    private const string PaymentCallbackResultPath = "/payments/callback";
+    private const string ClientCallbackOriginParameter = "clientCallbackOrigin";
+
+    private readonly IConfiguration _configuration;
+    private readonly ILogger<PaymentCallbackController> _logger;
+
+    public PaymentCallbackController(IConfiguration configuration, ILogger<PaymentCallbackController> logger)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(logger);
+
+        _configuration = configuration;
+        _logger = logger;
+    }
+
+    [HttpGet(PaymentCallbackPath)]
+    public IActionResult RedirectToClientCallback()
+    {
+        var parameters = Request.Query.ToDictionary(
+            item => item.Key,
+            item => item.Value.ToString(),
+            StringComparer.OrdinalIgnoreCase);
+        var paymentId = GetFirstValue(parameters, "id", "transaction_id", "payment_id") ?? "none";
+        var callbackStatus = GetFirstValue(parameters, "status", "transaction_status", "operation_status") ?? "unknown";
+        var tenantCode = GetFirstValue(parameters, "tenantCode") ?? "none";
+
+        if (!TryResolveFrontendBaseUrl(parameters, out var frontendBaseUrl))
+        {
+            _logger.LogError(
+                "Payment callback received for payment {PaymentId} and tenant {TenantCode}, but no frontend callback base URL could be resolved",
+                paymentId,
+                tenantCode);
+
+            return Problem(
+                detail: "The frontend callback URL is not configured.",
+                statusCode: StatusCodes.Status500InternalServerError,
+                title: "Payment callback redirect is unavailable.");
+        }
+
+        var redirectUrl = BuildFrontendCallbackUrl(frontendBaseUrl, Request.QueryString);
+
+        _logger.LogInformation(
+            "Payment callback received for payment {PaymentId} with raw status {Status} for tenant {TenantCode}. Redirecting browser to {RedirectUrl}",
+            paymentId,
+            callbackStatus,
+            tenantCode,
+            redirectUrl);
+
+        return Redirect(redirectUrl);
+    }
+
+    private bool TryResolveFrontendBaseUrl(IReadOnlyDictionary<string, string> parameters, out string frontendBaseUrl)
+    {
+        if (TryResolveClientCallbackOrigin(parameters, out frontendBaseUrl))
+        {
+            return true;
+        }
+
+        var useHttps = string.Equals(_configuration["USE_HTTPS"], "true", StringComparison.OrdinalIgnoreCase);
+        var configuredBaseUrl = _configuration["Frontend:WebBaseUrl"]?.Trim();
+        if (Uri.TryCreate(configuredBaseUrl, UriKind.Absolute, out var configuredUri))
+        {
+            frontendBaseUrl = NormalizeFrontendBaseUrl(configuredUri, useHttps);
+            return true;
+        }
+
+        var azureSiteName = Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME");
+        if (!string.IsNullOrWhiteSpace(azureSiteName))
+        {
+            var uiSiteName = azureSiteName!.Replace("-api-", "-ui-");
+            if (!string.Equals(uiSiteName, azureSiteName, StringComparison.Ordinal))
+            {
+                frontendBaseUrl = $"https://{uiSiteName}.azurewebsites.net";
+                return true;
+            }
+        }
+
+        var profile = useHttps ? "https" : "http";
+        var host = _configuration[$"ApiSettings:UI:{profile}:Host"] ?? "localhost";
+        var portValue = _configuration[$"ApiSettings:UI:{profile}:Port"];
+        var scheme = useHttps ? "https" : "http";
+
+        if (int.TryParse(portValue, out var port) && port > 0)
+        {
+            frontendBaseUrl = $"{scheme}://{host}:{port}";
+            return true;
+        }
+
+        frontendBaseUrl = string.Empty;
+        return false;
+    }
+
+    private bool TryResolveClientCallbackOrigin(IReadOnlyDictionary<string, string> parameters, out string frontendBaseUrl)
+    {
+        frontendBaseUrl = string.Empty;
+
+        var clientCallbackOrigin = GetFirstValue(parameters, ClientCallbackOriginParameter);
+        if (string.IsNullOrWhiteSpace(clientCallbackOrigin) || !Uri.TryCreate(clientCallbackOrigin, UriKind.Absolute, out var originUri))
+        {
+            return false;
+        }
+
+        var normalizedOrigin = NormalizeCallbackOrigin(originUri);
+        var allowedFrontendBaseUrls = GetAllowedFrontendBaseUrls();
+        if (!allowedFrontendBaseUrls.Contains(normalizedOrigin))
+        {
+            _logger.LogWarning(
+                "Ignoring client callback origin {ClientCallbackOrigin} because it is not in the allowed frontend base URLs.",
+                normalizedOrigin);
+            return false;
+        }
+
+        frontendBaseUrl = normalizedOrigin;
+        return true;
+    }
+
+    private HashSet<string> GetAllowedFrontendBaseUrls()
+    {
+        var allowedBaseUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        void AddBaseUrl(string? candidate)
+        {
+            if (!Uri.TryCreate(candidate, UriKind.Absolute, out var candidateUri))
+            {
+                return;
+            }
+
+            allowedBaseUrls.Add(NormalizeCallbackOrigin(candidateUri));
+        }
+
+        AddBaseUrl(_configuration["Frontend:WebBaseUrl"]?.Trim());
+
+        foreach (var profile in new[] { "http", "https" })
+        {
+            var host = _configuration[$"ApiSettings:UI:{profile}:Host"];
+            var port = _configuration[$"ApiSettings:UI:{profile}:Port"];
+            var scheme = string.Equals(profile, "https", StringComparison.OrdinalIgnoreCase) ? Uri.UriSchemeHttps : Uri.UriSchemeHttp;
+
+            if (!string.IsNullOrWhiteSpace(host) && int.TryParse(port, out var resolvedPort) && resolvedPort > 0)
+            {
+                AddBaseUrl($"{scheme}://{host}:{resolvedPort}");
+            }
+        }
+
+        var azureSiteName = Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME");
+        if (!string.IsNullOrWhiteSpace(azureSiteName))
+        {
+            var uiSiteName = azureSiteName.Replace("-api-", "-ui-");
+            if (!string.Equals(uiSiteName, azureSiteName, StringComparison.Ordinal))
+            {
+                AddBaseUrl($"https://{uiSiteName}.azurewebsites.net");
+            }
+        }
+
+        return allowedBaseUrls;
+    }
+
+    private static string NormalizeCallbackOrigin(Uri originUri)
+    {
+        return originUri.GetLeftPart(UriPartial.Authority).TrimEnd('/');
+    }
+
+    private static string NormalizeFrontendBaseUrl(Uri configuredUri, bool useHttps)
+    {
+        if (!configuredUri.IsLoopback)
+        {
+            return configuredUri.ToString().TrimEnd('/');
+        }
+
+        var expectedScheme = useHttps ? Uri.UriSchemeHttps : Uri.UriSchemeHttp;
+        if (string.Equals(configuredUri.Scheme, expectedScheme, StringComparison.OrdinalIgnoreCase))
+        {
+            return configuredUri.ToString().TrimEnd('/');
+        }
+
+        var builder = new UriBuilder(configuredUri)
+        {
+            Scheme = expectedScheme,
+            Port = configuredUri.IsDefaultPort ? -1 : configuredUri.Port
+        };
+
+        return builder.Uri.ToString().TrimEnd('/');
+    }
+
+    private static string BuildFrontendCallbackUrl(string frontendBaseUrl, QueryString queryString)
+    {
+        var frontendUri = new Uri(frontendBaseUrl, UriKind.Absolute);
+        var builder = new UriBuilder(frontendUri)
+        {
+            Path = CombinePath(frontendUri.AbsolutePath, PaymentCallbackResultPath),
+            Query = queryString.HasValue ? queryString.Value![1..] : string.Empty
+        };
+
+        return builder.Uri.ToString();
+    }
+
+    private static string CombinePath(string basePath, string relativePath)
+    {
+        var normalizedBasePath = string.IsNullOrWhiteSpace(basePath) || basePath == "/"
+            ? string.Empty
+            : basePath.TrimEnd('/');
+        var normalizedRelativePath = relativePath.TrimStart('/');
+
+        return $"{normalizedBasePath}/{normalizedRelativePath}";
+    }
+
+    private static string? GetFirstValue(IReadOnlyDictionary<string, string> parameters, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (parameters.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+}

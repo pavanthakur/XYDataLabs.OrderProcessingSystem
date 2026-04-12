@@ -14,6 +14,7 @@ public sealed class TenantMiddleware
     private const string HealthPath = "/health";
     private const string HealthLivePath = "/health/live";
     private const string HealthReadyPath = "/health/ready";
+    private const string PaymentCallbackPath = "/payment/callback";
 
     public TenantMiddleware(RequestDelegate next)
     {
@@ -25,17 +26,17 @@ public sealed class TenantMiddleware
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(tenantResolver);
 
-        var requestedTenantCode = context.Request.Headers[TenantHeaderName].FirstOrDefault()?.Trim();
+        string? requestedTenantCode = context.Request.Headers[TenantHeaderName].FirstOrDefault()?.Trim();
 
-        using var requestedTenantScope = LogContext.PushProperty(
+        using IDisposable requestedTenantScope = LogContext.PushProperty(
             "RequestedTenantCode",
             string.IsNullOrWhiteSpace(requestedTenantCode) ? "none" : requestedTenantCode);
 
-        if (IsTenantOptionalRequest(context.Request.Path))
+        if (IsTenantOptionalRequest(context.Request.Path, requestedTenantCode))
         {
-            using var bootstrapTenantScope = LogContext.PushProperty(
+            using IDisposable bootstrapTenantScope = LogContext.PushProperty(
                 "TenantCode",
-                IsHealthRequest(context.Request.Path) ? "infrastructure" : "bootstrap");
+                ResolveOptionalTenantCode(context));
             await _next(context);
             return;
         }
@@ -57,7 +58,7 @@ public sealed class TenantMiddleware
             return;
         }
 
-        var tenantContext = await tenantResolver.ResolveTenantAsync(requestedTenantCode, context.RequestAborted);
+        TenantContext? tenantContext = await tenantResolver.ResolveTenantAsync(requestedTenantCode, context.RequestAborted);
         if (tenantContext is null)
         {
             Log.Warning(
@@ -110,9 +111,14 @@ public sealed class TenantMiddleware
             || string.Equals(tenantStatus, "Decommissioned", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool IsTenantOptionalRequest(PathString requestPath)
+    private static bool IsTenantOptionalRequest(PathString requestPath, string? requestedTenantCode)
     {
-        return IsRuntimeConfigurationRequest(requestPath) || IsHealthRequest(requestPath);
+        if (IsRuntimeConfigurationRequest(requestPath) || IsPaymentCallbackRequest(requestPath))
+        {
+            return true;
+        }
+
+        return IsHealthRequest(requestPath) && string.IsNullOrWhiteSpace(requestedTenantCode);
     }
 
     private static bool IsRuntimeConfigurationRequest(PathString requestPath)
@@ -125,6 +131,27 @@ public sealed class TenantMiddleware
         return string.Equals(requestPath.Value, HealthPath, StringComparison.OrdinalIgnoreCase)
             || string.Equals(requestPath.Value, HealthLivePath, StringComparison.OrdinalIgnoreCase)
             || string.Equals(requestPath.Value, HealthReadyPath, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsPaymentCallbackRequest(PathString requestPath)
+    {
+        return string.Equals(requestPath.Value, PaymentCallbackPath, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ResolveOptionalTenantCode(HttpContext context)
+    {
+        if (IsHealthRequest(context.Request.Path))
+        {
+            return "infrastructure";
+        }
+
+        if (IsPaymentCallbackRequest(context.Request.Path))
+        {
+            string? callbackTenantCode = context.Request.Query["tenantCode"].FirstOrDefault()?.Trim();
+            return string.IsNullOrWhiteSpace(callbackTenantCode) ? "callback" : callbackTenantCode;
+        }
+
+        return "bootstrap";
     }
 
     private static async Task WriteFailureAsync(

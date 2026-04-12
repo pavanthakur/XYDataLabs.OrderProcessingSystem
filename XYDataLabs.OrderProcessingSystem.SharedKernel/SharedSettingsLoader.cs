@@ -17,7 +17,7 @@ namespace XYDataLabs.OrderProcessingSystem.SharedKernel
 
         /// <summary>
         /// Load environment-specific sharedsettings and appsettings JSON files.
-        /// Non-Docker local development uses the "local" profile (ports 5010-5013).
+        /// Non-Docker local development uses the "local" profile (API 5010/5011, UI 5173/5174).
         /// Docker uses the provided environment or falls back to "dev" (ports 5000-5003).
         /// Azure App Service uses the provided environment based on ASPNETCORE_ENVIRONMENT and loads secrets from Key Vault.
         /// </summary>

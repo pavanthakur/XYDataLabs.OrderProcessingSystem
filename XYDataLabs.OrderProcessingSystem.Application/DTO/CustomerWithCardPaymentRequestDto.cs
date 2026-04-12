@@ -25,5 +25,6 @@ namespace XYDataLabs.OrderProcessingSystem.Application.DTO
         //public string Currency { get; set; } = string.Empty;//todo: we can utilize later
         //public string Amount { get; set; } = string.Empty;//todo: we can utilize later
         public string CustomerOrderId { get; set; } = string.Empty;
+        public string? ClientCallbackOrigin { get; set; }
     }
 }

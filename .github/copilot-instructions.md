@@ -17,17 +17,21 @@ practice Azure cloud deployment, CI/CD automation, and enterprise DevOps pattern
 
 ---
 
-## 2. Solution — .NET Projects
+## 2. Solution — .NET Projects + Frontend Workspace
 
 | Project | Role |
 |---------|------|
 | `XYDataLabs.OrderProcessingSystem.API` | ASP.NET Core Web API — thin controllers, composition root, Swagger |
-| `XYDataLabs.OrderProcessingSystem.UI` | ASP.NET Core MVC — presentation layer |
 | `XYDataLabs.OrderProcessingSystem.Application` | Hand-rolled CQRS (ICommand/IQuery/IDispatcher), DTOs, pipeline behaviors |
 | `XYDataLabs.OrderProcessingSystem.Domain` | Core entities, domain logic (DDD) — zero dependencies |
 | `XYDataLabs.OrderProcessingSystem.Infrastructure` | EF Core, SQL Server, data access |
 | `XYDataLabs.OrderProcessingSystem.SharedKernel` | Result<T>, constants, observability, multi-tenancy |
 | `XYDataLabs.OpenPayAdapter` | OpenPay payment integration |
+
+Frontend workspace:
+- `frontend/apps/web` — React + Vite + TypeScript SPA deployed to the Azure UI App Service
+- `frontend/packages/api-sdk` — generated API client
+- `frontend/packages/tenant-session` — runtime bootstrap and tenant header support
 
 ### Test Projects (under `tests/`)
 
@@ -70,13 +74,16 @@ practice Azure cloud deployment, CI/CD automation, and enterprise DevOps pattern
 │   ├── configure-secrets-and-run.ps1
 │   └── validate-github-app-config.ps1
 │
-├── tests/                         # All test projects (6 projects)
+├── frontend/                      # React web/mobile workspace + shared packages
+│   ├── apps/
+│   └── packages/
+│
+├── tests/                         # All test projects (5 projects)
 │   ├── XYDataLabs.OrderProcessingSystem.Domain.Tests/
 │   ├── XYDataLabs.OrderProcessingSystem.Application.Tests/
 │   ├── XYDataLabs.OrderProcessingSystem.API.Tests/
 │   ├── XYDataLabs.OrderProcessingSystem.Integration.Tests/
-│   ├── XYDataLabs.OrderProcessingSystem.Architecture.Tests/
-│   └── XYDataLabs.OrderProcessingSystem.UI.Tests/
+│   └── XYDataLabs.OrderProcessingSystem.Architecture.Tests/
 │
 ├── docs/
 │   ├── README.md                  # Canonical documentation hub
@@ -286,7 +293,8 @@ identity to access Key Vault without credentials in config files.
 .\scripts\setup-local.ps1
 
 # Visual Studio F5 (recommended for debugging)
-# API: http://localhost:5010/swagger  |  UI: http://localhost:5012
+# HTTP profile: API http://localhost:5010/swagger  |  UI http://localhost:5173
+# HTTPS profile: API https://localhost:5011/swagger |  UI https://localhost:5174
 
 # Docker — dev environment
 .\Resources\Docker\start-docker.ps1 -Environment dev -Profile http
@@ -298,7 +306,7 @@ identity to access Key Vault without credentials in config files.
 .\Resources\Docker\start-docker.ps1 -Environment dev -Profile https -Reset
 ```
 
-Port allocations: Local VS (5010–5013) · Docker dev (5020–5023) · Docker stg (5030–5033) · Prod (5040–5043).
+Port allocations: Local VS API (5010–5011) + UI (5173–5174) · Docker dev (5020–5023) · Docker stg (5030–5033) · Prod (5040–5043).
 
 ---
 
@@ -359,6 +367,7 @@ This matrix shows which instructions auto-attach for common file locations:
 | Day Complete Router | `/XYDataLabs-day-complete` | After each curriculum day or phase-freeze closeout — routes updates to all correct documents, syncs architecture status surfaces, and requires completion-check/context-audit before a phase-close commit |
 | Completion Check | `/XYDataLabs-completion-check` | After any feature, task, script, or fix — 6-category quality gate: documented? guardrailed? unit tested? integration tested? automated? context current? |
 | Docker Start | `/XYDataLabs-docker-start` | Launches the supported Docker and local runtime profiles from one interactive entry point and prints the correct API/UI URLs. |
+| Payment Automation | `/XYDataLabs-payment-automation` | Launches the separate payment automation workspace from one interactive entry point for local, Docker, and Azure targets plus local/Docker/Azure matrix runs, including dry-run and tenant selection support. |
 | Local Setup | `/XYDataLabs-setup-local` | After a fresh git clone — runs setup-local.ps1, summarises VS F5 and Docker next steps |
 | SQL Local Access | `/XYDataLabs-sql-local-access` | Opens or closes Azure SQL firewall for local IP after a fresh bootstrap/deploy. Prints SSMS connection details. |
 | Context Audit | `/XYDataLabs-context-audit` | Detects stale AI context by diffing memory files and copilot-instructions against the actual codebase. Run periodically or after major refactors. |
@@ -366,7 +375,7 @@ This matrix shows which instructions auto-attach for common file locations:
 | Log + DB Correlation | `/XYDataLabs-verify-db-logs` | After any payment run on any env/profile — script-first by runtime: calls `scripts/verify-payment-run-physical.ps1` for docker/local or `scripts/verify-payment-run-azure.ps1` for azure, returns the formatted table summary by default, and falls back to manual investigation only when needed. |
 | ADR Validation | `/XYDataLabs-validate-adrs` | Before committing changes to any ADR — runs frontmatter schema check + markdownlint locally; documents how to toggle the CI counterpart. |
 
-> **Quick prompt tip:** `Ctrl+Shift+I` → select Agent mode → type `/XYDataLabs-new-feature`, `/XYDataLabs-completion-check`, `/XYDataLabs-docker-start`, `/XYDataLabs-setup-local`, `/XYDataLabs-day-complete`, `/XYDataLabs-sql-local-access`, `/XYDataLabs-context-audit`, `/XYDataLabs-verify-db-logs`, or `/XYDataLabs-validate-adrs`
+> **Quick prompt tip:** `Ctrl+Shift+I` → select Agent mode → type `/XYDataLabs-new-feature`, `/XYDataLabs-completion-check`, `/XYDataLabs-docker-start`, `/XYDataLabs-payment-automation`, `/XYDataLabs-setup-local`, `/XYDataLabs-day-complete`, `/XYDataLabs-sql-local-access`, `/XYDataLabs-context-audit`, `/XYDataLabs-verify-db-logs`, or `/XYDataLabs-validate-adrs`
 >
 > **Prompt reference:** See `.github/prompts/README.md` for when to use each prompt, prerequisites, and operational notes.
 >

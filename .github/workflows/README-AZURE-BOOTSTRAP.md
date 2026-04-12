@@ -82,7 +82,7 @@ See [`README-AZURE-INITIAL-SETUP.md`](README-AZURE-INITIAL-SETUP.md) for the one
 | `environment` | choice | `dev` | Target: `dev` / `staging` / `prod` / `all`. Branch must match: `dev`→dev, `staging`→staging, `main`→prod. |
 | `bootstrapInfra` | boolean | `true` | **Phase A** — Provisions Resource Group, App Service Plan, Web Apps, App Insights, Azure SQL, Key Vault + managed identity. |
 | `deployApi` | boolean | `true` | **Deploy** — Triggers `deploy-api-to-azure.yml` after bootstrap succeeds (or independently if bootstrap is not selected). |
-| `deployUi` | boolean | `true` | **Deploy** — Triggers `deploy-ui-to-azure.yml` after bootstrap succeeds (or independently if bootstrap is not selected). |
+| `deployUi` | boolean | `true` | **Deploy** — Triggers `deploy-ui-to-azure.yml` after bootstrap succeeds (or independently if bootstrap is not selected). This deploys the React frontend to the Azure UI App Service. |
 | `cleanupInfra` | boolean | `false` | **Phase X (DESTRUCTIVE)** — Deletes UI App, API App, then entire Resource Group. ⚠️ Irreversible. Do NOT combine with bootstrap. |
 
 ---
@@ -151,7 +151,7 @@ Step 3: az account show — verify login succeeded before making changes
 
 **Actions**:
 - Dispatches `deploy-api-to-azure.yml` via `workflow_dispatch` (if `deployApi=true`)
-- Dispatches `deploy-ui-to-azure.yml` via `workflow_dispatch` (if `deployUi=true`)
+- Dispatches `deploy-ui-to-azure.yml` via `workflow_dispatch` (if `deployUi=true`) for the React frontend
 - Deployment workflows determine their target environment from the branch name
 - Adds a deployment summary with links to the triggered workflow runs
 
@@ -167,7 +167,7 @@ After the Azure Initial Setup workflow has completed:
 environment: dev
 bootstrapInfra: true    # Provision all Azure resources
 deployApi: true         # Deploy API after bootstrap
-deployUi: true          # Deploy UI after bootstrap
+deployUi: true          # Deploy React frontend after bootstrap
 cleanupInfra: false
 ```
 
@@ -187,7 +187,7 @@ cleanupInfra: false
 environment: dev
 bootstrapInfra: false   # Skip — infra already provisioned
 deployApi: true
-deployUi: true
+deployUi: true          # Deploy the React frontend to the UI App Service
 cleanupInfra: false
 ```
 

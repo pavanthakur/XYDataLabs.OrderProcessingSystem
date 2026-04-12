@@ -22,24 +22,15 @@
 - ✅ **Architecture Phases 1-7 complete:** Structural Foundation, Hand-Rolled CQRS, Observability (Serilog + OTel), Multi-Tenancy Skeleton, Test Restructure, Polish & Hardening, Tenant Enforcement & DDD tactical patterns
 - ✅ **Phase 7 verification freeze complete (April 10, 2026):** latest code validated on local, Docker, and Azure; Azure Initial Setup and dev bootstrap proven end-to-end
 
-**🔥 YOUR NEXT 3 PRIORITIES:**
+**🔥 YOUR NEXT PRIORITIES:**
 
-### Priority 1: Track U — UI Modernization Program (pre-Phase-8 gate)
-**Why:** Replace the MVC UI before more end-user functionality accumulates on a host that is already targeted for retirement
-**Tasks:**
-- U1: freeze the frontend contract, auth model, and MVC retirement rules
-- U2: scaffold `frontend/`, React web, generated API SDK, and tenant bootstrap package
-- U3: replace MVC browser journeys by feature slice
-- U4-U5: rehome MVC-owned server endpoints to API ownership and retire MVC from the active deployment model
-- U6: add React Native / mobile only after the web cutover and outside the pre-Phase-8 gate
-
-### Priority 2: Azure Data & Resilience (Days 44-56) — *backend Phase 8 follows Track U U5*
-**Why:** Keep the backend event-foundation plan ready without starting implementation until the React web cutover and MVC retirement gate is complete
+### Priority 1: Azure Data & Resilience (Days 44-56) — *backend Phase 8 is now active*
+**Why:** Track U U5 is complete, so the next active engineering slice is the in-monolith event foundation and its supporting Azure operating model
 **Tasks:**
 - Days 44-50: Azure Functions + Service Bus + DLQ operating model preparation (learning and infrastructure prep only; production transport swap remains Phase 10)
 - Days 51-56: 🏗️ **Phase 8** event foundation inside the monolith — contracts, mapper, outbox/inbox, `PaymentAttempt`, reconciliation, and separate workers
 
-### Priority 3: Azure Services Deep Dive + Containers (Days 57-86) — *enables Architecture Phases 8.5, 9, 14*
+### Priority 2: Azure Services Deep Dive + Containers (Days 57-86) — *enables Architecture Phases 8.5, 9, 14*
 **Why:** Master advanced Azure services, then containerise with confidence  
 **Tasks:**
 - Days 57-59: Azure Functions Advanced + 🏗️ **Phase 8.5** (Multi-Provider Payment)
@@ -56,7 +47,8 @@
 ### Track U Gate
 
 - **Track U** reduces frontend migration risk: contract freeze, generated SDK, React web replacement, API ownership of callback/telemetry, and MVC removal rules
-- **Backend Phase 8** begins after Track U Phase U5 is complete
+- **Track U Phase U5** is complete: React web is the active UI and the legacy MVC host has been retired
+- **Backend Phase 8** is now the active next engineering phase
 - **Mobile (U6)** follows the web cutover and does not block backend Phase 8
 
 ---
@@ -75,7 +67,7 @@ See `ARCHITECTURE-EVOLUTION.md` for full phase details.
 | 5 | Test Restructure | Day 80 (auto-✅) | ✅ Complete |
 | 6 | Polish & Hardening | Days 42-43, 71-72, 94 (auto-✅) | ✅ Complete |
 | 7 | Tenant Enforcement & Ops | Days 42–43 (DDD + Ops) | ✅ Complete |
-| Track U | UI Modernization Program | U1-U6 (parallel, pre-Phase-8 gate) | 📅 Active |
+| Track U | UI Modernization Program | U1-U6 (U1-U5 complete; U6 later) | ✅ Web cutover complete |
 | 8 | Event-Driven Foundation | Days 51, 55–56 (Days 48–50 are Service Bus/DLQ preparation only) | 📅 Planned |
 | 8.5 | Multi-Provider Payment | Days 58–59 | 📅 Planned |
 | 9 | YARP Microservices | Days 74–79 | 📅 Planned |

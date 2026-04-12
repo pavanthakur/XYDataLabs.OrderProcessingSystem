@@ -6,7 +6,6 @@ using XYDataLabs.OrderProcessingSystem.Application.DTO;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
-using XYDataLabs.OrderProcessingSystem.UI.Models;
 
 namespace XYDataLabs.OrderProcessingSystem.Architecture.Tests;
 
@@ -87,8 +86,7 @@ public class MultiTenantSchemaTests
         {
             typeof(CustomerWithCardPaymentRequestDto),
             typeof(PaymentDto),
-            typeof(PaymentStatusDetailsDto),
-            typeof(PaymentCallbackViewModel)
+            typeof(PaymentStatusDetailsDto)
         };
 
         var bannedPropertyNames = new[]

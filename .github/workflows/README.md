@@ -8,7 +8,7 @@ This repo uses a small set of primary operational workflows, with additional sup
 
 | Workflow | Triggers On | Deploys To | Description |
 |----------|-------------|------------|-------------|
-| `ci.yml` | Pull requests to dev/staging/main | Validation only | PR build-and-test gate for the solution and test projects |
+| `ci.yml` | Pull requests to dev/staging/main | Validation only | PR build/test gate for the .NET solution plus React frontend typecheck, tests, and build |
 | `azure-initial-setup.yml` | Manual | One-time setup | **[See README-AZURE-INITIAL-SETUP.md](./README-AZURE-INITIAL-SETUP.md)** - Phase 0 (GitHub App), Phase 1a (OIDC), Phase 1b (secrets) |
 | `azure-bootstrap.yml` | Manual | Infrastructure + deploy | **[See README-AZURE-BOOTSTRAP.md](./README-AZURE-BOOTSTRAP.md)** - Phase 2 (infrastructure), API/UI deploy, Phase X (cleanup) |
 | `configure-github-secrets.yml` | Called by initial-setup | Secret configuration | **[See README-CONFIGURE-GITHUB-SECRETS.md](./README-CONFIGURE-GITHUB-SECRETS.md)** - GitHub App setup and secret management (can run independently) |
@@ -16,7 +16,7 @@ This repo uses a small set of primary operational workflows, with additional sup
 | `validate-deployment.yml` | Called by infra-deploy | Reusable workflow | **[See README-VALIDATE-DEPLOYMENT.md](./README-VALIDATE-DEPLOYMENT.md)** - Pre-deployment validation workflow |
 | `test-validate-deployment.yml` | Manual or PR changes | Test only | **[Quick Start](./QUICK-START-TEST-VALIDATION.md)** \| **[Full Docs](./README-TEST-VALIDATE-DEPLOYMENT.md)** - Tests validation workflow independently |
 | `deploy-api-to-azure.yml` | API/Backend code changes | All branches (dev/staging/main) | Builds and deploys API to environment-specific Azure Web App |
-| `deploy-ui-to-azure.yml` | UI/Frontend code changes | All branches (dev/staging/main) | Builds and deploys UI to environment-specific Azure Web App |
+| `deploy-ui-to-azure.yml` | React frontend changes | All branches (dev/staging/main) | Builds and deploys the React frontend to the environment-specific Azure UI App Service, then runs a browser smoke check against the deployed tenant bootstrap flow |
 | `validate-adrs.yml` | ADR file, script, or lint config changes | Push/PR to main/dev/staging, or manual | **[See README-VALIDATE-ADRS.md](./README-VALIDATE-ADRS.md)** — Validates ADR filename pattern, H1 heading, `**Status:**` frontmatter, and markdownlint rules |
 | `validate-ai-customization.yml` | Shared AI customization changes | Push/PR to main/dev/staging, or manual | Validates shared Copilot instructions, prompts, agents, operating-model docs, and their discovery surfaces |
 | `validate-doc-links.yml` | Docs or validator changes | Push/PR to main/dev/staging, or manual | Validates local markdown links and heading anchors for the canonical `docs/` tree |
@@ -31,7 +31,7 @@ This repo uses a small set of primary operational workflows, with additional sup
 | `azure-initial-setup.yml` | One-time repository and OIDC bootstrap |
 | `azure-bootstrap.yml` | Main day-to-day environment bootstrap and coordinated deployment entrypoint |
 | `deploy-api-to-azure.yml` | Normal API deployment path for code changes |
-| `deploy-ui-to-azure.yml` | Normal UI deployment path for code changes |
+| `deploy-ui-to-azure.yml` | Active React frontend deployment path for the Azure UI App Service |
 
 **Support workflows** exist for specialized validation, secondary entrypoints, or troubleshooting rather than the default delivery path:
 
@@ -47,8 +47,8 @@ This repo uses a small set of primary operational workflows, with additional sup
 
 ### Branch-to-Environment Mapping
 
-| Git Branch | API Deployment Target | UI Deployment Target |
-|------------|----------------------|---------------------|
+| Git Branch | API Deployment Target | React Frontend Target |
+|------------|----------------------|-----------------------|
 | `dev` | orderprocessing-api-xyapp-dev | orderprocessing-ui-xyapp-dev |
 | `staging` | orderprocessing-api-xyapp-stg | orderprocessing-ui-xyapp-stg |
 | `main` | orderprocessing-api-xyapp-prod | orderprocessing-ui-xyapp-prod |
@@ -105,15 +105,15 @@ git add XYDataLabs.OrderProcessingSystem.API/
 git commit -m "feat: Update API endpoint"
 git push origin dev  # Deploys API only to dev environment
 
-# Change UI code and push → triggers deploy-ui-to-azure.yml
-git add XYDataLabs.OrderProcessingSystem.UI/
-git commit -m "feat: Update UI styling"
-git push origin dev  # Deploys UI only to dev environment
+# Change React web code and push → triggers deploy-ui-to-azure.yml
+git add frontend/
+git commit -m "feat: Update React payment flow"
+git push origin dev  # Deploys the React frontend to the dev UI App Service
 
-# Change both API and UI → triggers BOTH workflows in parallel
-git add XYDataLabs.OrderProcessingSystem.API/ XYDataLabs.OrderProcessingSystem.UI/
-git commit -m "feat: Update API and UI"
-git push origin dev  # Deploys both API and UI to dev environment
+# Change API plus React frontend → triggers BOTH deploy workflows in parallel
+git add XYDataLabs.OrderProcessingSystem.API/ frontend/
+git commit -m "feat: Update API and React frontend"
+git push origin dev  # Deploys API and the React frontend to dev environment
 ```
 
 ### Path-Based Triggering
@@ -126,11 +126,9 @@ git push origin dev  # Deploys both API and UI to dev environment
 - `XYDataLabs.OrderProcessingSystem.SharedKernel/**`
 
 **UI Workflow** (`deploy-ui-to-azure.yml`) triggers on changes to:
-- `XYDataLabs.OrderProcessingSystem.UI/**`
-- `XYDataLabs.OrderProcessingSystem.Application/**`
-- `XYDataLabs.OrderProcessingSystem.Domain/**`
-- `XYDataLabs.OrderProcessingSystem.Infrastructure/**`
-- `XYDataLabs.OrderProcessingSystem.SharedKernel/**`
+- `frontend/**`
+- `Resources/Configuration/**`
+- `.github/workflows/deploy-ui-to-azure.yml`
 
 ### Pull Request Behavior
 
@@ -157,15 +155,15 @@ Workflows can be triggered manually via GitHub Actions UI:
 
 ## 📦 Workflow Stages
 
-Both API and UI workflows execute in 2 stages:
+The API workflow and the React frontend workflow execute in 2 stages:
 
 ### Stage 1: Build (Windows Runner)
 - ✅ Checkout code
-- ✅ Setup .NET 8 SDK
-- ✅ Restore NuGet packages for specific project
-- ✅ Build project (Release configuration)
-- ✅ **Run unit tests** (entire test suite)
-- ✅ Publish project
+- ✅ Setup Node.js 20
+- ✅ Restore npm workspace dependencies
+- ✅ Run frontend typecheck
+- ✅ Run frontend regression tests
+- ✅ Build the React production artifact with the environment-specific API base URL
 - ✅ Upload build artifact
 
 ### Stage 2: Deploy (Windows Runner)
@@ -173,8 +171,8 @@ Both API and UI workflows execute in 2 stages:
 - ✅ Download build artifact
 - ✅ Login to Azure using OIDC (passwordless authentication)
 - ✅ Deploy to environment-specific Azure Web App
-- ✅ Wait 30 seconds for service stabilization
-- ✅ Run health checks (API: `/health/ready`, UI: `/`)
+- ✅ Run SPA route health checks (API: `/health/ready`, frontend: `/customers`)
+- ✅ Run a browser smoke check that seeds a stale tenant and verifies the deployed UI still resolves the API bootstrap tenant
 - ✅ Display deployment URLs
 
 ---
@@ -220,8 +218,8 @@ Workflows use **path-based triggering** - they only run when relevant code chang
 # Changed: XYDataLabs.OrderProcessingSystem.API/Controllers/OrderController.cs
 # Result: Only deploy-api-to-azure.yml runs ✅
 
-# Scenario 2: Only UI code changed  
-# Changed: XYDataLabs.OrderProcessingSystem.UI/Pages/Index.razor
+# Scenario 2: Only web frontend code changed  
+# Changed: frontend/apps/web/src/App.tsx
 # Result: Only deploy-ui-to-azure.yml runs ✅
 
 # Scenario 3: Shared domain model changed

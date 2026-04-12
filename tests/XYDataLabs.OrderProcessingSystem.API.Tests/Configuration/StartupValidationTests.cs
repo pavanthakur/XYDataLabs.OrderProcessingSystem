@@ -67,13 +67,13 @@ public sealed class StartupValidationTests
                     ["http"] = new Dictionary<string, object?>
                     {
                         ["Host"] = "localhost",
-                        ["Port"] = 5012,
+                        ["Port"] = 5173,
                         ["HttpsEnabled"] = false
                     },
                     ["https"] = new Dictionary<string, object?>
                     {
                         ["Host"] = "localhost",
-                        ["Port"] = 5013,
+                        ["Port"] = 5174,
                         ["HttpsEnabled"] = true,
                         ["CertPassword"] = "password",
                         ["CertPath"] = "/https/aspnetapp.pfx"

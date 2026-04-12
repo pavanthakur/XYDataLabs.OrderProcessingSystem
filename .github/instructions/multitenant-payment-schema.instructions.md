@@ -1,5 +1,5 @@
 ---
-applyTo: "**/XYDataLabs.OrderProcessingSystem.Domain/Entities/**/*.cs,**/XYDataLabs.OrderProcessingSystem.Application/DTO/**/*.cs,**/XYDataLabs.OrderProcessingSystem.Application/Features/Payments/**/*.cs,**/XYDataLabs.OrderProcessingSystem.Infrastructure/**/*.cs,**/XYDataLabs.OrderProcessingSystem.API/Controllers/**/*.cs,**/XYDataLabs.OrderProcessingSystem.UI/**/*.cshtml,**/XYDataLabs.OrderProcessingSystem.UI/wwwroot/js/**/*.js,**/tests/XYDataLabs.OrderProcessingSystem.Architecture.Tests/**/*.cs,**/tests/XYDataLabs.OrderProcessingSystem.Integration.Tests/**/*.cs"
+applyTo: "**/XYDataLabs.OrderProcessingSystem.Domain/Entities/**/*.cs,**/XYDataLabs.OrderProcessingSystem.Application/DTO/**/*.cs,**/XYDataLabs.OrderProcessingSystem.Application/Features/Payments/**/*.cs,**/XYDataLabs.OrderProcessingSystem.Infrastructure/**/*.cs,**/XYDataLabs.OrderProcessingSystem.API/Controllers/**/*.cs,**/tests/XYDataLabs.OrderProcessingSystem.Architecture.Tests/**/*.cs,**/tests/XYDataLabs.OrderProcessingSystem.Integration.Tests/**/*.cs"
 ---
 # Multitenant Payment Schema Rules — XYDataLabs.OrderProcessingSystem
 

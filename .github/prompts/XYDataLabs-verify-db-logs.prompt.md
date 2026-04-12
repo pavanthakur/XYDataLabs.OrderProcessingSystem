@@ -1,13 +1,15 @@
 ---
 agent: agent
 description: |
-  Verify a payment test run end-to-end: read today's physical log files or App Insights KQL
+  Verify a payment test run end-to-end: read today's physical API log plus browser UI telemetry
+  captured through the API for local/docker runs, or App Insights KQL for azure runs,
   (azure runtime), extract charge IDs, run DB verification queries, and produce a correlated
   pass/fail report.
 
   Azure mode must derive a shared logical run prefix, narrow UI callback analysis to callback-only
-  traces, and treat UI callbacks as required only for 3DS-enabled tenants. Docker/local behavior
-  stays unchanged and continues to use physical log files.
+  traces, and treat UI callbacks as required only for 3DS-enabled tenants. Docker/local mode uses
+  the physical API log for backend evidence and browser-originated ui_payment telemetry instead of
+  the legacy UI file log.
 
   Usage examples:
     /XYDataLabs-verify-db-logs "prod docker"
@@ -20,9 +22,9 @@ description: |
 # Verify DB + Logs (Physical or App Insights)
 
 The user wants to verify that a payment test run is fully consistent across log data and
-the database. Cover **all three** of: API log → UI log → DB.
+the database. Cover **all three** of: API log → UI telemetry → DB.
 
-Log source depends on **runtime**: `docker`/`local` read physical files; `azure` queries App Insights KQL via Azure CLI.
+Log source depends on **runtime**: `docker`/`local` read the physical API log plus browser-originated UI telemetry captured in that API log; `azure` queries App Insights KQL via Azure CLI.
 
 > **Guardrail:** Any Azure-specific narrowing, parsing, or callback expectations in this prompt apply
 > only to the `azure` runtime. Do not change the `docker` or `local` verification flow when updating
@@ -48,19 +50,19 @@ Map their answer to the following table:
 
 | Selection | Env tag | Log source | API log / KQL scope | Shared DB | TenantC DB |
 |---|---|---|---|---|---|
-| dev http docker | `dev` | Physical file | `webapi-dev-dock-http-{DATE}.log` | `OrderProcessingSystem_Dev` | `OrderProcessingSystem_TenantC_Dev` |
-| dev https docker | `dev` | Physical file | `webapi-dev-dock-https-{DATE}.log` | `OrderProcessingSystem_Dev` | `OrderProcessingSystem_TenantC_Dev` |
+| dev http docker | `dev` | API log + browser UI telemetry | `webapi-dev-dock-http-{DATE}.log` | `OrderProcessingSystem_Dev` | `OrderProcessingSystem_TenantC_Dev` |
+| dev https docker | `dev` | API log + browser UI telemetry | `webapi-dev-dock-https-{DATE}.log` | `OrderProcessingSystem_Dev` | `OrderProcessingSystem_TenantC_Dev` |
 | dev http azure | `dev` | App Insights KQL | `ai-orderprocessing-dev` / `rg-orderprocessing-dev` | `orderprocessing-sql-dev` → `OrderProcessingSystem_Dev` | `OrderProcessingSystem_TenantC_Dev` |
 | dev https azure | `dev` | App Insights KQL | same as `dev http azure` — profile does not affect log source | `orderprocessing-sql-dev` → `OrderProcessingSystem_Dev` | `OrderProcessingSystem_TenantC_Dev` |
-| stg http docker | `stg` | Physical file | `webapi-stg-dock-http-{DATE}.log` | `OrderProcessingSystem_Stg` | `OrderProcessingSystem_TenantC_Stg` |
-| stg https docker | `stg` | Physical file | `webapi-stg-dock-https-{DATE}.log` | `OrderProcessingSystem_Stg` | `OrderProcessingSystem_TenantC_Stg` |
+| stg http docker | `stg` | API log + browser UI telemetry | `webapi-stg-dock-http-{DATE}.log` | `OrderProcessingSystem_Stg` | `OrderProcessingSystem_TenantC_Stg` |
+| stg https docker | `stg` | API log + browser UI telemetry | `webapi-stg-dock-https-{DATE}.log` | `OrderProcessingSystem_Stg` | `OrderProcessingSystem_TenantC_Stg` |
 | stg http azure | `stg` | App Insights KQL | `ai-orderprocessing-stg` / `rg-orderprocessing-stg` | `orderprocessing-sql-stg` → `OrderProcessingSystem_Staging` | `OrderProcessingSystem_TenantC_Staging` |
 | stg https azure | `stg` | App Insights KQL | same as `stg http azure` — profile does not affect log source | `orderprocessing-sql-stg` → `OrderProcessingSystem_Staging` | `OrderProcessingSystem_TenantC_Staging` |
-| prod http docker | `prod` | Physical file | `webapi-prod-dock-http-{DATE}.log` | `OrderProcessingSystem_Prod` | `OrderProcessingSystem_TenantC_Prod` |
-| prod https docker | `prod` | Physical file | `webapi-prod-dock-https-{DATE}.log` | `OrderProcessingSystem_Prod` | `OrderProcessingSystem_TenantC_Prod` |
+| prod http docker | `prod` | API log + browser UI telemetry | `webapi-prod-dock-http-{DATE}.log` | `OrderProcessingSystem_Prod` | `OrderProcessingSystem_TenantC_Prod` |
+| prod https docker | `prod` | API log + browser UI telemetry | `webapi-prod-dock-https-{DATE}.log` | `OrderProcessingSystem_Prod` | `OrderProcessingSystem_TenantC_Prod` |
 | prod http azure | `prod` | App Insights KQL | `ai-orderprocessing-prod` / `rg-orderprocessing-prod` | `orderprocessing-sql-prod` → `OrderProcessingSystem_Prod` | `OrderProcessingSystem_TenantC_Prod` |
 | prod https azure | `prod` | App Insights KQL | same as `prod http azure` — profile does not affect log source | `orderprocessing-sql-prod` → `OrderProcessingSystem_Prod` | `OrderProcessingSystem_TenantC_Prod` |
-| local dotnet run | `dev` | Physical file | `webapi-dev-local-http-{DATE}.log` | `OrderProcessingSystem_Local` | `OrderProcessingSystem_TenantC` |
+| local dotnet run | `dev` | API log + browser UI telemetry | `webapi-dev-local-http-{DATE}.log` | `OrderProcessingSystem_Local` | `OrderProcessingSystem_TenantC` |
 
 `{DATE}` = today as `YYYYMMDD` (e.g. `20260328`).  
 Physical log files are in `Q:\GIT\TestAppXY_OrderProcessingSystem\logs\`.  
@@ -114,7 +116,7 @@ Determine today's date tag:
 $dateTag = (Get-Date).ToString("yyyyMMdd")   # e.g. 20260329
 ```
 
-Read **API log only** in this step — the UI log is read in Step 3 after the PREFIX is confirmed:
+Read **API log only** in this step — local/docker UI telemetry is also sourced from this same API log in Step 3 after the PREFIX is confirmed:
 ```powershell
 $apiLog  = "Q:\GIT\TestAppXY_OrderProcessingSystem\logs\webapi-{ENV_TAG}-{RUNTIME}-{PROFILE}-$dateTag.log"
 Get-Content $apiLog |
@@ -129,7 +131,7 @@ For deterministic reruns outside chat, prefer the script path over rebuilding th
 .\scripts\verify-payment-run-physical.ps1 -Runtime <local|docker> -Environment <env> -Profile <profile> -RunPrefix <RUN_PREFIX>
 ```
 
-If the API log file does not exist, note this as a finding and stop — the UI log and DB queries cannot be meaningfully scoped without it.
+If the API log file does not exist, note this as a finding and stop — the UI telemetry and DB queries cannot be meaningfully scoped without it.
 
 ### If runtime = `azure` (App Insights KQL)
 
@@ -208,7 +210,7 @@ Replace `{ENV_TAG}` with the env suffix from Step 1 (`dev`, `stg`, `prod`).
 
 ---
 
-## Step 3 — Confirm the run prefix, then read the UI log
+## Step 3 — Confirm the run prefix, then read the UI telemetry
 
 **Determine the RUN_PREFIX:**
 
@@ -223,18 +225,25 @@ Showing the timestamp of the first entry is more reliable than listing the prefi
 
 Otherwise use the single prefix found. Use it as `<RUN_PREFIX>` for all queries below.
 
-### If runtime = `docker` or `local` (physical log)
+### If runtime = `docker` or `local` (physical API log + browser telemetry)
 
 ```powershell
-$uiLog = "Q:\GIT\TestAppXY_OrderProcessingSystem\logs\ui-{ENV_TAG}-{RUNTIME}-{PROFILE}-$dateTag.log"
-Get-Content $uiLog |
-  Select-String -Pattern "<RUN_PREFIX>|payment/callback responded" |
-  ForEach-Object { $_.Line.Trim() }
+$apiLog = "Q:\GIT\TestAppXY_OrderProcessingSystem\logs\webapi-{ENV_TAG}-{RUNTIME}-{PROFILE}-$dateTag.log"
+Get-Content $apiLog |
+  Select-String -Pattern "<RUN_PREFIX>" |
+  ForEach-Object { $_.Line.Trim() } |
+  Where-Object {
+    $_ -match 'UI payment event' -or
+    $_ -match 'OpenPay callback received' -or
+    $_ -match 'payment/callback responded'
+  }
 ```
 
-Replace `<RUN_PREFIX>` with the confirmed prefix literal (e.g. `OR-4-28Mar`). Using the exact prefix rather than the broad `callback` keyword ensures that same-day retry runs earlier in the same log file do not contaminate the extraction.
+Replace `<RUN_PREFIX>` with the confirmed prefix literal (e.g. `OR-4-28Mar`). Using the exact prefix rather than the broad `callback` keyword ensures that same-day retry runs earlier in the same API log do not contaminate the extraction.
 
-If the UI log file does not exist, note this as a finding and proceed with DB queries only.
+These lines are browser-originated `ui_payment_*` events forwarded through `POST /payment/client-event`, so they represent SPA activity without depending on the legacy ASP.NET UI file log.
+
+If no browser UI telemetry lines match the selected prefix, note this as a finding and proceed with DB queries.
 
 ### If runtime = `azure` (App Insights KQL)
 
@@ -403,7 +412,7 @@ For each charge ID seen in the API log, confirm it also appears in the DB (Q2 / 
 |---|---|---|---|---|---|
 | `<id>` | TenantA/B/C | ✅/❌ | completed/… | completed/… | ✅/❌ |
 
-For each charge ID, confirm the UI log received the callback **when a callback is expected**:
+For each charge ID, confirm the UI telemetry received the callback **when a callback is expected**:
 
 | Charge ID | Tenant | 3DS enabled? | UI callback expected? | UI callback logged? | HTTP status |
 |---|---|---|---|---|---|
@@ -434,7 +443,7 @@ Output a consolidated pass/fail table:
 | Q5-B TenantC steps | 4 or 2 | … | ✅/❌ |
 | Q9-B TenantC bleed | 0 | … | ✅/❌ |
 | API log → DB charge IDs | all match | … | ✅/❌ |
-| UI log → callbacks present where expected | 3DS tenants only | … | ✅/❌ |
+| UI telemetry → callbacks present where expected | 3DS tenants only | … | ✅/❌ |
 
 When the verifier script is used, mirror its table-style summary in the chat response. Only surface raw JSON when the user explicitly asks for JSON or machine-readable output.
 

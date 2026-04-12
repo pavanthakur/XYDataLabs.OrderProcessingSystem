@@ -1101,10 +1101,11 @@ Exit code `1` aborts deployment (infra not ready); exit code `0` proceeds.
 env:
   DOTNET_VERSION: '8.x'
   AZURE_WEBAPP_NAME: 'orderprocessing-ui-xyapp'
-  PROJECT_PATH: 'XYDataLabs.OrderProcessingSystem.UI/XYDataLabs.OrderProcessingSystem.UI.csproj'
+   NODE_VERSION: '20.x'
+   WORKING_DIRECTORY: 'frontend'
 ```
 
-**Workflow Steps**: Identical to API workflow with different project path
+**Workflow Steps**: React build and publish steps, then App Service deployment for the generated `frontend/apps/web/dist` output
 Include optional gating for UI only (shorter timeout):
 ```yaml
          - name: Gate UI readiness
@@ -1115,13 +1116,13 @@ Include optional gating for UI only (shorter timeout):
 
 **Triggers**:
 - **Automatic**: Push to `main` with changes in:
-  - `XYDataLabs.OrderProcessingSystem.UI/**`
+   - `frontend/**`
   - Shared layers (Application, Domain, Infrastructure, Utilities)
 - **Manual**: `workflow_dispatch`
 
 **Artifact Names**:
 - API: `dotnet-app`
-- UI: `ui-dotnet-app` (prevents conflicts when both workflows run simultaneously)
+- UI/Web: `react-web-app` (prevents conflicts when both workflows run simultaneously)
 
 ---
 
@@ -1154,8 +1155,8 @@ git push
 
 **Trigger UI Deployment**:
 ```powershell
-# Make a change to UI project
-Add-Content -Path ".\XYDataLabs.OrderProcessingSystem.UI\README.md" -Value "`n# Updated: $(Get-Date)"
+# Make a change to frontend project
+Add-Content -Path ".\frontend\apps\web\index.html" -Value "`n<!-- Updated: $(Get-Date) -->"
 git add .
 git commit -m "chore(ui): trigger deployment"
 git push
