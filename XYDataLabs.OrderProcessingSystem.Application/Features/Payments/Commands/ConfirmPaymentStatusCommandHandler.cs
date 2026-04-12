@@ -168,6 +168,28 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
             return false;
         }
 
+        var isDirectStatusEntry = IsDirectStatusEntry(command.CallbackParameters);
+        var shouldRecordCallbackStage = callbackPayloadReceived
+            && transaction.IsThreeDSecureEnabled
+            && !isDirectStatusEntry;
+        var callbackStage = EnumHelper.GetEnumDescription(ThreeDSecureStage.CallbackReceived);
+        var callbackStatus = NormalizeStatus(command.CallbackStatus) ?? transaction.TransactionStatus;
+        var callbackMatchesResolvedStage = shouldRecordCallbackStage
+            && string.Equals(callbackStage, resolvedThreeDSecureStage, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(callbackStatus, resolvedStatus, StringComparison.OrdinalIgnoreCase);
+
+        var existingHistoryEntries = await _context.TransactionStatusHistories
+            .Where(item => item.TransactionId == transaction.Id)
+            .ToListAsync(cancellationToken);
+
+        var callbackHistoryExists = shouldRecordCallbackStage
+            && HasHistoryEntry(existingHistoryEntries, transaction.AttemptOrderId, callbackStatus, callbackStage);
+        var resolvedHistoryExists = HasHistoryEntry(
+            existingHistoryEntries,
+            transaction.AttemptOrderId,
+            resolvedStatus,
+            resolvedThreeDSecureStage);
+
         transaction.TransactionStatus = resolvedStatus;
         transaction.IsTransactionSuccess = EnumHelper.IsSuccessStatus(resolvedStatus);
         transaction.TransactionMessage = resolvedErrorMessage ?? BuildAuditMessage(command, remoteCharge, resolvedStatus, resolvedThreeDSecureStage, transaction.PaymentTraceId);
@@ -178,36 +200,47 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
         transaction.UpdatedBy = transaction.BillingCustomerId;
         transaction.UpdatedDate = now;
 
-        if (callbackPayloadReceived)
+        var callbackHistoryAdded = false;
+        if (shouldRecordCallbackStage && !callbackHistoryExists)
         {
             _context.TransactionStatusHistories.Add(new Domain.Entities.TransactionStatusHistory
             {
                 TransactionId = transaction.Id,
                 AttemptOrderId = transaction.AttemptOrderId,
-                Status = NormalizeStatus(command.CallbackStatus) ?? transaction.TransactionStatus,
+                Status = callbackStatus,
                 Notes = $"Browser callback payload received for trace {transaction.PaymentTraceId}",
                 PaymentTraceId = transaction.PaymentTraceId,
-                ThreeDSecureStage = EnumHelper.GetEnumDescription(ThreeDSecureStage.CallbackReceived),
+                ThreeDSecureStage = callbackStage,
                 IsThreeDSecureEnabled = transaction.IsThreeDSecureEnabled,
                 TransactionReferenceId = transaction.TransactionReferenceId,
                 CreatedBy = transaction.BillingCustomerId,
                 CreatedDate = now
             });
+
+            callbackHistoryAdded = true;
         }
 
-        _context.TransactionStatusHistories.Add(new Domain.Entities.TransactionStatusHistory
+        var resolvedHistoryAdded = false;
+        if (!resolvedHistoryExists && !callbackMatchesResolvedStage)
         {
-            TransactionId = transaction.Id,
-            AttemptOrderId = transaction.AttemptOrderId,
-            Status = resolvedStatus,
-            Notes = BuildAuditMessage(command, remoteCharge, resolvedStatus, resolvedThreeDSecureStage, transaction.PaymentTraceId),
-            PaymentTraceId = transaction.PaymentTraceId,
-            ThreeDSecureStage = resolvedThreeDSecureStage,
-            IsThreeDSecureEnabled = transaction.IsThreeDSecureEnabled,
-            TransactionReferenceId = transaction.TransactionReferenceId,
-            CreatedBy = transaction.BillingCustomerId,
-            CreatedDate = now
-        });
+            _context.TransactionStatusHistories.Add(new Domain.Entities.TransactionStatusHistory
+            {
+                TransactionId = transaction.Id,
+                AttemptOrderId = transaction.AttemptOrderId,
+                Status = resolvedStatus,
+                Notes = BuildAuditMessage(command, remoteCharge, resolvedStatus, resolvedThreeDSecureStage, transaction.PaymentTraceId),
+                PaymentTraceId = transaction.PaymentTraceId,
+                ThreeDSecureStage = resolvedThreeDSecureStage,
+                IsThreeDSecureEnabled = transaction.IsThreeDSecureEnabled,
+                TransactionReferenceId = transaction.TransactionReferenceId,
+                CreatedBy = transaction.BillingCustomerId,
+                CreatedDate = now
+            });
+
+            resolvedHistoryAdded = true;
+        }
+
+        var finalAuditRecorded = resolvedHistoryAdded || (callbackHistoryAdded && callbackMatchesResolvedStage);
 
         if (payinLog is not null)
         {
@@ -220,21 +253,24 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
             payinLog.UpdatedBy = transaction.BillingCustomerId;
             payinLog.UpdatedDate = now;
 
-            _context.PayinLogDetails.Add(new Domain.Entities.PayinLogDetails
+            if (finalAuditRecorded)
             {
-                PayinLogId = payinLog.Id,
-                PostInfo = callbackPayloadReceived ? JsonSerializer.Serialize(command.CallbackParameters) : null,
-                RespInfo = remoteCharge is not null ? JsonSerializer.Serialize(remoteCharge) : null,
-                AdditionalInfo = BuildAuditMessage(command, remoteCharge, resolvedStatus, resolvedThreeDSecureStage, transaction.PaymentTraceId),
-                PaymentTraceId = transaction.PaymentTraceId,
-                ThreeDSecureStage = resolvedThreeDSecureStage,
-                CreatedBy = transaction.BillingCustomerId,
-                CreatedDate = now
-            });
+                _context.PayinLogDetails.Add(new Domain.Entities.PayinLogDetails
+                {
+                    PayinLogId = payinLog.Id,
+                    PostInfo = callbackPayloadReceived ? JsonSerializer.Serialize(command.CallbackParameters) : null,
+                    RespInfo = remoteCharge is not null ? JsonSerializer.Serialize(remoteCharge) : null,
+                    AdditionalInfo = BuildAuditMessage(command, remoteCharge, resolvedStatus, resolvedThreeDSecureStage, transaction.PaymentTraceId),
+                    PaymentTraceId = transaction.PaymentTraceId,
+                    ThreeDSecureStage = resolvedThreeDSecureStage,
+                    CreatedBy = transaction.BillingCustomerId,
+                    CreatedDate = now
+                });
+            }
         }
 
         await _context.SaveChangesAsync(cancellationToken);
-        return true;
+        return shouldRecordCallbackStage && (callbackHistoryExists || callbackHistoryAdded);
     }
 
     private static string BuildAuditMessage(ConfirmPaymentStatusCommand command, Charge? remoteCharge, string resolvedStatus, string resolvedThreeDSecureStage, string paymentTraceId)
@@ -298,6 +334,29 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
             return EnumHelper.GetEnumDescription(ThreeDSecureStage.CallbackReceived);
 
         return EnumHelper.GetEnumDescription(ThreeDSecureStage.Unknown);
+    }
+
+    private static bool HasHistoryEntry(
+        IEnumerable<Domain.Entities.TransactionStatusHistory> historyEntries,
+        string? attemptOrderId,
+        string status,
+        string stage)
+    {
+        return historyEntries.Any(entry =>
+            string.Equals(entry.AttemptOrderId, attemptOrderId, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(entry.Status, status, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(entry.ThreeDSecureStage, stage, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsDirectStatusEntry(IReadOnlyDictionary<string, string>? callbackParameters)
+    {
+        if (callbackParameters is null)
+        {
+            return false;
+        }
+
+        return callbackParameters.TryGetValue("source", out var source)
+            && string.Equals(source, "direct", StringComparison.OrdinalIgnoreCase);
     }
 
     private static DateTime? NormalizeToUtc(DateTime? dateTime)

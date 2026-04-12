@@ -31,7 +31,6 @@
     <ProjectReference Include="..\..\XYDataLabs.OrderProcessingSystem.Domain\XYDataLabs.OrderProcessingSystem.Domain.csproj" />
     <ProjectReference Include="..\..\XYDataLabs.OrderProcessingSystem.Infrastructure\XYDataLabs.OrderProcessingSystem.Infrastructure.csproj" />
     <ProjectReference Include="..\..\XYDataLabs.OrderProcessingSystem.SharedKernel\XYDataLabs.OrderProcessingSystem.SharedKernel.csproj" />
-    <ProjectReference Include="..\..\XYDataLabs.OrderProcessingSystem.UI\XYDataLabs.OrderProcessingSystem.UI.csproj" />
     <ProjectReference Include="..\..\XYDataLabs.OpenPayAdapter\XYDataLabs.OpenPayAdapter.csproj" />
   </ItemGroup>
 

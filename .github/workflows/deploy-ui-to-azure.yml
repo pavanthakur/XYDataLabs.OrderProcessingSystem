@@ -1,4 +1,4 @@
-name: Deploy UI to Azure App Service
+name: Deploy React Frontend to Azure App Service
 
 on:
   push:
@@ -7,54 +7,77 @@ on:
       - staging
       - dev
     paths:
-      - 'XYDataLabs.OrderProcessingSystem.UI/**'
-      - 'XYDataLabs.OrderProcessingSystem.Application/**'
-      - 'XYDataLabs.OrderProcessingSystem.Domain/**'
-      - 'XYDataLabs.OrderProcessingSystem.Infrastructure/**'
-      - 'XYDataLabs.OrderProcessingSystem.SharedKernel/**'
-      - 'XYDataLabs.OpenPayAdapter/**'           # Multitenant payment: UI renders payment pages driven by per-tenant Use3DSecure and payment provider config
+      - 'frontend/**'
       - 'Resources/Configuration/**'
       - '.github/workflows/deploy-ui-to-azure.yml'
   workflow_dispatch:
 
 env:
-  DOTNET_VERSION: '8.x'
+  NODE_VERSION: '20'
   AZURE_WEBAPP_NAME: ''
-  AZURE_WEBAPP_PACKAGE_PATH: './publish'
-  PROJECT_PATH: 'XYDataLabs.OrderProcessingSystem.UI/XYDataLabs.OrderProcessingSystem.UI.csproj'
+  FRONTEND_ARTIFACT_PATH: './react-web'
+
+# This workflow builds and deploys the Track U React frontend to the existing UI App Service.
 
 jobs:
   build:
     runs-on: windows-latest
     permissions:
       contents: read
+    outputs:
+      apiBaseUrl: ${{ steps.resolve-target.outputs.apiBaseUrl }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Set up .NET
-        uses: actions/setup-dotnet@v5
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
         with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
-      - name: Restore dependencies
-        run: dotnet restore ${{ env.PROJECT_PATH }}
+      - name: Resolve target API base URL
+        id: resolve-target
+        shell: pwsh
+        run: |
+          $ref = "${{ github.ref }}"
+          $owner = "${{ github.repository_owner }}".ToLowerInvariant()
 
-      - name: Build
-        run: dotnet build ${{ env.PROJECT_PATH }} --configuration Release --no-restore
+          if ($ref -eq 'refs/heads/main') { $envSuffix = 'prod' }
+          elseif ($ref -eq 'refs/heads/staging') { $envSuffix = 'stg' }
+          elseif ($ref -eq 'refs/heads/dev') { $envSuffix = 'dev' }
+          else { $branch = $ref.Replace('refs/heads/',''); $envSuffix = $branch }
 
-      - name: Run UI Unit Tests
-        run: dotnet test tests/XYDataLabs.OrderProcessingSystem.UI.Tests/XYDataLabs.OrderProcessingSystem.UI.Tests.csproj --configuration Release --verbosity normal
+          $apiBaseUrl = "https://${owner}-orderprocessing-api-xyapp-${envSuffix}.azurewebsites.net"
+          "apiBaseUrl=$apiBaseUrl" >> $env:GITHUB_OUTPUT
+          Write-Host "Resolved API base URL: $apiBaseUrl"
 
-      - name: Publish
-        run: dotnet publish ${{ env.PROJECT_PATH }} --configuration Release --no-build --output ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Typecheck frontend workspace
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Test frontend workspace
+        working-directory: frontend
+        run: npm run test:web
+
+      - name: Build frontend artifact
+        working-directory: frontend
+        env:
+          VITE_ORDERPROCESSING_API_BASE_URL: ${{ steps.resolve-target.outputs.apiBaseUrl }}
+          ORDERPROCESSING_API_BASE_URL: ${{ steps.resolve-target.outputs.apiBaseUrl }}
+        run: npm run build
 
       - name: Upload artifact
         uses: actions/upload-artifact@v6
         with:
-          name: ui-dotnet-app
-          path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+          name: react-web
+          path: frontend/apps/web/dist
 
   deploy:
     runs-on: windows-latest
@@ -68,6 +91,9 @@ jobs:
       contents: read
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
       - name: Check Azure Credentials
         id: check-credentials
         shell: pwsh
@@ -145,7 +171,8 @@ jobs:
         if: steps.check-credentials.outputs.credentialsConfigured == 'true'
         uses: actions/download-artifact@v8
         with:
-          name: ui-dotnet-app
+          name: react-web
+          path: ${{ env.FRONTEND_ARTIFACT_PATH }}
 
       - name: Login to Azure
         if: steps.check-credentials.outputs.credentialsConfigured == 'true'
@@ -202,62 +229,77 @@ jobs:
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          package: .
+          package: ${{ env.FRONTEND_ARTIFACT_PATH }}
 
       - name: Health Check
         if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'
         shell: pwsh
         run: |
-          Write-Host "Waiting 60 seconds for app to start (cold-start buffer)..." -ForegroundColor Yellow
-          Start-Sleep -Seconds 60
+          $uiUrl = "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/customers"
 
-          $uiUrl = "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net"
-
-          # Retry up to 3 times with 30 s between attempts; 60 s timeout each.
-          # Azure App Service cold starts can take 60–90 s after deployment.
-          Write-Host "Testing UI endpoint: $uiUrl" -ForegroundColor Cyan
-          $healthy     = $false
-          $maxAttempts = 3
+          Write-Host "Testing frontend route: $uiUrl" -ForegroundColor Cyan
+          $healthy = $false
+          $maxAttempts = 6
           for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
             try {
               $response = Invoke-WebRequest -Uri $uiUrl -Method Get -TimeoutSec 60
-              Write-Host "✅ UI responded with status: $($response.StatusCode)" -ForegroundColor Green
-              Write-Host "UI is accessible at: $uiUrl" -ForegroundColor Cyan
-              $healthy = $true
-              break
+              if ($response.StatusCode -eq 200 -and $response.Content -match 'id="root"') {
+                Write-Host "✅ Frontend responded with status: $($response.StatusCode)" -ForegroundColor Green
+                Write-Host "Frontend is accessible at: $uiUrl" -ForegroundColor Cyan
+                $healthy = $true
+                break
+              }
+
+              Write-Host "  Attempt $attempt/$maxAttempts returned an unexpected payload." -ForegroundColor Yellow
             } catch {
               Write-Host "  Attempt $attempt/$maxAttempts failed: $($_.Exception.Message)" -ForegroundColor Yellow
               if ($attempt -lt $maxAttempts) {
-                Write-Host "  Retrying in 30 s..." -ForegroundColor Yellow
-                Start-Sleep -Seconds 30
+                Write-Host "  Retrying in 20 s..." -ForegroundColor Yellow
+                Start-Sleep -Seconds 20
               }
             }
           }
           if (-not $healthy) {
-            Write-Host "❌ UI health check FAILED after $maxAttempts attempts" -ForegroundColor Red
+            Write-Host "❌ Frontend health check FAILED after $maxAttempts attempts" -ForegroundColor Red
           }
 
           if (-not $healthy) {
             Write-Host "" -ForegroundColor Gray
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
             Write-Host "❌ DEPLOYMENT HEALTH CHECK FAILED" -ForegroundColor Red
-            Write-Host "   The UI did not respond after deployment. Check App Service logs." -ForegroundColor Red
+            Write-Host "   The React frontend did not respond after deployment. Check App Service logs." -ForegroundColor Red
             Write-Host "   URL: $uiUrl" -ForegroundColor Red
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
             exit 1
           }
 
-      - name: Manual Dispatch Test Ownership Note
-        if: github.event_name == 'workflow_dispatch' && steps.check-target.outputs.infraReady == 'true'
-        shell: pwsh
-        run: |
-          Write-Host "⚠️  This UI workflow does not run solution tests." -ForegroundColor Yellow
-          Write-Host "   Use UI-only manual deploys when backend/shared code is unchanged." -ForegroundColor Yellow
-          Write-Host "   API workflow owns Domain/Application/API/Architecture tests." -ForegroundColor Gray
+      - name: Set up Node.js for browser smoke test
+        if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
-      # Unit tests (Domain, Application, API, Architecture) are owned by the API workflow.
-      # There are no UI-specific test projects in this solution.
-      # Tests run in deploy-api-to-azure.yml — no duplication needed here.
+      - name: Install frontend dependencies for browser smoke test
+        if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'
+        working-directory: frontend/apps/web
+        run: npx playwright install chromium
+
+      - name: Browser Smoke Test - Tenant Bootstrap
+        if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'
+        working-directory: frontend
+        run: npm run smoke:web:tenant -- --url "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/customers"
+
+      # Backend tests remain owned by deploy-api-to-azure.yml.
+      # Frontend regression tests run in the build job above so tenant bootstrap issues
+      # are blocked before artifact upload and deployment, and the browser smoke test
+      # above validates the deployed UI respects runtime bootstrap tenants.
 
       - name: Deployment Summary
         if: always()

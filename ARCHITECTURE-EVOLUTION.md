@@ -1,7 +1,7 @@
 # Architecture Evolution: Monolith to Enterprise Microservices
 
-**Last Updated:** April 10, 2026
-**Current Status:** Phases 1-7 Complete ✅ | Track U Active 📅 | Backend Phase 8 Next 📅 | Phases 8.5-14 Planned 📅
+**Last Updated:** April 11, 2026
+**Current Status:** Phases 1-7 Complete ✅ | Track U U5 Complete ✅ | Backend Phase 8 Active Next 📅 | Phases 8.5-14 Planned 📅
 
 ---
 
@@ -16,6 +16,10 @@ with MongoDB.
 ---
 
 ## Baseline: Monolith on Azure App Service ✅ DEPLOYED
+
+Historical note: the diagram below captures the original phase-1 baseline. The same UI App Service
+now serves the React frontend after Track U U5; the MVC web host is retained here only as
+historical context for the migration path.
 
 ### Timeline
 - **Duration:** Weeks 1-4 (Days 1-31)
@@ -72,7 +76,7 @@ XYDataLabs.OrderProcessingSystem.sln
 ├── XYDataLabs.OrderProcessingSystem.Domain       (Entities — zero deps)
 ├── XYDataLabs.OrderProcessingSystem.Infrastructure (EF Core, DbContext)
 ├── XYDataLabs.OrderProcessingSystem.SharedKernel  (Result<T>, ApiResponse<T>)
-├── XYDataLabs.OrderProcessingSystem.UI           (MVC Web App)
+├── frontend/apps/web                            (React Web App)
 └── XYDataLabs.OpenPayAdapter                     (Payment Integration)
 ```
 
@@ -99,7 +103,7 @@ XYDataLabs.OrderProcessingSystem.sln
 | Component | Resource Name | Status |
 |-----------|---------------|--------|
 | **API** | `pavanthakur-orderprocessing-api-xyapp-dev` | ✅ Running |
-| **UI** | `pavanthakur-orderprocessing-ui-xyapp-dev` | ✅ Running |
+| **Web** | `pavanthakur-orderprocessing-ui-xyapp-dev` | ✅ Running |
 | **Database** | `orderprocessing-sql-dev / OrderProcessingSystem_Dev` | ✅ Active |
 | **Monitoring** | `ai-orderprocessing-dev` | ✅ Active |
 | **Secrets** | `kv-orderprocessing-dev` | ⚠️ Created (needs access config) |
@@ -108,7 +112,7 @@ XYDataLabs.OrderProcessingSystem.sln
 ### URLs
 
 - **API Swagger:** https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net/swagger
-- **UI:** https://pavanthakur-orderprocessing-ui-xyapp-dev.azurewebsites.net
+- **Web (React):** https://pavanthakur-orderprocessing-ui-xyapp-dev.azurewebsites.net
 
 ---
 
@@ -138,7 +142,7 @@ XYDataLabs.OrderProcessingSystem.sln
 
 Track U is a parallel UI replacement program and does **not** renumber backend Phases 8-14.
 
-**Status:** Active planning and implementation track for React web replacement and MVC retirement before backend Phase 8 begins.
+**Status:** React web now owns the active runtime and deployment path; backend Phase 8 is no longer blocked by the MVC retirement gate.
 
 **Purpose:** Replace the MVC UI with React web first, remove MVC from the active runtime, and
 then enable React Native / mobile on the same API contract.
@@ -157,10 +161,26 @@ then enable React Native / mobile on the same API contract.
 Backend Phase 8 remains the next backend phase, but its implementation starts only after Track U
 Phase U5 is complete.
 
+The local HTTP path, Docker web profiles, and Azure deployment path now target the React frontend.
+`XYDataLabs.OrderProcessingSystem.UI` has been removed from the active runtime and solution graph.
+
 **Canonical references:**
 
 - `docs/guides/development/api-contract-audit.md`
 - `docs/guides/development/ui-modernization-plan.md`
+- `docs/guides/development/payment-journey-automation-blueprint.md`
+
+## Companion Payment Automation Blueprint
+
+Before backend Phase 8 implementation expands the payment surface further, the separate browser
+automation plan is frozen in `docs/guides/development/payment-journey-automation-blueprint.md`.
+
+Pointer precedence for this companion plan is intentional:
+
+1. `ARCHITECTURE-EVOLUTION.md` is the primary roadmap pointer.
+2. `README.md` and `docs/DEVELOPER-OPERATING-MODEL.md` are discovery surfaces.
+3. `docs/guides/development/ui-modernization-plan.md` is the sibling planning surface.
+4. `docs/internal/AZURE-PROGRESS-EVALUATION.md` records status only.
 
 ---
 
@@ -543,7 +563,7 @@ XYDataLabs.OrderProcessingSystem.sln
 ├── XYDataLabs.OrderProcessingSystem.Inventory.PublicApi (NEW - IInventoryModuleApi + contracts)
 ├── XYDataLabs.OrderProcessingSystem.Notifications.PublicApi (NEW - INotificationModuleApi + contracts)
 ├── XYDataLabs.OrderProcessingSystem.Payments.PublicApi (NEW - IPaymentModuleApi + contracts)
-├── XYDataLabs.OrderProcessingSystem.UI               (Existing - Updated routing)
+├── frontend/apps/web                                 (React SPA)
 ├── XYDataLabs.OrderProcessingSystem.Orders.Domain     (Split from shared Domain)
 ├── XYDataLabs.OrderProcessingSystem.Orders.Features   (Split from shared Application)
 ├── XYDataLabs.OrderProcessingSystem.Orders.Infrastructure (Split from shared Infrastructure)
@@ -556,6 +576,7 @@ XYDataLabs.OrderProcessingSystem.sln
 ├── XYDataLabs.OrderProcessingSystem.Payments.Domain (NEW)
 ├── XYDataLabs.OrderProcessingSystem.Payments.Features (NEW)
 ├── XYDataLabs.OrderProcessingSystem.Payments.Infrastructure (NEW)
+├── frontend/apps/web                                 (React SPA)
 ├── XYDataLabs.OrderProcessingSystem.SharedKernel     (Shared)
 └── XYDataLabs.OpenPayAdapter                         (Shared)
 ```
@@ -1338,5 +1359,5 @@ All technical skills from a typical Azure .NET senior role are fully covered or 
 
 ---
 
-**Last Updated:** April 10, 2026
-**Status:** Phases 1-7 Complete ✅ | Track U Active 📅 | Backend Phase 8 Next 📅 | Phases 8.5-14 Planned 📅
+**Last Updated:** April 11, 2026
+**Status:** Phases 1-7 Complete ✅ | Track U U5 Complete ✅ | Backend Phase 8 Active Next 📅 | Phases 8.5-14 Planned 📅

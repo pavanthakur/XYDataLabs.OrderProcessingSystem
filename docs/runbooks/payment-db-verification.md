@@ -14,7 +14,7 @@ of the previous one.
 - During incident triage to trace a specific payment
 
 **Runtime note:** The SQL queries in this runbook are runtime-agnostic. Only the way you identify the payment run differs:
-- `docker` / `local`: read the physical API/UI log files first, then use the derived prefix with the SQL queries below.
+- `docker` / `local`: read the physical API log first, then use the browser-originated `ui_payment_*` telemetry captured in that same API log to confirm the UI leg before running the SQL queries below.
 - `azure`: use App Insights to derive the logical run prefix and callback evidence first, then run the same SQL queries below.
 - This Azure refinement does **not** change the non-Azure verification flow.
 
@@ -45,8 +45,8 @@ Use the verifier that matches where the evidence lives:
 
 | Runtime | Command | Notes |
 |---|---|---|
-| local dev | `./scripts/verify-payment-run-physical.ps1 -Runtime local -Environment dev -Profile http` | Reads physical log files under `logs/` and local SQL on `localhost` |
-| docker dev | `./scripts/verify-payment-run-physical.ps1 -Runtime docker -Environment dev -Profile http` | Reads physical log files plus Docker SQL on `localhost` |
+| local dev | `./scripts/verify-payment-run-physical.ps1 -Runtime local -Environment dev -Profile http` | Reads the physical API log plus browser UI telemetry captured in that API log, then queries local SQL on `localhost` |
+| docker dev | `./scripts/verify-payment-run-physical.ps1 -Runtime docker -Environment dev -Profile http` | Reads the physical API log plus browser UI telemetry captured in that API log, then queries Docker SQL on `localhost` |
 | docker stg | `./scripts/verify-payment-run-physical.ps1 -Runtime docker -Environment stg -Profile http` | Uses staging-style local containers and DB names |
 | docker prod | `./scripts/verify-payment-run-physical.ps1 -Runtime docker -Environment prod -Profile http` | Uses prod-style local containers and DB names |
 | azure dev | `./scripts/verify-payment-run-azure.ps1 -Environment dev` | Requires `az login`, KV access, and Azure SQL firewall access |

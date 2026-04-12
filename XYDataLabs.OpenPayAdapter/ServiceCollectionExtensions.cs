@@ -31,7 +31,7 @@ namespace XYDataLabs.OpenPayAdapter
                 .ValidateOnStart();
 
             // When RedirectUrl is not explicitly configured (e.g. Docker), build it
-            // dynamically from ApiSettings:UI using the active profile's host and port.
+            // dynamically from ApiSettings:API using the active profile's host and port.
             services.PostConfigure<OpenPayConfig>(config =>
             {
                 // The Openpay SDK constructor order is (api_key, merchant_id, production).
@@ -53,8 +53,8 @@ namespace XYDataLabs.OpenPayAdapter
                 var useHttps = string.Equals(
                     configuration["USE_HTTPS"], "true", StringComparison.OrdinalIgnoreCase);
                 var profile = useHttps ? "https" : "http";
-                var host = configuration[$"ApiSettings:UI:{profile}:Host"] ?? "localhost";
-                var portStr = configuration[$"ApiSettings:UI:{profile}:Port"];
+                var host = configuration[$"ApiSettings:API:{profile}:Host"] ?? "localhost";
+                var portStr = configuration[$"ApiSettings:API:{profile}:Port"];
                 var scheme = useHttps ? "https" : "http";
 
                 if (int.TryParse(portStr, out var port) && port > 0)

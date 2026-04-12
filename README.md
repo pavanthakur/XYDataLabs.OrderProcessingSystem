@@ -272,7 +272,7 @@ POST /api/v1/Payments/{id}/confirm-status  <-- OpenPay webhook callback
 
 1. Clone the repo
 2. Configure `Resources/Configuration/sharedsettings.local.json` with your SQL Server connection string
-3. Press **F5** — API at `http://localhost:5010/swagger`, UI at `http://localhost:5012`
+3. Press **F5** — HTTP profile: API at `http://localhost:5010/swagger`, UI at `http://localhost:5173`; HTTPS profile: API at `https://localhost:5011/swagger`, UI at `https://localhost:5174`
 
 ### Option 2: Docker
 
@@ -382,7 +382,8 @@ Any deviation from ARCHITECTURE.md requires an Architecture Decision Record (ADR
 +-- XYDataLabs.OrderProcessingSystem.Domain/
 +-- XYDataLabs.OrderProcessingSystem.Infrastructure/
 +-- XYDataLabs.OrderProcessingSystem.SharedKernel/
-+-- XYDataLabs.OrderProcessingSystem.UI/
++-- frontend/
++-- automation/
 +-- XYDataLabs.OpenPayAdapter/
 |
 +-- tests/
@@ -416,6 +417,7 @@ Start here instead of navigating individual documents ad hoc:
 
 - [docs/README.md](docs/README.md) — canonical documentation hub
 - [docs/DEVELOPER-OPERATING-MODEL.md](docs/DEVELOPER-OPERATING-MODEL.md) — reading order and update rules
+- [docs/guides/development/payment-journey-automation-blueprint.md](docs/guides/development/payment-journey-automation-blueprint.md) — pre-implementation blueprint for the separate payment automation workspace
 - [ARCHITECTURE.md](ARCHITECTURE.md) — binding architecture standard
 - [.github/workflows/README.md](.github/workflows/README.md) — workflow behavior and deployment automation
 - [TROUBLESHOOTING-INDEX.md](TROUBLESHOOTING-INDEX.md) — first stop when setup, auth, or deployment fails

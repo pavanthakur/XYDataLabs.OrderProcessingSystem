@@ -10,3 +10,4 @@ Use these documents:
 - `scripts-overview.md` — script inventory and local/bootstrap usage guide
 - `api-contract-audit.md` — canonical frontend contract baseline before React implementation begins
 - `ui-modernization-plan.md` — Track U plan for React web replacement, MVC retirement, and later mobile enablement
+- `payment-journey-automation-blueprint.md` — canonical pre-implementation blueprint for the separate payment automation workspace

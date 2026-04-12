@@ -43,12 +43,14 @@ docs/README.md
 ## Current State
 
 - Days 1-43 are complete.
-- Track U (UI Modernization Program) is the active implementation-prep track.
-- Backend Phase 8 remains the next backend engineering phase and begins after Track U Phase U5.
+- Track U Phase U5 is complete: the React web cutover is live and the legacy MVC UI has been retired from the runtime and solution.
+- Backend Phase 8 is now the next active backend engineering phase.
+- Local and Docker UI validation for the React-first runtime are complete on the supported execution paths.
 - The canonical learning source of truth is `docs/learning/curriculum/1_MASTER_CURRICULUM.md`.
 - The canonical milestone tracker is `docs/internal/AZURE-PROGRESS-EVALUATION.md`.
 - Only the active `docs/` tree remains.
 - The canonical UI planning pages are `docs/guides/development/api-contract-audit.md` and `docs/guides/development/ui-modernization-plan.md`.
+- The companion payment automation planning page is `docs/guides/development/payment-journey-automation-blueprint.md`.
 
 ## Update Routing
 
@@ -138,6 +140,7 @@ Documentation structure is stable enough to stop reorganizing and return to engi
 1. `docs/learning/curriculum/1_MASTER_CURRICULUM.md`
 2. `docs/internal/AZURE-PROGRESS-EVALUATION.md`
 3. `docs/reference/quick-command-reference.md`
-4. `docs/AI-OPERATING-MODEL.md` when the task changes repo-shared AI assets
+4. `docs/guides/development/payment-journey-automation-blueprint.md` when the task touches payment UI automation, 3DS automation, or verification orchestration
+5. `docs/AI-OPERATING-MODEL.md` when the task changes repo-shared AI assets
 
 If a task touches Azure bootstrap, workflows, or IaC, open `docs/guides/deployment/README.md` for the relevant branch of guidance.

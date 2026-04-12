@@ -67,7 +67,7 @@ public class OptionsValidationTests
             UI = new ApiSettingsGroup
             {
                 http = new ApiSettingsSection { Host = "localhost", Port = 0 },
-                https = new ApiSettingsSection { Host = "localhost", Port = 5013, HttpsEnabled = true }
+                https = new ApiSettingsSection { Host = "localhost", Port = 5174, HttpsEnabled = true }
             },
             API = new ApiSettingsGroup
             {

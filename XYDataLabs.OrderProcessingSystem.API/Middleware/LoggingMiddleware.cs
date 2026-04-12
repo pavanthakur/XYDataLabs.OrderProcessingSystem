@@ -312,6 +312,12 @@ namespace XYDataLabs.OrderProcessingSystem.API.Middleware
                 return requestedTenantCode.Trim();
             }
 
+            if (string.Equals(context.Request.Path.Value, "/payment/callback", StringComparison.OrdinalIgnoreCase))
+            {
+                var callbackTenantCode = context.Request.Query["tenantCode"].FirstOrDefault()?.Trim();
+                return string.IsNullOrWhiteSpace(callbackTenantCode) ? "callback" : callbackTenantCode;
+            }
+
             return string.Equals(context.Request.Path.Value, "/api/v1/info/runtime-configuration", StringComparison.OrdinalIgnoreCase)
                 ? "bootstrap"
                 : "none";

@@ -1,0 +1,23 @@
+{
+  "name": "@xydatalabs/payment-automation",
+  "private": true,
+  "version": "0.0.0-placeholder",
+  "type": "module",
+  "scripts": {
+    "placeholder": "tsx ./src/orchestrator/placeholder-orchestrator.ts",
+    "run": "tsx ./src/cli/run-payment-automation.ts",
+    "run:dry": "tsx ./src/cli/run-payment-automation.ts --target local-http --tenant TenantA --dry-run",
+    "run:local:matrix": "tsx ./src/cli/run-local-matrix.ts",
+    "run:local:matrix:dry": "tsx ./src/cli/run-local-matrix.ts --dry-run",
+    "run:docker:matrix": "tsx ./src/cli/run-docker-matrix.ts",
+    "run:docker:matrix:dry": "tsx ./src/cli/run-docker-matrix.ts --dry-run",
+    "run:azure:matrix": "tsx ./src/cli/run-azure-matrix.ts",
+    "run:azure:matrix:dry": "tsx ./src/cli/run-azure-matrix.ts --dry-run"
+  },
+  "devDependencies": {
+    "@types/node": "^24.7.2",
+    "playwright": "^1.59.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}

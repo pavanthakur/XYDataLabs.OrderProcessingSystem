@@ -42,18 +42,20 @@ Service; never present in a local Docker or VS run.
 All environment-conditional feature gates use exactly three derived booleans, resolved at startup:
 
 ```csharp
-// Both API/Program.cs and UI/Program.cs
+// API/Program.cs (and historically the retired MVC host)
 var isDocker = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true";
 var azureSiteName = Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME");
 var isAzure = !string.IsNullOrWhiteSpace(azureSiteName);
 // IsDevelopment = ASPNETCORE_ENVIRONMENT == "Development"
 ```
 
-In the UI, these are also exposed as `ViewData` keys (`IsDocker`, `IsAzure`, `IsDevelopment`) by
-`HomeController.PopulateCommonViewData()` for use in Razor views.
+In the retired MVC UI, these were also exposed as `ViewData` keys (`IsDocker`, `IsAzure`,
+`IsDevelopment`) by `HomeController.PopulateCommonViewData()` for use in Razor views. The active
+React web client does not use Razor `ViewData`; it consumes runtime configuration from the API.
 
-Tenant policy flags (`UiSelectorEnabled`, `UiTenantOverrideEnabled`) are also passed through
-`ViewData`, but they come from `TenantConfiguration`, not from runtime detection.
+During the MVC phase, tenant policy flags (`UiSelectorEnabled`, `UiTenantOverrideEnabled`) were
+also passed through `ViewData`, but they came from `TenantConfiguration`, not from runtime
+detection.
 
 Tenant selector behavior is no longer derived from those booleans. It is controlled by
 `TenantConfiguration` so the same deployment can intentionally enable or disable tenant switching
@@ -73,7 +75,7 @@ Policy semantics:
 | Key | Purpose |
 |-----|---------|
 | `ActiveTenantCode` | Default tenant when no explicit tenant selection is supplied |
-| `UiSelectorEnabled` | Renders the MVC tenant selector + indicator in the banner |
+| `UiSelectorEnabled` | Controls whether the web client exposes tenant selector UI |
 | `UiTenantOverrideEnabled` | Allows browser-persisted user override; must be `false` if selector is hidden |
 | `SwaggerSelectorEnabled` | Injects the Swagger top-bar tenant selector in API Swagger UI |
 | URL `tenantCode` query param | Still honored as a request-scoped tenant hint for callback flows, even when browser override is disabled |
@@ -99,7 +101,10 @@ Policy semantics:
 Every feature that behaves differently per runtime context is listed here. **Update this table
 when adding any new environment-conditional logic.**
 
-### UI Features (`_Layout.cshtml` / controllers)
+### Legacy MVC UI Features (Historical)
+
+These rows describe the retired Razor host and are retained only to explain the original feature
+gating policy.
 
 | Feature | Gate condition | VS local | Dev Docker | Stg Docker | Prod Docker | Azure dev | Azure stg | Azure prod |
 |---------|---------------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
@@ -163,10 +168,12 @@ the matrix before merging:
 
 ---
 
-## Adding ViewData Flags to New Controllers
+## Legacy MVC Note
 
-If a new Razor controller needs environment-conditional rendering, add the flags via
-`PopulateCommonViewData()` in `HomeController` or reuse the same detection pattern:
+Do not add new ViewData-driven runtime UI behavior to the retired MVC host. If temporary
+compatibility maintenance is ever required, reuse `PopulateCommonViewData()` in `HomeController`
+or the same detection pattern below; all active web behavior belongs in `frontend/apps/web` and
+`GET /api/v1/Info/runtime-configuration`.
 
 ```csharp
 var isDocker = string.Equals(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"), "true", StringComparison.Ordinal);
@@ -223,11 +230,10 @@ Do NOT re-read `ASPNETCORE_ENVIRONMENT` directly in controllers — go through `
 
 ## Related
 
-- `XYDataLabs.OrderProcessingSystem.UI/Controllers/HomeController.cs` — `PopulateCommonViewData()`
-- `XYDataLabs.OrderProcessingSystem.UI/Views/Home/_Layout.cshtml` — tenant selector policy gate
-- `XYDataLabs.OrderProcessingSystem.UI/wwwroot/js/tenant-indicator.js` — browser override policy
+- `frontend/apps/web/src/App.tsx` — tenant bootstrap and shell policy gate
+- `frontend/apps/web/src/payment-flow.ts` — browser callback telemetry and API-bound tenant header usage
 - `XYDataLabs.OrderProcessingSystem.API/Program.cs` — all API-side gates
 - `Resources/Configuration/sharedsettings.{local,dev,stg,prod}.json` — tenant selector policy by environment
-- `XYDataLabs.OrderProcessingSystem.UI/Dockerfile` — `ENV DOTNET_RUNNING_IN_CONTAINER=true`
+- `frontend/apps/web/Dockerfile` — containerized React web runtime
 - ADR-007: Hybrid multi-tenant model
 - ADR-009: Tenant isolation hardening

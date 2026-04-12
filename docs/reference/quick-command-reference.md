@@ -439,9 +439,8 @@ dotnet test /p:CollectCoverage=true /p:CoverletOutputFormat=opencover
 cd XYDataLabs.OrderProcessingSystem.API
 dotnet run
 
-# Run UI (default: http://localhost:5012)
-cd XYDataLabs.OrderProcessingSystem.UI
-dotnet run
+# Run React web frontend (default: http://localhost:5173)
+npm --prefix .\frontend run dev:web
 
 # Run with specific environment
 $env:ASPNETCORE_ENVIRONMENT = "Development"
@@ -449,11 +448,12 @@ dotnet run
 ```
 
 > **Visual Studio (recommended for debugging):** Press F5 — sets `ASPNETCORE_ENVIRONMENT=Development` automatically.
+> **Workspace standard:** use Visual Studio for the .NET solution and run the React UI from the separate `frontend/` npm workspace.
 
 ### **Port Allocations**
-| Mode | API | UI |
+| Mode | API | Web |
 |------|-----|-----|
-| Local VS (F5) | http://localhost:5010 | http://localhost:5012 |
+| Local API + Vite | http://localhost:5010 | http://localhost:5173 |
 | Docker dev | http://localhost:5020 | http://localhost:5022 |
 | Docker stg | http://localhost:5030 | http://localhost:5032 |
 
