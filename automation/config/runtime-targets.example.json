@@ -1,0 +1,19 @@
+{
+  "targets": [
+    {
+      "key": "local-http",
+      "baseUrl": "http://localhost:5173",
+      "verificationMode": "physical",
+      "browserMode": "local",
+      "expectedTenantSource": "runtime-configuration",
+      "challengeCapability": "otp-spike-pending",
+      "supportsPartialExecution": false,
+      "supportsHeadless": true,
+      "runtime": "local",
+      "environment": "dev",
+      "profile": "http",
+      "paymentPagePath": "/payments/new",
+      "ignoreHttpsErrors": false
+    }
+  ]
+}

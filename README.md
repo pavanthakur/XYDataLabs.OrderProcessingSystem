@@ -383,6 +383,7 @@ Any deviation from ARCHITECTURE.md requires an Architecture Decision Record (ADR
 +-- XYDataLabs.OrderProcessingSystem.Infrastructure/
 +-- XYDataLabs.OrderProcessingSystem.SharedKernel/
 +-- frontend/
++-- automation/
 +-- XYDataLabs.OpenPayAdapter/
 |
 +-- tests/
@@ -416,6 +417,7 @@ Start here instead of navigating individual documents ad hoc:
 
 - [docs/README.md](docs/README.md) — canonical documentation hub
 - [docs/DEVELOPER-OPERATING-MODEL.md](docs/DEVELOPER-OPERATING-MODEL.md) — reading order and update rules
+- [docs/guides/development/payment-journey-automation-blueprint.md](docs/guides/development/payment-journey-automation-blueprint.md) — pre-implementation blueprint for the separate payment automation workspace
 - [ARCHITECTURE.md](ARCHITECTURE.md) — binding architecture standard
 - [.github/workflows/README.md](.github/workflows/README.md) — workflow behavior and deployment automation
 - [TROUBLESHOOTING-INDEX.md](TROUBLESHOOTING-INDEX.md) — first stop when setup, auth, or deployment fails

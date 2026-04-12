@@ -41,6 +41,7 @@
 - ✅ Local HTTP/HTTPS and Docker HTTP/HTTPS UI launch paths now target the React frontend workspace
 - ✅ `XYDataLabs.OrderProcessingSystem.UI` and `XYDataLabs.OrderProcessingSystem.UI.Tests` were removed physically and from the solution/runtime path
 - ✅ Backend Phase 8 is now unblocked under the completed Track U plan
+- ✅ Companion payment automation blueprint and placeholder workspace are defined before deeper payment automation execution begins; use `docs/guides/development/payment-journey-automation-blueprint.md` as the canonical guide, but treat this progress page as status-only for that topic
 
 ### Architecture Phases Completed
 

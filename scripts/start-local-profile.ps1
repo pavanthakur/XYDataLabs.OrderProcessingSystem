@@ -7,6 +7,29 @@ param(
 $workspaceRoot = Split-Path -Parent $PSScriptRoot
 $apiScriptPath = Join-Path $PSScriptRoot 'start-local-api-profile.ps1'
 $frontendScriptPath = Join-Path $PSScriptRoot 'start-local-frontend-profile.ps1'
+$expectedPorts = if ($Profile -eq 'https') { @(5011, 5174) } else { @(5010, 5173) }
+
+function Get-ListeningPorts {
+    param(
+        [Parameter(Mandatory = $true)]
+        [int[]]$Ports
+    )
+
+    return @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
+        Where-Object { $Ports -contains $_.LocalPort } |
+        Select-Object -ExpandProperty LocalPort -Unique |
+        Sort-Object -Unique)
+}
+
+function Test-ExpectedPortsListening {
+    param(
+        [Parameter(Mandatory = $true)]
+        [int[]]$Ports
+    )
+
+    $listeningPorts = Get-ListeningPorts -Ports $Ports
+    return @($Ports | Where-Object { $listeningPorts -contains $_ }).Count -eq $Ports.Count
+}
 
 function Start-ChildProfileProcess {
     param(
@@ -38,30 +61,38 @@ function Start-ChildProfileProcess {
         -PassThru
 }
 
-$apiProcess = $null
-$frontendProcess = $null
+$profileBecameReady = $false
+$startupDeadline = (Get-Date).AddSeconds(120)
 
 try
 {
-    $apiProcess = Start-ChildProfileProcess -Name 'API' -ScriptPath $apiScriptPath -ProfileName $Profile
-    $frontendProcess = Start-ChildProfileProcess -Name 'UI' -ScriptPath $frontendScriptPath -ProfileName $Profile
+    Start-ChildProfileProcess -Name 'API' -ScriptPath $apiScriptPath -ProfileName $Profile | Out-Null
+    Start-ChildProfileProcess -Name 'UI' -ScriptPath $frontendScriptPath -ProfileName $Profile | Out-Null
 
     Write-Host "Local '$Profile' profile is running."
     Write-Host 'Press Ctrl+C to stop the launcher task, or use the stop task to terminate listening processes.'
 
     while ($true)
     {
-        $apiProcess.Refresh()
-        $frontendProcess.Refresh()
-
-        if ($apiProcess.HasExited)
+        if (-not $profileBecameReady)
         {
-            throw "API process exited unexpectedly with code $($apiProcess.ExitCode)."
+            if (Test-ExpectedPortsListening -Ports $expectedPorts)
+            {
+                $profileBecameReady = $true
+                Write-Host "Local '$Profile' profile is ready on ports: $($expectedPorts -join ', ')."
+            }
+            elseif ((Get-Date) -ge $startupDeadline)
+            {
+                $listeningPorts = Get-ListeningPorts -Ports $expectedPorts
+                $listeningPortsLabel = if ($listeningPorts.Count -gt 0) { $listeningPorts -join ', ' } else { 'none' }
+                throw "Timed out waiting for local '$Profile' profile ports. Expected: $($expectedPorts -join ', '). Listening: $listeningPortsLabel."
+            }
         }
-
-        if ($frontendProcess.HasExited)
+        elseif (-not (Test-ExpectedPortsListening -Ports $expectedPorts))
         {
-            throw "UI process exited unexpectedly with code $($frontendProcess.ExitCode)."
+            $listeningPorts = Get-ListeningPorts -Ports $expectedPorts
+            $listeningPortsLabel = if ($listeningPorts.Count -gt 0) { $listeningPorts -join ', ' } else { 'none' }
+            throw "Local '$Profile' profile stopped listening on expected ports. Expected: $($expectedPorts -join ', '). Listening: $listeningPortsLabel."
         }
 
         Start-Sleep -Seconds 1
@@ -69,21 +100,14 @@ try
 }
 finally
 {
-    foreach ($process in @($apiProcess, $frontendProcess))
+    if (-not $profileBecameReady)
     {
-        if ($null -ne $process)
+        try
         {
-            try
-            {
-                $process.Refresh()
-                if (-not $process.HasExited)
-                {
-                    Stop-Process -Id $process.Id -Force -ErrorAction Stop
-                }
-            }
-            catch
-            {
-            }
+            & (Join-Path $PSScriptRoot 'stop-local-dev-sessions.ps1') -Profile $Profile | Out-Null
+        }
+        catch
+        {
         }
     }
 }

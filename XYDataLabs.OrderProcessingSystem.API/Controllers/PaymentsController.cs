@@ -48,7 +48,8 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
                     request.ExpirationYear,
                     request.ExpirationMonth,
                     request.Cvv2,
-                    request.CustomerOrderId), cancellationToken);
+                    request.CustomerOrderId,
+                    request.ClientCallbackOrigin), cancellationToken);
                 return result.ToActionResult();
             }
             catch (Exception ex)

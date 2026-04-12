@@ -208,7 +208,8 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
         expirationYear: formState.expirationYear,
         expirationMonth: formState.expirationMonth,
         cvv2: formState.cvv2,
-        customerOrderId: formState.customerOrderId
+        customerOrderId: formState.customerOrderId,
+        clientCallbackOrigin: window.location.origin
       });
 
       persistPendingPaymentContext(payment.id, {

@@ -238,3 +238,4 @@ The original Track U gate is satisfied and the cleanup slice has been completed:
 - `docs/architecture/decisions/ADR-016-client-rendered-react-spa.md`
 - `docs/guides/development/api-contract-audit.md`
 - `ARCHITECTURE-EVOLUTION.md`
+- `docs/guides/development/payment-journey-automation-blueprint.md` for the separate pre-implementation payment automation workspace and guardrails

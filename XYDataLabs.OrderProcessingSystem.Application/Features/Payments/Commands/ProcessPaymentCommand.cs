@@ -12,4 +12,5 @@ public sealed record ProcessPaymentCommand(
     string ExpirationYear,
     string ExpirationMonth,
     string Cvv2,
-    string CustomerOrderId) : ICommand<Result<PaymentDto>>;
+    string CustomerOrderId,
+    string? ClientCallbackOrigin) : ICommand<Result<PaymentDto>>;

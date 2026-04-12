@@ -168,6 +168,19 @@ The local HTTP path, Docker web profiles, and Azure deployment path now target t
 
 - `docs/guides/development/api-contract-audit.md`
 - `docs/guides/development/ui-modernization-plan.md`
+- `docs/guides/development/payment-journey-automation-blueprint.md`
+
+## Companion Payment Automation Blueprint
+
+Before backend Phase 8 implementation expands the payment surface further, the separate browser
+automation plan is frozen in `docs/guides/development/payment-journey-automation-blueprint.md`.
+
+Pointer precedence for this companion plan is intentional:
+
+1. `ARCHITECTURE-EVOLUTION.md` is the primary roadmap pointer.
+2. `README.md` and `docs/DEVELOPER-OPERATING-MODEL.md` are discovery surfaces.
+3. `docs/guides/development/ui-modernization-plan.md` is the sibling planning surface.
+4. `docs/internal/AZURE-PROGRESS-EVALUATION.md` records status only.
 
 ---
 

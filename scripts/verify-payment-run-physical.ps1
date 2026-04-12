@@ -70,7 +70,8 @@ $repoRoot = Split-Path -Path $PSScriptRoot -Parent
 $dateTag = (Get-Date).ToString('yyyyMMdd')
 $envTag = if ($Runtime -eq 'local') { 'dev' } else { $Environment }
 $runtimeTag = if ($Runtime -eq 'docker') { 'dock' } else { 'local' }
-$apiLogPath = Join-Path $repoRoot "logs\webapi-$envTag-$runtimeTag-$Profile-$dateTag.log"
+$logDirectory = Join-Path $repoRoot 'logs'
+$apiLogPattern = "webapi-$envTag-$runtimeTag-$Profile-$dateTag*.log"
 $envLocalPath = Join-Path $repoRoot 'Resources\Docker\.env.local'
 
 $sharedDbName = if ($Runtime -eq 'local') {
@@ -407,12 +408,21 @@ function Convert-UiLogLinesToEvents {
     return @($events | Sort-Object Timestamp)
 }
 
-if (-not (Test-Path $apiLogPath)) {
-    throw "API log file not found: $apiLogPath"
+if (-not (Test-Path $logDirectory)) {
+    throw "API log directory not found: $logDirectory"
 }
 
-Write-Step "Reading API log from $apiLogPath"
-$apiLogLines = Get-Content $apiLogPath |
+$apiLogFiles = @(Get-ChildItem -Path $logDirectory -Filter $apiLogPattern -File -ErrorAction SilentlyContinue | Sort-Object Name)
+if ($apiLogFiles.Count -eq 0) {
+    throw "API log files not found for pattern '$apiLogPattern' in $logDirectory"
+}
+
+$apiLogPaths = @($apiLogFiles | Select-Object -ExpandProperty FullName)
+$apiLogLabel = $apiLogPaths -join ', '
+
+Write-Step "Reading API logs from $apiLogLabel"
+$apiLogLines = $apiLogFiles |
+    Get-Content |
     Select-String -Pattern 'Generated payment|created charge|charge created|callback reconciliation completed|confirm-status responded|Response: 200.*OR-' |
     ForEach-Object { $_.Line.Trim() }
 
@@ -435,13 +445,13 @@ if ([string]::IsNullOrWhiteSpace($selectedRunPrefix)) {
         throw "Multiple payment run prefixes found today:`n- $($prefixDetails -join "`n- ")`nRe-run with -RunPrefix."
     }
     else {
-        throw "No payment run prefixes were found in today's API log: $apiLogPath"
+        throw "No payment run prefixes were found in today's API logs: $apiLogLabel"
     }
 }
 
 if ($availableRunPrefixes.Count -gt 0 -and $availableRunPrefixes -notcontains $selectedRunPrefix) {
     $prefixList = ($availableRunPrefixes | ForEach-Object { '- ' + $_ }) -join "`n"
-    throw "Run prefix '$selectedRunPrefix' was not found in today's API log.`n$prefixList"
+    throw "Run prefix '$selectedRunPrefix' was not found in today's API logs.`n$prefixList"
 }
 
 $selectedApiEvents = @($apiEvents | Where-Object { $_.ResolvedRunPrefix -eq $selectedRunPrefix })
@@ -469,8 +479,9 @@ $warnings = [System.Collections.Generic.List[string]]::new()
 $uiEvents = @()
 $selectedUiEvents = @()
 
-Write-Step "Reading browser UI telemetry from $apiLogPath"
-$uiEvidenceLines = Get-Content $apiLogPath |
+Write-Step "Reading browser UI telemetry from $apiLogLabel"
+$uiEvidenceLines = $apiLogFiles |
+    Get-Content |
     Select-String -Pattern $selectedRunPrefix |
     ForEach-Object { $_.Line.Trim() } |
     Where-Object {
@@ -492,7 +503,7 @@ if (@($uiEvidenceLines).Count -gt 0) {
     )
 }
 else {
-    $warnings.Add("No browser UI telemetry matched run prefix '$selectedRunPrefix' in API log: $apiLogPath")
+    $warnings.Add("No browser UI telemetry matched run prefix '$selectedRunPrefix' in API logs: $apiLogLabel")
 }
 
 Write-Step 'Querying SQL databases'

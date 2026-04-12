@@ -1,3 +1,4 @@
+import { StrictMode } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
@@ -42,14 +43,16 @@ describe("PaymentCallbackPage", () => {
     }));
 
     render(
-      <MemoryRouter initialEntries={["/payments/callback?tenantCode=TenantA&id=tri4sjvgkcxbnjt2heti&status=completed"]}>
-        <Routes>
-          <Route
-            path="/payments/callback"
-            element={<PaymentCallbackPage activeTenantCode="" apiClient={apiClient} onTenantChange={onTenantChange} />}
-          />
-        </Routes>
-      </MemoryRouter>
+      <StrictMode>
+        <MemoryRouter initialEntries={["/payments/callback?tenantCode=TenantA&id=tri4sjvgkcxbnjt2heti&status=completed"]}>
+          <Routes>
+            <Route
+              path="/payments/callback"
+              element={<PaymentCallbackPage activeTenantCode="" apiClient={apiClient} onTenantChange={onTenantChange} />}
+            />
+          </Routes>
+        </MemoryRouter>
+      </StrictMode>
     );
 
     await waitFor(() => expect(confirmPaymentStatus).toHaveBeenCalledWith(
@@ -59,6 +62,7 @@ describe("PaymentCallbackPage", () => {
       }),
       "TenantA"
     ));
+    await waitFor(() => expect(confirmPaymentStatus).toHaveBeenCalledTimes(1));
 
     expect(onTenantChange).not.toHaveBeenCalled();
     expect(await screen.findByText("Payment completed successfully.")).toBeInTheDocument();

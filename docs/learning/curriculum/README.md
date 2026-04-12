@@ -21,6 +21,7 @@ Canonical curriculum navigation for the learning track.
 - Completed: Days 1-43 and Architecture Phases 1-7
 - Current: Phase 7 is closed and verification-frozen; Track U U5 is complete and the React-first web cutover plus MVC retirement are done
 - Next: backend Phase 8 event foundation, then Phase 9 module extraction, then Phase 10 Azure transport + DLQ operations behind hard entry gates
+- Companion planning surface before payment automation implementation: `docs/guides/development/payment-journey-automation-blueprint.md`
 
 Last Updated: April 11, 2026
 Current Focus: Backend Phase 8 preparation and execution on top of the completed React-first cutover baseline

@@ -111,6 +111,9 @@ describe("PaymentPage", () => {
     await user.click(screen.getByRole("button", { name: "Process payment" }));
 
     await waitFor(() => expect(processPayment).toHaveBeenCalledTimes(1));
+    expect(processPayment).toHaveBeenCalledWith(expect.objectContaining({
+      clientCallbackOrigin: window.location.origin
+    }));
     await waitFor(() => expect(confirmPaymentStatus).toHaveBeenCalledWith(
       "pay-123",
       expect.objectContaining({
@@ -178,6 +181,9 @@ describe("PaymentPage", () => {
     await user.click(screen.getByRole("button", { name: "Process payment" }));
 
     await waitFor(() => expect(processPayment).toHaveBeenCalledTimes(1));
+    expect(processPayment).toHaveBeenCalledWith(expect.objectContaining({
+      clientCallbackOrigin: window.location.origin
+    }));
 
     expect(await screen.findByText("Opening the provider OTP challenge")).toBeInTheDocument();
     expect(screen.getByText(/will move to the provider challenge automatically/i)).toBeInTheDocument();

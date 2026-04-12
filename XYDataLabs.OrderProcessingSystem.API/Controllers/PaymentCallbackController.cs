@@ -7,6 +7,7 @@ public sealed class PaymentCallbackController : ControllerBase
 {
     private const string PaymentCallbackPath = "/payment/callback";
     private const string PaymentCallbackResultPath = "/payments/callback";
+    private const string ClientCallbackOriginParameter = "clientCallbackOrigin";
 
     private readonly IConfiguration _configuration;
     private readonly ILogger<PaymentCallbackController> _logger;
@@ -31,7 +32,7 @@ public sealed class PaymentCallbackController : ControllerBase
         var callbackStatus = GetFirstValue(parameters, "status", "transaction_status", "operation_status") ?? "unknown";
         var tenantCode = GetFirstValue(parameters, "tenantCode") ?? "none";
 
-        if (!TryResolveFrontendBaseUrl(out var frontendBaseUrl))
+        if (!TryResolveFrontendBaseUrl(parameters, out var frontendBaseUrl))
         {
             _logger.LogError(
                 "Payment callback received for payment {PaymentId} and tenant {TenantCode}, but no frontend callback base URL could be resolved",
@@ -56,8 +57,13 @@ public sealed class PaymentCallbackController : ControllerBase
         return Redirect(redirectUrl);
     }
 
-    private bool TryResolveFrontendBaseUrl(out string frontendBaseUrl)
+    private bool TryResolveFrontendBaseUrl(IReadOnlyDictionary<string, string> parameters, out string frontendBaseUrl)
     {
+        if (TryResolveClientCallbackOrigin(parameters, out frontendBaseUrl))
+        {
+            return true;
+        }
+
         var useHttps = string.Equals(_configuration["USE_HTTPS"], "true", StringComparison.OrdinalIgnoreCase);
         var configuredBaseUrl = _configuration["Frontend:WebBaseUrl"]?.Trim();
         if (Uri.TryCreate(configuredBaseUrl, UriKind.Absolute, out var configuredUri))
@@ -90,6 +96,76 @@ public sealed class PaymentCallbackController : ControllerBase
 
         frontendBaseUrl = string.Empty;
         return false;
+    }
+
+    private bool TryResolveClientCallbackOrigin(IReadOnlyDictionary<string, string> parameters, out string frontendBaseUrl)
+    {
+        frontendBaseUrl = string.Empty;
+
+        var clientCallbackOrigin = GetFirstValue(parameters, ClientCallbackOriginParameter);
+        if (string.IsNullOrWhiteSpace(clientCallbackOrigin) || !Uri.TryCreate(clientCallbackOrigin, UriKind.Absolute, out var originUri))
+        {
+            return false;
+        }
+
+        var normalizedOrigin = NormalizeCallbackOrigin(originUri);
+        var allowedFrontendBaseUrls = GetAllowedFrontendBaseUrls();
+        if (!allowedFrontendBaseUrls.Contains(normalizedOrigin))
+        {
+            _logger.LogWarning(
+                "Ignoring client callback origin {ClientCallbackOrigin} because it is not in the allowed frontend base URLs.",
+                normalizedOrigin);
+            return false;
+        }
+
+        frontendBaseUrl = normalizedOrigin;
+        return true;
+    }
+
+    private HashSet<string> GetAllowedFrontendBaseUrls()
+    {
+        var allowedBaseUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        void AddBaseUrl(string? candidate)
+        {
+            if (!Uri.TryCreate(candidate, UriKind.Absolute, out var candidateUri))
+            {
+                return;
+            }
+
+            allowedBaseUrls.Add(NormalizeCallbackOrigin(candidateUri));
+        }
+
+        AddBaseUrl(_configuration["Frontend:WebBaseUrl"]?.Trim());
+
+        foreach (var profile in new[] { "http", "https" })
+        {
+            var host = _configuration[$"ApiSettings:UI:{profile}:Host"];
+            var port = _configuration[$"ApiSettings:UI:{profile}:Port"];
+            var scheme = string.Equals(profile, "https", StringComparison.OrdinalIgnoreCase) ? Uri.UriSchemeHttps : Uri.UriSchemeHttp;
+
+            if (!string.IsNullOrWhiteSpace(host) && int.TryParse(port, out var resolvedPort) && resolvedPort > 0)
+            {
+                AddBaseUrl($"{scheme}://{host}:{resolvedPort}");
+            }
+        }
+
+        var azureSiteName = Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME");
+        if (!string.IsNullOrWhiteSpace(azureSiteName))
+        {
+            var uiSiteName = azureSiteName.Replace("-api-", "-ui-");
+            if (!string.Equals(uiSiteName, azureSiteName, StringComparison.Ordinal))
+            {
+                AddBaseUrl($"https://{uiSiteName}.azurewebsites.net");
+            }
+        }
+
+        return allowedBaseUrls;
+    }
+
+    private static string NormalizeCallbackOrigin(Uri originUri)
+    {
+        return originUri.GetLeftPart(UriPartial.Authority).TrimEnd('/');
     }
 
     private static string NormalizeFrontendBaseUrl(Uri configuredUri, bool useHttps)

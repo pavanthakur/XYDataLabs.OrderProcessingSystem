@@ -15,11 +15,30 @@ type CallbackState = "idle" | "loading" | "ready" | "error";
 
 const callbackRetryDelayMs = 2500;
 const maxPendingConfirmationAttempts = 4;
+const receivedCallbackTelemetryKeys = new Set<string>();
+const inFlightReconciliations = new Map<string, Promise<PaymentStatusDetails>>();
 
 interface PaymentCallbackPageProps {
   activeTenantCode: string;
   apiClient: OrderProcessingApiClient;
   onTenantChange: (tenantCode: string) => void;
+}
+
+function getOrStartReconciliation(
+  reconciliationKey: string,
+  factory: () => Promise<PaymentStatusDetails>
+): Promise<PaymentStatusDetails> {
+  const existingReconciliation = inFlightReconciliations.get(reconciliationKey);
+  if (existingReconciliation) {
+    return existingReconciliation;
+  }
+
+  const reconciliationPromise = factory().finally(() => {
+    inFlightReconciliations.delete(reconciliationKey);
+  });
+
+  inFlightReconciliations.set(reconciliationKey, reconciliationPromise);
+  return reconciliationPromise;
 }
 
 export function PaymentCallbackPage({ activeTenantCode, apiClient, onTenantChange }: PaymentCallbackPageProps) {
@@ -93,6 +112,7 @@ export function PaymentCallbackPage({ activeTenantCode, apiClient, onTenantChang
     };
     const confirmedPaymentId = paymentId;
     const receivedTelemetryKey = JSON.stringify({ paymentId: confirmedPaymentId, resolvedTenantCode, request });
+    const reconciliationKey = JSON.stringify({ paymentId: confirmedPaymentId, resolvedTenantCode, request, reconciliationAttempt });
 
     let isCancelled = false;
     let retryTimeoutId: number | null = null;
@@ -101,8 +121,9 @@ export function PaymentCallbackPage({ activeTenantCode, apiClient, onTenantChang
       setCallbackState("loading");
       setErrorMessage(null);
 
-      if (receivedTelemetryKeyRef.current !== receivedTelemetryKey) {
+      if (receivedTelemetryKeyRef.current !== receivedTelemetryKey && !receivedCallbackTelemetryKeys.has(receivedTelemetryKey)) {
         receivedTelemetryKeyRef.current = receivedTelemetryKey;
+        receivedCallbackTelemetryKeys.add(receivedTelemetryKey);
 
         void trackPaymentEvent({
           eventName: "ui_payment_callback_received",
@@ -118,7 +139,10 @@ export function PaymentCallbackPage({ activeTenantCode, apiClient, onTenantChang
       }
 
       try {
-        const nextPaymentStatus = await apiClient.confirmPaymentStatus(confirmedPaymentId, request, resolvedTenantCode);
+        const nextPaymentStatus = await getOrStartReconciliation(
+          reconciliationKey,
+          () => apiClient.confirmPaymentStatus(confirmedPaymentId, request, resolvedTenantCode)
+        );
         if (isCancelled) {
           return;
         }

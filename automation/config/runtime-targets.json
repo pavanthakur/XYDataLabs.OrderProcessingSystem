@@ -1,0 +1,34 @@
+{
+  "targets": [
+    {
+      "key": "local-http",
+      "baseUrl": "http://localhost:5173",
+      "verificationMode": "physical",
+      "browserMode": "local",
+      "expectedTenantSource": "runtime-configuration",
+      "challengeCapability": "otp-spike-pending",
+      "supportsPartialExecution": false,
+      "supportsHeadless": true,
+      "runtime": "local",
+      "environment": "dev",
+      "profile": "http",
+      "paymentPagePath": "/payments/new",
+      "ignoreHttpsErrors": false
+    },
+    {
+      "key": "local-https",
+      "baseUrl": "https://localhost:5174",
+      "verificationMode": "physical",
+      "browserMode": "local",
+      "expectedTenantSource": "runtime-configuration",
+      "challengeCapability": "otp-spike-pending",
+      "supportsPartialExecution": false,
+      "supportsHeadless": true,
+      "runtime": "local",
+      "environment": "dev",
+      "profile": "https",
+      "paymentPagePath": "/payments/new",
+      "ignoreHttpsErrors": true
+    }
+  ]
+}
