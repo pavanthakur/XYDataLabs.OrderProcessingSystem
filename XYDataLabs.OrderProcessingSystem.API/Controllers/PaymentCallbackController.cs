@@ -58,10 +58,11 @@ public sealed class PaymentCallbackController : ControllerBase
 
     private bool TryResolveFrontendBaseUrl(out string frontendBaseUrl)
     {
+        var useHttps = string.Equals(_configuration["USE_HTTPS"], "true", StringComparison.OrdinalIgnoreCase);
         var configuredBaseUrl = _configuration["Frontend:WebBaseUrl"]?.Trim();
         if (Uri.TryCreate(configuredBaseUrl, UriKind.Absolute, out var configuredUri))
         {
-            frontendBaseUrl = configuredUri.ToString().TrimEnd('/');
+            frontendBaseUrl = NormalizeFrontendBaseUrl(configuredUri, useHttps);
             return true;
         }
 
@@ -76,7 +77,6 @@ public sealed class PaymentCallbackController : ControllerBase
             }
         }
 
-        var useHttps = string.Equals(_configuration["USE_HTTPS"], "true", StringComparison.OrdinalIgnoreCase);
         var profile = useHttps ? "https" : "http";
         var host = _configuration[$"ApiSettings:UI:{profile}:Host"] ?? "localhost";
         var portValue = _configuration[$"ApiSettings:UI:{profile}:Port"];
@@ -90,6 +90,28 @@ public sealed class PaymentCallbackController : ControllerBase
 
         frontendBaseUrl = string.Empty;
         return false;
+    }
+
+    private static string NormalizeFrontendBaseUrl(Uri configuredUri, bool useHttps)
+    {
+        if (!configuredUri.IsLoopback)
+        {
+            return configuredUri.ToString().TrimEnd('/');
+        }
+
+        var expectedScheme = useHttps ? Uri.UriSchemeHttps : Uri.UriSchemeHttp;
+        if (string.Equals(configuredUri.Scheme, expectedScheme, StringComparison.OrdinalIgnoreCase))
+        {
+            return configuredUri.ToString().TrimEnd('/');
+        }
+
+        var builder = new UriBuilder(configuredUri)
+        {
+            Scheme = expectedScheme,
+            Port = configuredUri.IsDefaultPort ? -1 : configuredUri.Port
+        };
+
+        return builder.Uri.ToString().TrimEnd('/');
     }
 
     private static string BuildFrontendCallbackUrl(string frontendBaseUrl, QueryString queryString)

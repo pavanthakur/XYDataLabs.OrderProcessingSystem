@@ -272,7 +272,7 @@ POST /api/v1/Payments/{id}/confirm-status  <-- OpenPay webhook callback
 
 1. Clone the repo
 2. Configure `Resources/Configuration/sharedsettings.local.json` with your SQL Server connection string
-3. Press **F5** — API at `http://localhost:5010/swagger`, UI at `http://localhost:5012`
+3. Press **F5** — HTTP profile: API at `http://localhost:5010/swagger`, UI at `http://localhost:5173`; HTTPS profile: API at `https://localhost:5011/swagger`, UI at `https://localhost:5174`
 
 ### Option 2: Docker
 

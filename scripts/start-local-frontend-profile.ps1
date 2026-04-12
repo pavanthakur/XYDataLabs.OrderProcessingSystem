@@ -5,8 +5,9 @@ param(
 )
 
 $workspaceRoot = Split-Path -Parent $PSScriptRoot
+$uiPort = if ($Profile -eq 'https') { 5174 } else { 5173 }
 
-$uiUrl = if ($Profile -eq 'https') { 'https://localhost:5173/' } else { 'http://localhost:5173/' }
+$uiUrl = if ($Profile -eq 'https') { "https://localhost:$uiPort/" } else { "http://localhost:$uiPort/" }
 $apiBaseUrl = if ($Profile -eq 'https') { 'https://localhost:5011' } else { 'http://localhost:5010' }
 $apiUrl = "$apiBaseUrl/swagger"
 
@@ -35,6 +36,11 @@ if ($Profile -eq 'https')
     $env:ORDERPROCESSING_DEV_SERVER_PFX_PATH = (Resolve-Path (Join-Path $workspaceRoot 'Resources\Certificates\aspnetapp.pfx')).Path
     $env:ORDERPROCESSING_DEV_SERVER_PFX_PASSWORD = $certPasswordLine.Substring('LOCAL_CERT_PASSWORD='.Length)
 }
+else
+{
+    $env:ORDERPROCESSING_DEV_SERVER_USE_HTTPS = 'false'
+}
 
+$env:ORDERPROCESSING_DEV_SERVER_PORT = "$uiPort"
 $env:ORDERPROCESSING_API_BASE_URL = $apiBaseUrl
 npm --prefix .\frontend run dev:web

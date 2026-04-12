@@ -7,7 +7,8 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "USE_HTTPS": "false",
-        "CORS_ALLOWED_ORIGINS": "http://localhost:5010,http://localhost:5012",
+        "Frontend__WebBaseUrl": "http://localhost:5173",
+        "CORS_ALLOWED_ORIGINS": "http://localhost:5173",
         "SHAREDSETTINGS_PATH": "..\\Resources\\Configuration\\sharedsettings.local.json"
       },
       "dotnetRunMessages": true,
@@ -20,7 +21,8 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "USE_HTTPS": "true",
-        "CORS_ALLOWED_ORIGINS": "https://localhost:5011,https://localhost:5013",
+        "Frontend__WebBaseUrl": "https://localhost:5174",
+        "CORS_ALLOWED_ORIGINS": "https://localhost:5174",
         "SHAREDSETTINGS_PATH": "..\\Resources\\Configuration\\sharedsettings.local.json"
       },
       "dotnetRunMessages": true,

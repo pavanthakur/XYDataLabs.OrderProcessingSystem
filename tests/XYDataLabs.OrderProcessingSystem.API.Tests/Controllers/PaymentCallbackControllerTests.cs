@@ -37,4 +37,33 @@ public sealed class PaymentCallbackControllerTests
         result.Should().BeOfType<RedirectResult>()
             .Which.Url.Should().Be("http://localhost:5173/payments/callback?id=pay_123&tenantCode=TenantA");
     }
+
+    [Fact]
+    public void RedirectToClientCallback_RewritesLoopbackFrontendBaseUrl_ToHttps_WhenProfileRequiresIt()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Frontend:WebBaseUrl"] = "http://localhost:5173",
+                ["USE_HTTPS"] = "true"
+            })
+            .Build();
+
+        var controller = new PaymentCallbackController(
+            configuration,
+            Mock.Of<ILogger<PaymentCallbackController>>())
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext()
+            }
+        };
+
+        controller.ControllerContext.HttpContext.Request.QueryString = new QueryString("?id=pay_123&tenantCode=TenantA");
+
+        var result = controller.RedirectToClientCallback();
+
+        result.Should().BeOfType<RedirectResult>()
+            .Which.Url.Should().Be("https://localhost:5173/payments/callback?id=pay_123&tenantCode=TenantA");
+    }
 }

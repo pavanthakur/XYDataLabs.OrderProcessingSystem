@@ -8,7 +8,7 @@ The API and UI projects include both **Docker** and **Non-Docker** launch profil
 
 | **Profile Type** | **Purpose** | **Database** | **Ports** | **Setup Script** |
 |-----------------|-------------|--------------|-----------|------------------|
-| **Non-Docker** | Local development | OrderProcessingSystem_Local | 5010-5013 | `set-local-env.ps1` |
+| **Non-Docker** | Local development | OrderProcessingSystem_Local | API 5010/5011, UI 5173/5174 | `set-local-env.ps1` |
 | **Docker** | Containerized environments | OrderProcessingSystem_{Env} | 5020+, 5030+, 5040+ | `Resources\Docker\start-docker.ps1` |
 
 ## 🔄 Two-Stage Launch Architecture
@@ -67,8 +67,8 @@ Both Docker and Non-Docker profiles use a **two-stage architecture** to ensure p
 - **https-direct**: Direct HTTPS launch (used internally by `https` profile)
 
 #### UI Project Non-Docker Profiles  
-- **http**: Local development with HTTP (port 5012) → calls `http-direct`
-- **https**: Local development with HTTPS (port 5013) → calls `https-direct`
+- **http**: Local development with HTTP (port 5173) → calls `http-direct`
+- **https**: Local development with HTTPS (port 5174) → calls `https-direct`
 - **http-direct**: Direct HTTP launch (used internally by `http` profile)
 - **https-direct**: Direct HTTPS launch (used internally by `https` profile)
 
@@ -132,7 +132,7 @@ Each Docker profile includes:
 
 | Environment | API HTTP | API HTTPS | UI HTTP | UI HTTPS |
 |-------------|----------|-----------|---------|----------|
-| **Local (Non-Docker)** | 5010 | 5011 | 5012 | 5013 |
+| **Local (Non-Docker)** | 5010 | 5011 | 5173 | 5174 |
 | **dev (Docker)**     | 5020     | 5021      | 5022    | 5023     |
 | **uat (Docker)**     | 5030     | 5031      | 5032    | 5033     |
 | **prod (Docker)**    | 5040     | 5041      | 5042    | 5043     |

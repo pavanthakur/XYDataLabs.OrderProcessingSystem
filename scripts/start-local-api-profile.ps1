@@ -6,8 +6,9 @@ param(
 
 $workspaceRoot = Split-Path -Parent $PSScriptRoot
 $apiProjectPath = Join-Path $workspaceRoot 'XYDataLabs.OrderProcessingSystem.API'
+$uiPort = if ($Profile -eq 'https') { 5174 } else { 5173 }
 
-$uiUrl = if ($Profile -eq 'https') { 'https://localhost:5173/' } else { 'http://localhost:5173/' }
+$uiUrl = if ($Profile -eq 'https') { "https://localhost:$uiPort/" } else { "http://localhost:$uiPort/" }
 $apiUrl = if ($Profile -eq 'https') { 'https://localhost:5011/swagger' } else { 'http://localhost:5010/swagger' }
 
 Write-Host ''

@@ -429,7 +429,7 @@
             "args": [
                 "-NoProfile",
                 "-Command",
-                    "$ports = @(5010, 5011, 5173); $processIds = foreach ($port in $ports) { Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique }; $processIds = $processIds | Where-Object { $_ } | Sort-Object -Unique; if (-not $processIds) { Write-Host 'No local dev sessions found.'; exit 0 }; foreach ($processId in $processIds) { try { Stop-Process -Id $processId -Force -ErrorAction Stop; Write-Host \"Stopped process $processId\" } catch { Write-Warning \"Failed to stop process ${processId}: $($_.Exception.Message)\" } }"
+                    "$ports = @(5010, 5011, 5173, 5174); $processIds = foreach ($port in $ports) { Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique }; $processIds = $processIds | Where-Object { $_ } | Sort-Object -Unique; if (-not $processIds) { Write-Host 'No local dev sessions found.'; exit 0 }; foreach ($processId in $processIds) { try { Stop-Process -Id $processId -Force -ErrorAction Stop; Write-Host \"Stopped process $processId\" } catch { Write-Warning \"Failed to stop process ${processId}: $($_.Exception.Message)\" } }"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"

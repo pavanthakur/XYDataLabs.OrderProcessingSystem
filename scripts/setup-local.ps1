@@ -309,7 +309,7 @@ Write-Host '  Local setup complete!' -ForegroundColor Green
 Write-Host ''
 Write-Host '  Visual Studio F5 (http/https profile — no docker-* profiles):'
 Write-Host '    API  http://localhost:5010/swagger'
-Write-Host '    Web  http://localhost:5173   (run: npm --prefix .\frontend run dev:web)'
+Write-Host '    Web  http://localhost:5173   |   https://localhost:5174'
 Write-Host ''
 Write-Host '  Docker dev:'
 Write-Host '    .\Resources\Docker\start-docker.ps1 -Environment dev -Profile http'

@@ -7,6 +7,7 @@ import react from "@vitejs/plugin-react";
 
 const apiProxyTarget = process.env.ORDERPROCESSING_API_BASE_URL ?? process.env.VITE_ORDERPROCESSING_API_BASE_URL ?? "http://localhost:5010";
 const useHttpsDevServer = /^true$/i.test(process.env.ORDERPROCESSING_DEV_SERVER_USE_HTTPS ?? "false");
+const devServerPort = Number(process.env.ORDERPROCESSING_DEV_SERVER_PORT ?? (useHttpsDevServer ? "5174" : "5173"));
 const devServerPfxPath = process.env.ORDERPROCESSING_DEV_SERVER_PFX_PATH;
 const devServerPfxPassword = process.env.ORDERPROCESSING_DEV_SERVER_PFX_PASSWORD ?? "";
 const httpsOptions = useHttpsDevServer && devServerPfxPath
@@ -25,7 +26,7 @@ export default defineConfig({
   },
   server: {
     https: httpsOptions,
-    port: 5173,
+    port: devServerPort,
     strictPort: true,
     proxy: {
       "/api": {

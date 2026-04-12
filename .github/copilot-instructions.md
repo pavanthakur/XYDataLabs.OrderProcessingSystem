@@ -293,7 +293,8 @@ identity to access Key Vault without credentials in config files.
 .\scripts\setup-local.ps1
 
 # Visual Studio F5 (recommended for debugging)
-# API: http://localhost:5010/swagger  |  UI: http://localhost:5012
+# HTTP profile: API http://localhost:5010/swagger  |  UI http://localhost:5173
+# HTTPS profile: API https://localhost:5011/swagger |  UI https://localhost:5174
 
 # Docker — dev environment
 .\Resources\Docker\start-docker.ps1 -Environment dev -Profile http
@@ -305,7 +306,7 @@ identity to access Key Vault without credentials in config files.
 .\Resources\Docker\start-docker.ps1 -Environment dev -Profile https -Reset
 ```
 
-Port allocations: Local VS (5010–5013) · Docker dev (5020–5023) · Docker stg (5030–5033) · Prod (5040–5043).
+Port allocations: Local VS API (5010–5011) + UI (5173–5174) · Docker dev (5020–5023) · Docker stg (5030–5033) · Prod (5040–5043).
 
 ---
 
