@@ -1,0 +1,16 @@
+{
+  "name": "@xydatalabs/orderprocessing-api-sdk",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.6.1",
+    "typescript": "^5.8.3"
+  }
+}
