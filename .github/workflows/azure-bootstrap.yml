@@ -3159,15 +3159,26 @@ jobs:
 
             // Dispatch a workflow and poll until it reaches 'completed' status.
             // Returns the final run object. Throws on timeout or non-success conclusion.
+            // Use baseline run IDs instead of created_at timestamps because GitHub's
+            // API timestamps are not guaranteed to be strictly newer than the local
+            // runner clock at dispatch time.
             async function dispatchAndAwait(workflowId) {
-              const dispatchedAt = new Date();
+              const baseline = await github.rest.actions.listWorkflowRuns({
+                owner:       context.repo.owner,
+                repo:        context.repo.repo,
+                workflow_id: workflowId,
+                branch:      branch,
+                event:       'workflow_dispatch',
+                per_page:    20
+              });
+              const existingRunIds = new Set(baseline.data.workflow_runs.map(r => r.id));
 
               core.info(`🚀 Dispatching ${workflowId} on branch '${branch}'...`);
               await github.rest.actions.createWorkflowDispatch({
                 owner: context.repo.owner,
                 repo:  context.repo.repo,
                 workflow_id: workflowId,
-                ref:   ref
+                ref:   branch
               });
 
               // Poll until the newly-created run appears (up to 3 min, every 5 s).
@@ -3181,9 +3192,9 @@ jobs:
                   workflow_id: workflowId,
                   branch:      branch,
                   event:       'workflow_dispatch',
-                  per_page:    5
+                  per_page:    20
                 });
-                run = res.data.workflow_runs.find(r => new Date(r.created_at) >= dispatchedAt);
+                run = res.data.workflow_runs.find(r => !existingRunIds.has(r.id));
                 if (run) { core.info(`  [${workflowId}] Found run #${run.run_number}: ${run.html_url}`); break; }
               }
               if (!run) throw new Error(`[${workflowId}] Run not found within 3 minutes of dispatch`);
