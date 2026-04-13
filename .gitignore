@@ -219,6 +219,11 @@ PublishScripts/
 **/[Pp]ackages/*
 # except build/, which is used as an MSBuild target.
 !**/[Pp]ackages/build/
+# Frontend workspace packages are source code, not NuGet packages
+!frontend/packages/api-sdk/
+!frontend/packages/api-sdk/**
+!frontend/packages/tenant-session/
+!frontend/packages/tenant-session/**
 # Uncomment if necessary however generally it will be regenerated when needed
 #!**/[Pp]ackages/repositories.config
 # NuGet v3's project.json files produces more ignorable files
