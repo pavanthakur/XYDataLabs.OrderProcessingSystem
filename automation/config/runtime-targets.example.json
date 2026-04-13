@@ -6,7 +6,6 @@
       "verificationMode": "physical",
       "browserMode": "local",
       "expectedTenantSource": "runtime-configuration",
-      "challengeCapability": "otp-spike-pending",
       "supportsPartialExecution": false,
       "supportsHeadless": true,
       "runtime": "local",

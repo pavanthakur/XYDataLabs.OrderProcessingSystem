@@ -1,12 +1,14 @@
 import type { ChallengeOutcome } from "./provider-challenge-handler.js";
 import type { CleanupOutcome } from "./payment-fixture-provisioner.js";
 
+export type ThreeDsSetting = "enabled" | "disabled" | "unknown";
+
 export interface ExecutiveSummaryRow {
   runId: string;
   runtimeTarget: string;
   tenantCode: string;
   paymentProvider: string;
-  threeDsExpectation: string;
+  threeDsSetting: ThreeDsSetting;
   journeyOutcome: string;
   challengeOutcome: ChallengeOutcome;
   verificationOutcome: string;

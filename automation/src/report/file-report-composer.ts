@@ -5,13 +5,13 @@ export class FileReportComposer implements ReportComposer {
     const lines = [
       "# Payment Automation Executive Summary",
       "",
-      "| Run ID | Target | Tenant | 3DS Expectation | Journey | Challenge | Verification | Cleanup | Evidence |",
+      "| Run ID | Target | Tenant | 3DS Setting | Journey | Challenge | Verification | Cleanup | Evidence |",
       "|---|---|---|---|---|---|---|---|---|"
     ];
 
     for (const row of rows) {
       lines.push(
-        `| ${row.runId} | ${row.runtimeTarget} | ${row.tenantCode} | ${row.threeDsExpectation} | ${row.journeyOutcome} | ${row.challengeOutcome} | ${row.verificationOutcome} | ${row.cleanupOutcome} | ${row.evidenceReference} |`
+        `| ${row.runId} | ${row.runtimeTarget} | ${row.tenantCode} | ${row.threeDsSetting} | ${row.journeyOutcome} | ${row.challengeOutcome} | ${row.verificationOutcome} | ${row.cleanupOutcome} | ${row.evidenceReference} |`
       );
     }
 

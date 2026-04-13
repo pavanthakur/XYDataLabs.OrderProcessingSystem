@@ -1,5 +1,6 @@
 import { chromium } from "playwright";
 import type { ChallengeOutcome } from "../contracts/provider-challenge-handler.js";
+import type { ThreeDsSetting } from "../contracts/report-composer.js";
 import type { RuntimeTargetDefinition } from "../contracts/runtime-target-catalog.js";
 import { OpenPaySandboxChallengeHandler } from "./openpay-sandbox-challenge-handler.js";
 
@@ -16,6 +17,7 @@ export interface PaymentJourneyRequest {
 export interface PaymentJourneyResult {
   journeyOutcome: string;
   challengeOutcome: ChallengeOutcome;
+  threeDsSetting: ThreeDsSetting;
   finalUrl: string;
   statusMessage: string;
 }
@@ -63,13 +65,15 @@ export class PaymentJourneyRunner {
       ]);
 
       let challengeOutcome: ChallengeOutcome = "not-applicable";
+      let threeDsSetting: ThreeDsSetting = "unknown";
       if (nextState === "redirect") {
+        threeDsSetting = "enabled";
         log("3DS redirect state detected.");
         const continueLink = page.getByRole("link", { name: /Continue to secure verification now/i });
         const providerUrl = await continueLink.getAttribute("href").catch(() => null);
         if (providerUrl) {
-          log(`Navigating directly to provider challenge ${providerUrl}.`);
-          await this.openProviderChallenge(page, continueLink, providerUrl, request.target.baseUrl, callbackHeading, log);
+          log(`Waiting for provider challenge via browser redirect to ${providerUrl}.`);
+          await this.openProviderChallenge(page, continueLink, request.target.baseUrl, callbackHeading, log);
         }
         else if (await continueLink.count() > 0) {
           log("Opening provider challenge page via click fallback.");
@@ -88,6 +92,7 @@ export class PaymentJourneyRunner {
         await callbackHeading.waitFor({ timeout: 120000 });
       }
       else {
+        threeDsSetting = "disabled";
         log("Payment flow returned directly to callback page without provider challenge.");
       }
 
@@ -99,6 +104,7 @@ export class PaymentJourneyRunner {
       return {
         journeyOutcome: callbackSettled ? "completed" : "callback-pending",
         challengeOutcome,
+        threeDsSetting,
         finalUrl: page.url(),
         statusMessage
       };
@@ -111,43 +117,23 @@ export class PaymentJourneyRunner {
   private async openProviderChallenge(
     page: import("playwright").Page,
     continueLink: import("playwright").Locator,
-    providerUrl: string,
     appBaseUrl: string,
     callbackHeading: import("playwright").Locator,
     log: (message: string) => void
   ): Promise<void> {
-    let gotoFailed = false;
-
-    try {
-      await page.goto(providerUrl, { waitUntil: "domcontentloaded", timeout: 120000 });
-    }
-    catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (!message.includes("ERR_ABORTED")) {
-        throw error;
-      }
-
-      gotoFailed = true;
-      log(`Provider redirect returned ERR_ABORTED; checking whether the challenge page still opened.`);
-    }
-
     if (await this.waitForProviderOrCallback(page, appBaseUrl, callbackHeading)) {
       return;
     }
 
     if (await continueLink.count() > 0) {
-      log("Direct provider navigation did not settle; retrying via continue-link click.");
+      log("Automatic provider redirect did not settle; retrying via continue-link click.");
       await continueLink.click();
       if (await this.waitForProviderOrCallback(page, appBaseUrl, callbackHeading)) {
         return;
       }
     }
 
-    if (gotoFailed) {
-      throw new Error(`Provider challenge did not become ready after redirect to ${providerUrl}.`);
-    }
-
-    throw new Error(`Provider challenge did not become ready after navigating to ${providerUrl}.`);
+    throw new Error("Provider challenge did not become ready after automatic redirect and continue-link fallback.");
   }
 
   private async waitForProviderOrCallback(

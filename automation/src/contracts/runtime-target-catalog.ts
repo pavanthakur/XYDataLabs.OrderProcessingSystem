@@ -1,6 +1,5 @@
 export type VerificationMode = "physical" | "azure";
 export type BrowserMode = "local" | "docker" | "azure";
-export type ChallengeCapability = "unsupported" | "otp-spike-pending" | "supported";
 export type ExpectedTenantSource = "runtime-configuration" | "catalog";
 export type RuntimeKind = "local" | "docker" | "azure";
 export type EnvironmentName = "dev" | "stg" | "prod";
@@ -12,7 +11,6 @@ export interface RuntimeTargetDefinition {
   verificationMode: VerificationMode;
   browserMode: BrowserMode;
   expectedTenantSource: ExpectedTenantSource;
-  challengeCapability: ChallengeCapability;
   supportsPartialExecution: boolean;
   supportsHeadless: boolean;
   runtime: RuntimeKind;
