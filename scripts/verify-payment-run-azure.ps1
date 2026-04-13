@@ -364,6 +364,14 @@ function Get-MinimumTimeDeltaSeconds {
     return $minimum
 }
 
+function Test-IsCallbackEvent {
+    param([Parameter(Mandatory = $true)] [pscustomobject] $Event)
+
+    return ($Event.Message -match 'OpenPay callback received' -or
+        $Event.Message -match 'payment/callback responded' -or
+        $Event.UiEventName -like 'ui_payment_callback*')
+}
+
 function Get-ScopedUiEvents {
     param(
         [Parameter(Mandatory = $false)]
@@ -384,12 +392,23 @@ function Get-ScopedUiEvents {
         return @()
     }
 
-    return @(
+    $directMatches = @(
         $Events |
             Where-Object {
                 ($_.ChargeId -and ($KnownChargeIds -contains $_.ChargeId)) -or
-                ($_.Tenant -and ($KnownTenants -contains $_.Tenant)) -or
                 ($_.CustomerOrderId -and ($KnownCustomerOrders -contains $_.CustomerOrderId))
+            } |
+            Sort-Object Timestamp
+    )
+
+    if ($directMatches.Count -gt 0) {
+        return $directMatches
+    }
+
+    return @(
+        $Events |
+            Where-Object {
+                $_.Tenant -and ($KnownTenants -contains $_.Tenant)
             } |
             Sort-Object Timestamp
     )
@@ -557,6 +576,10 @@ traces
 | where timestamp >= startofday(now() + 330m) - 330m
 | where message has_any('OpenPay callback received',
                         'payment/callback responded',
+                        'ui_payment_callback_received',
+                        'ui_payment_callback_reconciled',
+                        'ui_payment_callback_pending_retry_scheduled',
+                        'ui_payment_callback_failed',
                         'ui_payment_callback_confirmation_requested',
                         'ui_payment_callback_confirmed',
                         'ui_payment_callback_confirmation_failed')
@@ -786,6 +809,10 @@ traces
 | where timestamp >= ago(7d)
 | where message has_any('OpenPay callback received',
                         'payment/callback responded',
+                'ui_payment_callback_received',
+                'ui_payment_callback_reconciled',
+                'ui_payment_callback_pending_retry_scheduled',
+                'ui_payment_callback_failed',
                         'ui_payment_callback_confirmation_requested',
                         'ui_payment_callback_confirmed',
                         'ui_payment_callback_confirmation_failed')
@@ -833,10 +860,11 @@ if (($apiQueryFailed -or $uiQueryFailed) -and $selectedApiEvents.Count -eq 0 -an
 $globalUiStatusCodes = @($selectedUiEvents | Where-Object { -not [string]::IsNullOrWhiteSpace($_.StatusCode) } | Select-Object -ExpandProperty StatusCode -Unique)
 $matchedUiEventKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
 $usedFallbackUiEventKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+$callbackUiEvents = @($selectedUiEvents | Where-Object { Test-IsCallbackEvent -Event $_ })
 
 $chargeCorrelation = @(
 foreach ($chargeEvent in $apiChargeEvents) {
-    $uiMatches = @($selectedUiEvents | Where-Object { $_.ChargeId -eq $chargeEvent.ChargeId })
+    $uiMatches = @($callbackUiEvents | Where-Object { $_.ChargeId -eq $chargeEvent.ChargeId })
     foreach ($uiMatch in $uiMatches) {
         $null = $matchedUiEventKeys.Add($uiMatch.EventKey)
     }
@@ -867,7 +895,7 @@ foreach ($chargeEvent in $apiChargeEvents) {
         }
 
         $fallbackMatch = @(
-            $selectedUiEvents |
+            $callbackUiEvents |
                 Where-Object {
                     -not $usedFallbackUiEventKeys.Contains($_.EventKey) -and
                     [string]::IsNullOrWhiteSpace($_.ChargeId) -and
