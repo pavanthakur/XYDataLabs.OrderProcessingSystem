@@ -1,8 +1,9 @@
 ﻿# PowerShell script to start Docker Compose with environment-specific configurations and enterprise features
 param(
     [Parameter(Mandatory=$false)]
+    [Alias('Profile')]
     [ValidateSet("http", "https", "all")]
-    [string]$Profile = "http",
+    [string]$Protocol = "http",
     
     [Parameter(Mandatory=$false)]
     [ValidateSet("dev", "stg", "prod")]
@@ -259,10 +260,10 @@ function Show-ImageStatus {
 }
 
 function Remove-ProjectImages {
-    param([string]$Environment, [string]$Profile)
-    Write-ColoredOutput "Cleaning project images for profile '$Profile' and environment '$Environment'..." "Yellow" "INFO"
+    param([string]$Environment, [string]$Protocol)
+    Write-ColoredOutput "Cleaning project images for profile '$Protocol' and environment '$Environment'..." "Yellow" "INFO"
     $targets = @()
-    switch ($Profile) {
+    switch ($Protocol) {
         'http'  { $targets = @("xydatalabs-orderprocessingsystem-api-http:$Environment", "xydatalabs-orderprocessingsystem-ui-http:$Environment") }
         'https' { $targets = @("xydatalabs-orderprocessingsystem-api-https:$Environment", "xydatalabs-orderprocessingsystem-ui-https:$Environment") }
         'all'   { $targets = @(
@@ -285,10 +286,10 @@ function Remove-ProjectImages {
 function Get-ComposeContainerIds {
     param(
         [string[]]$ComposeFiles,
-        [string]$Profile
+        [string]$Protocol
     )
     try {
-        $ids = & $ComposeCmd @ComposeFiles --profile $Profile ps -q 2>$null
+        $ids = & $ComposeCmd @ComposeFiles --profile $Protocol ps -q 2>$null
         return $ids
     } catch {
         return @()
@@ -298,7 +299,7 @@ function Get-ComposeContainerIds {
 function Wait-ForContainersHealthy {
     param(
         [string[]]$ComposeFiles,
-        [string]$Profile,
+        [string]$Protocol,
         [int]$TimeoutSec = 90,
         [int]$IntervalSec = 3
     )
@@ -308,7 +309,7 @@ function Wait-ForContainersHealthy {
 
     while ([DateTime]::UtcNow -lt $deadline.ToUniversalTime()) {
         $allGood = $true
-        $ids = Get-ComposeContainerIds -ComposeFiles $ComposeFiles -Profile $Profile
+        $ids = Get-ComposeContainerIds -ComposeFiles $ComposeFiles -Protocol $Protocol
         if (-not $ids -or $ids.Count -eq 0) {
             $allGood = $false
         } else {
@@ -344,19 +345,19 @@ function Wait-ForContainersHealthy {
 function Show-ComposeLogs {
     param(
         [string[]]$ComposeFiles,
-        [string]$Profile,
+        [string]$Protocol,
         [int]$Tail = 100
     )
     try {
         Write-ColoredOutput "Recent container logs (last $Tail lines):" "Yellow" "INFO"
-        $logs = & $ComposeCmd @ComposeFiles --profile $Profile logs --no-color --tail $Tail 2>&1
+        $logs = & $ComposeCmd @ComposeFiles --profile $Protocol logs --no-color --tail $Tail 2>&1
         $logs | ForEach-Object { Write-ColoredOutput "  $_" "Gray" "INFO" }
     } catch {
         Write-ColoredOutput "Failed to fetch compose logs: $($_.Exception.Message)" "Yellow" "WARNING"
     }
 }
 
-function Ensure-DockerNetwork {
+function Initialize-DockerNetwork {
     param(
         [string]$NetworkName = "xynetwork", 
         [string]$Environment = "dev",
@@ -487,7 +488,7 @@ function Test-ImageExists {
     }
 }
 
-function PrePull-BaseImages {
+function Invoke-BaseImagePrePull {
     param(
         [string[]]$Images,
         [switch]$StrictMode
@@ -600,7 +601,7 @@ try {
     $dockerPath = $scriptPath
     Set-Location $dockerPath
     # Ensure external command stderr does not become terminating errors in this scope
-    $oldEAP = $ErrorActionPreference
+    $savedErrorActionPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     
     if ($Help) {
@@ -650,13 +651,13 @@ try {
     # lock the second process races the first and fails with "container name already in use".
     # Solution: first process acquires a lock file; subsequent processes detect it and exit gracefully,
     # letting the first process manage the full lifecycle.
-    $lockFile = Join-Path $env:TEMP "start-docker-$Environment-$Profile.lock"
+    $lockFile = Join-Path $env:TEMP "start-docker-$Environment-$Protocol.lock"
     $lockTimeoutSec = 300  # max time to hold lock (safety valve)
     $acquiredLock = $false
     if (Test-Path $lockFile) {
         $lockAge = (Get-Date) - (Get-Item $lockFile).LastWriteTime
         if ($lockAge.TotalSeconds -lt $lockTimeoutSec) {
-            Write-ColoredOutput "Another instance is already managing this stack ($Environment/$Profile). Exiting — the primary instance will complete startup." "Yellow" "INFO"
+            Write-ColoredOutput "Another instance is already managing this stack ($Environment/$Protocol). Exiting — the primary instance will complete startup." "Yellow" "INFO"
             exit 0
         } else {
             Write-ColoredOutput "Stale lock detected (age: $([int]$lockAge.TotalSeconds)s) — removing and continuing." "Yellow" "INFO"
@@ -686,18 +687,22 @@ try {
         
         # Determine compose files to use - environment-specific only
         if (Test-Path "docker-compose.$Environment.yml") {
-            $composeFiles = @("-f", "docker-compose.$Environment.yml")
+            if (Test-Path ".env.local") {
+                $composeFiles = @("--env-file", ".env.local", "-f", "docker-compose.$Environment.yml")
+            } else {
+                $composeFiles = @("-f", "docker-compose.$Environment.yml")
+            }
             Write-ColoredOutput "Using environment-specific compose file: docker-compose.$Environment.yml" "Gray" "INFO"
         } else {
             throw "Environment-specific compose file docker-compose.$Environment.yml not found. Available environments: dev, stg, prod"
         }
         
-        Write-ColoredOutput "Running: $ComposeDisplay $($composeFiles -join ' ') --profile $Profile down" "Gray" "INFO"
-        & $ComposeCmd @composeFiles --profile $Profile down
+        Write-ColoredOutput "Running: $ComposeDisplay $($composeFiles -join ' ') --profile $Protocol down" "Gray" "INFO"
+        & $ComposeCmd @composeFiles --profile $Protocol down
         return
     }
 
-    Write-ColoredOutput "Starting Docker Compose Environment: $Environment, Profile: $Profile" "Cyan" "INFO"
+    Write-ColoredOutput "Starting Docker Compose Environment: $Environment, Profile: $Protocol" "Cyan" "INFO"
     
     # Apply strict semantics early (informational only now)
     if ($Strict) {
@@ -735,7 +740,7 @@ try {
         }
     }
     
-    Ensure-DockerNetwork -NetworkName $networkName -Environment $Environment -SettingsPath $SharedSettingsPath
+    Initialize-DockerNetwork -NetworkName $networkName -Environment $Environment -SettingsPath $SharedSettingsPath
     
     # Ensure database network exists for all environments
     $result = docker network ls --filter "name=xy-database-network" --format "{{.Name}}" | Where-Object { $_ -eq "xy-database-network" }
@@ -839,10 +844,10 @@ try {
     if ($Reset) {
         try {
             Write-ColoredOutput "Reset requested: stopping existing services..." "Yellow" "INFO"
-            Write-ColoredOutput "Running (reset): $ComposeDisplay $($composeFiles -join ' ') --profile $Profile down -v" "Gray" "INFO"
-            & $ComposeCmd @composeFiles --profile $Profile down -v 2>$null | Out-Null
+            Write-ColoredOutput "Running (reset): $ComposeDisplay $($composeFiles -join ' ') --profile $Protocol down -v" "Gray" "INFO"
+            & $ComposeCmd @composeFiles --profile $Protocol down -v 2>$null | Out-Null
         } catch {}
-        Remove-ProjectImages -Environment $Environment -Profile $Profile
+        Remove-ProjectImages -Environment $Environment -Protocol $Protocol
     }
 
     # Pre-pull commonly used base images (unless opted out)
@@ -855,7 +860,7 @@ try {
             'mcr.microsoft.com/dotnet/aspnet:8.0'
         )
         try {
-            [void](PrePull-BaseImages -Images $baseImages -StrictMode:$Strict)
+            [void](Invoke-BaseImagePrePull -Images $baseImages -StrictMode:$Strict)
         } catch {
             Write-ColoredOutput "Pre-pull encountered an error: $($_.Exception.Message)" "Red" "ERROR"
             if ($Strict) { throw }
@@ -874,24 +879,24 @@ try {
         Write-ColoredOutput "⚠️  Not recommended for STG/Production environments" "Yellow" "WARNING"
         
         # Legacy mode: Use existing images if available
-        $dockerCmd = "$ComposeDisplay $($composeFiles -join ' ') --profile $Profile up -d"
+        $dockerCmd = "$ComposeDisplay $($composeFiles -join ' ') --profile $Protocol up -d"
         Write-ColoredOutput "Running: $dockerCmd" "Gray"
         # Stream directly — avoids 2>&1 TTY breakage
-        & $ComposeCmd @composeFiles --profile $Profile up -d
+        & $ComposeCmd @composeFiles --profile $Protocol up -d
         $dockerOutput = ""
     } else {
         Write-ColoredOutput "Building fresh container images (Azure-style deployment)..." "Cyan" "INFO"
         Write-ColoredOutput "🏢 Enterprise Mode: Ensuring reproducible, secure builds" "Green" "INFO"
-        $buildCmd = "$ComposeDisplay $($composeFiles -join ' ') --profile $Profile build --no-cache"
+        $buildCmd = "$ComposeDisplay $($composeFiles -join ' ') --profile $Protocol build --no-cache"
         Write-ColoredOutput "Running: $buildCmd" "Gray"
         # Stream build output directly to console — capturing with 2>&1 breaks Docker BuildKit's
         # TTY/progress-pipe detection on Windows and causes instant exit code 1 before any layer builds.
-        & $ComposeCmd @composeFiles --profile $Profile build --no-cache
+        & $ComposeCmd @composeFiles --profile $Protocol build --no-cache
         $buildExitCode = $LASTEXITCODE
 
         # Determine expected target images for this profile
         $targetImages = @()
-        switch ($Profile) {
+        switch ($Protocol) {
             'http'  { $targetImages = @("xydatalabs-orderprocessingsystem-api-http:$Environment", "xydatalabs-orderprocessingsystem-ui-http:$Environment") }
             'https' { $targetImages = @("xydatalabs-orderprocessingsystem-api-https:$Environment", "xydatalabs-orderprocessingsystem-ui-https:$Environment") }
             'all'   { $targetImages = @(
@@ -900,19 +905,24 @@ try {
                          ) }
         }
 
-        # Primary success check: exit code; fallback: verify images exist in daemon
-        $existing = $false
+        # Fresh-build mode must fail closed: do not treat stale cached images as success.
+        $missingTargetImages = @()
         foreach ($img in $targetImages) {
             $id = docker images -q $img 2>$null
-            if (-not [string]::IsNullOrWhiteSpace($id)) { $existing = $true }
+            if ([string]::IsNullOrWhiteSpace($id)) {
+                $missingTargetImages += $img
+            }
         }
-        $buildSucceeded = ($buildExitCode -eq 0) -or $existing
 
-        if (-not $buildSucceeded) {
-            Write-ColoredOutput "❌ Build failed (exit code $buildExitCode) and required images are missing." "Red" "ERROR"
+        if ($buildExitCode -ne 0) {
+            Write-ColoredOutput "❌ Build failed (exit code $buildExitCode). Fresh-build mode will not reuse stale cached images." "Red" "ERROR"
             Write-ColoredOutput "  Tip: run manually to see full output:" "Yellow" "INFO"
             Write-ColoredOutput "  $buildCmd" "White" "INFO"
             throw "Docker build failed with exit code: $buildExitCode"
+        } elseif ($missingTargetImages.Count -gt 0) {
+            Write-ColoredOutput "❌ Build reported success but required images are missing." "Red" "ERROR"
+            $missingTargetImages | ForEach-Object { Write-ColoredOutput "  Missing image: $_" "Yellow" "INFO" }
+            throw "Docker build completed without producing all expected images."
         } else {
             Write-ColoredOutput "✅ Fresh images built successfully (enterprise-ready)" "Green" "SUCCESS"
         }
@@ -920,10 +930,10 @@ try {
         Write-ColoredOutput "Starting containers..." "Cyan" "INFO"
 
         # Start containers
-        $dockerCmd = "$ComposeDisplay $($composeFiles -join ' ') --profile $Profile up -d"
+        $dockerCmd = "$ComposeDisplay $($composeFiles -join ' ') --profile $Protocol up -d"
         Write-ColoredOutput "Running: $dockerCmd" "Gray"
         # Stream up output directly (same TTY reason as build above)
-        & $ComposeCmd @composeFiles --profile $Profile up -d
+        & $ComposeCmd @composeFiles --profile $Protocol up -d
         $dockerOutput = ""
     }
     
@@ -931,11 +941,11 @@ try {
     $effectiveWait = $Strict -or $LegacyBuild
     $waitSucceeded = $false
     if ($effectiveWait) {
-        $waitSucceeded = Wait-ForContainersHealthy -ComposeFiles $composeFiles -Profile $Profile -TimeoutSec $HealthTimeoutSec -IntervalSec 3
+        $waitSucceeded = Wait-ForContainersHealthy -ComposeFiles $composeFiles -Protocol $Protocol -TimeoutSec $HealthTimeoutSec -IntervalSec 3
         if ($waitSucceeded) { Write-ColoredOutput "Containers are healthy/running" "Green" "SUCCESS" }
         elseif ($Strict) {
             Write-ColoredOutput "Health checks did not pass within ${HealthTimeoutSec}s (strict mode)" "Red" "ERROR"
-            Show-ComposeLogs -ComposeFiles $composeFiles -Profile $Profile -Tail 150
+            Show-ComposeLogs -ComposeFiles $composeFiles -Protocol $Protocol -Tail 150
             throw "Strict mode: containers not healthy"
         }
     }
@@ -962,7 +972,7 @@ try {
     
     if ($hasRealError) {
         if ($effectiveWait -and -not $waitSucceeded) {
-            Show-ComposeLogs -ComposeFiles $composeFiles -Profile $Profile -Tail 150
+            Show-ComposeLogs -ComposeFiles $composeFiles -Protocol $Protocol -Tail 150
         }
         # Check for common image export errors
         if ($outputString -match "already exists" -or $outputString -match "failed to solve.*already exists") {
@@ -972,7 +982,7 @@ try {
             Show-ImageStatus -Environment $Environment
             
             # Remove conflicting images - only for current profile to preserve other protocol images
-            $targetServices = if ($Profile -eq "http") { @("api-http", "ui-http") } else { @("api-https", "ui-https") }
+            $targetServices = if ($Protocol -eq "http") { @("api-http", "ui-http") } else { @("api-https", "ui-https") }
             $taggedImages = @()
             foreach ($service in $targetServices) {
                 $taggedImages += "xydatalabs-orderprocessingsystem-$service`:$Environment"
@@ -989,10 +999,10 @@ try {
             foreach ($image in $taggedImages) {
                 $existingImage = docker images -q $image 2>$null
                 if ($existingImage) {
-                    Write-ColoredOutput "Removing existing $Profile image: $image" "Yellow" "INFO"
+                    Write-ColoredOutput "Removing existing $Protocol image: $image" "Yellow" "INFO"
                     docker rmi $image -f 2>$null
                 } else {
-                    Write-ColoredOutput "Target $Profile image not found: $image" "Gray" "INFO"
+                    Write-ColoredOutput "Target $Protocol image not found: $image" "Gray" "INFO"
                 }
             }
             
@@ -1013,7 +1023,7 @@ try {
             
             # Retry the command
             Write-ColoredOutput "Retrying Docker Compose startup..." "Yellow" "INFO"
-            $dockerOutput = & $ComposeCmd @composeFiles --profile $Profile up -d 2>&1
+            $dockerOutput = & $ComposeCmd @composeFiles --profile $Protocol up -d 2>&1
             
             # Check retry result
             if ($LASTEXITCODE -ne 0) {
@@ -1055,12 +1065,12 @@ try {
         if ($EnterpriseMode) {
             $config = $EnterpriseConfig[$Environment]
             Write-ColoredOutput "Enterprise Configuration:" "Cyan" "INFO"
-            Write-ColoredOutput "  Environment: $Environment | Profile: $Profile" "White" "INFO"
+            Write-ColoredOutput "  Environment: $Environment | Profile: $Protocol" "White" "INFO"
             Write-ColoredOutput "  Network: $($config.NetworkName)" "White" "INFO"
             Write-ColoredOutput "  Security Level: $($config.SecurityLevel)" "White" "INFO"
             Write-ColoredOutput "  Cleanup Policy: $($config.CleanupPolicy)" "White" "INFO"
         } else {
-            Write-ColoredOutput "Environment: $Environment | Profile: $Profile" "Cyan" "INFO"
+            Write-ColoredOutput "Environment: $Environment | Profile: $Protocol" "Cyan" "INFO"
         }
         
         Write-ColoredOutput "Container status:" "Cyan" "INFO"
@@ -1072,31 +1082,31 @@ try {
         # Display URLs based on environment and profile
         switch ($Environment) {
             "dev" {
-                if ($Profile -eq "http" -or $Profile -eq "all") {
+                if ($Protocol -eq "http" -or $Protocol -eq "all") {
                     Write-ColoredOutput "   API (HTTP):  http://localhost:5020/swagger" "White" "INFO"
                     Write-ColoredOutput "   UI (HTTP):   http://localhost:5022" "White" "INFO"
                 }
-                if ($Profile -eq "https" -or $Profile -eq "all") {
+                if ($Protocol -eq "https" -or $Protocol -eq "all") {
                     Write-ColoredOutput "   API (HTTPS): https://localhost:5021/swagger" "White" "INFO"
                     Write-ColoredOutput "   UI (HTTPS):  https://localhost:5023" "White" "INFO"
                 }
             }
             "stg" {
-                if ($Profile -eq "http" -or $Profile -eq "all") {
+                if ($Protocol -eq "http" -or $Protocol -eq "all") {
                     Write-ColoredOutput "   API (HTTP):  http://localhost:5030/swagger" "White" "INFO"
                     Write-ColoredOutput "   UI (HTTP):   http://localhost:5032" "White" "INFO"
                 }
-                if ($Profile -eq "https" -or $Profile -eq "all") {
+                if ($Protocol -eq "https" -or $Protocol -eq "all") {
                     Write-ColoredOutput "   API (HTTPS): https://localhost:5031/swagger" "White" "INFO"
                     Write-ColoredOutput "   UI (HTTPS):  https://localhost:5033" "White" "INFO"
                 }
             }
             "prod" {
-                if ($Profile -eq "http" -or $Profile -eq "all") {
+                if ($Protocol -eq "http" -or $Protocol -eq "all") {
                     Write-ColoredOutput "   API (HTTP):  http://localhost:5040/swagger" "White" "INFO"
                     Write-ColoredOutput "   UI (HTTP):   http://localhost:5042" "White" "INFO"
                 }
-                if ($Profile -eq "https" -or $Profile -eq "all") {
+                if ($Protocol -eq "https" -or $Protocol -eq "all") {
                     Write-ColoredOutput "   API (HTTPS): https://localhost:5041/swagger" "White" "INFO"
                     Write-ColoredOutput "   UI (HTTPS):  https://localhost:5043" "White" "INFO"
                 }
@@ -1139,22 +1149,23 @@ try {
         Write-ColoredOutput "" "White"
         Write-ColoredOutput "Quick Commands:" "Yellow" "INFO"
         Write-ColoredOutput "  View logs:    $ComposeDisplay -f docker-compose.$Environment.yml logs -f" "White" "INFO"
-        Write-ColoredOutput "  Stop:         .\start-docker.ps1 -Environment $Environment -Profile $Profile -Down" "White" "INFO"
-        Write-ColoredOutput "  Legacy build: .\start-docker.ps1 -Environment $Environment -Profile $Profile -LegacyBuild" "Yellow" "INFO"
+        Write-ColoredOutput "  Stop:         .\start-docker.ps1 -Environment $Environment -Profile $Protocol -Down" "White" "INFO"
+        Write-ColoredOutput "  Legacy build: .\start-docker.ps1 -Environment $Environment -Profile $Protocol -LegacyBuild" "Yellow" "INFO"
         
         if ($EnterpriseMode) {
             Write-ColoredOutput "  Enterprise Commands:" "Cyan" "INFO"
-            Write-ColoredOutput "  Conservative clean: .\start-docker.ps1 -Environment $Environment -Profile $Profile -ConservativeClean -EnterpriseMode" "White" "INFO"
-            Write-ColoredOutput "  Backup and start:   .\start-docker.ps1 -Environment $Environment -Profile $Profile -BackupFirst -EnterpriseMode" "White" "INFO"
-            Write-ColoredOutput "  Safe persistent:    .\start-docker.ps1 -Environment $Environment -Profile $Profile -PreservePersistentData -EnterpriseMode" "White" "INFO"
+            Write-ColoredOutput "  Conservative clean: .\start-docker.ps1 -Environment $Environment -Profile $Protocol -ConservativeClean -EnterpriseMode" "White" "INFO"
+            Write-ColoredOutput "  Backup and start:   .\start-docker.ps1 -Environment $Environment -Profile $Protocol -BackupFirst -EnterpriseMode" "White" "INFO"
+            Write-ColoredOutput "  Safe persistent:    .\start-docker.ps1 -Environment $Environment -Profile $Protocol -PreservePersistentData -EnterpriseMode" "White" "INFO"
         } else {
-            Write-ColoredOutput "  Enterprise:   .\start-docker.ps1 -Environment $Environment -Profile $Profile -EnterpriseMode" "Cyan" "INFO"
+            Write-ColoredOutput "  Enterprise:   .\start-docker.ps1 -Environment $Environment -Profile $Protocol -EnterpriseMode" "Cyan" "INFO"
         }
     } else {
         throw "Docker Compose failed to start"
     }
     # Explicit success exit to avoid propagating non-zero codes from underlying commands
     try { $global:LASTEXITCODE = 0 } catch {}
+    $ErrorActionPreference = $savedErrorActionPreference
     if ($acquiredLock) { Remove-Item $lockFile -Force -ErrorAction SilentlyContinue }
     exit 0
 }
@@ -1163,6 +1174,7 @@ catch {
     if ($EnterpriseMode) {
         Write-ColoredOutput "Check enterprise log file: logs/docker-startup-$(Get-Date -Format 'yyyy-MM-dd').log" "Yellow" "INFO"
     }
+    $ErrorActionPreference = $savedErrorActionPreference
     if ($acquiredLock) { Remove-Item $lockFile -Force -ErrorAction SilentlyContinue }
     exit 1
 }

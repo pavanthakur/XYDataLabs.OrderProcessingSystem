@@ -35,7 +35,6 @@ namespace XYDataLabs.OrderProcessingSystem.SharedKernel
             public const string ApiSettings = "ApiSettings";
             public const string OpenPay = "OpenPay";
             public const string Serilog = "Serilog";
-            public const string SerilogUI = "SerilogUI";
             public const string LaunchSettings = "LaunchSettings";
             public const string Azure = "Azure";
             public const string Docker = "Docker";

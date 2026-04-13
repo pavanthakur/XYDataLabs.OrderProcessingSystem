@@ -214,13 +214,12 @@ if (-not ${step5}) { Write-Log "EF migrations failed" 'ERROR'; exit 1 }
 if (-not $SkipAppInsights) {
   $step6 = Test-Step "Verify Application Insights configuration" `
     -Action {
-      Write-Log "Validating App Insights resource '$aiName' and app settings on '$apiApp' and '$uiApp'"
+      Write-Log "Validating App Insights resource '$aiName' and required API app setting on '$apiApp' (UI app '$uiApp' is a static SPA host and does not require direct App Insights settings)"
     } `
     -Validation {
       $aiExists = az monitor app-insights component show --app $aiName --resource-group $rg 2>$null
       $apiSetting = az webapp config appsettings list --name $apiApp --resource-group $rg --query "[?name=='APPLICATIONINSIGHTS_CONNECTION_STRING'].value" -o tsv 2>$null
-      $uiSetting = az webapp config appsettings list --name $uiApp --resource-group $rg --query "[?name=='APPLICATIONINSIGHTS_CONNECTION_STRING'].value" -o tsv 2>$null
-      $aiExists -and -not [string]::IsNullOrWhiteSpace($apiSetting) -and -not [string]::IsNullOrWhiteSpace($uiSetting)
+      $aiExists -and -not [string]::IsNullOrWhiteSpace($apiSetting)
     }
   if (-not $step6) { Write-Log "App Insights provisioning failed" 'ERROR' }
 } else {
