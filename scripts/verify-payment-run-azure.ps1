@@ -551,7 +551,7 @@ $apiChargeEvents = @(
         Sort-Object Timestamp
 )
 
-Write-Step "Querying App Insights UI traces"
+Write-Step "Querying App Insights browser/UI telemetry traces"
 $uiQuery = @"
 traces
 | where timestamp >= startofday(now() + 330m) - 330m
@@ -566,7 +566,7 @@ traces
 | extend uiEventName = coalesce(tostring(customDimensions['UiEventName']), extract(@'UI payment event\s+(\S+)\s+on', 1, message))
 | extend chargeId = coalesce(tostring(customDimensions['ChargeId']), tostring(customDimensions['PaymentId']), extract(@'for payment\s+([^,\s]+)', 1, message), extract(@'payment\s+([^,\s]+)', 1, message))
 | extend statusCode = tostring(customDimensions['StatusCode'])
-| where cloud_RoleName has 'ui' or application == 'UI'
+| where cloud_RoleName has 'api' or cloud_RoleName has 'ui' or application == 'API' or application == 'UI'
 | project timestamp, tenant, customerOrderId, uiEventName, chargeId, statusCode, message
 | order by timestamp asc
 "@
@@ -577,7 +577,7 @@ try {
 catch {
     $uiQueryFailed = $true
     $appInsightsWarnings += "UI trace query failed: $($_.Exception.Message)"
-    Write-Host 'App Insights UI query failed; continuing with DB-only verification for UI evidence.' -ForegroundColor Yellow
+    Write-Host 'App Insights browser/UI telemetry query failed; continuing with DB-only verification for UI evidence.' -ForegroundColor Yellow
 }
 
 $uiEvents = @(
@@ -795,7 +795,7 @@ traces
 | extend uiEventName = coalesce(tostring(customDimensions['UiEventName']), extract(@'UI payment event\s+(\S+)\s+on', 1, message))
 | extend chargeId = coalesce(tostring(customDimensions['ChargeId']), tostring(customDimensions['PaymentId']), extract(@'for payment\s+([^,\s]+)', 1, message), extract(@'payment\s+([^,\s]+)', 1, message))
 | extend statusCode = tostring(customDimensions['StatusCode'])
-| where cloud_RoleName has 'ui' or application == 'UI'
+| where cloud_RoleName has 'api' or cloud_RoleName has 'ui' or application == 'API' or application == 'UI'
 | where chargeId in ($evidenceChargeIdList)
    or tenant in ({0})
 | project timestamp, tenant, customerOrderId, uiEventName, chargeId, statusCode, message
@@ -969,10 +969,10 @@ else {
 $expectedUiCallbacks = @($chargeCorrelation | Where-Object UiCallbackExpected).Count
 $actualUiCallbacks = @($chargeCorrelation | Where-Object { $_.UiCallbackExpected -and $_.UiCallbackLogged }).Count
 if ($apiChargeEvents.Count -eq 0 -and $selectedUiEvents.Count -eq 0) {
-    $checks['UI log -> callbacks present where expected'] = Convert-CheckResult -Expected '3DS tenants only' -Actual 'No UI callback rows returned for the selected run prefix' -Outcome 'INCONCLUSIVE'
+    $checks['UI telemetry -> callbacks present where expected'] = Convert-CheckResult -Expected '3DS tenants only' -Actual 'No browser/UI telemetry rows returned for the selected run prefix' -Outcome 'INCONCLUSIVE'
 }
 else {
-    $checks['UI log -> callbacks present where expected'] = Convert-CheckResult -Expected ([string] $expectedUiCallbacks) -Actual ([string] $actualUiCallbacks) -Outcome $(if ($actualUiCallbacks -eq $expectedUiCallbacks) { 'PASS' } else { 'FAIL' })
+    $checks['UI telemetry -> callbacks present where expected'] = Convert-CheckResult -Expected ([string] $expectedUiCallbacks) -Actual ([string] $actualUiCallbacks) -Outcome $(if ($actualUiCallbacks -eq $expectedUiCallbacks) { 'PASS' } else { 'FAIL' })
 }
 
 $report = [PSCustomObject] @{

@@ -151,7 +151,7 @@ Deterministic Azure payment verification for the `verify-db-logs` workflow.
 Deterministic local/Docker payment verification for the `verify-db-logs` workflow.
 
 **Purpose**:
-- Reads today's physical API and UI log files in one pass
+- Reads today's physical API log plus browser-originated UI telemetry captured through the API in one pass
 - Resolves the logical run prefix automatically when only one prefix exists for the day
 - Queries both local SQL databases directly without ad hoc `sqlcmd` parsing in the terminal
 - Produces the same consolidated API -> UI -> DB pass/fail report shape used by the Azure verifier

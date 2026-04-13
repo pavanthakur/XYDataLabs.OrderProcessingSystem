@@ -2,8 +2,8 @@
 # Verify Application Insights is properly configured and capturing telemetry
 # This script checks:
 # 1. App Insights resource exists and is provisioned
-# 2. Connection string is configured on web apps
-# 3. Instrumentation key is valid
+# 2. Connection string is configured on the API app
+# 3. Direct UI app configuration is treated as optional for the React SPA host
 # 4. (Optional) Recent telemetry data exists
 
 param(
@@ -84,10 +84,16 @@ function Invoke-AzCliText {
         [scriptblock]$Command,
 
         [Parameter(Mandatory=$true)]
-        [string]$Operation
+        [string]$Operation,
+
+        [Parameter(Mandatory=$false)]
+        [int]$MaxAttempts = 3,
+
+        [Parameter(Mandatory=$false)]
+        [int]$DelaySeconds = 5
     )
 
-    $output = Invoke-AzCliWithRetry -Command $Command -Operation $Operation
+    $output = Invoke-AzCliWithRetry -Command $Command -Operation $Operation -MaxAttempts $MaxAttempts -DelaySeconds $DelaySeconds
     return ($output | Out-String).Trim()
 }
 
@@ -195,9 +201,9 @@ try {
     $allChecks = $false
 }
 
-# Check 3: Connection string configured on UI app
+# Check 3: Direct UI app configuration is optional for the React SPA host
 Write-Host ""
-Write-Host "[3/4] Checking UI app configuration..." -ForegroundColor Cyan
+Write-Host "[3/4] Checking UI app configuration (optional)..." -ForegroundColor Cyan
 try {
     $uiSettings = Invoke-AzCliText -Operation 'Retrieve UI app settings' -Command {
         az webapp config appsettings list `
@@ -205,27 +211,27 @@ try {
             --resource-group $rgName `
             --query "[?name=='APPLICATIONINSIGHTS_CONNECTION_STRING'].value" `
             -o tsv
-    }
+    } -MaxAttempts 1
     
     if ($uiSettings) {
-        Write-Host "  ✅ App Insights connection string is configured on UI app" -ForegroundColor Green
+        Write-Host "  ℹ️  App Insights connection string is configured on UI app" -ForegroundColor Cyan
         Write-Host "     App: $uiAppName" -ForegroundColor Gray
+        Write-Host "     Direct UI host instrumentation is optional after the React SPA migration" -ForegroundColor Gray
         
-        # Verify it matches the App Insights connection string
         if ($connectionString -and $uiSettings -eq $connectionString) {
-            Write-Host "  ✅ Connection string matches App Insights resource" -ForegroundColor Green
+            Write-Host "  ℹ️  Connection string matches App Insights resource" -ForegroundColor Gray
         } elseif ($connectionString) {
             Write-Host "  ⚠️  Connection string doesn't match App Insights resource" -ForegroundColor Yellow
-            Write-Host "     Connection string mismatch detected - manual verification required" -ForegroundColor Gray
+            Write-Host "     UI app setting is optional, but the mismatch suggests stale configuration" -ForegroundColor Gray
         }
     } else {
-        Write-Host "  ❌ App Insights connection string NOT configured on UI app" -ForegroundColor Red
-        Write-Host "     App: $uiAppName" -ForegroundColor Red
-        $allChecks = $false
+        Write-Host "  ℹ️  UI app has no direct App Insights connection string" -ForegroundColor Gray
+        Write-Host "     App: $uiAppName" -ForegroundColor Gray
+        Write-Host "     Expected for the React SPA host: browser payment telemetry is forwarded to the API via /payment/client-event" -ForegroundColor Gray
     }
 } catch {
-    Write-Host "  ❌ Failed to check UI app settings: $($_.Exception.Message)" -ForegroundColor Red
-    $allChecks = $false
+    Write-Host "  ⚠️  Failed to check UI app settings: $($_.Exception.Message)" -ForegroundColor Yellow
+    Write-Host "     Direct UI app instrumentation is optional, so bootstrap can continue without retrying this non-gating check" -ForegroundColor Gray
 }
 
 # Check 4: Check for recent telemetry (optional)
@@ -278,7 +284,7 @@ if ($allChecks) {
     Write-Host "Application Insights is properly configured:" -ForegroundColor Green
     Write-Host "  • Resource is provisioned and ready" -ForegroundColor Gray
     Write-Host "  • Connection string is configured on API app" -ForegroundColor Gray
-    Write-Host "  • Connection string is configured on UI app" -ForegroundColor Gray
+    Write-Host "  • Direct UI app connection string is optional for the React SPA host" -ForegroundColor Gray
     Write-Host ""
     Write-Host "To view telemetry:" -ForegroundColor Cyan
     Write-Host "  1. Azure Portal: https://portal.azure.com" -ForegroundColor Gray
@@ -295,13 +301,13 @@ if ($allChecks) {
     Write-Host ""
     Write-Host "Common issues:" -ForegroundColor Yellow
     Write-Host "  • App Insights resource not created" -ForegroundColor Gray
-    Write-Host "  • Connection string not configured on apps" -ForegroundColor Gray
-    Write-Host "  • Apps restarted but settings not applied yet" -ForegroundColor Gray
+    Write-Host "  • Connection string not configured on the API app" -ForegroundColor Gray
+    Write-Host "  • API app restarted before settings were applied" -ForegroundColor Gray
     Write-Host ""
     Write-Host "To fix:" -ForegroundColor Cyan
     Write-Host "  1. Re-run the bootstrap script" -ForegroundColor Gray
-    Write-Host "  2. Manually configure connection strings in Azure Portal" -ForegroundColor Gray
-    Write-Host "  3. Restart the web apps" -ForegroundColor Gray
+    Write-Host "  2. Manually configure the API app connection string in Azure Portal" -ForegroundColor Gray
+    Write-Host "  3. Restart the API app" -ForegroundColor Gray
     Write-Host ""
     exit 1
 }
