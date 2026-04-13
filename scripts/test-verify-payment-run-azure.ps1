@@ -300,18 +300,18 @@ function Test-StagingPassScenario {
     }
 
     $apiCheck = Get-Check -Report $report -CheckName 'API log -> DB charge IDs'
-    $uiCheck = Get-Check -Report $report -CheckName 'UI log -> callbacks present where expected'
+    $uiCheck = Get-Check -Report $report -CheckName 'UI telemetry -> callbacks present where expected'
 
     if ($hasLogEvidence) {
         Assert-Equal -TestName 'stg-pass check: API log -> DB charge IDs' -Expected 'PASS' -Actual $apiCheck.Outcome -ScenarioName $scenarioName
-        Assert-Equal -TestName 'stg-pass check: UI log -> callbacks present where expected' -Expected 'PASS' -Actual $uiCheck.Outcome -ScenarioName $scenarioName
+        Assert-Equal -TestName 'stg-pass check: UI telemetry -> callbacks present where expected' -Expected 'PASS' -Actual $uiCheck.Outcome -ScenarioName $scenarioName
         Assert-True -TestName 'stg-pass charge correlation populated' -Condition (@($report.ChargeCorrelation).Count -gt 0) -Message "Charge rows: $(@($report.ChargeCorrelation).Count)" -ScenarioName $scenarioName
         Assert-True -TestName 'stg-pass all charges persisted' -Condition (@($report.ChargeCorrelation | Where-Object { -not $_.InDb }).Count -eq 0) -Message 'All charge IDs resolved from App Insights were found in SQL.' -ScenarioName $scenarioName
         Assert-True -TestName 'stg-pass all expected UI callbacks logged' -Condition (@($report.ChargeCorrelation | Where-Object { $_.UiCallbackExpected -and -not $_.UiCallbackLogged }).Count -eq 0) -Message 'All 3DS charge flows had correlated UI callback evidence.' -ScenarioName $scenarioName
     }
     else {
         Assert-Equal -TestName 'stg-pass check: API log -> DB charge IDs' -Expected 'INCONCLUSIVE' -Actual $apiCheck.Outcome -ScenarioName $scenarioName
-        Assert-Equal -TestName 'stg-pass check: UI log -> callbacks present where expected' -Expected 'INCONCLUSIVE' -Actual $uiCheck.Outcome -ScenarioName $scenarioName
+        Assert-Equal -TestName 'stg-pass check: UI telemetry -> callbacks present where expected' -Expected 'INCONCLUSIVE' -Actual $uiCheck.Outcome -ScenarioName $scenarioName
         Assert-Equal -TestName 'stg-pass charge correlation absent without log evidence' -Expected 0 -Actual @($report.ChargeCorrelation).Count -ScenarioName $scenarioName
     }
 }
@@ -332,7 +332,7 @@ function Test-DevFallbackScenario {
     Assert-True -TestName 'dev-fallback returned checks object' -Condition ($null -ne $report.Checks) -Message 'Verifier completed and emitted structured checks.' -ScenarioName $scenarioName
 
     $apiCheck = Get-Check -Report $report -CheckName 'API log -> DB charge IDs'
-    $uiCheck = Get-Check -Report $report -CheckName 'UI log -> callbacks present where expected'
+    $uiCheck = Get-Check -Report $report -CheckName 'UI telemetry -> callbacks present where expected'
     $apiEvidenceCount = @($report.AppInsights.ApiEvidence).Count
     $uiEvidenceCount = @($report.AppInsights.UiEvidence).Count
 

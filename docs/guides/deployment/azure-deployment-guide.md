@@ -1288,15 +1288,15 @@ Resources\Azure-Deployment\setup-appinsights-dev.ps1 `
    -WorkspaceName logs-orderprocessing-dev `
    -ApiAppName pavanthakur-orderprocessing-api-xyapp-dev `
    -UiAppName pavanthakur-orderprocessing-ui-xyapp-dev `
-   -ApiAppInsights ai-orderprocessing-api-dev `
-   -UiAppInsights ai-orderprocessing-ui-dev
+   -ApiAppInsights ai-orderprocessing-api-dev
 ```
 
 What the manual script does:
-- Ensures Log Analytics workspace and AI components exist
-- Sets `APPLICATIONINSIGHTS_CONNECTION_STRING` on API/UI
-- Enables App Service auto-instrumentation settings
-- Configures Diagnostics (HTTP/App/Console/Platform logs + AllMetrics) to workspace
+- Ensures Log Analytics workspace and the API App Insights component exist
+- Sets `APPLICATIONINSIGHTS_CONNECTION_STRING` on the API app only
+- Enables API App Service auto-instrumentation settings
+- Configures Diagnostics (HTTP/App/Console/Platform logs + AllMetrics) to the workspace for both API and UI resources
+- Leaves the React SPA UI host without a direct App Insights connection string because browser payment telemetry flows through `POST /payment/client-event` on the API
 
 ---
 
@@ -1349,7 +1349,7 @@ If the API/UI return HTTP 500.30 (ASP.NET Core startup failure):
 # Tail API logs
 az webapp log tail --name pavanthakur-orderprocessing-api-xyapp-dev --resource-group rg-orderprocessing-dev
 
-# Tail UI logs
+# Tail UI App Service logs
 az webapp log tail --name pavanthakur-orderprocessing-ui-xyapp-dev --resource-group rg-orderprocessing-dev
 ```
 
@@ -2174,7 +2174,7 @@ Continue using repository-level secrets (static Tenant & Subscription IDs; dynam
 | `setup-github-oidc.ps1` (multi-RG) | `Resources/Azure-Deployment/` | Extended: use `-ResourceGroupNames "rg-orderprocessing-dev,rg-orderprocessing-stg,rg-orderprocessing-prod"` to assign role across multiple RGs in one run. |
 | `check-app-registration.ps1` | `Resources/Azure-Deployment/` | Enumerates App Registration details, lists branch & environment federated credentials, outputs verification guidance. |
 | `fix-federated-credential.ps1` | `Resources/Azure-Deployment/` | Adds missing main branch federated credential (legacy helper retained). |
-| `setup-appinsights-dev.ps1` | `Resources/Azure-Deployment/` | Creates/links workspace-based App Insights for API/UI, sets connection strings, enables auto-instrumentation, and configures Diagnostics to Log Analytics. |
+| `setup-appinsights-dev.ps1` | `Resources/Azure-Deployment/` | Creates/links workspace-based API App Insights, sets the API connection string, enables API auto-instrumentation, and configures API/UI Diagnostics to Log Analytics. |
 | `manage-appservice-slots.ps1` | `Resources/Azure-Deployment/` | Manages deployment slots (create, deploy, warmup, swap, rollback, delete) for zero-downtime releases. |
 | `provision-azure-sql.ps1` | `Resources/Azure-Deployment/` | Creates Azure SQL server and database, configures firewall rules, sets app connection strings, and restarts apps. |
 | `run-database-migrations.ps1` | `Resources/Azure-Deployment/` | Applies EF Core migrations (pins EF CLI 8.0.13); falls back to idempotent SQL via `sqlcmd` on failure. |
@@ -2335,10 +2335,9 @@ If you need to configure OIDC separately or customize settings:
           -WorkspaceName logs-orderprocessing-dev `
           -ApiAppName orderprocessing-api-xyapp-dev `
           -UiAppName orderprocessing-ui-xyapp-dev `
-          -ApiAppInsights ai-orderprocessing-api-dev `
-          -UiAppInsights ai-orderprocessing-ui-dev
+          -ApiAppInsights ai-orderprocessing-api-dev
        ```
-       Confirms both apps have `APPLICATIONINSIGHTS_CONNECTION_STRING` and Diagnostics to workspace.
+       Confirms the API app has `APPLICATIONINSIGHTS_CONNECTION_STRING`, and routes API/UI diagnostics to the workspace.
 
    8b. (Optional) Introduce staging slot for production API:
      ```powershell
@@ -2372,7 +2371,7 @@ If you need to configure OIDC separately or customize settings:
 6. Push code to dev / staging / main → branch-triggered deployments
 7. Validate apps (CLI + curl + browser)
 8. Optional enhancements:
-   - Monitoring: run `setup-appinsights-dev.ps1` per environment
+   - Monitoring: run `setup-appinsights-dev.ps1` per environment when you need API App Insights plus API/UI diagnostics routing
   - Deployment slot (prod API/UI): `manage-appservice-slots.ps1 -Action create -SlotName staging`
   - Slot lifecycle: deploy → warmup → swap → rollback (if needed)
 9. Ongoing: repeat steps 2–3 only when adding environments; repeat step 4 if App Registration recreated

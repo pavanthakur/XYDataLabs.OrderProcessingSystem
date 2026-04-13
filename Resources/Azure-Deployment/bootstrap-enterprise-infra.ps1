@@ -1049,20 +1049,30 @@ foreach ($env in $envList) {
                     $aspnetEnv = Get-AspNetCoreEnvironment -Environment $Environment
                     $job = Start-Job -ScriptBlock {
                         param($rg, $apiApp, $connString, $aspnetEnv, $kvName)
-                        az webapp config appsettings set -g $rg -n $apiApp --settings "APPLICATIONINSIGHTS_CONNECTION_STRING=$connString" "ASPNETCORE_ENVIRONMENT=$aspnetEnv" "KEY_VAULT_NAME=$kvName" "ApplicationInsightsAgent_EXTENSION_VERSION=~3" "XDT_MicrosoftApplicationInsights_Mode=recommended" 2>$null
+                        $output = az webapp config appsettings set -g $rg -n $apiApp --settings "APPLICATIONINSIGHTS_CONNECTION_STRING=$connString" "ASPNETCORE_ENVIRONMENT=$aspnetEnv" "KEY_VAULT_NAME=$kvName" "ApplicationInsightsAgent_EXTENSION_VERSION=~3" "XDT_MicrosoftApplicationInsights_Mode=recommended" 2>&1
+                        if ($LASTEXITCODE -ne 0) {
+                            throw ($output | Out-String).Trim()
+                        }
                     } -ArgumentList $rg, $apiApp, $connString, $aspnetEnv, $kvName
                     
                     $timeout = 90
                     $completed = Wait-Job -Job $job -Timeout $timeout
                     if ($completed) {
-                        $result = Receive-Job -Job $job
-                        Remove-Job -Job $job
-                        Write-Host "    [OK] App Insights and Key Vault configured for API: $apiApp" -ForegroundColor Green
+                        try {
+                            $null = Receive-Job -Job $job -ErrorAction Stop
+                            Remove-Job -Job $job
+                            Write-Host "    [OK] App Insights and Key Vault configured for API: $apiApp" -ForegroundColor Green
+                        } catch {
+                            Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+                            throw "Failed to configure API App Insights settings: $($_.Exception.Message)"
+                        }
                     } else {
                         Stop-Job -Job $job
                         Remove-Job -Job $job
-                        Write-Host "    [WARN] App Insights configuration for API timed out after ${timeout}s - will retry later" -ForegroundColor Yellow
+                        throw "App Insights configuration for API timed out after ${timeout}s."
                     }
+                } else {
+                    throw "API WebApp not found while configuring App Insights: $apiApp"
                 }
                 
                 $uiVerified = az webapp show -g $rg -n $uiApp --query "name" -o tsv 2>$null
@@ -1070,13 +1080,13 @@ foreach ($env in $envList) {
                     Write-Host "    [OK] UI app preserved as a static frontend host; bootstrap skips .NET-specific app settings." -ForegroundColor Green
                 }
             } else {
-                Write-Host "    [WARN] Could not retrieve App Insights connection string" -ForegroundColor Yellow
+                throw "Could not retrieve App Insights connection string for $aiName"
             }
         } else {
-            Write-Host "    [WARN] App Insights not found: $aiName" -ForegroundColor Yellow
+            throw "App Insights not found: $aiName"
         }
     } catch {
-        Write-Log "Failed to configure App Insights connection string: $($_.Exception.Message)" "WARN" "Yellow"
+        throw "Failed to configure App Insights connection string: $($_.Exception.Message)"
     }
 
     # Runtime check & attempt config to .NET 8 if needed (API only)
