@@ -1,4 +1,5 @@
 import type { EnvironmentName, RuntimeKind, RuntimeProfile } from "./runtime-target-catalog.js";
+import type { ThreeDsSetting } from "./report-composer.js";
 
 export interface VerificationRequest {
   runtimeTarget: string;
@@ -11,6 +12,7 @@ export interface VerificationRequest {
 export interface VerificationResult {
   outcome: "passed" | "failed" | "partial" | "skipped";
   summary: string;
+  threeDsByTenant?: Partial<Record<string, ThreeDsSetting>>;
   rawReport?: unknown;
 }
 

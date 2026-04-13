@@ -62,9 +62,9 @@ describe("App callback bootstrap", () => {
     expect(fetchSpy).toHaveBeenCalled();
   });
 
-  it("boots the shell against the callback tenant and renders the payment status after a direct 3DS return", async () => {
+  it("boots the shell against the callback tenant and renders the payment status after a direct 3DS return on the legacy singular callback route", async () => {
     localStorage.setItem("orderprocessing.activeTenantCode", "TenantB");
-    window.history.pushState({}, "", "/payments/callback?tenantCode=TenantA&id=truseqg7dswfmkp6fg1o");
+    window.history.pushState({}, "", "/payment/callback?tenantCode=TenantA&id=truseqg7dswfmkp6fg1o");
 
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const requestUrl = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);

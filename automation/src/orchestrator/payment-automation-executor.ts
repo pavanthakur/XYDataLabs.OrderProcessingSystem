@@ -80,6 +80,7 @@ export async function executePaymentAutomationRun(
     const tenantDiagnosticsDirectory = path.join(reportDirectory, tenantCode);
     let journeyOutcome = options.dryRun ? "dry_run" : "failed";
     let challengeOutcome: ExecutiveSummaryRow["challengeOutcome"] = "not-applicable";
+    let threeDsSetting: ExecutiveSummaryRow["threeDsSetting"] = "unknown";
     let evidenceReference = `customerOrderId:${customerOrderId}`;
 
     try {
@@ -103,6 +104,7 @@ export async function executePaymentAutomationRun(
 
         journeyOutcome = journeyResult.journeyOutcome;
         challengeOutcome = journeyResult.challengeOutcome;
+        threeDsSetting = journeyResult.threeDsSetting;
         evidenceReference = `${customerOrderId} -> ${journeyResult.finalUrl}`;
       }
 
@@ -117,7 +119,7 @@ export async function executePaymentAutomationRun(
         startedUtc: tenantStartedAt.toISOString(),
         finishedUtc: new Date().toISOString(),
         evidenceReference,
-        threeDsExpectation: target.challengeCapability,
+        threeDsSetting,
         paymentProvider: "OpenPay"
       });
     }
@@ -133,7 +135,7 @@ export async function executePaymentAutomationRun(
         startedUtc: tenantStartedAt.toISOString(),
         finishedUtc: new Date().toISOString(),
         evidenceReference,
-        threeDsExpectation: target.challengeCapability,
+        threeDsSetting,
         paymentProvider: "OpenPay"
       });
 
@@ -160,6 +162,10 @@ export async function executePaymentAutomationRun(
       verificationSummary = verificationResult.summary;
       for (const row of rows) {
         row.verificationOutcome = verificationResult.outcome;
+        const verifiedThreeDsSetting = verificationResult.threeDsByTenant?.[row.tenantCode];
+        if (verifiedThreeDsSetting) {
+          row.threeDsSetting = verifiedThreeDsSetting;
+        }
       }
 
       await writeFile(

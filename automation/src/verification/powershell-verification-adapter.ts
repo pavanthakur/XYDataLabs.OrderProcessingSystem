@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import type { ThreeDsSetting } from "../contracts/report-composer.js";
 import type { VerificationAdapter, VerificationRequest, VerificationResult } from "../contracts/verification-adapter.js";
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -41,6 +42,7 @@ export class PowerShellVerificationAdapter implements VerificationAdapter {
     return {
       outcome: hasFailure ? "failed" : hasInconclusive ? "partial" : "passed",
       summary: `Physical verification completed for ${request.runPrefix}.`,
+      threeDsByTenant: extractThreeDsByTenant(rawReport),
       rawReport
     };
   }
@@ -67,6 +69,7 @@ export class PowerShellVerificationAdapter implements VerificationAdapter {
     return {
       outcome: hasFailure ? "failed" : hasInconclusive ? "partial" : "passed",
       summary: `Azure verification completed for ${request.runPrefix}.`,
+      threeDsByTenant: extractThreeDsByTenant(rawReport),
       rawReport
     };
   }
@@ -125,4 +128,50 @@ function parseJsonPayload(stdout: string): unknown {
   }
 
   throw new Error("Unable to parse verification JSON from PowerShell output.");
+}
+
+function extractThreeDsByTenant(rawReport: unknown): Partial<Record<string, ThreeDsSetting>> {
+  const threeDsByTenant: Partial<Record<string, ThreeDsSetting>> = {};
+
+  if (!rawReport || typeof rawReport !== "object") {
+    return threeDsByTenant;
+  }
+
+  const report = rawReport as {
+    Preflight?: Record<string, unknown>;
+    ChargeCorrelation?: Array<{ Tenant?: unknown; ThreeDSEnabled?: unknown }>;
+  };
+
+  for (const entry of report.ChargeCorrelation ?? []) {
+    const tenantCode = typeof entry.Tenant === "string" ? entry.Tenant : "";
+    const resolvedSetting = toThreeDsSetting(entry.ThreeDSEnabled);
+    if (tenantCode && resolvedSetting !== "unknown") {
+      threeDsByTenant[tenantCode] = resolvedSetting;
+    }
+  }
+
+  for (const [tenantCode, configuredValue] of Object.entries(report.Preflight ?? {})) {
+    if (threeDsByTenant[tenantCode]) {
+      continue;
+    }
+
+    const resolvedSetting = toThreeDsSetting(configuredValue);
+    if (resolvedSetting !== "unknown") {
+      threeDsByTenant[tenantCode] = resolvedSetting;
+    }
+  }
+
+  return threeDsByTenant;
+}
+
+function toThreeDsSetting(value: unknown): ThreeDsSetting {
+  if (value === true || value === 1 || value === "1") {
+    return "enabled";
+  }
+
+  if (value === false || value === 0 || value === "0") {
+    return "disabled";
+  }
+
+  return "unknown";
 }
