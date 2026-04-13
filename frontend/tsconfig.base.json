@@ -6,7 +6,6 @@
       "DOM.Iterable",
       "ES2022"
     ],
-    "baseUrl": ".",
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
@@ -17,14 +16,6 @@
     "skipLibCheck": true,
     "noEmit": true,
     "allowSyntheticDefaultImports": true,
-    "useDefineForClassFields": true,
-    "paths": {
-      "@xydatalabs/orderprocessing-api-sdk": [
-        "packages/api-sdk/src/index.ts"
-      ],
-      "@xydatalabs/orderprocessing-tenant-session": [
-        "packages/tenant-session/src/index.ts"
-      ]
-    }
+    "useDefineForClassFields": true
   }
 }
