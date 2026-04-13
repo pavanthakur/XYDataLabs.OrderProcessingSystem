@@ -1,6 +1,11 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "baseUrl": "../../",
+    "paths": {
+      "@xydatalabs/orderprocessing-api-sdk": ["packages/api-sdk/src/index.ts"],
+      "@xydatalabs/orderprocessing-tenant-session": ["packages/tenant-session/src/index.ts"]
+    },
     "types": [
       "vite/client"
     ]
