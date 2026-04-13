@@ -143,6 +143,16 @@ export default function App() {
             }
           />
           <Route
+            path="/payment/callback"
+            element={
+              <PaymentCallbackPage
+                activeTenantCode={activeTenantCode}
+                apiClient={apiClient}
+                onTenantChange={handleTenantChange}
+              />
+            }
+          />
+          <Route
             path="/customers"
             element={
               <CustomerDirectoryPage
@@ -176,7 +186,7 @@ export default function App() {
 
 function resolveRequestedBootstrapTenantCode(pathname: string, search: string): string | null {
   const trimmedPath = pathname.trim();
-  if (!trimmedPath.startsWith("/payments/")) {
+  if (!trimmedPath.startsWith("/payments/") && !trimmedPath.startsWith("/payment/")) {
     return null;
   }
 
