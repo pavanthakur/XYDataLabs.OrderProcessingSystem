@@ -21,6 +21,8 @@
 - ✅ SQL resilience baseline — EnableRetryOnFailure + Polly planning (Day 38)
 - ✅ **Architecture Phases 1-7 complete:** Structural Foundation, Hand-Rolled CQRS, Observability (Serilog + OTel), Multi-Tenancy Skeleton, Test Restructure, Polish & Hardening, Tenant Enforcement & DDD tactical patterns
 - ✅ **Phase 7 verification freeze complete (April 10, 2026):** latest code validated on local, Docker, and Azure; Azure Initial Setup and dev bootstrap proven end-to-end
+- ✅ **Phase 7 deferral decisions are frozen:** `Address` stays deferred until a concrete customer, billing, or shipping boundary exists; broader optimistic concurrency stays deferred until another aggregate shows real competing-writer risk
+- ⏳ **Strict Phase 7 closeout is now a pure operational proof gate:** custom OTel metrics are implemented and need local/Docker/Azure revalidation; order-level concurrency surfacing remains deferred until the order write surface has a real multi-writer path
 
 **🔥 YOUR NEXT PRIORITIES:**
 

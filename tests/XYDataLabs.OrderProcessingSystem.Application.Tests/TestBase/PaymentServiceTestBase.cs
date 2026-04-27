@@ -203,7 +203,8 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
             ExpirationYear: "25",
             ExpirationMonth: "12",
             Cvv2: "123",
-            CustomerOrderId: customerOrderId);
+            CustomerOrderId: customerOrderId,
+            ClientCallbackOrigin: null);
 
     protected static ConfirmPaymentStatusCommand BuildConfirmPaymentCommand(
         string paymentId = "charge-001",

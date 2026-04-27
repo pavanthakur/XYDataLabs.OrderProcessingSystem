@@ -158,7 +158,7 @@ Transition note:
 
 ## Day 42-43: Phase 7 Closure - Typed Boundaries + Deployment Readiness
 
-Phase 7 closed with two final slices that were easy to get wrong if treated as cosmetic refactors.
+Phase 7 reached a verification freeze with two final slices that were easy to get wrong if treated as cosmetic refactors. The later strict-closeout backlog is intentionally narrow: custom OTel metrics are now implemented in code and need cross-runtime verification, `Address` remains deferred by design, and broader optimistic concurrency remains deferred until another aggregate shows real competing-writer risk.
 
 **1. Strongly typed IDs were pushed to the caller-facing boundary**
 
@@ -238,7 +238,11 @@ Passed!  - Failed: 0, Passed: 29, Skipped: 0, Total: 29
 
 **5. What this enables next**
 
-- Phase 7 is now closed with tenant enforcement, audit trail, aggregate hardening, value object adoption (`Money`), strongly typed IDs, typed contract boundaries, and correct deployment readiness semantics all verified.
+- Phase 7 reached a stable verification freeze with tenant enforcement, audit trail, aggregate hardening, value object adoption (`Money`), strongly typed IDs, typed contract boundaries, and correct deployment readiness semantics all verified.
+- `Address` remains intentionally deferred until a concrete customer, billing, or shipping boundary exists.
+- Broader optimistic concurrency remains intentionally deferred until another aggregate shows real competing-writer risk.
+- The custom OTel metrics slice is now implemented in the shared meter and emitted from tenant enforcement, API ProblemDetails handling, and payment execution.
+- Order-level concurrency surfacing is also intentionally deferred for now: the `RowVersion` guard stays in place, but explicit `DbUpdateConcurrencyException` -> stable API conflict mapping waits until the order write surface has a real multi-writer path that justifies freezing a public contract.
 - The next safe architecture slice is Phase 8a: define domain/integration event primitives and the transactional seam that writes aggregate changes and outbox rows in the same database transaction.
 
 ---
@@ -310,4 +314,36 @@ OrderProcessingSystem_TenantC_Dev
 
 - Phase 7 now has current runtime proof on local, Docker, and Azure, not just code-level tests.
 - Azure OIDC setup, GitHub environment secret automation, and bootstrap deployment are proven on the latest workflow design.
-- The next engineering slice can move to Phase 8 (event-driven foundation) without carrying uncertainty about the frozen Phase 7 baseline.
+- The next engineering slice can move to Phase 8 (event-driven foundation) without carrying uncertainty about the frozen Phase 7 baseline, but the newly added custom OTel metrics slice should still be revalidated across local, Docker, and Azure before the Phase 8 runtime surface grows materially.
+
+### Phase 7 Final Operational Closeout Gate
+
+The next strict target is not another feature. It is a pass/fail operational proof gate for the already-implemented Phase 7 surface.
+
+Phase 7 is finally closed only when all of the following are true:
+
+- Local dev: `orderprocessing.payments.completed` and `orderprocessing.payments.duration` can be observed after a representative payment run.
+- Docker dev: the same payment metric families can be observed without changing emitted dimensions or cardinality.
+- Azure dev: the same payment metric families arrive in the production-like telemetry path and remain operationally useful.
+- Health contract: `/health/live` and `/health/ready` remain healthy under the expected baseline and readiness continues to fail closed when dependencies degrade.
+- Payment verification: `verify-payment-run-physical.ps1` passes for local and Docker, and `verify-payment-run-azure.ps1` passes for Azure after the metrics slice.
+- CI/CD: `ci.yml` remains green for frontend validation, solution build, Domain/Application/API/Architecture tests, and tracked-artifact validation.
+- Focused regression coverage exists for the tenant-validation and ProblemDetails metric emission points added in Phase 7 closeout.
+- Documentation can be moved from "implemented, pending runtime revalidation" to "verified and closed" without caveat.
+
+Important proof split:
+
+- `orderprocessing.tenant_context.failures` is primarily regression-proved through `TenantValidationBehaviorTests`, not standard HTTP runtime probing, because public requests with missing, unknown, or blocked tenant context are intentionally rejected earlier by `TenantMiddleware`.
+- `orderprocessing.api.problem_responses` is primarily regression-proved through `ErrorHandlingMiddlewareTests`, because the closeout gate should not depend on synthetic unhandled-exception traffic against Azure dev.
+- The exact command sequence for the Phase 7 closeout proof lives in `docs/reference/quick-command-reference.md` under **Phase 7 Operational Proof Commands**.
+
+### April 28, 2026 Revalidation Snapshot
+
+- Focused regression coverage passed for the two non-runtime metric paths: `TenantValidationBehaviorTests` and `ErrorHandlingMiddlewareTests` both passed after a shared test-helper constructor mismatch was corrected in the Application test base.
+- Focused `MeterListener` coverage now also proves that `BusinessMetrics` emits the expected in-process measurements for tenant-validation failure, ProblemDetails responses, and payment outcome plus duration.
+- Local proof passed at the payment-verification layer after running the repo-owned browser automation target `local-http` for `TenantA`; `verify-payment-run-physical.ps1` passed for run prefix `OR-1777318139-28Apr`.
+- Docker dev proof passed at the payment-verification layer after running the repo-owned browser automation target `docker-dev-http` for `TenantA`; `verify-payment-run-physical.ps1` passed for run prefix `OR-1777318429-28Apr`.
+- Azure dev proof passed at the payment-verification layer for `TenantA`; the repo-owned automation wrapper reached a transient Azure SQL firewall timing failure during its embedded verification step, but the direct rerun of `verify-payment-run-azure.ps1` passed for run prefix `OR-1777318480-28Apr` once firewall access had taken effect.
+- Azure trace evidence is present in Application Insights for the April 28 Azure proof run, so the deployed runtime is emitting telemetry to the dev App Insights resource.
+- Local and Docker absence from App Insights is expected unless `APPLICATIONINSIGHTS_CONNECTION_STRING` is present, because the shared Application Insights options bind only from that environment key.
+- The remaining strict blocker is operational visibility on the deployed Azure runtime: `orderprocessing.payments.completed`, `orderprocessing.payments.duration`, `orderprocessing.api.problem_responses`, and `orderprocessing.tenant_context.failures` were still absent from the dev App Insights `customMetrics` table after the April 28 proof runs. With in-process emission now proven locally, the next meaningful operational check is to deploy the current API bits to Azure dev and then rerun the App Insights metric query.

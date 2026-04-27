@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.CQRS.Behaviors;
 
@@ -33,6 +34,8 @@ public sealed class TenantValidationBehavior<TRequest, TResult> : IPipelineBehav
         }
 
         var requestName = typeof(TRequest).Name;
+
+        BusinessMetrics.RecordTenantContextFailure(requestName, _tenantProvider.HasTenantContext);
 
         _logger.LogWarning(
             "[CQRS] Rejected {Request} because no valid tenant context was available.",

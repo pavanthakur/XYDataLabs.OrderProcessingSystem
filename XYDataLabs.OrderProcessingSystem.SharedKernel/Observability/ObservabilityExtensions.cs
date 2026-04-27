@@ -53,6 +53,7 @@ public static class ObservabilityExtensions
             {
                 metrics
                     .SetResourceBuilder(resourceBuilder)
+                    .AddMeter(BusinessMetrics.MeterName)
                     .AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation()
                     .AddRuntimeInstrumentation();
