@@ -1,5 +1,5 @@
 # Quick Command Reference Guide
-**Last Updated:** April 9, 2026 (Phase 7 freeze routing and architecture-status sync updates)
+**Last Updated:** April 28, 2026 (Phase 7 operational closeout proof gate)
 
 All commands in one place. Also available as topic-specific deep dives in this canonical `docs/reference/` subtree:
 
@@ -81,6 +81,88 @@ dotnet test .\tests\XYDataLabs.OrderProcessingSystem.Integration.Tests\XYDataLab
 # Use the no-build variant after a successful solution build to shorten reruns
 dotnet test .\tests\XYDataLabs.OrderProcessingSystem.Integration.Tests\XYDataLabs.OrderProcessingSystem.Integration.Tests.csproj --no-build --logger "console;verbosity=minimal"
 ```
+
+### **Phase 7 Operational Proof Commands**
+
+Use this checklist for the final Phase 7 closeout gate. The proof is intentionally split between runtime verification and focused regression coverage.
+
+```powershell
+# 1. Baseline build + focused regression coverage
+dotnet build .\XYDataLabs.OrderProcessingSystem.sln /property:GenerateFullPaths=true "/consoleloggerparameters:NoSummary;ForceNoAlign"
+dotnet test .\tests\XYDataLabs.OrderProcessingSystem.Application.Tests\XYDataLabs.OrderProcessingSystem.Application.Tests.csproj --filter "FullyQualifiedName~TenantValidationBehaviorTests" --logger "console;verbosity=minimal"
+dotnet test .\tests\XYDataLabs.OrderProcessingSystem.API.Tests\XYDataLabs.OrderProcessingSystem.API.Tests.csproj --filter "FullyQualifiedName~ErrorHandlingMiddlewareTests" --logger "console;verbosity=minimal"
+dotnet test .\tests\XYDataLabs.OrderProcessingSystem.Integration.Tests\XYDataLabs.OrderProcessingSystem.Integration.Tests.csproj --logger "console;verbosity=minimal"
+```
+
+Expected evidence:
+- `TenantValidationBehaviorTests` stays green for the CQRS tenant-enforcement path.
+- `ErrorHandlingMiddlewareTests` stays green for the ProblemDetails middleware path.
+- Use these focused tests to prove `orderprocessing.tenant_context.failures` and `orderprocessing.api.problem_responses` because public HTTP requests are intentionally intercepted earlier by tenant middleware or should not rely on synthetic 500 traffic in Azure dev.
+
+```powershell
+# 2. Start local dev runtime and execute one representative payment run through the active UI
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-local-profile.ps1 -Profile http
+
+# 3. Verify the local payment run physically
+.\scripts\verify-payment-run-physical.ps1 -Runtime local -Environment dev -Profile http
+```
+
+Expected evidence:
+- A fresh local payment run exists and the verifier reports a PASS table.
+- `orderprocessing.payments.completed` and `orderprocessing.payments.duration` are visible in telemetry for the same proof window.
+
+```powershell
+# 4. Start Docker dev runtime and execute one representative payment run through the active UI
+.\Resources\Docker\start-docker.ps1 -Environment dev -Profile http
+
+# 5. Verify the Docker payment run physically
+.\scripts\verify-payment-run-physical.ps1 -Runtime docker -Environment dev -Profile http
+```
+
+Expected evidence:
+- A fresh Docker dev payment run exists and the verifier reports a PASS table.
+- The same payment metrics appear without introducing new tag values or cardinality drift.
+
+```powershell
+# 6. Verify the Azure dev payment run
+.\scripts\verify-payment-run-azure.ps1 -Environment dev
+```
+
+Expected evidence:
+- Azure dev reports a PASS table.
+- `/health/live` and `/health/ready` remain healthy under the baseline runtime.
+- The same payment metrics are visible in the production-like telemetry path.
+
+```powershell
+# 7. Query the dev Application Insights resource immediately after each proof run
+$phase7MetricsQuery = @"
+customMetrics
+| where timestamp > ago(30m)
+| where name in ('orderprocessing.payments.completed', 'orderprocessing.payments.duration', 'orderprocessing.api.problem_responses', 'orderprocessing.tenant_context.failures')
+| project timestamp, name, value, customDimensions
+| order by timestamp desc
+"@
+
+az monitor app-insights query `
+  --app ai-orderprocessing-dev `
+  --resource-group rg-orderprocessing-dev `
+  --analytics-query $phase7MetricsQuery `
+  --output table
+```
+
+Expected evidence:
+- `orderprocessing.payments.completed` and `orderprocessing.payments.duration` appear after the local, Docker, and Azure proof windows.
+- `orderprocessing.api.problem_responses` and `orderprocessing.tenant_context.failures` are primarily regression-proved via the focused test commands above; if rows appear in dev telemetry as well, treat that as extra evidence, not the sole gate.
+
+```powershell
+# 8. Keep the standard CI-style validation gates green
+pwsh scripts/validate-tracked-generated-artifacts.ps1
+node scripts/validate-doc-links.js
+dotnet build XYDataLabs.OrderProcessingSystem.sln --warnaserror /warnnotaserror:NU1701 "/consoleloggerparameters:NoSummary;ForceNoAlign"
+```
+
+Expected evidence:
+- Local proof, Docker proof, Azure proof, focused regression coverage, and CI-style build hygiene all pass without caveat.
 
 ### **Payment Verification Commands**
 ```powershell

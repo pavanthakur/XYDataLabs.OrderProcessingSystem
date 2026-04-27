@@ -1,6 +1,7 @@
 ﻿using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
 
 namespace XYDataLabs.OrderProcessingSystem.API.Middleware
 {
@@ -45,6 +46,7 @@ namespace XYDataLabs.OrderProcessingSystem.API.Middleware
                 }
 
                 var problemDetails = CreateProblemDetails(context, ex, out var statusCode, out var logLevel);
+                BusinessMetrics.RecordProblemResponse(statusCode, problemDetails.Type);
 
                 _logger.Log(
                     logLevel,

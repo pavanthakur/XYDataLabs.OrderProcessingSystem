@@ -281,16 +281,16 @@ Pointer precedence for this companion plan is intentional:
   - `X-Content-Type-Options: nosniff`
   - `X-Frame-Options: DENY`
   - `Strict-Transport-Security` (HSTS)
-- Enhanced OpenTelemetry: request duration metrics, tenant validation failure counters
+- OpenTelemetry baseline in Phase 7 now includes a focused custom business-metrics slice for tenant-validation rejection, ProblemDetails responses, and payment outcome plus latency; cross-runtime verification of those metrics remains part of final closeout before Phase 8 broadens the runtime surface
 - Split health checks into `/health/live` (liveness) and `/health/ready` (readiness with SQL + Redis)
 
 ### DDD Tactical Patterns
 
 - **Aggregate root** — `Order` entity with private constructor, `Create()` factory method returning a domain-local `DomainResult<Order>` so Domain keeps zero project references
 - **State machine** — `Order` status transitions: `Created → Paid → Shipped → Delivered → Cancelled` with explicit transition methods (`Pay()`, `Ship()`, `Deliver()`, `Cancel()`) returning a domain-local result; invalid transitions return failure, never throw
-- **Value objects** — `Address` and `Money` as immutable `record` types with self-validation in constructor
+- **Value objects** — `Money` is implemented as an immutable value object with explicit validation; `Address` is intentionally deferred until a concrete customer, billing, or shipping boundary needs a first-class model
 - **Strongly-typed IDs** — `OrderId`, `CustomerId`, `ProductId` as `readonly record struct` wrappers around `Guid`; eliminates parameter-swap bugs (`Guid orderId, Guid customerId` → `OrderId orderId, CustomerId customerId`); EF Core value converters for transparent persistence
-- **Optimistic concurrency** — `RowVersion` (`byte[]` / `[Timestamp]`) is now applied to `Order`; future slices can generalize this if broader aggregate coverage is needed
+- **Optimistic concurrency** — `RowVersion` (`byte[]` / `[Timestamp]`) is now applied to `Order`; broader rollout to other aggregates stays deferred until another aggregate shows real competing-writer risk
 - **Domain invariants** — enforced inside aggregate methods (e.g. cannot ship an unpaid order), returning `Result<T>.Failure` with descriptive `Error` — no exceptions for business rules
 - **Aggregate boundary rule** — aggregates enforce only their own transactional invariants and do not depend on injected infrastructure services. External collaboration (payment gateways, inventory lookups, messaging, persistence orchestration) remains in application handlers, process managers, or domain policies — keeps aggregate behavior focused and predictable
 
@@ -308,6 +308,17 @@ Secure, observable, tenant-enforced system with rich domain model, standardized 
 The current `ProcessPaymentCommandHandler` makes three sequential OpenPay API calls (`CreateCustomerAsync` → `CreateCardTokenAsync` → `CreateChargeAsync`) followed by two DB writes (`CardTransaction` + `PayinLog`) in a single handler. If the process crashes or the DB transaction fails after the charge is successfully created at OpenPay, the charge is real but unrecorded — no reconciliation is possible without manually querying OpenPay by `AttemptOrderId`.
 
 The Outbox Pattern in Phase 8 resolves this: write an `OutboxMessage` (with the charge result) in the same DB transaction as `CardTransaction`. The background publisher then confirms/reconciles asynchronously. Until Phase 8 ships, `AttemptOrderId` in `PayinLog` is the manual reconciliation key — queries to OpenPay's charge API can recover the charge state by that ID.
+
+### Phase 7 Final Operational Closeout Gate
+
+Phase 7 verification freeze passed on April 10, 2026. The final strict closeout target is now an operational proof gate before Phase 8 expands the implementation surface:
+
+- Validate the implemented custom OpenTelemetry metrics slice across local dev, Docker dev, and Azure dev, and confirm the emitted dimensions stay low-cardinality and operationally useful
+- Keep order-level concurrency surfacing deferred for now; retain the `Order.RowVersion` guard, but wait to freeze a client-facing conflict contract until a real multi-writer order update path exists
+- Keep broader concurrency rollout deferred until another aggregate shows real competing-writer risk, and keep `Address` deferred until a concrete customer, billing, or shipping boundary exists
+- Re-run development validation on local dev, Docker dev, and Azure dev, including `/health/live`, `/health/ready`, `verify-payment-run-physical.ps1`, and `verify-payment-run-azure.ps1`
+- Keep PR CI green through `ci.yml`, and add or update focused unit or API tests for the metrics slice
+- Integration tests remain a local or manual gate until a Linux Docker-capable CI runner is added; re-run the integration slice locally before another verification freeze
 
 ---
 
@@ -1113,11 +1124,11 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 - [x] Central Package Management — `Directory.Packages.props` as single source of truth for all NuGet versions
 
 ### Phase 7-8 📅 Hardening & Events
-- [ ] Tenant enforcement + audit logging
-- [ ] Security headers + liveness/readiness health checks
-- [ ] ProblemDetails (RFC 9457) + global exception middleware
-- [ ] DDD tactical patterns: aggregate root, state machine (`Order` status transitions), value objects (`Address`, `Money`), strongly-typed IDs (`OrderId`, `CustomerId`), domain invariants via `Result<T>`
-- [ ] Optimistic concurrency — EF Core `RowVersion` + `ConcurrencyException` handling in command handlers
+- [x] Tenant enforcement + audit logging
+- [x] Security headers + liveness/readiness health checks
+- [x] ProblemDetails (RFC 9457) + global exception middleware
+- [x] DDD tactical patterns: aggregate root, state machine (`Order` status transitions), `Money`, strongly-typed IDs (`OrderId`, `CustomerId`), and domain invariants via `Result<T>`; `Address` is intentionally deferred until a real aggregate or request boundary exists
+- [ ] Optimistic concurrency — `Order` `RowVersion` is implemented; broader rollout stays deferred and explicit concurrency-conflict surfacing remains open only if strict Phase 7 closeout parity is required
 - [ ] Domain events + integration events
 - [ ] Outbox pattern + background event publisher
 - [ ] Inbox pattern (idempotent consumers) + event versioning
@@ -1217,10 +1228,10 @@ _Patterns from industry reference architectures evaluated against the 14-phase p
 | `IConfigureNamedOptions<T>` (JWT setup) | Skipped | Phase 10 | Implementation detail applied when Entra ID/JWT is wired; not a design-level requirement. |
 | Local Keycloak (IdP) | Deferred | Phase 9 | Requires Docker Compose infra; defer until local microservice orchestration exists. |
 | `DelegatingHandler` for external HTTP | Deferred | Phase 9 | Relevant for inter-service `HttpClient` use; implement when services call each other. |
-| Optimistic concurrency (`RowVersion`) | Added | Phase 7 | Critical for multi-tenant concurrent writes — detect and surface `ConcurrencyException` to handlers. |
+| Optimistic concurrency (`RowVersion`) | Added | Phase 7 | `RowVersion` is implemented on `Order`; broader rollout and explicit concurrency-conflict surfacing remain follow-up work where justified. |
 | Strongly-typed IDs (`OrderId`, `CustomerId`) | Added | Phase 7 | Lightweight safety to prevent Guid parameter-swap bugs; use EF value converters for persistence. |
 | SaveChangesAsync domain event dispatch (ChangeTracker) | Added | Phase 8 | Ensures domain events are only published after successful persistence (in-process or to Outbox). |
-| Value Objects (Money, Address) | Covered | Phase 7 | Already planned as DDD tactical patterns. |
+| Value Objects (`Money` implemented, `Address` deferred) | Added | Phase 7 | `Money` is implemented in Phase 7; `Address` remains deferred until a concrete customer, billing, or shipping boundary needs it. |
 
 
 ### Deliberately Skipped (Not Needed)
@@ -1247,7 +1258,7 @@ _Patterns from industry reference architectures evaluated against the 14-phase p
 
 | Pattern | Where Covered |
 |---------|---------------|
-| **Value Objects** (`Money`, `Address`, etc.) | Phase 7 — DDD Tactical Patterns section |
+| **Value Object** (`Money`) | Phase 7 — DDD Tactical Patterns section; `Address` remains intentionally deferred until a concrete boundary exists |
 | **Factory methods + private constructors** | Phase 7 — "`Order` entity with private constructor, `Create()` factory method returning `Result<Order>`" |
 | **Entity state machine** (guard clauses returning `Result`) | Phase 7 — `Pay()`, `Ship()`, `Deliver()`, `Cancel()` each returning `Result<T>` |
 | **Bogus/Faker for seed data** | Already in codebase — `Bogus` package in Infrastructure project, used for dev data seeding |
@@ -1257,7 +1268,7 @@ _Patterns from industry reference architectures evaluated against the 14-phase p
 
 | Pattern | Added To | Rationale |
 |---------|----------|----------|
-| **Optimistic concurrency** (EF `RowVersion` + `ConcurrencyException`) | Phase 7 | Genuine gap — any multi-tenant system with concurrent writes needs row versioning. Critical for Order aggregate where parallel requests (e.g., simultaneous `Pay()` and `Cancel()`) must be detected and failed safely. |
+| **Optimistic concurrency** (EF `RowVersion` + `ConcurrencyException`) | Phase 7 | `RowVersion` is implemented on `Order`; explicit concurrency-conflict surfacing and broader rollout stay as follow-up work where justified. |
 | **Strongly-typed IDs** (`OrderId`, `CustomerId` as `readonly record struct`) | Phase 7 | Eliminates `Guid` parameter-swap bugs at compile time. Lightweight pattern (one-line record struct + EF value converter) with high safety payoff. Natural companion to Value Objects. |
 | **SaveChangesAsync domain event dispatch** (ChangeTracker extraction) | Phase 8 | Was implied by Outbox pattern but not explicitly documented. Made explicit: extract events from `ChangeTracker.Entries<Entity>()` after `base.SaveChangesAsync()` — ensures events only fire on successful persistence. |
 | **Specification pattern** (composable query objects) | Phase 9 | Encapsulates reusable EF Core query logic (`Where`/`Include`/`OrderBy`) into named, testable specifications. Not useful in monolith (inline LINQ suffices); becomes valuable when per-module repositories need shared query definitions across handlers. |
