@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -14,6 +15,7 @@ using XYDataLabs.OrderProcessingSystem.Application.Utilities;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.SharedKernel;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
 using static XYDataLabs.OrderProcessingSystem.Application.Utilities.AppMasterConstant;
 using OpenPayCustomer = Openpay.Entities.Customer;
@@ -65,6 +67,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         ArgumentNullException.ThrowIfNull(command);
 
         using var activity = PaymentActivitySource.Source.StartActivity("ProcessPayment");
+        var startedAt = Stopwatch.GetTimestamp();
 
         Domain.Entities.PaymentMethod? paymentMethod = null;
         try
@@ -116,6 +119,13 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
                 ?? EnumHelper.GetEnumDescription(PaymentStatus.Unknown);
             var threeDSecureStage = ResolveChargeThreeDSecureStage(normalizedChargeStatus, isThreeDSecureEnabled, charge.PaymentMethod?.Url);
 
+            BusinessMetrics.RecordPaymentAttempt(
+                outcome: "success",
+                providerName: _openPayProvider.Name,
+                isThreeDSecureEnabled: isThreeDSecureEnabled,
+                paymentStatus: normalizedChargeStatus,
+                duration: Stopwatch.GetElapsedTime(startedAt));
+
             return new PaymentDto
             {
                 Id = charge.Id,
@@ -134,6 +144,13 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         }
         catch (Exception ex)
         {
+            BusinessMetrics.RecordPaymentAttempt(
+                outcome: "failure",
+                providerName: _openPayProvider.Name,
+                isThreeDSecureEnabled: _openPayProvider.Use3DSecure,
+                paymentStatus: "exception",
+                duration: Stopwatch.GetElapsedTime(startedAt));
+
             _logger.LogError(ex, "Error in combined payment process: {Message}", ex.Message);
             if (paymentMethod is not null)
             {
