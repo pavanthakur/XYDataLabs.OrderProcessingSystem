@@ -347,5 +347,5 @@ Important proof split:
 - Azure trace evidence is present in Application Insights for the April 28 Azure proof run, so the deployed runtime is emitting telemetry to the dev App Insights resource.
 - After the latest Azure dev deployment, a fresh automation run for `OR-1777369555-28Apr` also passed the direct Azure verifier and the deployed runtime exposed `orderprocessing.payments.completed` plus `orderprocessing.payments.duration` in the dev App Insights `customMetrics` table.
 - Local and Docker absence from App Insights is expected unless `APPLICATIONINSIGHTS_CONNECTION_STRING` is present, because the shared Application Insights options bind only from that environment key.
-- Under the agreed proof model, the remaining blocker is cleared: payment metrics are now operationally visible on the deployed Azure runtime, while tenant-validation and ProblemDetails metrics remain regression-proved through focused tests.
-- Phase 7 strict closeout is therefore verified and can be treated as closed before Phase 8 broadens the runtime surface.
+- Under the agreed proof model, the closeout gate is now satisfied: payment metrics are operationally visible on the deployed Azure runtime, while tenant-validation and ProblemDetails metrics remain regression-proved through focused tests.
+- Phase 7 strict closeout is verified and can now be treated as closed before Phase 8 broadens the runtime surface.
