@@ -397,7 +397,7 @@ This matrix shows which instructions auto-attach for common file locations:
 |------|-------|---------------|
 | `TROUBLESHOOTING-INDEX.md` | Root | Quick links for common GitHub App / OIDC / workflow errors |
 | `ARCHITECTURE.md` | Root | Binding tenant, payment identifier, migration, and test standard for future model creation |
-| `ARCHITECTURE-EVOLUTION.md` | Root | 14-phase roadmap: Phases 1-7 ✅ complete, Phase 8 next 📅 |
+| `ARCHITECTURE-EVOLUTION.md` | Root | 14-phase roadmap: Phase 7 strict closeout verified, Phase 8 next 📅 |
 | `docs/internal/AZURE-PROGRESS-EVALUATION.md` | docs/internal | Learning progress weeks 1–10, next-step guides |
 | `docs/AI-OPERATING-MODEL.md` | docs/ | Canonical protocol for shared AI customization and governance |
 | `docs/internal/DEFERRED-WORK-LOG.md` | docs/internal | Shared register for justified deferred work |
