@@ -311,13 +311,13 @@ The Outbox Pattern in Phase 8 resolves this: write an `OutboxMessage` (with the 
 
 ### Phase 7 Final Operational Closeout Gate
 
-Phase 7 verification freeze passed on April 10, 2026. The final strict closeout target is now an operational proof gate before Phase 8 expands the implementation surface:
+Phase 7 verification freeze passed on April 10, 2026. The final strict closeout gate was satisfied on April 28, 2026 before Phase 8 expanded the implementation surface:
 
-- Validate the implemented custom OpenTelemetry metrics slice across local dev, Docker dev, and Azure dev, and confirm the emitted dimensions stay low-cardinality and operationally useful
+- The implemented custom OpenTelemetry metrics slice was revalidated through local, Docker dev, and Azure proof runs, with `orderprocessing.payments.completed` and `orderprocessing.payments.duration` visible on the deployed Azure dev runtime and low-cardinality dimensions preserved
 - Keep order-level concurrency surfacing deferred for now; retain the `Order.RowVersion` guard, but wait to freeze a client-facing conflict contract until a real multi-writer order update path exists
 - Keep broader concurrency rollout deferred until another aggregate shows real competing-writer risk, and keep `Address` deferred until a concrete customer, billing, or shipping boundary exists
-- Re-run development validation on local dev, Docker dev, and Azure dev, including `/health/live`, `/health/ready`, `verify-payment-run-physical.ps1`, and `verify-payment-run-azure.ps1`
-- Keep PR CI green through `ci.yml`, and add or update focused unit or API tests for the metrics slice
+- Development validation was rerun on local dev, Docker dev, and Azure dev, including `/health/live`, `/health/ready`, `verify-payment-run-physical.ps1`, and `verify-payment-run-azure.ps1`
+- Focused unit and API tests now cover the metrics slice, including in-process `MeterListener` proof for the shared business meter
 - Integration tests remain a local or manual gate until a Linux Docker-capable CI runner is added; re-run the integration slice locally before another verification freeze
 
 ---
