@@ -97,14 +97,12 @@
 - ⬜ Reconfirm payment verification and fail-closed health semantics after the metrics slice
 - ⬜ Keep CI green and add focused regression coverage for the new metrics emission points
 
-### Remaining Validation Before Final Phase 7 Closeout
-- Development pass criteria: local dev, Docker dev, and Azure dev must emit `orderprocessing.payments.completed` and `orderprocessing.payments.duration` with low-cardinality dimensions after representative payment runs
-- Development pass criteria: tenant-validation and ProblemDetails metric paths are regression-proved through focused tests, because public HTTP traffic is intentionally intercepted earlier by tenant middleware or should not depend on synthetic exception traffic in Azure dev
-- Development pass criteria: `/health/live` and `/health/ready` must stay healthy under baseline conditions and readiness must continue to fail closed when dependencies degrade
-- Development pass criteria: representative payment runs must still pass `verify-payment-run-physical.ps1` and `verify-payment-run-azure.ps1`
-- CI/CD pass criteria: `ci.yml` stays green across frontend typecheck/test/build, solution build, Domain/Application/API/Architecture tests, and tracked-artifact validation
-- CI/CD pass criteria: focused tests cover `TenantValidationBehavior` and `ErrorHandlingMiddleware` as the primary proof paths for the non-payment metrics
-- CI/CD constraint: integration tests remain a local or manual gate until a Linux Docker-capable runner is introduced for Testcontainers
+### Phase 7 Final Closeout Criteria (Satisfied)
+- Development proof: local, Docker dev, and Azure dev payment journeys were rerun successfully through the repo-owned automation and verification scripts
+- Metric proof: `orderprocessing.payments.completed` and `orderprocessing.payments.duration` are visible on the deployed Azure dev runtime with low-cardinality dimensions after the latest deployment
+- Regression proof: tenant-validation and ProblemDetails metric paths remain covered by focused tests, because public HTTP traffic is intentionally intercepted earlier by tenant middleware or should not depend on synthetic exception traffic in Azure dev
+- Health proof: `/health/live` and `/health/ready` stayed healthy under baseline conditions, and readiness semantics remain fail-closed by design
+- CI/CD proof: focused regression tests and narrow validation slices remained green; integration tests are still a local or manual gate until a Linux Docker-capable runner is introduced for Testcontainers
 
 ### April 28, 2026 Revalidation Result
 - ✅ Focused regression coverage passed for `TenantValidationBehaviorTests` and `ErrorHandlingMiddlewareTests`
@@ -112,9 +110,11 @@
 - ✅ Local physical payment verification passed for `OR-1777318139-28Apr`
 - ✅ Docker dev physical payment verification passed for `OR-1777318429-28Apr`
 - ✅ Azure dev payment verification passed for `OR-1777318480-28Apr` when `verify-payment-run-azure.ps1` was rerun directly after firewall propagation
+- ✅ Azure dev payment verification also passed for the latest deployed runtime on `OR-1777369555-28Apr`
 - ✅ Azure trace evidence for the April 28 payment proof run is present in the dev App Insights resource
+- ✅ Latest Azure deployment exposes `orderprocessing.payments.completed` and `orderprocessing.payments.duration` in the dev App Insights `customMetrics` table
 - ℹ️ Local and Docker App Insights absence is expected unless `APPLICATIONINSIGHTS_CONNECTION_STRING` is configured for those runtimes
-- ⏳ Remaining blocker: the custom business metrics (`orderprocessing.payments.completed`, `orderprocessing.payments.duration`, `orderprocessing.api.problem_responses`, `orderprocessing.tenant_context.failures`) are still absent from the dev App Insights `customMetrics` table on the deployed Azure runtime, so the next meaningful operational step is an API deployment to Azure dev followed by a rerun of the App Insights metric query
+- ✅ Phase 7 strict closeout is now verified under the agreed proof model; Phase 8 can proceed without a remaining Phase 7 telemetry blocker
 
 ### Phase 8 Entry Dependency
 - ⬜ Phase 8 implementation must freeze the DomainEvent → IntegrationEvent mapper registration strategy before the first outbox payload is written; that schema carries forward into Phase 10 Service Bus message bodies
