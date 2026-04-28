@@ -92,10 +92,10 @@
 - ⬜ Broaden optimistic concurrency beyond `Order` if wider aggregate coverage is required
 - ⬜ Keep order-level concurrency surfacing deferred as well; retain `Order.RowVersion`, but delay `DbUpdateConcurrencyException` -> stable API conflict mapping until a real multi-writer order update surface exists
 
-### Operational Proof Closeout Still Open
-- ⬜ Revalidate the implemented metrics slice across local dev, Docker dev, and Azure dev
-- ⬜ Reconfirm payment verification and fail-closed health semantics after the metrics slice
-- ⬜ Keep CI green and add focused regression coverage for the new metrics emission points
+### Operational Proof Closeout (Historical Gate, Now Satisfied)
+- ✅ Revalidated the implemented metrics slice across local dev, Docker dev, and Azure dev
+- ✅ Reconfirmed payment verification and fail-closed health semantics after the metrics slice
+- ✅ Kept CI green on the focused validation slices and added focused regression coverage for the new metrics emission points
 
 ### Phase 7 Final Closeout Criteria (Satisfied)
 - Development proof: local, Docker dev, and Azure dev payment journeys were rerun successfully through the repo-owned automation and verification scripts
