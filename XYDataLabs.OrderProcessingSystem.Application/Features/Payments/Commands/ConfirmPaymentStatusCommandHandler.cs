@@ -7,6 +7,7 @@ using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
 using XYDataLabs.OrderProcessingSystem.Application.Utilities;
+using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
 using static XYDataLabs.OrderProcessingSystem.Application.Utilities.AppMasterConstant;
 
@@ -189,6 +190,19 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
             transaction.AttemptOrderId,
             resolvedStatus,
             resolvedThreeDSecureStage);
+        var attemptOrderId = FirstNonEmpty(command.AttemptOrderId, transaction.AttemptOrderId);
+        var paymentAttempt = !string.IsNullOrWhiteSpace(attemptOrderId)
+            ? await _context.PaymentAttempts
+                .FirstOrDefaultAsync(item => item.AttemptOrderId == attemptOrderId, cancellationToken)
+            : null;
+        var paymentAttemptHistories = paymentAttempt is not null
+            ? await _context.PaymentAttemptHistories
+                .Where(item => item.PaymentAttemptId == paymentAttempt.Id)
+                .ToListAsync(cancellationToken)
+            : [];
+        var resolvedAttemptStatus = ResolvePaymentAttemptStatus(resolvedStatus, remoteStatusConfirmed);
+        var paymentAttemptHistoryExists = paymentAttempt is not null
+            && HasPaymentAttemptHistoryEntry(paymentAttemptHistories, resolvedAttemptStatus, resolvedStatus);
 
         transaction.TransactionStatus = resolvedStatus;
         transaction.IsTransactionSuccess = EnumHelper.IsSuccessStatus(resolvedStatus);
@@ -241,6 +255,31 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
         }
 
         var finalAuditRecorded = resolvedHistoryAdded || (callbackHistoryAdded && callbackMatchesResolvedStage);
+
+        if (paymentAttempt is not null)
+        {
+            paymentAttempt.Status = resolvedAttemptStatus;
+            paymentAttempt.ProviderStatus = resolvedStatus;
+            paymentAttempt.ProviderChargeId = FirstNonEmpty(remoteCharge?.Id, paymentAttempt.ProviderChargeId, command.PaymentId);
+            paymentAttempt.ProviderReferenceId = FirstNonEmpty(remoteCharge?.Authorization, paymentAttempt.ProviderReferenceId);
+            paymentAttempt.LastErrorMessage = resolvedErrorMessage;
+            paymentAttempt.UpdatedDate = now;
+
+            if (!paymentAttemptHistoryExists)
+            {
+                _context.PaymentAttemptHistories.Add(new Domain.Entities.PaymentAttemptHistory
+                {
+                    PaymentAttemptId = paymentAttempt.Id,
+                    AttemptOrderId = paymentAttempt.AttemptOrderId,
+                    Status = resolvedAttemptStatus,
+                    PaymentTraceId = paymentAttempt.PaymentTraceId,
+                    ProviderStatus = resolvedStatus,
+                    Notes = BuildAuditMessage(command, remoteCharge, resolvedStatus, resolvedThreeDSecureStage, paymentAttempt.PaymentTraceId),
+                    TenantId = paymentAttempt.TenantId,
+                    CreatedDate = now,
+                });
+            }
+        }
 
         if (payinLog is not null)
         {
@@ -346,6 +385,36 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
             string.Equals(entry.AttemptOrderId, attemptOrderId, StringComparison.OrdinalIgnoreCase)
             && string.Equals(entry.Status, status, StringComparison.OrdinalIgnoreCase)
             && string.Equals(entry.ThreeDSecureStage, stage, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool HasPaymentAttemptHistoryEntry(
+        IEnumerable<Domain.Entities.PaymentAttemptHistory> historyEntries,
+        PaymentAttemptStatus status,
+        string providerStatus)
+    {
+        return historyEntries.Any(entry =>
+            entry.Status == status
+            && string.Equals(entry.ProviderStatus, providerStatus, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static PaymentAttemptStatus ResolvePaymentAttemptStatus(string resolvedStatus, bool remoteStatusConfirmed)
+    {
+        if (EnumHelper.IsSuccessStatus(resolvedStatus))
+        {
+            return PaymentAttemptStatus.Succeeded;
+        }
+
+        if (EnumHelper.IsFailureStatus(resolvedStatus) || EnumHelper.IsCancelledStatus(resolvedStatus))
+        {
+            return PaymentAttemptStatus.Failed;
+        }
+
+        if (remoteStatusConfirmed && EnumHelper.IsPendingStatus(resolvedStatus))
+        {
+            return PaymentAttemptStatus.ProviderAccepted;
+        }
+
+        return PaymentAttemptStatus.UnknownNeedsReconciliation;
     }
 
     private static bool IsDirectStatusEntry(IReadOnlyDictionary<string, string>? callbackParameters)

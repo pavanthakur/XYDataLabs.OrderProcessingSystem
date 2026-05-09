@@ -6,6 +6,8 @@ using Microsoft.Extensions.Logging;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Application.Events;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
+using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 
 namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Events;
 
@@ -41,80 +43,115 @@ public class OutboxPublisherWorker : BackgroundService
 
     private async Task ProcessOutboxMessagesAsync(CancellationToken cancellationToken)
     {
-        using var scope = _serviceProvider.CreateScope();
-        
-        var dbContext = scope.ServiceProvider.GetRequiredService<IAppDbContext>();
-        var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
-        var typeResolver = scope.ServiceProvider.GetRequiredService<IIntegrationEventTypeResolver>();
+        using var registryScope = _serviceProvider.CreateScope();
 
-        // In Phase 8, we pull unprocessed lines sequentially to avoid competing-consumer locking overhead just yet
-        var pendingMessages = await dbContext.OutboxMessages
-            .Where(x => x.ProcessedAt == null)
-            .OrderBy(x => x.OccurredUtc)
-            .Take(20)
+        var tenantRegistryContext = registryScope.ServiceProvider.GetRequiredService<TenantRegistryDbContext>();
+        var tenantResolver = registryScope.ServiceProvider.GetRequiredService<ITenantResolver>();
+        var tenantCodes = await tenantRegistryContext.Tenants
+            .AsNoTracking()
+            .OrderBy(tenant => tenant.Id)
+            .Select(tenant => tenant.Code)
             .ToListAsync(cancellationToken);
 
-        if (pendingMessages.Count == 0)
+        if (tenantCodes.Count == 0)
         {
             return;
         }
 
-        foreach (var outboxMessage in pendingMessages)
+        foreach (var tenantCode in tenantCodes)
         {
-            try
+            var tenantContext = await tenantResolver.ResolveTenantAsync(tenantCode, cancellationToken);
+            if (tenantContext is null)
             {
-                var eventType = typeResolver.ResolveType(outboxMessage.EventType);
-
-                if (eventType is null)
-                {
-                    _logger.LogWarning("Could not resolve integration event type for {EventType}", outboxMessage.EventType);
-                    outboxMessage.LastError = $"Unresolved Type: {outboxMessage.EventType}";
-                    outboxMessage.PublishAttempts++;
-                    continue;
-                }
-
-                var payloadObj = JsonSerializer.Deserialize(outboxMessage.Payload, eventType, _jsonOptions);
-
-                if (payloadObj is null)
-                {
-                    _logger.LogWarning("Could not deserialize payload for {MessageId}", outboxMessage.MessageId);
-                    outboxMessage.LastError = "Deserialization yielded null";
-                    outboxMessage.PublishAttempts++;
-                    continue;
-                }
-
-                var envelope = EventEnvelope.Create(
-                    outboxMessage.EventType,
-                    outboxMessage.SchemaVersion,
-                    outboxMessage.OccurredUtc,
-                    payloadObj,
-                    outboxMessage.MessageId,
-                    outboxMessage.CorrelationId,
-                    outboxMessage.CausationId,
-                    outboxMessage.TraceParent,
-                    outboxMessage.TenantId == 0 ? null : outboxMessage.TenantId);
-
-                // Publish synchronously in-memory
-                await publisher.PublishAsync(envelope, cancellationToken);
-
-                // Mark processed
-                outboxMessage.ProcessedAt = DateTime.UtcNow;
-                outboxMessage.LastError = null;
+                _logger.LogWarning("Skipping outbox processing for tenant code {TenantCode} because tenant resolution failed.", tenantCode);
+                continue;
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to publish Outbox Message {MessageId}", outboxMessage.MessageId);
-                // Truncate to MaxLength(1024) if it's a massive stack trace to avoid truncation errors
-                outboxMessage.LastError = ex.Message.Length > 1024 
-                    ? ex.Message.Substring(0, 1024) 
-                    : ex.Message;
-            }
-            finally
-            {
-                outboxMessage.PublishAttempts++;
-            }
+
+            await ProcessTenantOutboxMessagesAsync(tenantContext, cancellationToken);
         }
+    }
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+    private async Task ProcessTenantOutboxMessagesAsync(TenantContext tenantContext, CancellationToken cancellationToken)
+    {
+        using var tenantScope = _serviceProvider.CreateScope();
+        var tenantContextAccessor = tenantScope.ServiceProvider.GetRequiredService<ScopedTenantContextAccessor>();
+        tenantContextAccessor.Current = tenantContext;
+
+        try
+        {
+            var dbContext = tenantScope.ServiceProvider.GetRequiredService<IAppDbContext>();
+            var publisher = tenantScope.ServiceProvider.GetRequiredService<IEventPublisher>();
+            var typeResolver = tenantScope.ServiceProvider.GetRequiredService<IIntegrationEventTypeResolver>();
+
+            var pendingMessages = await dbContext.OutboxMessages
+                .Where(message => message.ProcessedAt == null && message.TenantId == tenantContext.TenantId)
+                .OrderBy(message => message.OccurredUtc)
+                .Take(20)
+                .ToListAsync(cancellationToken);
+
+            if (pendingMessages.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var outboxMessage in pendingMessages)
+            {
+                try
+                {
+                    var eventType = typeResolver.ResolveType(outboxMessage.EventType);
+
+                    if (eventType is null)
+                    {
+                        _logger.LogWarning("Could not resolve integration event type for {EventType}", outboxMessage.EventType);
+                        outboxMessage.LastError = $"Unresolved Type: {outboxMessage.EventType}";
+                        outboxMessage.PublishAttempts++;
+                        continue;
+                    }
+
+                    var payloadObj = JsonSerializer.Deserialize(outboxMessage.Payload, eventType, _jsonOptions);
+
+                    if (payloadObj is null)
+                    {
+                        _logger.LogWarning("Could not deserialize payload for {MessageId}", outboxMessage.MessageId);
+                        outboxMessage.LastError = "Deserialization yielded null";
+                        outboxMessage.PublishAttempts++;
+                        continue;
+                    }
+
+                    var envelope = EventEnvelope.Create(
+                        outboxMessage.EventType,
+                        outboxMessage.SchemaVersion,
+                        outboxMessage.OccurredUtc,
+                        payloadObj,
+                        outboxMessage.MessageId,
+                        outboxMessage.CorrelationId,
+                        outboxMessage.CausationId,
+                        outboxMessage.TraceParent,
+                        outboxMessage.TenantId == 0 ? null : outboxMessage.TenantId);
+
+                    await publisher.PublishAsync(envelope, cancellationToken);
+
+                    outboxMessage.ProcessedAt = DateTime.UtcNow;
+                    outboxMessage.LastError = null;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to publish Outbox Message {MessageId}", outboxMessage.MessageId);
+                    outboxMessage.LastError = ex.Message.Length > 1024
+                        ? ex.Message.Substring(0, 1024)
+                        : ex.Message;
+                }
+                finally
+                {
+                    outboxMessage.PublishAttempts++;
+                }
+            }
+
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        finally
+        {
+            tenantContextAccessor.Current = null;
+        }
     }
 }

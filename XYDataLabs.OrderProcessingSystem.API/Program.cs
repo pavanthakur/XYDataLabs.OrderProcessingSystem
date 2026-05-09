@@ -125,6 +125,7 @@ else
 }
 
 builder.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>(); // Required for LoggingMiddleware
+builder.Services.AddScoped<ScopedTenantContextAccessor>();
 builder.Services.AddScoped<ITenantProvider, HeaderTenantProvider>();
 builder.Services.AddScoped<ITenantResolver, EntityFrameworkTenantResolver>();
 builder.Services.AddSingleton(TimeProvider.System);

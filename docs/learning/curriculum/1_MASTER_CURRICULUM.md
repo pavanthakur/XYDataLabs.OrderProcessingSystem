@@ -9,7 +9,7 @@
 
 ## 🎯 WHAT'S NEXT? (Your Current Focus)
 
-**✅ COMPLETED SO FAR (Days 1-43 + Architecture Phases 1-7):**
+**✅ COMPLETED SO FAR (Days 1-43 + Architecture Phases 1-8):**
 - ✅ Azure fundamentals (Portal, CLI, resource management)
 - ✅ App Service deployment with OIDC authentication
 - ✅ GitHub Actions CI/CD workflows (10 workflows: bootstrap, initial setup, deploy API/UI, infra deploy, validate, ADR validate)
@@ -20,20 +20,21 @@
 - ✅ DefaultAzureCredential end-to-end — Managed Identity in Azure, CLI locally (Days 35-37)
 - ✅ SQL resilience baseline — EnableRetryOnFailure + Polly planning (Day 38)
 - ✅ **Architecture Phases 1-7 complete:** Structural Foundation, Hand-Rolled CQRS, Observability (Serilog + OTel), Multi-Tenancy Skeleton, Test Restructure, Polish & Hardening, Tenant Enforcement & DDD tactical patterns
+- ✅ **Architecture Phase 8 closeout verified:** event contracts, outbox/inbox persistence, deterministic payment recovery, tenant-scoped background workers, replay coverage, and reconciliation coverage are now proven on the current branch
 - ✅ **Phase 7 verification freeze complete (April 10, 2026):** latest code validated on local, Docker, and Azure; Azure Initial Setup and dev bootstrap proven end-to-end
 - ✅ **Phase 7 deferral decisions are frozen:** `Address` stays deferred until a concrete customer, billing, or shipping boundary exists; broader optimistic concurrency stays deferred until another aggregate shows real competing-writer risk
 - ✅ **Strict Phase 7 closeout is verified:** local, Docker, and Azure payment proof was rerun, Azure dev now shows the payment custom metrics on the deployed runtime, and order-level concurrency surfacing remains intentionally deferred until the order write surface has a real multi-writer path
 
 **🔥 YOUR NEXT PRIORITIES:**
 
-### Priority 1: Azure Data & Resilience (Days 44-56) — *backend Phase 8 is now active*
-**Why:** Track U U5 is complete, so the next active engineering slice is the in-monolith event foundation and its supporting Azure operating model
+### Priority 1: Azure Data & Resilience (Days 44-56) — *Phase 8 closeout is verified; remaining prep slices stay separate from runtime work*
+**Why:** The in-monolith event foundation is now proven, so the remaining value in this curriculum band is the Azure Functions and Service Bus preparation work that informs later phases without changing the verified Phase 8 runtime path
 **Tasks:**
 - Days 44-50: Azure Functions + Service Bus + DLQ operating model preparation (learning and infrastructure prep only; production transport swap remains Phase 10)
-- Days 51-56: 🏗️ **Phase 8** event foundation inside the monolith — contracts, mapper, outbox/inbox, `PaymentAttempt`, reconciliation, and separate workers
+- Days 51, 55-56: ✅ **Phase 8** event foundation inside the monolith — contracts, mapper, outbox/inbox, `PaymentAttempt`, reconciliation, and separate workers
 
-### Priority 2: Azure Services Deep Dive + Containers (Days 57-86) — *enables Architecture Phases 8.5, 9, 14*
-**Why:** Master advanced Azure services, then containerise with confidence  
+### Priority 2: Azure Services Deep Dive + Containers (Days 57-86) — *Phase 8.5 is now the active engineering phase*
+**Why:** With Phase 8 closed, the next backend slice is multi-provider payment architecture, followed by the Azure-service and container work that enables later modular extraction and read-model evolution
 **Tasks:**
 - Days 57-59: Azure Functions Advanced + 🏗️ **Phase 8.5** (Multi-Provider Payment)
 - Days 60-65: Durable Functions + Serilog (✅ partial — Phase 3)
@@ -50,8 +51,9 @@
 
 - **Track U** reduces frontend migration risk: contract freeze, generated SDK, React web replacement, API ownership of callback/telemetry, and MVC removal rules
 - **Track U Phase U5** is complete: React web is the active UI and the legacy MVC host has been retired
-- **Backend Phase 8** is now the active next engineering phase
-- **Mobile (U6)** follows the web cutover and does not block backend Phase 8
+- **Backend Phase 8** is verified and frozen as the current event-foundation baseline
+- **Backend Phase 8.5** is now the active next engineering phase
+- **Mobile (U6)** follows the web cutover and does not block backend Phase 8.5
 
 ---
 
@@ -70,8 +72,8 @@ See `ARCHITECTURE-EVOLUTION.md` for full phase details.
 | 6 | Polish & Hardening | Days 42-43, 71-72, 94 (auto-✅) | ✅ Complete |
 | 7 | Tenant Enforcement & Ops | Days 42–43 (DDD + Ops) | ✅ Complete |
 | Track U | UI Modernization Program | U1-U6 (U1-U5 complete; U6 later) | ✅ Web cutover complete |
-| 8 | Event-Driven Foundation | Days 51, 55–56 (Days 48–50 are Service Bus/DLQ preparation only) | 📅 Planned |
-| 8.5 | Multi-Provider Payment | Days 58–59 | 📅 Planned |
+| 8 | Event-Driven Foundation | Days 51, 55–56 (Days 48–50 are Service Bus/DLQ preparation only) | ✅ Complete |
+| 8.5 | Multi-Provider Payment | Days 58–59 | 📅 Active Next |
 | 9 | YARP Microservices | Days 74–79 | 📅 Planned |
 | 10 | Azure Container Apps | Days 87–93 (transport drills gate ingress/security) | 📅 Planned |
 | 11 | Data Ownership & Autonomy | Days 100, 102 | 📅 Planned |
@@ -479,11 +481,11 @@ After completing today's tasks, you will have:
 > **Additional Phase 8 deliverables for this day:**
 > - Inbox Pattern — `InboxMessages` table for idempotent consumers (deduplication by `MessageId` before processing)
 > - Event Versioning — envelope with `SchemaVersion` field; convention: `OrderCreatedV1` → `OrderCreatedV2` with backward-compatible projection
-- [ ] Define `IDomainEvent`, `IIntegrationEvent`, `EventEnvelope`, `IEventHandler<T>`, `IEventPublisher`, and `IIdempotencyGuard` in Application
-- [ ] Freeze `DeliveryFailureCategory` in Application, not Domain
-- [ ] Define the explicit `IDomainEventToIntegrationEventMapper<TDomain, TIntegration>` strategy and document how it is registered
-- [ ] Record the frozen rule: Domain raises → Application maps → Infrastructure persists
-- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+- [x] Define `IDomainEvent`, `IIntegrationEvent`, `EventEnvelope`, `IEventHandler<T>`, `IEventPublisher`, and `IIdempotencyGuard` in Application
+- [x] Freeze `DeliveryFailureCategory` in Application, not Domain
+- [x] Define the explicit `IDomainEventToIntegrationEventMapper<TDomain, TIntegration>` strategy and document how it is registered
+- [x] Record the frozen rule: Domain raises → Application maps → Infrastructure persists
+- [x] **Time:** 2 hours | **Completed:** 05/10/2026
 
 #### Day 52: Decision Matrix — Event Grid vs Service Bus vs Storage Queue
 - [ ] Document architectural decision matrix with real examples from OrderProcessingSystem
@@ -514,12 +516,12 @@ After completing today's tasks, you will have:
 > **Additional Phase 8 deliverables for this day:**
 > - Automatic domain event dispatch — `SaveChangesAsync` override extracts `IDomainEvent`s from `ChangeTracker.Entries<Entity>()`, maps them to integration events, and writes Outbox rows in the same transaction
 > - Parallel event handler execution — `EventPublisher` dispatches all `IEventHandler<T>` via `Task.WhenAll`; partial failures collected into `AggregateException`
-- [ ] Create `XYDataLabs.OrderProcessingSystem.Worker` project (Worker Service template)
-- [ ] Implement `OutboxPublisherWorker` that reads `OutboxMessage` rows and dispatches them through the in-memory `IEventPublisher`
-- [ ] Implement `PaymentReconciliationWorker` that resolves `UnknownNeedsReconciliation` payment attempts
-- [ ] Register as `IHostedService` in DI
-- [ ] Verify the two workers remain separate and are not merged into one operational path
-- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+- [x] Add hosted worker services for background publishing and reconciliation without introducing a separate Phase 8 worker runtime
+- [x] Implement `OutboxPublisherWorker` that reads `OutboxMessage` rows and dispatches them through the in-memory `IEventPublisher`
+- [x] Implement `PaymentReconciliationWorker` that resolves `UnknownNeedsReconciliation` payment attempts
+- [x] Register as `IHostedService` in DI
+- [x] Verify the two workers remain separate and are not merged into one operational path
+- [x] **Time:** 2 hours | **Completed:** 05/10/2026
 
 #### Day 56: 🆕 Outbox Pattern — Reliable Messaging (Azure-first .NET)
 > **Why now:** Without Outbox and a persisted payment-attempt lifecycle, a provider call can succeed while local state remains unrecoverable
@@ -531,13 +533,13 @@ After completing today's tasks, you will have:
 > - Schema changes must be backward-compatible (additive fields only; breaking changes = new version)
 > - Outbox writes in the same transaction as the domain change (no dual-write)
 > - Background publisher is idempotent — Inbox table deduplicates by `MessageId` before handler execution
-- [ ] Add `OutboxMessages`, `InboxMessages`, and `PaymentAttempts` tables to SQL via EF migration
-- [ ] Add indexes up front: `OutboxMessages(ProcessedAt, LockExpiry, OccurredUtc)`, `InboxMessages(MessageId)` unique, `PaymentAttempts(AttemptOrderId)` unique
-- [ ] Persist `PaymentAttempt` before the provider call and make `AttemptOrderId` deterministic (`OrderId + AttemptNumber`)
-- [ ] Implement the five-state payment lifecycle: `PendingProviderCall`, `ProviderAccepted`, `Succeeded`, `Failed`, `UnknownNeedsReconciliation`
-- [ ] Write business change + mapped integration event envelope to the Outbox in a single SQL transaction
-- [ ] Test: rollback leaves no outbox row; duplicate message is harmless; publisher restart replays rows; reconciliation resolves `UnknownNeedsReconciliation`; cross-tenant isolation is preserved
-- [ ] **Time:** 3 hours | **Completed:** ___/___/___
+- [x] Add `OutboxMessages`, `InboxMessages`, and `PaymentAttempts` tables to SQL via EF migration
+- [x] Add indexes up front: `OutboxMessages(ProcessedAt, LockExpiry, OccurredUtc)`, `InboxMessages(MessageId)` unique, `PaymentAttempts(AttemptOrderId)` unique
+- [x] Persist `PaymentAttempt` before the provider call and make `AttemptOrderId` deterministic (`OrderId + AttemptNumber`)
+- [x] Implement the five-state payment lifecycle: `PendingProviderCall`, `ProviderAccepted`, `Succeeded`, `Failed`, `UnknownNeedsReconciliation`
+- [x] Write business change + mapped integration event envelope to the Outbox in a single SQL transaction
+- [x] Test: rollback leaves no outbox row; duplicate message is harmless; parallel handlers remain independent; publisher restart replays rows; reconciliation resolves `UnknownNeedsReconciliation`; cross-tenant isolation is preserved
+- [x] **Time:** 3 hours | **Completed:** 05/10/2026
 
 ---
 
@@ -1264,15 +1266,15 @@ After completing today's tasks, you will have:
 
 ## 📈 Progress Summary
 
-**Total Days Planned:** 112 days (~16 weeks)  
-**Days Completed:** 43 / 112  
-**Percentage Complete:** 38%  
+**Total Days Planned:** 112 days (~16 weeks)
+**Days Completed:** 46 / 112
+**Percentage Complete:** 41%
 
-**Current Phase:** Track U — UI Modernization Program (pre-Phase-8 gate)
-**Current Day:** Track U1 — contract freeze and MVC replacement planning
-**Last Completed Task:** Day 43 — Phase 7 closure; typed ID propagation and deployment readiness semantics  
-**Next Milestone:** Track U2 React web foundation, then U3-U5 web cutover before backend Phase 8 Event-Driven Foundation
-**Architecture Status:** Phases 1-7 ✅ complete; Track U active; backend Phase 8 remains next
+**Current Phase:** Backend Phase 8.5 — Multi-Provider Payment architecture
+**Current Day:** Day 57-59 transition — Azure Functions advanced plus provider-routing and retry-model planning
+**Last Completed Task:** Days 51, 55-56 — Phase 8 event-foundation closeout verified with full integration and architecture coverage
+**Next Milestone:** Phase 8.5 multi-provider payment, then Phase 9 module extraction behind the frozen entry gates
+**Architecture Status:** Phases 1-8 ✅ complete; Track U web cutover ✅ complete; backend Phase 8.5 active next
 
 ---
 
