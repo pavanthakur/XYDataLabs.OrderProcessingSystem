@@ -73,8 +73,11 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure
             // Tenant registry service — read-only access to tenant list via TenantRegistryDbContext
             builder.Services.AddScoped<ITenantRegistry, Multitenancy.TenantRegistryService>();
 
+            // Phase 8 Idempotency Guard
+            builder.Services.AddScoped<Application.Events.IIdempotencyGuard, Events.SqlIdempotencyGuard>();
+
             // Phase 8 Background Publish Dispatchers
-            builder.Services.AddSingleton<Application.Events.IEventPublisher, Events.InMemoryEventPublisher>();
+            builder.Services.AddScoped<Application.Events.IEventPublisher, Events.InMemoryEventPublisher>();
             builder.Services.AddHostedService<Events.OutboxPublisherWorker>();
             builder.Services.AddHostedService<Events.PaymentReconciliationWorker>();
 

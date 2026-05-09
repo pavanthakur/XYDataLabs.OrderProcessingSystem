@@ -37,7 +37,7 @@ public class InMemoryEventPublisher : IEventPublisher
         // Invoke all handlers concurrently
         var tasks = handlers.Select(handler =>
         {
-            var task = handleMethod.Invoke(handler, new[] { eventEnvelope.Payload, cancellationToken }) as Task;
+            var task = handleMethod.Invoke(handler, new[] { eventEnvelope, eventEnvelope.Payload, cancellationToken }) as Task;
             return task ?? Task.CompletedTask;
         });
 

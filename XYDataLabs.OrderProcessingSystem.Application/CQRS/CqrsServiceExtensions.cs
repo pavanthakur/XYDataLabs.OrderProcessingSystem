@@ -28,6 +28,26 @@ public static class CqrsServiceExtensions
                 {
                     services.AddScoped(iface, type);
                 }
+                else if (definition == typeof(IEventHandler<>))
+                {
+                    // Register the concrete handler implementation so it can be resolved by the activator
+                    services.AddScoped(type);
+
+                    // Register the decorator to fulfill the interface
+                    var eventType = iface.GetGenericArguments()[0];
+                    var decoratorType = typeof(IdempotentEventHandlerDecorator<>).MakeGenericType(eventType);
+                    
+                    services.AddScoped(iface, provider =>
+                    {
+                        var innerHandler = provider.GetRequiredService(type);
+                        var idempotencyGuard = provider.GetRequiredService<IIdempotencyGuard>();
+                        
+                        var loggerType = typeof(Microsoft.Extensions.Logging.ILogger<>).MakeGenericType(decoratorType);
+                        var logger = provider.GetRequiredService(loggerType);
+                        
+                        return Activator.CreateInstance(decoratorType, innerHandler, idempotencyGuard, logger)!;
+                    });
+                }
             }
         }
 
