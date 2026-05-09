@@ -73,6 +73,11 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure
             // Tenant registry service — read-only access to tenant list via TenantRegistryDbContext
             builder.Services.AddScoped<ITenantRegistry, Multitenancy.TenantRegistryService>();
 
+            // Phase 8 Background Publish Dispatchers
+            builder.Services.AddSingleton<Application.Events.IEventPublisher, Events.InMemoryEventPublisher>();
+            builder.Services.AddHostedService<Events.OutboxPublisherWorker>();
+            builder.Services.AddHostedService<Events.PaymentReconciliationWorker>();
+
             // IDistributedCache — Redis when configured, in-memory fallback otherwise
             var redisConnection = builder.Configuration.GetConnectionString("Redis");
             if (!string.IsNullOrWhiteSpace(redisConnection))
