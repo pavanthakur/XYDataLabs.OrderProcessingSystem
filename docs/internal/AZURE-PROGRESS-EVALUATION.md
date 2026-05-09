@@ -117,7 +117,8 @@
 - ✅ Phase 7 strict closeout is now verified under the agreed proof model; Phase 8 can proceed without a remaining Phase 7 telemetry blocker
 
 ### Phase 8 Entry Dependency
-- ⬜ Phase 8 implementation must freeze the DomainEvent → IntegrationEvent mapper registration strategy before the first outbox payload is written; that schema carries forward into Phase 10 Service Bus message bodies
+- ✅ Phase 8a mapper registration strategy is now frozen before any outbox payload work: concrete domain events and aggregate event storage remain in Domain, Application owns `IDomainEventToIntegrationEventMapper` plus `IIntegrationEventMapperRegistry`, and mapper discovery is currently assembly-scanned through `AddCqrs` so the contract stays above Infrastructure
+- ⬜ Outbox, inbox, and payment-attempt persistence are still pending; the frozen mapper strategy above now becomes the input contract for the next schema slice and later Phase 10 transport work
 
 ---
 

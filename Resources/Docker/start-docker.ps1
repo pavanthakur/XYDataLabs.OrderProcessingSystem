@@ -71,6 +71,8 @@ function Get-DockerComposeCommand {
 
 $ComposeCmd = Get-DockerComposeCommand
 
+$DefaultSqlServerImage = "mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04"
+
 # Human-friendly display of compose command for logging/help (avoid invalid Get-Command usage with subcommand)
 try {
     docker compose version > $null 2>&1
@@ -143,6 +145,7 @@ function Initialize-LocalDockerSecrets {
         @{ Name = "LOCAL_OPENPAY_PRIVATE_KEY"; Prompt = "Enter OpenPay Private Key (LOCAL_OPENPAY_PRIVATE_KEY)" },
         @{ Name = "LOCAL_OPENPAY_DEVICE_SESSION_ID"; Prompt = "Enter LOCAL_OPENPAY_DEVICE_SESSION_ID (press Enter for default)" }
     )
+    $optionalSettingNames = @("ORDERPROCESSING_SQLSERVER_IMAGE")
 
     $fileSecrets = @{}
     if (Test-Path $SecretsFilePath) {
@@ -208,6 +211,20 @@ function Initialize-LocalDockerSecrets {
         $storedNewSecret = $true
     }
 
+    foreach ($optionalSettingName in $optionalSettingNames) {
+        $currentValue = (Get-Item -Path "Env:$optionalSettingName" -ErrorAction SilentlyContinue).Value
+        if (-not [string]::IsNullOrWhiteSpace($currentValue)) {
+            $fileSecrets[$optionalSettingName] = $currentValue
+            continue
+        }
+
+        $fileValue = if ($fileSecrets.ContainsKey($optionalSettingName)) { $fileSecrets[$optionalSettingName] } else { $null }
+        if (-not [string]::IsNullOrWhiteSpace($fileValue)) {
+            Set-Item -Path "Env:$optionalSettingName" -Value $fileValue
+            Write-ColoredOutput "Loaded $optionalSettingName from $SecretsFilePath" "Green" "INFO"
+        }
+    }
+
     if ($storedNewSecret -or -not (Test-Path $SecretsFilePath)) {
         $fileContent = @(
             '# Local Docker secrets for this machine only',
@@ -218,6 +235,9 @@ function Initialize-LocalDockerSecrets {
             "LOCAL_OPENPAY_PRIVATE_KEY=$($fileSecrets['LOCAL_OPENPAY_PRIVATE_KEY'])",
             "LOCAL_OPENPAY_DEVICE_SESSION_ID=$($fileSecrets['LOCAL_OPENPAY_DEVICE_SESSION_ID'])"
         )
+        if ($fileSecrets.ContainsKey('ORDERPROCESSING_SQLSERVER_IMAGE') -and -not [string]::IsNullOrWhiteSpace($fileSecrets['ORDERPROCESSING_SQLSERVER_IMAGE'])) {
+            $fileContent += "ORDERPROCESSING_SQLSERVER_IMAGE=$($fileSecrets['ORDERPROCESSING_SQLSERVER_IMAGE'])"
+        }
         Set-Content -Path $SecretsFilePath -Value $fileContent
         Write-ColoredOutput "Stored local Docker secrets in $SecretsFilePath for future runs" "Green" "SUCCESS"
     }
@@ -685,16 +705,16 @@ try {
     if ($Down) {
         Write-ColoredOutput "Stopping Docker Compose services (Environment: $Environment)..." "Yellow" "INFO"
         
-        # Determine compose files to use - environment-specific only
-        if (Test-Path "docker-compose.$Environment.yml") {
+        # Determine compose files to use - database + environment-specific
+        if ((Test-Path "docker-compose.database.yml") -and (Test-Path "docker-compose.$Environment.yml")) {
             if (Test-Path ".env.local") {
-                $composeFiles = @("--env-file", ".env.local", "-f", "docker-compose.$Environment.yml")
+                $composeFiles = @("--env-file", ".env.local", "-f", "docker-compose.database.yml", "-f", "docker-compose.$Environment.yml")
             } else {
-                $composeFiles = @("-f", "docker-compose.$Environment.yml")
+                $composeFiles = @("-f", "docker-compose.database.yml", "-f", "docker-compose.$Environment.yml")
             }
-            Write-ColoredOutput "Using environment-specific compose file: docker-compose.$Environment.yml" "Gray" "INFO"
+            Write-ColoredOutput "Using compose files: docker-compose.database.yml + docker-compose.$Environment.yml" "Gray" "INFO"
         } else {
-            throw "Environment-specific compose file docker-compose.$Environment.yml not found. Available environments: dev, stg, prod"
+            throw "Required compose files not found. Expected docker-compose.database.yml and docker-compose.$Environment.yml."
         }
         
         Write-ColoredOutput "Running: $ComposeDisplay $($composeFiles -join ' ') --profile $Protocol down" "Gray" "INFO"
@@ -771,48 +791,22 @@ try {
         Write-ColoredOutput "SharedSettings file verified: $SharedSettingsPath" "Green"
     }
 
-    # Pre-flight: ensure local SQL Server databases exist so EF migrations succeed on startup.
-    # EF Core's Migrate() can create a database, but if SA is locked (from a previous crash loop)
-    # the connection is refused before Migrate() even runs. Creating DBs via Windows auth here
-    # breaks that cascade. Silently skips if sqlcmd is not installed or SQL Server is unreachable.
-    $dbNames = switch ($Environment) {
-        "dev"  { @("OrderProcessingSystem_Dev",  "OrderProcessingSystem_TenantC_Dev") }
-        "stg"  { @("OrderProcessingSystem_Stg",  "OrderProcessingSystem_TenantC_Stg") }
-        "prod" { @("OrderProcessingSystem_Prod", "OrderProcessingSystem_TenantC_Prod") }
-        default { @() }
-    }
-    if ($dbNames.Count -gt 0) {
-        $sqlcmdExe = Get-Command sqlcmd -ErrorAction SilentlyContinue
-        if ($sqlcmdExe) {
-            Write-ColoredOutput "Pre-flight: ensuring local SQL databases exist for $Environment..." "Cyan" "INFO"
-            foreach ($db in $dbNames) {
-                $sql = "IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = '$db') CREATE DATABASE [$db];"
-                $result = sqlcmd -S "localhost" -E -d master -Q $sql 2>&1
-                if ($LASTEXITCODE -eq 0) {
-                    Write-ColoredOutput "  Database '$db' ready" "Green"
-                } else {
-                    Write-ColoredOutput "  Warning: could not create '$db' (SA may need unlocking or SQL Server not running): $result" "Yellow" "WARNING"
-                }
-            }
-        } else {
-            Write-ColoredOutput "Pre-flight DB check skipped (sqlcmd not found)" "DarkGray"
-        }
-    }
+    Write-ColoredOutput "Skipping host SQL pre-flight because Docker profiles now use the compose-managed sql-server service." "DarkGray" "INFO"
 
-    # Determine compose files to use - environment-specific only
-    if (Test-Path "docker-compose.$Environment.yml") {
+    # Determine compose files to use - database + environment-specific
+    if ((Test-Path "docker-compose.database.yml") -and (Test-Path "docker-compose.$Environment.yml")) {
         # Always include --env-file so docker compose resolves ${LOCAL_*} variables from .env.local
         # regardless of whether the caller inherited session env vars (e.g. Visual Studio launch,
         # fresh terminal, or direct docker compose call). Without this, undefined vars default to ""
         # which causes cert password mismatch and SA lockout on HTTPS profiles.
         if (Test-Path ".env.local") {
-            $composeFiles = @("--env-file", ".env.local", "-f", "docker-compose.$Environment.yml")
+            $composeFiles = @("--env-file", ".env.local", "-f", "docker-compose.database.yml", "-f", "docker-compose.$Environment.yml")
         } else {
-            $composeFiles = @("-f", "docker-compose.$Environment.yml")
+            $composeFiles = @("-f", "docker-compose.database.yml", "-f", "docker-compose.$Environment.yml")
         }
-        Write-ColoredOutput "Using environment-specific compose file: docker-compose.$Environment.yml" "Green"
+        Write-ColoredOutput "Using compose files: docker-compose.database.yml + docker-compose.$Environment.yml" "Green"
     } else {
-        throw "Environment-specific compose file docker-compose.$Environment.yml not found. Available environments: dev, stg, prod"
+        throw "Required compose files not found. Expected docker-compose.database.yml and docker-compose.$Environment.yml."
     }
     
     # Display port information from compose file (no .env generation needed)
@@ -855,9 +849,15 @@ try {
         Write-ColoredOutput "Pre-pulling base images (MCR) to warm cache..." "Cyan" "INFO"
         Write-ColoredOutput "Note: First-time downloads may take 5-15 minutes total for all base images" "Yellow" "INFO"
         Show-DockerProxyInfo
+        $sqlServerImage = (Get-Item -Path Env:ORDERPROCESSING_SQLSERVER_IMAGE -ErrorAction SilentlyContinue).Value
+        if ([string]::IsNullOrWhiteSpace($sqlServerImage)) {
+            $sqlServerImage = $DefaultSqlServerImage
+        }
+        Write-ColoredOutput "SQL Server image for Docker runtime: $sqlServerImage" "Gray" "INFO"
         $baseImages = @(
             'mcr.microsoft.com/dotnet/sdk:8.0',
-            'mcr.microsoft.com/dotnet/aspnet:8.0'
+            'mcr.microsoft.com/dotnet/aspnet:8.0',
+            $sqlServerImage
         )
         try {
             [void](Invoke-BaseImagePrePull -Images $baseImages -StrictMode:$Strict)

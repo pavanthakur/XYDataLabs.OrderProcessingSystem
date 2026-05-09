@@ -1,5 +1,6 @@
 using FluentAssertions;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
+using XYDataLabs.OrderProcessingSystem.Domain.Events;
 using Xunit;
 
 namespace XYDataLabs.OrderProcessingSystem.Domain.Tests.Entities
@@ -28,6 +29,43 @@ namespace XYDataLabs.OrderProcessingSystem.Domain.Tests.Entities
             order.Status.Should().Be(OrderStatus.Created);
             order.Customer.Should().BeNull();
             order.TenantId.Should().Be(0);
+        }
+
+        [Fact]
+        public void Create_ShouldRaise_OrderCreatedDomainEvent()
+        {
+            var createdAt = new DateTime(2026, 5, 9, 9, 30, 0, DateTimeKind.Utc);
+            var result = Order.Create(7, new[]
+            {
+                new Product { ProductId = 1, Name = "Product 1", Description = "Description 1", Price = 10m },
+                new Product { ProductId = 2, Name = "Product 2", Description = "Description 2", Price = 15m }
+            }, createdAt);
+
+            result.IsSuccess.Should().BeTrue();
+
+            var orderCreatedEvent = result.Value!.DomainEvents.Should().ContainSingle()
+                .Which.Should().BeOfType<OrderCreatedDomainEvent>().Subject;
+
+            orderCreatedEvent.CustomerId.Should().Be(7);
+            orderCreatedEvent.OrderDate.Should().Be(createdAt);
+            orderCreatedEvent.TotalPrice.Should().Be(25m);
+            orderCreatedEvent.ProductCount.Should().Be(2);
+            orderCreatedEvent.OccurredUtc.Should().Be(createdAt);
+        }
+
+        [Fact]
+        public void ClearDomainEvents_ShouldRemoveRaisedEvents()
+        {
+            var order = Order.Create(1, new[]
+            {
+                new Product { ProductId = 1, Name = "Product 1", Description = "Description 1", Price = 20m }
+            }).Value!;
+
+            order.DomainEvents.Should().ContainSingle();
+
+            order.ClearDomainEvents();
+
+            order.DomainEvents.Should().BeEmpty();
         }
 
         [Fact]

@@ -103,13 +103,13 @@ See [scripts/README.md](../../../scripts/README.md#local-development-bootstrap) 
 | **Mode** | **Database** | **Server** | **Ports** | **Use Case** |
 |----------|-------------|------------|-----------|--------------|
 | **Visual Studio F5** | `OrderProcessingSystem_Local` | localhost:1433 | API 5010/5011, UI 5173/5174 | Local development & debugging |
-| **Docker Dev** | `OrderProcessingSystem_Dev` | host.docker.internal:1433 | 5020-5023 | Container development |
-| **Docker UAT** | `OrderProcessingSystem_UAT` | host.docker.internal:1433 | 5030-5033 | Testing environment |
-| **Docker Prod** | `OrderProcessingSystem_Prod` | host.docker.internal:1433 | 5040-5043 | Production simulation |
+| **Docker Dev** | `OrderProcessingSystem_Dev` | compose-managed `sql-server:1433` | 5020-5023 | Container development |
+| **Docker Staging** | `OrderProcessingSystem_Stg` | compose-managed `sql-server:1433` | 5030-5033 | Testing environment |
+| **Docker Prod** | `OrderProcessingSystem_Prod` | compose-managed `sql-server:1433` | 5040-5043 | Production simulation |
 
 ## 📋 Prerequisites
 1. **.NET 8.0 SDK** and **Visual Studio 2022** installed
-2. **SQL Server** running on localhost:1433  
+2. **SQL Server** running on localhost:1433 for non-Docker F5 profiles only  
 3. **Docker Desktop** (for Docker scenarios only)
 4. Build solution to ensure no errors: `dotnet build`
 

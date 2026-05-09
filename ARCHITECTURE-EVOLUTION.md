@@ -15,6 +15,17 @@ with MongoDB.
 
 ---
 
+## 🛡️ Mandatory Phase Closeout Quality Gate
+
+Before marking **any** architectural phase as complete, the following end-to-end success criteria must be met and verified:
+1. **Docker Containerization Validation:** All modified or newly introduced services must successfully build, launch, and run correctly via the mapped Docker environment profiles (`dev`, `stg`, `prod`). 
+2. **Integration Test Verification:** The backend integration test suite must pass perfectly against an active, containerized SQL database without test-boundary data bleeding, confirming database access and domain logic constraints are met.
+3. **End-to-End Automation Coverage:** Playwright E2E automation (in the `automation/` workspace) must successfully navigate the full frontend-to-backend-to-payment cycle against the running containers without errors.
+
+Any phase missing confirmed verifiable passes on these three metrics cannot be formally closed.
+
+---
+
 ## Baseline: Monolith on Azure App Service ✅ DEPLOYED
 
 Historical note: the diagram below captures the original phase-1 baseline. The same UI App Service
@@ -465,12 +476,26 @@ Every Stripe charge carries an idempotency key to prevent double-charging on ret
 
 OpenPay does not have native idempotency support — the existing `AttemptOrderId` + `PayinLog` reconciliation pattern remains the safety net for OpenPay tenants.
 
+### Retry Policy (Stripe, Production Rules)
+
+The generic payment-retry pattern is appropriate for Stripe only when it is narrowed into an explicit enterprise retry policy. The system must not treat every failed charge as retryable.
+
+- **Retry scope is explicit** — automatic retries are allowed only for transient pre-accept failures such as connection drops before a Stripe response is confirmed, HTTP 5xx responses, or HTTP 429 with bounded backoff.
+- **Provider-accepted responses are never blindly retried** — once Stripe may have accepted the request, the attempt moves to reconciliation instead of issuing a second charge call. `PaymentAttempt` becomes the source of truth for this boundary.
+- **Customer-action failures are not retried** — insufficient funds, expired card, invalid payment details, authentication-required outcomes, fraud blocks, and hard declines are terminal attempt results that require user action or operational review.
+- **Attempt identity is stable** — one `AttemptOrderId` maps to one Stripe idempotency key and one append-only attempt history. Retries reuse the same idempotency key until the attempt is resolved.
+- **Retry budget is bounded** — retry count, backoff window, and terminal escalation path are configuration-driven and observable. Infinite or open-ended retry loops are forbidden.
+- **Unknown outcomes reconcile first** — if the local process loses certainty after sending the request, the attempt transitions to `UnknownNeedsReconciliation` and the reconciliation worker queries Stripe before any further action is taken.
+- **Append-only history is mandatory** — `PaymentAttempt` state changes and external status observations are recorded as immutable history rows so operators can reconstruct the full payment timeline.
+- **Provider portability is preserved** — retry classification lives above the adapter boundary so Stripe-specific idempotency is used where available without forcing unsafe automatic retries onto OpenPay.
+
 ### What Gets Added
 
 - `XYDataLabs.OpenPayAdapter/StripeAdapterService.cs` — `IPaymentAdapterService` implementation using `Stripe.net`
 - `XYDataLabs.OpenPayAdapter/ServiceCollectionExtensions.cs` — register both adapters as keyed services
 - `PaymentProvider.ProviderType` column + EF migration
 - Handler updated to resolve adapter from keyed DI instead of direct injection
+- `PaymentAttempt` retry classification + reconciliation rules so Stripe retries remain idempotent, bounded, and auditable in production
 
 All Application and Domain code above the adapter boundary remains unchanged.
 

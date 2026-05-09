@@ -47,6 +47,7 @@ If a gap is operationally useful but does not weaken those guarantees, it may be
 - A runtime boundary changed and the end-to-end behavior is not exercised.
 - `Program.cs` environment or readiness gates changed without verification.
 - A migration, tenant filter, or layer-boundary rule changed without the matching guardrail.
+- **Phase Completion Blockers:** Attempting to close out an architecture phase while backend Integration tests fail against standard isolated container parameters.
 
 **Deferrable with log entry**
 - A local convenience tool changed without affecting runtime behavior, schema, or delivery behavior.
@@ -57,6 +58,7 @@ If a gap is operationally useful but does not weaken those guarantees, it may be
 - A repeated manual step is introduced without a stable validation path.
 - A repo-shared AI asset, script, or workflow can drift without CI noticing.
 - A new workflow or validation rule is undocumented or unreachable from repo discovery surfaces.
+- **Phase Completion Blockers:** Attempting to close out an architecture phase before verifying the Playwright UI automation correctly covers the full end-to-end journey seamlessly across all running Docker profile containers.
 
 **Deferrable with log entry**
 - Local-only convenience automation such as optional VS Code tasks or hook templates that mirror an existing CI rule.

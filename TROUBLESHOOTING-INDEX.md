@@ -186,6 +186,14 @@ If the same error still appears, add `Directory.Read.All`, grant admin consent, 
 - For **Azure Bootstrap & Deploy** (Phase 2/X/deploy): Use the correct branch (`dev` for dev, `staging` for staging, `main` for prod)
 - For **Azure Initial Setup** (Phase 0/1a/1b): Use `branch=dev`, `environment=all` (recommended one-time setup)
 
+### Error: Docker Manifest Network EOF / Testcontainers SQL Pull Fails
+**Symptom**: Integration tests fail locally with `failed to do request: Head "https://mcr.microsoft.com/v2/mssql/server/manifests/...": EOF`
+**Cause**: Docker Desktop on Windows sometimes aggressively rejects high-bandwidth registry fetches from `mcr.microsoft.com` causing `Testcontainers` to fail.
+**Quick Fix**: Bypass Testcontainers and natively pipe the Test Suite directly into your Visual Studio `docker-compose.database.yml` container:
+1. Ensure your local Docker database is running: `.\Resources\Docker\start-docker.ps1 -Environment dev -Profile http`
+2. Set the override variable using your `.env.local` password: `$env:ORDERPROCESSING_TEST_CONNECTION_STRING="Server=localhost,1433;User Id=sa;Password=Admin100@;TrustServerCertificate=True"`
+3. Run `dotnet test`.
+
 ---
 
 ## 📚 Setup Guides

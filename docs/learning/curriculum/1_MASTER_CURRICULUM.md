@@ -562,12 +562,16 @@ After completing today's tasks, you will have:
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 #### Day 59: 🆕 Queue-Triggered Functions
-> 🏗️ **Architecture Phase 8.5b** — Replace with: `HttpClient`-based resilience with `IHttpClientFactory` + Polly policies for payment calls, idempotency keys for payment retries
+> 🏗️ **Architecture Phase 8.5b** — Replace with: `HttpClient`-based resilience with `IHttpClientFactory` + Polly policies for payment calls, idempotency keys for payment retries, and explicit Stripe retry classification
 - [ ] Create Queue-triggered Azure Function
 - [ ] Handle poison messages with retry logic
 - [ ] Monitor queue metrics in Application Insights
 - [ ] Test at-least-once delivery semantics
 - [ ] Implement dead-letter queue handling
+- [ ] Freeze the Stripe retry policy: retry only transient pre-accept failures; route provider-accepted uncertainty to reconciliation instead of blind re-charge
+- [ ] Classify payment outcomes into retryable transient, terminal customer-action-required, and `UnknownNeedsReconciliation`
+- [ ] Reuse one `AttemptOrderId` as the Stripe idempotency key across retries for the same attempt
+- [ ] Record retry and reconciliation transitions as append-only payment-attempt history
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 #### Day 60: Service Bus — Advanced Patterns (Sessions, Transactions, Deduplication)
