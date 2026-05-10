@@ -95,6 +95,27 @@ Apply once to the pattern `dev-backup-**` in **Settings → Branches → Branch 
 This makes pushed `dev-backup-*` branches effectively immutable, matching the immutability of
 the companion tag.
 
+### 1.5.1 Active branch protection baseline (`dev`, `staging`, `main`)
+
+The delivery branches should be protected enough to prevent destructive history changes, but not so tightly that the current direct-push operating model is broken.
+
+Apply this baseline to `dev`, `staging`, and `main`:
+
+| Setting | Value |
+|---|---|
+| Require a pull request before merging | ❌ Not yet, because the current operating model still allows direct pushes |
+| Require status checks to pass before merging | ❌ Not yet, until PR-only flow is adopted |
+| Require conversation resolution | ❌ |
+| Require signed commits | Optional |
+| Require linear history | ❌ |
+| **Block force pushes** | ✅ **Required** |
+| **Restrict deletions** | ✅ **Required** |
+| Allow bypassing the above settings | ✅ Admin only |
+
+This baseline protects the branch from destructive rewrites immediately while preserving the current workflow. The `validate-template-package-governance.yml` workflow still provides automatic signal and packaged smoke validation for Layer 1 template changes on both pull requests and direct pushes.
+
+When the repository later moves to PR-only delivery, upgrade this baseline to require pull requests plus required status checks.
+
 ### 1.6 Existing snapshots
 
 | Date | Phase | Tag | Branch |
@@ -213,6 +234,25 @@ dotnet new uninstall XYDataLabs.SaaS.Templates
 | Versioning | Annotated tags `blueprint-v1.0.0`, `blueprint-v1.1.0` on the template repo |
 | Bootstrap | "Use this template" button on the GitHub repo page |
 | Extraction trigger | Phase 14 closeout |
+
+#### 2.2.1 Future Layer 2 governance after extraction
+
+Layer 2 cannot be published through NuGet because it includes workflows, Bicep, frontend, Docker, docs, and AI customization assets. Its release mechanism is the GitHub template repository plus immutable `blueprint-v*` tags.
+
+Use this rule once `xydatalabs-saas-blueprint` exists:
+
+| Change type in blueprint repo | Action |
+|---|---|
+| Workflow, Bicep, frontend, Docker, docs, AI asset, or bootstrap-script change that should affect new side projects | Cut the next `blueprint-v*` tag and update the blueprint repo release notes |
+| Template repo metadata only with no bootstrap impact | No blueprint version bump required |
+| Side-project-specific customization in a consumer repo | No blueprint release action |
+
+Expected automation after extraction:
+- a blueprint governance workflow in the blueprint repo should watch the Layer 2 asset paths
+- that workflow should require a version-decision update for the next `blueprint-v*` line
+- the repo release process should then create the tag and GitHub release from the validated baseline
+
+That gives both layers the same operating model: Layer 1 uses NuGet semver, Layer 2 uses GitHub template tags.
 
 ### 2.3 Why two layers and not one
 
