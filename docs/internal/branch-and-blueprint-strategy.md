@@ -409,6 +409,28 @@ branches in this repository.
 | 4 | `ai-recruitment` | Blueprint + Azure OpenAI + Elasticsearch | 8–10 weeks |
 | 5 | (this repo) order-processing | — already exists | — |
 
+### 3.2.1 Side-project bootstrap matrix
+
+Use this matrix as the default decision table when a side project needs to start before or after the final Layer 2 blueprint extraction.
+
+| Side project | Best pre-Phase-14 baseline today | Why this baseline fits | Post-Phase-14 bootstrap path |
+|---|---|---|---|
+| `trading-analytics` | `v-20260510-phase8-frontend-spa` | Needs the React-first UI runtime, tenant bootstrap, current Azure deployment model, and a strong event-ready baseline without waiting for full microservice extraction | Start from `xydatalabs-saas-blueprint` + `XYDataLabs.SaaS.Templates`, then add market-data, charting, alerts, and broker integrations |
+| `whatsapp-automation` | `v-20260510-phase8-frontend-spa` | Needs the current React frontend, API ownership of callback/client-event style endpoints, and the cleanest baseline for AI + messaging automation without payment-specific coupling | Start from `xydatalabs-saas-blueprint` + `XYDataLabs.SaaS.Templates`, then add WhatsApp adapter, AI reply workflow, CRM hooks, and conversation audit flows |
+| `azure-cost-optimizer` | `v-20260510-phase8-frontend-spa` | Needs Azure governance, OIDC workflows, React UI, and enterprise reporting/automation patterns more than payment or order-domain specifics | Start from `xydatalabs-saas-blueprint` + `XYDataLabs.SaaS.Templates`, then replace order/payment slices with Azure cost ingestion, anomaly detection, and optimization actions |
+| `ai-recruitment` | `v-20260510-phase8-frontend-spa` | Needs the React-first UX baseline, multi-tenant foundation, and event-ready backend more than order/payment-specific domain logic | Start from `xydatalabs-saas-blueprint` + `XYDataLabs.SaaS.Templates`, then add search, resume parsing, recruiter workflows, AI matching, and interview orchestration |
+| B2B order/inventory SaaS variant | `v-20260510-pre-template-readme-1-0-1` plus current repo runtime | This is the closest domain match to the live product and already has the validated Layer 1 template package line and release discipline in place | Start directly from `XYDataLabs.SaaS.Templates::1.0.1` for the .NET skeleton and pair it with the future blueprint repo for workflows, infra, frontend, docs, and automation |
+
+Default rule before Phase 14:
+- if the side project needs the current React/Azure/automation baseline, fork from `v-20260510-phase8-frontend-spa`
+- if the side project is explicitly a reusable SaaS backend skeleton exercise, prefer the validated Layer 1 package line `XYDataLabs.SaaS.Templates::1.0.1`
+- if a future phase introduces a better architectural seam for a specific product category, cut the new snapshot pair and update this matrix instead of creating ad hoc product branches in this repo
+
+Default rule after Phase 14:
+- create the repo from `xydatalabs-saas-blueprint`
+- install the pinned Layer 1 template version from NuGet
+- record both `BLUEPRINT_VERSION` and `DOTNET_TEMPLATE_VERSION` in the side project's `README.md`
+
 ### 3.3 Per-side-project conventions
 
 - Pin `BLUEPRINT_VERSION` (Layer 2 tag) and `DOTNET_TEMPLATE_VERSION` (Layer 1 NuGet version)
