@@ -298,6 +298,18 @@ This mirrors the current Layer 1 pattern exactly:
 - Layer 1: `PackageVersion` in the template pack project, then NuGet publish.
 - Layer 2: `BLUEPRINT_VERSION` in the blueprint repo, then GitHub template tag + release.
 
+#### 2.2.2 Mandatory phase-closeout gate for blueprint releases
+
+At the end of every phase closeout, run this rule before declaring the phase complete:
+
+1. Review the phase changes against the future Layer 2 watched paths.
+2. Ask one explicit question: did this phase change any bootstrap asset that every new side project should inherit?
+3. If yes, plan the next `xydatalabs-saas-blueprint` line and advance `BLUEPRINT_VERSION` when the blueprint repo exists.
+4. If the phase changed only Layer 1 generated backend template assets, advance the NuGet template `PackageVersion` instead.
+5. If the phase changed neither Layer 1 nor Layer 2 bootstrap assets, record that no template release action is required.
+
+Treat this as a mandatory closeout gate, not optional guidance. The trigger is not "every phase creates a blueprint release"; the trigger is "phase closeout plus Layer 2 bootstrap impact."
+
 ### 2.3 Why two layers and not one
 
 | Mechanism | Can ship `src/` solution? | Can ship workflows / Bicep / frontend / Docker / docs? | Used by |
