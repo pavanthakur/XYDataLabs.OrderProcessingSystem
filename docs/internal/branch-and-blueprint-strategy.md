@@ -175,6 +175,33 @@ Create a new solution
 dotnet new xy-saas -n <ProductName> --rootNamespace <Company.Product> --companySlug <companyslug> --productSlug <productslug>
 ```
 
+#### 2.1.3 Ongoing template release governance
+
+The Layer 1 template line is no longer a one-time manual activity.
+
+Automatic enforcement now exists through `.github/workflows/validate-template-package-governance.yml`:
+- Any pull request that changes `templates/xy-saas/` or `templates/XYDataLabs.SaaS.Templates/` must also bump `PackageVersion` in `templates/XYDataLabs.SaaS.Templates/XYDataLabs.SaaS.Templates.csproj`.
+- The same workflow always packs the `.nupkg`, installs it, generates a smoke solution, and builds the generated output.
+
+That means `dev` always carries the next intended NuGet template line when the generated template itself changes, even if public publication happens later from a tag.
+
+Use this decision rule going forward:
+
+| Change type | Action |
+|---|---|
+| Layer 1 generated backend skeleton changes under `templates/xy-saas/` | Bump `PackageVersion`; let the governance workflow validate; publish later via `publish-template-package.yml` when the tagged baseline is ready |
+| Layer 1 package metadata or packaged README changes under `templates/XYDataLabs.SaaS.Templates/` | Bump `PackageVersion`; validate; publish later from tag |
+| Layer 2 blueprint-only assets such as workflows, Bicep, frontend, Docker, docs, or AI assets outside Layer 1 | Do not bump the NuGet package; cut a new GitHub template repo/tag when that Layer 2 baseline is ready |
+| Runtime repository code only | No template release action |
+
+Consumer installation remains version-pinned through NuGet:
+
+```powershell
+dotnet new install XYDataLabs.SaaS.Templates::1.0.1
+dotnet new update --check-only
+dotnet new uninstall XYDataLabs.SaaS.Templates
+```
+
 ### 2.2 Layer 2 — GitHub template repository
 
 | Aspect | Value |

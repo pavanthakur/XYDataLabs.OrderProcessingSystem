@@ -8,6 +8,15 @@ Manual workflow that packs `XYDataLabs.SaaS.Templates`, validates the packaged `
 - A publish action should not bypass the smoke path that installs the package, generates a solution, and builds the generated output.
 - Operators need a safe dry-run mode that produces the final package artifact without pushing it anywhere.
 
+## Governance handoff
+This workflow is the publication endpoint, not the first signal that a new NuGet template line is needed.
+
+Automatic detection now lives in [README-VALIDATE-TEMPLATE-PACKAGE-GOVERNANCE.md](./README-VALIDATE-TEMPLATE-PACKAGE-GOVERNANCE.md):
+- Pull requests that change `templates/xy-saas/` or `templates/XYDataLabs.SaaS.Templates/` must bump `PackageVersion`.
+- Those pull requests also run packaged smoke validation before merge.
+
+That keeps template version drift from becoming a one-time manual habit.
+
 ## Trigger
 Manual dispatch only.
 
@@ -84,7 +93,28 @@ https://nuget.pkg.github.com/<owner>/index.json
 - Dry-run validation before publishing to a public registry
 - Repeatable regeneration of the final `.nupkg` from a tagged baseline
 
+## How consumers install from NuGet.org
+
+Install a specific version:
+
+```powershell
+dotnet new install XYDataLabs.SaaS.Templates::1.0.1
+```
+
+Check for template updates:
+
+```powershell
+dotnet new update --check-only
+```
+
+Remove the currently installed package:
+
+```powershell
+dotnet new uninstall XYDataLabs.SaaS.Templates
+```
+
 ## Related documentation
 - [Workflow index](./README.md)
+- [Validate template package governance](./README-VALIDATE-TEMPLATE-PACKAGE-GOVERNANCE.md)
 - [Branch + blueprint strategy](../../docs/internal/branch-and-blueprint-strategy.md)
 - [ADR-018 blueprint and snapshot strategy](../../docs/architecture/decisions/ADR-018-blueprint-and-snapshot-strategy.md)

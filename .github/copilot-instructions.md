@@ -52,7 +52,7 @@ Frontend workspace:
 ├── .github/
 │   ├── app-manifest.json          # GitHub App manifest (permissions config)
 │   ├── copilot-instructions.md    # ← THIS FILE (Copilot context)
-│   └── workflows/                 # 11 GitHub Actions workflows + 8 README docs
+│   └── workflows/                 # 14 GitHub Actions workflows + companion README docs
 │
 ├── Resources/
 │   ├── Azure-Deployment/          # 27 PowerShell automation scripts (see §6)
@@ -105,7 +105,7 @@ Frontend workspace:
 
 ---
 
-## 4. GitHub Actions Workflows (12 workflows)
+## 4. GitHub Actions Workflows (14 workflows)
 
 All workflows live in `.github/workflows/`. Each has a companion `README-*.md` in the same folder.
 
@@ -121,15 +121,17 @@ All workflows live in `.github/workflows/`. Each has a companion `README-*.md` i
 | `deploy-api-to-azure.yml` | Deploy API to Azure App Service | Push to dev/staging/main (API paths) | Build → test → publish → Azure OIDC login → deploy → health check |
 | `deploy-ui-to-azure.yml` | Deploy UI to Azure App Service | Push to dev/staging/main (UI paths) | Build → test → publish → Azure OIDC login → deploy → health check |
 | `publish-template-package.yml` | Publish Template Package | Manual dispatch | Packs `XYDataLabs.SaaS.Templates`, validates the packaged `dotnet new` smoke flow, uploads the `.nupkg`, and optionally publishes it to NuGet.org or GitHub Packages |
+| `validate-template-package-governance.yml` | Validate Template Package Governance | Pull requests for Layer 1 template changes or manual | Forces a `PackageVersion` decision for Layer 1 template changes and runs packaged smoke validation before merge |
 | `validate-ai-customization.yml` | Validate AI Customization | Push/PR (shared AI asset paths) or manual | Validates shared Copilot instructions, prompts, agents, and AI governance docs/scripts stay in sync |
 | `validate-adrs.yml` | Validate ADR Markdown | Push/PR (ADR/script/config paths) or manual | Markdownlint format + frontmatter schema (filename, H1, `**Status:**`, valid status word) |
+| `validate-doc-links.yml` | Validate Docs Links | Push/PR (docs or validator paths) or manual | Validates local markdown links and heading anchors across the canonical `docs/` tree |
 
 ### Workflow Categories
 
 | Category | Workflows | Usage |
 |----------|-----------|-------|
 | **Primary** | `ci.yml`, `azure-initial-setup.yml`, `azure-bootstrap.yml`, `deploy-api-to-azure.yml`, `deploy-ui-to-azure.yml` | Default paths for PR validation, initial setup, day-to-day deployment, and normal API/UI delivery |
-| **Support** | `configure-github-secrets.yml`, `infra-deploy.yml`, `publish-template-package.yml`, `validate-deployment.yml`, `test-validate-deployment.yml`, `validate-ai-customization.yml`, `validate-adrs.yml` | Secondary validation, infra-only entrypoints, package publication, troubleshooting, and governance guardrails |
+| **Support** | `configure-github-secrets.yml`, `infra-deploy.yml`, `publish-template-package.yml`, `validate-template-package-governance.yml`, `validate-deployment.yml`, `test-validate-deployment.yml`, `validate-ai-customization.yml`, `validate-adrs.yml`, `validate-doc-links.yml` | Secondary validation, infra-only entrypoints, package publication, troubleshooting, and governance guardrails |
 
 ### Branch → Environment Mapping
 
