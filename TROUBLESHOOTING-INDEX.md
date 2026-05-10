@@ -432,3 +432,27 @@ These are required by `deploy-api-to-azure.yml`, `deploy-ui-to-azure.yml`, and `
 ---
 
 **Last Updated**: Based on fix for GitHub App installation detection and workflow update handling.
+---
+
+## 🐳 Docker Local Development Issues
+
+### ❌ SQL Container Startup Fails (Timeout or 'Login failed for user sa')
+**Error**: SQL Server container fails to start, hits timeout, or integration tests fail with 'Login failed for user sa'.
+
+**Cause**: 
+1. The default MCR image might be unreachable or broken.
+2. The Docker volume holding SQL data retains old credentials from a previous run, conflicting with the new '.env.local' password.
+
+**Quick Fix**: 
+1. Override the SQL image in '.env.local': ORDERPROCESSING_SQLSERVER_IMAGE=cjgaspard/mssql-server:latest
+2. Purge stale volumes: docker compose -f docker-compose.dev.yml down -v
+3. Restart the profile.
+
+### ❌ Node fetch healthcheck failure (ERR_CONNECTION_REFUSED)
+**Error**: Docker UI targets (dev-https, stg-https, prod-https) report as unhealthy, halting the automation matrix.
+
+**Cause**: The Node.js healthcheck fetch('https://localhost:...') intrinsically rejects the self-signed local development certificates.
+
+**Quick Fix**: 
+Use process.env.NODE_TLS_REJECT_UNAUTHORIZED='0'; fetch(...) inside the docker-compose.*.yml files' healthcheck command.
+
