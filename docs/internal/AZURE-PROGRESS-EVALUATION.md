@@ -57,6 +57,14 @@
 - ✅ Architecture guardrails and the full integration suite are green on the Phase 8 closeout branch
 - ✅ Backend Phase 8.5 is now the next active engineering phase
 
+### May 10, 2026 Architecture Roadmap Extension Adopted
+
+- ✅ `ARCHITECTURE-EVOLUTION.md` now extends the post-Phase-8 roadmap with **Phase 8.7** (Stripe webhook receiver), **Phase 9.5** (local Keycloak portability showcase), and **Phase 11.5** (Notifications module PostgreSQL pilot)
+- ✅ Phase 9 now explicitly introduces Aspire-Lite in parallel with Docker Compose, so local orchestration, service discovery, and dashboarding start when services are first extracted
+- ✅ Phase 13 now records two explicit decision gates: `azd` plus Aspire-generated manifest evaluation for ACA deployment, and the .NET LTS upgrade window, both ADR-bound when implementation forces the decision
+- ✅ ADR-017 captures the portability rationale: Entra ID and Azure SQL remain authoritative for production while the roadmap proves identity-provider and RDBMS flexibility in isolated, reviewable phases
+- ✅ Backend Phase 8.5 remains the next active engineering phase; today's planning work tightened the next milestones without changing the immediate execution order
+
 ### Architecture Phases Completed
 
 | Phase | Name | Days | Status |
@@ -77,13 +85,14 @@
 - Key Vault: `kv-orderprocessing-dev` (Managed Identity access, no stored credentials)
 - App Insights: `ai-orderprocessing-dev` — active, confirmed traces + metrics
 
-### Architecture Decisions Recorded (ADR-000 → ADR-015)
+### Architecture Decisions Recorded (ADR-000 → ADR-017)
 - ADR-001: Clean Architecture, ADR-002: OIDC, ADR-003: Subscription-scope Bicep
 - ADR-004: EF Core + Azure SQL, ADR-005: Serilog, ADR-006: Passwordless SQL
 - ADR-007: Hybrid multi-tenancy, ADR-008: Architecture test guardrails
 - ADR-009: Tenant isolation hardening, ADR-010: Runtime environment detection
 - ADR-011: Hand-rolled CQRS, ADR-012: OTel dual-export, ADR-013: Redis caching
 - ADR-014: Azure service coverage rationale, ADR-015: deployment readiness probes use `/health/ready`
+- ADR-016: client-rendered React SPA, ADR-017: phase plan portability extensions
 
 ### Phase 7 — Completed Deliverables
 - ✅ `TenantValidationBehavior<TRequest, TResult>` — CQRS pipeline tenant enforcement

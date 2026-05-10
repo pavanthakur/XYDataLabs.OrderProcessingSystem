@@ -1273,8 +1273,8 @@ After completing today's tasks, you will have:
 **Current Phase:** Backend Phase 8.5 — Multi-Provider Payment architecture
 **Current Day:** Day 57-59 transition — Azure Functions advanced plus provider-routing and retry-model planning
 **Last Completed Task:** Days 51, 55-56 — Phase 8 event-foundation closeout verified with full integration and architecture coverage
-**Next Milestone:** Phase 8.5 multi-provider payment, then Phase 9 module extraction behind the frozen entry gates
-**Architecture Status:** Phases 1-8 ✅ complete; Track U web cutover ✅ complete; backend Phase 8.5 active next
+**Next Milestone:** Phase 8.5 multi-provider payment, then Phase 8.7 Stripe webhooks, then Phase 9 module extraction plus Aspire-Lite behind the frozen entry gates
+**Architecture Status:** Phases 1-8 ✅ complete; Track U web cutover ✅ complete; backend Phase 8.5 active next; roadmap extended with 8.7, 9.5, and 11.5 portability milestones
 
 ---
 

@@ -21,8 +21,8 @@ Canonical curriculum navigation for the learning track.
 
 - Completed: Days 1-43, Architecture Phases 1-8, and Track U U5 web cutover
 - Current: Phase 8 is verification-closed; the React-first web cutover remains complete and the current backend focus moves to Phase 8.5
-- Next: backend Phase 8.5 multi-provider payment, then Phase 9 module extraction, then Phase 10 Azure transport + DLQ operations behind hard entry gates
+- Next: backend Phase 8.5 multi-provider payment, then Phase 8.7 Stripe webhooks, Phase 9 module extraction plus Aspire-Lite, Phase 9.5 Keycloak portability, and Phase 10 Azure transport + DLQ operations behind hard entry gates
 - Companion planning surface before payment automation implementation: `docs/guides/development/payment-journey-automation-blueprint.md`
 
 Last Updated: May 10, 2026
-Current Focus: Backend Phase 8.5 preparation on top of the verified Phase 8 event-foundation baseline
+Current Focus: Backend Phase 8.5 preparation on top of the verified Phase 8 event-foundation baseline and the newly extended portability roadmap

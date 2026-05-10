@@ -88,7 +88,7 @@ Frontend workspace:
 ├── docs/
 │   ├── README.md                  # Canonical documentation hub
 │   ├── DEVELOPER-OPERATING-MODEL.md # Guided reading order and maintenance rules
-│   ├── architecture/decisions/    # ADRs (ADR-000 through ADR-015)
+│   ├── architecture/decisions/    # ADRs (ADR-000 through ADR-017)
 │   ├── guides/                    # Deployment, configuration, and development guides
 │   ├── internal/                  # Active progress tracker and internal backlog
 │   ├── learning/                  # Curriculum, implementation notes, learning reference
