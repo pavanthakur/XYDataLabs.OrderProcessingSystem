@@ -413,6 +413,11 @@ Shared-flow rule:
 - `XYDataLabs.SideProjects` records product priority, naming, and chosen bootstrap path
 - `XYDataLabs.<ProductName>` becomes the actual implementation repository and the canonical home for product docs and code
 
+Upstream adoption planning rule:
+- the current primary objective is still to finish the upstream platform through its planned phases
+- whenever a new Layer 1 template line, major snapshot seam, future Layer 2 blueprint line, or reusable technology-adoption pattern is validated, review `XYDataLabs.SideProjects` and decide which target products should adopt it now, later, or not at all
+- use limited proof-of-concept bootstrap exercises to validate reuse when helpful, but do not let those exercises become unmanaged side-project development inside the upstream repository
+
 ### 3.2 Prioritized side projects
 
 | # | Side project | Bootstrap source | Realistic MVP |

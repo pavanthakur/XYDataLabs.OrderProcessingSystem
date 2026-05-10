@@ -19,6 +19,19 @@ The intended flow is:
 - `XYDataLabs.SideProjects` is the planning registry that records priority, naming, and chosen bootstrap path.
 - `XYDataLabs.<ProductName>` is the actual implementation repository and becomes the canonical home for product documentation and code.
 
+## Phase Completion Rule
+
+The current primary objective remains finishing `XYDataLabs.OrderProcessingSystem` through all planned phases.
+
+Side-project planning exists so validated outputs from that upstream work can be adopted correctly later, not so side projects replace the upstream roadmap.
+
+Use proof-of-concept product bootstraps only when they help validate reuse of:
+
+- the current Layer 1 NuGet template
+- a new snapshot seam
+- a future Layer 2 blueprint line
+- a reusable technology-adoption pattern from the upstream platform
+
 ## Current Candidate Products
 
 - `AIJobApplication`
