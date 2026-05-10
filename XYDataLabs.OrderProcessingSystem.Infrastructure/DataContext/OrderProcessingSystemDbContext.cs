@@ -1,5 +1,7 @@
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
+using XYDataLabs.OrderProcessingSystem.Application.Events;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
+using XYDataLabs.OrderProcessingSystem.Domain.Events;
 using XYDataLabs.OrderProcessingSystem.Domain.Identifiers;
 using XYDataLabs.OrderProcessingSystem.Domain.ValueObjects;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
@@ -43,6 +45,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
         };
 
         private readonly ITenantProvider? _tenantProvider;
+        private readonly IIntegrationEventMapperRegistry? _integrationEventMapperRegistry;
         private bool _isSavingAuditLogs;
 
         public OrderProcessingSystemDbContext()
@@ -56,10 +59,28 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
 
         public OrderProcessingSystemDbContext(
             DbContextOptions<OrderProcessingSystemDbContext> options,
+            IIntegrationEventMapperRegistry integrationEventMapperRegistry)
+        : base(options)
+        {
+            _integrationEventMapperRegistry = integrationEventMapperRegistry;
+        }
+
+        public OrderProcessingSystemDbContext(
+            DbContextOptions<OrderProcessingSystemDbContext> options,
             ITenantProvider tenantProvider)
         : base(options)
         {
             _tenantProvider = tenantProvider;
+        }
+
+        public OrderProcessingSystemDbContext(
+            DbContextOptions<OrderProcessingSystemDbContext> options,
+            ITenantProvider tenantProvider,
+            IIntegrationEventMapperRegistry integrationEventMapperRegistry)
+        : base(options)
+        {
+            _tenantProvider = tenantProvider;
+            _integrationEventMapperRegistry = integrationEventMapperRegistry;
         }
 
         public virtual DbSet<Tenant> Tenants { get; set; }
@@ -79,7 +100,11 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
         public virtual DbSet<PayinLogDetails> PayinLogDetails { get; set; }
         public virtual DbSet<PaymentMethod> PaymentMethods { get; set; }
         public virtual DbSet<PaymentProvider> PaymentProviders { get; set; }
+        public virtual DbSet<PaymentAttempt> PaymentAttempts { get; set; }
+        public virtual DbSet<PaymentAttemptHistory> PaymentAttemptHistories { get; set; }
         public virtual DbSet<TransactionStatusHistory> TransactionStatusHistories { get; set; }
+        public virtual DbSet<OutboxMessage> OutboxMessages { get; set; }
+        public virtual DbSet<InboxMessage> InboxMessages { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
@@ -199,6 +224,12 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
                 .HasForeignKey(tsh => tsh.TransactionId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            modelBuilder.Entity<PaymentAttemptHistory>()
+                .HasOne(history => history.PaymentAttempt)
+                .WithMany(attempt => attempt.History)
+                .HasForeignKey(history => history.PaymentAttemptId)
+                .OnDelete(DeleteBehavior.Cascade);
+
             modelBuilder.Entity<PayinLog>()
                 .HasOne(pl => pl.PaymentMethod)
                 .WithMany(pm => pm.PayinLogs)
@@ -241,6 +272,31 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
 
             modelBuilder.Entity<PayinLog>()
                 .HasIndex(pl => pl.PaymentTraceId);
+
+            modelBuilder.Entity<PaymentAttempt>()
+                .HasIndex(attempt => new { attempt.TenantId, attempt.AttemptOrderId })
+                .IsUnique();
+
+            modelBuilder.Entity<PaymentAttempt>()
+                .HasIndex(attempt => new { attempt.TenantId, attempt.CustomerOrderId, attempt.AttemptNumber })
+                .IsUnique();
+
+            modelBuilder.Entity<PaymentAttempt>()
+                .HasIndex(attempt => new { attempt.TenantId, attempt.PaymentTraceId });
+
+            modelBuilder.Entity<PaymentAttemptHistory>()
+                .HasIndex(history => new { history.TenantId, history.AttemptOrderId });
+
+            modelBuilder.Entity<OutboxMessage>()
+                .HasIndex(message => new { message.ProcessedAt, message.LockExpiry, message.OccurredUtc });
+
+            modelBuilder.Entity<OutboxMessage>()
+                .HasIndex(message => new { message.TenantId, message.MessageId })
+                .IsUnique();
+
+            modelBuilder.Entity<InboxMessage>()
+                .HasIndex(message => new { message.TenantId, message.MessageId })
+                .IsUnique();
 
             modelBuilder.Entity<TransactionStatusHistory>()
                 .HasIndex(tsh => new { tsh.TenantId, tsh.AttemptOrderId });
@@ -314,6 +370,88 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
                 .Property(pl => pl.ThreeDSecureStage)
                 .HasMaxLength(64);
 
+            modelBuilder.Entity<PaymentAttempt>()
+                .Property(attempt => attempt.Status)
+                .HasConversion<string>()
+                .HasMaxLength(64);
+
+            modelBuilder.Entity<PaymentAttempt>()
+                .Property(attempt => attempt.CustomerOrderId)
+                .HasMaxLength(128);
+
+            modelBuilder.Entity<PaymentAttempt>()
+                .Property(attempt => attempt.AttemptOrderId)
+                .HasMaxLength(128);
+
+            modelBuilder.Entity<PaymentAttempt>()
+                .Property(attempt => attempt.PaymentTraceId)
+                .HasMaxLength(64);
+
+            modelBuilder.Entity<PaymentAttempt>()
+                .Property(attempt => attempt.PaymentProviderName)
+                .HasMaxLength(64);
+
+            modelBuilder.Entity<PaymentAttempt>()
+                .Property(attempt => attempt.ProviderStatus)
+                .HasMaxLength(64);
+
+            modelBuilder.Entity<PaymentAttempt>()
+                .Property(attempt => attempt.ProviderReferenceId)
+                .HasMaxLength(128);
+
+            modelBuilder.Entity<PaymentAttempt>()
+                .Property(attempt => attempt.ProviderChargeId)
+                .HasMaxLength(128);
+
+            modelBuilder.Entity<PaymentAttempt>()
+                .Property(attempt => attempt.LastErrorMessage)
+                .HasMaxLength(512);
+
+            modelBuilder.Entity<PaymentAttemptHistory>()
+                .Property(history => history.Status)
+                .HasConversion<string>()
+                .HasMaxLength(64);
+
+            modelBuilder.Entity<PaymentAttemptHistory>()
+                .Property(history => history.AttemptOrderId)
+                .HasMaxLength(128);
+
+            modelBuilder.Entity<PaymentAttemptHistory>()
+                .Property(history => history.PaymentTraceId)
+                .HasMaxLength(64);
+
+            modelBuilder.Entity<PaymentAttemptHistory>()
+                .Property(history => history.ProviderStatus)
+                .HasMaxLength(64);
+
+            modelBuilder.Entity<PaymentAttemptHistory>()
+                .Property(history => history.Notes)
+                .HasMaxLength(512);
+
+            modelBuilder.Entity<OutboxMessage>()
+                .Property(message => message.EventType)
+                .HasMaxLength(256);
+
+            modelBuilder.Entity<OutboxMessage>()
+                .Property(message => message.CorrelationId)
+                .HasMaxLength(128);
+
+            modelBuilder.Entity<OutboxMessage>()
+                .Property(message => message.CausationId)
+                .HasMaxLength(128);
+
+            modelBuilder.Entity<OutboxMessage>()
+                .Property(message => message.TraceParent)
+                .HasMaxLength(128);
+
+            modelBuilder.Entity<OutboxMessage>()
+                .Property(message => message.LastError)
+                .HasMaxLength(1024);
+
+            modelBuilder.Entity<InboxMessage>()
+                .Property(message => message.EventType)
+                .HasMaxLength(256);
+
             modelBuilder.Entity<PayinLogDetails>()
                 .Property(pld => pld.PaymentTraceId)
                 .HasMaxLength(64);
@@ -345,7 +483,11 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
             ConfigureTenantOwnership<PayinLogDetails>(modelBuilder);
             ConfigureTenantOwnership<PaymentMethod>(modelBuilder);
             ConfigureTenantOwnership<PaymentProvider>(modelBuilder);
+            ConfigureTenantOwnership<PaymentAttempt>(modelBuilder);
+            ConfigureTenantOwnership<PaymentAttemptHistory>(modelBuilder);
             ConfigureTenantOwnership<TransactionStatusHistory>(modelBuilder);
+            ConfigureTenantOwnership<OutboxMessage>(modelBuilder);
+            ConfigureTenantOwnership<InboxMessage>(modelBuilder);
             ConfigureTenantOwnership<OrderProduct>(modelBuilder);
         }
 
@@ -403,8 +545,11 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
             StampTenantOnAddedEntities();
 
             var pendingAuditLogs = CreatePendingAuditLogs();
+            var pendingMappedDomainEvents = PreparePendingMappedDomainEvents();
+            PersistPendingOutboxMessages(pendingMappedDomainEvents.EventEnvelopes);
             var result = base.SaveChanges();
             PersistAuditLogs(pendingAuditLogs);
+            ClearDomainEvents(pendingMappedDomainEvents.Entities);
             return result;
         }
 
@@ -413,9 +558,22 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
             StampTenantOnAddedEntities();
 
             var pendingAuditLogs = CreatePendingAuditLogs();
+            var pendingMappedDomainEvents = PreparePendingMappedDomainEvents();
+            PersistPendingOutboxMessages(pendingMappedDomainEvents.EventEnvelopes);
             var result = await base.SaveChangesAsync(cancellationToken);
             await PersistAuditLogsAsync(pendingAuditLogs, cancellationToken);
+            ClearDomainEvents(pendingMappedDomainEvents.Entities);
             return result;
+        }
+
+        protected virtual void PersistPendingOutboxMessages(IReadOnlyCollection<EventEnvelope> eventEnvelopes)
+        {
+            if (eventEnvelopes.Count == 0)
+            {
+                return;
+            }
+
+            OutboxMessages.AddRange(eventEnvelopes.Select(CreateOutboxMessage));
         }
 
         private void StampTenantOnAddedEntities()
@@ -439,6 +597,122 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
                     }
                 }
             }
+        }
+
+        private PendingMappedDomainEvents PreparePendingMappedDomainEvents()
+        {
+            var entities = ChangeTracker.Entries()
+                .Select(entry => entry.Entity)
+                .OfType<IHasDomainEvents>()
+                .Where(entity => entity.DomainEvents.Count > 0)
+                .Distinct()
+                .ToList();
+
+            if (entities.Count == 0)
+            {
+                return PendingMappedDomainEvents.Empty;
+            }
+
+            if (_integrationEventMapperRegistry is null)
+            {
+                throw new InvalidOperationException("Domain events were raised, but no integration-event mapper registry is registered.");
+            }
+
+            var tenantId = ResolveDomainEventTenantId(entities);
+            var eventEnvelopes = _integrationEventMapperRegistry.Map(
+                entities.SelectMany(entity => entity.DomainEvents),
+                domainEvent => CreateEventEnvelopeMetadata(domainEvent, tenantId));
+
+            return new PendingMappedDomainEvents(entities, eventEnvelopes);
+        }
+
+        private EventEnvelopeMetadata CreateEventEnvelopeMetadata(object domainEvent, int? tenantId)
+        {
+            var activity = Activity.Current;
+            var traceParent = activity?.Id;
+            var correlationId = activity?.TraceId.ToString();
+            var causationId = activity is { ParentSpanId: var parentSpanId } && parentSpanId != default
+                ? parentSpanId.ToString()
+                : null;
+
+            return EventEnvelopeMetadata.Create(
+                ResolveOccurredUtc(domainEvent),
+                correlationId,
+                causationId,
+                traceParent,
+                tenantId);
+        }
+
+        private int? ResolveDomainEventTenantId(IReadOnlyCollection<IHasDomainEvents> entities)
+        {
+            if (_tenantProvider is { HasTenantContext: true })
+            {
+                return _tenantProvider.TenantId;
+            }
+
+            var resolvedTenantIds = entities
+                .Select(entity => entity switch
+                {
+                    BaseAuditableEntity auditable => auditable.TenantId,
+                    BaseAuditableCreateEntity auditableCreate => auditableCreate.TenantId,
+                    _ => 0,
+                })
+                .Where(tenantId => tenantId > 0)
+                .Distinct()
+                .ToList();
+
+            if (resolvedTenantIds.Count > 1)
+            {
+                throw new InvalidOperationException("Domain events from multiple tenants cannot be persisted in the same save operation.");
+            }
+
+            return resolvedTenantIds.Count == 1 ? resolvedTenantIds[0] : null;
+        }
+
+        private static OutboxMessage CreateOutboxMessage(EventEnvelope eventEnvelope)
+        {
+            return new OutboxMessage
+            {
+                TenantId = eventEnvelope.TenantId ?? 0,
+                MessageId = eventEnvelope.MessageId,
+                EventType = eventEnvelope.EventType,
+                SchemaVersion = eventEnvelope.SchemaVersion,
+                OccurredUtc = eventEnvelope.OccurredUtc,
+                Payload = JsonSerializer.Serialize(eventEnvelope.Payload, AuditJsonSerializerOptions),
+                CorrelationId = eventEnvelope.CorrelationId,
+                CausationId = eventEnvelope.CausationId,
+                TraceParent = eventEnvelope.TraceParent,
+                CreatedDate = eventEnvelope.OccurredUtc,
+            };
+        }
+
+        private static DateTime ResolveOccurredUtc(object domainEvent)
+        {
+            var occurredUtcProperty = domainEvent.GetType().GetProperty("OccurredUtc");
+            if (occurredUtcProperty?.PropertyType == typeof(DateTime)
+                && occurredUtcProperty.GetValue(domainEvent) is DateTime occurredUtc)
+            {
+                return occurredUtc;
+            }
+
+            return DateTime.UtcNow;
+        }
+
+        private static void ClearDomainEvents(IEnumerable<IHasDomainEvents> entities)
+        {
+            foreach (var entity in entities)
+            {
+                entity.ClearDomainEvents();
+            }
+        }
+
+        private sealed record PendingMappedDomainEvents(
+            IReadOnlyCollection<IHasDomainEvents> Entities,
+            IReadOnlyCollection<EventEnvelope> EventEnvelopes)
+        {
+            public static PendingMappedDomainEvents Empty { get; } = new(
+                Array.Empty<IHasDomainEvents>(),
+                Array.Empty<EventEnvelope>());
         }
 
         private List<PendingAuditLog> CreatePendingAuditLogs()

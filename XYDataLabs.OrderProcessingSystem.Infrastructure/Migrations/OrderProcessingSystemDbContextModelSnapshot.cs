@@ -343,6 +343,42 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                     b.ToTable("Customers");
                 });
 
+            modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.InboxMessage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<Guid>("MessageId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("ProcessedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("TenantId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "MessageId")
+                        .IsUnique();
+
+                    b.ToTable("InboxMessages");
+                });
+
             modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.Order", b =>
                 {
                     b.Property<int>("OrderId")
@@ -430,6 +466,82 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                     b.HasIndex("TenantId");
 
                     b.ToTable("OrderProducts");
+                });
+
+            modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.OutboxMessage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CausationId")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(1024)
+                        .HasColumnType("nvarchar(1024)");
+
+                    b.Property<DateTime?>("LockExpiry")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("MessageId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("OccurredUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ProcessedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("PublishAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SchemaVersion")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TenantId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TraceParent")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "MessageId")
+                        .IsUnique();
+
+                    b.HasIndex("ProcessedAt", "LockExpiry", "OccurredUtc");
+
+                    b.ToTable("OutboxMessages");
                 });
 
             modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.PayinLog", b =>
@@ -578,6 +690,137 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                     b.HasIndex("TenantId");
 
                     b.ToTable("PayinLogDetails");
+                });
+
+            modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.PaymentAttempt", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AttemptNumber")
+                        .HasColumnType("int");
+
+                    b.Property<string>("AttemptOrderId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CustomerOrderId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("LastErrorMessage")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<string>("PaymentProviderName")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("PaymentTraceId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("ProviderChargeId")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("ProviderReferenceId")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("ProviderStatus")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("TenantId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "AttemptOrderId")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "PaymentTraceId");
+
+                    b.HasIndex("TenantId", "CustomerOrderId", "AttemptNumber")
+                        .IsUnique();
+
+                    b.ToTable("PaymentAttempts");
+                });
+
+            modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.PaymentAttemptHistory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AttemptOrderId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<int>("PaymentAttemptId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PaymentTraceId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("ProviderStatus")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("TenantId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PaymentAttemptId");
+
+                    b.HasIndex("TenantId", "AttemptOrderId");
+
+                    b.ToTable("PaymentAttemptHistories");
                 });
 
             modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.PaymentMethod", b =>
@@ -906,6 +1149,15 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.InboxMessage", b =>
+                {
+                    b.HasOne("XYDataLabs.OrderProcessingSystem.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.Order", b =>
                 {
                     b.HasOne("XYDataLabs.OrderProcessingSystem.Domain.Entities.Customer", "Customer")
@@ -948,6 +1200,15 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                     b.Navigation("Product");
                 });
 
+            modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.OutboxMessage", b =>
+                {
+                    b.HasOne("XYDataLabs.OrderProcessingSystem.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.PayinLog", b =>
                 {
                     b.HasOne("XYDataLabs.OrderProcessingSystem.Domain.Entities.PaymentMethod", "PaymentMethod")
@@ -979,6 +1240,32 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("PayinLog");
+                });
+
+            modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.PaymentAttempt", b =>
+                {
+                    b.HasOne("XYDataLabs.OrderProcessingSystem.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.PaymentAttemptHistory", b =>
+                {
+                    b.HasOne("XYDataLabs.OrderProcessingSystem.Domain.Entities.PaymentAttempt", "PaymentAttempt")
+                        .WithMany("History")
+                        .HasForeignKey("PaymentAttemptId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("XYDataLabs.OrderProcessingSystem.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("PaymentAttempt");
                 });
 
             modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.PaymentMethod", b =>
@@ -1058,6 +1345,11 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
             modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.PayinLog", b =>
                 {
                     b.Navigation("PayinLogDetails");
+                });
+
+            modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.PaymentAttempt", b =>
+                {
+                    b.Navigation("History");
                 });
 
             modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.PaymentMethod", b =>

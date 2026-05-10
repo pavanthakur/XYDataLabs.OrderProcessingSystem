@@ -1,7 +1,7 @@
 # Architecture Evolution: Monolith to Enterprise Microservices
 
-**Last Updated:** April 28, 2026
-**Current Status:** Phase 7 Strict Closeout Verified ✅ | Track U U5 Complete ✅ | Backend Phase 8 Active Next 📅 | Phases 8.5-14 Planned 📅
+**Last Updated:** May 10, 2026
+**Current Status:** Phase 8 Closeout Matrix Validation Passed ✅ | Track U U5 Complete ✅ | Backend Phase 8.5 Active Next 📅 | Phases 8.7, 9, 9.5, 10, 11, 11.5, 12-14 Planned 📅
 
 ---
 
@@ -12,6 +12,25 @@ This document tracks the architectural evolution of the XYDataLabs Order Process
 event-driven microservices platform with YARP gateway, Azure Container Apps, .NET Aspire
 orchestration, Azure Service Bus messaging, multi-tenancy, and CQRS read/write separation
 with MongoDB.
+
+---
+
+## 🛡️ Mandatory Phase Closeout Quality Gate
+
+Before marking **any** architectural phase as complete, the following end-to-end success criteria must be met and verified:
+1. **Docker Containerization Validation:** All modified or newly introduced services must successfully build, launch, and run correctly via the mapped Docker environment profiles (`dev`, `stg`, `prod`) with Docker SQL as the only valid runtime path.
+2. **Integration Test Verification:** The backend integration test suite must pass against the active Docker validation slice, confirming database access and domain logic constraints are met.
+3. **End-to-End Automation Coverage:** Playwright E2E automation (in the `automation/` workspace) must successfully navigate the full frontend-to-backend-to-payment cycle against the running containers without errors.
+
+For phases that touch Docker runtime orchestration, payment automation runtime targets, or phase-closeout workflow surfaces, the closeout evidence must now be captured with the generated Docker validation bundle:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\generate-docker-validation-bundle.ps1 -Environment dev -Profile http
+```
+
+The bundle is written under `automation/reports/docker-validation/<bundleId>/` and must include `summary.md`, `summary.json`, raw test logs, target startup logs, and the referenced automation report path for the closeout session.
+
+Any phase missing confirmed verifiable passes on these three metrics cannot be formally closed.
 
 ---
 
@@ -322,7 +341,7 @@ Phase 7 verification freeze passed on April 10, 2026. The final strict closeout 
 
 ---
 
-## Phase 8 — Event-Driven Foundation 📅
+## Phase 8 — Event-Driven Foundation ✅
 
 **Focus:** Freeze event contracts inside the monolith, make business state changes recoverable,
 and keep transport in-process until Phase 10.
@@ -398,6 +417,20 @@ and keep transport in-process until Phase 10.
 - Architecture tests enforcing the boundary above are green.
 - All six Phase 8 test categories pass.
 
+### Current Closeout Status
+
+Phase 8 closeout is now verified on the current branch. The explicit closeout evidence is green for all six required categories:
+
+- rollback leaves no outbox row
+- duplicate message is harmless
+- parallel handlers remain independent
+- publisher restart replays previously unprocessed rows
+- reconciliation resolves `UnknownNeedsReconciliation`
+- cross-tenant isolation is preserved
+- architecture boundary tests are green
+
+Future phase freezes that touch Docker runtime orchestration or payment automation must record the real Docker proof run with `scripts/generate-docker-validation-bundle.ps1` under `automation/reports/docker-validation/`; the dry-run automation matrix remains a separate governance gate for shared automation asset changes.
+
 ### Outcome
 
 Loose coupling, recoverable payment workflows, idempotent delivery, and a transport-agnostic event backbone that can be swapped to Azure Service Bus later without redesigning contracts.
@@ -465,12 +498,27 @@ Every Stripe charge carries an idempotency key to prevent double-charging on ret
 
 OpenPay does not have native idempotency support — the existing `AttemptOrderId` + `PayinLog` reconciliation pattern remains the safety net for OpenPay tenants.
 
+### Retry Policy (Stripe, Production Rules)
+
+The generic payment-retry pattern is appropriate for Stripe only when it is narrowed into an explicit enterprise retry policy. The system must not treat every failed charge as retryable.
+
+- **Retry scope is explicit** — automatic retries are allowed only for transient pre-accept failures such as connection drops before a Stripe response is confirmed, HTTP 5xx responses, or HTTP 429 with bounded backoff.
+- **Provider-accepted responses are never blindly retried** — once Stripe may have accepted the request, the attempt moves to reconciliation instead of issuing a second charge call. `PaymentAttempt` becomes the source of truth for this boundary.
+- **Customer-action failures are not retried** — insufficient funds, expired card, invalid payment details, authentication-required outcomes, fraud blocks, and hard declines are terminal attempt results that require user action or operational review.
+- **Attempt identity is stable** — one `AttemptOrderId` maps to one Stripe idempotency key and one append-only attempt history. Retries reuse the same idempotency key until the attempt is resolved.
+- **Retry budget is bounded** — retry count, backoff window, and terminal escalation path are configuration-driven and observable. Infinite or open-ended retry loops are forbidden.
+- **Unknown outcomes reconcile first** — if the local process loses certainty after sending the request, the attempt transitions to `UnknownNeedsReconciliation` and the reconciliation worker queries Stripe before any further action is taken.
+- **Append-only history is mandatory** — `PaymentAttempt` state changes and external status observations are recorded as immutable history rows so operators can reconstruct the full payment timeline.
+- **Provider portability is preserved** — retry classification lives above the adapter boundary so Stripe-specific idempotency is used where available without forcing unsafe automatic retries onto OpenPay.
+
 ### What Gets Added
 
 - `XYDataLabs.OpenPayAdapter/StripeAdapterService.cs` — `IPaymentAdapterService` implementation using `Stripe.net`
 - `XYDataLabs.OpenPayAdapter/ServiceCollectionExtensions.cs` — register both adapters as keyed services
 - `PaymentProvider.ProviderType` column + EF migration
 - Handler updated to resolve adapter from keyed DI instead of direct injection
+- `PaymentAttempt` retry classification + reconciliation rules so Stripe retries remain idempotent, bounded, and auditable in production
+- Webhook receiver endpoint scaffolding (Phase 8.7 implements signature validation and event projection)
 
 All Application and Domain code above the adapter boundary remains unchanged.
 
@@ -483,6 +531,52 @@ All Application and Domain code above the adapter boundary remains unchanged.
 ### Outcome
 
 Both providers run concurrently. Each tenant's processor is a data-driven runtime decision. New tenants onboard to Stripe (async-native, idempotency-safe, actively maintained). Existing OpenPay tenants continue unaffected. The `IPaymentAdapterService` contract abstracts all provider-specific differences from the application layer.
+
+---
+
+## Phase 8.7 — Stripe Webhook Receiver & Event-Driven Payment Lifecycle 📅
+
+**Focus:** Process Stripe-originated payment lifecycle events securely and idempotently. This phase decouples local payment state from synchronous adapter polling — Stripe authoritatively pushes `payment_intent.succeeded`, `charge.refunded`, `charge.dispute.created`, and similar events to our backend.
+
+### Why This Phase Is Required
+
+Real-world payment systems cannot rely on synchronous response data alone. Asynchronous outcomes (3DS challenge completion, delayed bank authorisation, refunds, chargebacks, dispute lifecycle) arrive **after** the original request has returned. Without a webhook pipeline:
+- 3DS-authorised payments stay marked `UnknownNeedsReconciliation` indefinitely
+- Refunds initiated from the Stripe dashboard never reach our domain model
+- Chargebacks/disputes are missed until manual finance reconciliation
+
+### Key Deliverables
+
+- **Webhook endpoint** — `POST /api/v1/webhooks/stripe` with raw-body buffering required for HMAC validation (cannot use parsed JSON model binding)
+- **Signature validation** — `Stripe.EventUtility.ConstructEvent(json, signatureHeader, webhookSecret)` rejects forged or replayed payloads
+- **Webhook secret per environment** — stored in Key Vault, rotated independently from API keys; environment-scoped (test/live)
+- **Inbox idempotency** — every Stripe event has a unique `event.id`; Inbox table (Phase 8) deduplicates webhook deliveries (Stripe retries up to 3 days on non-2xx)
+- **Event-to-domain mapping** — typed handlers per Stripe event type (`PaymentIntentSucceededHandler`, `ChargeRefundedHandler`, `ChargeDisputeCreatedHandler`)
+- **Outbox bridge** — webhook-derived state transitions emit domain events through the Outbox so internal subscribers (notifications, fulfilment) see them through the same pipeline as locally-originated events
+- **Tenant resolution from metadata** — Stripe `metadata.tenantId` set on every PaymentIntent at creation; webhook handler restores tenant context before invoking domain logic
+- **Replay endpoint** (admin-only) — `POST /admin/webhooks/stripe/replay/{eventId}` re-processes a specific event from Stripe's event log when reconciliation is needed
+- **Local development** — Stripe CLI (`stripe listen --forward-to https://localhost:5021/api/v1/webhooks/stripe`) for testing without a public endpoint
+- **Failure isolation** — webhook returns 2xx as soon as the event is durably persisted to Inbox; downstream processing happens asynchronously so a slow handler does not cause Stripe to retry
+
+### Security Rules (Non-Negotiable)
+
+- **Never trust webhook payload without signature validation** — drop the request before any deserialization if signature check fails
+- **Replay attack mitigation** — reject events older than 5 minutes (per `event.created` timestamp); legitimate retries always carry the same `event.id` so Inbox handles those correctly
+- **Tenant isolation in webhook** — handler must resolve tenant from `metadata.tenantId` and apply tenant context filters before any DB access; never trust customer ID alone
+- **Webhook secret rotation** — support overlap window with two valid secrets during rotation (`Stripe.WebhookEndpoint.Update` + dual-secret validator)
+
+### Connection to Phase 10
+
+When Service Bus replaces the in-memory event bus in Phase 10, webhook-derived events flow through the same `order-events`/`payment-events` topics as locally-originated events. The webhook receiver remains a stateless Container App with public ingress; downstream handlers continue consuming from Service Bus subscriptions. No handler code changes between phases.
+
+### Builds On
+
+- Phase 8 (Inbox pattern for idempotency, Outbox for downstream propagation)
+- Phase 8.5 (Stripe SDK integration, `metadata.tenantId` convention)
+
+### Outcome
+
+Production-grade asynchronous payment lifecycle handling. Stripe is the system of record for charge state; our domain model converges via signed, idempotent, tenant-aware webhook events. Refund and dispute events propagate to internal subscribers through the same Outbox pipeline as locally-originated changes.
 
 ---
 
@@ -689,9 +783,67 @@ services:
 - One request flowing Orders → Inventory → Notifications produces one trace in Application Insights with all module spans present and the envelope `CorrelationId` attached to each span.
 - Event envelope, handler signatures, and retry semantics are identical to Phase 8 — no drift during extraction.
 
+### Aspire-Lite — Local Orchestration Track (Parallel)
+
+.NET Aspire `AppHost` is introduced **alongside** Docker Compose in Phase 9, not deferred to Phase 13. Both orchestrators target the same containerized service set:
+
+- **Aspire AppHost** — `XYDataLabs.OrderProcessingSystem.AppHost` project added; `builder.AddProject<Orders>()`, `builder.AddProject<Inventory>()`, `builder.AddSqlServer()`, `builder.AddRedis()`
+- **Service discovery** — Aspire-managed; eliminates hardcoded URLs in inter-service `HttpClient` registrations
+- **Aspire dashboard** — used as the primary local observability surface; complements (does not replace) App Insights for cloud environments
+- **Docker Compose retained** — covers strict CI scenarios, the Playwright matrix bundle, and contributors who do not yet have the Aspire workload installed
+- **Phase 13 then deepens** — `DistributedApplicationTestingBuilder` integration tests, Aspire manifest → ACA deployment, advanced resource composition
+
+This ordering matches modern cloud-native developer experience expectations: Aspire is the inner-loop orchestrator the moment services exist, not an end-state luxury.
+
+### Cross-Cutting Modernization (Aligned with .NET 10 Aspire Blueprint)
+
+Reviewed against the canonical Microsoft `dotnet-backend-blueprint-v-10` reference template (Aspire 13 + ACA + Keycloak + PostgreSQL). The following tactical refinements are adopted as Phase 9 deliverables — they support the microservice extraction without altering domain behaviour:
+
+- **`XYDataLabs.OrderProcessingSystem.ServiceDefaults` project** — new shared project referenced by every service host. Houses the canonical extension chain `AddServiceDefaults()` → `ConfigureOpenTelemetry()` + `AddDefaultHealthChecks()` + `AddServiceDiscovery()` + `ConfigureHttpClientDefaults(http => http.AddStandardResilienceHandler())`. Today these concerns are split between `SharedKernel` and individual `Program.cs` files; consolidating them is a prerequisite for clean per-service composition. Reinforces ADR-012 (OpenTelemetry dual export).
+- **`MapDefaultEndpoints()` extension** — standardizes `/health/ready` (full readiness, gates traffic) and `/health/alive` (liveness only) across every service host. Aligns with ADR-015 (deployment readiness probes) and removes duplicated health endpoint registration in each service.
+- **`IConfigureNamedOptions<JwtBearerOptions>` setup pattern** — replaces inline JWT wiring in `Program.cs` with a dedicated `JwtBearerOptionsSetup` registered via `ConfigureOptions<>()`. Required mechanism for Phase 9.5 (Keycloak portability) which adds a second JWT scheme via `AddPolicyScheme`.
+- **`IExceptionHandler` + `AddProblemDetails` + `UseExceptionHandler`** — confirm or migrate to the .NET 8+ idiomatic exception pipeline producing RFC 7807 ProblemDetails. This is the contract Stripe webhooks (Phase 8.7) and external partners expect; it must be in place before microservices accept inbound traffic from a gateway.
+- **EF Core `UseAsyncSeeding` for reference data** — EF 9 idiomatic seeding hook on `DbContextOptionsBuilder`. Replaces ad-hoc startup seed code; particularly useful before Phase 11.5's PostgreSQL pilot which re-seeds the Notifications module on a different RDBMS provider.
+
+**Deliberately not adopted from the blueprint:** vertical-slice replacement of Clean Architecture (ADR-011 enforces our domain boundaries), Keycloak as production IdP (Entra ID + Managed Identity remain authoritative — Phase 9.5 only proves portability), PostgreSQL as primary RDBMS (Phase 11.5 pilots one module only), single-workflow CI/CD (our split workflow is intentional per `architect-patterns.md`).
+
 ### Outcome
 
-Module-isolated, locally deployable services with proven PublicApi boundaries, a first-class Payments module, and unchanged event semantics ready for the Phase 10 transport swap.
+Module-isolated, locally deployable services with proven PublicApi boundaries, a first-class Payments module, dual orchestration (Docker Compose for CI + Aspire AppHost for inner-loop), a shared `ServiceDefaults` project, and unchanged event semantics ready for the Phase 10 transport swap.
+
+---
+
+## Phase 9.5 — Cloud-Portable Identity Showcase (Keycloak Local) 📅
+
+**Focus:** Demonstrate identity-provider portability by running Keycloak locally as a drop-in OIDC provider, validating that JWT auth works against any compliant IdP — not only Entra ID.
+
+### Why This Phase Is Required
+
+Enterprise architecture must avoid lock-in to a single identity provider. Phase 10 wires Entra ID + JWT for cloud deployment, but the **same `JwtBearerOptions` configuration must accept tokens from Keycloak with only `Authority` and `Audience` changes**. This phase proves that portability with a runnable local demo.
+
+### Key Deliverables
+
+- **Local Keycloak container** — added to Docker Compose `dev` profile (port 8080); pre-seeded realm `orderprocessing-dev` with three test tenants and roles (`admin`, `operator`, `customer`)
+- **OIDC discovery configuration** — `JwtBearerOptions.Authority = http://keycloak:8080/realms/orderprocessing-dev`; same `JwtBearerHandler`, no custom token validation code
+- **Multi-IdP runtime selection** — `AuthenticationScheme` per IdP (`KeycloakBearer`, `EntraBearer`); policy-based scheme selection via `AddPolicyScheme` for environment-aware routing
+- **Claims transformation parity** — `ITenantClaimsTransformation` extracts `tenantId` from either Keycloak `realm_access.attributes.tenantId` or Entra `extension_TenantId` claim; downstream code sees the same `ClaimsPrincipal` shape
+- **Frontend integration** — React SPA's auth provider configured to use Keycloak in local docker, Entra in cloud; same `oidc-client-ts` library, only the discovery URL changes
+- **Documentation deliverable** — `docs/architecture/identity-portability.md` proving the configuration delta between Entra ID and Keycloak is < 10 lines
+
+### What This Phase Does NOT Do
+
+- Does **not** replace Entra ID in cloud environments — Entra remains the authoritative IdP for `staging` and `prod`
+- Does **not** introduce Keycloak as a managed Azure service — Keycloak runs locally only; cloud deployments continue with Entra ID
+- Does **not** federate Keycloak ↔ Entra — federation is a Phase 12+ topic if business requirements emerge
+
+### Builds On
+
+- Phase 9 (Docker Compose infrastructure for local Keycloak container)
+- Phase 10 (JWT validation pipeline already in place — this phase swaps the IdP, not the auth model)
+
+### Outcome
+
+Identity-provider portability proven with a runnable local demo. The team has hands-on Keycloak experience (a major OSS skill in the .NET cloud-native ecosystem) without compromising the production Entra ID strategy. The architecture's auth pipeline is now demonstrably IdP-agnostic.
 
 ---
 
@@ -907,6 +1059,51 @@ Independent, fully decoupled services with clear data ownership, Durable Functio
 
 ---
 
+## Phase 11.5 — Polyglot Persistence Showcase (PostgreSQL Module) 📅
+
+**Focus:** Demonstrate database-engine portability by migrating one module's persistence layer to PostgreSQL while the rest of the system continues on Azure SQL. Proves the EF Core abstraction holds against a different RDBMS without leaking provider details into Domain or Features.
+
+### Why This Phase Is Required
+
+- **Cloud-portability proof** — Azure SQL is excellent but expensive at scale; PostgreSQL on Azure Database for PostgreSQL Flexible Server (or AWS RDS, GCP Cloud SQL) is a common cost-driven alternative
+- **Open-source alignment** — PostgreSQL is the dominant OSS RDBMS in modern .NET cloud-native stacks (Julio Casal stack, Aspire integrations, EF Core first-class provider)
+- **Skill demonstration** — proves the team can operate heterogeneous persistence without rewriting business logic
+
+### Selected Module: Notifications
+
+`Notifications` is chosen because:
+- Its data shape (event log, template store, delivery audit) is naturally PostgreSQL-friendly (JSONB for flexible delivery metadata, full-text search on template content)
+- It has the lowest cross-module read coupling — Phase 11 already established it owns its own data
+- Failure of this experiment does not affect Orders or Payments revenue paths
+
+### Key Deliverables
+
+- **`Npgsql.EntityFrameworkCore.PostgreSQL` provider** — replaces `Microsoft.EntityFrameworkCore.SqlServer` in the Notifications module's Infrastructure project only
+- **Provider-agnostic EF Core abstractions enforced** — architecture test verifies `Notifications.Domain` and `Notifications.Features` reference no provider-specific types (no `SqlServer.*`, no `Npgsql.*` leaks above the Infrastructure layer)
+- **JSONB column for delivery metadata** — `NotificationDeliveryLog.ProviderResponse` typed as `JsonDocument` with `HasColumnType("jsonb")` mapping; demonstrates leveraging native PG features without breaking the abstraction
+- **PG migrations** — separate `Notifications.Infrastructure.Migrations.Postgres` migration history; existing SQL Server migrations remain untouched
+- **Local Docker** — `postgres:16-alpine` added to Docker Compose alongside `mcr.microsoft.com/mssql/server`
+- **Cloud target** — Azure Database for PostgreSQL Flexible Server in `staging` and `prod` (separate Bicep module, private endpoint, managed identity auth)
+- **Connection string strategy** — same `IConfiguration` key, different connection string per provider; `ServiceCollectionExtensions.AddNotificationsModule()` selects provider via `appsettings`
+- **Backup / DR alignment** — PG backup retention parity with Azure SQL configured; restore runbook documented
+
+### What This Phase Does NOT Do
+
+- Does **not** migrate Orders, Inventory, or Payments — those remain on Azure SQL (revenue-critical, established operational baseline)
+- Does **not** introduce a different ORM — EF Core remains the single data-access library; only the provider changes
+- Does **not** attempt cross-database transactions — the Outbox/Inbox pattern (Phase 8) already removes that need
+
+### Builds On
+
+- Phase 11 (database-per-service ownership — required precondition; cannot mix providers in a shared schema)
+- Phase 6/8 (EF Core abstractions, Outbox pattern, eventual consistency model)
+
+### Outcome
+
+Provider-portability proven with one module running PostgreSQL end-to-end (local Docker → Azure Flexible Server). Architecture tests enforce that the abstraction remains clean. The team has operational PostgreSQL experience (replication, vacuum, JSONB indexing, role/grant model) — the dominant OSS RDBMS skill set in modern .NET cloud-native engineering.
+
+---
+
 ## Phase 12 — Platform Engineering & DevOps 📅
 
 **Focus:** Operational excellence — configuration, observability dashboards, and advanced resilience.
@@ -933,22 +1130,20 @@ Scalable, manageable production platform with enterprise-grade operations, advan
 
 ## Phase 13 — Aspire & Developer Experience 📅
 
-**Focus:** Developer inner-loop experience with .NET Aspire.
+**Focus:** Developer inner-loop experience deepening, on top of the Aspire-Lite track introduced in Phase 9.
 
 ### Key Deliverables
 
-- Adopt **.NET Aspire** for local orchestration and service composition
-- **AppHost project** — replaces Docker Compose for local development
-- **Resource definitions** — `builder.AddRedis()`, `builder.AddSqlServer()`, `builder.AddProject<OrdersAPI>()` etc.
-- **Service discovery** — Aspire-managed service resolution (no hardcoded URLs)
-- **Dashboard** — Aspire dashboard for local traces, logs, and metrics
-- **Integration tests** — `DistributedApplicationTestingBuilder` for end-to-end tests against the Aspire graph
-- Full end-to-end trace correlation across all services
-- **Aspire manifest** → ACA deployment via `azd` or Bicep
+- **Deepen .NET Aspire adoption** — Aspire-Lite (`AppHost` + service discovery + dashboard) was already introduced in Phase 9; Phase 13 promotes it from "alongside Docker Compose" to the primary inner-loop orchestrator
+- **Resource composition refinements** — advanced patterns: `WithReference()`, `WaitFor()`, `WithEnvironment()` ReferenceExpressions, persistent container lifetimes for stateful resources, run-mode vs publish-mode resource graph differences
+- **Integration tests** — `DistributedApplicationTestingBuilder` for end-to-end tests against the live Aspire graph; replaces hand-stitched `WebApplicationFactory` compositions where multi-service interaction is under test
+- **Full end-to-end trace correlation** across all services via the OTEL pipeline already standardized in the Phase 9 `ServiceDefaults` project
+- **Evaluate `azd` + Aspire-generated manifest as an ACA deployment path** — the .NET 10 blueprint reference uses `aspire deploy` / `azd provision` + `azd deploy` driving Aspire-generated Bicep. Compare against our hand-authored `infra/` Bicep on three axes: audit traceability (production), iteration speed (non-prod), and parameterization granularity. **Outcome captured in a new ADR**: either adopt `azd` for non-revenue-critical environments while keeping hand-authored Bicep for production, or remain on hand-authored Bicep across all environments with documented rationale.
+- **.NET LTS upgrade window** — if not already done, Phase 13 is the natural moment to evaluate upgrading from .NET 8 to the current LTS (.NET 10 GA Nov 2025). Captured under its own ADR with a compatibility matrix for EF Core, Aspire, and Azure SDK packages.
 
 ### Outcome
 
-Enterprise-grade, cloud-native system with excellent developer inner-loop experience and integration-tested service graph.
+Enterprise-grade, cloud-native system with excellent developer inner-loop experience, integration-tested service graph, and an explicit recorded decision on `azd`-vs-hand-authored Bicep for ACA deployment.
 
 ---
 
@@ -1081,15 +1276,23 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
      │
      ├── Phase 8     ─── 📅 Event-driven core (Outbox + events inside monolith)
      │
-     ├── Phase 9     ─── 📅 Extract services locally (YARP + Docker Compose)
+     ├── Phase 8.5   ─── 📅 Multi-provider payment (Stripe alongside OpenPay)
+     │
+     ├── Phase 8.7   ─── 📅 Stripe webhooks (signed, idempotent, tenant-aware)
+     │
+     ├── Phase 9     ─── 📅 Extract services locally (YARP + Docker Compose + Aspire-Lite)
+     │
+     ├── Phase 9.5   ─── 📅 Cloud-portable identity (local Keycloak demo)
      │
      ├── Phase 10    ─── 📅 Deploy to ACA + Service Bus + APIM + Functions
      │
      ├── Phase 11    ─── 📅 Split databases (each service owns its data)
      │
+     ├── Phase 11.5  ─── 📅 Polyglot persistence (Notifications module on PostgreSQL)
+     │
      ├── Phase 12    ─── 📅 Platform engineering (App Config, CI/CD, dashboards)
      │
-     ├── Phase 13    ─── 📅 Aspire orchestration + advanced deployments
+     ├── Phase 13    ─── 📅 Aspire deepening (testing, manifest → azd, advanced composition)
      │
      └── Phase 14    ─── 📅 CQRS read model (Cosmos DB) — final architecture
 ```
@@ -1099,11 +1302,16 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 | Transition | Why it must come first |
 |------------|----------------------|
 | Phase 7 before 8 | Tenant safety must be enforced before events carry tenant context |
+| Phase 8 before 8.5 | Outbox + Inbox required for Stripe idempotency keys and webhook deduplication |
+| Phase 8.5 before 8.7 | Stripe SDK + tenant metadata convention must exist before webhook handlers can resolve context |
+| Phase 8.7 before 9 | Webhook receiver lives in monolith first; carried unchanged into microservice extraction |
 | Phase 8 before 9 | Events must exist before services can communicate asynchronously |
+| Phase 9 before 9.5 | Docker Compose infrastructure required to host local Keycloak container |
 | Phase 9 before 10 | Validate microservices locally before deploying to cloud |
 | Phase 10 before 11 | Cloud infrastructure must exist before splitting databases |
+| Phase 11 before 11.5 | Database-per-service ownership required before swapping a single module's RDBMS provider |
 | Phase 11 before 12 | Data ownership enables per-service CI/CD pipelines |
-| Phase 12 before 13 | Platform foundations needed before Aspire adoption |
+| Phase 12 before 13 | Platform foundations needed before Aspire deepening |
 | Phase 13 before 14 | Aspire orchestration simplifies MongoDB integration |
 
 ---
@@ -1370,5 +1578,5 @@ All technical skills from a typical Azure .NET senior role are fully covered or 
 
 ---
 
-**Last Updated:** April 28, 2026
-**Status:** Phase 7 Strict Closeout Verified ✅ | Track U U5 Complete ✅ | Backend Phase 8 Active Next 📅 | Phases 8.5-14 Planned 📅
+**Last Updated:** May 10, 2026
+**Status:** Phase 8 Closeout Matrix Validation Passed ✅ | Track U U5 Complete ✅ | Backend Phase 8.5 Active Next 📅 | Phases 8.7, 9, 9.5, 10, 11, 11.5, 12-14 Planned 📅

@@ -158,6 +158,9 @@ public sealed class DedicatedTenantTests : IAsyncLifetime
 
         await SeedTenantRowInDedicatedDbAsync(dedicatedTenant);
 
+        var isoSuffix = Guid.NewGuid().ToString("N")[..8];
+        var isoEmail = $"dedicated-iso-{isoSuffix}@test.com";
+
         await _routingFactory.ExecuteTenantDbContextAsync(
             dedicatedTenant.ToTenantContext(),
             async dbContext =>
@@ -165,7 +168,7 @@ public sealed class DedicatedTenantTests : IAsyncLifetime
                 var customer = new Customer
                 {
                     Name = "Dedicated-Isolation Customer",
-                    Email = "dedicated-iso@test.com",
+                    Email = isoEmail,
                     TenantId = dedicatedTenant.TenantId,
                     CreatedBy = 1,
                     CreatedDate = DateTime.UtcNow
@@ -177,7 +180,7 @@ public sealed class DedicatedTenantTests : IAsyncLifetime
 
         // Verify: dedicated tenant's data exists in dedicated DB via direct SQL.
         var dedicatedCustomerCount = await CountCustomersByEmailAsync(
-            _fixture.DedicatedDbConnectionString, "dedicated-iso@test.com");
+            _fixture.DedicatedDbConnectionString, isoEmail);
         dedicatedCustomerCount.Should().Be(1, because: "the customer was routed to the dedicated DB");
 
         // Verify: shared pool tenant's data is NOT in the dedicated DB.
@@ -194,6 +197,9 @@ public sealed class DedicatedTenantTests : IAsyncLifetime
 
         await SeedTenantRowInDedicatedDbAsync(dedicatedTenant);
 
+        var uniqueOnlySuffix = Guid.NewGuid().ToString("N")[..8];
+        var onlyEmail = $"dedicated-only-{uniqueOnlySuffix}@test.com";
+
         // Write to dedicated DB through routing factory.
         await _routingFactory.ExecuteTenantDbContextAsync(
             dedicatedTenant.ToTenantContext(),
@@ -202,7 +208,7 @@ public sealed class DedicatedTenantTests : IAsyncLifetime
                 dbContext.Customers.Add(new Customer
                 {
                     Name = "Dedicated-Only Customer",
-                    Email = "dedicated-only@test.com",
+                    Email = onlyEmail,
                     TenantId = dedicatedTenant.TenantId,
                     CreatedBy = 1,
                     CreatedDate = DateTime.UtcNow
@@ -213,7 +219,7 @@ public sealed class DedicatedTenantTests : IAsyncLifetime
 
         // Query shared DB directly — the dedicated tenant's data must not be there.
         var countInShared = await CountCustomersByEmailAsync(
-            _fixture.ConnectionString, "dedicated-only@test.com");
+            _fixture.ConnectionString, onlyEmail);
         countInShared.Should().Be(0, because: "dedicated tenant data must not exist in the shared-pool database");
     }
 

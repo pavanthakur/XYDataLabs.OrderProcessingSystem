@@ -23,7 +23,11 @@ public class MultiTenantSchemaTests
         HasIndex(model.FindEntityType(typeof(CardTransaction)), nameof(CardTransaction.TenantId), nameof(CardTransaction.CustomerOrderId)).Should().BeTrue();
         HasIndex(model.FindEntityType(typeof(CardTransaction)), nameof(CardTransaction.TenantId), nameof(CardTransaction.AttemptOrderId)).Should().BeTrue();
         HasIndex(model.FindEntityType(typeof(PayinLog)), nameof(PayinLog.TenantId), nameof(PayinLog.AttemptOrderId)).Should().BeTrue();
+        HasIndex(model.FindEntityType(typeof(PaymentAttempt)), nameof(PaymentAttempt.TenantId), nameof(PaymentAttempt.AttemptOrderId)).Should().BeTrue();
+        HasIndex(model.FindEntityType(typeof(PaymentAttemptHistory)), nameof(PaymentAttemptHistory.TenantId), nameof(PaymentAttemptHistory.AttemptOrderId)).Should().BeTrue();
         HasIndex(model.FindEntityType(typeof(TransactionStatusHistory)), nameof(TransactionStatusHistory.TenantId), nameof(TransactionStatusHistory.AttemptOrderId)).Should().BeTrue();
+        HasIndex(model.FindEntityType(typeof(OutboxMessage)), nameof(OutboxMessage.ProcessedAt), nameof(OutboxMessage.LockExpiry), nameof(OutboxMessage.OccurredUtc)).Should().BeTrue();
+        HasIndex(model.FindEntityType(typeof(InboxMessage)), nameof(InboxMessage.TenantId), nameof(InboxMessage.MessageId)).Should().BeTrue();
     }
 
     [Fact]
@@ -63,8 +67,12 @@ public class MultiTenantSchemaTests
 
         context.Model.FindEntityType(typeof(AuditLog))!.GetQueryFilter().Should().NotBeNull();
         context.Model.FindEntityType(typeof(CardTransaction))!.GetQueryFilter().Should().NotBeNull();
+        context.Model.FindEntityType(typeof(PaymentAttempt))!.GetQueryFilter().Should().NotBeNull();
+        context.Model.FindEntityType(typeof(PaymentAttemptHistory))!.GetQueryFilter().Should().NotBeNull();
         context.Model.FindEntityType(typeof(PayinLog))!.GetQueryFilter().Should().NotBeNull();
         context.Model.FindEntityType(typeof(TransactionStatusHistory))!.GetQueryFilter().Should().NotBeNull();
+        context.Model.FindEntityType(typeof(OutboxMessage))!.GetQueryFilter().Should().NotBeNull();
+        context.Model.FindEntityType(typeof(InboxMessage))!.GetQueryFilter().Should().NotBeNull();
     }
 
     [Fact]

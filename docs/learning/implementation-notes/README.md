@@ -5,6 +5,7 @@ Canonical execution-evidence subtree for curriculum delivery notes.
 Current documents in this subtree:
 
 - `implementation-notes-days-29-38.md` — detailed implementation evidence for curriculum days 29-38
+- `implementation-notes-days-51-56.md` — detailed implementation evidence for the Phase 8 event-foundation closeout slices
 
 Usage:
 
@@ -14,4 +15,4 @@ Usage:
 
 Transition note:
 
-- `implementation-notes-days-29-38.md` is the active canonical implementation-evidence document for this completed curriculum range.
+- Each implementation-notes document owns its completed curriculum range only. Add a new file when a later phase or day range needs command-level evidence.

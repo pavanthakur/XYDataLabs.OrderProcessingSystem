@@ -21,6 +21,9 @@ namespace XYDataLabs.OrderProcessingSystem.Application
             // Register CQRS: handlers, validators, pipeline behaviors, dispatcher
             builder.Services.AddCqrs(Assembly.GetExecutingAssembly());
 
+            // Register Event Type mapping resolution for background workers
+            builder.Services.AddSingleton<Events.IIntegrationEventTypeResolver, Events.IntegrationEventTypeResolver>();
+
             // Register OpenPay adapter (external payment gateway)
             builder.Services.AddOpenPayAdapter(builder.Configuration);
             builder.Services.AddScoped<IOpenPayAdapterService, OpenPayAdapterService>();

@@ -26,6 +26,8 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
     private readonly List<CardTransaction> _capturedCardTransactions = [];
     private readonly List<TransactionStatusHistory> _capturedTsh = [];
     private readonly List<PayinLogDetails> _capturedPayinLogDetails = [];
+    private readonly List<PaymentAttempt> _capturedPaymentAttempts = [];
+    private readonly List<PaymentAttemptHistory> _capturedPaymentAttemptHistories = [];
 
     // --- fixed reference time ---
     protected static readonly DateTime UtcNow = new(2024, 3, 1, 10, 0, 0, DateTimeKind.Utc);
@@ -39,6 +41,8 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
     protected IList<CardTransaction> CapturedCardTransactions => _capturedCardTransactions;
     protected IList<TransactionStatusHistory> CapturedTsh => _capturedTsh;
     protected IList<PayinLogDetails> CapturedPayinLogDetails => _capturedPayinLogDetails;
+    protected IList<PaymentAttempt> CapturedPaymentAttempts => _capturedPaymentAttempts;
+    protected IList<PaymentAttemptHistory> CapturedPaymentAttemptHistories => _capturedPaymentAttemptHistories;
 
     public PaymentServiceTestBase()
     {
@@ -81,10 +85,14 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
     /// Sets up all DbSets used by ProcessPaymentCommandHandler.
     /// CardTransactions and TransactionStatusHistories are captured for assertion.
     /// </summary>
-    protected void SetupPaymentDbSets(IEnumerable<BillingCustomer>? existingBillingCustomers = null)
+    protected void SetupPaymentDbSets(
+        IEnumerable<BillingCustomer>? existingBillingCustomers = null,
+        IEnumerable<PaymentAttempt>? existingPaymentAttempts = null)
     {
         _capturedCardTransactions.Clear();
         _capturedTsh.Clear();
+        _capturedPaymentAttempts.Clear();
+        _capturedPaymentAttemptHistories.Clear();
 
         // PaymentMethods —FindAsync returns a stable PM (needed by UpdatePaymentMethodByBillingCustomerId)
         var stubPm = new Domain.Entities.PaymentMethod { Id = 0, Token = "pm-token", Status = true, PaymentProviderId = 1 };
@@ -103,6 +111,32 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
         mockCtSet.Setup(s => s.Add(It.IsAny<CardTransaction>()))
             .Callback<CardTransaction>(ct => _capturedCardTransactions.Add(ct));
         MockDbContext.Setup(db => db.CardTransactions).Returns(mockCtSet.Object);
+
+        var paymentAttempts = (existingPaymentAttempts ?? Enumerable.Empty<PaymentAttempt>()).ToList();
+        var mockPaymentAttemptSet = GetMockDbSet(paymentAttempts.AsQueryable());
+        mockPaymentAttemptSet
+            .Setup(s => s.Add(It.IsAny<PaymentAttempt>()))
+            .Callback<PaymentAttempt>(attempt =>
+            {
+                attempt.Id = paymentAttempts.Count + 1;
+                paymentAttempts.Add(attempt);
+                _capturedPaymentAttempts.Add(attempt);
+            });
+        mockPaymentAttemptSet
+            .Setup(s => s.Update(It.IsAny<PaymentAttempt>()))
+            .Callback<PaymentAttempt>(_ => { });
+        MockDbContext.Setup(db => db.PaymentAttempts).Returns(mockPaymentAttemptSet.Object);
+
+        var paymentAttemptHistories = new List<PaymentAttemptHistory>();
+        var mockPaymentAttemptHistorySet = new Mock<DbSet<PaymentAttemptHistory>>();
+        mockPaymentAttemptHistorySet
+            .Setup(s => s.Add(It.IsAny<PaymentAttemptHistory>()))
+            .Callback<PaymentAttemptHistory>(history =>
+            {
+                paymentAttemptHistories.Add(history);
+                _capturedPaymentAttemptHistories.Add(history);
+            });
+        MockDbContext.Setup(db => db.PaymentAttemptHistories).Returns(mockPaymentAttemptHistorySet.Object);
 
         // TransactionStatusHistories — capture adds
         var mockTshSet = new Mock<DbSet<TransactionStatusHistory>>();
@@ -133,10 +167,14 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
     protected void SetupConfirmPaymentDbSets(
         CardTransaction? existingTransaction = null,
         PayinLog? existingPayinLog = null,
-        IEnumerable<TransactionStatusHistory>? existingTransactionStatusHistories = null)
+        IEnumerable<TransactionStatusHistory>? existingTransactionStatusHistories = null,
+        PaymentAttempt? existingPaymentAttempt = null,
+        IEnumerable<PaymentAttemptHistory>? existingPaymentAttemptHistories = null)
     {
         _capturedTsh.Clear();
         _capturedPayinLogDetails.Clear();
+        _capturedPaymentAttempts.Clear();
+        _capturedPaymentAttemptHistories.Clear();
 
         var transactions = existingTransaction is null
             ? Enumerable.Empty<CardTransaction>()
@@ -149,6 +187,24 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
             : new[] { existingPayinLog };
         MockDbContext.Setup(db => db.PayinLogs)
             .Returns(GetMockDbSet(payinLogs.AsQueryable()).Object);
+
+        var paymentAttempts = existingPaymentAttempt is null
+            ? Enumerable.Empty<PaymentAttempt>()
+            : new[] { existingPaymentAttempt };
+        var mockPaymentAttemptSet = GetMockDbSet(paymentAttempts.AsQueryable());
+        mockPaymentAttemptSet.Setup(s => s.Update(It.IsAny<PaymentAttempt>()))
+            .Callback<PaymentAttempt>(attempt => _capturedPaymentAttempts.Add(attempt));
+        MockDbContext.Setup(db => db.PaymentAttempts).Returns(mockPaymentAttemptSet.Object);
+
+        var paymentAttemptHistories = (existingPaymentAttemptHistories ?? Enumerable.Empty<PaymentAttemptHistory>()).ToList();
+        var mockPaymentAttemptHistorySet = GetMockDbSet(paymentAttemptHistories.AsQueryable());
+        mockPaymentAttemptHistorySet.Setup(s => s.Add(It.IsAny<PaymentAttemptHistory>()))
+            .Callback<PaymentAttemptHistory>(history =>
+            {
+                paymentAttemptHistories.Add(history);
+                _capturedPaymentAttemptHistories.Add(history);
+            });
+        MockDbContext.Setup(db => db.PaymentAttemptHistories).Returns(mockPaymentAttemptHistorySet.Object);
 
         var transactionStatusHistories = (existingTransactionStatusHistories ?? Enumerable.Empty<TransactionStatusHistory>()).ToList();
         var mockTshSet = GetMockDbSet(transactionStatusHistories.AsQueryable());

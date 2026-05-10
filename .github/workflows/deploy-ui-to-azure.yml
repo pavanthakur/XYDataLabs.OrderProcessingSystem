@@ -277,6 +277,80 @@ jobs:
             exit 1
           }
 
+      - name: Warm up UI before browser smoke test
+        if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'
+        shell: pwsh
+        run: |
+          $minimumUiWarmupSeconds = 300
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+          Write-Host "UI PRE-SMOKE WARM-UP BUFFER" -ForegroundColor Cyan
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+          Write-Host "Waiting $minimumUiWarmupSeconds seconds (5 minutes) before browser smoke validation starts..." -ForegroundColor Yellow
+          Write-Host "Reason: freshly deployed App Service instances can serve the shell before the runtime is fully warm." -ForegroundColor Gray
+          Start-Sleep -Seconds $minimumUiWarmupSeconds
+          Write-Host "✅ Minimum UI warm-up buffer complete." -ForegroundColor Green
+
+      - name: Wait for API runtime bootstrap dependency
+        if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'
+        shell: pwsh
+        run: |
+          $apiBaseUrl = "${{ needs.build.outputs.apiBaseUrl }}"
+          $runtimeConfigurationUrl = "$apiBaseUrl/api/v1/Info/runtime-configuration"
+          $customersUrl = "$apiBaseUrl/api/v1/Customer/GetAllCustomers"
+          $headers = @{ "X-Tenant-Code" = "TenantA" }
+          $overallPreSmokeBudgetSeconds = 900
+          $minimumUiWarmupSeconds = 300
+          $retryIntervalSeconds = 30
+          $apiPollingBudgetSeconds = $overallPreSmokeBudgetSeconds - $minimumUiWarmupSeconds
+          $deadline = (Get-Date).AddSeconds($apiPollingBudgetSeconds)
+
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+          Write-Host "WAITING FOR API DEPENDENCY BEFORE UI SMOKE TEST" -ForegroundColor Cyan
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+          Write-Host "The UI smoke test depends on the API runtime bootstrap and customer endpoints." -ForegroundColor Gray
+          Write-Host "Overall pre-smoke wait policy: 5 minutes UI warm-up + up to 10 additional minutes API wait = 15 minutes hard maximum." -ForegroundColor Yellow
+          Write-Host "API retry interval: $retryIntervalSeconds seconds" -ForegroundColor Yellow
+          Write-Host "Runtime bootstrap URL: $runtimeConfigurationUrl" -ForegroundColor Cyan
+          Write-Host "Customer directory URL: $customersUrl" -ForegroundColor Cyan
+
+          $apiReady = $false
+          $attempt = 0
+          while ((Get-Date) -lt $deadline) {
+            $attempt += 1
+            $remainingSeconds = [Math]::Max([int][Math]::Ceiling(($deadline - (Get-Date)).TotalSeconds), 0)
+            Write-Host "Attempt $attempt — checking whether the API is up for UI smoke validation (remaining budget: ${remainingSeconds}s)..." -ForegroundColor Yellow
+
+            try {
+              $runtimeConfiguration = Invoke-RestMethod -Uri $runtimeConfigurationUrl -Headers $headers -Method Get -TimeoutSec 60 -ErrorAction Stop
+              $customersResponse = Invoke-WebRequest -Uri $customersUrl -Headers $headers -Method Get -TimeoutSec 60 -ErrorAction Stop
+
+              if (-not [string]::IsNullOrWhiteSpace($runtimeConfiguration.activeTenantCode) -and $customersResponse.StatusCode -eq 200) {
+                Write-Host "✅ API dependency is ready for UI smoke validation" -ForegroundColor Green
+                Write-Host "   Active tenant: $($runtimeConfiguration.activeTenantCode)" -ForegroundColor Gray
+                $apiReady = $true
+                break
+              }
+
+              Write-Host "  Attempt $attempt returned an incomplete API payload." -ForegroundColor Yellow
+            } catch {
+              Write-Host "  Attempt $attempt failed: $($_.Exception.Message)" -ForegroundColor Yellow
+            }
+
+            if ((Get-Date).AddSeconds($retryIntervalSeconds) -lt $deadline) {
+              Write-Host "  API is not up yet. Retrying in $retryIntervalSeconds seconds..." -ForegroundColor Yellow
+              Start-Sleep -Seconds $retryIntervalSeconds
+            }
+          }
+
+          if (-not $apiReady) {
+            Write-Host "❌ API dependency did not become ready before the browser smoke test budget expired" -ForegroundColor Red
+            Write-Host "   Wait policy exhausted: 5 minutes UI warm-up + 10 minutes API retry budget = 15 minutes total." -ForegroundColor Red
+            Write-Host "   This commonly means the API deployment, migration path, or App Service warm-up is still in progress while the UI deployment has already finished." -ForegroundColor Red
+            Write-Host "   Runtime URL: $runtimeConfigurationUrl" -ForegroundColor Red
+            Write-Host "   Customers URL: $customersUrl" -ForegroundColor Red
+            exit 1
+          }
+
       - name: Set up Node.js for browser smoke test
         if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'
         uses: actions/setup-node@v6

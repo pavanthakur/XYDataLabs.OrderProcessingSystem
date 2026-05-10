@@ -1,4 +1,5 @@
-﻿using XYDataLabs.OrderProcessingSystem.Domain.Entities;
+﻿using XYDataLabs.OrderProcessingSystem.Application.Events;
+using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 using System;
@@ -17,11 +18,20 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
         private static readonly string[] StartupSeedTenantCodes = { "TenantA", "TenantB" };
         private const int SeededCustomerCountPerTenant = 120;
 
-        public static void Initialize(OrderProcessingSystemDbContext context, IConfiguration? configuration = null, bool applyMigrations = true)
+        public static void Initialize(
+            OrderProcessingSystemDbContext context,
+            IConfiguration? configuration = null,
+            bool applyMigrations = true,
+            IIntegrationEventMapperRegistry? integrationEventMapperRegistry = null)
         {
             if (context is null)
             {
                 throw new ArgumentNullException(nameof(context));
+            }
+
+            if (integrationEventMapperRegistry is null)
+            {
+                throw new ArgumentNullException(nameof(integrationEventMapperRegistry));
             }
 
             // Azure deployments run schema migrations in workflow steps before app startup.
@@ -44,7 +54,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
             // Connection strings are read from IConfiguration (Key Vault / appsettings),
             // not from the Tenants table — connection strings are secrets.
             // Skipped when configuration is null or DedicatedTenantConnectionStrings is absent.
-            SeedDedicatedTenants(context, configuration, applyMigrations);
+            SeedDedicatedTenants(context, configuration, applyMigrations, integrationEventMapperRegistry);
         }
 
         private static IReadOnlyList<StartupSeedTenant> GetStartupSeedTenants(OrderProcessingSystemDbContext context)
@@ -171,7 +181,11 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
         /// A NullTenantProvider is injected so EF Core query filters evaluate safely (HasTenantContext=false →
         /// filter short-circuits to true, making all rows visible — correct for cross-tenant seeding).
         /// </summary>
-        private static void SeedDedicatedTenants(OrderProcessingSystemDbContext mainContext, IConfiguration? configuration, bool applyMigrations)
+        private static void SeedDedicatedTenants(
+            OrderProcessingSystemDbContext mainContext,
+            IConfiguration? configuration,
+            bool applyMigrations,
+            IIntegrationEventMapperRegistry integrationEventMapperRegistry)
         {
             if (configuration is null)
                 return;
@@ -206,7 +220,10 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                 // (HasTenantContext = false → filter = true → all rows visible).
                 // Without this, dedicatedContext._tenantProvider would be null and EF Core's
                 // expression tree evaluator can NullReference on _tenantProvider.HasTenantContext.
-                using var dedicatedContext = new OrderProcessingSystemDbContext(dedicatedOptions, new NullTenantProvider());
+                using var dedicatedContext = new OrderProcessingSystemDbContext(
+                    dedicatedOptions,
+                    new NullTenantProvider(),
+                    integrationEventMapperRegistry);
 
                 // For Option B (fresh dedicated DB), apply migrations so the schema exists.
                 // For Option A (same DB), this is idempotent — no-op.

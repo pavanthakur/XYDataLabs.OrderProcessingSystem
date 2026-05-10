@@ -186,6 +186,14 @@ If the same error still appears, add `Directory.Read.All`, grant admin consent, 
 - For **Azure Bootstrap & Deploy** (Phase 2/X/deploy): Use the correct branch (`dev` for dev, `staging` for staging, `main` for prod)
 - For **Azure Initial Setup** (Phase 0/1a/1b): Use `branch=dev`, `environment=all` (recommended one-time setup)
 
+### Error: Docker Manifest Network EOF / Testcontainers SQL Pull Fails
+**Symptom**: Integration tests fail locally with `failed to do request: Head "https://mcr.microsoft.com/v2/mssql/server/manifests/...": EOF`
+**Cause**: Docker Desktop on Windows sometimes aggressively rejects high-bandwidth registry fetches from `mcr.microsoft.com` causing `Testcontainers` to fail.
+**Quick Fix**: Bypass Testcontainers and natively pipe the Test Suite directly into your Visual Studio `docker-compose.database.yml` container:
+1. Ensure your local Docker database is running: `.\Resources\Docker\start-docker.ps1 -Environment dev -Profile http`
+2. Set the override variable using your `.env.local` password: `$env:ORDERPROCESSING_TEST_CONNECTION_STRING="Server=localhost,1433;User Id=sa;Password=Admin100@;TrustServerCertificate=True"`
+3. Run `dotnet test`.
+
 ---
 
 ## 📚 Setup Guides
@@ -424,3 +432,27 @@ These are required by `deploy-api-to-azure.yml`, `deploy-ui-to-azure.yml`, and `
 ---
 
 **Last Updated**: Based on fix for GitHub App installation detection and workflow update handling.
+---
+
+## 🐳 Docker Local Development Issues
+
+### ❌ SQL Container Startup Fails (Timeout or 'Login failed for user sa')
+**Error**: SQL Server container fails to start, hits timeout, or integration tests fail with 'Login failed for user sa'.
+
+**Cause**: 
+1. The default MCR image might be unreachable or broken.
+2. The Docker volume holding SQL data retains old credentials from a previous run, conflicting with the new '.env.local' password.
+
+**Quick Fix**: 
+1. Override the SQL image in '.env.local': ORDERPROCESSING_SQLSERVER_IMAGE=cjgaspard/mssql-server:latest
+2. Purge stale volumes: docker compose -f docker-compose.dev.yml down -v
+3. Restart the profile.
+
+### ❌ Node fetch healthcheck failure (ERR_CONNECTION_REFUSED)
+**Error**: Docker UI targets (dev-https, stg-https, prod-https) report as unhealthy, halting the automation matrix.
+
+**Cause**: The Node.js healthcheck fetch('https://localhost:...') intrinsically rejects the self-signed local development certificates.
+
+**Quick Fix**: 
+Use process.env.NODE_TLS_REJECT_UNAUTHORIZED='0'; fetch(...) inside the docker-compose.*.yml files' healthcheck command.
+

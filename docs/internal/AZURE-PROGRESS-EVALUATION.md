@@ -7,7 +7,13 @@
 
 ---
 
-## 🟢 Current State (April 2026) — Days 1-43 Complete, Phase 7 Complete
+## 🟢 Current State (May 2026) — Phase 8 Closeout Matrix Validation Passed
+
+### May 10, 2026 Verification Freeze
+
+- ✅ Phase 8 backend orchestration and integration tests passed securely across all target matrices.
+- ✅ Full environment coverage validated utilizing the `generate-docker-validation-bundle.ps1` natively with correct DB mapping, Node healthchecks, and automation suites hitting success.
+- ✅ Transitioning to Backend Phase 8.5 (Stripe Multi-Provider integration).
 
 ### April 10, 2026 Verification Freeze
 
@@ -43,6 +49,22 @@
 - ✅ Backend Phase 8 is now unblocked under the completed Track U plan
 - ✅ Companion payment automation blueprint and placeholder workspace are defined before deeper payment automation execution begins; use `docs/guides/development/payment-journey-automation-blueprint.md` as the canonical guide, but treat this progress page as status-only for that topic
 
+### May 10, 2026 Phase 8 Closeout Verified
+
+- ✅ `PaymentAttempt` is now persisted before provider execution and reconciled through a deterministic `AttemptOrderId` plus a five-state lifecycle
+- ✅ `OutboxPublisherWorker` and `PaymentReconciliationWorker` now establish tenant-scoped context explicitly for non-request execution paths
+- ✅ Integration coverage now proves rollback leaves no outbox row, duplicate delivery is harmless, parallel handlers remain independent, publisher restart replays pending rows, reconciliation resolves `UnknownNeedsReconciliation`, and tenant isolation is preserved
+- ✅ Architecture guardrails and the full integration suite are green on the Phase 8 closeout branch
+- ✅ Backend Phase 8.5 is now the next active engineering phase
+
+### May 10, 2026 Architecture Roadmap Extension Adopted
+
+- ✅ `ARCHITECTURE-EVOLUTION.md` now extends the post-Phase-8 roadmap with **Phase 8.7** (Stripe webhook receiver), **Phase 9.5** (local Keycloak portability showcase), and **Phase 11.5** (Notifications module PostgreSQL pilot)
+- ✅ Phase 9 now explicitly introduces Aspire-Lite in parallel with Docker Compose, so local orchestration, service discovery, and dashboarding start when services are first extracted
+- ✅ Phase 13 now records two explicit decision gates: `azd` plus Aspire-generated manifest evaluation for ACA deployment, and the .NET LTS upgrade window, both ADR-bound when implementation forces the decision
+- ✅ ADR-017 captures the portability rationale: Entra ID and Azure SQL remain authoritative for production while the roadmap proves identity-provider and RDBMS flexibility in isolated, reviewable phases
+- ✅ Backend Phase 8.5 remains the next active engineering phase; today's planning work tightened the next milestones without changing the immediate execution order
+
 ### Architecture Phases Completed
 
 | Phase | Name | Days | Status |
@@ -54,6 +76,7 @@
 | Phase 5 | OpenPay Payment Integration (multi-tenant, per-tenant config) | Days 36-37 | ✅ Complete |
 | Phase 6 | Resilience baseline — EF Core retry, Polly, Redis caching pipeline, rate limiting | Day 38 | ✅ Complete |
 | **Phase 7** | **Tenant Enforcement & DDD tactical patterns** | **Days 39-43** | **✅ Complete** |
+| **Phase 8** | **Event-Driven Foundation** | **Days 51, 55-56** | **✅ Closeout Verified** |
 
 ### Deployed Azure Resources (Dev Environment)
 - API: `https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net/swagger`
@@ -62,13 +85,14 @@
 - Key Vault: `kv-orderprocessing-dev` (Managed Identity access, no stored credentials)
 - App Insights: `ai-orderprocessing-dev` — active, confirmed traces + metrics
 
-### Architecture Decisions Recorded (ADR-000 → ADR-015)
+### Architecture Decisions Recorded (ADR-000 → ADR-017)
 - ADR-001: Clean Architecture, ADR-002: OIDC, ADR-003: Subscription-scope Bicep
 - ADR-004: EF Core + Azure SQL, ADR-005: Serilog, ADR-006: Passwordless SQL
 - ADR-007: Hybrid multi-tenancy, ADR-008: Architecture test guardrails
 - ADR-009: Tenant isolation hardening, ADR-010: Runtime environment detection
 - ADR-011: Hand-rolled CQRS, ADR-012: OTel dual-export, ADR-013: Redis caching
 - ADR-014: Azure service coverage rationale, ADR-015: deployment readiness probes use `/health/ready`
+- ADR-016: client-rendered React SPA, ADR-017: phase plan portability extensions
 
 ### Phase 7 — Completed Deliverables
 - ✅ `TenantValidationBehavior<TRequest, TResult>` — CQRS pipeline tenant enforcement
@@ -114,10 +138,14 @@
 - ✅ Azure trace evidence for the April 28 payment proof run is present in the dev App Insights resource
 - ✅ Latest Azure deployment exposes `orderprocessing.payments.completed` and `orderprocessing.payments.duration` in the dev App Insights `customMetrics` table
 - ℹ️ Local and Docker App Insights absence is expected unless `APPLICATIONINSIGHTS_CONNECTION_STRING` is configured for those runtimes
-- ✅ Phase 7 strict closeout is now verified under the agreed proof model; Phase 8 can proceed without a remaining Phase 7 telemetry blocker
+- ✅ Phase 7 strict closeout is now verified under the agreed proof model; the later Phase 8 closeout work carried forward on a stable baseline
 
-### Phase 8 Entry Dependency
-- ⬜ Phase 8 implementation must freeze the DomainEvent → IntegrationEvent mapper registration strategy before the first outbox payload is written; that schema carries forward into Phase 10 Service Bus message bodies
+### Phase 8 Closeout Verification
+- ✅ Event contracts, envelopes, mapper registration, and delivery-failure semantics remain frozen above Infrastructure
+- ✅ Outbox, inbox, and payment-attempt persistence now execute end-to-end inside the monolith runtime
+- ✅ Payment recovery now persists `PaymentAttempt` before provider execution, uses deterministic `AttemptOrderId`, and reconciles provider uncertainty through the background worker path
+- ✅ Background publishing and reconciliation remain separate operational paths and now run under explicit tenant-scoped context
+- ✅ Explicit verification evidence exists for all six Phase 8 closeout categories, plus the architecture boundary gate
 
 ---
 

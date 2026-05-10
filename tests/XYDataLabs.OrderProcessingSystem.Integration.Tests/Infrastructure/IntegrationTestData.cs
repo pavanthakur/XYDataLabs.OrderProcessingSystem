@@ -134,11 +134,14 @@ internal static class IntegrationTestData
         string marker) =>
         factory.ExecuteDbContextAsync(async dbContext =>
         {
+            var uniqueId = Guid.NewGuid().ToString("N")[..8];
+            var safeMarker = $"{marker}-{uniqueId}";
+
             var createdAt = DateTime.UtcNow;
             var customer = new Customer
             {
-                Name = $"Customer {marker}",
-                Email = $"customer-{marker}@test.com",
+                Name = $"Customer {safeMarker}",
+                Email = $"customer-{safeMarker}@test.com",
                 TenantId = tenantId,
                 CreatedBy = 1,
                 CreatedDate = createdAt
@@ -146,8 +149,8 @@ internal static class IntegrationTestData
 
             var product = new Product
             {
-                Name = $"Product {marker}",
-                Description = $"Seeded product {marker}",
+                Name = $"Product {safeMarker}",
+                Description = $"Seeded product {safeMarker}",
                 Price = 50.00m,
                 TenantId = tenantId,
                 CreatedBy = 1,

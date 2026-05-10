@@ -5,6 +5,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using System.Threading.RateLimiting;
 using XYDataLabs.OrderProcessingSystem.API.Middleware;
 using XYDataLabs.OrderProcessingSystem.Application;
+using XYDataLabs.OrderProcessingSystem.Application.Events;
 using XYDataLabs.OrderProcessingSystem.Infrastructure;
 using Microsoft.OpenApi.Models;
 using Serilog;
@@ -125,6 +126,7 @@ else
 }
 
 builder.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>(); // Required for LoggingMiddleware
+builder.Services.AddScoped<ScopedTenantContextAccessor>();
 builder.Services.AddScoped<ITenantProvider, HeaderTenantProvider>();
 builder.Services.AddScoped<ITenantResolver, EntityFrameworkTenantResolver>();
 builder.Services.AddSingleton(TimeProvider.System);
@@ -387,7 +389,12 @@ using (var scope = app.Services.CreateScope())
     {
         // Apply migrations locally/Docker; skip on Azure (managed via pipelines)
         var dbContext = scope.ServiceProvider.GetRequiredService<OrderProcessingSystemDbContext>();
-        DbInitializer.Initialize(dbContext, app.Configuration, applyMigrations: !isAzure);
+        var integrationEventMapperRegistry = scope.ServiceProvider.GetRequiredService<IIntegrationEventMapperRegistry>();
+        DbInitializer.Initialize(
+            dbContext,
+            app.Configuration,
+            applyMigrations: !isAzure,
+            integrationEventMapperRegistry: integrationEventMapperRegistry);
 
         Log.Information("Database initialized successfully during startup");
     }

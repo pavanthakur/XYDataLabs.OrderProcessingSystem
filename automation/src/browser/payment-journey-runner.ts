@@ -58,11 +58,19 @@ export class PaymentJourneyRunner {
 
       const redirectHeading = page.getByRole("heading", { name: /Opening the provider OTP challenge/i });
       const callbackHeading = page.getByRole("heading", { name: /Review the final payment outcome/i });
+      const paymentErrorBanner = page.locator("p.error-banner").first();
 
       const nextState = await Promise.race([
         redirectHeading.waitFor({ timeout: 45000 }).then(() => "redirect" as const),
-        callbackHeading.waitFor({ timeout: 45000 }).then(() => "callback" as const)
+        callbackHeading.waitFor({ timeout: 45000 }).then(() => "callback" as const),
+        paymentErrorBanner.waitFor({ timeout: 45000 }).then(() => "error" as const)
       ]);
+
+      if (nextState === "error") {
+        const statusMessage = (await paymentErrorBanner.textContent().catch(() => null))?.trim() || "Payment processing failed on the payment page.";
+        log(`Payment flow failed on the payment page: ${statusMessage}`);
+        throw new Error(statusMessage);
+      }
 
       let challengeOutcome: ChallengeOutcome = "not-applicable";
       let threeDsSetting: ThreeDsSetting = "unknown";

@@ -102,6 +102,30 @@ Dry-run the Docker matrix without browser execution or verification:
 npm --prefix automation run run:docker:matrix:dry
 ```
 
+## Docker Validation Bundle
+
+Generate the phase-closeout Docker evidence bundle with the repo-owned PowerShell entry point:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\generate-docker-validation-bundle.ps1 -Environment dev -Profile http
+```
+
+Widen the bundle to all mapped Docker environments and profiles when the closeout scope requires it:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\generate-docker-validation-bundle.ps1 -Environment all -Profile all
+```
+
+Notes:
+
+- The bundle writes to `automation/reports/docker-validation/<bundleId>/`
+- The root bundle contains `summary.md` and `summary.json`
+- Per-target folders capture Docker startup logs, compose snapshots, inspect output, and referenced automation report paths
+- This flow requires the compose-managed `sql-server` container path; Docker validation must not fall back to host SQL
+- Local runs may use `Resources/Docker/.env.local` to point `ORDERPROCESSING_SQLSERVER_IMAGE` at a machine-local mirror or pre-pulled tag
+- CI/CD runs should set `ORDERPROCESSING_SQLSERVER_IMAGE` explicitly in the pipeline environment so Docker validation always uses the approved registry path
+- `-SkipAutomation` is a local debugging mode, not phase-closeout proof when the changed slice requires full Docker automation evidence
+
 ## Azure Matrix Run
 
 Run all supported Azure targets in one command and produce an aggregate matrix summary:
