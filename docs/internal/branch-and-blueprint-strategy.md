@@ -254,6 +254,50 @@ Expected automation after extraction:
 
 That gives both layers the same operating model: Layer 1 uses NuGet semver, Layer 2 uses GitHub template tags.
 
+Recommended concrete implementation in the future blueprint repo:
+
+| Concern | Recommended mechanism |
+|---|---|
+| Version-decision artifact | Root file `BLUEPRINT_VERSION` containing only the next intended immutable tag name, for example `blueprint-v1.1.0` |
+| Governance workflow name | `Validate Blueprint Governance` |
+| PR rule | If any Layer 2 asset path changes, `BLUEPRINT_VERSION` must also change |
+| Push rule | On direct pushes, still run the blueprint validation matrix so drift is visible immediately |
+| Release mechanism | Create annotated tag from `BLUEPRINT_VERSION`, then create the matching GitHub release |
+
+Recommended watched paths in the future blueprint repo:
+- `.github/workflows/**`
+- `infra/**`
+- `bicep/**`
+- `Resources/Docker/**`
+- `frontend/**`
+- `automation/**`
+- `docs/**`
+- `.github/instructions/**`
+- `.github/prompts/**`
+- `.github/agents/**`
+- `.github/skills/**`
+- bootstrap scripts such as `scripts/setup-local.ps1` and `scripts/initialize-blueprint.ps1`
+
+Recommended validation matrix in the future blueprint repo:
+- docs link validation
+- AI customization validation
+- workflow YAML validation
+- Bicep validation / what-if-safe static checks
+- frontend install + build where applicable
+- bootstrap script lint or smoke checks where practical
+
+Recommended release flow after extraction:
+1. Change Layer 2 assets.
+2. Update `BLUEPRINT_VERSION` to the next intended `blueprint-v*` line.
+3. Let `Validate Blueprint Governance` pass on the PR.
+4. Merge the PR.
+5. Cut the annotated tag named in `BLUEPRINT_VERSION`.
+6. Create the matching GitHub release with the Layer 2 change summary.
+
+This mirrors the current Layer 1 pattern exactly:
+- Layer 1: `PackageVersion` in the template pack project, then NuGet publish.
+- Layer 2: `BLUEPRINT_VERSION` in the blueprint repo, then GitHub template tag + release.
+
 ### 2.3 Why two layers and not one
 
 | Mechanism | Can ship `src/` solution? | Can ship workflows / Bicep / frontend / Docker / docs? | Used by |
