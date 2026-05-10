@@ -88,7 +88,7 @@ Frontend workspace:
 ├── docs/
 │   ├── README.md                  # Canonical documentation hub
 │   ├── DEVELOPER-OPERATING-MODEL.md # Guided reading order and maintenance rules
-│   ├── architecture/decisions/    # ADRs (ADR-000 through ADR-017)
+│   ├── architecture/decisions/    # ADRs (ADR-000 through ADR-018)
 │   ├── guides/                    # Deployment, configuration, and development guides
 │   ├── internal/                  # Active progress tracker and internal backlog
 │   ├── learning/                  # Curriculum, implementation notes, learning reference
@@ -401,6 +401,8 @@ This matrix shows which instructions auto-attach for common file locations:
 | `docs/internal/AZURE-PROGRESS-EVALUATION.md` | docs/internal | Learning progress weeks 1–10, next-step guides |
 | `docs/AI-OPERATING-MODEL.md` | docs/ | Canonical protocol for shared AI customization and governance |
 | `docs/internal/DEFERRED-WORK-LOG.md` | docs/internal | Shared register for justified deferred work |
+| `docs/internal/branch-and-blueprint-strategy.md` | docs/internal | Snapshot tag/branch governance, two-layer template packaging, side-project bootstrap (ADR-018) |
+| `docs/architecture/decisions/ADR-018-blueprint-and-snapshot-strategy.md` | docs/architecture/decisions | Decision: tag+branch (Path C) snapshots + `dotnet new` NuGet template + GitHub template repo (Layer 1 + Layer 2) |
 | `docs/reference/quick-command-reference.md` | docs/ | Command cheat sheet for Azure, Git, Docker, GitHub App |
 | `.github/workflows/README.md` | Workflows | Workflow overview, secrets, path triggers |
 | `.github/workflows/README-AZURE-INITIAL-SETUP.md` | Workflows | Initial Setup workflow (Phase 0/1a/1b) |

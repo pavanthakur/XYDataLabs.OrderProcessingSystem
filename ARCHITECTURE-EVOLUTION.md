@@ -32,6 +32,8 @@ The bundle is written under `automation/reports/docker-validation/<bundleId>/` a
 
 Any phase missing confirmed verifiable passes on these three metrics cannot be formally closed.
 
+**Snapshot pair at major architectural seams.** Phase 7, 8, 11, 13, and 14 closeouts also cut a tag + backup branch pair per [ADR-018](docs/architecture/decisions/ADR-018-blueprint-and-snapshot-strategy.md) and [docs/internal/branch-and-blueprint-strategy.md](docs/internal/branch-and-blueprint-strategy.md). Tags use the format `v-YYYYMMDD-phase<N>-<slug>`; backup branches use `dev-backup-YYYYMMDD-<Scope>-Upto-Phase<N>`. The same strategy doc covers the two-layer reusable template (Layer 1 `dotnet new` NuGet template + Layer 2 GitHub template repo) that is extracted at Phase 14 closeout for side-project bootstrap.
+
 ---
 
 ## Baseline: Monolith on Azure App Service ✅ DEPLOYED
