@@ -25,14 +25,14 @@ namespace XYDataLabs.OrderProcessingSystem.Domain.Entities
         public int? PayinType { get; set; }
 
         [MaxLength(50)]
-        public string? OpenPayChargeId { get; set; }
+        public string? ProviderChargeId { get; set; }
 
         [Required]
         [MaxLength(64)]
         public string PaymentTraceId { get; set; } = string.Empty;
 
         [MaxLength(50)]
-        public string? OpenPayAuthorizationId { get; set; }
+        public string? ProviderAuthorizationId { get; set; }
 
         [Column(TypeName = "decimal(18,4)")]
         public decimal? Amount { get; set; }

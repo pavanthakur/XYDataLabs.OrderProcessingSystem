@@ -588,11 +588,11 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                         .HasMaxLength(4)
                         .HasColumnType("nvarchar(4)");
 
-                    b.Property<string>("OpenPayAuthorizationId")
+                    b.Property<string>("ProviderAuthorizationId")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<string>("OpenPayChargeId")
+                    b.Property<string>("ProviderChargeId")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 

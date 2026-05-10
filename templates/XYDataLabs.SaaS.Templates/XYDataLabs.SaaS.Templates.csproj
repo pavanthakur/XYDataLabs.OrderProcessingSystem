@@ -4,21 +4,22 @@
     <IsPackable>true</IsPackable>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <NoDefaultExcludes>true</NoDefaultExcludes>
-    <NoWarn>$(NoWarn);NU5128</NoWarn>
+    <NoWarn>$(NoWarn);NU5110;NU5111;NU5128</NoWarn>
     <PackageType>Template</PackageType>
     <PackageId>XYDataLabs.SaaS.Templates</PackageId>
     <Title>XYDataLabs SaaS Templates</Title>
-    <Description>Layer 1 dotnet new template for the XYDataLabs multi-tenant SaaS backend and test solution.</Description>
+    <Description>Layer 1 dotnet new template for the XYDataLabs multi-tenant SaaS backend and test solution with a provider-agnostic payment gateway seam.</Description>
     <Authors>Pavan Thakur</Authors>
     <PackageTags>dotnet-new;template;saas;clean-architecture;cqrs;multitenant;azure</PackageTags>
-    <PackageVersion>0.1.0</PackageVersion>
+    <PackageVersion>1.0.0</PackageVersion>
+    <PackageReleaseNotes>First formal Layer 1 template release. Includes provider-agnostic PaymentGateway seam, generic payment persistence naming, validated packaged dotnet new smoke path, and removal of legacy OpenPayAdapter template surface.</PackageReleaseNotes>
     <PackageOutputPath>..\..\.artifacts\packages</PackageOutputPath>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
   </PropertyGroup>
 
   <ItemGroup>
     <Content Include="..\xy-saas\**\*"
-             Exclude="..\xy-saas\**\.vs\**;..\xy-saas\**\.vscode\**;..\xy-saas\**\bin\**;..\xy-saas\**\obj\**;..\xy-saas\**\*.user;..\xy-saas\**\*.suo;..\xy-saas\**\*.cache"
+             Exclude="..\xy-saas\**\.vs\**;..\xy-saas\**\.vscode\**;..\xy-saas\**\bin\**;..\xy-saas\**\obj\**;..\xy-saas\**\.artifacts\**;..\xy-saas\**\*.user;..\xy-saas\**\*.suo;..\xy-saas\**\*.cache"
              PackagePath="content" />
   </ItemGroup>
 </Project>

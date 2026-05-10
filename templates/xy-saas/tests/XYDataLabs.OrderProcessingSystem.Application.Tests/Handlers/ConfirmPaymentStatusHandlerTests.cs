@@ -1,8 +1,8 @@
 using FluentAssertions;
 using Moq;
-using Openpay.Entities;
 using XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
+using XYDataLabs.OrderProcessingSystem.PaymentGateway;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers;
 
@@ -37,9 +37,9 @@ public class ConfirmPaymentStatusHandlerTests : PaymentServiceTestBase
     {
         // Arrange — no matching CardTransaction in the DB
         SetupConfirmPaymentDbSets(existingTransaction: null);
-        MockOpenPayAdapter
+        MockPaymentGateway
             .Setup(s => s.GetChargeAsync(It.IsAny<string>(), It.IsAny<string?>()))
-            .ReturnsAsync(new Charge { Id = "charge-001", Status = "completed" });
+            .ReturnsAsync(new PaymentGatewayCharge { Id = "charge-001", Status = "completed" });
 
         var handler = CreateConfirmPaymentHandler();
 
@@ -59,9 +59,9 @@ public class ConfirmPaymentStatusHandlerTests : PaymentServiceTestBase
         // Arrange — pass a callback status to trigger the browser-callback TSH row
         var transaction = BuildStubCardTransaction(billingCustomerId: 42);
         SetupConfirmPaymentDbSets(existingTransaction: transaction);
-        MockOpenPayAdapter
+        MockPaymentGateway
             .Setup(s => s.GetChargeAsync(It.IsAny<string>(), It.IsAny<string?>()))
-            .ReturnsAsync(new Charge { Id = "charge-001", Status = "completed", Amount = 100m });
+            .ReturnsAsync(new PaymentGatewayCharge { Id = "charge-001", Status = "completed", Amount = 100m });
 
         var handler = CreateConfirmPaymentHandler();
         var command = BuildConfirmPaymentCommand(callbackStatus: "completed"); // triggers callbackPayloadReceived
@@ -78,12 +78,12 @@ public class ConfirmPaymentStatusHandlerTests : PaymentServiceTestBase
     [Fact]
     public async Task HandleAsync_WithRemoteStatusOnly_ShouldWriteOneTransactionStatusHistoryRow()
     {
-        // Arrange — no callback payload; only remote status fetch from OpenPay
+        // Arrange — no callback payload; only remote status fetch from the payment provider
         var transaction = BuildStubCardTransaction(billingCustomerId: 42);
         SetupConfirmPaymentDbSets(existingTransaction: transaction);
-        MockOpenPayAdapter
+        MockPaymentGateway
             .Setup(s => s.GetChargeAsync(It.IsAny<string>(), It.IsAny<string?>()))
-            .ReturnsAsync(new Charge { Id = "charge-001", Status = "completed", Amount = 100m });
+            .ReturnsAsync(new PaymentGatewayCharge { Id = "charge-001", Status = "completed", Amount = 100m });
 
         var handler = CreateConfirmPaymentHandler();
         var command = BuildConfirmPaymentCommand(callbackStatus: null, callbackParameters: null); // no browser payload
@@ -104,9 +104,9 @@ public class ConfirmPaymentStatusHandlerTests : PaymentServiceTestBase
         var transaction = BuildStubCardTransaction(billingCustomerId: 42);
         var payinLog = BuildStubPayinLog(billingCustomerId: 42);
         SetupConfirmPaymentDbSets(existingTransaction: transaction, existingPayinLog: payinLog);
-        MockOpenPayAdapter
+        MockPaymentGateway
             .Setup(s => s.GetChargeAsync(It.IsAny<string>(), It.IsAny<string?>()))
-            .ReturnsAsync(new Charge
+            .ReturnsAsync(new PaymentGatewayCharge
             {
                 Id = "charge-001",
                 Status = "completed",
@@ -148,7 +148,7 @@ public class ConfirmPaymentStatusHandlerTests : PaymentServiceTestBase
 
         var payinLog = BuildStubPayinLog(billingCustomerId: 42, isThreeDSecureEnabled: false);
         payinLog.Result = 1;
-        payinLog.OpenPayAuthorizationId = "auth-ref-001";
+        payinLog.ProviderAuthorizationId = "auth-ref-001";
 
         var existingHistories = new[]
         {
@@ -182,9 +182,9 @@ public class ConfirmPaymentStatusHandlerTests : PaymentServiceTestBase
             existingPayinLog: payinLog,
             existingTransactionStatusHistories: existingHistories);
 
-        MockOpenPayAdapter
+        MockPaymentGateway
             .Setup(s => s.GetChargeAsync(It.IsAny<string>(), It.IsAny<string?>()))
-            .ReturnsAsync(new Charge
+            .ReturnsAsync(new PaymentGatewayCharge
             {
                 Id = "charge-001",
                 Status = "completed",
@@ -228,15 +228,15 @@ public class ConfirmPaymentStatusHandlerTests : PaymentServiceTestBase
             AttemptOrderId = transaction.AttemptOrderId!,
             AttemptNumber = 1,
             PaymentTraceId = transaction.PaymentTraceId!,
-            PaymentProviderName = "OpenPay",
+            PaymentProviderName = "DefaultGateway",
             ProviderChargeId = transaction.TransactionId,
             Status = PaymentAttemptStatus.ProviderAccepted,
         };
 
         SetupConfirmPaymentDbSets(existingTransaction: transaction, existingPaymentAttempt: paymentAttempt);
-        MockOpenPayAdapter
+        MockPaymentGateway
             .Setup(s => s.GetChargeAsync(It.IsAny<string>(), It.IsAny<string?>()))
-            .ReturnsAsync(new Charge
+            .ReturnsAsync(new PaymentGatewayCharge
             {
                 Id = "charge-001",
                 Status = "completed",
@@ -268,7 +268,7 @@ public class ConfirmPaymentStatusHandlerTests : PaymentServiceTestBase
             AttemptOrderId = transaction.AttemptOrderId!,
             AttemptNumber = 1,
             PaymentTraceId = transaction.PaymentTraceId!,
-            PaymentProviderName = "OpenPay",
+            PaymentProviderName = "DefaultGateway",
             ProviderChargeId = transaction.TransactionId,
             Status = PaymentAttemptStatus.ProviderAccepted,
         };
@@ -291,9 +291,9 @@ public class ConfirmPaymentStatusHandlerTests : PaymentServiceTestBase
             existingTransaction: transaction,
             existingPaymentAttempt: paymentAttempt,
             existingPaymentAttemptHistories: existingAttemptHistories);
-        MockOpenPayAdapter
+        MockPaymentGateway
             .Setup(s => s.GetChargeAsync(It.IsAny<string>(), It.IsAny<string?>()))
-            .ReturnsAsync(new Charge
+            .ReturnsAsync(new PaymentGatewayCharge
             {
                 Id = "charge-001",
                 Status = "completed",
@@ -318,9 +318,9 @@ public class ConfirmPaymentStatusHandlerTests : PaymentServiceTestBase
         const int expectedBillingCustomerId = 42;
         var transaction = BuildStubCardTransaction(billingCustomerId: expectedBillingCustomerId);
         SetupConfirmPaymentDbSets(existingTransaction: transaction);
-        MockOpenPayAdapter
+        MockPaymentGateway
             .Setup(s => s.GetChargeAsync(It.IsAny<string>(), It.IsAny<string?>()))
-            .ReturnsAsync(new Charge { Id = "charge-001", Status = "completed", Amount = 100m });
+            .ReturnsAsync(new PaymentGatewayCharge { Id = "charge-001", Status = "completed", Amount = 100m });
 
         var handler = CreateConfirmPaymentHandler();
 
@@ -339,18 +339,18 @@ public class ConfirmPaymentStatusHandlerTests : PaymentServiceTestBase
     [Fact]
     public async Task HandleAsync_RemoteChargeCreationDate_ShouldBeNormalisedToUtcInReturnDto()
     {
-        // Arrange — OpenPay returns a DateTimeKind.Unspecified date (CDMx local time)
-        var openPayLocalTime = new DateTime(2024, 3, 1, 4, 0, 0, DateTimeKind.Unspecified);
+        // Arrange — the provider returns a DateTimeKind.Unspecified date.
+        var providerLocalTime = new DateTime(2024, 3, 1, 4, 0, 0, DateTimeKind.Unspecified);
         var transaction = BuildStubCardTransaction();
         SetupConfirmPaymentDbSets(existingTransaction: transaction);
-        MockOpenPayAdapter
+        MockPaymentGateway
             .Setup(s => s.GetChargeAsync(It.IsAny<string>(), It.IsAny<string?>()))
-            .ReturnsAsync(new Charge
+            .ReturnsAsync(new PaymentGatewayCharge
             {
                 Id = "charge-001",
                 Status = "completed",
                 Amount = 100m,
-                CreationDate = openPayLocalTime
+                CreationDate = providerLocalTime
             });
 
         var handler = CreateConfirmPaymentHandler();

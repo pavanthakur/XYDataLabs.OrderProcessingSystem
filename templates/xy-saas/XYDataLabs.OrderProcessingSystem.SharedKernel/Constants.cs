@@ -16,10 +16,10 @@ namespace XYDataLabs.OrderProcessingSystem.SharedKernel
             public const string OrderProcessingSystemDbConnectionString = "OrderProcessingSystemDbConnection";
             
             /// <summary>
-            /// OpenPay configuration keys
+            /// Payment gateway configuration keys
             /// </summary>
-            public const string OpenPayRedirectUrl = "OpenPay:RedirectUrl";
-            public const string OpenPayDeviceSessionId = "OpenPay:DeviceSessionId";
+            public const string PaymentGatewayRedirectUrl = "PaymentGateway:RedirectUrl";
+            public const string PaymentGatewayDeviceSessionId = "PaymentGateway:DeviceSessionId";
             public const string EnableEfSensitiveDataLogging = "Observability:EnableEfSensitiveDataLogging";
             public const string ActiveTenantCode = "TenantConfiguration:ActiveTenantCode";
             public const string UiSelectorEnabled = "TenantConfiguration:UiSelectorEnabled";
@@ -33,7 +33,7 @@ namespace XYDataLabs.OrderProcessingSystem.SharedKernel
         public static class AppSettings
         {
             public const string ApiSettings = "ApiSettings";
-            public const string OpenPay = "OpenPay";
+            public const string PaymentGateway = "PaymentGateway";
             public const string Serilog = "Serilog";
             public const string LaunchSettings = "LaunchSettings";
             public const string Azure = "Azure";

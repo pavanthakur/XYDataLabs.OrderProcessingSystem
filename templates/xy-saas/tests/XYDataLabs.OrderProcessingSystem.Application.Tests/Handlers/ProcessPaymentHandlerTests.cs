@@ -1,12 +1,9 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Moq;
-using Openpay.Entities;
-using Openpay.Entities.Request;
-using XYDataLabs.OpenPayAdapter;
 using XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
-using OpenPayCustomer = Openpay.Entities.Customer;
+using XYDataLabs.OrderProcessingSystem.PaymentGateway;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers;
 
@@ -23,7 +20,7 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
     {
         // Arrange
         SetupPaymentDbSets();
-        SetupOpenPayHappyPath();
+        SetupPaymentGatewayHappyPath();
         var handler = CreateProcessPaymentHandler();
 
         // Act
@@ -53,12 +50,12 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
     // ------------------------------------------------------------------ Fix 4 regression guard
 
     [Fact]
-    public async Task HandleAsync_CreationDatesFromOpenPay_ShouldBeStoredAsUtcOnBothCardTransactions()
+    public async Task HandleAsync_CreationDatesFromProvider_ShouldBeStoredAsUtcOnBothCardTransactions()
     {
-        // Arrange — simulate OpenPay returning DateTimeKind.Unspecified timestamps (their CDMx local time)
-        var openPayLocalTime = new DateTime(2024, 3, 1, 4, 0, 0); // unspecified / CDMx = UTC-6
+        // Arrange — simulate the provider returning DateTimeKind.Unspecified timestamps.
+        var providerLocalTime = new DateTime(2024, 3, 1, 4, 0, 0, DateTimeKind.Unspecified);
         SetupPaymentDbSets();
-        SetupOpenPayHappyPath(cardDate: openPayLocalTime, chargeDate: openPayLocalTime);
+        SetupPaymentGatewayHappyPath(cardDate: providerLocalTime, chargeDate: providerLocalTime);
         var handler = CreateProcessPaymentHandler();
 
         // Act
@@ -77,7 +74,7 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
     // ------------------------------------------------------------------ Existing customer path
 
     [Fact]
-    public async Task HandleAsync_ExistingBillingCustomer_ShouldNotCallOpenPayCreateCustomer()
+    public async Task HandleAsync_ExistingBillingCustomer_ShouldNotCallProviderCreateCustomer()
     {
         // Arrange — seed a billing customer matching the command's name/email
         var existingCustomer = new BillingCustomer
@@ -85,31 +82,31 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
             Id = 5,
             Name = "John Doe",
             Email = "john@example.com",
-            APICustomerId = "openpay-cust-existing"
+            APICustomerId = "provider-cust-existing"
         };
         SetupPaymentDbSets(existingBillingCustomers: [existingCustomer]);
-        SetupOpenPayHappyPath();
+        SetupPaymentGatewayHappyPath();
         var handler = CreateProcessPaymentHandler();
 
         // Act
         await handler.HandleAsync(BuildProcessPaymentCommand());
 
         // Assert — CreateCustomerAsync must NOT be called when the customer is already in DB
-        MockOpenPayAdapter.Verify(
-            s => s.CreateCustomerAsync(It.IsAny<OpenPayCustomer>()),
+        MockPaymentGateway.Verify(
+            s => s.CreateCustomerAsync(It.IsAny<PaymentGatewayCustomer>()),
             Times.Never,
-            "CreateCustomerAsync in OpenPay must be skipped for repeat customers");
+            "CreateCustomerAsync in the payment provider must be skipped for repeat customers");
 
         // CreateCardTokenAsync and CreateChargeAsync should still run
-        MockOpenPayAdapter.Verify(s => s.CreateCardTokenAsync(It.IsAny<Card>()), Times.Once);
-        MockOpenPayAdapter.Verify(s => s.CreateChargeAsync(It.IsAny<ChargeRequest>()), Times.Once);
+        MockPaymentGateway.Verify(s => s.CreateCardTokenAsync(It.IsAny<PaymentGatewayCardTokenRequest>()), Times.Once);
+        MockPaymentGateway.Verify(s => s.CreateChargeAsync(It.IsAny<PaymentGatewayChargeRequest>()), Times.Once);
     }
 
     [Fact]
     public async Task HandleAsync_ShouldCreatePaymentAttemptAndAppendLifecycleHistory()
     {
         SetupPaymentDbSets();
-        SetupOpenPayHappyPath();
+        SetupPaymentGatewayHappyPath();
         var handler = CreateProcessPaymentHandler();
 
         await handler.HandleAsync(BuildProcessPaymentCommand());
@@ -142,11 +139,11 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
                 AttemptOrderId = "ORDER-001-1",
                 AttemptNumber = 1,
                 PaymentTraceId = "trace-existing",
-                PaymentProviderName = "OpenPay",
+                PaymentProviderName = "DefaultGateway",
                 Status = PaymentAttemptStatus.Succeeded,
             }
         ]);
-        SetupOpenPayHappyPath();
+        SetupPaymentGatewayHappyPath();
         var handler = CreateProcessPaymentHandler();
 
         await handler.HandleAsync(BuildProcessPaymentCommand());
@@ -166,7 +163,7 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
     {
         // Arrange — tenant with Use3DSecure = false on its PaymentProvider
         SetupPaymentDbSets();
-        SetupOpenPayHappyPath();
+        SetupPaymentGatewayHappyPath();
         var handler = CreateProcessPaymentHandler(use3DSecure: false);
 
         // Act
@@ -190,7 +187,7 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
     {
         // Arrange — 3DS disabled; charge returns immediately as completed with Authorization populated
         SetupPaymentDbSets();
-        SetupOpenPayHappyPath();
+        SetupPaymentGatewayHappyPath();
         var handler = CreateProcessPaymentHandler(use3DSecure: false);
 
         // Act
@@ -198,7 +195,7 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
 
         // Assert — charge CT must carry TransactionReferenceId from charge.Authorization at creation time.
         // For 3DS=0 there is no subsequent ConfirmPaymentStatus call, so the CT row is the only
-        // opportunity to persist the reference ID returned by OpenPay.
+        // opportunity to persist the reference ID returned by the payment provider.
         CapturedCardTransactions.Should().HaveCount(2);
         var chargeCt = CapturedCardTransactions.Last();
         chargeCt.TransactionReferenceId.Should().Be("auth-ref-001",
@@ -207,15 +204,15 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
     }
 
     [Fact]
-    public async Task HandleAsync_WhenOpenPayChargeFails_ShouldDeactivateOrphanedPaymentMethod()
+    public async Task HandleAsync_WhenProviderChargeFails_ShouldDeactivateOrphanedPaymentMethod()
     {
         // Arrange — fail at charge creation (after PaymentMethod has been persisted)
         SetupPaymentDbSets();
 
         // Customer creation succeeds so paymentMethod variable is set before the exception
-        MockOpenPayAdapter
-            .Setup(s => s.CreateCustomerAsync(It.IsAny<OpenPayCustomer>()))
-            .ThrowsAsync(new Exception("OpenPay unavailable"));
+        MockPaymentGateway
+            .Setup(s => s.CreateCustomerAsync(It.IsAny<PaymentGatewayCustomer>()))
+            .ThrowsAsync(new Exception("Payment provider unavailable"));
 
         // Capture Update calls on PaymentMethods
         Domain.Entities.PaymentMethod? deactivatedPm = null;

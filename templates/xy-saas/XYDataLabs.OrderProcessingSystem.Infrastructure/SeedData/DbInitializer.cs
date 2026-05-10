@@ -43,7 +43,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
             // Phase 1: seed shared-pool tenants (TenantA, TenantB) into the main DB.
             var startupSeedTenants = GetStartupSeedTenants(context);
 
-            SeedOpenpayProviders(context, startupSeedTenants);
+            SeedPaymentProviders(context, startupSeedTenants);
 
             foreach (var seedTenant in startupSeedTenants)
             {
@@ -142,23 +142,23 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
             context.SaveChanges();
         }
 
-        private static void SeedOpenpayProviders(OrderProcessingSystemDbContext context, IReadOnlyList<StartupSeedTenant> seedTenants)
+        private static void SeedPaymentProviders(OrderProcessingSystemDbContext context, IReadOnlyList<StartupSeedTenant> seedTenants)
         {
             foreach (var seedTenant in seedTenants)
             {
                 var providerExists = context.PaymentProviders.Any(provider =>
                     provider.TenantId == seedTenant.TenantId &&
-                    provider.Name == "OpenPay");
+                    provider.Name == "DefaultGateway");
 
                 if (providerExists)
                 {
                     continue;
                 }
 
-                var openPayProvider = new PaymentProvider
+                var paymentProvider = new PaymentProvider
                 {
-                    Name = "OpenPay",
-                    APIUrl = "https://sandbox-api.openpay.mx/v1",
+                    Name = "DefaultGateway",
+                    APIUrl = "https://sandbox.example-payments.test/v1",
                     IsActive = true,
                     IsProduction = false,
                     Use3DSecure = true,
@@ -167,7 +167,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                     CreatedDate = DateTime.UtcNow
                 };
 
-                context.PaymentProviders.Add(openPayProvider);
+                context.PaymentProviders.Add(paymentProvider);
             }
 
             context.SaveChanges();
@@ -241,7 +241,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                 if (seedTenant is null)
                     continue;
 
-                SeedOpenpayProviders(dedicatedContext, new[] { seedTenant });
+                SeedPaymentProviders(dedicatedContext, new[] { seedTenant });
 
                 SeedTenantSampleData(dedicatedContext, seedTenant);
             }

@@ -12,10 +12,11 @@
   "DedicatedTenantConnectionStrings": {
     "TenantC": "Server=localhost;Database=OrderProcessingSystem_TenantC;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true;"
   },
-  "OpenPay": {
-    "MerchantId": "__OPENPAY_MERCHANT_ID__",
-    "PrivateKey": "__OPENPAY_PRIVATE_KEY__",
-    "DeviceSessionId": "__OPENPAY_DEVICE_SESSION_ID__",
+  "PaymentGateway": {
+    "ProviderName": "DefaultGateway",
+    "AccountId": "__PAYMENT_GATEWAY_ACCOUNT_ID__",
+    "ApiKey": "__PAYMENT_GATEWAY_API_KEY__",
+    "DeviceSessionId": "__PAYMENT_GATEWAY_DEVICE_SESSION_ID__",
     "IsProduction": false,
     "RedirectUrl": ""
   },

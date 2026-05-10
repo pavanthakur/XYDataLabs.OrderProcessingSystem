@@ -81,7 +81,7 @@
         "XYDataLabs.OrderProcessingSystem.sln",
         "Resources/BuildConfiguration/**/*",
         "Resources/Configuration/**/*",
-        "XYDataLabs.OpenPayAdapter/**/*",
+        "XYDataLabs.OrderProcessingSystem.PaymentGateway/**/*",
         "XYDataLabs.OrderProcessingSystem.API/**/*",
         "XYDataLabs.OrderProcessingSystem.Application/**/*",
         "XYDataLabs.OrderProcessingSystem.Domain/**/*",

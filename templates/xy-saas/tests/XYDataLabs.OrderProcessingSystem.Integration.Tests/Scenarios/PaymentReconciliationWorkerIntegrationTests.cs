@@ -1,10 +1,9 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Openpay.Entities.Request;
-using XYDataLabs.OpenPayAdapter;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure;
+using XYDataLabs.OrderProcessingSystem.PaymentGateway;
 
 namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Scenarios;
 
@@ -24,7 +23,7 @@ public sealed class PaymentReconciliationWorkerIntegrationTests : IAsyncLifetime
     {
         _factory = new ServiceOverrideIntegrationTestFactory(
             _fixture.ConnectionString,
-            services => services.AddScoped<IOpenPayAdapterService, SuccessfulOpenPayAdapterStub>());
+            services => services.AddScoped<IPaymentGatewayService, SuccessfulPaymentGatewayStub>());
         _ = _factory.CreateClient(); // Force host initialization
         return Task.CompletedTask;
     }
@@ -46,7 +45,7 @@ public sealed class PaymentReconciliationWorkerIntegrationTests : IAsyncLifetime
             CustomerOrderId = "ORD-123",
             PaymentTraceId = Guid.NewGuid().ToString("N"),
             AttemptNumber = 1,
-            PaymentProviderName = "OpenPay",
+            PaymentProviderName = "DefaultGateway",
             ProviderChargeId = "tr_invalid_test_charge",
             Status = PaymentAttemptStatus.UnknownNeedsReconciliation,
             ProviderStatus = "in_progress",
@@ -88,26 +87,26 @@ public sealed class PaymentReconciliationWorkerIntegrationTests : IAsyncLifetime
         updatedAttempt.UpdatedDate.Should().NotBeNull();
     }
 
-    private sealed class SuccessfulOpenPayAdapterStub : IOpenPayAdapterService
+    private sealed class SuccessfulPaymentGatewayStub : IPaymentGatewayService
     {
-        public Task<Openpay.Entities.Customer> CreateCustomerAsync(Openpay.Entities.Customer customer)
+        public Task<PaymentGatewayCustomer> CreateCustomerAsync(PaymentGatewayCustomer customer)
         {
             throw new NotSupportedException();
         }
 
-        public Task<Openpay.Entities.Card> CreateCardTokenAsync(Openpay.Entities.Card card)
+        public Task<PaymentGatewayCardToken> CreateCardTokenAsync(PaymentGatewayCardTokenRequest card)
         {
             throw new NotSupportedException();
         }
 
-        public Task<Openpay.Entities.Charge> CreateChargeAsync(ChargeRequest request)
+        public Task<PaymentGatewayCharge> CreateChargeAsync(PaymentGatewayChargeRequest request)
         {
             throw new NotSupportedException();
         }
 
-        public Task<Openpay.Entities.Charge> GetChargeAsync(string chargeId, string? customerId = null)
+        public Task<PaymentGatewayCharge> GetChargeAsync(string chargeId, string? customerId = null)
         {
-            return Task.FromResult(new Openpay.Entities.Charge
+            return Task.FromResult(new PaymentGatewayCharge
             {
                 Id = chargeId,
                 Status = "completed",

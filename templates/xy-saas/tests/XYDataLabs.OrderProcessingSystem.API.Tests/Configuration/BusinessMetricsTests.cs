@@ -40,7 +40,7 @@ public class BusinessMetricsTests
         var measurements = CaptureMeasurements(() =>
             BusinessMetrics.RecordPaymentAttempt(
                 outcome: "success",
-                providerName: "OpenPay",
+                providerName: "DefaultGateway",
                 isThreeDSecureEnabled: true,
                 paymentStatus: "completed",
                 duration: TimeSpan.FromMilliseconds(125)));
@@ -56,7 +56,7 @@ public class BusinessMetricsTests
         foreach (var measurement in new[] { counter, histogram })
         {
             measurement.Tags.Should().ContainKey("outcome").WhoseValue.Should().Be("success");
-            measurement.Tags.Should().ContainKey("provider").WhoseValue.Should().Be("OpenPay");
+            measurement.Tags.Should().ContainKey("provider").WhoseValue.Should().Be("DefaultGateway");
             measurement.Tags.Should().ContainKey("three_d_secure_enabled").WhoseValue.Should().Be("True");
             measurement.Tags.Should().ContainKey("payment_status").WhoseValue.Should().Be("completed");
         }

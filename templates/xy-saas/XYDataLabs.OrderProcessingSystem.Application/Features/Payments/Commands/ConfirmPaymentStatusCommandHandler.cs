@@ -1,13 +1,12 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Openpay.Entities;
-using XYDataLabs.OpenPayAdapter;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
 using XYDataLabs.OrderProcessingSystem.Application.Utilities;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
+using XYDataLabs.OrderProcessingSystem.PaymentGateway;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
 using static XYDataLabs.OrderProcessingSystem.Application.Utilities.AppMasterConstant;
 
@@ -16,23 +15,23 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Features.Payments.Command
 public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<ConfirmPaymentStatusCommand, Result<PaymentStatusDetailsDto>>
 {
     private readonly IAppDbContext _context;
-    private readonly IOpenPayAdapterService _openPayAdapterService;
+    private readonly IPaymentGatewayService _paymentGatewayService;
     private readonly ILogger<ConfirmPaymentStatusCommandHandler> _logger;
     private readonly TimeProvider _timeProvider;
 
     public ConfirmPaymentStatusCommandHandler(
         IAppDbContext context,
-        IOpenPayAdapterService openPayAdapterService,
+        IPaymentGatewayService paymentGatewayService,
         ILogger<ConfirmPaymentStatusCommandHandler> logger,
         TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(context);
-        ArgumentNullException.ThrowIfNull(openPayAdapterService);
+        ArgumentNullException.ThrowIfNull(paymentGatewayService);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(timeProvider);
 
         _context = context;
-        _openPayAdapterService = openPayAdapterService;
+        _paymentGatewayService = paymentGatewayService;
         _logger = logger;
         _timeProvider = timeProvider;
     }
@@ -71,11 +70,11 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
         var payinLog = await _context.PayinLogs
             .OrderByDescending(item => item.Id)
             .FirstOrDefaultAsync(
-                item => item.OpenPayChargeId == command.PaymentId
+                item => item.ProviderChargeId == command.PaymentId
                     || (!string.IsNullOrWhiteSpace(command.AttemptOrderId) && item.AttemptOrderId == command.AttemptOrderId),
                 cancellationToken);
 
-        Charge? remoteCharge = null;
+        PaymentGatewayCharge? remoteCharge = null;
         var remoteStatusConfirmed = false;
         var callbackPayloadReceived = (command.CallbackParameters?.Count ?? 0) > 0
             || !string.IsNullOrWhiteSpace(command.CallbackStatus)
@@ -83,12 +82,12 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
 
         try
         {
-            remoteCharge = await _openPayAdapterService.GetChargeAsync(command.PaymentId, transaction.TransactionCustomerId);
+            remoteCharge = await _paymentGatewayService.GetChargeAsync(command.PaymentId, transaction.TransactionCustomerId);
             remoteStatusConfirmed = true;
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Remote OpenPay status lookup failed for payment {PaymentId}", command.PaymentId);
+            _logger.LogWarning(ex, "Remote payment provider status lookup failed for payment {PaymentId}", command.PaymentId);
         }
 
         var resolvedStatus = NormalizeStatus(remoteCharge?.Status)
@@ -140,7 +139,7 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
             IsFinal = EnumHelper.IsFinalStatus(resolvedStatus),
             CallbackRecorded = callbackRecorded,
             RemoteStatusConfirmed = remoteStatusConfirmed,
-            StatusSource = remoteStatusConfirmed ? "openpay" : "database",
+            StatusSource = remoteStatusConfirmed ? "provider" : "database",
             ErrorMessage = resolvedErrorMessage,
             TransactionReferenceId = FirstNonEmpty(remoteCharge?.Authorization, transaction.TransactionReferenceId),
             TransactionDate = NormalizeToUtc(remoteCharge?.CreationDate) ?? transaction.TransactionDate,
@@ -154,7 +153,7 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
         ConfirmPaymentStatusCommand command,
         Domain.Entities.CardTransaction transaction,
         Domain.Entities.PayinLog? payinLog,
-        Charge? remoteCharge,
+        PaymentGatewayCharge? remoteCharge,
         bool remoteStatusConfirmed,
         bool callbackPayloadReceived,
         string resolvedStatus,
@@ -286,7 +285,7 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
             payinLog.PaymentTraceId = transaction.PaymentTraceId;
             payinLog.Result = EnumHelper.GetEnumIdFromDescription<PaymentStatus>(resolvedStatus) ?? (int)PaymentStatus.Unknown;
             payinLog.AmountFromAPI = remoteCharge?.Amount ?? payinLog.AmountFromAPI;
-            payinLog.OpenPayAuthorizationId = FirstNonEmpty(remoteCharge?.Authorization, payinLog.OpenPayAuthorizationId);
+            payinLog.ProviderAuthorizationId = FirstNonEmpty(remoteCharge?.Authorization, payinLog.ProviderAuthorizationId);
             payinLog.IsThreeDSecureEnabled = transaction.IsThreeDSecureEnabled;
             payinLog.ThreeDSecureStage = resolvedThreeDSecureStage;
             payinLog.UpdatedBy = transaction.BillingCustomerId;
@@ -312,7 +311,7 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
         return shouldRecordCallbackStage && (callbackHistoryExists || callbackHistoryAdded);
     }
 
-    private static string BuildAuditMessage(ConfirmPaymentStatusCommand command, Charge? remoteCharge, string resolvedStatus, string resolvedThreeDSecureStage, string paymentTraceId)
+    private static string BuildAuditMessage(ConfirmPaymentStatusCommand command, PaymentGatewayCharge? remoteCharge, string resolvedStatus, string resolvedThreeDSecureStage, string paymentTraceId)
     {
         var messageParts = new List<string>
         {
@@ -328,7 +327,7 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
 
         if (!string.IsNullOrWhiteSpace(remoteCharge?.Status))
         {
-            messageParts.Add($"OpenPay status '{remoteCharge.Status}'");
+            messageParts.Add($"provider status '{remoteCharge.Status}'");
         }
 
         if (!string.IsNullOrWhiteSpace(command.ErrorMessage))
@@ -338,14 +337,14 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
 
         if (!string.IsNullOrWhiteSpace(remoteCharge?.ErrorMessage))
         {
-            messageParts.Add($"OpenPay message '{remoteCharge.ErrorMessage}'");
+            messageParts.Add($"provider message '{remoteCharge.ErrorMessage}'");
         }
 
         return string.Join("; ", messageParts);
     }
 
     private static string? NormalizeStatus(string? status)
-        => EnumHelper.NormalizeOpenPayStatus(status);
+        => EnumHelper.NormalizePaymentProviderStatus(status);
 
     private static string? FirstNonEmpty(params string?[] values)
     {

@@ -4,16 +4,13 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
-using Openpay.Entities;
-using Openpay.Entities.Request;
-using XYDataLabs.OpenPayAdapter;
-using XYDataLabs.OpenPayAdapter.Configuration;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Payments.Commands;
 using XYDataLabs.OrderProcessingSystem.Application.Utilities;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
+using XYDataLabs.OrderProcessingSystem.PaymentGateway;
+using XYDataLabs.OrderProcessingSystem.PaymentGateway.Configuration;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
-using OpenPayCustomer = Openpay.Entities.Customer;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase;
 
@@ -33,7 +30,7 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
     protected static readonly DateTime UtcNow = new(2024, 3, 1, 10, 0, 0, DateTimeKind.Utc);
 
     // --- shared mocks ---
-    protected readonly Mock<IOpenPayAdapterService> MockOpenPayAdapter = new();
+    protected readonly Mock<IPaymentGatewayService> MockPaymentGateway = new();
     protected readonly Mock<ITenantProvider> MockTenantProvider = new();
     protected readonly Mock<TimeProvider> MockTimeProvider = new();
 
@@ -57,9 +54,10 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
     {
         var appMasterData = BuildAppMasterData(use3DSecure);
         return new ProcessPaymentCommandHandler(
-            MockOpenPayAdapter.Object,
-            Options.Create(new OpenPayConfig
+            MockPaymentGateway.Object,
+            Options.Create(new PaymentGatewayOptions
             {
+                ProviderName = "DefaultGateway",
                 RedirectUrl = "https://example.com/callback",
                 DeviceSessionId = "default-device-session"
             }),
@@ -74,7 +72,7 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
     {
         return new ConfirmPaymentStatusCommandHandler(
             MockDbContext.Object,
-            MockOpenPayAdapter.Object,
+            MockPaymentGateway.Object,
             new Mock<ILogger<ConfirmPaymentStatusCommandHandler>>().Object,
             MockTimeProvider.Object);
     }
@@ -152,7 +150,7 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
         // PaymentProviders — needed by CreatePaymentMethodAsync to resolve FK-safe PaymentProviderId
         var providers = new List<PaymentProvider>
         {
-            new PaymentProvider { Id = 1, Name = "OpenPay", TenantId = 1, Use3DSecure = true }
+            new PaymentProvider { Id = 1, Name = "DefaultGateway", TenantId = 1, Use3DSecure = true }
         }.AsQueryable();
         MockDbContext.Setup(db => db.PaymentProviders).Returns(GetMockDbSet(providers).Object);
 
@@ -228,13 +226,13 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
         MockDbContext.Setup(db => db.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
     }
 
-    // ------------------------------------------------------------------ OpenPay wiring
+    // ------------------------------------------------------------------ payment gateway wiring
 
-    protected void SetupOpenPayHappyPath(DateTime? cardDate = null, DateTime? chargeDate = null)
+    protected void SetupPaymentGatewayHappyPath(DateTime? cardDate = null, DateTime? chargeDate = null)
     {
-        var fakeCustomer = new OpenPayCustomer { Id = "openpay-cust-001", Name = "John Doe", Email = "john@example.com" };
-        var fakeCard = new Card { Id = "card-001", CreationDate = cardDate ?? UtcNow };
-        var fakeCharge = new Charge
+        var fakeCustomer = new PaymentGatewayCustomer { Id = "provider-cust-001", Name = "John Doe", Email = "john@example.com" };
+        var fakeCard = new PaymentGatewayCardToken { Id = "card-001", CreationDate = cardDate ?? UtcNow };
+        var fakeCharge = new PaymentGatewayCharge
         {
             Id = "charge-001",
             Status = "completed",
@@ -243,9 +241,9 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
             Authorization = "auth-ref-001"
         };
 
-        MockOpenPayAdapter.Setup(s => s.CreateCustomerAsync(It.IsAny<OpenPayCustomer>())).ReturnsAsync(fakeCustomer);
-        MockOpenPayAdapter.Setup(s => s.CreateCardTokenAsync(It.IsAny<Card>())).ReturnsAsync(fakeCard);
-        MockOpenPayAdapter.Setup(s => s.CreateChargeAsync(It.IsAny<ChargeRequest>())).ReturnsAsync(fakeCharge);
+        MockPaymentGateway.Setup(s => s.CreateCustomerAsync(It.IsAny<PaymentGatewayCustomer>())).ReturnsAsync(fakeCustomer);
+        MockPaymentGateway.Setup(s => s.CreateCardTokenAsync(It.IsAny<PaymentGatewayCardTokenRequest>())).ReturnsAsync(fakeCard);
+        MockPaymentGateway.Setup(s => s.CreateChargeAsync(It.IsAny<PaymentGatewayChargeRequest>())).ReturnsAsync(fakeCharge);
     }
 
     // ------------------------------------------------------------------ command builders
@@ -280,7 +278,7 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
             Id = 1,
             BillingCustomerId = billingCustomerId,
             TransactionId = "charge-001",
-            TransactionCustomerId = "openpay-cust-001",
+            TransactionCustomerId = "provider-cust-001",
             AttemptOrderId = "attempt-001",
             CustomerOrderId = "ORDER-001",
             PaymentTraceId = "trace-001",
@@ -296,7 +294,7 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
         {
             Id = 1,
             AttemptOrderId = "attempt-001",
-            OpenPayChargeId = "charge-001",
+            ProviderChargeId = "charge-001",
             PaymentTraceId = "trace-001",
             Result = 0,
             IsThreeDSecureEnabled = isThreeDSecureEnabled,
@@ -316,7 +314,7 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
     /// </summary>
     private AppMasterData BuildAppMasterData(bool use3DSecure = true)
     {
-        var provider = new PaymentProvider { Id = 1, Name = "OpenPay", TenantId = 1, Use3DSecure = use3DSecure };
+        var provider = new PaymentProvider { Id = 1, Name = "DefaultGateway", TenantId = 1, Use3DSecure = use3DSecure };
         var list = new List<PaymentProvider> { provider };
 
         var mockProviderSet = new Mock<DbSet<PaymentProvider>>();

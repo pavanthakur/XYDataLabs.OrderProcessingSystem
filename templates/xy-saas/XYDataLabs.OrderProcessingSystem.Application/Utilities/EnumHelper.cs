@@ -28,14 +28,14 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Utilities
         }
 
         /// <summary>
-        /// Normalises a raw OpenPay payment status string to the canonical internal status value
+        /// Normalises a raw payment-provider status string to the canonical internal status value
         /// used across all payment tables (TransactionStatus, PaymentStatus enum descriptions).
         /// </summary>
         /// <summary>
-        /// Normalises a raw OpenPay status string to the canonical PaymentStatus description value.
+        /// Normalises a raw payment-provider status string to the canonical PaymentStatus description value.
         /// Returns null for unrecognised inputs so callers can use ?? chains to provide a fallback.
         /// </summary>
-        public static string? NormalizeOpenPayStatus(string? status)
+        public static string? NormalizePaymentProviderStatus(string? status)
         {
             if (string.IsNullOrWhiteSpace(status))
                 return null;
@@ -86,26 +86,26 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Utilities
         {
             if (IsSuccessStatus(status))
                 return remoteStatusConfirmed
-                    ? "Payment completed successfully and the final status was confirmed with OpenPay."
+                    ? "Payment completed successfully and the final status was confirmed with the payment provider."
                     : "Payment completed successfully based on the latest local record.";
 
             if (IsPendingStatus(status))
                 return remoteStatusConfirmed
-                    ? "Payment is still pending issuer or 3D Secure completion according to OpenPay."
+                    ? "Payment is still pending issuer or 3D Secure completion according to the payment provider."
                     : "Payment is still pending confirmation based on the latest local record.";
 
             if (IsFailedStatus(status))
                 return remoteStatusConfirmed
-                    ? "Payment failed and the final status was confirmed with OpenPay."
+                    ? "Payment failed and the final status was confirmed with the payment provider."
                     : "Payment failed based on the latest local record.";
 
             if (IsCancelledStatus(status))
                 return remoteStatusConfirmed
-                    ? "Payment was cancelled and the final status was confirmed with OpenPay."
+                    ? "Payment was cancelled and the final status was confirmed with the payment provider."
                     : "Payment was cancelled based on the latest local record.";
 
             return remoteStatusConfirmed
-                ? "Payment callback was received, but OpenPay returned a status that is not explicitly mapped yet."
+                ? "Payment callback was received, but the payment provider returned a status that is not explicitly mapped yet."
                 : "Payment callback was received, but the final status could not be confirmed remotely.";
         }
     }

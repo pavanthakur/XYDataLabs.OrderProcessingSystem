@@ -7,7 +7,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XYDataLabs.OrderProcessingS
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XYDataLabs.OrderProcessingSystem.Application", "XYDataLabs.OrderProcessingSystem.Application\XYDataLabs.OrderProcessingSystem.Application.csproj", "{73662AEA-FBF3-4330-AE67-9E66166379E7}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XYDataLabs.OpenPayAdapter", "XYDataLabs.OpenPayAdapter\XYDataLabs.OpenPayAdapter.csproj", "{BD5667CB-F09D-4299-8431-977A44DE613D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XYDataLabs.OrderProcessingSystem.PaymentGateway", "XYDataLabs.OrderProcessingSystem.PaymentGateway\XYDataLabs.OrderProcessingSystem.PaymentGateway.csproj", "{BD5667CB-F09D-4299-8431-977A44DE613D}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XYDataLabs.OrderProcessingSystem.Domain", "XYDataLabs.OrderProcessingSystem.Domain\XYDataLabs.OrderProcessingSystem.Domain.csproj", "{C058A61B-EEC6-49F0-9AFA-89ABE5583B79}"
 EndProject

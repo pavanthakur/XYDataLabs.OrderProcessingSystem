@@ -18,7 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\XYDataLabs.OpenPayAdapter\XYDataLabs.OpenPayAdapter.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.PaymentGateway\XYDataLabs.OrderProcessingSystem.PaymentGateway.csproj" />
     <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Domain\XYDataLabs.OrderProcessingSystem.Domain.csproj" />
     <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.SharedKernel\XYDataLabs.OrderProcessingSystem.SharedKernel.csproj" />
   </ItemGroup>

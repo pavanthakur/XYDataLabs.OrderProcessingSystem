@@ -18,6 +18,14 @@ A backend system for processing customer orders and payments across multiple ten
 
 This is not a tutorial project — it is built to the constraints of real SaaS systems: tenant isolation, PCI DSS card data rules, architecture-enforced contracts, and Azure-deployed infrastructure.
 
+## Reusable Template
+
+The repository now also ships a Layer 1 `dotnet new` template release under `templates/xy-saas/`, packed by `templates/XYDataLabs.SaaS.Templates/XYDataLabs.SaaS.Templates.csproj`.
+
+- The current formal template package line is `XYDataLabs.SaaS.Templates` `1.0.0`.
+- The generated template uses a provider-agnostic `PaymentGateway` seam so side projects can replace the default in-memory implementation with a real provider without carrying the repository's internal OpenPay dependency surface.
+- The main repository runtime described below still uses the concrete `XYDataLabs.OpenPayAdapter` project.
+
 ---
 
 ## Architecture
@@ -250,9 +258,9 @@ POST /api/v1/Payments/ProcessPayment
 ProcessPaymentCommandHandler
     +-- 1. Resolve TenantId (X-Tenant-Code header)
     +-- 2. Create BillingCustomer record
-    +-- 3. OpenPayAdapter.CreateCustomerAsync()      --> OpenPay API
-    +-- 4. OpenPayAdapter.CreateCardTokenAsync()     --> OpenPay API
-    +-- 5. OpenPayAdapter.CreateChargeAsync()        --> OpenPay API
+  +-- 3. OpenPayAdapter.CreateCustomerAsync()      --> OpenPay API
+  +-- 4. OpenPayAdapter.CreateCardTokenAsync()     --> OpenPay API
+  +-- 5. OpenPayAdapter.CreateChargeAsync()        --> OpenPay API
     +-- 6. Persist CardTransaction (status, masked card, AttemptOrderId)
     +-- 7. Persist PayinLog (reconciliation)
     +-- 8. Return PaymentDto { CustomerOrderId, TransactionId, Status }

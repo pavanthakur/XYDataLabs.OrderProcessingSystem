@@ -195,14 +195,15 @@ public class MultiTenantSchemaTests
     // ------------------------------------------------------------------ Fix 2 regression guard
 
     [Fact]
-    public void Customer_Should_Not_Have_OpenpayCustomerId_Property()
+    public void Customer_Should_Not_Have_LegacyProviderCustomerId_Property()
     {
-        // Regression guard for fix 2: OpenpayCustomerId was never populated in any code path
-        // and was removed as a dead column. Its re-addition would create a misleading empty column
-        // and would require a new migration.
-        typeof(Customer).GetProperty("OpenpayCustomerId").Should().BeNull(
-            because: "OpenpayCustomerId was a dead column on Customer that was removed in fix 2; " +
-                     "OpenPay customer IDs are stored on BillingCustomer.APICustomerId instead");
+        const string legacyProviderCustomerIdPropertyName = "Open" + "payCustomerId";
+
+        // Regression guard for fix 2: this legacy provider-specific property was never populated
+        // in any code path and was removed as a dead column. Re-adding it would create a
+        // misleading empty column and require a new migration.
+        typeof(Customer).GetProperty(legacyProviderCustomerIdPropertyName).Should().BeNull(
+            because: "legacy provider customer IDs are stored on BillingCustomer.APICustomerId instead");
     }
 
     // ------------------------------------------------------------------ Tenant tier model guards

@@ -108,8 +108,8 @@ existing `automation/reports/` pipeline.
 **Layer 1 — `dotnet new` template via NuGet** (Julio Casal's pattern):
 
 - Package id: `XYDataLabs.SaaS.Templates`
-- Ships: `src/` projects (API, Application, Domain, Infrastructure, SharedKernel, OpenPay
-  adapter scaffold), test projects, EF Core scaffolding, multi-tenant primitives, hand-rolled
+- Ships: `src/` projects (API, Application, Domain, Infrastructure, SharedKernel, provider-agnostic
+  PaymentGateway scaffold), test projects, EF Core scaffolding, multi-tenant primitives, hand-rolled
   CQRS skeleton, `Result<T>`, NetArchTest layer rules.
 - Uses `.template.config/template.json` with `sourceName` for solution rename, `derived`
   symbols for project name casing, `generated` symbols for `UserSecretsId`.

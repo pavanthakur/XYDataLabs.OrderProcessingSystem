@@ -142,7 +142,7 @@ public sealed class DomainEventOutboxSqliteTests : IDisposable
 
         var paymentProvider = new PaymentProvider
         {
-            Name = "OpenPay",
+            Name = "DefaultGateway",
             APIUrl = "https://api.example.com",
             IsProduction = false,
             IsActive = true,

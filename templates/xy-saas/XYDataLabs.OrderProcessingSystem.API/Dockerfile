@@ -23,7 +23,7 @@ COPY ["XYDataLabs.OrderProcessingSystem.Application/XYDataLabs.OrderProcessingSy
 COPY ["XYDataLabs.OrderProcessingSystem.Domain/XYDataLabs.OrderProcessingSystem.Domain.csproj", "XYDataLabs.OrderProcessingSystem.Domain/"]
 COPY ["XYDataLabs.OrderProcessingSystem.Infrastructure/XYDataLabs.OrderProcessingSystem.Infrastructure.csproj", "XYDataLabs.OrderProcessingSystem.Infrastructure/"]
 COPY ["XYDataLabs.OrderProcessingSystem.SharedKernel/XYDataLabs.OrderProcessingSystem.SharedKernel.csproj", "XYDataLabs.OrderProcessingSystem.SharedKernel/"]
-COPY ["XYDataLabs.OpenPayAdapter/XYDataLabs.OpenPayAdapter.csproj", "XYDataLabs.OpenPayAdapter/"]
+COPY ["XYDataLabs.OrderProcessingSystem.PaymentGateway/XYDataLabs.OrderProcessingSystem.PaymentGateway.csproj", "XYDataLabs.OrderProcessingSystem.PaymentGateway/"]
 
 # Restore dependencies
 RUN dotnet restore "./XYDataLabs.OrderProcessingSystem.API/XYDataLabs.OrderProcessingSystem.API.csproj"
@@ -52,7 +52,7 @@ COPY ["XYDataLabs.OrderProcessingSystem.Application/XYDataLabs.OrderProcessingSy
 COPY ["XYDataLabs.OrderProcessingSystem.Domain/XYDataLabs.OrderProcessingSystem.Domain.csproj", "../XYDataLabs.OrderProcessingSystem.Domain/"]
 COPY ["XYDataLabs.OrderProcessingSystem.Infrastructure/XYDataLabs.OrderProcessingSystem.Infrastructure.csproj", "../XYDataLabs.OrderProcessingSystem.Infrastructure/"]
 COPY ["XYDataLabs.OrderProcessingSystem.SharedKernel/XYDataLabs.OrderProcessingSystem.SharedKernel.csproj", "../XYDataLabs.OrderProcessingSystem.SharedKernel/"]
-COPY ["XYDataLabs.OpenPayAdapter/XYDataLabs.OpenPayAdapter.csproj", "../XYDataLabs.OpenPayAdapter/"]
+COPY ["XYDataLabs.OrderProcessingSystem.PaymentGateway/XYDataLabs.OrderProcessingSystem.PaymentGateway.csproj", "../XYDataLabs.OrderProcessingSystem.PaymentGateway/"]
 
 RUN dotnet restore "XYDataLabs.OrderProcessingSystem.API.csproj"
 

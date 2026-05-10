@@ -1,8 +1,8 @@
 using FluentAssertions;
 using Microsoft.Extensions.Options;
-using XYDataLabs.OpenPayAdapter.Configuration;
 using XYDataLabs.OrderProcessingSystem.SharedKernel;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Configuration;
+using XYDataLabs.OrderProcessingSystem.PaymentGateway.Configuration;
 
 namespace XYDataLabs.OrderProcessingSystem.API.Tests.Configuration;
 
@@ -83,13 +83,14 @@ public class OptionsValidationTests
     }
 
     [Fact]
-    public void OpenPayConfigValidator_Fails_WhenRedirectUrlIsRelative()
+    public void PaymentGatewayOptionsValidator_Fails_WhenRedirectUrlIsRelative()
     {
-        var validator = new OpenPayConfigValidator();
-        var settings = new OpenPayConfig
+        var validator = new PaymentGatewayOptionsValidator();
+        var settings = new PaymentGatewayOptions
         {
-            MerchantId = "merchant",
-            PrivateKey = "private-key",
+            ProviderName = "DefaultGateway",
+            AccountId = "account-id",
+            ApiKey = "private-key",
             DeviceSessionId = "device-session",
             RedirectUrl = "/payment/callback",
             IsProduction = false
@@ -102,13 +103,14 @@ public class OptionsValidationTests
     }
 
     [Fact]
-    public void OpenPayConfigValidator_Fails_WhenMerchantIdIsEmpty()
+    public void PaymentGatewayOptionsValidator_Fails_WhenAccountIdIsEmpty()
     {
-        var validator = new OpenPayConfigValidator();
-        var settings = new OpenPayConfig
+        var validator = new PaymentGatewayOptionsValidator();
+        var settings = new PaymentGatewayOptions
         {
-            MerchantId = "",
-            PrivateKey = "private-key",
+            ProviderName = "DefaultGateway",
+            AccountId = "",
+            ApiKey = "private-key",
             DeviceSessionId = "device-session",
             RedirectUrl = "https://example.com/payment/callback",
             IsProduction = false
@@ -117,17 +119,18 @@ public class OptionsValidationTests
         var result = validator.Validate(Options.DefaultName, settings);
 
         result.Failed.Should().BeTrue();
-        result.Failures.Should().ContainSingle(failure => failure.Contains("OpenPay:MerchantId is required", StringComparison.Ordinal));
+        result.Failures.Should().ContainSingle(failure => failure.Contains("PaymentGateway:AccountId is required", StringComparison.Ordinal));
     }
 
     [Fact]
-    public void OpenPayConfigValidator_Fails_WhenPrivateKeyIsEmpty()
+    public void PaymentGatewayOptionsValidator_Fails_WhenApiKeyIsEmpty()
     {
-        var validator = new OpenPayConfigValidator();
-        var settings = new OpenPayConfig
+        var validator = new PaymentGatewayOptionsValidator();
+        var settings = new PaymentGatewayOptions
         {
-            MerchantId = "merchant",
-            PrivateKey = "",
+            ProviderName = "DefaultGateway",
+            AccountId = "account-id",
+            ApiKey = "",
             DeviceSessionId = "device-session",
             RedirectUrl = "https://example.com/payment/callback",
             IsProduction = false
@@ -136,17 +139,18 @@ public class OptionsValidationTests
         var result = validator.Validate(Options.DefaultName, settings);
 
         result.Failed.Should().BeTrue();
-        result.Failures.Should().ContainSingle(failure => failure.Contains("OpenPay:PrivateKey is required", StringComparison.Ordinal));
+        result.Failures.Should().ContainSingle(failure => failure.Contains("PaymentGateway:ApiKey is required", StringComparison.Ordinal));
     }
 
     [Fact]
-    public void OpenPayConfigValidator_Fails_WhenDeviceSessionIdIsEmpty()
+    public void PaymentGatewayOptionsValidator_Fails_WhenDeviceSessionIdIsEmpty()
     {
-        var validator = new OpenPayConfigValidator();
-        var settings = new OpenPayConfig
+        var validator = new PaymentGatewayOptionsValidator();
+        var settings = new PaymentGatewayOptions
         {
-            MerchantId = "merchant",
-            PrivateKey = "private-key",
+            ProviderName = "DefaultGateway",
+            AccountId = "account-id",
+            ApiKey = "private-key",
             DeviceSessionId = "",
             RedirectUrl = "https://example.com/payment/callback",
             IsProduction = false
@@ -155,17 +159,18 @@ public class OptionsValidationTests
         var result = validator.Validate(Options.DefaultName, settings);
 
         result.Failed.Should().BeTrue();
-        result.Failures.Should().ContainSingle(failure => failure.Contains("OpenPay:DeviceSessionId is required", StringComparison.Ordinal));
+        result.Failures.Should().ContainSingle(failure => failure.Contains("PaymentGateway:DeviceSessionId is required", StringComparison.Ordinal));
     }
 
     [Fact]
-    public void OpenPayConfigValidator_Fails_WhenMerchantIdIsPlaceholder()
+    public void PaymentGatewayOptionsValidator_Fails_WhenAccountIdIsPlaceholder()
     {
-        var validator = new OpenPayConfigValidator();
-        var settings = new OpenPayConfig
+        var validator = new PaymentGatewayOptionsValidator();
+        var settings = new PaymentGatewayOptions
         {
-            MerchantId = "set-openpay-merchant-id-dev",
-            PrivateKey = "private-key",
+            ProviderName = "DefaultGateway",
+            AccountId = "set-payment-gateway-account-id-dev",
+            ApiKey = "private-key",
             DeviceSessionId = "device-session",
             RedirectUrl = "https://example.com/payment/callback",
             IsProduction = false
@@ -178,13 +183,14 @@ public class OptionsValidationTests
     }
 
     [Fact]
-    public void OpenPayConfigValidator_Succeeds_WhenAllRequiredFieldsProvided()
+    public void PaymentGatewayOptionsValidator_Succeeds_WhenAllRequiredFieldsProvided()
     {
-        var validator = new OpenPayConfigValidator();
-        var settings = new OpenPayConfig
+        var validator = new PaymentGatewayOptionsValidator();
+        var settings = new PaymentGatewayOptions
         {
-            MerchantId = "real-merchant-id",
-            PrivateKey = "real-private-key",
+            ProviderName = "DefaultGateway",
+            AccountId = "real-account-id",
+            ApiKey = "real-api-key",
             DeviceSessionId = "real-device-session",
             RedirectUrl = "https://example.com/payment/callback",
             IsProduction = false

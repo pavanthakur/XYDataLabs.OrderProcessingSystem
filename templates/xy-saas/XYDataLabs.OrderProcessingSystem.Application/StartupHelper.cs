@@ -3,8 +3,8 @@ using Microsoft.Extensions.Configuration;
 using System.Reflection;
 using Microsoft.Extensions.Hosting;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
-using XYDataLabs.OpenPayAdapter;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
+using XYDataLabs.OrderProcessingSystem.PaymentGateway;
 using XYDataLabs.OrderProcessingSystem.Application.Utilities;
 
 namespace XYDataLabs.OrderProcessingSystem.Application
@@ -24,9 +24,8 @@ namespace XYDataLabs.OrderProcessingSystem.Application
             // Register Event Type mapping resolution for background workers
             builder.Services.AddSingleton<Events.IIntegrationEventTypeResolver, Events.IntegrationEventTypeResolver>();
 
-            // Register OpenPay adapter (external payment gateway)
-            builder.Services.AddOpenPayAdapter(builder.Configuration);
-            builder.Services.AddScoped<IOpenPayAdapterService, OpenPayAdapterService>();
+            // Register the provider-agnostic payment gateway seam and default implementation.
+            builder.Services.AddPaymentGateway(builder.Configuration);
 
             // AppMasterData is scoped so each request gets the tenant-routed DbContext.
             // This ensures dedicated-tier tenants load providers from their own DB — no

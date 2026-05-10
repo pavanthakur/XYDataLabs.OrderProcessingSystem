@@ -2,10 +2,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using XYDataLabs.OpenPayAdapter;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
+using XYDataLabs.OrderProcessingSystem.PaymentGateway;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 
 namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Events;
@@ -77,7 +77,7 @@ public class PaymentReconciliationWorker : BackgroundService
         try
         {
             var dbContext = tenantScope.ServiceProvider.GetRequiredService<IAppDbContext>();
-            var openPayService = tenantScope.ServiceProvider.GetRequiredService<IOpenPayAdapterService>();
+            var paymentGatewayService = tenantScope.ServiceProvider.GetRequiredService<IPaymentGatewayService>();
 
             // Polling attempts stuck in UnknownNeedsReconciliation state
             var stalledAttempts = await dbContext.PaymentAttempts
@@ -99,7 +99,7 @@ public class PaymentReconciliationWorker : BackgroundService
                 {
                     if (!string.IsNullOrWhiteSpace(attempt.ProviderChargeId))
                     {
-                        var charge = await openPayService.GetChargeAsync(attempt.ProviderChargeId);
+                        var charge = await paymentGatewayService.GetChargeAsync(attempt.ProviderChargeId);
 
                         if (charge.Status == "completed")
                         {
@@ -115,13 +115,13 @@ public class PaymentReconciliationWorker : BackgroundService
                     }
                     else
                     {
-                        _logger.LogWarning("Attempt {AttemptOrderId} has no ProviderChargeId. Cannot reconcile natively through OpenPay SDK GetChargeAsync.", attempt.AttemptOrderId);
+                        _logger.LogWarning("Attempt {AttemptOrderId} has no ProviderChargeId. Cannot reconcile through the configured payment gateway lookup.", attempt.AttemptOrderId);
                         attempt.LastErrorMessage = "Missing ProviderChargeId for SDK Lookup. Requires REST OrderId Search Implementation.";
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error calling OpenPay adapter for Attempt {AttemptOrderId}", attempt.AttemptOrderId);
+                    _logger.LogError(ex, "Error calling payment gateway adapter for Attempt {AttemptOrderId}", attempt.AttemptOrderId);
                     attempt.LastErrorMessage = ex.Message.Length > 500 ? ex.Message.Substring(0, 500) : ex.Message;
                 }
                 finally

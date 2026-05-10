@@ -101,6 +101,7 @@ the companion tag.
 |------|-------|-----|--------|
 | 2026-04-09 | 7 — Multi-tenant baseline | `v-20260409-phase7-multitenant` | `dev-backup-20260409-Multitenant-Upto-Phase7` |
 | 2026-05-10 | 8 — Frontend SPA + OIDC deploy | `v-20260510-phase8-frontend-spa` | `dev-backup-20260510-FrontendSPA-Upto-Phase8` |
+| 2026-05-10 | 8 — Template release seam hardening | `v-20260510-pre-template-release-1-0-0` | `dev-backup-20260510-TemplateRelease-Upto-Phase8` |
 
 ---
 
@@ -112,11 +113,11 @@ the companion tag.
 |---|---|
 | Package id | `XYDataLabs.SaaS.Templates` |
 | Mechanism | `.template.config/template.json` (Julio Casal pattern) |
-| Current prototype location | `templates/xy-saas/` source tree + `templates/XYDataLabs.SaaS.Templates/XYDataLabs.SaaS.Templates.csproj` pack project |
-| Ships | API/Application/Domain/Infrastructure/SharedKernel/OpenPayAdapter + 5 test projects, EF Core scaffolding, multi-tenant primitives, hand-rolled CQRS skeleton, `Result<T>`, NetArchTest layer rules |
+| Current release location | `templates/xy-saas/` source tree + `templates/XYDataLabs.SaaS.Templates/XYDataLabs.SaaS.Templates.csproj` pack project |
+| Ships | API/Application/Domain/Infrastructure/SharedKernel/PaymentGateway + 5 test projects, EF Core scaffolding, multi-tenant primitives, hand-rolled CQRS skeleton, `Result<T>`, NetArchTest layer rules |
 | Versioning | NuGet semver (`1.0.0`, `1.1.0`, ...); each version immutable |
 | Bootstrap | `dotnet new install <local-or-nupkg-path>` then `dotnet new xy-saas -n <ProductName> --rootNamespace <Company.Product> --companySlug <companyslug> --productSlug <productslug>` |
-| Publish trigger | Phase 14 closeout for the first formal NuGet/template release; the in-repo prototype is already bootstrapped and validated locally |
+| Publish trigger | Phase 14 closeout for the first formal NuGet/template release; version `1.0.0` is the first release-ready validated package line |
 
 ### 2.2 Layer 2 — GitHub template repository
 
@@ -194,7 +195,7 @@ git remote add blueprint https://github.com/pavanthakur/XYDataLabs.OrderProcessi
 git fetch blueprint v-20260409-phase7-multitenant
 git reset --hard FETCH_HEAD
 
-# Strip product-specific code manually (Order/Payment entities, OpenPay adapter)
+# Strip product-specific code manually (Order/Payment entities, provider-specific payment integration)
 # Rename namespaces manually (or via a one-time PowerShell script)
 
 # First commit

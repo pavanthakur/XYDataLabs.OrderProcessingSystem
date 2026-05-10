@@ -55,7 +55,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Utilities
             Unknown = 5
         }
 
-        public enum OpenPayTransactionStatus
+        public enum PaymentProviderTransactionStatus
         {
             [Description("pending")]
             Pending = 1,

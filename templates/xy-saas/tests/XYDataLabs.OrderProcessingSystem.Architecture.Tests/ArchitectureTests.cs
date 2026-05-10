@@ -232,7 +232,7 @@ public class ArchitectureTests
             Path.Combine(solutionRoot, "XYDataLabs.OrderProcessingSystem.API"),
             Path.Combine(solutionRoot, "XYDataLabs.OrderProcessingSystem.SharedKernel"),
             Path.Combine(solutionRoot, "XYDataLabs.OrderProcessingSystem.Domain"),
-            Path.Combine(solutionRoot, "XYDataLabs.OpenPayAdapter"),
+            Path.Combine(solutionRoot, "XYDataLabs.OrderProcessingSystem.PaymentGateway"),
         };
 
         var violations = new List<string>();
