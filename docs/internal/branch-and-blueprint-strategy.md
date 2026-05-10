@@ -119,6 +119,34 @@ the companion tag.
 | Bootstrap | `dotnet new install <local-or-nupkg-path>` then `dotnet new xy-saas -n <ProductName> --rootNamespace <Company.Product> --companySlug <companyslug> --productSlug <productslug>` |
 | Publish trigger | Phase 14 closeout for the first formal NuGet/template release; version `1.0.0` is the first release-ready validated package line |
 
+#### 2.1.1 Public release note draft — `1.0.0`
+
+Use the text below as the baseline GitHub/NuGet release summary for the first formal Layer 1 package publication:
+
+```text
+XYDataLabs.SaaS.Templates 1.0.0
+
+First formal release of the Layer 1 `dotnet new` template for the XYDataLabs multi-tenant SaaS backend skeleton.
+
+Highlights
+- Ships a complete .NET 8 Clean Architecture solution skeleton with API, Application, Domain, Infrastructure, SharedKernel, PaymentGateway, and five test projects.
+- Replaces the template's internal provider lock-in with a provider-agnostic `PaymentGateway` seam and a default in-memory implementation that is safe for bootstrap and smoke validation.
+- Preserves multi-tenant primitives, EF Core scaffolding, hand-rolled CQRS, `Result<T>`, and NetArchTest architecture guardrails.
+- Removes the legacy OpenPayAdapter surface from generated solutions.
+
+Validated for this release
+- `dotnet pack templates/XYDataLabs.SaaS.Templates/XYDataLabs.SaaS.Templates.csproj -c Release --nologo`
+- `dotnet new install <nupkg>` and `dotnet new xy-saas ...` packaged smoke flow
+- Generated solution restore/build smoke pass with the new `PaymentGateway` project surface
+- Documentation link validation and release-surface alignment across README, ADR-018, and the blueprint strategy runbook
+
+Install
+dotnet new install XYDataLabs.SaaS.Templates::1.0.0
+
+Create a new solution
+dotnet new xy-saas -n <ProductName> --rootNamespace <Company.Product> --companySlug <companyslug> --productSlug <productslug>
+```
+
 ### 2.2 Layer 2 — GitHub template repository
 
 | Aspect | Value |
