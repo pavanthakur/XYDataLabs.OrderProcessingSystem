@@ -1,0 +1,154 @@
+name: Validate Template Package Governance
+
+on:
+  push:
+    branches:
+      - dev
+      - staging
+      - main
+    paths:
+      - 'templates/xy-saas/**'
+      - 'templates/XYDataLabs.SaaS.Templates/**'
+      - '.github/workflows/validate-template-package-governance.yml'
+      - '.github/workflows/README-VALIDATE-TEMPLATE-PACKAGE-GOVERNANCE.md'
+      - '.github/workflows/README-PUBLISH-TEMPLATE-PACKAGE.md'
+      - 'docs/internal/branch-and-blueprint-strategy.md'
+  pull_request:
+    branches:
+      - dev
+      - staging
+      - main
+    paths:
+      - 'templates/xy-saas/**'
+      - 'templates/XYDataLabs.SaaS.Templates/**'
+      - '.github/workflows/validate-template-package-governance.yml'
+      - '.github/workflows/README-VALIDATE-TEMPLATE-PACKAGE-GOVERNANCE.md'
+      - '.github/workflows/README-PUBLISH-TEMPLATE-PACKAGE.md'
+      - 'docs/internal/branch-and-blueprint-strategy.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  TEMPLATE_PROJECT: templates/XYDataLabs.SaaS.Templates/XYDataLabs.SaaS.Templates.csproj
+  PACKAGE_OUTPUT_DIR: .artifacts/packages
+
+jobs:
+  validate-template-package:
+    name: Validate Template Package Governance
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require package version bump for Layer 1 template changes
+        if: ${{ github.event_name == 'pull_request' }}
+        shell: pwsh
+        run: |
+          $baseRef = '${{ github.base_ref }}'
+
+          if ([string]::IsNullOrWhiteSpace($baseRef)) {
+            throw 'github.base_ref is required for pull_request validation.'
+          }
+
+          git fetch origin "$baseRef" --depth=1
+
+          $changedFiles = @(git diff --name-only "origin/$baseRef...HEAD")
+          $layer1TemplateChanges = @(
+            $changedFiles | Where-Object {
+              $_ -like 'templates/xy-saas/*' -or $_ -like 'templates/XYDataLabs.SaaS.Templates/*'
+            }
+          )
+
+          if (-not $layer1TemplateChanges) {
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value 'No Layer 1 template payload changes detected. Packaged smoke validation will still run for workflow verification.'
+            exit 0
+          }
+
+          $baseProject = git show "origin/$baseRef:templates/XYDataLabs.SaaS.Templates/XYDataLabs.SaaS.Templates.csproj"
+          $baseProjectText = $baseProject -join "`n"
+          $headProjectText = Get-Content -Path 'templates/XYDataLabs.SaaS.Templates/XYDataLabs.SaaS.Templates.csproj' -Raw
+
+          $baseVersion = ([regex]::Match($baseProjectText, '<PackageVersion>([^<]+)</PackageVersion>')).Groups[1].Value
+          $headVersion = ([regex]::Match($headProjectText, '<PackageVersion>([^<]+)</PackageVersion>')).Groups[1].Value
+
+          if ([string]::IsNullOrWhiteSpace($baseVersion) -or [string]::IsNullOrWhiteSpace($headVersion)) {
+            throw 'Unable to resolve PackageVersion from templates/XYDataLabs.SaaS.Templates/XYDataLabs.SaaS.Templates.csproj.'
+          }
+
+          if ($baseVersion -eq $headVersion) {
+            $changedList = ($layer1TemplateChanges | Sort-Object | ForEach-Object { "- $_" }) -join "`n"
+
+            $message = @(
+              'Layer 1 template files changed, but PackageVersion was not bumped.'
+              ''
+              "Base version: $baseVersion"
+              "Head version: $headVersion"
+              ''
+              'Changed template files:'
+              $changedList
+              ''
+              'Update templates/XYDataLabs.SaaS.Templates/XYDataLabs.SaaS.Templates.csproj with the next NuGet version before merge. Publish still remains manual through publish-template-package.yml after the tagged release baseline is ready.'
+            ) -join "`n"
+
+            throw $message
+          }
+
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "Layer 1 template change detected. PackageVersion advanced from $baseVersion to $headVersion."
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Pack template package
+        shell: pwsh
+        run: |
+          dotnet pack $env:TEMPLATE_PROJECT -c Release --nologo
+
+      - name: Locate packaged template
+        id: locate-package
+        shell: pwsh
+        run: |
+          $package = Get-ChildItem -Path $env:PACKAGE_OUTPUT_DIR -Filter 'XYDataLabs.SaaS.Templates.*.nupkg' |
+            Where-Object { $_.Name -notlike '*.symbols.nupkg' } |
+            Sort-Object LastWriteTimeUtc -Descending |
+            Select-Object -First 1
+
+          if (-not $package) {
+            throw "Unable to locate packaged template under '$env:PACKAGE_OUTPUT_DIR'."
+          }
+
+          "package_path=$($package.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Install packaged template
+        shell: pwsh
+        run: |
+          dotnet new uninstall XYDataLabs.SaaS.Templates 2>$null | Out-Null
+          dotnet new install "${{ steps.locate-package.outputs.package_path }}"
+
+      - name: Generate smoke solution
+        shell: pwsh
+        run: |
+          $smokeOutputDir = Join-Path $env:RUNNER_TEMP 'xy-saas-template-governance-smoke'
+
+          if (Test-Path $smokeOutputDir) {
+            Remove-Item -Path $smokeOutputDir -Recurse -Force
+          }
+
+          dotnet new xy-saas `
+            -n GovernanceSmoke `
+            --rootNamespace Contoso.GovernanceSmoke `
+            --companySlug contoso `
+            --productSlug governancesmoke `
+            -o $smokeOutputDir
+
+      - name: Build generated smoke solution
+        shell: pwsh
+        run: |
+          $smokeSolution = Join-Path (Join-Path $env:RUNNER_TEMP 'xy-saas-template-governance-smoke') 'Contoso.GovernanceSmoke.sln'
+          dotnet build $smokeSolution --nologo

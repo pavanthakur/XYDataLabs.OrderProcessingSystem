@@ -74,12 +74,46 @@ See `ARCHITECTURE-EVOLUTION.md` for full phase details.
 | Track U | UI Modernization Program | U1-U6 (U1-U5 complete; U6 later) | ✅ Web cutover complete |
 | 8 | Event-Driven Foundation | Days 51, 55–56 (Days 48–50 are Service Bus/DLQ preparation only) | ✅ Complete |
 | 8.5 | Multi-Provider Payment | Days 58–59 | 📅 Active Next |
+| 8.7 | Stripe Webhooks & Async Payment Lifecycle | Days 60–64 | 📅 Planned |
 | 9 | YARP Microservices | Days 74–79 | 📅 Planned |
+| 9.5 | Cloud-Portable Identity Showcase (Keycloak Local) | Days 80–82 | 📅 Planned |
 | 10 | Azure Container Apps | Days 87–93 (transport drills gate ingress/security) | 📅 Planned |
 | 11 | Data Ownership & Autonomy | Days 100, 102 | 📅 Planned |
+| 11.5 | Polyglot Persistence Showcase (PostgreSQL Notifications Pilot) | Day 103 | 📅 Planned |
 | 12 | Platform Engineering | Days 95, 97 | 📅 Planned |
 | 13 | Aspire & Final Maturity | Days 106–109 | 📅 Planned |
 | 14 | CQRS Read Model (Cosmos DB) | Days 67–68, 70 | 📅 Planned |
+
+### Enterprise Alignment For Phases 8.5-14 (May 2026)
+
+The expanded .NET 10 + Aspire + cloud-native skill tree is being imported as an **enterprise capability overlay**, not as a blanket instruction to swap this repository's core production stack.
+
+#### Production-authoritative choices remain unchanged
+
+- Azure SQL remains the primary transactional production store.
+- Microsoft Entra ID plus Azure managed identity remains the primary production identity model.
+- React remains the primary active frontend track; Blazor is not being introduced as a required implementation phase.
+- .NET 10 / newer Aspire features stay gated behind the planned upgrade window in Phases 12-13 instead of forcing an immediate platform rewrite on the current branch.
+
+#### Comparative / portability showcases remain isolated by design
+
+- Keycloak is a **local portability proof** in Phase 9.5, not a production identity-provider replacement.
+- PostgreSQL is an **isolated Notifications-module pilot** in Phase 11.5, not a platform-wide replacement for Azure SQL.
+
+#### Cross-cutting enterprise capabilities now map explicitly to future phases
+
+| Capability imported from the modern bootcamp stack | Planned implementation surface |
+|---|---|
+| API consumer experience: contract discipline, versioning, problem details, generated SDK expectations, pagination/filtering/sorting | Track U carry-forward + Phase 8.5 + Phase 9 + Phase 12 |
+| Worker services, async messaging, idempotency, DLQ thinking, replay and reconciliation | Phase 8 + Phase 8.7 + Phase 10 |
+| Configuration management, Options Pattern discipline, App Configuration, Key Vault-backed rollout safety | Phase 10 + Phase 12 |
+| Distributed tracing, correlation, service dependency visibility, advanced OpenTelemetry usage | Phase 9 + Phase 10 + Phase 13 |
+| Cloud networking, ingress, CORS, TLS, API gateway, Front Door / APIM style concerns | Phase 10 + Phase 12 |
+| Integration testing, Testcontainers discipline, distributed app testability | Phase 9 + Phase 13 |
+| Performance, caching, cost awareness, troubleshooting and diagnostics runbooks | Phase 12 + Phase 13 |
+| Modern local development and orchestration experience | Phase 9 (Aspire-Lite) + Phase 13 |
+
+Use this as the rule for future edits: import the **enterprise pattern** when it strengthens the architecture, but only import the **specific technology** when it improves this repository's Azure-first production story or is intentionally isolated as a portability showcase.
 
 ### Azure Service Coverage (Jan 2026 analysis snapshot)
 

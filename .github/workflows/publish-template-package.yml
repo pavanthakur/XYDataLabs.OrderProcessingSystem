@@ -1,0 +1,164 @@
+name: Publish Template Package
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish-package:
+        description: Push the validated package to the selected registry after packing and smoke validation.
+        required: true
+        type: boolean
+        default: false
+      package-source:
+        description: Target registry when publish-package is enabled.
+        required: true
+        type: choice
+        default: nuget.org
+        options:
+          - nuget.org
+          - github-packages
+
+permissions:
+  contents: read
+
+env:
+  TEMPLATE_PROJECT: templates/XYDataLabs.SaaS.Templates/XYDataLabs.SaaS.Templates.csproj
+  PACKAGE_OUTPUT_DIR: .artifacts/packages
+
+jobs:
+  pack-and-validate:
+    name: Pack And Smoke Validate
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Pack template package
+        shell: pwsh
+        run: |
+          dotnet pack $env:TEMPLATE_PROJECT -c Release --nologo
+
+      - name: Locate packaged template
+        id: locate-package
+        shell: pwsh
+        run: |
+          $package = Get-ChildItem -Path $env:PACKAGE_OUTPUT_DIR -Filter 'XYDataLabs.SaaS.Templates.*.nupkg' |
+            Where-Object { $_.Name -notlike '*.symbols.nupkg' } |
+            Sort-Object LastWriteTimeUtc -Descending |
+            Select-Object -First 1
+
+          if (-not $package) {
+            throw "Unable to locate packaged template under '$env:PACKAGE_OUTPUT_DIR'."
+          }
+
+          "package_name=$($package.Name)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "package_path=$($package.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Install packaged template
+        shell: pwsh
+        run: |
+          dotnet new uninstall XYDataLabs.SaaS.Templates 2>$null | Out-Null
+          dotnet new install "${{ steps.locate-package.outputs.package_path }}"
+
+      - name: Generate smoke solution
+        shell: pwsh
+        run: |
+          $smokeOutputDir = Join-Path $env:RUNNER_TEMP 'xy-saas-template-smoke'
+
+          if (Test-Path $smokeOutputDir) {
+            Remove-Item -Path $smokeOutputDir -Recurse -Force
+          }
+
+          dotnet new xy-saas `
+            -n WorkflowSmoke `
+            --rootNamespace Contoso.WorkflowSmoke `
+            --companySlug contoso `
+            --productSlug workflowsmoke `
+            -o $smokeOutputDir
+
+      - name: Build generated smoke solution
+        shell: pwsh
+        run: |
+          $smokeSolution = Join-Path (Join-Path $env:RUNNER_TEMP 'xy-saas-template-smoke') 'Contoso.WorkflowSmoke.sln'
+          dotnet build $smokeSolution --nologo
+
+      - name: Upload template package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: template-package
+          path: ${{ steps.locate-package.outputs.package_path }}
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-package:
+    name: Publish Package
+    if: ${{ inputs.publish-package }}
+    needs: pack-and-validate
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Download packaged template artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: template-package
+          path: ${{ runner.temp }}\template-package
+
+      - name: Locate downloaded package
+        id: downloaded-package
+        shell: pwsh
+        run: |
+          $package = Get-ChildItem -Path "$env:RUNNER_TEMP\template-package" -Filter 'XYDataLabs.SaaS.Templates.*.nupkg' |
+            Where-Object { $_.Name -notlike '*.symbols.nupkg' } |
+            Sort-Object LastWriteTimeUtc -Descending |
+            Select-Object -First 1
+
+          if (-not $package) {
+            throw 'Template package artifact was not downloaded.'
+          }
+
+          "package_path=$($package.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Push package to NuGet.org
+        if: ${{ inputs.package-source == 'nuget.org' }}
+        shell: pwsh
+        env:
+          NUGET_API_KEY: ${{ secrets['NUGET_API_KEY'] }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:NUGET_API_KEY)) {
+            throw 'Repository secret NUGET_API_KEY is required to publish to NuGet.org.'
+          }
+
+          dotnet nuget push "${{ steps.downloaded-package.outputs.package_path }}" `
+            --api-key "$env:NUGET_API_KEY" `
+            --source "https://api.nuget.org/v3/index.json" `
+            --skip-duplicate
+
+      - name: Push package to GitHub Packages
+        if: ${{ inputs.package-source == 'github-packages' }}
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          dotnet nuget add source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" `
+            --name github `
+            --username "${{ github.repository_owner }}" `
+            --password "$env:GITHUB_TOKEN" `
+            --store-password-in-clear-text
+
+          dotnet nuget push "${{ steps.downloaded-package.outputs.package_path }}" `
+            --source github `
+            --api-key "$env:GITHUB_TOKEN" `
+            --skip-duplicate
