@@ -86,3 +86,16 @@ Observed result:
 - Docs link validation: passed
 
 Result: Phase 8 closeout is now backed by the explicit test bar defined in `ARCHITECTURE-EVOLUTION.md`, and backend Phase 8.5 is the next active engineering phase.
+## Docker Integration and UI matrix validation
+To cryptographically prove Docker compatibility across all targets locally:
+
+`powershell
+.\scripts\generate-docker-validation-bundle.ps1 -Environment all -Profile all
+`
+
+Observed result:
+- Integration suite: 41 passed
+- Automation UI matrix: Passed accurately across docker-dev-http, docker-dev-https, docker-stg-http, docker-stg-https, docker-prod-http, docker-prod-https.
+- Overall outcome: passed.
+
+This satisfies the Mandatory Phase Closeout Quality Gate from \ARCHITECTURE-EVOLUTION.md\.
