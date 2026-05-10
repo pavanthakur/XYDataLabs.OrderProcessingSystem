@@ -14,7 +14,7 @@
 ## Install
 
 ```powershell
-dotnet new install XYDataLabs.SaaS.Templates::1.0.0
+dotnet new install XYDataLabs.SaaS.Templates::1.0.1
 ```
 
 ## Create a solution

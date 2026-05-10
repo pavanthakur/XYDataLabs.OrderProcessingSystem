@@ -102,6 +102,7 @@ the companion tag.
 | 2026-04-09 | 7 — Multi-tenant baseline | `v-20260409-phase7-multitenant` | `dev-backup-20260409-Multitenant-Upto-Phase7` |
 | 2026-05-10 | 8 — Frontend SPA + OIDC deploy | `v-20260510-phase8-frontend-spa` | `dev-backup-20260510-FrontendSPA-Upto-Phase8` |
 | 2026-05-10 | 8 — Template release seam hardening | `v-20260510-pre-template-release-1-0-0` | `dev-backup-20260510-TemplateRelease-Upto-Phase8` |
+| 2026-05-10 | 8 — Template README patch release | `v-20260510-pre-template-readme-1-0-1` | `dev-backup-20260510-TemplateReadmePatch-Upto-Phase8` |
 
 ---
 
@@ -147,6 +148,33 @@ Create a new solution
 dotnet new xy-saas -n <ProductName> --rootNamespace <Company.Product> --companySlug <companyslug> --productSlug <productslug>
 ```
 
+#### 2.1.2 Patch release note draft — `1.0.1`
+
+Use the text below as the baseline GitHub/NuGet release summary for the README patch publication:
+
+```text
+XYDataLabs.SaaS.Templates 1.0.1
+
+Patch release for the Layer 1 `dotnet new` template package.
+
+Highlights
+- Adds a packaged NuGet README so the package page carries install and bootstrap guidance directly from source control.
+- Preserves the validated .NET 8 Clean Architecture template surface shipped in 1.0.0, including API, Application, Domain, Infrastructure, SharedKernel, PaymentGateway, and five test projects.
+- Keeps the provider-agnostic `PaymentGateway` seam and default in-memory bootstrap implementation unchanged.
+
+Validated for this release
+- `dotnet pack templates/XYDataLabs.SaaS.Templates/XYDataLabs.SaaS.Templates.csproj -c Release --nologo`
+- Packaged README present at the `.nupkg` root
+- `dotnet new install <nupkg>` and `dotnet new xy-saas ...` packaged smoke flow
+- Generated solution restore/build smoke pass
+
+Install
+dotnet new install XYDataLabs.SaaS.Templates::1.0.1
+
+Create a new solution
+dotnet new xy-saas -n <ProductName> --rootNamespace <Company.Product> --companySlug <companyslug> --productSlug <productslug>
+```
+
 ### 2.2 Layer 2 — GitHub template repository
 
 | Aspect | Value |
@@ -178,7 +206,7 @@ git clone https://github.com/<your-account>/<side-project-name>.git
 cd <side-project-name>
 
 # 3. Install and run the .NET solution skeleton
-dotnet new install XYDataLabs.SaaS.Templates::1.0.0
+dotnet new install XYDataLabs.SaaS.Templates::1.0.1
 dotnet new xy-saas `
   -n TradingAnalytics `
   --rootNamespace Contoso.TradingAnalytics `
@@ -192,7 +220,7 @@ dotnet new xy-saas `
 
 # 5. First commit
 git add -A
-git commit -m "chore: initialize from blueprint-v1.0.0 + dotnet template 1.0.0"
+git commit -m "chore: initialize from blueprint-v1.0.0 + dotnet template 1.0.1"
 
 # 6. Local dev setup
 .\scripts\setup-local.ps1
@@ -205,7 +233,7 @@ gh workflow run azure-bootstrap.yml -f environment=dev
 
 # 9. Pin blueprint + template versions in README.md
 # BLUEPRINT_VERSION=blueprint-v1.0.0
-# DOTNET_TEMPLATE_VERSION=XYDataLabs.SaaS.Templates@1.0.0
+# DOTNET_TEMPLATE_VERSION=XYDataLabs.SaaS.Templates@1.0.1
 ```
 
 ### 2.5 Bootstrapping a side project (pre-Phase-14)

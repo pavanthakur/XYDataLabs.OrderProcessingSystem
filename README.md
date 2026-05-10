@@ -22,8 +22,8 @@ This is not a tutorial project — it is built to the constraints of real SaaS s
 
 The repository now also ships a Layer 1 `dotnet new` template release under `templates/xy-saas/`, packed by `templates/XYDataLabs.SaaS.Templates/XYDataLabs.SaaS.Templates.csproj`.
 
-- The current formal template package line is `XYDataLabs.SaaS.Templates` `1.0.0`.
-- Install with `dotnet new install XYDataLabs.SaaS.Templates::1.0.0`.
+- The current formal template package line is `XYDataLabs.SaaS.Templates` `1.0.1`.
+- Install with `dotnet new install XYDataLabs.SaaS.Templates::1.0.1`.
 - The generated template uses a provider-agnostic `PaymentGateway` seam so side projects can replace the default in-memory implementation with a real provider without carrying the repository's internal OpenPay dependency surface.
 - The main repository runtime described below still uses the concrete `XYDataLabs.OpenPayAdapter` project.
 
