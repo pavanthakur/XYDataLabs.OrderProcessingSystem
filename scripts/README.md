@@ -185,6 +185,51 @@ Deterministic local/Docker payment verification for the `verify-db-logs` workflo
 - If multiple run prefixes exist for the day, the script stops and asks you to rerun with `-RunPrefix`.
 - The pass/fail summary scopes UI callback evidence to 3DS-enabled tenants only.
 
+### generate-docker-validation-bundle.ps1
+
+Deterministic Docker closeout evidence generator for runtime validation and phase-freeze proof.
+
+**Purpose**:
+- Starts the selected Docker profile on the compose-managed SQL Server path only
+- Captures bundle-level API and integration test evidence
+- Executes the existing Docker payment automation target path when enabled
+- Writes a consolidated evidence bundle under `automation/reports/docker-validation/`
+
+**Usage**:
+```powershell
+# Generate one real Docker validation bundle for dev/http
+pwsh .\scripts\generate-docker-validation-bundle.ps1 -Environment dev -Profile http
+
+# Generate a wider matrix bundle across all Docker environments and profiles
+pwsh .\scripts\generate-docker-validation-bundle.ps1 -Environment all -Profile all
+
+# Generate only startup and container-health evidence
+pwsh .\scripts\generate-docker-validation-bundle.ps1 -Environment dev -Profile http -SkipTests -SkipAutomation
+```
+
+**Parameters**:
+- `Environment` (optional): `dev`, `stg`, `prod`, or `all` (default: `dev`)
+- `Profile` (optional): `http`, `https`, or `all` (default: `http`)
+- `Tenant` (optional): one or more tenant codes forwarded to the automation runner
+- `OutputRoot` (optional): alternate output root; default is `automation/reports/docker-validation/`
+- `SkipTests` (switch): skip API and integration test execution
+- `SkipAutomation` (switch): skip browser automation execution
+- `SkipCleanup` (switch): leave the selected Docker runtime running after bundle generation
+- `AllowPartialExecution` (switch): allow the automation runner to continue after tenant-level failures
+
+**Outputs**:
+- `summary.md` and `summary.json` at the bundle root
+- per-target startup logs, compose snapshots, and inspect output
+- API and integration test logs under the bundle `tests/` folder when enabled
+- referenced automation report paths plus copied verification JSON when automation runs
+
+**Notes**:
+- Docker SQL is mandatory for this flow; host SQL fallback is intentionally not supported.
+- This script is the phase-closeout proof path when Docker runtime orchestration or payment automation runtime targets changed.
+- Local machine runs should resolve `ORDERPROCESSING_SQLSERVER_IMAGE` from `Resources/Docker/.env.local` when you want a machine-local mirror or pre-pulled image.
+- CI/CD runs must set `ORDERPROCESSING_SQLSERVER_IMAGE` through the workflow or job environment, not through `.env.local`.
+- `-SkipAutomation` is useful for local startup, test, and artifact debugging, but it does not replace real automation evidence when the closeout gate requires end-to-end Docker runtime proof.
+
 ### test-verify-payment-run-azure.ps1
 
 Regression runner for `verify-payment-run-azure.ps1`.

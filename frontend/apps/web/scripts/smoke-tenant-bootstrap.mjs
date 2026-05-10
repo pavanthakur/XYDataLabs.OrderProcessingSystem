@@ -2,6 +2,7 @@ import process from "node:process";
 import { chromium } from "playwright";
 
 const customerRequestPathFragment = "/api/v1/Customer/GetAllCustomers";
+const defaultAttemptCount = 3;
 const defaultTimeoutMs = 60000;
 const localStorageKey = "orderprocessing.activeTenantCode";
 const runtimeConfigurationPathFragment = "/api/v1/Info/runtime-configuration";
@@ -111,28 +112,27 @@ Optional:
 }
 
 async function discoverRuntimeConfiguration(browser, url, timeoutMs) {
-  const context = await browser.newContext({ ignoreHTTPSErrors: true });
+  return withRetry("Runtime configuration discovery", async attempt => {
+    const context = await browser.newContext({ ignoreHTTPSErrors: true });
 
-  try {
-    const page = await context.newPage();
-    const runtimeConfigurationResponsePromise = page.waitForResponse(
-      response => response.ok() && response.url().includes(runtimeConfigurationPathFragment),
-      { timeout: timeoutMs }
-    );
+    try {
+      const page = await context.newPage();
+      const diagnostics = attachPageDiagnostics(page);
 
-    await page.goto(url, { timeout: timeoutMs, waitUntil: "domcontentloaded" });
+      await page.goto(url, { timeout: timeoutMs, waitUntil: "domcontentloaded" });
 
-    const runtimeConfigurationResponse = await runtimeConfigurationResponsePromise;
-    const runtimeConfiguration = await runtimeConfigurationResponse.json();
+      const runtimeConfigurationResponse = await waitForRuntimeConfigurationResponse(page, timeoutMs, diagnostics, attempt);
+      const runtimeConfiguration = await runtimeConfigurationResponse.json();
 
-    validateRuntimeConfiguration(runtimeConfiguration);
+      validateRuntimeConfiguration(runtimeConfiguration);
 
-    return {
-      runtimeConfiguration
-    };
-  } finally {
-    await context.close();
-  }
+      return {
+        runtimeConfiguration
+      };
+    } finally {
+      await context.close();
+    }
+  });
 }
 
 function resolveStaleTenantCode(availableTenants, expectedTenantCode, requestedStaleTenantCode) {
@@ -162,66 +162,193 @@ function resolveStaleTenantCode(availableTenants, expectedTenantCode, requestedS
 }
 
 async function verifyTenantBootstrap(browser, options) {
-  const context = await browser.newContext({ ignoreHTTPSErrors: true });
+  return withRetry("Tenant bootstrap verification", async attempt => {
+    const context = await browser.newContext({ ignoreHTTPSErrors: true });
 
-  try {
-    const page = await context.newPage();
-    const customerRequestPromise = page.waitForRequest(
-      request => request.url().includes(customerRequestPathFragment),
-      { timeout: options.timeoutMs }
-    );
-    const runtimeConfigurationResponsePromise = page.waitForResponse(
-      response => response.ok() && response.url().includes(runtimeConfigurationPathFragment),
-      { timeout: options.timeoutMs }
-    );
-
-    await page.addInitScript(({ nextTenantCode, storageKey }) => {
-      window.localStorage.setItem(storageKey, nextTenantCode);
-    }, {
-      nextTenantCode: options.staleTenantCode,
-      storageKey: localStorageKey
-    });
-
-    await page.goto(options.url, { timeout: options.timeoutMs, waitUntil: "domcontentloaded" });
-
-    const runtimeConfigurationResponse = await runtimeConfigurationResponsePromise;
-    const runtimeConfiguration = await runtimeConfigurationResponse.json();
-
-    validateRuntimeConfiguration(runtimeConfiguration);
-
-    const select = page.getByLabel(tenantLabel);
-    await select.waitFor({ state: "visible", timeout: options.timeoutMs });
-    await waitForTenantValue(page, select, options.expectedTenantCode, options.timeoutMs);
-
-    const activeTenantCode = await select.inputValue();
-    if (!equalsIgnoreCase(activeTenantCode, options.expectedTenantCode)) {
-      throw new Error(`Tenant selector value '${activeTenantCode}' does not match expected tenant '${options.expectedTenantCode}'.`);
-    }
-
-    const persistedTenantCode = await page.evaluate(storageKey => window.localStorage.getItem(storageKey), localStorageKey);
-    if (!equalsIgnoreCase(persistedTenantCode, options.expectedTenantCode)) {
-      throw new Error(`Persisted tenant '${persistedTenantCode}' does not match expected tenant '${options.expectedTenantCode}'.`);
-    }
-
-    const customerRequest = await customerRequestPromise;
-    const customerRequestHeaders = normalizeHeaders(customerRequest.headers());
-    const tenantHeaderName = runtimeConfiguration.tenantHeaderName;
-    const customerRequestTenantCode = customerRequestHeaders[tenantHeaderName.toLowerCase()] ?? null;
-
-    if (!equalsIgnoreCase(customerRequestTenantCode, options.expectedTenantCode)) {
-      throw new Error(
-        `Customer request header '${tenantHeaderName}' used '${customerRequestTenantCode}', expected '${options.expectedTenantCode}'.`
+    try {
+      const page = await context.newPage();
+      const diagnostics = attachPageDiagnostics(page);
+      const customerRequestPromise = page.waitForRequest(
+        request => request.url().includes(customerRequestPathFragment),
+        { timeout: options.timeoutMs }
       );
-    }
 
-    return {
-      activeTenantCode,
-      customerRequestTenantCode,
-      tenantHeaderName
-    };
-  } finally {
-    await context.close();
+      await page.addInitScript(({ nextTenantCode, storageKey }) => {
+        window.localStorage.setItem(storageKey, nextTenantCode);
+      }, {
+        nextTenantCode: options.staleTenantCode,
+        storageKey: localStorageKey
+      });
+
+      await page.goto(options.url, { timeout: options.timeoutMs, waitUntil: "domcontentloaded" });
+
+      const runtimeConfigurationResponse = await waitForRuntimeConfigurationResponse(page, options.timeoutMs, diagnostics, attempt);
+      const runtimeConfiguration = await runtimeConfigurationResponse.json();
+
+      validateRuntimeConfiguration(runtimeConfiguration);
+
+      const select = page.getByLabel(tenantLabel);
+      await select.waitFor({ state: "visible", timeout: options.timeoutMs });
+      await waitForTenantValue(page, select, options.expectedTenantCode, options.timeoutMs);
+
+      const activeTenantCode = await select.inputValue();
+      if (!equalsIgnoreCase(activeTenantCode, options.expectedTenantCode)) {
+        throw new Error(`Tenant selector value '${activeTenantCode}' does not match expected tenant '${options.expectedTenantCode}'.`);
+      }
+
+      const persistedTenantCode = await page.evaluate(storageKey => window.localStorage.getItem(storageKey), localStorageKey);
+      if (!equalsIgnoreCase(persistedTenantCode, options.expectedTenantCode)) {
+        throw new Error(`Persisted tenant '${persistedTenantCode}' does not match expected tenant '${options.expectedTenantCode}'.`);
+      }
+
+      const customerRequest = await customerRequestPromise;
+      const customerRequestHeaders = normalizeHeaders(customerRequest.headers());
+      const tenantHeaderName = runtimeConfiguration.tenantHeaderName;
+      const customerRequestTenantCode = customerRequestHeaders[tenantHeaderName.toLowerCase()] ?? null;
+
+      if (!equalsIgnoreCase(customerRequestTenantCode, options.expectedTenantCode)) {
+        throw new Error(
+          `Customer request header '${tenantHeaderName}' used '${customerRequestTenantCode}', expected '${options.expectedTenantCode}'.`
+        );
+      }
+
+      return {
+        activeTenantCode,
+        customerRequestTenantCode,
+        tenantHeaderName
+      };
+    } finally {
+      await context.close();
+    }
+  });
+}
+
+async function withRetry(operationName, operation, attemptCount = defaultAttemptCount) {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= attemptCount; attempt += 1) {
+    try {
+      if (attempt > 1) {
+        console.log(`${operationName}: retrying attempt ${attempt}/${attemptCount}...`);
+      }
+
+      return await operation(attempt);
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+
+      if (attempt === attemptCount) {
+        break;
+      }
+
+      console.warn(`${operationName}: attempt ${attempt}/${attemptCount} failed. ${message}`);
+      await delay(Math.min(2000 * attempt, 5000));
+    }
   }
+
+  throw new Error(`${operationName} failed after ${attemptCount} attempts. ${lastError instanceof Error ? lastError.message : String(lastError)}`);
+}
+
+async function waitForRuntimeConfigurationResponse(page, timeoutMs, diagnostics, attempt) {
+  const response = await page.waitForResponse(
+    candidate => candidate.url().includes(runtimeConfigurationPathFragment),
+    { timeout: timeoutMs }
+  ).catch(async error => {
+    throw new Error(await buildRuntimeConfigurationDiagnostics(page, diagnostics, attempt, error));
+  });
+
+  if (!response.ok()) {
+    const bodySnippet = await safeReadResponseBody(response);
+    throw new Error(
+      `Runtime configuration request returned HTTP ${response.status()} on attempt ${attempt}. ${bodySnippet}`
+    );
+  }
+
+  return response;
+}
+
+function attachPageDiagnostics(page) {
+  const consoleMessages = [];
+  const pageErrors = [];
+  const failedRequests = [];
+
+  page.on("console", message => {
+    if (consoleMessages.length < 10) {
+      consoleMessages.push(`${message.type()}: ${message.text()}`);
+    }
+  });
+
+  page.on("pageerror", error => {
+    if (pageErrors.length < 10) {
+      pageErrors.push(error.message);
+    }
+  });
+
+  page.on("requestfailed", request => {
+    if (failedRequests.length < 10) {
+      failedRequests.push(`${request.url()} -> ${request.failure()?.errorText ?? "unknown failure"}`);
+    }
+  });
+
+  return {
+    consoleMessages,
+    failedRequests,
+    pageErrors
+  };
+}
+
+async function buildRuntimeConfigurationDiagnostics(page, diagnostics, attempt, error) {
+  const shellState = await page.evaluate(() => ({
+    errorBanner: document.querySelector(".error-banner")?.textContent ?? null,
+    location: window.location.href,
+    rootPresent: Boolean(document.getElementById("root")),
+    shellMeta: document.querySelector(".shell-meta")?.textContent ?? null,
+    title: document.title,
+    tenantValue: document.querySelector("select")?.value ?? null
+  })).catch(() => null);
+
+  const parts = [
+    `Timed out waiting for runtime configuration response on attempt ${attempt}: ${error instanceof Error ? error.message : String(error)}`
+  ];
+
+  if (shellState) {
+    parts.push(`Page title: ${shellState.title}`);
+    parts.push(`Page URL: ${shellState.location}`);
+    parts.push(`Shell status: ${shellState.shellMeta ?? "n/a"}`);
+    parts.push(`Error banner: ${shellState.errorBanner ?? "none"}`);
+    parts.push(`Tenant select value: ${shellState.tenantValue ?? "n/a"}`);
+  }
+
+  if (diagnostics.pageErrors.length > 0) {
+    parts.push(`Page errors: ${diagnostics.pageErrors.join(" | ")}`);
+  }
+
+  if (diagnostics.failedRequests.length > 0) {
+    parts.push(`Failed requests: ${diagnostics.failedRequests.join(" | ")}`);
+  }
+
+  if (diagnostics.consoleMessages.length > 0) {
+    parts.push(`Console: ${diagnostics.consoleMessages.join(" | ")}`);
+  }
+
+  return parts.join("\n");
+}
+
+async function safeReadResponseBody(response) {
+  const bodyText = await response.text().catch(() => "");
+  if (!bodyText) {
+    return "Response body was empty.";
+  }
+
+  const compactBody = bodyText.replace(/\s+/g, " ").trim();
+  const truncatedBody = compactBody.length > 300 ? `${compactBody.slice(0, 300)}...` : compactBody;
+  return `Response body: ${truncatedBody}`;
+}
+
+function delay(milliseconds) {
+  return new Promise(resolve => {
+    setTimeout(resolve, milliseconds);
+  });
 }
 
 async function waitForTenantValue(page, locator, expectedTenantCode, timeoutMs) {

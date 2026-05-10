@@ -105,6 +105,60 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
         MockOpenPayAdapter.Verify(s => s.CreateChargeAsync(It.IsAny<ChargeRequest>()), Times.Once);
     }
 
+    [Fact]
+    public async Task HandleAsync_ShouldCreatePaymentAttemptAndAppendLifecycleHistory()
+    {
+        SetupPaymentDbSets();
+        SetupOpenPayHappyPath();
+        var handler = CreateProcessPaymentHandler();
+
+        await handler.HandleAsync(BuildProcessPaymentCommand());
+
+        CapturedPaymentAttempts.Should().ContainSingle();
+        var paymentAttempt = CapturedPaymentAttempts.Single();
+        paymentAttempt.CustomerOrderId.Should().Be("ORDER-001");
+        paymentAttempt.AttemptOrderId.Should().Be("ORDER-001-1");
+        paymentAttempt.AttemptNumber.Should().Be(1);
+        paymentAttempt.PaymentTraceId.Should().NotBeNullOrWhiteSpace();
+        paymentAttempt.ProviderChargeId.Should().Be("charge-001");
+        paymentAttempt.ProviderReferenceId.Should().Be("auth-ref-001");
+        paymentAttempt.Status.Should().Be(PaymentAttemptStatus.Succeeded);
+
+        CapturedPaymentAttemptHistories.Should().HaveCount(2);
+        CapturedPaymentAttemptHistories.Select(history => history.Status)
+            .Should().ContainInOrder(PaymentAttemptStatus.PendingProviderCall, PaymentAttemptStatus.Succeeded);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ShouldGenerateNextDeterministicAttemptOrderIdForExistingCustomerOrder()
+    {
+        SetupPaymentDbSets(existingPaymentAttempts:
+        [
+            new PaymentAttempt
+            {
+                Id = 7,
+                TenantId = 1,
+                CustomerOrderId = "ORDER-001",
+                AttemptOrderId = "ORDER-001-1",
+                AttemptNumber = 1,
+                PaymentTraceId = "trace-existing",
+                PaymentProviderName = "OpenPay",
+                Status = PaymentAttemptStatus.Succeeded,
+            }
+        ]);
+        SetupOpenPayHappyPath();
+        var handler = CreateProcessPaymentHandler();
+
+        await handler.HandleAsync(BuildProcessPaymentCommand());
+
+        CapturedPaymentAttempts.Should().ContainSingle();
+        var paymentAttempt = CapturedPaymentAttempts.Single();
+        paymentAttempt.AttemptNumber.Should().Be(2);
+        paymentAttempt.AttemptOrderId.Should().Be("ORDER-001-2");
+        CapturedCardTransactions.Select(transaction => transaction.AttemptOrderId)
+            .Should().OnlyContain(attemptOrderId => attemptOrderId == "ORDER-001-2");
+    }
+
     // ------------------------------------------------------------------ Fix 3 regression guard
 
     [Fact]

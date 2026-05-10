@@ -101,9 +101,31 @@ LOCAL_CERT_PASSWORD=<local-cert-password>
 LOCAL_OPENPAY_MERCHANT_ID=<local-openpay-merchant-id>
 LOCAL_OPENPAY_PRIVATE_KEY=<local-openpay-private-key>
 LOCAL_OPENPAY_DEVICE_SESSION_ID=<local-openpay-device-session-id>
+ORDERPROCESSING_SQLSERVER_IMAGE=mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04  # optional mirrored/pre-pulled override
 ```
 
-If `.env.local` is missing, `start-docker.ps1` now prompts once for each required value and writes the file for future runs.
+If `.env.local` is missing, `start-docker.ps1` now prompts once for each required secret and writes the file for future runs. `ORDERPROCESSING_SQLSERVER_IMAGE` remains optional and is only needed when you want Docker and Testcontainers to use a pre-pulled or mirrored SQL Server image.
+
+### Local vs CI/CD SQL Image Strategy
+
+Keep local Docker SQL configuration separate from CI/CD Docker SQL configuration:
+
+- Local machine: use `Resources\Docker\.env.local` only. This is the correct place for machine-local overrides such as a pre-pulled or mirrored `ORDERPROCESSING_SQLSERVER_IMAGE` value.
+- CI/CD: do not rely on `.env.local`. Set `ORDERPROCESSING_SQLSERVER_IMAGE` directly in the workflow or job environment so the pipeline always uses a controlled registry path.
+- Local convenience: pre-pulling the SQL Server image is recommended when you want faster iterative runs or offline reuse.
+- CI/CD enforcement: use a mirrored registry such as ACR and keep Docker SQL as the only valid runtime path. Host SQL fallback is not permitted.
+
+Example local override:
+
+```text
+ORDERPROCESSING_SQLSERVER_IMAGE=<local-or-mirrored-sql-image-tag>
+```
+
+Example CI/CD environment variable:
+
+```text
+ORDERPROCESSING_SQLSERVER_IMAGE=<approved-registry>/mssql/server:<tag>
+```
 
 ### Stop Services
 ```powershell
@@ -873,9 +895,9 @@ docker logs ui-uat-https-1
 | **Development Mode** | **Database Name** | **Server** | **Ports** | **Configuration File** | **Launch Method** |
 |---------------------|-------------------|------------|-----------|----------------------|-------------------|
 | **Visual Studio Non-Docker** | `OrderProcessingSystem_Local` | `localhost,1433` | API 5010/5011, UI 5173/5174 | `sharedsettings.local.json` | F5 → http/https profile |
-| **Docker Dev** | `OrderProcessingSystem_Dev` | `host.docker.internal,1433` | 5020-5023 | `sharedsettings.dev.json` | F5 → docker-dev-* profile |
-| **Docker UAT** | `OrderProcessingSystem_UAT` | `host.docker.internal,1433` | 5030-5033 | `sharedsettings.uat.json` | F5 → docker-uat-* profile |
-| **Docker Prod** | `OrderProcessingSystem_Prod` | `host.docker.internal,1433` | 5040-5043 | `sharedsettings.prod.json` | F5 → docker-prod-* profile |
+| **Docker Dev** | `OrderProcessingSystem_Dev` | `sql-server,1433` inside the compose network | 5020-5023 | `sharedsettings.dev.json` | F5 → docker-dev-* profile |
+| **Docker Staging** | `OrderProcessingSystem_Stg` | `sql-server,1433` inside the compose network | 5030-5033 | `sharedsettings.stg.json` | F5 → docker-stg-* profile |
+| **Docker Prod** | `OrderProcessingSystem_Prod` | `sql-server,1433` inside the compose network | 5040-5043 | `sharedsettings.prod.json` | F5 → docker-prod-* profile |
 
 ### 🔧 Automatic Environment Setup
 
@@ -899,20 +921,20 @@ When you select **http** or **https** profile in Visual Studio:
 When you select **docker-dev-http** or similar profile in Visual Studio:
 
 1. **Script Execution**: `start-docker.ps1` runs automatically with appropriate environment
-2. **Environment Setup**: `.env` file updated with environment-specific ports
-3. **Database**: Environment-specific database created (e.g., `OrderProcessingSystem_Dev`)
+2. **Environment Setup**: `.env.local` is loaded for local secrets and the optional SQL image override
+3. **Database**: The compose-managed `sql-server` container starts first and the environment-specific database is migrated on startup (for example `OrderProcessingSystem_Dev`)
 4. **Launch**: Docker containers start on environment-specific ports
 
 ### ⚡ Quick Database Verification
 
 ```powershell
-# Check all databases
-sqlcmd -S localhost -U sa -P <LOCAL_SQL_PASSWORD> -Q "SELECT name FROM sys.databases WHERE name LIKE 'OrderProcessingSystem%'"
+# Check all Docker databases inside the compose-managed SQL container
+docker exec orderprocessing-sqlserver /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P <LOCAL_SQL_PASSWORD> -Q "SELECT name FROM sys.databases WHERE name LIKE 'OrderProcessingSystem%'"
 
 # Expected Results:
 # OrderProcessingSystem_Local  (Non-Docker)
 # OrderProcessingSystem_Dev    (Docker Dev)
-# OrderProcessingSystem_UAT    (Docker UAT)  
+# OrderProcessingSystem_Stg    (Docker Staging)
 # OrderProcessingSystem_Prod   (Docker Prod)
 ```
 
@@ -1186,7 +1208,7 @@ Get-Content "logs/docker-startup-$(Get-Date -Format 'yyyy-MM-dd').log" -Tail 20 
 - [ ] Docker Desktop running and accessible
 - [ ] PowerShell execution policy allows scripts
 - [ ] No containers running on ports 5020-5023
-- [ ] SQL Server accessible on host.docker.internal:1433
+- [ ] SQL Server image available locally or pullable from the configured registry
 
 **Execution Checklist**:
 - [ ] ✅ Script starts without PowerShell errors
@@ -1395,7 +1417,7 @@ docker network ls | Select-String "xy-"
 #### **Database Isolation Test**
 ```powershell
 # Verify separate databases for each environment
-sqlcmd -S host.docker.internal -U sa -P <LOCAL_SQL_PASSWORD> -Q "SELECT name FROM sys.databases WHERE name LIKE 'OrderProcessingSystem%'"
+docker exec orderprocessing-sqlserver /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P <LOCAL_SQL_PASSWORD> -Q "SELECT name FROM sys.databases WHERE name LIKE 'OrderProcessingSystem%'"
 ```
 
 **Database Verification**:
@@ -1454,12 +1476,12 @@ docker network ls | Select-String "xy-" | ForEach-Object { $_.ToString().Split()
 |-------------|------|-------|----------|----------|----------|---------------|
 | **Local (Non-Docker)** | ✅ 5010/5173 | ✅ 5011/5174 | ✅ Working | ✅ OrderProcessingSystem_Local | ✅ localhost | ✅ http/https |
 | **Dev (Docker)** | ✅ 5020/5022 | ✅ 5021/5023 | ✅ Working | ✅ OrderProcessingSystem_Dev | ✅ xy-dev-network | ✅ docker-dev-* |
-| **UAT (Docker)** | ✅ 5030/5032 | ✅ 5031/5033 | ✅ Working | ✅ OrderProcessingSystem_UAT | ✅ xy-uat-network | ✅ docker-uat-* |
+| **Staging (Docker)** | ✅ 5030/5032 | ✅ 5031/5033 | ✅ Working | ✅ OrderProcessingSystem_Stg | ✅ xy-stg-network | ✅ docker-stg-* |
 | **Prod (Docker)** | ✅ 5040/5042 | ✅ 5041/5043 | ✅ Working | ✅ OrderProcessingSystem_Prod | ✅ xy-prod-network | ✅ docker-prod-* |
 
 **Shared Resources**:
 - ✅ `xy-database-network` - All Docker environments
-- ✅ SQL Server: localhost:1433 (Local) / host.docker.internal:1433 (Docker)
+- ✅ SQL Server: localhost:1433 (Local non-Docker) / compose-managed `sql-server:1433` (Docker)
 - ✅ OpenPay Integration: All environments seeded
 - ✅ `set-local-env.ps1` - Non-Docker environment setup
 

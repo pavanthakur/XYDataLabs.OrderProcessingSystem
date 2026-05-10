@@ -88,7 +88,7 @@ Frontend workspace:
 ├── docs/
 │   ├── README.md                  # Canonical documentation hub
 │   ├── DEVELOPER-OPERATING-MODEL.md # Guided reading order and maintenance rules
-│   ├── architecture/decisions/    # ADRs (ADR-000 through ADR-015)
+│   ├── architecture/decisions/    # ADRs (ADR-000 through ADR-017)
 │   ├── guides/                    # Deployment, configuration, and development guides
 │   ├── internal/                  # Active progress tracker and internal backlog
 │   ├── learning/                  # Curriculum, implementation notes, learning reference
@@ -364,8 +364,8 @@ This matrix shows which instructions auto-attach for common file locations:
 | Prompt | Command | Purpose |
 |--------|---------|--------|
 | New Feature Workflow | `/XYDataLabs-new-feature` | Orchestrates end-to-end feature development: entity → CQRS → migration → controller → tests → review → commit → payment verification (conditional). Enforces mandatory 13-step workflow with multitenant support. |
-| Day Complete Router | `/XYDataLabs-day-complete` | After each curriculum day or phase-freeze closeout — routes updates to all correct documents, syncs architecture status surfaces, and requires completion-check/context-audit before a phase-close commit |
-| Completion Check | `/XYDataLabs-completion-check` | After any feature, task, script, or fix — 6-category quality gate: documented? guardrailed? unit tested? integration tested? automated? context current? |
+| Day Complete Router | `/XYDataLabs-day-complete` | After each curriculum day or phase-freeze closeout — routes updates to all correct documents, syncs architecture status surfaces, and makes payment automation dry-run validation mandatory when automation scope changed before a phase-close commit |
+| Completion Check | `/XYDataLabs-completion-check` | After any feature, task, script, or fix — 6-category quality gate: documented? guardrailed? unit tested? integration tested? automated, including payment automation dry-run matrix when relevant? context current? |
 | Docker Start | `/XYDataLabs-docker-start` | Launches the supported Docker and local runtime profiles from one interactive entry point and prints the correct API/UI URLs. |
 | Payment Automation | `/XYDataLabs-payment-automation` | Launches the separate payment automation workspace from one interactive entry point for local, Docker, and Azure targets plus local/Docker/Azure matrix runs, including dry-run and tenant selection support. |
 | Local Setup | `/XYDataLabs-setup-local` | After a fresh git clone — runs setup-local.ps1, summarises VS F5 and Docker next steps |

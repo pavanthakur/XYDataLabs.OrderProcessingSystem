@@ -15,8 +15,8 @@ services:
       - ASPNETCORE_ENVIRONMENT=Staging
       - ASPNETCORE_URLS=http://+:5030
       - ASPNETCORE_HTTP_PORTS=5030
-      - ConnectionStrings__OrderProcessingSystemDbConnection=Server=host.docker.internal,1433;Database=OrderProcessingSystem_Stg;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
-      - DedicatedTenantConnectionStrings__TenantC=Server=host.docker.internal,1433;Database=OrderProcessingSystem_TenantC_Stg;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
+      - ConnectionStrings__OrderProcessingSystemDbConnection=Server=sql-server,1433;Database=OrderProcessingSystem_Stg;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
+      - DedicatedTenantConnectionStrings__TenantC=Server=sql-server,1433;Database=OrderProcessingSystem_TenantC_Stg;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
       - OpenPay__MerchantId=${LOCAL_OPENPAY_MERCHANT_ID}
       - OpenPay__PrivateKey=${LOCAL_OPENPAY_PRIVATE_KEY}
       - OpenPay__DeviceSessionId=${LOCAL_OPENPAY_DEVICE_SESSION_ID}
@@ -29,6 +29,9 @@ services:
       - xy-stg-network
       - xy-database-network
     profiles: ["http", "all", "api"]
+    depends_on:
+      sql-server:
+        condition: service_healthy
     healthcheck:
       test: curl --fail http://localhost:5030/swagger --insecure || exit 1
       interval: 30s
@@ -50,8 +53,8 @@ services:
       - ASPNETCORE_HTTPS_PORTS=5031
       - ASPNETCORE_Kestrel__Certificates__Default__Password=${LOCAL_CERT_PASSWORD}
       - ApiSettings__API__https__CertPassword=${LOCAL_CERT_PASSWORD}
-      - ConnectionStrings__OrderProcessingSystemDbConnection=Server=host.docker.internal,1433;Database=OrderProcessingSystem_Stg;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
-      - DedicatedTenantConnectionStrings__TenantC=Server=host.docker.internal,1433;Database=OrderProcessingSystem_TenantC_Stg;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
+      - ConnectionStrings__OrderProcessingSystemDbConnection=Server=sql-server,1433;Database=OrderProcessingSystem_Stg;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
+      - DedicatedTenantConnectionStrings__TenantC=Server=sql-server,1433;Database=OrderProcessingSystem_TenantC_Stg;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
       - OpenPay__MerchantId=${LOCAL_OPENPAY_MERCHANT_ID}
       - OpenPay__PrivateKey=${LOCAL_OPENPAY_PRIVATE_KEY}
       - OpenPay__DeviceSessionId=${LOCAL_OPENPAY_DEVICE_SESSION_ID}
@@ -64,6 +67,9 @@ services:
       - xy-stg-network
       - xy-database-network
     profiles: ["https", "all", "api-https"]
+    depends_on:
+      sql-server:
+        condition: service_healthy
     healthcheck:
       test: curl --fail https://localhost:5031/swagger --insecure || exit 1
       interval: 30s
@@ -94,7 +100,7 @@ services:
       api-stg-http:
         condition: service_healthy
     healthcheck:
-      test: curl --fail http://localhost:5032/customers --insecure || exit 1
+      test: ["CMD", "node", "-e", "fetch('http://localhost:5032/customers').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 2
@@ -126,7 +132,7 @@ services:
       api-stg-https:
         condition: service_healthy
     healthcheck:
-      test: curl --fail https://localhost:5033/customers --insecure || exit 1
+      test: ["CMD", "node", "-e", "process.env.NODE_TLS_REJECT_UNAUTHORIZED='0'; fetch('https://localhost:5033/customers').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 2

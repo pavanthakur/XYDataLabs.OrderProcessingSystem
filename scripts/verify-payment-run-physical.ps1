@@ -201,11 +201,55 @@ function Get-SqlPasswordFromEnvLocal {
     return [string] $password
 }
 
+function Get-DockerSqlJsonPayload {
+    param(
+        [Parameter(Mandatory = $true)] [string] $Database,
+        [Parameter(Mandatory = $true)] [string] $Query
+    )
+
+    $normalizedQuery = $Query.Trim()
+    if ($normalizedQuery.EndsWith(';')) {
+        $normalizedQuery = $normalizedQuery.Substring(0, $normalizedQuery.Length - 1)
+    }
+
+    $jsonQuery = "$normalizedQuery FOR JSON PATH, INCLUDE_NULL_VALUES;"
+    $escapedQuery = $jsonQuery.Replace('"', '\"')
+    $shellCommand = [string]::Format(
+           'if [ -x /opt/mssql-tools18/bin/sqlcmd ]; then SQLCMD=/opt/mssql-tools18/bin/sqlcmd; else SQLCMD=/opt/mssql-tools/bin/sqlcmd; fi; "$SQLCMD" -C -S localhost -U sa -P "$SA_PASSWORD" -d "{0}" -w 65535 -y 0 -Y 0 -Q "SET NOCOUNT ON; {1}"',
+        $Database,
+        $escapedQuery)
+
+    $output = docker exec orderprocessing-sqlserver /bin/sh -lc $shellCommand 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
+    }
+
+    return ([string]::Join('', @($output | ForEach-Object { $_.ToString().Trim() }))).Trim()
+}
+
 function Invoke-PhysicalSqlQuery {
     param(
         [Parameter(Mandatory = $true)] [string] $Database,
         [Parameter(Mandatory = $true)] [string] $Query
     )
+
+    if ($Runtime -eq 'docker') {
+        $jsonPayload = Get-DockerSqlJsonPayload -Database $Database -Query $Query
+        if ([string]::IsNullOrWhiteSpace($jsonPayload)) {
+            return @()
+        }
+
+        $parsed = $jsonPayload | ConvertFrom-Json -Depth 20
+        if ($null -eq $parsed) {
+            return @()
+        }
+
+        if ($parsed -is [System.Array]) {
+            return @($parsed)
+        }
+
+        return @($parsed)
+    }
 
     $builder = [System.Data.SqlClient.SqlConnectionStringBuilder]::new()
     $builder['Data Source'] = 'localhost'
@@ -213,16 +257,8 @@ function Invoke-PhysicalSqlQuery {
     $builder['TrustServerCertificate'] = $true
     $builder['Connect Timeout'] = 30
 
-    if ($Runtime -eq 'docker') {
-        $builder['User ID'] = 'sa'
-        $builder['Password'] = Get-SqlPasswordFromEnvLocal
-        $builder['Integrated Security'] = $false
-        $builder['Encrypt'] = $false
-    }
-    else {
-        $builder['Integrated Security'] = $true
-        $builder['Encrypt'] = $false
-    }
+    $builder['Integrated Security'] = $true
+    $builder['Encrypt'] = $false
 
     $connection = [System.Data.SqlClient.SqlConnection]::new($builder.ConnectionString)
 

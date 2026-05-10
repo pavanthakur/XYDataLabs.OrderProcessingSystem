@@ -22,7 +22,11 @@ public interface IAppDbContext
     DbSet<PayinLogDetails> PayinLogDetails { get; }
     DbSet<PaymentMethod> PaymentMethods { get; }
     DbSet<PaymentProvider> PaymentProviders { get; }
+    DbSet<PaymentAttempt> PaymentAttempts { get; }
+    DbSet<PaymentAttemptHistory> PaymentAttemptHistories { get; }
     DbSet<TransactionStatusHistory> TransactionStatusHistories { get; }
+    DbSet<OutboxMessage> OutboxMessages { get; }
+    DbSet<InboxMessage> InboxMessages { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

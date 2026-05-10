@@ -2,11 +2,9 @@
 # Purpose: Containerized database solution that eliminates IP dependency
 # Usage: docker-compose -f docker-compose.database.yml up -d
 
-version: '3.8'
-
 services:
   sql-server:
-    image: mcr.microsoft.com/mssql/server:2019-CU18-ubuntu-20.04
+    image: ${ORDERPROCESSING_SQLSERVER_IMAGE:-mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04}
     container_name: orderprocessing-sqlserver
     hostname: sql-server
     environment:
@@ -15,8 +13,6 @@ services:
       - MSSQL_PID=Express
       - MSSQL_TCP_PORT=1433
       - MSSQL_COLLATION=SQL_Latin1_General_CP1_CI_AS
-    ports:
-      - "1433:1433"
     volumes:
       - sql_data:/var/opt/mssql/data
       - sql_log:/var/opt/mssql/log
@@ -26,7 +22,7 @@ services:
       - xy-database-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${LOCAL_SQL_PASSWORD} -Q 'SELECT 1'"]
+      test: ["CMD-SHELL", "if [ -x /opt/mssql-tools18/bin/sqlcmd ]; then /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$SA_PASSWORD\" -Q 'SELECT 1'; else /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P \"$$SA_PASSWORD\" -Q 'SELECT 1'; fi"]
       interval: 30s
       timeout: 10s
       retries: 5

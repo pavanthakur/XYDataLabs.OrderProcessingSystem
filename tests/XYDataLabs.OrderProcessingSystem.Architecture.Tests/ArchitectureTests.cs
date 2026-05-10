@@ -168,6 +168,50 @@ public class ArchitectureTests
             because: "Controllers must be thin — delegate to CQRS dispatcher or service interfaces, never reference Infrastructure directly");
     }
 
+    [Fact]
+    public void Phase8_Event_Contracts_Should_Reside_In_Application()
+    {
+        var contractTypes = new[]
+        {
+            typeof(Application.Events.EventEnvelope),
+            typeof(Application.Events.DeliveryFailureCategory),
+            typeof(Application.Events.IEventPublisher),
+            typeof(Application.Events.IIdempotencyGuard),
+            typeof(Application.Events.IIntegrationEventMapperRegistry),
+            typeof(Application.Events.IDomainEventToIntegrationEventMapper),
+        };
+
+        contractTypes.Should().OnlyContain(type => type.Assembly == ApplicationAssembly,
+            because: "Phase 8 event contracts must live above Infrastructure in the Application layer");
+    }
+
+    [Fact]
+    public void Phase8_Domain_Event_Implementations_Should_Reside_In_Domain()
+    {
+        var domainEventTypes = new[]
+        {
+            typeof(Domain.Events.IHasDomainEvents),
+            typeof(Domain.Events.OrderCreatedDomainEvent),
+        };
+
+        domainEventTypes.Should().OnlyContain(type => type.Assembly == DomainAssembly,
+            because: "Domain keeps concrete domain events and aggregate event storage without taking an Application dependency");
+    }
+
+    [Fact]
+    public void Phase8_Event_Mappers_Should_Reside_In_Application()
+    {
+        var result = Types.InAssembly(ApplicationAssembly)
+            .That()
+            .ImplementInterface(typeof(Application.Events.IDomainEventToIntegrationEventMapper))
+            .Should()
+            .ResideInNamespaceStartingWith("XYDataLabs.OrderProcessingSystem.Application")
+            .GetResult();
+
+        result.IsSuccessful.Should().BeTrue(
+            because: "DomainEvent -> IntegrationEvent mapping is an Application concern in Phase 8");
+    }
+
     // ------------------------------------------------------------------ Guardrail tests (1.6, 1.7, FC3)
 
     [Fact]

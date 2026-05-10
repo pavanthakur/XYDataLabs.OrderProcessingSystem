@@ -8,10 +8,12 @@ namespace XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 public sealed class HeaderTenantProvider : ITenantProvider
 {
     private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly ScopedTenantContextAccessor _tenantContextAccessor;
 
-    public HeaderTenantProvider(IHttpContextAccessor httpContextAccessor)
+    public HeaderTenantProvider(IHttpContextAccessor httpContextAccessor, ScopedTenantContextAccessor tenantContextAccessor)
     {
         _httpContextAccessor = httpContextAccessor;
+        _tenantContextAccessor = tenantContextAccessor;
     }
 
     public bool HasTenantContext => ResolveTenantContext() is not null;
@@ -28,6 +30,11 @@ public sealed class HeaderTenantProvider : ITenantProvider
 
     private TenantContext? ResolveTenantContext()
     {
+        if (_tenantContextAccessor.Current is not null)
+        {
+            return _tenantContextAccessor.Current;
+        }
+
         var context = _httpContextAccessor.HttpContext;
         if (context?.Items.TryGetValue(TenantMiddleware.HttpContextItemKey, out var tenantObj) == true
             && tenantObj is TenantContext tenantContext)

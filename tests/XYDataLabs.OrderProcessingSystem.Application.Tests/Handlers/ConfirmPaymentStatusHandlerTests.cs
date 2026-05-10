@@ -216,6 +216,99 @@ public class ConfirmPaymentStatusHandlerTests : PaymentServiceTestBase
             because: "the not_applicable PayinLogDetails row already exists from the original charge creation");
     }
 
+    [Fact]
+    public async Task HandleAsync_ShouldUpdatePaymentAttemptToSucceededAndAppendHistory()
+    {
+        var transaction = BuildStubCardTransaction(billingCustomerId: 42);
+        var paymentAttempt = new PaymentAttempt
+        {
+            Id = 9,
+            TenantId = 1,
+            CustomerOrderId = transaction.CustomerOrderId,
+            AttemptOrderId = transaction.AttemptOrderId!,
+            AttemptNumber = 1,
+            PaymentTraceId = transaction.PaymentTraceId!,
+            PaymentProviderName = "OpenPay",
+            ProviderChargeId = transaction.TransactionId,
+            Status = PaymentAttemptStatus.ProviderAccepted,
+        };
+
+        SetupConfirmPaymentDbSets(existingTransaction: transaction, existingPaymentAttempt: paymentAttempt);
+        MockOpenPayAdapter
+            .Setup(s => s.GetChargeAsync(It.IsAny<string>(), It.IsAny<string?>()))
+            .ReturnsAsync(new Charge
+            {
+                Id = "charge-001",
+                Status = "completed",
+                Amount = 100m,
+                Authorization = "auth-ref-001"
+            });
+
+        var handler = CreateConfirmPaymentHandler();
+
+        var result = await handler.HandleAsync(BuildConfirmPaymentCommand(callbackStatus: "completed"));
+
+        result.IsSuccess.Should().BeTrue();
+        paymentAttempt.Status.Should().Be(PaymentAttemptStatus.Succeeded);
+        paymentAttempt.ProviderStatus.Should().Be("completed");
+        paymentAttempt.ProviderReferenceId.Should().Be("auth-ref-001");
+        CapturedPaymentAttemptHistories.Should().ContainSingle();
+        CapturedPaymentAttemptHistories.Single().Status.Should().Be(PaymentAttemptStatus.Succeeded);
+    }
+
+    [Fact]
+    public async Task HandleAsync_RepeatedCallback_ShouldNotDuplicatePaymentAttemptHistory()
+    {
+        var transaction = BuildStubCardTransaction(billingCustomerId: 42);
+        var paymentAttempt = new PaymentAttempt
+        {
+            Id = 9,
+            TenantId = 1,
+            CustomerOrderId = transaction.CustomerOrderId,
+            AttemptOrderId = transaction.AttemptOrderId!,
+            AttemptNumber = 1,
+            PaymentTraceId = transaction.PaymentTraceId!,
+            PaymentProviderName = "OpenPay",
+            ProviderChargeId = transaction.TransactionId,
+            Status = PaymentAttemptStatus.ProviderAccepted,
+        };
+        var existingAttemptHistories = new[]
+        {
+            new PaymentAttemptHistory
+            {
+                Id = 1,
+                PaymentAttemptId = paymentAttempt.Id,
+                AttemptOrderId = paymentAttempt.AttemptOrderId,
+                Status = PaymentAttemptStatus.Succeeded,
+                PaymentTraceId = paymentAttempt.PaymentTraceId,
+                ProviderStatus = "completed",
+                TenantId = 1,
+                CreatedDate = UtcNow,
+            }
+        };
+
+        SetupConfirmPaymentDbSets(
+            existingTransaction: transaction,
+            existingPaymentAttempt: paymentAttempt,
+            existingPaymentAttemptHistories: existingAttemptHistories);
+        MockOpenPayAdapter
+            .Setup(s => s.GetChargeAsync(It.IsAny<string>(), It.IsAny<string?>()))
+            .ReturnsAsync(new Charge
+            {
+                Id = "charge-001",
+                Status = "completed",
+                Amount = 100m,
+                Authorization = "auth-ref-001"
+            });
+
+        var handler = CreateConfirmPaymentHandler();
+
+        var result = await handler.HandleAsync(BuildConfirmPaymentCommand(callbackStatus: "completed"));
+
+        result.IsSuccess.Should().BeTrue();
+        CapturedPaymentAttemptHistories.Should().BeEmpty();
+    }
+
     // ------------------------------------------------------------------ Fix 1 regression guard
 
     [Fact]

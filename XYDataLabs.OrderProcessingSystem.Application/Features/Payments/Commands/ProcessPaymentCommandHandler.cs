@@ -70,13 +70,15 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         var startedAt = Stopwatch.GetTimestamp();
 
         Domain.Entities.PaymentMethod? paymentMethod = null;
+        PaymentAttempt? paymentAttempt = null;
         try
         {
             _logger.LogInformation("Starting combined customer, card, and payment process");
 
             var customerOrderId = ResolveCustomerOrderId(command.CustomerOrderId);
             var paymentTraceId = GeneratePaymentTraceId();
-            var attemptOrderId = GenerateAttemptOrderId(customerOrderId);
+            var attemptNumber = await GetNextAttemptNumberAsync(customerOrderId, cancellationToken);
+            var attemptOrderId = GenerateAttemptOrderId(customerOrderId, attemptNumber);
             var isThreeDSecureEnabled = _openPayProvider.Use3DSecure;
 
             activity?.SetTag("payment.customer_order_id", customerOrderId);
@@ -114,10 +116,13 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             var (openpayCustomer, billingCustomerId) = await CreateCustomerAsync(request, paymentMethod, cancellationToken);
             await UpdatePaymentMethodByBillingCustomerIdAsync(paymentMethod.Id, billingCustomerId, cancellationToken);
             var createdCard = await CreateCardTokenAsync(request, openpayCustomer, billingCustomerId, customerOrderId, attemptOrderId, paymentTraceId, cancellationToken);
+            paymentAttempt = await CreatePaymentAttemptAsync(customerOrderId, attemptOrderId, paymentTraceId, attemptNumber, cancellationToken);
             var charge = await CreateChargeAsync(request, openpayCustomer, createdCard.Id, paymentMethod, billingCustomerId, customerOrderId, attemptOrderId, paymentTraceId, isThreeDSecureEnabled, redirectUrl, cancellationToken);
             var normalizedChargeStatus = EnumHelper.NormalizeOpenPayStatus(charge.Status)
                 ?? EnumHelper.GetEnumDescription(PaymentStatus.Unknown);
             var threeDSecureStage = ResolveChargeThreeDSecureStage(normalizedChargeStatus, isThreeDSecureEnabled, charge.PaymentMethod?.Url);
+
+            await UpdatePaymentAttemptAfterChargeAsync(paymentAttempt, normalizedChargeStatus, charge, charge.ErrorMessage, cancellationToken);
 
             BusinessMetrics.RecordPaymentAttempt(
                 outcome: "success",
@@ -144,6 +149,11 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         }
         catch (Exception ex)
         {
+            if (paymentAttempt is not null && paymentAttempt.Status == PaymentAttemptStatus.PendingProviderCall)
+            {
+                await MarkAttemptUnknownForReconciliationAsync(paymentAttempt, ex.Message, cancellationToken);
+            }
+
             BusinessMetrics.RecordPaymentAttempt(
                 outcome: "failure",
                 providerName: _openPayProvider.Name,
@@ -169,6 +179,112 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             }
             throw new InvalidOperationException("Payment processing failed during customer, card, or charge creation.", ex);
         }
+    }
+
+    private async Task<int> GetNextAttemptNumberAsync(string customerOrderId, CancellationToken cancellationToken)
+    {
+        var currentMaxAttemptNumber = await _context.PaymentAttempts
+            .Where(attempt => attempt.TenantId == _tenantProvider.TenantId && attempt.CustomerOrderId == customerOrderId)
+            .Select(attempt => (int?)attempt.AttemptNumber)
+            .MaxAsync(cancellationToken)
+            ?? 0;
+
+        return currentMaxAttemptNumber + 1;
+    }
+
+    private async Task<PaymentAttempt> CreatePaymentAttemptAsync(
+        string customerOrderId,
+        string attemptOrderId,
+        string paymentTraceId,
+        int attemptNumber,
+        CancellationToken cancellationToken)
+    {
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        var paymentAttempt = new PaymentAttempt
+        {
+            CustomerOrderId = customerOrderId,
+            AttemptOrderId = attemptOrderId,
+            PaymentTraceId = paymentTraceId,
+            AttemptNumber = attemptNumber,
+            Status = PaymentAttemptStatus.PendingProviderCall,
+            PaymentProviderName = _openPayProvider.Name,
+            TenantId = _tenantProvider.TenantId,
+            CreatedDate = now,
+        };
+
+        _context.PaymentAttempts.Add(paymentAttempt);
+        _context.PaymentAttemptHistories.Add(new PaymentAttemptHistory
+        {
+            PaymentAttempt = paymentAttempt,
+            AttemptOrderId = attemptOrderId,
+            Status = PaymentAttemptStatus.PendingProviderCall,
+            PaymentTraceId = paymentTraceId,
+            Notes = "Payment attempt persisted before provider charge call.",
+            TenantId = _tenantProvider.TenantId,
+            CreatedDate = now,
+        });
+
+        await _context.SaveChangesAsync(cancellationToken);
+        return paymentAttempt;
+    }
+
+    private async Task UpdatePaymentAttemptAfterChargeAsync(
+        PaymentAttempt paymentAttempt,
+        string normalizedChargeStatus,
+        Charge charge,
+        string? errorMessage,
+        CancellationToken cancellationToken)
+    {
+        var targetStatus = ResolvePaymentAttemptStatus(normalizedChargeStatus);
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+
+        paymentAttempt.Status = targetStatus;
+        paymentAttempt.ProviderStatus = normalizedChargeStatus;
+        paymentAttempt.ProviderChargeId = charge.Id;
+        paymentAttempt.ProviderReferenceId = charge.Authorization;
+        paymentAttempt.LastErrorMessage = errorMessage;
+        paymentAttempt.UpdatedDate = now;
+
+        _context.PaymentAttempts.Update(paymentAttempt);
+        _context.PaymentAttemptHistories.Add(new PaymentAttemptHistory
+        {
+            PaymentAttemptId = paymentAttempt.Id,
+            AttemptOrderId = paymentAttempt.AttemptOrderId,
+            Status = targetStatus,
+            PaymentTraceId = paymentAttempt.PaymentTraceId,
+            ProviderStatus = normalizedChargeStatus,
+            Notes = $"Charge response mapped to payment attempt status '{targetStatus}'.",
+            TenantId = _tenantProvider.TenantId,
+            CreatedDate = now,
+        });
+
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task MarkAttemptUnknownForReconciliationAsync(
+        PaymentAttempt paymentAttempt,
+        string errorMessage,
+        CancellationToken cancellationToken)
+    {
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        paymentAttempt.Status = PaymentAttemptStatus.UnknownNeedsReconciliation;
+        paymentAttempt.LastErrorMessage = errorMessage;
+        paymentAttempt.UpdatedDate = now;
+
+        _context.PaymentAttempts.Update(paymentAttempt);
+        _context.PaymentAttemptHistories.Add(new PaymentAttemptHistory
+        {
+            PaymentAttemptId = paymentAttempt.Id,
+            AttemptOrderId = paymentAttempt.AttemptOrderId,
+            Status = PaymentAttemptStatus.UnknownNeedsReconciliation,
+            PaymentTraceId = paymentAttempt.PaymentTraceId,
+            ProviderStatus = paymentAttempt.ProviderStatus,
+            Notes = "Charge execution failed after attempt persistence; reconciliation required.",
+            TenantId = _tenantProvider.TenantId,
+            CreatedDate = now,
+        });
+
+        await _context.SaveChangesAsync(cancellationToken);
     }
 
     private async Task<Domain.Entities.PaymentMethod> CreatePaymentMethodAsync(CancellationToken cancellationToken)
@@ -497,13 +613,33 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         return charge;
     }
 
-    private string GenerateAttemptOrderId(string baseOrderId)
+    private static PaymentAttemptStatus ResolvePaymentAttemptStatus(string normalizedChargeStatus)
+    {
+        if (EnumHelper.IsSuccessStatus(normalizedChargeStatus))
+        {
+            return PaymentAttemptStatus.Succeeded;
+        }
+
+        if (EnumHelper.IsFailureStatus(normalizedChargeStatus) || EnumHelper.IsCancelledStatus(normalizedChargeStatus))
+        {
+            return PaymentAttemptStatus.Failed;
+        }
+
+        if (EnumHelper.IsPendingStatus(normalizedChargeStatus))
+        {
+            return PaymentAttemptStatus.ProviderAccepted;
+        }
+
+        return PaymentAttemptStatus.UnknownNeedsReconciliation;
+    }
+
+    private static string GenerateAttemptOrderId(string baseOrderId, int attemptNumber)
     {
         var normalizedBaseOrderId = string.IsNullOrWhiteSpace(baseOrderId)
             ? $"ORD-{Guid.NewGuid():N}"
             : baseOrderId.Trim();
 
-        return $"{normalizedBaseOrderId}-{_timeProvider.GetUtcNow():yyyyMMddHHmmssfff}";
+        return $"{normalizedBaseOrderId}-{attemptNumber}";
     }
 
     private static string GeneratePaymentTraceId()

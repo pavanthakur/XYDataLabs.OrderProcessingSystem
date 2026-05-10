@@ -6,7 +6,8 @@ Canonical curriculum navigation for the learning track.
 
 - `1_MASTER_CURRICULUM.md` — active source of truth for daily curriculum execution
 - `docs/learning/curriculum/README.md` — canonical navigation and status guide
-- `../implementation-notes/implementation-notes-days-29-38.md` — detailed implementation evidence beyond checklist updates
+- `../implementation-notes/implementation-notes-days-29-38.md` — detailed implementation evidence for curriculum days 29-38
+- `../implementation-notes/implementation-notes-days-51-56.md` — detailed implementation evidence for the Phase 8 event-foundation closeout slices
 - `../reference/containerization-aca-aspire-learning-path.md` — supporting learning reference for Docker, ACR, ACA, and Aspire
 
 ## Working Usage
@@ -18,10 +19,10 @@ Canonical curriculum navigation for the learning track.
 
 ## Current Learning Status
 
-- Completed: Days 1-43 and Architecture Phases 1-7
-- Current: Phase 7 is closed and verification-frozen; Track U U5 is complete and the React-first web cutover plus MVC retirement are done
-- Next: backend Phase 8 event foundation, then Phase 9 module extraction, then Phase 10 Azure transport + DLQ operations behind hard entry gates
+- Completed: Days 1-43, Architecture Phases 1-8, and Track U U5 web cutover
+- Current: Phase 8 is verification-closed; the React-first web cutover remains complete and the current backend focus moves to Phase 8.5
+- Next: backend Phase 8.5 multi-provider payment, then Phase 8.7 Stripe webhooks, Phase 9 module extraction plus Aspire-Lite, Phase 9.5 Keycloak portability, and Phase 10 Azure transport + DLQ operations behind hard entry gates
 - Companion planning surface before payment automation implementation: `docs/guides/development/payment-journey-automation-blueprint.md`
 
-Last Updated: April 11, 2026
-Current Focus: Backend Phase 8 preparation and execution on top of the completed React-first cutover baseline
+Last Updated: May 10, 2026
+Current Focus: Backend Phase 8.5 preparation on top of the verified Phase 8 event-foundation baseline and the newly extended portability roadmap

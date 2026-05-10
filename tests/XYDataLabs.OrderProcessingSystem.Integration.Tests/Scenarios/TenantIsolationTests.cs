@@ -46,7 +46,8 @@ public sealed class TenantIsolationTests : IAsyncLifetime
                 .Select(item => $"{item.OrderId.Value}:{item.ProductId.Value}")
                 .ToListAsync(),
             PaymentProviderNames = await dbContext.PaymentProviders.OrderBy(item => item.Id).Select(item => item.Name).ToListAsync(),
-            PaymentMethodTokens = await dbContext.PaymentMethods.OrderBy(item => item.Id).Select(item => item.Token).ToListAsync()
+            PaymentMethodTokens = await dbContext.PaymentMethods.OrderBy(item => item.Id).Select(item => item.Token).ToListAsync(),
+            OutboxMessageTenantIds = await dbContext.OutboxMessages.Select(item => item.TenantId).Distinct().ToListAsync()
         });
 
         tenantAView.CustomerEmails.Should().ContainSingle().Which.Should().Be(tenantASeed.CustomerEmail);
@@ -62,5 +63,8 @@ public sealed class TenantIsolationTests : IAsyncLifetime
         tenantAView.OrderProducts.Should().NotContain($"{tenantBSeed.OrderId}:{tenantBSeed.ProductId}");
         tenantAView.PaymentProviderNames.Should().NotContain(tenantBSeed.PaymentProviderName);
         tenantAView.PaymentMethodTokens.Should().NotContain(tenantBSeed.PaymentMethodToken);
+
+        // Assert outbox
+        tenantAView.OutboxMessageTenantIds.Should().OnlyContain(t => t == tenantA.TenantId);
     }
 }

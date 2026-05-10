@@ -25,11 +25,13 @@ Ctrl+Shift+I → Agent mode → type /XYDataLabs-day-complete, /XYDataLabs-docke
 Purpose:
 - Routes end-of-day curriculum updates to the correct documents.
 - Ensures progress tracking stays consistent, including architecture phase status surfaces.
+- Makes payment automation validation mandatory during phase closeout when the work touched `automation/` or the payment automation workflow surfaces.
 - Helps prevent missing updates in curriculum, daily progress, and related docs.
 
 Use when:
 - A curriculum day is finished.
 - A phase is being closed or frozen and all status surfaces must be aligned.
+- A phase closeout touched payment automation and you need the dry-run matrix enforced before commit.
 - You want guided document updates for learning progress.
 
 ### `/XYDataLabs-sql-local-access`
@@ -235,6 +237,7 @@ Note: For deep-dive queries (Q1, Q3, Q4, Q6, Q6a, Q7, Q8-B and per-tenant 3DS to
 
 [After a phase close/freeze]
 └─ /XYDataLabs-day-complete  →  routes curriculum + roadmap + status-surface updates
+   └─ [If automation scope changed] run automation dry-run matrix and record results
    └─ /XYDataLabs-completion-check  →  mandatory quality gate before commit
    └─ /XYDataLabs-context-audit  →  mandatory drift audit before commit
 
