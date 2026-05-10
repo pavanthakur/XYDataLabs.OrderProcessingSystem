@@ -17,6 +17,7 @@ This repo uses a small set of primary operational workflows, with additional sup
 | `test-validate-deployment.yml` | Manual or PR changes | Test only | **[Quick Start](./QUICK-START-TEST-VALIDATION.md)** \| **[Full Docs](./README-TEST-VALIDATE-DEPLOYMENT.md)** - Tests validation workflow independently |
 | `deploy-api-to-azure.yml` | API/Backend code changes | All branches (dev/staging/main) | Builds and deploys API to environment-specific Azure Web App |
 | `deploy-ui-to-azure.yml` | React frontend changes | All branches (dev/staging/main) | Builds and deploys the React frontend to the environment-specific Azure UI App Service, then runs a browser smoke check against the deployed tenant bootstrap flow |
+| `publish-template-package.yml` | Manual | Artifact only or package registry | **[See README-PUBLISH-TEMPLATE-PACKAGE.md](./README-PUBLISH-TEMPLATE-PACKAGE.md)** - Packs `XYDataLabs.SaaS.Templates`, validates the packaged `dotnet new` smoke flow, uploads the `.nupkg`, and optionally publishes it |
 | `validate-adrs.yml` | ADR file, script, or lint config changes | Push/PR to main/dev/staging, or manual | **[See README-VALIDATE-ADRS.md](./README-VALIDATE-ADRS.md)** — Validates ADR filename pattern, H1 heading, `**Status:**` frontmatter, and markdownlint rules |
 | `validate-ai-customization.yml` | Shared AI customization changes | Push/PR to main/dev/staging, or manual | Validates shared Copilot instructions, prompts, agents, operating-model docs, and their discovery surfaces |
 | `validate-doc-links.yml` | Docs or validator changes | Push/PR to main/dev/staging, or manual | Validates local markdown links and heading anchors for the canonical `docs/` tree |
@@ -39,6 +40,7 @@ This repo uses a small set of primary operational workflows, with additional sup
 |----------|------|
 | `configure-github-secrets.yml` | Secondary/manual secret configuration and GitHub App troubleshooting path |
 | `infra-deploy.yml` | Infra-only Bicep deployment entrypoint |
+| `publish-template-package.yml` | Manual package publication path for the Layer 1 `dotnet new` template after packaged smoke validation |
 | `validate-deployment.yml` | Reusable preflight validation called by infra deployment |
 | `test-validate-deployment.yml` | Independent test harness for validation workflow changes |
 | `validate-adrs.yml` | Documentation governance for ADR changes |
@@ -68,6 +70,7 @@ Before workflows can execute, the following secrets must be configured:
 |-------------|-------------|------------|
 | `APP_ID` | GitHub App ID | GitHub App setup |
 | `APP_PRIVATE_KEY` | GitHub App private key | GitHub App setup |
+| `NUGET_API_KEY` | NuGet.org publish key for `XYDataLabs.SaaS.Templates` | Create in NuGet.org account settings (required only when publishing to NuGet.org) |
 
 **Environment secrets** (`dev`, `staging`, `prod`)
 

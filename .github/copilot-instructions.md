@@ -105,7 +105,7 @@ Frontend workspace:
 
 ---
 
-## 4. GitHub Actions Workflows (11 workflows)
+## 4. GitHub Actions Workflows (12 workflows)
 
 All workflows live in `.github/workflows/`. Each has a companion `README-*.md` in the same folder.
 
@@ -120,6 +120,7 @@ All workflows live in `.github/workflows/`. Each has a companion `README-*.md` i
 | `test-validate-deployment.yml` | Test Pre-Deployment Validation | Manual or PR | Tests the validation workflow independently. |
 | `deploy-api-to-azure.yml` | Deploy API to Azure App Service | Push to dev/staging/main (API paths) | Build → test → publish → Azure OIDC login → deploy → health check |
 | `deploy-ui-to-azure.yml` | Deploy UI to Azure App Service | Push to dev/staging/main (UI paths) | Build → test → publish → Azure OIDC login → deploy → health check |
+| `publish-template-package.yml` | Publish Template Package | Manual dispatch | Packs `XYDataLabs.SaaS.Templates`, validates the packaged `dotnet new` smoke flow, uploads the `.nupkg`, and optionally publishes it to NuGet.org or GitHub Packages |
 | `validate-ai-customization.yml` | Validate AI Customization | Push/PR (shared AI asset paths) or manual | Validates shared Copilot instructions, prompts, agents, and AI governance docs/scripts stay in sync |
 | `validate-adrs.yml` | Validate ADR Markdown | Push/PR (ADR/script/config paths) or manual | Markdownlint format + frontmatter schema (filename, H1, `**Status:**`, valid status word) |
 
@@ -128,7 +129,7 @@ All workflows live in `.github/workflows/`. Each has a companion `README-*.md` i
 | Category | Workflows | Usage |
 |----------|-----------|-------|
 | **Primary** | `ci.yml`, `azure-initial-setup.yml`, `azure-bootstrap.yml`, `deploy-api-to-azure.yml`, `deploy-ui-to-azure.yml` | Default paths for PR validation, initial setup, day-to-day deployment, and normal API/UI delivery |
-| **Support** | `configure-github-secrets.yml`, `infra-deploy.yml`, `validate-deployment.yml`, `test-validate-deployment.yml`, `validate-ai-customization.yml`, `validate-adrs.yml` | Secondary validation, infra-only entrypoints, troubleshooting, and governance guardrails |
+| **Support** | `configure-github-secrets.yml`, `infra-deploy.yml`, `publish-template-package.yml`, `validate-deployment.yml`, `test-validate-deployment.yml`, `validate-ai-customization.yml`, `validate-adrs.yml` | Secondary validation, infra-only entrypoints, package publication, troubleshooting, and governance guardrails |
 
 ### Branch → Environment Mapping
 

@@ -117,7 +117,7 @@ the companion tag.
 | Ships | API/Application/Domain/Infrastructure/SharedKernel/PaymentGateway + 5 test projects, EF Core scaffolding, multi-tenant primitives, hand-rolled CQRS skeleton, `Result<T>`, NetArchTest layer rules |
 | Versioning | NuGet semver (`1.0.0`, `1.1.0`, ...); each version immutable |
 | Bootstrap | `dotnet new install <local-or-nupkg-path>` then `dotnet new xy-saas -n <ProductName> --rootNamespace <Company.Product> --companySlug <companyslug> --productSlug <productslug>` |
-| Publish trigger | Phase 14 closeout for the first formal NuGet/template release; version `1.0.0` is the first release-ready validated package line |
+| Publish trigger | Phase 14 closeout for the first formal NuGet/template release; version `1.0.0` is the first release-ready validated package line and is published through `.github/workflows/publish-template-package.yml` |
 
 #### 2.1.1 Public release note draft — `1.0.0`
 

@@ -181,8 +181,9 @@ Each side project pins both `BLUEPRINT_VERSION` (Layer 2 tag) and `DOTNET_TEMPLA
   by automating the action via `/XYDataLabs-day-complete`.
 - Branch protection rule must be configured manually in GitHub Settings the first time the
   pattern `dev-backup-**` is used. Captured in the operational runbook.
-- Layer 1 NuGet template requires a separate package publish pipeline (out of scope until
-  Phase 14 closeout).
+- Layer 1 NuGet template requires a dedicated package publish pipeline. That pipeline now exists
+  as `.github/workflows/publish-template-package.yml` and keeps package publication behind a
+  packaged smoke-validation gate.
 
 **Operational requirements**
 
