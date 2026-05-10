@@ -795,9 +795,21 @@ services:
 
 This ordering matches modern cloud-native developer experience expectations: Aspire is the inner-loop orchestrator the moment services exist, not an end-state luxury.
 
+### Cross-Cutting Modernization (Aligned with .NET 10 Aspire Blueprint)
+
+Reviewed against the canonical Microsoft `dotnet-backend-blueprint-v-10` reference template (Aspire 13 + ACA + Keycloak + PostgreSQL). The following tactical refinements are adopted as Phase 9 deliverables — they support the microservice extraction without altering domain behaviour:
+
+- **`XYDataLabs.OrderProcessingSystem.ServiceDefaults` project** — new shared project referenced by every service host. Houses the canonical extension chain `AddServiceDefaults()` → `ConfigureOpenTelemetry()` + `AddDefaultHealthChecks()` + `AddServiceDiscovery()` + `ConfigureHttpClientDefaults(http => http.AddStandardResilienceHandler())`. Today these concerns are split between `SharedKernel` and individual `Program.cs` files; consolidating them is a prerequisite for clean per-service composition. Reinforces ADR-012 (OpenTelemetry dual export).
+- **`MapDefaultEndpoints()` extension** — standardizes `/health/ready` (full readiness, gates traffic) and `/health/alive` (liveness only) across every service host. Aligns with ADR-015 (deployment readiness probes) and removes duplicated health endpoint registration in each service.
+- **`IConfigureNamedOptions<JwtBearerOptions>` setup pattern** — replaces inline JWT wiring in `Program.cs` with a dedicated `JwtBearerOptionsSetup` registered via `ConfigureOptions<>()`. Required mechanism for Phase 9.5 (Keycloak portability) which adds a second JWT scheme via `AddPolicyScheme`.
+- **`IExceptionHandler` + `AddProblemDetails` + `UseExceptionHandler`** — confirm or migrate to the .NET 8+ idiomatic exception pipeline producing RFC 7807 ProblemDetails. This is the contract Stripe webhooks (Phase 8.7) and external partners expect; it must be in place before microservices accept inbound traffic from a gateway.
+- **EF Core `UseAsyncSeeding` for reference data** — EF 9 idiomatic seeding hook on `DbContextOptionsBuilder`. Replaces ad-hoc startup seed code; particularly useful before Phase 11.5's PostgreSQL pilot which re-seeds the Notifications module on a different RDBMS provider.
+
+**Deliberately not adopted from the blueprint:** vertical-slice replacement of Clean Architecture (ADR-011 enforces our domain boundaries), Keycloak as production IdP (Entra ID + Managed Identity remain authoritative — Phase 9.5 only proves portability), PostgreSQL as primary RDBMS (Phase 11.5 pilots one module only), single-workflow CI/CD (our split workflow is intentional per `architect-patterns.md`).
+
 ### Outcome
 
-Module-isolated, locally deployable services with proven PublicApi boundaries, a first-class Payments module, dual orchestration (Docker Compose for CI + Aspire AppHost for inner-loop), and unchanged event semantics ready for the Phase 10 transport swap.
+Module-isolated, locally deployable services with proven PublicApi boundaries, a first-class Payments module, dual orchestration (Docker Compose for CI + Aspire AppHost for inner-loop), a shared `ServiceDefaults` project, and unchanged event semantics ready for the Phase 10 transport swap.
 
 ---
 
@@ -1118,22 +1130,20 @@ Scalable, manageable production platform with enterprise-grade operations, advan
 
 ## Phase 13 — Aspire & Developer Experience 📅
 
-**Focus:** Developer inner-loop experience with .NET Aspire.
+**Focus:** Developer inner-loop experience deepening, on top of the Aspire-Lite track introduced in Phase 9.
 
 ### Key Deliverables
 
-- Adopt **.NET Aspire** for local orchestration and service composition
-- **AppHost project** — replaces Docker Compose for local development
-- **Resource definitions** — `builder.AddRedis()`, `builder.AddSqlServer()`, `builder.AddProject<OrdersAPI>()` etc.
-- **Service discovery** — Aspire-managed service resolution (no hardcoded URLs)
-- **Dashboard** — Aspire dashboard for local traces, logs, and metrics
-- **Integration tests** — `DistributedApplicationTestingBuilder` for end-to-end tests against the Aspire graph
-- Full end-to-end trace correlation across all services
-- **Aspire manifest** → ACA deployment via `azd` or Bicep
+- **Deepen .NET Aspire adoption** — Aspire-Lite (`AppHost` + service discovery + dashboard) was already introduced in Phase 9; Phase 13 promotes it from "alongside Docker Compose" to the primary inner-loop orchestrator
+- **Resource composition refinements** — advanced patterns: `WithReference()`, `WaitFor()`, `WithEnvironment()` ReferenceExpressions, persistent container lifetimes for stateful resources, run-mode vs publish-mode resource graph differences
+- **Integration tests** — `DistributedApplicationTestingBuilder` for end-to-end tests against the live Aspire graph; replaces hand-stitched `WebApplicationFactory` compositions where multi-service interaction is under test
+- **Full end-to-end trace correlation** across all services via the OTEL pipeline already standardized in the Phase 9 `ServiceDefaults` project
+- **Evaluate `azd` + Aspire-generated manifest as an ACA deployment path** — the .NET 10 blueprint reference uses `aspire deploy` / `azd provision` + `azd deploy` driving Aspire-generated Bicep. Compare against our hand-authored `infra/` Bicep on three axes: audit traceability (production), iteration speed (non-prod), and parameterization granularity. **Outcome captured in a new ADR**: either adopt `azd` for non-revenue-critical environments while keeping hand-authored Bicep for production, or remain on hand-authored Bicep across all environments with documented rationale.
+- **.NET LTS upgrade window** — if not already done, Phase 13 is the natural moment to evaluate upgrading from .NET 8 to the current LTS (.NET 10 GA Nov 2025). Captured under its own ADR with a compatibility matrix for EF Core, Aspire, and Azure SDK packages.
 
 ### Outcome
 
-Enterprise-grade, cloud-native system with excellent developer inner-loop experience and integration-tested service graph.
+Enterprise-grade, cloud-native system with excellent developer inner-loop experience, integration-tested service graph, and an explicit recorded decision on `azd`-vs-hand-authored Bicep for ACA deployment.
 
 ---
 
