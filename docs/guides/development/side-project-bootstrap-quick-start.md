@@ -121,6 +121,7 @@ dotnet new uninstall XYDataLabs.SaaS.Templates
 
 - [branch-and-blueprint-strategy.md](../../internal/branch-and-blueprint-strategy.md)
 - [side-projects/README.md](./side-projects/README.md)
+- External planning repo: [XYDataLabs.SideProjects](https://github.com/pavanthakur/XYDataLabs.SideProjects)
 - [README-PUBLISH-TEMPLATE-PACKAGE.md](../../../.github/workflows/README-PUBLISH-TEMPLATE-PACKAGE.md)
 - [README-VALIDATE-TEMPLATE-PACKAGE-GOVERNANCE.md](../../../.github/workflows/README-VALIDATE-TEMPLATE-PACKAGE-GOVERNANCE.md)
 - [ADR-018](../../architecture/decisions/ADR-018-blueprint-and-snapshot-strategy.md)

@@ -404,6 +404,8 @@ branches in this repository.
 
 Detailed product documentation also does **not** live in this repository. This repo keeps only the bootstrap decision table, snapshot rules, template/version rules, and candidate-product naming. Product-specific design, ADRs, and implementation notes start in the target side-project repository.
 
+Until each product gets its own implementation repository, the recovered pre-bootstrap planning docs live in the separate planning repository `pavanthakur/XYDataLabs.SideProjects`.
+
 ### 3.2 Prioritized side projects
 
 | # | Side project | Bootstrap source | Realistic MVP |

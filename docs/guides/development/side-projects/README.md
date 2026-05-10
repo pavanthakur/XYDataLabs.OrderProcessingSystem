@@ -19,4 +19,4 @@ This repository may describe how to bootstrap future side projects, but it must 
 
 ## Operating Note
 
-When a new side-project repository is created, the first documentation commit in that repository should establish its own README, internal planning surface, ADR folder, and implementation roadmap. Do not continue expanding product-specific docs inside `XYDataLabs.OrderProcessingSystem`.
+The temporary planning home for the recovered candidate-product docs is [XYDataLabs.SideProjects](https://github.com/pavanthakur/XYDataLabs.SideProjects). When a real side-project repository is created, the first documentation commit in that repository should establish its own README, internal planning surface, ADR folder, and implementation roadmap. Do not continue expanding product-specific docs inside `XYDataLabs.OrderProcessingSystem`.
