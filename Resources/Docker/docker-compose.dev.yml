@@ -99,7 +99,7 @@ services:
       api-dev-http:
         condition: service_healthy
     healthcheck:
-      test: curl --fail http://localhost:5022/customers --insecure || exit 1
+      test: ["CMD", "node", "-e", "fetch('http://localhost:5022/customers').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 2
@@ -131,7 +131,7 @@ services:
       api-dev-https:
         condition: service_healthy
     healthcheck:
-      test: curl --fail https://localhost:5023/customers --insecure || exit 1
+      test: ["CMD", "node", "-e", "process.env.NODE_TLS_REJECT_UNAUTHORIZED='0'; fetch('https://localhost:5023/customers').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 2

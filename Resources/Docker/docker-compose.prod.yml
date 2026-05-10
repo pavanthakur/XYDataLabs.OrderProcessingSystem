@@ -118,7 +118,7 @@ services:
     mem_limit: 512m
     cpus: 0.5
     healthcheck:
-      test: curl --fail http://localhost:5042/customers --insecure || exit 1
+      test: ["CMD", "node", "-e", "fetch('http://localhost:5042/customers').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 60s
       timeout: 10s
       retries: 3
@@ -156,7 +156,7 @@ services:
     mem_limit: 512m
     cpus: 0.5
     healthcheck:
-      test: curl --fail https://localhost:5043/customers --insecure || exit 1
+      test: ["CMD", "node", "-e", "process.env.NODE_TLS_REJECT_UNAUTHORIZED='0'; fetch('https://localhost:5043/customers').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 60s
       timeout: 10s
       retries: 3
