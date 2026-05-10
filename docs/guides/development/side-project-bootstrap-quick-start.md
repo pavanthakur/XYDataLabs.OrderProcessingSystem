@@ -8,10 +8,25 @@ Decision rationale and the full release/snapshot model live in [branch-and-bluep
 
 - Side projects live in **separate repositories**, not long-lived branches in this repository.
 - Detailed product documentation also lives in those separate repositories, not in this repository.
+- `XYDataLabs.SideProjects` is the idea-dump and pre-bootstrap planning registry, not the implementation home.
 - Before Phase 14, bootstrap from the best matching **snapshot tag**.
 - After Phase 14, bootstrap from the two-layer model:
   - Layer 1: `XYDataLabs.SaaS.Templates` from NuGet
   - Layer 2: `xydatalabs-saas-blueprint` from GitHub template repo
+
+## Repository Naming Rule
+
+Create actual product repositories with readable `XYDataLabs.<ProductName>` names.
+
+Examples:
+
+- `XYDataLabs.IndiaTradingSystem`
+- `XYDataLabs.WhatsAppAutomation`
+- `XYDataLabs.AzureCostOptimizer`
+- `XYDataLabs.AIRecruitment`
+- `XYDataLabs.HospitalClinicAppointments`
+
+Do not develop the actual product inside `XYDataLabs.SideProjects`; that repository is for idea capture and early planning only.
 
 ## Current Recommended Baselines
 
@@ -31,9 +46,9 @@ If a later phase creates a better seam for a product category, update the bootst
 Use this when the full `xydatalabs-saas-blueprint` repo does not exist yet.
 
 ```powershell
-gh repo create <side-project-name> --private
-git clone https://github.com/<your-account>/<side-project-name>.git
-cd <side-project-name>
+gh repo create XYDataLabs.IndiaTradingSystem --private
+git clone https://github.com/<your-account>/XYDataLabs.IndiaTradingSystem.git
+cd XYDataLabs.IndiaTradingSystem
 
 git remote add blueprint https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem.git
 git fetch blueprint v-20260510-phase8-frontend-spa
@@ -45,7 +60,7 @@ git commit -m "chore: initialize from snapshot v-20260510-phase8-frontend-spa"
 git push -u origin main
 ```
 
-Then strip or replace product-specific slices, rename namespaces, and create the product's own README, ADR surface, and implementation plan in the new repository.
+Then strip or replace product-specific slices, rename namespaces, and create the product's own README, ADR surface, and implementation plan in that dedicated product repository.
 
 ## Option B — Start After Phase 14 (Two-Layer Bootstrap)
 

@@ -406,6 +406,8 @@ Detailed product documentation also does **not** live in this repository. This r
 
 Until each product gets its own implementation repository, the recovered pre-bootstrap planning docs live in the separate planning repository `pavanthakur/XYDataLabs.SideProjects`.
 
+Use `XYDataLabs.<ProductName>` naming for real implementation repositories so the portfolio surface stays readable, for example `XYDataLabs.IndiaTradingSystem` instead of a generic side-project dump repo.
+
 ### 3.2 Prioritized side projects
 
 | # | Side project | Bootstrap source | Realistic MVP |
