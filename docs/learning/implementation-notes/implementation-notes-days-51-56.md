@@ -133,3 +133,46 @@ Reviewed Julio Casal's `.NET 10 backend blueprint` reference template and adopte
 **4. What this enables next**
 
 The next engineering phase is still **Phase 8.5**. The practical benefit of today's planning work is that Stripe adapter work can now start against a stable target sequence: adapter integration first, webhook receiver second, module extraction third, then identity and persistence portability proofs in isolated follow-on phases.
+
+## May 10, 2026: Azure UI Deployment Stabilization And Live Automation Proof
+
+The Azure dev deployment path was revalidated after the React UI deploy workflow hit a tenant-bootstrap smoke timeout while the API deployment was still warming up.
+
+**1. Deployment stabilization change**
+
+- The UI workflow now treats the browser smoke step as dependent on both the deployed UI shell and the API runtime bootstrap endpoints it calls during tenant initialization.
+- Added a mandatory **5-minute UI warm-up buffer** before browser smoke starts.
+- Added an explicit API readiness gate before Playwright launches: the workflow now polls `/api/v1/Info/runtime-configuration` and `/api/v1/Customer/GetAllCustomers` using `X-Tenant-Code: TenantA`.
+- The gate retries every **30 seconds** and fails cleanly after a **15-minute total pre-smoke budget** (5 minutes UI warm-up + 10 minutes API polling).
+- The smoke script itself was hardened so transient first-attempt failures produce actionable diagnostics and short retries instead of a generic `page.waitForResponse` timeout.
+
+**2. Focused validation commands**
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\Resources\Azure-Deployment\validate-workflow-config.ps1
+npm --prefix frontend run smoke:web:tenant -- --url https://pavanthakur-orderprocessing-ui-xyapp-dev.azurewebsites.net/customers
+npm --prefix automation run run -- --target azure-dev --run-prefix OR-AZDEV-10May
+```
+
+Observed result:
+
+- Workflow validator: passed
+- Live Azure UI tenant bootstrap smoke: passed
+- Azure dev payment automation: passed for `TenantA`, `TenantB`, and `TenantC`
+
+**3. Live Azure dev automation evidence**
+
+- Run ID: `payment-automation-2026-05-10T14-56-14-140Z`
+- Run prefix: `OR-AZDEV-10May`
+- Report directory: `automation/reports/payment-automation-2026-05-10T14-56-14-140Z/`
+- Executive summary: `automation/reports/payment-automation-2026-05-10T14-56-14-140Z/summary.md`
+
+Per-tenant outcome:
+
+- `TenantA` — journey completed, challenge passed, Azure verification passed
+- `TenantB` — journey completed, challenge passed, Azure verification passed
+- `TenantC` — journey completed, challenge passed, Azure verification passed
+
+**4. Operational conclusion**
+
+Azure dev is currently healthy at the combined runtime level: API deployment, UI deployment, tenant bootstrap, and the end-to-end payment automation path all passed on the deployed environment after the UI smoke gate was changed to wait for API readiness explicitly.
