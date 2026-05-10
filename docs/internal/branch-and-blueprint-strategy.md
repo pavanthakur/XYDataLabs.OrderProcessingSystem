@@ -394,13 +394,15 @@ prototype already exists in-repo and has been validated locally via `dotnet pack
 ## 3. Side projects
 
 Quick operator path: [side-project-bootstrap-quick-start.md](../guides/development/side-project-bootstrap-quick-start.md)
-Detailed per-project plans: [side-projects/README.md](../guides/development/side-projects/README.md)
+Repository-boundary note: [side-projects/README.md](../guides/development/side-projects/README.md)
 
 ### 3.1 Location and naming
 
 Side projects live in **separate GitHub repositories**, ideally under a dedicated org
 (`pavanthakur-saas/`) for clean portfolio branding. They do **not** live as long-lived
 branches in this repository.
+
+Detailed product documentation also does **not** live in this repository. This repo keeps only the bootstrap decision table, snapshot rules, template/version rules, and candidate-product naming. Product-specific design, ADRs, and implementation notes start in the target side-project repository.
 
 ### 3.2 Prioritized side projects
 
@@ -431,10 +433,10 @@ Default rule before Phase 14:
 - if the side project is explicitly a reusable SaaS backend skeleton exercise, prefer the validated Layer 1 package line `XYDataLabs.SaaS.Templates::1.0.1`
 - if a future phase introduces a better architectural seam for a specific product category, cut the new snapshot pair and update this matrix instead of creating ad hoc product branches in this repo
 
-Planning note for the current hospital/clinic appointment ask:
-- the new healthcare scheduling project fits the existing Phase 8 frontend snapshot and future two-layer bootstrap model, so no new snapshot tag or NuGet package line is required yet
-- cut a new snapshot tag/backup branch only when a future phase adds healthcare-relevant shared bootstrap assets that materially improve all new scheduling products
-- move `PackageVersion` only if the shared Layer 1 generated backend skeleton changes for every consumer, not for one domain plan document
+Planning note for any new side-project ask:
+- if the request only adds or changes product-specific planning, do not create or retain those detailed docs in this repository
+- cut a new snapshot tag or backup branch only when shared bootstrap assets materially improve future side-project creation
+- move `PackageVersion` only when the shared Layer 1 generated backend skeleton changes for every consumer, not for one product plan
 
 Default rule after Phase 14:
 - create the repo from `xydatalabs-saas-blueprint`
@@ -448,6 +450,7 @@ Default rule after Phase 14:
 - Inherit `automation/reports/` per-run summary discipline from the blueprint.
 - Inherit `docs/internal/` status surface pattern from the blueprint.
 - Each side project maintains its own ADRs starting at ADR-000-template.
+- Each side project owns its own domain-specific planning and implementation documentation in its own repository.
 
 ---
 

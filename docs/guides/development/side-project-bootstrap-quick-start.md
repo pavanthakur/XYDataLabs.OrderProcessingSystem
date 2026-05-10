@@ -7,6 +7,7 @@ Decision rationale and the full release/snapshot model live in [branch-and-bluep
 ## Rule First
 
 - Side projects live in **separate repositories**, not long-lived branches in this repository.
+- Detailed product documentation also lives in those separate repositories, not in this repository.
 - Before Phase 14, bootstrap from the best matching **snapshot tag**.
 - After Phase 14, bootstrap from the two-layer model:
   - Layer 1: `XYDataLabs.SaaS.Templates` from NuGet
@@ -44,7 +45,7 @@ git commit -m "chore: initialize from snapshot v-20260510-phase8-frontend-spa"
 git push -u origin main
 ```
 
-Then strip or replace product-specific slices, rename namespaces, and document the chosen baseline in the new repo README.
+Then strip or replace product-specific slices, rename namespaces, and create the product's own README, ADR surface, and implementation plan in the new repository.
 
 ## Option B — Start After Phase 14 (Two-Layer Bootstrap)
 
@@ -79,6 +80,15 @@ dotnet new xy-saas `
 BLUEPRINT_VERSION=blueprint-v1.0.0
 DOTNET_TEMPLATE_VERSION=XYDataLabs.SaaS.Templates@1.0.1
 ```
+
+### Step 5: Start product-specific documentation in the new repository
+
+Create these there, not here:
+
+- product README
+- `docs/internal/` delivery plan or backlog
+- ADRs for domain-specific decisions
+- implementation notes for the chosen product
 
 ## NuGet Commands For Consumers
 
