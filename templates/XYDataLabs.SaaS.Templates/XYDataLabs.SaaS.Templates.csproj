@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <NoDefaultExcludes>true</NoDefaultExcludes>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+    <PackageType>Template</PackageType>
+    <PackageId>XYDataLabs.SaaS.Templates</PackageId>
+    <Title>XYDataLabs SaaS Templates</Title>
+    <Description>Layer 1 dotnet new template for the XYDataLabs multi-tenant SaaS backend and test solution.</Description>
+    <Authors>Pavan Thakur</Authors>
+    <PackageTags>dotnet-new;template;saas;clean-architecture;cqrs;multitenant;azure</PackageTags>
+    <PackageVersion>0.1.0</PackageVersion>
+    <PackageOutputPath>..\..\.artifacts\packages</PackageOutputPath>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="..\xy-saas\**\*"
+             Exclude="..\xy-saas\**\.vs\**;..\xy-saas\**\.vscode\**;..\xy-saas\**\bin\**;..\xy-saas\**\obj\**;..\xy-saas\**\*.user;..\xy-saas\**\*.suo;..\xy-saas\**\*.cache"
+             PackagePath="content" />
+  </ItemGroup>
+</Project>

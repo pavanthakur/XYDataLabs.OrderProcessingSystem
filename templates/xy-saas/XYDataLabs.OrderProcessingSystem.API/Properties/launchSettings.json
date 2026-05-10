@@ -1,0 +1,99 @@
+{
+  "profiles": {
+    "http": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "launchUrl": "swagger",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "USE_HTTPS": "false",
+        "Frontend__WebBaseUrl": "http://localhost:5173",
+        "CORS_ALLOWED_ORIGINS": "http://localhost:5173",
+        "SHAREDSETTINGS_PATH": "..\\Resources\\Configuration\\sharedsettings.local.json"
+      },
+      "dotnetRunMessages": true,
+      "applicationUrl": "http://localhost:5010"
+    },
+    "https": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "launchUrl": "swagger",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "USE_HTTPS": "true",
+        "Frontend__WebBaseUrl": "https://localhost:5174",
+        "CORS_ALLOWED_ORIGINS": "https://localhost:5174",
+        "SHAREDSETTINGS_PATH": "..\\Resources\\Configuration\\sharedsettings.local.json"
+      },
+      "dotnetRunMessages": true,
+      "applicationUrl": "https://localhost:5011"
+    },
+    "docker-dev-http": {
+      "commandName": "Executable",
+      "executablePath": "powershell.exe",
+      "commandLineArgs": "-NoProfile -ExecutionPolicy Bypass -Command \"& '$(SolutionDir)Resources\\Docker\\start-docker.ps1' -Environment dev -Profile http -Reset -NoPrePull\"",
+      "workingDirectory": "$(SolutionDir)",
+      "launchBrowser": true,
+      "launchUrl": "http://localhost:5020/swagger",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    },
+    "docker-dev-https": {
+      "commandName": "Executable",
+      "executablePath": "powershell.exe",
+      "commandLineArgs": "-NoProfile -ExecutionPolicy Bypass -Command \"& '$(SolutionDir)Resources\\Docker\\start-docker.ps1' -Environment dev -Profile https -Reset -NoPrePull\"",
+      "workingDirectory": "$(SolutionDir)",
+      "launchBrowser": true,
+      "launchUrl": "https://localhost:5021/swagger",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    },
+    "docker-stg-http": {
+      "commandName": "Executable",
+      "executablePath": "powershell.exe",
+      "commandLineArgs": "-NoProfile -ExecutionPolicy Bypass -Command \"& '$(SolutionDir)Resources\\Docker\\start-docker.ps1' -Environment stg -Profile http -Reset -NoPrePull\"",
+      "workingDirectory": "$(SolutionDir)",
+      "launchBrowser": true,
+      "launchUrl": "http://localhost:5030/swagger",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Staging"
+      }
+    },
+    "docker-stg-https": {
+      "commandName": "Executable",
+      "executablePath": "powershell.exe",
+      "commandLineArgs": "-NoProfile -ExecutionPolicy Bypass -Command \"& '$(SolutionDir)Resources\\Docker\\start-docker.ps1' -Environment stg -Profile https -Reset -NoPrePull\"",
+      "workingDirectory": "$(SolutionDir)",
+      "launchBrowser": true,
+      "launchUrl": "https://localhost:5031/swagger",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Staging"
+      }
+    },
+    "docker-prod-http": {
+      "commandName": "Executable",
+      "executablePath": "powershell.exe",
+      "commandLineArgs": "-NoProfile -ExecutionPolicy Bypass -Command \"& '$(SolutionDir)Resources\\Docker\\start-docker.ps1' -Environment prod -Profile http -Reset -NoPrePull\"",
+      "workingDirectory": "$(SolutionDir)",
+      "launchBrowser": true,
+      "launchUrl": "http://localhost:5040/swagger",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Production"
+      }
+    },
+    "docker-prod-https": {
+      "commandName": "Executable",
+      "executablePath": "powershell.exe",
+      "commandLineArgs": "-NoProfile -ExecutionPolicy Bypass -Command \"& '$(SolutionDir)Resources\\Docker\\start-docker.ps1' -Environment prod -Profile https -Reset -NoPrePull\"",
+      "workingDirectory": "$(SolutionDir)",
+      "launchBrowser": true,
+      "launchUrl": "https://localhost:5041/swagger",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Production"
+      }
+    }
+  },
+  "$schema": "http://json.schemastore.org/launchsettings.json"
+}

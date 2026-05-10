@@ -1,0 +1,290 @@
+﻿using XYDataLabs.OrderProcessingSystem.Application.Events;
+using XYDataLabs.OrderProcessingSystem.Domain.Entities;
+using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using Bogus;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+
+namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
+{
+    public static class DbInitializer
+    {
+        private static readonly string[] StartupSeedTenantCodes = { "TenantA", "TenantB" };
+        private const int SeededCustomerCountPerTenant = 120;
+
+        public static void Initialize(
+            OrderProcessingSystemDbContext context,
+            IConfiguration? configuration = null,
+            bool applyMigrations = true,
+            IIntegrationEventMapperRegistry? integrationEventMapperRegistry = null)
+        {
+            if (context is null)
+            {
+                throw new ArgumentNullException(nameof(context));
+            }
+
+            if (integrationEventMapperRegistry is null)
+            {
+                throw new ArgumentNullException(nameof(integrationEventMapperRegistry));
+            }
+
+            // Azure deployments run schema migrations in workflow steps before app startup.
+            if (applyMigrations)
+            {
+                context.Database.Migrate();
+            }
+
+            // Phase 1: seed shared-pool tenants (TenantA, TenantB) into the main DB.
+            var startupSeedTenants = GetStartupSeedTenants(context);
+
+            SeedOpenpayProviders(context, startupSeedTenants);
+
+            foreach (var seedTenant in startupSeedTenants)
+            {
+                SeedTenantSampleData(context, seedTenant);
+            }
+
+            // Phase 2: seed dedicated-tier tenants into their own DB connection.
+            // Connection strings are read from IConfiguration (Key Vault / appsettings),
+            // not from the Tenants table — connection strings are secrets.
+            // Skipped when configuration is null or DedicatedTenantConnectionStrings is absent.
+            SeedDedicatedTenants(context, configuration, applyMigrations, integrationEventMapperRegistry);
+        }
+
+        private static IReadOnlyList<StartupSeedTenant> GetStartupSeedTenants(OrderProcessingSystemDbContext context)
+        {
+            var tenants = context.Tenants
+                .AsNoTracking()
+                .Where(tenant => StartupSeedTenantCodes.Contains(tenant.Code))
+                .Select(tenant => new StartupSeedTenant(tenant.Id, tenant.Code, tenant.Name))
+                .ToList();
+
+            var missingTenantCodes = StartupSeedTenantCodes
+                .Except(tenants.Select(tenant => tenant.TenantCode), StringComparer.Ordinal)
+                .ToArray();
+
+            if (missingTenantCodes.Length > 0)
+            {
+                throw new InvalidOperationException($"Startup seed tenants were not found in Tenants table: {string.Join(", ", missingTenantCodes)}");
+            }
+
+            return tenants;
+        }
+
+        private static void SeedTenantSampleData(OrderProcessingSystemDbContext context, StartupSeedTenant seedTenant)
+        {
+            if (!context.Customers.Any(customer => customer.TenantId == seedTenant.TenantId))
+            {
+                SeedCustomers(context, seedTenant);
+            }
+
+            if (!context.Products.Any(product => product.TenantId == seedTenant.TenantId))
+            {
+                SeedProducts(context, seedTenant);
+            }
+
+            if (!context.Orders.Any(order => order.TenantId == seedTenant.TenantId))
+            {
+                SeedOrders(context, seedTenant);
+            }
+        }
+
+        private static void SeedCustomers(OrderProcessingSystemDbContext context, StartupSeedTenant seedTenant)
+        {
+            var faker = new Faker<Customer>()
+                .RuleFor(c => c.Name, f => $"{seedTenant.TenantCode} {f.Name.FullName()}")
+                .RuleFor(c => c.Email, (f, _) => $"{seedTenant.TenantCode}.{f.UniqueIndex}@example.test")
+                .RuleFor(c => c.TenantId, _ => seedTenant.TenantId);
+
+            var customers = faker.Generate(SeededCustomerCountPerTenant);
+            context.Customers.AddRange(customers);
+            context.SaveChanges();
+        }
+
+        private static void SeedProducts(OrderProcessingSystemDbContext context, StartupSeedTenant seedTenant)
+        {
+            var products = new List<Product>
+                {
+                    new Product { Name = $"{seedTenant.TenantCode} Laptop", Description = $"Sample laptop for {seedTenant.TenantName}", Price = 500.00m, TenantId = seedTenant.TenantId },
+                    new Product { Name = $"{seedTenant.TenantCode} Phone", Description = $"Sample phone for {seedTenant.TenantName}", Price = 300.00m, TenantId = seedTenant.TenantId },
+                    new Product { Name = $"{seedTenant.TenantCode} Headphones", Description = $"Sample headphones for {seedTenant.TenantName}", Price = 200.00m, TenantId = seedTenant.TenantId }
+                };
+            context.Products.AddRange(products);
+            context.SaveChanges();
+        }
+
+        private static void SeedOrders(OrderProcessingSystemDbContext context, StartupSeedTenant seedTenant)
+        {
+            var customers = context.Customers
+                .Where(customer => customer.TenantId == seedTenant.TenantId)
+                .OrderBy(customer => customer.CustomerId)
+                .ToList();
+
+            var products = context.Products
+                .Where(product => product.TenantId == seedTenant.TenantId)
+                .OrderBy(product => product.ProductId)
+                .ToList();
+
+            var createdAt = DateTime.UtcNow;
+            var orders = new List<Order>
+            {
+                CreateSeedOrder(customers[0].CustomerId, new[] { products[0], products[1] }, seedTenant.TenantId, createdAt),
+                CreateSeedOrder(customers[1].CustomerId, new[] { products[2] }, seedTenant.TenantId, createdAt)
+            };
+
+            context.Orders.AddRange(orders);
+            context.SaveChanges();
+        }
+
+        private static void SeedOpenpayProviders(OrderProcessingSystemDbContext context, IReadOnlyList<StartupSeedTenant> seedTenants)
+        {
+            foreach (var seedTenant in seedTenants)
+            {
+                var providerExists = context.PaymentProviders.Any(provider =>
+                    provider.TenantId == seedTenant.TenantId &&
+                    provider.Name == "OpenPay");
+
+                if (providerExists)
+                {
+                    continue;
+                }
+
+                var openPayProvider = new PaymentProvider
+                {
+                    Name = "OpenPay",
+                    APIUrl = "https://sandbox-api.openpay.mx/v1",
+                    IsActive = true,
+                    IsProduction = false,
+                    Use3DSecure = true,
+                    TenantId = seedTenant.TenantId,
+                    CreatedBy = 1,
+                    CreatedDate = DateTime.UtcNow
+                };
+
+                context.PaymentProviders.Add(openPayProvider);
+            }
+
+            context.SaveChanges();
+        }
+
+        /// <summary>
+        /// Seeds sample data for every Dedicated-tier tenant whose connection string is configured.
+        /// Connection strings are read from IConfiguration (DedicatedTenantConnectionStrings section),
+        /// not from the Tenants table — connection strings are secrets that belong in Key Vault / config.
+        /// Creates a separate DbContext per dedicated tenant so data lands in the correct database.
+        /// A NullTenantProvider is injected so EF Core query filters evaluate safely (HasTenantContext=false →
+        /// filter short-circuits to true, making all rows visible — correct for cross-tenant seeding).
+        /// </summary>
+        private static void SeedDedicatedTenants(
+            OrderProcessingSystemDbContext mainContext,
+            IConfiguration? configuration,
+            bool applyMigrations,
+            IIntegrationEventMapperRegistry integrationEventMapperRegistry)
+        {
+            if (configuration is null)
+                return;
+
+            var section = configuration.GetSection("DedicatedTenantConnectionStrings");
+            if (!section.Exists())
+                return;
+
+            var configuredStrings = section.GetChildren()
+                .ToDictionary(c => c.Key, c => c.Value, StringComparer.OrdinalIgnoreCase);
+
+            if (configuredStrings.Count == 0)
+                return;
+
+            // Resolve dedicated tenants from the main DB, then match against config keys.
+            var dedicatedTenants = mainContext.Tenants
+                .AsNoTracking()
+                .Where(t => t.TenantTier == "Dedicated")
+                .ToList()
+                .Where(t => configuredStrings.TryGetValue(t.Code, out var cs) && !string.IsNullOrWhiteSpace(cs))
+                .ToList();
+
+            foreach (var tenant in dedicatedTenants)
+            {
+                var connectionString = configuredStrings[tenant.Code]!;
+
+                var dedicatedOptions = new DbContextOptionsBuilder<OrderProcessingSystemDbContext>()
+                    .UseSqlServer(connectionString)
+                    .Options;
+
+                // NullTenantProvider ensures EF Core query filters short-circuit safely
+                // (HasTenantContext = false → filter = true → all rows visible).
+                // Without this, dedicatedContext._tenantProvider would be null and EF Core's
+                // expression tree evaluator can NullReference on _tenantProvider.HasTenantContext.
+                using var dedicatedContext = new OrderProcessingSystemDbContext(
+                    dedicatedOptions,
+                    new NullTenantProvider(),
+                    integrationEventMapperRegistry);
+
+                // For Option B (fresh dedicated DB), apply migrations so the schema exists.
+                // For Option A (same DB), this is idempotent — no-op.
+                if (applyMigrations)
+                    dedicatedContext.Database.Migrate();
+
+                // Look up the tenant row in the dedicated DB's own Tenants table.
+                // Migrations seed all tenant rows into every DB, so this row will exist.
+                var seedTenant = dedicatedContext.Tenants
+                    .AsNoTracking()
+                    .Where(t => t.Code == tenant.Code)
+                    .Select(t => new StartupSeedTenant(t.Id, t.Code, t.Name))
+                    .FirstOrDefault();
+
+                if (seedTenant is null)
+                    continue;
+
+                SeedOpenpayProviders(dedicatedContext, new[] { seedTenant });
+
+                SeedTenantSampleData(dedicatedContext, seedTenant);
+            }
+        }
+
+        private static Order CreateSeedOrder(int customerId, IReadOnlyCollection<Product> products, int tenantId, DateTime createdAt)
+        {
+            var orderResult = Order.Create(customerId, products, createdAt);
+            if (orderResult.IsFailure || orderResult.Value is null)
+            {
+                throw new InvalidOperationException(orderResult.Error.Description);
+            }
+
+            var order = orderResult.Value;
+            order.TenantId = tenantId;
+            order.CreatedBy = 1;
+            order.CreatedDate = createdAt;
+
+            foreach (var orderProduct in order.OrderProducts)
+            {
+                orderProduct.TenantId = tenantId;
+                orderProduct.CreatedBy = 1;
+                orderProduct.CreatedDate = createdAt;
+            }
+
+            return order;
+        }
+
+        /// <summary>
+        /// Null-object ITenantProvider used when creating a DbContext for dedicated-tenant seeding.
+        /// HasTenantContext = false causes EF Core query filters to pass all rows through,
+        /// which is correct when seeding a dedicated DB that holds only one tenant's data.
+        /// </summary>
+        private sealed class NullTenantProvider : ITenantProvider
+        {
+            public bool HasTenantContext => false;
+            public int TenantId => 0;
+            public string TenantCode => string.Empty;
+            public string TenantExternalId => string.Empty;
+            public string? ConnectionString => null;
+            public bool IsSharedPool => true;
+        }
+
+        private sealed record StartupSeedTenant(int TenantId, string TenantCode, string TenantName);
+    }
+}

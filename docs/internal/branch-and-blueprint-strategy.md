@@ -112,10 +112,11 @@ the companion tag.
 |---|---|
 | Package id | `XYDataLabs.SaaS.Templates` |
 | Mechanism | `.template.config/template.json` (Julio Casal pattern) |
-| Ships | `src/` projects, test projects, EF Core scaffolding, multi-tenant primitives, hand-rolled CQRS skeleton, `Result<T>`, NetArchTest layer rules, OpenPay adapter scaffold (with `IPaymentProviderAdapter` seam) |
+| Current prototype location | `templates/xy-saas/` source tree + `templates/XYDataLabs.SaaS.Templates/XYDataLabs.SaaS.Templates.csproj` pack project |
+| Ships | API/Application/Domain/Infrastructure/SharedKernel/OpenPayAdapter + 5 test projects, EF Core scaffolding, multi-tenant primitives, hand-rolled CQRS skeleton, `Result<T>`, NetArchTest layer rules |
 | Versioning | NuGet semver (`1.0.0`, `1.1.0`, ...); each version immutable |
-| Bootstrap | `dotnet new install XYDataLabs.SaaS.Templates::1.x.x` then `dotnet new xy-saas -n <ProductName>` |
-| Extraction trigger | Phase 14 closeout |
+| Bootstrap | `dotnet new install <local-or-nupkg-path>` then `dotnet new xy-saas -n <ProductName> --rootNamespace <Company.Product> --companySlug <companyslug> --productSlug <productslug>` |
+| Publish trigger | Phase 14 closeout for the first formal NuGet/template release; the in-repo prototype is already bootstrapped and validated locally |
 
 ### 2.2 Layer 2 — GitHub template repository
 
@@ -149,7 +150,11 @@ cd <side-project-name>
 
 # 3. Install and run the .NET solution skeleton
 dotnet new install XYDataLabs.SaaS.Templates::1.0.0
-dotnet new xy-saas -n <SideProjectName>
+dotnet new xy-saas `
+  -n TradingAnalytics `
+  --rootNamespace Contoso.TradingAnalytics `
+  --companySlug contoso `
+  --productSlug tradinganalytics
 
 # 4. Apply blueprint parameterization (resource prefix, tenants, namespaces)
 .\scripts\initialize-blueprint.ps1 `
@@ -199,8 +204,9 @@ git commit -m "chore: initialize from snapshot v-20260409-phase7-multitenant"
 git push -u origin main
 ```
 
-Pre-Phase-14 forks are intentionally manual — formal Layer 1 + Layer 2 bootstrap arrives at
-Phase 14 closeout.
+Pre-Phase-14 forks are intentionally manual for the full two-layer bootstrap. The Layer 1
+prototype already exists in-repo and has been validated locally via `dotnet pack`,
+`dotnet new install <nupkg>`, and generated-solution restore/build smoke tests.
 
 ---
 
