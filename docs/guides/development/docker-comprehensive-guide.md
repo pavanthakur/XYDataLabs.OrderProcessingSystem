@@ -106,6 +106,27 @@ ORDERPROCESSING_SQLSERVER_IMAGE=mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-
 
 If `.env.local` is missing, `start-docker.ps1` now prompts once for each required secret and writes the file for future runs. `ORDERPROCESSING_SQLSERVER_IMAGE` remains optional and is only needed when you want Docker and Testcontainers to use a pre-pulled or mirrored SQL Server image.
 
+### Local vs CI/CD SQL Image Strategy
+
+Keep local Docker SQL configuration separate from CI/CD Docker SQL configuration:
+
+- Local machine: use `Resources\Docker\.env.local` only. This is the correct place for machine-local overrides such as a pre-pulled or mirrored `ORDERPROCESSING_SQLSERVER_IMAGE` value.
+- CI/CD: do not rely on `.env.local`. Set `ORDERPROCESSING_SQLSERVER_IMAGE` directly in the workflow or job environment so the pipeline always uses a controlled registry path.
+- Local convenience: pre-pulling the SQL Server image is recommended when you want faster iterative runs or offline reuse.
+- CI/CD enforcement: use a mirrored registry such as ACR and keep Docker SQL as the only valid runtime path. Host SQL fallback is not permitted.
+
+Example local override:
+
+```text
+ORDERPROCESSING_SQLSERVER_IMAGE=<local-or-mirrored-sql-image-tag>
+```
+
+Example CI/CD environment variable:
+
+```text
+ORDERPROCESSING_SQLSERVER_IMAGE=<approved-registry>/mssql/server:<tag>
+```
+
 ### Stop Services
 ```powershell
 .\start-docker.ps1 -Environment dev -Profile http -Down

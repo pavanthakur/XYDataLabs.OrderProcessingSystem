@@ -1,6 +1,6 @@
 ---
 agent: agent
-description: "After a curriculum day or phase-freeze closeout: asks what you completed, then auto-routes — updates curriculum, roadmap/status surfaces, reference docs, memory, and implementation evidence"
+description: "After a curriculum day or phase-freeze closeout: asks what you completed, then auto-routes — updates curriculum, roadmap/status surfaces, reference docs, memory, implementation evidence, and mandatory automation validation when relevant"
 ---
 
 # Day Completion Routing
@@ -90,9 +90,21 @@ Then, based on their answer, apply the following routing rules automatically —
     - If a Bicep module adds new params, add placeholder entries in all 3 parameter files
     - Flag any environment that was missed and apply the missing change before committing
 
+12. **If the work touched the payment automation workspace, Docker runtime orchestration, or their shared workflow surfaces** (`automation/`, `Resources/Docker/`, `/XYDataLabs-payment-automation`, verification-adapter contracts, or payment automation operator docs):
+      - Run the documented dry-run validation matrix before treating the work as complete:
+         - `npm --prefix automation run run:local:matrix:dry`
+         - `npm --prefix automation run run:docker:matrix:dry`
+         - `npm --prefix automation run run:azure:matrix:dry`
+      - Record the pass/fail outcome in the active implementation-notes file when the day had meaningful automation work
+      - If the changed slice is runtime-specific and the target is available in the same session, run the narrowest real target path as additional evidence
+   - If the work is a phase freeze/closeout and it touched Docker runtime orchestration, payment automation runtime targets, or closeout workflow surfaces, generate the real Docker validation bundle in the same session with `pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\generate-docker-validation-bundle.ps1 -Environment dev -Profile http` or the narrowest applicable mapped target set, and record the generated bundle path in the implementation notes
+      - Treat a missing automation validation run as a blocking gap for phase closeout, not an optional follow-up
+
 ## After Routing
 - If the work is a phase freeze/closeout or changed roadmap/status surfaces, run `/XYDataLabs-completion-check` (or perform its equivalent quality gate) before suggesting a commit; fix any non-deferred gaps first
 - If the work is a phase freeze/closeout or changed roadmap/status surfaces, run `/XYDataLabs-context-audit` (or perform its equivalent status-surface audit) before suggesting a commit; fix any HIGH or MEDIUM drift first
+- If the work is a phase freeze/closeout and it touched the payment automation workspace or workflow surfaces, do not ask "Ready to commit?" until the dry-run automation matrix above passed in the same session or an explicit deferral was recorded
+- If the work is a phase freeze/closeout and it touched Docker runtime orchestration, payment automation runtime targets, or closeout workflow surfaces, do not ask "Ready to commit?" until the Docker validation bundle command above produced a bundle with the expected summary files or an explicit deferral was recorded
 - For a phase freeze/closeout, do not ask "Ready to commit?" until both mandatory checks above are complete in the same session
 - Summarise what was updated and where
 - Suggest a commit message in the format: `Day <N>: <what was done>`

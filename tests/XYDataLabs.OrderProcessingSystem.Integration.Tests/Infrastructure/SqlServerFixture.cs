@@ -8,9 +8,7 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure
     {
         private const string DedicatedDatabaseName = "DedicatedTenantDb";
         private const string DefaultSqlServerImage = "mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04";
-        private static readonly string SqlServerImage = string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ORDERPROCESSING_SQLSERVER_IMAGE"))
-            ? DefaultSqlServerImage
-            : Environment.GetEnvironmentVariable("ORDERPROCESSING_SQLSERVER_IMAGE")!;
+        private static readonly string SqlServerImage = ResolveSqlServerImage();
 
         private readonly MsSqlContainer? _container;
         private string _connectionString = string.Empty;
@@ -54,7 +52,7 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure
                 catch (Exception ex)
                 {
                     throw new InvalidOperationException(
-                        $"Failed to start SQL Server testcontainer using image '{SqlServerImage}'. Pre-pull the image or set ORDERPROCESSING_SQLSERVER_IMAGE to a mirrored registry tag if MCR pulls are blocked.",
+                        $"Failed to start SQL Server testcontainer using image '{SqlServerImage}'. Local machine: pre-pull the image or set ORDERPROCESSING_SQLSERVER_IMAGE in Resources/Docker/.env.local to a reachable local or mirrored tag. CI/CD: set ORDERPROCESSING_SQLSERVER_IMAGE in the workflow or job environment to the approved registry path. Host SQL fallback is intentionally not supported.",
                         ex);
                 }
             }
@@ -91,6 +89,66 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure
             {
                 InitialCatalog = DedicatedDatabaseName
             }.ConnectionString;
+        }
+
+        private static string ResolveSqlServerImage()
+        {
+            var configuredImage = Environment.GetEnvironmentVariable("ORDERPROCESSING_SQLSERVER_IMAGE");
+            if (!string.IsNullOrWhiteSpace(configuredImage))
+            {
+                return configuredImage;
+            }
+
+            var dockerSecretsPath = FindDockerSecretsFilePath();
+            if (!string.IsNullOrWhiteSpace(dockerSecretsPath))
+            {
+                foreach (var line in File.ReadLines(dockerSecretsPath))
+                {
+                    if (!line.StartsWith("ORDERPROCESSING_SQLSERVER_IMAGE=", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    var value = line.Split('=', 2)[1].Trim();
+                    if (!string.IsNullOrWhiteSpace(value))
+                    {
+                        return value;
+                    }
+                }
+            }
+
+            return DefaultSqlServerImage;
+        }
+
+        private static string? FindDockerSecretsFilePath()
+        {
+            var currentDirectory = new DirectoryInfo(Directory.GetCurrentDirectory());
+            var fromCurrentDirectory = TryFindDockerSecretsPath(currentDirectory);
+            if (!string.IsNullOrWhiteSpace(fromCurrentDirectory))
+            {
+                return fromCurrentDirectory;
+            }
+
+            var baseDirectory = new DirectoryInfo(AppContext.BaseDirectory);
+            return TryFindDockerSecretsPath(baseDirectory);
+        }
+
+        private static string? TryFindDockerSecretsPath(DirectoryInfo? startingDirectory)
+        {
+            var directory = startingDirectory;
+
+            while (directory != null)
+            {
+                var candidate = Path.Combine(directory.FullName, "Resources", "Docker", ".env.local");
+                if (File.Exists(candidate))
+                {
+                    return candidate;
+                }
+
+                directory = directory.Parent;
+            }
+
+            return null;
         }
     }
 

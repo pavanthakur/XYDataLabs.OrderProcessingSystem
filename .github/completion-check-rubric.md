@@ -58,7 +58,10 @@ If a gap is operationally useful but does not weaken those guarantees, it may be
 - A repeated manual step is introduced without a stable validation path.
 - A repo-shared AI asset, script, or workflow can drift without CI noticing.
 - A new workflow or validation rule is undocumented or unreachable from repo discovery surfaces.
-- **Phase Completion Blockers:** Attempting to close out an architecture phase before verifying the Playwright UI automation correctly covers the full end-to-end journey seamlessly across all running Docker profile containers.
+- If `automation/`, `/XYDataLabs-payment-automation`, verification-adapter contracts, or payment automation guidance changed, the documented dry-run validation matrix was not run.
+- If a phase freeze/closeout touched Docker runtime orchestration, payment automation runtime targets, or closeout workflow surfaces, the Docker validation bundle was not generated with `scripts/generate-docker-validation-bundle.ps1`.
+- **Phase Completion Blockers:** Attempting to close out an automation-related task or architecture phase without passing the documented dry-run validation matrix (`npm --prefix automation run run:local:matrix:dry`, `run:docker:matrix:dry`, `run:azure:matrix:dry`) or recording a justified deferral.
+- **Phase Completion Blockers:** Attempting to close out an architecture phase that changed Docker runtime orchestration or payment automation runtime behavior without a generated bundle under `automation/reports/docker-validation/` containing `summary.md` and `summary.json`, or without a justified deferral.
 
 **Deferrable with log entry**
 - Local-only convenience automation such as optional VS Code tasks or hook templates that mirror an existing CI rule.

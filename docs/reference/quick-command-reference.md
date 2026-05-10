@@ -199,6 +199,21 @@ git diff --check
 pwsh scripts/validate-ai-customization.ps1
 ```
 
+### **Docker Validation Bundle Commands**
+```powershell
+# Narrow real Docker closeout proof for one mapped target
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\generate-docker-validation-bundle.ps1 -Environment dev -Profile http
+
+# Wider real Docker closeout proof across all mapped environments and profiles
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\generate-docker-validation-bundle.ps1 -Environment all -Profile all
+```
+
+Expected evidence:
+- A new bundle exists under `automation/reports/docker-validation/<bundleId>/`
+- The bundle root contains `summary.md` and `summary.json`
+- The selected target folders contain Docker startup logs and container snapshots
+- When tests and automation are enabled, the bundle also captures API/integration logs and references the generated automation report directory
+
 ### **Exit Code Interpretation**
 - **Exit Code 0** = ✅ PASS - Safe to proceed
 - **Exit Code 1** = ❌ FAIL - Fix issues before committing
@@ -846,7 +861,7 @@ Reusable agent prompts in `.github/prompts/`. Run in VS Code Chat (`Ctrl+Shift+I
 
 | Command | When to use | What it does |
 |---------|-------------|--------------|
-| `/XYDataLabs-day-complete` | End of every curriculum day or phase freeze | Routes updates to curriculum, commands files, architecture roadmap/status surfaces, ADRs, and memory; phase-freeze closeout must then run `/XYDataLabs-completion-check` and `/XYDataLabs-context-audit` before commit. |
+| `/XYDataLabs-day-complete` | End of every curriculum day or phase freeze | Routes updates to curriculum, commands files, architecture roadmap/status surfaces, ADRs, and memory; phase-freeze closeout must then run `/XYDataLabs-completion-check` and `/XYDataLabs-context-audit`, plus the automation dry-run matrix when automation scope changed, before commit. |
 | `/XYDataLabs-sql-local-access` | After every fresh bootstrap/deploy | Opens/closes Azure SQL firewall for your local IP. Prints SSMS details. |
 
 **How to run:** `Ctrl+Shift+I` → Agent mode → `/XYDataLabs-day-complete` → answer "What did you complete today?"
@@ -932,6 +947,7 @@ git push origin dev
 - [ ] `/XYDataLabs-day-complete` run and all phase-status surfaces updated
 - [ ] `/XYDataLabs-completion-check` run and any non-deferred gaps fixed
 - [ ] `/XYDataLabs-context-audit` run and any HIGH/MEDIUM drift fixed
+- [ ] `pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\generate-docker-validation-bundle.ps1 -Environment dev -Profile http` run when the closeout touched Docker runtime orchestration, payment automation runtime targets, or closeout workflow surfaces
 - [ ] `node scripts/validate-doc-links.js` passes if docs changed
 - [ ] `pwsh scripts/validate-ai-customization.ps1` passes if prompts/instructions/agents/skills changed
 

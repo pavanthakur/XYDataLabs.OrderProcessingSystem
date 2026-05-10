@@ -159,17 +159,17 @@ function Initialize-LocalDockerSecrets {
     $storedNewSecret = $false
     foreach ($definition in $secretDefinitions) {
         $secretName = $definition.Name
-        $currentValue = (Get-Item -Path "Env:$secretName" -ErrorAction SilentlyContinue).Value
-        if (-not [string]::IsNullOrWhiteSpace($currentValue)) {
-            Write-ColoredOutput "Using $secretName from current environment" "Green" "INFO"
-            $fileSecrets[$secretName] = $currentValue
-            continue
-        }
-
         $fileValue = if ($fileSecrets.ContainsKey($secretName)) { $fileSecrets[$secretName] } else { $null }
         if (-not [string]::IsNullOrWhiteSpace($fileValue)) {
             Set-Item -Path "Env:$secretName" -Value $fileValue
             Write-ColoredOutput "Loaded $secretName from $SecretsFilePath" "Green" "INFO"
+            continue
+        }
+
+        $currentValue = (Get-Item -Path "Env:$secretName" -ErrorAction SilentlyContinue).Value
+        if (-not [string]::IsNullOrWhiteSpace($currentValue)) {
+            Write-ColoredOutput "Using $secretName from current environment" "Green" "INFO"
+            $fileSecrets[$secretName] = $currentValue
             continue
         }
 
@@ -508,6 +508,54 @@ function Test-ImageExists {
     }
 }
 
+function Ensure-RequiredRuntimeImages {
+    param(
+        [string[]]$Images,
+        [int]$RetryCount = 3,
+        [int]$RetryDelaySec = 5
+    )
+
+    if (-not $Images -or $Images.Count -eq 0) {
+        return
+    }
+
+    foreach ($img in ($Images | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)) {
+        if (Test-ImageExists -Image $img) {
+            Write-ColoredOutput "Runtime image already present: $img" "Green" "INFO"
+            continue
+        }
+
+        $pulled = $false
+        for ($attempt = 1; $attempt -le $RetryCount -and -not $pulled; $attempt++) {
+            Write-ColoredOutput "Ensuring runtime image ($attempt/$RetryCount): $img" "Yellow" "INFO"
+            $output = docker pull $img 2>&1
+
+            if ($LASTEXITCODE -eq 0 -or (Test-ImageExists -Image $img)) {
+                Write-ColoredOutput "Runtime image ready: $img" "Green" "SUCCESS"
+                $pulled = $true
+                break
+            }
+
+            Write-ColoredOutput "Runtime image pull failed (attempt $attempt): $img" "Yellow" "WARNING"
+            $output | ForEach-Object { Write-ColoredOutput "  $_" "Gray" "INFO" }
+
+            if ($attempt -lt $RetryCount) {
+                Write-ColoredOutput "Retrying runtime image pull in $RetryDelaySec seconds..." "Yellow" "INFO"
+                Start-Sleep -Seconds $RetryDelaySec
+            }
+        }
+
+        if (-not $pulled) {
+            throw @"
+Required runtime image is unavailable after $RetryCount attempt(s): $img
+Local machine: pre-pull the image or set ORDERPROCESSING_SQLSERVER_IMAGE in Resources/Docker/.env.local to a reachable local or mirrored SQL Server tag.
+CI/CD: set ORDERPROCESSING_SQLSERVER_IMAGE in the workflow or job environment to the approved registry path, for example via the existing ACR_NAME / ACR_LOGIN_SERVER surfaces.
+Host SQL fallback is intentionally not supported.
+"@
+        }
+    }
+}
+
 function Invoke-BaseImagePrePull {
     param(
         [string[]]$Images,
@@ -676,16 +724,25 @@ try {
     $acquiredLock = $false
     if (Test-Path $lockFile) {
         $lockAge = (Get-Date) - (Get-Item $lockFile).LastWriteTime
-        if ($lockAge.TotalSeconds -lt $lockTimeoutSec) {
-            Write-ColoredOutput "Another instance is already managing this stack ($Environment/$Protocol). Exiting — the primary instance will complete startup." "Yellow" "INFO"
-            exit 0
-        } else {
+        if ($lockAge.TotalSeconds -ge $lockTimeoutSec) {
             Write-ColoredOutput "Stale lock detected (age: $([int]$lockAge.TotalSeconds)s) — removing and continuing." "Yellow" "INFO"
             Remove-Item $lockFile -Force -ErrorAction SilentlyContinue
+        } else {
+            Write-ColoredOutput "Another instance is already managing this stack ($Environment/$Protocol). Waiting for it to release the startup lock before continuing." "Yellow" "INFO"
+            while (Test-Path $lockFile) {
+                $currentLockAge = (Get-Date) - (Get-Item $lockFile).LastWriteTime
+                if ($currentLockAge.TotalSeconds -ge $lockTimeoutSec) {
+                    Write-ColoredOutput "Startup lock became stale while waiting (age: $([int]$currentLockAge.TotalSeconds)s) — removing and continuing." "Yellow" "INFO"
+                    Remove-Item $lockFile -Force -ErrorAction SilentlyContinue
+                    break
+                }
+
+                Start-Sleep -Seconds 2
+            }
         }
     }
     try {
-        New-Item $lockFile -ItemType File -Force | Out-Null
+        New-Item $lockFile -ItemType File -ErrorAction Stop | Out-Null
         $acquiredLock = $true
     } catch {
         Write-ColoredOutput "Could not acquire lock file — continuing without lock." "Yellow" "INFO"
@@ -808,6 +865,8 @@ try {
     } else {
         throw "Required compose files not found. Expected docker-compose.database.yml and docker-compose.$Environment.yml."
     }
+
+    $composeFilesWithDatabase = @($composeFiles)
     
     # Display port information from compose file (no .env generation needed)
     switch ($Environment) {
@@ -844,34 +903,48 @@ try {
         Remove-ProjectImages -Environment $Environment -Protocol $Protocol
     }
 
+    $sqlServerImage = (Get-Item -Path Env:ORDERPROCESSING_SQLSERVER_IMAGE -ErrorAction SilentlyContinue).Value
+    if ([string]::IsNullOrWhiteSpace($sqlServerImage)) {
+        $sqlServerImage = $DefaultSqlServerImage
+    }
+
     # Pre-pull commonly used base images (unless opted out)
     if (-not $NoPrePull) {
         Write-ColoredOutput "Pre-pulling base images (MCR) to warm cache..." "Cyan" "INFO"
         Write-ColoredOutput "Note: First-time downloads may take 5-15 minutes total for all base images" "Yellow" "INFO"
         Show-DockerProxyInfo
-        $sqlServerImage = (Get-Item -Path Env:ORDERPROCESSING_SQLSERVER_IMAGE -ErrorAction SilentlyContinue).Value
-        if ([string]::IsNullOrWhiteSpace($sqlServerImage)) {
-            $sqlServerImage = $DefaultSqlServerImage
-        }
         Write-ColoredOutput "SQL Server image for Docker runtime: $sqlServerImage" "Gray" "INFO"
         $baseImages = @(
             'mcr.microsoft.com/dotnet/sdk:8.0',
             'mcr.microsoft.com/dotnet/aspnet:8.0',
             $sqlServerImage
         )
+        $prePullSucceeded = $true
         try {
-            [void](Invoke-BaseImagePrePull -Images $baseImages -StrictMode:$Strict)
+            $prePullSucceeded = Invoke-BaseImagePrePull -Images $baseImages -StrictMode:$Strict
         } catch {
             Write-ColoredOutput "Pre-pull encountered an error: $($_.Exception.Message)" "Red" "ERROR"
             if ($Strict) { throw }
+            $prePullSucceeded = $false
         }
         Write-ColoredOutput "" "White"
-        Write-ColoredOutput "✅ Pre-pull step completed - base images are now cached locally" "Green" "SUCCESS"
-        Write-ColoredOutput "   Future builds will be much faster!" "Green" "INFO"
+        if ($prePullSucceeded) {
+            Write-ColoredOutput "✅ Pre-pull step completed - base images are now cached locally" "Green" "SUCCESS"
+            Write-ColoredOutput "   Future builds will be much faster!" "Green" "INFO"
+        } else {
+            Write-ColoredOutput "Pre-pull completed with missing images; runtime image validation will retry required service images before compose up." "Yellow" "WARNING"
+        }
         Write-ColoredOutput "" "White"
     } else {
         Write-ColoredOutput "Skipping base image pre-pull (-NoPrePull)" "Gray" "INFO"
     }
+
+    $requiredRuntimeImages = @(
+        $sqlServerImage,
+        'redis:7-alpine'
+    )
+
+    Ensure-RequiredRuntimeImages -Images $requiredRuntimeImages
 
     # Start containers depending on mode
     if ($LegacyBuild) {

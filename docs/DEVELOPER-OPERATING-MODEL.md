@@ -89,6 +89,8 @@ Keep maintenance simple:
   - Optional local shortcut: run the VS Code task `Validate: AI governance bundle`
   - If the task created a justified deferral, add it to `docs/internal/DEFERRED-WORK-LOG.md`
   - If the task closes or freezes an architecture phase: run `/XYDataLabs-day-complete`, then `/XYDataLabs-completion-check`, then `/XYDataLabs-context-audit` before committing
+  - If that phase work touched `automation/` or the payment automation workflow surfaces, the dry-run matrix is mandatory in the same closeout session: `npm --prefix automation run run:local:matrix:dry`, `run:docker:matrix:dry`, and `run:azure:matrix:dry`
+  - If that phase work touched Docker runtime orchestration, payment automation runtime targets, or closeout workflow surfaces, generate the real Docker validation bundle in the same session: `pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\generate-docker-validation-bundle.ps1 -Environment dev -Profile http`
 - Once per week
   - Spend 10 minutes checking for obvious broken links, duplicate guidance, or stale navigation
   - Fix only real issues; do not restart broad cleanup work
@@ -113,8 +115,10 @@ Before committing a phase close/freeze:
 1. Run `/XYDataLabs-day-complete` to route curriculum, roadmap, implementation-note, and status-surface updates.
 2. Run `/XYDataLabs-completion-check` and resolve any non-deferred gaps.
 3. Run `/XYDataLabs-context-audit` and resolve any HIGH or MEDIUM roadmap/status drift.
-4. If `docs/` changed, `node scripts/validate-doc-links.js` passes.
-5. If shared AI assets changed, `pwsh scripts/validate-ai-customization.ps1` passes.
+4. If the phase work touched `automation/` or the payment automation workflow surfaces, `npm --prefix automation run run:local:matrix:dry`, `run:docker:matrix:dry`, and `run:azure:matrix:dry` all pass.
+5. If the phase work touched Docker runtime orchestration, payment automation runtime targets, or closeout workflow surfaces, `pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\generate-docker-validation-bundle.ps1 -Environment dev -Profile http` produces a bundle with `summary.md` and `summary.json` under `automation/reports/docker-validation/`.
+6. If `docs/` changed, `node scripts/validate-doc-links.js` passes.
+7. If shared AI assets changed, `pwsh scripts/validate-ai-customization.ps1` passes.
 
 ## Change Routing Rule
 

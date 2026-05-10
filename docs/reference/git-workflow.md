@@ -68,11 +68,17 @@ dotnet test tests/XYDataLabs.OrderProcessingSystem.Architecture.Tests --no-build
 # Patch hygiene + AI customization validation
 git diff --check
 pwsh scripts/validate-ai-customization.ps1
+
+# Mandatory when automation/ or payment automation workflow surfaces changed
+npm --prefix automation run run:local:matrix:dry
+npm --prefix automation run run:docker:matrix:dry
+npm --prefix automation run run:azure:matrix:dry
 ```
 
 Notes:
 - Use this gate for phase freezes, workflow closeout, and repo-shared AI customization changes.
 - `validate-ai-customization.ps1` must stay green whenever `.github/copilot-instructions.md`, `.github/instructions/`, `.github/prompts/`, `.github/agents/`, or `.github/skills/` changes.
+- The three `automation` dry-run commands are mandatory whenever the closeout changed `automation/`, `/XYDataLabs-payment-automation`, verification-adapter contracts, or payment automation guidance.
 
 ### **Exit Code Interpretation**
 - **Exit Code 0** = ✅ PASS — Safe to proceed

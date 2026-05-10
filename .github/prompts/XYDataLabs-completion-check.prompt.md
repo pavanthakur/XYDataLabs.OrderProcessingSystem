@@ -10,7 +10,7 @@ If a gap is deferred, record it in `docs/internal/DEFERRED-WORK-LOG.md` with own
 
 ## Step 0 — Run automated checks first
 
-Run all three blocks in the terminal before evaluating the checklist. Use the results to fill in categories 2, 3, and 4 below.
+Run all three blocks in the terminal before evaluating the checklist. Use the results to fill in categories 2, 3, and 4 below. If the task touched the payment automation workspace or workflow surfaces, run the additional automation block as well and use it for category 5. If the task closes or freezes a phase and it touched Docker runtime orchestration, payment automation runtime targets, or closeout workflow surfaces, run the Docker validation bundle block as well and use it for category 5.
 
 **Build (warnings as errors):**
 ```powershell
@@ -38,6 +38,20 @@ $hits = Get-ChildItem -Recurse -Include $extensions -Exclude '*.example','*.temp
     Where-Object { $_.Path -notmatch '\\(obj|bin|publish|node_modules)\\' }
 if ($hits) { $hits | Format-Table Path, LineNumber, Line -AutoSize; Write-Host "SECRET SCAN: $($hits.Count) potential hit(s) — review each" -ForegroundColor Red }
 else { Write-Host 'SECRET SCAN: clean' -ForegroundColor Green }
+```
+
+**Automation workspace validation (run when the task touches `automation/`, `/XYDataLabs-payment-automation`, verification-adapter contracts, or payment automation docs):**
+```powershell
+cd Q:\GIT\TestAppXY_OrderProcessingSystem
+npm --prefix automation run run:local:matrix:dry
+npm --prefix automation run run:docker:matrix:dry
+npm --prefix automation run run:azure:matrix:dry
+```
+
+**Docker validation bundle (run when the task closes/freezes a phase and touches Docker runtime orchestration, payment automation runtime targets, or closeout workflow surfaces):**
+```powershell
+cd Q:\GIT\TestAppXY_OrderProcessingSystem
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\generate-docker-validation-bundle.ps1 -Environment dev -Profile http
 ```
 
 ---
@@ -80,6 +94,8 @@ else { Write-Host 'SECRET SCAN: clean' -ForegroundColor Green }
 - [ ] If a new script automates a task: can it run unattended (no interactive prompts in CI mode)?
 - [ ] If a new workflow was added: is there a corresponding path trigger in the right workflow file?
 - [ ] If something was previously manual: is it now captured in a script or workflow?
+- [ ] If the task touched the payment automation workspace or workflow surfaces: did `npm --prefix automation run run:local:matrix:dry`, `run:docker:matrix:dry`, and `run:azure:matrix:dry` all pass?
+- [ ] If this task closes or freezes a phase and it touched Docker runtime orchestration, payment automation runtime targets, or closeout workflow surfaces: did `pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\generate-docker-validation-bundle.ps1 -Environment dev -Profile http` (or the narrowest applicable mapped target set) produce a bundle with `summary.md` and `summary.json`?
 - [ ] If a VS Code task or Copilot prompt would help discoverability: has one been created?
 
 ## 6. Copilot Context
