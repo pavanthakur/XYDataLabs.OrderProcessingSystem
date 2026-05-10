@@ -9,10 +9,19 @@ Decision rationale and the full release/snapshot model live in [branch-and-bluep
 - Side projects live in **separate repositories**, not long-lived branches in this repository.
 - Detailed product documentation also lives in those separate repositories, not in this repository.
 - `XYDataLabs.SideProjects` is the idea-dump and pre-bootstrap planning registry, not the implementation home.
+- `XYDataLabs.OrderProcessingSystem` is the upstream source of shared templates, bootstrap rules, and approved technology-adoption patterns.
 - Before Phase 14, bootstrap from the best matching **snapshot tag**.
 - After Phase 14, bootstrap from the two-layer model:
   - Layer 1: `XYDataLabs.SaaS.Templates` from NuGet
   - Layer 2: `xydatalabs-saas-blueprint` from GitHub template repo
+
+## Operating Flow
+
+1. Define or reprioritize candidate products in `XYDataLabs.SideProjects`.
+2. Choose the correct upstream bootstrap path from `XYDataLabs.OrderProcessingSystem`.
+3. Create the dedicated implementation repo using the readable `XYDataLabs.<ProductName>` pattern.
+4. Record the chosen bootstrap provenance in the new product repo.
+5. Apply only the shared technology-adoption patterns that the new product actually needs.
 
 ## Repository Naming Rule
 
@@ -20,11 +29,12 @@ Create actual product repositories with readable `XYDataLabs.<ProductName>` name
 
 Examples:
 
+- `XYDataLabs.AIJobApplication`
+- `XYDataLabs.AIClinicAppointmentSystem`
 - `XYDataLabs.IndiaTradingSystem`
+- `XYDataLabs.AIRecruitment`
 - `XYDataLabs.WhatsAppAutomation`
 - `XYDataLabs.AzureCostOptimizer`
-- `XYDataLabs.AIRecruitment`
-- `XYDataLabs.HospitalClinicAppointments`
 
 Do not develop the actual product inside `XYDataLabs.SideProjects`; that repository is for idea capture and early planning only.
 
@@ -32,16 +42,40 @@ Do not develop the actual product inside `XYDataLabs.SideProjects`; that reposit
 
 | Product idea | Start from now | Why |
 |---|---|---|
-| `trading-analytics` | `v-20260510-phase8-frontend-spa` | Best current React + Azure + tenant-ready baseline |
-| `whatsapp-automation` | `v-20260510-phase8-frontend-spa` | Best current React + API-ownership + automation-ready baseline |
-| `azure-cost-optimizer` | `v-20260510-phase8-frontend-spa` | Best current Azure governance + React + workflow baseline |
-| `ai-recruitment` | `v-20260510-phase8-frontend-spa` | Best current multi-tenant + React + event-ready baseline |
-| `hospital-clinic-appointments` | `v-20260510-phase8-frontend-spa` | Best current React + SignalR + Azure workflow baseline for scheduling, notifications, and role-based operational UX |
+| `AIJobApplication` | `XYDataLabs.SaaS.Templates::1.0.1` plus current runtime patterns | Strongest current fit for the Layer 1 backend skeleton and applicant-workflow domain |
+| `AIClinicAppointmentSystem` | `XYDataLabs.SaaS.Templates::1.0.1` plus current runtime patterns | Good current fit for scheduling, workflow, and audit domain; add SignalR, notification, and calendar patterns from upstream as needed |
+| `IndiaTradingSystem` | `v-20260510-phase8-frontend-spa` | Best current React + Azure + tenant-ready baseline for real-time and event-heavy behavior |
+| `AIRecruitment` | `XYDataLabs.SaaS.Templates::1.0.1` plus current runtime patterns | Strong fit for workflow-heavy hiring domain with AI suggestions layered on top |
+| `WhatsAppAutomation` | `v-20260510-phase8-frontend-spa` | Better current fit for callback, messaging, and operator dashboard patterns |
+| `AzureCostOptimizer` | `XYDataLabs.SaaS.Templates::1.0.1` plus current runtime patterns | Good fit for backend-first SaaS workflows, approvals, and evidence storage |
 | B2B order/inventory SaaS variant | `XYDataLabs.SaaS.Templates::1.0.1` plus current runtime patterns | Closest fit to the live domain and already packaged as a reusable backend skeleton |
 
 If a later phase creates a better seam for a product category, update the bootstrap matrix in [branch-and-blueprint-strategy.md](../../internal/branch-and-blueprint-strategy.md) instead of inventing an ad hoc branch strategy.
 
-## Option A — Start Before Phase 14 (Snapshot Bootstrap)
+## Option A — Start From The Current NuGet Template
+
+Use this for backend-first products whose domain fits the current Layer 1 skeleton well, such as `AIJobApplication`, `AIClinicAppointmentSystem`, and `AIRecruitment`.
+
+```powershell
+gh repo create XYDataLabs.AIJobApplication --private
+git clone https://github.com/<your-account>/XYDataLabs.AIJobApplication.git
+cd XYDataLabs.AIJobApplication
+
+dotnet new install XYDataLabs.SaaS.Templates::1.0.1
+dotnet new xy-saas `
+  -n AIJobApplication `
+  --rootNamespace XYDataLabs.AIJobApplication `
+  --companySlug xydatalabs `
+  --productSlug aijobapplication
+
+git add -A
+git commit -m "chore: initialize from XYDataLabs.SaaS.Templates 1.0.1"
+git push -u origin main
+```
+
+Then add the product's own README, ADR surface, `docs/internal/` execution plan, and only the upstream technology patterns that the product actually needs.
+
+## Option B — Start Before Phase 14 (Snapshot Bootstrap)
 
 Use this when the full `xydatalabs-saas-blueprint` repo does not exist yet.
 
@@ -62,7 +96,7 @@ git push -u origin main
 
 Then strip or replace product-specific slices, rename namespaces, and create the product's own README, ADR surface, and implementation plan in that dedicated product repository.
 
-## Option B — Start After Phase 14 (Two-Layer Bootstrap)
+## Option C — Start After Phase 14 (Two-Layer Bootstrap)
 
 Use this when `xydatalabs-saas-blueprint` exists.
 

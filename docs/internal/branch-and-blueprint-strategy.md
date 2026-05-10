@@ -408,15 +408,20 @@ Until each product gets its own implementation repository, the recovered pre-boo
 
 Use `XYDataLabs.<ProductName>` naming for real implementation repositories so the portfolio surface stays readable, for example `XYDataLabs.IndiaTradingSystem` instead of a generic side-project dump repo.
 
+Shared-flow rule:
+- `XYDataLabs.OrderProcessingSystem` is the upstream source of shared templates, bootstrap rules, and approved technology-adoption patterns
+- `XYDataLabs.SideProjects` records product priority, naming, and chosen bootstrap path
+- `XYDataLabs.<ProductName>` becomes the actual implementation repository and the canonical home for product docs and code
+
 ### 3.2 Prioritized side projects
 
 | # | Side project | Bootstrap source | Realistic MVP |
 |---|---|---|---|
-| 1 | `trading-analytics` (flagship) | Blueprint v1.x + dotnet template | 6–8 weeks |
-| 2 | `whatsapp-automation` | Blueprint + WhatsApp adapter | 4–6 weeks |
-| 3 | `azure-cost-optimizer` | Blueprint + Cost Management API client | 6–8 weeks |
-| 4 | `ai-recruitment` | Blueprint + Azure OpenAI + Elasticsearch | 8–10 weeks |
-| 5 | `hospital-clinic-appointments` | Blueprint + calendar connectors + notification adapters | 8–10 weeks |
+| 1 | `AIJobApplication` | Layer 1 template + upstream runtime adoption | 4–6 weeks |
+| 2 | `AIClinicAppointmentSystem` | Layer 1 template + upstream runtime adoption | 6–8 weeks |
+| 3 | `IndiaTradingSystem` | Phase 8 snapshot now, full blueprint later | 6–8 weeks |
+| 4 | `AIRecruitment` | Layer 1 template + upstream runtime adoption | 6–8 weeks |
+| 5 | Secondary backlog (`WhatsAppAutomation`, `AzureCostOptimizer`) | Case-by-case from upstream matrix | TBD |
 | 6 | (this repo) order-processing | — already exists | — |
 
 ### 3.2.1 Side-project bootstrap matrix
@@ -425,11 +430,12 @@ Use this matrix as the default decision table when a side project needs to start
 
 | Side project | Best pre-Phase-14 baseline today | Why this baseline fits | Post-Phase-14 bootstrap path |
 |---|---|---|---|
-| `trading-analytics` | `v-20260510-phase8-frontend-spa` | Needs the React-first UI runtime, tenant bootstrap, current Azure deployment model, and a strong event-ready baseline without waiting for full microservice extraction | Start from `xydatalabs-saas-blueprint` + `XYDataLabs.SaaS.Templates`, then add market-data, charting, alerts, and broker integrations |
-| `whatsapp-automation` | `v-20260510-phase8-frontend-spa` | Needs the current React frontend, API ownership of callback/client-event style endpoints, and the cleanest baseline for AI + messaging automation without payment-specific coupling | Start from `xydatalabs-saas-blueprint` + `XYDataLabs.SaaS.Templates`, then add WhatsApp adapter, AI reply workflow, CRM hooks, and conversation audit flows |
-| `azure-cost-optimizer` | `v-20260510-phase8-frontend-spa` | Needs Azure governance, OIDC workflows, React UI, and enterprise reporting/automation patterns more than payment or order-domain specifics | Start from `xydatalabs-saas-blueprint` + `XYDataLabs.SaaS.Templates`, then replace order/payment slices with Azure cost ingestion, anomaly detection, and optimization actions |
-| `ai-recruitment` | `v-20260510-phase8-frontend-spa` | Needs the React-first UX baseline, multi-tenant foundation, and event-ready backend more than order/payment-specific domain logic | Start from `xydatalabs-saas-blueprint` + `XYDataLabs.SaaS.Templates`, then add search, resume parsing, recruiter workflows, AI matching, and interview orchestration |
-| `hospital-clinic-appointments` | `v-20260510-phase8-frontend-spa` | Needs the React operational dashboard, SignalR-ready real-time layer, Azure notification-friendly backend, and role-based workflow surfaces more than order/payment-specific domain logic | Start from `xydatalabs-saas-blueprint` + `XYDataLabs.SaaS.Templates`, then add calendar sync, appointment orchestration, notifications, doctor mobile PWA flows, and healthcare scheduling analytics |
+| `AIJobApplication` | `XYDataLabs.SaaS.Templates::1.0.1` plus current runtime patterns | Strongest current fit for the Layer 1 backend skeleton and applicant-workflow domain; technology adoption can be pulled later from the upstream source as needed | Start from `xydatalabs-saas-blueprint` + `XYDataLabs.SaaS.Templates`, then add AI tailoring, reminders, and applicant workflow UX |
+| `AIClinicAppointmentSystem` | `XYDataLabs.SaaS.Templates::1.0.1` plus current runtime patterns | Good fit for scheduling, workflow, and audit domain; later add SignalR, notifications, and calendar integration patterns from the upstream source | Start from `xydatalabs-saas-blueprint` + `XYDataLabs.SaaS.Templates`, then add calendar sync, appointment orchestration, notifications, and doctor/mobile UX |
+| `IndiaTradingSystem` | `v-20260510-phase8-frontend-spa` | Needs the React-first UI runtime, tenant bootstrap, current Azure deployment model, and a strong event-ready baseline without waiting for full microservice extraction | Start from `xydatalabs-saas-blueprint` + `XYDataLabs.SaaS.Templates`, then add market-data, charting, alerts, and broker integrations |
+| `AIRecruitment` | `XYDataLabs.SaaS.Templates::1.0.1` plus current runtime patterns | Strong fit for workflow-heavy hiring domain where the current Layer 1 backend skeleton is already close to the required shape | Start from `xydatalabs-saas-blueprint` + `XYDataLabs.SaaS.Templates`, then add recruiter workflow UX, matching, search, and interview orchestration |
+| `WhatsAppAutomation` | `v-20260510-phase8-frontend-spa` | Better fit for callback, messaging, and operator-dashboard patterns than the current backend-only NuGet template | Start from `xydatalabs-saas-blueprint` + `XYDataLabs.SaaS.Templates`, then add messaging adapters and conversation automation |
+| `AzureCostOptimizer` | `XYDataLabs.SaaS.Templates::1.0.1` plus current runtime patterns | Good fit for backend-first SaaS flows, approvals, evidence, and reporting | Start from `xydatalabs-saas-blueprint` + `XYDataLabs.SaaS.Templates`, then add Azure ingestion, anomaly detection, and optimization actions |
 | B2B order/inventory SaaS variant | `v-20260510-pre-template-readme-1-0-1` plus current repo runtime | This is the closest domain match to the live product and already has the validated Layer 1 template package line and release discipline in place | Start directly from `XYDataLabs.SaaS.Templates::1.0.1` for the .NET skeleton and pair it with the future blueprint repo for workflows, infra, frontend, docs, and automation |
 
 Default rule before Phase 14:
