@@ -1,0 +1,123 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "Pavan Thakur",
+  "classifications": [
+    "Web",
+    "Web API",
+    "SaaS",
+    "Clean Architecture",
+    "CQRS",
+    "Multi-Tenant",
+    "Azure"
+  ],
+  "identity": "XYDataLabs.SaaS.Template",
+  "name": "XYDataLabs SaaS Layer 1 Backend",
+  "shortName": "xy-saas",
+  "description": "Backend and test solution skeleton for a multi-tenant .NET SaaS based on Clean Architecture, hand-rolled CQRS, and Azure-ready conventions.",
+  "tags": {
+    "language": "C#",
+    "type": "solution"
+  },
+  "sourceName": "OrderProcessingSystem",
+  "preferNameDirectory": true,
+  "symbols": {
+    "rootNamespace": {
+      "type": "parameter",
+      "datatype": "text",
+      "defaultValue": "XYDataLabs.OrderProcessingSystem",
+      "description": "Full root namespace used in project and folder names, for example Contoso.TradingAnalytics.",
+      "replaces": "XYDataLabs.OrderProcessingSystem",
+      "fileRename": "XYDataLabs.OrderProcessingSystem"
+    },
+    "companySlug": {
+      "type": "parameter",
+      "datatype": "text",
+      "defaultValue": "xydatalabs",
+      "description": "Lowercase company slug used in host names and URLs when you want to replace xydatalabs-specific placeholders.",
+      "replaces": "xydatalabs"
+    },
+    "productNameLower": {
+      "type": "derived",
+      "valueSource": "name",
+      "valueTransform": "lowerCase",
+      "replaces": "orderprocessingsystem"
+    },
+    "productSlug": {
+      "type": "parameter",
+      "datatype": "text",
+      "defaultValue": "orderprocessing",
+      "description": "Lowercase product slug used in host names and URLs when you want to replace orderprocessing-specific placeholders.",
+      "replaces": "orderprocessing"
+    },
+    "userSecretsId": {
+      "type": "generated",
+      "generator": "guid",
+      "replaces": "ea81fb46-489a-4a69-bba2-45521f53ab6d"
+    }
+  },
+  "guids": [
+    "47CF8388-DE6D-4108-A7B1-2252E5230C22",
+    "73662AEA-FBF3-4330-AE67-9E66166379E7",
+    "BD5667CB-F09D-4299-8431-977A44DE613D",
+    "C058A61B-EEC6-49F0-9AFA-89ABE5583B79",
+    "E6768C67-7464-416D-874A-21522A723FAE",
+    "F4798796-0CB7-4C74-AAD9-916DC95E29A8",
+    "0AB3BF05-4346-4AA6-1389-037BE0695223",
+    "9F350F94-DB9A-46EF-BA1C-43AEC6FBF3F1",
+    "830C975E-8678-4A72-B236-C3AE2F13F467",
+    "6C381EA0-B450-426F-B4A9-E5B7685322BC",
+    "ACEE6A6A-DA10-4A01-9EA0-F990939C9513",
+    "F578344E-2F78-4C4D-8700-44C1DFC7C734"
+  ],
+  "sources": [
+    {
+      "source": "./",
+      "target": "./",
+      "include": [
+        ".editorconfig",
+        ".gitignore",
+        "Directory.Build.props",
+        "Directory.Packages.props",
+        "XYDataLabs.OrderProcessingSystem.sln",
+        "Resources/BuildConfiguration/**/*",
+        "Resources/Configuration/**/*",
+        "XYDataLabs.OrderProcessingSystem.PaymentGateway/**/*",
+        "XYDataLabs.OrderProcessingSystem.API/**/*",
+        "XYDataLabs.OrderProcessingSystem.Application/**/*",
+        "XYDataLabs.OrderProcessingSystem.Domain/**/*",
+        "XYDataLabs.OrderProcessingSystem.Infrastructure/**/*",
+        "XYDataLabs.OrderProcessingSystem.SharedKernel/**/*",
+        "tests/**/*"
+      ],
+      "exclude": [
+        "**/.vs/**",
+        "**/.vscode/**",
+        "**/[Bb]in/**",
+        "**/[Oo]bj/**",
+        "**/*.user",
+        "**/*.suo",
+        "**/*.cache"
+      ]
+    }
+  ],
+  "primaryOutputs": [
+    {
+      "path": "XYDataLabs.OrderProcessingSystem.sln"
+    },
+    {
+      "path": "XYDataLabs.OrderProcessingSystem.API/XYDataLabs.OrderProcessingSystem.API.csproj"
+    }
+  ],
+  "postActions": [
+    {
+      "actionId": "210D431B-A78B-4D2F-B762-4ED3E3EA9025",
+      "continueOnError": true,
+      "description": "Restore NuGet packages required by this solution.",
+      "manualInstructions": [
+        {
+          "text": "Run 'dotnet restore'"
+        }
+      ]
+    }
+  ]
+}

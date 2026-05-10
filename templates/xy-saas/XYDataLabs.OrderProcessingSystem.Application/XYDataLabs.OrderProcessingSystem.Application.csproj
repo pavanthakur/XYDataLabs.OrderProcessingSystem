@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FluentValidation" />
+    <PackageReference Include="FluentValidation.AspNetCore" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.PaymentGateway\XYDataLabs.OrderProcessingSystem.PaymentGateway.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Domain\XYDataLabs.OrderProcessingSystem.Domain.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.SharedKernel\XYDataLabs.OrderProcessingSystem.SharedKernel.csproj" />
+  </ItemGroup>
+
+</Project>

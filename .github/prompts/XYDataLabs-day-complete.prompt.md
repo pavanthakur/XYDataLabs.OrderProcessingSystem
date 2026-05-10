@@ -100,6 +100,16 @@ Then, based on their answer, apply the following routing rules automatically —
    - If the work is a phase freeze/closeout and it touched Docker runtime orchestration, payment automation runtime targets, or closeout workflow surfaces, generate the real Docker validation bundle in the same session with `pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\generate-docker-validation-bundle.ps1 -Environment dev -Profile http` or the narrowest applicable mapped target set, and record the generated bundle path in the implementation notes
       - Treat a missing automation validation run as a blocking gap for phase closeout, not an optional follow-up
 
+13. **If the closing commit closes a major architectural seam (Phase 7, 8, 11, 13, 14) or precedes an irreversible architectural change** (microservices split, primary key strategy change, multi-region rollout):
+    - Cut a snapshot pair per `docs/internal/branch-and-blueprint-strategy.md` (decision: ADR-018):
+      - Annotated tag: `v-YYYYMMDD-phase<N>-<slug>` (e.g. `v-20260510-phase8-frontend-spa`)
+      - Backup branch: `dev-backup-YYYYMMDD-<Scope>-Upto-Phase<N>` (e.g. `dev-backup-20260510-FrontendSPA-Upto-Phase8`)
+    - Both pointers reference the same anchor commit (the closing commit of the seam)
+    - Tag message must follow §1.3 of the strategy doc: phase, anchor commit, companion branch, ADRs ratified, automation matrix link, Docker matrix status, Azure status, intentionally-absent items
+    - Push tag and branch to origin
+    - The branch protection rule on `dev-backup-**` must already exist (one-time GitHub Settings step — instructions in §1.5 of the strategy doc); flag if missing
+    - Skip this step for minor phase closeouts (8.5, 8.7, 9.5) and ordinary Day Complete runs
+
 ## After Routing
 - If the work is a phase freeze/closeout or changed roadmap/status surfaces, run `/XYDataLabs-completion-check` (or perform its equivalent quality gate) before suggesting a commit; fix any non-deferred gaps first
 - If the work is a phase freeze/closeout or changed roadmap/status surfaces, run `/XYDataLabs-context-audit` (or perform its equivalent status-surface audit) before suggesting a commit; fix any HIGH or MEDIUM drift first

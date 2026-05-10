@@ -1,0 +1,159 @@
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning",
+      "Microsoft.AspNetCore.Hosting.Diagnostics": "Error",
+      "System": "Warning"
+    }
+  },
+  "AllowedHosts": "*",
+  "ConnectionStrings": {
+    "OrderProcessingSystemDbConnection": "Server=tcp:orderprocessing-sql-dev.database.windows.net,1433;Initial Catalog=OrderProcessingSystem_Dev;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;Authentication=Active Directory Default",
+    "OrderProcessingSystemDbConnection_Local": "Server=localhost,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=__LOCAL_SQL_PASSWORD__;TrustServerCertificate=True;"
+  },
+  "DedicatedTenantConnectionStrings": {
+    "TenantC": "Server=tcp:orderprocessing-sql-dev.database.windows.net,1433;Initial Catalog=OrderProcessingSystem_TenantC_Dev;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;Authentication=Active Directory Default"
+  },
+  "PaymentGateway": {
+    "ProviderName": "DefaultGateway",
+    "AccountId": "__PAYMENT_GATEWAY_ACCOUNT_ID__",
+    "ApiKey": "__PAYMENT_GATEWAY_API_KEY__",
+    "DeviceSessionId": "__PAYMENT_GATEWAY_DEVICE_SESSION_ID__",
+    "IsProduction": false,
+    "RedirectUrl": "",
+    "_Comment": "RedirectUrl is auto-resolved from ApiSettings:UI locally/Docker. In Azure, set via Key Vault (PaymentGateway--RedirectUrl) to the public domain URL."
+  },
+  "Observability": {
+    "EnableEfSensitiveDataLogging": true
+  },
+  "TenantConfiguration": {
+    "ActiveTenantCode": "TenantA",
+    "UiSelectorEnabled": true,
+    "UiTenantOverrideEnabled": true,
+    "SwaggerSelectorEnabled": true
+  },
+  "Serilog": {
+    "Using": [ "Serilog.Sinks.File" ],
+    "MinimumLevel": {
+      "Default": "Information",
+      "Override": {
+        "Microsoft": "Warning",
+        "Microsoft.AspNetCore.Hosting.Diagnostics": "Error",
+        "Microsoft.Hosting.Lifetime": "Information",
+        "System": "Warning"
+      }
+    },
+    "WriteTo": [
+      {
+        "Name": "File",
+        "Args": {
+          "path": "logs/webapi-.log",
+          "rollingInterval": "Day",
+          "outputTemplate": "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{TraceId}] {Level:u3} {Username} {Message:lj}{Exception}{NewLine}"
+        }
+      }
+    ]
+  },
+  "ApiSettings": {
+    "UI": {
+      "http": {
+        "Host": "localhost",
+        "Port": 5022,
+        "HttpsEnabled": false
+      },
+      "https": {
+        "Host": "localhost",
+        "Port": 5023,
+        "HttpsEnabled": true,
+        "CertPassword": "__CERT_PASSWORD__",
+        "CertPath": "/https/aspnetapp.pfx"
+      }
+    },
+    "API": {
+      "http": {
+        "Host": "localhost",
+        "Port": 5020,
+        "HttpsEnabled": false
+      },
+      "https": {
+        "Host": "localhost",
+        "Port": 5021,
+        "HttpsEnabled": true,
+        "CertPassword": "__CERT_PASSWORD__",
+        "CertPath": "/https/aspnetapp.pfx"
+      }
+    }
+  },
+  "LaunchSettings": {
+    "Environment": "Development",
+    "DefaultProfile": "http",
+    "LaunchBrowser": true,
+    "HotReloadEnabled": true,
+    "API": {
+      "LaunchUrl": "swagger",
+      "EnvironmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "CORS_ALLOWED_ORIGINS": "http://localhost:5022;https://localhost:5023"
+      }
+    },
+    "UI": {
+      "EnvironmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "API_BASE_URL": "http://localhost:5020"
+      }
+    }
+  },
+  "Azure": {
+    "Local": {
+      "Enabled": true,
+      "ConnectionStrings": {
+        "DefaultConnection": "Server=localhost,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=__LOCAL_SQL_PASSWORD__;TrustServerCertificate=True;",
+        "Redis": "localhost:6379"
+      }
+    },
+    "Cloud": {
+      "Enabled": false,
+      "ResourceGroup": "rg-orderprocessing-dev",
+      "Location": "centralindia",
+      "WebApps": {
+        "API": {
+          "Name": "pavanthakur-orderprocessing-api-xyapp-dev",
+          "Url": "https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net",
+          "CustomDomain": ""
+        },
+        "UI": {
+          "Name": "pavanthakur-orderprocessing-ui-xyapp-dev",
+          "Url": "https://pavanthakur-orderprocessing-ui-xyapp-dev.azurewebsites.net",
+          "CustomDomain": ""
+        }
+      },
+      "Database": {
+        "ServerName": "orderprocessing-sql-dev.database.windows.net",
+        "DatabaseName": "OrderProcessingSystem_Dev",
+        "Edition": "Basic"
+      }
+    }
+  },
+  "Docker": {
+    "Networks": {
+      "Name": "xy-dev-network",
+      "Subnet": "172.20.0.0/16",
+      "Gateway": "172.20.0.1"
+    },
+    "Volumes": {
+      "Database": {
+        "Name": "orderprocessing_db_dev",
+        "Persistent": true,
+        "BackupEnabled": false,
+        "BackupSchedule": ""
+      },
+      "Logs": {
+        "Name": "orderprocessing_logs_dev", 
+        "Persistent": true,
+        "BackupEnabled": false,
+        "BackupSchedule": ""
+      }
+    }
+  }
+}

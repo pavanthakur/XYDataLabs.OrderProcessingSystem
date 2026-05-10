@@ -32,6 +32,8 @@ The bundle is written under `automation/reports/docker-validation/<bundleId>/` a
 
 Any phase missing confirmed verifiable passes on these three metrics cannot be formally closed.
 
+**Snapshot pair at major architectural seams.** Phase 7, 8, 11, 13, and 14 closeouts also cut a tag + backup branch pair per [ADR-018](docs/architecture/decisions/ADR-018-blueprint-and-snapshot-strategy.md) and [docs/internal/branch-and-blueprint-strategy.md](docs/internal/branch-and-blueprint-strategy.md). Tags use the format `v-YYYYMMDD-phase<N>-<slug>`; backup branches use `dev-backup-YYYYMMDD-<Scope>-Upto-Phase<N>`. The same strategy doc covers the two-layer reusable template (Layer 1 `dotnet new` NuGet template + Layer 2 GitHub template repo) that is extracted at Phase 14 closeout for side-project bootstrap.
+
 ---
 
 ## Baseline: Monolith on Azure App Service ✅ DEPLOYED
@@ -148,14 +150,47 @@ XYDataLabs.OrderProcessingSystem.sln
 | **7** | Tenant Enforcement & Ops | TenantValidationBehavior, AuditLog, security headers, liveness/readiness checks | ✅ **COMPLETE** |
 | **8** | Event-Driven Foundation | Domain events, integration events, Outbox pattern, background publisher | 📅 Planned |
 | **8.5** | Multi-Provider Payment Architecture | Stripe migration, per-tenant provider selection, `HttpClient`-based resilience, idempotency keys | 📅 Planned |
+| **8.7** | Stripe Webhook Receiver & Async Payment Lifecycle | Signed webhooks, inbox idempotency, replay flow, tenant-aware async payment convergence | 📅 Planned |
 | **9** | YARP Microservices (Local) | Gateway, Orders/Inventory/Notifications APIs, Docker Compose, event-based communication | 📅 Planned |
+| **9.5** | Cloud-Portable Identity Showcase | Local Keycloak portability proof for the JWT/OIDC pipeline without changing the Azure production identity model | 📅 Planned |
 | **10** | Azure Container Apps | ACA deployment, ACR, Service Bus, Entra ID + JWT, private networking | 📅 Planned |
 | **11** | Data Ownership & Autonomy | Database per service, remove shared DbContext, eventual consistency | 📅 Planned |
-| **12** | Platform Engineering & DevOps | .NET 10 upgrade, Azure App Configuration, Polly resilience, per-service CI/CD, observability dashboards | 📅 Planned |
-| **13** | Aspire & Final Maturity | .NET Aspire orchestration, service discovery, blue-green/canary deployments | 📅 Planned |
+| **11.5** | Polyglot Persistence Showcase | Notifications module PostgreSQL pilot proving provider portability while Orders/Payments stay on Azure SQL | 📅 Planned |
+| **12** | Platform Engineering & Operability | .NET 10 upgrade window, Azure App Configuration, API consumer discipline, troubleshooting/performance/cost runbooks, per-service CI/CD, observability dashboards | 📅 Planned |
+| **13** | Aspire & Final Maturity | Aspire AppHost deepening, distributed app testing, service discovery, manifest / `azd` evaluation, blue-green/canary deployment strategy | 📅 Planned |
 | **14** | CQRS Read Model (MongoDB) | Separate read/write models, projection handlers, Hangfire, tenant-scoped documents | 📅 Planned |
 
 ---
+
+## Enterprise Alignment Rules For Phases 8.5-14
+
+The Julio Casal bootcamp stack is being used here as an **enterprise capability benchmark**, not as a blanket instruction to replace every Azure-first production choice already made in this repository.
+
+### Adopt the pattern, not accidental vendor churn
+
+- **Adopt as first-class roadmap work:** production engineering mindset, observability depth, worker services, async messaging, resilience, configuration management, API consumer experience, integration testing, troubleshooting, performance, cloud networking, modern local orchestration, and repeatable deployment operations.
+- **Keep production-authoritative choices:** Azure SQL remains the main transactional store; Entra ID plus managed identity remains the production identity path; React remains the active frontend track.
+- **Use isolated portability proofs where they add architect-level credibility:** Keycloak in Phase 9.5 and PostgreSQL in Phase 11.5.
+- **Do not force premature platform churn:** .NET 10 and deeper Aspire adoption stay gated behind the planned upgrade window in Phases 12-13.
+
+### Capability-to-phase mapping
+
+| Capability area | Where it is made explicit in the roadmap |
+|---|---|
+| API consumer experience, contract quality, generated client expectations, consistent error design | Track U carry-forward + Phase 8.5 + Phase 9 + Phase 12 |
+| Worker services, outbox/inbox, webhook/event convergence, DLQ and replay operations | Phase 8 + Phase 8.7 + Phase 10 |
+| OpenTelemetry depth, distributed tracing, dependency graphs, service-level observability | Phase 3 baseline + Phase 9 + Phase 10 + Phase 13 |
+| Configuration management, Options Pattern discipline, App Configuration, secret rollout safety | Phase 10 + Phase 12 |
+| Cloud networking, ingress, gateway, CORS, TLS, Front Door / APIM concerns | Phase 10 + Phase 12 |
+| Integration and distributed testing, including containerized and orchestration-aware validation | Phase 9 + Phase 13 |
+| Performance, caching, cost optimization, production troubleshooting and diagnostics | Phase 12 + Phase 13 |
+| Modern local development and orchestration | Phase 9 (Aspire-Lite) + Phase 13 |
+
+### Explicit non-goals for the current production path
+
+- Do **not** replace Azure SQL platform-wide with PostgreSQL; keep PostgreSQL isolated to the Phase 11.5 Notifications pilot.
+- Do **not** replace Entra ID in production with Keycloak; keep Keycloak as the local-only Phase 9.5 portability showcase.
+- Do **not** add a separate Blazor implementation phase unless a product-specific need appears.
 
 ## Parallel Track U — UI Modernization Program 📅
 
