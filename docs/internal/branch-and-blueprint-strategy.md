@@ -393,6 +393,8 @@ prototype already exists in-repo and has been validated locally via `dotnet pack
 
 ## 3. Side projects
 
+Quick operator path: [side-project-bootstrap-quick-start.md](../guides/development/side-project-bootstrap-quick-start.md)
+
 ### 3.1 Location and naming
 
 Side projects live in **separate GitHub repositories**, ideally under a dedicated org
