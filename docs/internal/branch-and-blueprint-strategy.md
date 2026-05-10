@@ -410,7 +410,8 @@ branches in this repository.
 | 2 | `whatsapp-automation` | Blueprint + WhatsApp adapter | 4–6 weeks |
 | 3 | `azure-cost-optimizer` | Blueprint + Cost Management API client | 6–8 weeks |
 | 4 | `ai-recruitment` | Blueprint + Azure OpenAI + Elasticsearch | 8–10 weeks |
-| 5 | (this repo) order-processing | — already exists | — |
+| 5 | `hospital-clinic-appointments` | Blueprint + calendar connectors + notification adapters | 8–10 weeks |
+| 6 | (this repo) order-processing | — already exists | — |
 
 ### 3.2.1 Side-project bootstrap matrix
 
@@ -422,12 +423,18 @@ Use this matrix as the default decision table when a side project needs to start
 | `whatsapp-automation` | `v-20260510-phase8-frontend-spa` | Needs the current React frontend, API ownership of callback/client-event style endpoints, and the cleanest baseline for AI + messaging automation without payment-specific coupling | Start from `xydatalabs-saas-blueprint` + `XYDataLabs.SaaS.Templates`, then add WhatsApp adapter, AI reply workflow, CRM hooks, and conversation audit flows |
 | `azure-cost-optimizer` | `v-20260510-phase8-frontend-spa` | Needs Azure governance, OIDC workflows, React UI, and enterprise reporting/automation patterns more than payment or order-domain specifics | Start from `xydatalabs-saas-blueprint` + `XYDataLabs.SaaS.Templates`, then replace order/payment slices with Azure cost ingestion, anomaly detection, and optimization actions |
 | `ai-recruitment` | `v-20260510-phase8-frontend-spa` | Needs the React-first UX baseline, multi-tenant foundation, and event-ready backend more than order/payment-specific domain logic | Start from `xydatalabs-saas-blueprint` + `XYDataLabs.SaaS.Templates`, then add search, resume parsing, recruiter workflows, AI matching, and interview orchestration |
+| `hospital-clinic-appointments` | `v-20260510-phase8-frontend-spa` | Needs the React operational dashboard, SignalR-ready real-time layer, Azure notification-friendly backend, and role-based workflow surfaces more than order/payment-specific domain logic | Start from `xydatalabs-saas-blueprint` + `XYDataLabs.SaaS.Templates`, then add calendar sync, appointment orchestration, notifications, doctor mobile PWA flows, and healthcare scheduling analytics |
 | B2B order/inventory SaaS variant | `v-20260510-pre-template-readme-1-0-1` plus current repo runtime | This is the closest domain match to the live product and already has the validated Layer 1 template package line and release discipline in place | Start directly from `XYDataLabs.SaaS.Templates::1.0.1` for the .NET skeleton and pair it with the future blueprint repo for workflows, infra, frontend, docs, and automation |
 
 Default rule before Phase 14:
 - if the side project needs the current React/Azure/automation baseline, fork from `v-20260510-phase8-frontend-spa`
 - if the side project is explicitly a reusable SaaS backend skeleton exercise, prefer the validated Layer 1 package line `XYDataLabs.SaaS.Templates::1.0.1`
 - if a future phase introduces a better architectural seam for a specific product category, cut the new snapshot pair and update this matrix instead of creating ad hoc product branches in this repo
+
+Planning note for the current hospital/clinic appointment ask:
+- the new healthcare scheduling project fits the existing Phase 8 frontend snapshot and future two-layer bootstrap model, so no new snapshot tag or NuGet package line is required yet
+- cut a new snapshot tag/backup branch only when a future phase adds healthcare-relevant shared bootstrap assets that materially improve all new scheduling products
+- move `PackageVersion` only if the shared Layer 1 generated backend skeleton changes for every consumer, not for one domain plan document
 
 Default rule after Phase 14:
 - create the repo from `xydatalabs-saas-blueprint`

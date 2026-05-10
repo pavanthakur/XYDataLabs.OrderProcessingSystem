@@ -20,6 +20,7 @@ Decision rationale and the full release/snapshot model live in [branch-and-bluep
 | `whatsapp-automation` | `v-20260510-phase8-frontend-spa` | Best current React + API-ownership + automation-ready baseline |
 | `azure-cost-optimizer` | `v-20260510-phase8-frontend-spa` | Best current Azure governance + React + workflow baseline |
 | `ai-recruitment` | `v-20260510-phase8-frontend-spa` | Best current multi-tenant + React + event-ready baseline |
+| `hospital-clinic-appointments` | `v-20260510-phase8-frontend-spa` | Best current React + SignalR + Azure workflow baseline for scheduling, notifications, and role-based operational UX |
 | B2B order/inventory SaaS variant | `XYDataLabs.SaaS.Templates::1.0.1` plus current runtime patterns | Closest fit to the live domain and already packaged as a reusable backend skeleton |
 
 If a later phase creates a better seam for a product category, update the bootstrap matrix in [branch-and-blueprint-strategy.md](../../internal/branch-and-blueprint-strategy.md) instead of inventing an ad hoc branch strategy.
@@ -103,6 +104,7 @@ dotnet new uninstall XYDataLabs.SaaS.Templates
 
 - If Layer 1 template files change, `PackageVersion` must move and the template governance workflow validates the packaged `.nupkg`.
 - If future Layer 2 blueprint assets change, the phase-closeout gate decides whether the next `blueprint-v*` line is required.
+- Adding a new side-project plan alone does not require a new NuGet template line; move `PackageVersion` only when shared Layer 1 generated assets change.
 - If neither Layer 1 nor Layer 2 bootstrap assets changed, do not create a new template release line.
 
 ## Related Docs

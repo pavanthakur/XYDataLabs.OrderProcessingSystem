@@ -10,6 +10,7 @@ Use these documents after choosing the bootstrap path in [side-project-bootstrap
 - [whatsapp-automation.md](./whatsapp-automation.md) — AI-assisted WhatsApp business automation platform
 - [azure-cost-optimizer.md](./azure-cost-optimizer.md) — Azure FinOps and optimization SaaS
 - [ai-recruitment.md](./ai-recruitment.md) — AI-enabled recruiter workflow and candidate matching platform
+- [hospital-clinic-appointments.md](./hospital-clinic-appointments.md) — hospital and clinic appointment orchestration with unified doctor schedules and patient notifications
 
 ## Usage Rule
 
