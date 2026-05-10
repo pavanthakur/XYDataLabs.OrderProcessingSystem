@@ -1,7 +1,7 @@
 # Architecture Evolution: Monolith to Enterprise Microservices
 
-**Last Updated:** April 28, 2026
-**Current Status:** Phase 8 Closeout Verified ✅ | Track U U5 Complete ✅ | Backend Phase 8.5 Active Next 📅 | Phases 9-14 Planned 📅
+**Last Updated:** May 10, 2026
+**Current Status:** Phase 8 Closeout Matrix Validation Passed ✅ | Track U U5 Complete ✅ | Backend Phase 8.5 Active Next 📅 | Phases 9-14 Planned 📅
 
 ---
 
@@ -18,9 +18,17 @@ with MongoDB.
 ## 🛡️ Mandatory Phase Closeout Quality Gate
 
 Before marking **any** architectural phase as complete, the following end-to-end success criteria must be met and verified:
-1. **Docker Containerization Validation:** All modified or newly introduced services must successfully build, launch, and run correctly via the mapped Docker environment profiles (`dev`, `stg`, `prod`). 
-2. **Integration Test Verification:** The backend integration test suite must pass perfectly against an active, containerized SQL database without test-boundary data bleeding, confirming database access and domain logic constraints are met.
+1. **Docker Containerization Validation:** All modified or newly introduced services must successfully build, launch, and run correctly via the mapped Docker environment profiles (`dev`, `stg`, `prod`) with Docker SQL as the only valid runtime path.
+2. **Integration Test Verification:** The backend integration test suite must pass against the active Docker validation slice, confirming database access and domain logic constraints are met.
 3. **End-to-End Automation Coverage:** Playwright E2E automation (in the `automation/` workspace) must successfully navigate the full frontend-to-backend-to-payment cycle against the running containers without errors.
+
+For phases that touch Docker runtime orchestration, payment automation runtime targets, or phase-closeout workflow surfaces, the closeout evidence must now be captured with the generated Docker validation bundle:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\generate-docker-validation-bundle.ps1 -Environment dev -Profile http
+```
+
+The bundle is written under `automation/reports/docker-validation/<bundleId>/` and must include `summary.md`, `summary.json`, raw test logs, target startup logs, and the referenced automation report path for the closeout session.
 
 Any phase missing confirmed verifiable passes on these three metrics cannot be formally closed.
 
@@ -420,6 +428,8 @@ Phase 8 closeout is now verified on the current branch. The explicit closeout ev
 - reconciliation resolves `UnknownNeedsReconciliation`
 - cross-tenant isolation is preserved
 - architecture boundary tests are green
+
+Future phase freezes that touch Docker runtime orchestration or payment automation must record the real Docker proof run with `scripts/generate-docker-validation-bundle.ps1` under `automation/reports/docker-validation/`; the dry-run automation matrix remains a separate governance gate for shared automation asset changes.
 
 ### Outcome
 
@@ -1407,5 +1417,5 @@ All technical skills from a typical Azure .NET senior role are fully covered or 
 
 ---
 
-**Last Updated:** April 28, 2026
-**Status:** Phase 8 Closeout Verified ✅ | Track U U5 Complete ✅ | Backend Phase 8.5 Active Next 📅 | Phases 9-14 Planned 📅
+**Last Updated:** May 10, 2026
+**Status:** Phase 8 Closeout Matrix Validation Passed ✅ | Track U U5 Complete ✅ | Backend Phase 8.5 Active Next 📅 | Phases 9-14 Planned 📅
