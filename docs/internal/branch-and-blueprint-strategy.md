@@ -181,6 +181,7 @@ The Layer 1 template line is no longer a one-time manual activity.
 
 Automatic enforcement now exists through `.github/workflows/validate-template-package-governance.yml`:
 - Any pull request that changes `templates/xy-saas/` or `templates/XYDataLabs.SaaS.Templates/` must also bump `PackageVersion` in `templates/XYDataLabs.SaaS.Templates/XYDataLabs.SaaS.Templates.csproj`.
+- Direct pushes to `dev`, `staging`, or `main` that touch the same Layer 1 template surface also run the packaged smoke path automatically, so the branch signals template drift immediately even before formal publication.
 - The same workflow always packs the `.nupkg`, installs it, generates a smoke solution, and builds the generated output.
 
 That means `dev` always carries the next intended NuGet template line when the generated template itself changes, even if public publication happens later from a tag.

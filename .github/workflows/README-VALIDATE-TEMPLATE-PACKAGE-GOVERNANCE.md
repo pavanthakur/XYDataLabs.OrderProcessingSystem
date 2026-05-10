@@ -9,7 +9,7 @@ Automatic governance workflow for the Layer 1 `dotnet new` template package. It 
 - The repository needs an automatic rule that forces a package-version decision before those changes merge.
 
 ## Trigger
-- Automatic on pull requests to `dev`, `staging`, or `main` when the Layer 1 template surface changes
+- Automatic on pushes and pull requests targeting `dev`, `staging`, or `main` when the Layer 1 template surface changes
 - Manual dispatch for on-demand dry-run validation
 
 ## What it enforces
@@ -20,6 +20,8 @@ For pull requests, if any Layer 1 template payload file changes, the workflow co
 If the version did not change, the workflow fails and blocks the merge.
 
 This means the repository always knows the next intended NuGet template line whenever the generated template changes.
+
+On direct pushes to `dev`, `staging`, or `main`, the workflow still runs the packaged smoke path automatically so template-impacting commits are visible immediately even before branch protection is enabled.
 
 ### 2. Packaged smoke validation
 The workflow then runs the same release-quality path used for publication:
@@ -48,6 +50,9 @@ Publication remains an intentional operator step through [README-PUBLISH-TEMPLAT
 2. Choose the release baseline and create the tag.
 3. Run `publish-template-package.yml` against that tag.
 4. Create the matching GitHub release.
+
+## Strong enforcement note
+The workflow now runs on both pull requests and direct pushes, but pull-request blocking still depends on branch protection if you want to make this non-bypassable for protected branches.
 
 ## Consumer usage from NuGet.org
 

@@ -1,6 +1,18 @@
 name: Validate Template Package Governance
 
 on:
+  push:
+    branches:
+      - dev
+      - staging
+      - main
+    paths:
+      - 'templates/xy-saas/**'
+      - 'templates/XYDataLabs.SaaS.Templates/**'
+      - '.github/workflows/validate-template-package-governance.yml'
+      - '.github/workflows/README-VALIDATE-TEMPLATE-PACKAGE-GOVERNANCE.md'
+      - '.github/workflows/README-PUBLISH-TEMPLATE-PACKAGE.md'
+      - 'docs/internal/branch-and-blueprint-strategy.md'
   pull_request:
     branches:
       - dev

@@ -13,6 +13,7 @@ This workflow is the publication endpoint, not the first signal that a new NuGet
 
 Automatic detection now lives in [README-VALIDATE-TEMPLATE-PACKAGE-GOVERNANCE.md](./README-VALIDATE-TEMPLATE-PACKAGE-GOVERNANCE.md):
 - Pull requests that change `templates/xy-saas/` or `templates/XYDataLabs.SaaS.Templates/` must bump `PackageVersion`.
+- Pushes to `dev`, `staging`, or `main` that touch the same Layer 1 template surface also run automatic packaged smoke validation.
 - Those pull requests also run packaged smoke validation before merge.
 
 That keeps template version drift from becoming a one-time manual habit.
