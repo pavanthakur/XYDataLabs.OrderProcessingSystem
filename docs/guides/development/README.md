@@ -13,3 +13,4 @@ Use these documents:
 - `payment-journey-automation-blueprint.md` — canonical pre-implementation blueprint for the separate payment automation workspace
 - `background-worker-testing-patterns.md` — integration testing mechanics for polling and long-running background hosted services
 - `side-project-bootstrap-quick-start.md` — short operator guide for starting side projects from snapshot tags now and the future two-layer template model later
+- `side-projects/README.md` — per-project implementation plans for prioritized side-project products

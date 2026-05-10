@@ -394,6 +394,7 @@ prototype already exists in-repo and has been validated locally via `dotnet pack
 ## 3. Side projects
 
 Quick operator path: [side-project-bootstrap-quick-start.md](../guides/development/side-project-bootstrap-quick-start.md)
+Detailed per-project plans: [side-projects/README.md](../guides/development/side-projects/README.md)
 
 ### 3.1 Location and naming
 
