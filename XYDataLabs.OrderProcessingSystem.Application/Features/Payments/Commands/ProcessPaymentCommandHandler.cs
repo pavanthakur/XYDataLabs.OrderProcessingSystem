@@ -16,6 +16,7 @@ using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.SharedKernel;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
 using static XYDataLabs.OrderProcessingSystem.Application.Utilities.AppMasterConstant;
 using OpenPayCustomer = Openpay.Entities.Customer;
@@ -58,8 +59,8 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         _timeProvider = timeProvider;
 
         _tenantProvider = tenantProvider;
-        _openPayProvider = appMasterData.GetProviderByNameForTenant("OpenPay", tenantProvider.TenantId)
-            ?? throw new InvalidOperationException($"OpenPay provider not found in master data for tenant {tenantProvider.TenantId}");
+        _openPayProvider = appMasterData.GetProviderByNameForTenant(PaymentProviderTypes.OpenPay, tenantProvider.TenantId)
+            ?? throw new InvalidOperationException($"{PaymentProviderTypes.OpenPay} provider not found in master data for tenant {tenantProvider.TenantId}");
     }
 
     public async Task<Result<PaymentDto>> HandleAsync(ProcessPaymentCommand command, CancellationToken cancellationToken = default)

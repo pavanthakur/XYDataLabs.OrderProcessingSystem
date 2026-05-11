@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "http": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "launchUrl": "",
+      "applicationUrl": "http://localhost:5080",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ReverseProxy__Clusters__orders-cluster__Destinations__orders-api__Address": "http://localhost:5010/",
+        "ReverseProxy__Clusters__ui-cluster__Destinations__web-ui__Address": "http://localhost:5173/"
+      }
+    },
+    "docker-dev-http": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "launchUrl": "",
+      "applicationUrl": "http://localhost:5080",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ReverseProxy__Clusters__orders-cluster__Destinations__orders-api__Address": "http://localhost:5020/",
+        "ReverseProxy__Clusters__ui-cluster__Destinations__web-ui__Address": "http://localhost:5022/"
+      }
+    },
+    "docker-stg-http": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "launchUrl": "",
+      "applicationUrl": "http://localhost:5080",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Staging",
+        "ReverseProxy__Clusters__orders-cluster__Destinations__orders-api__Address": "http://localhost:5030/",
+        "ReverseProxy__Clusters__ui-cluster__Destinations__web-ui__Address": "http://localhost:5032/"
+      }
+    },
+    "docker-prod-http": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "launchUrl": "",
+      "applicationUrl": "http://localhost:5080",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Production",
+        "ReverseProxy__Clusters__orders-cluster__Destinations__orders-api__Address": "http://localhost:5040/",
+        "ReverseProxy__Clusters__ui-cluster__Destinations__web-ui__Address": "http://localhost:5042/"
+      }
+    }
+  }
+}

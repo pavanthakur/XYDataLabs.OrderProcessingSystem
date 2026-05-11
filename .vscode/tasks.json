@@ -118,6 +118,27 @@
             },
             "problemMatcher": []
         },
+        {
+            "label": "Validate: Gateway tests",
+            "type": "process",
+            "command": "dotnet",
+            "args": [
+                "test",
+                "${workspaceFolder}/tests/XYDataLabs.OrderProcessingSystem.Gateway.Tests/XYDataLabs.OrderProcessingSystem.Gateway.Tests.csproj",
+                "--logger",
+                "console;verbosity=minimal"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
         // Run: Local
         {
             "label": "1 Run: 01 Frontend only",
@@ -145,6 +166,51 @@
             "dependsOn": [
                 "Internal: Stop local dev sessions",
                 "Internal: Start local https profile"
+            ],
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: 06 Gateway Baseline Http",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Internal: Stop local dev sessions",
+                "Internal: API http profile",
+                "Internal: React web frontend (standalone)",
+                "Internal: Gateway http profile"
+            ],
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: 13 Gateway over Docker Dev Http",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Internal: Stop local dev sessions",
+                "1 Run: 11 Docker Dev Http Profile",
+                "Internal: Gateway docker-dev-http profile"
+            ],
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: 23 Gateway over Docker Stg Http",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Internal: Stop local dev sessions",
+                "1 Run: 21 Docker Stg Http Profile",
+                "Internal: Gateway docker-stg-http profile"
+            ],
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: 33 Gateway over Docker Prod Http",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Internal: Stop local dev sessions",
+                "1 Run: 31 Docker Prod Http Profile",
+                "Internal: Gateway docker-prod-http profile"
             ],
             "group": "none",
             "problemMatcher": []
@@ -589,6 +655,122 @@
                 "scripts/start-local-frontend-profile.ps1",
                 "-Profile",
                 "standalone"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "hide": true,
+            "group": "none",
+            "isBackground": true,
+            "runOptions": {
+                "instanceLimit": 2
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Internal: Gateway http profile",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/start-local-gateway-profile.ps1",
+                "-Profile",
+                "http"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "hide": true,
+            "group": "none",
+            "isBackground": true,
+            "runOptions": {
+                "instanceLimit": 2
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Internal: Gateway docker-dev-http profile",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/start-local-gateway-profile.ps1",
+                "-Profile",
+                "docker-dev-http"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "hide": true,
+            "group": "none",
+            "isBackground": true,
+            "runOptions": {
+                "instanceLimit": 2
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Internal: Gateway docker-stg-http profile",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/start-local-gateway-profile.ps1",
+                "-Profile",
+                "docker-stg-http"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "hide": true,
+            "group": "none",
+            "isBackground": true,
+            "runOptions": {
+                "instanceLimit": 2
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Internal: Gateway docker-prod-http profile",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/start-local-gateway-profile.ps1",
+                "-Profile",
+                "docker-prod-http"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"

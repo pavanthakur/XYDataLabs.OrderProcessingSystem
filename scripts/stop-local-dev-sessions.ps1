@@ -2,16 +2,16 @@ param(
     [ValidateSet('all', 'http', 'https')]
     [string]$Profile = 'all',
 
-    [int[]]$Ports = @(5010, 5011, 5173, 5174)
+    [int[]]$Ports = @(5010, 5011, 5080, 5173, 5174)
 )
 
 if ($PSBoundParameters.ContainsKey('Ports') -eq $false)
 {
     $Ports = switch ($Profile)
     {
-        'http'  { @(5010, 5173) }
+        'http'  { @(5010, 5080, 5173) }
         'https' { @(5011, 5174) }
-        default { @(5010, 5011, 5173, 5174) }
+        default { @(5010, 5011, 5080, 5173, 5174) }
     }
 }
 

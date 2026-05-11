@@ -806,6 +806,18 @@ You are **cleared to proceed** with Day 32+ tasks. All documentation is in place
 ### Overview
 This guide provides step-by-step instructions for implementing YARP (Yet Another Reverse Proxy) to establish a clean microservices architecture.
 
+### Current Repo Baseline (May 2026)
+
+The repository now contains a groundwork-only YARP baseline. This does not mean Phase 9 is complete or active ahead of Phase 8.5.
+
+- `XYDataLabs.OrderProcessingSystem.Gateway` exists in the solution and builds cleanly
+- The gateway listens on `http://localhost:5080`
+- Current routes proxy the existing API (`localhost:5010`) and React UI (`localhost:5173`) through one entry point
+- Launch profiles now support retargeting the same gateway ingress to Docker dev/stg/prod ports without code edits; this is the current stepping stone toward Aspire-provided service discovery
+- Guardrails already implemented: unsupported-host rejection, payload-size rejection, `/health/alive`, `/health/ready`, gateway correlation header propagation, and a fixed-window gateway limiter
+- Dedicated regression coverage exists in `tests/XYDataLabs.OrderProcessingSystem.Gateway.Tests`
+- Still pending for true Phase 9 execution: module extraction, `ServiceDefaults`, `AppHost`, Aspire service discovery, Docker/Compose parity updates, additional downstream services, and traced multi-service flow proof
+
 ### Architecture Goals
 ```
 Current State:
@@ -825,116 +837,98 @@ Target State (with YARP):
 - ✅ **Clean URLs:** No port management
 - ✅ **Service Isolation:** Independent scaling and deployment
 - ✅ **Production-Ready:** Same pattern for Azure Container Apps
-- ✅ **Centralized Auth:** JWT validation once in gateway
-- ✅ **Easy Monitoring:** Single entry point for tracing
+- ✅ **Gateway Guardrails:** Request validation, size limits, and rate limiting before traffic reaches services
+- ✅ **Protocol Flexibility:** HTTP/1.1, HTTP/2, gRPC, and WebSockets pass-through
+- ✅ **Easy Monitoring:** Single entry point for logs, metrics, and distributed traces
+
+### Implementation Workstreams And Done Criteria
+
+Treat Phase 9 as eight concrete workstreams. Do not mark the phase complete until each workstream is demonstrably green.
+
+1. **Gateway skeleton**
+  - Create `XYDataLabs.OrderProcessingSystem.Gateway`
+  - Add `Yarp.ReverseProxy`
+  - Configure host-based and path-based routes for Orders, Inventory, Notifications, and UI
+  - Expose standardized `/health/alive` and `/health/ready` endpoints
+
+2. **Request filtering + edge validation**
+  - Reject unknown hosts, unsupported paths, malformed forwarded headers, and oversized payloads
+  - Normalize forwarded headers and correlation metadata before proxying
+  - Return ProblemDetails-style failures for gateway-generated errors
+
+3. **Auth boundary**
+  - Gateway enforces transport-level prerequisites and forwards normalized identity context
+  - Downstream services still perform JWT validation, tenant enforcement, and authorization policies
+  - Do not treat YARP as the only trust boundary
+
+4. **Routing resilience**
+  - Use Aspire service discovery in the inner loop and explicit Docker destination config in CI
+  - Remove unhealthy destinations from routing
+  - Apply timeout, retry, and circuit-breaker policy only where they are safe and observable
+
+5. **Observability**
+  - Emit structured logs with `traceparent`, `CorrelationId`, `TenantId`, route id, cluster id, and destination id
+  - Publish traces and gateway metrics so a single request can be followed across gateway and services
+  - Prove the gateway does not break correlation propagation
+
+6. **Protocol support**
+  - Validate plain HTTP API traffic first
+  - Add pass-through coverage for WebSockets and HTTP/2/gRPC-capable routes where applicable
+  - Avoid Phase 9 assumptions that lock the platform into REST-only traffic
+
+7. **Safe caching + throttling**
+  - Only cache explicitly approved idempotent read endpoints
+  - Make cache keys tenant-aware to prevent cross-tenant leakage
+  - Rate-limit by tenant/client identity at the gateway, not by fragile IP-only heuristics
+
+8. **Proof and regression checks**
+  - Automated tests cover route matching, invalid host rejection, payload limit rejection, health-based destination removal, and standardized gateway error payloads
+  - One end-to-end traced request proves correlation survives gateway -> service -> event flow
+  - Docker Compose and Aspire AppHost both exercise the same routing intent
 
 ---
 
 ### Day 41-42: Setup YARP Gateway
 
-#### Step 1: Create Gateway Project
+#### Step 1: Current Implemented Baseline
 ```powershell
-# Navigate to solution root
-cd Q:\GIT\TestAppXY_OrderProcessingSystem
+# Build the gateway host
+dotnet build .\XYDataLabs.OrderProcessingSystem.Gateway\XYDataLabs.OrderProcessingSystem.Gateway.csproj
 
-# Create YARP Gateway project
-dotnet new web -n XYDataLabs.OrderProcessingSystem.Gateway
-dotnet sln add XYDataLabs.OrderProcessingSystem.Gateway
+# Run the focused gateway regression suite
+dotnet test .\tests\XYDataLabs.OrderProcessingSystem.Gateway.Tests\XYDataLabs.OrderProcessingSystem.Gateway.Tests.csproj
 
-# Add YARP package
-cd XYDataLabs.OrderProcessingSystem.Gateway
-dotnet add package Yarp.ReverseProxy
+# Start the gateway baseline
+dotnet run --project .\XYDataLabs.OrderProcessingSystem.Gateway\XYDataLabs.OrderProcessingSystem.Gateway.csproj --launch-profile http
 ```
 
-#### Step 2: Configure Program.cs
-```csharp
-using Microsoft.AspNetCore.HttpOverrides;
+#### Step 2: What The Baseline Already Proves
 
-var builder = WebApplication.CreateBuilder(args);
+- `Program.cs` already wires `AddProblemDetails()`, `AddHealthChecks()`, `AddRateLimiter()`, forwarded headers, host filtering, payload-size rejection, and YARP reverse proxy routing
+- The gateway exposes `/health/alive` and `/health/ready`
+- The gateway adds `X-Correlation-Id` before proxying and returns ProblemDetails-style failures for gateway-generated errors
+- Host-based routes (`orders.localhost`, `ui.localhost`) and path-based routes (`/api`, `/swagger`, `/app`) already exist so local validation does not depend on hosts-file edits
 
-// Add YARP
-builder.Services.AddReverseProxy()
-    .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
+#### Step 3: What Still Changes In Real Phase 9
 
-// Forwarded headers (required behind load balancer)
-builder.Services.Configure<ForwardedHeadersOptions>(options =>
-{
-    options.ForwardedHeaders = ForwardedHeaders.All;
-    options.KnownNetworks.Clear();
-    options.KnownProxies.Clear();
-});
-
-var app = builder.Build();
-
-app.UseForwardedHeaders();
-
-// Health check
-app.MapGet("/health", () => Results.Ok(new { 
-    service = "YARP Gateway", 
-    status = "healthy" 
-}));
-
-// YARP routing
-app.MapReverseProxy();
-
-app.Run();
-```
-
-#### Step 3: Configure appsettings.json
-```json
-{
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information",
-      "Microsoft.AspNetCore": "Warning",
-      "Yarp": "Information"
-    }
-  },
-  "ReverseProxy": {
-    "Routes": {
-      "orders-route": {
-        "ClusterId": "orders-cluster",
-        "Match": {
-          "Hosts": ["orders.localhost"]
-        }
-      },
-      "ui-route": {
-        "ClusterId": "ui-cluster",
-        "Match": {
-          "Hosts": ["ui.localhost"]
-        }
-      }
-    },
-    "Clusters": {
-      "orders-cluster": {
-        "Destinations": {
-          "orders-api": {
-            "Address": "http://localhost:5001"
-          }
-        }
-      },
-      "ui-cluster": {
-        "Destinations": {
-          "ui-app": {
-            "Address": "http://localhost:5173"
-          }
-        }
-      }
-    }
-  }
-}
-```
+- Replace static localhost destinations with Aspire service discovery for the inner loop while retaining explicit Docker destination config for CI
+- Add downstream health-aware routing instead of the current single-destination baseline
+- Expand routing to extracted Inventory and Notifications services instead of only the current monolith API + UI split
+- Add structured gateway observability that aligns with the shared `ServiceDefaults` and OpenTelemetry rollout
 
 #### Step 4: Test Gateway
 ```powershell
-# Start Gateway
-cd XYDataLabs.OrderProcessingSystem.Gateway
-dotnet run
-
-# Test in another terminal
-curl http://orders.localhost:8080/health
-curl http://ui.localhost:8080
+# With the API and UI already running, verify the gateway health and path-based routes
+Invoke-WebRequest http://localhost:5080/health/alive
+Invoke-WebRequest http://localhost:5080/swagger/index.html
+Invoke-WebRequest http://localhost:5080/app/
 ```
+
+Expected evidence:
+- `/health/alive` returns HTTP 200 from the gateway
+- `/swagger/index.html` flows through the gateway to the existing API
+- `/app/` flows through the gateway to the React dev server
+- `tests/XYDataLabs.OrderProcessingSystem.Gateway.Tests` remains green for unsupported-host rejection, payload-limit rejection, and correlation propagation
 
 ---
 

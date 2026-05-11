@@ -793,9 +793,24 @@ services:
 
 - **CORS** — policy per downstream service, configured in YARP
 - **Rate limiting** — `System.Threading.RateLimiting` per tenant/client at gateway level
+- **Request validation** — reject malformed host/header/path combinations and oversized payloads before they reach downstream services
+- **Contributor-friendly ingress parity** — preserve both host-based routes (`orders.localhost`) and path-based fallback routes (`/api`, `/app`) for local and Docker validation so contributors and CI do not depend on hosts-file edits; Aspire later replaces destination resolution, not the single-entry-point contract
+- **Authentication boundary** — Phase 9 gateway validates transport-level auth prerequisites, forwards normalized identity context, and never becomes the sole authorization enforcement point; downstream services still validate tokens and policies
 - **Request/response logging** — structured audit trail at gateway entry point
 - **Request size limits** — prevent oversized payloads reaching downstream services
-- **Authentication prep** — token forwarding middleware (prepares for Phase 10 JWT)
+- **Service discovery + health-aware routing** — YARP destinations resolve through Aspire service discovery in the inner loop and fall back to explicit Docker Compose routes in CI; unhealthy destinations are removed from rotation
+- **Protocol support** — HTTP/1.1, HTTP/2, gRPC, and WebSocket pass-through are part of the gateway acceptance bar so the platform does not lock itself into REST-only transport assumptions
+- **Safe response caching** — only for explicitly approved idempotent read endpoints, keyed by tenant-aware cache policy to avoid cross-tenant leakage
+- **Standardized gateway errors** — gateway-generated failures return ProblemDetails-compatible responses with correlation metadata so edge failures are diagnosable without divergent error shapes
+- **Observability** — gateway emits structured logs, metrics, and traces with `traceparent`, `CorrelationId`, `TenantId`, and destination metadata attached
+
+### Deliberate Phase 9 Scope Boundary
+
+Phase 9 uses YARP to prove the internal gateway pattern and developer experience, not to recreate the full external API management plane.
+
+- **Owned by YARP in Phase 9** — local single entry point, internal routing, host/path transforms, tenant-safe caching for approved reads, rate limiting, health-aware destination selection, protocol pass-through, correlation/logging/tracing
+- **Deferred to APIM in Phase 10** — subscription keys, public developer portal, consumer products/plans, external analytics, public API policy governance, and internet-facing API onboarding
+- **Still owned by downstream services** — domain authorization, business invariants, tenant enforcement, and final JWT/policy validation
 
 ### Resilience (Polly v8 Basics)
 
@@ -808,6 +823,7 @@ services:
 
 - **Graceful shutdown** — `IHostApplicationLifetime` to drain in-flight requests before container stops
 - **Structured concurrency** — `Task.WhenAll` for parallel scatter-gather queries through gateway
+- **Monorepo CI guardrail** — while services still live in one solution, gateway- or module-only changes must trigger the shared CI workflow and execute the focused gateway regression suite so extraction work cannot bypass validation just because API/UI paths were untouched
 - **Testcontainers snapshots** — pre-seeded Docker images for integration tests: build a custom SQL Server image with migrations + seed data baked in, so each test run skips migration/seed overhead; apply when test suite runtime becomes a CI bottleneck across multiple per-module DBs
 
 ### Entry Gate To Phase 10
@@ -815,6 +831,8 @@ services:
 - Orders, Inventory, Notifications, and Payments compile independently.
 - PublicApi boundaries are enforced by architecture tests.
 - Local end-to-end flow works through the YARP gateway.
+- The gateway rejects invalid host/header/payload combinations, removes unhealthy destinations from routing, and returns standardized ProblemDetails-style failures for gateway-generated errors.
+- At least one traced request path demonstrates tenant-aware routing plus correlation propagation from gateway to downstream services without losing `traceparent` or domain correlation metadata.
 - One request flowing Orders → Inventory → Notifications produces one trace in Application Insights with all module spans present and the envelope `CorrelationId` attached to each span.
 - Event envelope, handler signatures, and retry semantics are identical to Phase 8 — no drift during extraction.
 
@@ -952,6 +970,7 @@ contracts frozen in Phase 8.
 ### Key Deliverables
 
 - Deploy to **Azure Container Apps** (managed environment, auto-scaling, scale-to-zero)
+- **Gateway deployment path** — YARP is packaged and deployed as a first-class workload with its own container image, health probes, configuration surface, and deployment step; it is not piggybacked onto the Orders API or UI artifact
 - **Azure API Management (APIM)** — Consumption tier as public-facing gateway; subscription keys, external rate limiting, developer portal, API analytics. YARP becomes the internal east-west proxy behind APIM: `Internet → APIM → ACA Ingress → YARP → Services`. This rollout starts only after transport failure drills pass.
 - **Azure Container Registry (ACR)** — build and push container images
 - **Azure Service Bus** — replace the in-memory event bus behind `IEventPublisher` with durable topics + subscriptions; handlers and envelopes remain unchanged
