@@ -7,6 +7,7 @@ using Polly;
 using Polly.CircuitBreaker;
 using Polly.Retry;
 using Serilog;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
 
 namespace XYDataLabs.OpenPayAdapter
 {
@@ -92,8 +93,9 @@ namespace XYDataLabs.OpenPayAdapter
                     });
             });
 
-            // Register HttpClient
+            // Register OpenPay as both the current concrete adapter and the future keyed provider seam.
             services.AddHttpClient<IOpenPayAdapterService, OpenPayAdapterService>();
+            services.AddKeyedScoped<IPaymentProviderAdapter, OpenPayAdapterService>(PaymentProviderTypes.OpenPay);
 
             // Register Serilog if not already registered
             if (!services.Any(s => s.ServiceType == typeof(ILogger)))

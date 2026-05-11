@@ -65,6 +65,9 @@ dotnet build XYDataLabs.OrderProcessingSystem.sln
 
 # 7. Run unit tests (before committing code)
 dotnet test XYDataLabs.OrderProcessingSystem.UnitTest/
+
+# 8. When gateway code changes, run the focused gateway regression suite
+dotnet test .\tests\XYDataLabs.OrderProcessingSystem.Gateway.Tests\XYDataLabs.OrderProcessingSystem.Gateway.Tests.csproj --logger "console;verbosity=minimal"
 ```
 
 ### **Focused Verification Commands (Phase 7 close-out)**
@@ -81,6 +84,19 @@ dotnet test .\tests\XYDataLabs.OrderProcessingSystem.Integration.Tests\XYDataLab
 # Use the no-build variant after a successful solution build to shorten reruns
 dotnet test .\tests\XYDataLabs.OrderProcessingSystem.Integration.Tests\XYDataLabs.OrderProcessingSystem.Integration.Tests.csproj --no-build --logger "console;verbosity=minimal"
 ```
+
+### **Gateway Baseline Guardrail Commands (Phase 9 groundwork)**
+```powershell
+# Build the gateway host after proxy changes
+dotnet build .\XYDataLabs.OrderProcessingSystem.Gateway\XYDataLabs.OrderProcessingSystem.Gateway.csproj
+
+# Run the focused gateway regression suite
+dotnet test .\tests\XYDataLabs.OrderProcessingSystem.Gateway.Tests\XYDataLabs.OrderProcessingSystem.Gateway.Tests.csproj --logger "console;verbosity=minimal"
+```
+
+Expected evidence:
+- The gateway host still compiles independently of the wider solution work
+- Unsupported-host rejection, payload-limit rejection, health endpoints, and correlation propagation remain green
 
 ### **Phase 7 Operational Proof Commands**
 

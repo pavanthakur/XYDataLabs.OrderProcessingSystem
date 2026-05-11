@@ -45,6 +45,18 @@ dotnet test .\tests\XYDataLabs.OrderProcessingSystem.Integration.Tests\XYDataLab
 dotnet test .\tests\XYDataLabs.OrderProcessingSystem.Integration.Tests\XYDataLabs.OrderProcessingSystem.Integration.Tests.csproj --no-build --logger "console;verbosity=minimal"
 ```
 
+### **Gateway groundwork verification (Phase 9 baseline)**
+
+```powershell
+# Build and test the gateway in isolation
+dotnet build .\XYDataLabs.OrderProcessingSystem.Gateway\XYDataLabs.OrderProcessingSystem.Gateway.csproj
+dotnet test .\tests\XYDataLabs.OrderProcessingSystem.Gateway.Tests\XYDataLabs.OrderProcessingSystem.Gateway.Tests.csproj --logger "console;verbosity=minimal"
+```
+
+Notes:
+- Use this focused slice whenever the YARP gateway host or its proxy rules change.
+- The current regression suite covers unsupported-host rejection, payload-limit rejection, `/health/alive`, and correlation propagation on a proxied route.
+
 ### **Payment verification — physical logs + DB correlation**
 
 ```powershell
@@ -71,6 +83,9 @@ dotnet run --launch-profile http
 # Run React web frontend
 npm --prefix .\frontend run dev:web
 
+# Run the gateway baseline (expects API on 5010 and UI on 5173)
+dotnet run --project .\XYDataLabs.OrderProcessingSystem.Gateway\XYDataLabs.OrderProcessingSystem.Gateway.csproj --launch-profile http
+
 # Run with specific environment
 dotnet run --environment Development
 dotnet run --environment Staging
@@ -85,10 +100,42 @@ dotnet run
 > **VS Code:** Set `"env": { "ASPNETCORE_ENVIRONMENT": "Development" }` in `launch.json`.
 > **Workspace standard:** Keep `XYDataLabs.OrderProcessingSystem.sln` focused on .NET projects, tests, infrastructure, and repo-owned assets. Run the React UI from the separate `frontend/` workspace with `npm --prefix .\frontend run dev:web`; do not add the React workspace to the Visual Studio solution unless a deliberate tooling requirement justifies it.
 
+### **Gateway baseline local flow**
+
+```powershell
+# Terminal 1
+dotnet run --project .\XYDataLabs.OrderProcessingSystem.API\XYDataLabs.OrderProcessingSystem.API.csproj --launch-profile http
+
+# Terminal 2
+npm --prefix .\frontend run dev:web
+
+# Terminal 3
+dotnet run --project .\XYDataLabs.OrderProcessingSystem.Gateway\XYDataLabs.OrderProcessingSystem.Gateway.csproj --launch-profile http
+```
+
+Automation shortcuts:
+- VS Code task: `1 Run: 06 Gateway Baseline Http`
+- Direct gateway launcher: `pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-local-gateway-profile.ps1 -Profile http`
+- Stop all local HTTP processes, including the gateway: `pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop-local-dev-sessions.ps1 -Profile http`
+
+Docker-targeted gateway profiles:
+- Dev Docker gateway: `pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-local-gateway-profile.ps1 -Profile docker-dev-http`
+- Staging Docker gateway: `pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-local-gateway-profile.ps1 -Profile docker-stg-http`
+- Production Docker gateway: `pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-local-gateway-profile.ps1 -Profile docker-prod-http`
+- VS Code tasks: `1 Run: 13 Gateway over Docker Dev Http`, `1 Run: 23 Gateway over Docker Stg Http`, `1 Run: 33 Gateway over Docker Prod Http`
+
+Access paths:
+- Gateway health: `http://localhost:5080/health/alive`
+- API through gateway: `http://localhost:5080/swagger/index.html`
+- React UI through gateway: `http://localhost:5080/app/`
+- Optional host-based routes still exist for `orders.localhost` and `ui.localhost`, but the path-based routes avoid a local hosts-file dependency.
+- The Docker-targeted gateway profiles keep the same `http://localhost:5080` ingress while retargeting downstream API/UI ports via launch-profile environment overrides.
+
 ### **Port Allocations**
 | Mode | API | Web |
 |------|-----|-----|
 | Local API + Vite | http://localhost:5010 | http://localhost:5173 |
+| Local Gateway baseline | http://localhost:5080 | Proxies API/UI |
 | Docker dev | http://localhost:5020 | http://localhost:5022 |
 | Docker stg | http://localhost:5030 | http://localhost:5032 |
 

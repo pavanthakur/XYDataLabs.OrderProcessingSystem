@@ -1,9 +1,10 @@
 ﻿using Openpay.Entities;
 using Openpay.Entities.Request;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
 
 namespace XYDataLabs.OpenPayAdapter
 {
-    public interface IOpenPayAdapterService
+    public interface IOpenPayAdapterService : IPaymentProviderAdapter
     {
         Task<Customer> CreateCustomerAsync(Customer customer);
         Task<Card> CreateCardTokenAsync(Card card);

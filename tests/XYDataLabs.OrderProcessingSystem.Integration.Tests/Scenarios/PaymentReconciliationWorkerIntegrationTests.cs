@@ -5,6 +5,7 @@ using Openpay.Entities.Request;
 using XYDataLabs.OpenPayAdapter;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
 
 namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Scenarios;
 
@@ -90,6 +91,8 @@ public sealed class PaymentReconciliationWorkerIntegrationTests : IAsyncLifetime
 
     private sealed class SuccessfulOpenPayAdapterStub : IOpenPayAdapterService
     {
+        public string ProviderType => PaymentProviderTypes.OpenPay;
+
         public Task<Openpay.Entities.Customer> CreateCustomerAsync(Openpay.Entities.Customer customer)
         {
             throw new NotSupportedException();

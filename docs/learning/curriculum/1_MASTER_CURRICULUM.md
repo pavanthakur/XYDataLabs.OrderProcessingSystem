@@ -747,6 +747,7 @@ After completing today's tasks, you will have:
 **Reference:** Official .NET Aspire documentation
 
 #### Day 73: .NET Aspire Fundamentals
+> **Baseline status:** The YARP gateway scaffold and dedicated behavior tests already exist in the solution. Days 73-79 extend that baseline with `AppHost`, `ServiceDefaults`, and service discovery; they do not re-scaffold the gateway.
 - [ ] Install .NET Aspire workload: `dotnet workload install aspire`
 - [ ] Understand Aspire architecture (App Host, Service Defaults)
 - [ ] Create Aspire App Host project: `XYDataLabs.OrderProcessingSystem.AppHost`
@@ -767,10 +768,11 @@ After completing today's tasks, you will have:
 > - Per-module DB schemas within shared database (`orders`, `inventory`, `notifications`)
 - [ ] Add Aspire service defaults to Orders API
 - [ ] Register Orders API in App Host
+- [ ] Reference the existing YARP gateway baseline from the App Host plan instead of creating a second local entry point
 - [ ] Configure environment variables via Aspire
 - [ ] Test service discovery: Orders API → SQL Database
 - [ ] View telemetry in Aspire dashboard (traces, logs, metrics)
-- [ ] Remove manual Docker Compose configuration
+- [ ] Keep Docker Compose parity while adding Aspire service discovery wiring; do not remove Docker Compose from the supported Phase 9 paths
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 #### Day 75: Add All Microservices to Aspire
@@ -783,6 +785,7 @@ After completing today's tasks, you will have:
 - [ ] Register Inventory API in App Host
 - [ ] Register Notifications API in App Host
 - [ ] Register UI in App Host
+- [ ] Register the YARP gateway in App Host as the single local ingress once downstream service discovery is wired
 - [ ] Configure service-to-service communication
 - [ ] Test end-to-end flow through Aspire orchestration
 - [ ] Verify distributed tracing across all services
@@ -794,9 +797,14 @@ After completing today's tasks, you will have:
 > **Gateway cross-cutting concerns (Phase 9):**
 > - CORS policy per downstream service configured in YARP
 > - `System.Threading.RateLimiting` per tenant/client at gateway level
+> - Request validation at the edge: reject malformed host/header/path combinations before they hit services
 > - Request/response logging — structured audit trail at gateway entry point
 > - Request size limits — prevent oversized payloads reaching downstream services
-> - Auth token forwarding middleware (prepares for Phase 10 JWT)
+> - Transport/auth boundary: gateway forwards normalized identity context but downstream services still enforce JWT and authorization policies
+> - Service discovery and health-aware routing via Aspire in the inner loop and explicit Docker routes in CI
+> - Protocol support baseline: HTTP/1.1, HTTP/2, gRPC, WebSockets pass-through
+> - Standardized ProblemDetails-style gateway failures with correlation metadata
+> - Safe caching only for explicitly approved tenant-aware read endpoints
 - [ ] Add `Aspire.Hosting.SqlServer` package to App Host
 - [ ] Register SQL Server container in App Host
 - [ ] Connect Orders API to Aspire-managed SQL
@@ -827,6 +835,7 @@ After completing today's tasks, you will have:
 - [ ] Generate deployment manifests: `dotnet run --publisher manifest`
 - [ ] Understand Aspire → Azure Container Apps deployment
 - [ ] Review generated Bicep/YAML files
+- [ ] Prove the YARP gateway can resolve downstream services through Aspire service discovery without hardcoded localhost ports
 - [ ] Compare Aspire vs manual Docker Compose
 - [ ] Document Aspire benefits (service discovery, observability, config)
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
@@ -1309,6 +1318,12 @@ After completing today's tasks, you will have:
 **Last Completed Task:** Days 51, 55-56 — Phase 8 event-foundation closeout verified with full integration and architecture coverage
 **Next Milestone:** Phase 8.5 multi-provider payment, then Phase 8.7 Stripe webhooks, then Phase 9 module extraction plus Aspire-Lite behind the frozen entry gates
 **Architecture Status:** Phases 1-8 ✅ complete; Track U web cutover ✅ complete; backend Phase 8.5 active next; roadmap extended with 8.7, 9.5, and 11.5 portability milestones
+
+**Pre-Phase-9 entry gate:**
+- Complete Phase 8.5 Stripe multi-provider routing, idempotency-key usage, retry classification, and append-only payment-attempt history.
+- Complete Phase 8.7 signed Stripe webhooks, inbox-backed idempotency, tenant restoration from metadata, replay support, and async payment-state convergence.
+- Re-run the mandatory phase closeout evidence for the payment phases on the active Docker validation slice before starting module extraction.
+- Treat the current YARP gateway work as groundwork only; do not use it to skip the payment-phase closeout sequence.
 
 ---
 
