@@ -6,6 +6,7 @@ using Serilog;
 using Openpay;
 using Openpay.Entities;
 using Openpay.Entities.Request;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
 
 namespace XYDataLabs.OpenPayAdapter
 {
@@ -14,6 +15,8 @@ namespace XYDataLabs.OpenPayAdapter
         private readonly OpenpayAPI _openpayApi;
         private readonly ILogger _logger;
         private readonly ResiliencePipeline _pipeline;
+
+        public string ProviderType => PaymentProviderTypes.OpenPay;
 
         public OpenPayAdapterService(
             IOptions<OpenPayConfig> config,
