@@ -1,7 +1,7 @@
 # Architecture Evolution: Monolith to Enterprise Microservices
 
 **Last Updated:** May 10, 2026
-**Current Status:** Phase 8 Closeout Matrix Validation Passed ✅ | Track U U5 Complete ✅ | Backend Phase 8.5 Active Next 📅 | Phases 8.7, 9, 9.5, 10, 11, 11.5, 12-14 Planned 📅
+**Current Status:** Phase 8 Closeout Matrix Validation Passed ✅ | Track U U5 Complete ✅ | Phase 8.5 Complete ✅ | Phases 8.7, 9, 9.5, 10, 11, 11.5, 12-14 Planned 📅
 
 ---
 
@@ -149,8 +149,8 @@ XYDataLabs.OrderProcessingSystem.sln
 | **6** | Polish & Hardening | CachingBehavior, Redis, API versioning `/api/v1/`, health checks, CancellationToken, TimeProvider | ✅ **COMPLETE** |
 | **7** | Tenant Enforcement & Ops | TenantValidationBehavior, AuditLog, security headers, liveness/readiness checks | ✅ **COMPLETE** |
 | **8** | Event-Driven Foundation | Domain events, integration events, Outbox pattern, background publisher | 📅 Planned |
-| **8.5** | Multi-Provider Payment Architecture | Stripe migration, per-tenant provider selection, `HttpClient`-based resilience, idempotency keys | 📅 Planned |
-| **8.7** | Stripe Webhook Receiver & Async Payment Lifecycle | Signed webhooks, inbox idempotency, replay flow, tenant-aware async payment convergence | 📅 Planned |
+| **8.5** | Secondary Payment Provider Architecture | Provider-neutral routing, per-tenant provider selection, `HttpClient`-based resilience, provider-aware idempotency and reconciliation | 📅 Planned |
+| **8.7** | Provider Webhook Receiver & Async Payment Lifecycle | Signed webhooks, inbox idempotency, replay flow, tenant-aware async payment convergence for the selected secondary provider | 📅 Planned |
 | **9** | YARP Microservices (Local) | Gateway, Orders/Inventory/Notifications APIs, Docker Compose, event-based communication | 📅 Planned |
 | **9.5** | Cloud-Portable Identity Showcase | Local Keycloak portability proof for the JWT/OIDC pipeline without changing the Azure production identity model | 📅 Planned |
 | **10** | Azure Container Apps | ACA deployment, ACR, Service Bus, Entra ID + JWT, private networking | 📅 Planned |
@@ -472,133 +472,97 @@ Loose coupling, recoverable payment workflows, idempotent delivery, and a transp
 
 ---
 
-## Phase 8.5 — Multi-Provider Payment Architecture 📅
+## Phase 8.5 — Secondary Payment Provider Architecture ✅
 
-**Focus:** Add Stripe (`Stripe.net`) as a second payment provider alongside OpenPay. Both adapters run concurrently; each tenant is routed to its configured provider at runtime. No provider is removed.
+**Focus:** Keep OpenPay operational while finishing a provider-neutral payment boundary that can host a second provider selected for business fit, India viability, and testability. Runtime provider selection stays tenant-driven; no provider assumptions are allowed above the adapter boundary.
 
-### Why Add Stripe
+### Why This Phase Exists
 
-| Dimension | OpenPay (`Openpay` 1.0.27) | Stripe (`Stripe.net` v50+) |
-|-----------|---------------------------|---------------------------|
-| .NET support | .NET Framework 4.5.2 target | .NET Standard 2.0+ / .NET 8+ native |
-| Maintenance | Last release April 2024 | Active — releases weekly |
-| Async model | Sync SDK wrapped in `Task.Run()` | Async-first throughout |
-| Resilience | Service-level `ResiliencePipeline<T>` workaround | Direct `Microsoft.Extensions.Http.Resilience` on `HttpClient` |
-| Idempotency keys | Must build manually | First-class `RequestOptions.IdempotencyKey` on every call |
-| 3DS | Per-tenant `Use3DSecure` flag (manual) | Payment Intents API — 3DS handled natively by flow |
-
-Both providers remain registered and fully operational. The architecture goal is per-tenant configurability — not replacement.
+The repository already has the right long-term seam: `PaymentProvider.ProviderType`, tenant-specific payment configuration, and a generic payment gateway contract. The remaining work is to finish that seam cleanly so the system can support OpenPay plus one additional provider without leaking provider-specific types or retry rules into Application or Domain.
 
 ### Per-Tenant Provider Selection
 
-The `PaymentProvider` entity already exists with a `Use3DSecure` flag per tenant. Adding a `ProviderType` discriminator enables each tenant to declare its processor independently:
+The `PaymentProvider` entity already owns `Use3DSecure`, `IsActive`, and `ProviderType`. The runtime rule is simple: each tenant resolves its active provider from data, and the composition root wires the matching gateway implementation.
 
-```csharp
-// PaymentProvider entity extension
-public string ProviderType { get; private set; }  // "Stripe" | "OpenPay"
+This remains a runtime configuration decision. Switching a tenant's processor is a data change in `PaymentProvider`, not a code change or redeploy.
 
-// DI registration — both adapters registered via keyed services (.NET 8+)
-services.AddKeyedScoped<IPaymentAdapterService, StripeAdapterService>("Stripe");
-services.AddKeyedScoped<IPaymentAdapterService, OpenPayAdapterService>("OpenPay");
+### Resilience And Reconciliation Rules
 
-// Handler resolution — provider resolved per request from tenant config
-var adapter = serviceProvider.GetRequiredKeyedService<IPaymentAdapterService>(
-    tenant.PaymentProvider.ProviderType);
-```
+Each provider keeps its own adapter and its own transport strategy, but retry classification stays above the adapter boundary.
 
-This is a runtime configuration decision — switching a tenant's provider is a single row update in `PaymentProvider`, with no redeploy. New tenants onboard directly to Stripe; existing OpenPay tenants remain on OpenPay until they opt in to migrate.
-
-### Resilience — Per-Provider Strategy
-
-Each adapter registers its own resilience strategy appropriate to its SDK:
-
-**OpenPay** (sync SDK — `Task.Run()` wrapper, existing):
-```csharp
-// Service-level pipeline remains — unchanged from Phase 7
-services.AddResiliencePipeline("openpay", builder => { ... });
-```
-
-**Stripe** (async SDK — `HttpClient`-native):
-```csharp
-// HttpClient-level resilience — cleaner, framework-standard pattern
-services.AddHttpClient<StripeAdapterService>()
-    .AddStandardResilienceHandler();  // Microsoft.Extensions.Http.Resilience
-```
-
-Same retry + circuit breaker semantics for both, but Stripe uses the preferred `IHttpClientBuilder` composition pattern instead of the `Task.Run()` + `ResiliencePipeline<string>` workaround.
-
-### Idempotency Key Strategy (Stripe)
-
-Every Stripe charge carries an idempotency key to prevent double-charging on retries. `AttemptOrderId`, already generated per payment attempt, maps directly onto `RequestOptions.IdempotencyKey`. This is the Phase 8 Outbox Pattern complement: the Outbox guarantees at-least-once delivery to the handler; the idempotency key guarantees Stripe sees each charge attempt exactly once regardless of retry count.
-
-OpenPay does not have native idempotency support — the existing `AttemptOrderId` + `PayinLog` reconciliation pattern remains the safety net for OpenPay tenants.
-
-### Retry Policy (Stripe, Production Rules)
-
-The generic payment-retry pattern is appropriate for Stripe only when it is narrowed into an explicit enterprise retry policy. The system must not treat every failed charge as retryable.
-
-- **Retry scope is explicit** — automatic retries are allowed only for transient pre-accept failures such as connection drops before a Stripe response is confirmed, HTTP 5xx responses, or HTTP 429 with bounded backoff.
-- **Provider-accepted responses are never blindly retried** — once Stripe may have accepted the request, the attempt moves to reconciliation instead of issuing a second charge call. `PaymentAttempt` becomes the source of truth for this boundary.
-- **Customer-action failures are not retried** — insufficient funds, expired card, invalid payment details, authentication-required outcomes, fraud blocks, and hard declines are terminal attempt results that require user action or operational review.
-- **Attempt identity is stable** — one `AttemptOrderId` maps to one Stripe idempotency key and one append-only attempt history. Retries reuse the same idempotency key until the attempt is resolved.
-- **Retry budget is bounded** — retry count, backoff window, and terminal escalation path are configuration-driven and observable. Infinite or open-ended retry loops are forbidden.
-- **Unknown outcomes reconcile first** — if the local process loses certainty after sending the request, the attempt transitions to `UnknownNeedsReconciliation` and the reconciliation worker queries Stripe before any further action is taken.
-- **Append-only history is mandatory** — `PaymentAttempt` state changes and external status observations are recorded as immutable history rows so operators can reconstruct the full payment timeline.
-- **Provider portability is preserved** — retry classification lives above the adapter boundary so Stripe-specific idempotency is used where available without forcing unsafe automatic retries onto OpenPay.
+- **Retry scope is explicit** — automatic retries are allowed only for transient pre-accept failures such as connection drops, transport timeouts, or provider throttling with bounded backoff.
+- **Provider-accepted responses are never blindly retried** — once the provider may have accepted the request, the attempt moves to reconciliation instead of issuing a second charge call.
+- **Customer-action failures are not retried** — insufficient funds, expired cards, authentication-required outcomes, and hard declines remain terminal attempt results.
+- **Attempt identity is stable** — one `AttemptOrderId` maps to one external attempt identity and one append-only attempt history.
+- **Retry budget is bounded** — retry count, backoff window, and escalation path are configuration-driven and observable.
+- **Unknown outcomes reconcile first** — the attempt transitions to `UnknownNeedsReconciliation` until the provider state is confirmed.
+- **Append-only history is mandatory** — payment-attempt transitions and external observations remain immutable audit history.
+- **Provider portability is preserved** — provider-specific idempotency features are used where available without forcing unsafe assumptions on providers that do not offer them natively.
 
 ### What Gets Added
 
-- `XYDataLabs.OpenPayAdapter/StripeAdapterService.cs` — `IPaymentAdapterService` implementation using `Stripe.net`
-- `XYDataLabs.OpenPayAdapter/ServiceCollectionExtensions.cs` — register both adapters as keyed services
-- `PaymentProvider.ProviderType` column + EF migration
-- Handler updated to resolve adapter from keyed DI instead of direct injection
-- `PaymentAttempt` retry classification + reconciliation rules so Stripe retries remain idempotent, bounded, and auditable in production
-- Webhook receiver endpoint scaffolding (Phase 8.7 implements signature validation and event projection)
-
-All Application and Domain code above the adapter boundary remains unchanged.
+- Provider-neutral request defaults and composition-root wiring for payment gateways
+- Tenant-driven provider resolution with gateway/provider consistency checks
+- Secondary-provider adapter once the provider is selected and legally testable
+- Provider-aware retry classification and reconciliation rules on `PaymentAttempt`
+- Webhook receiver scaffolding for asynchronous provider events (implemented in Phase 8.7)
 
 ### Builds On
 
 - Phase 4 (multi-tenancy — `PaymentProvider` entity per tenant)
 - Phase 7 (OpenPay resilience pipeline — retained for OpenPay tenants)
-- Phase 8 (Outbox Pattern — `AttemptOrderId` becomes Stripe idempotency key)
+- Phase 8 (Outbox and Inbox patterns for durable payment-attempt persistence and reconciliation)
 
 ### Outcome
 
-Both providers run concurrently. Each tenant's processor is a data-driven runtime decision. New tenants onboard to Stripe (async-native, idempotency-safe, actively maintained). Existing OpenPay tenants continue unaffected. The `IPaymentAdapterService` contract abstracts all provider-specific differences from the application layer.
+The payment runtime is provider-neutral above the adapter boundary. OpenPay remains the current live provider. Razorpay is implemented as the secondary provider with keyed DI, Polly resilience, and seed data per tenant (`IsActive = false` until a tenant explicitly enables it). Provider-aware retry classification is live: customer-action failures (`PaymentProviderCustomerActionException`) mark the attempt `Failed` (terminal); all other exceptions trigger `UnknownNeedsReconciliation` for reconciliation-worker recovery. Architecture boundary tests assert the Application layer has no dependency on either adapter assembly.
+
+### Completed Items (Phase 8.5)
+
+- `XYDataLabs.RazorpayAdapter` — full adapter project (SDK, Polly, config validation, keyed DI)
+- `IPaymentProviderGateway` keyed registration for both OpenPay and Razorpay; Application `StartupHelper` factory resolves per-tenant at runtime
+- `PaymentProviderCustomerActionException` in SharedKernel — cross-cutting typed exception for terminal declines
+- `ProcessPaymentCommandHandler` catch differentiation — customer-action → `Failed`; transient/unknown → `UnknownNeedsReconciliation`
+- `OpenPayPaymentGateway` — classifies HTTP 402/422 `OpenpayException` as customer-action
+- `RazorpayPaymentGateway` — classifies `BadRequestError` as customer-action
+- `IsProduction` flag on both `OpenPayConfig` and `RazorpayConfig`; default `false` in all environments (dev, stg, prod, local); startup logs `"TEST mode"` or `"LIVE mode"` for each adapter on initialisation
+- `RazorpayConfigValidator` key-prefix cross-check: `rzp_live_*` key with `IsProduction=false` fails at startup; `rzp_test_*` key with `IsProduction=true` fails at startup; prevents misconfigured live keys silently charging real customers
+- Seed data, config sections, and docker-compose env vars for Razorpay across all environments
+- Unit tests: `RazorpayOptionsValidationTests`, `RazorpayPaymentGatewayTests`, `RazorpayConfigValidatorTests` (key-prefix vs mode cross-validation — 9 tests), retry classification tests in `ProcessPaymentHandlerTests`
+- Architecture tests: `Application_Should_Not_Depend_On_OpenPayAdapter`, `Application_Should_Not_Depend_On_RazorpayAdapter`
 
 ---
 
-## Phase 8.7 — Stripe Webhook Receiver & Event-Driven Payment Lifecycle 📅
+## Phase 8.7 — Provider Webhook Receiver & Event-Driven Payment Lifecycle 📅
 
-**Focus:** Process Stripe-originated payment lifecycle events securely and idempotently. This phase decouples local payment state from synchronous adapter polling — Stripe authoritatively pushes `payment_intent.succeeded`, `charge.refunded`, `charge.dispute.created`, and similar events to our backend.
+**Focus:** Process asynchronous payment lifecycle events from the selected secondary provider securely and idempotently. This phase decouples local payment state from synchronous adapter polling whenever the provider supports authoritative webhook delivery.
 
 ### Why This Phase Is Required
 
-Real-world payment systems cannot rely on synchronous response data alone. Asynchronous outcomes (3DS challenge completion, delayed bank authorisation, refunds, chargebacks, dispute lifecycle) arrive **after** the original request has returned. Without a webhook pipeline:
+Real-world payment systems cannot rely on synchronous response data alone. Asynchronous outcomes such as 3DS challenge completion, delayed bank authorisation, refunds, chargebacks, and dispute lifecycle changes arrive **after** the original request has returned. Without a webhook pipeline:
 - 3DS-authorised payments stay marked `UnknownNeedsReconciliation` indefinitely
-- Refunds initiated from the Stripe dashboard never reach our domain model
+- Refunds or reversals initiated outside the original request path never reach our domain model
 - Chargebacks/disputes are missed until manual finance reconciliation
 
 ### Key Deliverables
 
-- **Webhook endpoint** — `POST /api/v1/webhooks/stripe` with raw-body buffering required for HMAC validation (cannot use parsed JSON model binding)
-- **Signature validation** — `Stripe.EventUtility.ConstructEvent(json, signatureHeader, webhookSecret)` rejects forged or replayed payloads
-- **Webhook secret per environment** — stored in Key Vault, rotated independently from API keys; environment-scoped (test/live)
-- **Inbox idempotency** — every Stripe event has a unique `event.id`; Inbox table (Phase 8) deduplicates webhook deliveries (Stripe retries up to 3 days on non-2xx)
-- **Event-to-domain mapping** — typed handlers per Stripe event type (`PaymentIntentSucceededHandler`, `ChargeRefundedHandler`, `ChargeDisputeCreatedHandler`)
+- **Webhook endpoint** — provider-scoped endpoint with raw-body buffering required for HMAC validation when the provider signs the raw payload
+- **Signature validation** — provider-specific HMAC or signature verification before business deserialization
+- **Webhook secret per environment** — stored in Key Vault and rotated independently from API keys
+- **Inbox idempotency** — every provider event must map to a stable external event identity; Inbox deduplicates webhook deliveries
+- **Event-to-domain mapping** — typed handlers per external event category (`payment succeeded`, `refund`, `dispute`, and similar lifecycle signals)
 - **Outbox bridge** — webhook-derived state transitions emit domain events through the Outbox so internal subscribers (notifications, fulfilment) see them through the same pipeline as locally-originated events
-- **Tenant resolution from metadata** — Stripe `metadata.tenantId` set on every PaymentIntent at creation; webhook handler restores tenant context before invoking domain logic
-- **Replay endpoint** (admin-only) — `POST /admin/webhooks/stripe/replay/{eventId}` re-processes a specific event from Stripe's event log when reconciliation is needed
-- **Local development** — Stripe CLI (`stripe listen --forward-to https://localhost:5021/api/v1/webhooks/stripe`) for testing without a public endpoint
-- **Failure isolation** — webhook returns 2xx as soon as the event is durably persisted to Inbox; downstream processing happens asynchronously so a slow handler does not cause Stripe to retry
+- **Tenant resolution from metadata** — outgoing provider requests must stamp enough tenant metadata for webhook restoration before any DB access
+- **Replay endpoint** (admin-only) — re-process a specific provider event when reconciliation is needed
+- **Local development** — use the selected provider's sandbox and local forwarding toolchain if a public callback endpoint is required
+- **Failure isolation** — webhook returns 2xx as soon as the event is durably persisted to Inbox; downstream processing happens asynchronously so a slow handler does not cause provider retries
 
 ### Security Rules (Non-Negotiable)
 
-- **Never trust webhook payload without signature validation** — drop the request before any deserialization if signature check fails
-- **Replay attack mitigation** — reject events older than 5 minutes (per `event.created` timestamp); legitimate retries always carry the same `event.id` so Inbox handles those correctly
+- **Never trust webhook payload without signature validation** — drop the request before any business deserialization if signature check fails
+- **Replay attack mitigation** — reject stale signed events according to the provider's timestamp tolerance; legitimate retries must preserve the same event identity so Inbox can deduplicate them
 - **Tenant isolation in webhook** — handler must resolve tenant from `metadata.tenantId` and apply tenant context filters before any DB access; never trust customer ID alone
-- **Webhook secret rotation** — support overlap window with two valid secrets during rotation (`Stripe.WebhookEndpoint.Update` + dual-secret validator)
+- **Webhook secret rotation** — support overlap windows and dual-secret validation when the provider supports staged rotation
 
 ### Connection to Phase 10
 
@@ -607,11 +571,11 @@ When Service Bus replaces the in-memory event bus in Phase 10, webhook-derived e
 ### Builds On
 
 - Phase 8 (Inbox pattern for idempotency, Outbox for downstream propagation)
-- Phase 8.5 (Stripe SDK integration, `metadata.tenantId` convention)
+- Phase 8.5 (secondary-provider integration and tenant metadata convention)
 
 ### Outcome
 
-Production-grade asynchronous payment lifecycle handling. Stripe is the system of record for charge state; our domain model converges via signed, idempotent, tenant-aware webhook events. Refund and dispute events propagate to internal subscribers through the same Outbox pipeline as locally-originated changes.
+Production-grade asynchronous payment lifecycle handling for the selected secondary provider. Provider-originated refunds, disputes, and delayed confirmations converge on the same tenant-aware Outbox pipeline as locally-originated payment state changes.
 
 ---
 
@@ -855,7 +819,7 @@ Reviewed against the canonical Microsoft `dotnet-backend-blueprint-v-10` referen
 - **`XYDataLabs.OrderProcessingSystem.ServiceDefaults` project** — new shared project referenced by every service host. Houses the canonical extension chain `AddServiceDefaults()` → `ConfigureOpenTelemetry()` + `AddDefaultHealthChecks()` + `AddServiceDiscovery()` + `ConfigureHttpClientDefaults(http => http.AddStandardResilienceHandler())`. Today these concerns are split between `SharedKernel` and individual `Program.cs` files; consolidating them is a prerequisite for clean per-service composition. Reinforces ADR-012 (OpenTelemetry dual export).
 - **`MapDefaultEndpoints()` extension** — standardizes `/health/ready` (full readiness, gates traffic) and `/health/alive` (liveness only) across every service host. Aligns with ADR-015 (deployment readiness probes) and removes duplicated health endpoint registration in each service.
 - **`IConfigureNamedOptions<JwtBearerOptions>` setup pattern** — replaces inline JWT wiring in `Program.cs` with a dedicated `JwtBearerOptionsSetup` registered via `ConfigureOptions<>()`. Required mechanism for Phase 9.5 (Keycloak portability) which adds a second JWT scheme via `AddPolicyScheme`.
-- **`IExceptionHandler` + `AddProblemDetails` + `UseExceptionHandler`** — confirm or migrate to the .NET 8+ idiomatic exception pipeline producing RFC 7807 ProblemDetails. This is the contract Stripe webhooks (Phase 8.7) and external partners expect; it must be in place before microservices accept inbound traffic from a gateway.
+- **`IExceptionHandler` + `AddProblemDetails` + `UseExceptionHandler`** — confirm or migrate to the .NET 8+ idiomatic exception pipeline producing RFC 7807 ProblemDetails. This is the contract provider webhooks (Phase 8.7) and external partners expect; it must be in place before microservices accept inbound traffic from a gateway.
 - **EF Core `UseAsyncSeeding` for reference data** — EF 9 idiomatic seeding hook on `DbContextOptionsBuilder`. Replaces ad-hoc startup seed code; particularly useful before Phase 11.5's PostgreSQL pilot which re-seeds the Notifications module on a different RDBMS provider.
 
 **Deliberately not adopted from the blueprint:** vertical-slice replacement of Clean Architecture (ADR-011 enforces our domain boundaries), Keycloak as production IdP (Entra ID + Managed Identity remain authoritative — Phase 9.5 only proves portability), PostgreSQL as primary RDBMS (Phase 11.5 pilots one module only), single-workflow CI/CD (our split workflow is intentional per `architect-patterns.md`).
@@ -1330,9 +1294,9 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
      │
      ├── Phase 8     ─── 📅 Event-driven core (Outbox + events inside monolith)
      │
-     ├── Phase 8.5   ─── 📅 Multi-provider payment (Stripe alongside OpenPay)
+    ├── Phase 8.5   ─── ✅ Multi-provider payment (OpenPay + Razorpay, keyed DI, retry classification)
      │
-     ├── Phase 8.7   ─── 📅 Stripe webhooks (signed, idempotent, tenant-aware)
+    ├── Phase 8.7   ─── 📅 Provider webhooks (signed, idempotent, tenant-aware)
      │
      ├── Phase 9     ─── 📅 Extract services locally (YARP + Docker Compose + Aspire-Lite)
      │
@@ -1356,8 +1320,8 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 | Transition | Why it must come first |
 |------------|----------------------|
 | Phase 7 before 8 | Tenant safety must be enforced before events carry tenant context |
-| Phase 8 before 8.5 | Outbox + Inbox required for Stripe idempotency keys and webhook deduplication |
-| Phase 8.5 before 8.7 | Stripe SDK + tenant metadata convention must exist before webhook handlers can resolve context |
+| Phase 8 before 8.5 | Outbox + Inbox required for provider-aware reconciliation and webhook deduplication |
+| Phase 8.5 before 8.7 | Secondary-provider integration and tenant metadata convention must exist before webhook handlers can resolve context |
 | Phase 8.7 before 9 | Webhook receiver lives in monolith first; carried unchanged into microservice extraction |
 | Phase 8 before 9 | Events must exist before services can communicate asynchronously |
 | Phase 9 before 9.5 | Docker Compose infrastructure required to host local Keycloak container |
@@ -1633,4 +1597,4 @@ All technical skills from a typical Azure .NET senior role are fully covered or 
 ---
 
 **Last Updated:** May 10, 2026
-**Status:** Phase 8 Closeout Matrix Validation Passed ✅ | Track U U5 Complete ✅ | Backend Phase 8.5 Active Next 📅 | Phases 8.7, 9, 9.5, 10, 11, 11.5, 12-14 Planned 📅
+**Status:** Phase 8 Closeout Matrix Validation Passed ✅ | Track U U5 Complete ✅ | Phase 8.5 Complete ✅ | Phases 8.7, 9, 9.5, 10, 11, 11.5, 12-14 Planned 📅

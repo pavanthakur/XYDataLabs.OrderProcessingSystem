@@ -19,6 +19,11 @@
     "IsProduction": false,
     "RedirectUrl": ""
   },
+  "Razorpay": {
+    "MerchantId": "__RAZORPAY_MERCHANT_ID__",
+    "PrivateKey": "__RAZORPAY_PRIVATE_KEY__",
+    "IsProduction": false
+  },
   "Observability": {
     "EnableEfSensitiveDataLogging": true
   },

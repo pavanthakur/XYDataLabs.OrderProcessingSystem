@@ -25,6 +25,10 @@ namespace XYDataLabs.OrderProcessingSystem.Domain.Entities
         public bool IsActive { get; set; }
 
         [Required]
+        [MaxLength(50)]
+        public string ProviderType { get; set; } = "OpenPay";
+
+        [Required]
         public bool Use3DSecure { get; set; } = true;
     }
 }

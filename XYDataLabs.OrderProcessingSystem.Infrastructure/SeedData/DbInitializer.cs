@@ -2,6 +2,7 @@
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -44,6 +45,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
             var startupSeedTenants = GetStartupSeedTenants(context);
 
             SeedOpenpayProviders(context, startupSeedTenants);
+            SeedRazorpayProviders(context, startupSeedTenants);
 
             foreach (var seedTenant in startupSeedTenants)
             {
@@ -161,6 +163,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                     APIUrl = "https://sandbox-api.openpay.mx/v1",
                     IsActive = true,
                     IsProduction = false,
+                    ProviderType = PaymentProviderTypes.OpenPay,
                     Use3DSecure = true,
                     TenantId = seedTenant.TenantId,
                     CreatedBy = 1,
@@ -168,6 +171,38 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                 };
 
                 context.PaymentProviders.Add(openPayProvider);
+            }
+
+            context.SaveChanges();
+        }
+
+        private static void SeedRazorpayProviders(OrderProcessingSystemDbContext context, IReadOnlyList<StartupSeedTenant> seedTenants)
+        {
+            foreach (var seedTenant in seedTenants)
+            {
+                var providerExists = context.PaymentProviders.Any(provider =>
+                    provider.TenantId == seedTenant.TenantId &&
+                    provider.Name == "Razorpay");
+
+                if (providerExists)
+                {
+                    continue;
+                }
+
+                var razorpayProvider = new PaymentProvider
+                {
+                    Name = "Razorpay",
+                    APIUrl = "https://api.razorpay.com/v1",
+                    IsActive = false,
+                    IsProduction = false,
+                    ProviderType = PaymentProviderTypes.Razorpay,
+                    Use3DSecure = false,
+                    TenantId = seedTenant.TenantId,
+                    CreatedBy = 1,
+                    CreatedDate = DateTime.UtcNow
+                };
+
+                context.PaymentProviders.Add(razorpayProvider);
             }
 
             context.SaveChanges();
@@ -242,6 +277,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                     continue;
 
                 SeedOpenpayProviders(dedicatedContext, new[] { seedTenant });
+                SeedRazorpayProviders(dedicatedContext, new[] { seedTenant });
 
                 SeedTenantSampleData(dedicatedContext, seedTenant);
             }

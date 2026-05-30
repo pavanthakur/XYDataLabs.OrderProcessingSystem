@@ -74,7 +74,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 
                     b.HasIndex("TenantId", "EntityName", "EntityId");
 
-                    b.ToTable("AuditLogs");
+                    b.ToTable("AuditLogs", (string)null);
                 });
 
             modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.BillingCustomer", b =>
@@ -134,7 +134,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 
                     b.HasIndex("TenantId");
 
-                    b.ToTable("BillingCustomers");
+                    b.ToTable("BillingCustomers", (string)null);
                 });
 
             modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.BillingCustomerKeyInfo", b =>
@@ -179,7 +179,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 
                     b.HasIndex("TenantId");
 
-                    b.ToTable("BillingCustomerKeyInfos");
+                    b.ToTable("BillingCustomerKeyInfos", (string)null);
                 });
 
             modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.CardTransaction", b =>
@@ -302,7 +302,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 
                     b.HasIndex("TenantId", "CustomerOrderId");
 
-                    b.ToTable("CardTransactions");
+                    b.ToTable("CardTransactions", (string)null);
                 });
 
             modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.Customer", b =>
@@ -340,7 +340,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 
                     b.HasIndex("TenantId");
 
-                    b.ToTable("Customers");
+                    b.ToTable("Customers", (string)null);
                 });
 
             modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.InboxMessage", b =>
@@ -376,7 +376,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                     b.HasIndex("TenantId", "MessageId")
                         .IsUnique();
 
-                    b.ToTable("InboxMessages");
+                    b.ToTable("InboxMessages", (string)null);
                 });
 
             modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.Order", b =>
@@ -430,7 +430,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 
                     b.HasIndex("TenantId", "CustomerId", "Status");
 
-                    b.ToTable("Orders");
+                    b.ToTable("Orders", (string)null);
                 });
 
             modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.OrderProduct", b =>
@@ -465,7 +465,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 
                     b.HasIndex("TenantId");
 
-                    b.ToTable("OrderProducts");
+                    b.ToTable("OrderProducts", (string)null);
                 });
 
             modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.OutboxMessage", b =>
@@ -541,7 +541,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 
                     b.HasIndex("ProcessedAt", "LockExpiry", "OccurredUtc");
 
-                    b.ToTable("OutboxMessages");
+                    b.ToTable("OutboxMessages", (string)null);
                 });
 
             modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.PayinLog", b =>
@@ -637,7 +637,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 
                     b.HasIndex("TenantId", "AttemptOrderId");
 
-                    b.ToTable("PayinLogs");
+                    b.ToTable("PayinLogs", (string)null);
                 });
 
             modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.PayinLogDetails", b =>
@@ -689,7 +689,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 
                     b.HasIndex("TenantId");
 
-                    b.ToTable("PayinLogDetails");
+                    b.ToTable("PayinLogDetails", (string)null);
                 });
 
             modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.PaymentAttempt", b =>
@@ -769,7 +769,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                     b.HasIndex("TenantId", "CustomerOrderId", "AttemptNumber")
                         .IsUnique();
 
-                    b.ToTable("PaymentAttempts");
+                    b.ToTable("PaymentAttempts", (string)null);
                 });
 
             modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.PaymentAttemptHistory", b =>
@@ -820,7 +820,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 
                     b.HasIndex("TenantId", "AttemptOrderId");
 
-                    b.ToTable("PaymentAttemptHistories");
+                    b.ToTable("PaymentAttemptHistories", (string)null);
                 });
 
             modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.PaymentMethod", b =>
@@ -865,7 +865,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                     b.HasIndex("Token")
                         .IsUnique();
 
-                    b.ToTable("PaymentMethods");
+                    b.ToTable("PaymentMethods", (string)null);
                 });
 
             modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.PaymentProvider", b =>
@@ -898,6 +898,11 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("ProviderType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<int>("TenantId")
                         .HasColumnType("int");
 
@@ -914,7 +919,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 
                     b.HasIndex("TenantId");
 
-                    b.ToTable("PaymentProviders");
+                    b.ToTable("PaymentProviders", (string)null);
                 });
 
             modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.Product", b =>
@@ -956,7 +961,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 
                     b.HasIndex("TenantId");
 
-                    b.ToTable("Products");
+                    b.ToTable("Products", (string)null);
                 });
 
             modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.Tenant", b =>
@@ -1012,7 +1017,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
                     b.HasIndex("ExternalId")
                         .IsUnique();
 
-                    b.ToTable("Tenants");
+                    b.ToTable("Tenants", (string)null);
                 });
 
             modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.TransactionStatusHistory", b =>
@@ -1077,7 +1082,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations
 
                     b.HasIndex("TenantId", "TransactionReferenceId");
 
-                    b.ToTable("TransactionStatusHistories");
+                    b.ToTable("TransactionStatusHistories", (string)null);
                 });
 
             modelBuilder.Entity("XYDataLabs.OrderProcessingSystem.Domain.Entities.AuditLog", b =>

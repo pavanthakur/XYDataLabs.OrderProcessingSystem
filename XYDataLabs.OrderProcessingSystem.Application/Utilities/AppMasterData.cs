@@ -39,6 +39,26 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Utilities
                 p.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && p.TenantId == tenantId);
         }
 
+        public PaymentProvider? GetProviderByTypeForTenant(string providerType, int tenantId)
+        {
+            return _paymentProviders.FirstOrDefault(p =>
+                p.ProviderType.Equals(providerType, StringComparison.OrdinalIgnoreCase) && p.TenantId == tenantId);
+        }
+
+        public PaymentProvider? GetActiveProviderForTenant(int tenantId)
+        {
+            var activeProviders = _paymentProviders
+                .Where(p => p.TenantId == tenantId && p.IsActive)
+                .ToList();
+
+            return activeProviders.Count switch
+            {
+                0 => null,
+                1 => activeProviders[0],
+                _ => throw new InvalidOperationException($"Multiple active payment providers are configured for tenant {tenantId}.")
+            };
+        }
+
         public void RefreshData()
         {
             InitializeData();

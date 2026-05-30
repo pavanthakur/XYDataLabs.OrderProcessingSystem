@@ -23,11 +23,14 @@ using System.Runtime.CompilerServices;
 using XYDataLabs.OrderProcessingSystem.Application.Utilities;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Configuration;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
+using XYDataLabs.RazorpayAdapter;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.Multitenancy;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Orders;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Customers;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Payments;
+using XYDataLabs.OpenPayAdapter;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
 
 // Bootstrap Serilog as early as possible so Log.* writes go to console immediately
 // Azure App Service Deployment - Fix for Application Not Starting
@@ -197,6 +200,13 @@ builder.Services.AddCors(options =>
 
 builder.InjectInfrastructureDependencies();
 builder.InjectApplicationDependencies();
+builder.Services.AddOptions<PaymentGatewayRequestDefaults>()
+    .Bind(builder.Configuration.GetSection("OpenPay"))
+    .Validate(defaults => !string.IsNullOrWhiteSpace(defaults.RedirectUrl), "OpenPay:RedirectUrl is required.")
+    .Validate(defaults => !string.IsNullOrWhiteSpace(defaults.DeviceSessionId), "OpenPay:DeviceSessionId is required.")
+    .ValidateOnStart();
+builder.Services.AddOpenPayAdapter(builder.Configuration);
+builder.Services.AddRazorpayAdapter(builder.Configuration);
 builder.Services.AddProblemDetails();
 
 // Health checks — /health/live (liveness), /health/ready (SQL + Redis), /health (backward compat)

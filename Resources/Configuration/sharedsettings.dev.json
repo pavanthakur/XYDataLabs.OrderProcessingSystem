@@ -21,7 +21,12 @@
     "DeviceSessionId": "__OPENPAY_DEVICE_SESSION_ID__",
     "IsProduction": false,
     "RedirectUrl": "",
-    "_Comment": "RedirectUrl is auto-resolved from ApiSettings:UI locally/Docker. In Azure, set via Key Vault (OpenPay--RedirectUrl) to the public domain URL."
+    "_Comment": "RedirectUrl is auto-resolved from ApiSettings:API locally/Docker (applies to both OpenPayConfig and PaymentGatewayRequestDefaults). In Azure, set via Key Vault (OpenPay--RedirectUrl) to the public callback URL."
+  },
+  "Razorpay": {
+    "MerchantId": "__RAZORPAY_MERCHANT_ID__",
+    "PrivateKey": "__RAZORPAY_PRIVATE_KEY__",
+    "IsProduction": false
   },
   "Observability": {
     "EnableEfSensitiveDataLogging": true

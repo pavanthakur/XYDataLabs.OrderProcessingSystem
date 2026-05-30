@@ -1,7 +1,6 @@
 # ADR-015: Deployment Readiness Probes Must Use Health Endpoints, Not Swagger
 
-## Status
-Accepted
+**Status:** Accepted
 
 ## Context
 

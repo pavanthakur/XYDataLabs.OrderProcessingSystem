@@ -24,6 +24,7 @@ practice Azure cloud deployment, CI/CD automation, and enterprise DevOps pattern
 | `XYDataLabs.OrderProcessingSystem.API` | ASP.NET Core Web API — thin controllers, composition root, Swagger |
 | `XYDataLabs.OrderProcessingSystem.Application` | Hand-rolled CQRS (ICommand/IQuery/IDispatcher), DTOs, pipeline behaviors |
 | `XYDataLabs.OrderProcessingSystem.Domain` | Core entities, domain logic (DDD) — zero dependencies |
+| `XYDataLabs.OrderProcessingSystem.Gateway` | YARP gateway for local modular routing and frontend/API entry-point experiments |
 | `XYDataLabs.OrderProcessingSystem.Infrastructure` | EF Core, SQL Server, data access |
 | `XYDataLabs.OrderProcessingSystem.SharedKernel` | Result<T>, constants, observability, multi-tenancy |
 | `XYDataLabs.OpenPayAdapter` | OpenPay payment integration |
@@ -40,6 +41,7 @@ Frontend workspace:
 | `XYDataLabs.OrderProcessingSystem.Domain.Tests` | Entity unit tests (xUnit, FluentAssertions) |
 | `XYDataLabs.OrderProcessingSystem.Application.Tests` | CQRS handler unit tests (xUnit, Moq, Bogus) |
 | `XYDataLabs.OrderProcessingSystem.API.Tests` | Controller unit tests |
+| `XYDataLabs.OrderProcessingSystem.Gateway.Tests` | Gateway routing and host-behavior tests |
 | `XYDataLabs.OrderProcessingSystem.Integration.Tests` | End-to-end tests (Testcontainers + WebApplicationFactory) |
 | `XYDataLabs.OrderProcessingSystem.Architecture.Tests` | NetArchTest layer boundary enforcement |
 
@@ -74,14 +76,19 @@ Frontend workspace:
 │   ├── configure-secrets-and-run.ps1
 │   └── validate-github-app-config.ps1
 │
+├── automation/                    # Payment journey automation workspace and dry-run/reporting assets
+│
 ├── frontend/                      # React web/mobile workspace + shared packages
 │   ├── apps/
 │   └── packages/
 │
-├── tests/                         # All test projects (5 projects)
+├── templates/                     # Layer 1 template source and packaging projects
+│
+├── tests/                         # All test projects (6 projects)
 │   ├── XYDataLabs.OrderProcessingSystem.Domain.Tests/
 │   ├── XYDataLabs.OrderProcessingSystem.Application.Tests/
 │   ├── XYDataLabs.OrderProcessingSystem.API.Tests/
+│   ├── XYDataLabs.OrderProcessingSystem.Gateway.Tests/
 │   ├── XYDataLabs.OrderProcessingSystem.Integration.Tests/
 │   └── XYDataLabs.OrderProcessingSystem.Architecture.Tests/
 │
@@ -97,6 +104,7 @@ Frontend workspace:
 │
 ├── TROUBLESHOOTING-INDEX.md       # ← Quick troubleshooting guide with links
 ├── ARCHITECTURE-EVOLUTION.md      # 14-phase monolith → microservices roadmap
+├── XYDataLabs.OrderProcessingSystem.Gateway/ # YARP gateway project
 ├── test-bootstrap-dry-run.ps1     # Dry-run test for bootstrap workflow
 ├── test-pre-deployment-validation.ps1  # Local test for pre-deployment validation
 ├── test-recommended-next-steps.ps1     # Test recommended next steps after bootstrap
@@ -362,6 +370,10 @@ This matrix shows which instructions auto-attach for common file locations:
 | Skill | File | Use when |
 |-------|------|----------|
 | Azure Deployment Operations | `.github/skills/azure-deployment-operations/SKILL.md` | Working on Azure bootstrap, deployment workflows, OIDC validation, App Service rollout checks, Bicep preflight, or deployment troubleshooting |
+| CQRS Backend Implementation | `.github/skills/cqrs-backend-implementation/SKILL.md` | Working on C# backend code: Domain entities, CQRS handlers, DTOs, Infrastructure data access, API controllers, migrations, or backend test coverage |
+| Code Review Guardrails | `.github/skills/code-review-guardrails/SKILL.md` | Reviewing code changes for architecture compliance, tenant safety, security issues, CQRS correctness, migration safety, or missing backend test coverage |
+| Completion Check Governance | `.github/skills/completion-check-governance/SKILL.md` | Closing out a task with the repo-standard completion gate: build, tests, secret scan, documentation, automation, Copilot-context checks, and deferral decisions |
+| Context Audit Governance | `.github/skills/context-audit-governance/SKILL.md` | Detects stale AI context by diffing memory files, discovery surfaces, and repo facts against the live codebase |
 
 ### Reusable agent prompts (type in VS Code Chat → Agent mode)
 | Prompt | Command | Purpose |

@@ -1,12 +1,9 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Moq;
-using Openpay.Entities;
-using Openpay.Entities.Request;
-using XYDataLabs.OpenPayAdapter;
 using XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
-using OpenPayCustomer = Openpay.Entities.Customer;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers;
 
@@ -95,14 +92,14 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
         await handler.HandleAsync(BuildProcessPaymentCommand());
 
         // Assert — CreateCustomerAsync must NOT be called when the customer is already in DB
-        MockOpenPayAdapter.Verify(
-            s => s.CreateCustomerAsync(It.IsAny<OpenPayCustomer>()),
+        MockPaymentGateway.Verify(
+            s => s.CreateCustomerAsync(It.IsAny<PaymentGatewayCreateCustomerRequest>(), It.IsAny<CancellationToken>()),
             Times.Never,
-            "CreateCustomerAsync in OpenPay must be skipped for repeat customers");
+            "CreateCustomerAsync in the payment gateway must be skipped for repeat customers");
 
         // CreateCardTokenAsync and CreateChargeAsync should still run
-        MockOpenPayAdapter.Verify(s => s.CreateCardTokenAsync(It.IsAny<Card>()), Times.Once);
-        MockOpenPayAdapter.Verify(s => s.CreateChargeAsync(It.IsAny<ChargeRequest>()), Times.Once);
+        MockPaymentGateway.Verify(s => s.CreateCardTokenAsync(It.IsAny<PaymentGatewayCreateCardTokenRequest>(), It.IsAny<CancellationToken>()), Times.Once);
+        MockPaymentGateway.Verify(s => s.CreateChargeAsync(It.IsAny<PaymentGatewayCreateChargeRequest>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -207,15 +204,15 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
     }
 
     [Fact]
-    public async Task HandleAsync_WhenOpenPayChargeFails_ShouldDeactivateOrphanedPaymentMethod()
+    public async Task HandleAsync_WhenProviderChargeFails_ShouldDeactivateOrphanedPaymentMethod()
     {
         // Arrange — fail at charge creation (after PaymentMethod has been persisted)
         SetupPaymentDbSets();
 
         // Customer creation succeeds so paymentMethod variable is set before the exception
-        MockOpenPayAdapter
-            .Setup(s => s.CreateCustomerAsync(It.IsAny<OpenPayCustomer>()))
-            .ThrowsAsync(new Exception("OpenPay unavailable"));
+        MockPaymentGateway
+            .Setup(s => s.CreateCustomerAsync(It.IsAny<PaymentGatewayCreateCustomerRequest>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Payment provider unavailable"));
 
         // Capture Update calls on PaymentMethods
         Domain.Entities.PaymentMethod? deactivatedPm = null;
@@ -245,5 +242,55 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
             db => db.SaveChangesAsync(CancellationToken.None),
             Times.AtLeastOnce,
             "deactivation SaveChangesAsync must use CancellationToken.None so it is not cancelled");
+    }
+
+    // ------------------------------------------------------------------ Provider-aware retry classification
+
+    [Fact]
+    public async Task HandleAsync_WhenCustomerActionException_ShouldMarkAttemptAsFailed_NotReconciliation()
+    {
+        // Arrange — gateway throws PaymentProviderCustomerActionException (card declined, insufficient funds)
+        SetupPaymentDbSets();
+
+        MockPaymentGateway
+            .Setup(s => s.CreateCustomerAsync(It.IsAny<PaymentGatewayCreateCustomerRequest>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new PaymentProviderCustomerActionException("Card declined by issuer"));
+
+        var handler = CreateProcessPaymentHandler();
+
+        // Act
+        var act = () => handler.HandleAsync(BuildProcessPaymentCommand());
+        await act.Should().ThrowAsync<InvalidOperationException>();
+
+        // Assert — attempt must be terminal Failed, not UnknownNeedsReconciliation
+        CapturedPaymentAttempts.Should().ContainSingle();
+        CapturedPaymentAttempts.Single().Status
+            .Should().Be(PaymentAttemptStatus.Failed,
+                because: "a definitive customer-action failure must mark the attempt as Failed " +
+                         "with no reconciliation required");
+    }
+
+    [Fact]
+    public async Task HandleAsync_WhenGenericProviderException_ShouldMarkAttemptAsUnknownForReconciliation()
+    {
+        // Arrange — gateway throws a non-customer-action exception (timeout, network error, etc.)
+        SetupPaymentDbSets();
+
+        MockPaymentGateway
+            .Setup(s => s.CreateCustomerAsync(It.IsAny<PaymentGatewayCreateCustomerRequest>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new TimeoutException("Provider gateway timeout"));
+
+        var handler = CreateProcessPaymentHandler();
+
+        // Act
+        var act = () => handler.HandleAsync(BuildProcessPaymentCommand());
+        await act.Should().ThrowAsync<InvalidOperationException>();
+
+        // Assert — attempt must go to reconciliation, not Failed
+        CapturedPaymentAttempts.Should().ContainSingle();
+        CapturedPaymentAttempts.Single().Status
+            .Should().Be(PaymentAttemptStatus.UnknownNeedsReconciliation,
+                because: "a transient or ambiguous exception must place the attempt in " +
+                         "UnknownNeedsReconciliation so the reconciliation worker can recover it");
     }
 }

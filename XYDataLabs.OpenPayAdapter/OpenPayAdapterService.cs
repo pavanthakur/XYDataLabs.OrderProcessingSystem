@@ -26,6 +26,9 @@ namespace XYDataLabs.OpenPayAdapter
             _logger = logger;
             _openpayApi = new OpenpayAPI(config.Value.PrivateKey, config.Value.MerchantId, config.Value.IsProduction);
             _pipeline = pipelineProvider.GetPipeline("openpay");
+
+            var mode = config.Value.IsProduction ? "LIVE" : "TEST";
+            _logger.Information("OpenPayAdapterService initialized in {Mode} mode", mode);
         }
 
         public async Task<Customer> CreateCustomerAsync(Customer customer)

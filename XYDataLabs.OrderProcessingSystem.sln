@@ -384,6 +384,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XYDataLabs.OrderProcessingS
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XYDataLabs.OrderProcessingSystem.Gateway.Tests", "tests\XYDataLabs.OrderProcessingSystem.Gateway.Tests\XYDataLabs.OrderProcessingSystem.Gateway.Tests.csproj", "{18E98AB6-B78E-4BD1-B910-6621CEDCF593}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XYDataLabs.RazorpayAdapter", "XYDataLabs.RazorpayAdapter\XYDataLabs.RazorpayAdapter.csproj", "{E5667929-C113-4ED0-9ED1-2BFF086FD56F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -557,6 +559,18 @@ Global
 		{18E98AB6-B78E-4BD1-B910-6621CEDCF593}.Release|x64.Build.0 = Release|Any CPU
 		{18E98AB6-B78E-4BD1-B910-6621CEDCF593}.Release|x86.ActiveCfg = Release|Any CPU
 		{18E98AB6-B78E-4BD1-B910-6621CEDCF593}.Release|x86.Build.0 = Release|Any CPU
+		{E5667929-C113-4ED0-9ED1-2BFF086FD56F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E5667929-C113-4ED0-9ED1-2BFF086FD56F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E5667929-C113-4ED0-9ED1-2BFF086FD56F}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{E5667929-C113-4ED0-9ED1-2BFF086FD56F}.Debug|x64.Build.0 = Debug|Any CPU
+		{E5667929-C113-4ED0-9ED1-2BFF086FD56F}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{E5667929-C113-4ED0-9ED1-2BFF086FD56F}.Debug|x86.Build.0 = Debug|Any CPU
+		{E5667929-C113-4ED0-9ED1-2BFF086FD56F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E5667929-C113-4ED0-9ED1-2BFF086FD56F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E5667929-C113-4ED0-9ED1-2BFF086FD56F}.Release|x64.ActiveCfg = Release|Any CPU
+		{E5667929-C113-4ED0-9ED1-2BFF086FD56F}.Release|x64.Build.0 = Release|Any CPU
+		{E5667929-C113-4ED0-9ED1-2BFF086FD56F}.Release|x86.ActiveCfg = Release|Any CPU
+		{E5667929-C113-4ED0-9ED1-2BFF086FD56F}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

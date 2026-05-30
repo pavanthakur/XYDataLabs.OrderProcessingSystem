@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using XYDataLabs.OpenPayAdapter.Configuration;
 using XYDataLabs.OrderProcessingSystem.SharedKernel;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Configuration;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
 
 namespace XYDataLabs.OrderProcessingSystem.API.Tests.Configuration;
 
@@ -193,5 +194,50 @@ public class OptionsValidationTests
         var result = validator.Validate(Options.DefaultName, settings);
 
         result.Failed.Should().BeFalse();
+    }
+
+    // PaymentGatewayRequestDefaults — inline delegate validation from Program.cs
+    // Mirrors the two .Validate() calls registered via AddOptions<PaymentGatewayRequestDefaults>().
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void PaymentGatewayRequestDefaults_Fails_WhenRedirectUrlIsBlankOrWhitespace(string redirectUrl)
+    {
+        Func<PaymentGatewayRequestDefaults, bool> validate = defaults =>
+            !string.IsNullOrWhiteSpace(defaults.RedirectUrl);
+
+        var result = validate(new PaymentGatewayRequestDefaults { RedirectUrl = redirectUrl, DeviceSessionId = "session-id" });
+
+        result.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void PaymentGatewayRequestDefaults_Fails_WhenDeviceSessionIdIsBlankOrWhitespace(string deviceSessionId)
+    {
+        Func<PaymentGatewayRequestDefaults, bool> validate = defaults =>
+            !string.IsNullOrWhiteSpace(defaults.DeviceSessionId);
+
+        var result = validate(new PaymentGatewayRequestDefaults { RedirectUrl = "https://example.com/payment/callback", DeviceSessionId = deviceSessionId });
+
+        result.Should().BeFalse();
+    }
+
+    [Fact]
+    public void PaymentGatewayRequestDefaults_Passes_WhenBothFieldsProvided()
+    {
+        var defaults = new PaymentGatewayRequestDefaults
+        {
+            RedirectUrl = "https://example.com/payment/callback",
+            DeviceSessionId = "real-device-session-id"
+        };
+
+        var redirectUrlValid = !string.IsNullOrWhiteSpace(defaults.RedirectUrl);
+        var deviceSessionIdValid = !string.IsNullOrWhiteSpace(defaults.DeviceSessionId);
+
+        redirectUrlValid.Should().BeTrue();
+        deviceSessionIdValid.Should().BeTrue();
     }
 }

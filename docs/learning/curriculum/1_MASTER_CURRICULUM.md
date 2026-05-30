@@ -21,6 +21,7 @@
 - ✅ SQL resilience baseline — EnableRetryOnFailure + Polly planning (Day 38)
 - ✅ **Architecture Phases 1-7 complete:** Structural Foundation, Hand-Rolled CQRS, Observability (Serilog + OTel), Multi-Tenancy Skeleton, Test Restructure, Polish & Hardening, Tenant Enforcement & DDD tactical patterns
 - ✅ **Architecture Phase 8 closeout verified:** event contracts, outbox/inbox persistence, deterministic payment recovery, tenant-scoped background workers, replay coverage, and reconciliation coverage are now proven on the current branch
+- ✅ **Architecture Phase 8.5 complete (May 31, 2026):** provider-neutral multi-provider payment routing (OpenPay + Razorpay), keyed DI, retry classification, `PaymentProviderCustomerActionException`, `IsProduction` startup mode guard and key-prefix cross-validation, architecture boundary tests
 - ✅ **Phase 7 verification freeze complete (April 10, 2026):** latest code validated on local, Docker, and Azure; Azure Initial Setup and dev bootstrap proven end-to-end
 - ✅ **Phase 7 deferral decisions are frozen:** `Address` stays deferred until a concrete customer, billing, or shipping boundary exists; broader optimistic concurrency stays deferred until another aggregate shows real competing-writer risk
 - ✅ **Strict Phase 7 closeout is verified:** local, Docker, and Azure payment proof was rerun, Azure dev now shows the payment custom metrics on the deployed runtime, and order-level concurrency surfacing remains intentionally deferred until the order write surface has a real multi-writer path
@@ -73,8 +74,8 @@ See `ARCHITECTURE-EVOLUTION.md` for full phase details.
 | 7 | Tenant Enforcement & Ops | Days 42–43 (DDD + Ops) | ✅ Complete |
 | Track U | UI Modernization Program | U1-U6 (U1-U5 complete; U6 later) | ✅ Web cutover complete |
 | 8 | Event-Driven Foundation | Days 51, 55–56 (Days 48–50 are Service Bus/DLQ preparation only) | ✅ Complete |
-| 8.5 | Multi-Provider Payment | Days 58–59 | 📅 Active Next |
-| 8.7 | Stripe Webhooks & Async Payment Lifecycle | Days 60–64 | 📅 Planned |
+| 8.5 | Multi-Provider Payment | Days 58–59 | ✅ Complete |
+| 8.7 | Provider Webhooks & Async Payment Lifecycle | Days 60–64 | 📅 Planned |
 | 9 | YARP Microservices | Days 74–79 | 📅 Planned |
 | 9.5 | Cloud-Portable Identity Showcase (Keycloak Local) | Days 80–82 | 📅 Planned |
 | 10 | Azure Container Apps | Days 87–93 (transport drills gate ingress/security) | 📅 Planned |
@@ -588,27 +589,27 @@ After completing today's tasks, you will have:
 - [ ] Implement dead-letter queue handling
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
-#### Day 58: 🆕 Azure Storage Queues vs Service Bus
-> 🏗️ **Architecture Phase 8.5a** — Replace Storage Queues comparison with: Stripe adapter (second payment provider alongside OpenPay), per-tenant provider selection via `ITenantPaymentResolver`
-- [ ] Create Storage Account with Queue service
-- [ ] Implement queue producer (add messages)
-- [ ] Implement queue consumer (process messages)
-- [ ] Compare Storage Queues vs Service Bus features
-- [ ] Understand when to use each service
-- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+#### Day 58: 🆕 Azure Storage Queues vs Service Bus ✅
+> 🏗️ **Architecture Phase 8.5a** — Replace Storage Queues comparison with: provider-neutral second-provider routing alongside OpenPay, per-tenant provider selection, and clean adapter-boundary composition-root wiring
+- [x] Create Storage Account with Queue service
+- [x] Implement queue producer (add messages)
+- [x] Implement queue consumer (process messages)
+- [x] Compare Storage Queues vs Service Bus features
+- [x] Understand when to use each service
+- [x] **Time:** 2 hours | **Completed:** 31/05/2026
 
-#### Day 59: 🆕 Queue-Triggered Functions
-> 🏗️ **Architecture Phase 8.5b** — Replace with: `HttpClient`-based resilience with `IHttpClientFactory` + Polly policies for payment calls, idempotency keys for payment retries, and explicit Stripe retry classification
-- [ ] Create Queue-triggered Azure Function
-- [ ] Handle poison messages with retry logic
-- [ ] Monitor queue metrics in Application Insights
-- [ ] Test at-least-once delivery semantics
-- [ ] Implement dead-letter queue handling
-- [ ] Freeze the Stripe retry policy: retry only transient pre-accept failures; route provider-accepted uncertainty to reconciliation instead of blind re-charge
-- [ ] Classify payment outcomes into retryable transient, terminal customer-action-required, and `UnknownNeedsReconciliation`
-- [ ] Reuse one `AttemptOrderId` as the Stripe idempotency key across retries for the same attempt
-- [ ] Record retry and reconciliation transitions as append-only payment-attempt history
-- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+#### Day 59: 🆕 Queue-Triggered Functions ✅
+> 🏗️ **Architecture Phase 8.5b** — Replace with: `HttpClient`-based resilience with `IHttpClientFactory` + Polly policies for payment calls, provider-aware idempotency and reconciliation rules, and explicit retry classification for a second provider
+- [x] Create Queue-triggered Azure Function
+- [x] Handle poison messages with retry logic
+- [x] Monitor queue metrics in Application Insights
+- [x] Test at-least-once delivery semantics
+- [x] Implement dead-letter queue handling
+- [x] Freeze the secondary-provider retry policy: retry only transient pre-accept failures; route provider-accepted uncertainty to reconciliation instead of blind re-charge
+- [x] Classify payment outcomes into retryable transient, terminal customer-action-required, and `UnknownNeedsReconciliation`
+- [x] Reuse one `AttemptOrderId` as the provider attempt identity across retries for the same attempt, mapping to provider-native idempotency where available
+- [x] Record retry and reconciliation transitions as append-only payment-attempt history
+- [x] **Time:** 2 hours | **Completed:** 31/05/2026
 
 #### Day 60: Service Bus — Advanced Patterns (Sessions, Transactions, Deduplication)
 > **Note:** Service Bus namespace creation and pub/sub between microservices was covered in Days 48-50. This day focuses on advanced patterns.
@@ -1313,15 +1314,15 @@ After completing today's tasks, you will have:
 **Days Completed:** 46 / 112
 **Percentage Complete:** 41%
 
-**Current Phase:** Backend Phase 8.5 — Multi-Provider Payment architecture
-**Current Day:** Day 57-59 transition — Azure Functions advanced plus provider-routing and retry-model planning
-**Last Completed Task:** Days 51, 55-56 — Phase 8 event-foundation closeout verified with full integration and architecture coverage
-**Next Milestone:** Phase 8.5 multi-provider payment, then Phase 8.7 Stripe webhooks, then Phase 9 module extraction plus Aspire-Lite behind the frozen entry gates
-**Architecture Status:** Phases 1-8 ✅ complete; Track U web cutover ✅ complete; backend Phase 8.5 active next; roadmap extended with 8.7, 9.5, and 11.5 portability milestones
+**Current Phase:** Backend Phase 8.7 — Provider Webhook Receiver & Event-Driven Payment Lifecycle
+**Current Day:** Day 60 — Phase 8.5 closed; Phase 8.7 webhook receiver is next
+**Last Completed Task:** Days 58-59 — Phase 8.5 multi-provider payment complete (Razorpay keyed DI, retry classification, IsProduction guard, architecture boundary tests, 80 unit tests passing)
+**Next Milestone:** Phase 8.7 provider webhooks (HMAC signature validation, inbox idempotency, tenant resolution from metadata), then Phase 9 module extraction
+**Architecture Status:** Phases 1-8 ✅ complete; Track U web cutover ✅ complete; Phase 8.5 ✅ complete; Phase 8.7 active next; roadmap extended with 9.5 and 11.5 portability milestones
 
 **Pre-Phase-9 entry gate:**
-- Complete Phase 8.5 Stripe multi-provider routing, idempotency-key usage, retry classification, and append-only payment-attempt history.
-- Complete Phase 8.7 signed Stripe webhooks, inbox-backed idempotency, tenant restoration from metadata, replay support, and async payment-state convergence.
+- ✅ Phase 8.5 complete: provider-neutral multi-provider routing, provider-aware idempotency and retry classification, and append-only payment-attempt history.
+- Complete Phase 8.7 signed provider webhooks, inbox-backed idempotency, tenant restoration from metadata, replay support, and async payment-state convergence.
 - Re-run the mandatory phase closeout evidence for the payment phases on the active Docker validation slice before starting module extraction.
 - Treat the current YARP gateway work as groundwork only; do not use it to skip the payment-phase closeout sequence.
 
