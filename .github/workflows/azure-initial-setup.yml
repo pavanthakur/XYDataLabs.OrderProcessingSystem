@@ -258,7 +258,7 @@ jobs:
         continue-on-error: true
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.APP_ID }}
+          client-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
       - name: Validate Phase 1b-Only Baseline
@@ -1135,7 +1135,7 @@ jobs:
         continue-on-error: true
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.APP_ID }}
+          client-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
       - name: Download OIDC Handoff Artifact
@@ -1806,9 +1806,10 @@ jobs:
           "" >> $env:GITHUB_STEP_SUMMARY
           "> These secrets must be present **before running Azure Bootstrap & Deploy**. They are environment-scoped, set manually by an authorized person, and never written by this workflow." >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
-          "Add these five environment secrets to each target GitHub environment you plan to bootstrap:" >> $env:GITHUB_STEP_SUMMARY
+          "Add these six environment secrets to each target GitHub environment you plan to bootstrap:" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
           "- ``OPENPAY_MERCHANT_ID``" >> $env:GITHUB_STEP_SUMMARY
+          "- ``OPENPAY_PUBLIC_KEY``" >> $env:GITHUB_STEP_SUMMARY
           "- ``OPENPAY_PRIVATE_KEY``" >> $env:GITHUB_STEP_SUMMARY
           "- ``OPENPAY_DEVICE_SESSION_ID``" >> $env:GITHUB_STEP_SUMMARY
           "- ``RAZORPAY_MERCHANT_ID``" >> $env:GITHUB_STEP_SUMMARY
@@ -1818,7 +1819,7 @@ jobs:
           "" >> $env:GITHUB_STEP_SUMMARY
           "1. Go to **[Settings → Environments]($environmentsUrl)**" >> $env:GITHUB_STEP_SUMMARY
           "2. Open each target environment (``dev``, ``staging``, and/or ``prod``)" >> $env:GITHUB_STEP_SUMMARY
-          "3. Add all five values under **Environment secrets**" >> $env:GITHUB_STEP_SUMMARY
+          "3. Add all six values under **Environment secrets**" >> $env:GITHUB_STEP_SUMMARY
           "4. Then run **Azure Bootstrap & Deploy** — the target bootstrap job validates its environment secrets before proceeding" >> $env:GITHUB_STEP_SUMMARY
 
           # Console output mirror
