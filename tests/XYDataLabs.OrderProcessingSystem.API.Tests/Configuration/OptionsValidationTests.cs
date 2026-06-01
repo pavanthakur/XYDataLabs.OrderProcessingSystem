@@ -128,6 +128,7 @@ public class OptionsValidationTests
         var settings = new OpenPayConfig
         {
             MerchantId = "merchant",
+            PublicKey = "public-key",
             PrivateKey = "",
             DeviceSessionId = "device-session",
             RedirectUrl = "https://example.com/payment/callback",
@@ -147,6 +148,7 @@ public class OptionsValidationTests
         var settings = new OpenPayConfig
         {
             MerchantId = "merchant",
+            PublicKey = "public-key",
             PrivateKey = "private-key",
             DeviceSessionId = "",
             RedirectUrl = "https://example.com/payment/callback",
@@ -166,6 +168,7 @@ public class OptionsValidationTests
         var settings = new OpenPayConfig
         {
             MerchantId = "set-openpay-merchant-id-dev",
+            PublicKey = "public-key",
             PrivateKey = "private-key",
             DeviceSessionId = "device-session",
             RedirectUrl = "https://example.com/payment/callback",
@@ -179,12 +182,53 @@ public class OptionsValidationTests
     }
 
     [Fact]
+    public void OpenPayConfigValidator_Fails_WhenPublicKeyIsEmpty()
+    {
+        var validator = new OpenPayConfigValidator();
+        var settings = new OpenPayConfig
+        {
+            MerchantId = "merchant",
+            PublicKey = "",
+            PrivateKey = "private-key",
+            DeviceSessionId = "device-session",
+            RedirectUrl = "https://example.com/payment/callback",
+            IsProduction = false
+        };
+
+        var result = validator.Validate(Options.DefaultName, settings);
+
+        result.Failed.Should().BeTrue();
+        result.Failures.Should().ContainSingle(failure => failure.Contains("OpenPay:PublicKey is required", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void OpenPayConfigValidator_Fails_WhenPublicKeyIsPlaceholder()
+    {
+        var validator = new OpenPayConfigValidator();
+        var settings = new OpenPayConfig
+        {
+            MerchantId = "merchant",
+            PublicKey = "__OPENPAY_PUBLIC_KEY__",
+            PrivateKey = "private-key",
+            DeviceSessionId = "device-session",
+            RedirectUrl = "https://example.com/payment/callback",
+            IsProduction = false
+        };
+
+        var result = validator.Validate(Options.DefaultName, settings);
+
+        result.Failed.Should().BeTrue();
+        result.Failures.Should().ContainSingle(failure => failure.Contains("OpenPay:PublicKey", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void OpenPayConfigValidator_Succeeds_WhenAllRequiredFieldsProvided()
     {
         var validator = new OpenPayConfigValidator();
         var settings = new OpenPayConfig
         {
             MerchantId = "real-merchant-id",
+            PublicKey = "real-public-key",
             PrivateKey = "real-private-key",
             DeviceSessionId = "real-device-session",
             RedirectUrl = "https://example.com/payment/callback",

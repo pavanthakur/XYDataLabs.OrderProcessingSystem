@@ -13,6 +13,7 @@ on:
       - 'XYDataLabs.OrderProcessingSystem.Infrastructure/**'
       - 'XYDataLabs.OrderProcessingSystem.SharedKernel/**'
       - 'XYDataLabs.OpenPayAdapter/**'           # Multitenant payment: ProcessPaymentCommandHandler uses OpenPayAdapterService for per-tenant Use3DSecure routing
+      - 'XYDataLabs.RazorpayAdapter/**'          # Multitenant payment: ProcessPaymentCommandHandler uses RazorpayAdapterService for tenant-selected hosted checkout
       - 'Resources/Configuration/**'
       - '.github/workflows/deploy-api-to-azure.yml'
   workflow_dispatch:
@@ -75,6 +76,13 @@ jobs:
     permissions:
       id-token: write
       contents: read
+    env:
+      OPENPAY_MERCHANT_ID: ${{ secrets[format('OPENPAY_{0}', 'MERCHANT_ID')] }}
+      OPENPAY_PUBLIC_KEY: ${{ secrets.OPENPAY_PUBLIC_KEY }}
+      OPENPAY_PRIVATE_KEY: ${{ secrets[format('OPENPAY_{0}', 'PRIVATE_KEY')] }}
+      OPENPAY_DEVICE_SESSION_ID: ${{ secrets[format('OPENPAY_{0}_{1}', 'DEVICE', 'SESSION_ID')] }}
+      RAZORPAY_MERCHANT_ID: ${{ secrets[format('RAZORPAY_{0}', 'MERCHANT_ID')] }}
+      RAZORPAY_PRIVATE_KEY: ${{ secrets[format('RAZORPAY_{0}', 'PRIVATE_KEY')] }}
 
     steps:
       - name: Check Azure Credentials
@@ -150,12 +158,6 @@ jobs:
           echo "AZURE_WEBAPP_NAME=$name" >> $env:GITHUB_ENV
           Write-Host "Deploying to WebApp: $name"
 
-      - name: Download artifact
-        if: steps.check-credentials.outputs.credentialsConfigured == 'true'
-        uses: actions/download-artifact@v8
-        with:
-          name: dotnet-app
-
       - name: Login to Azure
         if: steps.check-credentials.outputs.credentialsConfigured == 'true'
         uses: azure/login@v3
@@ -163,6 +165,10 @@ jobs:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+
+      - name: Checkout code for deployment scripts
+        if: steps.check-credentials.outputs.credentialsConfigured == 'true'
+        uses: actions/checkout@v6
 
       - name: Check Target Infrastructure Exists
         if: steps.check-credentials.outputs.credentialsConfigured == 'true'
@@ -205,17 +211,77 @@ jobs:
           Write-Host "✅ Target infrastructure exists: $rgName / $appName" -ForegroundColor Green
           "infraReady=true" >> $env:GITHUB_OUTPUT
 
+      - name: Validate Payment Provider Secrets
+        if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'
+        shell: pwsh
+        run: |
+          $missing = @()
+          if ([string]::IsNullOrWhiteSpace($env:OPENPAY_MERCHANT_ID))       { $missing += 'OPENPAY_MERCHANT_ID' }
+          if ([string]::IsNullOrWhiteSpace($env:OPENPAY_PUBLIC_KEY))        { $missing += 'OPENPAY_PUBLIC_KEY' }
+          if ([string]::IsNullOrWhiteSpace($env:OPENPAY_PRIVATE_KEY))       { $missing += 'OPENPAY_PRIVATE_KEY' }
+          if ([string]::IsNullOrWhiteSpace($env:OPENPAY_DEVICE_SESSION_ID)) { $missing += 'OPENPAY_DEVICE_SESSION_ID' }
+          if ([string]::IsNullOrWhiteSpace($env:RAZORPAY_MERCHANT_ID))      { $missing += 'RAZORPAY_MERCHANT_ID' }
+          if ([string]::IsNullOrWhiteSpace($env:RAZORPAY_PRIVATE_KEY))      { $missing += 'RAZORPAY_PRIVATE_KEY' }
+
+          if ($missing.Count -gt 0) {
+            $targetEnv = "${{ steps.check-target.outputs.targetEnvironment }}"
+            Write-Host '❌ Deployment blocked because payment provider environment secrets are missing.' -ForegroundColor Red
+            Write-Host "Target GitHub environment: $targetEnv" -ForegroundColor Yellow
+            $missing | ForEach-Object { Write-Host "  • $_" -ForegroundColor Red }
+            exit 1
+          }
+
+          Write-Host '✅ All payment provider environment secrets are present for the target environment.' -ForegroundColor Green
+
+      - name: Sync Payment Secrets To Key Vault
+        if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'
+        shell: pwsh
+        run: |
+          $targetEnv = "${{ steps.check-target.outputs.targetEnvironment }}"
+          $owner = "${{ github.repository_owner }}"
+
+          ./Resources/Azure-Deployment/populate-keyvault-secrets.ps1 `
+            -Environment $targetEnv `
+            -BaseName orderprocessing `
+            -GitHubOwner $owner `
+            -OpenPayMerchantId "${{ env.OPENPAY_MERCHANT_ID }}" `
+            -OpenPayPublicKey "${{ env.OPENPAY_PUBLIC_KEY }}" `
+            -OpenPayPrivateKey "${{ env.OPENPAY_PRIVATE_KEY }}" `
+            -OpenPayDeviceSessionId "${{ env.OPENPAY_DEVICE_SESSION_ID }}" `
+            -RazorpayMerchantId "${{ env.RAZORPAY_MERCHANT_ID }}" `
+            -RazorpayPrivateKey "${{ env.RAZORPAY_PRIVATE_KEY }}"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Key Vault payment secret synchronization failed with exit code $LASTEXITCODE"
+          }
+
+      - name: Configure Azure App Runtime Settings
+        if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'
+        shell: pwsh
+        run: |
+          $targetEnv = "${{ steps.check-target.outputs.targetEnvironment }}"
+          $owner = "${{ github.repository_owner }}"
+
+          ./Resources/Azure-Deployment/configure-app-environment.ps1 -Environment $targetEnv -BaseName orderprocessing -GitHubOwner $owner
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Azure app runtime setting refresh failed with exit code $LASTEXITCODE"
+          }
+
+      - name: Download artifact
+        if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: dotnet-app
+          path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+
       - name: Deploy to Azure Web App
         if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'
         id: deploy-to-webapp
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          package: .
-
-      - name: Checkout code for migrations
-        if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'
-        uses: actions/checkout@v6
+          package: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
 
       - name: Run Database Migrations
         if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'

@@ -60,14 +60,17 @@ export function PaymentCallbackPage({ activeTenantCode, apiClient, onTenantChang
     return parameters;
   }, [searchParams]);
 
-  const paymentId = resolveFirstValue(callbackParameters, "id", "transaction_id", "payment_id");
-  const attemptOrderId = resolveFirstValue(callbackParameters, "order_id", "orderId");
+  const paymentId = resolveFirstValue(callbackParameters, "id", "transaction_id", "payment_id", "razorpay_payment_id");
+  const attemptOrderId = resolveFirstValue(callbackParameters, "order_id", "orderId", "razorpay_order_id");
   const callbackStatus = resolveFirstValue(callbackParameters, "status", "transaction_status", "operation_status");
   const callbackError = resolveFirstValue(callbackParameters, "error_message", "error", "message", "description");
   const callbackTenantCode = resolveFirstValue(callbackParameters, "tenantCode");
   const callbackSource = resolveFirstValue(callbackParameters, "source");
   const resolvedTenantCode = callbackTenantCode ?? activeTenantCode;
-  const pendingContext = useMemo(() => loadPendingPaymentContext(paymentId), [paymentId]);
+  const pendingContext = useMemo(
+    () => loadPendingPaymentContext(paymentId) ?? loadPendingPaymentContext(attemptOrderId),
+    [attemptOrderId, paymentId]
+  );
   const isDirectStatusEntry = (callbackSource ?? "").toLowerCase() === "direct";
   const visibleCallbackEntries = useMemo(
     () => Object.entries(callbackParameters).filter(([key]) => key !== "source"),
@@ -438,6 +441,8 @@ function formatStatusSource(value: string | null | undefined): string {
   switch ((value ?? "").toLowerCase()) {
     case "openpay":
       return "Provider confirmation (OpenPay)";
+    case "razorpay":
+      return "Provider confirmation (Razorpay)";
     case "callback":
       return "Provider callback payload";
     case "database":

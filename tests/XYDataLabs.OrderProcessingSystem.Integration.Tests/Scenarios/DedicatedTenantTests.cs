@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -6,6 +7,7 @@ using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 using XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
 using Xunit;
 
 namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Scenarios;
@@ -140,6 +142,88 @@ public sealed class DedicatedTenantTests : IAsyncLifetime
 
         sharedResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         dedicatedResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task SharedPoolTenant_PaymentConfiguration_Reflects_Runtime_Provider_Switch()
+    {
+        var tenant = await IntegrationTestData.CreateTenantAsync(_sharedFactory);
+        var tenantContext = tenant.ToTenantContext();
+
+        await ConfigurePaymentProvidersAsync(_sharedFactory, tenantContext, PaymentProviderTypes.Razorpay);
+
+        using var client = _sharedFactory.CreateTenantClient(tenant.TenantCode);
+
+        var razorpayConfiguration = await GetPaymentConfigurationAsync(client);
+        razorpayConfiguration.ActiveProviderType.Should().Be(PaymentProviderTypes.Razorpay);
+        razorpayConfiguration.CollectionMode.Should().Be("provider_checkout");
+        razorpayConfiguration.BrowserKey.Should().Be("rzp_test_browser_key_runtime");
+        razorpayConfiguration.BrowserMerchantId.Should().BeNull();
+
+        await ConfigurePaymentProvidersAsync(_sharedFactory, tenantContext, PaymentProviderTypes.OpenPay);
+
+        var openPayConfiguration = await GetPaymentConfigurationAsync(client);
+        openPayConfiguration.ActiveProviderType.Should().Be(PaymentProviderTypes.OpenPay);
+        openPayConfiguration.CollectionMode.Should().Be("direct_card_form");
+        openPayConfiguration.BrowserKey.Should().Be("pk_test_openpay_runtime");
+        openPayConfiguration.BrowserMerchantId.Should().Be("mt_test_openpay_runtime");
+    }
+
+    [Fact]
+    public async Task DedicatedTenant_PaymentConfiguration_Reflects_Runtime_Provider_Switch()
+    {
+        var tenant = await IntegrationTestData.CreateDedicatedTenantAsync(
+            _routingFactory,
+            connectionString: _fixture.DedicatedDbConnectionString,
+            status: "Active");
+
+        await SeedTenantRowInDedicatedDbAsync(tenant);
+
+        var tenantContext = tenant.ToTenantContext();
+        await ConfigurePaymentProvidersAsync(_routingFactory, tenantContext, PaymentProviderTypes.OpenPay);
+
+        using var client = _routingFactory.CreateTenantClient(tenant.TenantCode);
+
+        var openPayConfiguration = await GetPaymentConfigurationAsync(client);
+        openPayConfiguration.ActiveProviderType.Should().Be(PaymentProviderTypes.OpenPay);
+        openPayConfiguration.CollectionMode.Should().Be("direct_card_form");
+        openPayConfiguration.BrowserKey.Should().Be("pk_test_openpay_runtime");
+        openPayConfiguration.BrowserMerchantId.Should().Be("mt_test_openpay_runtime");
+
+        await ConfigurePaymentProvidersAsync(_routingFactory, tenantContext, PaymentProviderTypes.Razorpay);
+
+        var razorpayConfiguration = await GetPaymentConfigurationAsync(client);
+        razorpayConfiguration.ActiveProviderType.Should().Be(PaymentProviderTypes.Razorpay);
+        razorpayConfiguration.CollectionMode.Should().Be("provider_checkout");
+        razorpayConfiguration.BrowserKey.Should().Be("rzp_test_browser_key_runtime");
+        razorpayConfiguration.BrowserMerchantId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task SharedPool_And_Dedicated_Tenants_Can_Resolve_Different_Providers_Concurrently()
+    {
+        var sharedTenant = await IntegrationTestData.CreateTenantAsync(_routingFactory);
+        var dedicatedTenant = await IntegrationTestData.CreateDedicatedTenantAsync(
+            _routingFactory,
+            connectionString: _fixture.DedicatedDbConnectionString,
+            status: "Active");
+
+        await SeedTenantRowInDedicatedDbAsync(dedicatedTenant);
+
+        await ConfigurePaymentProvidersAsync(_routingFactory, sharedTenant.ToTenantContext(), PaymentProviderTypes.Razorpay);
+        await ConfigurePaymentProvidersAsync(_routingFactory, dedicatedTenant.ToTenantContext(), PaymentProviderTypes.OpenPay);
+
+        using var sharedClient = _routingFactory.CreateTenantClient(sharedTenant.TenantCode);
+        using var dedicatedClient = _routingFactory.CreateTenantClient(dedicatedTenant.TenantCode);
+
+        var sharedConfiguration = await GetPaymentConfigurationAsync(sharedClient);
+        var dedicatedConfiguration = await GetPaymentConfigurationAsync(dedicatedClient);
+
+        sharedConfiguration.ActiveProviderType.Should().Be(PaymentProviderTypes.Razorpay);
+        sharedConfiguration.CollectionMode.Should().Be("provider_checkout");
+
+        dedicatedConfiguration.ActiveProviderType.Should().Be(PaymentProviderTypes.OpenPay);
+        dedicatedConfiguration.CollectionMode.Should().Be("direct_card_form");
     }
 
     // ──────────────────────────────────────── Physical DB isolation tests ──
@@ -315,6 +399,99 @@ public sealed class DedicatedTenantTests : IAsyncLifetime
 
         await command.ExecuteNonQueryAsync();
     }
+
+    private static Task ConfigurePaymentProvidersAsync(
+        IntegrationTestWebAppFactory factory,
+        TenantContext tenantContext,
+        string activeProviderType)
+    {
+        return factory.ExecuteTenantDbContextAsync(
+            tenantContext,
+            async dbContext =>
+            {
+                var providers = await dbContext.PaymentProviders
+                    .Where(provider => provider.TenantId == tenantContext.TenantId)
+                    .ToListAsync();
+
+                var razorpayProvider = providers.FirstOrDefault(provider =>
+                    string.Equals(provider.ProviderType, PaymentProviderTypes.Razorpay, StringComparison.OrdinalIgnoreCase));
+
+                if (razorpayProvider is null)
+                {
+                    razorpayProvider = new PaymentProvider
+                    {
+                        TenantId = tenantContext.TenantId,
+                        CreatedBy = 1,
+                        CreatedDate = DateTime.UtcNow
+                    };
+
+                    dbContext.PaymentProviders.Add(razorpayProvider);
+                }
+
+                razorpayProvider.Name = "Razorpay";
+                razorpayProvider.APIUrl = "https://api.razorpay.com";
+                razorpayProvider.IsProduction = false;
+                razorpayProvider.IsActive = string.Equals(activeProviderType, PaymentProviderTypes.Razorpay, StringComparison.OrdinalIgnoreCase);
+                razorpayProvider.ProviderType = PaymentProviderTypes.Razorpay;
+                razorpayProvider.MerchantId = "rzp_test_browser_key_runtime";
+                razorpayProvider.PublicKey = null;
+                razorpayProvider.PrivateKeyConfigurationKey = "Razorpay:PrivateKey";
+                razorpayProvider.Use3DSecure = false;
+
+                var openPayProvider = providers.FirstOrDefault(provider =>
+                    string.Equals(provider.ProviderType, PaymentProviderTypes.OpenPay, StringComparison.OrdinalIgnoreCase));
+
+                if (openPayProvider is null)
+                {
+                    openPayProvider = new PaymentProvider
+                    {
+                        TenantId = tenantContext.TenantId,
+                        CreatedBy = 1,
+                        CreatedDate = DateTime.UtcNow
+                    };
+
+                    dbContext.PaymentProviders.Add(openPayProvider);
+                }
+
+                openPayProvider.Name = "OpenPay";
+                openPayProvider.APIUrl = "https://sandbox-api.openpay.mx";
+                openPayProvider.IsProduction = false;
+                openPayProvider.IsActive = string.Equals(activeProviderType, PaymentProviderTypes.OpenPay, StringComparison.OrdinalIgnoreCase);
+                openPayProvider.ProviderType = PaymentProviderTypes.OpenPay;
+                openPayProvider.MerchantId = "mt_test_openpay_runtime";
+                openPayProvider.PublicKey = "pk_test_openpay_runtime";
+                openPayProvider.PrivateKeyConfigurationKey = "OpenPay:PrivateKey";
+                openPayProvider.Use3DSecure = false;
+
+                await dbContext.SaveChangesAsync();
+                return true;
+            });
+    }
+
+    private static async Task<PaymentConfigurationSnapshot> GetPaymentConfigurationAsync(HttpClient client)
+    {
+        var response = await client.GetAsync("/api/v1/info/payment-configuration");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var root = document.RootElement;
+
+        return new PaymentConfigurationSnapshot(
+            root.GetProperty("activeProviderType").GetString() ?? string.Empty,
+            root.GetProperty("activeProviderName").GetString() ?? string.Empty,
+            root.GetProperty("collectionMode").GetString() ?? string.Empty,
+            root.TryGetProperty("browserKey", out var browserKeyElement) ? browserKeyElement.GetString() : null,
+            root.TryGetProperty("browserMerchantId", out var browserMerchantIdElement) ? browserMerchantIdElement.GetString() : null,
+            root.GetProperty("isProduction").GetBoolean());
+    }
+
+    private sealed record PaymentConfigurationSnapshot(
+        string ActiveProviderType,
+        string ActiveProviderName,
+        string CollectionMode,
+        string? BrowserKey,
+        string? BrowserMerchantId,
+        bool IsProduction);
 
     /// <summary>
     /// Counts customer rows by email via parameterized SQL.

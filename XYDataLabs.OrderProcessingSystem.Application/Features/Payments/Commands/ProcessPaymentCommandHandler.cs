@@ -28,6 +28,8 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
     private readonly PaymentProvider _paymentProvider;
     private readonly TimeProvider _timeProvider;
     private readonly ITenantProvider _tenantProvider;
+    private bool UsesProviderHostedCheckout =>
+        string.Equals(_paymentProvider.ProviderType, PaymentProviderTypes.Razorpay, StringComparison.OrdinalIgnoreCase);
 
     public ProcessPaymentCommandHandler(
         IPaymentProviderGateway paymentProviderGateway,
@@ -396,7 +398,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         Domain.Entities.PaymentMethod paymentMethod,
         CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Creating customer in OpenPay...");
+        _logger.LogInformation("Creating customer in {PaymentProvider}...", _paymentProvider.Name);
         var existingCustomer = await _context.BillingCustomers
             .FirstOrDefaultAsync(c => c.Name == request.Name && c.Email == request.Email, cancellationToken);
 
@@ -448,7 +450,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         string paymentTraceId,
         CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Creating card token in OpenPay...");
+        _logger.LogInformation("Creating card token in {PaymentProvider}...", _paymentProvider.Name);
 
         var createdCard = await _paymentProviderGateway.CreateCardTokenAsync(
             new PaymentGatewayCreateCardTokenRequest(
@@ -476,9 +478,9 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             CurrencyCode = AppMasterConstant.DefaultCurrencyCode,
             Amount = new decimal(100.00),
             CreditCardOwnerName = request.Name,
-            CreditCardExpireYear = int.Parse(request.ExpirationYear, CultureInfo.InvariantCulture),
-            CreditCardExpireMonth = int.Parse(request.ExpirationMonth, CultureInfo.InvariantCulture),
-            MaskedCardNumber = MaskCardNumber(request.CardNumber),
+            CreditCardExpireYear = ResolveCardExpiryComponent(request.ExpirationYear),
+            CreditCardExpireMonth = ResolveCardExpiryComponent(request.ExpirationMonth),
+            MaskedCardNumber = ResolveMaskedCardNumber(request.CardNumber),
             TransactionMessage = $"Card created with ID: {createdCard.Id}",
             IsTransactionSuccess = true,
             IsThreeDSecureEnabled = false,
@@ -523,16 +525,21 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         CancellationToken cancellationToken)
     {
         _logger.LogInformation(
-            "Creating charge in OpenPay for payment trace {PaymentTraceId}, customer order {CustomerOrderId}, attempt order {AttemptOrderId}, 3DS enabled {IsThreeDSecureEnabled}",
+            "Creating charge in {PaymentProvider} for payment trace {PaymentTraceId}, customer order {CustomerOrderId}, attempt order {AttemptOrderId}, 3DS enabled {IsThreeDSecureEnabled}",
+            _paymentProvider.Name,
             paymentTraceId,
             customerOrderId,
             attemptOrderId,
             isThreeDSecureEnabled);
 
+        string currencyCode = _paymentProvider.ProviderType == PaymentProviderTypes.Razorpay
+            ? "INR"
+            : AppMasterConstant.DefaultCurrencyCode;
+
         var chargeRequest = new PaymentGatewayCreateChargeRequest(
             sourceId,
             new decimal(100.00),
-            AppMasterConstant.DefaultCurrencyCode,
+            currencyCode,
             $"CustomerOrder: {customerOrderId}; AttemptOrder: {attemptOrderId}",
             request.DeviceSessionId,
             attemptOrderId,
@@ -558,7 +565,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             Amount = chargeRequest.Amount,
             AmountFromAPI = charge.Amount,
             CardOwnerName = request.Name,
-            LastFourCardNbr = request.CardNumber[^4..],
+            LastFourCardNbr = ResolveLastFourCardDigits(request.CardNumber),
             Currency = AppMasterConstant.DefaultCurrencyCode,
             IsThreeDSecureEnabled = isThreeDSecureEnabled,
             ThreeDSecureStage = threeDSecureStage,
@@ -605,9 +612,9 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             TransactionReferenceId = charge.Authorization,
             RedirectUrl = charge.RedirectUrl,
             CreditCardOwnerName = request.Name,
-            CreditCardExpireYear = int.Parse(request.ExpirationYear, CultureInfo.InvariantCulture),
-            CreditCardExpireMonth = int.Parse(request.ExpirationMonth, CultureInfo.InvariantCulture),
-            MaskedCardNumber = MaskCardNumber(request.CardNumber),
+            CreditCardExpireYear = ResolveCardExpiryComponent(request.ExpirationYear),
+            CreditCardExpireMonth = ResolveCardExpiryComponent(request.ExpirationMonth),
+            MaskedCardNumber = ResolveMaskedCardNumber(request.CardNumber),
             TransactionMessage = charge.ErrorMessage,
             CreatedBy = billingCustomerId,
             CreatedDate = _timeProvider.GetUtcNow().UtcDateTime
@@ -668,6 +675,36 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
     private static string GeneratePaymentTraceId()
     {
         return Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
+    }
+
+    private int ResolveCardExpiryComponent(string value)
+    {
+        if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedValue))
+        {
+            return parsedValue;
+        }
+
+        return UsesProviderHostedCheckout ? 0 : throw new FormatException("Card expiry value is required for direct card providers.");
+    }
+
+    private string? ResolveMaskedCardNumber(string cardNumber)
+    {
+        if (string.IsNullOrWhiteSpace(cardNumber))
+        {
+            return UsesProviderHostedCheckout ? null : MaskCardNumber(cardNumber);
+        }
+
+        return MaskCardNumber(cardNumber);
+    }
+
+    private static string? ResolveLastFourCardDigits(string cardNumber)
+    {
+        if (string.IsNullOrWhiteSpace(cardNumber) || cardNumber.Length < 4)
+        {
+            return null;
+        }
+
+        return cardNumber[^4..];
     }
 
     private static string MaskCardNumber(string cardNumber)

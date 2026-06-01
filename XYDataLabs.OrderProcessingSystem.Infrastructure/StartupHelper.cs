@@ -14,6 +14,7 @@ using System.Threading.Tasks;
 using XYDataLabs.OrderProcessingSystem.SharedKernel;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Configuration;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
 
 namespace XYDataLabs.OrderProcessingSystem.Infrastructure
 {
@@ -69,6 +70,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure
             // Forward IAppDbContext to the EF-registered concrete context
             builder.Services.AddScoped<IAppDbContext>(sp =>
                 sp.GetRequiredService<OrderProcessingSystemDbContext>());
+            builder.Services.AddScoped<ITenantPaymentProviderConfigurationResolver, Payments.TenantPaymentProviderConfigurationResolver>();
 
             // Tenant registry service — read-only access to tenant list via TenantRegistryDbContext
             builder.Services.AddScoped<ITenantRegistry, Multitenancy.TenantRegistryService>();

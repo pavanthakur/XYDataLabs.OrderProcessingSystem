@@ -9,6 +9,7 @@ namespace XYDataLabs.OpenPayAdapter.Configuration
     public class OpenPayConfig
     {
         public string MerchantId { get; set; } = string.Empty;
+        public string PublicKey { get; set; } = string.Empty;
         public string PrivateKey { get; set; } = string.Empty;
         public string DeviceSessionId { get; set; } = string.Empty;
         public string RedirectUrl { get; set; } = string.Empty;

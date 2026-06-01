@@ -1,7 +1,7 @@
 # Architecture Evolution: Monolith to Enterprise Microservices
 
 **Last Updated:** May 10, 2026
-**Current Status:** Phase 8 Closeout Matrix Validation Passed ✅ | Track U U5 Complete ✅ | Phase 8.5 Complete ✅ | Phases 8.7, 9, 9.5, 10, 11, 11.5, 12-14 Planned 📅
+**Current Status:** Phase 8 Closeout Matrix Validation Passed ✅ | Track U U5 Complete ✅ | Phase 8.5 Complete ✅ | Phases 8.6, 8.7, 9, 9.5, 10, 11, 11.5, 12-14 Planned 📅
 
 ---
 
@@ -530,6 +530,80 @@ The payment runtime is provider-neutral above the adapter boundary. OpenPay rema
 - Seed data, config sections, and docker-compose env vars for Razorpay across all environments
 - Unit tests: `RazorpayOptionsValidationTests`, `RazorpayPaymentGatewayTests`, `RazorpayConfigValidatorTests` (key-prefix vs mode cross-validation — 9 tests), retry classification tests in `ProcessPaymentHandlerTests`
 - Architecture tests: `Application_Should_Not_Depend_On_OpenPayAdapter`, `Application_Should_Not_Depend_On_RazorpayAdapter`
+
+---
+
+## Phase 8.6 — Central Tenant Registry & Separation of Duties 📅
+
+**Focus:** Extract tenant identity and per-tenant business configuration from application code and shared config files into a dedicated, ops-owned database. Developers have code access; they have no access to the Registry DB in any non-local environment.
+
+### Why This Phase Is Required
+
+The current `DbInitializer.SeedProviderAssignments` dictionary is an explicit, PR-reviewed placeholder — correct for this stage. But it has two compliance-level problems that block production readiness:
+
+- **Developer visibility:** Any developer with repo access sees which real tenants exist and which payment provider each uses. In a regulated or multi-client context this breaks separation of duties.
+- **Change path:** Changing a tenant's active provider requires a code change + PR + deploy. In production, this is an operational decision made by the business/ops team — not a code change.
+
+The Central Tenant Registry moves tenant identity and provider assignment out of code and into a DB that the app reads via Managed Identity only, and that developer accounts cannot reach.
+
+### Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                   SEPARATION OF DUTIES                               │
+│                                                                      │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │              Central Tenant Registry DB                      │   │
+│  │          (ops/security team access only)                     │   │
+│  │                                                              │   │
+│  │  • Tenant master records (code, name, tier, status)          │   │
+│  │  • Per-tenant payment provider assignment                    │   │
+│  │  • Feature flags per tenant                                  │   │
+│  │  • Tier limits and entitlements                              │   │
+│  │                                                              │   │
+│  │  Access: App Managed Identity (read-only) only               │   │
+│  │          Developer accounts: DENIED in staging/prod          │   │
+│  └──────────────────────┬───────────────────────────────────────┘   │
+│                         │  read-only at runtime                      │
+│                         ▼                                            │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │              Application Layer                               │   │
+│  │  ITenantRegistry interface (Application — zero DB coupling)  │   │
+│  │  SqlTenantRegistry (Infrastructure — reads Registry DB)      │   │
+│  └──────────────────────┬───────────────────────────────────────┘   │
+│                         │                                            │
+│  ┌──────────────────────▼───────────────────────────────────────┐   │
+│  │  Shared-pool DB + Dedicated tenant DBs                       │   │
+│  │  (orders, customers, payments — no tenant config here)       │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Key Deliverables
+
+- **`ITenantRegistry` interface** — Application layer, zero DB coupling. Methods: `FindByCodeAsync`, `GetActiveTenantsAsync`
+- **`SqlTenantRegistry` implementation** — Infrastructure layer. Separate `TenantRegistryDbContext` backed by the Registry DB. Connection string from Key Vault only, never from config files.
+- **Registry DB schema** — `Tenants` table: `Id`, `Code`, `Name`, `Tier`, `IsActive`, `PaymentProviderCode`, `CreatedAt`, `ModifiedAt`
+- **Remove `DbInitializer.SeedProviderAssignments` dictionary** — tenants are no longer seeded from code. The Registry DB is populated by ops tooling (migration + admin script), not by application startup.
+- **Access control** — staging/prod Registry DB: Managed Identity connection only. No developer connection strings exist. No dev tooling is provided to browse the Registry in non-local environments.
+- **Local dev exception** — local Registry DB seeded by a migration with the standard test tenants. Developers can see and modify local data freely; this is the only environment with developer DB access.
+- **`ADR-019`** — documents the Central Registry decision, access model, schema versioning strategy, and ops change process.
+
+### Security Rules (Non-Negotiable)
+
+- Registry DB connection string is stored in Key Vault and injected at runtime via Managed Identity. It must never appear in any config file or source-controlled secret.
+- Developer accounts are explicitly denied Registry DB access in staging and production via Azure SQL firewall + Entra ID RBAC. No exceptions.
+- `ITenantRegistry` must be read-only. No application code may write to the Registry; writes are ops-only via controlled migration scripts.
+- Audit log every read of the Registry that resolves a provider assignment in a financial operation.
+
+### Closure Trigger
+
+This phase is closed when:
+1. `ITenantRegistry` + `SqlTenantRegistry` replace all `SeedProviderAssignments` lookups at runtime
+2. `DbInitializer` has no knowledge of tenant-to-provider mappings
+3. Staging Registry DB is access-controlled (developer connection denied, validated)
+4. ADR-019 is merged and status is `Accepted`
 
 ---
 
@@ -1296,6 +1370,8 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
      │
     ├── Phase 8.5   ─── ✅ Multi-provider payment (OpenPay + Razorpay, keyed DI, retry classification)
      │
+    ├── Phase 8.6   ─── 📅 Central Tenant Registry (separation of duties, ops-only DB)
+     │
     ├── Phase 8.7   ─── 📅 Provider webhooks (signed, idempotent, tenant-aware)
      │
      ├── Phase 9     ─── 📅 Extract services locally (YARP + Docker Compose + Aspire-Lite)
@@ -1321,7 +1397,8 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 |------------|----------------------|
 | Phase 7 before 8 | Tenant safety must be enforced before events carry tenant context |
 | Phase 8 before 8.5 | Outbox + Inbox required for provider-aware reconciliation and webhook deduplication |
-| Phase 8.5 before 8.7 | Secondary-provider integration and tenant metadata convention must exist before webhook handlers can resolve context |
+| Phase 8.5 before 8.6 | Per-tenant provider assignments must be stable in the DB before the Registry is extracted into a separate ops-owned DB |
+| Phase 8.6 before 8.7 | Webhook handler needs authoritative tenant resolution from the Registry; hardcoded seed data is not a safe source for this |
 | Phase 8.7 before 9 | Webhook receiver lives in monolith first; carried unchanged into microservice extraction |
 | Phase 8 before 9 | Events must exist before services can communicate asynchronously |
 | Phase 9 before 9.5 | Docker Compose infrastructure required to host local Keycloak container |

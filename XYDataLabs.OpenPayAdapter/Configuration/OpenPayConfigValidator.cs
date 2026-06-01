@@ -19,6 +19,16 @@ public sealed class OpenPayConfigValidator : IValidateOptions<OpenPayConfig>
             failures.Add("OpenPay:MerchantId contains a placeholder value (matches bootstrap placeholder prefix 'set-openpay-*'). Set a real credential in Azure Key Vault. Note: this check pattern-matches the current placeholder format only — it is not exhaustive.");
         }
 
+        if (string.IsNullOrWhiteSpace(options.PublicKey))
+        {
+            failures.Add("OpenPay:PublicKey is required.");
+        }
+        else if (options.PublicKey.StartsWith("set-openpay-", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(options.PublicKey, "__OPENPAY_PUBLIC_KEY__", StringComparison.OrdinalIgnoreCase))
+        {
+            failures.Add("OpenPay:PublicKey contains a placeholder value (matches bootstrap placeholder prefix 'set-openpay-*'). Set a real browser-safe credential in Azure Key Vault. Note: this check pattern-matches the current placeholder format only — it is not exhaustive.");
+        }
+
         if (string.IsNullOrWhiteSpace(options.PrivateKey))
         {
             failures.Add("OpenPay:PrivateKey is required.");

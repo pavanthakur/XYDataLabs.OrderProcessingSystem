@@ -17,6 +17,7 @@
   },
   "OpenPay": {
     "MerchantId": "__OPENPAY_MERCHANT_ID__",
+    "PublicKey": "__OPENPAY_PUBLIC_KEY__",
     "PrivateKey": "__OPENPAY_PRIVATE_KEY__",
     "DeviceSessionId": "__OPENPAY_DEVICE_SESSION_ID__",
     "IsProduction": false,

@@ -68,6 +68,7 @@ $envMap = @{
         ApiApp = "$GitHubOwner-$BaseName-api-xyapp-dev"
         UiApp = "$GitHubOwner-$BaseName-ui-xyapp-dev"
         AspNetCoreEnvironment = 'Development'
+        KeyVaultName = "kv-$BaseName-dev"
     }
     'staging' = @{
         Name = 'staging'
@@ -75,6 +76,7 @@ $envMap = @{
         ApiApp = "$GitHubOwner-$BaseName-api-xyapp-stg"
         UiApp = "$GitHubOwner-$BaseName-ui-xyapp-stg"
         AspNetCoreEnvironment = 'Staging'
+        KeyVaultName = "kv-$BaseName-stg"
     }
     'prod' = @{
         Name = 'prod'
@@ -82,6 +84,7 @@ $envMap = @{
         ApiApp = "$GitHubOwner-$BaseName-api-xyapp-prod"
         UiApp = "$GitHubOwner-$BaseName-ui-xyapp-prod"
         AspNetCoreEnvironment = 'Production'
+        KeyVaultName = "kv-$BaseName-prod"
     }
 }
 
@@ -98,6 +101,7 @@ Write-Host "  Resource Group:          $($config.ResourceGroup)" -ForegroundColo
 Write-Host "  API App:                 $($config.ApiApp)" -ForegroundColor Gray
 Write-Host "  UI App:                  $($config.UiApp)" -ForegroundColor Gray
 Write-Host "  ASPNETCORE_ENVIRONMENT:  $($config.AspNetCoreEnvironment)" -ForegroundColor Gray
+Write-Host "  KEY_VAULT_NAME:          $($config.KeyVaultName)" -ForegroundColor Gray
 Write-Host ""
 Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
 Write-Host ""
@@ -128,12 +132,12 @@ try {
     
     # Configure API App Service
     Write-Host "[3/5] Configuring API App Service environment..." -ForegroundColor Cyan
-    Write-Host "  Setting ASPNETCORE_ENVIRONMENT=$($config.AspNetCoreEnvironment) on $($config.ApiApp)..." -ForegroundColor Gray
+    Write-Host "  Setting ASPNETCORE_ENVIRONMENT=$($config.AspNetCoreEnvironment) and KEY_VAULT_NAME=$($config.KeyVaultName) on $($config.ApiApp)..." -ForegroundColor Gray
     
     $null = az webapp config appsettings set `
         --resource-group $config.ResourceGroup `
         --name $config.ApiApp `
-        --settings "ASPNETCORE_ENVIRONMENT=$($config.AspNetCoreEnvironment)" `
+        --settings "ASPNETCORE_ENVIRONMENT=$($config.AspNetCoreEnvironment)" "KEY_VAULT_NAME=$($config.KeyVaultName)" `
         2>&1
     
     if ($LASTEXITCODE -ne 0) {
@@ -174,10 +178,16 @@ try {
         try {
             $apiSettings = $apiSettingsJson | ConvertFrom-Json
             $apiEnv = $apiSettings | Where-Object { $_.name -eq 'ASPNETCORE_ENVIRONMENT' }
+            $apiKeyVault = $apiSettings | Where-Object { $_.name -eq 'KEY_VAULT_NAME' }
             if ($apiEnv.value -eq $config.AspNetCoreEnvironment) {
                 Write-Host "  ✅ API: ASPNETCORE_ENVIRONMENT = $($apiEnv.value)" -ForegroundColor Green
             } else {
                 Write-Host "  ⚠️  API: ASPNETCORE_ENVIRONMENT = $($apiEnv.value) (expected: $($config.AspNetCoreEnvironment))" -ForegroundColor Yellow
+            }
+            if ($apiKeyVault.value -eq $config.KeyVaultName) {
+                Write-Host "  ✅ API: KEY_VAULT_NAME = $($apiKeyVault.value)" -ForegroundColor Green
+            } else {
+                Write-Host "  ⚠️  API: KEY_VAULT_NAME = $($apiKeyVault.value) (expected: $($config.KeyVaultName))" -ForegroundColor Yellow
             }
         } catch {
             Write-Host "  ⚠️  API: Failed to parse settings" -ForegroundColor Yellow

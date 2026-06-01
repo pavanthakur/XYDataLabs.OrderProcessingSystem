@@ -293,4 +293,46 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
                 because: "a transient or ambiguous exception must place the attempt in " +
                          "UnknownNeedsReconciliation so the reconciliation worker can recover it");
     }
+
+    [Fact]
+    public async Task HandleAsync_RazorpayHostedCheckout_ShouldAllowMissingCardFields()
+    {
+        SetupPaymentDbSets(providerType: PaymentProviderTypes.Razorpay);
+
+        MockPaymentGateway
+            .Setup(s => s.CreateCustomerAsync(It.IsAny<PaymentGatewayCreateCustomerRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PaymentGatewayCustomer("razorpay-cust-john", "John Doe", "john@example.com"));
+        MockPaymentGateway
+            .Setup(s => s.CreateCardTokenAsync(It.IsAny<PaymentGatewayCreateCardTokenRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PaymentGatewayCardToken("razorpay-token-pending", UtcNow));
+        MockPaymentGateway
+            .Setup(s => s.CreateChargeAsync(It.IsAny<PaymentGatewayCreateChargeRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PaymentGatewayChargeResult(
+                "order_test_001",
+                "created",
+                100m,
+                UtcNow,
+                null,
+                null,
+                "https://example.com/payment/callback?tenantCode=TenantA"));
+
+        var handler = CreateProcessPaymentHandler(use3DSecure: false, providerType: PaymentProviderTypes.Razorpay);
+
+        var result = await handler.HandleAsync(new XYDataLabs.OrderProcessingSystem.Application.Features.Payments.Commands.ProcessPaymentCommand(
+            Name: "John Doe",
+            Email: "john@example.com",
+            DeviceSessionId: string.Empty,
+            CardNumber: string.Empty,
+            ExpirationYear: string.Empty,
+            ExpirationMonth: string.Empty,
+            Cvv2: string.Empty,
+            CustomerOrderId: "ORDER-RZP-001",
+            ClientCallbackOrigin: null));
+
+        result.IsSuccess.Should().BeTrue();
+        CapturedCardTransactions.Should().HaveCount(2);
+        CapturedCardTransactions.Should().OnlyContain(transaction => transaction.CreditCardExpireYear == 0);
+        CapturedCardTransactions.Should().OnlyContain(transaction => transaction.CreditCardExpireMonth == 0);
+        CapturedCardTransactions.Should().OnlyContain(transaction => transaction.MaskedCardNumber == null);
+    }
 }

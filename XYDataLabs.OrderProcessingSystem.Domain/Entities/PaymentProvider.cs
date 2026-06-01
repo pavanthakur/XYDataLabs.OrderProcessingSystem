@@ -28,6 +28,15 @@ namespace XYDataLabs.OrderProcessingSystem.Domain.Entities
         [MaxLength(50)]
         public string ProviderType { get; set; } = "OpenPay";
 
+        [MaxLength(255)]
+        public string? MerchantId { get; set; }
+
+        [MaxLength(255)]
+        public string? PublicKey { get; set; }
+
+        [MaxLength(255)]
+        public string? PrivateKeyConfigurationKey { get; set; }
+
         [Required]
         public bool Use3DSecure { get; set; } = true;
     }

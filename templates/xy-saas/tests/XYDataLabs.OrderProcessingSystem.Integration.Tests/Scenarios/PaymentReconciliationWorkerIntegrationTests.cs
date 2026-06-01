@@ -23,7 +23,8 @@ public sealed class PaymentReconciliationWorkerIntegrationTests : IAsyncLifetime
     {
         _factory = new ServiceOverrideIntegrationTestFactory(
             _fixture.ConnectionString,
-            services => services.AddScoped<IPaymentGatewayService, SuccessfulPaymentGatewayStub>());
+            services => services.AddScoped<IPaymentGatewayService, SuccessfulPaymentGatewayStub>(),
+            enableBackgroundWorkers: true);
         _ = _factory.CreateClient(); // Force host initialization
         return Task.CompletedTask;
     }

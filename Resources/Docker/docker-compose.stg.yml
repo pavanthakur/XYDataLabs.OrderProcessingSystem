@@ -18,10 +18,17 @@ services:
       - ConnectionStrings__OrderProcessingSystemDbConnection=Server=sql-server,1433;Database=OrderProcessingSystem_Stg;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
       - DedicatedTenantConnectionStrings__TenantC=Server=sql-server,1433;Database=OrderProcessingSystem_TenantC_Stg;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
       - OpenPay__MerchantId=${LOCAL_OPENPAY_MERCHANT_ID}
+      - OpenPay__PublicKey=${LOCAL_OPENPAY_PUBLIC_KEY}
       - OpenPay__PrivateKey=${LOCAL_OPENPAY_PRIVATE_KEY}
       - OpenPay__DeviceSessionId=${LOCAL_OPENPAY_DEVICE_SESSION_ID}
       - Razorpay__MerchantId=${LOCAL_RAZORPAY_MERCHANT_ID}
       - Razorpay__PrivateKey=${LOCAL_RAZORPAY_PRIVATE_KEY}
+      - PaymentProviders__TenantA__OpenPay__PrivateKey=${LOCAL_OPENPAY_PRIVATE_KEY}
+      - PaymentProviders__TenantB__OpenPay__PrivateKey=${LOCAL_OPENPAY_PRIVATE_KEY}
+      - PaymentProviders__TenantC__OpenPay__PrivateKey=${LOCAL_OPENPAY_PRIVATE_KEY}
+      - PaymentProviders__TenantA__Razorpay__PrivateKey=${LOCAL_RAZORPAY_PRIVATE_KEY}
+      - PaymentProviders__TenantB__Razorpay__PrivateKey=${LOCAL_RAZORPAY_PRIVATE_KEY}
+      - PaymentProviders__TenantC__Razorpay__PrivateKey=${LOCAL_RAZORPAY_PRIVATE_KEY}
       - USE_HTTPS=false
     volumes:
       - ../../logs:/logs
@@ -58,10 +65,17 @@ services:
       - ConnectionStrings__OrderProcessingSystemDbConnection=Server=sql-server,1433;Database=OrderProcessingSystem_Stg;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
       - DedicatedTenantConnectionStrings__TenantC=Server=sql-server,1433;Database=OrderProcessingSystem_TenantC_Stg;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
       - OpenPay__MerchantId=${LOCAL_OPENPAY_MERCHANT_ID}
+      - OpenPay__PublicKey=${LOCAL_OPENPAY_PUBLIC_KEY}
       - OpenPay__PrivateKey=${LOCAL_OPENPAY_PRIVATE_KEY}
       - OpenPay__DeviceSessionId=${LOCAL_OPENPAY_DEVICE_SESSION_ID}
       - Razorpay__MerchantId=${LOCAL_RAZORPAY_MERCHANT_ID}
       - Razorpay__PrivateKey=${LOCAL_RAZORPAY_PRIVATE_KEY}
+      - PaymentProviders__TenantA__OpenPay__PrivateKey=${LOCAL_OPENPAY_PRIVATE_KEY}
+      - PaymentProviders__TenantB__OpenPay__PrivateKey=${LOCAL_OPENPAY_PRIVATE_KEY}
+      - PaymentProviders__TenantC__OpenPay__PrivateKey=${LOCAL_OPENPAY_PRIVATE_KEY}
+      - PaymentProviders__TenantA__Razorpay__PrivateKey=${LOCAL_RAZORPAY_PRIVATE_KEY}
+      - PaymentProviders__TenantB__Razorpay__PrivateKey=${LOCAL_RAZORPAY_PRIVATE_KEY}
+      - PaymentProviders__TenantC__Razorpay__PrivateKey=${LOCAL_RAZORPAY_PRIVATE_KEY}
       - USE_HTTPS=true
     volumes:
       - ../../logs:/logs

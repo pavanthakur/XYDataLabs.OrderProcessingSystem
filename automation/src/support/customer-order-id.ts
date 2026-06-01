@@ -8,8 +8,15 @@ export function buildRunPrefix(now: Date): string {
   return `OR-${runNumber}-${dayTag}`;
 }
 
-export function buildCustomerOrderId(runPrefix: string, tenantCode: string, profile: string, runtime: string): string {
-  return `${runPrefix}-${resolveTenantTag(tenantCode)}-${profile}-${runtime}`.replace(/\s+/g, "");
+export function buildCustomerOrderId(
+  runPrefix: string,
+  tenantCode: string,
+  profile: string,
+  runtime: string,
+  providerType?: string
+): string {
+  const providerTag = providerType ? resolveProviderTag(providerType) : "auto";
+  return `${runPrefix}-${resolveTenantTag(tenantCode)}-${profile}-${runtime}-${providerTag}`.replace(/\s+/g, "");
 }
 
 function resolveTenantTag(tenantCode: string): string {
@@ -22,5 +29,16 @@ function resolveTenantTag(tenantCode: string): string {
       return "tC";
     default:
       return tenantCode;
+  }
+}
+
+function resolveProviderTag(providerType: string): string {
+  switch (providerType.trim().toLowerCase()) {
+    case "openpay":
+      return "op";
+    case "razorpay":
+      return "rz";
+    default:
+      return providerType;
   }
 }

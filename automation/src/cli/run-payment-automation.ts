@@ -22,6 +22,7 @@ function parseCliOptions(argumentsList: string[]): ExecutePaymentAutomationRunOp
   let verify = true;
   let sandboxOtpCode = "999";
   let tenantTimeoutMs = 180000;
+  const requestedProviders: string[] = [];
   let runPrefix: string | undefined;
   let autoStopLocalSessions = true;
 
@@ -38,6 +39,15 @@ function parseCliOptions(argumentsList: string[]): ExecutePaymentAutomationRunOp
           tenantCodes.push(argumentsList[index + 1]);
         }
         index += 1;
+        break;
+      case "--provider":
+        if (argumentsList[index + 1]) {
+          requestedProviders.push(argumentsList[index + 1]);
+        }
+        index += 1;
+        break;
+      case "--all-providers":
+        requestedProviders.push("OpenPay", "Razorpay");
         break;
       case "--allow-partial":
         allowPartialExecution = true;
@@ -81,6 +91,7 @@ function parseCliOptions(argumentsList: string[]): ExecutePaymentAutomationRunOp
     verify,
     sandboxOtpCode,
     tenantTimeoutMs,
+    requestedProviders,
     runPrefix,
     autoStopLocalSessions
   };

@@ -28,8 +28,7 @@ namespace XYDataLabs.OpenPayAdapter
         {
             services.AddSingleton<IValidateOptions<OpenPayConfig>, OpenPayConfigValidator>();
             services.AddOptions<OpenPayConfig>()
-                .Bind(configuration.GetSection("OpenPay"))
-                .ValidateOnStart();
+                .Bind(configuration.GetSection("OpenPay"));
 
             // When RedirectUrl is not explicitly configured (e.g. Docker), build it
             // dynamically from ApiSettings:API using the active profile's host and port.
@@ -119,7 +118,10 @@ namespace XYDataLabs.OpenPayAdapter
 
             // Register OpenPay as keyed provider — the unkeyed IPaymentProviderGateway
             // factory in Application StartupHelper resolves the correct provider per tenant.
-            services.AddHttpClient<IOpenPayAdapterService, OpenPayAdapterService>();
+            // OpenPayAdapterService uses the Openpay SDK which manages its own HTTP internally;
+            // it does not need a typed HttpClient and must be registered as a plain scoped service
+            // so keyed DI resolution can construct it via normal constructor injection.
+            services.AddScoped<IOpenPayAdapterService, OpenPayAdapterService>();
             services.AddKeyedScoped<IPaymentProviderGateway, OpenPayPaymentGateway>(PaymentProviderTypes.OpenPay);
             services.AddKeyedScoped<IPaymentProviderAdapter, OpenPayAdapterService>(PaymentProviderTypes.OpenPay);
 

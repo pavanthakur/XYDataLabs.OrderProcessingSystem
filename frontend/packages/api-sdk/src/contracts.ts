@@ -18,6 +18,15 @@ export interface RuntimeConfiguration {
   availableTenants: AvailableTenant[];
 }
 
+export interface PaymentConfiguration {
+  activeProviderType: string;
+  activeProviderName: string;
+  collectionMode: string;
+  browserKey?: string | null;
+  browserMerchantId?: string | null;
+  isProduction: boolean;
+}
+
 export interface OrderSummary {
   orderId: number;
   orderDate: string;

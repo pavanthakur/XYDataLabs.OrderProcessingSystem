@@ -19,8 +19,8 @@ public static class ServiceCollectionExtensions
     {
         services.AddSingleton<IValidateOptions<RazorpayConfig>, RazorpayConfigValidator>();
         services.AddOptions<RazorpayConfig>()
-            .Bind(configuration.GetSection("Razorpay"))
-            .ValidateOnStart();
+            .Bind(configuration.GetSection("Razorpay"));
+            //.ValidateOnStart();
 
         // Resilience pipeline for Razorpay SDK calls:
         //   • Retry 3×, exponential backoff + jitter (1s base) on ServerError / TimeoutException

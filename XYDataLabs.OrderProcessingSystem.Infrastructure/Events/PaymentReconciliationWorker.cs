@@ -64,7 +64,18 @@ public class PaymentReconciliationWorker : BackgroundService
                 continue;
             }
 
-            await ProcessTenantPaymentsAsync(tenantContext, cancellationToken);
+            try
+            {
+                await ProcessTenantPaymentsAsync(tenantContext, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                // Isolate per-tenant failures so a misconfigured dedicated tenant
+                // cannot block reconciliation for all remaining tenants in the cycle.
+                _logger.LogError(ex,
+                    "Payment reconciliation failed for tenant {TenantCode} (Id={TenantId}). Skipping to next tenant.",
+                    tenantCode, tenantContext.TenantId);
+            }
         }
     }
 
@@ -77,7 +88,6 @@ public class PaymentReconciliationWorker : BackgroundService
         try
         {
             var dbContext = tenantScope.ServiceProvider.GetRequiredService<IAppDbContext>();
-            var paymentGateway = tenantScope.ServiceProvider.GetRequiredService<IPaymentProviderGateway>();
 
             // Polling attempts stuck in UnknownNeedsReconciliation state
             var stalledAttempts = await dbContext.PaymentAttempts
@@ -91,15 +101,20 @@ public class PaymentReconciliationWorker : BackgroundService
                 return;
             }
 
+            // Resolve the payment gateway only when there are stalled attempts to
+            // reconcile. This avoids throwing for tenants with no active provider
+            // when there is nothing to reconcile.
+            var paymentGateway = tenantScope.ServiceProvider.GetRequiredService<IPaymentProviderGateway>();
+
             foreach (var attempt in stalledAttempts)
             {
                 _logger.LogInformation("Reconciling PaymentAttempt {AttemptId} for Order {AttemptOrderId}", attempt.Id, attempt.AttemptOrderId);
 
                 try
                 {
-                    if (!string.IsNullOrWhiteSpace(attempt.ProviderChargeId))
+                    if (TryResolveChargeLookupId(paymentGateway, attempt, out var chargeLookupId, out var skipReason))
                     {
-                        var charge = await paymentGateway.GetChargeAsync(attempt.ProviderChargeId, cancellationToken: cancellationToken);
+                        var charge = await paymentGateway.GetChargeAsync(chargeLookupId, cancellationToken: cancellationToken);
 
                         if (charge.Status == "completed")
                         {
@@ -113,6 +128,15 @@ public class PaymentReconciliationWorker : BackgroundService
                         attempt.ProviderStatus = charge.Status;
                         attempt.LastErrorMessage = "Reconciled successfully via Background Worker";
                     }
+                    else if (!string.IsNullOrWhiteSpace(skipReason))
+                    {
+                        _logger.LogInformation(
+                            "Skipping gateway reconciliation for attempt {AttemptOrderId}: {SkipReason}",
+                            attempt.AttemptOrderId,
+                            skipReason);
+
+                        attempt.LastErrorMessage = skipReason;
+                    }
                     else
                     {
                         _logger.LogWarning("Attempt {AttemptOrderId} has no ProviderChargeId. Cannot reconcile through the configured payment gateway lookup.", attempt.AttemptOrderId);
@@ -121,7 +145,7 @@ public class PaymentReconciliationWorker : BackgroundService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error calling OpenPay adapter for Attempt {AttemptOrderId}", attempt.AttemptOrderId);
+                    _logger.LogError(ex, "Error calling {PaymentProviderType} gateway for Attempt {AttemptOrderId}", paymentGateway.ProviderType, attempt.AttemptOrderId);
                     attempt.LastErrorMessage = ex.Message.Length > 500 ? ex.Message.Substring(0, 500) : ex.Message;
                 }
                 finally
@@ -136,5 +160,38 @@ public class PaymentReconciliationWorker : BackgroundService
         {
             tenantContextAccessor.Current = null;
         }
+    }
+
+    private static bool TryResolveChargeLookupId(
+        IPaymentProviderGateway paymentGateway,
+        PaymentAttempt attempt,
+        out string chargeLookupId,
+        out string? skipReason)
+    {
+        chargeLookupId = string.Empty;
+        skipReason = null;
+
+        if (string.IsNullOrWhiteSpace(attempt.ProviderChargeId))
+        {
+            return false;
+        }
+
+        if (!string.Equals(paymentGateway.ProviderType, PaymentProviderTypes.Razorpay, StringComparison.OrdinalIgnoreCase))
+        {
+            chargeLookupId = attempt.ProviderChargeId;
+            return true;
+        }
+
+        if (attempt.ProviderChargeId.StartsWith("pay_", StringComparison.OrdinalIgnoreCase))
+        {
+            chargeLookupId = attempt.ProviderChargeId;
+            return true;
+        }
+
+        skipReason = attempt.ProviderChargeId.StartsWith("order_", StringComparison.OrdinalIgnoreCase)
+            ? "Razorpay reconciliation is waiting for the provider payment id from callback/webhook; the current order id cannot be used for charge lookup yet."
+            : $"Razorpay reconciliation requires a payment id starting with 'pay_'. Current ProviderChargeId '{attempt.ProviderChargeId}' is not a valid charge lookup id.";
+
+        return false;
     }
 }

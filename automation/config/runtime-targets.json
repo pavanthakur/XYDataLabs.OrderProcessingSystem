@@ -31,6 +31,7 @@
     {
       "key": "docker-dev-http",
       "baseUrl": "http://localhost:5022",
+      "apiBaseUrl": "http://localhost:5020",
       "verificationMode": "physical",
       "browserMode": "docker",
       "expectedTenantSource": "runtime-configuration",
@@ -45,6 +46,7 @@
     {
       "key": "docker-dev-https",
       "baseUrl": "https://localhost:5023",
+      "apiBaseUrl": "https://localhost:5021",
       "verificationMode": "physical",
       "browserMode": "docker",
       "expectedTenantSource": "runtime-configuration",
@@ -59,6 +61,7 @@
     {
       "key": "docker-stg-http",
       "baseUrl": "http://localhost:5032",
+      "apiBaseUrl": "http://localhost:5030",
       "verificationMode": "physical",
       "browserMode": "docker",
       "expectedTenantSource": "runtime-configuration",
@@ -73,6 +76,7 @@
     {
       "key": "docker-stg-https",
       "baseUrl": "https://localhost:5033",
+      "apiBaseUrl": "https://localhost:5031",
       "verificationMode": "physical",
       "browserMode": "docker",
       "expectedTenantSource": "runtime-configuration",
@@ -87,6 +91,7 @@
     {
       "key": "docker-prod-http",
       "baseUrl": "http://localhost:5042",
+      "apiBaseUrl": "http://localhost:5040",
       "verificationMode": "physical",
       "browserMode": "docker",
       "expectedTenantSource": "runtime-configuration",
@@ -101,6 +106,7 @@
     {
       "key": "docker-prod-https",
       "baseUrl": "https://localhost:5043",
+      "apiBaseUrl": "https://localhost:5041",
       "verificationMode": "physical",
       "browserMode": "docker",
       "expectedTenantSource": "runtime-configuration",

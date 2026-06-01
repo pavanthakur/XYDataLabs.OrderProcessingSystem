@@ -229,4 +229,19 @@ public class RazorpayPaymentGatewayTests
         result.ErrorMessage.Should().Contain("insufficient funds",
             because: "error description from Razorpay must be surfaced in the gateway charge result");
     }
+
+    [Fact]
+    public async Task GetChargeAsync_RejectsOrderIds_BeforeCallingAdapter()
+    {
+        var act = () => _sut.GetChargeAsync("order_ABC123");
+
+        await act.Should()
+            .ThrowAsync<ArgumentException>()
+            .WithMessage("*Expected 'pay_' but got 'order_ABC123'*");
+
+        _mockAdapter.Verify(
+            a => a.GetPaymentAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never,
+            "order ids must be rejected before the Razorpay payment lookup is attempted");
+    }
 }

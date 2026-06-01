@@ -279,6 +279,8 @@ via the `ASPNETCORE_ENVIRONMENT` variable.
 | `OPENPAY_MERCHANT_ID` | Environments | OpenPay merchant ID — **set manually** in GitHub Settings → Environments by an authorized person; bootstrap validates the target environment before proceeding |
 | `OPENPAY_PRIVATE_KEY` | Environments | OpenPay private key — **set manually** in GitHub Settings → Environments by an authorized person; bootstrap validates the target environment before proceeding |
 | `OPENPAY_DEVICE_SESSION_ID` | Environments | OpenPay device session ID — **set manually** in GitHub Settings → Environments by an authorized person; bootstrap validates the target environment before proceeding |
+| `RAZORPAY_MERCHANT_ID` | Environments | Razorpay key ID (e.g. `rzp_test_…`) — **set manually** in GitHub Settings → Environments by an authorized person; bootstrap validates the target environment before proceeding |
+| `RAZORPAY_PRIVATE_KEY` | Environments | Razorpay key secret — **set manually** in GitHub Settings → Environments by an authorized person; bootstrap validates the target environment before proceeding |
 
 > **Note**: `APP_INSTALLATION_ID` is **not** required — it is auto-discovered at runtime.
 

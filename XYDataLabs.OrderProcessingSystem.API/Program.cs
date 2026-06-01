@@ -361,6 +361,7 @@ builder.Host.UseSerilog((context, services, loggerConfiguration) =>
             .WriteTo.File(
                 path: $"../logs/webapi-{environmentName}-{runtimeSuffix}-{profileSuffix}-.log",
                 rollingInterval: RollingInterval.Day,
+                shared: true,
                 outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{Exception}{NewLine}"
             );
     }

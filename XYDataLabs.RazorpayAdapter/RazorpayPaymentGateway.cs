@@ -105,6 +105,13 @@ public sealed class RazorpayPaymentGateway : IPaymentProviderGateway
         string? customerId = null,
         CancellationToken cancellationToken = default)
     {
+        if (!IsValidRazorpayPaymentId(chargeId))
+        {
+            throw new ArgumentException(
+                $"Invalid Razorpay payment ID format. Expected 'pay_' but got '{chargeId}'.",
+                nameof(chargeId));
+        }
+
         var payment = await _razorpayService.GetPaymentAsync(chargeId, cancellationToken);
 
         // Normalize Razorpay statuses to the same vocabulary used by the reconciliation worker
@@ -129,5 +136,11 @@ public sealed class RazorpayPaymentGateway : IPaymentProviderGateway
             Authorization: null,
             ErrorMessage: errorMessage,
             RedirectUrl: null);
+    }
+
+    private static bool IsValidRazorpayPaymentId(string? paymentId)
+    {
+        return !string.IsNullOrWhiteSpace(paymentId)
+            && paymentId.StartsWith("pay_", StringComparison.OrdinalIgnoreCase);
     }
 }

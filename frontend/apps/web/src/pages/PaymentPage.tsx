@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import type { OrderDetail, OrderProcessingApiClient } from "@xydatalabs/orderprocessing-api-sdk";
+import type { OrderDetail, OrderProcessingApiClient, PaymentConfiguration, PaymentResult } from "@xydatalabs/orderprocessing-api-sdk";
 import { createFlowId, persistPendingPaymentContext, trackPaymentEvent } from "../payment-flow";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
-type SubmitState = "idle" | "submitting" | "redirecting" | "success" | "error";
+type SubmitState = "idle" | "submitting" | "launching_checkout" | "redirecting" | "success" | "error";
 
 interface PaymentPageProps {
   activeTenantCode: string;
@@ -27,9 +27,25 @@ interface ThreeDSRedirectState {
   customerOrderId: string;
 }
 
-const openPayMerchantId = "mt2ummntdjhxgoeycbgj";
-const openPayPublicKey = "pk_4881b1c79b064f7397685d7d491c7338";
+interface RazorpayCheckoutSuccessResponse {
+  razorpay_payment_id: string;
+  razorpay_order_id: string;
+  razorpay_signature?: string;
+}
+
+interface RazorpayCheckoutFailureResponse {
+  error?: {
+    code?: string;
+    description?: string;
+    metadata?: {
+      order_id?: string;
+      payment_id?: string;
+    };
+  };
+}
+
 const threeDSecureRedirectDelayMs = 1200;
+let razorpayScriptPromise: Promise<RazorpayConstructor> | null = null;
 
 export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
   const navigate = useNavigate();
@@ -40,6 +56,8 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
   const hasValidOrderContext = Number.isInteger(orderId) && orderId > 0;
   const hasValidCustomerContext = Number.isInteger(customerId) && customerId > 0;
   const [order, setOrder] = useState<OrderDetail | null>(null);
+  const [paymentConfiguration, setPaymentConfiguration] = useState<PaymentConfiguration | null>(null);
+  const [paymentConfigurationState, setPaymentConfigurationState] = useState<LoadState>("idle");
   const [deviceSessionId, setDeviceSessionId] = useState<string>("");
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [submitState, setSubmitState] = useState<SubmitState>("idle");
@@ -56,6 +74,8 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
     cvv2: ""
   });
   const isManualFlow = !hasValidOrderContext;
+  const usesProviderCheckout = paymentConfiguration?.collectionMode === "provider_checkout";
+  const activeProviderName = paymentConfiguration?.activeProviderName ?? "payment provider";
 
   useEffect(() => {
     if (!hasOrderRouteContext) {
@@ -121,11 +141,57 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
       return;
     }
 
+    let isCancelled = false;
+
+    async function loadPaymentConfiguration() {
+      setPaymentConfigurationState("loading");
+
+      try {
+        const nextPaymentConfiguration = await apiClient.getPaymentConfiguration(activeTenantCode);
+        if (isCancelled) {
+          return;
+        }
+
+        setPaymentConfiguration(nextPaymentConfiguration);
+        setPaymentConfigurationState("ready");
+      } catch (error) {
+        if (isCancelled) {
+          return;
+        }
+
+        setPaymentConfigurationState("error");
+        setErrorMessage(error instanceof Error ? error.message : "Unable to load the tenant payment configuration.");
+      }
+    }
+
+    void loadPaymentConfiguration();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeTenantCode, apiClient]);
+
+  useEffect(() => {
+    if (!activeTenantCode || paymentConfigurationState !== "ready") {
+      return;
+    }
+
+    if (paymentConfiguration?.collectionMode !== "direct_card_form") {
+      setDeviceSessionId("");
+      return;
+    }
+
+    if (!paymentConfiguration.browserMerchantId || !paymentConfiguration.browserKey) {
+      setErrorMessage("OpenPay browser configuration is unavailable for the active tenant.");
+      setDeviceSessionId("");
+      return;
+    }
+
     try {
       const openPay = getOpenPay();
-      openPay.setId(openPayMerchantId);
-      openPay.setApiKey(openPayPublicKey);
-      openPay.setSandboxMode(true);
+      openPay.setId(paymentConfiguration.browserMerchantId);
+      openPay.setApiKey(paymentConfiguration.browserKey);
+      openPay.setSandboxMode(!paymentConfiguration.isProduction);
       const nextDeviceSessionId = openPay.deviceData.setup("payment-form", "deviceIdHiddenFieldName");
       setDeviceSessionId(nextDeviceSessionId);
     } catch (error) {
@@ -137,7 +203,7 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
         errorMessage: error instanceof Error ? error.message : "OpenPay initialization failed."
       });
     }
-  }, [activeTenantCode]);
+  }, [activeTenantCode, paymentConfiguration, paymentConfigurationState]);
 
   const totalPrice = useMemo(() => order?.totalPrice ?? 0, [order]);
 
@@ -180,7 +246,12 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
       return;
     }
 
-    if (!deviceSessionId) {
+    if (!paymentConfiguration) {
+      setErrorMessage("Payment provider configuration is unavailable.");
+      return;
+    }
+
+    if (!usesProviderCheckout && !deviceSessionId) {
       setErrorMessage("OpenPay device session is unavailable.");
       return;
     }
@@ -200,24 +271,44 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
     });
 
     try {
+      const pendingPaymentContext = {
+        customerOrderId: formState.customerOrderId,
+        clientFlowId,
+        customerId: hasValidCustomerContext ? customerId : null,
+        orderId: hasValidOrderContext ? orderId : null
+      };
+
       const payment = await apiClient.processPayment({
         name: formState.name,
         email: formState.email,
-        deviceSessionId,
-        cardNumber: formState.cardNumber.replace(/\s/g, ""),
-        expirationYear: formState.expirationYear,
-        expirationMonth: formState.expirationMonth,
-        cvv2: formState.cvv2,
+        deviceSessionId: usesProviderCheckout ? "" : deviceSessionId,
+        cardNumber: usesProviderCheckout ? "" : formState.cardNumber.replace(/\s/g, ""),
+        expirationYear: usesProviderCheckout ? "" : formState.expirationYear,
+        expirationMonth: usesProviderCheckout ? "" : formState.expirationMonth,
+        cvv2: usesProviderCheckout ? "" : formState.cvv2,
         customerOrderId: formState.customerOrderId,
         clientCallbackOrigin: window.location.origin
       });
 
-      persistPendingPaymentContext(payment.id, {
-        customerOrderId: payment.customerOrderId,
-        clientFlowId,
-        customerId: hasValidCustomerContext ? customerId : null,
-        orderId: hasValidOrderContext ? orderId : null
-      });
+      persistPendingPaymentContext(payment.id, pendingPaymentContext);
+
+      if (usesProviderCheckout) {
+        setSubmitState("launching_checkout");
+        await openProviderCheckout({
+          activeProviderName,
+          activeTenantCode,
+          clientFlowId,
+          navigate,
+          payment,
+          paymentConfiguration,
+          pendingPaymentContext,
+          payerEmail: formState.email,
+          payerName: formState.name,
+          setErrorMessage,
+          setSubmitState
+        });
+        return;
+      }
 
       const normalizedStatus = (payment.status || "").toLowerCase();
 
@@ -291,8 +382,12 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
             <h2>{order ? `Collect payment for order #${order.orderId}` : "Take a card payment"}</h2>
             <p className="subtle-copy">
               {order
-                ? "Review the order amount, capture the card details, and continue through secure verification only when the provider requires it."
-                : "Create a standalone card payment with a clear customer reference and a secure provider-managed verification step when needed."}
+                ? usesProviderCheckout
+                  ? `Review the order amount, confirm payer details, and continue into ${activeProviderName} checkout to collect the payment securely.`
+                  : "Review the order amount, capture the card details, and continue through secure verification only when the provider requires it."
+                : usesProviderCheckout
+                  ? `Create a standalone payment reference and hand the card collection to ${activeProviderName} checkout.`
+                  : "Create a standalone card payment with a clear customer reference and a secure provider-managed verification step when needed."}
             </p>
           </div>
           <div className="detail-actions">
@@ -386,63 +481,75 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
                 </div>
               </div>
 
-              <div className="form-section">
-                <p className="section-kicker">Card details</p>
-                <h3>Payment information</h3>
-                <div className="field-grid">
-                  <label className="search-field field-span-full">
-                    <span>Card number</span>
-                    <input
-                      value={formState.cardNumber}
-                      onChange={(event) => updateFormState("cardNumber", formatCardNumber(event.target.value))}
-                      autoComplete="cc-number"
-                      inputMode="numeric"
-                      required
-                    />
-                  </label>
-                  <label className="search-field">
-                    <span>Expiry month</span>
-                    <input
-                      value={formState.expirationMonth}
-                      onChange={(event) => updateFormState("expirationMonth", sanitizeMonthInput(event.target.value))}
-                      onBlur={(event) => updateFormState("expirationMonth", normalizeMonth(event.target.value))}
-                      autoComplete="cc-exp-month"
-                      inputMode="numeric"
-                      maxLength={2}
-                      required
-                    />
-                  </label>
-                  <label className="search-field">
-                    <span>Expiry year</span>
-                    <input
-                      value={formState.expirationYear}
-                      onChange={(event) => updateFormState("expirationYear", normalizeYear(event.target.value))}
-                      autoComplete="cc-exp-year"
-                      inputMode="numeric"
-                      maxLength={2}
-                      required
-                    />
-                  </label>
-                  <label className="search-field">
-                    <span>CVV</span>
-                    <input
-                      value={formState.cvv2}
-                      onChange={(event) => updateFormState("cvv2", event.target.value.replace(/\D/g, "").slice(0, 4))}
-                      autoComplete="cc-csc"
-                      inputMode="numeric"
-                      maxLength={4}
-                      required
-                    />
-                  </label>
+              {usesProviderCheckout ? (
+                <div className="form-section">
+                  <p className="section-kicker">Provider checkout</p>
+                  <h3>{activeProviderName} payment information</h3>
+                  <p className="subtle-copy">
+                    Card details are collected inside the provider-hosted checkout window. This page only captures payer identity and the business reference needed for reconciliation.
+                  </p>
                 </div>
-              </div>
+              ) : (
+                <div className="form-section">
+                  <p className="section-kicker">Card details</p>
+                  <h3>Payment information</h3>
+                  <div className="field-grid">
+                    <label className="search-field field-span-full">
+                      <span>Card number</span>
+                      <input
+                        value={formState.cardNumber}
+                        onChange={(event) => updateFormState("cardNumber", formatCardNumber(event.target.value))}
+                        autoComplete="cc-number"
+                        inputMode="numeric"
+                        required
+                      />
+                    </label>
+                    <label className="search-field">
+                      <span>Expiry month</span>
+                      <input
+                        value={formState.expirationMonth}
+                        onChange={(event) => updateFormState("expirationMonth", sanitizeMonthInput(event.target.value))}
+                        onBlur={(event) => updateFormState("expirationMonth", normalizeMonth(event.target.value))}
+                        autoComplete="cc-exp-month"
+                        inputMode="numeric"
+                        maxLength={2}
+                        required
+                      />
+                    </label>
+                    <label className="search-field">
+                      <span>Expiry year</span>
+                      <input
+                        value={formState.expirationYear}
+                        onChange={(event) => updateFormState("expirationYear", normalizeYear(event.target.value))}
+                        autoComplete="cc-exp-year"
+                        inputMode="numeric"
+                        maxLength={2}
+                        required
+                      />
+                    </label>
+                    <label className="search-field">
+                      <span>CVV</span>
+                      <input
+                        value={formState.cvv2}
+                        onChange={(event) => updateFormState("cvv2", event.target.value.replace(/\D/g, "").slice(0, 4))}
+                        autoComplete="cc-csc"
+                        inputMode="numeric"
+                        maxLength={4}
+                        required
+                      />
+                    </label>
+                  </div>
+                </div>
+              )}
             </section>
 
             <aside className="detail-card order-summary-card">
               <p className="section-kicker">Summary</p>
               <h3>Payment summary</h3>
               <p className="subtle-copy">
-                The cardholder is sent to an additional verification step only when the provider requests 3D Secure for this transaction.
+                {usesProviderCheckout
+                  ? `${activeProviderName} hosts the checkout and returns the browser here once the provider has a payment result to reconcile.`
+                  : "The cardholder is sent to an additional verification step only when the provider requests 3D Secure for this transaction."}
               </p>
               <dl className="definition-list definition-list-single">
                 <div>
@@ -463,24 +570,39 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
                 </div>
                 <div>
                   <dt>Verification</dt>
-                  <dd>3D Secure when required</dd>
+                  <dd>{usesProviderCheckout ? `${activeProviderName} hosted checkout` : "3D Secure when required"}</dd>
                 </div>
               </dl>
 
               <p className="subtle-copy payment-trust-copy">
-                Card details stay inside the secure payment flow, and the callback page brings the browser back with the final payment result.
+                {usesProviderCheckout
+                  ? "Card details stay inside the provider checkout experience, and the callback page reconciles the final outcome after the provider returns control."
+                  : "Card details stay inside the secure payment flow, and the callback page brings the browser back with the final payment result."}
               </p>
 
               <button
                 type="submit"
                 className="action-button action-button-primary"
-                disabled={submitState === "submitting" || submitState === "redirecting" || !deviceSessionId || loadState !== "ready"}
+                disabled={
+                  submitState === "submitting"
+                  || submitState === "redirecting"
+                  || submitState === "launching_checkout"
+                  || paymentConfigurationState !== "ready"
+                  || loadState !== "ready"
+                  || (!usesProviderCheckout && !deviceSessionId)
+                }
               >
                 {submitState === "submitting"
-                  ? "Processing payment..."
+                  ? usesProviderCheckout
+                    ? "Preparing checkout..."
+                    : "Processing payment..."
+                  : submitState === "launching_checkout"
+                    ? `Opening ${activeProviderName}...`
                   : submitState === "redirecting"
                     ? "Opening 3D Secure..."
-                    : "Process payment"}
+                    : usesProviderCheckout
+                      ? `Continue to ${activeProviderName}`
+                      : "Process payment"}
               </button>
             </aside>
           </form>
@@ -502,12 +624,16 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
               <dd>{isManualFlow ? "Standalone" : "Order-linked"}</dd>
             </div>
             <div>
+              <dt>Provider flow</dt>
+              <dd>{paymentConfiguration?.collectionMode ?? "Pending"}</dd>
+            </div>
+            <div>
               <dt>Submission state</dt>
               <dd>{formatSubmitState(submitState)}</dd>
             </div>
             <div>
               <dt>Device session</dt>
-              <dd>{deviceSessionId ? "Ready" : "Pending"}</dd>
+              <dd>{usesProviderCheckout ? "Not required" : deviceSessionId ? "Ready" : "Pending"}</dd>
             </div>
           </dl>
         </details>
@@ -542,6 +668,8 @@ function formatSubmitState(value: SubmitState): string {
       return "Ready";
     case "submitting":
       return "Submitting";
+    case "launching_checkout":
+      return "Opening provider checkout";
     case "redirecting":
       return "Redirecting to 3D Secure";
     case "success":
@@ -615,6 +743,130 @@ function getOpenPay(): NonNullable<OpenPayWindow["OpenPay"]> {
 
   return globalWindow.OpenPay;
 }
+
+async function openProviderCheckout(options: {
+  activeProviderName: string;
+  activeTenantCode: string;
+  clientFlowId: string;
+  navigate: ReturnType<typeof useNavigate>;
+  payment: PaymentResult;
+  paymentConfiguration: PaymentConfiguration;
+  pendingPaymentContext: {
+    customerOrderId: string;
+    clientFlowId: string;
+    customerId: number | null;
+    orderId: number | null;
+  };
+  payerEmail: string;
+  payerName: string;
+  setErrorMessage: (value: string | null) => void;
+  setSubmitState: (value: SubmitState) => void;
+}): Promise<void> {
+  const providerType = options.paymentConfiguration.activeProviderType.trim().toLowerCase();
+  if (providerType !== "razorpay") {
+    throw new Error(`Provider checkout is not implemented for ${options.paymentConfiguration.activeProviderName}.`);
+  }
+
+  const browserKey = options.paymentConfiguration.browserKey?.trim();
+  if (!browserKey) {
+    throw new Error("Razorpay browser key is unavailable.");
+  }
+
+  const Razorpay = await getRazorpayConstructor();
+  const checkout = new Razorpay({
+    key: browserKey,
+    order_id: options.payment.id,
+    name: options.activeProviderName,
+    description: options.payment.customerOrderId,
+    prefill: {
+      name: options.payerName,
+      email: options.payerEmail
+    },
+    notes: {
+      tenantCode: options.activeTenantCode,
+      customerOrderId: options.payment.customerOrderId
+    },
+    handler: (response) => {
+      persistPendingPaymentContext(response.razorpay_payment_id, options.pendingPaymentContext);
+      options.setSubmitState("success");
+
+      const summarySearchParams = new URLSearchParams({
+        tenantCode: options.activeTenantCode,
+        razorpay_payment_id: response.razorpay_payment_id,
+        razorpay_order_id: response.razorpay_order_id,
+        source: "razorpay"
+      });
+
+      if (response.razorpay_signature) {
+        summarySearchParams.set("razorpay_signature", response.razorpay_signature);
+      }
+
+      options.navigate(`/payments/callback?${summarySearchParams.toString()}`, { replace: true });
+    },
+    modal: {
+      ondismiss: () => {
+        options.setSubmitState("idle");
+      }
+    }
+  });
+
+  checkout.on("payment.failed", (response) => {
+    const paymentId = response.error?.metadata?.payment_id;
+    const orderId = response.error?.metadata?.order_id ?? options.payment.id;
+    const errorMessage = response.error?.description ?? "Razorpay checkout failed.";
+
+    if (paymentId) {
+      persistPendingPaymentContext(paymentId, options.pendingPaymentContext);
+    }
+
+    options.setSubmitState("error");
+    options.setErrorMessage(errorMessage);
+
+    const summarySearchParams = new URLSearchParams({
+      tenantCode: options.activeTenantCode,
+      source: "razorpay",
+      error_message: errorMessage,
+      razorpay_order_id: orderId
+    });
+
+    if (paymentId) {
+      summarySearchParams.set("razorpay_payment_id", paymentId);
+    }
+
+    options.navigate(`/payments/callback?${summarySearchParams.toString()}`, { replace: true });
+  });
+
+  checkout.open();
+}
+
+async function getRazorpayConstructor(): Promise<RazorpayConstructor> {
+  const globalWindow = window as Window & RazorpayWindow;
+  if (globalWindow.Razorpay) {
+    return globalWindow.Razorpay;
+  }
+
+  if (!razorpayScriptPromise) {
+    razorpayScriptPromise = new Promise<RazorpayConstructor>((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.async = true;
+      script.onload = () => {
+        const nextConstructor = (window as Window & RazorpayWindow).Razorpay;
+        if (nextConstructor) {
+          resolve(nextConstructor);
+          return;
+        }
+
+        reject(new Error("Razorpay checkout script loaded without exposing the Razorpay constructor."));
+      };
+      script.onerror = () => reject(new Error("Failed to load Razorpay checkout script."));
+      document.head.append(script);
+    });
+  }
+
+  return razorpayScriptPromise;
+}
+
 interface OpenPayWindow {
   OpenPay?: {
     setId(value: string): void;
@@ -625,3 +877,30 @@ interface OpenPayWindow {
     };
   };
 }
+
+interface RazorpayWindow {
+  Razorpay?: RazorpayConstructor;
+}
+
+type RazorpayCheckoutConstructorOptions = {
+  key: string;
+  order_id: string;
+  name: string;
+  description: string;
+  prefill?: {
+    name?: string;
+    email?: string;
+  };
+  notes?: Record<string, string>;
+  handler?: (response: RazorpayCheckoutSuccessResponse) => void;
+  modal?: {
+    ondismiss?: () => void;
+  };
+};
+
+interface RazorpayCheckoutInstance {
+  on(eventName: "payment.failed", handler: (response: RazorpayCheckoutFailureResponse) => void): void;
+  open(): void;
+}
+
+type RazorpayConstructor = new (options: RazorpayCheckoutConstructorOptions) => RazorpayCheckoutInstance;

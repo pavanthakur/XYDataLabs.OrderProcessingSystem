@@ -142,8 +142,11 @@ function Initialize-LocalDockerSecrets {
         @{ Name = "LOCAL_SQL_PASSWORD"; Prompt = "Enter LOCAL_SQL_PASSWORD for local Docker SQL" },
         @{ Name = "LOCAL_CERT_PASSWORD"; Prompt = "Enter LOCAL_CERT_PASSWORD for local HTTPS certificate" },
         @{ Name = "LOCAL_OPENPAY_MERCHANT_ID"; Prompt = "Enter OpenPay Merchant ID (LOCAL_OPENPAY_MERCHANT_ID)" },
+        @{ Name = "LOCAL_OPENPAY_PUBLIC_KEY"; Prompt = "Enter OpenPay Public Key (LOCAL_OPENPAY_PUBLIC_KEY)" },
         @{ Name = "LOCAL_OPENPAY_PRIVATE_KEY"; Prompt = "Enter OpenPay Private Key (LOCAL_OPENPAY_PRIVATE_KEY)" },
-        @{ Name = "LOCAL_OPENPAY_DEVICE_SESSION_ID"; Prompt = "Enter LOCAL_OPENPAY_DEVICE_SESSION_ID (press Enter for default)" }
+        @{ Name = "LOCAL_OPENPAY_DEVICE_SESSION_ID"; Prompt = "Enter LOCAL_OPENPAY_DEVICE_SESSION_ID (press Enter for default)" },
+        @{ Name = "LOCAL_RAZORPAY_MERCHANT_ID"; Prompt = "Enter Razorpay Merchant ID (LOCAL_RAZORPAY_MERCHANT_ID)" },
+        @{ Name = "LOCAL_RAZORPAY_PRIVATE_KEY"; Prompt = "Enter Razorpay Private Key (LOCAL_RAZORPAY_PRIVATE_KEY)" }
     )
     $optionalSettingNames = @("ORDERPROCESSING_SQLSERVER_IMAGE")
 
@@ -176,7 +179,7 @@ function Initialize-LocalDockerSecrets {
         Write-ColoredOutput "$secretName not set. Prompting once and storing it in $SecretsFilePath (gitignored)." "Yellow" "INFO"
 
         # Show detailed instructions for OpenPay credentials
-        if ($secretName -in @('LOCAL_OPENPAY_MERCHANT_ID', 'LOCAL_OPENPAY_PRIVATE_KEY')) {
+        if ($secretName -in @('LOCAL_OPENPAY_MERCHANT_ID', 'LOCAL_OPENPAY_PUBLIC_KEY', 'LOCAL_OPENPAY_PRIVATE_KEY', 'LOCAL_RAZORPAY_MERCHANT_ID', 'LOCAL_RAZORPAY_PRIVATE_KEY')) {
             Write-Host ''
             Write-Host '  ┌─────────────────────────────────────────────────────────────────┐' -ForegroundColor Cyan
             Write-Host '  │  OpenPay sandbox credentials — manual step required             │' -ForegroundColor Cyan
@@ -185,13 +188,15 @@ function Initialize-LocalDockerSecrets {
             Write-Host '  │  2. Log in to your sandbox account                              │' -ForegroundColor Cyan
             Write-Host '  │  3. On the home/dashboard page you will see:                    │' -ForegroundColor Cyan
             Write-Host '  │       Merchant ID  — a short alphanumeric string (e.g. m...)    │' -ForegroundColor Cyan
+            Write-Host '  │       Public key   — starts with pk_...                         │' -ForegroundColor Cyan
             Write-Host '  │       Private key  — starts with sk_...                         │' -ForegroundColor Cyan
             Write-Host '  │  4. Paste below. Stored in .env.local — not asked again.        │' -ForegroundColor Cyan
             Write-Host '  │                                                                 │' -ForegroundColor Cyan
             Write-Host '  │  To persist for all team machines, run once after pasting:      │' -ForegroundColor Cyan
             Write-Host '  │    .\Resources\Azure-Deployment\populate-keyvault-secrets.ps1   │' -ForegroundColor Cyan
             Write-Host '  │        -Environment dev                                         │' -ForegroundColor Cyan
-            Write-Host '  │        -OpenPayMerchantId <id> -OpenPayPrivateKey <key>         │' -ForegroundColor Cyan
+            Write-Host '  │        -OpenPayMerchantId <id> -OpenPayPublicKey <key>          │' -ForegroundColor Cyan
+            Write-Host '  │        -OpenPayPrivateKey <key>                                  │' -ForegroundColor Cyan
             Write-Host '  └─────────────────────────────────────────────────────────────────┘' -ForegroundColor Cyan
             Write-Host ''
         }
@@ -232,8 +237,11 @@ function Initialize-LocalDockerSecrets {
             "LOCAL_SQL_PASSWORD=$($fileSecrets['LOCAL_SQL_PASSWORD'])",
             "LOCAL_CERT_PASSWORD=$($fileSecrets['LOCAL_CERT_PASSWORD'])",
             "LOCAL_OPENPAY_MERCHANT_ID=$($fileSecrets['LOCAL_OPENPAY_MERCHANT_ID'])",
+            "LOCAL_OPENPAY_PUBLIC_KEY=$($fileSecrets['LOCAL_OPENPAY_PUBLIC_KEY'])",
             "LOCAL_OPENPAY_PRIVATE_KEY=$($fileSecrets['LOCAL_OPENPAY_PRIVATE_KEY'])",
-            "LOCAL_OPENPAY_DEVICE_SESSION_ID=$($fileSecrets['LOCAL_OPENPAY_DEVICE_SESSION_ID'])"
+            "LOCAL_OPENPAY_DEVICE_SESSION_ID=$($fileSecrets['LOCAL_OPENPAY_DEVICE_SESSION_ID'])",
+            "LOCAL_RAZORPAY_MERCHANT_ID=$($fileSecrets['LOCAL_RAZORPAY_MERCHANT_ID'])",
+            "LOCAL_RAZORPAY_PRIVATE_KEY=$($fileSecrets['LOCAL_RAZORPAY_PRIVATE_KEY'])"
         )
         if ($fileSecrets.ContainsKey('ORDERPROCESSING_SQLSERVER_IMAGE') -and -not [string]::IsNullOrWhiteSpace($fileSecrets['ORDERPROCESSING_SQLSERVER_IMAGE'])) {
             $fileContent += "ORDERPROCESSING_SQLSERVER_IMAGE=$($fileSecrets['ORDERPROCESSING_SQLSERVER_IMAGE'])"

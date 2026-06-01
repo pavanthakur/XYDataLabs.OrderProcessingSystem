@@ -18,24 +18,24 @@ public sealed class RazorpayAdapterService : IRazorpayAdapterService
     public string ProviderType => PaymentProviderTypes.Razorpay;
 
     public RazorpayAdapterService(
-        IOptions<RazorpayConfig> config,
+        ITenantPaymentProviderConfigurationResolver paymentProviderConfigurationResolver,
         ILogger logger,
         ResiliencePipelineProvider<string> pipelineProvider)
     {
-        ArgumentNullException.ThrowIfNull(config);
+        ArgumentNullException.ThrowIfNull(paymentProviderConfigurationResolver);
+        ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(pipelineProvider);
 
+        var configuration = paymentProviderConfigurationResolver.ResolveCurrentTenantConfiguration();
         _logger = logger;
-        _client = new RazorpayClient(config.Value.MerchantId, config.Value.PrivateKey);
+        _client = new RazorpayClient(configuration.MerchantId, configuration.PrivateKey);
         _pipeline = pipelineProvider.GetPipeline("razorpay");
 
-        var mode = config.Value.IsProduction ? "LIVE" : "TEST";
-        var keyHint = config.Value.MerchantId.Length > 12
-            ? string.Concat(config.Value.MerchantId.AsSpan(0, 12), "...")
-            : config.Value.MerchantId;
+        var mode = configuration.IsProduction ? "LIVE" : "TEST";
         _logger.Information(
-            "RazorpayAdapterService initialized in {Mode} mode (key_id prefix: {KeyHint})",
-            mode, keyHint);
+            "RazorpayAdapterService initialized in {Mode} mode for merchant {MerchantId}",
+            mode,
+            configuration.MerchantId);
     }
 
     public async Task<RazorpayOrderResult> CreateOrderAsync(
@@ -46,8 +46,8 @@ public sealed class RazorpayAdapterService : IRazorpayAdapterService
         var amountInPaise = (int)(request.Amount * 100);
 
         _logger.Information(
-            "Creating Razorpay order for amount {Amount} {Currency} receipt {Receipt}",
-            request.Amount, request.Currency, request.Receipt);
+            "Creating Razorpay order with payload: Amount={Amount}, Currency={Currency}, Receipt={Receipt}, Notes={Notes}",
+            request.Amount, request.Currency, request.Receipt, request.Notes);
 
         try
         {
@@ -56,12 +56,14 @@ public sealed class RazorpayAdapterService : IRazorpayAdapterService
                 var attributes = new Dictionary<string, object>
                 {
                     ["amount"] = amountInPaise,
-                    ["currency"] = request.Currency,
+                    ["currency"] = "INR", // Always use INR for Razorpay
                     ["receipt"] = request.Receipt
                 };
 
                 if (!string.IsNullOrWhiteSpace(request.Notes))
                     attributes["notes"] = new Dictionary<string, string> { ["description"] = request.Notes };
+
+                _logger.Information("Sending order creation request to Razorpay: {Attributes}", attributes);
 
                 return new ValueTask<Order>(Task.Run(
                     () => _client.Order.Create(attributes), ct));
@@ -73,14 +75,15 @@ public sealed class RazorpayAdapterService : IRazorpayAdapterService
                 order["created_at"] != null ? (long)order["created_at"] : DateTimeOffset.UtcNow.ToUnixTimeSeconds())
                 .UtcDateTime;
 
-            _logger.Information("Razorpay order created: {OrderId} status {Status}", orderId, status);
+            _logger.Information("Razorpay order created successfully: {OrderId}, Status: {Status}, FullResponse: {Order}", orderId, status, order.Attributes);
 
             return new RazorpayOrderResult(orderId, status, request.Amount, request.Currency, createdAt);
         }
         catch (Exception ex)
         {
             _logger.Error(ex,
-                "Failed to create Razorpay order for receipt {Receipt}", request.Receipt);
+                "Failed to create Razorpay order for receipt {Receipt}. Exception: {ExceptionMessage}. Full exception: {ExceptionDetails}",
+                request.Receipt, ex.Message, ex.ToString());
             throw;
         }
     }
