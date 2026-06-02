@@ -17,10 +17,12 @@ using Microsoft.Extensions.Configuration;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData;
 using Microsoft.ApplicationInsights.Extensibility;
+using Microsoft.ApplicationInsights;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Runtime.CompilerServices;
 using XYDataLabs.OrderProcessingSystem.Application.Utilities;
+using XYDataLabs.OrderProcessingSystem.API.Services;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Configuration;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
 using XYDataLabs.RazorpayAdapter;
@@ -145,7 +147,7 @@ if (!string.IsNullOrWhiteSpace(appInsightsConnectionString))
         builder.Services.AddApplicationInsightsTelemetry(options =>
         {
             options.ConnectionString = appInsightsConnectionString;
-            options.EnableAdaptiveSampling = true;
+            options.EnableAdaptiveSampling = false;
             options.EnableQuickPulseMetricStream = true;
         });
         Log.Information("[CONFIG] Application Insights enabled for {Environment} environment", environmentName);
@@ -200,6 +202,8 @@ builder.Services.AddCors(options =>
 
 builder.InjectInfrastructureDependencies();
 builder.InjectApplicationDependencies();
+builder.Services.AddScoped<IPaymentTelemetryTracker>(serviceProvider =>
+    new ApplicationInsightsPaymentTelemetryTracker(serviceProvider.GetService<TelemetryClient>()));
 builder.Services.AddOptions<PaymentGatewayRequestDefaults>()
     .Bind(builder.Configuration.GetSection("OpenPay"))
     .Validate(defaults => !string.IsNullOrWhiteSpace(defaults.RedirectUrl), "OpenPay:RedirectUrl is required.")

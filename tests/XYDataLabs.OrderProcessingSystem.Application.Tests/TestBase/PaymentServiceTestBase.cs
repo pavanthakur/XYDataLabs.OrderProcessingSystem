@@ -12,6 +12,7 @@ using XYDataLabs.OrderProcessingSystem.Application.Features.Payments.Commands;
 using XYDataLabs.OrderProcessingSystem.Application.Utilities;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase;
@@ -80,9 +81,10 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
                 RedirectUrl = "https://example.com/callback",
                 DeviceSessionId = "default-device-session"
             }),
+            NullPaymentTelemetryTracker.Instance,
             new Mock<ILogger<ProcessPaymentCommandHandler>>().Object,
             MockDbContext.Object,
-                MockPaymentProviderResolver.Object,
+            MockPaymentProviderResolver.Object,
             MockTimeProvider.Object,
             MockTenantProvider.Object);
     }
@@ -99,9 +101,11 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
             return new ConfirmPaymentStatusCommandHandler(
                 MockDbContext.Object,
                 new OpenPayPaymentGateway(MockOpenPayAdapter.Object),
+                NullPaymentTelemetryTracker.Instance,
                 new Mock<ILogger<ConfirmPaymentStatusCommandHandler>>().Object,
                 MockPaymentProviderConfigurationResolver.Object,
                 MockPaymentProviderResolver.Object,
+                MockTenantProvider.Object,
                 MockTimeProvider.Object);
         }
 
@@ -110,9 +114,11 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
         return new ConfirmPaymentStatusCommandHandler(
             MockDbContext.Object,
             MockPaymentGateway.Object,
+            NullPaymentTelemetryTracker.Instance,
             new Mock<ILogger<ConfirmPaymentStatusCommandHandler>>().Object,
             MockPaymentProviderConfigurationResolver.Object,
             MockPaymentProviderResolver.Object,
+            MockTenantProvider.Object,
             MockTimeProvider.Object);
     }
 

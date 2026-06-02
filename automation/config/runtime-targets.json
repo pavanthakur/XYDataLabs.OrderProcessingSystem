@@ -121,6 +121,7 @@
     {
       "key": "azure-dev",
       "baseUrl": "https://pavanthakur-orderprocessing-ui-xyapp-dev.azurewebsites.net",
+      "apiBaseUrl": "https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net",
       "verificationMode": "azure",
       "browserMode": "azure",
       "expectedTenantSource": "runtime-configuration",
@@ -135,6 +136,7 @@
     {
       "key": "azure-stg",
       "baseUrl": "https://pavanthakur-orderprocessing-ui-xyapp-stg.azurewebsites.net",
+      "apiBaseUrl": "https://pavanthakur-orderprocessing-api-xyapp-stg.azurewebsites.net",
       "verificationMode": "azure",
       "browserMode": "azure",
       "expectedTenantSource": "runtime-configuration",
@@ -149,6 +151,7 @@
     {
       "key": "azure-prod",
       "baseUrl": "https://pavanthakur-orderprocessing-ui-xyapp-prod.azurewebsites.net",
+      "apiBaseUrl": "https://pavanthakur-orderprocessing-api-xyapp-prod.azurewebsites.net",
       "verificationMode": "azure",
       "browserMode": "azure",
       "expectedTenantSource": "runtime-configuration",

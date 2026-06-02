@@ -452,8 +452,29 @@ if (-not $SkipFirewallOpen) {
     Ensure-AzureSqlFirewallAccess
 }
 
-Write-Step "Querying App Insights API traces"
+Write-Step "Querying App Insights API telemetry"
 $apiQuery = @"
+union isfuzzy=true
+(
+customEvents
+| where timestamp >= startofday(now() + 330m) - 330m
+| where name in ('payment_validation_attempt_created',
+                 'payment_validation_charge_created',
+                 'payment_validation_callback_reconciled')
+| extend application = tostring(customDimensions['Application'])
+| extend tenant = tostring(customDimensions['TenantCode'])
+| extend customerOrderId = tostring(customDimensions['CustomerOrderId'])
+| extend runPrefix = coalesce(tostring(customDimensions['RunPrefix']), extract(@'^(OR-\d+-[^-]+)', 1, customerOrderId))
+| extend chargeId = tostring(customDimensions['PaymentId'])
+| extend message = case(
+    name == 'payment_validation_attempt_created', strcat('Generated payment attempt order id ', tostring(customDimensions['AttemptOrderId']), ' and payment trace id ', tostring(customDimensions['PaymentTraceId']), ' from customer order id ', customerOrderId),
+    name == 'payment_validation_charge_created', strcat('Charge created with ID: ', tostring(customDimensions['PaymentId'])),
+    name == 'payment_validation_callback_reconciled', strcat('Payment callback reconciliation completed for payment ', tostring(customDimensions['PaymentId']), '. Status ', tostring(customDimensions['PaymentStatus']), ', remote confirmed: ', tostring(customDimensions['RemoteStatusConfirmed']), ', callback recorded: ', tostring(customDimensions['CallbackRecorded'])),
+    name)
+| where application == 'API' or cloud_RoleName has 'api'
+| project timestamp, tenant, customerOrderId, runPrefix, chargeId, message
+),
+(
 traces
 | where timestamp >= startofday(now() + 330m) - 330m
 | where message has_any('Generated payment attempt order id',
@@ -467,6 +488,7 @@ traces
 | extend chargeId = coalesce(tostring(customDimensions['ChargeId']), extract(@'Charge created with ID:\s+(\S+)', 1, message), extract(@'payment\s+(\S+)\. Status', 1, message), extract(@'/payments/(\S+)/confirm-status', 1, message))
 | where cloud_RoleName has 'api' or application == 'API'
 | project timestamp, tenant, customerOrderId, runPrefix, chargeId, message
+)
 | order by timestamp asc
 "@
 
@@ -481,12 +503,12 @@ try {
 }
 catch {
     $apiQueryFailed = $true
-    $appInsightsWarnings += "API trace query failed: $($_.Exception.Message)"
+    $appInsightsWarnings += "API telemetry query failed: $($_.Exception.Message)"
     if ([string]::IsNullOrWhiteSpace($RunPrefix)) {
-        throw "API trace query failed and -RunPrefix was not supplied. $($_.Exception.Message)"
+        throw "API telemetry query failed and -RunPrefix was not supplied. $($_.Exception.Message)"
     }
 
-    Write-Host "App Insights API query failed; continuing with DB-only verification for run prefix $RunPrefix." -ForegroundColor Yellow
+    Write-Host "App Insights API telemetry query failed; continuing with DB-only verification for run prefix $RunPrefix." -ForegroundColor Yellow
 }
 
 $apiEvents = foreach ($row in $apiRows) {
@@ -545,13 +567,18 @@ if ([string]::IsNullOrWhiteSpace($selectedRunPrefix)) {
         throw "Multiple run prefixes were found. Re-run with -RunPrefix.`n$prefixList"
     }
     else {
-        throw "No payment run prefixes were found in today's API traces for $Environment. Re-run with -RunPrefix to force a DB-only verification pass."
+        throw "No payment run prefixes were found in today's API telemetry for $Environment. Re-run with -RunPrefix to force a DB-only verification pass."
     }
 }
 
 if ($availableRunPrefixes.Count -gt 0 -and $availableRunPrefixes -notcontains $selectedRunPrefix) {
-    $prefixList = ($availableRunPrefixes | ForEach-Object { "- $_" }) -join "`n"
-    throw "Run prefix '$selectedRunPrefix' was not found in today's API traces.`n$prefixList"
+    if ([string]::IsNullOrWhiteSpace($RunPrefix)) {
+        $prefixList = ($availableRunPrefixes | ForEach-Object { "- $_" }) -join "`n"
+        throw "Run prefix '$selectedRunPrefix' was not found in today's API telemetry.`n$prefixList"
+    }
+
+    $appInsightsWarnings += "Run prefix '$selectedRunPrefix' was not found in today's API telemetry yet; continuing with DB-backed verification."
+    $appInsightsAvailable = $false
 }
 
 $selectedApiEvents = @($resolvedApiEvents | Where-Object { $_.ResolvedRunPrefix -eq $selectedRunPrefix })
@@ -570,8 +597,30 @@ $apiChargeEvents = @(
         Sort-Object Timestamp
 )
 
-Write-Step "Querying App Insights browser/UI telemetry traces"
+Write-Step "Querying App Insights browser/UI telemetry"
 $uiQuery = @"
+union isfuzzy=true
+(
+customEvents
+| where timestamp >= startofday(now() + 330m) - 330m
+| where name in ('ui_payment_callback_received',
+                 'ui_payment_callback_reconciled',
+                 'ui_payment_callback_pending_retry_scheduled',
+                 'ui_payment_callback_failed',
+                 'ui_payment_callback_confirmation_requested',
+                 'ui_payment_callback_confirmed',
+                 'ui_payment_callback_confirmation_failed')
+| extend application = tostring(customDimensions['Application'])
+| extend tenant = tostring(customDimensions['TenantCode'])
+| extend customerOrderId = tostring(customDimensions['CustomerOrderId'])
+| extend uiEventName = name
+| extend chargeId = tostring(customDimensions['PaymentId'])
+| extend statusCode = tostring(customDimensions['HttpStatus'])
+| extend message = coalesce(tostring(customDimensions['ErrorMessage']), tostring(customDimensions['PaymentStatus']), name)
+| where application == 'UI' or cloud_RoleName has 'api' or cloud_RoleName has 'ui'
+| project timestamp, tenant, customerOrderId, uiEventName, chargeId, statusCode, message
+),
+(
 traces
 | where timestamp >= startofday(now() + 330m) - 330m
 | where message has_any('OpenPay callback received',
@@ -591,6 +640,7 @@ traces
 | extend statusCode = tostring(customDimensions['StatusCode'])
 | where cloud_RoleName has 'api' or cloud_RoleName has 'ui' or application == 'API' or application == 'UI'
 | project timestamp, tenant, customerOrderId, uiEventName, chargeId, statusCode, message
+)
 | order by timestamp asc
 "@
 
@@ -599,7 +649,7 @@ try {
 }
 catch {
     $uiQueryFailed = $true
-    $appInsightsWarnings += "UI trace query failed: $($_.Exception.Message)"
+    $appInsightsWarnings += "UI telemetry query failed: $($_.Exception.Message)"
     Write-Host 'App Insights browser/UI telemetry query failed; continuing with DB-only verification for UI evidence.' -ForegroundColor Yellow
 }
 
@@ -730,20 +780,43 @@ if (@($apiChargeEvents).Count -eq 0 -and @($allDbChargeIds).Count -gt 0) {
     $dbChargeIdList = Get-KqlQuotedValues -Values $allDbChargeIds
     if (-not [string]::IsNullOrWhiteSpace($dbChargeIdList)) {
         $fallbackApiQuery = @"
-traces
+    union isfuzzy=true
+    (
+    customEvents
 | where timestamp >= ago(7d)
-| where message has_any('Generated payment attempt order id',
-                        'Charge created with ID',
-                        'Payment callback reconciliation completed',
-                        'confirm-status responded')
+    | where name in ('payment_validation_attempt_created',
+             'payment_validation_charge_created',
+             'payment_validation_callback_reconciled')
 | extend application = tostring(customDimensions['Application'])
 | extend tenant = tostring(customDimensions['TenantCode'])
-| extend customerOrderId = coalesce(tostring(customDimensions['CustomerOrderId']), extract(@'customer order id\s+(\S+)', 1, message), extract(@'customer order\s+(\S+)', 1, message))
-| extend runPrefix = extract(@'^(OR-\d+-[^-]+)', 1, customerOrderId)
-| extend chargeId = coalesce(tostring(customDimensions['ChargeId']), extract(@'Charge created with ID:\s+(\S+)', 1, message), extract(@'payment\s+(\S+)\. Status', 1, message), extract(@'/payments/(\S+)/confirm-status', 1, message))
-| where cloud_RoleName has 'api' or application == 'API'
+    | extend customerOrderId = tostring(customDimensions['CustomerOrderId'])
+    | extend runPrefix = coalesce(tostring(customDimensions['RunPrefix']), extract(@'^(OR-\d+-[^-]+)', 1, customerOrderId))
+    | extend chargeId = tostring(customDimensions['PaymentId'])
+    | extend message = case(
+        name == 'payment_validation_attempt_created', strcat('Generated payment attempt order id ', tostring(customDimensions['AttemptOrderId']), ' and payment trace id ', tostring(customDimensions['PaymentTraceId']), ' from customer order id ', customerOrderId),
+        name == 'payment_validation_charge_created', strcat('Charge created with ID: ', tostring(customDimensions['PaymentId'])),
+        name == 'payment_validation_callback_reconciled', strcat('Payment callback reconciliation completed for payment ', tostring(customDimensions['PaymentId']), '. Status ', tostring(customDimensions['PaymentStatus']), ', remote confirmed: ', tostring(customDimensions['RemoteStatusConfirmed']), ', callback recorded: ', tostring(customDimensions['CallbackRecorded'])),
+        name)
+    | where application == 'API' or cloud_RoleName has 'api'
 | where chargeId in ($dbChargeIdList)
 | project timestamp, tenant, customerOrderId, runPrefix, chargeId, message
+    ),
+    (
+    traces
+    | where timestamp >= ago(7d)
+    | where message has_any('Generated payment attempt order id',
+                'Charge created with ID',
+                'Payment callback reconciliation completed',
+                'confirm-status responded')
+    | extend application = tostring(customDimensions['Application'])
+    | extend tenant = tostring(customDimensions['TenantCode'])
+    | extend customerOrderId = coalesce(tostring(customDimensions['CustomerOrderId']), extract(@'customer order id\s+(\S+)', 1, message), extract(@'customer order\s+(\S+)', 1, message))
+    | extend runPrefix = extract(@'^(OR-\d+-[^-]+)', 1, customerOrderId)
+    | extend chargeId = coalesce(tostring(customDimensions['ChargeId']), extract(@'Charge created with ID:\s+(\S+)', 1, message), extract(@'payment\s+(\S+)\. Status', 1, message), extract(@'/payments/(\S+)/confirm-status', 1, message))
+    | where cloud_RoleName has 'api' or application == 'API'
+    | where chargeId in ($dbChargeIdList)
+    | project timestamp, tenant, customerOrderId, runPrefix, chargeId, message
+    )
 | order by timestamp asc
 "@
 
@@ -805,27 +878,52 @@ if ($selectedUiEvents.Count -eq 0) {
     $evidenceChargeIdList = Get-KqlQuotedValues -Values $evidenceChargeIds
     if (-not [string]::IsNullOrWhiteSpace($evidenceChargeIdList)) {
         $fallbackUiQuery = @"
-traces
+    union isfuzzy=true
+    (
+    customEvents
 | where timestamp >= ago(7d)
-| where message has_any('OpenPay callback received',
-                        'payment/callback responded',
-                'ui_payment_callback_received',
-                'ui_payment_callback_reconciled',
-                'ui_payment_callback_pending_retry_scheduled',
-                'ui_payment_callback_failed',
-                        'ui_payment_callback_confirmation_requested',
-                        'ui_payment_callback_confirmed',
-                        'ui_payment_callback_confirmation_failed')
+    | where name in ('ui_payment_callback_received',
+             'ui_payment_callback_reconciled',
+             'ui_payment_callback_pending_retry_scheduled',
+             'ui_payment_callback_failed',
+             'ui_payment_callback_confirmation_requested',
+             'ui_payment_callback_confirmed',
+             'ui_payment_callback_confirmation_failed')
 | extend application = tostring(customDimensions['Application'])
-| extend tenant = coalesce(tostring(customDimensions['TenantCode']), extract(@'for tenant\s+([^,\s]+)', 1, message))
+    | extend tenant = tostring(customDimensions['TenantCode'])
 | extend customerOrderId = tostring(customDimensions['CustomerOrderId'])
-| extend uiEventName = coalesce(tostring(customDimensions['UiEventName']), extract(@'UI payment event\s+(\S+)\s+on', 1, message))
-| extend chargeId = coalesce(tostring(customDimensions['ChargeId']), tostring(customDimensions['PaymentId']), extract(@'for payment\s+([^,\s]+)', 1, message), extract(@'payment\s+([^,\s]+)', 1, message))
-| extend statusCode = tostring(customDimensions['StatusCode'])
-| where cloud_RoleName has 'api' or cloud_RoleName has 'ui' or application == 'API' or application == 'UI'
+    | extend uiEventName = name
+    | extend chargeId = tostring(customDimensions['PaymentId'])
+    | extend statusCode = tostring(customDimensions['HttpStatus'])
+    | extend message = coalesce(tostring(customDimensions['ErrorMessage']), tostring(customDimensions['PaymentStatus']), name)
+    | where application == 'UI' or cloud_RoleName has 'api' or cloud_RoleName has 'ui'
 | where chargeId in ($evidenceChargeIdList)
    or tenant in ({0})
 | project timestamp, tenant, customerOrderId, uiEventName, chargeId, statusCode, message
+    ),
+    (
+    traces
+    | where timestamp >= ago(7d)
+    | where message has_any('OpenPay callback received',
+                'payment/callback responded',
+            'ui_payment_callback_received',
+            'ui_payment_callback_reconciled',
+            'ui_payment_callback_pending_retry_scheduled',
+            'ui_payment_callback_failed',
+                'ui_payment_callback_confirmation_requested',
+                'ui_payment_callback_confirmed',
+                'ui_payment_callback_confirmation_failed')
+    | extend application = tostring(customDimensions['Application'])
+    | extend tenant = coalesce(tostring(customDimensions['TenantCode']), extract(@'for tenant\s+([^,\s]+)', 1, message))
+    | extend customerOrderId = tostring(customDimensions['CustomerOrderId'])
+    | extend uiEventName = coalesce(tostring(customDimensions['UiEventName']), extract(@'UI payment event\s+(\S+)\s+on', 1, message))
+    | extend chargeId = coalesce(tostring(customDimensions['ChargeId']), tostring(customDimensions['PaymentId']), extract(@'for payment\s+([^,\s]+)', 1, message), extract(@'payment\s+([^,\s]+)', 1, message))
+    | extend statusCode = tostring(customDimensions['StatusCode'])
+    | where cloud_RoleName has 'api' or cloud_RoleName has 'ui' or application == 'API' or application == 'UI'
+    | where chargeId in ($evidenceChargeIdList)
+       or tenant in ({0})
+    | project timestamp, tenant, customerOrderId, uiEventName, chargeId, statusCode, message
+    )
 | order by timestamp asc
 "@ -f (Get-KqlQuotedValues -Values $expectedUiTenants)
 
@@ -933,23 +1031,34 @@ foreach ($chargeEvent in $apiChargeEvents) {
         $uiStatusCodes = $globalUiStatusCodes
     }
 
+    $dbRow = if ($chargeEvent.Tenant -eq 'TenantC') {
+        $q2TenantC | Where-Object ChargeId -eq $chargeEvent.ChargeId | Select-Object -First 1
+    }
+    else {
+        $q2Shared | Where-Object ChargeId -eq $chargeEvent.ChargeId | Select-Object -First 1
+    }
+
+    if ($null -eq $dbRow -and -not [string]::IsNullOrWhiteSpace($chargeEvent.ResolvedCustomerOrderId)) {
+        $dbRow = if ($chargeEvent.Tenant -eq 'TenantC') {
+            $q2TenantC | Where-Object CustomerOrderId -eq $chargeEvent.ResolvedCustomerOrderId | Select-Object -First 1
+        }
+        else {
+            $q2Shared |
+                Where-Object {
+                    $_.Tenant -eq $chargeEvent.Tenant -and
+                    $_.CustomerOrderId -eq $chargeEvent.ResolvedCustomerOrderId
+                } |
+                Select-Object -First 1
+        }
+    }
+
     [PSCustomObject] @{
         ChargeId = $chargeEvent.ChargeId
         Tenant = $chargeEvent.Tenant
         CustomerOrderId = $chargeEvent.ResolvedCustomerOrderId
-        InDb = ($allDbChargeIds -contains $chargeEvent.ChargeId)
-        DbStatus = if ($chargeEvent.Tenant -eq 'TenantC') {
-            (($q2TenantC | Where-Object { $_.ChargeId -eq $chargeEvent.ChargeId } | Select-Object -First 1).Status)
-        }
-        else {
-            (($q2Shared | Where-Object { $_.ChargeId -eq $chargeEvent.ChargeId } | Select-Object -First 1).Status)
-        }
-        DbStage = if ($chargeEvent.Tenant -eq 'TenantC') {
-            (($q2TenantC | Where-Object { $_.ChargeId -eq $chargeEvent.ChargeId } | Select-Object -First 1).ThreeDSecureStage)
-        }
-        else {
-            (($q2Shared | Where-Object { $_.ChargeId -eq $chargeEvent.ChargeId } | Select-Object -First 1).ThreeDSecureStage)
-        }
+        InDb = ($null -ne $dbRow)
+        DbStatus = if ($null -ne $dbRow) { [string] (Get-ObjectPropertyValue -Object $dbRow -PropertyName 'Status') } else { '' }
+        DbStage = if ($null -ne $dbRow) { [string] (Get-ObjectPropertyValue -Object $dbRow -PropertyName 'ThreeDSecureStage') } else { '' }
         ThreeDSEnabled = $threeDsByTenant[$chargeEvent.Tenant]
         UiCallbackExpected = ($threeDsByTenant[$chargeEvent.Tenant] -eq 1)
         UiCallbackLogged = ($uiMatches.Count -gt 0)
@@ -967,12 +1076,102 @@ else {
     @($selectedUiEvents)
 }
 
+function Get-ExpectedHistoryStepsForTenant {
+    param(
+        [Parameter(Mandatory = $true)] [string] $TenantCode,
+        [Parameter(Mandatory = $true)] [string[]] $CustomerOrderIds,
+        [Parameter(Mandatory = $true)] [AllowEmptyCollection()] [object[]] $RunApiEvents,
+        [Parameter(Mandatory = $true)] [AllowEmptyCollection()] [object[]] $RunChargeEvents,
+        [Parameter(Mandatory = $true)] [AllowEmptyCollection()] [object[]] $TransactionRows,
+        [Parameter(Mandatory = $true)] [AllowEmptyCollection()] [object[]] $HistoryRows,
+        [Parameter(Mandatory = $true)] [hashtable] $TenantThreeDsByTenant
+    )
+
+    $expectedSteps = 0
+
+    foreach ($customerOrderId in $CustomerOrderIds) {
+        $orderApiEvents = @(
+            $RunApiEvents |
+                Where-Object {
+                    $_.Tenant -eq $TenantCode -and
+                    $_.ResolvedCustomerOrderId -eq $customerOrderId
+                }
+        )
+
+        $orderChargeEvents = @(
+            $RunChargeEvents |
+                Where-Object {
+                    $_.Tenant -eq $TenantCode -and
+                    $_.ResolvedCustomerOrderId -eq $customerOrderId
+                }
+        )
+
+        $orderTransactionRows = @(
+            $TransactionRows |
+                Where-Object {
+                    $_.CustomerOrderId -eq $customerOrderId -and
+                    (($TenantCode -eq 'TenantC') -or $_.Tenant -eq $TenantCode)
+                }
+        )
+
+        $orderHistoryRows = @(
+            $HistoryRows |
+                Where-Object {
+                    $_.CustomerOrderId -eq $customerOrderId -and
+                    (($TenantCode -eq 'TenantC') -or $_.Tenant -eq $TenantCode)
+                }
+        )
+
+        $runtimeThreeDsEnabled = $false
+        $hasOrderLevelRuntimeEvidence = ($orderApiEvents.Count -gt 0) -or ($orderTransactionRows.Count -gt 0) -or ($orderHistoryRows.Count -gt 0)
+
+        if (@($orderApiEvents | Where-Object { $_.PSObject.Properties.Name -contains 'IsThreeDSecureEnabled' -and $_.IsThreeDSecureEnabled }).Count -gt 0) {
+            $runtimeThreeDsEnabled = $true
+        }
+        elseif (@($orderTransactionRows | Where-Object { $_.ThreeDS -eq 1 -or [string] $_.ThreeDSecureStage -match 'redirect|challenge|authenticated' }).Count -gt 0) {
+            $runtimeThreeDsEnabled = $true
+        }
+        elseif (@($orderHistoryRows | Where-Object { $_.ThreeDS -eq 1 -or [string] $_.Stage -match 'redirect|challenge|authenticated' }).Count -gt 0) {
+            $runtimeThreeDsEnabled = $true
+        }
+        elseif (-not $hasOrderLevelRuntimeEvidence -and $TenantThreeDsByTenant.ContainsKey($TenantCode) -and $TenantThreeDsByTenant[$TenantCode] -eq 1) {
+            $runtimeThreeDsEnabled = $true
+        }
+
+        $uniqueChargeIds = @(
+            $orderChargeEvents |
+                Where-Object { -not [string]::IsNullOrWhiteSpace($_.ChargeId) } |
+                Select-Object -ExpandProperty ChargeId -Unique
+        )
+
+        $expectedSteps += $(if ($runtimeThreeDsEnabled) { 4 } else { 2 })
+
+        if (-not $runtimeThreeDsEnabled -and $uniqueChargeIds.Count -gt 1) {
+            $expectedSteps += ($uniqueChargeIds.Count - 1)
+        }
+        elseif (
+            -not $runtimeThreeDsEnabled -and
+            @($orderHistoryRows | Where-Object { [string] $_.Stage -eq 'tokenization_completed' }).Count -gt 0
+        ) {
+            $expectedSteps += 1
+        }
+    }
+
+    return $expectedSteps
+}
+
 $expectedTenantARows = if ($expectedOrdersByTenant.ContainsKey('TenantA')) { $expectedOrdersByTenant['TenantA'].Count * 2 } else { 0 }
 $expectedTenantBRows = if ($expectedOrdersByTenant.ContainsKey('TenantB')) { $expectedOrdersByTenant['TenantB'].Count * 2 } else { 0 }
 $expectedTenantCRows = if ($expectedOrdersByTenant.ContainsKey('TenantC')) { $expectedOrdersByTenant['TenantC'].Count * 2 } else { 0 }
-$expectedTenantASteps = if ($expectedOrdersByTenant.ContainsKey('TenantA')) { $expectedOrdersByTenant['TenantA'].Count * ($(if ($threeDsByTenant['TenantA'] -eq 1) { 4 } else { 2 })) } else { 0 }
-$expectedTenantBSteps = if ($expectedOrdersByTenant.ContainsKey('TenantB')) { $expectedOrdersByTenant['TenantB'].Count * ($(if ($threeDsByTenant['TenantB'] -eq 1) { 4 } else { 2 })) } else { 0 }
-$expectedTenantCSteps = if ($expectedOrdersByTenant.ContainsKey('TenantC')) { $expectedOrdersByTenant['TenantC'].Count * ($(if ($threeDsByTenant['TenantC'] -eq 1) { 4 } else { 2 })) } else { 0 }
+$expectedTenantASteps = if ($expectedOrdersByTenant.ContainsKey('TenantA')) {
+    Get-ExpectedHistoryStepsForTenant -TenantCode 'TenantA' -CustomerOrderIds $expectedOrdersByTenant['TenantA'] -RunApiEvents $selectedApiEvents -RunChargeEvents $apiChargeEvents -TransactionRows $q2Shared -HistoryRows $q5Shared -TenantThreeDsByTenant $threeDsByTenant
+} else { 0 }
+$expectedTenantBSteps = if ($expectedOrdersByTenant.ContainsKey('TenantB')) {
+    Get-ExpectedHistoryStepsForTenant -TenantCode 'TenantB' -CustomerOrderIds $expectedOrdersByTenant['TenantB'] -RunApiEvents $selectedApiEvents -RunChargeEvents $apiChargeEvents -TransactionRows $q2Shared -HistoryRows $q5Shared -TenantThreeDsByTenant $threeDsByTenant
+} else { 0 }
+$expectedTenantCSteps = if ($expectedOrdersByTenant.ContainsKey('TenantC')) {
+    Get-ExpectedHistoryStepsForTenant -TenantCode 'TenantC' -CustomerOrderIds $expectedOrdersByTenant['TenantC'] -RunApiEvents $selectedApiEvents -RunChargeEvents $apiChargeEvents -TransactionRows $q2TenantC -HistoryRows $q5TenantC -TenantThreeDsByTenant $threeDsByTenant
+} else { 0 }
 
 $checks = [ordered] @{}
 $checks['Pre-flight TenantA 3DS'] = Convert-CheckResult -Expected 'configured' -Actual ([string] $threeDsByTenant['TenantA']) -Outcome $(if ($null -ne $threeDsByTenant['TenantA']) { 'PASS' } else { 'FAIL' })

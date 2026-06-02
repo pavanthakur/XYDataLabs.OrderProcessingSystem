@@ -21,6 +21,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Features.Payments.Command
 public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymentCommand, Result<PaymentDto>>
 {
     private readonly IPaymentProviderGateway _paymentProviderGateway;
+    private readonly IPaymentTelemetryTracker _paymentTelemetryTracker;
     private readonly ILogger<ProcessPaymentCommandHandler> _logger;
     private readonly string _redirectUrl;
     private readonly string _defaultDeviceSessionId;
@@ -34,6 +35,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
     public ProcessPaymentCommandHandler(
         IPaymentProviderGateway paymentProviderGateway,
         IOptions<PaymentGatewayRequestDefaults> paymentGatewayRequestDefaults,
+        IPaymentTelemetryTracker paymentTelemetryTracker,
         ILogger<ProcessPaymentCommandHandler> logger,
         IAppDbContext context,
         ITenantPaymentProviderResolver paymentProviderResolver,
@@ -42,6 +44,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
     {
         ArgumentNullException.ThrowIfNull(paymentProviderGateway);
         ArgumentNullException.ThrowIfNull(paymentGatewayRequestDefaults);
+        ArgumentNullException.ThrowIfNull(paymentTelemetryTracker);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(paymentProviderResolver);
@@ -49,10 +52,11 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         ArgumentNullException.ThrowIfNull(tenantProvider);
 
         _paymentProviderGateway = paymentProviderGateway;
+        _paymentTelemetryTracker = paymentTelemetryTracker;
         _logger = logger;
-    var requestDefaults = paymentGatewayRequestDefaults.Value;
-    _redirectUrl = requestDefaults.RedirectUrl;
-    _defaultDeviceSessionId = requestDefaults.DeviceSessionId;
+        var requestDefaults = paymentGatewayRequestDefaults.Value;
+        _redirectUrl = requestDefaults.RedirectUrl;
+        _defaultDeviceSessionId = requestDefaults.DeviceSessionId;
         _context = context;
         _timeProvider = timeProvider;
 
@@ -118,6 +122,17 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
 
             paymentMethod = await CreatePaymentMethodAsync(cancellationToken);
             paymentAttempt = await CreatePaymentAttemptAsync(customerOrderId, attemptOrderId, paymentTraceId, attemptNumber, cancellationToken);
+            _paymentTelemetryTracker.Track(new PaymentTelemetryEvent
+            {
+                EventName = PaymentTelemetryEventNames.AttemptCreated,
+                TenantCode = tenantCode,
+                CustomerOrderId = customerOrderId,
+                AttemptOrderId = paymentAttempt.AttemptOrderId,
+                PaymentTraceId = paymentAttempt.PaymentTraceId,
+                ProviderType = _paymentProvider.ProviderType,
+                IsThreeDSecureEnabled = isThreeDSecureEnabled,
+            });
+
             var (paymentGatewayCustomer, billingCustomerId) = await CreateCustomerAsync(request, paymentMethod, cancellationToken);
             await UpdatePaymentMethodByBillingCustomerIdAsync(paymentMethod.Id, billingCustomerId, cancellationToken);
             var createdCard = await CreateCardTokenAsync(request, paymentGatewayCustomer, billingCustomerId, customerOrderId, attemptOrderId, paymentTraceId, cancellationToken);
@@ -127,6 +142,21 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             var threeDSecureStage = ResolveChargeThreeDSecureStage(normalizedChargeStatus, isThreeDSecureEnabled, charge.RedirectUrl);
 
             await UpdatePaymentAttemptAfterChargeAsync(paymentAttempt, normalizedChargeStatus, charge, charge.ErrorMessage, cancellationToken);
+            _paymentTelemetryTracker.Track(new PaymentTelemetryEvent
+            {
+                EventName = PaymentTelemetryEventNames.ChargeCreated,
+                TenantCode = tenantCode,
+                CustomerOrderId = customerOrderId,
+                AttemptOrderId = paymentAttempt.AttemptOrderId,
+                PaymentId = charge.Id,
+                PaymentTraceId = paymentTraceId,
+                ProviderType = _paymentProvider.ProviderType,
+                PaymentStatus = normalizedChargeStatus,
+                StatusCategory = EnumHelper.ToStatusCategory(normalizedChargeStatus),
+                ThreeDSecureStage = threeDSecureStage,
+                IsThreeDSecureEnabled = isThreeDSecureEnabled,
+                ErrorMessage = charge.ErrorMessage,
+            });
 
             BusinessMetrics.RecordPaymentAttempt(
                 outcome: "success",

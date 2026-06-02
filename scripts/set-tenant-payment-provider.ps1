@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('local', 'docker')]
+    [ValidateSet('local', 'docker', 'azure')]
     [string]$Runtime,
 
     [Parameter(Mandatory = $true)]
@@ -23,6 +23,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+$script:AzureSqlContext = $null
+$script:AzureSqlFirewallOpened = $false
+
 function Get-DatabaseName {
     param(
         [Parameter(Mandatory = $true)] [string] $CurrentRuntime,
@@ -38,11 +41,17 @@ function Get-DatabaseName {
         return 'OrderProcessingSystem_Local'
     }
 
-    $environmentSuffix = switch ($CurrentEnvironment) {
-        'dev' { 'Dev' }
-        'stg' { 'Stg' }
-        'prod' { 'Prod' }
-        default { throw "Unsupported environment: $CurrentEnvironment" }
+    if ($CurrentRuntime -eq 'azure') {
+        $azureEnvironmentDescriptor = Get-AzureEnvironmentDescriptor -CurrentEnvironment $CurrentEnvironment
+        $environmentSuffix = $azureEnvironmentDescriptor.AzureSqlDatabaseSuffix
+    }
+    else {
+        $environmentSuffix = switch ($CurrentEnvironment) {
+            'dev' { 'Dev' }
+            'stg' { 'Stg' }
+            'prod' { 'Prod' }
+            default { throw "Unsupported environment: $CurrentEnvironment" }
+        }
     }
 
     if ($CurrentTenantCode -eq 'TenantC') {
@@ -75,6 +84,121 @@ function Normalize-SqlOutputLines {
                 $_ -ne 'ProviderType'
             }
     )
+}
+
+function Get-AzureEnvironmentDescriptor {
+    param(
+        [Parameter(Mandatory = $true)] [string] $CurrentEnvironment
+    )
+
+    $branchPolicyScriptPath = Join-Path $PSScriptRoot '..\Resources\Azure-Deployment\branch-policy.ps1'
+    . $branchPolicyScriptPath
+
+    $branchPolicy = Get-GitHubBranchPolicy
+    return Get-GitHubEnvironmentDescriptor -Policy $branchPolicy -EnvironmentKey $CurrentEnvironment
+}
+
+function Invoke-AzureCliText {
+    param(
+        [Parameter(Mandatory = $true)] [scriptblock] $Command,
+        [Parameter(Mandatory = $true)] [string] $Operation,
+        [Parameter(Mandatory = $false)] [int] $MaxAttempts = 3
+    )
+
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        $result = & $Command 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            $text = ((@($result | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine)).Trim()
+            if (-not [string]::IsNullOrWhiteSpace($text)) {
+                return $text
+            }
+        }
+
+        if ($attempt -ge $MaxAttempts) {
+            throw "${Operation} failed. $((@($result | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine).Trim())"
+        }
+    }
+
+    throw "$Operation returned no response."
+}
+
+function Get-PublicIpAddress {
+    $candidates = @(
+        'https://api.ipify.org?format=json',
+        'https://ifconfig.me/ip'
+    )
+
+    foreach ($endpoint in $candidates) {
+        try {
+            $response = Invoke-RestMethod -Uri $endpoint -Method Get -TimeoutSec 10
+            if ($response -is [string]) {
+                $value = $response.Trim()
+            }
+            else {
+                $value = [string] $response.ip
+            }
+
+            if ($value -match '^(?:\d{1,3}\.){3}\d{1,3}$') {
+                return $value
+            }
+        }
+        catch {
+        }
+    }
+
+    throw 'Failed to determine the current public IP address for the Azure SQL firewall rule.'
+}
+
+function Get-AzureSqlContext {
+    if ($null -ne $script:AzureSqlContext) {
+        return $script:AzureSqlContext
+    }
+
+    $environmentDescriptor = Get-AzureEnvironmentDescriptor -CurrentEnvironment $Environment
+    $resourceSuffix = $environmentDescriptor.ResourceSuffix
+    $resourceGroup = "rg-orderprocessing-$resourceSuffix"
+    $keyVaultName = "kv-orderprocessing-$resourceSuffix"
+    $sqlServerName = "orderprocessing-sql-$resourceSuffix"
+    $sqlServerFqdn = "$sqlServerName.database.windows.net"
+    $sqlAdminUser = Invoke-AzureCliText -Operation 'Resolve SQL administrator login' -Command {
+        az sql server show --name $sqlServerName --resource-group $resourceGroup --query administratorLogin -o tsv
+    }
+    $sqlAdminPassword = Invoke-AzureCliText -Operation 'Resolve sql-admin-password from Key Vault' -Command {
+        az keyvault secret show --vault-name $keyVaultName --name sql-admin-password --query value -o tsv
+    }
+
+    $script:AzureSqlContext = [PSCustomObject]@{
+        ResourceGroup = $resourceGroup
+        SqlServerName = $sqlServerName
+        SqlServerFqdn = $sqlServerFqdn
+        SqlAdminUser = $sqlAdminUser
+        SqlAdminPassword = $sqlAdminPassword
+        RuleName = "$($environmentDescriptor.GitHubEnvironment)-payment-automation"
+    }
+
+    return $script:AzureSqlContext
+}
+
+function Ensure-AzureSqlFirewallAccess {
+    if ($script:AzureSqlFirewallOpened) {
+        return
+    }
+
+    $azureSqlContext = Get-AzureSqlContext
+    $publicIp = Get-PublicIpAddress
+
+    $createResult = az sql server firewall-rule create `
+        --resource-group $azureSqlContext.ResourceGroup `
+        --server $azureSqlContext.SqlServerName `
+        --name $azureSqlContext.RuleName `
+        --start-ip-address $publicIp `
+        --end-ip-address $publicIp 2>&1
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Open Azure SQL firewall access failed. $((@($createResult | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine).Trim())"
+    }
+
+    $script:AzureSqlFirewallOpened = $true
 }
 
 function Invoke-LocalSqlTextQuery {
@@ -114,11 +238,62 @@ function Invoke-DockerSqlTextQuery {
     return Normalize-SqlOutputLines -Lines @($output | ForEach-Object { $_.ToString() })
 }
 
+function Invoke-AzureSqlTextQuery {
+    param(
+        [Parameter(Mandatory = $true)] [string] $Database,
+        [Parameter(Mandatory = $true)] [string] $Query
+    )
+
+    Ensure-AzureSqlFirewallAccess
+    $azureSqlContext = Get-AzureSqlContext
+    $normalizedQuery = ($Query -replace "`r?`n", ' ').Trim()
+    $connectionString = "Server=tcp:$($azureSqlContext.SqlServerFqdn),1433;Initial Catalog=$Database;Persist Security Info=False;User ID=$($azureSqlContext.SqlAdminUser);Password=$($azureSqlContext.SqlAdminPassword);Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+    $connection = [System.Data.SqlClient.SqlConnection]::new($connectionString)
+
+    try {
+        $connection.Open()
+        $command = $connection.CreateCommand()
+        $command.CommandText = "SET NOCOUNT ON; $normalizedQuery"
+        $command.CommandTimeout = 60
+
+        $reader = $command.ExecuteReader()
+        try {
+            if ($reader.FieldCount -le 0) {
+                return @()
+            }
+
+            $table = [System.Data.DataTable]::new()
+            $table.Load($reader)
+            return Normalize-SqlOutputLines -Lines @(
+                $table.Rows | ForEach-Object {
+                    if ($table.Columns.Count -gt 0) {
+                        [string] $_[$table.Columns[0].ColumnName]
+                    }
+                }
+            )
+        }
+        finally {
+            $reader.Dispose()
+        }
+    }
+    finally {
+        if ($connection.State -ne [System.Data.ConnectionState]::Closed) {
+            $connection.Close()
+        }
+
+        $connection.Dispose()
+    }
+}
+
 function Invoke-SqlTextQuery {
     param(
         [Parameter(Mandatory = $true)] [string] $Database,
         [Parameter(Mandatory = $true)] [string] $Query
     )
+
+    if ($Runtime -eq 'azure') {
+        return Invoke-AzureSqlTextQuery -Database $Database -Query $Query
+    }
 
     if ($Runtime -eq 'docker') {
         return Invoke-DockerSqlTextQuery -Database $Database -Query $Query

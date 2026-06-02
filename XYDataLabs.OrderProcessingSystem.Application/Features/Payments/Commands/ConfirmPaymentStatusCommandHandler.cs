@@ -8,6 +8,8 @@ using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
 using XYDataLabs.OrderProcessingSystem.Application.Utilities;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
 using static XYDataLabs.OrderProcessingSystem.Application.Utilities.AppMasterConstant;
@@ -22,31 +24,39 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
 
     private readonly IAppDbContext _context;
     private readonly IPaymentProviderGateway _paymentProviderGateway;
+    private readonly IPaymentTelemetryTracker _paymentTelemetryTracker;
     private readonly ILogger<ConfirmPaymentStatusCommandHandler> _logger;
     private readonly ITenantPaymentProviderConfigurationResolver _paymentProviderConfigurationResolver;
     private readonly PaymentProvider _paymentProvider;
+    private readonly ITenantProvider _tenantProvider;
     private readonly TimeProvider _timeProvider;
 
     public ConfirmPaymentStatusCommandHandler(
         IAppDbContext context,
         IPaymentProviderGateway paymentProviderGateway,
+        IPaymentTelemetryTracker paymentTelemetryTracker,
         ILogger<ConfirmPaymentStatusCommandHandler> logger,
         ITenantPaymentProviderConfigurationResolver paymentProviderConfigurationResolver,
         ITenantPaymentProviderResolver paymentProviderResolver,
+        ITenantProvider tenantProvider,
         TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(paymentProviderGateway);
+        ArgumentNullException.ThrowIfNull(paymentTelemetryTracker);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(paymentProviderConfigurationResolver);
         ArgumentNullException.ThrowIfNull(paymentProviderResolver);
+        ArgumentNullException.ThrowIfNull(tenantProvider);
         ArgumentNullException.ThrowIfNull(timeProvider);
 
         _context = context;
         _paymentProviderGateway = paymentProviderGateway;
+        _paymentTelemetryTracker = paymentTelemetryTracker;
         _logger = logger;
         _paymentProviderConfigurationResolver = paymentProviderConfigurationResolver;
         _paymentProvider = paymentProviderResolver.ResolveCurrentTenantProvider();
+        _tenantProvider = tenantProvider;
         _timeProvider = timeProvider;
 
         if (!string.Equals(_paymentProvider.ProviderType, _paymentProviderGateway.ProviderType, StringComparison.OrdinalIgnoreCase))
@@ -167,7 +177,7 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
             remoteStatusConfirmed,
             callbackRecorded);
 
-        return new PaymentStatusDetailsDto
+        var paymentStatusDetails = new PaymentStatusDetailsDto
         {
             PaymentId = command.PaymentId,
             CustomerOrderId = transaction.CustomerOrderId,
@@ -188,6 +198,27 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
             IsThreeDSecureEnabled = transaction.IsThreeDSecureEnabled,
             ThreeDSecureStage = resolvedThreeDSecureStage
         };
+
+        _paymentTelemetryTracker.Track(new PaymentTelemetryEvent
+        {
+            EventName = PaymentTelemetryEventNames.CallbackReconciled,
+            TenantCode = _tenantProvider.TenantCode,
+            CustomerOrderId = transaction.CustomerOrderId,
+            AttemptOrderId = FirstNonEmpty(command.AttemptOrderId, transaction.AttemptOrderId),
+            PaymentId = command.PaymentId,
+            PaymentTraceId = transaction.PaymentTraceId,
+            ProviderType = _paymentProvider.ProviderType,
+            PaymentStatus = paymentStatusDetails.Status,
+            StatusCategory = paymentStatusDetails.StatusCategory,
+            StatusSource = paymentStatusDetails.StatusSource,
+            ThreeDSecureStage = paymentStatusDetails.ThreeDSecureStage,
+            RemoteStatusConfirmed = remoteStatusConfirmed,
+            CallbackRecorded = callbackRecorded,
+            IsThreeDSecureEnabled = paymentStatusDetails.IsThreeDSecureEnabled,
+            ErrorMessage = paymentStatusDetails.ErrorMessage,
+        });
+
+        return paymentStatusDetails;
     }
 
     private Result<PaymentStatusDetailsDto>? ValidateRazorpaySignatureIfRequired(

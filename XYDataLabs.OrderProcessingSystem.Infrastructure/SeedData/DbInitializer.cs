@@ -245,7 +245,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                     ProviderType = PaymentProviderTypes.Razorpay,
                     MerchantId = merchantId,
                     PrivateKeyConfigurationKey = BuildTenantProviderPrivateKeyConfigurationKey(seedTenant.TenantCode, PaymentProviderTypes.Razorpay),
-                    Use3DSecure = false,
+                    Use3DSecure = true,
                     TenantId = seedTenant.TenantId,
                     CreatedBy = 1,
                     CreatedDate = DateTime.UtcNow

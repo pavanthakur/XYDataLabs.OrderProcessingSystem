@@ -63,6 +63,9 @@ public sealed class DbInitializerSeedProviderTests : IDisposable
             .ToList();
 
         providers.Should().HaveCount(2, "DbInitializer seeds both OpenPay and Razorpay for every tenant");
+        providers.Should().OnlyContain(
+            provider => provider.Use3DSecure,
+            "freshly seeded provider rows should default Use3DSecure to true for every tenant/provider combination");
 
         var activeProviders = providers.Where(pp => pp.IsActive).ToList();
         activeProviders.Should().ContainSingle(

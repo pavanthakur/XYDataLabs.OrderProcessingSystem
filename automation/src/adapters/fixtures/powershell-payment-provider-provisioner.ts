@@ -64,7 +64,7 @@ export class PowerShellPaymentProviderProvisioner implements PaymentFixtureProvi
   }
 
   private async activateProvider(tenantCode: string, providerType: string): Promise<ProviderActivationResult> {
-    if (this.options.target.runtime !== "local" && this.options.target.runtime !== "docker") {
+    if (this.options.target.runtime !== "local" && this.options.target.runtime !== "docker" && this.options.target.runtime !== "azure") {
       throw new Error(`Provider override is not supported for runtime ${this.options.target.runtime}.`);
     }
 

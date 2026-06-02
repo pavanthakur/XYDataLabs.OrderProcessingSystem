@@ -57,6 +57,9 @@ public sealed class PaymentProviderSeedIntegrationTests : IAsyncLifetime
 
         providers.Should().HaveCount(2,
             $"DbInitializer should seed exactly two providers (OpenPay + Razorpay) for {tenantCode}");
+        providers.Should().OnlyContain(
+            provider => provider.Use3DSecure,
+            $"startup seeding should default Use3DSecure to true for all provider rows for {tenantCode}");
 
         providers.Single(pp => pp.ProviderType == expectedActiveProviderType)
             .IsActive.Should().BeTrue(
@@ -100,6 +103,9 @@ public sealed class PaymentProviderSeedIntegrationTests : IAsyncLifetime
         });
 
         providers.Should().HaveCount(2, because: $"two providers seeded for {tenantCode}");
+        providers.Should().OnlyContain(
+            provider => provider.Use3DSecure,
+            because: "fresh startup-seeded providers should keep the documented Use3DSecure default of true");
         providers.Single(pp => pp.ProviderType == activeType).IsActive.Should().BeTrue();
         providers.Single(pp => pp.ProviderType == inactiveType).IsActive.Should().BeFalse();
     }
