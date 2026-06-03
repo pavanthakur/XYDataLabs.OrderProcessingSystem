@@ -1,4 +1,4 @@
-﻿using XYDataLabs.OrderProcessingSystem.Application.Events;
+using XYDataLabs.OrderProcessingSystem.Application.Events;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
@@ -42,13 +42,23 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                 throw new ArgumentNullException(nameof(integrationEventMapperRegistry));
             }
 
+            InitializeSharedPool(context, configuration, applyMigrations);
+            InitializeDedicatedTenants(context, configuration, applyMigrations, integrationEventMapperRegistry);
+        }
+
+        public static void InitializeSharedPool(
+            OrderProcessingSystemDbContext context,
+            IConfiguration? configuration = null,
+            bool applyMigrations = true)
+        {
+            ArgumentNullException.ThrowIfNull(context);
+
             // Azure deployments run schema migrations in workflow steps before app startup.
             if (applyMigrations)
             {
                 context.Database.Migrate();
             }
 
-            // Phase 1: seed shared-pool tenants (TenantA, TenantB) into the main DB.
             var startupSeedTenants = GetStartupSeedTenants(context);
 
             SeedOpenpayProviders(context, startupSeedTenants, configuration);
@@ -58,12 +68,18 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
             {
                 SeedTenantSampleData(context, seedTenant);
             }
+        }
 
-            // Phase 2: seed dedicated-tier tenants into their own DB connection.
-            // Connection strings are read from IConfiguration (Key Vault / appsettings),
-            // not from the Tenants table — connection strings are secrets.
-            // Skipped when configuration is null or DedicatedTenantConnectionStrings is absent.
-            SeedDedicatedTenants(context, configuration, applyMigrations, integrationEventMapperRegistry);
+        public static void InitializeDedicatedTenants(
+            OrderProcessingSystemDbContext mainContext,
+            IConfiguration? configuration,
+            bool applyMigrations,
+            IIntegrationEventMapperRegistry integrationEventMapperRegistry)
+        {
+            ArgumentNullException.ThrowIfNull(mainContext);
+            ArgumentNullException.ThrowIfNull(integrationEventMapperRegistry);
+
+            SeedConfiguredDedicatedTenants(mainContext, configuration, applyMigrations, integrationEventMapperRegistry);
         }
 
         private static IReadOnlyList<StartupSeedTenant> GetStartupSeedTenants(OrderProcessingSystemDbContext context)
@@ -284,7 +300,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
         /// A NullTenantProvider is injected so EF Core query filters evaluate safely (HasTenantContext=false →
         /// filter short-circuits to true, making all rows visible — correct for cross-tenant seeding).
         /// </summary>
-        private static void SeedDedicatedTenants(
+        private static void SeedConfiguredDedicatedTenants(
             OrderProcessingSystemDbContext mainContext,
             IConfiguration? configuration,
             bool applyMigrations,

@@ -405,7 +405,11 @@ using (var scope = app.Services.CreateScope())
         // Apply migrations locally/Docker; skip on Azure (managed via pipelines)
         var dbContext = scope.ServiceProvider.GetRequiredService<OrderProcessingSystemDbContext>();
         var integrationEventMapperRegistry = scope.ServiceProvider.GetRequiredService<IIntegrationEventMapperRegistry>();
-        DbInitializer.Initialize(
+        DbInitializer.InitializeSharedPool(
+            dbContext,
+            app.Configuration,
+            applyMigrations: !isAzure);
+        DbInitializer.InitializeDedicatedTenants(
             dbContext,
             app.Configuration,
             applyMigrations: !isAzure,
