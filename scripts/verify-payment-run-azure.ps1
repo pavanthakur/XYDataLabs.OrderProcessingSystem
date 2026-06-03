@@ -47,7 +47,10 @@ param(
     [string] $OutputFormat = 'Table',
 
     [Parameter(Mandatory = $false)]
-    [switch] $SkipFirewallOpen
+    [switch] $SkipFirewallOpen,
+
+    [Parameter(Mandatory = $false)]
+    [int] $PreQueryDelaySeconds = 0
 )
 
 Set-StrictMode -Version Latest
@@ -450,6 +453,11 @@ if ([string]::IsNullOrWhiteSpace($sqlAdminPassword)) {
 if (-not $SkipFirewallOpen) {
     Write-Step "Opening Azure SQL firewall access"
     Ensure-AzureSqlFirewallAccess
+}
+
+if ($PreQueryDelaySeconds -gt 0) {
+    Write-Step "Waiting $PreQueryDelaySeconds seconds for App Insights telemetry ingestion..."
+    Start-Sleep -Seconds $PreQueryDelaySeconds
 }
 
 Write-Step "Querying App Insights API telemetry"
@@ -1060,7 +1068,7 @@ foreach ($chargeEvent in $apiChargeEvents) {
         DbStatus = if ($null -ne $dbRow) { [string] (Get-ObjectPropertyValue -Object $dbRow -PropertyName 'Status') } else { '' }
         DbStage = if ($null -ne $dbRow) { [string] (Get-ObjectPropertyValue -Object $dbRow -PropertyName 'ThreeDSecureStage') } else { '' }
         ThreeDSEnabled = $threeDsByTenant[$chargeEvent.Tenant]
-        UiCallbackExpected = ($threeDsByTenant[$chargeEvent.Tenant] -eq 1)
+        UiCallbackExpected = ($threeDsByTenant[$chargeEvent.Tenant] -eq 1) -and (-not ($chargeEvent.ChargeId -match '^order_'))
         UiCallbackLogged = ($uiMatches.Count -gt 0)
         UiCorrelationMode = $uiCorrelationMode
         UiEventNames = @($uiEventNames)
