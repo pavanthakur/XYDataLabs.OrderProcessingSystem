@@ -27,7 +27,7 @@ env:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2025
     permissions:
       contents: read
 
@@ -67,7 +67,7 @@ jobs:
           path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
 
   deploy:
-    runs-on: windows-latest
+    runs-on: windows-2025
     needs: build
     timeout-minutes: 30  # Covers approval wait + deploy + migrations + SQL setup + health check (~15 min worst case on F1)
     # Prod approval window: set via GitHub Settings → Environments → prod → Required reviewers timeout
