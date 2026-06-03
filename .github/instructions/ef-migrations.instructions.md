@@ -45,6 +45,7 @@ az sql server firewall-rule delete --server orderprocessing-sql-dev --resource-g
 2. `20260324202503_SeedBaselineTenants` — inserts TenantA and TenantB rows (IF NOT EXISTS guards — safe for Azure re-apply)
 3. `20260324210853_SeedDedicatedTenantC` — inserts TenantC as Dedicated-tier tenant (IF NOT EXISTS guard)
 4. `RemoveConnectionStringFromTenant` — drops the `ConnectionString` column from `Tenants` (ADR-009; connection strings are never stored in the DB)
+5. `20260603124839_AddTenantPaymentProviderCode` — adds `PaymentProviderCode nvarchar(50) NULL` to `Tenants`; seeds TenantA/TenantB→Razorpay, TenantC→OpenPay (idempotent `WHERE PaymentProviderCode IS NULL` guards — ADR-019)
 
 This repository was rebaselined in March 2026. Historical migrations were intentionally removed. The current migration chain starts from a single clean baseline and future migrations must build from that baseline only.
 
@@ -57,9 +58,13 @@ This repository was rebaselined in March 2026. Historical migrations were intent
 
 ## DbInitializer — Startup Bootstrap Sequence
 
-Signature: `DbInitializer.Initialize(OrderProcessingSystemDbContext context, IConfiguration? configuration = null, bool applyMigrations = true)`
+Entry points: `DbInitializer.InitializeSharedPool(context, configuration, applyMigrations)` and `DbInitializer.InitializeDedicatedTenants(mainContext, configuration, applyMigrations, integrationEventMapperRegistry)`
 
-Called from `Program.cs` as: `DbInitializer.Initialize(dbContext, app.Configuration, applyMigrations: !isAzureRuntime)`
+Called from `Program.cs` as:
+```csharp
+DbInitializer.InitializeSharedPool(dbContext, app.Configuration, applyMigrations: !isAzure);
+DbInitializer.InitializeDedicatedTenants(dbContext, app.Configuration, applyMigrations: !isAzure, ...);
+```
 
 **Phase 1** — Shared-pool sample data:
 1. `Database.Migrate()` — applies pending migrations (seeds TenantA, TenantB, TenantC)

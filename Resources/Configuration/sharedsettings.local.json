@@ -7,7 +7,8 @@
   },
   "AllowedHosts": "*",
   "ConnectionStrings": {
-    "OrderProcessingSystemDbConnection": "Server=localhost;Database=OrderProcessingSystem_Local;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true;"
+    "OrderProcessingSystemDbConnection": "Server=localhost;Database=OrderProcessingSystem_Local;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true;",
+    "TenantRegistryDbConnection": "Server=localhost;Database=OrderProcessingSystem_Local;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true;"
   },
   "DedicatedTenantConnectionStrings": {
     "TenantC": "Server=localhost;Database=OrderProcessingSystem_TenantC;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true;"

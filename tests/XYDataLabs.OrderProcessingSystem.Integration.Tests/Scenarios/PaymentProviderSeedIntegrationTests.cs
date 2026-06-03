@@ -7,8 +7,9 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Scenarios;
 
 /// <summary>
 /// Asserts that <see cref="XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData.DbInitializer"/>
-/// seeds provider rows and applies the generic default only when a baseline tenant has no
-/// database-selected active provider when the application starts.
+/// seeds provider rows with IsActive=false for all baseline tenants.
+/// Phase 8.6: active provider is now authoritative from Tenant.PaymentProviderCode (Tenant Registry).
+/// DbInitializer seeds both providers as inactive — routing is not determined at startup seeding time.
 /// These tests run against a real SQL Server via Testcontainers (same DB as other integration tests).
 /// </summary>
 [Collection("SqlServer")]
@@ -36,12 +37,9 @@ public sealed class PaymentProviderSeedIntegrationTests : IAsyncLifetime
     }
 
     [Theory]
-    [InlineData("TenantA", PaymentProviderTypes.Razorpay, PaymentProviderTypes.OpenPay)]
-    [InlineData("TenantB", PaymentProviderTypes.Razorpay, PaymentProviderTypes.OpenPay)]
-    public async Task AfterStartup_BaselineTenant_HasCorrectProviderActiveState(
-        string tenantCode,
-        string expectedActiveProviderType,
-        string expectedInactiveProviderType)
+    [InlineData("TenantA")]
+    [InlineData("TenantB")]
+    public async Task AfterStartup_BaselineTenant_BothProvidersSeededAsInactive(string tenantCode)
     {
         var providers = await _factory.ExecuteDbContextAsync(async context =>
         {
@@ -56,39 +54,30 @@ public sealed class PaymentProviderSeedIntegrationTests : IAsyncLifetime
         });
 
         providers.Should().HaveCount(2,
-            $"DbInitializer should seed exactly two providers (OpenPay + Razorpay) for {tenantCode}");
+            $"DbInitializer seeds exactly two providers (OpenPay + Razorpay) for {tenantCode}");
         providers.Should().OnlyContain(
             provider => provider.Use3DSecure,
-            $"startup seeding should default Use3DSecure to true for all provider rows for {tenantCode}");
-
-        providers.Single(pp => pp.ProviderType == expectedActiveProviderType)
-            .IsActive.Should().BeTrue(
-                $"the generic seed default should activate {expectedActiveProviderType} for {tenantCode} when no active provider row exists");
-
-        providers.Single(pp => pp.ProviderType == expectedInactiveProviderType)
-            .IsActive.Should().BeFalse(
-                $"the non-assigned provider ({expectedInactiveProviderType}) must be inactive for {tenantCode}");
+            $"startup seeding defaults Use3DSecure to true for all provider rows ({tenantCode})");
+        providers.Should().OnlyContain(
+            provider => !provider.IsActive,
+            $"Phase 8.6: all seeded provider rows must be IsActive=false — routing authority is Tenant Registry ({tenantCode})");
     }
 
     [Fact]
-        public async Task AfterStartup_TenantA_RazorpayIsActive_OpenPayIsInactive()
+    public async Task AfterStartup_TenantA_BothProvidersInactive()
     {
-        await AssertProviderState("TenantA",
-            activeType: PaymentProviderTypes.Razorpay,
-            inactiveType: PaymentProviderTypes.OpenPay);
+        await AssertBothProvidersInactive("TenantA");
     }
 
     [Fact]
-        public async Task AfterStartup_TenantB_RazorpayIsActive_OpenPayIsInactive()
+    public async Task AfterStartup_TenantB_BothProvidersInactive()
     {
-        await AssertProviderState("TenantB",
-            activeType: PaymentProviderTypes.Razorpay,
-            inactiveType: PaymentProviderTypes.OpenPay);
+        await AssertBothProvidersInactive("TenantB");
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private async Task AssertProviderState(string tenantCode, string activeType, string inactiveType)
+    private async Task AssertBothProvidersInactive(string tenantCode)
     {
         var providers = await _factory.ExecuteDbContextAsync(async context =>
         {
@@ -105,8 +94,9 @@ public sealed class PaymentProviderSeedIntegrationTests : IAsyncLifetime
         providers.Should().HaveCount(2, because: $"two providers seeded for {tenantCode}");
         providers.Should().OnlyContain(
             provider => provider.Use3DSecure,
-            because: "fresh startup-seeded providers should keep the documented Use3DSecure default of true");
-        providers.Single(pp => pp.ProviderType == activeType).IsActive.Should().BeTrue();
-        providers.Single(pp => pp.ProviderType == inactiveType).IsActive.Should().BeFalse();
+            because: "startup-seeded providers default Use3DSecure to true");
+        providers.Should().OnlyContain(
+            provider => !provider.IsActive,
+            because: $"Phase 8.6: routing authority is Tenant Registry — all seeded rows must be inactive ({tenantCode})");
     }
 }

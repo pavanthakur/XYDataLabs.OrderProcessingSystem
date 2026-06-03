@@ -43,11 +43,13 @@ public sealed class DbInitializerSeedProviderTests : IDisposable
     public void Dispose() => _connection.Dispose();
 
     [Theory]
-    [InlineData("TenantA", TenantAId, PaymentProviderTypes.Razorpay)]
-    [InlineData("TenantB", TenantBId, PaymentProviderTypes.Razorpay)]
-    public void Initialize_WhenNoActiveProviderExists_UsesSeedDefaultProvider(
-        string tenantCode, int tenantId, string expectedActiveProvider)
+    [InlineData("TenantA", TenantAId)]
+    [InlineData("TenantB", TenantBId)]
+    public void Initialize_WhenNoProviderRowsExist_SeedsBothProvidersAsInactive(
+        string tenantCode, int tenantId)
     {
+        // Phase 8.6: active provider is authoritative from Tenant.PaymentProviderCode (Tenant Registry).
+        // DbInitializer seeds both providers with IsActive=false for every tenant on a fresh database.
         using var seedContext = CreateContext();
         SeedBothBaselineTenants(seedContext);
 
@@ -62,24 +64,13 @@ public sealed class DbInitializerSeedProviderTests : IDisposable
             .Where(pp => pp.TenantId == tenantId)
             .ToList();
 
-        providers.Should().HaveCount(2, "DbInitializer seeds both OpenPay and Razorpay for every tenant");
+        providers.Should().HaveCount(2, $"DbInitializer seeds both OpenPay and Razorpay for every tenant ({tenantCode})");
         providers.Should().OnlyContain(
             provider => provider.Use3DSecure,
             "freshly seeded provider rows should default Use3DSecure to true for every tenant/provider combination");
-
-        var activeProviders = providers.Where(pp => pp.IsActive).ToList();
-        activeProviders.Should().ContainSingle(
-            $"exactly one provider should be active for {tenantCode}");
-        activeProviders[0].ProviderType.Should().Be(
-            expectedActiveProvider,
-            $"the seed default should activate {expectedActiveProvider} when {tenantCode} has no active provider row");
-
-        var inactiveProviders = providers.Where(pp => !pp.IsActive).ToList();
-        inactiveProviders.Should().ContainSingle(
-            "the non-assigned provider should be inactive");
-        inactiveProviders[0].ProviderType.Should().NotBe(
-            expectedActiveProvider,
-            "the inactive provider must be the one not assigned");
+        providers.Should().OnlyContain(
+            provider => !provider.IsActive,
+            $"new provider rows must be seeded IsActive=false — active provider is resolved from Tenant Registry (Tenant.PaymentProviderCode), not DbInitializer ({tenantCode})");
     }
 
     [Theory]
@@ -180,41 +171,46 @@ public sealed class DbInitializerSeedProviderTests : IDisposable
     }
 
     [Fact]
-    public void Initialize_WhenTenantHasNoActiveProvider_FallsBackToDefaultProvider()
+    public void Initialize_AlwaysSeedsBothProvidersAsInactiveRegardlessOfTenantState()
     {
-        // Because DbInitializer only seeds StartupSeedTenantCodes, this exercises the fallback path
-        // on a baseline tenant that has no existing provider rows.
+        // Phase 8.6: DbInitializer no longer resolves an active provider.
+        // All StartupSeedTenantCodes tenants should have both providers seeded as inactive,
+        // regardless of whether provider rows previously existed.
         using var seedContext = CreateContext();
 
-        // Seed TenantA and TenantB (StartupSeedTenantCodes) with stub sample data so Initialize() skips SeedOrders.
         SeedTenant(seedContext, TenantAId, "TenantA");
         SeedTenant(seedContext, TenantBId, "TenantB");
         seedContext.SaveChanges();
         SeedStubSampleData(seedContext, TenantAId);
         SeedStubSampleData(seedContext, TenantBId);
 
-        // Also seed an extra tenant outside the startup seed list to confirm it does not affect baseline fallback.
         SeedTenant(seedContext, UnknownTenantId, "UnknownTenant");
         seedContext.SaveChanges();
 
-        // Initialize() only seeds StartupSeedTenantCodes, so TenantB is the baseline tenant that proves
-        // the seed default applies when there is no database-selected active provider.
         DbInitializer.Initialize(
             seedContext,
             configuration: null,
             applyMigrations: false,
             integrationEventMapperRegistry: _emptyRegistry);
 
-        var tenantBProviders = seedContext.PaymentProviders
-            .IgnoreQueryFilters()
-            .Where(pp => pp.TenantId == TenantBId)
-            .ToList();
+        foreach (var tenantId in new[] { TenantAId, TenantBId })
+        {
+            var providers = seedContext.PaymentProviders
+                .IgnoreQueryFilters()
+                .Where(pp => pp.TenantId == tenantId)
+                .ToList();
 
-        tenantBProviders.Should().HaveCount(2);
-        tenantBProviders.Single(pp => pp.ProviderType == PaymentProviderTypes.Razorpay).IsActive
-            .Should().BeTrue("TenantB should have the generic seed default provider active when no active row exists");
-        tenantBProviders.Single(pp => pp.ProviderType == PaymentProviderTypes.OpenPay).IsActive
-            .Should().BeFalse();
+            providers.Should().HaveCount(2, $"DbInitializer seeds both providers for TenantId={tenantId}");
+            providers.Should().OnlyContain(
+                pp => !pp.IsActive,
+                $"all seeded providers must be inactive — routing authority is Tenant Registry (TenantId={tenantId})");
+        }
+
+        // UnknownTenant (outside StartupSeedTenantCodes) should have no providers seeded.
+        seedContext.PaymentProviders
+            .IgnoreQueryFilters()
+            .Where(pp => pp.TenantId == UnknownTenantId)
+            .Should().BeEmpty("DbInitializer only seeds providers for StartupSeedTenantCodes");
     }
 
     [Fact]

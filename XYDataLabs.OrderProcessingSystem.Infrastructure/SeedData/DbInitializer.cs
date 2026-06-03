@@ -20,12 +20,6 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
         private static readonly string[] StartupSeedTenantCodes = { "TenantA", "TenantB" };
         private const int SeededCustomerCountPerTenant = 120;
 
-        /// <summary>
-        /// Default active provider only for fresh databases that have no active provider row yet.
-        /// Once provider rows exist, the database remains the source of truth for activation state.
-        /// </summary>
-        private const string SeedDefaultProvider = PaymentProviderTypes.Razorpay;
-
         public static void Initialize(
             OrderProcessingSystemDbContext context,
             IConfiguration? configuration = null,
@@ -182,14 +176,10 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                     provider.TenantId == seedTenant.TenantId &&
                     provider.Name == "OpenPay");
 
-                var shouldBeActive = existing?.IsActive
-                    ?? ResolveMissingProviderActiveState(
-                        context,
-                        seedTenant.TenantId,
-                        PaymentProviderTypes.OpenPay);
-
                 if (existing is not null)
                 {
+                    // Update credentials only — IsActive is not touched.
+                    // Active provider is authoritative from Tenant.PaymentProviderCode (Phase 8.6).
                     ApplyProviderRuntimeConfiguration(
                         existing,
                         merchantId,
@@ -203,7 +193,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                 {
                     Name = "OpenPay",
                     APIUrl = "https://sandbox-api.openpay.mx/v1",
-                    IsActive = shouldBeActive,
+                    IsActive = false, // Active provider resolved from Tenant Registry (Tenant.PaymentProviderCode)
                     IsProduction = isProduction,
                     ProviderType = PaymentProviderTypes.OpenPay,
                     MerchantId = merchantId,
@@ -235,14 +225,10 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                     provider.TenantId == seedTenant.TenantId &&
                     provider.Name == "Razorpay");
 
-                var shouldBeActive = existing?.IsActive
-                    ?? ResolveMissingProviderActiveState(
-                        context,
-                        seedTenant.TenantId,
-                        PaymentProviderTypes.Razorpay);
-
                 if (existing is not null)
                 {
+                    // Update credentials only — IsActive is not touched.
+                    // Active provider is authoritative from Tenant.PaymentProviderCode (Phase 8.6).
                     ApplyProviderRuntimeConfiguration(
                         existing,
                         merchantId,
@@ -256,7 +242,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                 {
                     Name = "Razorpay",
                     APIUrl = "https://api.razorpay.com/v1",
-                    IsActive = shouldBeActive,
+                    IsActive = false, // Active provider resolved from Tenant Registry (Tenant.PaymentProviderCode)
                     IsProduction = isProduction,
                     ProviderType = PaymentProviderTypes.Razorpay,
                     MerchantId = merchantId,
@@ -271,25 +257,6 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
             }
 
             context.SaveChanges();
-        }
-
-        private static bool ResolveMissingProviderActiveState(
-            OrderProcessingSystemDbContext context,
-            int tenantId,
-            string providerType)
-        {
-            var existingActiveProvider = context.PaymentProviders
-                .AsNoTracking()
-                .Where(provider => provider.TenantId == tenantId && provider.IsActive)
-                .Select(provider => provider.ProviderType)
-                .FirstOrDefault();
-
-            if (!string.IsNullOrWhiteSpace(existingActiveProvider))
-            {
-                return string.Equals(existingActiveProvider, providerType, StringComparison.OrdinalIgnoreCase);
-            }
-
-            return string.Equals(SeedDefaultProvider, providerType, StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>

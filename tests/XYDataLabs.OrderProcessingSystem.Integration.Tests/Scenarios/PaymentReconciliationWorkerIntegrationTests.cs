@@ -46,6 +46,7 @@ public sealed class PaymentReconciliationWorkerIntegrationTests : IAsyncLifetime
 
         // Seed an active OpenPay provider for the dynamically created tenant so that
         // TenantPaymentProviderResolver.ResolveCurrentTenantProvider() can resolve it.
+        // Phase 8.6: also update Tenant.PaymentProviderCode so the registry resolves OpenPay.
         await _factory.ExecuteTenantDbContextAsync(tenant.ToTenantContext(), async dbContext =>
         {
             dbContext.PaymentProviders.Add(new PaymentProvider
@@ -60,6 +61,12 @@ public sealed class PaymentReconciliationWorkerIntegrationTests : IAsyncLifetime
                 CreatedBy = 1,
                 CreatedDate = DateTime.UtcNow
             });
+
+            var tenantRow = await dbContext.Tenants
+                .IgnoreQueryFilters()
+                .SingleAsync(t => t.Id == tenant.TenantId);
+            tenantRow.PaymentProviderCode = PaymentProviderTypes.OpenPay;
+
             await dbContext.SaveChangesAsync();
             return true;
         });
@@ -144,6 +151,13 @@ public sealed class PaymentReconciliationWorkerIntegrationTests : IAsyncLifetime
                 CreatedBy = 1,
                 CreatedDate = DateTime.UtcNow
             });
+
+            // Phase 8.6: also update Tenant.PaymentProviderCode so the registry resolves Razorpay.
+            var tenantRow = await dbContext.Tenants
+                .IgnoreQueryFilters()
+                .SingleAsync(t => t.Id == tenant.TenantId);
+            tenantRow.PaymentProviderCode = PaymentProviderTypes.Razorpay;
+
             await dbContext.SaveChangesAsync();
             return true;
         });

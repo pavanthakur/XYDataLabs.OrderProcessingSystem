@@ -400,12 +400,12 @@ public sealed class DedicatedTenantTests : IAsyncLifetime
         await command.ExecuteNonQueryAsync();
     }
 
-    private static Task ConfigurePaymentProvidersAsync(
+    private static async Task ConfigurePaymentProvidersAsync(
         IntegrationTestWebAppFactory factory,
         TenantContext tenantContext,
         string activeProviderType)
     {
-        return factory.ExecuteTenantDbContextAsync(
+        await factory.ExecuteTenantDbContextAsync(
             tenantContext,
             async dbContext =>
             {
@@ -466,6 +466,18 @@ public sealed class DedicatedTenantTests : IAsyncLifetime
                 await dbContext.SaveChangesAsync();
                 return true;
             });
+
+        // Phase 8.6: active provider is authoritative from Tenant.PaymentProviderCode (Tenant Registry).
+        // TenantRegistryDbContext always uses the shared (registry) DB, so we update the Tenant row
+        // via ExecuteDbContextAsync (non-routed, always shared DB) — not via the tenant-scoped context
+        // which for Dedicated tenants routes to the dedicated physical database.
+        await factory.ExecuteDbContextAsync(async sharedDbContext =>
+        {
+            var tenant = await sharedDbContext.Tenants
+                .SingleAsync(t => t.Id == tenantContext.TenantId);
+            tenant.PaymentProviderCode = activeProviderType;
+            await sharedDbContext.SaveChangesAsync();
+        });
     }
 
     private static async Task<PaymentConfigurationSnapshot> GetPaymentConfigurationAsync(HttpClient client)
