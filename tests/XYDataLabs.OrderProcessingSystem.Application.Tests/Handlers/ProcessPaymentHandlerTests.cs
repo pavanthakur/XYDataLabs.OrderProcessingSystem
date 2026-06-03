@@ -31,8 +31,8 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
         // the property EXISTS and is consistently identical across both records.
         CapturedCardTransactions.Should().HaveCount(2, "ProcessPayment creates one tokenization CT and one charge CT");
 
-        var tokenizationCt = CapturedCardTransactions.First();
-        var chargeCt = CapturedCardTransactions.Last();
+        var tokenizationCt = CapturedCardTransactions[0];
+        var chargeCt = CapturedCardTransactions[^1];
 
         // Both CTs must link to the same billing customer (regression for Fix 1 rename)
         tokenizationCt.BillingCustomerId.Should().Be(chargeCt.BillingCustomerId,
@@ -53,7 +53,7 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
     public async Task HandleAsync_CreationDatesFromOpenPay_ShouldBeStoredAsUtcOnBothCardTransactions()
     {
         // Arrange — simulate OpenPay returning DateTimeKind.Unspecified timestamps (their CDMx local time)
-        var openPayLocalTime = new DateTime(2024, 3, 1, 4, 0, 0); // unspecified / CDMx = UTC-6
+        var openPayLocalTime = new DateTime(2024, 3, 1, 4, 0, 0, DateTimeKind.Unspecified); // unspecified / CDMx = UTC-6
         SetupPaymentDbSets();
         SetupOpenPayHappyPath(cardDate: openPayLocalTime, chargeDate: openPayLocalTime);
         var handler = CreateProcessPaymentHandler();
@@ -171,7 +171,7 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
 
         // Assert — charge CT (second) must reflect 3DS OFF
         CapturedCardTransactions.Should().HaveCount(2);
-        var chargeCt = CapturedCardTransactions.Last();
+        var chargeCt = CapturedCardTransactions[^1];
         chargeCt.IsThreeDSecureEnabled.Should().BeFalse(
             because: "the tenant's PaymentProvider has Use3DSecure = false");
         chargeCt.ThreeDSecureStage.Should().Be("not_applicable",
@@ -197,7 +197,7 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
         // For 3DS=0 there is no subsequent ConfirmPaymentStatus call, so the CT row is the only
         // opportunity to persist the reference ID returned by OpenPay.
         CapturedCardTransactions.Should().HaveCount(2);
-        var chargeCt = CapturedCardTransactions.Last();
+        var chargeCt = CapturedCardTransactions[^1];
         chargeCt.TransactionReferenceId.Should().Be("auth-ref-001",
             because: "for non-3DS payments the Authorization from the charge response must be " +
                      "written to CardTransactions.TransactionReferenceId at charge creation time");

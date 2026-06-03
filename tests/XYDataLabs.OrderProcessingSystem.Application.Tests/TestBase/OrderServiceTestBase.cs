@@ -6,9 +6,9 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase
     public abstract class OrderServiceTestBase : OrderProcessingSystemTestBase<CreateOrderCommandHandler>
     {
         protected readonly int CustomerId = 1;
-        protected readonly List<int> ProductIds;
+        protected readonly IReadOnlyList<int> ProductIds;
         protected readonly Customer Customer;
-        protected readonly List<Product> Products;
+        protected readonly IReadOnlyList<Product> Products;
 
         protected OrderServiceTestBase()
         {
@@ -28,7 +28,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase
             };
         }
 
-        protected List<Product> GenerateProducts(int count)
+        protected static IReadOnlyList<Product> GenerateProducts(int count)
         {
             var products = new List<Product>();
 
@@ -46,7 +46,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase
             return products;
         }
 
-        protected List<Order> GenerateOrders(int customerId, int count)
+        protected IReadOnlyList<Order> GenerateOrders(int customerId, int count)
         {
             var orders = new List<Order>();
 
@@ -64,17 +64,17 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase
             return CreateOrder(CustomerId, GenerateProducts(1), OrderStatus.Created, orderId);
         }
 
-        protected List<Customer> GenerateCustomersWithOrders(int customerCount, int orderCount, int? customerId = 1)
+        protected IReadOnlyList<Customer> GenerateCustomersWithOrders(int customerCount, int orderCount, int? customerId = 1)
         {
             return GenerateCustomers(customerCount, orderCount, customerId, OrderStatus.Created);
         }
 
-        protected List<Customer> GenerateCustomersWithFulFilledOrders(int customerCount, int orderCount, int? customerId = 1)
+        protected IReadOnlyList<Customer> GenerateCustomersWithFulFilledOrders(int customerCount, int orderCount, int? customerId = 1)
         {
             return GenerateCustomers(customerCount, orderCount, customerId, OrderStatus.Delivered);
         }
 
-        private List<Customer> GenerateCustomers(int customerCount, int orderCount, int? customerId, OrderStatus orderStatus)
+        private static IReadOnlyList<Customer> GenerateCustomers(int customerCount, int orderCount, int? customerId, OrderStatus orderStatus)
         {
             var customers = new List<Customer>();
             var nextOrderId = 1;
