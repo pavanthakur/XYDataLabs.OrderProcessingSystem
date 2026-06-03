@@ -32,7 +32,7 @@ async function main() {
     );
 
     console.log(`Discovered expected tenant: ${expectedTenantCode}`);
-    console.log(`Using stale tenant seed: ${staleTenantCode}`);
+    console.log(`Injecting stale tenant candidate into localStorage: ${staleTenantCode}`);
 
     const smokeResult = await verifyTenantBootstrap(browser, {
       expectedTenantCode,
