@@ -17,12 +17,6 @@ applyTo: "**/Infrastructure/**,**/Migrations/**,**/DataContext/**"
 - Registered in: `Infrastructure/StartupHelper.cs` → `InjectInfrastructureDependencies()`
 - Dev SQL logging: `LogTo(Console.WriteLine)` + `EnableSensitiveDataLogging()` guarded by `IsDevelopment()`
 
-## Azure SQL (Dev)
-- Server: `orderprocessing-sql-dev.database.windows.net`
-- Database: `OrderProcessingSystem_Dev`
-- Admin: `sqladmin` (passwordless via `Authentication=Active Directory Default` — see ADR-006)
-- Resource Group: `rg-orderprocessing-dev`
-
 ## Migration Commands
 ```powershell
 # Add new migration (--context required because two DbContexts exist)
@@ -134,10 +128,4 @@ Rule: if the database is structurally valid without these rows, they belong in `
 
 Do not move baseline reference rows out of the migration without an explicit architecture review. Doing so weakens deterministic database bootstrapping and breaks any environment that skips `DbInitializer` (for example, CI pipeline fresh migrations).
 
-## Multi-Tenancy Schema
-- `TenantId` column: `int NOT NULL` FK to `Tenants.Id` on all tenant-owned tables
-- `Tenants` carries `Id`, `ExternalId`, `Code`, `Name`, and `Status`
-- Request resolution uses `X-Tenant-Code`, not `X-Tenant-Id`
-- Global query filters apply to tenant-owned entities and do not apply to `Tenants`
-- Both `SaveChanges()` and `SaveChangesAsync()` stamp `TenantId` only for tenant-owned base-class entities
-- Non-request operations must set `TenantId` explicitly
+Multi-tenancy schema rules are in `multitenant-payment-schema.instructions.md` (auto-attached alongside this file for all Infrastructure files).

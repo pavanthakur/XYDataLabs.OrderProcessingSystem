@@ -118,3 +118,5 @@ Report results in this table:
 | Guardrails | ✅ / ⚠️ gaps fixed / ❌ deferred | |
 | Automation | ✅ / ⚠️ gaps fixed / ❌ deferred | |
 | Copilot context | ✅ / ⚠️ gaps fixed / ❌ deferred | |
+
+After printing the table: update `/memories/repo/active-work.md` — set `## Last Session` to today's date + what was just completed, and refresh `## Pending / Next Actions` with the next concrete task.
