@@ -282,6 +282,7 @@ Port allocations: Local VS API (5010–5011) + UI (5173–5174) · Docker dev (5
 ### Reusable agent prompts (type in VS Code Chat → Agent mode)
 | Prompt | Command | Purpose |
 |--------|---------|--------|
+| Day Start | `/XYDataLabs-day-start` | Start of every session — reads active-work.md and reports current phase, last session summary, pending actions, and key file paths. Zero exploration, zero token waste. |
 | New Feature Workflow | `/XYDataLabs-new-feature` | Orchestrates end-to-end feature development: entity → CQRS → migration → controller → tests → review → commit → payment verification (conditional). Enforces mandatory 13-step workflow with multitenant support. |
 | Day Complete Router | `/XYDataLabs-day-complete` | After each curriculum day or phase-freeze closeout — routes updates to all correct documents, syncs architecture status surfaces, and makes payment automation dry-run validation mandatory when automation scope changed before a phase-close commit |
 | Completion Check | `/XYDataLabs-completion-check` | After any feature, task, script, or fix — 6-category quality gate: documented? guardrailed? unit tested? integration tested? automated, including payment automation dry-run matrix when relevant? context current? |
@@ -302,12 +303,13 @@ Port allocations: Local VS API (5010–5011) + UI (5173–5174) · Docker dev (5
 |------|-------|---------------|
 | `TROUBLESHOOTING-INDEX.md` | Root | Quick links for common GitHub App / OIDC / workflow errors |
 | `ARCHITECTURE.md` | Root | Binding tenant, payment identifier, migration, and test standard for future model creation |
-| `ARCHITECTURE-EVOLUTION.md` | Root | 14-phase roadmap: Phase 7 strict closeout verified, Phase 8 next 📅 |
+| `ARCHITECTURE-EVOLUTION.md` | Root | 14-phase roadmap: Phase 8.6 ✅ (Central Tenant Registry), Phase 8.7 next 📅 (Webhook Receiver) |
 | `docs/internal/AZURE-PROGRESS-EVALUATION.md` | docs/internal | Learning progress weeks 1–10, next-step guides |
 | `docs/AI-OPERATING-MODEL.md` | docs/ | Canonical protocol for shared AI customization and governance |
 | `docs/internal/DEFERRED-WORK-LOG.md` | docs/internal | Shared register for justified deferred work |
 | `docs/internal/branch-and-blueprint-strategy.md` | docs/internal | Snapshot tag/branch governance, two-layer template packaging, side-project bootstrap (ADR-018) |
 | `docs/architecture/decisions/ADR-018-blueprint-and-snapshot-strategy.md` | docs/architecture/decisions | Decision: tag+branch (Path C) snapshots + `dotnet new` NuGet template + GitHub template repo (Layer 1 + Layer 2) |
+| `docs/architecture/decisions/ADR-019-central-tenant-registry.md` | docs/architecture/decisions | Decision: `Tenant.PaymentProviderCode` as sole routing authority; `ITenantRegistry` resolver; ALL `PaymentProviders.IsActive = false` |
 | `docs/reference/quick-command-reference.md` | docs/ | Command cheat sheet for Azure, Git, Docker, GitHub App |
 | `.github/workflows/README.md` | Workflows | Workflow overview, secrets, path triggers |
 | `.github/workflows/README-AZURE-INITIAL-SETUP.md` | Workflows | Initial Setup workflow (Phase 0/1a/1b) |

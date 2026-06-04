@@ -156,6 +156,50 @@ Transition note:
 
 ---
 
+## Phase 8.6 Closeout + Pre-8.7 Context Hygiene (June 5, 2026)
+
+This session closed Phase 8.6 (Central Tenant Registry) and hardened the AI context system before Phase 8.7.
+
+**1. Phase 8.6 final gate results**
+
+All gates passed on commit `4426b82`:
+- Build: 0 errors · Domain 14/14 · Application 53/53 · API 88/88 · Architecture 42/42
+- Automation dry-run matrix: local + docker + azure all passed
+- Docker validation bundle `docker-validation-20260605-013343` (TenantA + TenantC): all passed
+- E2E provider matrix: 4/6 on Docker dev + Azure dev + Azure staging (2 known external Razorpay S2S failures — not a code issue)
+- Snapshot tag: `v-20260605-phase8.6-central-tenant-registry` + backup branch
+
+**2. Bugs found and fixed during closeout**
+
+Three bugs surfaced during the Docker validation bundle run:
+
+| Bug | Root cause | Fix |
+|-----|------------|-----|
+| `generate-docker-validation-bundle.ps1` — empty `--tenant ""` arg | `-File` mode passes `$Tenant=""` when param omitted; `@("")` iterates once | `IsNullOrWhiteSpace` guard before appending `--tenant` |
+| `generate-docker-validation-bundle.ps1` — `--tenant TenantA,TenantC` rejected as one arg | `-File` mode binds comma-separated string as single value | Comma-split loop on each tenant code value |
+| `InfoControllerTests.GetPaymentConfiguration_ReturnsRazorpayCheckoutContract` failure | `PaymentProvider.Use3DSecure` defaults to `true`; test omitted `Use3DSecure = false` | Added `Use3DSecure = false` to test's `PaymentProvider` construction |
+
+Canonical Docker bundle invocation must use `-Command` mode (not `-File`):
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -Command "& '.\scripts\generate-docker-validation-bundle.ps1' -Environment dev -Profile http -Tenant @('TenantA','TenantC')"
+```
+
+**3. Pre-8.7 context hygiene committed (commits 8c08c8a, 257531e)**
+
+- `DEFERRED-WORK-LOG.md`: removed DW-002, DW-003, DW-010 from Open Items (were already in Closed Items — duplicate entries)
+- `copilot-instructions.md`: added ADR-019 to Key Documentation table; updated ARCHITECTURE-EVOLUTION line to Phase 8.6 ✅ / Phase 8.7 📅
+- `active-work.md`: added Phase 8.7 key file entry points and migration command so AI doesn't need to search at phase kickoff
+- New prompt: `/XYDataLabs-day-start` — reads `active-work.md`, reports phase/summary/actions/files in structured output; explicitly forbidden from running terminal commands or exploring the codebase
+
+**4. What this enables for Phase 8.7**
+
+- Zero-exploration session start via `/XYDataLabs-day-start`
+- `active-work.md` contains 9 direct file paths for Phase 8.7 artifacts
+- Deferred work log is clean — only genuinely open items remain
+- Docker bundle invocation is canonical in `docs/internal/phase-closeout-gates.md`
+
+---
+
 ## Day 42-43: Phase 7 Closure - Typed Boundaries + Deployment Readiness
 
 Phase 7 reached a verification freeze with two final slices that were easy to get wrong if treated as cosmetic refactors. The later strict-closeout backlog is intentionally narrow: custom OTel metrics are now implemented in code and need cross-runtime verification, `Address` remains deferred by design, and broader optimistic concurrency remains deferred until another aggregate shows real competing-writer risk.

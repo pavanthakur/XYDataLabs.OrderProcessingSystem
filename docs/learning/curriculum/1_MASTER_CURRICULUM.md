@@ -35,10 +35,10 @@
 - Days 44-50: Azure Functions + Service Bus + DLQ operating model preparation (learning and infrastructure prep only; production transport swap remains Phase 10)
 - Days 51, 55-56: ✅ **Phase 8** event foundation inside the monolith — contracts, mapper, outbox/inbox, `PaymentAttempt`, reconciliation, and separate workers
 
-### Priority 2: Azure Services Deep Dive + Containers (Days 57-86) — *Phase 8.5 is now the active engineering phase*
-**Why:** With Phase 8 closed, the next backend slice is multi-provider payment architecture, followed by the Azure-service and container work that enables later modular extraction and read-model evolution
+### Priority 2: Azure Services Deep Dive + Containers (Days 57-86) — *Phase 8.7 is now the active engineering phase*
+**Why:** With Phase 8.6 closed, the next backend slice is the webhook receiver and inbox idempotency pattern, followed by the Azure-service and container work that enables later modular extraction and read-model evolution
 **Tasks:**
-- Days 57-59: Azure Functions Advanced + 🏗️ **Phase 8.5** (Multi-Provider Payment)
+- Days 57-59: Azure Functions Advanced + ✅ **Phase 8.5** (Multi-Provider Payment) + ✅ **Phase 8.6** (Central Tenant Registry)
 - Days 60-65: Durable Functions + Serilog (✅ partial — Phase 3)
 - Days 66-72: Cosmos DB + 🏗️ **Phase 14** (CQRS Read Model) + Redis (✅ Phase 6)
 - Days 73-86: .NET Aspire + 🏗️ **Phase 9** (YARP Microservices) + Docker + ACR, with Orders, Inventory, Notifications, and Payments treated as first-class modules
@@ -54,8 +54,9 @@
 - **Track U** reduces frontend migration risk: contract freeze, generated SDK, React web replacement, API ownership of callback/telemetry, and MVC removal rules
 - **Track U Phase U5** is complete: React web is the active UI and the legacy MVC host has been retired
 - **Backend Phase 8** is verified and frozen as the current event-foundation baseline
-- **Backend Phase 8.5** is now the active next engineering phase
-- **Mobile (U6)** follows the web cutover and does not block backend Phase 8.5
+- **Backend Phase 8.5 and 8.6** are complete — multi-provider routing and Central Tenant Registry
+- **Backend Phase 8.7** is now the active next engineering phase (Provider Webhook Receiver)
+- **Mobile (U6)** follows the web cutover and does not block backend Phase 8.7
 
 ---
 
