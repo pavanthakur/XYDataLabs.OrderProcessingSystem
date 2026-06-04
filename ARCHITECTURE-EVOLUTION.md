@@ -1,7 +1,7 @@
 # Architecture Evolution: Monolith to Enterprise Microservices
 
-**Last Updated:** May 10, 2026
-**Current Status:** Phase 8 Closeout Matrix Validation Passed ✅ | Track U U5 Complete ✅ | Phase 8.5 Complete ✅ | Phases 8.6, 8.7, 9, 9.5, 10, 11, 11.5, 12-14 Planned 📅
+**Last Updated:** June 5, 2026
+**Current Status:** Phase 8 Closeout Matrix Validation Passed ✅ | Track U U5 Complete ✅ | Phase 8.5 Complete ✅ | Phase 8.6 Complete ✅ | Phases 8.7, 9, 9.5, 10, 11, 11.5, 12-14 Planned 📅
 
 ---
 
@@ -533,7 +533,7 @@ The payment runtime is provider-neutral above the adapter boundary. OpenPay rema
 
 ---
 
-## Phase 8.6 — Central Tenant Registry & Separation of Duties 📅
+## Phase 8.6 — Central Tenant Registry & Separation of Duties ✅
 
 **Focus:** Extract tenant identity and per-tenant business configuration from application code and shared config files into a dedicated, ops-owned database. Developers have code access; they have no access to the Registry DB in any non-local environment.
 
@@ -604,6 +604,21 @@ This phase is closed when:
 2. `DbInitializer` has no knowledge of tenant-to-provider mappings
 3. Staging Registry DB is access-controlled (developer connection denied, validated)
 4. ADR-019 is merged and status is `Accepted`
+
+### Completed Items (Phase 8.6)
+
+- `ITenantRegistry` interface in Application layer — `FindByCodeAsync`, `GetActiveTenantsAsync`, `FindByCode` (sync)
+- `TenantRegistryService` implementation in Infrastructure — reads `Tenant.PaymentProviderCode` from `TenantRegistryDbContext`
+- `TenantRegistryDbContext` — separate EF Core context backed by the shared/central registry DB; always reads from the central DB regardless of tenant tier
+- `AddTenantPaymentProviderCode` migration — idempotent seed: TenantA → Razorpay, TenantB → Razorpay, TenantC → OpenPay
+- `DbInitializer` updated — all `PaymentProviders.IsActive = false`; no tenant-to-provider mapping knowledge remains in seed code
+- `set-tenant-payment-provider.ps1` fixed — `Get-DatabaseName` always targets registry/central DB; TenantC dedicated DB (`OrderProcessingSystem_TenantC_{env}`) is for business ops only, never for registry lookups
+- `ProcessPaymentCommandHandler` fixed — removed `IsActive` filter when resolving `PaymentProvider` FK; added guard for missing row
+- `ADR-019` — merged and status `Accepted`; documents Central Registry decision, access model, `Tenant.PaymentProviderCode` as sole routing authority
+- `deploy-api-to-azure.yml` — `Validate TenantC Dedicated Database Contract` step asserts `PaymentProviderCode IS NOT NULL` in both shared registry DB and dedicated DB
+- **E2E provider matrix verified — Docker dev + Azure dev + Azure staging (all three environments):** 4/6 pass on every target; 2 expected failures (TenantB/Razorpay + TenantC/Razorpay) are an external Razorpay S2S account restriction, not a code issue
+- Architecture tests, unit tests (53 Application, 88 API, 42 Architecture, 14 Domain), and secret scan all green
+- Docker validation bundle generated (`scripts/generate-docker-validation-bundle.ps1 -Environment dev -Profile http`)
 
 ---
 
@@ -1381,7 +1396,7 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
      │
     ├── Phase 8.5   ─── ✅ Multi-provider payment (OpenPay + Razorpay, keyed DI, retry classification)
      │
-    ├── Phase 8.6   ─── 📅 Central Tenant Registry (separation of duties, ops-only DB)
+    ├── Phase 8.6   ─── ✅ Central Tenant Registry (separation of duties, ops-only DB)
      │
     ├── Phase 8.7   ─── 📅 Provider webhooks (signed, idempotent, tenant-aware)
      │

@@ -21,7 +21,7 @@ public class InfoControllerTests
         var controller = CreateController(
             "TenantA",
             [new TenantInfo(1, "TenantA", "Tenant A")],
-            new PaymentProvider { Name = "Razorpay", ProviderType = "Razorpay", MerchantId = "rzp_test_browser_key", PrivateKeyConfigurationKey = "Razorpay:PrivateKey" });
+            new PaymentProvider { Name = "Razorpay", ProviderType = "Razorpay", MerchantId = "rzp_test_browser_key", PrivateKeyConfigurationKey = "Razorpay:PrivateKey", Use3DSecure = false });
 
         var result = controller.GetPaymentConfiguration();
 
