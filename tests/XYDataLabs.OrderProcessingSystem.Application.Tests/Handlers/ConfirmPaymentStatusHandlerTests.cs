@@ -3,6 +3,7 @@ using Moq;
 using Openpay.Entities;
 using XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers;
 
@@ -49,6 +50,230 @@ public class ConfirmPaymentStatusHandlerTests : PaymentServiceTestBase
         // Assert
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("NotFound");
+    }
+
+    [Fact]
+    public async Task HandleAsync_RazorpayProviderOrderIdCallback_ShouldResolveTransactionViaStoredProviderOrderId()
+    {
+        var transaction = BuildStubCardTransaction(billingCustomerId: 42, isThreeDSecureEnabled: false);
+        transaction.TransactionId = "razorpay-token-pending";
+        transaction.TransactionCustomerId = "razorpay-cust-john";
+        transaction.AttemptOrderId = "attempt-rzp-001";
+        transaction.TransactionStatus = "completed";
+        transaction.ThreeDSecureStage = "not_applicable";
+
+        var payinLog = BuildStubPayinLog(billingCustomerId: 42, isThreeDSecureEnabled: false);
+        payinLog.AttemptOrderId = transaction.AttemptOrderId;
+        payinLog.OpenPayChargeId = "order_rzp_123";
+
+        var paymentAttempt = new PaymentAttempt
+        {
+            Id = 9,
+            TenantId = 1,
+            CustomerOrderId = transaction.CustomerOrderId,
+            AttemptOrderId = transaction.AttemptOrderId!,
+            AttemptNumber = 1,
+            PaymentTraceId = transaction.PaymentTraceId!,
+            PaymentProviderName = PaymentProviderTypes.Razorpay,
+            ProviderChargeId = payinLog.OpenPayChargeId,
+            Status = PaymentAttemptStatus.ProviderAccepted,
+        };
+
+        SetupConfirmPaymentDbSets(
+            existingTransaction: transaction,
+            existingPayinLog: payinLog,
+            existingPaymentAttempt: paymentAttempt);
+
+        MockPaymentGateway
+            .Setup(g => g.GetChargeAsync("pay_rzp_123", transaction.TransactionCustomerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PaymentGatewayChargeResult(
+                Id: "pay_rzp_123",
+                Status: "completed",
+                Amount: 100m,
+                CreatedAt: UtcNow,
+                Authorization: null,
+                ErrorMessage: null,
+                RedirectUrl: null));
+
+        var handler = CreateConfirmPaymentHandler(providerType: PaymentProviderTypes.Razorpay);
+
+        var result = await handler.HandleAsync(BuildConfirmPaymentCommand(
+            paymentId: "pay_rzp_123",
+            attemptOrderId: "order_rzp_123",
+            callbackParameters: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["tenantCode"] = "TenantA",
+                ["razorpay_order_id"] = "order_rzp_123",
+                ["razorpay_payment_id"] = "pay_rzp_123",
+                ["razorpay_signature"] = BuildRazorpaySignature("order_rzp_123", "pay_rzp_123")
+            }));
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value!.CustomerOrderId.Should().Be(transaction.CustomerOrderId);
+        result.Value.Status.Should().Be("completed");
+        result.Value.StatusSource.Should().Be(PaymentProviderTypes.Razorpay);
+        result.Value.StatusMessage.Should().Contain("Razorpay");
+        result.Value.StatusMessage.Should().NotContain("OpenPay");
+        paymentAttempt.Status.Should().Be(PaymentAttemptStatus.Succeeded);
+        paymentAttempt.ProviderChargeId.Should().Be("pay_rzp_123");
+    }
+
+    [Fact]
+    public async Task HandleAsync_RazorpaySuccessfulCallback_WithInvalidSignature_ShouldReturnValidationError()
+    {
+        var transaction = BuildStubCardTransaction(billingCustomerId: 42, isThreeDSecureEnabled: false);
+        transaction.TransactionId = "order_rzp_bad_sig";
+        transaction.TransactionCustomerId = "razorpay-cust-john";
+        transaction.AttemptOrderId = "attempt-rzp-bad-sig";
+        transaction.TransactionStatus = "charge_pending";
+        transaction.ThreeDSecureStage = "not_applicable";
+
+        var payinLog = BuildStubPayinLog(billingCustomerId: 42, isThreeDSecureEnabled: false);
+        payinLog.AttemptOrderId = transaction.AttemptOrderId;
+        payinLog.OpenPayChargeId = "order_rzp_bad_sig";
+
+        SetupConfirmPaymentDbSets(existingTransaction: transaction, existingPayinLog: payinLog);
+
+        MockPaymentGateway
+            .Setup(g => g.GetChargeAsync("pay_rzp_bad_sig", transaction.TransactionCustomerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PaymentGatewayChargeResult(
+                Id: "pay_rzp_bad_sig",
+                Status: "completed",
+                Amount: 100m,
+                CreatedAt: UtcNow,
+                Authorization: null,
+                ErrorMessage: null,
+                RedirectUrl: null));
+
+        var handler = CreateConfirmPaymentHandler(providerType: PaymentProviderTypes.Razorpay);
+
+        var result = await handler.HandleAsync(BuildConfirmPaymentCommand(
+            paymentId: "pay_rzp_bad_sig",
+            attemptOrderId: "order_rzp_bad_sig",
+            callbackParameters: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["tenantCode"] = "TenantA",
+                ["razorpay_order_id"] = "order_rzp_bad_sig",
+                ["razorpay_payment_id"] = "pay_rzp_bad_sig",
+                ["razorpay_signature"] = "bad-signature"
+            }));
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Validation");
+        result.Error.Description.Should().Contain("signature verification failed");
+    }
+
+    [Fact]
+    public async Task HandleAsync_RazorpayProviderOrderIdCallback_WithoutPayinLog_ShouldResolveTransactionViaStoredOrderId()
+    {
+        var transaction = BuildStubCardTransaction(billingCustomerId: 42, isThreeDSecureEnabled: false);
+        transaction.TransactionId = "order_rzp_456";
+        transaction.TransactionCustomerId = "razorpay-cust-jane";
+        transaction.AttemptOrderId = "attempt-rzp-456";
+        transaction.TransactionStatus = "charge_pending";
+        transaction.ThreeDSecureStage = "not_applicable";
+
+        SetupConfirmPaymentDbSets(existingTransaction: transaction, existingPayinLog: null);
+
+        MockPaymentGateway
+            .Setup(g => g.GetChargeAsync("pay_rzp_456", transaction.TransactionCustomerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PaymentGatewayChargeResult(
+                Id: "pay_rzp_456",
+                Status: "completed",
+                Amount: 100m,
+                CreatedAt: UtcNow,
+                Authorization: null,
+                ErrorMessage: null,
+                RedirectUrl: null));
+
+        var handler = CreateConfirmPaymentHandler(providerType: PaymentProviderTypes.Razorpay);
+
+        var result = await handler.HandleAsync(BuildConfirmPaymentCommand(
+            paymentId: "pay_rzp_456",
+            attemptOrderId: "order_rzp_456"));
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value!.CustomerOrderId.Should().Be(transaction.CustomerOrderId);
+        result.Value.Status.Should().Be("completed");
+    }
+
+    [Fact]
+    public async Task HandleAsync_RazorpayCallbackErrorWithoutStatus_ShouldTreatCallbackAsFailed()
+    {
+        var transaction = BuildStubCardTransaction(billingCustomerId: 42, isThreeDSecureEnabled: false);
+        transaction.TransactionId = "order_rzp_declined_001";
+        transaction.TransactionCustomerId = "razorpay-cust-jane";
+        transaction.AttemptOrderId = "attempt-rzp-declined-001";
+        transaction.TransactionStatus = "charge_pending";
+        transaction.ThreeDSecureStage = "pending_confirmation";
+
+        SetupConfirmPaymentDbSets(existingTransaction: transaction, existingPayinLog: null);
+
+        MockPaymentGateway
+            .Setup(g => g.GetChargeAsync("pay_rzp_declined_001", transaction.TransactionCustomerId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Razorpay lookup unavailable for declined callback test."));
+
+        var handler = CreateConfirmPaymentHandler(providerType: PaymentProviderTypes.Razorpay);
+
+        var result = await handler.HandleAsync(BuildConfirmPaymentCommand(
+            paymentId: "pay_rzp_declined_001",
+            attemptOrderId: "order_rzp_declined_001",
+            errorMessage: "International cards are not supported. Please contact our support team for help",
+            callbackParameters: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["tenantCode"] = "TenantA",
+                ["razorpay_order_id"] = "order_rzp_declined_001",
+                ["razorpay_payment_id"] = "pay_rzp_declined_001",
+                ["error_message"] = "International cards are not supported. Please contact our support team for help"
+            }));
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value!.Status.Should().Be("failed");
+        result.Value.IsFailure.Should().BeTrue();
+        result.Value.IsPending.Should().BeFalse();
+        result.Value.StatusMessage.Should().Be("Payment failed based on the latest local record.");
+        result.Value.StatusMessage.Should().NotContain("OpenPay");
+        result.Value.ErrorMessage.Should().Be("International cards are not supported. Please contact our support team for help");
+        transaction.TransactionStatus.Should().Be("failed");
+    }
+
+    [Fact]
+    public async Task HandleAsync_LongCallbackError_ShouldTruncatePersistedTransactionStatusHistoryNotes()
+    {
+        var transaction = BuildStubCardTransaction(billingCustomerId: 42, isThreeDSecureEnabled: false);
+        transaction.TransactionId = "order_rzp_declined_002";
+        transaction.TransactionCustomerId = "razorpay-cust-john";
+        transaction.AttemptOrderId = "attempt-rzp-declined-002";
+        transaction.TransactionStatus = "charge_pending";
+        transaction.ThreeDSecureStage = "pending_confirmation";
+
+        SetupConfirmPaymentDbSets(existingTransaction: transaction, existingPayinLog: null);
+
+        var longErrorMessage = new string('X', 400);
+
+        MockPaymentGateway
+            .Setup(g => g.GetChargeAsync("pay_rzp_declined_002", transaction.TransactionCustomerId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Razorpay lookup unavailable for truncation test."));
+
+        var handler = CreateConfirmPaymentHandler(providerType: PaymentProviderTypes.Razorpay);
+
+        var result = await handler.HandleAsync(BuildConfirmPaymentCommand(
+            paymentId: "pay_rzp_declined_002",
+            attemptOrderId: "order_rzp_declined_002",
+            errorMessage: longErrorMessage,
+            callbackParameters: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["tenantCode"] = "TenantA",
+                ["razorpay_order_id"] = "order_rzp_declined_002",
+                ["razorpay_payment_id"] = "pay_rzp_declined_002",
+                ["error_message"] = longErrorMessage
+            }));
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value!.Status.Should().Be("failed");
+        CapturedTsh.Should().ContainSingle();
+        CapturedTsh.Single().Notes.Should().NotBeNull();
+        CapturedTsh.Single().Notes!.Length.Should().BeLessThanOrEqualTo(255);
     }
 
     // ------------------------------------------------------------------ TSH state-machine tests

@@ -20,7 +20,6 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
         {
             // Arrange
             var newCustomer = GenerateNewCustomerRequestDto(1)[0];
-            var customer = GenerateCustomers(1).First();
             MockDbContext.Setup(db => db.Customers.Add(It.IsAny<Customer>()));
             MockDbContext.Setup(db => db.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
 
@@ -38,8 +37,8 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
         public async Task GetAllCustomersQuery_ShouldReturnListOfCustomers()
         {
             // Arrange
-            var customers = GenerateCustomers(5).AsQueryable();
-            var mockDbSet = GetMockDbSet(customers);
+            var customers = GenerateCustomers(5);
+            var mockDbSet = GetMockDbSet(customers.AsQueryable());
 
             MockDbContext.Setup(db => db.Customers).Returns(mockDbSet.Object);
 
@@ -51,14 +50,14 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
             // Assert
             result.IsSuccess.Should().BeTrue();
             result.Value.Should().HaveCount(5);
-            result.Value!.First().Name.Should().Be(customers.First().Name);
+            result.Value!.First().Name.Should().Be(customers[0].Name);
         }
 
         [Fact]
         public async Task GetCustomerByIdQuery_ShouldReturnCustomer_WhenCustomerExists()
         {
             // Arrange
-            var customer = GenerateCustomers(1).First();
+            var customer = GenerateCustomers(1)[0];
             MockDbContext.Setup(db => db.Customers.FindAsync(new object[] { new CustomerId(1) }, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(customer);
 
@@ -94,9 +93,9 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
         {
             // Arrange
             var customerId = 1;
-            var customers = GenerateCustomersWithOrders(1, 1).AsQueryable();
-            customers.First().CustomerId = customerId;
-            var mockDbSet = GetMockDbSet(customers);
+            var customers = GenerateCustomersWithOrders(1, 1).ToList();
+            customers[0].CustomerId = customerId;
+            var mockDbSet = GetMockDbSet(customers.AsQueryable());
 
             MockDbContext.Setup(db => db.Customers).Returns(mockDbSet.Object);
             var handler = new GetCustomerWithOrdersQueryHandler(MockDbContext.Object);
@@ -114,15 +113,14 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
         public async Task GetCustomersByNameQuery_ShouldReturnListOfCustomers()
         {
             // Arrange
-            var customers = GenerateCustomers(5).AsQueryable();
+            var customers = GenerateCustomers(5);
             var tempCustomers = customers.Select((c, index) => new Customer
             {
                 CustomerId = c.CustomerId,
                 Name = (index == 0 || index == 2) ? "JohnXXX" : c.Name,
                 Email = c.Email
-            }).AsQueryable();
-            var filteredCustomers = tempCustomers.Where(c => c.Name == "JohnXXX");
-            var mockDbSet = GetMockDbSet<Customer>(tempCustomers);
+            }).ToList();
+            var mockDbSet = GetMockDbSet(tempCustomers.AsQueryable());
 
             MockDbContext.Setup(db => db.Customers).Returns(mockDbSet.Object);
 
@@ -141,7 +139,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
         public async Task UpdateCustomerCommand_ShouldReturnCustomerId_WhenCustomerIsUpdated()
         {
             // Arrange
-            var customer = GenerateCustomers(1).First();
+            var customer = GenerateCustomers(1)[0];
             MockDbContext.Setup(db => db.Customers.FindAsync(new object[] { new CustomerId(1) }, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(customer);
             MockDbContext.Setup(db => db.SaveChangesAsync(default)).ReturnsAsync(1);
@@ -177,7 +175,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
         public async Task DeleteCustomerCommand_ShouldReturnSuccess_WhenCustomerIsDeleted()
         {
             // Arrange
-            var customer = GenerateCustomers(1).First();
+            var customer = GenerateCustomers(1)[0];
             MockDbContext.Setup(db => db.Customers.FindAsync(new object[] { new CustomerId(1) }, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(customer);
             MockDbContext.Setup(db => db.Customers.Remove(It.IsAny<Customer>()));

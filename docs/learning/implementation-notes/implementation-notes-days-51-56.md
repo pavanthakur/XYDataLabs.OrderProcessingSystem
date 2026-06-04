@@ -109,7 +109,7 @@ Today's closeout work did not add runtime code; it tightened the architecture pl
 
 **1. Strategic roadmap extensions adopted**
 
-- Added **Phase 8.7** for a Stripe webhook receiver with signature validation, Inbox-backed idempotency, tenant resolution from provider metadata, and Outbox-driven downstream events
+- Added **Phase 8.7** for a provider webhook receiver with signature validation, Inbox-backed idempotency, tenant resolution from provider metadata, and Outbox-driven downstream events
 - Added **Phase 9.5** for a local Keycloak portability showcase proving the JWT/auth pipeline can swap authorities without disturbing the Entra ID production path
 - Added **Phase 11.5** for a Notifications-only PostgreSQL pilot, preserving Azure SQL as the production baseline for revenue-critical paths while demonstrating RDBMS portability
 
@@ -132,7 +132,7 @@ Reviewed Julio Casal's `.NET 10 backend blueprint` reference template and adopte
 
 **4. What this enables next**
 
-The next engineering phase is still **Phase 8.5**. The practical benefit of today's planning work is that Stripe adapter work can now start against a stable target sequence: adapter integration first, webhook receiver second, module extraction third, then identity and persistence portability proofs in isolated follow-on phases.
+The next engineering phase is still **Phase 8.5**. The practical benefit of today's planning work is that secondary-provider integration can now start against a stable target sequence: provider-neutral routing first, webhook receiver second, module extraction third, then identity and persistence portability proofs in isolated follow-on phases.
 
 ## May 10, 2026: Azure UI Deployment Stabilization And Live Automation Proof
 

@@ -58,7 +58,9 @@ export class PowerShellVerificationAdapter implements VerificationAdapter {
       "-RunPrefix",
       request.runPrefix,
       "-OutputFormat",
-      "Json"
+      "Json",
+      "-PreQueryDelaySeconds",
+      "90"
     ]);
 
     const rawReport = parseJsonPayload(stdout) as { Checks?: Record<string, { Outcome?: string }> };

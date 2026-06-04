@@ -1,7 +1,6 @@
 # ADR-014: Azure Service Coverage Rationale
 
-## Status
-Accepted
+**Status:** Accepted
 
 ## Context
 

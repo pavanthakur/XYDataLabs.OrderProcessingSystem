@@ -24,4 +24,28 @@ public sealed class TenantRegistryService : ITenantRegistry
             .Select(t => new TenantInfo(t.Id, t.Code, t.Name))
             .ToListAsync(cancellationToken);
     }
+
+    public TenantRegistryEntry? FindByCode(string tenantCode)
+    {
+        if (string.IsNullOrWhiteSpace(tenantCode))
+            return null;
+
+        return _registryContext.Tenants
+            .AsNoTracking()
+            .Where(t => t.Code == tenantCode)
+            .Select(t => new TenantRegistryEntry(t.Id, t.Code, t.Name, t.TenantTier, t.PaymentProviderCode))
+            .FirstOrDefault();
+    }
+
+    public async Task<TenantRegistryEntry?> FindByCodeAsync(string tenantCode, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(tenantCode))
+            return null;
+
+        return await _registryContext.Tenants
+            .AsNoTracking()
+            .Where(t => t.Code == tenantCode)
+            .Select(t => new TenantRegistryEntry(t.Id, t.Code, t.Name, t.TenantTier, t.PaymentProviderCode))
+            .FirstOrDefaultAsync(cancellationToken);
+    }
 }

@@ -7,17 +7,24 @@
   },
   "AllowedHosts": "*",
   "ConnectionStrings": {
-    "OrderProcessingSystemDbConnection": "Server=localhost;Database=OrderProcessingSystem_Local;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true;"
+    "OrderProcessingSystemDbConnection": "Server=localhost;Database=OrderProcessingSystem_Local;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true;",
+    "TenantRegistryDbConnection": "Server=localhost;Database=OrderProcessingSystem_Local;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true;"
   },
   "DedicatedTenantConnectionStrings": {
     "TenantC": "Server=localhost;Database=OrderProcessingSystem_TenantC;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true;"
   },
   "OpenPay": {
     "MerchantId": "__OPENPAY_MERCHANT_ID__",
+    "PublicKey": "__OPENPAY_PUBLIC_KEY__",
     "PrivateKey": "__OPENPAY_PRIVATE_KEY__",
     "DeviceSessionId": "__OPENPAY_DEVICE_SESSION_ID__",
     "IsProduction": false,
     "RedirectUrl": ""
+  },
+  "Razorpay": {
+    "MerchantId": "__RAZORPAY_MERCHANT_ID__",
+    "PrivateKey": "__RAZORPAY_PRIVATE_KEY__",
+    "IsProduction": false
   },
   "Observability": {
     "EnableEfSensitiveDataLogging": true

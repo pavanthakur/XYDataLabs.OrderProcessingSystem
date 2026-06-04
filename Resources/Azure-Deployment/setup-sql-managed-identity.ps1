@@ -267,10 +267,12 @@ else {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Step 4: Create contained user and grant roles
+# Step 4: Create contained user and grant runtime roles
 # db_datareader  — SELECT on all tables
 # db_datawriter  — INSERT/UPDATE/DELETE on all tables
-# db_ddladmin    — CREATE/ALTER/DROP (needed for EF Core migrations)
+# Azure deployment workflows run EF Core migrations separately with deployment
+# credentials, so the runtime API identity intentionally does not receive
+# db_ddladmin.
 # ─────────────────────────────────────────────────────────────────────────────
 Write-Host "Step 4: Creating contained user and granting roles in $dbName..." -ForegroundColor Yellow
 
@@ -297,18 +299,7 @@ BEGIN
     ALTER ROLE db_datawriter ADD MEMBER [$displayName];
 END
 
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.database_role_members drm
-    JOIN sys.database_principals r ON r.principal_id = drm.role_principal_id
-    JOIN sys.database_principals m ON m.principal_id = drm.member_principal_id
-    WHERE r.name = 'db_ddladmin' AND m.name = '$displayName'
-)
-BEGIN
-    ALTER ROLE db_ddladmin ADD MEMBER [$displayName];
-END
-
-PRINT 'Roles granted: db_datareader, db_datawriter, db_ddladmin'
+PRINT 'Roles granted: db_datareader, db_datawriter'
 "@
 
 if ($UseSqlAuthentication) {
@@ -383,11 +374,11 @@ $roleGrantSql
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Step 5: Grant managed identity access on TenantC dedicated database (ADR-009)
-# TenantC is a Dedicated-tier tenant. Its database must also have the managed
-# identity user so that DbInitializer.SeedDedicatedTenants() can migrate and
-# seed it at app startup. Without this, TenantC startup seeding fails with a
-# SQL login error even if DedicatedTenantConnectionStrings--TenantC is present
-# in Key Vault.
+# TenantC is a Dedicated-tier tenant. Its dedicated database must also have the
+# managed identity user so runtime requests can read and write against the
+# dedicated store after the deployment workflow has already applied schema
+# migrations. Without this, TenantC requests fail with SQL login errors even if
+# DedicatedTenantConnectionStrings--TenantC is present in Key Vault.
 # ─────────────────────────────────────────────────────────────────────────────
 Write-Host "Step 5: Granting managed identity access on TenantC dedicated database..." -ForegroundColor Yellow
 
@@ -419,18 +410,7 @@ BEGIN
     ALTER ROLE db_datawriter ADD MEMBER [$displayName];
 END
 
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.database_role_members drm
-    JOIN sys.database_principals r ON r.principal_id = drm.role_principal_id
-    JOIN sys.database_principals m ON m.principal_id = drm.member_principal_id
-    WHERE r.name = 'db_ddladmin' AND m.name = '$displayName'
-)
-BEGIN
-    ALTER ROLE db_ddladmin ADD MEMBER [$displayName];
-END
-
-PRINT 'TenantC roles granted: db_datareader, db_datawriter, db_ddladmin'
+PRINT 'TenantC roles granted: db_datareader, db_datawriter'
 "@
 
 if ($UseSqlAuthentication) {
@@ -504,8 +484,8 @@ Write-Host ""
 Write-Host "✅  Managed identity setup complete!" -ForegroundColor Green
 Write-Host ""
 Write-Host "Identity '$displayName' now has:" -ForegroundColor White
-Write-Host "  db_datareader, db_datawriter, db_ddladmin on $dbName (shared-pool)" -ForegroundColor White
-Write-Host "  db_datareader, db_datawriter, db_ddladmin on $tenantCDbName (TenantC dedicated)" -ForegroundColor White
+Write-Host "  db_datareader, db_datawriter on $dbName (shared-pool)" -ForegroundColor White
+Write-Host "  db_datareader, db_datawriter on $tenantCDbName (TenantC dedicated)" -ForegroundColor White
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Cyan
 Write-Host "  1. Restart App Service:"

@@ -55,7 +55,7 @@ See [quick-setup-github-app.md](../../docs/guides/configuration/quick-setup-gith
 
 After completion, proceed to the **Azure Bootstrap & Deploy** workflow for infrastructure.
 
-> ⚠️ **Before running Bootstrap**: You must also add the three OpenPay secrets manually to each target **GitHub environment** (`OPENPAY_MERCHANT_ID`, `OPENPAY_PRIVATE_KEY`, `OPENPAY_DEVICE_SESSION_ID`). These are payment credentials that must never pass through workflow inputs. The target bootstrap job will fail immediately with guidance if any are missing.
+> ⚠️ **Before running Bootstrap**: You must also add the payment provider secrets manually to each target **GitHub environment**: `OPENPAY_MERCHANT_ID`, `OPENPAY_PUBLIC_KEY`, `OPENPAY_PRIVATE_KEY`, `OPENPAY_DEVICE_SESSION_ID`, `RAZORPAY_MERCHANT_ID`, and `RAZORPAY_PRIVATE_KEY`. These are payment credentials that must never pass through workflow inputs. The target bootstrap job will fail immediately with guidance if any are missing.
 
 ### Additional Entra Permission For SQL Managed Identity Automation
 

@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Azure.Identity;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Configuration;
 
@@ -25,6 +26,7 @@ namespace XYDataLabs.OrderProcessingSystem.SharedKernel
         /// <param name="environmentName">The ASP.NET Core environment name.</param>
         /// <param name="isDocker">Whether the app is running inside a Docker container.</param>
         /// <returns>The same configuration builder for chaining.</returns>
+        [SuppressMessage("Globalization", "CA1303:Do not pass literals as localized parameters", Justification = "Startup diagnostics and remediation guidance are operational messages, not user-facing localized UI.")]
         public static IConfigurationBuilder LoadSharedSettings(this IConfigurationBuilder builder, string environmentName, bool isDocker)
         {
             // Detect Azure App Service using WEBSITE_SITE_NAME environment variable
@@ -141,6 +143,7 @@ namespace XYDataLabs.OrderProcessingSystem.SharedKernel
         /// <param name="useHttps">Outputs whether HTTPS is active.</param>
         /// <param name="forceUseHttps">Optional override to force HTTPS selection.</param>
         /// <returns>The active ApiSettingsSection for the chosen group (API or UI).</returns>
+        [SuppressMessage("Globalization", "CA1303:Do not pass literals as localized parameters", Justification = "Configuration diagnostics are operator-facing startup messages, not end-user UI text.")]
         public static ApiSettingsSection AddAndBindSettings(
             IServiceCollection? services,
             IConfigurationBuilder builder,
@@ -245,6 +248,9 @@ namespace XYDataLabs.OrderProcessingSystem.SharedKernel
         /// <param name="isDocker">True if the application is running in Docker.</param>
         public static void PrintApiSettingsDebug(ApiSettings apiSettings, ApiSettingsSection activeSettings, string context, bool isDocker)
         {
+            ArgumentNullException.ThrowIfNull(apiSettings);
+            ArgumentNullException.ThrowIfNull(activeSettings);
+
             Console.WriteLine($"[ENV VALIDATION] {context}.Host: {activeSettings.Host}");
             Console.WriteLine($"[ENV VALIDATION] {context}.Port: {activeSettings.Port}");
             Console.WriteLine($"[ENV VALIDATION] {context}.HttpsEnabled: {activeSettings.HttpsEnabled}");

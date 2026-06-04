@@ -17,17 +17,22 @@ using Microsoft.Extensions.Configuration;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData;
 using Microsoft.ApplicationInsights.Extensibility;
+using Microsoft.ApplicationInsights;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Runtime.CompilerServices;
 using XYDataLabs.OrderProcessingSystem.Application.Utilities;
+using XYDataLabs.OrderProcessingSystem.API.Services;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Configuration;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
+using XYDataLabs.RazorpayAdapter;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.Multitenancy;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Orders;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Customers;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Payments;
+using XYDataLabs.OpenPayAdapter;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
 
 // Bootstrap Serilog as early as possible so Log.* writes go to console immediately
 // Azure App Service Deployment - Fix for Application Not Starting
@@ -142,7 +147,7 @@ if (!string.IsNullOrWhiteSpace(appInsightsConnectionString))
         builder.Services.AddApplicationInsightsTelemetry(options =>
         {
             options.ConnectionString = appInsightsConnectionString;
-            options.EnableAdaptiveSampling = true;
+            options.EnableAdaptiveSampling = false;
             options.EnableQuickPulseMetricStream = true;
         });
         Log.Information("[CONFIG] Application Insights enabled for {Environment} environment", environmentName);
@@ -197,6 +202,15 @@ builder.Services.AddCors(options =>
 
 builder.InjectInfrastructureDependencies();
 builder.InjectApplicationDependencies();
+builder.Services.AddScoped<IPaymentTelemetryTracker>(serviceProvider =>
+    new ApplicationInsightsPaymentTelemetryTracker(serviceProvider.GetService<TelemetryClient>()));
+builder.Services.AddOptions<PaymentGatewayRequestDefaults>()
+    .Bind(builder.Configuration.GetSection("OpenPay"))
+    .Validate(defaults => !string.IsNullOrWhiteSpace(defaults.RedirectUrl), "OpenPay:RedirectUrl is required.")
+    .Validate(defaults => !string.IsNullOrWhiteSpace(defaults.DeviceSessionId), "OpenPay:DeviceSessionId is required.")
+    .ValidateOnStart();
+builder.Services.AddOpenPayAdapter(builder.Configuration);
+builder.Services.AddRazorpayAdapter(builder.Configuration);
 builder.Services.AddProblemDetails();
 
 // Health checks — /health/live (liveness), /health/ready (SQL + Redis), /health (backward compat)
@@ -351,6 +365,7 @@ builder.Host.UseSerilog((context, services, loggerConfiguration) =>
             .WriteTo.File(
                 path: $"../logs/webapi-{environmentName}-{runtimeSuffix}-{profileSuffix}-.log",
                 rollingInterval: RollingInterval.Day,
+                shared: true,
                 outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Environment}] [{Runtime}] [Tenant:{TenantCode}] [ReqTenant:{RequestedTenantCode}] {Message:lj}{Exception}{NewLine}"
             );
     }
@@ -390,7 +405,11 @@ using (var scope = app.Services.CreateScope())
         // Apply migrations locally/Docker; skip on Azure (managed via pipelines)
         var dbContext = scope.ServiceProvider.GetRequiredService<OrderProcessingSystemDbContext>();
         var integrationEventMapperRegistry = scope.ServiceProvider.GetRequiredService<IIntegrationEventMapperRegistry>();
-        DbInitializer.Initialize(
+        DbInitializer.InitializeSharedPool(
+            dbContext,
+            app.Configuration,
+            applyMigrations: !isAzure);
+        DbInitializer.InitializeDedicatedTenants(
             dbContext,
             app.Configuration,
             applyMigrations: !isAzure,

@@ -8,18 +8,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase
 {
     public class CustomerServiceTestBase : OrderProcessingSystemTestBase<CreateCustomerCommandHandler>
     {
-        public CustomerServiceTestBase()
-        {
-        }
-
-        /// <summary>
-        ///  Setup common test data for Customer handlers
-        /// </summary>
-        public override void SetupTestBase()
-        {
-        }
-
-        protected List<Customer> GenerateCustomers(int count)
+        protected static IReadOnlyList<Customer> GenerateCustomers(int count)
         {
             return new Faker<Customer>()
                 .RuleFor(c => c.CustomerId, (f, _) => new CustomerId(f.IndexFaker + 1))
@@ -28,7 +17,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase
                 .Generate(count);
         }
 
-        protected List<CreateCustomerRequestDto> GenerateNewCustomerRequestDto(int count)
+        protected static IReadOnlyList<CreateCustomerRequestDto> GenerateNewCustomerRequestDto(int count)
         {
             var faker = new Faker<CreateCustomerRequestDto>()
                 .RuleFor(c => c.Name, f => f.Name.FullName())
@@ -37,7 +26,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase
             return faker.Generate(count);
         }
 
-        protected List<Customer> GenerateCustomersWithOrders(int customerCount, int orderCount, int? customerId = 1)
+        protected static IReadOnlyList<Customer> GenerateCustomersWithOrders(int customerCount, int orderCount, int? customerId = 1)
         {
             var customers = new List<Customer>();
             var nextOrderId = 1;

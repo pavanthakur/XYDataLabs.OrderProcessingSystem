@@ -73,6 +73,7 @@ API (→ Application, → Infrastructure, → SharedKernel) ← composition root
 - Use `Result<T>` for business outcomes — not exceptions
 - Exceptions are for truly exceptional situations (infrastructure failures, bugs)
 - Controllers map `Result<T>` → `ApiResponse<T>` → HTTP status codes
+- `PaymentProviderCustomerActionException` (SharedKernel) = terminal provider decline — map to `PaymentAttemptStatus.Failed`, no retry. All other gateway exceptions → `UnknownNeedsReconciliation`.
 
 ### API Responses
 - ALL endpoints return `ApiResponse<T>` with `{ Success, Data, Message, Errors }`
@@ -99,6 +100,11 @@ API (→ Application, → Infrastructure, → SharedKernel) ← composition root
 - `Tenants` is a system table — excluded from query filters, `IAppDbContext`, and tenant stamping
 - **Controllers must never accept TenantId, TenantCode, or TenantExternalId as parameters or in request DTOs.** Tenant context comes from middleware only.
 - Non-request operations must set `TenantId` explicitly instead of relying on ambient tenant context
+
+### Payment Configuration Safety
+- `IsProduction = false` is the required default in all `sharedsettings.{env}.json` files. Startup logs `"TEST mode"` or `"LIVE mode"`.
+- `RazorpayConfigValidator` cross-checks key prefix (`rzp_test_*` / `rzp_live_*`) against `IsProduction` at startup — mismatch fails startup immediately.
+- Never put per-tenant runtime config (`Use3DSecure`, provider routing) in sharedsettings. DB is the source of truth.
 
 ## Red Flags — Reject These in Code Review
 

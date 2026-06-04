@@ -9,11 +9,57 @@ using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Configuration;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
 
 namespace XYDataLabs.OrderProcessingSystem.API.Tests.Controllers;
 
 public class InfoControllerTests
 {
+    [Fact]
+    public void GetPaymentConfiguration_ReturnsRazorpayCheckoutContract()
+    {
+        var controller = CreateController(
+            "TenantA",
+            [new TenantInfo(1, "TenantA", "Tenant A")],
+            new PaymentProvider { Name = "Razorpay", ProviderType = "Razorpay", MerchantId = "rzp_test_browser_key", PrivateKeyConfigurationKey = "Razorpay:PrivateKey" });
+
+        var result = controller.GetPaymentConfiguration();
+
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        okResult.Value.Should().NotBeNull();
+        okResult.Value!.GetType().GetProperty("ActiveProviderType")!.GetValue(okResult.Value)
+            .Should().Be("Razorpay");
+        okResult.Value!.GetType().GetProperty("CollectionMode")!.GetValue(okResult.Value)
+            .Should().Be("provider_checkout");
+        okResult.Value!.GetType().GetProperty("BrowserKey")!.GetValue(okResult.Value)
+            .Should().Be("rzp_test_browser_key");
+        okResult.Value!.GetType().GetProperty("BrowserMerchantId")!.GetValue(okResult.Value)
+            .Should().BeNull();
+        okResult.Value!.GetType().GetProperty("IsProduction")!.GetValue(okResult.Value)
+            .Should().Be(false);
+    }
+
+    [Fact]
+    public void GetPaymentConfiguration_ReturnsOpenPayDirectCardContract()
+    {
+        var controller = CreateController(
+            "TenantA",
+            [new TenantInfo(1, "TenantA", "Tenant A")],
+            new PaymentProvider { Name = "OpenPay", ProviderType = "OpenPay", MerchantId = "mt_test_openpay_merchant", PublicKey = "pk_test_openpay_browser_key", PrivateKeyConfigurationKey = "OpenPay:PrivateKey" });
+
+        var result = controller.GetPaymentConfiguration();
+
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        okResult.Value!.GetType().GetProperty("CollectionMode")!.GetValue(okResult.Value)
+            .Should().Be("direct_card_form");
+        okResult.Value!.GetType().GetProperty("BrowserKey")!.GetValue(okResult.Value)
+            .Should().Be("pk_test_openpay_browser_key");
+        okResult.Value!.GetType().GetProperty("BrowserMerchantId")!.GetValue(okResult.Value)
+            .Should().Be("mt_test_openpay_merchant");
+        okResult.Value!.GetType().GetProperty("IsProduction")!.GetValue(okResult.Value)
+            .Should().Be(false);
+    }
+
     [Fact]
     public async Task GetRuntimeConfiguration_ReturnsActiveTenantConfiguration()
     {
@@ -71,16 +117,49 @@ public class InfoControllerTests
         objectResult.StatusCode.Should().Be(500);
     }
 
-    private static InfoController CreateController(string activeTenantCode, IReadOnlyList<TenantInfo> tenants)
+    private static InfoController CreateController(
+        string activeTenantCode,
+        IReadOnlyList<TenantInfo> tenants,
+        PaymentProvider? paymentProvider = null)
     {
         var tenantRegistry = new Mock<ITenantRegistry>();
         tenantRegistry
             .Setup(r => r.GetActiveTenantsAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(tenants);
 
+        var paymentProviderResolver = new Mock<ITenantPaymentProviderResolver>();
+        paymentProviderResolver
+            .Setup(r => r.ResolveCurrentTenantProvider())
+            .Returns(paymentProvider ?? new PaymentProvider { Name = "OpenPay", ProviderType = "OpenPay", MerchantId = "mt_test_openpay_merchant", PublicKey = "pk_test_openpay_browser_key", PrivateKeyConfigurationKey = "OpenPay:PrivateKey" });
+
+        var paymentProviderConfigurationResolver = new Mock<ITenantPaymentProviderConfigurationResolver>();
+        paymentProviderConfigurationResolver
+            .Setup(r => r.ResolveCurrentTenantConfiguration())
+            .Returns(() =>
+            {
+                var provider = paymentProvider ?? new PaymentProvider
+                {
+                    Name = "OpenPay",
+                    ProviderType = PaymentProviderTypes.OpenPay,
+                    MerchantId = "mt_test_openpay_merchant",
+                    PublicKey = "pk_test_openpay_browser_key",
+                    PrivateKeyConfigurationKey = "OpenPay:PrivateKey",
+                    IsProduction = false
+                };
+
+                return new PaymentProviderRuntimeConfiguration(
+                    provider.ProviderType,
+                    provider.MerchantId ?? string.Empty,
+                    provider.PublicKey,
+                    "test-private-key",
+                    provider.IsProduction);
+            });
+
         return new InfoController(
             Mock.Of<ILogger<InfoController>>(),
             tenantRegistry.Object,
+            paymentProviderResolver.Object,
+            paymentProviderConfigurationResolver.Object,
             Options.Create(new TenantConfigurationOptions { ActiveTenantCode = activeTenantCode }),
             TimeProvider.System);
     }

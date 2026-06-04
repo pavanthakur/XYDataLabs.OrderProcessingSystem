@@ -14,6 +14,13 @@ namespace XYDataLabs.OrderProcessingSystem.SharedKernel
             /// The connection string name for the main Order Processing System database.
             /// </summary>
             public const string OrderProcessingSystemDbConnectionString = "OrderProcessingSystemDbConnection";
+
+            /// <summary>
+            /// The connection string name for the Tenant Registry database.
+            /// Local: same physical DB as OrderProcessingSystemDbConnection.
+            /// Staging/Prod: separate, ops-controlled DB with Managed Identity access only.
+            /// </summary>
+            public const string TenantRegistryDbConnectionString = "TenantRegistryDbConnection";
             
             /// <summary>
             /// OpenPay configuration keys

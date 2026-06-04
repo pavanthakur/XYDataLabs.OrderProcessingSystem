@@ -146,6 +146,7 @@ public sealed class DomainEventOutboxSqliteTests : IDisposable
             APIUrl = "https://api.example.com",
             IsProduction = false,
             IsActive = true,
+            ProviderType = "OpenPay",
             Use3DSecure = true,
             TenantId = _tenantProvider.TenantId,
             CreatedBy = 1,

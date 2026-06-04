@@ -116,6 +116,7 @@ Then, based on their answer, apply the following routing rules automatically —
 - If the work is a phase freeze/closeout and it touched the payment automation workspace or workflow surfaces, do not ask "Ready to commit?" until the dry-run automation matrix above passed in the same session or an explicit deferral was recorded
 - If the work is a phase freeze/closeout and it touched Docker runtime orchestration, payment automation runtime targets, or closeout workflow surfaces, do not ask "Ready to commit?" until the Docker validation bundle command above produced a bundle with the expected summary files or an explicit deferral was recorded
 - For a phase freeze/closeout, do not ask "Ready to commit?" until both mandatory checks above are complete in the same session
+- **Always: Update `/memories/repo/active-work.md`** — overwrite the `## Last Session` block with today's date + bullet list of what was done, and update `## Pending / Next Actions` with the next concrete task. Keep `## Recent Key Facts` current. Also refresh the `## If returning after a long gap` block: update the active phase name, the next action, and any startup gotchas that changed (DB name, port, seed state). This block is read by someone returning after weeks away — write it for that person. This is the file loaded at the start of every new session.
 - Summarise what was updated and where
 - Suggest a commit message in the format: `Day <N>: <what was done>`
 - Ask: "Ready to commit?"

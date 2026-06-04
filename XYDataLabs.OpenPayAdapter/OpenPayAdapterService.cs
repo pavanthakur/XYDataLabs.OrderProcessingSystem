@@ -1,5 +1,4 @@
 ﻿using XYDataLabs.OpenPayAdapter.Configuration;
-using Microsoft.Extensions.Options;
 using Polly;
 using Polly.Registry;
 using Serilog;
@@ -19,13 +18,19 @@ namespace XYDataLabs.OpenPayAdapter
         public string ProviderType => PaymentProviderTypes.OpenPay;
 
         public OpenPayAdapterService(
-            IOptions<OpenPayConfig> config,
+            ITenantPaymentProviderConfigurationResolver paymentProviderConfigurationResolver,
             ILogger logger,
             ResiliencePipelineProvider<string> pipelineProvider)
         {
+            ArgumentNullException.ThrowIfNull(paymentProviderConfigurationResolver);
+            ArgumentNullException.ThrowIfNull(logger);
             _logger = logger;
-            _openpayApi = new OpenpayAPI(config.Value.PrivateKey, config.Value.MerchantId, config.Value.IsProduction);
+            var configuration = paymentProviderConfigurationResolver.ResolveCurrentTenantConfiguration();
+            _openpayApi = new OpenpayAPI(configuration.PrivateKey, configuration.MerchantId, configuration.IsProduction);
             _pipeline = pipelineProvider.GetPipeline("openpay");
+
+            var mode = configuration.IsProduction ? "LIVE" : "TEST";
+            _logger.Information("OpenPayAdapterService initialized in {Mode} mode", mode);
         }
 
         public async Task<Customer> CreateCustomerAsync(Customer customer)

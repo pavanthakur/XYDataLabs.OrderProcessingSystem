@@ -3,10 +3,6 @@ using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Openpay.Entities;
-using Openpay.Entities.Request;
-using XYDataLabs.OpenPayAdapter;
-using XYDataLabs.OpenPayAdapter.Configuration;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
@@ -19,48 +15,59 @@ using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
 using static XYDataLabs.OrderProcessingSystem.Application.Utilities.AppMasterConstant;
-using OpenPayCustomer = Openpay.Entities.Customer;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.Features.Payments.Commands;
 
 public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymentCommand, Result<PaymentDto>>
 {
-    private readonly IOpenPayAdapterService _openPayAdapterService;
+    private readonly IPaymentProviderGateway _paymentProviderGateway;
+    private readonly IPaymentTelemetryTracker _paymentTelemetryTracker;
     private readonly ILogger<ProcessPaymentCommandHandler> _logger;
     private readonly string _redirectUrl;
+    private readonly string _defaultDeviceSessionId;
     private readonly IAppDbContext _context;
-    private readonly PaymentProvider _openPayProvider;
-    private readonly OpenPayConfig _openPayConfig;
+    private readonly PaymentProvider _paymentProvider;
     private readonly TimeProvider _timeProvider;
     private readonly ITenantProvider _tenantProvider;
+    private bool UsesProviderHostedCheckout =>
+        string.Equals(_paymentProvider.ProviderType, PaymentProviderTypes.Razorpay, StringComparison.OrdinalIgnoreCase);
 
     public ProcessPaymentCommandHandler(
-        IOpenPayAdapterService openPayAdapterService,
-        IOptions<OpenPayConfig> openPayOptions,
+        IPaymentProviderGateway paymentProviderGateway,
+        IOptions<PaymentGatewayRequestDefaults> paymentGatewayRequestDefaults,
+        IPaymentTelemetryTracker paymentTelemetryTracker,
         ILogger<ProcessPaymentCommandHandler> logger,
         IAppDbContext context,
-        AppMasterData appMasterData,
+        ITenantPaymentProviderResolver paymentProviderResolver,
         TimeProvider timeProvider,
         ITenantProvider tenantProvider)
     {
-        ArgumentNullException.ThrowIfNull(openPayAdapterService);
-        ArgumentNullException.ThrowIfNull(openPayOptions);
+        ArgumentNullException.ThrowIfNull(paymentProviderGateway);
+        ArgumentNullException.ThrowIfNull(paymentGatewayRequestDefaults);
+        ArgumentNullException.ThrowIfNull(paymentTelemetryTracker);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(context);
-        ArgumentNullException.ThrowIfNull(appMasterData);
+        ArgumentNullException.ThrowIfNull(paymentProviderResolver);
         ArgumentNullException.ThrowIfNull(timeProvider);
         ArgumentNullException.ThrowIfNull(tenantProvider);
 
-        _openPayAdapterService = openPayAdapterService;
+        _paymentProviderGateway = paymentProviderGateway;
+        _paymentTelemetryTracker = paymentTelemetryTracker;
         _logger = logger;
-        _openPayConfig = openPayOptions.Value;
-        _redirectUrl = _openPayConfig.RedirectUrl;
+        var requestDefaults = paymentGatewayRequestDefaults.Value;
+        _redirectUrl = requestDefaults.RedirectUrl;
+        _defaultDeviceSessionId = requestDefaults.DeviceSessionId;
         _context = context;
         _timeProvider = timeProvider;
 
         _tenantProvider = tenantProvider;
-        _openPayProvider = appMasterData.GetProviderByNameForTenant(PaymentProviderTypes.OpenPay, tenantProvider.TenantId)
-            ?? throw new InvalidOperationException($"{PaymentProviderTypes.OpenPay} provider not found in master data for tenant {tenantProvider.TenantId}");
+        _paymentProvider = paymentProviderResolver.ResolveCurrentTenantProvider();
+
+        if (!string.Equals(_paymentProvider.ProviderType, _paymentProviderGateway.ProviderType, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Configured payment provider '{_paymentProvider.ProviderType}' does not match the registered gateway '{_paymentProviderGateway.ProviderType}' for tenant {_tenantProvider.TenantId}.");
+        }
     }
 
     public async Task<Result<PaymentDto>> HandleAsync(ProcessPaymentCommand command, CancellationToken cancellationToken = default)
@@ -80,14 +87,14 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             var paymentTraceId = GeneratePaymentTraceId();
             var attemptNumber = await GetNextAttemptNumberAsync(customerOrderId, cancellationToken);
             var attemptOrderId = GenerateAttemptOrderId(customerOrderId, attemptNumber);
-            var isThreeDSecureEnabled = _openPayProvider.Use3DSecure;
+            var isThreeDSecureEnabled = _paymentProvider.Use3DSecure;
 
             activity?.SetTag("payment.customer_order_id", customerOrderId);
             activity?.SetTag("payment.attempt_order_id", attemptOrderId);
             activity?.SetTag("payment.trace_id", paymentTraceId);
 
             var resolvedDeviceSessionId = string.IsNullOrWhiteSpace(command.DeviceSessionId)
-                ? _openPayConfig.DeviceSessionId
+                ? _defaultDeviceSessionId
                 : command.DeviceSessionId;
 
             // Build DTO for mapper compatibility
@@ -114,20 +121,46 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             var redirectUrl = BuildRedirectUrl(_redirectUrl, tenantCode, command.ClientCallbackOrigin);
 
             paymentMethod = await CreatePaymentMethodAsync(cancellationToken);
-            var (openpayCustomer, billingCustomerId) = await CreateCustomerAsync(request, paymentMethod, cancellationToken);
-            await UpdatePaymentMethodByBillingCustomerIdAsync(paymentMethod.Id, billingCustomerId, cancellationToken);
-            var createdCard = await CreateCardTokenAsync(request, openpayCustomer, billingCustomerId, customerOrderId, attemptOrderId, paymentTraceId, cancellationToken);
             paymentAttempt = await CreatePaymentAttemptAsync(customerOrderId, attemptOrderId, paymentTraceId, attemptNumber, cancellationToken);
-            var charge = await CreateChargeAsync(request, openpayCustomer, createdCard.Id, paymentMethod, billingCustomerId, customerOrderId, attemptOrderId, paymentTraceId, isThreeDSecureEnabled, redirectUrl, cancellationToken);
+            _paymentTelemetryTracker.Track(new PaymentTelemetryEvent
+            {
+                EventName = PaymentTelemetryEventNames.AttemptCreated,
+                TenantCode = tenantCode,
+                CustomerOrderId = customerOrderId,
+                AttemptOrderId = paymentAttempt.AttemptOrderId,
+                PaymentTraceId = paymentAttempt.PaymentTraceId,
+                ProviderType = _paymentProvider.ProviderType,
+                IsThreeDSecureEnabled = isThreeDSecureEnabled,
+            });
+
+            var (paymentGatewayCustomer, billingCustomerId) = await CreateCustomerAsync(request, paymentMethod, cancellationToken);
+            await UpdatePaymentMethodByBillingCustomerIdAsync(paymentMethod.Id, billingCustomerId, cancellationToken);
+            var createdCard = await CreateCardTokenAsync(request, paymentGatewayCustomer, billingCustomerId, customerOrderId, attemptOrderId, paymentTraceId, cancellationToken);
+            var charge = await CreateChargeAsync(request, paymentGatewayCustomer, createdCard.Id, paymentMethod, billingCustomerId, customerOrderId, attemptOrderId, paymentTraceId, isThreeDSecureEnabled, redirectUrl, cancellationToken);
             var normalizedChargeStatus = EnumHelper.NormalizeOpenPayStatus(charge.Status)
                 ?? EnumHelper.GetEnumDescription(PaymentStatus.Unknown);
-            var threeDSecureStage = ResolveChargeThreeDSecureStage(normalizedChargeStatus, isThreeDSecureEnabled, charge.PaymentMethod?.Url);
+            var threeDSecureStage = ResolveChargeThreeDSecureStage(normalizedChargeStatus, isThreeDSecureEnabled, charge.RedirectUrl);
 
             await UpdatePaymentAttemptAfterChargeAsync(paymentAttempt, normalizedChargeStatus, charge, charge.ErrorMessage, cancellationToken);
+            _paymentTelemetryTracker.Track(new PaymentTelemetryEvent
+            {
+                EventName = PaymentTelemetryEventNames.ChargeCreated,
+                TenantCode = tenantCode,
+                CustomerOrderId = customerOrderId,
+                AttemptOrderId = paymentAttempt.AttemptOrderId,
+                PaymentId = charge.Id,
+                PaymentTraceId = paymentTraceId,
+                ProviderType = _paymentProvider.ProviderType,
+                PaymentStatus = normalizedChargeStatus,
+                StatusCategory = EnumHelper.ToStatusCategory(normalizedChargeStatus),
+                ThreeDSecureStage = threeDSecureStage,
+                IsThreeDSecureEnabled = isThreeDSecureEnabled,
+                ErrorMessage = charge.ErrorMessage,
+            });
 
             BusinessMetrics.RecordPaymentAttempt(
                 outcome: "success",
-                providerName: _openPayProvider.Name,
+                providerName: _paymentProvider.Name,
                 isThreeDSecureEnabled: isThreeDSecureEnabled,
                 paymentStatus: normalizedChargeStatus,
                 duration: Stopwatch.GetElapsedTime(startedAt));
@@ -136,13 +169,13 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             {
                 Id = charge.Id,
                 CustomerOrderId = customerOrderId,
-                CustomerId = openpayCustomer.Id,
+                CustomerId = paymentGatewayCustomer.Id,
                 Amount = new decimal(100.00),
                 Currency = AppMasterConstant.DefaultCurrencyCode,
                 Status = normalizedChargeStatus,
-                CreatedAt = charge.CreationDate ?? _timeProvider.GetUtcNow().UtcDateTime,
+                CreatedAt = charge.CreatedAt ?? _timeProvider.GetUtcNow().UtcDateTime,
                 TransactionId = charge.Authorization,
-                ThreeDSecureUrl = charge.PaymentMethod?.Url,
+                ThreeDSecureUrl = charge.RedirectUrl,
                 ErrorMessage = charge.ErrorMessage,
                 IsThreeDSecureEnabled = isThreeDSecureEnabled,
                 ThreeDSecureStage = threeDSecureStage
@@ -152,13 +185,29 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         {
             if (paymentAttempt is not null && paymentAttempt.Status == PaymentAttemptStatus.PendingProviderCall)
             {
-                await MarkAttemptUnknownForReconciliationAsync(paymentAttempt, ex.Message, cancellationToken);
+                if (ex is PaymentProviderCustomerActionException)
+                {
+                    // Terminal customer-action failure (declined, insufficient funds, expired card, etc.).
+                    // The provider definitively rejected the charge — no retry and no reconciliation needed.
+                    await MarkAttemptFailedAsync(paymentAttempt, ex.Message, cancellationToken);
+                }
+                else if (ex is PaymentProviderIntegrationNotEnabledException)
+                {
+                    // Provider integration feature not enabled (e.g. Razorpay S2S not activated).
+                    // This is a setup/configuration issue, not a card error. Mark as failed with a
+                    // clear operator-actionable message; retrying would not help until the feature is enabled.
+                    await MarkAttemptFailedAsync(paymentAttempt, ex.Message, cancellationToken);
+                }
+                else
+                {
+                    await MarkAttemptUnknownForReconciliationAsync(paymentAttempt, ex.Message, cancellationToken);
+                }
             }
 
             BusinessMetrics.RecordPaymentAttempt(
                 outcome: "failure",
-                providerName: _openPayProvider.Name,
-                isThreeDSecureEnabled: _openPayProvider.Use3DSecure,
+                providerName: _paymentProvider.Name,
+                isThreeDSecureEnabled: _paymentProvider.Use3DSecure,
                 paymentStatus: "exception",
                 duration: Stopwatch.GetElapsedTime(startedAt));
 
@@ -208,7 +257,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             PaymentTraceId = paymentTraceId,
             AttemptNumber = attemptNumber,
             Status = PaymentAttemptStatus.PendingProviderCall,
-            PaymentProviderName = _openPayProvider.Name,
+            PaymentProviderName = _paymentProvider.Name,
             TenantId = _tenantProvider.TenantId,
             CreatedDate = now,
         };
@@ -232,7 +281,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
     private async Task UpdatePaymentAttemptAfterChargeAsync(
         PaymentAttempt paymentAttempt,
         string normalizedChargeStatus,
-        Charge charge,
+        PaymentGatewayChargeResult charge,
         string? errorMessage,
         CancellationToken cancellationToken)
     {
@@ -288,6 +337,32 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         await _context.SaveChangesAsync(cancellationToken);
     }
 
+    private async Task MarkAttemptFailedAsync(
+        PaymentAttempt paymentAttempt,
+        string errorMessage,
+        CancellationToken cancellationToken)
+    {
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        paymentAttempt.Status = PaymentAttemptStatus.Failed;
+        paymentAttempt.LastErrorMessage = errorMessage;
+        paymentAttempt.UpdatedDate = now;
+
+        _context.PaymentAttempts.Update(paymentAttempt);
+        _context.PaymentAttemptHistories.Add(new PaymentAttemptHistory
+        {
+            PaymentAttemptId = paymentAttempt.Id,
+            AttemptOrderId = paymentAttempt.AttemptOrderId,
+            Status = PaymentAttemptStatus.Failed,
+            PaymentTraceId = paymentAttempt.PaymentTraceId,
+            ProviderStatus = paymentAttempt.ProviderStatus,
+            Notes = "Customer-action failure (declined, insufficient funds, or similar terminal outcome). No retry or reconciliation.",
+            TenantId = _tenantProvider.TenantId,
+            CreatedDate = now,
+        });
+
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
     private async Task<Domain.Entities.PaymentMethod> CreatePaymentMethodAsync(CancellationToken cancellationToken)
     {
         _logger.LogInformation("Creating PaymentMethod...");
@@ -296,10 +371,20 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         // tenant's actual DB (dedicated or shared pool). The scoped AppMasterData also reads
         // from this context, but uses the Id for config lookups only (Use3DSecure, Name).
         // The FK-safe Id must come from the DB that owns the PaymentMethods row.
+        // Phase 8.6 (ADR-019): IsActive is no longer the routing authority — routing is driven
+        // by Tenant.PaymentProviderCode. All PaymentProvider rows are seeded with IsActive=false.
+        // Filter by ProviderType only; the query filter on the context already scopes to this tenant.
         var providerIdInTenantDb = await _context.PaymentProviders
-            .Where(p => p.Name == "OpenPay")
+            .Where(p => p.ProviderType == _paymentProvider.ProviderType)
             .Select(p => p.Id)
             .FirstOrDefaultAsync(cancellationToken);
+
+        if (providerIdInTenantDb == 0)
+        {
+            throw new InvalidOperationException(
+                $"No PaymentProvider row found for provider type '{_paymentProvider.ProviderType}' " +
+                $"in the tenant DB. Ensure all migration and seed steps have been applied.");
+        }
 
         var openPayMethod = new Domain.Entities.PaymentMethod
         {
@@ -355,38 +440,29 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         _logger.LogInformation("PaymentMethod updated for BillingCustomerId: {BillingCustomerId}", billingCustomerId);
     }
 
-    private async Task<(OpenPayCustomer openpayCustomer, int BillingCustomerId)> CreateCustomerAsync(
+    private async Task<(PaymentGatewayCustomer Customer, int BillingCustomerId)> CreateCustomerAsync(
         CustomerWithCardPaymentRequestDto request,
         Domain.Entities.PaymentMethod paymentMethod,
         CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Creating customer in OpenPay...");
+        _logger.LogInformation("Creating customer in {PaymentProvider}...", _paymentProvider.Name);
         var existingCustomer = await _context.BillingCustomers
             .FirstOrDefaultAsync(c => c.Name == request.Name && c.Email == request.Email, cancellationToken);
 
         if (existingCustomer is not null)
         {
             _logger.LogInformation("Existing customer found with ID: {CustomerId}", existingCustomer.APICustomerId);
-            return (new OpenPayCustomer
-            {
-                Name = existingCustomer.Name,
-                Email = existingCustomer.Email,
-                RequiresAccount = false,
-                Id = existingCustomer.APICustomerId
-            }, existingCustomer.Id);
+            return (new PaymentGatewayCustomer(existingCustomer.APICustomerId, existingCustomer.Name, existingCustomer.Email), existingCustomer.Id);
         }
 
-        var openpayCustomer = await _openPayAdapterService.CreateCustomerAsync(new OpenPayCustomer
-        {
-            Name = request.Name,
-            Email = request.Email,
-            RequiresAccount = false
-        });
+        var paymentGatewayCustomer = await _paymentProviderGateway.CreateCustomerAsync(
+            new PaymentGatewayCreateCustomerRequest(request.Name, request.Email),
+            cancellationToken);
 
-        _logger.LogInformation("Customer created with ID: {CustomerId}", openpayCustomer.Id);
+        _logger.LogInformation("Customer created with ID: {CustomerId}", paymentGatewayCustomer.Id);
 
         var billingCustomer = request.ToBillingCustomer();
-        billingCustomer.APICustomerId = openpayCustomer.Id;
+        billingCustomer.APICustomerId = paymentGatewayCustomer.Id;
         billingCustomer.TwoLetterIsoCode = AppMasterConstant.DefaultCountryCode;
         billingCustomer.PaymentMethodId = paymentMethod.Id;
         billingCustomer.CreatedDate = _timeProvider.GetUtcNow().UtcDateTime;
@@ -409,37 +485,35 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         _context.BillingCustomerKeyInfos.Add(keyInfo);
         await _context.SaveChangesAsync(cancellationToken);
 
-        return (openpayCustomer, billingCustomer.Id);
+        return (paymentGatewayCustomer, billingCustomer.Id);
     }
 
-    private async Task<Card> CreateCardTokenAsync(
+    private async Task<PaymentGatewayCardToken> CreateCardTokenAsync(
         CustomerWithCardPaymentRequestDto request,
-        OpenPayCustomer openpayCustomerEntity,
+        PaymentGatewayCustomer paymentGatewayCustomer,
         int billingCustomerId,
         string customerOrderId,
         string attemptOrderId,
         string paymentTraceId,
         CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Creating card token in OpenPay...");
+        _logger.LogInformation("Creating card token in {PaymentProvider}...", _paymentProvider.Name);
 
-        var card = new Card
-        {
-            CardNumber = request.CardNumber,
-            HolderName = request.Name,
-            ExpirationYear = request.ExpirationYear,
-            ExpirationMonth = request.ExpirationMonth,
-            Cvv2 = request.Cvv2,
-            DeviceSessionId = request.DeviceSessionId
-        };
-
-        var createdCard = await _openPayAdapterService.CreateCardTokenAsync(card);
+        var createdCard = await _paymentProviderGateway.CreateCardTokenAsync(
+            new PaymentGatewayCreateCardTokenRequest(
+                request.CardNumber,
+                request.Name,
+                request.ExpirationYear,
+                request.ExpirationMonth,
+                request.Cvv2,
+                request.DeviceSessionId),
+            cancellationToken);
         _logger.LogInformation("Card created with ID: {CardId}", createdCard.Id);
 
         var cardTransaction = new CardTransaction
         {
             BillingCustomerId = billingCustomerId,
-            TransactionCustomerId = openpayCustomerEntity.Id,
+            TransactionCustomerId = paymentGatewayCustomer.Id,
             TransactionId = createdCard.Id,
             PaymentTraceId = paymentTraceId,
             PaymentMethod = EnumHelper.GetEnumDescription(PaymentMethodType.Card),
@@ -447,13 +521,13 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             CustomerOrderId = customerOrderId,
             AttemptOrderId = attemptOrderId,
             TransactionStatus = EnumHelper.GetEnumDescription(OpenPayTransactionStatus.Completed),
-            TransactionDate = NormalizeToUtc(createdCard.CreationDate),
+            TransactionDate = NormalizeToUtc(createdCard.CreatedAt),
             CurrencyCode = AppMasterConstant.DefaultCurrencyCode,
             Amount = new decimal(100.00),
             CreditCardOwnerName = request.Name,
-            CreditCardExpireYear = int.Parse(request.ExpirationYear, CultureInfo.InvariantCulture),
-            CreditCardExpireMonth = int.Parse(request.ExpirationMonth, CultureInfo.InvariantCulture),
-            MaskedCardNumber = MaskCardNumber(request.CardNumber),
+            CreditCardExpireYear = ResolveCardExpiryComponent(request.ExpirationYear),
+            CreditCardExpireMonth = ResolveCardExpiryComponent(request.ExpirationMonth),
+            MaskedCardNumber = ResolveMaskedCardNumber(request.CardNumber),
             TransactionMessage = $"Card created with ID: {createdCard.Id}",
             IsTransactionSuccess = true,
             IsThreeDSecureEnabled = false,
@@ -484,9 +558,9 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         return createdCard;
     }
 
-    private async Task<Charge> CreateChargeAsync(
+    private async Task<PaymentGatewayChargeResult> CreateChargeAsync(
         CustomerWithCardPaymentRequestDto request,
-        OpenPayCustomer customer,
+        PaymentGatewayCustomer customer,
         string sourceId,
         Domain.Entities.PaymentMethod paymentMethod,
         int billingCustomerId,
@@ -498,45 +572,53 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         CancellationToken cancellationToken)
     {
         _logger.LogInformation(
-            "Creating charge in OpenPay for payment trace {PaymentTraceId}, customer order {CustomerOrderId}, attempt order {AttemptOrderId}, 3DS enabled {IsThreeDSecureEnabled}",
+            "Creating charge in {PaymentProvider} for payment trace {PaymentTraceId}, customer order {CustomerOrderId}, attempt order {AttemptOrderId}, 3DS enabled {IsThreeDSecureEnabled}",
+            _paymentProvider.Name,
             paymentTraceId,
             customerOrderId,
             attemptOrderId,
             isThreeDSecureEnabled);
 
-        var chargeRequest = new ChargeRequest
-        {
-            Method = EnumHelper.GetEnumDescription(PaymentMethodType.Card),
-            SourceId = sourceId,
-            Amount = new decimal(100.00),
-            Currency = AppMasterConstant.DefaultCurrencyCode,
-            Description = $"CustomerOrder: {customerOrderId}; AttemptOrder: {attemptOrderId}",
-            DeviceSessionId = request.DeviceSessionId,
-            OrderId = attemptOrderId,
-            Use3DSecure = isThreeDSecureEnabled,
-            RedirectUrl = redirectUrl,
-            Customer = customer
-        };
+        string currencyCode = _paymentProvider.ProviderType == PaymentProviderTypes.Razorpay
+            ? "INR"
+            : AppMasterConstant.DefaultCurrencyCode;
 
-        var charge = await _openPayAdapterService.CreateChargeAsync(chargeRequest);
+        var chargeRequest = new PaymentGatewayCreateChargeRequest(
+            sourceId,
+            new decimal(100.00),
+            currencyCode,
+            $"CustomerOrder: {customerOrderId}; AttemptOrder: {attemptOrderId}",
+            request.DeviceSessionId,
+            attemptOrderId,
+            isThreeDSecureEnabled,
+            redirectUrl,
+            customer,
+            CardDetails: new PaymentGatewayCardDetails(
+                request.CardNumber,
+                request.Name,
+                request.ExpirationYear,
+                request.ExpirationMonth,
+                request.Cvv2));
+
+        var charge = await _paymentProviderGateway.CreateChargeAsync(chargeRequest, cancellationToken);
         _logger.LogInformation("Charge created with ID: {ChargeId}", charge.Id);
         var normalizedChargeStatus = EnumHelper.NormalizeOpenPayStatus(charge.Status)
             ?? EnumHelper.GetEnumDescription(PaymentStatus.Unknown);
-        var threeDSecureStage = ResolveChargeThreeDSecureStage(normalizedChargeStatus, isThreeDSecureEnabled, charge.PaymentMethod?.Url);
+        var threeDSecureStage = ResolveChargeThreeDSecureStage(normalizedChargeStatus, isThreeDSecureEnabled, charge.RedirectUrl);
 
         var payinLog = new PayinLog
         {
-            AttemptOrderId = chargeRequest.OrderId,
+            AttemptOrderId = chargeRequest.AttemptOrderId,
             CustomerOrderId = customerOrderId,
             PaymentMethodId = paymentMethod.Id,
-            PaymentMethodName = _openPayProvider.Name,
+            PaymentMethodName = _paymentProvider.Name,
             PayinType = (int?)PayInType.Charge,
             OpenPayChargeId = charge.Id,
             PaymentTraceId = paymentTraceId,
             Amount = chargeRequest.Amount,
             AmountFromAPI = charge.Amount,
             CardOwnerName = request.Name,
-            LastFourCardNbr = request.CardNumber[^4..],
+            LastFourCardNbr = ResolveLastFourCardDigits(request.CardNumber),
             Currency = AppMasterConstant.DefaultCurrencyCode,
             IsThreeDSecureEnabled = isThreeDSecureEnabled,
             ThreeDSecureStage = threeDSecureStage,
@@ -553,7 +635,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             PayinLogId = payinLog.Id,
             PostInfo = System.Text.Json.JsonSerializer.Serialize(chargeRequest),
             RespInfo = System.Text.Json.JsonSerializer.Serialize(charge),
-            AdditionalInfo = BuildTrackingInfo(paymentTraceId, customerOrderId, chargeRequest.OrderId, threeDSecureStage, "Charge created in OpenPay"),
+            AdditionalInfo = BuildTrackingInfo(paymentTraceId, customerOrderId, chargeRequest.AttemptOrderId, threeDSecureStage, "Charge created in OpenPay"),
             PaymentTraceId = paymentTraceId,
             ThreeDSecureStage = threeDSecureStage,
             CreatedBy = billingCustomerId,
@@ -571,21 +653,21 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             PaymentMethod = EnumHelper.GetEnumDescription(PaymentMethodType.Card),
             TransactionType = EnumHelper.GetEnumDescription(TransactionType.Charge),
             CustomerOrderId = customerOrderId,
-            AttemptOrderId = chargeRequest.OrderId,
+            AttemptOrderId = chargeRequest.AttemptOrderId,
             Description = chargeRequest.Description,
             TransactionStatus = normalizedChargeStatus,
-            TransactionDate = NormalizeToUtc(charge.CreationDate),
+            TransactionDate = NormalizeToUtc(charge.CreatedAt),
             Amount = charge.Amount,
             CurrencyCode = AppMasterConstant.DefaultCurrencyCode,
             IsTransactionSuccess = EnumHelper.IsSuccessStatus(normalizedChargeStatus),
             IsThreeDSecureEnabled = isThreeDSecureEnabled,
             ThreeDSecureStage = threeDSecureStage,
             TransactionReferenceId = charge.Authorization,
-            RedirectUrl = charge.PaymentMethod?.Url,
+            RedirectUrl = charge.RedirectUrl,
             CreditCardOwnerName = request.Name,
-            CreditCardExpireYear = int.Parse(request.ExpirationYear, CultureInfo.InvariantCulture),
-            CreditCardExpireMonth = int.Parse(request.ExpirationMonth, CultureInfo.InvariantCulture),
-            MaskedCardNumber = MaskCardNumber(request.CardNumber),
+            CreditCardExpireYear = ResolveCardExpiryComponent(request.ExpirationYear),
+            CreditCardExpireMonth = ResolveCardExpiryComponent(request.ExpirationMonth),
+            MaskedCardNumber = ResolveMaskedCardNumber(request.CardNumber),
             TransactionMessage = charge.ErrorMessage,
             CreatedBy = billingCustomerId,
             CreatedDate = _timeProvider.GetUtcNow().UtcDateTime
@@ -597,7 +679,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         var statusHistory = new TransactionStatusHistory
         {
             TransactionId = cardTransaction.Id,
-            AttemptOrderId = chargeRequest.OrderId,
+            AttemptOrderId = chargeRequest.AttemptOrderId,
             Status = normalizedChargeStatus,
             Notes = charge.ErrorMessage,
             PaymentTraceId = paymentTraceId,
@@ -646,6 +728,36 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
     private static string GeneratePaymentTraceId()
     {
         return Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
+    }
+
+    private int ResolveCardExpiryComponent(string value)
+    {
+        if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedValue))
+        {
+            return parsedValue;
+        }
+
+        return UsesProviderHostedCheckout ? 0 : throw new FormatException("Card expiry value is required for direct card providers.");
+    }
+
+    private string? ResolveMaskedCardNumber(string cardNumber)
+    {
+        if (string.IsNullOrWhiteSpace(cardNumber))
+        {
+            return UsesProviderHostedCheckout ? null : MaskCardNumber(cardNumber);
+        }
+
+        return MaskCardNumber(cardNumber);
+    }
+
+    private static string? ResolveLastFourCardDigits(string cardNumber)
+    {
+        if (string.IsNullOrWhiteSpace(cardNumber) || cardNumber.Length < 4)
+        {
+            return null;
+        }
+
+        return cardNumber[^4..];
     }
 
     private static string MaskCardNumber(string cardNumber)

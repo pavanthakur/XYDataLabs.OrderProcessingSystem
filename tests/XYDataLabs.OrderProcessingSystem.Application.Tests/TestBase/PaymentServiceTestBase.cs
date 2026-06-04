@@ -1,19 +1,19 @@
 using System.Collections;
+using System.Security.Cryptography;
+using System.Text;
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
-using Openpay.Entities;
-using Openpay.Entities.Request;
 using XYDataLabs.OpenPayAdapter;
-using XYDataLabs.OpenPayAdapter.Configuration;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Payments.Commands;
 using XYDataLabs.OrderProcessingSystem.Application.Utilities;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
-using OpenPayCustomer = Openpay.Entities.Customer;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase;
 
@@ -34,6 +34,9 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
 
     // --- shared mocks ---
     protected readonly Mock<IOpenPayAdapterService> MockOpenPayAdapter = new();
+    protected readonly Mock<IPaymentProviderGateway> MockPaymentGateway = new();
+    protected readonly Mock<ITenantPaymentProviderResolver> MockPaymentProviderResolver = new();
+    protected readonly Mock<ITenantPaymentProviderConfigurationResolver> MockPaymentProviderConfigurationResolver = new();
     protected readonly Mock<ITenantProvider> MockTenantProvider = new();
     protected readonly Mock<TimeProvider> MockTimeProvider = new();
 
@@ -49,33 +52,73 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
         MockTimeProvider.Setup(t => t.GetUtcNow()).Returns(new DateTimeOffset(UtcNow));
         MockTenantProvider.Setup(t => t.TenantCode).Returns("tenant-a");
         MockTenantProvider.Setup(t => t.TenantId).Returns(1);
+        MockOpenPayAdapter.SetupGet(adapter => adapter.ProviderType).Returns(PaymentProviderTypes.OpenPay);
+        MockPaymentProviderConfigurationResolver
+            .Setup(r => r.ResolveCurrentTenantConfiguration())
+            .Returns(new PaymentProviderRuntimeConfiguration(
+                PaymentProviderTypes.Razorpay,
+                "rzp_test_merchant",
+                null,
+                "razorpay-test-secret",
+                false));
     }
 
     // ------------------------------------------------------------------ factories
 
-    protected ProcessPaymentCommandHandler CreateProcessPaymentHandler(bool use3DSecure = true)
+    protected ProcessPaymentCommandHandler CreateProcessPaymentHandler(
+        bool use3DSecure = true,
+        string providerType = PaymentProviderTypes.OpenPay)
     {
-        var appMasterData = BuildAppMasterData(use3DSecure);
+        var paymentProvider = BuildPaymentProvider(use3DSecure, providerType);
+        MockPaymentGateway.SetupGet(g => g.ProviderType).Returns(paymentProvider.ProviderType);
+        MockPaymentProviderResolver
+            .Setup(r => r.ResolveCurrentTenantProvider())
+            .Returns(paymentProvider);
         return new ProcessPaymentCommandHandler(
-            MockOpenPayAdapter.Object,
-            Options.Create(new OpenPayConfig
+            MockPaymentGateway.Object,
+            Options.Create(new PaymentGatewayRequestDefaults
             {
                 RedirectUrl = "https://example.com/callback",
                 DeviceSessionId = "default-device-session"
             }),
+            NullPaymentTelemetryTracker.Instance,
             new Mock<ILogger<ProcessPaymentCommandHandler>>().Object,
             MockDbContext.Object,
-            appMasterData,
+            MockPaymentProviderResolver.Object,
             MockTimeProvider.Object,
             MockTenantProvider.Object);
     }
 
-    protected ConfirmPaymentStatusCommandHandler CreateConfirmPaymentHandler()
+    protected ConfirmPaymentStatusCommandHandler CreateConfirmPaymentHandler(string providerType = PaymentProviderTypes.OpenPay)
     {
+        var paymentProvider = BuildPaymentProvider(providerType: providerType);
+        MockPaymentProviderResolver
+            .Setup(r => r.ResolveCurrentTenantProvider())
+            .Returns(paymentProvider);
+
+        if (string.Equals(providerType, PaymentProviderTypes.OpenPay, StringComparison.OrdinalIgnoreCase))
+        {
+            return new ConfirmPaymentStatusCommandHandler(
+                MockDbContext.Object,
+                new OpenPayPaymentGateway(MockOpenPayAdapter.Object),
+                NullPaymentTelemetryTracker.Instance,
+                new Mock<ILogger<ConfirmPaymentStatusCommandHandler>>().Object,
+                MockPaymentProviderConfigurationResolver.Object,
+                MockPaymentProviderResolver.Object,
+                MockTenantProvider.Object,
+                MockTimeProvider.Object);
+        }
+
+        MockPaymentGateway.SetupGet(g => g.ProviderType).Returns(providerType);
+
         return new ConfirmPaymentStatusCommandHandler(
             MockDbContext.Object,
-            MockOpenPayAdapter.Object,
+            MockPaymentGateway.Object,
+            NullPaymentTelemetryTracker.Instance,
             new Mock<ILogger<ConfirmPaymentStatusCommandHandler>>().Object,
+            MockPaymentProviderConfigurationResolver.Object,
+            MockPaymentProviderResolver.Object,
+            MockTenantProvider.Object,
             MockTimeProvider.Object);
     }
 
@@ -87,7 +130,8 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
     /// </summary>
     protected void SetupPaymentDbSets(
         IEnumerable<BillingCustomer>? existingBillingCustomers = null,
-        IEnumerable<PaymentAttempt>? existingPaymentAttempts = null)
+        IEnumerable<PaymentAttempt>? existingPaymentAttempts = null,
+        string providerType = PaymentProviderTypes.OpenPay)
     {
         _capturedCardTransactions.Clear();
         _capturedTsh.Clear();
@@ -152,7 +196,7 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
         // PaymentProviders — needed by CreatePaymentMethodAsync to resolve FK-safe PaymentProviderId
         var providers = new List<PaymentProvider>
         {
-            new PaymentProvider { Id = 1, Name = "OpenPay", TenantId = 1, Use3DSecure = true }
+            new PaymentProvider { Id = 1, Name = providerType, ProviderType = providerType, TenantId = 1, Use3DSecure = true, IsActive = true }
         }.AsQueryable();
         MockDbContext.Setup(db => db.PaymentProviders).Returns(GetMockDbSet(providers).Object);
 
@@ -232,20 +276,20 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
 
     protected void SetupOpenPayHappyPath(DateTime? cardDate = null, DateTime? chargeDate = null)
     {
-        var fakeCustomer = new OpenPayCustomer { Id = "openpay-cust-001", Name = "John Doe", Email = "john@example.com" };
-        var fakeCard = new Card { Id = "card-001", CreationDate = cardDate ?? UtcNow };
-        var fakeCharge = new Charge
-        {
-            Id = "charge-001",
-            Status = "completed",
-            Amount = 100m,
-            CreationDate = chargeDate ?? UtcNow,
-            Authorization = "auth-ref-001"
-        };
+        var fakeCustomer = new PaymentGatewayCustomer("openpay-cust-001", "John Doe", "john@example.com");
+        var fakeCard = new PaymentGatewayCardToken("card-001", cardDate ?? UtcNow);
+        var fakeCharge = new PaymentGatewayChargeResult(
+            "charge-001",
+            "completed",
+            100m,
+            chargeDate ?? UtcNow,
+            "auth-ref-001",
+            null,
+            null);
 
-        MockOpenPayAdapter.Setup(s => s.CreateCustomerAsync(It.IsAny<OpenPayCustomer>())).ReturnsAsync(fakeCustomer);
-        MockOpenPayAdapter.Setup(s => s.CreateCardTokenAsync(It.IsAny<Card>())).ReturnsAsync(fakeCard);
-        MockOpenPayAdapter.Setup(s => s.CreateChargeAsync(It.IsAny<ChargeRequest>())).ReturnsAsync(fakeCharge);
+        MockPaymentGateway.Setup(s => s.CreateCustomerAsync(It.IsAny<PaymentGatewayCreateCustomerRequest>(), It.IsAny<CancellationToken>())).ReturnsAsync(fakeCustomer);
+        MockPaymentGateway.Setup(s => s.CreateCardTokenAsync(It.IsAny<PaymentGatewayCreateCardTokenRequest>(), It.IsAny<CancellationToken>())).ReturnsAsync(fakeCard);
+        MockPaymentGateway.Setup(s => s.CreateChargeAsync(It.IsAny<PaymentGatewayCreateChargeRequest>(), It.IsAny<CancellationToken>())).ReturnsAsync(fakeCharge);
     }
 
     // ------------------------------------------------------------------ command builders
@@ -266,12 +310,13 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
         string paymentId = "charge-001",
         string? attemptOrderId = "attempt-001",
         string? callbackStatus = null,
+        string? errorMessage = null,
         IReadOnlyDictionary<string, string>? callbackParameters = null) =>
         new(
             PaymentId: paymentId,
             AttemptOrderId: attemptOrderId,
             CallbackStatus: callbackStatus,
-            ErrorMessage: null,
+            ErrorMessage: errorMessage,
             CallbackParameters: callbackParameters);
 
     protected static CardTransaction BuildStubCardTransaction(int billingCustomerId = 42, bool isThreeDSecureEnabled = true) =>
@@ -307,6 +352,13 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
             CreatedDate = UtcNow
         };
 
+    protected static string BuildRazorpaySignature(string orderId, string paymentId, string secret = "razorpay-test-secret")
+    {
+        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret));
+        var hash = hmac.ComputeHash(Encoding.UTF8.GetBytes($"{orderId}|{paymentId}"));
+        return Convert.ToHexString(hash);
+    }
+
     // ------------------------------------------------------------------ AppMasterData helper
 
     /// <summary>
@@ -314,66 +366,16 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
     /// that safely ignores EF-specific expression nodes (AsNoTracking)
     /// so LINQ to Objects can evaluate the list correctly.
     /// </summary>
-    private AppMasterData BuildAppMasterData(bool use3DSecure = true)
+    private static PaymentProvider BuildPaymentProvider(bool use3DSecure = true, string providerType = PaymentProviderTypes.OpenPay)
     {
-        var provider = new PaymentProvider { Id = 1, Name = "OpenPay", TenantId = 1, Use3DSecure = use3DSecure };
-        var list = new List<PaymentProvider> { provider };
-
-        var mockProviderSet = new Mock<DbSet<PaymentProvider>>();
-        mockProviderSet
-            .As<IQueryable<PaymentProvider>>()
-            .Setup(m => m.Provider)
-            .Returns(new PassThroughQueryProvider<PaymentProvider>(list));
-        mockProviderSet
-            .As<IQueryable<PaymentProvider>>()
-            .Setup(m => m.Expression)
-            .Returns(list.AsQueryable().Expression);
-        mockProviderSet
-            .As<IQueryable<PaymentProvider>>()
-            .Setup(m => m.ElementType)
-            .Returns(typeof(PaymentProvider));
-        mockProviderSet
-            .As<IQueryable<PaymentProvider>>()
-            .Setup(m => m.GetEnumerator())
-            .Returns(() => list.GetEnumerator());
-
-        var appMasterContext = new Mock<XYDataLabs.OrderProcessingSystem.Application.Abstractions.IAppDbContext>();
-        appMasterContext.Setup(c => c.PaymentProviders).Returns(mockProviderSet.Object);
-
-        return new AppMasterData(appMasterContext.Object);
-    }
-
-    // ------------------------------------------------------------------ nested helpers
-
-    /// <summary>
-    /// A query provider that bypasses EF Core-specific expression tree nodes
-    /// (AsNoTracking) and always enumerates the backing list.
-    /// This is safe for unit-test usage only — it ignores query filter semantics.
-    /// </summary>
-    private sealed class PassThroughQueryProvider<TEntity>(IEnumerable<TEntity> source) : IQueryProvider
-    {
-        private readonly IReadOnlyList<TEntity> _list = source.ToList();
-
-        public IQueryable CreateQuery(Expression expression) =>
-            new PassThroughQueryable<TEntity>(_list);
-
-        public IQueryable<TElement> CreateQuery<TElement>(Expression expression) =>
-            // Called by AsNoTracking(); return a new pass-through queryable
-            (IQueryable<TElement>)(object)new PassThroughQueryable<TEntity>(_list);
-
-        public object? Execute(Expression expression) => _list.ToList();
-
-        public TResult Execute<TResult>(Expression expression) =>
-            (TResult)(object)_list.ToList();
-    }
-
-    private sealed class PassThroughQueryable<TEntity>(IReadOnlyList<TEntity> list)
-        : IQueryable<TEntity>
-    {
-        public Type ElementType => typeof(TEntity);
-        public Expression Expression => list.AsQueryable().Expression;
-        public IQueryProvider Provider => new PassThroughQueryProvider<TEntity>(list);
-        public IEnumerator<TEntity> GetEnumerator() => list.GetEnumerator();
-        IEnumerator IEnumerable.GetEnumerator() => list.GetEnumerator();
+        return new PaymentProvider
+        {
+            Id = 1,
+            Name = providerType,
+            ProviderType = providerType,
+            TenantId = 1,
+            Use3DSecure = use3DSecure,
+            IsActive = true
+        };
     }
 }

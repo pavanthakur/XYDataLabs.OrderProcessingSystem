@@ -107,6 +107,25 @@ pwsh .\scripts\validate-tracked-generated-artifacts.ps1
 - The source file `frontend/apps/web/public/web.config` is expected to stay tracked for Azure App Service packaging
 - The copied output under `frontend/apps/web/dist/` is expected to stay ignored
 
+### validate-secret-hygiene.ps1
+
+Deterministic secret-hygiene validation for the completion gate.
+
+**Purpose**:
+- Scans source-owned `.cs`, `.json`, `.yml`, `.yaml`, `.ps1`, and `.bicep` files for likely hardcoded credentials
+- Excludes generated or packaged output such as `.artifacts/`, `bin/`, `obj/`, `publish/`, `dist/`, and report folders
+- Ignores known safe secret-retrieval and masking lines such as Key Vault lookups and masked runtime connection-string assembly
+
+**Usage**:
+```powershell
+pwsh .\scripts\validate-secret-hygiene.ps1
+```
+
+**When to Use**:
+- As the secret / credential scan step in `/XYDataLabs-completion-check`
+- Before merging workflow, deployment-script, or configuration changes that touch secret handling
+- When you need a deterministic scan result that is not polluted by generated artifacts or template smoke output
+
 ### verify-payment-run-azure.ps1
 
 Deterministic Azure payment verification for the `verify-db-logs` workflow.

@@ -29,6 +29,13 @@ public class Tenant
     [MaxLength(20)]
     public string TenantTier { get; set; } = "SharedPool";
 
+    /// <summary>
+    /// The active payment provider for this tenant. Authoritative source — set by ops via migration or controlled script.
+    /// Valid values: "OpenPay", "Razorpay". Null means not yet configured.
+    /// </summary>
+    [MaxLength(50)]
+    public string? PaymentProviderCode { get; set; }
+
     public int? CreatedBy { get; set; }
 
     public DateTime? CreatedDate { get; set; }

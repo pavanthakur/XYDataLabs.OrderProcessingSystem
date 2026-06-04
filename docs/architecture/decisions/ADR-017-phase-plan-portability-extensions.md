@@ -8,10 +8,11 @@ and end-to-end production-grade, but reviewing it against the modern .NET cloud-
 stack (per the Julio Casal bootcamp / .NET 10 + Aspire 13 reference) surfaced three gaps that an
 enterprise architect role is expected to demonstrate:
 
-1. **Asynchronous payment lifecycle handling.** Phase 8.5 introduced Stripe as a second adapter,
-   but did not call out a webhook receiver as a first-class deliverable. Real Stripe deployments
-   cannot rely on synchronous SDK responses alone — refunds, disputes, delayed 3DS authorisation,
-   and bank-confirmed captures all arrive asynchronously through signed webhook events.
+1. **Asynchronous payment lifecycle handling.** Phase 8.5 introduced a second-provider path,
+   but did not call out a webhook receiver as a first-class deliverable. Real production payment
+   integrations cannot rely on synchronous SDK responses alone — refunds, disputes, delayed 3DS
+   authorisation, and bank-confirmed captures all arrive asynchronously through signed provider
+   events.
 
 2. **Identity-provider portability.** Phase 10 wires Microsoft Entra ID + JWT for the cloud
    deployment. The architecture is technically IdP-agnostic, but the plan never proves that
@@ -34,7 +35,7 @@ Insert three new sub-phases and pull Aspire's local orchestration role forward:
 
 | Sub-phase | Insert after | Focus |
 |-----------|--------------|-------|
-| **Phase 8.7 — Stripe Webhook Receiver & Event-Driven Payment Lifecycle** | Phase 8.5 | Signed, idempotent, tenant-aware webhook receiver feeding the Outbox pipeline |
+| **Phase 8.7 — Provider Webhook Receiver & Event-Driven Payment Lifecycle** | Phase 8.5 | Signed, idempotent, tenant-aware webhook receiver feeding the Outbox pipeline |
 | **Phase 9.5 — Cloud-Portable Identity Showcase (Keycloak Local)** | Phase 9 | Local Keycloak container proving the JWT pipeline accepts any compliant OIDC provider |
 | **Phase 11.5 — Polyglot Persistence Showcase (PostgreSQL Module)** | Phase 11 | Notifications module migrated to PostgreSQL while Orders/Inventory/Payments remain on Azure SQL |
 
@@ -54,7 +55,7 @@ advanced resource composition.
 | Replace Azure SQL with PostgreSQL across the platform | Single RDBMS | Disrupts the established operational baseline on revenue-critical paths; provides no isolation between the migration risk and Orders/Payments | ❌ Rejected |
 
 **Why webhooks live in Phase 8.7 rather than Phase 8.5:** Phase 8.5 is already substantial
-(keyed DI, per-tenant routing, retry classification, idempotency keys). Splitting the webhook
+(provider-neutral routing, retry classification, provider-aware idempotency, composition-root cleanup). Splitting the webhook
 receiver into its own phase keeps each milestone independently reviewable and lets webhook
 infrastructure ship before microservice extraction (Phase 9) without coupling the two changes.
 
@@ -70,7 +71,7 @@ experiment does not affect Orders or Payments revenue paths.
 ## Consequences
 
 **Positive:**
-- Production-grade Stripe lifecycle: refunds, disputes, async 3DS, and replay flows all converge
+- Production-grade provider lifecycle: refunds, disputes, async 3DS, and replay flows all converge
   on the same Outbox-backed event stream as locally-originated events
 - Demonstrable identity-provider portability with a runnable local Keycloak demo
 - Demonstrable persistence-engine portability with one module on PostgreSQL end-to-end
@@ -100,6 +101,6 @@ experiment does not affect Orders or Payments revenue paths.
 - ADR-015: Deployment readiness probes (webhook receiver health/readiness contract follows
   the same rules)
 - `ARCHITECTURE-EVOLUTION.md` — Phases 8.5, 8.7, 9, 9.5, 10, 11, 11.5, 12-14
-- Stripe webhook security: <https://docs.stripe.com/webhooks#secure-your-webhooks>
+- Selected-provider webhook security guidance and signature-validation notes captured when the provider is chosen
 - Keycloak OIDC: <https://www.keycloak.org/docs/latest/securing_apps/#_oidc>
 - Npgsql EF Core provider: <https://www.npgsql.org/efcore/>

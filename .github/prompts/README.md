@@ -15,7 +15,7 @@ For repo-shared AI governance, use [docs/AI-OPERATING-MODEL.md](../../docs/AI-OP
 Quick tip:
 
 ```text
-Ctrl+Shift+I → Agent mode → type /XYDataLabs-day-complete, /XYDataLabs-docker-start, /XYDataLabs-payment-automation, /XYDataLabs-sql-local-access, /XYDataLabs-context-audit, or /XYDataLabs-validate-adrs
+Ctrl+Shift+I → Agent mode → type /XYDataLabs-day-complete, /XYDataLabs-sql-local-access, /XYDataLabs-setup-local, /XYDataLabs-docker-start, /XYDataLabs-payment-automation, /XYDataLabs-completion-check, /XYDataLabs-context-audit, /XYDataLabs-new-feature, /XYDataLabs-validate-adrs, or /XYDataLabs-verify-db-logs
 ```
 
 ## Available Prompts
@@ -271,9 +271,11 @@ Select these in the VS Code Chat agent picker for focused, context-scoped assist
 | `docs/AI-OPERATING-MODEL.md` | Canonical protocol for shared AI customization, validation, and deferrals |
 | `docs/internal/DEFERRED-WORK-LOG.md` | Shared register for justified deferred work |
 | `.github/completion-check-rubric.md` | Pass/defer rubric for `/XYDataLabs-completion-check` |
+| `.github/prompts/XYDataLabs-completion-check.prompt.md` | Repo-standard task closeout and quality gate |
 | `.github/prompts/XYDataLabs-day-complete.prompt.md` | Day completion routing workflow |
 | `.github/prompts/XYDataLabs-docker-start.prompt.md` | Interactive launcher for Docker and local runtime profiles |
 | `.github/prompts/XYDataLabs-payment-automation.prompt.md` | Interactive launcher for the separate payment automation workspace |
+| `.github/prompts/XYDataLabs-setup-local.prompt.md` | First-clone local environment bootstrap workflow |
 | `.github/prompts/XYDataLabs-sql-local-access.prompt.md` | SQL firewall open/close workflow |
 | `.github/prompts/XYDataLabs-context-audit.prompt.md` | Context drift detection audit |
 | `.github/prompts/XYDataLabs-new-feature.prompt.md` | End-to-end feature development workflow |

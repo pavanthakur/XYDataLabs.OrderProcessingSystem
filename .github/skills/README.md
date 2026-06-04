@@ -15,6 +15,10 @@ For the governing protocol, see `docs/AI-OPERATING-MODEL.md`.
 | Skill | Folder | Use when |
 |-------|--------|----------|
 | Azure Deployment Operations | `.github/skills/azure-deployment-operations/` | Working on Azure bootstrap, deployment workflows, OIDC validation, App Service rollout checks, Bicep preflight, or deployment troubleshooting in this repo |
+| CQRS Backend Implementation | `.github/skills/cqrs-backend-implementation/` | Working on C# backend code in this repo: Domain entities, CQRS handlers, DTOs, Infrastructure data access, API controllers, migrations, or backend test coverage |
+| Code Review Guardrails | `.github/skills/code-review-guardrails/` | Reviewing changes in this repo for architecture compliance, tenant safety, security issues, CQRS correctness, migration safety, or missing backend test coverage |
+| Completion Check Governance | `.github/skills/completion-check-governance/` | Closing out a task with the repo-standard completion gate: build, tests, secret scan, documentation, automation, Copilot-context checks, and deferral decisions |
+| Context Audit Governance | `.github/skills/context-audit-governance/` | Auditing this repo for stale AI context, discovery-surface drift, repo memory inaccuracies, prompt/index mismatches, or secret-like values in AI-facing assets |
 
 ## Authoring Rules
 

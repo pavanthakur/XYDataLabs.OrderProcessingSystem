@@ -95,6 +95,32 @@ public class ArchitectureTests
     }
 
     [Fact]
+    public void Application_Should_Not_Depend_On_OpenPayAdapter()
+    {
+        var result = Types.InAssembly(ApplicationAssembly)
+            .ShouldNot()
+            .HaveDependencyOn("XYDataLabs.OpenPayAdapter")
+            .GetResult();
+
+        result.IsSuccessful.Should().BeTrue(
+            because: "Application layer must never depend on provider adapters; " +
+                     "it must use IPaymentProviderGateway from SharedKernel only");
+    }
+
+    [Fact]
+    public void Application_Should_Not_Depend_On_RazorpayAdapter()
+    {
+        var result = Types.InAssembly(ApplicationAssembly)
+            .ShouldNot()
+            .HaveDependencyOn("XYDataLabs.RazorpayAdapter")
+            .GetResult();
+
+        result.IsSuccessful.Should().BeTrue(
+            because: "Application layer must never depend on provider adapters; " +
+                     "it must use IPaymentProviderGateway from SharedKernel only");
+    }
+
+    [Fact]
     public void Infrastructure_Should_Not_Depend_On_API()
     {
         var result = Types.InAssembly(InfrastructureAssembly)

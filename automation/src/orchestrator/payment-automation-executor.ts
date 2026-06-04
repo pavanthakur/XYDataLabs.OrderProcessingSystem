@@ -5,7 +5,9 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { CleanupOutcome } from "../contracts/payment-fixture-provisioner.js";
+import type { PaymentFixtureProvisioner } from "../contracts/payment-fixture-provisioner.js";
 import type { ExecutiveSummaryRow } from "../contracts/report-composer.js";
+import { PowerShellPaymentProviderProvisioner } from "../adapters/fixtures/powershell-payment-provider-provisioner.js";
 import { JsonRuntimeTargetCatalog } from "../catalog/json-runtime-target-catalog.js";
 import { StaticTenantExecutionCatalog } from "../catalog/static-tenant-execution-catalog.js";
 import { PaymentJourneyRunner } from "../browser/payment-journey-runner.js";
@@ -22,6 +24,7 @@ export interface ExecutePaymentAutomationRunOptions {
   verify: boolean;
   sandboxOtpCode: string;
   tenantTimeoutMs: number;
+  requestedProviders?: string[];
   runPrefix?: string;
   startedAt?: Date;
   autoStartLocalSessions?: boolean;
@@ -39,6 +42,13 @@ export interface PaymentAutomationRunOutput {
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 const automationRoot = path.resolve(currentDirectory, "../..");
+const supportedProviders = ["OpenPay", "Razorpay"] as const;
+
+interface ExecutionItem {
+  tenantCode: string;
+  requestedProvider?: string;
+  executionRunPrefix: string;
+}
 
 export async function executePaymentAutomationRun(
   options: ExecutePaymentAutomationRunOptions
@@ -59,6 +69,12 @@ export async function executePaymentAutomationRun(
   const runId = `payment-automation-${startedAt.toISOString().replace(/[.:]/g, "-")}`;
   const runPrefix = options.runPrefix ?? buildRunPrefix(startedAt);
   const reportDirectory = path.join(automationRoot, "reports", runId);
+  const executionItems = buildExecutionItems(
+    tenantPlan.resolvedTenantCodes,
+    normalizeRequestedProviders(options.requestedProviders ?? []),
+    startedAt,
+    runPrefix
+  );
 
   await mkdir(reportDirectory, { recursive: true });
   log(`Starting payment automation run ${runId} with prefix ${runPrefix}.`);
@@ -74,119 +90,147 @@ export async function executePaymentAutomationRun(
   }
 
   const rows: ExecutiveSummaryRow[] = [];
-  for (const tenantCode of tenantPlan.resolvedTenantCodes) {
+  const verificationSummaries: string[] = [];
+
+  for (const executionItem of executionItems) {
     const tenantStartedAt = new Date();
-    const customerOrderId = buildCustomerOrderId(runPrefix, tenantCode, target.profile, target.runtime);
-    const tenantDiagnosticsDirectory = path.join(reportDirectory, tenantCode);
+    const customerOrderId = buildCustomerOrderId(
+      executionItem.executionRunPrefix,
+      executionItem.tenantCode,
+      target.profile,
+      target.runtime,
+      executionItem.requestedProvider
+    );
+    const tenantDiagnosticsDirectory = path.join(
+      reportDirectory,
+      executionItem.tenantCode,
+      normalizeProviderForPath(executionItem.requestedProvider ?? "resolved")
+    );
     let journeyOutcome = options.dryRun ? "dry_run" : "failed";
     let challengeOutcome: ExecutiveSummaryRow["challengeOutcome"] = "not-applicable";
     let threeDsSetting: ExecutiveSummaryRow["threeDsSetting"] = "unknown";
-    let evidenceReference = `customerOrderId:${customerOrderId}`;
+    let paymentProvider = executionItem.requestedProvider ?? "unresolved";
+    let verificationOutcome = options.verify && !options.dryRun ? "pending" : "skipped";
+    let cleanupOutcome = resolveCleanupOutcome();
+    let evidenceReference = `customerOrderId:${customerOrderId} | runPrefix:${executionItem.executionRunPrefix}`;
+    let fixtureIds: string[] = [];
+    let provisioner: PaymentFixtureProvisioner | undefined;
+    let stopAfterCurrentItem = false;
 
     try {
+      if (!options.dryRun && executionItem.requestedProvider) {
+        provisioner = new PowerShellPaymentProviderProvisioner({
+          target,
+          requestedProvider: executionItem.requestedProvider,
+          logger: (message) => {
+            log(`[${executionItem.tenantCode}/${executionItem.requestedProvider}] ${message}`);
+          }
+        });
+
+        const fixturePrepareResult = await provisioner.prepare(executionItem.tenantCode);
+        fixtureIds = fixturePrepareResult.fixtureIds;
+        evidenceReference = `${evidenceReference} | baseline:${fixturePrepareResult.baselineName}`;
+      }
+
       if (!options.dryRun) {
-        log(`Running tenant ${tenantCode} with order id ${customerOrderId}.`);
+        log(
+          `Running tenant ${executionItem.tenantCode}${executionItem.requestedProvider ? ` with requested provider ${executionItem.requestedProvider}` : ""} and order id ${customerOrderId}.`
+        );
         const journeyResult = await withTimeout(
           paymentJourneyRunner.execute({
-            tenantCode,
+            tenantCode: executionItem.tenantCode,
             target,
             customerOrderId,
             sandboxOtpCode: options.sandboxOtpCode,
             headless: options.headless,
+            requestedProvider: executionItem.requestedProvider,
             diagnosticsDirectory: tenantDiagnosticsDirectory,
             logger: (message) => {
-              log(`[${tenantCode}] ${message}`);
+              log(`[${executionItem.tenantCode}] ${message}`);
             }
           }),
           options.tenantTimeoutMs,
-          `Tenant ${tenantCode} exceeded ${options.tenantTimeoutMs}ms.`
+          `Tenant ${executionItem.tenantCode} exceeded ${options.tenantTimeoutMs}ms.`
         );
 
         journeyOutcome = journeyResult.journeyOutcome;
         challengeOutcome = journeyResult.challengeOutcome;
         threeDsSetting = journeyResult.threeDsSetting;
+        paymentProvider = journeyResult.paymentProvider;
         evidenceReference = `${customerOrderId} -> ${journeyResult.finalUrl}`;
-      }
 
-      rows.push({
-        runId,
-        runtimeTarget: target.key,
-        tenantCode,
-        challengeOutcome,
-        journeyOutcome,
-        verificationOutcome: options.verify && !options.dryRun ? "pending" : "skipped",
-        cleanupOutcome: resolveCleanupOutcome(),
-        startedUtc: tenantStartedAt.toISOString(),
-        finishedUtc: new Date().toISOString(),
-        evidenceReference,
-        threeDsSetting,
-        paymentProvider: "OpenPay"
-      });
+        if (options.verify) {
+          const verificationResult = await verificationAdapter.execute({
+            runtimeTarget: target.key,
+            runtime: target.runtime,
+            environment: target.environment,
+            profile: target.profile,
+            runPrefix: executionItem.executionRunPrefix
+          });
+
+          verificationOutcome = verificationResult.outcome;
+          verificationSummaries.push(verificationResult.summary);
+
+          const verifiedThreeDsSetting = verificationResult.threeDsByTenant?.[executionItem.tenantCode];
+          if (verifiedThreeDsSetting) {
+            threeDsSetting = verifiedThreeDsSetting;
+          }
+
+          await writeFile(
+            path.join(
+              reportDirectory,
+              `${executionItem.tenantCode}-${normalizeProviderForPath(paymentProvider)}-verification-report.json`
+            ),
+            JSON.stringify(verificationResult.rawReport ?? {}, null, 2),
+            "utf8"
+          );
+        }
+      }
     }
     catch (error) {
-      rows.push({
-        runId,
-        runtimeTarget: target.key,
-        tenantCode,
-        challengeOutcome,
-        journeyOutcome: error instanceof Error ? `failed: ${error.message}` : "failed",
-        verificationOutcome: "skipped",
-        cleanupOutcome: resolveCleanupOutcome(),
-        startedUtc: tenantStartedAt.toISOString(),
-        finishedUtc: new Date().toISOString(),
-        evidenceReference,
-        threeDsSetting,
-        paymentProvider: "OpenPay"
-      });
-
+      journeyOutcome = error instanceof Error ? `failed: ${error.message}` : "failed";
+      verificationOutcome = "skipped";
       if (!options.allowPartialExecution) {
-        break;
+        stopAfterCurrentItem = true;
       }
     }
-  }
-
-  const hasAnyReachableJourney = rows.some((row) => !row.journeyOutcome.startsWith("failed:"));
-
-  let verificationSummary = "Verification skipped.";
-  if (options.verify && !options.dryRun && hasAnyReachableJourney) {
-    log(`Running verification for prefix ${runPrefix}.`);
-    try {
-      const verificationResult = await verificationAdapter.execute({
-        runtimeTarget: target.key,
-        runtime: target.runtime,
-        environment: target.environment,
-        profile: target.profile,
-        runPrefix
-      });
-
-      verificationSummary = verificationResult.summary;
-      for (const row of rows) {
-        row.verificationOutcome = verificationResult.outcome;
-        const verifiedThreeDsSetting = verificationResult.threeDsByTenant?.[row.tenantCode];
-        if (verifiedThreeDsSetting) {
-          row.threeDsSetting = verifiedThreeDsSetting;
+    finally {
+      if (provisioner) {
+        try {
+          const fixtureCleanupResult = await provisioner.cleanup(executionItem.tenantCode, fixtureIds);
+          cleanupOutcome = fixtureCleanupResult.outcome;
+        }
+        catch (error) {
+          cleanupOutcome = "manual-review";
+          const cleanupMessage = error instanceof Error ? error.message : "Cleanup failed.";
+          evidenceReference = `${evidenceReference} | cleanup:${cleanupMessage}`;
         }
       }
 
-      await writeFile(
-        path.join(reportDirectory, "verification-report.json"),
-        JSON.stringify(verificationResult.rawReport ?? {}, null, 2),
-        "utf8"
-      );
+      rows.push({
+        runId,
+        runtimeTarget: target.key,
+        tenantCode: executionItem.tenantCode,
+        challengeOutcome,
+        journeyOutcome,
+        verificationOutcome,
+        cleanupOutcome,
+        startedUtc: tenantStartedAt.toISOString(),
+        finishedUtc: new Date().toISOString(),
+        evidenceReference,
+        threeDsSetting,
+        paymentProvider
+      });
     }
-    catch (error) {
-      verificationSummary = error instanceof Error ? error.message : "Verification failed unexpectedly.";
-      for (const row of rows) {
-        row.verificationOutcome = "failed";
-      }
+
+    if (stopAfterCurrentItem) {
+      break;
     }
   }
-  else if (options.verify && !options.dryRun) {
-    verificationSummary = "Verification skipped because no tenant journey reached the payment flow.";
-    for (const row of rows) {
-      row.verificationOutcome = "skipped";
-    }
-  }
+
+  const verificationSummary = verificationSummaries.length > 0
+    ? verificationSummaries.join(" | ")
+    : "Verification skipped.";
 
   const markdownSummary = await reportComposer.compose(rows);
   const output: PaymentAutomationRunOutput = {
@@ -209,6 +253,60 @@ export async function executePaymentAutomationRun(
 
 function resolveCleanupOutcome(): CleanupOutcome {
   return "reset";
+}
+
+function normalizeRequestedProviders(requestedProviders: string[]): string[] {
+  const normalizedProviders = Array.from(
+    new Set(
+      requestedProviders
+        .map((provider) => provider.trim())
+        .filter(Boolean)
+        .map((provider) => {
+          const supportedProvider = supportedProviders.find(
+            (candidate) => candidate.localeCompare(provider, undefined, { sensitivity: "accent" }) === 0
+          );
+
+          if (!supportedProvider) {
+            throw new Error(`Unsupported provider requested for automation: ${provider}.`);
+          }
+
+          return supportedProvider;
+        })
+    )
+  );
+
+  return normalizedProviders;
+}
+
+function buildExecutionItems(
+  tenantCodes: string[],
+  requestedProviders: string[],
+  startedAt: Date,
+  defaultRunPrefix: string
+): ExecutionItem[] {
+  if (requestedProviders.length === 0) {
+    return tenantCodes.map((tenantCode) => ({
+      tenantCode,
+      executionRunPrefix: defaultRunPrefix
+    }));
+  }
+
+  return tenantCodes.flatMap((tenantCode, tenantIndex) =>
+    requestedProviders.map((requestedProvider, providerIndex) => {
+      const executionIndex = (tenantIndex * requestedProviders.length) + providerIndex;
+      const executionStartedAt = new Date(startedAt.getTime() + (executionIndex * 1000));
+
+      return {
+        tenantCode,
+        requestedProvider,
+        executionRunPrefix: buildRunPrefix(executionStartedAt)
+      };
+    })
+  );
+}
+
+function normalizeProviderForPath(providerType: string): string {
+  return providerType.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
 }
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {

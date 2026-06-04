@@ -139,4 +139,59 @@ describe("PaymentCallbackPage", () => {
     expect(screen.getByText("completed")).toBeInTheDocument();
     expect(screen.getByText("1 of 4 used")).toBeInTheDocument();
   }, 10000);
+
+  it("accepts Razorpay callback identifiers and labels the provider source correctly", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+
+    const confirmPaymentStatus = vi.fn().mockResolvedValue({
+      paymentId: "pay_rzp_123",
+      customerOrderId: "ORDER-RZP-42",
+      status: "completed",
+      statusCategory: "success",
+      statusMessage: "Payment completed successfully.",
+      isSuccess: true,
+      isPending: false,
+      isFailure: false,
+      isFinal: true,
+      callbackRecorded: true,
+      remoteStatusConfirmed: true,
+      statusSource: "razorpay",
+      transactionReferenceId: "pay_rzp_123",
+      isThreeDSecureEnabled: false,
+      threeDSecureStage: "not_applicable"
+    } satisfies PaymentStatusDetails);
+
+    const apiClient = {
+      confirmPaymentStatus
+    } as unknown as OrderProcessingApiClient;
+
+    sessionStorage.setItem("pending-payment:order_rzp_123", JSON.stringify({
+      customerOrderId: "ORDER-RZP-42",
+      clientFlowId: "flow-rzp-123",
+      customerId: 8,
+      orderId: 42
+    }));
+
+    render(
+      <MemoryRouter initialEntries={["/payments/callback?tenantCode=TenantA&source=razorpay&razorpay_payment_id=pay_rzp_123&razorpay_order_id=order_rzp_123"]}>
+        <Routes>
+          <Route
+            path="/payments/callback"
+            element={<PaymentCallbackPage activeTenantCode="TenantA" apiClient={apiClient} onTenantChange={vi.fn()} />}
+          />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => expect(confirmPaymentStatus).toHaveBeenCalledWith(
+      "pay_rzp_123",
+      expect.objectContaining({
+        attemptOrderId: "order_rzp_123"
+      }),
+      "TenantA"
+    ));
+
+    expect(await screen.findByText("Provider confirmation (Razorpay)")).toBeInTheDocument();
+    expect(screen.getAllByText("order_rzp_123")).toHaveLength(2);
+  });
 });

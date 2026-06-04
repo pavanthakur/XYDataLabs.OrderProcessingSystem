@@ -8,6 +8,7 @@ export type RuntimeProfile = "http" | "https";
 export interface RuntimeTargetDefinition {
   key: string;
   baseUrl: string;
+  apiBaseUrl?: string;
   verificationMode: VerificationMode;
   browserMode: BrowserMode;
   expectedTenantSource: ExpectedTenantSource;

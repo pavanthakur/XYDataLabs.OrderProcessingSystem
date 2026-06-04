@@ -1,7 +1,8 @@
-﻿using XYDataLabs.OrderProcessingSystem.Application.Events;
+using XYDataLabs.OrderProcessingSystem.Application.Events;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,12 +11,24 @@ using System.Threading.Tasks;
 using Bogus;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using System.Globalization;
 
 namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
 {
     public static class DbInitializer
     {
         private static readonly string[] StartupSeedTenantCodes = { "TenantA", "TenantB" };
+
+        // Seed-time defaults only. Once in the DB, the DB value is authoritative — re-seed does NOT overwrite.
+        // TenantA Razorpay uses the Checkout JS popup; 3DS is handled internally by the Razorpay SDK (SAQ A).
+        // All other tenant/provider combinations default to true (fail-secure).
+        private static readonly Dictionary<(string TenantCode, string ProviderType), bool> Use3DSecureSeedDefaults = new()
+        {
+            [("TenantA", PaymentProviderTypes.Razorpay)] = false,
+        };
+
+        private static bool GetUse3DSecureSeedDefault(string tenantCode, string providerType)
+            => Use3DSecureSeedDefaults.TryGetValue((tenantCode, providerType), out var value) ? value : true;
         private const int SeededCustomerCountPerTenant = 120;
 
         public static void Initialize(
@@ -34,27 +47,44 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                 throw new ArgumentNullException(nameof(integrationEventMapperRegistry));
             }
 
+            InitializeSharedPool(context, configuration, applyMigrations);
+            InitializeDedicatedTenants(context, configuration, applyMigrations, integrationEventMapperRegistry);
+        }
+
+        public static void InitializeSharedPool(
+            OrderProcessingSystemDbContext context,
+            IConfiguration? configuration = null,
+            bool applyMigrations = true)
+        {
+            ArgumentNullException.ThrowIfNull(context);
+
             // Azure deployments run schema migrations in workflow steps before app startup.
             if (applyMigrations)
             {
                 context.Database.Migrate();
             }
 
-            // Phase 1: seed shared-pool tenants (TenantA, TenantB) into the main DB.
             var startupSeedTenants = GetStartupSeedTenants(context);
 
-            SeedOpenpayProviders(context, startupSeedTenants);
+            SeedOpenpayProviders(context, startupSeedTenants, configuration);
+            SeedRazorpayProviders(context, startupSeedTenants, configuration);
 
             foreach (var seedTenant in startupSeedTenants)
             {
                 SeedTenantSampleData(context, seedTenant);
             }
+        }
 
-            // Phase 2: seed dedicated-tier tenants into their own DB connection.
-            // Connection strings are read from IConfiguration (Key Vault / appsettings),
-            // not from the Tenants table — connection strings are secrets.
-            // Skipped when configuration is null or DedicatedTenantConnectionStrings is absent.
-            SeedDedicatedTenants(context, configuration, applyMigrations, integrationEventMapperRegistry);
+        public static void InitializeDedicatedTenants(
+            OrderProcessingSystemDbContext mainContext,
+            IConfiguration? configuration,
+            bool applyMigrations,
+            IIntegrationEventMapperRegistry integrationEventMapperRegistry)
+        {
+            ArgumentNullException.ThrowIfNull(mainContext);
+            ArgumentNullException.ThrowIfNull(integrationEventMapperRegistry);
+
+            SeedConfiguredDedicatedTenants(mainContext, configuration, applyMigrations, integrationEventMapperRegistry);
         }
 
         private static IReadOnlyList<StartupSeedTenant> GetStartupSeedTenants(OrderProcessingSystemDbContext context)
@@ -142,16 +172,31 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
             context.SaveChanges();
         }
 
-        private static void SeedOpenpayProviders(OrderProcessingSystemDbContext context, IReadOnlyList<StartupSeedTenant> seedTenants)
+        private static void SeedOpenpayProviders(
+            OrderProcessingSystemDbContext context,
+            IReadOnlyList<StartupSeedTenant> seedTenants,
+            IConfiguration? configuration)
         {
+            var merchantId = configuration?["OpenPay:MerchantId"];
+            var publicKey = configuration?["OpenPay:PublicKey"];
+            var isProduction = ResolveProviderProductionMode(configuration, "OpenPay");
+
             foreach (var seedTenant in seedTenants)
             {
-                var providerExists = context.PaymentProviders.Any(provider =>
+                var existing = context.PaymentProviders.FirstOrDefault(provider =>
                     provider.TenantId == seedTenant.TenantId &&
                     provider.Name == "OpenPay");
 
-                if (providerExists)
+                if (existing is not null)
                 {
+                    // Update credentials only — IsActive is not touched.
+                    // Active provider is authoritative from Tenant.PaymentProviderCode (Phase 8.6).
+                    ApplyProviderRuntimeConfiguration(
+                        existing,
+                        merchantId,
+                        publicKey,
+                        privateKeyConfigurationKey: BuildTenantProviderPrivateKeyConfigurationKey(seedTenant.TenantCode, PaymentProviderTypes.OpenPay),
+                        isProduction);
                     continue;
                 }
 
@@ -159,15 +204,67 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                 {
                     Name = "OpenPay",
                     APIUrl = "https://sandbox-api.openpay.mx/v1",
-                    IsActive = true,
-                    IsProduction = false,
-                    Use3DSecure = true,
+                    IsActive = false, // Active provider resolved from Tenant Registry (Tenant.PaymentProviderCode)
+                    IsProduction = isProduction,
+                    ProviderType = PaymentProviderTypes.OpenPay,
+                    MerchantId = merchantId,
+                    PublicKey = publicKey,
+                    PrivateKeyConfigurationKey = BuildTenantProviderPrivateKeyConfigurationKey(seedTenant.TenantCode, PaymentProviderTypes.OpenPay),
+                    Use3DSecure = GetUse3DSecureSeedDefault(seedTenant.TenantCode, PaymentProviderTypes.OpenPay),
                     TenantId = seedTenant.TenantId,
                     CreatedBy = 1,
                     CreatedDate = DateTime.UtcNow
                 };
 
                 context.PaymentProviders.Add(openPayProvider);
+            }
+
+            context.SaveChanges();
+        }
+
+        private static void SeedRazorpayProviders(
+            OrderProcessingSystemDbContext context,
+            IReadOnlyList<StartupSeedTenant> seedTenants,
+            IConfiguration? configuration)
+        {
+            var merchantId = configuration?["Razorpay:MerchantId"];
+            var isProduction = ResolveProviderProductionMode(configuration, "Razorpay");
+
+            foreach (var seedTenant in seedTenants)
+            {
+                var existing = context.PaymentProviders.FirstOrDefault(provider =>
+                    provider.TenantId == seedTenant.TenantId &&
+                    provider.Name == "Razorpay");
+
+                if (existing is not null)
+                {
+                    // Update credentials only — IsActive is not touched.
+                    // Active provider is authoritative from Tenant.PaymentProviderCode (Phase 8.6).
+                    ApplyProviderRuntimeConfiguration(
+                        existing,
+                        merchantId,
+                        publicKey: null,
+                        privateKeyConfigurationKey: BuildTenantProviderPrivateKeyConfigurationKey(seedTenant.TenantCode, PaymentProviderTypes.Razorpay),
+                        isProduction);
+                    continue;
+                }
+
+                var razorpayProvider = new PaymentProvider
+                {
+                    Name = "Razorpay",
+                    APIUrl = "https://api.razorpay.com/v1",
+                    IsActive = false, // Active provider resolved from Tenant Registry (Tenant.PaymentProviderCode)
+                    IsProduction = isProduction,
+                    ProviderType = PaymentProviderTypes.Razorpay,
+                    MerchantId = merchantId,
+                    PrivateKeyConfigurationKey = BuildTenantProviderPrivateKeyConfigurationKey(seedTenant.TenantCode, PaymentProviderTypes.Razorpay),
+                    Use3DSecure = GetUse3DSecureSeedDefault(seedTenant.TenantCode, PaymentProviderTypes.Razorpay),
+                    TenantId = seedTenant.TenantId,
+                    CreatedBy = 1,
+                    CreatedDate = DateTime.UtcNow
+                };
+
+                context.PaymentProviders.Add(razorpayProvider);
             }
 
             context.SaveChanges();
@@ -181,7 +278,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
         /// A NullTenantProvider is injected so EF Core query filters evaluate safely (HasTenantContext=false →
         /// filter short-circuits to true, making all rows visible — correct for cross-tenant seeding).
         /// </summary>
-        private static void SeedDedicatedTenants(
+        private static void SeedConfiguredDedicatedTenants(
             OrderProcessingSystemDbContext mainContext,
             IConfiguration? configuration,
             bool applyMigrations,
@@ -241,10 +338,60 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                 if (seedTenant is null)
                     continue;
 
-                SeedOpenpayProviders(dedicatedContext, new[] { seedTenant });
+                SeedOpenpayProviders(dedicatedContext, new[] { seedTenant }, configuration);
+                SeedRazorpayProviders(dedicatedContext, new[] { seedTenant }, configuration);
 
                 SeedTenantSampleData(dedicatedContext, seedTenant);
             }
+        }
+
+        private static void ApplyProviderRuntimeConfiguration(
+            PaymentProvider paymentProvider,
+            string? merchantId,
+            string? publicKey,
+            string privateKeyConfigurationKey,
+            bool isProduction)
+        {
+            var shouldBackfillProductionMode = ShouldBackfillProductionMode(paymentProvider);
+
+            if (string.IsNullOrWhiteSpace(paymentProvider.MerchantId) && !string.IsNullOrWhiteSpace(merchantId))
+            {
+                paymentProvider.MerchantId = merchantId;
+            }
+
+            if (string.IsNullOrWhiteSpace(paymentProvider.PublicKey) && !string.IsNullOrWhiteSpace(publicKey))
+            {
+                paymentProvider.PublicKey = publicKey;
+            }
+
+            if (string.IsNullOrWhiteSpace(paymentProvider.PrivateKeyConfigurationKey))
+            {
+                paymentProvider.PrivateKeyConfigurationKey = privateKeyConfigurationKey;
+            }
+
+            if (shouldBackfillProductionMode)
+            {
+                paymentProvider.IsProduction = isProduction;
+            }
+        }
+
+        private static bool ShouldBackfillProductionMode(PaymentProvider paymentProvider)
+        {
+            return string.IsNullOrWhiteSpace(paymentProvider.MerchantId)
+                || string.IsNullOrWhiteSpace(paymentProvider.PrivateKeyConfigurationKey)
+                || string.Equals(paymentProvider.ProviderType, PaymentProviderTypes.OpenPay, StringComparison.OrdinalIgnoreCase)
+                    && string.IsNullOrWhiteSpace(paymentProvider.PublicKey);
+        }
+
+        private static bool ResolveProviderProductionMode(IConfiguration? configuration, string sectionName)
+        {
+            return bool.TryParse(configuration?[$"{sectionName}:IsProduction"], out var isProduction)
+                && isProduction;
+        }
+
+        private static string BuildTenantProviderPrivateKeyConfigurationKey(string tenantCode, string providerType)
+        {
+            return $"PaymentProviders:{tenantCode}:{providerType}:PrivateKey";
         }
 
         private static Order CreateSeedOrder(int customerId, IReadOnlyCollection<Product> products, int tenantId, DateTime createdAt)

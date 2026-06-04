@@ -5,8 +5,10 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
+using XYDataLabs.OrderProcessingSystem.Infrastructure.Events;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 
 namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure
@@ -16,6 +18,7 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure
         public const string TenantHeaderName = "X-Tenant-Code";
         private readonly string _connectionString;
         private readonly string? _dedicatedConnectionString;
+        private readonly bool _enableBackgroundWorkers;
         private readonly ConcurrentDictionary<string, string?> _configOverrides = new();
 
         /// <summary>
@@ -23,7 +26,12 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure
         /// Existing tests use this constructor — no behavior change.
         /// </summary>
         public IntegrationTestWebAppFactory(string connectionString)
-            : this(connectionString, dedicatedConnectionString: null)
+            : this(connectionString, dedicatedConnectionString: null, enableBackgroundWorkers: false)
+        {
+        }
+
+        public IntegrationTestWebAppFactory(string connectionString, bool enableBackgroundWorkers)
+            : this(connectionString, dedicatedConnectionString: null, enableBackgroundWorkers)
         {
         }
 
@@ -35,10 +43,14 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure
         /// using <paramref name="connectionString"/> as the shared-pool default and
         /// ITenantProvider.ConnectionString for dedicated tenants.
         /// </summary>
-        public IntegrationTestWebAppFactory(string connectionString, string? dedicatedConnectionString)
+        public IntegrationTestWebAppFactory(
+            string connectionString,
+            string? dedicatedConnectionString,
+            bool enableBackgroundWorkers = false)
         {
             _connectionString = connectionString;
             _dedicatedConnectionString = dedicatedConnectionString;
+            _enableBackgroundWorkers = enableBackgroundWorkers;
         }
 
         /// <summary>
@@ -63,10 +75,33 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure
             builder.ConfigureAppConfiguration((_, config) =>
             {
                 config.Add(new MutableConfigSource(_configOverrides));
+
+                // Supply test-safe provider config so ValidateOnStart passes.
+                // Real credentials are not needed in integration tests.
+                config.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["OpenPay:MerchantId"] = "mt_test_integration_openpay_merchant",
+                    ["OpenPay:PublicKey"] = "pk_test_integration_openpay_browser_key",
+                    ["OpenPay:PrivateKey"] = "integration_test_openpay_private_key",
+                    ["OpenPay:IsProduction"] = "false",
+                    ["Razorpay:MerchantId"] = "rzp_test_integration_test_key",
+                    ["Razorpay:PrivateKey"] = "integration_test_private_key",
+                    ["Razorpay:IsProduction"] = "false",
+                    // Keep TenantC on a test-local dedicated DB when this factory is
+                    // running routing-aware scenarios. Otherwise suppress the dev
+                    // setting so integration tests never point at Azure SQL.
+                    ["DedicatedTenantConnectionStrings:TenantC"] = _dedicatedConnectionString
+                });
             });
 
             builder.ConfigureServices(services =>
             {
+                if (!_enableBackgroundWorkers)
+                {
+                    RemoveHostedService<OutboxPublisherWorker>(services);
+                    RemoveHostedService<PaymentReconciliationWorker>(services);
+                }
+
                 // ── Remove existing business DbContext ──
                 RemoveService<DbContextOptions<OrderProcessingSystemDbContext>>(services);
                 RemoveService<OrderProcessingSystemDbContext>(services);
@@ -165,6 +200,20 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure
             var descriptor = services.SingleOrDefault(d => d.ServiceType == typeof(T));
             if (descriptor != null)
                 services.Remove(descriptor);
+        }
+
+        private static void RemoveHostedService<THostedService>(IServiceCollection services)
+            where THostedService : class, IHostedService
+        {
+            var descriptors = services
+                .Where(descriptor => descriptor.ServiceType == typeof(IHostedService)
+                    && descriptor.ImplementationType == typeof(THostedService))
+                .ToList();
+
+            foreach (var descriptor in descriptors)
+            {
+                services.Remove(descriptor);
+            }
         }
 
         // ── Mutable configuration for dynamic DedicatedTenantConnectionStrings ──

@@ -2,9 +2,18 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
-import type { OrderProcessingApiClient, PaymentResult, PaymentStatusDetails } from "@xydatalabs/orderprocessing-api-sdk";
+import type { OrderProcessingApiClient, PaymentConfiguration, PaymentResult, PaymentStatusDetails } from "@xydatalabs/orderprocessing-api-sdk";
 import { PaymentCallbackPage } from "./PaymentCallbackPage";
 import { PaymentPage } from "./PaymentPage";
+
+const openPayConfiguration = {
+  activeProviderType: "OpenPay",
+  activeProviderName: "OpenPay",
+  collectionMode: "direct_card_form",
+  browserKey: "pk_test_openpay_browser_key",
+  browserMerchantId: "mt_test_openpay_merchant",
+  isProduction: false
+} satisfies PaymentConfiguration;
 
 describe("PaymentPage", () => {
   it("allows entering a two-digit expiry month without resetting to 01", async () => {
@@ -18,6 +27,7 @@ describe("PaymentPage", () => {
     };
 
     const apiClient = {
+      getPaymentConfiguration: vi.fn().mockResolvedValue(openPayConfiguration),
       processPayment: vi.fn(),
       getOrderById: vi.fn()
     } as unknown as OrderProcessingApiClient;
@@ -83,6 +93,7 @@ describe("PaymentPage", () => {
     } satisfies PaymentStatusDetails);
 
     const apiClient = {
+      getPaymentConfiguration: vi.fn().mockResolvedValue(openPayConfiguration),
       processPayment,
       confirmPaymentStatus,
       getOrderById: vi.fn()
@@ -158,6 +169,7 @@ describe("PaymentPage", () => {
     } satisfies PaymentResult);
 
     const apiClient = {
+      getPaymentConfiguration: vi.fn().mockResolvedValue(openPayConfiguration),
       processPayment,
       getOrderById: vi.fn()
     } as unknown as OrderProcessingApiClient;
@@ -194,4 +206,114 @@ describe("PaymentPage", () => {
       timeout: 4000
     });
   }, 10000);
+
+  it("launches Razorpay checkout and routes the success callback into the shared status page", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+
+    const razorpayOpen = vi.fn();
+    const Razorpay = vi.fn().mockImplementation(function (this: {
+      on: (eventName: string, handler: (response: unknown) => void) => void;
+      open: () => void;
+    }, options: {
+      handler?: (response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => void;
+    }) {
+      this.on = vi.fn();
+      this.open = () => {
+        razorpayOpen();
+        options.handler?.({
+          razorpay_payment_id: "pay_rzp_123",
+          razorpay_order_id: "order_rzp_123",
+          razorpay_signature: "sig_rzp_123"
+        });
+      };
+    });
+
+    (window as Window & { Razorpay?: unknown }).Razorpay = Razorpay as unknown;
+
+    const processPayment = vi.fn().mockResolvedValue({
+      id: "order_rzp_123",
+      customerOrderId: "PAY-20260411-RZP123",
+      customerId: "cust-123",
+      amount: 100,
+      currency: "INR",
+      status: "created",
+      createdAt: "2026-04-11T12:00:00Z",
+      transactionId: null,
+      isThreeDSecureEnabled: false,
+      threeDSecureStage: null,
+      threeDSecureUrl: null
+    } satisfies PaymentResult);
+
+    const confirmPaymentStatus = vi.fn().mockResolvedValue({
+      paymentId: "pay_rzp_123",
+      customerOrderId: "PAY-20260411-RZP123",
+      status: "completed",
+      statusCategory: "success",
+      statusMessage: "Payment completed successfully.",
+      isSuccess: true,
+      isPending: false,
+      isFailure: false,
+      isFinal: true,
+      callbackRecorded: true,
+      remoteStatusConfirmed: true,
+      statusSource: "razorpay",
+      transactionReferenceId: "pay_rzp_123",
+      isThreeDSecureEnabled: false,
+      threeDSecureStage: "not_applicable"
+    } satisfies PaymentStatusDetails);
+
+    const apiClient = {
+      getPaymentConfiguration: vi.fn().mockResolvedValue({
+        activeProviderType: "Razorpay",
+        activeProviderName: "Razorpay",
+        collectionMode: "provider_checkout",
+        browserKey: "rzp_test_browser_key",
+        browserMerchantId: null,
+        isProduction: false
+      } satisfies PaymentConfiguration),
+      processPayment,
+      confirmPaymentStatus,
+      getOrderById: vi.fn()
+    } as unknown as OrderProcessingApiClient;
+
+    render(
+      <MemoryRouter initialEntries={["/payments/new"]}>
+        <Routes>
+          <Route path="/payments/new" element={<PaymentPage activeTenantCode="TenantA" apiClient={apiClient} />} />
+          <Route
+            path="/payments/callback"
+            element={<PaymentCallbackPage activeTenantCode="TenantA" apiClient={apiClient} onTenantChange={vi.fn()} />}
+          />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const user = userEvent.setup();
+
+    expect(await screen.findByText("Razorpay payment information")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Card number")).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Cardholder name"), "Alice Smith");
+    await user.type(screen.getByLabelText("Email"), "alice@example.com");
+    await user.click(screen.getByRole("button", { name: "Continue to Razorpay" }));
+
+    await waitFor(() => expect(processPayment).toHaveBeenCalledTimes(1));
+    expect(processPayment).toHaveBeenCalledWith(expect.objectContaining({
+      deviceSessionId: "",
+      cardNumber: "",
+      expirationYear: "",
+      expirationMonth: "",
+      cvv2: ""
+    }));
+    await waitFor(() => expect(razorpayOpen).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(confirmPaymentStatus).toHaveBeenCalledWith(
+      "pay_rzp_123",
+      expect.objectContaining({
+        attemptOrderId: "order_rzp_123"
+      }),
+      "TenantA"
+    ));
+
+    expect(await screen.findByText("Provider confirmation (Razorpay)")).toBeInTheDocument();
+  });
 });

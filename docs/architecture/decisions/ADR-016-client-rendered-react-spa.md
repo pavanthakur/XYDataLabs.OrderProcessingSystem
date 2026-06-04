@@ -1,7 +1,6 @@
 # ADR-016: Client-Rendered React SPA For UI Modernization
 
-## Status
-Accepted
+**Status:** Accepted
 
 ## Context
 The previous UI was an ASP.NET Core MVC application in `XYDataLabs.OrderProcessingSystem.UI`.

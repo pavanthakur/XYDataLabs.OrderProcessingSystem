@@ -45,7 +45,7 @@ docs/README.md
 - Days 1-43 are complete.
 - Track U Phase U5 is complete: the React web cutover is live and the legacy MVC UI has been retired from the runtime and solution.
 - Backend Phase 8 is verified; backend Phase 8.5 is now the next active engineering phase.
-- The roadmap beyond Phase 8.5 is now explicitly extended with Phase 8.7 (Stripe webhooks), Phase 9.5 (Keycloak portability), and Phase 11.5 (PostgreSQL portability), while keeping Entra ID and Azure SQL as the production defaults.
+- The roadmap beyond Phase 8.5 is now explicitly extended with Phase 8.7 (provider webhooks), Phase 9.5 (Keycloak portability), and Phase 11.5 (PostgreSQL portability), while keeping Entra ID and Azure SQL as the production defaults.
 - Local and Docker UI validation for the React-first runtime are complete on the supported execution paths.
 - The canonical learning source of truth is `docs/learning/curriculum/1_MASTER_CURRICULUM.md`.
 - The canonical milestone tracker is `docs/internal/AZURE-PROGRESS-EVALUATION.md`.
@@ -140,7 +140,7 @@ If you are unsure where an update belongs, route it like this:
 
 ## Practical Next Move
 
-Documentation structure is stable enough to stop reorganizing and return to engineering work. Resume from Phase 8 using:
+Documentation structure is stable enough to stop reorganizing and return to engineering work. Resume from Backend Phase 8.5 using:
 
 1. `docs/learning/curriculum/1_MASTER_CURRICULUM.md`
 2. `docs/internal/AZURE-PROGRESS-EVALUATION.md`

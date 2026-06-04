@@ -13,6 +13,7 @@ on:
       - 'XYDataLabs.OrderProcessingSystem.Infrastructure/**'
       - 'XYDataLabs.OrderProcessingSystem.SharedKernel/**'
       - 'XYDataLabs.OpenPayAdapter/**'           # Multitenant payment: ProcessPaymentCommandHandler uses OpenPayAdapterService for per-tenant Use3DSecure routing
+      - 'XYDataLabs.RazorpayAdapter/**'          # Multitenant payment: ProcessPaymentCommandHandler uses RazorpayAdapterService for tenant-selected hosted checkout
       - 'Resources/Configuration/**'
       - '.github/workflows/deploy-api-to-azure.yml'
   workflow_dispatch:
@@ -26,7 +27,7 @@ env:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2025
     permissions:
       contents: read
 
@@ -66,7 +67,7 @@ jobs:
           path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
 
   deploy:
-    runs-on: windows-latest
+    runs-on: windows-2025
     needs: build
     timeout-minutes: 30  # Covers approval wait + deploy + migrations + SQL setup + health check (~15 min worst case on F1)
     # Prod approval window: set via GitHub Settings → Environments → prod → Required reviewers timeout
@@ -75,6 +76,13 @@ jobs:
     permissions:
       id-token: write
       contents: read
+    env:
+      OPENPAY_MERCHANT_ID: ${{ secrets[format('OPENPAY_{0}', 'MERCHANT_ID')] }}
+      OPENPAY_PUBLIC_KEY: ${{ secrets.OPENPAY_PUBLIC_KEY }}
+      OPENPAY_PRIVATE_KEY: ${{ secrets[format('OPENPAY_{0}', 'PRIVATE_KEY')] }}
+      OPENPAY_DEVICE_SESSION_ID: ${{ secrets[format('OPENPAY_{0}_{1}', 'DEVICE', 'SESSION_ID')] }}
+      RAZORPAY_MERCHANT_ID: ${{ secrets[format('RAZORPAY_{0}', 'MERCHANT_ID')] }}
+      RAZORPAY_PRIVATE_KEY: ${{ secrets[format('RAZORPAY_{0}', 'PRIVATE_KEY')] }}
 
     steps:
       - name: Check Azure Credentials
@@ -150,12 +158,6 @@ jobs:
           echo "AZURE_WEBAPP_NAME=$name" >> $env:GITHUB_ENV
           Write-Host "Deploying to WebApp: $name"
 
-      - name: Download artifact
-        if: steps.check-credentials.outputs.credentialsConfigured == 'true'
-        uses: actions/download-artifact@v8
-        with:
-          name: dotnet-app
-
       - name: Login to Azure
         if: steps.check-credentials.outputs.credentialsConfigured == 'true'
         uses: azure/login@v3
@@ -163,6 +165,10 @@ jobs:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+
+      - name: Checkout code for deployment scripts
+        if: steps.check-credentials.outputs.credentialsConfigured == 'true'
+        uses: actions/checkout@v6
 
       - name: Check Target Infrastructure Exists
         if: steps.check-credentials.outputs.credentialsConfigured == 'true'
@@ -205,17 +211,77 @@ jobs:
           Write-Host "✅ Target infrastructure exists: $rgName / $appName" -ForegroundColor Green
           "infraReady=true" >> $env:GITHUB_OUTPUT
 
+      - name: Validate Payment Provider Secrets
+        if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'
+        shell: pwsh
+        run: |
+          $missing = @()
+          if ([string]::IsNullOrWhiteSpace($env:OPENPAY_MERCHANT_ID))       { $missing += 'OPENPAY_MERCHANT_ID' }
+          if ([string]::IsNullOrWhiteSpace($env:OPENPAY_PUBLIC_KEY))        { $missing += 'OPENPAY_PUBLIC_KEY' }
+          if ([string]::IsNullOrWhiteSpace($env:OPENPAY_PRIVATE_KEY))       { $missing += 'OPENPAY_PRIVATE_KEY' }
+          if ([string]::IsNullOrWhiteSpace($env:OPENPAY_DEVICE_SESSION_ID)) { $missing += 'OPENPAY_DEVICE_SESSION_ID' }
+          if ([string]::IsNullOrWhiteSpace($env:RAZORPAY_MERCHANT_ID))      { $missing += 'RAZORPAY_MERCHANT_ID' }
+          if ([string]::IsNullOrWhiteSpace($env:RAZORPAY_PRIVATE_KEY))      { $missing += 'RAZORPAY_PRIVATE_KEY' }
+
+          if ($missing.Count -gt 0) {
+            $targetEnv = "${{ steps.check-target.outputs.targetEnvironment }}"
+            Write-Host '❌ Deployment blocked because payment provider environment secrets are missing.' -ForegroundColor Red
+            Write-Host "Target GitHub environment: $targetEnv" -ForegroundColor Yellow
+            $missing | ForEach-Object { Write-Host "  • $_" -ForegroundColor Red }
+            exit 1
+          }
+
+          Write-Host '✅ All payment provider environment secrets are present for the target environment.' -ForegroundColor Green
+
+      - name: Sync Payment Secrets To Key Vault
+        if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'
+        shell: pwsh
+        run: |
+          $targetEnv = "${{ steps.check-target.outputs.targetEnvironment }}"
+          $owner = "${{ github.repository_owner }}"
+
+          ./Resources/Azure-Deployment/populate-keyvault-secrets.ps1 `
+            -Environment $targetEnv `
+            -BaseName orderprocessing `
+            -GitHubOwner $owner `
+            -OpenPayMerchantId "${{ env.OPENPAY_MERCHANT_ID }}" `
+            -OpenPayPublicKey "${{ env.OPENPAY_PUBLIC_KEY }}" `
+            -OpenPayPrivateKey "${{ env.OPENPAY_PRIVATE_KEY }}" `
+            -OpenPayDeviceSessionId "${{ env.OPENPAY_DEVICE_SESSION_ID }}" `
+            -RazorpayMerchantId "${{ env.RAZORPAY_MERCHANT_ID }}" `
+            -RazorpayPrivateKey "${{ env.RAZORPAY_PRIVATE_KEY }}"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Key Vault payment secret synchronization failed with exit code $LASTEXITCODE"
+          }
+
+      - name: Configure Azure App Runtime Settings
+        if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'
+        shell: pwsh
+        run: |
+          $targetEnv = "${{ steps.check-target.outputs.targetEnvironment }}"
+          $owner = "${{ github.repository_owner }}"
+
+          ./Resources/Azure-Deployment/configure-app-environment.ps1 -Environment $targetEnv -BaseName orderprocessing -GitHubOwner $owner
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Azure app runtime setting refresh failed with exit code $LASTEXITCODE"
+          }
+
+      - name: Download artifact
+        if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: dotnet-app
+          path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+
       - name: Deploy to Azure Web App
         if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'
         id: deploy-to-webapp
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          package: .
-
-      - name: Checkout code for migrations
-        if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'
-        uses: actions/checkout@v6
+          package: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
 
       - name: Run Database Migrations
         if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'
@@ -240,13 +306,14 @@ jobs:
           
           $owner = "${{ github.repository_owner }}"
           
-          # MULTITENANT NOTE — shared-pool DB only:
-          # run-database-migrations.ps1 applies EF migrations to the shared-pool DB (OrderProcessingSystemDbContext).
-          # TenantC (Dedicated tier) is migrated and seeded at app startup by DbInitializer.SeedDedicatedTenants().
-          # That phase reads 'DedicatedTenantConnectionStrings--TenantC' from Key Vault at runtime.
-          # If that secret is absent, TenantC requests return HTTP 400 (fail-loud per ADR-009) — no failure surfaces here in CI.
-          # Ensure populate-keyvault-secrets.ps1 has stored 'DedicatedTenantConnectionStrings--TenantC' in Key Vault
-          # before deploying to any environment where TenantC traffic is expected.
+          # MULTITENANT NOTE — shared and dedicated databases:
+          # run-database-migrations.ps1 applies EF migrations to the shared-pool DB and separately to
+          # TenantC's dedicated DB. Azure startup does not own schema migration because Program.cs runs
+          # DbInitializer.Initialize(..., applyMigrations: !isAzure).
+          # Runtime startup still depends on DedicatedTenantConnectionStrings--TenantC being present in Key Vault
+          # so TenantC can resolve to its dedicated database instead of failing closed at request time.
+          # The dedicated-database validation step below treats TenantC as its own deployment unit and fails
+          # the workflow if the shared registry or dedicated DB contract is not satisfied.
           try {
             ./Resources/Azure-Deployment/run-database-migrations.ps1 -Environment $env -BaseName orderprocessing -Owner $owner
             
@@ -278,6 +345,96 @@ jobs:
             Write-Host ""
             throw
           }
+
+      - name: Validate TenantC Dedicated Database Contract
+        if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'
+        shell: pwsh
+        run: |
+          Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║      VALIDATE TENANTC DEDICATED DATABASE CONTRACT            ║" -ForegroundColor Cyan
+          Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+
+          . ./Resources/Azure-Deployment/branch-policy.ps1
+
+          function Invoke-SqlScalar {
+            param(
+              [Parameter(Mandatory = $true)] [string] $ConnectionString,
+              [Parameter(Mandatory = $true)] [string] $Query
+            )
+
+            $connection = [System.Data.SqlClient.SqlConnection]::new($ConnectionString)
+            try {
+              $connection.Open()
+              $command = $connection.CreateCommand()
+              $command.CommandText = $Query
+              $command.CommandTimeout = 60
+              return $command.ExecuteScalar()
+            }
+            finally {
+              if ($connection.State -ne [System.Data.ConnectionState]::Closed) {
+                $connection.Close()
+              }
+
+              $connection.Dispose()
+            }
+          }
+
+          $targetEnv = "${{ steps.check-target.outputs.targetEnvironment }}"
+          $policy = Get-GitHubBranchPolicy
+          $environmentDescriptor = Get-GitHubEnvironmentDescriptor -Policy $policy -EnvironmentKey $targetEnv
+          $envSuffix = $environmentDescriptor.ResourceSuffix
+          $dbSuffix = $environmentDescriptor.AzureSqlDatabaseSuffix
+          $kvName = "kv-orderprocessing-$envSuffix"
+          $sqlServerName = "orderprocessing-sql-$envSuffix"
+          $fullyQualifiedDomain = "$sqlServerName.database.windows.net"
+          $sharedDbName = "OrderProcessingSystem_$dbSuffix"
+          $tenantCDbName = "OrderProcessingSystem_TenantC_$dbSuffix"
+
+          Write-Host "Target environment: $targetEnv" -ForegroundColor Cyan
+          Write-Host "Shared registry DB : $sharedDbName" -ForegroundColor White
+          Write-Host "TenantC DB         : $tenantCDbName" -ForegroundColor White
+          Write-Host ""
+
+          $sqlAdminPassword = az keyvault secret show --vault-name $kvName --name sql-admin-password --query value -o tsv 2>$null
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($sqlAdminPassword)) {
+            throw "Could not retrieve sql-admin-password from Key Vault '$kvName' for TenantC dedicated-database validation."
+          }
+
+          Write-Output "::add-mask::$sqlAdminPassword"
+
+          $tenantCDbExists = az sql db show --server $sqlServerName --resource-group "rg-orderprocessing-$envSuffix" --name $tenantCDbName --query name -o tsv 2>$null
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($tenantCDbExists)) {
+            throw "TenantC dedicated database '$tenantCDbName' does not exist on server '$sqlServerName'."
+          }
+
+          $sharedConnectionString = "Server=tcp:$fullyQualifiedDomain,1433;Initial Catalog=$sharedDbName;User ID=sqladmin;Password=$sqlAdminPassword;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+          $tenantCConnectionString = "Server=tcp:$fullyQualifiedDomain,1433;Initial Catalog=$tenantCDbName;User ID=sqladmin;Password=$sqlAdminPassword;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+
+          $sharedTenantTier = [string] (Invoke-SqlScalar -ConnectionString $sharedConnectionString -Query "SET NOCOUNT ON; SELECT TOP (1) TenantTier FROM dbo.Tenants WHERE Code = 'TenantC';")
+          if ([string]::IsNullOrWhiteSpace($sharedTenantTier)) {
+            throw "Shared tenant registry database '$sharedDbName' does not contain a TenantC row."
+          }
+
+          if ($sharedTenantTier -ne 'Dedicated') {
+            throw "Shared tenant registry classifies TenantC as '$sharedTenantTier' instead of 'Dedicated'."
+          }
+
+          $dedicatedTenantTier = [string] (Invoke-SqlScalar -ConnectionString $tenantCConnectionString -Query "SET NOCOUNT ON; SELECT TOP (1) TenantTier FROM dbo.Tenants WHERE Code = 'TenantC';")
+          if ([string]::IsNullOrWhiteSpace($dedicatedTenantTier)) {
+            throw "TenantC dedicated database '$tenantCDbName' is reachable but does not contain a TenantC row in dbo.Tenants."
+          }
+
+          $tenantCMigrationCount = [int] (Invoke-SqlScalar -ConnectionString $tenantCConnectionString -Query "SET NOCOUNT ON; SELECT COUNT(1) FROM dbo.__EFMigrationsHistory;")
+          if ($tenantCMigrationCount -lt 1) {
+            throw "TenantC dedicated database '$tenantCDbName' is reachable but has no migration history rows."
+          }
+
+          Write-Host "✅ Shared tenant registry confirms TenantC is a Dedicated-tier tenant" -ForegroundColor Green
+          Write-Host "✅ TenantC dedicated database is reachable as a separate database" -ForegroundColor Green
+          Write-Host "✅ TenantC dedicated database contains migration history and tenant metadata" -ForegroundColor Green
+
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## TenantC Dedicated Database Validation`n- Shared registry database: $sharedDbName`n- Dedicated database: $tenantCDbName`n- Tenant tier in shared registry: Dedicated`n- Dedicated database reachable: Yes`n- Dedicated migration history rows: $tenantCMigrationCount`n"
 
       - name: Configure SQL Managed Identity Database User
         if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'

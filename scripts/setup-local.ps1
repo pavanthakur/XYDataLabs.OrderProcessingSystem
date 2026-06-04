@@ -106,8 +106,11 @@ function New-EnvLocalContent {
         [Parameter(Mandatory = $true)] [string] $SqlPassword,
         [Parameter(Mandatory = $true)] [string] $CertPassword,
         [Parameter(Mandatory = $true)] [string] $OpenPayMerchant,
+        [Parameter(Mandatory = $true)] [string] $OpenPayPublicKey,
         [Parameter(Mandatory = $true)] [string] $OpenPayPrivateKey,
         [Parameter(Mandatory = $true)] [string] $OpenPayDeviceSessionId,
+        [Parameter(Mandatory = $true)] [string] $RazorpayMerchantId,
+        [Parameter(Mandatory = $true)] [string] $RazorpayPrivateKey,
         [string] $SqlServerImage = ''
     )
 
@@ -117,8 +120,11 @@ function New-EnvLocalContent {
 LOCAL_SQL_PASSWORD=$SqlPassword
 LOCAL_CERT_PASSWORD=$CertPassword
 LOCAL_OPENPAY_MERCHANT_ID=$OpenPayMerchant
+LOCAL_OPENPAY_PUBLIC_KEY=$OpenPayPublicKey
 LOCAL_OPENPAY_PRIVATE_KEY=$OpenPayPrivateKey
 LOCAL_OPENPAY_DEVICE_SESSION_ID=$OpenPayDeviceSessionId
+LOCAL_RAZORPAY_MERCHANT_ID=$RazorpayMerchantId
+LOCAL_RAZORPAY_PRIVATE_KEY=$RazorpayPrivateKey
 "@
 
     if (-not [string]::IsNullOrWhiteSpace($SqlServerImage)) {
@@ -134,8 +140,11 @@ function Write-EnvLocal {
         [Parameter(Mandatory = $true)] [string] $SqlPassword,
         [Parameter(Mandatory = $true)] [string] $CertPassword,
         [Parameter(Mandatory = $true)] [string] $OpenPayMerchant,
+        [Parameter(Mandatory = $true)] [string] $OpenPayPublicKey,
         [Parameter(Mandatory = $true)] [string] $OpenPayPrivateKey,
         [Parameter(Mandatory = $true)] [string] $OpenPayDeviceSessionId,
+        [Parameter(Mandatory = $true)] [string] $RazorpayMerchantId,
+        [Parameter(Mandatory = $true)] [string] $RazorpayPrivateKey,
         [string] $SqlServerImage = ''
     )
 
@@ -143,8 +152,11 @@ function Write-EnvLocal {
         -SqlPassword $SqlPassword `
         -CertPassword $CertPassword `
         -OpenPayMerchant $OpenPayMerchant `
+        -OpenPayPublicKey $OpenPayPublicKey `
         -OpenPayPrivateKey $OpenPayPrivateKey `
         -OpenPayDeviceSessionId $OpenPayDeviceSessionId `
+        -RazorpayMerchantId $RazorpayMerchantId `
+        -RazorpayPrivateKey $RazorpayPrivateKey `
         -SqlServerImage $SqlServerImage
 
     Set-Content -Path $Path -Value $content -Encoding UTF8
@@ -159,8 +171,11 @@ if ((Test-Path $envLocal) -and -not $Force) {
     $certPassword    = $envVars['LOCAL_CERT_PASSWORD']
     $sqlPassword     = $envVars['LOCAL_SQL_PASSWORD']
     $openpayMerchant = $envVars['LOCAL_OPENPAY_MERCHANT_ID']
+    $openpayPublicKey = $envVars['LOCAL_OPENPAY_PUBLIC_KEY']
     $openpayKey      = $envVars['LOCAL_OPENPAY_PRIVATE_KEY']
     $openpaySession  = $envVars['LOCAL_OPENPAY_DEVICE_SESSION_ID']
+    $razorpayMerchant = $envVars['LOCAL_RAZORPAY_MERCHANT_ID']
+    $razorpayPrivateKey = $envVars['LOCAL_RAZORPAY_PRIVATE_KEY']
     $sqlServerImage  = $envVars['ORDERPROCESSING_SQLSERVER_IMAGE']
 
     $normalizedEnvCredentials = Normalize-OpenPayCredentials `
@@ -199,6 +214,27 @@ if ((Test-Path $envLocal) -and -not $Force) {
         $envLocalWasIncomplete = $true
     }
 
+    if ([string]::IsNullOrWhiteSpace($openpayPublicKey)) {
+        Write-Host '    [!!] LOCAL_OPENPAY_PUBLIC_KEY is missing from .env.local - prompting to repair it.' -ForegroundColor Yellow
+        $openpayPublicKey = (Read-Host '  OpenPay Public Key (LOCAL_OPENPAY_PUBLIC_KEY) ').Trim()
+        if ([string]::IsNullOrWhiteSpace($openpayPublicKey)) { $openpayPublicKey = 'local-sandbox-only' }
+        $envLocalWasIncomplete = $true
+    }
+
+    if ([string]::IsNullOrWhiteSpace($razorpayMerchant)) {
+        Write-Host '    [!!] LOCAL_RAZORPAY_MERCHANT_ID is missing from .env.local - prompting to repair it.' -ForegroundColor Yellow
+        $razorpayMerchant = (Read-Host '  Razorpay Merchant ID (LOCAL_RAZORPAY_MERCHANT_ID) ').Trim()
+        if ([string]::IsNullOrWhiteSpace($razorpayMerchant)) { $razorpayMerchant = 'local-sandbox-only' }
+        $envLocalWasIncomplete = $true
+    }
+
+    if ([string]::IsNullOrWhiteSpace($razorpayPrivateKey)) {
+        Write-Host '    [!!] LOCAL_RAZORPAY_PRIVATE_KEY is missing from .env.local - prompting to repair it.' -ForegroundColor Yellow
+        $razorpayPrivateKey = (Read-Host '  Razorpay Private Key (LOCAL_RAZORPAY_PRIVATE_KEY) ').Trim()
+        if ([string]::IsNullOrWhiteSpace($razorpayPrivateKey)) { $razorpayPrivateKey = 'local-sandbox-only' }
+        $envLocalWasIncomplete = $true
+    }
+
     if ([string]::IsNullOrWhiteSpace($openpaySession)) {
         Write-Host '    [!!] LOCAL_OPENPAY_DEVICE_SESSION_ID is missing from .env.local - defaulting it.' -ForegroundColor Yellow
         $openpaySession = 'default-device-session'
@@ -211,8 +247,11 @@ if ((Test-Path $envLocal) -and -not $Force) {
             -SqlPassword $sqlPassword `
             -CertPassword $certPassword `
             -OpenPayMerchant $openpayMerchant `
+            -OpenPayPublicKey $openpayPublicKey `
             -OpenPayPrivateKey $openpayKey `
             -OpenPayDeviceSessionId $openpaySession `
+            -RazorpayMerchantId $razorpayMerchant `
+            -RazorpayPrivateKey $razorpayPrivateKey `
             -SqlServerImage $sqlServerImage
 
         Write-Done 'Repaired .env.local'
@@ -233,15 +272,21 @@ else {
     Write-Host ''
     Write-Host '  OpenPay sandbox credentials — fetching from Key Vault kv-orderprocessing-dev...' -ForegroundColor Yellow
     $openpayMerchant = $null
+    $openpayPublicKey = $null
     $openpayKey      = $null
     $openpaySession  = 'default-device-session'
+    $razorpayMerchant = $null
+    $razorpayPrivateKey = $null
     $sqlServerImage  = if (Test-Path $envLocal) { (Read-EnvLocal $envLocal)['ORDERPROCESSING_SQLSERVER_IMAGE'] } else { '' }
 
     $azAvailable = Get-Command az -ErrorAction SilentlyContinue
     if ($azAvailable) {
         try {
             $kvMerchant = az keyvault secret show --vault-name kv-orderprocessing-dev --name 'OpenPay--MerchantId' --query value -o tsv 2>$null
+            $kvPublicKey = az keyvault secret show --vault-name kv-orderprocessing-dev --name 'OpenPay--PublicKey' --query value -o tsv 2>$null
             $kvKey      = az keyvault secret show --vault-name kv-orderprocessing-dev --name 'OpenPay--PrivateKey'  --query value -o tsv 2>$null
+            $kvRazorpayMerchant = az keyvault secret show --vault-name kv-orderprocessing-dev --name 'Razorpay--MerchantId' --query value -o tsv 2>$null
+            $kvRazorpayKey = az keyvault secret show --vault-name kv-orderprocessing-dev --name 'Razorpay--PrivateKey' --query value -o tsv 2>$null
             if ($kvMerchant -and $kvKey -and
                 $kvMerchant -notmatch '^set-openpay' -and $kvKey -notmatch '^set-openpay') {
                 $normalizedKvCredentials = Normalize-OpenPayCredentials `
@@ -251,6 +296,15 @@ else {
 
                 $openpayMerchant = $normalizedKvCredentials.MerchantId
                 $openpayKey      = $normalizedKvCredentials.PrivateKey
+                if ($kvPublicKey -and $kvPublicKey -notmatch '^set-openpay' -and $kvPublicKey -ne '__OPENPAY_PUBLIC_KEY__') {
+                    $openpayPublicKey = $kvPublicKey.Trim()
+                }
+                if ($kvRazorpayMerchant -and $kvRazorpayMerchant -notmatch '^set-razorpay' -and $kvRazorpayMerchant -ne '__RAZORPAY_MERCHANT_ID__') {
+                    $razorpayMerchant = $kvRazorpayMerchant.Trim()
+                }
+                if ($kvRazorpayKey -and $kvRazorpayKey -notmatch '^set-razorpay' -and $kvRazorpayKey -ne '__RAZORPAY_PRIVATE_KEY__') {
+                    $razorpayPrivateKey = $kvRazorpayKey.Trim()
+                }
                 if ($normalizedKvCredentials.WasSwapped) {
                     Write-Host '    [!!] kv-orderprocessing-dev still stores OpenPay--MerchantId and OpenPay--PrivateKey under the wrong names. Local setup will continue with normalized values, but the Key Vault source should be corrected separately.' -ForegroundColor Yellow
                 }
@@ -274,8 +328,9 @@ else {
         Write-Host '  │  2. Log in to your sandbox account                              │' -ForegroundColor Cyan
         Write-Host '  │  3. On the home/dashboard page you will see:                    │' -ForegroundColor Cyan
         Write-Host '  │       Merchant ID  — a short alphanumeric string (e.g. m...)    │' -ForegroundColor Cyan
+        Write-Host '  │       Public key   — starts with pk_...                         │' -ForegroundColor Cyan
         Write-Host '  │       Private key  — starts with sk_...                         │' -ForegroundColor Cyan
-        Write-Host '  │  4. Paste both below.                                           │' -ForegroundColor Cyan
+        Write-Host '  │  4. Paste the OpenPay values below, then Razorpay if used.      │' -ForegroundColor Cyan
         Write-Host '  │                                                                 │' -ForegroundColor Cyan
         Write-Host '  │  These are stored in .env.local (gitignored) and user-secrets.  │' -ForegroundColor Cyan
         Write-Host '  │  You will NOT be asked again on subsequent runs.                │' -ForegroundColor Cyan
@@ -284,16 +339,34 @@ else {
         Write-Host '  │  machines get them automatically, run once after pasting:       │' -ForegroundColor Cyan
         Write-Host '  │    .\Resources\Azure-Deployment\populate-keyvault-secrets.ps1   │' -ForegroundColor Cyan
         Write-Host '  │        -Environment dev                                         │' -ForegroundColor Cyan
-        Write-Host '  │        -OpenPayMerchantId <id> -OpenPayPrivateKey <key>         │' -ForegroundColor Cyan
+        Write-Host '  │        -OpenPayMerchantId <id> -OpenPayPublicKey <key>          │' -ForegroundColor Cyan
+        Write-Host '  │        -OpenPayPrivateKey <key>                                  │' -ForegroundColor Cyan
         Write-Host '  │                                                                 │' -ForegroundColor Cyan
         Write-Host '  │  Leave blank to skip — payment calls will fail (error 1002)     │' -ForegroundColor Cyan
         Write-Host '  │  until credentials are set.                                     │' -ForegroundColor Cyan
         Write-Host '  └─────────────────────────────────────────────────────────────────┘' -ForegroundColor Cyan
         Write-Host ''
         $openpayMerchant = (Read-Host '  OpenPay Merchant ID (LOCAL_OPENPAY_MERCHANT_ID) ').Trim()
+        $openpayPublicKey = (Read-Host '  OpenPay Public Key (LOCAL_OPENPAY_PUBLIC_KEY)   ').Trim()
         $openpayKey      = (Read-Host '  OpenPay Private Key (LOCAL_OPENPAY_PRIVATE_KEY)  ').Trim()
         if ([string]::IsNullOrWhiteSpace($openpayMerchant)) { $openpayMerchant = 'local-sandbox-only' }
+        if ([string]::IsNullOrWhiteSpace($openpayPublicKey)) { $openpayPublicKey = 'local-sandbox-only' }
         if ([string]::IsNullOrWhiteSpace($openpayKey))      { $openpayKey      = 'local-sandbox-only' }
+    }
+
+    if (-not $razorpayMerchant) {
+        $razorpayMerchant = (Read-Host '  Razorpay Merchant ID (LOCAL_RAZORPAY_MERCHANT_ID) ').Trim()
+        if ([string]::IsNullOrWhiteSpace($razorpayMerchant)) { $razorpayMerchant = 'local-sandbox-only' }
+    }
+
+    if (-not $razorpayPrivateKey) {
+        $razorpayPrivateKey = (Read-Host '  Razorpay Private Key (LOCAL_RAZORPAY_PRIVATE_KEY) ').Trim()
+        if ([string]::IsNullOrWhiteSpace($razorpayPrivateKey)) { $razorpayPrivateKey = 'local-sandbox-only' }
+    }
+
+    if (-not $openpayPublicKey) {
+        $openpayPublicKey = (Read-Host '  OpenPay Public Key (LOCAL_OPENPAY_PUBLIC_KEY) ').Trim()
+        if ([string]::IsNullOrWhiteSpace($openpayPublicKey)) { $openpayPublicKey = 'local-sandbox-only' }
     }
 
     Write-EnvLocal `
@@ -301,8 +374,11 @@ else {
         -SqlPassword $sqlPassword `
         -CertPassword $certPassword `
         -OpenPayMerchant $openpayMerchant `
+        -OpenPayPublicKey $openpayPublicKey `
         -OpenPayPrivateKey $openpayKey `
         -OpenPayDeviceSessionId $openpaySession `
+        -RazorpayMerchantId $razorpayMerchant `
+        -RazorpayPrivateKey $razorpayPrivateKey `
         -SqlServerImage $sqlServerImage
 
     Write-Done 'Created .env.local'
@@ -312,10 +388,19 @@ else {
 Write-Step 'dotnet user-secrets — API project'
 
 $apiSecrets = [ordered]@{
-    'ApiSettings:API:https:CertPassword' = $certPassword
-    'OpenPay:MerchantId'                 = $openpayMerchant
-    'OpenPay:PrivateKey'                 = $openpayKey
-    'OpenPay:DeviceSessionId'            = $openpaySession
+    'ApiSettings:API:https:CertPassword'          = $certPassword
+    'OpenPay:MerchantId'                          = $openpayMerchant
+    'OpenPay:PublicKey'                           = $openpayPublicKey
+    'OpenPay:PrivateKey'                          = $openpayKey
+    'OpenPay:DeviceSessionId'                     = $openpaySession
+    'Razorpay:MerchantId'                         = $razorpayMerchant
+    'Razorpay:PrivateKey'                         = $razorpayPrivateKey
+    'PaymentProviders:TenantA:OpenPay:PrivateKey' = $openpayKey
+    'PaymentProviders:TenantB:OpenPay:PrivateKey' = $openpayKey
+    'PaymentProviders:TenantC:OpenPay:PrivateKey' = $openpayKey
+    'PaymentProviders:TenantA:Razorpay:PrivateKey' = $razorpayPrivateKey
+    'PaymentProviders:TenantB:Razorpay:PrivateKey' = $razorpayPrivateKey
+    'PaymentProviders:TenantC:Razorpay:PrivateKey' = $razorpayPrivateKey
 }
 
 foreach ($kv in $apiSecrets.GetEnumerator()) {
