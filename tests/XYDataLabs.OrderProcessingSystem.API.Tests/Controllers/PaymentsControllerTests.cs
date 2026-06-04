@@ -6,6 +6,7 @@ using XYDataLabs.OrderProcessingSystem.API.Controllers;
 using XYDataLabs.OrderProcessingSystem.API.Models;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
 
 namespace XYDataLabs.OrderProcessingSystem.API.Tests.Controllers;
 
@@ -22,6 +23,7 @@ public class PaymentsControllerTests
         _controller = new PaymentsController(
             Mock.Of<IDispatcher>(),
             Mock.Of<ILogger<PaymentsController>>(),
+            NullPaymentTelemetryTracker.Instance,
             tenantProvider.Object);
     }
 

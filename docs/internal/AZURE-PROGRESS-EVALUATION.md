@@ -7,13 +7,32 @@
 
 ---
 
-## 🟢 Current State (May 2026) — Phase 8 Closeout Matrix Validation Passed
+## 🟢 Current State (June 2026) — Phase 8.6 Complete
+
+### June 5, 2026 Verification Freeze — Phase 8.6 Closeout
+
+- ✅ Phase 8.6 complete: Central Tenant Registry — `ITenantRegistry`, `TenantRegistryService`, `TenantRegistryDbContext`. `Tenant.PaymentProviderCode` is the sole routing authority (ADR-019 Accepted).
+- ✅ `DbInitializer` cleared of all provider assignment knowledge; all `PaymentProviders.IsActive = false`.
+- ✅ `AddTenantPaymentProviderCode` migration live on both Azure dev and Azure staging.
+- ✅ E2E provider matrix verified on all three environments (Docker dev, Azure dev, Azure staging) — 4/6 pass; 2 expected external failures (Razorpay S2S not enabled on test account).
+- ✅ `deploy-api-to-azure.yml` tightened — `Validate TenantC Dedicated Database Contract` now asserts `PaymentProviderCode IS NOT NULL` in both registry DB and dedicated DB.
+- ✅ Build: 0 errors, 0 warnings. Tests: Domain 14/14, Application 53/53, API 88/88, Architecture 42/42. Secret scan: clean.
+- ✅ Next: Phase 8.7 — Provider Webhook Receiver (HMAC signature validation, inbox idempotency, tenant resolution from metadata, DW-002 optimistic concurrency on `PaymentAttempt`).
+
+### May 31, 2026 Verification Freeze — Phase 8.5 Closeout
+
+- ✅ Phase 8.5 complete: provider-neutral multi-provider payment routing with OpenPay and Razorpay.
+- ✅ `XYDataLabs.RazorpayAdapter` implemented: SDK, Polly resilience pipeline, `IValidateOptions<RazorpayConfig>` startup validation, keyed DI registration.
+- ✅ `PaymentProviderCustomerActionException` in SharedKernel; `ProcessPaymentCommandHandler` differentiates terminal failures from `UnknownNeedsReconciliation`.
+- ✅ `IsProduction` on both adapters: default `false` in all environments; startup mode logging; `RazorpayConfigValidator` enforces key-prefix vs mode consistency at startup (`rzp_live_*` + `IsProduction=false` fails; `rzp_test_*` + `IsProduction=true` fails).
+- ✅ Architecture boundary tests: `Application_Should_Not_Depend_On_OpenPayAdapter`, `Application_Should_Not_Depend_On_RazorpayAdapter` — 80 unit tests passing.
+- ✅ Next: Phase 8.7 — Provider Webhook Receiver (HMAC signature validation, inbox idempotency, tenant resolution from metadata).
 
 ### May 10, 2026 Verification Freeze
 
 - ✅ Phase 8 backend orchestration and integration tests passed securely across all target matrices.
 - ✅ Full environment coverage validated utilizing the `generate-docker-validation-bundle.ps1` natively with correct DB mapping, Node healthchecks, and automation suites hitting success.
-- ✅ Transitioning to Backend Phase 8.5 (Stripe Multi-Provider integration).
+- ✅ Transitioning to Backend Phase 8.5 (secondary payment provider architecture).
 
 ### April 10, 2026 Verification Freeze
 
@@ -59,7 +78,7 @@
 
 ### May 10, 2026 Architecture Roadmap Extension Adopted
 
-- ✅ `ARCHITECTURE-EVOLUTION.md` now extends the post-Phase-8 roadmap with **Phase 8.7** (Stripe webhook receiver), **Phase 9.5** (local Keycloak portability showcase), and **Phase 11.5** (Notifications module PostgreSQL pilot)
+- ✅ `ARCHITECTURE-EVOLUTION.md` now extends the post-Phase-8 roadmap with **Phase 8.7** (provider webhook receiver), **Phase 9.5** (local Keycloak portability showcase), and **Phase 11.5** (Notifications module PostgreSQL pilot)
 - ✅ Phase 9 now explicitly introduces Aspire-Lite in parallel with Docker Compose, so local orchestration, service discovery, and dashboarding start when services are first extracted
 - ✅ Phase 13 now records two explicit decision gates: `azd` plus Aspire-generated manifest evaluation for ACA deployment, and the .NET LTS upgrade window, both ADR-bound when implementation forces the decision
 - ✅ ADR-017 captures the portability rationale: Entra ID and Azure SQL remain authoritative for production while the roadmap proves identity-provider and RDBMS flexibility in isolated, reviewable phases
@@ -77,6 +96,8 @@
 | Phase 6 | Resilience baseline — EF Core retry, Polly, Redis caching pipeline, rate limiting | Day 38 | ✅ Complete |
 | **Phase 7** | **Tenant Enforcement & DDD tactical patterns** | **Days 39-43** | **✅ Complete** |
 | **Phase 8** | **Event-Driven Foundation** | **Days 51, 55-56** | **✅ Closeout Verified** |
+| **Phase 8.5** | **Secondary Payment Provider (OpenPay + Razorpay, keyed DI)** | **Day 57-59** | **✅ Complete** |
+| **Phase 8.6** | **Central Tenant Registry & Separation of Duties** | **Jun 5, 2026** | **✅ Complete** |
 
 ### Deployed Azure Resources (Dev Environment)
 - API: `https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net/swagger`
@@ -85,14 +106,14 @@
 - Key Vault: `kv-orderprocessing-dev` (Managed Identity access, no stored credentials)
 - App Insights: `ai-orderprocessing-dev` — active, confirmed traces + metrics
 
-### Architecture Decisions Recorded (ADR-000 → ADR-017)
+### Architecture Decisions Recorded (ADR-000 → ADR-018)
 - ADR-001: Clean Architecture, ADR-002: OIDC, ADR-003: Subscription-scope Bicep
 - ADR-004: EF Core + Azure SQL, ADR-005: Serilog, ADR-006: Passwordless SQL
 - ADR-007: Hybrid multi-tenancy, ADR-008: Architecture test guardrails
 - ADR-009: Tenant isolation hardening, ADR-010: Runtime environment detection
 - ADR-011: Hand-rolled CQRS, ADR-012: OTel dual-export, ADR-013: Redis caching
 - ADR-014: Azure service coverage rationale, ADR-015: deployment readiness probes use `/health/ready`
-- ADR-016: client-rendered React SPA, ADR-017: phase plan portability extensions
+- ADR-016: client-rendered React SPA, ADR-017: phase plan portability extensions, ADR-018: blueprint packaging and snapshot strategy
 
 ### Phase 7 — Completed Deliverables
 - ✅ `TenantValidationBehavior<TRequest, TResult>` — CQRS pipeline tenant enforcement
@@ -230,7 +251,10 @@ Monolithic Application on Azure App Service
 
 ---
 
-## 🚀 Next Phase: Microservices with YARP (Days 41-56)
+## Historical March 2026 Next-Phase Snapshot — Superseded
+
+This section is retained only as historical planning context from before the Phase 8 closeout and Track U completion.
+Use the May 2026 current-state block above, `ARCHITECTURE-EVOLUTION.md`, and `docs/learning/curriculum/1_MASTER_CURRICULUM.md` for the active phase and next-step truth.
 
 ### Phase 2 Goal: Transform Monolith → Microservices
 This is a **learning exercise** to understand microservices architecture patterns. The production monolith will continue running on Azure while you build the microservices architecture locally.

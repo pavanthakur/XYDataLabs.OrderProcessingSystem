@@ -241,23 +241,29 @@ jobs:
       TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
       SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
       OPENPAY_MERCHANT_ID: ${{ secrets[format('OPENPAY_{0}', 'MERCHANT_ID')] }}
+      OPENPAY_PUBLIC_KEY: ${{ secrets.OPENPAY_PUBLIC_KEY }}
       OPENPAY_PRIVATE_KEY: ${{ secrets[format('OPENPAY_{0}', 'PRIVATE_KEY')] }}
       OPENPAY_DEVICE_SESSION_ID: ${{ secrets[format('OPENPAY_{0}_{1}', 'DEVICE', 'SESSION_ID')] }}
+      RAZORPAY_MERCHANT_ID: ${{ secrets[format('RAZORPAY_{0}', 'MERCHANT_ID')] }}
+      RAZORPAY_PRIVATE_KEY: ${{ secrets[format('RAZORPAY_{0}', 'PRIVATE_KEY')] }}
     steps:
       - uses: actions/checkout@v6
 
-      - name: Validate OpenPay Secrets
+      - name: Validate Payment Provider Secrets
         run: |
           $missing = @()
           if ([string]::IsNullOrWhiteSpace($env:OPENPAY_MERCHANT_ID))       { $missing += 'OPENPAY_MERCHANT_ID' }
+          if ([string]::IsNullOrWhiteSpace($env:OPENPAY_PUBLIC_KEY))        { $missing += 'OPENPAY_PUBLIC_KEY' }
           if ([string]::IsNullOrWhiteSpace($env:OPENPAY_PRIVATE_KEY))       { $missing += 'OPENPAY_PRIVATE_KEY' }
           if ([string]::IsNullOrWhiteSpace($env:OPENPAY_DEVICE_SESSION_ID)) { $missing += 'OPENPAY_DEVICE_SESSION_ID' }
+          if ([string]::IsNullOrWhiteSpace($env:RAZORPAY_MERCHANT_ID))      { $missing += 'RAZORPAY_MERCHANT_ID' }
+          if ([string]::IsNullOrWhiteSpace($env:RAZORPAY_PRIVATE_KEY))      { $missing += 'RAZORPAY_PRIVATE_KEY' }
 
           if ($missing.Count -gt 0) {
             $envUrl = 'https://github.com/${{ github.repository }}/settings/environments'
             Write-Host ''
             Write-Host '════════════════════════════════════════════════════' -ForegroundColor Red
-            Write-Host '❌ DEPLOYMENT BLOCKED — MISSING ENVIRONMENT OPENPAY SECRETS' -ForegroundColor Red
+            Write-Host '❌ DEPLOYMENT BLOCKED — MISSING ENVIRONMENT PAYMENT PROVIDER SECRETS' -ForegroundColor Red
             Write-Host '════════════════════════════════════════════════════' -ForegroundColor Red
             Write-Host ''
             Write-Host 'Target GitHub environment: dev' -ForegroundColor Yellow
@@ -271,7 +277,7 @@ jobs:
             Write-Host '  4. Re-run this workflow' -ForegroundColor White
             Write-Host ''
 
-            '## ❌ Deployment Blocked — Missing OpenPay Environment Secrets' >> $env:GITHUB_STEP_SUMMARY
+            '## ❌ Deployment Blocked — Missing Environment Payment Provider Secrets' >> $env:GITHUB_STEP_SUMMARY
             '' >> $env:GITHUB_STEP_SUMMARY
             '**GitHub environment**: `dev`' >> $env:GITHUB_STEP_SUMMARY
             '' >> $env:GITHUB_STEP_SUMMARY
@@ -284,7 +290,7 @@ jobs:
             exit 1
           }
 
-          Write-Host '✅ All OpenPay environment secrets are present for dev — bootstrap may proceed.' -ForegroundColor Green
+          Write-Host '✅ All payment provider environment secrets are present for dev — bootstrap may proceed.' -ForegroundColor Green
       
       - name: Generate GitHub App Token
         id: app-token
@@ -294,7 +300,7 @@ jobs:
           APP_ID: ${{ secrets.APP_ID }}
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.APP_ID }}
+          client-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
       
       - name: Validate Azure Credentials
@@ -708,15 +714,17 @@ jobs:
             Write-Host ""
             
             # Populate secrets - script will auto-retrieve App Insights connection string
-            # OPENPAY_MERCHANT_ID / OPENPAY_PRIVATE_KEY / OPENPAY_DEVICE_SESSION_ID must be set
-            # as GitHub repository secrets before running bootstrap. RedirectUrl is derived
-            # automatically from the App Service naming convention.
+            # OPENPAY_* / RAZORPAY_* must be set as GitHub environment secrets before running
+            # bootstrap. RedirectUrl is derived automatically from the App Service naming convention.
             ./Resources/Azure-Deployment/populate-keyvault-secrets.ps1 `
               -Environment dev `
               -BaseName orderprocessing `
               -OpenPayMerchantId "${{ env.OPENPAY_MERCHANT_ID }}" `
+              -OpenPayPublicKey "${{ env.OPENPAY_PUBLIC_KEY }}" `
               -OpenPayPrivateKey "${{ env.OPENPAY_PRIVATE_KEY }}" `
-              -OpenPayDeviceSessionId "${{ env.OPENPAY_DEVICE_SESSION_ID }}"
+              -OpenPayDeviceSessionId "${{ env.OPENPAY_DEVICE_SESSION_ID }}" `
+              -RazorpayMerchantId "${{ env.RAZORPAY_MERCHANT_ID }}" `
+              -RazorpayPrivateKey "${{ env.RAZORPAY_PRIVATE_KEY }}"
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
@@ -1028,23 +1036,29 @@ jobs:
       TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
       SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
       OPENPAY_MERCHANT_ID: ${{ secrets[format('OPENPAY_{0}', 'MERCHANT_ID')] }}
+      OPENPAY_PUBLIC_KEY: ${{ secrets.OPENPAY_PUBLIC_KEY }}
       OPENPAY_PRIVATE_KEY: ${{ secrets[format('OPENPAY_{0}', 'PRIVATE_KEY')] }}
       OPENPAY_DEVICE_SESSION_ID: ${{ secrets[format('OPENPAY_{0}_{1}', 'DEVICE', 'SESSION_ID')] }}
+      RAZORPAY_MERCHANT_ID: ${{ secrets[format('RAZORPAY_{0}', 'MERCHANT_ID')] }}
+      RAZORPAY_PRIVATE_KEY: ${{ secrets[format('RAZORPAY_{0}', 'PRIVATE_KEY')] }}
     steps:
       - uses: actions/checkout@v6
 
-      - name: Validate OpenPay Secrets
+      - name: Validate Payment Provider Secrets
         run: |
           $missing = @()
           if ([string]::IsNullOrWhiteSpace($env:OPENPAY_MERCHANT_ID))       { $missing += 'OPENPAY_MERCHANT_ID' }
+          if ([string]::IsNullOrWhiteSpace($env:OPENPAY_PUBLIC_KEY))        { $missing += 'OPENPAY_PUBLIC_KEY' }
           if ([string]::IsNullOrWhiteSpace($env:OPENPAY_PRIVATE_KEY))       { $missing += 'OPENPAY_PRIVATE_KEY' }
           if ([string]::IsNullOrWhiteSpace($env:OPENPAY_DEVICE_SESSION_ID)) { $missing += 'OPENPAY_DEVICE_SESSION_ID' }
+          if ([string]::IsNullOrWhiteSpace($env:RAZORPAY_MERCHANT_ID))      { $missing += 'RAZORPAY_MERCHANT_ID' }
+          if ([string]::IsNullOrWhiteSpace($env:RAZORPAY_PRIVATE_KEY))      { $missing += 'RAZORPAY_PRIVATE_KEY' }
 
           if ($missing.Count -gt 0) {
             $envUrl = 'https://github.com/${{ github.repository }}/settings/environments'
             Write-Host ''
             Write-Host '════════════════════════════════════════════════════' -ForegroundColor Red
-            Write-Host '❌ DEPLOYMENT BLOCKED — MISSING ENVIRONMENT OPENPAY SECRETS' -ForegroundColor Red
+            Write-Host '❌ DEPLOYMENT BLOCKED — MISSING ENVIRONMENT PAYMENT PROVIDER SECRETS' -ForegroundColor Red
             Write-Host '════════════════════════════════════════════════════' -ForegroundColor Red
             Write-Host ''
             Write-Host 'Target GitHub environment: staging' -ForegroundColor Yellow
@@ -1058,7 +1072,7 @@ jobs:
             Write-Host '  4. Re-run this workflow' -ForegroundColor White
             Write-Host ''
 
-            '## ❌ Deployment Blocked — Missing OpenPay Environment Secrets' >> $env:GITHUB_STEP_SUMMARY
+            '## ❌ Deployment Blocked — Missing Environment Payment Provider Secrets' >> $env:GITHUB_STEP_SUMMARY
             '' >> $env:GITHUB_STEP_SUMMARY
             '**GitHub environment**: `staging`' >> $env:GITHUB_STEP_SUMMARY
             '' >> $env:GITHUB_STEP_SUMMARY
@@ -1071,7 +1085,7 @@ jobs:
             exit 1
           }
 
-          Write-Host '✅ All OpenPay environment secrets are present for staging — bootstrap may proceed.' -ForegroundColor Green
+          Write-Host '✅ All payment provider environment secrets are present for staging — bootstrap may proceed.' -ForegroundColor Green
       
       - name: Generate GitHub App Token
         id: app-token
@@ -1081,7 +1095,7 @@ jobs:
           APP_ID: ${{ secrets.APP_ID }}
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.APP_ID }}
+          client-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
       
       - name: Validate Azure Credentials
@@ -1504,8 +1518,11 @@ jobs:
               -Environment staging `
               -BaseName orderprocessing `
               -OpenPayMerchantId "${{ env.OPENPAY_MERCHANT_ID }}" `
+              -OpenPayPublicKey "${{ env.OPENPAY_PUBLIC_KEY }}" `
               -OpenPayPrivateKey "${{ env.OPENPAY_PRIVATE_KEY }}" `
-              -OpenPayDeviceSessionId "${{ env.OPENPAY_DEVICE_SESSION_ID }}"
+              -OpenPayDeviceSessionId "${{ env.OPENPAY_DEVICE_SESSION_ID }}" `
+              -RazorpayMerchantId "${{ env.RAZORPAY_MERCHANT_ID }}" `
+              -RazorpayPrivateKey "${{ env.RAZORPAY_PRIVATE_KEY }}"
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
@@ -1819,23 +1836,29 @@ jobs:
       TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
       SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
       OPENPAY_MERCHANT_ID: ${{ secrets[format('OPENPAY_{0}', 'MERCHANT_ID')] }}
+      OPENPAY_PUBLIC_KEY: ${{ secrets.OPENPAY_PUBLIC_KEY }}
       OPENPAY_PRIVATE_KEY: ${{ secrets[format('OPENPAY_{0}', 'PRIVATE_KEY')] }}
       OPENPAY_DEVICE_SESSION_ID: ${{ secrets[format('OPENPAY_{0}_{1}', 'DEVICE', 'SESSION_ID')] }}
+      RAZORPAY_MERCHANT_ID: ${{ secrets[format('RAZORPAY_{0}', 'MERCHANT_ID')] }}
+      RAZORPAY_PRIVATE_KEY: ${{ secrets[format('RAZORPAY_{0}', 'PRIVATE_KEY')] }}
     steps:
       - uses: actions/checkout@v6
 
-      - name: Validate OpenPay Secrets
+      - name: Validate Payment Provider Secrets
         run: |
           $missing = @()
           if ([string]::IsNullOrWhiteSpace($env:OPENPAY_MERCHANT_ID))       { $missing += 'OPENPAY_MERCHANT_ID' }
+          if ([string]::IsNullOrWhiteSpace($env:OPENPAY_PUBLIC_KEY))        { $missing += 'OPENPAY_PUBLIC_KEY' }
           if ([string]::IsNullOrWhiteSpace($env:OPENPAY_PRIVATE_KEY))       { $missing += 'OPENPAY_PRIVATE_KEY' }
           if ([string]::IsNullOrWhiteSpace($env:OPENPAY_DEVICE_SESSION_ID)) { $missing += 'OPENPAY_DEVICE_SESSION_ID' }
+          if ([string]::IsNullOrWhiteSpace($env:RAZORPAY_MERCHANT_ID))      { $missing += 'RAZORPAY_MERCHANT_ID' }
+          if ([string]::IsNullOrWhiteSpace($env:RAZORPAY_PRIVATE_KEY))      { $missing += 'RAZORPAY_PRIVATE_KEY' }
 
           if ($missing.Count -gt 0) {
             $envUrl = 'https://github.com/${{ github.repository }}/settings/environments'
             Write-Host ''
             Write-Host '════════════════════════════════════════════════════' -ForegroundColor Red
-            Write-Host '❌ DEPLOYMENT BLOCKED — MISSING ENVIRONMENT OPENPAY SECRETS' -ForegroundColor Red
+            Write-Host '❌ DEPLOYMENT BLOCKED — MISSING ENVIRONMENT PAYMENT PROVIDER SECRETS' -ForegroundColor Red
             Write-Host '════════════════════════════════════════════════════' -ForegroundColor Red
             Write-Host ''
             Write-Host 'Target GitHub environment: prod' -ForegroundColor Yellow
@@ -1849,7 +1872,7 @@ jobs:
             Write-Host '  4. Re-run this workflow' -ForegroundColor White
             Write-Host ''
 
-            '## ❌ Deployment Blocked — Missing OpenPay Environment Secrets' >> $env:GITHUB_STEP_SUMMARY
+            '## ❌ Deployment Blocked — Missing Environment Payment Provider Secrets' >> $env:GITHUB_STEP_SUMMARY
             '' >> $env:GITHUB_STEP_SUMMARY
             '**GitHub environment**: `prod`' >> $env:GITHUB_STEP_SUMMARY
             '' >> $env:GITHUB_STEP_SUMMARY
@@ -1862,7 +1885,7 @@ jobs:
             exit 1
           }
 
-          Write-Host '✅ All OpenPay environment secrets are present for prod — bootstrap may proceed.' -ForegroundColor Green
+          Write-Host '✅ All payment provider environment secrets are present for prod — bootstrap may proceed.' -ForegroundColor Green
       
       - name: Generate GitHub App Token
         id: app-token
@@ -1872,7 +1895,7 @@ jobs:
           APP_ID: ${{ secrets.APP_ID }}
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.APP_ID }}
+          client-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
       
       - name: Validate Azure Credentials
@@ -2290,8 +2313,11 @@ jobs:
               -Environment prod `
               -BaseName orderprocessing `
               -OpenPayMerchantId "${{ env.OPENPAY_MERCHANT_ID }}" `
+              -OpenPayPublicKey "${{ env.OPENPAY_PUBLIC_KEY }}" `
               -OpenPayPrivateKey "${{ env.OPENPAY_PRIVATE_KEY }}" `
-              -OpenPayDeviceSessionId "${{ env.OPENPAY_DEVICE_SESSION_ID }}"
+              -OpenPayDeviceSessionId "${{ env.OPENPAY_DEVICE_SESSION_ID }}" `
+              -RazorpayMerchantId "${{ env.RAZORPAY_MERCHANT_ID }}" `
+              -RazorpayPrivateKey "${{ env.RAZORPAY_PRIVATE_KEY }}"
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""

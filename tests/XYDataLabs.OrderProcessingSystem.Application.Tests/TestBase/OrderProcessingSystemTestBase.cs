@@ -36,25 +36,20 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase
             MockDbContext.Setup(c => c.Customers).Returns(MockCustomerDbSet.Object);
             MockDbContext.Setup(o => o.Orders).Returns(MockOrderDbSet.Object);
             MockDbContext.Setup(p => p.Products).Returns(MockProductDbSet.Object);
-
-            SetupTestBase();
         }
 
-        public virtual void SetupTestBase()
+             protected static Mock<DbSet<T2>> GetMockDbSet<T2>(IQueryable<T2> entities) where T2 : class
         {
-        }
+                 ArgumentNullException.ThrowIfNull(entities);
 
-        protected Mock<DbSet<T2>> GetMockDbSet<T2>(IQueryable<T2> entities) where T2 : class
-        {
             var mockSet = new Mock<DbSet<T2>>();
-            mockSet.As<IQueryable<T2>>().Setup(m => m.Provider).Returns(entities.AsQueryable().Provider);
             mockSet.As<IQueryable<T2>>().Setup(m => m.Expression).Returns(entities.AsQueryable().Expression);
             mockSet.As<IQueryable<T2>>().Setup(m => m.ElementType).Returns(entities.AsQueryable().ElementType);
             mockSet.As<IQueryable<T2>>().Setup(m => m.GetEnumerator()).Returns(entities.AsQueryable().GetEnumerator());
 
             mockSet.As<IAsyncEnumerable<T2>>()
                    .Setup(m => m.GetAsyncEnumerator(It.IsAny<CancellationToken>()))
-                   .Returns(new TestAsyncEnumerator<T2>(entities.GetEnumerator()));
+                     .Returns(() => new TestAsyncEnumerator<T2>(entities.GetEnumerator()));
 
             mockSet.As<IQueryable<T2>>()
                    .Setup(m => m.Provider)

@@ -4,6 +4,11 @@ This file provides GitHub Copilot and other AI assistants with a structured over
 **XYDataLabs.OrderProcessingSystem** repository so that every session starts from a common
 understanding of the codebase.
 
+> **Session start — do this first, every time:**
+> Use the memory tool to read `/memories/repo/active-work.md` before responding to the first
+> message. It contains current phase, last session summary, and pending next actions.
+> Skip if the user's first message explicitly says to ignore it.
+
 ---
 
 ## 1. Repository Purpose
@@ -24,6 +29,7 @@ practice Azure cloud deployment, CI/CD automation, and enterprise DevOps pattern
 | `XYDataLabs.OrderProcessingSystem.API` | ASP.NET Core Web API — thin controllers, composition root, Swagger |
 | `XYDataLabs.OrderProcessingSystem.Application` | Hand-rolled CQRS (ICommand/IQuery/IDispatcher), DTOs, pipeline behaviors |
 | `XYDataLabs.OrderProcessingSystem.Domain` | Core entities, domain logic (DDD) — zero dependencies |
+| `XYDataLabs.OrderProcessingSystem.Gateway` | YARP gateway for local modular routing and frontend/API entry-point experiments |
 | `XYDataLabs.OrderProcessingSystem.Infrastructure` | EF Core, SQL Server, data access |
 | `XYDataLabs.OrderProcessingSystem.SharedKernel` | Result<T>, constants, observability, multi-tenancy |
 | `XYDataLabs.OpenPayAdapter` | OpenPay payment integration |
@@ -40,6 +46,7 @@ Frontend workspace:
 | `XYDataLabs.OrderProcessingSystem.Domain.Tests` | Entity unit tests (xUnit, FluentAssertions) |
 | `XYDataLabs.OrderProcessingSystem.Application.Tests` | CQRS handler unit tests (xUnit, Moq, Bogus) |
 | `XYDataLabs.OrderProcessingSystem.API.Tests` | Controller unit tests |
+| `XYDataLabs.OrderProcessingSystem.Gateway.Tests` | Gateway routing and host-behavior tests |
 | `XYDataLabs.OrderProcessingSystem.Integration.Tests` | End-to-end tests (Testcontainers + WebApplicationFactory) |
 | `XYDataLabs.OrderProcessingSystem.Architecture.Tests` | NetArchTest layer boundary enforcement |
 
@@ -74,14 +81,19 @@ Frontend workspace:
 │   ├── configure-secrets-and-run.ps1
 │   └── validate-github-app-config.ps1
 │
+├── automation/                    # Payment journey automation workspace and dry-run/reporting assets
+│
 ├── frontend/                      # React web/mobile workspace + shared packages
 │   ├── apps/
 │   └── packages/
 │
-├── tests/                         # All test projects (5 projects)
+├── templates/                     # Layer 1 template source and packaging projects
+│
+├── tests/                         # All test projects (6 projects)
 │   ├── XYDataLabs.OrderProcessingSystem.Domain.Tests/
 │   ├── XYDataLabs.OrderProcessingSystem.Application.Tests/
 │   ├── XYDataLabs.OrderProcessingSystem.API.Tests/
+│   ├── XYDataLabs.OrderProcessingSystem.Gateway.Tests/
 │   ├── XYDataLabs.OrderProcessingSystem.Integration.Tests/
 │   └── XYDataLabs.OrderProcessingSystem.Architecture.Tests/
 │
@@ -97,6 +109,7 @@ Frontend workspace:
 │
 ├── TROUBLESHOOTING-INDEX.md       # ← Quick troubleshooting guide with links
 ├── ARCHITECTURE-EVOLUTION.md      # 14-phase monolith → microservices roadmap
+├── XYDataLabs.OrderProcessingSystem.Gateway/ # YARP gateway project
 ├── test-bootstrap-dry-run.ps1     # Dry-run test for bootstrap workflow
 ├── test-pre-deployment-validation.ps1  # Local test for pre-deployment validation
 ├── test-recommended-next-steps.ps1     # Test recommended next steps after bootstrap
@@ -150,60 +163,7 @@ Setup and day-to-day operations are split into two focused workflows:
 | **Azure Initial Setup** (`azure-initial-setup.yml`) | Phase 0, 1a, 1b | All enabled, environment=`all` |
 | **Azure Bootstrap & Deploy** (`azure-bootstrap.yml`) | Phase 2, Deploy, Phase X | All enabled except cleanup, environment=`dev` |
 
-#### Phase Summary
-
-| Phase | Workflow | Input flag | What it does |
-|-------|----------|-----------|--------------|
-| **Phase 0** | Initial Setup | `setupGitHubApp = true` | Shows GitHub App creation instructions. |
-| **Phase 1a** | Initial Setup | `setupOidc = true` | Creates/updates Microsoft Entra ID App Registration + federated OIDC credentials via `setup-github-oidc.ps1`. Always runs in `dev` environment context. |
-| **Phase 1b** | Initial Setup | `configureSecrets = true` | Calls `configure-github-secrets.yml` to store OIDC values as GitHub repo/env secrets using the GitHub App token. |
-| **Phase 2** | Bootstrap & Deploy | `bootstrapInfra = true` | Runs `bootstrap-enterprise-infra.ps1` — resource group, App Service, SQL, Key Vault. |
-| **Phase 2** | Bootstrap & Deploy | `deployApi / deployUi` | Dispatches `deploy-api-to-azure.yml` / `deploy-ui-to-azure.yml`. **Blocked** if the bootstrap job for the target environment failed. |
-| **Phase X** | Bootstrap & Deploy | `cleanupInfra = true` | ⚠️ **DESTRUCTIVE**: Stops and deletes App Services, then deletes the entire Resource Group. |
-
-### Phase 1a + 1b — One-Time OIDC Prerequisite
-
-Phase 1a and Phase 1b are **one-time setup steps** that must complete before Phase 2 or Phase X
-can authenticate with Azure. They create the OIDC trust between GitHub and Azure:
-
-| Step | What it creates |
-|------|-----------------|
-| **Phase 1a** | Azure AD App Registration + federated identity credentials (`environment:dev`, `environment:staging`, `environment:prod`, branch refs) |
-| **Phase 1b** | GitHub environment secrets (`AZUREAPPSERVICE_CLIENTID`, `AZUREAPPSERVICE_TENANTID`, `AZUREAPPSERVICE_SUBSCRIPTIONID`) for dev, staging, and prod |
-
-**How to run (recommended — one-time per repository):**
-1. Go to **Actions → Azure Initial Setup → Run workflow**
-2. All defaults are correct (environment=`all`, Phase 1a + 1b enabled)
-3. Click **Run workflow** and wait for completion
-
-> **Note:** `setup-oidc` always uses `environment: dev` context (hardcoded) because all environments
-> share the same Azure AD App Registration.
-
-### Deployment Guard
-
-The `trigger-deployments` job depends on bootstrap job results. When `bootstrapInfra` is selected,
-API/UI deployments are **blocked** unless the bootstrap job for the target environment succeeds.
-If the Azure Initial Setup workflow was never run, bootstrap fails at credential validation and
-deployments are automatically prevented.
-
-### OIDC Authentication Pattern
-
-Workflows use **passwordless OIDC** (not stored secrets):
-```yaml
-permissions:
-  id-token: write   # request OIDC token
-  contents: read
-steps:
-  - uses: azure/login@v3
-    with:
-      client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
-      tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
-      subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
-```
-
-Required GitHub environment secrets (set by Azure Initial Setup): `AZUREAPPSERVICE_CLIENTID`, `AZUREAPPSERVICE_TENANTID`, `AZUREAPPSERVICE_SUBSCRIPTIONID`.
-
-Required for GitHub App token (set in Phase 0 of Azure Initial Setup): `APP_ID`, `APP_PRIVATE_KEY`.
+Phase details, OIDC setup steps, deployment guard, and secrets reference: see `.github/workflows/README-AZURE-INITIAL-SETUP.md` and `README-AZURE-BOOTSTRAP.md`.
 
 ---
 
@@ -220,35 +180,7 @@ Parameter files follow the pattern `{environment}.json` / `{environment}.paramet
 
 ## 6. PowerShell Scripts — `Resources/Azure-Deployment/`
 
-| Script | Purpose |
-|--------|---------|
-| `bootstrap-enterprise-infra.ps1` | **Main bootstrap**: resource group, App Service Plan, Web Apps, App Insights, Key Vault + managed identity, OIDC |
-| `setup-github-oidc.ps1` | Create/update Entra ID app + federated OIDC credentials |
-| `configure-github-secrets.ps1` | Store OIDC values as GitHub repo/env secrets |
-| `configure-app-environment.ps1` | Set App Service application settings per environment |
-| `enable-managed-identity.ps1` | Enable system-assigned managed identity on App Services |
-| `provision-azure-sql.ps1` | Provision SQL Server + database |
-| `populate-keyvault-secrets.ps1` | Store application secrets in Key Vault |
-| `run-database-migrations.ps1` | Execute EF Core migrations against target environment |
-| `manage-appservice-slots.ps1` | Blue-green deployment slot management |
-| `wait-appservice-ready.ps1` | Poll until App Service is healthy |
-| `verify-azure-setup.ps1` | Verify all Azure resources are configured correctly |
-| `verify-app-insights.ps1` | Verify Application Insights configuration |
-| `verify-deployment-endpoints.ps1` | Health-check API and UI endpoints |
-| `verify-oidc-credentials.ps1` | Verify GitHub OIDC federated credentials exist for all environments |
-| `check-app-registration.ps1` | Verify Azure AD app registration exists |
-| `fix-federated-credential.ps1` | Fix/recreate OIDC federated credentials |
-| `diagnose-keyvault-access.ps1` | Diagnose Key Vault access issues |
-| `validate-parameters-whatif.ps1` | Bicep what-if analysis for infra changes |
-| `validate-sharedsettings-diff.ps1` | Check consistency across environment config files |
-| `validate-bootstrap-logic.ps1` | Validate bootstrap script logic before execution |
-| `validate-workflow-config.ps1` | Validate workflow parameter configuration |
-| `setup-appinsights-dev.ps1` | Dev-specific Application Insights setup |
-| `inspect-and-cleanup-appinsights-managed-rg.ps1` | Clean App Insights managed resource group |
-| `query-app-insights-errors.ps1` | Query application errors from App Insights |
-| `test-retry-logic.ps1` | Test retry mechanism in scripts |
-| `test-branch-env-mapping.ps1` | Test branch-to-environment mapping |
-| `test-enterprise-deployment.ps1` | End-to-end enterprise deployment test |
+Full script reference: see `Resources/Azure-Deployment/README.md`.
 
 ---
 
@@ -271,6 +203,8 @@ via the `ASPNETCORE_ENVIRONMENT` variable.
 | `OPENPAY_MERCHANT_ID` | Environments | OpenPay merchant ID — **set manually** in GitHub Settings → Environments by an authorized person; bootstrap validates the target environment before proceeding |
 | `OPENPAY_PRIVATE_KEY` | Environments | OpenPay private key — **set manually** in GitHub Settings → Environments by an authorized person; bootstrap validates the target environment before proceeding |
 | `OPENPAY_DEVICE_SESSION_ID` | Environments | OpenPay device session ID — **set manually** in GitHub Settings → Environments by an authorized person; bootstrap validates the target environment before proceeding |
+| `RAZORPAY_MERCHANT_ID` | Environments | Razorpay key ID (e.g. `rzp_test_…`) — **set manually** in GitHub Settings → Environments by an authorized person; bootstrap validates the target environment before proceeding |
+| `RAZORPAY_PRIVATE_KEY` | Environments | Razorpay key secret — **set manually** in GitHub Settings → Environments by an authorized person; bootstrap validates the target environment before proceeding |
 
 > **Note**: `APP_INSTALLATION_ID` is **not** required — it is auto-discovered at runtime.
 
@@ -327,28 +261,6 @@ Port allocations: Local VS API (5010–5011) + UI (5173–5174) · Docker dev (5
 | `.github/instructions/curriculum.instructions.md` | `**/*CURRICULUM*`, `**/docs/learning/curriculum/**` |
 | `.github/instructions/architecture.instructions.md` | `**/docs/architecture/**`, `**/*ADR*` |
 
-### Instruction auto-injection matrix
-
-When editing a file, multiple instruction files may fire simultaneously based on overlapping `applyTo` patterns.
-This matrix shows which instructions auto-attach for common file locations:
-
-| File location | clean-arch | ef-migrations | multitenant | azure-workflows | bicep | docs-governance | architecture | curriculum |
-|---------------|:----------:|:-------------:|:-----------:|:---------------:|:-----:|:---------------:|:------------:|:----------:|
-| `Domain/Entities/*.cs` | ✓ | | ✓ | | | | | |
-| `Application/Features/**/*.cs` | ✓ | | ✓ | | | | | |
-| `Application/DTO/**/*.cs` | ✓ | | ✓ | | | | | |
-| `Infrastructure/**/*.cs` | ✓ | ✓ | ✓ | | | | | |
-| `Infrastructure/Migrations/*` | ✓ | ✓ | ✓ | | | | | |
-| `API/Controllers/*.cs` | ✓ | | ✓ | | | | | |
-| `SharedKernel/**/*.cs` | ✓ | | | | | | | |
-| `tests/Architecture.Tests/*.cs` | ✓ | | ✓ | | | | | |
-| `.github/workflows/*.yml` | | | | ✓ | | | | |
-| `infra/**/*.bicep` | | | | | ✓ | | | |
-| `docs/*.md` | | | | | | ✓ | | |
-| `docs/**/*.md` | | | | | | ✓ | | |
-| `docs/architecture/decisions/*` | | | | | | ✓ | ✓ | |
-| `docs/learning/curriculum/*` | | | | | | ✓ | | ✓ |
-
 ### Custom agents (select in VS Code Chat agent picker)
 
 | Agent | File | Use when |
@@ -362,10 +274,15 @@ This matrix shows which instructions auto-attach for common file locations:
 | Skill | File | Use when |
 |-------|------|----------|
 | Azure Deployment Operations | `.github/skills/azure-deployment-operations/SKILL.md` | Working on Azure bootstrap, deployment workflows, OIDC validation, App Service rollout checks, Bicep preflight, or deployment troubleshooting |
+| CQRS Backend Implementation | `.github/skills/cqrs-backend-implementation/SKILL.md` | Working on C# backend code: Domain entities, CQRS handlers, DTOs, Infrastructure data access, API controllers, migrations, or backend test coverage |
+| Code Review Guardrails | `.github/skills/code-review-guardrails/SKILL.md` | Reviewing code changes for architecture compliance, tenant safety, security issues, CQRS correctness, migration safety, or missing backend test coverage |
+| Completion Check Governance | `.github/skills/completion-check-governance/SKILL.md` | Closing out a task with the repo-standard completion gate: build, tests, secret scan, documentation, automation, Copilot-context checks, and deferral decisions |
+| Context Audit Governance | `.github/skills/context-audit-governance/SKILL.md` | Detects stale AI context by diffing memory files, discovery surfaces, and repo facts against the live codebase |
 
 ### Reusable agent prompts (type in VS Code Chat → Agent mode)
 | Prompt | Command | Purpose |
 |--------|---------|--------|
+| Day Start | `/XYDataLabs-day-start` | Start of every session — reads active-work.md and reports current phase, last session summary, pending actions, and key file paths. Zero exploration, zero token waste. |
 | New Feature Workflow | `/XYDataLabs-new-feature` | Orchestrates end-to-end feature development: entity → CQRS → migration → controller → tests → review → commit → payment verification (conditional). Enforces mandatory 13-step workflow with multitenant support. |
 | Day Complete Router | `/XYDataLabs-day-complete` | After each curriculum day or phase-freeze closeout — routes updates to all correct documents, syncs architecture status surfaces, and makes payment automation dry-run validation mandatory when automation scope changed before a phase-close commit |
 | Completion Check | `/XYDataLabs-completion-check` | After any feature, task, script, or fix — 6-category quality gate: documented? guardrailed? unit tested? integration tested? automated, including payment automation dry-run matrix when relevant? context current? |
@@ -378,20 +295,6 @@ This matrix shows which instructions auto-attach for common file locations:
 | Log + DB Correlation | `/XYDataLabs-verify-db-logs` | After any payment run on any env/profile — script-first by runtime: calls `scripts/verify-payment-run-physical.ps1` for docker/local or `scripts/verify-payment-run-azure.ps1` for azure, returns the formatted table summary by default, and falls back to manual investigation only when needed. |
 | ADR Validation | `/XYDataLabs-validate-adrs` | Before committing changes to any ADR — runs frontmatter schema check + markdownlint locally; documents how to toggle the CI counterpart. |
 
-> **Quick prompt tip:** `Ctrl+Shift+I` → select Agent mode → type `/XYDataLabs-new-feature`, `/XYDataLabs-completion-check`, `/XYDataLabs-docker-start`, `/XYDataLabs-payment-automation`, `/XYDataLabs-setup-local`, `/XYDataLabs-day-complete`, `/XYDataLabs-sql-local-access`, `/XYDataLabs-context-audit`, `/XYDataLabs-verify-db-logs`, or `/XYDataLabs-validate-adrs`
->
-> **Prompt reference:** See `.github/prompts/README.md` for when to use each prompt, prerequisites, and operational notes.
->
-> **Skill reference:** See `.github/skills/README.md` for the repo-owned skills catalog and authoring rules.
->
-> **Maintenance rule:** When adding or changing any reusable prompt in `.github/prompts/`, also update `.github/prompts/README.md` and any operational docs that point users to required manual post-deploy steps.
-> When adding or changing any agent in `.github/agents/`, also update the Custom agents table above.
-> When adding or changing any skill in `.github/skills/`, also update `.github/skills/README.md` and the skills table above.
->
-> **AI operating model:** See `docs/AI-OPERATING-MODEL.md` for the canonical protocol covering prompts, agents, instructions, deferrals, and future hooks/skills/MCP adoption.
->
-> **Validation rule:** When changing `.github/copilot-instructions.md`, `.github/instructions/`, `.github/prompts/`, `.github/agents/`, or `.github/skills/`, run `pwsh scripts/validate-ai-customization.ps1` and keep the discovery surfaces in sync.
-
 ---
 
 ## 10. Key Documentation Files
@@ -400,12 +303,13 @@ This matrix shows which instructions auto-attach for common file locations:
 |------|-------|---------------|
 | `TROUBLESHOOTING-INDEX.md` | Root | Quick links for common GitHub App / OIDC / workflow errors |
 | `ARCHITECTURE.md` | Root | Binding tenant, payment identifier, migration, and test standard for future model creation |
-| `ARCHITECTURE-EVOLUTION.md` | Root | 14-phase roadmap: Phase 7 strict closeout verified, Phase 8 next 📅 |
+| `ARCHITECTURE-EVOLUTION.md` | Root | 14-phase roadmap: Phase 8.6 ✅ (Central Tenant Registry), Phase 8.7 next 📅 (Webhook Receiver) |
 | `docs/internal/AZURE-PROGRESS-EVALUATION.md` | docs/internal | Learning progress weeks 1–10, next-step guides |
 | `docs/AI-OPERATING-MODEL.md` | docs/ | Canonical protocol for shared AI customization and governance |
 | `docs/internal/DEFERRED-WORK-LOG.md` | docs/internal | Shared register for justified deferred work |
 | `docs/internal/branch-and-blueprint-strategy.md` | docs/internal | Snapshot tag/branch governance, two-layer template packaging, side-project bootstrap (ADR-018) |
 | `docs/architecture/decisions/ADR-018-blueprint-and-snapshot-strategy.md` | docs/architecture/decisions | Decision: tag+branch (Path C) snapshots + `dotnet new` NuGet template + GitHub template repo (Layer 1 + Layer 2) |
+| `docs/architecture/decisions/ADR-019-central-tenant-registry.md` | docs/architecture/decisions | Decision: `Tenant.PaymentProviderCode` as sole routing authority; `ITenantRegistry` resolver; ALL `PaymentProviders.IsActive = false` |
 | `docs/reference/quick-command-reference.md` | docs/ | Command cheat sheet for Azure, Git, Docker, GitHub App |
 | `.github/workflows/README.md` | Workflows | Workflow overview, secrets, path triggers |
 | `.github/workflows/README-AZURE-INITIAL-SETUP.md` | Workflows | Initial Setup workflow (Phase 0/1a/1b) |
@@ -428,15 +332,4 @@ This matrix shows which instructions auto-attach for common file locations:
 
 ## 11. Common Troubleshooting Patterns
 
-| Symptom | First place to check |
-|---------|---------------------|
-| Workflow exits with code 1 on GitHub App step | `TROUBLESHOOTING-INDEX.md` — check if `APP_ID`/`APP_PRIVATE_KEY` are present; `gh api /app` requires JWT, not installation token |
-| `AADSTS700016` during Azure login | Federated credential missing for branch — run `fix-federated-credential.ps1` |
-| `AADSTS700213` during Azure login | Federated credential missing for environment — run `Azure Initial Setup` workflow with `environment=all`. Bootstrap jobs include a `Diagnose Azure Login Failure` step that detects this automatically and prints remediation steps in the workflow summary. |
-| `DEPLOYMENT BLOCKED` in bootstrap | OIDC not configured — run `Azure Initial Setup` workflow with `environment=all` first |
-| API/UI deployment skipped after bootstrap failure | Deployment guard blocks dispatches when bootstrap fails — fix the bootstrap error first |
-| Secrets show ❌ Missing | Ensure workflow runs with correct environment (dev/staging/prod), not "all" |
-| Bootstrap infra fails | Check OIDC secrets are configured (`Azure Initial Setup` must run before `Azure Bootstrap & Deploy`) |
-| `APP_INSTALLATION_ID` errors | Not needed — auto-discovered; remove any manual configuration |
-| Branch/env mismatch error | Use `dev` branch for `dev` env, `staging` for `staging`, `main` for `prod`. |
-| What-if fails on Bicep | Run `validate-deployment.yml` independently to see full error output |
+See `TROUBLESHOOTING-INDEX.md` for symptom-to-remedy quick reference.

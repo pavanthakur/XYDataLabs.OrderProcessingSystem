@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.CQRS.Behaviors;
 
@@ -11,11 +12,13 @@ public sealed class CachingBehavior<TRequest, TResult> : IPipelineBehavior<TRequ
 
     private readonly IDistributedCache _cache;
     private readonly ILogger<CachingBehavior<TRequest, TResult>> _logger;
+    private readonly ITenantProvider _tenantProvider;
 
-    public CachingBehavior(IDistributedCache cache, ILogger<CachingBehavior<TRequest, TResult>> logger)
+    public CachingBehavior(IDistributedCache cache, ILogger<CachingBehavior<TRequest, TResult>> logger, ITenantProvider tenantProvider)
     {
         _cache = cache;
         _logger = logger;
+        _tenantProvider = tenantProvider;
     }
 
     public async Task<TResult> HandleAsync(TRequest request, Func<Task<TResult>> next, CancellationToken cancellationToken = default)
@@ -23,7 +26,11 @@ public sealed class CachingBehavior<TRequest, TResult> : IPipelineBehavior<TRequ
         if (request is not ICacheable cacheable)
             return await next();
 
-        var cacheKey = cacheable.CacheKey;
+        // Scope the cache key by tenant to prevent cross-tenant data leakage.
+        var cacheKey = _tenantProvider.HasTenantContext
+            ? $"tenant:{_tenantProvider.TenantCode}:{cacheable.CacheKey}"
+            : cacheable.CacheKey;
+
         var cached = await _cache.GetStringAsync(cacheKey, cancellationToken);
 
         if (cached is not null)

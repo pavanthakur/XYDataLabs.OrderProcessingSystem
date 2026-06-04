@@ -17,6 +17,9 @@ param(
     [string]$OpenPayMerchantId,
 
     [Parameter(Mandatory=$false)]
+    [string]$OpenPayPublicKey,
+
+    [Parameter(Mandatory=$false)]
     [string]$OpenPayPrivateKey,
 
     [Parameter(Mandatory=$false)]
@@ -27,6 +30,12 @@ param(
 
     [Parameter(Mandatory=$false)]
     [string]$OpenPayRedirectUrl,
+
+    [Parameter(Mandatory=$false)]
+    [string]$RazorpayMerchantId,
+
+    [Parameter(Mandatory=$false)]
+    [string]$RazorpayPrivateKey,
 
     [Parameter(Mandatory=$false)]
     [string]$ApiHttpsCertPassword,
@@ -225,8 +234,8 @@ try {
     }
     Write-Host ""
     
-    # 1. Add OpenPay and HTTPS certificate secrets
-    Write-Host "🔑 [1/3] Adding OpenPay and HTTPS certificate secrets..." -ForegroundColor Cyan
+    # 1. Add payment provider (OpenPay + Razorpay) and HTTPS certificate secrets
+    Write-Host "🔑 [1/4] Adding payment provider (OpenPay + Razorpay) and HTTPS certificate secrets..." -ForegroundColor Cyan
 
     if ([string]::IsNullOrWhiteSpace($OpenPayMerchantId)) {
         Write-Error "❌ OpenPayMerchantId is required and was not provided.`n  • Local invocation: pass -OpenPayMerchantId <value>`n  • Azure bootstrap: add OPENPAY_MERCHANT_ID to GitHub Settings → Secrets → Actions and re-run bootstrap."
@@ -238,8 +247,23 @@ try {
         exit 1
     }
 
+    if ([string]::IsNullOrWhiteSpace($OpenPayPublicKey)) {
+        Write-Error "❌ OpenPayPublicKey is required and was not provided.`n  • Local invocation: pass -OpenPayPublicKey <value>`n  • Azure bootstrap: add OPENPAY_PUBLIC_KEY to GitHub Settings → Environments and re-run bootstrap."
+        exit 1
+    }
+
     if ([string]::IsNullOrWhiteSpace($OpenPayDeviceSessionId)) {
         Write-Error "❌ OpenPayDeviceSessionId is required and was not provided.`n  • Local invocation: pass -OpenPayDeviceSessionId <value>`n  • Azure bootstrap: add OPENPAY_DEVICE_SESSION_ID to GitHub Settings → Secrets → Actions and re-run bootstrap."
+        exit 1
+    }
+
+    if ([string]::IsNullOrWhiteSpace($RazorpayMerchantId)) {
+        Write-Error "❌ RazorpayMerchantId is required and was not provided.`n  • Local invocation: pass -RazorpayMerchantId <value>`n  • Azure bootstrap: add RAZORPAY_MERCHANT_ID to GitHub Settings → Environments and re-run bootstrap."
+        exit 1
+    }
+
+    if ([string]::IsNullOrWhiteSpace($RazorpayPrivateKey)) {
+        Write-Error "❌ RazorpayPrivateKey is required and was not provided.`n  • Local invocation: pass -RazorpayPrivateKey <value>`n  • Azure bootstrap: add RAZORPAY_PRIVATE_KEY to GitHub Settings → Environments and re-run bootstrap."
         exit 1
     }
 
@@ -263,10 +287,19 @@ try {
 
     $secretMap = [ordered]@{
         'OpenPay--MerchantId' = $OpenPayMerchantId
+        'OpenPay--PublicKey' = $OpenPayPublicKey
         'OpenPay--PrivateKey' = $OpenPayPrivateKey
+        'PaymentProviders--TenantA--OpenPay--PrivateKey' = $OpenPayPrivateKey
+        'PaymentProviders--TenantB--OpenPay--PrivateKey' = $OpenPayPrivateKey
+        'PaymentProviders--TenantC--OpenPay--PrivateKey' = $OpenPayPrivateKey
         'OpenPay--DeviceSessionId' = $OpenPayDeviceSessionId
         'OpenPay--IsProduction' = $OpenPayIsProduction.ToString().ToLowerInvariant()
         'OpenPay--RedirectUrl' = $OpenPayRedirectUrl
+        'Razorpay--MerchantId' = $RazorpayMerchantId
+        'Razorpay--PrivateKey' = $RazorpayPrivateKey
+        'PaymentProviders--TenantA--Razorpay--PrivateKey' = $RazorpayPrivateKey
+        'PaymentProviders--TenantB--Razorpay--PrivateKey' = $RazorpayPrivateKey
+        'PaymentProviders--TenantC--Razorpay--PrivateKey' = $RazorpayPrivateKey
         'ApiSettings--API--https--CertPassword' = $ApiHttpsCertPassword
         'ApiSettings--UI--https--CertPassword' = $UiHttpsCertPassword
     }

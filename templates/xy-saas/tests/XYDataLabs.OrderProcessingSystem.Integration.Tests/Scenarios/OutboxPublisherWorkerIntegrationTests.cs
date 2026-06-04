@@ -24,7 +24,7 @@ public sealed class OutboxPublisherWorkerIntegrationTests : IAsyncLifetime
 
     public Task InitializeAsync()
     {
-        _factory = new IntegrationTestWebAppFactory(_fixture.ConnectionString);
+        _factory = new IntegrationTestWebAppFactory(_fixture.ConnectionString, enableBackgroundWorkers: true);
         _ = _factory.CreateClient(); // Force host initialization
         return Task.CompletedTask;
     }
@@ -98,7 +98,8 @@ public sealed class OutboxPublisherWorkerIntegrationTests : IAsyncLifetime
     {
         var firstFactory = new ServiceOverrideIntegrationTestFactory(
             _fixture.ConnectionString,
-            services => services.AddScoped<IEventPublisher, ThrowingEventPublisher>());
+            services => services.AddScoped<IEventPublisher, ThrowingEventPublisher>(),
+            enableBackgroundWorkers: true);
         _ = firstFactory.CreateClient();
 
         try
@@ -134,7 +135,7 @@ public sealed class OutboxPublisherWorkerIntegrationTests : IAsyncLifetime
 
             await firstFactory.DisposeAsync();
 
-            await using var restartedFactory = new IntegrationTestWebAppFactory(_fixture.ConnectionString);
+            await using var restartedFactory = new IntegrationTestWebAppFactory(_fixture.ConnectionString, enableBackgroundWorkers: true);
             _ = restartedFactory.CreateClient();
 
             var replayedMessage = await WaitForProcessedMessageAsync(restartedFactory, tenant.ToTenantContext(), messageId);

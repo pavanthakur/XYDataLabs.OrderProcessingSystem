@@ -146,6 +146,19 @@ public class MultiTenantSchemaTests
     }
 
     [Fact]
+    public void Tenant_Should_Have_PaymentProviderCode_Column()
+    {
+        using var context = CreateDbContext();
+        var tenantEntity = context.Model.FindEntityType(typeof(Tenant));
+
+        tenantEntity.Should().NotBeNull();
+        var property = tenantEntity!.FindProperty(nameof(Tenant.PaymentProviderCode));
+        property.Should().NotBeNull(because: "PaymentProviderCode is the authoritative payment routing field (ADR-019)");
+        property!.IsNullable.Should().BeTrue(because: "PaymentProviderCode is nullable — null means not yet configured");
+        property.GetMaxLength().Should().Be(50);
+    }
+
+    [Fact]
     public void TenantRegistryDbContext_Tenant_Should_Not_Have_Global_Query_Filter()
     {
         var options = new DbContextOptionsBuilder<TenantRegistryDbContext>()

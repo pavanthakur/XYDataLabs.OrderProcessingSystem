@@ -38,6 +38,17 @@ These rules are binding for all tenant, payment, DTO, migration, middleware, and
 - `IsSharedPool` is derived from `TenantTier == SharedPool`, NOT from connection string presence.
 - A Dedicated tenant without a provisioned connection string config entry is treated as unresolvable (fail-loud).
 
+## Tenant registry (seed state — authoritative routing, ADR-019)
+| TenantCode | Tier | Active provider | Notes |
+|---|---|---|---|
+| TenantA | SharedPool | OpenPay | Razorpay seeded inactive; `Use3DSecure=false` for Razorpay (popup/SAQ A) |
+| TenantB | SharedPool | Razorpay | OpenPay seeded inactive |
+| TenantC | Dedicated | OpenPay | Separate DB; requires `DedicatedTenantConnectionStrings:TenantC` in config |
+- `Tenant.PaymentProviderCode` (`nvarchar(50)`, nullable) is the **only** authoritative routing field — set by migration/ops script, never by code.
+- `ITenantRegistry.FindByCode(string)` is the sync resolver at payment dispatch time.
+- `PaymentProvider.IsActive` is kept but routing-inert after Phase 8.6.
+- Ops change: `UPDATE Tenants SET PaymentProviderCode = '...' WHERE Code = '...'` — no PR needed.
+
 ## Tenant resolution pipeline (circular dependency rule)
 - `EntityFrameworkTenantResolver` MUST use `TenantRegistryDbContext`, never `OrderProcessingSystemDbContext`.
 - `TenantRegistryDbContext` always uses the shared/admin connection string from configuration.
@@ -74,6 +85,14 @@ These rules are binding for all tenant, payment, DTO, migration, middleware, and
 - `AttemptOrderId` is provider/callback/technical only.
 - `PaymentTraceId` is internal-only and must not appear in customer-facing DTOs or UI.
 
+## Column limits (violating these causes HTTP 500 on callback)
+| Entity | Column | Limit |
+|---|---|---|
+| `TransactionStatusHistory` | `Notes` | 255 |
+| `PaymentAttemptHistory` | `Notes` | 512 |
+| `PaymentAttempt` | `LastErrorMessage` | 512 |
+- `ConfirmPaymentStatusCommandHandler` must truncate text to these limits before persisting.
+
 ## Card data handling (PCI DSS 3.2)
 - `CardTransaction` must never store raw PAN or CVV.
 - `CreditCardCvv2` was removed — CVV must not be persisted under any circumstances.
@@ -85,8 +104,8 @@ These rules are binding for all tenant, payment, DTO, migration, middleware, and
 ## Per-tenant payment flags
 - `PaymentProvider.Use3DSecure` controls whether 3D Secure is enabled per tenant. It is a `bool` column (default `true`) on the `PaymentProvider` entity.
 - This is a business rule per tenant, not an infrastructure/global setting. It must NOT be in `OpenPayConfig` or appsettings JSON.
-- `ProcessPaymentCommandHandler` reads `Use3DSecure` from the tenant-specific `PaymentProvider` row via `AppMasterData.GetProviderByNameForTenant()`.
-- All tenants seed with `Use3DSecure = true` by default (from the `StartupSeedTenant` record default). Override per-tenant at runtime via a DB UPDATE or by adding a seed-data migration.
+- `ProcessPaymentCommandHandler` reads `Use3DSecure` from `_paymentProvider.Use3DSecure` — the `PaymentProvider` entity resolved by `TenantPaymentProviderResolver` via `AppMasterData.GetProviderByTypeForTenant()`.
+- Seed defaults come from the `Use3DSecureSeedDefaults` dictionary in `DbInitializer` (not from any record field). Default is `true` for all except `(TenantA, Razorpay) = false`. Re-seed never overwrites existing DB values.
 - Future per-tenant payment flags (e.g. per-tenant MerchantId) should follow the same pattern: column on `PaymentProvider`, not appsettings.
 
 ## ConfigureTenantOwnership pattern

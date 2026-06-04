@@ -31,13 +31,7 @@ dotnet test tests/XYDataLabs.OrderProcessingSystem.Architecture.Tests --no-build
 **Secret / credential scan (no hardcoded values in source):**
 ```powershell
 cd Q:\GIT\TestAppXY_OrderProcessingSystem
-$patterns = @('password\s*=\s*"[^<{]', 'Password\s*=\s*"[^<{]', 'secret\s*=\s*"', 'connectionstring.*password=(?!.*\$\{)', 'privatekey\s*=\s*"')
-$extensions = '*.cs','*.json','*.yml','*.yaml','*.ps1','*.bicep'
-$hits = Get-ChildItem -Recurse -Include $extensions -Exclude '*.example','*.template' |
-    Select-String -Pattern ($patterns -join '|') -CaseSensitive:$false |
-    Where-Object { $_.Path -notmatch '\\(obj|bin|publish|node_modules)\\' }
-if ($hits) { $hits | Format-Table Path, LineNumber, Line -AutoSize; Write-Host "SECRET SCAN: $($hits.Count) potential hit(s) — review each" -ForegroundColor Red }
-else { Write-Host 'SECRET SCAN: clean' -ForegroundColor Green }
+pwsh .\scripts\validate-secret-hygiene.ps1
 ```
 
 **Automation workspace validation (run when the task touches `automation/`, `/XYDataLabs-payment-automation`, verification-adapter contracts, or payment automation docs):**
@@ -124,3 +118,5 @@ Report results in this table:
 | Guardrails | ✅ / ⚠️ gaps fixed / ❌ deferred | |
 | Automation | ✅ / ⚠️ gaps fixed / ❌ deferred | |
 | Copilot context | ✅ / ⚠️ gaps fixed / ❌ deferred | |
+
+After printing the table: update `/memories/repo/active-work.md` — set `## Last Session` to today's date + what was just completed, and refresh `## Pending / Next Actions` with the next concrete task.

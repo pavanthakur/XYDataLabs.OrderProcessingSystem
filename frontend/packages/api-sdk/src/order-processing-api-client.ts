@@ -3,6 +3,7 @@ import type {
   CreateOrderRequest,
   CustomerSummary,
   OrderDetail,
+  PaymentConfiguration,
   PaymentStatusDetails,
   PaymentStatusLookupRequest,
   PaymentResult,
@@ -42,6 +43,12 @@ export class OrderProcessingApiClient {
 
   async getRuntimeConfiguration(requestedTenantCode?: string): Promise<RuntimeConfiguration> {
     return this.requestJson<RuntimeConfiguration>("/api/v1/Info/runtime-configuration", {
+      headers: this.buildHeaders(requestedTenantCode)
+    });
+  }
+
+  async getPaymentConfiguration(requestedTenantCode?: string): Promise<PaymentConfiguration> {
+    return this.requestJson<PaymentConfiguration>("/api/v1/Info/payment-configuration", {
       headers: this.buildHeaders(requestedTenantCode)
     });
   }

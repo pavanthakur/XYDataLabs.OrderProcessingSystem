@@ -28,8 +28,7 @@ namespace XYDataLabs.OpenPayAdapter
         {
             services.AddSingleton<IValidateOptions<OpenPayConfig>, OpenPayConfigValidator>();
             services.AddOptions<OpenPayConfig>()
-                .Bind(configuration.GetSection("OpenPay"))
-                .ValidateOnStart();
+                .Bind(configuration.GetSection("OpenPay"));
 
             // When RedirectUrl is not explicitly configured (e.g. Docker), build it
             // dynamically from ApiSettings:API using the active profile's host and port.
@@ -64,6 +63,30 @@ namespace XYDataLabs.OpenPayAdapter
                 }
             });
 
+            // Sync the auto-resolved redirect URL to PaymentGatewayRequestDefaults so that
+            // the ValidateOnStart check succeeds when config ships RedirectUrl blank and
+            // relies on the same dynamic fallback from ApiSettings.
+            services.PostConfigure<PaymentGatewayRequestDefaults>(defaults =>
+            {
+                if (!string.IsNullOrWhiteSpace(defaults.RedirectUrl)
+                    && Uri.TryCreate(defaults.RedirectUrl, UriKind.Absolute, out _))
+                {
+                    return; // Already set via user-secrets, Key Vault, or env var
+                }
+
+                var useHttps = string.Equals(
+                    configuration["USE_HTTPS"], "true", StringComparison.OrdinalIgnoreCase);
+                var profile = useHttps ? "https" : "http";
+                var host = configuration[$"ApiSettings:API:{profile}:Host"] ?? "localhost";
+                var portStr = configuration[$"ApiSettings:API:{profile}:Port"];
+                var scheme = useHttps ? "https" : "http";
+
+                if (int.TryParse(portStr, out var port) && port > 0)
+                {
+                    defaults.RedirectUrl = $"{scheme}://{host}:{port}/payment/callback";
+                }
+            });
+
             // Resilience pipeline for OpenPay SDK calls:
             //   • Retry 3×, exponential backoff + jitter (1s base) on OpenpayException / TimeoutException
             //   • Circuit breaker: open after 5 failures in 30 s; stays open 30 s
@@ -93,8 +116,13 @@ namespace XYDataLabs.OpenPayAdapter
                     });
             });
 
-            // Register OpenPay as both the current concrete adapter and the future keyed provider seam.
-            services.AddHttpClient<IOpenPayAdapterService, OpenPayAdapterService>();
+            // Register OpenPay as keyed provider — the unkeyed IPaymentProviderGateway
+            // factory in Application StartupHelper resolves the correct provider per tenant.
+            // OpenPayAdapterService uses the Openpay SDK which manages its own HTTP internally;
+            // it does not need a typed HttpClient and must be registered as a plain scoped service
+            // so keyed DI resolution can construct it via normal constructor injection.
+            services.AddScoped<IOpenPayAdapterService, OpenPayAdapterService>();
+            services.AddKeyedScoped<IPaymentProviderGateway, OpenPayPaymentGateway>(PaymentProviderTypes.OpenPay);
             services.AddKeyedScoped<IPaymentProviderAdapter, OpenPayAdapterService>(PaymentProviderTypes.OpenPay);
 
             // Register Serilog if not already registered

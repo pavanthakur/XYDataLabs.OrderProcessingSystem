@@ -10,6 +10,7 @@ import { buildRunPrefix } from "../support/customer-order-id.js";
 interface LocalMatrixOptions {
   targets: string[];
   tenantCodes: string[];
+  requestedProviders: string[];
   allowPartialExecution: boolean;
   dryRun: boolean;
   headless: boolean;
@@ -57,6 +58,7 @@ async function main(): Promise<void> {
     const run = await executePaymentAutomationRun({
       target,
       tenantCodes: options.tenantCodes,
+      requestedProviders: options.requestedProviders,
       allowPartialExecution: options.allowPartialExecution,
       dryRun: options.dryRun,
       headless: options.headless,
@@ -114,6 +116,7 @@ async function main(): Promise<void> {
 function parseCliOptions(argumentsList: string[]): LocalMatrixOptions {
   const targets: string[] = [];
   const tenantCodes: string[] = [];
+  const requestedProviders: string[] = [];
   let allowPartialExecution = false;
   let dryRun = false;
   let headless = true;
@@ -137,6 +140,15 @@ function parseCliOptions(argumentsList: string[]): LocalMatrixOptions {
           tenantCodes.push(argumentsList[index + 1]);
         }
         index += 1;
+        break;
+      case "--provider":
+        if (argumentsList[index + 1]) {
+          requestedProviders.push(argumentsList[index + 1]);
+        }
+        index += 1;
+        break;
+      case "--all-providers":
+        requestedProviders.push("OpenPay", "Razorpay");
         break;
       case "--allow-partial":
         allowPartialExecution = true;
@@ -170,6 +182,7 @@ function parseCliOptions(argumentsList: string[]): LocalMatrixOptions {
   return {
     targets: targets.length > 0 ? targets : ["local-http", "local-https"],
     tenantCodes,
+    requestedProviders,
     allowPartialExecution,
     dryRun,
     headless,

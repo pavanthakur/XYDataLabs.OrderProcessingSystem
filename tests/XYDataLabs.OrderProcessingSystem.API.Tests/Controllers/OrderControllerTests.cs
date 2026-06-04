@@ -47,6 +47,10 @@ namespace XYDataLabs.OrderProcessingSystem.API.Tests.Controllers
 
             // Act
             var result = await _orderController.CreateOrder(createOrderRequestDto, CancellationToken.None);
+
+            // Assert
+            var createdResult = Assert.IsType<CreatedAtActionResult>(result);
+            Assert.Equal(StatusCodes.Status201Created, createdResult.StatusCode);
         }
 
         [Fact]

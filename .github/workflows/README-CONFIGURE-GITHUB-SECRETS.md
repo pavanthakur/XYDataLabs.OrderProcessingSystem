@@ -52,7 +52,7 @@ Automates:
 - Environment secret configuration (Azure OIDC credentials for dev, staging, and prod)
 - Configuration validation
 
-> **Scope**: This workflow configures OIDC environment credentials and the `OIDC_SP_OBJECT_ID` secret only. It does **not** set OpenPay secrets. OpenPay secrets (`OPENPAY_MERCHANT_ID`, `OPENPAY_PRIVATE_KEY`, `OPENPAY_DEVICE_SESSION_ID`) must be added manually in GitHub Settings → Environments — workflow inputs are not a secure channel for credentials (they appear in plain text in workflow logs).
+> **Scope**: This workflow configures OIDC environment credentials and the `OIDC_SP_OBJECT_ID` secret only. It does **not** set payment provider secrets. Payment provider secrets (`OPENPAY_MERCHANT_ID`, `OPENPAY_PUBLIC_KEY`, `OPENPAY_PRIVATE_KEY`, `OPENPAY_DEVICE_SESSION_ID`, `RAZORPAY_MERCHANT_ID`, `RAZORPAY_PRIVATE_KEY`) must be added manually in GitHub Settings → Environments — workflow inputs are not a secure channel for credentials (they appear in plain text in workflow logs).
 
 ## Triggers
 

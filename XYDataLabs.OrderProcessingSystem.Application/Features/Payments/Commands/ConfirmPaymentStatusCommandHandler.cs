@@ -1,13 +1,16 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Openpay.Entities;
-using XYDataLabs.OpenPayAdapter;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
 using XYDataLabs.OrderProcessingSystem.Application.Utilities;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
 using static XYDataLabs.OrderProcessingSystem.Application.Utilities.AppMasterConstant;
 
@@ -15,26 +18,52 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Features.Payments.Command
 
 public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<ConfirmPaymentStatusCommand, Result<PaymentStatusDetailsDto>>
 {
+    private const int TransactionStatusHistoryNotesMaxLength = 255;
+    private const int PaymentAttemptHistoryNotesMaxLength = 512;
+    private const int PaymentAttemptLastErrorMaxLength = 512;
+
     private readonly IAppDbContext _context;
-    private readonly IOpenPayAdapterService _openPayAdapterService;
+    private readonly IPaymentProviderGateway _paymentProviderGateway;
+    private readonly IPaymentTelemetryTracker _paymentTelemetryTracker;
     private readonly ILogger<ConfirmPaymentStatusCommandHandler> _logger;
+    private readonly ITenantPaymentProviderConfigurationResolver _paymentProviderConfigurationResolver;
+    private readonly PaymentProvider _paymentProvider;
+    private readonly ITenantProvider _tenantProvider;
     private readonly TimeProvider _timeProvider;
 
     public ConfirmPaymentStatusCommandHandler(
         IAppDbContext context,
-        IOpenPayAdapterService openPayAdapterService,
+        IPaymentProviderGateway paymentProviderGateway,
+        IPaymentTelemetryTracker paymentTelemetryTracker,
         ILogger<ConfirmPaymentStatusCommandHandler> logger,
+        ITenantPaymentProviderConfigurationResolver paymentProviderConfigurationResolver,
+        ITenantPaymentProviderResolver paymentProviderResolver,
+        ITenantProvider tenantProvider,
         TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(context);
-        ArgumentNullException.ThrowIfNull(openPayAdapterService);
+        ArgumentNullException.ThrowIfNull(paymentProviderGateway);
+        ArgumentNullException.ThrowIfNull(paymentTelemetryTracker);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(paymentProviderConfigurationResolver);
+        ArgumentNullException.ThrowIfNull(paymentProviderResolver);
+        ArgumentNullException.ThrowIfNull(tenantProvider);
         ArgumentNullException.ThrowIfNull(timeProvider);
 
         _context = context;
-        _openPayAdapterService = openPayAdapterService;
+        _paymentProviderGateway = paymentProviderGateway;
+        _paymentTelemetryTracker = paymentTelemetryTracker;
         _logger = logger;
+        _paymentProviderConfigurationResolver = paymentProviderConfigurationResolver;
+        _paymentProvider = paymentProviderResolver.ResolveCurrentTenantProvider();
+        _tenantProvider = tenantProvider;
         _timeProvider = timeProvider;
+
+        if (!string.Equals(_paymentProvider.ProviderType, _paymentProviderGateway.ProviderType, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Configured payment provider '{_paymentProvider.ProviderType}' does not match the registered gateway '{_paymentProviderGateway.ProviderType}' for tenant payment reconciliation.");
+        }
     }
 
     public async Task<Result<PaymentStatusDetailsDto>> HandleAsync(ConfirmPaymentStatusCommand command, CancellationToken cancellationToken = default)
@@ -46,28 +75,6 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
             return Error.Create("Validation", "PaymentId is required.");
         }
 
-        _logger.LogInformation(
-            "Reconciling payment callback for payment {PaymentId} and attempt order {AttemptOrderId}",
-            command.PaymentId,
-            command.AttemptOrderId);
-
-        var transaction = await _context.CardTransactions
-            .OrderByDescending(item => item.Id)
-            .FirstOrDefaultAsync(
-                item => item.TransactionId == command.PaymentId
-                    || (!string.IsNullOrWhiteSpace(command.AttemptOrderId) && item.AttemptOrderId == command.AttemptOrderId),
-                cancellationToken);
-
-        if (transaction is null)
-        {
-            _logger.LogWarning(
-                "No local CardTransaction was found for payment {PaymentId} and order {OrderId}",
-                command.PaymentId,
-                command.AttemptOrderId);
-
-            return Error.NotFound;
-        }
-
         var payinLog = await _context.PayinLogs
             .OrderByDescending(item => item.Id)
             .FirstOrDefaultAsync(
@@ -75,7 +82,43 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
                     || (!string.IsNullOrWhiteSpace(command.AttemptOrderId) && item.AttemptOrderId == command.AttemptOrderId),
                 cancellationToken);
 
-        Charge? remoteCharge = null;
+        if (payinLog is null && !string.IsNullOrWhiteSpace(command.AttemptOrderId))
+        {
+            payinLog = await _context.PayinLogs
+                .OrderByDescending(item => item.Id)
+                .FirstOrDefaultAsync(
+                    item => item.OpenPayChargeId == command.AttemptOrderId,
+                    cancellationToken);
+        }
+
+        var localAttemptOrderId = FirstNonEmpty(payinLog?.AttemptOrderId, command.AttemptOrderId);
+
+        _logger.LogInformation(
+            "Reconciling payment callback for payment {PaymentId}, callback order {CallbackOrderId}, and local attempt order {LocalAttemptOrderId}",
+            command.PaymentId,
+            command.AttemptOrderId,
+            localAttemptOrderId);
+
+        var transaction = await _context.CardTransactions
+            .OrderByDescending(item => item.Id)
+            .FirstOrDefaultAsync(
+                item => item.TransactionId == command.PaymentId
+                    || (!string.IsNullOrWhiteSpace(command.AttemptOrderId) && item.TransactionId == command.AttemptOrderId)
+                    || (!string.IsNullOrWhiteSpace(localAttemptOrderId) && item.AttemptOrderId == localAttemptOrderId),
+                cancellationToken);
+
+        if (transaction is null)
+        {
+            _logger.LogWarning(
+                "No local CardTransaction was found for payment {PaymentId}, callback order {CallbackOrderId}, and local attempt order {LocalAttemptOrderId}",
+                command.PaymentId,
+                command.AttemptOrderId,
+                localAttemptOrderId);
+
+            return Error.NotFound;
+        }
+
+        PaymentGatewayChargeResult? remoteCharge = null;
         var remoteStatusConfirmed = false;
         var callbackPayloadReceived = (command.CallbackParameters?.Count ?? 0) > 0
             || !string.IsNullOrWhiteSpace(command.CallbackStatus)
@@ -83,16 +126,17 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
 
         try
         {
-            remoteCharge = await _openPayAdapterService.GetChargeAsync(command.PaymentId, transaction.TransactionCustomerId);
+            remoteCharge = await _paymentProviderGateway.GetChargeAsync(command.PaymentId, transaction.TransactionCustomerId, cancellationToken);
             remoteStatusConfirmed = true;
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Remote OpenPay status lookup failed for payment {PaymentId}", command.PaymentId);
+            _logger.LogWarning(ex, "Remote {PaymentProviderName} status lookup failed for payment {PaymentId}", _paymentProvider.Name, command.PaymentId);
         }
 
         var resolvedStatus = NormalizeStatus(remoteCharge?.Status)
             ?? NormalizeStatus(command.CallbackStatus)
+            ?? InferStatusFromCallbackError(command.ErrorMessage)
             ?? NormalizeStatus(transaction.TransactionStatus)
             ?? "unknown";
 
@@ -105,6 +149,12 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
             transaction.IsThreeDSecureEnabled,
             callbackPayloadReceived,
             remoteStatusConfirmed);
+
+        var signatureValidationError = ValidateRazorpaySignatureIfRequired(command, transaction, payinLog, resolvedStatus);
+        if (signatureValidationError is not null)
+        {
+            return signatureValidationError;
+        }
 
         var now = _timeProvider.GetUtcNow().UtcDateTime;
         var callbackRecorded = await ReconcilePersistenceAsync(
@@ -127,34 +177,105 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
             remoteStatusConfirmed,
             callbackRecorded);
 
-        return new PaymentStatusDetailsDto
+        var paymentStatusDetails = new PaymentStatusDetailsDto
         {
             PaymentId = command.PaymentId,
             CustomerOrderId = transaction.CustomerOrderId,
             Status = resolvedStatus,
             StatusCategory = EnumHelper.ToStatusCategory(resolvedStatus),
-            StatusMessage = EnumHelper.ToStatusMessage(resolvedStatus, remoteStatusConfirmed),
+            StatusMessage = EnumHelper.ToStatusMessage(resolvedStatus, remoteStatusConfirmed, _paymentProvider.Name),
             IsSuccess = EnumHelper.IsSuccessStatus(resolvedStatus),
             IsPending = EnumHelper.IsPendingStatus(resolvedStatus),
             IsFailure = EnumHelper.IsFailureStatus(resolvedStatus),
             IsFinal = EnumHelper.IsFinalStatus(resolvedStatus),
             CallbackRecorded = callbackRecorded,
             RemoteStatusConfirmed = remoteStatusConfirmed,
-            StatusSource = remoteStatusConfirmed ? "openpay" : "database",
+            StatusSource = remoteStatusConfirmed ? ResolveStatusSource(_paymentProvider.ProviderType) : "database",
             ErrorMessage = resolvedErrorMessage,
             TransactionReferenceId = FirstNonEmpty(remoteCharge?.Authorization, transaction.TransactionReferenceId),
-            TransactionDate = NormalizeToUtc(remoteCharge?.CreationDate) ?? transaction.TransactionDate,
-            ThreeDSecureUrl = FirstNonEmpty(remoteCharge?.PaymentMethod?.Url, transaction.RedirectUrl),
+            TransactionDate = NormalizeToUtc(remoteCharge?.CreatedAt) ?? transaction.TransactionDate,
+            ThreeDSecureUrl = FirstNonEmpty(remoteCharge?.RedirectUrl, transaction.RedirectUrl),
             IsThreeDSecureEnabled = transaction.IsThreeDSecureEnabled,
             ThreeDSecureStage = resolvedThreeDSecureStage
         };
+
+        _paymentTelemetryTracker.Track(new PaymentTelemetryEvent
+        {
+            EventName = PaymentTelemetryEventNames.CallbackReconciled,
+            TenantCode = _tenantProvider.TenantCode,
+            CustomerOrderId = transaction.CustomerOrderId,
+            AttemptOrderId = FirstNonEmpty(command.AttemptOrderId, transaction.AttemptOrderId),
+            PaymentId = command.PaymentId,
+            PaymentTraceId = transaction.PaymentTraceId,
+            ProviderType = _paymentProvider.ProviderType,
+            PaymentStatus = paymentStatusDetails.Status,
+            StatusCategory = paymentStatusDetails.StatusCategory,
+            StatusSource = paymentStatusDetails.StatusSource,
+            ThreeDSecureStage = paymentStatusDetails.ThreeDSecureStage,
+            RemoteStatusConfirmed = remoteStatusConfirmed,
+            CallbackRecorded = callbackRecorded,
+            IsThreeDSecureEnabled = paymentStatusDetails.IsThreeDSecureEnabled,
+            ErrorMessage = paymentStatusDetails.ErrorMessage,
+        });
+
+        return paymentStatusDetails;
+    }
+
+    private Result<PaymentStatusDetailsDto>? ValidateRazorpaySignatureIfRequired(
+        ConfirmPaymentStatusCommand command,
+        Domain.Entities.CardTransaction transaction,
+        Domain.Entities.PayinLog? payinLog,
+        string resolvedStatus)
+    {
+        if (!string.Equals(_paymentProvider.ProviderType, PaymentProviderTypes.Razorpay, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (!EnumHelper.IsSuccessStatus(resolvedStatus))
+        {
+            return null;
+        }
+
+        if (command.CallbackParameters is null || !HasAnyCallbackValue(command.CallbackParameters, "razorpay_payment_id", "razorpay_order_id", "razorpay_signature"))
+        {
+            return null;
+        }
+
+        var callbackSignature = GetCallbackValue(command.CallbackParameters, "razorpay_signature");
+        if (string.IsNullOrWhiteSpace(callbackSignature))
+        {
+            return Error.Create("Validation", "Razorpay signature is required for successful payment confirmation.");
+        }
+
+        var storedOrderId = ResolveStoredRazorpayOrderId(transaction, payinLog);
+        if (string.IsNullOrWhiteSpace(storedOrderId))
+        {
+            return Error.Create("Validation", "Stored Razorpay order id is unavailable for signature verification.");
+        }
+
+        var callbackOrderId = GetCallbackValue(command.CallbackParameters, "razorpay_order_id");
+        if (!string.IsNullOrWhiteSpace(callbackOrderId)
+            && !string.Equals(callbackOrderId, storedOrderId, StringComparison.Ordinal))
+        {
+            return Error.Create("Validation", "Razorpay callback order id does not match the stored order id.");
+        }
+
+        var providerConfiguration = _paymentProviderConfigurationResolver.ResolveCurrentTenantConfiguration();
+        var generatedSignature = ComputeRazorpaySignature(storedOrderId, command.PaymentId, providerConfiguration.PrivateKey);
+        if (!FixedTimeEquals(generatedSignature, callbackSignature))
+        {
+            return Error.Create("Validation", "Razorpay signature verification failed.");
+        }
+
+        return null;
     }
 
     private async Task<bool> ReconcilePersistenceAsync(
         ConfirmPaymentStatusCommand command,
         Domain.Entities.CardTransaction transaction,
         Domain.Entities.PayinLog? payinLog,
-        Charge? remoteCharge,
+        PaymentGatewayChargeResult? remoteCharge,
         bool remoteStatusConfirmed,
         bool callbackPayloadReceived,
         string resolvedStatus,
@@ -174,7 +295,9 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
             && transaction.IsThreeDSecureEnabled
             && !isDirectStatusEntry;
         var callbackStage = EnumHelper.GetEnumDescription(ThreeDSecureStage.CallbackReceived);
-        var callbackStatus = NormalizeStatus(command.CallbackStatus) ?? transaction.TransactionStatus;
+        var callbackStatus = NormalizeStatus(command.CallbackStatus)
+            ?? InferStatusFromCallbackError(command.ErrorMessage)
+            ?? transaction.TransactionStatus;
         var callbackMatchesResolvedStage = shouldRecordCallbackStage
             && string.Equals(callbackStage, resolvedThreeDSecureStage, StringComparison.OrdinalIgnoreCase)
             && string.Equals(callbackStatus, resolvedStatus, StringComparison.OrdinalIgnoreCase);
@@ -190,7 +313,7 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
             transaction.AttemptOrderId,
             resolvedStatus,
             resolvedThreeDSecureStage);
-        var attemptOrderId = FirstNonEmpty(command.AttemptOrderId, transaction.AttemptOrderId);
+        var attemptOrderId = FirstNonEmpty(payinLog?.AttemptOrderId, command.AttemptOrderId, transaction.AttemptOrderId);
         var paymentAttempt = !string.IsNullOrWhiteSpace(attemptOrderId)
             ? await _context.PaymentAttempts
                 .FirstOrDefaultAsync(item => item.AttemptOrderId == attemptOrderId, cancellationToken)
@@ -201,15 +324,18 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
                 .ToListAsync(cancellationToken)
             : [];
         var resolvedAttemptStatus = ResolvePaymentAttemptStatus(resolvedStatus, remoteStatusConfirmed);
+        var auditMessage = BuildAuditMessage(command, remoteCharge, resolvedStatus, resolvedThreeDSecureStage, transaction.PaymentTraceId, _paymentProvider.Name);
+        var transactionStatusHistoryNotes = TruncateForPersistence(auditMessage, TransactionStatusHistoryNotesMaxLength);
+        var paymentAttemptHistoryNotes = TruncateForPersistence(auditMessage, PaymentAttemptHistoryNotesMaxLength);
         var paymentAttemptHistoryExists = paymentAttempt is not null
             && HasPaymentAttemptHistoryEntry(paymentAttemptHistories, resolvedAttemptStatus, resolvedStatus);
 
         transaction.TransactionStatus = resolvedStatus;
         transaction.IsTransactionSuccess = EnumHelper.IsSuccessStatus(resolvedStatus);
-        transaction.TransactionMessage = resolvedErrorMessage ?? BuildAuditMessage(command, remoteCharge, resolvedStatus, resolvedThreeDSecureStage, transaction.PaymentTraceId);
+        transaction.TransactionMessage = resolvedErrorMessage ?? auditMessage;
         transaction.TransactionReferenceId = FirstNonEmpty(remoteCharge?.Authorization, transaction.TransactionReferenceId);
-        transaction.TransactionDate = NormalizeToUtc(remoteCharge?.CreationDate) ?? transaction.TransactionDate;
-        transaction.RedirectUrl = FirstNonEmpty(remoteCharge?.PaymentMethod?.Url, transaction.RedirectUrl);
+        transaction.TransactionDate = NormalizeToUtc(remoteCharge?.CreatedAt) ?? transaction.TransactionDate;
+        transaction.RedirectUrl = FirstNonEmpty(remoteCharge?.RedirectUrl, transaction.RedirectUrl);
         transaction.ThreeDSecureStage = resolvedThreeDSecureStage;
         transaction.UpdatedBy = transaction.BillingCustomerId;
         transaction.UpdatedDate = now;
@@ -222,7 +348,7 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
                 TransactionId = transaction.Id,
                 AttemptOrderId = transaction.AttemptOrderId,
                 Status = callbackStatus,
-                Notes = $"Browser callback payload received for trace {transaction.PaymentTraceId}",
+                Notes = TruncateForPersistence($"Browser callback payload received for trace {transaction.PaymentTraceId}", TransactionStatusHistoryNotesMaxLength),
                 PaymentTraceId = transaction.PaymentTraceId,
                 ThreeDSecureStage = callbackStage,
                 IsThreeDSecureEnabled = transaction.IsThreeDSecureEnabled,
@@ -242,7 +368,7 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
                 TransactionId = transaction.Id,
                 AttemptOrderId = transaction.AttemptOrderId,
                 Status = resolvedStatus,
-                Notes = BuildAuditMessage(command, remoteCharge, resolvedStatus, resolvedThreeDSecureStage, transaction.PaymentTraceId),
+                Notes = transactionStatusHistoryNotes,
                 PaymentTraceId = transaction.PaymentTraceId,
                 ThreeDSecureStage = resolvedThreeDSecureStage,
                 IsThreeDSecureEnabled = transaction.IsThreeDSecureEnabled,
@@ -262,7 +388,7 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
             paymentAttempt.ProviderStatus = resolvedStatus;
             paymentAttempt.ProviderChargeId = FirstNonEmpty(remoteCharge?.Id, paymentAttempt.ProviderChargeId, command.PaymentId);
             paymentAttempt.ProviderReferenceId = FirstNonEmpty(remoteCharge?.Authorization, paymentAttempt.ProviderReferenceId);
-            paymentAttempt.LastErrorMessage = resolvedErrorMessage;
+            paymentAttempt.LastErrorMessage = TruncateForPersistence(resolvedErrorMessage, PaymentAttemptLastErrorMaxLength);
             paymentAttempt.UpdatedDate = now;
 
             if (!paymentAttemptHistoryExists)
@@ -274,7 +400,7 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
                     Status = resolvedAttemptStatus,
                     PaymentTraceId = paymentAttempt.PaymentTraceId,
                     ProviderStatus = resolvedStatus,
-                    Notes = BuildAuditMessage(command, remoteCharge, resolvedStatus, resolvedThreeDSecureStage, paymentAttempt.PaymentTraceId),
+                    Notes = paymentAttemptHistoryNotes,
                     TenantId = paymentAttempt.TenantId,
                     CreatedDate = now,
                 });
@@ -299,7 +425,7 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
                     PayinLogId = payinLog.Id,
                     PostInfo = callbackPayloadReceived ? JsonSerializer.Serialize(command.CallbackParameters) : null,
                     RespInfo = remoteCharge is not null ? JsonSerializer.Serialize(remoteCharge) : null,
-                    AdditionalInfo = BuildAuditMessage(command, remoteCharge, resolvedStatus, resolvedThreeDSecureStage, transaction.PaymentTraceId),
+                    AdditionalInfo = auditMessage,
                     PaymentTraceId = transaction.PaymentTraceId,
                     ThreeDSecureStage = resolvedThreeDSecureStage,
                     CreatedBy = transaction.BillingCustomerId,
@@ -312,7 +438,7 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
         return shouldRecordCallbackStage && (callbackHistoryExists || callbackHistoryAdded);
     }
 
-    private static string BuildAuditMessage(ConfirmPaymentStatusCommand command, Charge? remoteCharge, string resolvedStatus, string resolvedThreeDSecureStage, string paymentTraceId)
+    private static string BuildAuditMessage(ConfirmPaymentStatusCommand command, PaymentGatewayChargeResult? remoteCharge, string resolvedStatus, string resolvedThreeDSecureStage, string paymentTraceId, string providerDisplayName)
     {
         var messageParts = new List<string>
         {
@@ -328,7 +454,7 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
 
         if (!string.IsNullOrWhiteSpace(remoteCharge?.Status))
         {
-            messageParts.Add($"OpenPay status '{remoteCharge.Status}'");
+            messageParts.Add($"{providerDisplayName} status '{remoteCharge.Status}'");
         }
 
         if (!string.IsNullOrWhiteSpace(command.ErrorMessage))
@@ -338,7 +464,7 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
 
         if (!string.IsNullOrWhiteSpace(remoteCharge?.ErrorMessage))
         {
-            messageParts.Add($"OpenPay message '{remoteCharge.ErrorMessage}'");
+            messageParts.Add($"{providerDisplayName} message '{remoteCharge.ErrorMessage}'");
         }
 
         return string.Join("; ", messageParts);
@@ -347,9 +473,90 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
     private static string? NormalizeStatus(string? status)
         => EnumHelper.NormalizeOpenPayStatus(status);
 
+    private static string? InferStatusFromCallbackError(string? errorMessage)
+    {
+        return string.IsNullOrWhiteSpace(errorMessage)
+            ? null
+            : EnumHelper.GetEnumDescription(PaymentStatus.Failed);
+    }
+
     private static string? FirstNonEmpty(params string?[] values)
     {
         return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+    }
+
+    private static string? GetCallbackValue(IReadOnlyDictionary<string, string>? callbackParameters, params string[] keys)
+    {
+        if (callbackParameters is null)
+        {
+            return null;
+        }
+
+        foreach (var key in keys)
+        {
+            if (callbackParameters.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool HasAnyCallbackValue(IReadOnlyDictionary<string, string>? callbackParameters, params string[] keys)
+    {
+        return GetCallbackValue(callbackParameters, keys) is not null;
+    }
+
+    private static string? ResolveStoredRazorpayOrderId(Domain.Entities.CardTransaction transaction, Domain.Entities.PayinLog? payinLog)
+    {
+        foreach (var candidate in new[] { payinLog?.OpenPayChargeId, transaction.TransactionId })
+        {
+            if (!string.IsNullOrWhiteSpace(candidate)
+                && candidate.StartsWith("order_", StringComparison.OrdinalIgnoreCase))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private static string ComputeRazorpaySignature(string orderId, string paymentId, string secret)
+    {
+        var payload = $"{orderId}|{paymentId}";
+        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret));
+        var hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(payload));
+        return Convert.ToHexString(hash);
+    }
+
+    private static bool FixedTimeEquals(string expectedSignature, string actualSignature)
+    {
+        var expectedBytes = Encoding.UTF8.GetBytes(expectedSignature.Trim().ToUpperInvariant());
+        var actualBytes = Encoding.UTF8.GetBytes(actualSignature.Trim().ToUpperInvariant());
+
+        return expectedBytes.Length == actualBytes.Length
+            && CryptographicOperations.FixedTimeEquals(expectedBytes, actualBytes);
+    }
+
+    private static string? TruncateForPersistence(string? value, int maxLength)
+    {
+        if (string.IsNullOrEmpty(value) || value.Length <= maxLength)
+        {
+            return value;
+        }
+
+        return value[..maxLength];
+    }
+
+    private static string ResolveStatusSource(string providerType)
+    {
+        if (string.Equals(providerType, PaymentProviderTypes.OpenPay, StringComparison.OrdinalIgnoreCase))
+        {
+            return "openpay";
+        }
+
+        return providerType;
     }
 
     private static string ResolveThreeDSecureStage(string resolvedStatus, bool isThreeDSecureEnabled, bool callbackPayloadReceived, bool remoteStatusConfirmed)

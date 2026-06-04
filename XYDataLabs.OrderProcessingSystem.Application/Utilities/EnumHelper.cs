@@ -82,30 +82,30 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Utilities
             return "info";
         }
 
-        public static string ToStatusMessage(string? status, bool remoteStatusConfirmed)
+        public static string ToStatusMessage(string? status, bool remoteStatusConfirmed, string providerDisplayName)
         {
             if (IsSuccessStatus(status))
                 return remoteStatusConfirmed
-                    ? "Payment completed successfully and the final status was confirmed with OpenPay."
+                    ? $"Payment completed successfully and the final status was confirmed with {providerDisplayName}."
                     : "Payment completed successfully based on the latest local record.";
 
             if (IsPendingStatus(status))
                 return remoteStatusConfirmed
-                    ? "Payment is still pending issuer or 3D Secure completion according to OpenPay."
+                    ? $"Payment is still pending issuer or 3D Secure completion according to {providerDisplayName}."
                     : "Payment is still pending confirmation based on the latest local record.";
 
             if (IsFailedStatus(status))
                 return remoteStatusConfirmed
-                    ? "Payment failed and the final status was confirmed with OpenPay."
+                    ? $"Payment failed and the final status was confirmed with {providerDisplayName}."
                     : "Payment failed based on the latest local record.";
 
             if (IsCancelledStatus(status))
                 return remoteStatusConfirmed
-                    ? "Payment was cancelled and the final status was confirmed with OpenPay."
+                    ? $"Payment was cancelled and the final status was confirmed with {providerDisplayName}."
                     : "Payment was cancelled based on the latest local record.";
 
             return remoteStatusConfirmed
-                ? "Payment callback was received, but OpenPay returned a status that is not explicitly mapped yet."
+                ? $"Payment callback was received, but {providerDisplayName} returned a status that is not explicitly mapped yet."
                 : "Payment callback was received, but the final status could not be confirmed remotely.";
         }
     }

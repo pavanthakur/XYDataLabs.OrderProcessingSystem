@@ -68,10 +68,12 @@ if ($Runtime -eq 'local' -and $Environment -ne 'dev') {
 
 $repoRoot = Split-Path -Path $PSScriptRoot -Parent
 $dateTag = (Get-Date).ToString('yyyyMMdd')
+$yesterdayDateTag = (Get-Date).AddDays(-1).ToString('yyyyMMdd')
 $envTag = if ($Runtime -eq 'local') { 'dev' } else { $Environment }
 $runtimeTag = if ($Runtime -eq 'docker') { 'dock' } else { 'local' }
 $logDirectory = Join-Path $repoRoot 'logs'
-$apiLogPattern = "webapi-$envTag-$runtimeTag-$Profile-$dateTag*.log"
+$apiLogPatternToday = "webapi-$envTag-$runtimeTag-$Profile-$dateTag*.log"
+$apiLogPatternYesterday = "webapi-$envTag-$runtimeTag-$Profile-$yesterdayDateTag*.log"
 $envLocalPath = Join-Path $repoRoot 'Resources\Docker\.env.local'
 
 $sharedDbName = if ($Runtime -eq 'local') {
@@ -367,6 +369,8 @@ function Convert-ApiLogLinesToEvents {
                         RunPrefix = $runPrefix
                         ResolvedRunPrefix = $runPrefix
                         ChargeId = $chargeId
+                    IsThreeDSecureEnabled = [bool] $data.isThreeDSecureEnabled
+                    ThreeDSecureStage = [string] $data.threeDSecureStage
                         Message = $line
                         EventType = 'response'
                     })
@@ -448,9 +452,18 @@ if (-not (Test-Path $logDirectory)) {
     throw "API log directory not found: $logDirectory"
 }
 
-$apiLogFiles = @(Get-ChildItem -Path $logDirectory -Filter $apiLogPattern -File -ErrorAction SilentlyContinue | Sort-Object Name)
+$apiLogFiles = @(
+    Get-ChildItem -Path $logDirectory -Filter $apiLogPatternToday -File -ErrorAction SilentlyContinue
+    Get-ChildItem -Path $logDirectory -Filter $apiLogPatternYesterday -File -ErrorAction SilentlyContinue
+)
+if ($null -ne $apiLogFiles) {
+    $apiLogFiles = @($apiLogFiles | Sort-Object Name -Unique)
+} else {
+    $apiLogFiles = @()
+}
+
 if ($apiLogFiles.Count -eq 0) {
-    throw "API log files not found for pattern '$apiLogPattern' in $logDirectory"
+    throw "API log files not found for patterns '$apiLogPatternToday' or '$apiLogPatternYesterday' in $logDirectory"
 }
 
 $apiLogPaths = @($apiLogFiles | Select-Object -ExpandProperty FullName)
@@ -636,7 +649,6 @@ if ($expectedOrdersByTenant.Count -eq 0) {
     }
 }
 
-$allDbChargeIds = @(@($q2Shared | Select-Object -ExpandProperty ChargeId) + @($q2TenantC | Select-Object -ExpandProperty ChargeId))
 $matchedUiEventKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
 $usedFallbackUiEventKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
 
@@ -692,11 +704,25 @@ $chargeCorrelation = @(
             $q2Shared | Where-Object ChargeId -eq $chargeEvent.ChargeId | Select-Object -First 1
         }
 
+        if ($null -eq $dbRow -and -not [string]::IsNullOrWhiteSpace($chargeEvent.ResolvedCustomerOrderId)) {
+            $dbRow = if ($chargeEvent.Tenant -eq 'TenantC') {
+                $q2TenantC | Where-Object CustomerOrderId -eq $chargeEvent.ResolvedCustomerOrderId | Select-Object -First 1
+            }
+            else {
+                $q2Shared |
+                    Where-Object {
+                        $_.Tenant -eq $chargeEvent.Tenant -and
+                        $_.CustomerOrderId -eq $chargeEvent.ResolvedCustomerOrderId
+                    } |
+                    Select-Object -First 1
+            }
+        }
+
         [PSCustomObject] @{
             ChargeId = $chargeEvent.ChargeId
             Tenant = $chargeEvent.Tenant
             CustomerOrderId = $chargeEvent.ResolvedCustomerOrderId
-            InDb = ($allDbChargeIds -contains $chargeEvent.ChargeId)
+            InDb = ($null -ne $dbRow)
             DbStatus = if ($null -ne $dbRow) { [string] $dbRow.Status } else { '' }
             DbStage = if ($null -ne $dbRow) { [string] $dbRow.ThreeDSecureStage } else { '' }
             ThreeDSEnabled = $threeDsByTenant[$chargeEvent.Tenant]
@@ -719,9 +745,94 @@ else {
 $expectedTenantARows = if ($expectedOrdersByTenant.ContainsKey('TenantA')) { $expectedOrdersByTenant['TenantA'].Count * 2 } else { 0 }
 $expectedTenantBRows = if ($expectedOrdersByTenant.ContainsKey('TenantB')) { $expectedOrdersByTenant['TenantB'].Count * 2 } else { 0 }
 $expectedTenantCRows = if ($expectedOrdersByTenant.ContainsKey('TenantC')) { $expectedOrdersByTenant['TenantC'].Count * 2 } else { 0 }
-$expectedTenantASteps = if ($expectedOrdersByTenant.ContainsKey('TenantA')) { $expectedOrdersByTenant['TenantA'].Count * ($(if ($threeDsByTenant['TenantA'] -eq 1) { 4 } else { 2 })) } else { 0 }
-$expectedTenantBSteps = if ($expectedOrdersByTenant.ContainsKey('TenantB')) { $expectedOrdersByTenant['TenantB'].Count * ($(if ($threeDsByTenant['TenantB'] -eq 1) { 4 } else { 2 })) } else { 0 }
-$expectedTenantCSteps = if ($expectedOrdersByTenant.ContainsKey('TenantC')) { $expectedOrdersByTenant['TenantC'].Count * ($(if ($threeDsByTenant['TenantC'] -eq 1) { 4 } else { 2 })) } else { 0 }
+
+function Get-ExpectedHistoryStepsForTenant {
+    param(
+        [Parameter(Mandatory = $true)] [string] $TenantCode,
+        [Parameter(Mandatory = $true)] [string[]] $CustomerOrderIds,
+        [Parameter(Mandatory = $true)] [object[]] $RunApiEvents,
+        [Parameter(Mandatory = $true)] [object[]] $RunChargeEvents,
+        [Parameter(Mandatory = $true)] [object[]] $TransactionRows,
+        [Parameter(Mandatory = $true)] [object[]] $HistoryRows,
+        [Parameter(Mandatory = $true)] [hashtable] $TenantThreeDsByTenant
+    )
+
+    $expectedSteps = 0
+
+    foreach ($customerOrderId in $CustomerOrderIds) {
+        $orderApiEvents = @(
+            $RunApiEvents |
+                Where-Object {
+                    $_.Tenant -eq $TenantCode -and
+                    $_.ResolvedCustomerOrderId -eq $customerOrderId
+                }
+        )
+
+        $orderChargeEvents = @(
+            $RunChargeEvents |
+                Where-Object {
+                    $_.Tenant -eq $TenantCode -and
+                    $_.ResolvedCustomerOrderId -eq $customerOrderId
+                }
+        )
+
+        $orderTransactionRows = @(
+            $TransactionRows |
+                Where-Object {
+                    $_.CustomerOrderId -eq $customerOrderId -and
+                    (($TenantCode -eq 'TenantC') -or $_.Tenant -eq $TenantCode)
+                }
+        )
+
+        $orderHistoryRows = @(
+            $HistoryRows |
+                Where-Object {
+                    $_.CustomerOrderId -eq $customerOrderId -and
+                    (($TenantCode -eq 'TenantC') -or $_.Tenant -eq $TenantCode)
+                }
+        )
+
+        $runtimeThreeDsEnabled = $false
+        $hasOrderLevelRuntimeEvidence = ($orderApiEvents.Count -gt 0) -or ($orderTransactionRows.Count -gt 0) -or ($orderHistoryRows.Count -gt 0)
+
+        if (@($orderApiEvents | Where-Object { $_.PSObject.Properties.Name -contains 'IsThreeDSecureEnabled' -and $_.IsThreeDSecureEnabled }).Count -gt 0) {
+            $runtimeThreeDsEnabled = $true
+        }
+        elseif (@($orderTransactionRows | Where-Object { $_.ThreeDS -eq 1 -or [string] $_.ThreeDSecureStage -match 'redirect|challenge|authenticated' }).Count -gt 0) {
+            $runtimeThreeDsEnabled = $true
+        }
+        elseif (@($orderHistoryRows | Where-Object { $_.ThreeDS -eq 1 -or [string] $_.Stage -match 'redirect|challenge|authenticated' }).Count -gt 0) {
+            $runtimeThreeDsEnabled = $true
+        }
+        elseif (-not $hasOrderLevelRuntimeEvidence -and $TenantThreeDsByTenant.ContainsKey($TenantCode) -and $TenantThreeDsByTenant[$TenantCode] -eq 1) {
+            $runtimeThreeDsEnabled = $true
+        }
+
+        $uniqueChargeIds = @(
+            $orderChargeEvents |
+                Where-Object { -not [string]::IsNullOrWhiteSpace($_.ChargeId) } |
+                Select-Object -ExpandProperty ChargeId -Unique
+        )
+
+        $expectedSteps += $(if ($runtimeThreeDsEnabled) { 4 } else { 2 })
+
+        if (-not $runtimeThreeDsEnabled -and $uniqueChargeIds.Count -gt 1) {
+            $expectedSteps += ($uniqueChargeIds.Count - 1)
+        }
+    }
+
+    return $expectedSteps
+}
+
+$expectedTenantASteps = if ($expectedOrdersByTenant.ContainsKey('TenantA')) {
+    Get-ExpectedHistoryStepsForTenant -TenantCode 'TenantA' -CustomerOrderIds $expectedOrdersByTenant['TenantA'] -RunApiEvents $selectedApiEvents -RunChargeEvents $apiChargeEvents -TransactionRows $q2Shared -HistoryRows $q5Shared -TenantThreeDsByTenant $threeDsByTenant
+} else { 0 }
+$expectedTenantBSteps = if ($expectedOrdersByTenant.ContainsKey('TenantB')) {
+    Get-ExpectedHistoryStepsForTenant -TenantCode 'TenantB' -CustomerOrderIds $expectedOrdersByTenant['TenantB'] -RunApiEvents $selectedApiEvents -RunChargeEvents $apiChargeEvents -TransactionRows $q2Shared -HistoryRows $q5Shared -TenantThreeDsByTenant $threeDsByTenant
+} else { 0 }
+$expectedTenantCSteps = if ($expectedOrdersByTenant.ContainsKey('TenantC')) {
+    Get-ExpectedHistoryStepsForTenant -TenantCode 'TenantC' -CustomerOrderIds $expectedOrdersByTenant['TenantC'] -RunApiEvents $selectedApiEvents -RunChargeEvents $apiChargeEvents -TransactionRows $q2TenantC -HistoryRows $q5TenantC -TenantThreeDsByTenant $threeDsByTenant
+} else { 0 }
 
 $checks = [ordered] @{}
 $checks['Pre-flight TenantA 3DS'] = Convert-CheckResult -Expected 'configured' -Actual ([string] $threeDsByTenant['TenantA']) -Outcome $(if ($null -ne $threeDsByTenant['TenantA']) { 'PASS' } else { 'FAIL' })

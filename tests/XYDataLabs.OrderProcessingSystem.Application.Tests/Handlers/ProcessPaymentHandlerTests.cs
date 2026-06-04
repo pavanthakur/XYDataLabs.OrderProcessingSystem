@@ -1,12 +1,9 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Moq;
-using Openpay.Entities;
-using Openpay.Entities.Request;
-using XYDataLabs.OpenPayAdapter;
 using XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
-using OpenPayCustomer = Openpay.Entities.Customer;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers;
 
@@ -34,8 +31,8 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
         // the property EXISTS and is consistently identical across both records.
         CapturedCardTransactions.Should().HaveCount(2, "ProcessPayment creates one tokenization CT and one charge CT");
 
-        var tokenizationCt = CapturedCardTransactions.First();
-        var chargeCt = CapturedCardTransactions.Last();
+        var tokenizationCt = CapturedCardTransactions[0];
+        var chargeCt = CapturedCardTransactions[^1];
 
         // Both CTs must link to the same billing customer (regression for Fix 1 rename)
         tokenizationCt.BillingCustomerId.Should().Be(chargeCt.BillingCustomerId,
@@ -56,7 +53,7 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
     public async Task HandleAsync_CreationDatesFromOpenPay_ShouldBeStoredAsUtcOnBothCardTransactions()
     {
         // Arrange — simulate OpenPay returning DateTimeKind.Unspecified timestamps (their CDMx local time)
-        var openPayLocalTime = new DateTime(2024, 3, 1, 4, 0, 0); // unspecified / CDMx = UTC-6
+        var openPayLocalTime = new DateTime(2024, 3, 1, 4, 0, 0, DateTimeKind.Unspecified); // unspecified / CDMx = UTC-6
         SetupPaymentDbSets();
         SetupOpenPayHappyPath(cardDate: openPayLocalTime, chargeDate: openPayLocalTime);
         var handler = CreateProcessPaymentHandler();
@@ -95,14 +92,14 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
         await handler.HandleAsync(BuildProcessPaymentCommand());
 
         // Assert — CreateCustomerAsync must NOT be called when the customer is already in DB
-        MockOpenPayAdapter.Verify(
-            s => s.CreateCustomerAsync(It.IsAny<OpenPayCustomer>()),
+        MockPaymentGateway.Verify(
+            s => s.CreateCustomerAsync(It.IsAny<PaymentGatewayCreateCustomerRequest>(), It.IsAny<CancellationToken>()),
             Times.Never,
-            "CreateCustomerAsync in OpenPay must be skipped for repeat customers");
+            "CreateCustomerAsync in the payment gateway must be skipped for repeat customers");
 
         // CreateCardTokenAsync and CreateChargeAsync should still run
-        MockOpenPayAdapter.Verify(s => s.CreateCardTokenAsync(It.IsAny<Card>()), Times.Once);
-        MockOpenPayAdapter.Verify(s => s.CreateChargeAsync(It.IsAny<ChargeRequest>()), Times.Once);
+        MockPaymentGateway.Verify(s => s.CreateCardTokenAsync(It.IsAny<PaymentGatewayCreateCardTokenRequest>(), It.IsAny<CancellationToken>()), Times.Once);
+        MockPaymentGateway.Verify(s => s.CreateChargeAsync(It.IsAny<PaymentGatewayCreateChargeRequest>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -174,7 +171,7 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
 
         // Assert — charge CT (second) must reflect 3DS OFF
         CapturedCardTransactions.Should().HaveCount(2);
-        var chargeCt = CapturedCardTransactions.Last();
+        var chargeCt = CapturedCardTransactions[^1];
         chargeCt.IsThreeDSecureEnabled.Should().BeFalse(
             because: "the tenant's PaymentProvider has Use3DSecure = false");
         chargeCt.ThreeDSecureStage.Should().Be("not_applicable",
@@ -200,22 +197,22 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
         // For 3DS=0 there is no subsequent ConfirmPaymentStatus call, so the CT row is the only
         // opportunity to persist the reference ID returned by OpenPay.
         CapturedCardTransactions.Should().HaveCount(2);
-        var chargeCt = CapturedCardTransactions.Last();
+        var chargeCt = CapturedCardTransactions[^1];
         chargeCt.TransactionReferenceId.Should().Be("auth-ref-001",
             because: "for non-3DS payments the Authorization from the charge response must be " +
                      "written to CardTransactions.TransactionReferenceId at charge creation time");
     }
 
     [Fact]
-    public async Task HandleAsync_WhenOpenPayChargeFails_ShouldDeactivateOrphanedPaymentMethod()
+    public async Task HandleAsync_WhenProviderChargeFails_ShouldDeactivateOrphanedPaymentMethod()
     {
         // Arrange — fail at charge creation (after PaymentMethod has been persisted)
         SetupPaymentDbSets();
 
         // Customer creation succeeds so paymentMethod variable is set before the exception
-        MockOpenPayAdapter
-            .Setup(s => s.CreateCustomerAsync(It.IsAny<OpenPayCustomer>()))
-            .ThrowsAsync(new Exception("OpenPay unavailable"));
+        MockPaymentGateway
+            .Setup(s => s.CreateCustomerAsync(It.IsAny<PaymentGatewayCreateCustomerRequest>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Payment provider unavailable"));
 
         // Capture Update calls on PaymentMethods
         Domain.Entities.PaymentMethod? deactivatedPm = null;
@@ -245,5 +242,97 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
             db => db.SaveChangesAsync(CancellationToken.None),
             Times.AtLeastOnce,
             "deactivation SaveChangesAsync must use CancellationToken.None so it is not cancelled");
+    }
+
+    // ------------------------------------------------------------------ Provider-aware retry classification
+
+    [Fact]
+    public async Task HandleAsync_WhenCustomerActionException_ShouldMarkAttemptAsFailed_NotReconciliation()
+    {
+        // Arrange — gateway throws PaymentProviderCustomerActionException (card declined, insufficient funds)
+        SetupPaymentDbSets();
+
+        MockPaymentGateway
+            .Setup(s => s.CreateCustomerAsync(It.IsAny<PaymentGatewayCreateCustomerRequest>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new PaymentProviderCustomerActionException("Card declined by issuer"));
+
+        var handler = CreateProcessPaymentHandler();
+
+        // Act
+        var act = () => handler.HandleAsync(BuildProcessPaymentCommand());
+        await act.Should().ThrowAsync<InvalidOperationException>();
+
+        // Assert — attempt must be terminal Failed, not UnknownNeedsReconciliation
+        CapturedPaymentAttempts.Should().ContainSingle();
+        CapturedPaymentAttempts.Single().Status
+            .Should().Be(PaymentAttemptStatus.Failed,
+                because: "a definitive customer-action failure must mark the attempt as Failed " +
+                         "with no reconciliation required");
+    }
+
+    [Fact]
+    public async Task HandleAsync_WhenGenericProviderException_ShouldMarkAttemptAsUnknownForReconciliation()
+    {
+        // Arrange — gateway throws a non-customer-action exception (timeout, network error, etc.)
+        SetupPaymentDbSets();
+
+        MockPaymentGateway
+            .Setup(s => s.CreateCustomerAsync(It.IsAny<PaymentGatewayCreateCustomerRequest>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new TimeoutException("Provider gateway timeout"));
+
+        var handler = CreateProcessPaymentHandler();
+
+        // Act
+        var act = () => handler.HandleAsync(BuildProcessPaymentCommand());
+        await act.Should().ThrowAsync<InvalidOperationException>();
+
+        // Assert — attempt must go to reconciliation, not Failed
+        CapturedPaymentAttempts.Should().ContainSingle();
+        CapturedPaymentAttempts.Single().Status
+            .Should().Be(PaymentAttemptStatus.UnknownNeedsReconciliation,
+                because: "a transient or ambiguous exception must place the attempt in " +
+                         "UnknownNeedsReconciliation so the reconciliation worker can recover it");
+    }
+
+    [Fact]
+    public async Task HandleAsync_RazorpayHostedCheckout_ShouldAllowMissingCardFields()
+    {
+        SetupPaymentDbSets(providerType: PaymentProviderTypes.Razorpay);
+
+        MockPaymentGateway
+            .Setup(s => s.CreateCustomerAsync(It.IsAny<PaymentGatewayCreateCustomerRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PaymentGatewayCustomer("razorpay-cust-john", "John Doe", "john@example.com"));
+        MockPaymentGateway
+            .Setup(s => s.CreateCardTokenAsync(It.IsAny<PaymentGatewayCreateCardTokenRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PaymentGatewayCardToken("razorpay-token-pending", UtcNow));
+        MockPaymentGateway
+            .Setup(s => s.CreateChargeAsync(It.IsAny<PaymentGatewayCreateChargeRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PaymentGatewayChargeResult(
+                "order_test_001",
+                "created",
+                100m,
+                UtcNow,
+                null,
+                null,
+                "https://example.com/payment/callback?tenantCode=TenantA"));
+
+        var handler = CreateProcessPaymentHandler(use3DSecure: false, providerType: PaymentProviderTypes.Razorpay);
+
+        var result = await handler.HandleAsync(new XYDataLabs.OrderProcessingSystem.Application.Features.Payments.Commands.ProcessPaymentCommand(
+            Name: "John Doe",
+            Email: "john@example.com",
+            DeviceSessionId: string.Empty,
+            CardNumber: string.Empty,
+            ExpirationYear: string.Empty,
+            ExpirationMonth: string.Empty,
+            Cvv2: string.Empty,
+            CustomerOrderId: "ORDER-RZP-001",
+            ClientCallbackOrigin: null));
+
+        result.IsSuccess.Should().BeTrue();
+        CapturedCardTransactions.Should().HaveCount(2);
+        CapturedCardTransactions.Should().OnlyContain(transaction => transaction.CreditCardExpireYear == 0);
+        CapturedCardTransactions.Should().OnlyContain(transaction => transaction.CreditCardExpireMonth == 0);
+        CapturedCardTransactions.Should().OnlyContain(transaction => transaction.MaskedCardNumber == null);
     }
 }

@@ -1,9 +1,7 @@
 using Microsoft.EntityFrameworkCore.Query;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase
@@ -42,7 +40,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase
             return new TestAsyncEnumerable<TResult>(expression);
         }
 
-        public TResult ExecuteAsync<TResult>(Expression expression, CancellationToken cancellationToken)
+        public TResult ExecuteAsync<TResult>(Expression expression, CancellationToken cancellationToken = default)
         {
             var expectedResultType = typeof(TResult).GetGenericArguments()[0];
             var executionResult = typeof(IQueryProvider)
@@ -56,64 +54,5 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase
                 .MakeGenericMethod(expectedResultType)
                 .Invoke(null, new[] { executionResult }) ?? throw new InvalidOperationException("Task.FromResult invocation failed."));
         }
-    }
-
-    internal class TestAsyncEnumerable<T> : EnumerableQuery<T>, IAsyncEnumerable<T>, IQueryable<T>
-    {
-        public TestAsyncEnumerable(IEnumerable<T> enumerable)
-            : base(enumerable)
-        {
-        }
-
-        public TestAsyncEnumerable(Expression expression)
-            : base(expression)
-        {
-        }
-
-        public IAsyncEnumerator<T> GetEnumerator()
-        {
-            return new TestAsyncEnumerator<T>(this.AsEnumerable()
-                .GetEnumerator());
-        }
-
-        IQueryProvider IQueryable.Provider
-        {
-            get { return new TestAsyncQueryProvider<T>(this); }
-        }
-
-        public IAsyncEnumerator<T> GetAsyncEnumerator(CancellationToken cancellationToken = new CancellationToken()) =>
-            GetEnumerator();
-    }
-
-    internal class TestAsyncEnumerator<T> : IAsyncEnumerator<T>
-    {
-        private readonly IEnumerator<T> _inner;
-
-        public TestAsyncEnumerator(IEnumerator<T> inner)
-        {
-            _inner = inner;
-        }
-
-        public void Dispose()
-        {
-            _inner.Dispose();
-        }
-
-        public ValueTask<bool> MoveNextAsync() => new ValueTask<bool>(Task.FromResult(_inner.MoveNext()));
-
-        public T Current
-        {
-            get
-            {
-                return _inner.Current;
-            }
-        }
-
-        public Task<bool> MoveNext(CancellationToken cancellationToken)
-        {
-            return Task.FromResult(_inner.MoveNext());
-        }
-
-        public ValueTask DisposeAsync() => new ValueTask(Task.Run(Dispose));
     }
 }

@@ -128,6 +128,7 @@ public sealed class DomainEventOutboxTests : IAsyncLifetime
                     APIUrl = "https://payments.example.test",
                     IsProduction = false,
                     IsActive = true,
+                    ProviderType = "OpenPay",
                     TenantId = tenant.TenantId,
                     CreatedBy = 1,
                     CreatedDate = DateTime.UtcNow,

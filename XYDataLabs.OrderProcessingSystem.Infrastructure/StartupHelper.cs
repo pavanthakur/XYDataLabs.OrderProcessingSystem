@@ -14,6 +14,7 @@ using System.Threading.Tasks;
 using XYDataLabs.OrderProcessingSystem.SharedKernel;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Configuration;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
 
 namespace XYDataLabs.OrderProcessingSystem.Infrastructure
 {
@@ -28,11 +29,16 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure
             var defaultConnectionString = builder.Configuration.GetConnectionString(
                 Constants.Configuration.OrderProcessingSystemDbConnectionString);
 
+            var tenantRegistryConnectionString = builder.Configuration.GetConnectionString(
+                Constants.Configuration.TenantRegistryDbConnectionString)
+                ?? defaultConnectionString; // Local fallback: same DB when TenantRegistryDbConnection is absent
+
             // TenantRegistryDbContext — lightweight context for tenant resolution.
-            // Always uses the shared/admin connection string. No ITenantProvider dependency.
+            // Local: same physical DB as business DB. Staging/Prod: separate ops-controlled DB.
+            // No ITenantProvider dependency — breaks the circular reference.
             builder.Services.AddDbContext<TenantRegistryDbContext>(options =>
             {
-                options.UseSqlServer(defaultConnectionString,
+                options.UseSqlServer(tenantRegistryConnectionString,
                     sqlOptions => sqlOptions.EnableRetryOnFailure(
                         maxRetryCount: 5,
                         maxRetryDelay: TimeSpan.FromSeconds(30),
@@ -69,6 +75,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure
             // Forward IAppDbContext to the EF-registered concrete context
             builder.Services.AddScoped<IAppDbContext>(sp =>
                 sp.GetRequiredService<OrderProcessingSystemDbContext>());
+            builder.Services.AddScoped<ITenantPaymentProviderConfigurationResolver, Payments.TenantPaymentProviderConfigurationResolver>();
 
             // Tenant registry service — read-only access to tenant list via TenantRegistryDbContext
             builder.Services.AddScoped<ITenantRegistry, Multitenancy.TenantRegistryService>();

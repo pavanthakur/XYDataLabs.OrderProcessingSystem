@@ -558,7 +558,14 @@ function Invoke-AutomationRun {
 
     $arguments = @('--prefix', 'automation', 'run', 'run', '--', '--target', $TargetKey)
     foreach ($tenantCode in @($Tenant)) {
-        $arguments += @('--tenant', $tenantCode)
+        if (-not [string]::IsNullOrWhiteSpace($tenantCode)) {
+            foreach ($code in ($tenantCode -split ',')) {
+                $code = $code.Trim()
+                if (-not [string]::IsNullOrWhiteSpace($code)) {
+                    $arguments += @('--tenant', $code)
+                }
+            }
+        }
     }
     if ($AllowPartialExecution) {
         $arguments += '--allow-partial'

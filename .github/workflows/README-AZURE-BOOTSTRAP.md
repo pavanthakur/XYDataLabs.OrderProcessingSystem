@@ -24,24 +24,32 @@ Before running this workflow, the following must already be in place:
 | `AZUREAPPSERVICE_SUBSCRIPTIONID` environment secret | Azure Initial Setup (Phase 1a + 1b) | `Settings → Environments → <env>` |
 | Azure AD App Registration with federated credentials | Azure Initial Setup (Phase 1a) | `az ad app list --display-name "GitHub-Actions-OIDC"` |
 | `OPENPAY_MERCHANT_ID` environment secret | **Set manually** — see below | `Settings → Environments → <env>` |
+| `OPENPAY_PUBLIC_KEY` environment secret | **Set manually** — see below | `Settings → Environments → <env>` |
 | `OPENPAY_PRIVATE_KEY` environment secret | **Set manually** — see below | `Settings → Environments → <env>` |
 | `OPENPAY_DEVICE_SESSION_ID` environment secret | **Set manually** — see below | `Settings → Environments → <env>` |
+| `RAZORPAY_MERCHANT_ID` environment secret | **Set manually** — see below | `Settings → Environments → <env>` |
+| `RAZORPAY_PRIVATE_KEY` environment secret | **Set manually** — see below | `Settings → Environments → <env>` |
 
 If any `AZUREAPPSERVICE_*` environment secret is missing, the target bootstrap or cleanup job will **fail immediately** with guidance to run the Azure Initial Setup workflow first.
 
-If any `OPENPAY_*` environment secret is missing, the target bootstrap job will **fail immediately** before any infrastructure is touched, with the name of the missing secret and a direct link to the Environments page.
+If any `OPENPAY_*` or `RAZORPAY_*` environment secret is missing, the target bootstrap job will **fail immediately** before any infrastructure is touched, with the name of the missing secret and a direct link to the Environments page.
 
-### Required OpenPay Environment Secrets
+### Required Payment Provider Environment Secrets
 
-These three secrets must be added manually in the target **GitHub environment** before running bootstrap. They are never passed through workflow inputs — that is not a secure channel (inputs appear in plain text in workflow logs and the GitHub API).
+These six secrets must be added manually in the target **GitHub environment** before running bootstrap. They are never passed through workflow inputs — that is not a secure channel (inputs appear in plain text in workflow logs and the GitHub API).
 
 | Secret name | Description |
 |-------------|-------------|
 | `OPENPAY_MERCHANT_ID` | Your OpenPay merchant ID |
+| `OPENPAY_PUBLIC_KEY` | Your OpenPay public key |
 | `OPENPAY_PRIVATE_KEY` | Your OpenPay private key |
 | `OPENPAY_DEVICE_SESSION_ID` | Your OpenPay device session ID |
+| `RAZORPAY_MERCHANT_ID` | Your Razorpay merchant ID (key ID, e.g. `rzp_test_…` or `rzp_live_…`) |
+| `RAZORPAY_PRIVATE_KEY` | Your Razorpay private key (key secret) |
 
 **How to add**: Go to **Settings → Environments → dev/staging/prod** → add each one under **Environment secrets**.
+
+Bootstrap still uses the shared provider secrets above as the GitHub entry point. During Key Vault population it also creates baseline tenant aliases for the seeded tenants, for example `PaymentProviders--TenantA--OpenPay--PrivateKey` and `PaymentProviders--TenantA--Razorpay--PrivateKey`, so no extra GitHub environment secrets are required just to support the tenant-driven runtime model.
 
 See [`README-AZURE-INITIAL-SETUP.md`](README-AZURE-INITIAL-SETUP.md) for the one-time OIDC setup instructions.
 

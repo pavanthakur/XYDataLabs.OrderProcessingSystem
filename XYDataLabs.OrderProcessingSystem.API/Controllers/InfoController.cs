@@ -3,9 +3,11 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using System.Globalization;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
+using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.SharedKernel;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Configuration;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
 
 namespace XYDataLabs.OrderProcessingSystem.API.Controllers
 {
@@ -14,25 +16,32 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
     [Route("api/v{version:apiVersion}/[controller]")]
     public class InfoController : ControllerBase
     {
-        private const string ActiveTenantStatus = "Active";
         private readonly ILogger<InfoController> _logger;
         private readonly ITenantRegistry _tenantRegistry;
+        private readonly ITenantPaymentProviderResolver _paymentProviderResolver;
+        private readonly ITenantPaymentProviderConfigurationResolver _paymentProviderConfigurationResolver;
         private readonly TenantConfigurationOptions _tenantConfigurationOptions;
         private readonly TimeProvider _timeProvider;
 
         public InfoController(
             ILogger<InfoController> logger,
             ITenantRegistry tenantRegistry,
+            ITenantPaymentProviderResolver paymentProviderResolver,
+            ITenantPaymentProviderConfigurationResolver paymentProviderConfigurationResolver,
             IOptions<TenantConfigurationOptions> tenantConfigurationOptions,
             TimeProvider timeProvider)
         {
             ArgumentNullException.ThrowIfNull(logger);
             ArgumentNullException.ThrowIfNull(tenantRegistry);
+            ArgumentNullException.ThrowIfNull(paymentProviderResolver);
+            ArgumentNullException.ThrowIfNull(paymentProviderConfigurationResolver);
             ArgumentNullException.ThrowIfNull(tenantConfigurationOptions);
             ArgumentNullException.ThrowIfNull(timeProvider);
 
             _logger = logger;
             _tenantRegistry = tenantRegistry;
+            _paymentProviderResolver = paymentProviderResolver;
+            _paymentProviderConfigurationResolver = paymentProviderConfigurationResolver;
             _tenantConfigurationOptions = tenantConfigurationOptions.Value;
             _timeProvider = timeProvider;
         }
@@ -133,6 +142,26 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
                 availableTenants));
         }
 
+        /// <summary>
+        /// Gets non-sensitive payment-provider configuration for the current tenant UI flow.
+        /// </summary>
+        [HttpGet("payment-configuration")]
+        [ProducesResponseType<PaymentConfigurationResponse>(StatusCodes.Status200OK)]
+        public IActionResult GetPaymentConfiguration()
+        {
+            var paymentProvider = _paymentProviderResolver.ResolveCurrentTenantProvider();
+            var providerConfiguration = _paymentProviderConfigurationResolver.ResolveCurrentTenantConfiguration();
+
+            return Ok(new PaymentConfigurationResponse(
+                paymentProvider.ProviderType,
+                paymentProvider.Name,
+                ResolveCollectionMode(paymentProvider),
+                ResolveBrowserKey(paymentProvider, providerConfiguration),
+                ResolveBrowserMerchantId(paymentProvider, providerConfiguration),
+                providerConfiguration.IsProduction,
+                paymentProvider.Use3DSecure));
+        }
+
         private string ResolveTenantCode(
             string? requestedTenantCode,
             string configuredTenantCode,
@@ -175,11 +204,58 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
             return true;
         }
 
+        private static string ResolveCollectionMode(PaymentProvider paymentProvider)
+        {
+            if (string.Equals(paymentProvider.ProviderType, "Razorpay", StringComparison.OrdinalIgnoreCase))
+            {
+                // Use3DSecure = true  → show our card form; S2S JSON v2 handles the 3DS OTP redirect
+                // Use3DSecure = false → Razorpay Checkout JS popup handles 3DS internally
+                return paymentProvider.Use3DSecure ? "direct_card_form" : "provider_checkout";
+            }
+
+            return "direct_card_form";
+        }
+
+        private static string? ResolveBrowserKey(
+            PaymentProvider paymentProvider,
+            PaymentProviderRuntimeConfiguration providerConfiguration)
+        {
+            if (string.Equals(paymentProvider.ProviderType, PaymentProviderTypes.Razorpay, StringComparison.OrdinalIgnoreCase))
+            {
+                return providerConfiguration.MerchantId;
+            }
+
+            if (string.Equals(paymentProvider.ProviderType, PaymentProviderTypes.OpenPay, StringComparison.OrdinalIgnoreCase))
+            {
+                return providerConfiguration.PublicKey;
+            }
+
+            return null;
+        }
+
+        private static string? ResolveBrowserMerchantId(
+            PaymentProvider paymentProvider,
+            PaymentProviderRuntimeConfiguration providerConfiguration)
+        {
+            return string.Equals(paymentProvider.ProviderType, PaymentProviderTypes.OpenPay, StringComparison.OrdinalIgnoreCase)
+                ? providerConfiguration.MerchantId
+                : null;
+        }
+
         private sealed record RuntimeConfigurationResponse(
             string ActiveTenantCode,
             string ConfiguredActiveTenantCode,
             string TenantHeaderName,
             IReadOnlyList<AvailableTenantConfiguration> AvailableTenants);
+
+        private sealed record PaymentConfigurationResponse(
+            string ActiveProviderType,
+            string ActiveProviderName,
+            string CollectionMode,
+            string? BrowserKey,
+            string? BrowserMerchantId,
+            bool IsProduction,
+            bool IsThreeDSecure);
 
         private sealed record AvailableTenantConfiguration(
             int TenantId,

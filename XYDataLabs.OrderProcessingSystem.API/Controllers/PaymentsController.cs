@@ -7,6 +7,7 @@ using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Payments.Commands;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
 
 namespace XYDataLabs.OrderProcessingSystem.API.Controllers
 {
@@ -18,12 +19,18 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
     {
         private readonly IDispatcher _dispatcher;
         private readonly ILogger<PaymentsController> _logger;
+        private readonly IPaymentTelemetryTracker _paymentTelemetryTracker;
         private readonly ITenantProvider _tenantProvider;
 
-        public PaymentsController(IDispatcher dispatcher, ILogger<PaymentsController> logger, ITenantProvider tenantProvider)
+        public PaymentsController(
+            IDispatcher dispatcher,
+            ILogger<PaymentsController> logger,
+            IPaymentTelemetryTracker paymentTelemetryTracker,
+            ITenantProvider tenantProvider)
         {
             _dispatcher = dispatcher;
             _logger = logger;
+            _paymentTelemetryTracker = paymentTelemetryTracker;
             _tenantProvider = tenantProvider;
         }
 
@@ -105,16 +112,45 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
             var eventName = NormalizeLogValue(request.EventName, 100) ?? "ui_payment_event";
             var severity = NormalizeLogValue(request.Severity, 16) ?? "information";
             var tenantCode = GetResolvedTenantCode();
-            var clientFlowId = NormalizeLogValue(request.ClientFlowId, 64) ?? "none";
-            var customerOrderId = NormalizeLogValue(request.CustomerOrderId, 128) ?? "none";
-            var attemptOrderId = NormalizeLogValue(request.AttemptOrderId, 128) ?? "none";
-            var paymentId = NormalizeLogValue(request.PaymentId, 128) ?? "none";
-            var paymentStatus = NormalizeLogValue(request.PaymentStatus, 64) ?? "none";
-            var statusCategory = NormalizeLogValue(request.StatusCategory, 32) ?? "none";
-            var errorCode = NormalizeLogValue(request.ErrorCode, 64) ?? "none";
-            var errorMessage = NormalizeLogValue(request.ErrorMessage, 512) ?? "none";
-            var pagePath = NormalizeLogValue(request.PagePath, 256) ?? "unknown";
-            var clientTimestampUtc = NormalizeLogValue(request.ClientTimestampUtc, 64) ?? "none";
+            var normalizedClientFlowId = NormalizeLogValue(request.ClientFlowId, 64);
+            var normalizedCustomerOrderId = NormalizeLogValue(request.CustomerOrderId, 128);
+            var normalizedAttemptOrderId = NormalizeLogValue(request.AttemptOrderId, 128);
+            var normalizedPaymentId = NormalizeLogValue(request.PaymentId, 128);
+            var normalizedPaymentStatus = NormalizeLogValue(request.PaymentStatus, 64);
+            var normalizedStatusCategory = NormalizeLogValue(request.StatusCategory, 32);
+            var normalizedErrorCode = NormalizeLogValue(request.ErrorCode, 64);
+            var normalizedErrorMessage = NormalizeLogValue(request.ErrorMessage, 512);
+            var normalizedPagePath = NormalizeLogValue(request.PagePath, 256);
+            var normalizedClientTimestampUtc = NormalizeLogValue(request.ClientTimestampUtc, 64);
+            var clientFlowId = normalizedClientFlowId ?? "none";
+            var customerOrderId = normalizedCustomerOrderId ?? "none";
+            var attemptOrderId = normalizedAttemptOrderId ?? "none";
+            var paymentId = normalizedPaymentId ?? "none";
+            var paymentStatus = normalizedPaymentStatus ?? "none";
+            var statusCategory = normalizedStatusCategory ?? "none";
+            var errorCode = normalizedErrorCode ?? "none";
+            var errorMessage = normalizedErrorMessage ?? "none";
+            var pagePath = normalizedPagePath ?? "unknown";
+            var clientTimestampUtc = normalizedClientTimestampUtc ?? "none";
+
+            _paymentTelemetryTracker.Track(new PaymentTelemetryEvent
+            {
+                Application = "UI",
+                EventName = eventName,
+                TenantCode = _tenantProvider.HasTenantContext ? _tenantProvider.TenantCode : null,
+                CustomerOrderId = normalizedCustomerOrderId,
+                AttemptOrderId = normalizedAttemptOrderId,
+                PaymentId = normalizedPaymentId,
+                PaymentStatus = normalizedPaymentStatus,
+                StatusCategory = normalizedStatusCategory,
+                ClientFlowId = normalizedClientFlowId,
+                PagePath = normalizedPagePath,
+                HttpStatus = request.HttpStatus,
+                ErrorCode = normalizedErrorCode,
+                ErrorMessage = normalizedErrorMessage,
+                ClientTimestampUtc = normalizedClientTimestampUtc,
+                Severity = severity,
+            });
 
             var logMessage =
                 "UI payment event {UiEventName} on {PagePath} for tenant {TenantCode} customer order {CustomerOrderId} attempt {AttemptOrderId} payment {PaymentId} status {PaymentStatus} category {StatusCategory} http {HttpStatus} flow {ClientFlowId} client time {ClientTimestampUtc} error code {ErrorCode} message {ClientMessage}";

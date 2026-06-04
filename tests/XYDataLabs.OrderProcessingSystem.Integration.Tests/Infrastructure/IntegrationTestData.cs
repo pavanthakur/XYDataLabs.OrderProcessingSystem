@@ -163,6 +163,7 @@ internal static class IntegrationTestData
                 APIUrl = $"https://payments-{marker}.example.test",
                 IsProduction = false,
                 IsActive = true,
+                ProviderType = "OpenPay",
                 TenantId = tenantId,
                 CreatedBy = 1,
                 CreatedDate = createdAt
