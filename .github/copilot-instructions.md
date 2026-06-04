@@ -302,12 +302,13 @@ Port allocations: Local VS API (5010–5011) + UI (5173–5174) · Docker dev (5
 |------|-------|---------------|
 | `TROUBLESHOOTING-INDEX.md` | Root | Quick links for common GitHub App / OIDC / workflow errors |
 | `ARCHITECTURE.md` | Root | Binding tenant, payment identifier, migration, and test standard for future model creation |
-| `ARCHITECTURE-EVOLUTION.md` | Root | 14-phase roadmap: Phase 7 strict closeout verified, Phase 8 next 📅 |
+| `ARCHITECTURE-EVOLUTION.md` | Root | 14-phase roadmap: Phase 8.6 ✅ (Central Tenant Registry), Phase 8.7 next 📅 (Webhook Receiver) |
 | `docs/internal/AZURE-PROGRESS-EVALUATION.md` | docs/internal | Learning progress weeks 1–10, next-step guides |
 | `docs/AI-OPERATING-MODEL.md` | docs/ | Canonical protocol for shared AI customization and governance |
 | `docs/internal/DEFERRED-WORK-LOG.md` | docs/internal | Shared register for justified deferred work |
 | `docs/internal/branch-and-blueprint-strategy.md` | docs/internal | Snapshot tag/branch governance, two-layer template packaging, side-project bootstrap (ADR-018) |
 | `docs/architecture/decisions/ADR-018-blueprint-and-snapshot-strategy.md` | docs/architecture/decisions | Decision: tag+branch (Path C) snapshots + `dotnet new` NuGet template + GitHub template repo (Layer 1 + Layer 2) |
+| `docs/architecture/decisions/ADR-019-central-tenant-registry.md` | docs/architecture/decisions | Decision: `Tenant.PaymentProviderCode` as sole routing authority; `ITenantRegistry` resolver; ALL `PaymentProviders.IsActive = false` |
 | `docs/reference/quick-command-reference.md` | docs/ | Command cheat sheet for Azure, Git, Docker, GitHub App |
 | `.github/workflows/README.md` | Workflows | Workflow overview, secrets, path triggers |
 | `.github/workflows/README-AZURE-INITIAL-SETUP.md` | Workflows | Initial Setup workflow (Phase 0/1a/1b) |
