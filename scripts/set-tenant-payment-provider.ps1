@@ -29,15 +29,15 @@ $script:AzureSqlFirewallOpened = $false
 function Get-DatabaseName {
     param(
         [Parameter(Mandatory = $true)] [string] $CurrentRuntime,
-        [Parameter(Mandatory = $true)] [string] $CurrentEnvironment,
-        [Parameter(Mandatory = $true)] [string] $CurrentTenantCode
+        [Parameter(Mandatory = $true)] [string] $CurrentEnvironment
     )
 
+    # PaymentProviderCode is a Tenant Registry field. TenantRegistryDbContext always reads it from
+    # the central/shared registry database (OrderProcessingSystem_Dev/_Stg/_Prod), regardless of
+    # whether the tenant is SharedPool or Dedicated tier. TenantC's dedicated database
+    # (OrderProcessingSystem_TenantC_*) is scoped to business operations only — updating it here
+    # would not affect what TenantPaymentProviderResolver sees. Always target the registry DB.
     if ($CurrentRuntime -eq 'local') {
-        if ($CurrentTenantCode -eq 'TenantC') {
-            return 'OrderProcessingSystem_TenantC'
-        }
-
         return 'OrderProcessingSystem_Local'
     }
 
@@ -52,10 +52,6 @@ function Get-DatabaseName {
             'prod' { 'Prod' }
             default { throw "Unsupported environment: $CurrentEnvironment" }
         }
-    }
-
-    if ($CurrentTenantCode -eq 'TenantC') {
-        return "OrderProcessingSystem_TenantC_$environmentSuffix"
     }
 
     return "OrderProcessingSystem_$environmentSuffix"
@@ -81,7 +77,7 @@ function Normalize-SqlOutputLines {
                 -not [string]::IsNullOrWhiteSpace($_) -and
                 $_ -notmatch '^[-\s]+$' -and
                 $_ -notmatch '^\(\d+ rows affected\)$' -and
-                $_ -ne 'ProviderType'
+                $_ -ne 'PaymentProviderCode'
             }
     )
 }
@@ -309,16 +305,16 @@ function Get-ActiveProvider {
     )
 
     $escapedTenantCode = Escape-SqlLiteral -Value $CurrentTenantCode
+    # Phase 8.6 / ADR-019: PaymentProviderCode on Tenants is the authoritative routing field.
+    # PaymentProviders.IsActive is no longer used for provider selection.
     $query = @"
-SELECT TOP 1 pp.ProviderType
-FROM PaymentProviders pp
-INNER JOIN Tenants t ON t.Id = pp.TenantId
-WHERE t.Code = '$escapedTenantCode' AND pp.IsActive = 1
-ORDER BY pp.ProviderType;
+SELECT TOP 1 t.PaymentProviderCode
+FROM Tenants t
+WHERE t.Code = '$escapedTenantCode';
 "@
 
     $rows = @(Invoke-SqlTextQuery -Database $Database -Query $query)
-    if ($rows.Count -eq 0) {
+    if ($rows.Count -eq 0 -or [string]::IsNullOrWhiteSpace($rows[0])) {
         return $null
     }
 
@@ -334,22 +330,22 @@ function Set-ActiveProvider {
 
     $escapedTenantCode = Escape-SqlLiteral -Value $CurrentTenantCode
     $escapedProviderType = Escape-SqlLiteral -Value $CurrentProviderType
+    # Phase 8.6 / ADR-019: Update Tenants.PaymentProviderCode — the authoritative routing field.
+    # PaymentProviders.IsActive is no longer the switching mechanism.
     $updateQuery = @"
-UPDATE pp
-SET pp.IsActive = CASE WHEN pp.ProviderType = '$escapedProviderType' THEN 1 ELSE 0 END
-FROM PaymentProviders pp
-INNER JOIN Tenants t ON t.Id = pp.TenantId
-WHERE t.Code = '$escapedTenantCode';
+UPDATE Tenants
+SET PaymentProviderCode = '$escapedProviderType'
+WHERE Code = '$escapedTenantCode';
 "@
 
     [void](Invoke-SqlTextQuery -Database $Database -Query $updateQuery)
 }
 
-$database = Get-DatabaseName -CurrentRuntime $Runtime -CurrentEnvironment $Environment -CurrentTenantCode $TenantCode
+$database = Get-DatabaseName -CurrentRuntime $Runtime -CurrentEnvironment $Environment
 $previousProviderType = Get-ActiveProvider -Database $database -CurrentTenantCode $TenantCode
 
 if ([string]::IsNullOrWhiteSpace($previousProviderType)) {
-    throw "No active payment provider row was found for tenant $TenantCode in database $database."
+    throw "No PaymentProviderCode value found for tenant $TenantCode in database $database. Ensure the AddTenantPaymentProviderCode migration has been applied."
 }
 
 if ($previousProviderType -ne $ProviderType) {

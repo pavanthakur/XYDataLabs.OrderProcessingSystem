@@ -371,10 +371,20 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         // tenant's actual DB (dedicated or shared pool). The scoped AppMasterData also reads
         // from this context, but uses the Id for config lookups only (Use3DSecure, Name).
         // The FK-safe Id must come from the DB that owns the PaymentMethods row.
+        // Phase 8.6 (ADR-019): IsActive is no longer the routing authority — routing is driven
+        // by Tenant.PaymentProviderCode. All PaymentProvider rows are seeded with IsActive=false.
+        // Filter by ProviderType only; the query filter on the context already scopes to this tenant.
         var providerIdInTenantDb = await _context.PaymentProviders
-            .Where(p => p.ProviderType == _paymentProvider.ProviderType && p.IsActive)
+            .Where(p => p.ProviderType == _paymentProvider.ProviderType)
             .Select(p => p.Id)
             .FirstOrDefaultAsync(cancellationToken);
+
+        if (providerIdInTenantDb == 0)
+        {
+            throw new InvalidOperationException(
+                $"No PaymentProvider row found for provider type '{_paymentProvider.ProviderType}' " +
+                $"in the tenant DB. Ensure all migration and seed steps have been applied.");
+        }
 
         var openPayMethod = new Domain.Entities.PaymentMethod
         {
