@@ -282,6 +282,7 @@ Port allocations: Local VS API (5010–5011) + UI (5173–5174) · Docker dev (5
 ### Reusable agent prompts (type in VS Code Chat → Agent mode)
 | Prompt | Command | Purpose |
 |--------|---------|--------|
+| Day Start | `/XYDataLabs-day-start` | Start of every session — reads active-work.md and reports current phase, last session summary, pending actions, and key file paths. Zero exploration, zero token waste. |
 | New Feature Workflow | `/XYDataLabs-new-feature` | Orchestrates end-to-end feature development: entity → CQRS → migration → controller → tests → review → commit → payment verification (conditional). Enforces mandatory 13-step workflow with multitenant support. |
 | Day Complete Router | `/XYDataLabs-day-complete` | After each curriculum day or phase-freeze closeout — routes updates to all correct documents, syncs architecture status surfaces, and makes payment automation dry-run validation mandatory when automation scope changed before a phase-close commit |
 | Completion Check | `/XYDataLabs-completion-check` | After any feature, task, script, or fix — 6-category quality gate: documented? guardrailed? unit tested? integration tested? automated, including payment automation dry-run matrix when relevant? context current? |
