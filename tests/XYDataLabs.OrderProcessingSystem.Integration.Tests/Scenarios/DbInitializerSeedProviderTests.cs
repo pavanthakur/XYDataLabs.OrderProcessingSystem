@@ -43,13 +43,14 @@ public sealed class DbInitializerSeedProviderTests : IDisposable
     public void Dispose() => _connection.Dispose();
 
     [Theory]
-    [InlineData("TenantA", TenantAId)]
-    [InlineData("TenantB", TenantBId)]
+    [InlineData("TenantA", TenantAId, false, true)]  // TenantA: Razorpay 3DS off (Checkout JS popup, SAQ A), OpenPay on
+    [InlineData("TenantB", TenantBId, true,  true)]  // TenantB: both providers 3DS on
     public void Initialize_WhenNoProviderRowsExist_SeedsBothProvidersAsInactive(
-        string tenantCode, int tenantId)
+        string tenantCode, int tenantId, bool expectedRazorpay3DS, bool expectedOpenPay3DS)
     {
         // Phase 8.6: active provider is authoritative from Tenant.PaymentProviderCode (Tenant Registry).
         // DbInitializer seeds both providers with IsActive=false for every tenant on a fresh database.
+        // Use3DSecure is determined by the seed-data dictionary in DbInitializer (DB is source of truth at runtime).
         using var seedContext = CreateContext();
         SeedBothBaselineTenants(seedContext);
 
@@ -65,9 +66,12 @@ public sealed class DbInitializerSeedProviderTests : IDisposable
             .ToList();
 
         providers.Should().HaveCount(2, $"DbInitializer seeds both OpenPay and Razorpay for every tenant ({tenantCode})");
-        providers.Should().OnlyContain(
-            provider => provider.Use3DSecure,
-            "freshly seeded provider rows should default Use3DSecure to true for every tenant/provider combination");
+        var rzp = providers.Single(p => p.ProviderType == PaymentProviderTypes.Razorpay);
+        var opy = providers.Single(p => p.ProviderType == PaymentProviderTypes.OpenPay);
+        opy.Use3DSecure.Should().Be(expectedOpenPay3DS,
+            $"{tenantCode} OpenPay Use3DSecure should match seed-data dictionary default");
+        rzp.Use3DSecure.Should().Be(expectedRazorpay3DS,
+            $"{tenantCode} Razorpay Use3DSecure should match seed-data dictionary default");
         providers.Should().OnlyContain(
             provider => !provider.IsActive,
             $"new provider rows must be seeded IsActive=false — active provider is resolved from Tenant Registry (Tenant.PaymentProviderCode), not DbInitializer ({tenantCode})");
@@ -248,13 +252,15 @@ public sealed class DbInitializerSeedProviderTests : IDisposable
                 provider.MerchantId == "mt_seed_openpay"
                 && provider.PublicKey == "pk_seed_openpay"
                 && provider.PrivateKeyConfigurationKey == "PaymentProviders:TenantA:OpenPay:PrivateKey"
-                && provider.IsProduction);
+                && provider.IsProduction
+                && provider.Use3DSecure);
 
         tenantAProviders.Single(pp => pp.ProviderType == PaymentProviderTypes.Razorpay)
             .Should().Match<PaymentProvider>(provider =>
                 provider.MerchantId == "rzp_test_seed"
                 && provider.PrivateKeyConfigurationKey == "PaymentProviders:TenantA:Razorpay:PrivateKey"
-                && !provider.IsProduction);
+                && !provider.IsProduction
+                && !provider.Use3DSecure);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

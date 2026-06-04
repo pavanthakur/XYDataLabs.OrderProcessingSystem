@@ -25,6 +25,17 @@ public sealed record PaymentGatewayCreateCardTokenRequest(
 
 public sealed record PaymentGatewayCardToken(string Id, DateTime? CreatedAt);
 
+/// <summary>
+/// Card details forwarded to providers that support server-side S2S card submission (e.g. Razorpay S2S JSON v2).
+/// Providers that use client-side tokenisation (e.g. Razorpay Checkout JS) ignore this field.
+/// </summary>
+public sealed record PaymentGatewayCardDetails(
+    string CardNumber,
+    string HolderName,
+    string ExpirationYear,
+    string ExpirationMonth,
+    string Cvv2);
+
 public sealed record PaymentGatewayCreateChargeRequest(
     string SourceId,
     decimal Amount,
@@ -34,7 +45,8 @@ public sealed record PaymentGatewayCreateChargeRequest(
     string AttemptOrderId,
     bool Use3DSecure,
     string RedirectUrl,
-    PaymentGatewayCustomer Customer);
+    PaymentGatewayCustomer Customer,
+    PaymentGatewayCardDetails? CardDetails = null);
 
 public sealed record PaymentGatewayChargeResult(
     string Id,

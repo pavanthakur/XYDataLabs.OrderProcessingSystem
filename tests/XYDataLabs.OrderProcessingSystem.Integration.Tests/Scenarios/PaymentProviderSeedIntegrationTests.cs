@@ -55,9 +55,11 @@ public sealed class PaymentProviderSeedIntegrationTests : IAsyncLifetime
 
         providers.Should().HaveCount(2,
             $"DbInitializer seeds exactly two providers (OpenPay + Razorpay) for {tenantCode}");
-        providers.Should().OnlyContain(
-            provider => provider.Use3DSecure,
-            $"startup seeding defaults Use3DSecure to true for all provider rows ({tenantCode})");
+        var rzp = providers.Single(p => p.ProviderType == PaymentProviderTypes.Razorpay);
+        var opy = providers.Single(p => p.ProviderType == PaymentProviderTypes.OpenPay);
+        opy.Use3DSecure.Should().BeTrue($"OpenPay seeds with 3DS enabled ({tenantCode})");
+        rzp.Use3DSecure.Should().Be(tenantCode != "TenantA",
+            $"{tenantCode} Razorpay 3DS: disabled for TenantA, enabled otherwise");
         providers.Should().OnlyContain(
             provider => !provider.IsActive,
             $"Phase 8.6: all seeded provider rows must be IsActive=false — routing authority is Tenant Registry ({tenantCode})");
@@ -92,9 +94,11 @@ public sealed class PaymentProviderSeedIntegrationTests : IAsyncLifetime
         });
 
         providers.Should().HaveCount(2, because: $"two providers seeded for {tenantCode}");
-        providers.Should().OnlyContain(
-            provider => provider.Use3DSecure,
-            because: "startup-seeded providers default Use3DSecure to true");
+        var rzp = providers.Single(p => p.ProviderType == PaymentProviderTypes.Razorpay);
+        var opy = providers.Single(p => p.ProviderType == PaymentProviderTypes.OpenPay);
+        opy.Use3DSecure.Should().BeTrue(because: $"OpenPay seeds with 3DS enabled ({tenantCode})");
+        rzp.Use3DSecure.Should().Be(tenantCode != "TenantA",
+            because: $"{tenantCode} Razorpay 3DS: disabled for TenantA, enabled otherwise");
         providers.Should().OnlyContain(
             provider => !provider.IsActive,
             because: $"Phase 8.6: routing authority is Tenant Registry — all seeded rows must be inactive ({tenantCode})");

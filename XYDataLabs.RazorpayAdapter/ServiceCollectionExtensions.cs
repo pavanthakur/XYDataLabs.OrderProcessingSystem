@@ -54,6 +54,13 @@ public static class ServiceCollectionExtensions
         services.AddKeyedScoped<IPaymentProviderGateway, RazorpayPaymentGateway>(PaymentProviderTypes.Razorpay);
         services.AddKeyedScoped<IPaymentProviderAdapter, RazorpayAdapterService>(PaymentProviderTypes.Razorpay);
 
+        // Named HttpClient for Razorpay S2S JSON v2 API calls.
+        // Authorization header is set per-request in RazorpayAdapterService (tenant-scoped credentials).
+        services.AddHttpClient("razorpay-s2s", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
+
         if (!services.Any(s => s.ServiceType == typeof(ILogger)))
         {
             var logger = new LoggerConfiguration()

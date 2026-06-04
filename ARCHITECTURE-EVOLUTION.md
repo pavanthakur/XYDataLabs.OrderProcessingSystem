@@ -631,6 +631,16 @@ Real-world payment systems cannot rely on synchronous response data alone. Async
 - **Local development** — use the selected provider's sandbox and local forwarding toolchain if a public callback endpoint is required
 - **Failure isolation** — webhook returns 2xx as soon as the event is durably persisted to Inbox; downstream processing happens asynchronously so a slow handler does not cause provider retries
 
+### Absorbed Deferred Items (from Phase 8 backlog)
+
+**DW-002 — Optimistic concurrency on webhook-mutated aggregates (medium risk)**
+
+Phase 8.7 webhook handlers will write state transitions to `PaymentAttempt` and potentially other aggregates. Without row-version protection, a rapid duplicate webhook delivery that passes Inbox deduplication (e.g. a redelivery before the first write commits) can silently overwrite. The Phase 8 outbox already proved the pattern on `Order`. This phase extends `RowVersion` / `ConcurrencyToken` to every aggregate that a webhook handler mutates — at minimum `PaymentAttempt`. Architecture tests must enforce the property is present on all affected aggregates before Phase 8.7 closes.
+
+**DW-003 — OpenTelemetry business metrics for webhook and inbox paths (low–medium)**
+
+The webhook receiver is the natural place to instrument: HMAC validation failures (security signal), inbox deduplication hits (operational signal), handler latency per event type, and unresolvable-tenant rejections at the webhook boundary. These metrics are added as part of the webhook endpoint implementation using the existing OpenTelemetry baseline from Phase 7. No separate observability phase needed.
+
 ### Security Rules (Non-Negotiable)
 
 - **Never trust webhook payload without signature validation** — drop the request before any business deserialization if signature check fails
@@ -646,10 +656,11 @@ When Service Bus replaces the in-memory event bus in Phase 10, webhook-derived e
 
 - Phase 8 (Inbox pattern for idempotency, Outbox for downstream propagation)
 - Phase 8.5 (secondary-provider integration and tenant metadata convention)
+- Phase 8.6 (tenant registry as the authoritative resolver — webhook tenant resolution uses `ITenantRegistry`)
 
 ### Outcome
 
-Production-grade asynchronous payment lifecycle handling for the selected secondary provider. Provider-originated refunds, disputes, and delayed confirmations converge on the same tenant-aware Outbox pipeline as locally-originated payment state changes.
+Production-grade asynchronous payment lifecycle handling for the selected secondary provider. Provider-originated refunds, disputes, and delayed confirmations converge on the same tenant-aware Outbox pipeline as locally-originated payment state changes. Optimistic concurrency is extended to all webhook-mutated aggregates. Webhook and inbox paths are observable via structured metrics.
 
 ---
 

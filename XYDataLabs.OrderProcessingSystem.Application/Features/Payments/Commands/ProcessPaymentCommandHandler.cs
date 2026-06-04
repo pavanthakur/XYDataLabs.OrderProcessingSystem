@@ -191,6 +191,13 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
                     // The provider definitively rejected the charge — no retry and no reconciliation needed.
                     await MarkAttemptFailedAsync(paymentAttempt, ex.Message, cancellationToken);
                 }
+                else if (ex is PaymentProviderIntegrationNotEnabledException)
+                {
+                    // Provider integration feature not enabled (e.g. Razorpay S2S not activated).
+                    // This is a setup/configuration issue, not a card error. Mark as failed with a
+                    // clear operator-actionable message; retrying would not help until the feature is enabled.
+                    await MarkAttemptFailedAsync(paymentAttempt, ex.Message, cancellationToken);
+                }
                 else
                 {
                     await MarkAttemptUnknownForReconciliationAsync(paymentAttempt, ex.Message, cancellationToken);
@@ -575,7 +582,13 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             attemptOrderId,
             isThreeDSecureEnabled,
             redirectUrl,
-            customer);
+            customer,
+            CardDetails: new PaymentGatewayCardDetails(
+                request.CardNumber,
+                request.Name,
+                request.ExpirationYear,
+                request.ExpirationMonth,
+                request.Cvv2));
 
         var charge = await _paymentProviderGateway.CreateChargeAsync(chargeRequest, cancellationToken);
         _logger.LogInformation("Charge created with ID: {ChargeId}", charge.Id);

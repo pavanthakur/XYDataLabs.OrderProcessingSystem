@@ -158,7 +158,8 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
                 ResolveCollectionMode(paymentProvider),
                 ResolveBrowserKey(paymentProvider, providerConfiguration),
                 ResolveBrowserMerchantId(paymentProvider, providerConfiguration),
-                providerConfiguration.IsProduction));
+                providerConfiguration.IsProduction,
+                paymentProvider.Use3DSecure));
         }
 
         private string ResolveTenantCode(
@@ -205,9 +206,14 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
 
         private static string ResolveCollectionMode(PaymentProvider paymentProvider)
         {
-            return string.Equals(paymentProvider.ProviderType, "Razorpay", StringComparison.OrdinalIgnoreCase)
-                ? "provider_checkout"
-                : "direct_card_form";
+            if (string.Equals(paymentProvider.ProviderType, "Razorpay", StringComparison.OrdinalIgnoreCase))
+            {
+                // Use3DSecure = true  → show our card form; S2S JSON v2 handles the 3DS OTP redirect
+                // Use3DSecure = false → Razorpay Checkout JS popup handles 3DS internally
+                return paymentProvider.Use3DSecure ? "direct_card_form" : "provider_checkout";
+            }
+
+            return "direct_card_form";
         }
 
         private static string? ResolveBrowserKey(
@@ -248,7 +254,8 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
             string CollectionMode,
             string? BrowserKey,
             string? BrowserMerchantId,
-            bool IsProduction);
+            bool IsProduction,
+            bool IsThreeDSecure);
 
         private sealed record AvailableTenantConfiguration(
             int TenantId,

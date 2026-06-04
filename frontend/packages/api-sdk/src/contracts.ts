@@ -25,6 +25,7 @@ export interface PaymentConfiguration {
   browserKey?: string | null;
   browserMerchantId?: string | null;
   isProduction: boolean;
+  isThreeDSecure?: boolean;
 }
 
 export interface OrderSummary {

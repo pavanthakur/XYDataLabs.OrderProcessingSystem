@@ -76,6 +76,8 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
   const isManualFlow = !hasValidOrderContext;
   const usesProviderCheckout = paymentConfiguration?.collectionMode === "provider_checkout";
   const activeProviderName = paymentConfiguration?.activeProviderName ?? "payment provider";
+  const requiresDeviceSessionId = !usesProviderCheckout
+    && paymentConfiguration?.activeProviderType?.toLowerCase() === "openpay";
 
   useEffect(() => {
     if (!hasOrderRouteContext) {
@@ -181,6 +183,13 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
       return;
     }
 
+    // OpenPay device session is only required for the OpenPay provider.
+    // Razorpay S2S uses direct_card_form too but does not need a device session ID.
+    if (paymentConfiguration.activeProviderType?.toLowerCase() !== "openpay") {
+      setDeviceSessionId("");
+      return;
+    }
+
     if (!paymentConfiguration.browserMerchantId || !paymentConfiguration.browserKey) {
       setErrorMessage("OpenPay browser configuration is unavailable for the active tenant.");
       setDeviceSessionId("");
@@ -251,7 +260,7 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
       return;
     }
 
-    if (!usesProviderCheckout && !deviceSessionId) {
+    if (requiresDeviceSessionId && !deviceSessionId) {
       setErrorMessage("OpenPay device session is unavailable.");
       return;
     }
@@ -589,7 +598,7 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
                   || submitState === "launching_checkout"
                   || paymentConfigurationState !== "ready"
                   || loadState !== "ready"
-                  || (!usesProviderCheckout && !deviceSessionId)
+                  || (requiresDeviceSessionId && !deviceSessionId)
                 }
               >
                 {submitState === "submitting"
@@ -633,7 +642,7 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
             </div>
             <div>
               <dt>Device session</dt>
-              <dd>{usesProviderCheckout ? "Not required" : deviceSessionId ? "Ready" : "Pending"}</dd>
+              <dd>{!requiresDeviceSessionId ? "Not required" : deviceSessionId ? "Ready" : "Pending"}</dd>
             </div>
           </dl>
         </details>

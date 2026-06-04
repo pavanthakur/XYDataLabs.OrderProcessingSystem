@@ -36,3 +36,21 @@ public sealed class PaymentProviderCustomerActionException : PaymentProviderExce
         Exception? inner = null)
         : base(message, providerErrorCode, inner) { }
 }
+
+/// <summary>
+/// Thrown when the payment provider API endpoint or feature is not enabled on the merchant account.
+/// This is a configuration/activation error — not a customer-action failure.
+///
+/// Handling rule:
+///   • Do <em>not</em> treat as a terminal card-level failure.
+///   • The <c>PaymentAttempt</c> is marked failed but with a clear setup-required message.
+///   • Operator must enable the feature on the provider dashboard before the integration can work.
+/// </summary>
+public sealed class PaymentProviderIntegrationNotEnabledException : PaymentProviderException
+{
+    public PaymentProviderIntegrationNotEnabledException(
+        string message,
+        string? providerErrorCode = null,
+        Exception? inner = null)
+        : base(message, providerErrorCode, inner) { }
+}

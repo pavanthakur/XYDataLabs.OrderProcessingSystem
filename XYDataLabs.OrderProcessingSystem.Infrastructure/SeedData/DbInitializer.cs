@@ -18,6 +18,17 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
     public static class DbInitializer
     {
         private static readonly string[] StartupSeedTenantCodes = { "TenantA", "TenantB" };
+
+        // Seed-time defaults only. Once in the DB, the DB value is authoritative — re-seed does NOT overwrite.
+        // TenantA Razorpay uses the Checkout JS popup; 3DS is handled internally by the Razorpay SDK (SAQ A).
+        // All other tenant/provider combinations default to true (fail-secure).
+        private static readonly Dictionary<(string TenantCode, string ProviderType), bool> Use3DSecureSeedDefaults = new()
+        {
+            [("TenantA", PaymentProviderTypes.Razorpay)] = false,
+        };
+
+        private static bool GetUse3DSecureSeedDefault(string tenantCode, string providerType)
+            => Use3DSecureSeedDefaults.TryGetValue((tenantCode, providerType), out var value) ? value : true;
         private const int SeededCustomerCountPerTenant = 120;
 
         public static void Initialize(
@@ -199,7 +210,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                     MerchantId = merchantId,
                     PublicKey = publicKey,
                     PrivateKeyConfigurationKey = BuildTenantProviderPrivateKeyConfigurationKey(seedTenant.TenantCode, PaymentProviderTypes.OpenPay),
-                    Use3DSecure = true,
+                    Use3DSecure = GetUse3DSecureSeedDefault(seedTenant.TenantCode, PaymentProviderTypes.OpenPay),
                     TenantId = seedTenant.TenantId,
                     CreatedBy = 1,
                     CreatedDate = DateTime.UtcNow
@@ -247,7 +258,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                     ProviderType = PaymentProviderTypes.Razorpay,
                     MerchantId = merchantId,
                     PrivateKeyConfigurationKey = BuildTenantProviderPrivateKeyConfigurationKey(seedTenant.TenantCode, PaymentProviderTypes.Razorpay),
-                    Use3DSecure = true,
+                    Use3DSecure = GetUse3DSecureSeedDefault(seedTenant.TenantCode, PaymentProviderTypes.Razorpay),
                     TenantId = seedTenant.TenantId,
                     CreatedBy = 1,
                     CreatedDate = DateTime.UtcNow
