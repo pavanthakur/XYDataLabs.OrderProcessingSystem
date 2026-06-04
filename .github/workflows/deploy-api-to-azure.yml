@@ -430,11 +430,26 @@ jobs:
             throw "TenantC dedicated database '$tenantCDbName' is reachable but has no migration history rows."
           }
 
+          # Assert PaymentProviderCode is set in the shared registry DB (seeded by AddTenantPaymentProviderCode migration).
+          # This catches the rare case where migrations ran against the wrong DB or the seed UPDATE was skipped.
+          $registryPaymentProviderCode = [string] (Invoke-SqlScalar -ConnectionString $sharedConnectionString -Query "SET NOCOUNT ON; SELECT TOP (1) PaymentProviderCode FROM dbo.Tenants WHERE Code = 'TenantC';")
+          if ([string]::IsNullOrWhiteSpace($registryPaymentProviderCode)) {
+            throw "TenantC PaymentProviderCode is NULL in shared registry database '$sharedDbName'. The AddTenantPaymentProviderCode migration seed did not run or targeted the wrong database."
+          }
+
+          # Assert PaymentProviderCode is also set in the dedicated DB (same migration runs there too).
+          $dedicatedPaymentProviderCode = [string] (Invoke-SqlScalar -ConnectionString $tenantCConnectionString -Query "SET NOCOUNT ON; SELECT TOP (1) PaymentProviderCode FROM dbo.Tenants WHERE Code = 'TenantC';")
+          if ([string]::IsNullOrWhiteSpace($dedicatedPaymentProviderCode)) {
+            throw "TenantC PaymentProviderCode is NULL in dedicated database '$tenantCDbName'. The AddTenantPaymentProviderCode migration seed did not run against the dedicated database."
+          }
+
           Write-Host "✅ Shared tenant registry confirms TenantC is a Dedicated-tier tenant" -ForegroundColor Green
           Write-Host "✅ TenantC dedicated database is reachable as a separate database" -ForegroundColor Green
           Write-Host "✅ TenantC dedicated database contains migration history and tenant metadata" -ForegroundColor Green
+          Write-Host "✅ TenantC PaymentProviderCode = '$registryPaymentProviderCode' in shared registry DB" -ForegroundColor Green
+          Write-Host "✅ TenantC PaymentProviderCode = '$dedicatedPaymentProviderCode' in dedicated DB" -ForegroundColor Green
 
-          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## TenantC Dedicated Database Validation`n- Shared registry database: $sharedDbName`n- Dedicated database: $tenantCDbName`n- Tenant tier in shared registry: Dedicated`n- Dedicated database reachable: Yes`n- Dedicated migration history rows: $tenantCMigrationCount`n"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## TenantC Dedicated Database Validation`n- Shared registry database: $sharedDbName`n- Dedicated database: $tenantCDbName`n- Tenant tier in shared registry: Dedicated`n- Dedicated database reachable: Yes`n- Dedicated migration history rows: $tenantCMigrationCount`n- Registry PaymentProviderCode: $registryPaymentProviderCode`n- Dedicated PaymentProviderCode: $dedicatedPaymentProviderCode`n"
 
       - name: Configure SQL Managed Identity Database User
         if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'
