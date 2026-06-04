@@ -7,7 +7,17 @@
 
 ---
 
-## 🟢 Current State (May 2026) — Phase 8.5 Complete
+## 🟢 Current State (June 2026) — Phase 8.6 Complete
+
+### June 5, 2026 Verification Freeze — Phase 8.6 Closeout
+
+- ✅ Phase 8.6 complete: Central Tenant Registry — `ITenantRegistry`, `TenantRegistryService`, `TenantRegistryDbContext`. `Tenant.PaymentProviderCode` is the sole routing authority (ADR-019 Accepted).
+- ✅ `DbInitializer` cleared of all provider assignment knowledge; all `PaymentProviders.IsActive = false`.
+- ✅ `AddTenantPaymentProviderCode` migration live on both Azure dev and Azure staging.
+- ✅ E2E provider matrix verified on all three environments (Docker dev, Azure dev, Azure staging) — 4/6 pass; 2 expected external failures (Razorpay S2S not enabled on test account).
+- ✅ `deploy-api-to-azure.yml` tightened — `Validate TenantC Dedicated Database Contract` now asserts `PaymentProviderCode IS NOT NULL` in both registry DB and dedicated DB.
+- ✅ Build: 0 errors, 0 warnings. Tests: Domain 14/14, Application 53/53, API 88/88, Architecture 42/42. Secret scan: clean.
+- ✅ Next: Phase 8.7 — Provider Webhook Receiver (HMAC signature validation, inbox idempotency, tenant resolution from metadata, DW-002 optimistic concurrency on `PaymentAttempt`).
 
 ### May 31, 2026 Verification Freeze — Phase 8.5 Closeout
 
@@ -86,6 +96,8 @@
 | Phase 6 | Resilience baseline — EF Core retry, Polly, Redis caching pipeline, rate limiting | Day 38 | ✅ Complete |
 | **Phase 7** | **Tenant Enforcement & DDD tactical patterns** | **Days 39-43** | **✅ Complete** |
 | **Phase 8** | **Event-Driven Foundation** | **Days 51, 55-56** | **✅ Closeout Verified** |
+| **Phase 8.5** | **Secondary Payment Provider (OpenPay + Razorpay, keyed DI)** | **Day 57-59** | **✅ Complete** |
+| **Phase 8.6** | **Central Tenant Registry & Separation of Duties** | **Jun 5, 2026** | **✅ Complete** |
 
 ### Deployed Azure Resources (Dev Environment)
 - API: `https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net/swagger`
