@@ -312,6 +312,14 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
                 .HasIndex(message => new { message.TenantId, message.MessageId })
                 .IsUnique();
 
+            // DB-level dedup guard: one InboxMessage per (TenantId, ProviderEventId).
+            // Filtered on non-empty ProviderEventId to exclude legacy rows or outbox-sourced messages.
+            modelBuilder.Entity<InboxMessage>()
+                .HasIndex(message => new { message.TenantId, message.ProviderEventId })
+                .IsUnique()
+                .HasFilter("[ProviderEventId] IS NOT NULL AND [ProviderEventId] <> ''")
+                .HasDatabaseName("IX_InboxMessages_TenantId_ProviderEventId");
+
             modelBuilder.Entity<TransactionStatusHistory>()
                 .HasIndex(tsh => new { tsh.TenantId, tsh.AttemptOrderId });
 

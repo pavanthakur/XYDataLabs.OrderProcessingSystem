@@ -15,10 +15,10 @@
   },
   "Webhooks": {
     "Razorpay": {
-      "Secret": "razorpay-test-secret"
+      "Secret": "__RAZORPAY_WEBHOOK_SECRET__"
     },
     "OpenPay": {
-      "Secret": "openpay-test-secret"
+      "Secret": "__OPENPAY_WEBHOOK_SECRET__"
     }
   },
   "OpenPay": {

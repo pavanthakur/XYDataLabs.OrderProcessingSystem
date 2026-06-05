@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
@@ -47,7 +48,21 @@ public sealed class RecordWebhookEventCommandHandler : ICommandHandler<RecordWeb
         };
 
         _context.InboxMessages.Add(inboxMessage);
-        await _context.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (IsDuplicateKeyException(ex))
+        {
+            // DB-level unique constraint on (TenantId, ProviderEventId) fired — event already recorded.
+            // Return the existing row's id would require a second query; returning 0 signals dedup to the caller.
+            // The controller still returns 202 — the event is considered durably received.
+            _logger.LogInformation(
+                "Webhook event already recorded (duplicate key). Source={Source} EventType={EventType} ProviderEventId={ProviderEventId} TenantId={TenantId}",
+                command.ProviderName, command.EventType, command.ProviderEventId, tenantId);
+            return Result<int>.Success(0);
+        }
 
         _logger.LogInformation(
             "Webhook event recorded. InboxMessageId={InboxMessageId} Source={Source} EventType={EventType} ProviderEventId={ProviderEventId} TenantId={TenantId}",
@@ -55,4 +70,10 @@ public sealed class RecordWebhookEventCommandHandler : ICommandHandler<RecordWeb
 
         return Result<int>.Success(inboxMessage.Id);
     }
+
+    private static bool IsDuplicateKeyException(DbUpdateException ex) =>
+        ex.InnerException?.Message.Contains("IX_InboxMessages_TenantId_ProviderEventId",
+            StringComparison.OrdinalIgnoreCase) == true
+        || ex.InnerException?.Message.Contains("duplicate key", StringComparison.OrdinalIgnoreCase) == true
+           && ex.InnerException.Message.Contains("InboxMessages", StringComparison.OrdinalIgnoreCase);
 }
