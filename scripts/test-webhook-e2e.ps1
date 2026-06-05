@@ -18,8 +18,8 @@
 
     Prerequisites:
       - Local HTTP profile running: http://localhost:5010
-      - Webhooks:Razorpay:Secret = "razorpay-test-secret" in sharedsettings.local.json
-      - Webhooks:OpenPay:Secret  = "openpay-test-secret"  in sharedsettings.local.json
+    - Webhooks:Razorpay:Secret matches LOCAL_RAZORPAY_WEBHOOK_SECRET, or the local test fallback
+    - Webhooks:OpenPay:Secret matches LOCAL_OPENPAY_WEBHOOK_SECRET, or the local test fallback
 
 .EXAMPLE
     .\scripts\test-webhook-e2e.ps1
@@ -27,8 +27,8 @@
 #>
 param(
     [string]$ApiBaseUrl          = "http://localhost:5010",
-    [string]$RazorpaySecret      = "razorpay-test-secret",
-    [string]$OpenPaySecret       = "openpay-test-secret",
+    [string]$RazorpaySecret      = $env:LOCAL_RAZORPAY_WEBHOOK_SECRET,
+    [string]$OpenPaySecret       = $env:LOCAL_OPENPAY_WEBHOOK_SECRET,
     [string]$SharedDbServer      = "localhost",
     [string]$SharedDbName        = "OrderProcessingSystem_Local",
     [string]$TenantCDbServer     = "localhost",
@@ -42,6 +42,14 @@ $ErrorActionPreference = 'Continue'
 $testRun = [Guid]::NewGuid().ToString("N").Substring(0, 8)
 $results = [System.Collections.Generic.List[PSCustomObject]]::new()
 $failed  = 0
+
+if ([string]::IsNullOrWhiteSpace($RazorpaySecret)) {
+    $RazorpaySecret = 'razorpay-test-secret'
+}
+
+if ([string]::IsNullOrWhiteSpace($OpenPaySecret)) {
+    $OpenPaySecret = 'openpay-test-secret'
+}
 
 # ── HMAC helpers ─────────────────────────────────────────────────────────────
 function Get-RazorpaySignature([string]$Payload, [string]$Secret) {

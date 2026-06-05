@@ -690,7 +690,7 @@ When Service Bus replaces the in-memory event bus in Phase 10, webhook-derived e
 - `RowVersion` optimistic concurrency on `PaymentAttempt` (DW-002 absorbed) — Architecture test enforces presence on all webhook-mutated aggregates
 - OTel business metrics (DW-003 absorbed) — `WebhookHmacFailure`, `InboxDedupHit`, `InboxProcessed`, `InboxProcessingDuration` counters/histograms in `BusinessMetrics`
 - `ADR-020` — documents the webhook receiver design, HMAC contract, Inbox/Outbox bridge, and deferred items
-- **Unit tests: +12 new** — 4 entity (`PaymentAttemptEntityTests`), 2 mapper (`PaymentAttemptEventMapperTests`), 6 handler (`PaymentWebhookHandlerTests`); total **286 tests all green** (Domain 18, API 94, Gateway 4, Application 55, Architecture 43, Integration 72)
+- **Tests/closeout gates** — total **287 tests all green** after hosted-checkout seed guardrail correction (API 95, Integration 72); strict build passed with known `NU1701` Openpay warnings only; docs links, secret hygiene, AI customization, and payment automation dry-run matrices passed before Phase 9
 - **E2E: 25/25 pass** — 13 send scenarios + 12 verify checks; S13 (payment.failed → 202), V11 (PA.Status=Failed), V12 (OutboxMessages row for PaymentAttemptSucceededV1)
 - DW-012 to DW-015 logged in `docs/internal/DEFERRED-WORK-LOG.md` (replay endpoint, refund/dispute handlers, timestamp replay-attack mitigation, Key Vault secret operational task)
 

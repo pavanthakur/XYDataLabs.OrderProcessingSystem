@@ -7,7 +7,18 @@
 
 ---
 
-## 🟢 Current State (June 2026) — Phase 8.6 Complete
+## 🟢 Current State (June 2026) — Phase 8.7 Complete
+
+### June 5, 2026 Verification Freeze — Phase 8.7 Closeout
+
+- ✅ Phase 8.7 complete: Provider Webhook Receiver & Event-Driven Payment Lifecycle — signed provider webhooks, Inbox idempotency, async processor, `payment.captured` / `payment.failed` handlers, Outbox bridge, `PaymentAttempt.RowVersion`, and webhook metrics.
+- ✅ Webhook secrets are wired across local setup, Docker compose, Azure bootstrap, API deploy, and Key Vault population: `Webhooks:{Provider}:Secret`, `Webhooks__{Provider}__Secret`, and `Webhooks--{Provider}--Secret`.
+- ✅ Azure dev API and UI deployment validated after webhook-secret rollout: `/health/ready`, runtime configuration, and UI homepage all returned `200 OK`.
+- ✅ Azure dev payment journeys completed across TenantA, TenantB, and TenantC for OpenPay and Razorpay after forcing Razorpay tenants to hosted `provider_checkout` mode.
+- ✅ TenantC Azure correlation passed with `verify-payment-run-azure.ps1` for run prefix `OR-1780677599-5Jun`; API telemetry, UI telemetry, Azure SQL, and tenant bleed checks all passed.
+- ✅ Razorpay webhook endpoint validated on Azure with a signed synthetic `payment.captured` request using the Key Vault webhook secret: API returned `202 Accepted`; TenantC `InboxMessages` row recorded `EventType=payment.captured` and processed successfully.
+- ⚠️ Razorpay dashboard delivery is the only remaining external confirmation: no real Razorpay `/api/v1/webhook/Razorpay` request was visible in App Insights during the validation window, so monitor provider dashboard delivery/retry history and Azure App Insights for the first live provider-originated event.
+- ✅ Next: Phase 9 — YARP Microservices Architecture (Local), carrying Phase 8 event contracts and webhook semantics unchanged.
 
 ### June 5, 2026 Verification Freeze — Phase 8.6 Closeout
 
@@ -98,6 +109,7 @@
 | **Phase 8** | **Event-Driven Foundation** | **Days 51, 55-56** | **✅ Closeout Verified** |
 | **Phase 8.5** | **Secondary Payment Provider (OpenPay + Razorpay, keyed DI)** | **Day 57-59** | **✅ Complete** |
 | **Phase 8.6** | **Central Tenant Registry & Separation of Duties** | **Jun 5, 2026** | **✅ Complete** |
+| **Phase 8.7** | **Provider Webhook Receiver & Async Payment Lifecycle** | **Jun 5, 2026** | **✅ Complete** |
 
 ### Deployed Azure Resources (Dev Environment)
 - API: `https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net/swagger`

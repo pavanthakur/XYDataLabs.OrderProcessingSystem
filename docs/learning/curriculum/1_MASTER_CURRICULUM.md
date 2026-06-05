@@ -9,7 +9,7 @@
 
 ## 🎯 WHAT'S NEXT? (Your Current Focus)
 
-**✅ COMPLETED SO FAR (Days 1-43 + Architecture Phases 1-8):**
+**✅ COMPLETED SO FAR (Days 1-43 + Architecture Phases 1-8.7):**
 - ✅ Azure fundamentals (Portal, CLI, resource management)
 - ✅ App Service deployment with OIDC authentication
 - ✅ GitHub Actions CI/CD workflows (10 workflows: bootstrap, initial setup, deploy API/UI, infra deploy, validate, ADR validate)
@@ -23,6 +23,7 @@
 - ✅ **Architecture Phase 8 closeout verified:** event contracts, outbox/inbox persistence, deterministic payment recovery, tenant-scoped background workers, replay coverage, and reconciliation coverage are now proven on the current branch
 - ✅ **Architecture Phase 8.5 complete (May 31, 2026):** provider-neutral multi-provider payment routing (OpenPay + Razorpay), keyed DI, retry classification, `PaymentProviderCustomerActionException`, `IsProduction` startup mode guard and key-prefix cross-validation, architecture boundary tests
 - ✅ **Architecture Phase 8.6 complete (June 5, 2026):** Central Tenant Registry — `ITenantRegistry`/`TenantRegistryService`/`TenantRegistryDbContext`, `Tenant.PaymentProviderCode` as sole routing authority, `DbInitializer` cleared of all provider assignment knowledge, ADR-019 accepted, E2E provider matrix verified on Docker dev + Azure dev + Azure staging (4/6 pass; 2 expected external Razorpay S2S failures)
+- ✅ **Architecture Phase 8.7 complete (June 6, 2026):** provider webhook receiver, HMAC validation, per-environment webhook secrets, Inbox idempotency, async `payment.captured` / `payment.failed` handlers, Outbox bridge, Azure synthetic webhook proof, and closeout gates for build/tests/docs/secret hygiene/AI customization/automation dry-runs
 - ✅ **Phase 7 verification freeze complete (April 10, 2026):** latest code validated on local, Docker, and Azure; Azure Initial Setup and dev bootstrap proven end-to-end
 - ✅ **Phase 7 deferral decisions are frozen:** `Address` stays deferred until a concrete customer, billing, or shipping boundary exists; broader optimistic concurrency stays deferred until another aggregate shows real competing-writer risk
 - ✅ **Strict Phase 7 closeout is verified:** local, Docker, and Azure payment proof was rerun, Azure dev now shows the payment custom metrics on the deployed runtime, and order-level concurrency surfacing remains intentionally deferred until the order write surface has a real multi-writer path
@@ -35,11 +36,12 @@
 - Days 44-50: Azure Functions + Service Bus + DLQ operating model preparation (learning and infrastructure prep only; production transport swap remains Phase 10)
 - Days 51, 55-56: ✅ **Phase 8** event foundation inside the monolith — contracts, mapper, outbox/inbox, `PaymentAttempt`, reconciliation, and separate workers
 
-### Priority 2: Azure Services Deep Dive + Containers (Days 57-86) — *Phase 8.7 is now the active engineering phase*
-**Why:** With Phase 8.6 closed, the next backend slice is the webhook receiver and inbox idempotency pattern, followed by the Azure-service and container work that enables later modular extraction and read-model evolution
+### Priority 2: Azure Services Deep Dive + Containers (Days 57-86) — *Phase 9 is now the next engineering phase*
+**Why:** With Phase 8.7 closed, the next backend slice is module extraction and local YARP gateway routing while carrying the frozen Phase 8 event and webhook semantics unchanged
 **Tasks:**
 - Days 57-59: Azure Functions Advanced + ✅ **Phase 8.5** (Multi-Provider Payment) + ✅ **Phase 8.6** (Central Tenant Registry)
-- Days 60-65: Durable Functions + Serilog (✅ partial — Phase 3)
+- Days 60-64: ✅ **Phase 8.7** (Provider Webhook Receiver & Async Payment Lifecycle)
+- Day 65: Durable Functions + Serilog (✅ partial — Phase 3)
 - Days 66-72: Cosmos DB + 🏗️ **Phase 14** (CQRS Read Model) + Redis (✅ Phase 6)
 - Days 73-86: .NET Aspire + 🏗️ **Phase 9** (YARP Microservices) + Docker + ACR, with Orders, Inventory, Notifications, and Payments treated as first-class modules
 
@@ -54,9 +56,9 @@
 - **Track U** reduces frontend migration risk: contract freeze, generated SDK, React web replacement, API ownership of callback/telemetry, and MVC removal rules
 - **Track U Phase U5** is complete: React web is the active UI and the legacy MVC host has been retired
 - **Backend Phase 8** is verified and frozen as the current event-foundation baseline
-- **Backend Phase 8.5 and 8.6** are complete — multi-provider routing and Central Tenant Registry
-- **Backend Phase 8.7** is now the active next engineering phase (Provider Webhook Receiver)
-- **Mobile (U6)** follows the web cutover and does not block backend Phase 8.7
+- **Backend Phase 8.5, 8.6, and 8.7** are complete — multi-provider routing, Central Tenant Registry, and provider webhooks
+- **Backend Phase 9** is now next — YARP microservices architecture and module isolation
+- **Mobile (U6)** follows the web cutover and does not block backend Phase 9
 
 ---
 
@@ -77,8 +79,8 @@ See `ARCHITECTURE-EVOLUTION.md` for full phase details.
 | Track U | UI Modernization Program | U1-U6 (U1-U5 complete; U6 later) | ✅ Web cutover complete |
 | 8 | Event-Driven Foundation | Days 51, 55–56 (Days 48–50 are Service Bus/DLQ preparation only) | ✅ Complete |
 | 8.5 | Multi-Provider Payment | Days 58–59 | ✅ Complete |
-| 8.7 | Provider Webhooks & Async Payment Lifecycle | Days 60–64 | 📅 Planned |
-| 9 | YARP Microservices | Days 74–79 | 📅 Planned |
+| 8.7 | Provider Webhooks & Async Payment Lifecycle | Days 60–64 | ✅ Complete |
+| 9 | YARP Microservices | Days 74–79 | 📅 Next |
 | 9.5 | Cloud-Portable Identity Showcase (Keycloak Local) | Days 80–82 | 📅 Planned |
 | 10 | Azure Container Apps | Days 87–93 (transport drills gate ingress/security) | 📅 Planned |
 | 11 | Data Ownership & Autonomy | Days 100, 102 | 📅 Planned |
@@ -613,32 +615,31 @@ After completing today's tasks, you will have:
 - [x] Record retry and reconciliation transitions as append-only payment-attempt history
 - [x] **Time:** 2 hours | **Completed:** 31/05/2026
 
-#### Day 60: Service Bus — Advanced Patterns (Sessions, Transactions, Deduplication)
-> **Note:** Service Bus namespace creation and pub/sub between microservices was covered in Days 48-50. This day focuses on advanced patterns.
-- [ ] Implement message sessions for ordered per-customer processing via `ServiceBusSessionProcessor`
-- [ ] Use `ServiceBusReceiver` with `ReceiveMode.PeekLock` for transactional processing
-- [ ] Test message deduplication using message ID
-- [ ] Implement Service Bus-triggered Azure Function for order processing
-- [ ] Document when to use sessions vs standard queues
-- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+#### Day 60: Provider Webhook Receiver Foundation ✅
+> 🏗️ **Architecture Phase 8.7a** — Replace generic Service Bus exercises with the payment webhook receiver foundation needed before module extraction.
+- [x] Add provider-scoped webhook endpoint with raw-body buffering
+- [x] Validate Razorpay and OpenPay HMAC signatures before business deserialization
+- [x] Persist accepted events to Inbox before async processing
+- [x] Add per-provider webhook secrets across local, Docker, Azure bootstrap/deploy, and Key Vault population
+- [x] **Time:** 2 hours | **Completed:** 06/06/2026
 
-#### Day 61: Event Grid vs Service Bus (Interview Critical)
-- [ ] Create Event Grid Topic
-- [ ] Subscribe Azure Function to Event Grid events
-- [ ] Publish order events to Event Grid (webhook push)
-- [ ] Compare: Service Bus Queue vs Event Grid Topic
-- [ ] Understand when to use each (commands vs events)
-- [ ] Implement Azure Storage Blob trigger (Event Grid integration)
-- [ ] Document architectural decision matrix
-- [ ] **Time:** 2 hours | **Completed:** ___/___/___
+#### Day 61: Inbox Idempotency & Async Handlers ✅
+> 🏗️ **Architecture Phase 8.7b** — Replace Event Grid comparison with concrete Inbox idempotency, async handler dispatch, and Outbox bridge implementation.
+- [x] Add stable provider-event deduplication through Inbox unique index
+- [x] Add async `InboxProcessorWorker` dispatch for provider event handlers
+- [x] Implement `payment.captured` and `payment.failed` handlers
+- [x] Emit payment attempt domain events and Outbox integration events through the existing event bridge
+- [x] **Time:** 2 hours | **Completed:** 06/06/2026
 
-#### Day 62-64: Azure Functions Advanced
-- [ ] Implement Durable Functions for long-running workflows
-- [ ] Call Inventory API from Functions (service-to-service)
-- [ ] Trigger Notifications API from Functions
-- [ ] Implement saga pattern with Durable Functions
-- [ ] Test orchestration with approvals and timeouts
-- [ ] **Time:** 6 hours (3 days × 2 hours) | **Completed:** ___/___/___
+#### Day 62-64: Azure Webhook Validation & Phase 8.7 Closeout ✅
+> 🏗️ **Architecture Phase 8.7c** — Replace generic Durable Functions tasks with Azure webhook readiness, hosted-checkout alignment, and closeout validation before Phase 9.
+- [x] Configure Razorpay dashboard webhook events for backend-supported `payment.captured` and `payment.failed` only
+- [x] Validate Azure API/UI readiness and payment journeys across TenantA, TenantB, and TenantC
+- [x] Prove signed synthetic Razorpay webhook acceptance and Inbox processing on Azure
+- [x] Fix Razorpay hosted-checkout seed/test guardrails: `Use3DSecure=false` for all Razorpay tenants
+- [x] Run closeout gates: strict build, solution tests, docs links, secret hygiene, AI customization, and payment automation dry-run matrices
+- [x] Record Docker dev/http bundle partial evidence and cleanup after the integration leg stalled
+- [x] **Time:** 6 hours (3 days × 2 hours) | **Completed:** 06/06/2026
 
 ---
 
@@ -1313,20 +1314,21 @@ After completing today's tasks, you will have:
 ## 📈 Progress Summary
 
 **Total Days Planned:** 112 days (~16 weeks)
-**Days Completed:** 46 / 112
-**Percentage Complete:** 41%
+**Days Completed:** 51 / 112
+**Percentage Complete:** 46%
 
-**Current Phase:** Backend Phase 8.7 — Provider Webhook Receiver & Event-Driven Payment Lifecycle
-**Current Day:** Day 60 — Phase 8.5 closed; Phase 8.7 webhook receiver is next
-**Last Completed Task:** Days 58-59 — Phase 8.5 multi-provider payment complete (Razorpay keyed DI, retry classification, IsProduction guard, architecture boundary tests, 80 unit tests passing)
-**Next Milestone:** Phase 8.7 provider webhooks (HMAC signature validation, inbox idempotency, tenant resolution from metadata), then Phase 9 module extraction
-**Architecture Status:** Phases 1-8 ✅ complete; Track U web cutover ✅ complete; Phase 8.5 ✅ complete; Phase 8.7 active next; roadmap extended with 9.5 and 11.5 portability milestones
+**Current Phase:** Backend Phase 9 — YARP Microservices Architecture (Local)
+**Current Day:** Day 74 — Phase 9 module isolation and local gateway routing kickoff
+**Last Completed Task:** Days 60-64 — Phase 8.7 provider webhooks complete (HMAC validation, Inbox idempotency, async payment handlers, Azure synthetic webhook proof, closeout gates passed)
+**Next Milestone:** Phase 9 module extraction with `PublicApi` contracts, YARP local routing, Aspire-Lite service discovery, and tracing acceptance
+**Architecture Status:** Phases 1-8.7 ✅ complete; Track U web cutover ✅ complete; Phase 9 next; roadmap extended with 9.5 and 11.5 portability milestones
 
 **Pre-Phase-9 entry gate:**
 - ✅ Phase 8.5 complete: provider-neutral multi-provider routing, provider-aware idempotency and retry classification, and append-only payment-attempt history.
-- Complete Phase 8.7 signed provider webhooks, inbox-backed idempotency, tenant restoration from metadata, replay support, and async payment-state convergence.
-- Re-run the mandatory phase closeout evidence for the payment phases on the active Docker validation slice before starting module extraction.
-- Treat the current YARP gateway work as groundwork only; do not use it to skip the payment-phase closeout sequence.
+- ✅ Phase 8.7 complete: signed provider webhooks, inbox-backed idempotency, tenant restoration from metadata, and async payment-state convergence.
+- ✅ Mandatory closeout evidence passed for strict build, solution tests, docs links, secret hygiene, AI customization, and payment automation dry-run matrices.
+- ⚠ Docker dev/http bundle produced partial evidence only: startup/health, DB readiness, OpenPay credential readiness, and API tests passed; integration leg stalled before summary and was stopped with cleanup complete.
+- Treat the current YARP gateway work as groundwork only until Phase 9 module isolation, `PublicApi` contracts, and traced gateway flow proof are implemented.
 
 ---
 

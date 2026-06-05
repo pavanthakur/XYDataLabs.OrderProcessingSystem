@@ -6,6 +6,8 @@ Current documents in this subtree:
 
 - `implementation-notes-days-29-38.md` — detailed implementation evidence for curriculum days 29-38
 - `implementation-notes-days-51-56.md` — detailed implementation evidence for the Phase 8 event-foundation closeout slices
+- `implementation-notes-days-57-59.md` — detailed implementation evidence for Phase 8.5 multi-provider payment closeout
+- `implementation-notes-days-60-64.md` — detailed implementation evidence for Phase 8.7 provider webhook closeout
 
 Usage:
 

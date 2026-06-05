@@ -15,10 +15,20 @@ For repo-shared AI governance, use [docs/AI-OPERATING-MODEL.md](../../docs/AI-OP
 Quick tip:
 
 ```text
-Ctrl+Shift+I → Agent mode → type /XYDataLabs-day-complete, /XYDataLabs-sql-local-access, /XYDataLabs-setup-local, /XYDataLabs-docker-start, /XYDataLabs-payment-automation, /XYDataLabs-completion-check, /XYDataLabs-context-audit, /XYDataLabs-new-feature, /XYDataLabs-validate-adrs, or /XYDataLabs-verify-db-logs
+Ctrl+Shift+I → Agent mode → type /XYDataLabs-day-start, /XYDataLabs-day-complete, /XYDataLabs-sql-local-access, /XYDataLabs-setup-local, /XYDataLabs-docker-start, /XYDataLabs-payment-automation, /XYDataLabs-completion-check, /XYDataLabs-context-audit, /XYDataLabs-new-feature, /XYDataLabs-validate-adrs, or /XYDataLabs-verify-db-logs
 ```
 
 ## Available Prompts
+
+### `/XYDataLabs-day-start`
+
+Purpose:
+- Reads `/memories/repo/active-work.md` and reports the current phase, last-session summary, pending next actions, and key paths.
+- Starts a session from the repository handoff note without broad rediscovery.
+
+Use when:
+- Beginning a new work session in this repository.
+- Returning after a context reset or a long gap and you want the current phase and next action first.
 
 ### `/XYDataLabs-day-complete`
 
@@ -194,6 +204,7 @@ Note: For deep-dive queries (Q1, Q3, Q4, Q6, Q6a, Q7, Q8-B and per-tenant 3DS to
 
 | Scenario | Prompt |
 |----------|--------|
+| Start a session from active handoff | `/XYDataLabs-day-start` |
 | Add a new feature end-to-end | `/XYDataLabs-new-feature` |
 | Finish a learning day | `/XYDataLabs-day-complete` |
 | Start Docker or local run profiles | `/XYDataLabs-docker-start` |

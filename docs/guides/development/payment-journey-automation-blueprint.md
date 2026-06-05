@@ -187,6 +187,14 @@ The following policies are frozen by the blueprint:
 4. Provider challenge handling stays outside production React code.
 5. Docker and Azure expansion must remain catalog-driven, not orchestrator-driven.
 
+## Operational Precautions
+
+- Treat each long-running payment automation command as owning its terminal until it exits. On Windows, starting another command in the same reused terminal while `npm --prefix automation run run ...` is still active can prompt `Terminate batch job (Y/N)?` and interrupt the matrix.
+- While a matrix is active, inspect progress only with the terminal ID returned by the runner, or wait for the completion notification. Do not run ad hoc `Select-String`, process inspection, or SQL checks in that same terminal session.
+- For Azure payment-flow validation, use target `azure-dev`. There is no generic `azure` target.
+- Use `--skip-verification` when the goal is to prove browser/provider flow separately from App Insights and Azure SQL correlation. Then run `scripts/verify-payment-run-azure.ps1` as a separate command for the specific run prefix.
+- If embedded Azure verification appears silent, first check for a child `verify-payment-run-azure.ps1` process. The automation runner buffers that child output until it exits.
+
 ## Phase Plan
 
 ### Phase 0A — Contract Freeze And Reporting Freeze
