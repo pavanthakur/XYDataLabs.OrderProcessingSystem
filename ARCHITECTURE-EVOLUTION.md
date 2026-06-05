@@ -148,9 +148,10 @@ XYDataLabs.OrderProcessingSystem.sln
 | **5** | Test Project Restructure | Domain.Tests, Application.Tests, API.Tests, Integration.Tests (Testcontainers) | ✅ **COMPLETE** |
 | **6** | Polish & Hardening | CachingBehavior, Redis, API versioning `/api/v1/`, health checks, CancellationToken, TimeProvider | ✅ **COMPLETE** |
 | **7** | Tenant Enforcement & Ops | TenantValidationBehavior, AuditLog, security headers, liveness/readiness checks | ✅ **COMPLETE** |
-| **8** | Event-Driven Foundation | Domain events, integration events, Outbox pattern, background publisher | 📅 Planned |
-| **8.5** | Secondary Payment Provider Architecture | Provider-neutral routing, per-tenant provider selection, `HttpClient`-based resilience, provider-aware idempotency and reconciliation | 📅 Planned |
-| **8.7** | Provider Webhook Receiver & Async Payment Lifecycle | Signed webhooks, inbox idempotency, replay flow, tenant-aware async payment convergence for the selected secondary provider | 📅 Planned |
+| **8** | Event-Driven Foundation | Domain events, integration events, Outbox pattern, background publisher | ✅ **COMPLETE** |
+| **8.5** | Secondary Payment Provider Architecture | Provider-neutral routing, per-tenant provider selection, `HttpClient`-based resilience, provider-aware idempotency and reconciliation | ✅ **COMPLETE** |
+| **8.6** | Central Tenant Registry & Separation of Duties | `ITenantRegistry`, `Tenant.PaymentProviderCode` as sole routing authority, ops-owned DB, ADR-019 | ✅ **COMPLETE** |
+| **8.7** | Provider Webhook Receiver & Async Payment Lifecycle | Signed webhooks, inbox idempotency, Outbox bridge, `payment.captured`/`payment.failed` handlers, tenant-aware async payment convergence | ✅ **COMPLETE** |
 | **9** | YARP Microservices (Local) | Gateway, Orders/Inventory/Notifications APIs, Docker Compose, event-based communication | 📅 Planned |
 | **9.5** | Cloud-Portable Identity Showcase | Local Keycloak portability proof for the JWT/OIDC pipeline without changing the Azure production identity model | 📅 Planned |
 | **10** | Azure Container Apps | ACA deployment, ACR, Service Bus, Entra ID + JWT, private networking | 📅 Planned |
