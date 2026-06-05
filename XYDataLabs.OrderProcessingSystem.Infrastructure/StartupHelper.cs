@@ -85,6 +85,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure
 
             // Phase 8.7 Inbox event handlers (one per EventType; resolved as IEnumerable by InboxProcessorWorker)
             builder.Services.AddScoped<Application.Features.Webhooks.IWebhookEventHandler, Webhooks.PaymentCapturedHandler>();
+            builder.Services.AddScoped<Application.Features.Webhooks.IWebhookEventHandler, Webhooks.PaymentFailedHandler>();
 
             // Phase 8.7 Inbox background processor
             builder.Services.AddHostedService<Webhooks.InboxProcessorWorker>();

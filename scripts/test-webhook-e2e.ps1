@@ -171,16 +171,19 @@ Write-Host ''
 Write-Host '[SETUP] Preparing test PaymentAttempts with known ProviderReferenceIds...' -ForegroundColor Yellow
 
 $testRefs = @{
-    TenantA = "rzp_pay_e2e_${testRun}_A"
-    TenantB = "rzp_pay_e2e_${testRun}_B"
-    TenantC = "op_charge_e2e_${testRun}_C"
+    TenantA       = "rzp_pay_e2e_${testRun}_A"
+    TenantB       = "rzp_pay_e2e_${testRun}_B"
+    TenantC       = "op_charge_e2e_${testRun}_C"
+    TenantAFailed = "rzp_pay_e2e_${testRun}_A_fail"
 }
 
 # TenantA and TenantB — update one existing UnknownNeedsReconciliation attempt
+# Also seed a second TenantA attempt for the payment.failed S13 scenario
 foreach ($code in @('TenantA', 'TenantB')) {
     if (-not $tenants.ContainsKey($code)) { continue }
     $tid = $tenants[$code].Id
     $ref = $testRefs[$code]
+    $provider = $tenants[$code].Provider
     Invoke-Sql $SharedDbServer $SharedDbName @"
 UPDATE TOP(1) [PaymentAttempts]
    SET [ProviderReferenceId] = '$ref'
@@ -193,7 +196,59 @@ UPDATE TOP(1) [PaymentAttempts]
     if ($check) {
         Write-Host "    $code : PaymentAttempt updated → ProviderReferenceId='$ref'" -ForegroundColor DarkGray
     } else {
-        Write-Host "    $code : WARNING — no suitable UnknownNeedsReconciliation attempt found" -ForegroundColor DarkYellow
+        # No UnknownNeedsReconciliation attempt available — insert a fresh test row
+        $oid = "TEST-WH-E2E-$testRun-$code"
+        Invoke-Sql $SharedDbServer $SharedDbName @"
+INSERT INTO [PaymentAttempts]
+  ([CustomerOrderId],[AttemptOrderId],[PaymentTraceId],[AttemptNumber],
+   [Status],[PaymentProviderName],[ProviderReferenceId],[TenantId],[CreatedDate])
+VALUES
+  ('$oid','AT-E2E-$testRun-$code','trace-e2e-$testRun-$code',1,
+   'UnknownNeedsReconciliation','$provider','$ref',$tid,GETUTCDATE())
+"@ | Out-Null
+        $check2 = Invoke-Sql $SharedDbServer $SharedDbName `
+            "SELECT TOP 1 Id FROM PaymentAttempts WHERE TenantId=$tid AND ProviderReferenceId='$ref'"
+        if ($check2) {
+            Write-Host "    $code : PaymentAttempt inserted (fresh) → ProviderReferenceId='$ref'" -ForegroundColor DarkGray
+        } else {
+            Write-Host "    $code : WARNING — could not insert test PaymentAttempt" -ForegroundColor DarkYellow
+        }
+    }
+}
+
+# TenantA failed scenario — seed a second attempt for S13
+if ($tenants.ContainsKey('TenantA')) {
+    $tid = $tenants['TenantA'].Id
+    $ref = $testRefs['TenantAFailed']
+    Invoke-Sql $SharedDbServer $SharedDbName @"
+UPDATE TOP(1) [PaymentAttempts]
+   SET [ProviderReferenceId] = '$ref'
+ WHERE [TenantId] = $tid
+   AND [Status] = 'UnknownNeedsReconciliation'
+   AND ([ProviderReferenceId] IS NULL OR [ProviderReferenceId] = '')
+"@ | Out-Null
+    $check = Invoke-Sql $SharedDbServer $SharedDbName `
+        "SELECT TOP 1 Id FROM PaymentAttempts WHERE TenantId=$tid AND ProviderReferenceId='$ref'"
+    if ($check) {
+        Write-Host "    TenantA (failed) : PaymentAttempt updated for S13 → ProviderReferenceId='$ref'" -ForegroundColor DarkGray
+    } else {
+        # No UnknownNeedsReconciliation attempt available — insert a fresh test row for S13
+        $oid = "TEST-WH-E2E-FAIL-$testRun"
+        Invoke-Sql $SharedDbServer $SharedDbName @"
+INSERT INTO [PaymentAttempts]
+  ([CustomerOrderId],[AttemptOrderId],[PaymentTraceId],[AttemptNumber],
+   [Status],[PaymentProviderName],[ProviderReferenceId],[TenantId],[CreatedDate])
+VALUES
+  ('$oid','AT-E2E-FAIL-$testRun','trace-e2e-fail-$testRun',1,
+   'UnknownNeedsReconciliation','Razorpay','$ref',$tid,GETUTCDATE())
+"@ | Out-Null
+        $check2 = Invoke-Sql $SharedDbServer $SharedDbName `
+            "SELECT TOP 1 Id FROM PaymentAttempts WHERE TenantId=$tid AND ProviderReferenceId='$ref'"
+        if ($check2) {
+            Write-Host "    TenantA (failed) : PaymentAttempt inserted (fresh) for S13 → ProviderReferenceId='$ref'" -ForegroundColor DarkGray
+        } else {
+            Write-Host '    TenantA (failed) : WARNING — could not insert test PaymentAttempt for S13' -ForegroundColor DarkYellow
+        }
     }
 }
 
@@ -308,6 +363,14 @@ Store-InboxId 'S9b' $rS9b
 Add-Result 'S9' 'TenantA/Razorpay DEDUP 1st POST → 202' ($rS9a.Status -eq 202) "HTTP=$($rS9a.Status) InboxId=$($inboxIds['S9a'])"
 Add-Result 'S10' 'TenantA/Razorpay DEDUP 2nd POST → 202' ($rS9b.Status -eq 202) "HTTP=$($rS9b.Status) InboxId=$($inboxIds['S9b'])"
 
+# ── S13: TenantA / Razorpay payment.failed — expect 202 + PA transitions to Failed ─
+$evtS13  = "evt-${testRun}-A-rz-failed"
+$payS13  = '{"payment_id":"' + $testRefs['TenantAFailed'] + '","event":"payment.failed","description":"Insufficient funds"}'
+$sigS13  = Get-RazorpaySignature $payS13 $RazorpaySecret
+$rS13    = Send-Webhook 'Razorpay' 'TenantA' $payS13 $sigS13 'X-Razorpay-Signature' $evtS13 -EventType 'payment.failed'
+Store-InboxId 'S13' $rS13
+Add-Result 'S13' 'TenantA/Razorpay payment.failed → 202' ($rS13.Status -eq 202) "HTTP=$($rS13.Status) InboxId=$($inboxIds['S13'])"
+
 # ── S11: Unsupported provider → 400 ──────────────────────────────────────────
 $rS11 = Send-Webhook 'Stripe' 'TenantA' '{"event":"charge.success"}' 'sig' 'X-Stripe-Signature' "evt-${testRun}-stripe"
 Add-Result 'S11' "Unsupported provider 'Stripe' → 400" ($rS11.Status -eq 400) "HTTP=$($rS11.Status)"
@@ -387,6 +450,20 @@ Add-Result 'V9'  'Dedup 1st: InboxMsg=Processed' ($ist9a -eq 'Processed') "Inbox
 $dedupCount = [int](Invoke-Sql $SharedDbServer $SharedDbName "SELECT COUNT(*) FROM InboxMessages WHERE ProviderEventId='$evtS9'" | Select-Object -First 1).ToString().Trim()
 $noS9bId    = -not $inboxIds['S9b']
 Add-Result 'V10' 'Dedup 2nd: DB-level dedup (no new row, count=1)' ($dedupCount -eq 1 -and $noS9bId) "InboxCount=$dedupCount | S9b-NoId=$noS9bId"
+
+# V11: payment.failed — InboxMsg=Processed + PA=Failed
+$ist13 = if ($inboxIds['S13']) { Get-InboxStatus $inboxIds['S13'] $SharedDbServer $SharedDbName } else { 'no-id' }
+$ast13 = Get-AttemptStatus $testRefs['TenantAFailed'] $tenants['TenantA'].Id $SharedDbServer $SharedDbName
+Add-Result 'V11' 'TenantA/Razorpay payment.failed: InboxMsg=Processed + PA=Failed' `
+    ($ist13 -eq 'Processed' -and $ast13 -eq 'Failed') `
+    "InboxMsg[$($inboxIds['S13'])].Status=$ist13 | PA.Status=$ast13"
+
+# V12: Outbox bridge — payment.captured must have written an OutboxMessage for TenantA (S1)
+# EventType is the integration event class name: 'PaymentAttemptSucceededV1'
+$outboxCount = [int](Invoke-Sql $SharedDbServer $SharedDbName `
+    "SELECT COUNT(*) FROM OutboxMessages WHERE TenantId=$($tenants['TenantA'].Id) AND EventType LIKE '%PaymentAttemptSucceeded%'" `
+    | Select-Object -First 1).ToString().Trim()
+Add-Result 'V12' 'Outbox bridge: PaymentAttemptSucceededV1 row in OutboxMessages' ($outboxCount -ge 1) "OutboxRows=$outboxCount"
 
 # ── SUMMARY ───────────────────────────────────────────────────────────────────
 Write-Host ''

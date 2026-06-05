@@ -4,24 +4,23 @@ using Microsoft.Extensions.Logging;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Webhooks;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
-using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
 
 namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Webhooks;
 
 /// <summary>
-/// Handles payment.captured events from any provider.
-/// Transitions the matching PaymentAttempt to Succeeded via optimistic concurrency (RowVersion).
-/// Idempotent: if Status is already Succeeded, exits cleanly.
+/// Handles payment.failed events from any provider.
+/// Transitions the matching PaymentAttempt to Failed via optimistic concurrency (RowVersion).
+/// Raises PaymentAttemptFailedDomainEvent — DbContext writes an OutboxMessage atomically (Outbox bridge).
+/// Idempotent: if Status is already Failed, exits cleanly.
 /// </summary>
-internal sealed class PaymentCapturedHandler : IWebhookEventHandler
+internal sealed class PaymentFailedHandler : IWebhookEventHandler
 {
-    public string EventType => "payment.captured";
+    public string EventType => "payment.failed";
 
     private readonly IAppDbContext _context;
-    private readonly ILogger<PaymentCapturedHandler> _logger;
-    private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
+    private readonly ILogger<PaymentFailedHandler> _logger;
 
-    public PaymentCapturedHandler(IAppDbContext context, ILogger<PaymentCapturedHandler> logger)
+    public PaymentFailedHandler(IAppDbContext context, ILogger<PaymentFailedHandler> logger)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(logger);
@@ -31,9 +30,8 @@ internal sealed class PaymentCapturedHandler : IWebhookEventHandler
 
     public async Task HandleAsync(string providerName, string rawPayload, int tenantId, CancellationToken cancellationToken)
     {
-        // Extract the provider reference id from the payload.
-        // Providers use different field names — check common ones.
         string? providerReferenceId = null;
+        string? errorReason = null;
         try
         {
             using var doc = JsonDocument.Parse(rawPayload);
@@ -42,11 +40,15 @@ internal sealed class PaymentCapturedHandler : IWebhookEventHandler
                 TryGetString(root, "payment_id") ??
                 TryGetString(root, "id") ??
                 TryGetString(root, "transaction_id");
+            errorReason =
+                TryGetString(root, "description") ??
+                TryGetString(root, "error_description") ??
+                TryGetString(root, "reason");
         }
         catch (JsonException ex)
         {
             _logger.LogError(ex,
-                "Failed to parse payment.captured payload. Provider={Provider} TenantId={TenantId}",
+                "Failed to parse payment.failed payload. Provider={Provider} TenantId={TenantId}",
                 providerName, tenantId);
             return;
         }
@@ -54,7 +56,7 @@ internal sealed class PaymentCapturedHandler : IWebhookEventHandler
         if (string.IsNullOrWhiteSpace(providerReferenceId))
         {
             _logger.LogWarning(
-                "payment.captured payload has no recognisable provider reference id. Provider={Provider} TenantId={TenantId}",
+                "payment.failed payload has no recognisable provider reference id. Provider={Provider} TenantId={TenantId}",
                 providerName, tenantId);
             return;
         }
@@ -67,30 +69,30 @@ internal sealed class PaymentCapturedHandler : IWebhookEventHandler
         if (attempt is null)
         {
             _logger.LogWarning(
-                "No PaymentAttempt found for payment.captured. Provider={Provider} ProviderReferenceId={RefId} TenantId={TenantId}",
+                "No PaymentAttempt found for payment.failed. Provider={Provider} ProviderReferenceId={RefId} TenantId={TenantId}",
                 providerName, providerReferenceId, tenantId);
             return;
         }
 
-        // Idempotency: already succeeded — nothing to do.
-        if (attempt.Status == PaymentAttemptStatus.Succeeded)
+        // Idempotency: already failed — nothing to do.
+        if (attempt.Status == PaymentAttemptStatus.Failed)
         {
             _logger.LogInformation(
-                "payment.captured: PaymentAttempt {AttemptId} already Succeeded — skipping. TenantId={TenantId}",
+                "payment.failed: PaymentAttempt {AttemptId} already Failed — skipping. TenantId={TenantId}",
                 attempt.Id, tenantId);
             return;
         }
 
-        // MarkAsSucceeded sets Status + ProviderStatus and raises PaymentAttemptSucceededDomainEvent.
+        // MarkAsFailed sets Status + ProviderStatus + LastErrorMessage and raises PaymentAttemptFailedDomainEvent.
         // DbContext.SaveChangesAsync harvests the domain event and writes an OutboxMessage atomically (Outbox bridge).
         // RowVersion on PaymentAttempt provides optimistic concurrency (DW-002).
         // DbUpdateConcurrencyException is caught by the worker and the message retried.
-        attempt.MarkAsSucceeded(providerName);
+        attempt.MarkAsFailed(providerName, errorReason);
         await _context.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(
-            "payment.captured: PaymentAttempt {AttemptId} transitioned to Succeeded. Provider={Provider} TenantId={TenantId}",
-            attempt.Id, providerName, tenantId);
+            "payment.failed: PaymentAttempt {AttemptId} transitioned to Failed. Provider={Provider} TenantId={TenantId} Reason={Reason}",
+            attempt.Id, providerName, tenantId, errorReason);
     }
 
     private static string? TryGetString(JsonElement element, string propertyName) =>
