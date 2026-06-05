@@ -20,15 +20,13 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
         private static readonly string[] StartupSeedTenantCodes = { "TenantA", "TenantB" };
 
         // Seed-time defaults only. Once in the DB, the DB value is authoritative — re-seed does NOT overwrite.
-        // TenantA Razorpay uses the Checkout JS popup; 3DS is handled internally by the Razorpay SDK (SAQ A).
-        // All other tenant/provider combinations default to true (fail-secure).
-        private static readonly Dictionary<(string TenantCode, string ProviderType), bool> Use3DSecureSeedDefaults = new()
-        {
-            [("TenantA", PaymentProviderTypes.Razorpay)] = false,
-        };
-
+        // Razorpay: always use provider_checkout (Use3DSecure = false) for all tenants.
+        //   The Checkout JS popup handles 3DS internally (SAQ A, no PCI scope) and requires no
+        //   Razorpay account activation. S2S direct charge (Use3DSecure = true) requires the merchant
+        //   to raise a Razorpay support ticket — not available on our sandbox account.
+        // OpenPay: Use3DSecure = true (direct_card_form) — OpenPay uses server-side 3DS natively.
         private static bool GetUse3DSecureSeedDefault(string tenantCode, string providerType)
-            => Use3DSecureSeedDefaults.TryGetValue((tenantCode, providerType), out var value) ? value : true;
+            => providerType != PaymentProviderTypes.Razorpay;
         private const int SeededCustomerCountPerTenant = 120;
 
         public static void Initialize(
