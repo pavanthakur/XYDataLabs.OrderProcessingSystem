@@ -13,6 +13,14 @@
   "DedicatedTenantConnectionStrings": {
     "TenantC": "Server=localhost;Database=OrderProcessingSystem_TenantC;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true;"
   },
+  "Webhooks": {
+    "Razorpay": {
+      "Secret": "__RAZORPAY_WEBHOOK_SECRET__"
+    },
+    "OpenPay": {
+      "Secret": "__OPENPAY_WEBHOOK_SECRET__"
+    }
+  },
   "OpenPay": {
     "MerchantId": "__OPENPAY_MERCHANT_ID__",
     "PublicKey": "__OPENPAY_PUBLIC_KEY__",

@@ -50,6 +50,23 @@ public class MultiTenantSchemaTests
     }
 
     [Fact]
+    public void PaymentAttempt_Should_Use_RowVersion_Concurrency_Token()
+    {
+        // DW-002 (absorbed Phase 8.7): webhook handlers write concurrent state transitions to PaymentAttempt.
+        // RowVersion protects against silent overwrites when duplicate webhooks pass inbox deduplication.
+        using var context = CreateDbContext();
+        var paymentAttemptEntity = context.Model.FindEntityType(typeof(PaymentAttempt));
+
+        paymentAttemptEntity.Should().NotBeNull();
+
+        var rowVersionProperty = paymentAttemptEntity!.FindProperty(nameof(PaymentAttempt.RowVersion));
+        rowVersionProperty.Should().NotBeNull(
+            because: "PaymentAttempt is mutated by webhook handlers and requires optimistic concurrency protection (DW-002, Phase 8.7)");
+        rowVersionProperty!.IsConcurrencyToken.Should().BeTrue();
+        rowVersionProperty.ValueGenerated.Should().Be(ValueGenerated.OnAddOrUpdate);
+    }
+
+    [Fact]
     public void Tenants_Table_Should_Not_Have_Global_Query_Filter()
     {
         using var context = CreateDbContext();

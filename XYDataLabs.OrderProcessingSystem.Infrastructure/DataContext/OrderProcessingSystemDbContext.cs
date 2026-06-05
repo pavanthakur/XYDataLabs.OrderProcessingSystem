@@ -284,6 +284,20 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
             modelBuilder.Entity<PaymentAttempt>()
                 .HasIndex(attempt => new { attempt.TenantId, attempt.PaymentTraceId });
 
+            modelBuilder.Entity<PaymentAttempt>()
+                .Property(attempt => attempt.RowVersion)
+                .IsRowVersion();
+
+            modelBuilder.Entity<PaymentAttempt>()
+                .Property(attempt => attempt.Status)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            modelBuilder.Entity<InboxMessage>()
+                .Property(message => message.Status)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
             modelBuilder.Entity<PaymentAttemptHistory>()
                 .HasIndex(history => new { history.TenantId, history.AttemptOrderId });
 
@@ -297,6 +311,14 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
             modelBuilder.Entity<InboxMessage>()
                 .HasIndex(message => new { message.TenantId, message.MessageId })
                 .IsUnique();
+
+            // DB-level dedup guard: one InboxMessage per (TenantId, ProviderEventId).
+            // Filtered on non-empty ProviderEventId to exclude legacy rows or outbox-sourced messages.
+            modelBuilder.Entity<InboxMessage>()
+                .HasIndex(message => new { message.TenantId, message.ProviderEventId })
+                .IsUnique()
+                .HasFilter("[ProviderEventId] IS NOT NULL AND [ProviderEventId] <> ''")
+                .HasDatabaseName("IX_InboxMessages_TenantId_ProviderEventId");
 
             modelBuilder.Entity<TransactionStatusHistory>()
                 .HasIndex(tsh => new { tsh.TenantId, tsh.AttemptOrderId });

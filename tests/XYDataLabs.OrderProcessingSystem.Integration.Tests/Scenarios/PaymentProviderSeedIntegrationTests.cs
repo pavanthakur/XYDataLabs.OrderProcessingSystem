@@ -58,8 +58,8 @@ public sealed class PaymentProviderSeedIntegrationTests : IAsyncLifetime
         var rzp = providers.Single(p => p.ProviderType == PaymentProviderTypes.Razorpay);
         var opy = providers.Single(p => p.ProviderType == PaymentProviderTypes.OpenPay);
         opy.Use3DSecure.Should().BeTrue($"OpenPay seeds with 3DS enabled ({tenantCode})");
-        rzp.Use3DSecure.Should().Be(tenantCode != "TenantA",
-            $"{tenantCode} Razorpay 3DS: disabled for TenantA, enabled otherwise");
+        rzp.Use3DSecure.Should().BeFalse(
+            $"{tenantCode} Razorpay uses hosted provider_checkout; S2S/direct_card_form is disabled for all tenants");
         providers.Should().OnlyContain(
             provider => !provider.IsActive,
             $"Phase 8.6: all seeded provider rows must be IsActive=false — routing authority is Tenant Registry ({tenantCode})");
@@ -97,8 +97,8 @@ public sealed class PaymentProviderSeedIntegrationTests : IAsyncLifetime
         var rzp = providers.Single(p => p.ProviderType == PaymentProviderTypes.Razorpay);
         var opy = providers.Single(p => p.ProviderType == PaymentProviderTypes.OpenPay);
         opy.Use3DSecure.Should().BeTrue(because: $"OpenPay seeds with 3DS enabled ({tenantCode})");
-        rzp.Use3DSecure.Should().Be(tenantCode != "TenantA",
-            because: $"{tenantCode} Razorpay 3DS: disabled for TenantA, enabled otherwise");
+        rzp.Use3DSecure.Should().BeFalse(
+            because: $"{tenantCode} Razorpay uses hosted provider_checkout; S2S/direct_card_form is disabled for all tenants");
         providers.Should().OnlyContain(
             provider => !provider.IsActive,
             because: $"Phase 8.6: routing authority is Tenant Registry — all seeded rows must be inactive ({tenantCode})");

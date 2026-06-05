@@ -25,8 +25,13 @@ public class SqlIdempotencyGuard : IIdempotencyGuard
         var inboxMessage = new InboxMessage
         {
             MessageId = messageId,
-            EventType = "Processed", // A default label since interface lacks EventType
-            ProcessedUtc = DateTime.UtcNow
+            ProviderEventId = messageId.ToString(),
+            Source = "Outbox",
+            EventType = "Processed",
+            Payload = "{}",
+            Status = Domain.Entities.InboxMessageStatus.Processed,
+            ProcessedUtc = DateTime.UtcNow,
+            CreatedDate = DateTime.UtcNow
         };
 
         _dbContext.InboxMessages.Add(inboxMessage);

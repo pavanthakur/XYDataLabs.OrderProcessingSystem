@@ -205,6 +205,8 @@ via the `ASPNETCORE_ENVIRONMENT` variable.
 | `OPENPAY_DEVICE_SESSION_ID` | Environments | OpenPay device session ID — **set manually** in GitHub Settings → Environments by an authorized person; bootstrap validates the target environment before proceeding |
 | `RAZORPAY_MERCHANT_ID` | Environments | Razorpay key ID (e.g. `rzp_test_…`) — **set manually** in GitHub Settings → Environments by an authorized person; bootstrap validates the target environment before proceeding |
 | `RAZORPAY_PRIVATE_KEY` | Environments | Razorpay key secret — **set manually** in GitHub Settings → Environments by an authorized person; bootstrap validates the target environment before proceeding |
+| `OPENPAY_WEBHOOK_SECRET` | Environments | OpenPay HMAC-SHA256 webhook signing secret — **set manually** in GitHub Settings → Environments by an authorized person; bootstrap validates presence and pushes to Key Vault as `Webhooks--OpenPay--Secret`; without it all incoming OpenPay webhooks are rejected with HTTP 400 |
+| `RAZORPAY_WEBHOOK_SECRET` | Environments | Razorpay HMAC-SHA256 webhook signing secret — **set manually** in GitHub Settings → Environments by an authorized person; bootstrap validates presence and pushes to Key Vault as `Webhooks--Razorpay--Secret`; without it all incoming Razorpay webhooks are rejected with HTTP 400 |
 
 > **Note**: `APP_INSTALLATION_ID` is **not** required — it is auto-discovered at runtime.
 
@@ -303,7 +305,7 @@ Port allocations: Local VS API (5010–5011) + UI (5173–5174) · Docker dev (5
 |------|-------|---------------|
 | `TROUBLESHOOTING-INDEX.md` | Root | Quick links for common GitHub App / OIDC / workflow errors |
 | `ARCHITECTURE.md` | Root | Binding tenant, payment identifier, migration, and test standard for future model creation |
-| `ARCHITECTURE-EVOLUTION.md` | Root | 14-phase roadmap: Phase 8.6 ✅ (Central Tenant Registry), Phase 8.7 next 📅 (Webhook Receiver) |
+| `ARCHITECTURE-EVOLUTION.md` | Root | 14-phase roadmap: Phase 8.7 ✅ (Provider Webhooks), Phase 9 next 📅 (YARP Microservices Architecture) |
 | `docs/internal/AZURE-PROGRESS-EVALUATION.md` | docs/internal | Learning progress weeks 1–10, next-step guides |
 | `docs/AI-OPERATING-MODEL.md` | docs/ | Canonical protocol for shared AI customization and governance |
 | `docs/internal/DEFERRED-WORK-LOG.md` | docs/internal | Shared register for justified deferred work |

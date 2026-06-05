@@ -80,6 +80,16 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure
             // Tenant registry service — read-only access to tenant list via TenantRegistryDbContext
             builder.Services.AddScoped<ITenantRegistry, Multitenancy.TenantRegistryService>();
 
+            // Phase 8.7 Webhook Signature Validator — per-provider HMAC, secrets from IConfiguration (Key Vault at runtime)
+            builder.Services.AddScoped<IWebhookSignatureValidator, Webhooks.WebhookSignatureValidator>();
+
+            // Phase 8.7 Inbox event handlers (one per EventType; resolved as IEnumerable by InboxProcessorWorker)
+            builder.Services.AddScoped<Application.Features.Webhooks.IWebhookEventHandler, Webhooks.PaymentCapturedHandler>();
+            builder.Services.AddScoped<Application.Features.Webhooks.IWebhookEventHandler, Webhooks.PaymentFailedHandler>();
+
+            // Phase 8.7 Inbox background processor
+            builder.Services.AddHostedService<Webhooks.InboxProcessorWorker>();
+
             // Phase 8 Idempotency Guard
             builder.Services.AddScoped<Application.Events.IIdempotencyGuard, Events.SqlIdempotencyGuard>();
 

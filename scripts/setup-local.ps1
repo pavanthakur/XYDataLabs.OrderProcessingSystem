@@ -111,6 +111,8 @@ function New-EnvLocalContent {
         [Parameter(Mandatory = $true)] [string] $OpenPayDeviceSessionId,
         [Parameter(Mandatory = $true)] [string] $RazorpayMerchantId,
         [Parameter(Mandatory = $true)] [string] $RazorpayPrivateKey,
+        [string] $RazorpayWebhookSecret = 'local-sandbox-only',
+        [string] $OpenPayWebhookSecret = 'local-sandbox-only',
         [string] $SqlServerImage = ''
     )
 
@@ -123,8 +125,10 @@ LOCAL_OPENPAY_MERCHANT_ID=$OpenPayMerchant
 LOCAL_OPENPAY_PUBLIC_KEY=$OpenPayPublicKey
 LOCAL_OPENPAY_PRIVATE_KEY=$OpenPayPrivateKey
 LOCAL_OPENPAY_DEVICE_SESSION_ID=$OpenPayDeviceSessionId
+LOCAL_OPENPAY_WEBHOOK_SECRET=$OpenPayWebhookSecret
 LOCAL_RAZORPAY_MERCHANT_ID=$RazorpayMerchantId
 LOCAL_RAZORPAY_PRIVATE_KEY=$RazorpayPrivateKey
+LOCAL_RAZORPAY_WEBHOOK_SECRET=$RazorpayWebhookSecret
 "@
 
     if (-not [string]::IsNullOrWhiteSpace($SqlServerImage)) {
@@ -145,6 +149,8 @@ function Write-EnvLocal {
         [Parameter(Mandatory = $true)] [string] $OpenPayDeviceSessionId,
         [Parameter(Mandatory = $true)] [string] $RazorpayMerchantId,
         [Parameter(Mandatory = $true)] [string] $RazorpayPrivateKey,
+        [string] $RazorpayWebhookSecret = 'local-sandbox-only',
+        [string] $OpenPayWebhookSecret = 'local-sandbox-only',
         [string] $SqlServerImage = ''
     )
 
@@ -157,6 +163,8 @@ function Write-EnvLocal {
         -OpenPayDeviceSessionId $OpenPayDeviceSessionId `
         -RazorpayMerchantId $RazorpayMerchantId `
         -RazorpayPrivateKey $RazorpayPrivateKey `
+        -RazorpayWebhookSecret $RazorpayWebhookSecret `
+        -OpenPayWebhookSecret $OpenPayWebhookSecret `
         -SqlServerImage $SqlServerImage
 
     Set-Content -Path $Path -Value $content -Encoding UTF8
@@ -176,6 +184,8 @@ if ((Test-Path $envLocal) -and -not $Force) {
     $openpaySession  = $envVars['LOCAL_OPENPAY_DEVICE_SESSION_ID']
     $razorpayMerchant = $envVars['LOCAL_RAZORPAY_MERCHANT_ID']
     $razorpayPrivateKey = $envVars['LOCAL_RAZORPAY_PRIVATE_KEY']
+    $razorpayWebhookSecret = $envVars['LOCAL_RAZORPAY_WEBHOOK_SECRET']
+    $openpayWebhookSecret  = $envVars['LOCAL_OPENPAY_WEBHOOK_SECRET']
     $sqlServerImage  = $envVars['ORDERPROCESSING_SQLSERVER_IMAGE']
 
     $normalizedEnvCredentials = Normalize-OpenPayCredentials `
@@ -235,6 +245,20 @@ if ((Test-Path $envLocal) -and -not $Force) {
         $envLocalWasIncomplete = $true
     }
 
+    if ([string]::IsNullOrWhiteSpace($razorpayWebhookSecret)) {
+        Write-Host '    [!!] LOCAL_RAZORPAY_WEBHOOK_SECRET is missing from .env.local - prompting to repair it.' -ForegroundColor Yellow
+        $razorpayWebhookSecret = (Read-Host '  Razorpay Webhook Secret (LOCAL_RAZORPAY_WEBHOOK_SECRET) ').Trim()
+        if ([string]::IsNullOrWhiteSpace($razorpayWebhookSecret)) { $razorpayWebhookSecret = 'local-sandbox-only' }
+        $envLocalWasIncomplete = $true
+    }
+
+    if ([string]::IsNullOrWhiteSpace($openpayWebhookSecret)) {
+        Write-Host '    [!!] LOCAL_OPENPAY_WEBHOOK_SECRET is missing from .env.local - prompting to repair it.' -ForegroundColor Yellow
+        $openpayWebhookSecret = (Read-Host '  OpenPay Webhook Secret (LOCAL_OPENPAY_WEBHOOK_SECRET) ').Trim()
+        if ([string]::IsNullOrWhiteSpace($openpayWebhookSecret)) { $openpayWebhookSecret = 'local-sandbox-only' }
+        $envLocalWasIncomplete = $true
+    }
+
     if ([string]::IsNullOrWhiteSpace($openpaySession)) {
         Write-Host '    [!!] LOCAL_OPENPAY_DEVICE_SESSION_ID is missing from .env.local - defaulting it.' -ForegroundColor Yellow
         $openpaySession = 'default-device-session'
@@ -252,6 +276,8 @@ if ((Test-Path $envLocal) -and -not $Force) {
             -OpenPayDeviceSessionId $openpaySession `
             -RazorpayMerchantId $razorpayMerchant `
             -RazorpayPrivateKey $razorpayPrivateKey `
+            -RazorpayWebhookSecret $razorpayWebhookSecret `
+            -OpenPayWebhookSecret $openpayWebhookSecret `
             -SqlServerImage $sqlServerImage
 
         Write-Done 'Repaired .env.local'
@@ -277,6 +303,8 @@ else {
     $openpaySession  = 'default-device-session'
     $razorpayMerchant = $null
     $razorpayPrivateKey = $null
+    $razorpayWebhookSecret = $null
+    $openpayWebhookSecret  = $null
     $sqlServerImage  = if (Test-Path $envLocal) { (Read-EnvLocal $envLocal)['ORDERPROCESSING_SQLSERVER_IMAGE'] } else { '' }
 
     $azAvailable = Get-Command az -ErrorAction SilentlyContinue
@@ -287,6 +315,8 @@ else {
             $kvKey      = az keyvault secret show --vault-name kv-orderprocessing-dev --name 'OpenPay--PrivateKey'  --query value -o tsv 2>$null
             $kvRazorpayMerchant = az keyvault secret show --vault-name kv-orderprocessing-dev --name 'Razorpay--MerchantId' --query value -o tsv 2>$null
             $kvRazorpayKey = az keyvault secret show --vault-name kv-orderprocessing-dev --name 'Razorpay--PrivateKey' --query value -o tsv 2>$null
+            $kvRazorpayWebhook = az keyvault secret show --vault-name kv-orderprocessing-dev --name 'Webhooks--Razorpay--Secret' --query value -o tsv 2>$null
+            $kvOpenpayWebhook  = az keyvault secret show --vault-name kv-orderprocessing-dev --name 'Webhooks--OpenPay--Secret'  --query value -o tsv 2>$null
             if ($kvMerchant -and $kvKey -and
                 $kvMerchant -notmatch '^set-openpay' -and $kvKey -notmatch '^set-openpay') {
                 $normalizedKvCredentials = Normalize-OpenPayCredentials `
@@ -304,6 +334,12 @@ else {
                 }
                 if ($kvRazorpayKey -and $kvRazorpayKey -notmatch '^set-razorpay' -and $kvRazorpayKey -ne '__RAZORPAY_PRIVATE_KEY__') {
                     $razorpayPrivateKey = $kvRazorpayKey.Trim()
+                }
+                if ($kvRazorpayWebhook -and $kvRazorpayWebhook -notmatch '^local-sandbox-only' -and $kvRazorpayWebhook -ne '__RAZORPAY_WEBHOOK_SECRET__') {
+                    $razorpayWebhookSecret = $kvRazorpayWebhook.Trim()
+                }
+                if ($kvOpenpayWebhook -and $kvOpenpayWebhook -notmatch '^local-sandbox-only' -and $kvOpenpayWebhook -ne '__OPENPAY_WEBHOOK_SECRET__') {
+                    $openpayWebhookSecret = $kvOpenpayWebhook.Trim()
                 }
                 if ($normalizedKvCredentials.WasSwapped) {
                     Write-Host '    [!!] kv-orderprocessing-dev still stores OpenPay--MerchantId and OpenPay--PrivateKey under the wrong names. Local setup will continue with normalized values, but the Key Vault source should be corrected separately.' -ForegroundColor Yellow
@@ -364,6 +400,16 @@ else {
         if ([string]::IsNullOrWhiteSpace($razorpayPrivateKey)) { $razorpayPrivateKey = 'local-sandbox-only' }
     }
 
+    if (-not $razorpayWebhookSecret) {
+        $razorpayWebhookSecret = (Read-Host '  Razorpay Webhook Secret (LOCAL_RAZORPAY_WEBHOOK_SECRET) [leave blank to skip] ').Trim()
+        if ([string]::IsNullOrWhiteSpace($razorpayWebhookSecret)) { $razorpayWebhookSecret = 'local-sandbox-only' }
+    }
+
+    if (-not $openpayWebhookSecret) {
+        $openpayWebhookSecret = (Read-Host '  OpenPay Webhook Secret (LOCAL_OPENPAY_WEBHOOK_SECRET) [leave blank to skip]   ').Trim()
+        if ([string]::IsNullOrWhiteSpace($openpayWebhookSecret)) { $openpayWebhookSecret = 'local-sandbox-only' }
+    }
+
     if (-not $openpayPublicKey) {
         $openpayPublicKey = (Read-Host '  OpenPay Public Key (LOCAL_OPENPAY_PUBLIC_KEY) ').Trim()
         if ([string]::IsNullOrWhiteSpace($openpayPublicKey)) { $openpayPublicKey = 'local-sandbox-only' }
@@ -379,6 +425,8 @@ else {
         -OpenPayDeviceSessionId $openpaySession `
         -RazorpayMerchantId $razorpayMerchant `
         -RazorpayPrivateKey $razorpayPrivateKey `
+        -RazorpayWebhookSecret $razorpayWebhookSecret `
+        -OpenPayWebhookSecret $openpayWebhookSecret `
         -SqlServerImage $sqlServerImage
 
     Write-Done 'Created .env.local'
@@ -395,6 +443,8 @@ $apiSecrets = [ordered]@{
     'OpenPay:DeviceSessionId'                     = $openpaySession
     'Razorpay:MerchantId'                         = $razorpayMerchant
     'Razorpay:PrivateKey'                         = $razorpayPrivateKey
+    'Webhooks:Razorpay:Secret'                    = $razorpayWebhookSecret
+    'Webhooks:OpenPay:Secret'                     = $openpayWebhookSecret
     'PaymentProviders:TenantA:OpenPay:PrivateKey' = $openpayKey
     'PaymentProviders:TenantB:OpenPay:PrivateKey' = $openpayKey
     'PaymentProviders:TenantC:OpenPay:PrivateKey' = $openpayKey

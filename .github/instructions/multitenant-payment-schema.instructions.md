@@ -105,7 +105,7 @@ These rules are binding for all tenant, payment, DTO, migration, middleware, and
 - `PaymentProvider.Use3DSecure` controls whether 3D Secure is enabled per tenant. It is a `bool` column (default `true`) on the `PaymentProvider` entity.
 - This is a business rule per tenant, not an infrastructure/global setting. It must NOT be in `OpenPayConfig` or appsettings JSON.
 - `ProcessPaymentCommandHandler` reads `Use3DSecure` from `_paymentProvider.Use3DSecure` — the `PaymentProvider` entity resolved by `TenantPaymentProviderResolver` via `AppMasterData.GetProviderByTypeForTenant()`.
-- Seed defaults come from the `Use3DSecureSeedDefaults` dictionary in `DbInitializer` (not from any record field). Default is `true` for all except `(TenantA, Razorpay) = false`. Re-seed never overwrites existing DB values.
+- Seed defaults come from `DbInitializer.GetUse3DSecureSeedDefault`. Razorpay seeds `false` for all tenants so the runtime uses hosted `provider_checkout`; OpenPay and future providers seed `true` unless explicitly changed. Re-seed never overwrites existing DB values.
 - Future per-tenant payment flags (e.g. per-tenant MerchantId) should follow the same pattern: column on `PaymentProvider`, not appsettings.
 
 ## ConfigureTenantOwnership pattern

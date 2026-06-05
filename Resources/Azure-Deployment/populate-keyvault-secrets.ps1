@@ -37,6 +37,17 @@ param(
     [Parameter(Mandatory=$false)]
     [string]$RazorpayPrivateKey,
 
+    # Phase 8.7 — Webhook HMAC signing secrets
+    # Key Vault secret names: Webhooks--OpenPay--Secret / Webhooks--Razorpay--Secret
+    # Read by SharedSettingsLoader at runtime for HMAC signature validation on incoming webhook calls.
+    # Must be set as GitHub environment secrets (OPENPAY_WEBHOOK_SECRET / RAZORPAY_WEBHOOK_SECRET)
+    # before running bootstrap. Webhooks will be rejected with HTTP 400 if these are absent.
+    [Parameter(Mandatory=$false)]
+    [string]$OpenPayWebhookSecret,
+
+    [Parameter(Mandatory=$false)]
+    [string]$RazorpayWebhookSecret,
+
     [Parameter(Mandatory=$false)]
     [string]$ApiHttpsCertPassword,
 
@@ -267,6 +278,16 @@ try {
         exit 1
     }
 
+    if ([string]::IsNullOrWhiteSpace($OpenPayWebhookSecret)) {
+        Write-Error "❌ OpenPayWebhookSecret is required and was not provided.`n  • Local invocation: pass -OpenPayWebhookSecret <value>`n  • Azure bootstrap: add OPENPAY_WEBHOOK_SECRET to GitHub Settings → Environments and re-run bootstrap."
+        exit 1
+    }
+
+    if ([string]::IsNullOrWhiteSpace($RazorpayWebhookSecret)) {
+        Write-Error "❌ RazorpayWebhookSecret is required and was not provided.`n  • Local invocation: pass -RazorpayWebhookSecret <value>`n  • Azure bootstrap: add RAZORPAY_WEBHOOK_SECRET to GitHub Settings → Environments and re-run bootstrap."
+        exit 1
+    }
+
     if ([string]::IsNullOrWhiteSpace($OpenPayRedirectUrl)) {
         # Derive from the Azure App Service naming convention: {GitHubOwner}-{BaseName}-ui-xyapp-{envSuffix}
         # This matches bootstrap-enterprise-infra.ps1 and is predictable on any machine.
@@ -300,6 +321,8 @@ try {
         'PaymentProviders--TenantA--Razorpay--PrivateKey' = $RazorpayPrivateKey
         'PaymentProviders--TenantB--Razorpay--PrivateKey' = $RazorpayPrivateKey
         'PaymentProviders--TenantC--Razorpay--PrivateKey' = $RazorpayPrivateKey
+        'Webhooks--OpenPay--Secret' = $OpenPayWebhookSecret
+        'Webhooks--Razorpay--Secret' = $RazorpayWebhookSecret
         'ApiSettings--API--https--CertPassword' = $ApiHttpsCertPassword
         'ApiSettings--UI--https--CertPassword' = $UiHttpsCertPassword
     }

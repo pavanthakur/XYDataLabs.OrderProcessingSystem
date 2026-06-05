@@ -44,7 +44,7 @@ public sealed class DbInitializerSeedProviderTests : IDisposable
 
     [Theory]
     [InlineData("TenantA", TenantAId, false, true)]  // TenantA: Razorpay 3DS off (Checkout JS popup, SAQ A), OpenPay on
-    [InlineData("TenantB", TenantBId, true,  true)]  // TenantB: both providers 3DS on
+    [InlineData("TenantB", TenantBId, false, true)]  // TenantB: Razorpay 3DS off (Checkout JS popup, SAQ A), OpenPay on
     public void Initialize_WhenNoProviderRowsExist_SeedsBothProvidersAsInactive(
         string tenantCode, int tenantId, bool expectedRazorpay3DS, bool expectedOpenPay3DS)
     {

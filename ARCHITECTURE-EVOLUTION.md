@@ -1,7 +1,7 @@
 # Architecture Evolution: Monolith to Enterprise Microservices
 
 **Last Updated:** June 5, 2026
-**Current Status:** Phase 8 Closeout Matrix Validation Passed ✅ | Track U U5 Complete ✅ | Phase 8.5 Complete ✅ | Phase 8.6 Complete ✅ | Phases 8.7, 9, 9.5, 10, 11, 11.5, 12-14 Planned 📅
+**Current Status:** Phase 8 Closeout Matrix Validation Passed ✅ | Track U U5 Complete ✅ | Phase 8.5 Complete ✅ | Phase 8.6 Complete ✅ | Phase 8.7 Complete ✅ | Phases 9, 9.5, 10, 11, 11.5, 12-14 Planned 📅
 
 ---
 
@@ -148,9 +148,10 @@ XYDataLabs.OrderProcessingSystem.sln
 | **5** | Test Project Restructure | Domain.Tests, Application.Tests, API.Tests, Integration.Tests (Testcontainers) | ✅ **COMPLETE** |
 | **6** | Polish & Hardening | CachingBehavior, Redis, API versioning `/api/v1/`, health checks, CancellationToken, TimeProvider | ✅ **COMPLETE** |
 | **7** | Tenant Enforcement & Ops | TenantValidationBehavior, AuditLog, security headers, liveness/readiness checks | ✅ **COMPLETE** |
-| **8** | Event-Driven Foundation | Domain events, integration events, Outbox pattern, background publisher | 📅 Planned |
-| **8.5** | Secondary Payment Provider Architecture | Provider-neutral routing, per-tenant provider selection, `HttpClient`-based resilience, provider-aware idempotency and reconciliation | 📅 Planned |
-| **8.7** | Provider Webhook Receiver & Async Payment Lifecycle | Signed webhooks, inbox idempotency, replay flow, tenant-aware async payment convergence for the selected secondary provider | 📅 Planned |
+| **8** | Event-Driven Foundation | Domain events, integration events, Outbox pattern, background publisher | ✅ **COMPLETE** |
+| **8.5** | Secondary Payment Provider Architecture | Provider-neutral routing, per-tenant provider selection, `HttpClient`-based resilience, provider-aware idempotency and reconciliation | ✅ **COMPLETE** |
+| **8.6** | Central Tenant Registry & Separation of Duties | `ITenantRegistry`, `Tenant.PaymentProviderCode` as sole routing authority, ops-owned DB, ADR-019 | ✅ **COMPLETE** |
+| **8.7** | Provider Webhook Receiver & Async Payment Lifecycle | Signed webhooks, inbox idempotency, Outbox bridge, `payment.captured`/`payment.failed` handlers, tenant-aware async payment convergence | ✅ **COMPLETE** |
 | **9** | YARP Microservices (Local) | Gateway, Orders/Inventory/Notifications APIs, Docker Compose, event-based communication | 📅 Planned |
 | **9.5** | Cloud-Portable Identity Showcase | Local Keycloak portability proof for the JWT/OIDC pipeline without changing the Azure production identity model | 📅 Planned |
 | **10** | Azure Container Apps | ACA deployment, ACR, Service Bus, Entra ID + JWT, private networking | 📅 Planned |
@@ -622,7 +623,7 @@ This phase is closed when:
 
 ---
 
-## Phase 8.7 — Provider Webhook Receiver & Event-Driven Payment Lifecycle 📅
+## Phase 8.7 — Provider Webhook Receiver & Event-Driven Payment Lifecycle ✅
 
 **Focus:** Process asynchronous payment lifecycle events from the selected secondary provider securely and idempotently. This phase decouples local payment state from synchronous adapter polling whenever the provider supports authoritative webhook delivery.
 
@@ -673,9 +674,25 @@ When Service Bus replaces the in-memory event bus in Phase 10, webhook-derived e
 - Phase 8.5 (secondary-provider integration and tenant metadata convention)
 - Phase 8.6 (tenant registry as the authoritative resolver — webhook tenant resolution uses `ITenantRegistry`)
 
-### Outcome
+### Completed Items (Phase 8.7)
 
-Production-grade asynchronous payment lifecycle handling for the selected secondary provider. Provider-originated refunds, disputes, and delayed confirmations converge on the same tenant-aware Outbox pipeline as locally-originated payment state changes. Optimistic concurrency is extended to all webhook-mutated aggregates. Webhook and inbox paths are observable via structured metrics.
+- `WebhookController` — provider-scoped endpoint with raw-body buffering and HMAC validation before any business deserialization; returns 202 immediately after durable Inbox persist
+- `IWebhookSignatureValidator` / `WebhookSignatureValidator` — HMAC-SHA256: Razorpay (hex uppercase, `X-Razorpay-Signature`), OpenPay (Base64, `X-OpenPay-Signature`); timing-safe via `CryptographicOperations.FixedTimeEquals`
+- Webhook secrets per environment — config key `Webhooks:{Provider}:Secret`; local values managed by `setup-local.ps1` through gitignored `.env.local` plus dotnet user-secrets; Docker receives `Webhooks__{Provider}__Secret` from `.env.local`; Azure receives `Webhooks--{Provider}--Secret` from GitHub environment secrets via bootstrap/deploy Key Vault population
+- `RecordWebhookEventCommand` / `RecordWebhookEventCommandHandler` — writes `InboxMessage` row with `Status=Received`; catches `DbUpdateException` on duplicate key → returns `Success(0)` (202 still returned)
+- `InboxProcessorWorker` — `BackgroundService` (5 s poll); dispatches to `IWebhookEventHandler` dictionary keyed on `EventType` (case-insensitive); catches `DbUpdateConcurrencyException` → resets to Received and retries; marks unhandled event types as Processed without retry
+- `PaymentCapturedHandler` — handles `payment.captured`; calls `attempt.MarkAsSucceeded(providerName)` → raises `PaymentAttemptSucceededDomainEvent` → DbContext harvests event and writes `OutboxMessage` atomically (Outbox bridge active)
+- `PaymentFailedHandler` — handles `payment.failed`; calls `attempt.MarkAsFailed(providerName, errorReason)` → raises `PaymentAttemptFailedDomainEvent` → same Outbox bridge
+- `PaymentAttemptSucceededDomainEvent` + `PaymentAttemptFailedDomainEvent` — domain events in Domain layer
+- `PaymentAttemptSucceededV1` + `PaymentAttemptFailedV1` — integration event DTOs; `PaymentAttemptSucceededDomainEventMapper` + `PaymentAttemptFailedDomainEventMapper` auto-registered by `CqrsServiceExtensions` assembly scan
+- `PaymentAttempt.MarkAsSucceeded()` + `PaymentAttempt.MarkAsFailed()` — idempotent entity methods; idempotency guard prevents re-raising domain events on repeated transitions
+- DB-level Inbox dedup — unique filtered index `IX_InboxMessages_TenantId_ProviderEventId` on both `OrderProcessingSystem_Local` and `OrderProcessingSystem_TenantC`; migration `Phase_8_7_InboxDedup_UniqueProviderEventId` applied
+- `RowVersion` optimistic concurrency on `PaymentAttempt` (DW-002 absorbed) — Architecture test enforces presence on all webhook-mutated aggregates
+- OTel business metrics (DW-003 absorbed) — `WebhookHmacFailure`, `InboxDedupHit`, `InboxProcessed`, `InboxProcessingDuration` counters/histograms in `BusinessMetrics`
+- `ADR-020` — documents the webhook receiver design, HMAC contract, Inbox/Outbox bridge, and deferred items
+- **Tests/closeout gates** — total **287 tests all green** after hosted-checkout seed guardrail correction (API 95, Integration 72); strict build passed with known `NU1701` Openpay warnings only; docs links, secret hygiene, AI customization, and payment automation dry-run matrices passed before Phase 9
+- **E2E: 25/25 pass** — 13 send scenarios + 12 verify checks; S13 (payment.failed → 202), V11 (PA.Status=Failed), V12 (OutboxMessages row for PaymentAttemptSucceededV1)
+- DW-012 to DW-015 logged in `docs/internal/DEFERRED-WORK-LOG.md` (replay endpoint, refund/dispute handlers, timestamp replay-attack mitigation, Key Vault secret operational task)
 
 ---
 
@@ -696,6 +713,17 @@ Before extracting to separate deployables, restructure the monolith into isolate
 - **PublicApi contracts** — `IOrderModuleApi`, `IInventoryModuleApi` interfaces in dedicated `*.PublicApi` projects with strongly-typed request/response records. Modules depend ONLY on each other's PublicApi — never internal Domain/Features/Infrastructure
 - **Per-module DB schemas** — each module owns its own SQL schema (`orders`, `inventory`, `notifications`, `payments`) within the shared database. Phase 11's "split databases" then becomes a connection string change, not a data migration
 - **Per-module database migrators** — `IModuleDatabaseMigrator` interface; each module owns its `DbContext` and independent migration history. Startup runs all migrators sequentially
+
+### Webhook Subscription Expansion Rule
+
+Provider dashboard event selection follows backend capability. Phase 8.7 enables only Razorpay/OpenPay `payment.captured` and `payment.failed`, because those are the only event types with implemented handlers, idempotent state transitions, and tests. Future events must not be enabled in provider dashboards until the corresponding domain model, Inbox handler, tenant resolution path, replay behavior, and Azure smoke test exist.
+
+Candidate expansion order:
+
+- **Refund lifecycle** — add `refund.created`, `refund.processed`, and `refund.failed` only after the Payments module owns refund state/schema and idempotent refund handlers.
+- **Dispute lifecycle** — add `payment.dispute.created`, `payment.dispute.under_review`, `payment.dispute.action_required`, `payment.dispute.won`, `payment.dispute.lost`, and `payment.dispute.closed` only after a dispute state machine exists.
+- **Provider-owned order/invoice/subscription events** — add `order.*`, `invoice.*`, or `subscription.*` only if the product deliberately adopts those Razorpay/OpenPay provider constructs instead of the current internal order-processing model.
+- **Operational/provider account events** — keep `payment.downtime.*`, `settlement.*`, `fund_account.*`, `payment_link.*`, and `account.*` disabled unless a concrete operational runbook and handler owner are defined.
 - **Module self-registration** — `AddOrdersModule()`, `AddInventoryModule()`, `AddNotificationsModule()`, and `AddPaymentsModule()` chain API registration, infrastructure setup, and assembly scanning. `Program.cs` stays clean as project count grows
 - **`AssemblyReference.cs` markers** — static class per project exposing `Assembly` for reliable handler discovery, endpoint registration, and architecture test scanning
 - **Bounded-context and subdomain mapping** — before extraction, explicitly model Orders, Inventory, Notifications, and Payments as business contexts with clear responsibilities, upstream/downstream relationships, and published contracts. Payments is elevated because reconciliation and recovery logic must not remain in a shared blob.
@@ -1398,7 +1426,7 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
      │
     ├── Phase 8.6   ─── ✅ Central Tenant Registry (separation of duties, ops-only DB)
      │
-    ├── Phase 8.7   ─── 📅 Provider webhooks (signed, idempotent, tenant-aware)
+    ├── Phase 8.7   ─── ✅ Provider webhooks (signed, idempotent, tenant-aware)
      │
      ├── Phase 9     ─── 📅 Extract services locally (YARP + Docker Compose + Aspire-Lite)
      │

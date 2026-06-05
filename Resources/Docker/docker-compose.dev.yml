@@ -23,6 +23,8 @@ services:
       - OpenPay__DeviceSessionId=${LOCAL_OPENPAY_DEVICE_SESSION_ID}
       - Razorpay__MerchantId=${LOCAL_RAZORPAY_MERCHANT_ID}
       - Razorpay__PrivateKey=${LOCAL_RAZORPAY_PRIVATE_KEY}
+      - Webhooks__Razorpay__Secret=${LOCAL_RAZORPAY_WEBHOOK_SECRET}
+      - Webhooks__OpenPay__Secret=${LOCAL_OPENPAY_WEBHOOK_SECRET}
       - PaymentProviders__TenantA__OpenPay__PrivateKey=${LOCAL_OPENPAY_PRIVATE_KEY}
       - PaymentProviders__TenantB__OpenPay__PrivateKey=${LOCAL_OPENPAY_PRIVATE_KEY}
       - PaymentProviders__TenantC__OpenPay__PrivateKey=${LOCAL_OPENPAY_PRIVATE_KEY}
@@ -70,6 +72,8 @@ services:
       - OpenPay__DeviceSessionId=${LOCAL_OPENPAY_DEVICE_SESSION_ID}
       - Razorpay__MerchantId=${LOCAL_RAZORPAY_MERCHANT_ID}
       - Razorpay__PrivateKey=${LOCAL_RAZORPAY_PRIVATE_KEY}
+      - Webhooks__Razorpay__Secret=${LOCAL_RAZORPAY_WEBHOOK_SECRET}
+      - Webhooks__OpenPay__Secret=${LOCAL_OPENPAY_WEBHOOK_SECRET}
       - PaymentProviders__TenantA__OpenPay__PrivateKey=${LOCAL_OPENPAY_PRIVATE_KEY}
       - PaymentProviders__TenantB__OpenPay__PrivateKey=${LOCAL_OPENPAY_PRIVATE_KEY}
       - PaymentProviders__TenantC__OpenPay__PrivateKey=${LOCAL_OPENPAY_PRIVATE_KEY}
