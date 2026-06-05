@@ -80,6 +80,9 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure
             // Tenant registry service — read-only access to tenant list via TenantRegistryDbContext
             builder.Services.AddScoped<ITenantRegistry, Multitenancy.TenantRegistryService>();
 
+            // Phase 8.7 Webhook Signature Validator (stub — per-provider HMAC to be implemented)
+            builder.Services.AddScoped<IWebhookSignatureValidator, Webhooks.WebhookSignatureValidator>();
+
             // Phase 8 Idempotency Guard
             builder.Services.AddScoped<Application.Events.IIdempotencyGuard, Events.SqlIdempotencyGuard>();
 

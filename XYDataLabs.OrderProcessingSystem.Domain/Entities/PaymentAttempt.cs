@@ -43,6 +43,9 @@ namespace XYDataLabs.OrderProcessingSystem.Domain.Entities
         [MaxLength(512)]
         public string? LastErrorMessage { get; set; }
 
+        /// <summary>Optimistic concurrency token. Required because webhook handlers may write concurrent state transitions.</summary>
+        public byte[] RowVersion { get; private set; } = Array.Empty<byte>();
+
         public virtual ICollection<PaymentAttemptHistory> History { get; set; } = new List<PaymentAttemptHistory>();
     }
 }

@@ -284,6 +284,20 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
             modelBuilder.Entity<PaymentAttempt>()
                 .HasIndex(attempt => new { attempt.TenantId, attempt.PaymentTraceId });
 
+            modelBuilder.Entity<PaymentAttempt>()
+                .Property(attempt => attempt.RowVersion)
+                .IsRowVersion();
+
+            modelBuilder.Entity<PaymentAttempt>()
+                .Property(attempt => attempt.Status)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            modelBuilder.Entity<InboxMessage>()
+                .Property(message => message.Status)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
             modelBuilder.Entity<PaymentAttemptHistory>()
                 .HasIndex(history => new { history.TenantId, history.AttemptOrderId });
 
