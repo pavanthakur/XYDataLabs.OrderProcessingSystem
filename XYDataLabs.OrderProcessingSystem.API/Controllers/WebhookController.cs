@@ -1,5 +1,6 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Webhooks.Commands;
@@ -86,7 +87,9 @@ public sealed class WebhookController : ControllerBase
                            ?? Request.Headers["X-Razorpay-Event-Id"].FirstOrDefault()
                            ?? Guid.NewGuid().ToString();
 
-        var eventType = Request.Headers["X-Provider-Event-Type"].FirstOrDefault() ?? "unknown";
+        var eventType = Request.Headers["X-Provider-Event-Type"].FirstOrDefault()
+                     ?? ExtractEventTypeFromPayload(rawPayload)
+                     ?? "unknown";
 
         var command = new RecordWebhookEventCommand(
             ProviderName: providerName,
@@ -109,5 +112,40 @@ public sealed class WebhookController : ControllerBase
             providerName, result.Value);
 
         return Accepted(new { inboxMessageId = result.Value });
+    }
+
+    private static string? ExtractEventTypeFromPayload(string rawPayload)
+    {
+        if (string.IsNullOrWhiteSpace(rawPayload))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(rawPayload);
+            var root = document.RootElement;
+
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            return TryGetNonEmptyString(root, "event")
+                ?? TryGetNonEmptyString(root, "type");
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string? TryGetNonEmptyString(JsonElement root, string propertyName)
+    {
+        return root.TryGetProperty(propertyName, out var property)
+            && property.ValueKind == JsonValueKind.String
+            && !string.IsNullOrWhiteSpace(property.GetString())
+            ? property.GetString()
+            : null;
     }
 }

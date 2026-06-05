@@ -678,7 +678,7 @@ When Service Bus replaces the in-memory event bus in Phase 10, webhook-derived e
 
 - `WebhookController` — provider-scoped endpoint with raw-body buffering and HMAC validation before any business deserialization; returns 202 immediately after durable Inbox persist
 - `IWebhookSignatureValidator` / `WebhookSignatureValidator` — HMAC-SHA256: Razorpay (hex uppercase, `X-Razorpay-Signature`), OpenPay (Base64, `X-OpenPay-Signature`); timing-safe via `CryptographicOperations.FixedTimeEquals`
-- Webhook secrets per environment — config key `Webhooks:{Provider}:Secret`; placeholders in `sharedsettings.local.json`; real values in dotnet user-secrets (untracked); DW-015 logs the Azure Key Vault operational step
+- Webhook secrets per environment — config key `Webhooks:{Provider}:Secret`; local values managed by `setup-local.ps1` through gitignored `.env.local` plus dotnet user-secrets; Docker receives `Webhooks__{Provider}__Secret` from `.env.local`; Azure receives `Webhooks--{Provider}--Secret` from GitHub environment secrets via bootstrap/deploy Key Vault population
 - `RecordWebhookEventCommand` / `RecordWebhookEventCommandHandler` — writes `InboxMessage` row with `Status=Received`; catches `DbUpdateException` on duplicate key → returns `Success(0)` (202 still returned)
 - `InboxProcessorWorker` — `BackgroundService` (5 s poll); dispatches to `IWebhookEventHandler` dictionary keyed on `EventType` (case-insensitive); catches `DbUpdateConcurrencyException` → resets to Received and retries; marks unhandled event types as Processed without retry
 - `PaymentCapturedHandler` — handles `payment.captured`; calls `attempt.MarkAsSucceeded(providerName)` → raises `PaymentAttemptSucceededDomainEvent` → DbContext harvests event and writes `OutboxMessage` atomically (Outbox bridge active)
@@ -713,6 +713,17 @@ Before extracting to separate deployables, restructure the monolith into isolate
 - **PublicApi contracts** — `IOrderModuleApi`, `IInventoryModuleApi` interfaces in dedicated `*.PublicApi` projects with strongly-typed request/response records. Modules depend ONLY on each other's PublicApi — never internal Domain/Features/Infrastructure
 - **Per-module DB schemas** — each module owns its own SQL schema (`orders`, `inventory`, `notifications`, `payments`) within the shared database. Phase 11's "split databases" then becomes a connection string change, not a data migration
 - **Per-module database migrators** — `IModuleDatabaseMigrator` interface; each module owns its `DbContext` and independent migration history. Startup runs all migrators sequentially
+
+### Webhook Subscription Expansion Rule
+
+Provider dashboard event selection follows backend capability. Phase 8.7 enables only Razorpay/OpenPay `payment.captured` and `payment.failed`, because those are the only event types with implemented handlers, idempotent state transitions, and tests. Future events must not be enabled in provider dashboards until the corresponding domain model, Inbox handler, tenant resolution path, replay behavior, and Azure smoke test exist.
+
+Candidate expansion order:
+
+- **Refund lifecycle** — add `refund.created`, `refund.processed`, and `refund.failed` only after the Payments module owns refund state/schema and idempotent refund handlers.
+- **Dispute lifecycle** — add `payment.dispute.created`, `payment.dispute.under_review`, `payment.dispute.action_required`, `payment.dispute.won`, `payment.dispute.lost`, and `payment.dispute.closed` only after a dispute state machine exists.
+- **Provider-owned order/invoice/subscription events** — add `order.*`, `invoice.*`, or `subscription.*` only if the product deliberately adopts those Razorpay/OpenPay provider constructs instead of the current internal order-processing model.
+- **Operational/provider account events** — keep `payment.downtime.*`, `settlement.*`, `fund_account.*`, `payment_link.*`, and `account.*` disabled unless a concrete operational runbook and handler owner are defined.
 - **Module self-registration** — `AddOrdersModule()`, `AddInventoryModule()`, `AddNotificationsModule()`, and `AddPaymentsModule()` chain API registration, infrastructure setup, and assembly scanning. `Program.cs` stays clean as project count grows
 - **`AssemblyReference.cs` markers** — static class per project exposing `Assembly` for reliable handler discovery, endpoint registration, and architecture test scanning
 - **Bounded-context and subdomain mapping** — before extraction, explicitly model Orders, Inventory, Notifications, and Payments as business contexts with clear responsibilities, upstream/downstream relationships, and published contracts. Payments is elevated because reconciliation and recovery logic must not remain in a shared blob.
