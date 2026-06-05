@@ -118,7 +118,7 @@
 - Key Vault: `kv-orderprocessing-dev` (Managed Identity access, no stored credentials)
 - App Insights: `ai-orderprocessing-dev` — active, confirmed traces + metrics
 
-### Architecture Decisions Recorded (ADR-000 → ADR-018)
+### Architecture Decisions Recorded (ADR-000 → ADR-021)
 - ADR-001: Clean Architecture, ADR-002: OIDC, ADR-003: Subscription-scope Bicep
 - ADR-004: EF Core + Azure SQL, ADR-005: Serilog, ADR-006: Passwordless SQL
 - ADR-007: Hybrid multi-tenancy, ADR-008: Architecture test guardrails
@@ -126,6 +126,7 @@
 - ADR-011: Hand-rolled CQRS, ADR-012: OTel dual-export, ADR-013: Redis caching
 - ADR-014: Azure service coverage rationale, ADR-015: deployment readiness probes use `/health/ready`
 - ADR-016: client-rendered React SPA, ADR-017: phase plan portability extensions, ADR-018: blueprint packaging and snapshot strategy
+- ADR-019: central tenant registry, ADR-020: webhook inbox idempotency, ADR-021: Phase 9 module isolation before service extraction
 
 ### Phase 7 — Completed Deliverables
 - ✅ `TenantValidationBehavior<TRequest, TResult>` — CQRS pipeline tenant enforcement
