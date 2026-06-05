@@ -29,6 +29,14 @@
     "PrivateKey": "__RAZORPAY_PRIVATE_KEY__",
     "IsProduction": false
   },
+  "Webhooks": {
+    "Razorpay": {
+      "Secret": "__RAZORPAY_WEBHOOK_SECRET__"
+    },
+    "OpenPay": {
+      "Secret": "__OPENPAY_WEBHOOK_SECRET__"
+    }
+  },
   "Observability": {
     "EnableEfSensitiveDataLogging": true
   },

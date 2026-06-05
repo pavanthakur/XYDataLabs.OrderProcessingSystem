@@ -244,8 +244,10 @@ jobs:
       OPENPAY_PUBLIC_KEY: ${{ secrets.OPENPAY_PUBLIC_KEY }}
       OPENPAY_PRIVATE_KEY: ${{ secrets[format('OPENPAY_{0}', 'PRIVATE_KEY')] }}
       OPENPAY_DEVICE_SESSION_ID: ${{ secrets[format('OPENPAY_{0}_{1}', 'DEVICE', 'SESSION_ID')] }}
+      OPENPAY_WEBHOOK_SECRET: ${{ secrets.OPENPAY_WEBHOOK_SECRET }}
       RAZORPAY_MERCHANT_ID: ${{ secrets[format('RAZORPAY_{0}', 'MERCHANT_ID')] }}
       RAZORPAY_PRIVATE_KEY: ${{ secrets[format('RAZORPAY_{0}', 'PRIVATE_KEY')] }}
+      RAZORPAY_WEBHOOK_SECRET: ${{ secrets.RAZORPAY_WEBHOOK_SECRET }}
     steps:
       - uses: actions/checkout@v6
 
@@ -256,8 +258,10 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($env:OPENPAY_PUBLIC_KEY))        { $missing += 'OPENPAY_PUBLIC_KEY' }
           if ([string]::IsNullOrWhiteSpace($env:OPENPAY_PRIVATE_KEY))       { $missing += 'OPENPAY_PRIVATE_KEY' }
           if ([string]::IsNullOrWhiteSpace($env:OPENPAY_DEVICE_SESSION_ID)) { $missing += 'OPENPAY_DEVICE_SESSION_ID' }
+          if ([string]::IsNullOrWhiteSpace($env:OPENPAY_WEBHOOK_SECRET))    { $missing += 'OPENPAY_WEBHOOK_SECRET' }
           if ([string]::IsNullOrWhiteSpace($env:RAZORPAY_MERCHANT_ID))      { $missing += 'RAZORPAY_MERCHANT_ID' }
           if ([string]::IsNullOrWhiteSpace($env:RAZORPAY_PRIVATE_KEY))      { $missing += 'RAZORPAY_PRIVATE_KEY' }
+          if ([string]::IsNullOrWhiteSpace($env:RAZORPAY_WEBHOOK_SECRET))   { $missing += 'RAZORPAY_WEBHOOK_SECRET' }
 
           if ($missing.Count -gt 0) {
             $envUrl = 'https://github.com/${{ github.repository }}/settings/environments'
@@ -723,8 +727,10 @@ jobs:
               -OpenPayPublicKey "${{ env.OPENPAY_PUBLIC_KEY }}" `
               -OpenPayPrivateKey "${{ env.OPENPAY_PRIVATE_KEY }}" `
               -OpenPayDeviceSessionId "${{ env.OPENPAY_DEVICE_SESSION_ID }}" `
+              -OpenPayWebhookSecret "${{ env.OPENPAY_WEBHOOK_SECRET }}" `
               -RazorpayMerchantId "${{ env.RAZORPAY_MERCHANT_ID }}" `
-              -RazorpayPrivateKey "${{ env.RAZORPAY_PRIVATE_KEY }}"
+              -RazorpayPrivateKey "${{ env.RAZORPAY_PRIVATE_KEY }}" `
+              -RazorpayWebhookSecret "${{ env.RAZORPAY_WEBHOOK_SECRET }}"
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
@@ -1039,8 +1045,10 @@ jobs:
       OPENPAY_PUBLIC_KEY: ${{ secrets.OPENPAY_PUBLIC_KEY }}
       OPENPAY_PRIVATE_KEY: ${{ secrets[format('OPENPAY_{0}', 'PRIVATE_KEY')] }}
       OPENPAY_DEVICE_SESSION_ID: ${{ secrets[format('OPENPAY_{0}_{1}', 'DEVICE', 'SESSION_ID')] }}
+      OPENPAY_WEBHOOK_SECRET: ${{ secrets.OPENPAY_WEBHOOK_SECRET }}
       RAZORPAY_MERCHANT_ID: ${{ secrets[format('RAZORPAY_{0}', 'MERCHANT_ID')] }}
       RAZORPAY_PRIVATE_KEY: ${{ secrets[format('RAZORPAY_{0}', 'PRIVATE_KEY')] }}
+      RAZORPAY_WEBHOOK_SECRET: ${{ secrets.RAZORPAY_WEBHOOK_SECRET }}
     steps:
       - uses: actions/checkout@v6
 
@@ -1051,8 +1059,10 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($env:OPENPAY_PUBLIC_KEY))        { $missing += 'OPENPAY_PUBLIC_KEY' }
           if ([string]::IsNullOrWhiteSpace($env:OPENPAY_PRIVATE_KEY))       { $missing += 'OPENPAY_PRIVATE_KEY' }
           if ([string]::IsNullOrWhiteSpace($env:OPENPAY_DEVICE_SESSION_ID)) { $missing += 'OPENPAY_DEVICE_SESSION_ID' }
+          if ([string]::IsNullOrWhiteSpace($env:OPENPAY_WEBHOOK_SECRET))    { $missing += 'OPENPAY_WEBHOOK_SECRET' }
           if ([string]::IsNullOrWhiteSpace($env:RAZORPAY_MERCHANT_ID))      { $missing += 'RAZORPAY_MERCHANT_ID' }
           if ([string]::IsNullOrWhiteSpace($env:RAZORPAY_PRIVATE_KEY))      { $missing += 'RAZORPAY_PRIVATE_KEY' }
+          if ([string]::IsNullOrWhiteSpace($env:RAZORPAY_WEBHOOK_SECRET))   { $missing += 'RAZORPAY_WEBHOOK_SECRET' }
 
           if ($missing.Count -gt 0) {
             $envUrl = 'https://github.com/${{ github.repository }}/settings/environments'
@@ -1521,8 +1531,10 @@ jobs:
               -OpenPayPublicKey "${{ env.OPENPAY_PUBLIC_KEY }}" `
               -OpenPayPrivateKey "${{ env.OPENPAY_PRIVATE_KEY }}" `
               -OpenPayDeviceSessionId "${{ env.OPENPAY_DEVICE_SESSION_ID }}" `
+              -OpenPayWebhookSecret "${{ env.OPENPAY_WEBHOOK_SECRET }}" `
               -RazorpayMerchantId "${{ env.RAZORPAY_MERCHANT_ID }}" `
-              -RazorpayPrivateKey "${{ env.RAZORPAY_PRIVATE_KEY }}"
+              -RazorpayPrivateKey "${{ env.RAZORPAY_PRIVATE_KEY }}" `
+              -RazorpayWebhookSecret "${{ env.RAZORPAY_WEBHOOK_SECRET }}"
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
@@ -1839,8 +1851,10 @@ jobs:
       OPENPAY_PUBLIC_KEY: ${{ secrets.OPENPAY_PUBLIC_KEY }}
       OPENPAY_PRIVATE_KEY: ${{ secrets[format('OPENPAY_{0}', 'PRIVATE_KEY')] }}
       OPENPAY_DEVICE_SESSION_ID: ${{ secrets[format('OPENPAY_{0}_{1}', 'DEVICE', 'SESSION_ID')] }}
+      OPENPAY_WEBHOOK_SECRET: ${{ secrets.OPENPAY_WEBHOOK_SECRET }}
       RAZORPAY_MERCHANT_ID: ${{ secrets[format('RAZORPAY_{0}', 'MERCHANT_ID')] }}
       RAZORPAY_PRIVATE_KEY: ${{ secrets[format('RAZORPAY_{0}', 'PRIVATE_KEY')] }}
+      RAZORPAY_WEBHOOK_SECRET: ${{ secrets.RAZORPAY_WEBHOOK_SECRET }}
     steps:
       - uses: actions/checkout@v6
 
@@ -1851,8 +1865,10 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($env:OPENPAY_PUBLIC_KEY))        { $missing += 'OPENPAY_PUBLIC_KEY' }
           if ([string]::IsNullOrWhiteSpace($env:OPENPAY_PRIVATE_KEY))       { $missing += 'OPENPAY_PRIVATE_KEY' }
           if ([string]::IsNullOrWhiteSpace($env:OPENPAY_DEVICE_SESSION_ID)) { $missing += 'OPENPAY_DEVICE_SESSION_ID' }
+          if ([string]::IsNullOrWhiteSpace($env:OPENPAY_WEBHOOK_SECRET))    { $missing += 'OPENPAY_WEBHOOK_SECRET' }
           if ([string]::IsNullOrWhiteSpace($env:RAZORPAY_MERCHANT_ID))      { $missing += 'RAZORPAY_MERCHANT_ID' }
           if ([string]::IsNullOrWhiteSpace($env:RAZORPAY_PRIVATE_KEY))      { $missing += 'RAZORPAY_PRIVATE_KEY' }
+          if ([string]::IsNullOrWhiteSpace($env:RAZORPAY_WEBHOOK_SECRET))   { $missing += 'RAZORPAY_WEBHOOK_SECRET' }
 
           if ($missing.Count -gt 0) {
             $envUrl = 'https://github.com/${{ github.repository }}/settings/environments'
@@ -2316,8 +2332,10 @@ jobs:
               -OpenPayPublicKey "${{ env.OPENPAY_PUBLIC_KEY }}" `
               -OpenPayPrivateKey "${{ env.OPENPAY_PRIVATE_KEY }}" `
               -OpenPayDeviceSessionId "${{ env.OPENPAY_DEVICE_SESSION_ID }}" `
+              -OpenPayWebhookSecret "${{ env.OPENPAY_WEBHOOK_SECRET }}" `
               -RazorpayMerchantId "${{ env.RAZORPAY_MERCHANT_ID }}" `
-              -RazorpayPrivateKey "${{ env.RAZORPAY_PRIVATE_KEY }}"
+              -RazorpayPrivateKey "${{ env.RAZORPAY_PRIVATE_KEY }}" `
+              -RazorpayWebhookSecret "${{ env.RAZORPAY_WEBHOOK_SECRET }}"
             
             if ($LASTEXITCODE -ne 0) {
               Write-Host ""
