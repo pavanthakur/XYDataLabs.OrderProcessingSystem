@@ -380,11 +380,13 @@ Add-Result 'V7' 'TenantA/OpenPay cross: InboxMsg=Processed (PA miss OK)' ($ist7 
 $ist8 = if ($inboxIds['S8']) { Get-InboxStatus $inboxIds['S8'] $TenantCDbServer $TenantCDbName } else { 'no-id' }
 Add-Result 'V8' 'TenantC/Razorpay cross: InboxMsg=Processed (PA miss OK)' ($ist8 -eq 'Processed') "InboxMsg[$($inboxIds['S8'])].Status=$ist8"
 
-# V9/V10: Dedup — both InboxMessages should be Processed (2nd is a dedup hit)
+# V9: Dedup 1st — InboxMessage must be Processed
 $ist9a = if ($inboxIds['S9a']) { Get-InboxStatus $inboxIds['S9a'] $SharedDbServer $SharedDbName } else { 'no-id' }
-$ist9b = if ($inboxIds['S9b']) { Get-InboxStatus $inboxIds['S9b'] $SharedDbServer $SharedDbName } else { 'no-id' }
 Add-Result 'V9'  'Dedup 1st: InboxMsg=Processed' ($ist9a -eq 'Processed') "InboxMsg[$($inboxIds['S9a'])].Status=$ist9a"
-Add-Result 'V10' 'Dedup 2nd (dedup hit): InboxMsg=Processed' ($ist9b -eq 'Processed') "InboxMsg[$($inboxIds['S9b'])].Status=$ist9b"
+# V10: DB-level dedup — 2nd POST must NOT insert a new row; exactly 1 InboxMessage for this ProviderEventId
+$dedupCount = [int](Invoke-Sql $SharedDbServer $SharedDbName "SELECT COUNT(*) FROM InboxMessages WHERE ProviderEventId='$evtS9'" | Select-Object -First 1).ToString().Trim()
+$noS9bId    = -not $inboxIds['S9b']
+Add-Result 'V10' 'Dedup 2nd: DB-level dedup (no new row, count=1)' ($dedupCount -eq 1 -and $noS9bId) "InboxCount=$dedupCount | S9b-NoId=$noS9bId"
 
 # ── SUMMARY ───────────────────────────────────────────────────────────────────
 Write-Host ''
