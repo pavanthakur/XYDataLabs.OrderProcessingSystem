@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Webhooks.Commands;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
 
 namespace XYDataLabs.OrderProcessingSystem.API.Controllers;
 
@@ -71,6 +72,7 @@ public sealed class WebhookController : ControllerBase
 
         if (!_signatureValidator.Validate(providerName, rawPayload, signatureHeader))
         {
+            BusinessMetrics.RecordWebhookHmacFailure(providerName);
             // Log provider and timestamp but never the payload — it may contain PII.
             _logger.LogWarning(
                 "Webhook signature validation failed. Provider={ProviderName} RequestId={RequestId}",

@@ -25,6 +25,24 @@ public static class BusinessMetrics
         unit: "ms",
         description: "End-to-end duration for payment processing attempts.");
 
+    // Phase 8.7 — Webhook + Inbox metrics (DW-003)
+    private static readonly Counter<long> WebhookHmacFailures = Meter.CreateCounter<long>(
+        name: "orderprocessing.webhook.hmac_failures",
+        unit: "{failure}",
+        description: "Webhook requests rejected due to HMAC signature validation failure.");
+    private static readonly Counter<long> InboxDedupHits = Meter.CreateCounter<long>(
+        name: "orderprocessing.inbox.dedup_hits",
+        unit: "{hit}",
+        description: "Webhook events deduplicated by the Inbox (duplicate ProviderEventId detected).");
+    private static readonly Histogram<double> InboxHandlerDuration = Meter.CreateHistogram<double>(
+        name: "orderprocessing.inbox.handler_duration",
+        unit: "ms",
+        description: "Processing duration for Inbox event handlers, per event type.");
+    private static readonly Counter<long> WebhookUnresolvableTenant = Meter.CreateCounter<long>(
+        name: "orderprocessing.webhook.unresolvable_tenant",
+        unit: "{event}",
+        description: "Webhook events rejected because tenant could not be resolved from metadata.");
+
     public static void RecordTenantContextFailure(string requestName, bool hasTenantContext)
     {
         TenantContextFailures.Add(1, new TagList
@@ -60,6 +78,43 @@ public static class BusinessMetrics
 
         PaymentAttempts.Add(1, tags);
         PaymentDuration.Record(duration.TotalMilliseconds, tags);
+    }
+
+    // Phase 8.7 — Webhook + Inbox metric recording methods
+
+    public static void RecordWebhookHmacFailure(string providerName)
+    {
+        WebhookHmacFailures.Add(1, new TagList
+        {
+            { "provider", Normalize(providerName) }
+        });
+    }
+
+    public static void RecordInboxDedupHit(string providerName, string eventType)
+    {
+        InboxDedupHits.Add(1, new TagList
+        {
+            { "provider", Normalize(providerName) },
+            { "event_type", Normalize(eventType) }
+        });
+    }
+
+    public static void RecordInboxHandlerDuration(string eventType, string outcome, TimeSpan duration)
+    {
+        InboxHandlerDuration.Record(duration.TotalMilliseconds, new TagList
+        {
+            { "event_type", Normalize(eventType) },
+            { "outcome", Normalize(outcome) }
+        });
+    }
+
+    public static void RecordWebhookUnresolvableTenant(string providerName, string eventType)
+    {
+        WebhookUnresolvableTenant.Add(1, new TagList
+        {
+            { "provider", Normalize(providerName) },
+            { "event_type", Normalize(eventType) }
+        });
     }
 
     private static string Normalize(string? value) =>
