@@ -770,6 +770,7 @@ After completing today's tasks, you will have:
 > - Module self-registration: `AddOrdersModule()`, `AddInventoryModule()`, `AddNotificationsModule()`, `AddPaymentsModule()`
 > - Specification pattern — composable query objects (`OrderByStatusSpec`, `ActiveCustomersSpec`) replacing inline LINQ
 > - Per-module DB schemas within shared database (`orders`, `inventory`, `notifications`)
+> - Payments extraction must close DW-016: amount and currency must come from an authoritative order/invoice contract, not from `ProcessPaymentCommandHandler` constants
 - [ ] Add Aspire service defaults to Orders API
 - [ ] Register Orders API in App Host
 - [ ] Reference the existing YARP gateway baseline from the App Host plan instead of creating a second local entry point
