@@ -10,9 +10,10 @@
 | Point-in-time backup | **Annotated tag + protected backup branch** at the same commit (Path C) |
 | Backup naming | Tag `v-YYYYMMDD-phase<N>-<slug>` + branch `dev-backup-YYYYMMDD-<Scope>-Upto-Phase<N>` |
 | Backup cadence | Major architectural seams (Phase 7, 8, 11, 13, 14) + before any irreversible architectural change |
+| Snapshot immutability | Never merge `dev` forward into an old snapshot branch; cut a new tag + backup branch from current `dev` instead |
 | Reusable template (.NET solution) | `dotnet new` template via NuGet package `XYDataLabs.SaaS.Templates` (extracted at Phase 14) |
 | Reusable template (workflows / Bicep / frontend / Docker / docs / AI) | GitHub template repository `xydatalabs-saas-blueprint` (extracted at Phase 14) |
-| Side-project location | Separate GitHub repos, optionally under `pavanthakur-saas/` org |
+| Side-project location | Separate GitHub repos, optionally under `pavanthakur-saas/` org; do not use long-lived phase branches in this repo as product forks |
 
 ---
 
@@ -42,6 +43,21 @@ git branch dev-backup-YYYYMMDD-<Scope>-Upto-Phase<N> <sha>
 git push origin v-YYYYMMDD-phase<N>-<slug>
 git push origin dev-backup-YYYYMMDD-<Scope>-Upto-Phase<N>
 ```
+
+### 1.2.1 Do Not Roll Snapshot Branches Forward
+
+Snapshot and `dev-backup-*` branches are recovery anchors, not maintenance branches.
+
+Do **not** merge `dev` into an older snapshot branch such as `snapshot/phase8.6-central-tenant-registry` to "bring it up to date." That would erase the meaning of the snapshot by making it no longer represent the phase boundary it names.
+
+When a newer baseline is needed:
+
+1. Finish and validate the current `dev` state.
+2. Commit any documentation that explains why the snapshot is being created.
+3. Cut a new annotated tag and companion backup branch from the same current `dev` commit.
+4. Push both pointers.
+
+Use short-lived feature branches for active work and immutable tags/backup branches for baselines. Do not use phase snapshots as long-lived development branches or product forks.
 
 ### 1.3 Tag message standard
 
@@ -124,6 +140,23 @@ When the repository later moves to PR-only delivery, upgrade this baseline to re
 | 2026-05-10 | 8 — Frontend SPA + OIDC deploy | `v-20260510-phase8-frontend-spa` | `dev-backup-20260510-FrontendSPA-Upto-Phase8` |
 | 2026-05-10 | 8 — Template release seam hardening | `v-20260510-pre-template-release-1-0-0` | `dev-backup-20260510-TemplateRelease-Upto-Phase8` |
 | 2026-05-10 | 8 — Template README patch release | `v-20260510-pre-template-readme-1-0-1` | `dev-backup-20260510-TemplateReadmePatch-Upto-Phase8` |
+| 2026-06-06 | Pre-Phase 9 — Microservices split readiness | `v-20260606-pre-microservices-split` | `dev-backup-20260606-PreMicroservicesSplit-Upto-Phase8_7` |
+
+### 1.7 Phase Branching Vs Product Separation
+
+This repository remains the upstream platform/reference implementation. Phase work should not create permanent per-phase product branches.
+
+Use this separation model:
+
+| Need | Mechanism |
+|---|---|
+| Active implementation work | Short-lived branch from `dev`, merged back to `dev` after validation |
+| Recovery before/after a major architectural seam | Annotated tag + `dev-backup-*` branch at the same commit |
+| Preserve a named historical baseline | Immutable snapshot/tag; never merge it forward |
+| Build a new side project from this platform | Separate repository bootstrapped from Layer 1 template and/or Layer 2 blueprint |
+| Evolve reusable scaffolding for future side projects | Phase 14 template and blueprint extraction, not long-lived branches in this repo |
+
+For Phase 9 specifically, cut the pre-microservices-split snapshot from `dev` before module extraction starts. Then continue implementation on `dev` or a short-lived Phase 9 work branch. If a side project is created later, bootstrap it as its own repository from the validated template/blueprint line.
 
 ---
 
