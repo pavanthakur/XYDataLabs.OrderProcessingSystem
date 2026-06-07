@@ -9,6 +9,13 @@ Use these prompts when a phase needs a two-step handoff:
 
 These files are repo-shared AI assets, not canonical human-facing documentation. Canonical decisions still belong in `docs/architecture/decisions/`, and implementation truth still belongs in the code, tests, and owned docs.
 
+## Model Utilization
+
+- Prefer the phase's named 14B architect/developer models when they are stable and the prompt fits comfortably.
+- Use 64k variants, such as Deepseek 64k or Qwen 64k, when long repository context must remain in one pass or a 14B run stalls.
+- Treat 64k architect output as a draft requiring the same ADR-quality review, constraint checklist, and stakeholder-risk validation.
+- Keep implementation prompts slice-sized even when using 64k context; long context is for better grounding, not broader change scope.
+
 ## Naming Convention
 
 Use this pattern for future phases:

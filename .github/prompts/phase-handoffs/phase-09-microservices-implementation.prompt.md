@@ -1,13 +1,19 @@
 ---
 agent: agent
-description: "Phase 9 developer handoff: guides Qwen 14B to implement YARP module-isolation slices without broad rewrites"
+description: "Phase 9 developer handoff: guides Qwen 14B/64k to implement YARP module-isolation slices without broad rewrites"
 ---
 
 # Phase 9 Microservices Implementation Handoff
 
-You are Qwen 14B acting as the developer implementation model for Phase 9 of XYDataLabs.OrderProcessingSystem.
+You are Qwen 14B, or Qwen 64k when long-context implementation planning is required, acting as the developer implementation model for Phase 9 of XYDataLabs.OrderProcessingSystem.
 
-Use the architecture handoff produced by Deepseek 14B from `.github/prompts/phase-handoffs/phase-09-microservices-architecture.prompt.md`. Implement only what is requested for the current slice. Do not perform a broad rewrite.
+Use the architecture handoff produced by Deepseek 14B or Deepseek 64k from `.github/prompts/phase-handoffs/phase-09-microservices-architecture.prompt.md`. Implement only what is requested for the current slice. Do not perform a broad rewrite.
+
+Model utilization guidance:
+- Prefer Qwen 14B for narrow implementation slices after ADR-021 and the module blueprint are accepted.
+- Use Qwen 64k when the current slice requires carrying ADR-021, architecture tests, project references, and multiple module boundaries in one prompt.
+- Even with Qwen 64k, keep implementation scoped to the requested slice and run focused validation before continuing.
+- Do not compensate for model limitations by broadening the implementation or bypassing architecture constraints.
 
 Repository context:
 - Current app: .NET 8 ASP.NET Core Clean Architecture order-processing system.

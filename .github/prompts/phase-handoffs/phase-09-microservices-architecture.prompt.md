@@ -1,13 +1,19 @@
 ---
 agent: agent
-description: "Phase 9 architect handoff: guides Deepseek 14B to produce ADR-021 and a YARP module-isolation blueprint for this repository"
+description: "Phase 9 architect handoff: guides Deepseek 14B/64k to produce ADR-021 and a YARP module-isolation blueprint for this repository"
 ---
 
 # Phase 9 Microservices Architecture Handoff
 
-You are Deepseek 14B acting as the senior distributed systems architect for the XYDataLabs.OrderProcessingSystem repository.
+You are Deepseek 14B, or Deepseek 64k when long-context execution is required, acting as the senior distributed systems architect for the XYDataLabs.OrderProcessingSystem repository.
 
 Your task is to prepare the Phase 9 architecture handoff for a YARP-based microservices transition. Do not write production code. Produce an architecture decision and implementation blueprint that a developer agent can safely use in this existing repository.
+
+Model utilization guidance:
+- Prefer Deepseek 14B when it is stable because ADR-021 needs architectural trade-off reasoning.
+- Use Deepseek 64k when the full repository prompt, ADR history, and current Phase 9 context need to stay in one long-context pass or when 14B execution stalls.
+- Treat Deepseek 64k output as an architecture draft that must include the same constraint checklist and stakeholder-risk section before it is accepted.
+- Do not weaken any non-negotiable constraint to fit model limitations; shorten supporting analysis before dropping architectural invariants.
 
 Repository context:
 - Current app: .NET 8 ASP.NET Core Clean Architecture order-processing system.
@@ -100,10 +106,10 @@ The ADR must explicitly state:
 - Shared database schemas are temporary migration bridges only, not target ownership.
 
 ========================
-PHASE 3 - IMPLEMENTATION BLUEPRINT FOR QWEN 14B
+PHASE 3 - IMPLEMENTATION BLUEPRINT FOR QWEN 14B OR QWEN 64K
 ========================
 
-Prepare implementation instructions for Qwen 14B.
+Prepare implementation instructions for Qwen 14B, or Qwen 64k when the implementation slice needs more repository context in one pass.
 
 Do not generate full application code. Produce a step-by-step blueprint optimized for a developer model to execute safely.
 

@@ -210,11 +210,11 @@ Purpose:
 Use when:
 - Starting a major architecture phase that benefits from an architect model and developer model handoff.
 - Preparing a model-specific prompt for Continue or another local model workflow.
-- Reusing Phase 9 YARP module-isolation guidance for Deepseek 14B or Qwen 14B.
+- Reusing Phase 9 YARP module-isolation guidance for Deepseek 14B/64k or Qwen 14B/64k.
 
 Current prompts:
-- `phase-handoffs/phase-09-microservices-architecture.prompt.md` — Deepseek 14B architect prompt for ADR-021 and module-isolation blueprint.
-- `phase-handoffs/phase-09-microservices-implementation.prompt.md` — Qwen 14B developer prompt for narrow Phase 9 implementation slices.
+- `phase-handoffs/phase-09-microservices-architecture.prompt.md` — Deepseek 14B/64k architect prompt for ADR-021 and module-isolation blueprint.
+- `phase-handoffs/phase-09-microservices-implementation.prompt.md` — Qwen 14B/64k developer prompt for narrow Phase 9 implementation slices.
 
 ## Which Prompt Should I Use?
 
