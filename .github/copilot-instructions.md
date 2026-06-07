@@ -296,6 +296,7 @@ Port allocations: Local VS API (5010–5011) + UI (5173–5174) · Docker dev (5
 
 | Log + DB Correlation | `/XYDataLabs-verify-db-logs` | After any payment run on any env/profile — script-first by runtime: calls `scripts/verify-payment-run-physical.ps1` for docker/local or `scripts/verify-payment-run-azure.ps1` for azure, returns the formatted table summary by default, and falls back to manual investigation only when needed. |
 | ADR Validation | `/XYDataLabs-validate-adrs` | Before committing changes to any ADR — runs frontmatter schema check + markdownlint locally; documents how to toggle the CI counterpart. |
+| Phase Handoff Prompts | `.github/prompts/phase-handoffs/` | Phase-specific architect/developer prompts for external or role-specialized models; Phase 9 uses Deepseek 14B for ADR-021/module-isolation architecture and Qwen 14B for narrow implementation slices. |
 
 ---
 

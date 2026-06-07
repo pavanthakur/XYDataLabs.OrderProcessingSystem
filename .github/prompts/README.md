@@ -15,7 +15,7 @@ For repo-shared AI governance, use [docs/AI-OPERATING-MODEL.md](../../docs/AI-OP
 Quick tip:
 
 ```text
-Ctrl+Shift+I → Agent mode → type /XYDataLabs-day-start, /XYDataLabs-day-complete, /XYDataLabs-sql-local-access, /XYDataLabs-setup-local, /XYDataLabs-docker-start, /XYDataLabs-payment-automation, /XYDataLabs-completion-check, /XYDataLabs-context-audit, /XYDataLabs-new-feature, /XYDataLabs-validate-adrs, or /XYDataLabs-verify-db-logs
+Ctrl+Shift+I → Agent mode → type /XYDataLabs-day-start, /XYDataLabs-day-complete, /XYDataLabs-sql-local-access, /XYDataLabs-setup-local, /XYDataLabs-docker-start, /XYDataLabs-payment-automation, /XYDataLabs-completion-check, /XYDataLabs-context-audit, /XYDataLabs-new-feature, /XYDataLabs-validate-adrs, /XYDataLabs-verify-db-logs, /phase-handoffs/phase-09-microservices-architecture, or /phase-handoffs/phase-09-microservices-implementation
 ```
 
 ## Available Prompts
@@ -200,6 +200,22 @@ Prompt routing note:
 
 Note: For deep-dive queries (Q1, Q3, Q4, Q6, Q6a, Q7, Q8-B and per-tenant 3DS toggle), open `docs/runbooks/payment-db-verification.md`.
 
+### Phase Handoff Prompts
+
+Purpose:
+- Stores phase-specific architect/developer handoff prompts for external or role-specialized models.
+- Keeps AI handoff guidelines out of the canonical human-facing `docs/` tree.
+- Gives each major phase a repeatable two-prompt structure: architecture strategy first, implementation slices second.
+
+Use when:
+- Starting a major architecture phase that benefits from an architect model and developer model handoff.
+- Preparing a model-specific prompt for Continue or another local model workflow.
+- Reusing Phase 9 YARP module-isolation guidance for Deepseek 14B or Qwen 14B.
+
+Current prompts:
+- `phase-handoffs/phase-09-microservices-architecture.prompt.md` — Deepseek 14B architect prompt for ADR-021 and module-isolation blueprint.
+- `phase-handoffs/phase-09-microservices-implementation.prompt.md` — Qwen 14B developer prompt for narrow Phase 9 implementation slices.
+
 ## Which Prompt Should I Use?
 
 | Scenario | Prompt |
@@ -215,6 +231,7 @@ Note: For deep-dive queries (Q1, Q3, Q4, Q6, Q6a, Q7, Q8-B and per-tenant 3DS to
 | Check for stale AI context / memory drift | `/XYDataLabs-context-audit` |
 | Verify payment run: API log + UI telemetry + DB correlated | `/XYDataLabs-verify-db-logs "prod https docker"` or `/XYDataLabs-verify-db-logs "dev http azure"` |
 | Validate ADR markdown files before committing | `/XYDataLabs-validate-adrs` |
+| Prepare external-model phase handoff prompts | `/phase-handoffs/phase-09-microservices-architecture` then `/phase-handoffs/phase-09-microservices-implementation` |
 
 ## Typical Workflows
 
