@@ -16,6 +16,10 @@ These files are repo-shared AI assets, not canonical human-facing documentation.
 - Treat 64k architect output as a draft requiring the same ADR-quality review, constraint checklist, and stakeholder-risk validation.
 - Keep implementation prompts slice-sized even when using 64k context; long context is for better grounding, not broader change scope.
 
+## Local Model Operating Guide
+
+Use `local-model-phase-handoff-guide.md` before handing a phase to Continue, Ollama, or Cline. It defines the standard model routing, review gates, ready Continue lines, and validation sequence for local-model phase execution.
+
 ## Naming Convention
 
 Use this pattern for future phases:
@@ -39,6 +43,9 @@ phase-10-servicebus-implementation.prompt.md
 | Phase | Architect Prompt | Developer Prompt | Status |
 |---|---|---|---|
 | Phase 9 - YARP Microservices Architecture | `phase-09-microservices-architecture.prompt.md` | `phase-09-microservices-implementation.prompt.md` | Active |
+
+Supporting guide:
+- `local-model-phase-handoff-guide.md` - standard local Ollama/Continue/Cline handoff workflow for all phases.
 
 ## Maintenance Rules
 

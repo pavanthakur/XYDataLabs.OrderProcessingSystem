@@ -215,6 +215,7 @@ Use when:
 Current prompts:
 - `phase-handoffs/phase-09-microservices-architecture.prompt.md` — Deepseek 14B/64k architect prompt for ADR-021 and module-isolation blueprint.
 - `phase-handoffs/phase-09-microservices-implementation.prompt.md` — Qwen 14B/64k developer prompt for narrow Phase 9 implementation slices.
+- `phase-handoffs/local-model-phase-handoff-guide.md` — standard local Ollama/Continue/Cline model-routing and validation guide for phase work.
 
 ## Which Prompt Should I Use?
 

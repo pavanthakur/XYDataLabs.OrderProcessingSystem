@@ -6,6 +6,12 @@ This note documents the verified local Continue setup for this workstation. The 
 C:\Users\Pavan\.continue\config.yaml
 ```
 
+Shared phase handoff guideline:
+
+```text
+.github\prompts\phase-handoffs\local-model-phase-handoff-guide.md
+```
+
 Verified Continue picker entries:
 
 - `Nomic Embed Local [semantic]` -> `nomic-embed-text:latest`
