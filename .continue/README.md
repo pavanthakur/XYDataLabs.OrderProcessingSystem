@@ -12,22 +12,26 @@ Shared phase handoff guideline:
 .github\prompts\phase-handoffs\local-model-phase-handoff-guide.md
 ```
 
-Verified Continue picker entries:
+Verified Continue picker entries use this display pattern:
 
-- `Nomic Embed Local [semantic]` -> `nomic-embed-text:latest`
-- `Qwen 8B (Fast) Local [fast]` -> `qwen3-8b-32k:latest`
-- `Qwen 8B (Long 64K) Local [longctx]` -> `qwen3-8b-64k:latest`
-- `Qwen 14B (Better Coding) Local [coding]` -> `qwen3-14b-32k:latest`
-- `Qwen3 14B 32k Local [coding]` -> `qwen3-14b-32k:latest`
-- `DeepSeek 8B (Debugging) Local [debug]` -> `deepseek-r1-8b-32k:latest`
-- `DeepSeek 8B (Long 64K) Local [longctx]` -> `deepseek-r1-8b-64k:latest`
-- `DeepSeek 14B (Architecture) Local [architecture]` -> `deepseek-r1-14b-32k:latest`
-- `DeepSeek R1 14B 32k Local [reasoning]` -> `deepseek-r1-14b-32k:latest`
-- `Devstral 24B Local Optional [agent]` -> `devstral:24b`
-- `Codestral 22B Local Optional [frontend]` -> `codestral:22b`
-- `Qwen2.5 Coder 32B Local Optional [backend]` -> `qwen2.5-coder:32b`
-- `Qwen3 Coder 30B Local [large-gen]` -> `qwen3-coder:30b`
-- `DeepSeek Coder V2 Local Optional [refactor]` -> `deepseek-coder-v2:latest`
+```text
+Family ModelSize Context [purpose]
+```
+
+- `Embed Nomic 274MB [semantic]` -> `nomic-embed-text:latest`
+- `Qwen3 8B 32K [fast]` -> `qwen3-8b-32k:latest`
+- `Qwen3 8B 64K [longctx]` -> `qwen3-8b-64k:latest`
+- `Qwen3 14B 32K [coding]` -> `qwen3-14b-32k:latest`
+- `Qwen3 14B 32K API [coding]` -> `qwen3-14b-32k:latest`
+- `DeepSeek R1 8B 32K [debug]` -> `deepseek-r1-8b-32k:latest`
+- `DeepSeek R1 8B 64K [longctx]` -> `deepseek-r1-8b-64k:latest`
+- `DeepSeek R1 14B 32K [architecture]` -> `deepseek-r1-14b-32k:latest`
+- `DeepSeek R1 14B 32K API [reasoning]` -> `deepseek-r1-14b-32k:latest`
+- `Devstral 24B 32K [agent]` -> `devstral:24b`
+- `Codestral 22B 32K [frontend]` -> `codestral:22b`
+- `Qwen2.5 Coder 32B 32K [backend]` -> `qwen2.5-coder:32b`
+- `Qwen3 Coder 30B 32K [large-gen]` -> `qwen3-coder:30b`
+- `DeepSeek Coder V2 32K [refactor]` -> `deepseek-coder-v2:latest`
 
 Installed but intentionally not configured unless extra fallback choices are needed:
 
@@ -38,11 +42,16 @@ Installed but intentionally not configured unless extra fallback choices are nee
 
 Recommended usage:
 
-- `[backend]` or `[large-gen]` for C# CQRS / EF Core / multi-file implementation.
-- `[architecture]` or `[reasoning]` for ADRs, module boundaries, and trade-off analysis.
-- `[agent]` for multi-step execution and Playwright-oriented work.
-- `[frontend]` for React, Vite, UI wiring, and selector fixes.
-- `[semantic]` for embeddings and indexing only, not chat.
+- `[backend]` -> precise C# CQRS / EF Core / architecture-test implementation.
+- `[large-gen]` -> larger implementation planning or generation, with strict scope.
+- `[coding]` -> medium coding tasks when 30B/32B is too slow.
+- `[fast]` -> quick answers and small snippets.
+- `[longctx]` -> larger pasted context, not necessarily stronger reasoning.
+- `[architecture]` or `[reasoning]` -> ADRs, module boundaries, and trade-off analysis.
+- `[debug]` -> focused debugging and root-cause analysis.
+- `[agent]` -> precise multi-step execution and Playwright-oriented work.
+- `[frontend]` -> React, Vite, UI wiring, and selector fixes.
+- `[semantic]` -> embeddings and indexing only, not chat.
 
 Verified VS Code extensions:
 
