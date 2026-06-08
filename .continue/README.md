@@ -33,6 +33,25 @@ Family ModelSize Context [purpose]
 - `Qwen3 Coder 30B 32K [large-gen]` -> `qwen3-coder:30b`
 - `DeepSeek Coder V2 32K [refactor]` -> `deepseek-coder-v2:latest`
 
+Zoo Code note:
+
+Zoo Code does not read `C:\Users\Pavan\.continue\config.yaml`. Its Ollama picker is rebuilt from the raw `ollama list` model tags and cache file:
+
+```text
+C:\Users\Pavan\AppData\Roaming\Code\User\globalStorage\zoocodeorganization.zoo-code\cache\ollama_models.json
+```
+
+Use this mapping in Zoo Code:
+
+- `qwen2.5-coder:32b` -> backend implementation
+- `qwen3-coder:30b` -> large generation / broader code
+- `deepseek-r1-14b-32k:latest` -> architecture / reasoning
+- `deepseek-r1-8b-32k:latest` -> debugging
+- `devstral:24b` -> agent execution
+- `codestral:22b` -> frontend
+
+Do not edit Zoo Code's `ollama_models.json` for friendly aliases; it is a generated cache and Zoo will recreate it from Ollama tags.
+
 Installed but intentionally not configured unless extra fallback choices are needed:
 
 - `deepseek-r1:14b`
