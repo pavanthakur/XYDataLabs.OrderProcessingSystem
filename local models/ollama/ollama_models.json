@@ -1,0 +1,11 @@
+{
+  "models": [
+    {
+      "title": "Qwen Coder (7B)",
+      "provider": "ollama",
+      "model": "qwen2.5-coder:7b",
+      "recommended": true
+    }
+  ],
+  "notes": "Local index for developer tooling. Do not edit generated caches used by Zoo Code; update this file only for local tooling preferences."
+}

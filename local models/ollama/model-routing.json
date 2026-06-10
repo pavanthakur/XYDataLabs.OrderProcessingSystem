@@ -1,0 +1,38 @@
+{
+  "purpose": "Local model routing for phase execution. This is a local preference file, not a generated Zoo Code cache.",
+  "profiles": {
+    "architect": {
+      "provider": "ollama",
+      "preferredModels": [
+        "deepseek-r1:14b",
+        "deepseek-r1:32b",
+        "qwen2.5-coder:14b"
+      ],
+      "fallbackModel": "qwen2.5-coder:7b",
+      "useFor": [
+        "architecture review",
+        "ADR draft and correction",
+        "module boundary blueprint",
+        "developer slice definition"
+      ]
+    },
+    "developer": {
+      "provider": "ollama",
+      "preferredModels": [
+        "qwen2.5-coder:7b",
+        "qwen2.5-coder:14b"
+      ],
+      "fallbackModel": "qwen2.5-coder:7b",
+      "useFor": [
+        "narrow implementation slice",
+        "focused test repair",
+        "local validation loop"
+      ]
+    }
+  },
+  "rules": [
+    "Architect profile decides or corrects the plan before developer profile edits code.",
+    "Developer profile implements one accepted slice at a time.",
+    "Generated Zoo Code cache files are not edited here."
+  ]
+}
