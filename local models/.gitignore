@@ -1,0 +1,14 @@
+# Local model run outputs and caches
+cache/
+**/cache/
+
+# Keep run folder guidance, ignore actual run records unless explicitly force-added
+prompt-runs/*
+!prompt-runs/README.md
+!prompt-runs/run-record-template.md
+
+# Local generated model/tool artifacts
+*.tmp
+*.log
+*.bak
+ollama/generated/
