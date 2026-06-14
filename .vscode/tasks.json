@@ -139,6 +139,56 @@
             },
             "problemMatcher": []
         },
+        {
+            "label": "Start LocalAI with folder-aware model",
+            "type": "shell",
+            "command": "${workspaceFolder}\\.vscode\\scripts\\set_localai_model.bat",
+            "problemMatcher": [],
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            }
+        },
+        {
+            "label": "Aider: Run (choose mode)",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "${workspaceFolder}\\scripts\\run-aider-onecmd.ps1",
+                "-Mode",
+                "developer"
+            ],
+            "problemMatcher": [],
+            "group": "none",
+            "presentation": { "reveal": "always", "panel": "new", "focus": true }
+        },
+        {
+            "label": "Aider: Developer (one command)",
+            "type": "shell",
+            "command": "pwsh",
+            "args": ["-NoProfile","-ExecutionPolicy","Bypass","-File","${workspaceFolder}\\scripts\\run-aider-onecmd.ps1","-Mode","developer"],
+            "problemMatcher": [],"group":"none","presentation":{"reveal":"always","panel":"new","focus":true}
+        },
+        {
+            "label": "Aider: Architect (one command)",
+            "type": "shell",
+            "command": "pwsh",
+            "args": ["-NoProfile","-ExecutionPolicy","Bypass","-File","${workspaceFolder}\\scripts\\run-aider-onecmd.ps1","-Mode","architect"],
+            "problemMatcher": [],"group":"none","presentation":{"reveal":"always","panel":"new","focus":true}
+        },
+        {
+            "label": "Aider: Automation (one command)",
+            "type": "shell",
+            "command": "pwsh",
+            "args": ["-NoProfile","-ExecutionPolicy","Bypass","-File","${workspaceFolder}\\scripts\\run-aider-onecmd.ps1","-Mode","automation"],
+            "problemMatcher": [],"group":"none","presentation":{"reveal":"always","panel":"new","focus":true}
+        },
         // Run: Local
         {
             "label": "1 Run: 01 Frontend only",

@@ -16,7 +16,12 @@ ollama list
 ollama pull qwen2.5-coder:7b
 ```
 
-- Recommended model for local Phase 9 work: `qwen2.5-coder:7b` (see `.vscode/ollama-model-config.json`).
+- Recommended installed models for local Phase 9 work:
+	- Architecture: `qwen3-8b-64k:latest`, then `qwen3-8b-32k:latest`, then `qwen3:8b`.
+	- Development: `qwen2.5-coder:7b`, then `qwen2.5-coder:7b-instruct-q4_K_M`, then `qwen3:8b`.
+	- Quick/debugging: `qwen3:8b`, then `qwen2.5-coder:3b`.
+
+Avoid routing Continue or Zoo Code to tags that are not present in `ollama list`; missing tags can stall on pull attempts or fail with a manifest error.
 
 Notes
 

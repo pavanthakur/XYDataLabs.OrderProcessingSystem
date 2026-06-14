@@ -8,8 +8,10 @@ You are the architecture reviewer for `XYDataLabs.OrderProcessingSystem`. Produc
 
 ## Recommended Local Model
 
-- Primary: Deepseek 14B or another stronger reasoning model available through Ollama/Zoo Code.
-- Long-context fallback: Deepseek 64k or equivalent if the phase requires roadmap, ADR history, and current code context in one pass.
+- Primary/default: `qwen2.5-coder:7b` with 4096-8192 context tokens.
+- Quick fallback: `qwen2.5-coder:3b` for short questions and wording-only guidance.
+- Escalation only: `deepseek-r1-14b-32k:latest` or equivalent when Qwen output is insufficient for bounded-context decomposition, ADR trade-off analysis, or final architecture review.
+- Avoid by default: 32768/65536 context windows. Use 16384+ only for a deliberate one-off architecture pass after closing browsers/background services.
 
 ## Inputs
 
@@ -25,6 +27,8 @@ Read these before producing architecture output:
 ## Hard Rules
 
 - Do not write production code.
+- Use DeepSeek 14B only after explicit repo-owner approval and with background apps closed.
+- Keep context at 4096 or 8192 unless a specific architecture pass requires escalation.
 - Do not propose changes that bypass current ADRs without explicitly naming the ADR that must change.
 - Treat module isolation as the first step before service extraction unless a phase explicitly says otherwise.
 - Keep Domain and Application independent from Infrastructure.
@@ -44,3 +48,9 @@ Return:
 ## Approval Gate
 
 Developer execution starts only after repo-owner review accepts the architect output or the output is corrected by a follow-up architect pass.
+
+Example (minimal first developer slice):
+- Files: `XYDataLabs.OrderProcessingSystem.Application/Features/Payments/PaymentHandler.cs`
+- Scope: Add `IPaymentGateway` abstraction + unit tests
+- Validation: `dotnet test tests\XYDataLabs.OrderProcessingSystem.Application.Tests\`
+- Stop: Human review of unit tests and interface design

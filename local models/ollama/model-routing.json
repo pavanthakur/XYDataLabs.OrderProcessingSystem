@@ -4,11 +4,21 @@
     "architect": {
       "provider": "ollama",
       "preferredModels": [
-        "deepseek-r1:14b",
-        "deepseek-r1:32b",
-        "qwen2.5-coder:14b"
+        "qwen3-8b-64k:latest",
+        "qwen3-8b-32k:latest",
+        "qwen3:8b"
       ],
-      "fallbackModel": "qwen2.5-coder:7b",
+      "fallbackModel": "deepseek-r1-14b-32k:latest",
+      "escalationModels": [
+        "deepseek-r1-14b-32k:latest",
+        "deepseek-r1-8b-64k:latest"
+      ],
+      "contextTokens": {
+        "fast": 4096,
+        "recommended": 8192,
+        "heavyEscalationOnly": 16384,
+        "avoidByDefault": 65536
+      },
       "useFor": [
         "architecture review",
         "ADR draft and correction",
@@ -20,19 +30,47 @@
       "provider": "ollama",
       "preferredModels": [
         "qwen2.5-coder:7b",
-        "qwen2.5-coder:14b"
+        "qwen2.5-coder:7b-instruct-q4_K_M",
+        "qwen3:8b"
       ],
       "fallbackModel": "qwen2.5-coder:7b",
+      "contextTokens": {
+        "fast": 4096,
+        "recommended": 8192,
+        "avoidByDefault": 65536
+      },
       "useFor": [
         "narrow implementation slice",
         "focused test repair",
         "local validation loop"
+      ]
+    },
+    "quickAsk": {
+      "provider": "ollama",
+      "preferredModels": [
+        "qwen3:8b",
+        "qwen2.5-coder:3b",
+        "qwen2.5-coder:7b"
+      ],
+      "contextTokens": {
+        "recommended": 4096
+      },
+      "useFor": [
+        "quick questions",
+        "documentation wording",
+        "small code snippets",
+        "learning explanations"
       ]
     }
   },
   "rules": [
     "Architect profile decides or corrects the plan before developer profile edits code.",
     "Developer profile implements one accepted slice at a time.",
+    "Use installed same-family Qwen3 models before requesting new pulls, to avoid Continue or Zoo Code timeouts from missing tags.",
+    "Qwen3 8B long-context variants are the default Phase 9 architecture models on the Acer Predator Helios 300 profile.",
+    "Qwen2.5-Coder 7B remains the daily developer coding model because it is installed and stable locally.",
+    "DeepSeek R1 14B is an architecture fallback or escalation model only, not the daily default.",
+    "Keep context at 4096 or 8192 by default; do not use 65536 unless explicitly approved for a one-off architecture pass.",
     "Generated Zoo Code cache files are not edited here."
   ]
 }

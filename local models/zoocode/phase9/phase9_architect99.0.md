@@ -1,6 +1,6 @@
 # Phase 9 Architect 99.0 - Final Architecture Acceptance
 
-Zoo model: `deepseek-r1-14b-32k:latest` or the Zoo architecture/reasoning model.
+Zoo model: `qwen2.5-coder:7b` by default; escalate to `deepseek-r1-14b-32k:latest` only if Qwen output is insufficient for architecture trade-offs.
 
 Mode: read-only final review. Do not write production code. Do not emit patches.
 

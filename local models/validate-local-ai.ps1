@@ -18,9 +18,12 @@ $requiredPaths = @(
     'ai-guidelines/README.md',
     'ai-guidelines/architect-profile.md',
     'ai-guidelines/developer-profile.md',
+    'ai-guidelines/local-ai-performance-tuning.md',
     'ai-guidelines/phase-execution-model.md',
     'prompt-runs/README.md',
-    'prompt-runs/run-record-template.md'
+    'prompt-runs/run-record-template.md',
+    'zoocode/phase9/README.md',
+    'zoocode/phase9/00-phase9-zoo-code-runner.md'
 )
 
 $missing = @()

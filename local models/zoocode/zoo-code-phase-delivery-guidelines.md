@@ -114,11 +114,13 @@ Recommended settings:
 Configuration Profile: phaseN-architect
 API Provider: Ollama
 Base URL: http://localhost:11434
-Model: deepseek-r1-14b-32k:latest
-Context Window Size: 32768 or 65536
+Model: qwen2.5-coder:7b
+Context Window Size: 8192
 Mode: Ask / Chat
 Auto-Approve: Off
 ```
+
+Use `deepseek-r1-14b-32k:latest` only as an architecture escalation model when Qwen output is insufficient. Start DeepSeek at 8192 context and increase only deliberately; do not use 32768 or 65536 as defaults on the Acer Predator Helios 300 profile.
 
 Attach:
 
@@ -173,11 +175,13 @@ Recommended settings:
 Configuration Profile: phaseN-review
 API Provider: Ollama
 Base URL: http://localhost:11434
-Model: deepseek-r1-14b-32k:latest
-Context Window Size: 32768
+Model: qwen2.5-coder:7b
+Context Window Size: 8192
 Mode: Ask / Chat
 Auto-Approve: Off
 ```
+
+Escalate review to `deepseek-r1-14b-32k:latest` only when the review requires deeper architecture reasoning than Qwen provides.
 
 Review against repository rules:
 
