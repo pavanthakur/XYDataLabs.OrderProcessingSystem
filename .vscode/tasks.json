@@ -160,7 +160,7 @@
                 "-ExecutionPolicy",
                 "Bypass",
                 "-File",
-                "${workspaceFolder}\\scripts\\run-aider-onecmd.ps1",
+                "${workspaceFolder}\\ai-runtime\\run.ps1",
                 "-Mode",
                 "developer"
             ],
@@ -172,21 +172,21 @@
             "label": "Aider: Developer (one command)",
             "type": "shell",
             "command": "pwsh",
-            "args": ["-NoProfile","-ExecutionPolicy","Bypass","-File","${workspaceFolder}\\scripts\\run-aider-onecmd.ps1","-Mode","developer"],
+            "args": ["-NoProfile","-ExecutionPolicy","Bypass","-File","${workspaceFolder}\\ai-runtime\\run.ps1","-Mode","developer"],
             "problemMatcher": [],"group":"none","presentation":{"reveal":"always","panel":"new","focus":true}
         },
         {
             "label": "Aider: Architect (one command)",
             "type": "shell",
             "command": "pwsh",
-            "args": ["-NoProfile","-ExecutionPolicy","Bypass","-File","${workspaceFolder}\\scripts\\run-aider-onecmd.ps1","-Mode","architect"],
+            "args": ["-NoProfile","-ExecutionPolicy","Bypass","-File","${workspaceFolder}\\ai-runtime\\run.ps1","-Mode","architect"],
             "problemMatcher": [],"group":"none","presentation":{"reveal":"always","panel":"new","focus":true}
         },
         {
             "label": "Aider: Automation (one command)",
             "type": "shell",
             "command": "pwsh",
-            "args": ["-NoProfile","-ExecutionPolicy","Bypass","-File","${workspaceFolder}\\scripts\\run-aider-onecmd.ps1","-Mode","automation"],
+            "args": ["-NoProfile","-ExecutionPolicy","Bypass","-File","${workspaceFolder}\\ai-runtime\\run.ps1","-Mode","automation"],
             "problemMatcher": [],"group":"none","presentation":{"reveal":"always","panel":"new","focus":true}
         },
         // Run: Local
