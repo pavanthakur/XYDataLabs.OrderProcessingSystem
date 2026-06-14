@@ -30,7 +30,8 @@ function Invoke-Engine {
     param(
         [ValidateSet('developer','architect','automation','all')]
         [string]$Mode = 'developer',
-        [string]$PromptFile = ''
+        [string]$PromptFile = '',
+        [string]$SessionId = ''
     )
 
     # decide model mapping
@@ -72,5 +73,5 @@ function Invoke-Engine {
     }
 
     # Do not write logs here; return metadata for caller to log
-    return @{ exit = $exit; output = $out; model = $selectedModel; prompt = $PromptFile }
+    return @{ exit = $exit; output = $out; model = $selectedModel; prompt = $PromptFile; session = $SessionId }
 }
