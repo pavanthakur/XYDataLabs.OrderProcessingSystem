@@ -1,8 +1,14 @@
 #!/bin/sh
 # Simple pre-commit hook: scan for obvious secrets and prevent committing .env-like files
 changed_files=$(git diff --cached --name-only)
-echo "$changed_files" | grep -E "(^|/)\.env($|\.)|\.env\b|\.pem$|\.key$" && {
+# Block env/key files and common AI artifacts
+echo "$changed_files" | grep -E "(^|/)(\.env|\.env\.|\.pem$|\.key$)" && {
   echo "Error: Attempting to commit env or key files. Remove them from the commit." >&2
+  exit 1
+}
+# Prevent committing prompt-runs and venv or large logs
+echo "$changed_files" | grep -E "(^|/)(prompt-runs/|\.venv/|.*\.log$)" && {
+  echo "Error: Attempting to commit runtime artifacts (prompt-runs/.venv/*.log). Remove them from the commit." >&2
   exit 1
 }
 # Block large generated files >5MB

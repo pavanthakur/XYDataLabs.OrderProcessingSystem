@@ -6,7 +6,7 @@ param(
     [string]$SessionId = ''
 )
 # Writes a JSONL entry into local models/prompt-runs/prompt_runs.jsonl
-if (-not (Test-Path "local models\prompt-runs")) { New-Item -ItemType Directory -Path "local models\prompt-runs" -Force | Out-Null }
+if (-not (Test-Path "prompt-runs")) { New-Item -ItemType Directory -Path "prompt-runs" -Force | Out-Null }
 $out = Get-Content -Path $OutputFile -Raw -ErrorAction SilentlyContinue
 $prompt = Get-Content -Path $PromptFile -Raw -ErrorAction SilentlyContinue
 $timestamp = (Get-Date).ToString("o")
@@ -24,6 +24,6 @@ $entry = @{
     session_id = $SessionId
 }
 $json = ($entry | ConvertTo-Json -Compress)
-$logfile = "local models\prompt-runs\prompt_runs.jsonl"
+$logfile = "prompt-runs\prompt_runs.jsonl"
 Add-Content -Path $logfile -Value $json
 Write-Host "Logged prompt run to $logfile"
