@@ -19,56 +19,8 @@ if (-not (Test-Path .venv)) {
 }
 
 if (Test-Path .venv\Scripts\Activate.ps1) { & .venv\Scripts\Activate.ps1 }
-
-# Load .env.aider if present
-if (Test-Path .env.aider) {
-    Get-Content .env.aider | ForEach-Object {
-        if ($_ -match "^\s*([A-Za-z0-9_]+)=(.*)$") { Set-Item -Path Env:$($matches[1]) -Value $matches[2] }
-    }
-}
-
-function Ensure-Model([string]$tag) {
-    $exists = (ollama list) -match [regex]::Escape($tag)
-    if (-not $exists) {
-        Write-Host "Pulling model $tag..."
-        try {
-            ollama pull $tag
-        } catch {
-            Write-Warning ("Failed to pull {0}: {1}" -f $tag, $_.Exception.Message)
-        }
-    } else { Write-Host "Model $tag already available." }
-}
-
-function Get-AiderPath {
-    param()
-    $repoRoot = (Split-Path -Parent $PSScriptRoot)
-    $venvAider = Join-Path -Path $repoRoot -ChildPath ".venv\Scripts\aider.exe"
-    $venvPython = Join-Path -Path $repoRoot -ChildPath ".venv\Scripts\python.exe"
-    return @{ aiderExe = $venvAider; pythonExe = $venvPython; repoRoot = $repoRoot }
-}
-
-function Invoke-OllamaFallback {
-    param(
-        [string]$PromptFile,
-        [string]$Model = 'qwen2.5-coder:7b',
-        [string]$RepoRoot
-    )
-    if (-not $PromptFile) { $PromptFile = (Join-Path $RepoRoot '.github\prompts\phase-handoffs\phase-09-microservices-architecture.prompt.md') }
-    Write-Host "Using Ollama CLI fallback: streaming prompt file $PromptFile to ollama run $Model"
-    $prompt = Get-Content -Path $PromptFile -Raw
-    $start = Get-Date
-    $tmpOut = Join-Path $RepoRoot '.tmp_phase9_output.txt'
-    $prompt | ollama run $Model > $tmpOut 2>&1
-    $end = Get-Date
-    $duration = ($end - $start).TotalMilliseconds
-    $env:AI_DURATION_MS = [int]$duration
-    & (Join-Path $RepoRoot 'scripts\prompt-run-logger.ps1') -PromptFile $PromptFile -Model $Model -ExitCode $LASTEXITCODE -OutputFile $tmpOut -SessionId ''
-}
-
-# Map required models for each role to installed equivalents
-$mapping = @{
-    developer = @('qwen2.5-coder:7b')
-    architect  = @('qwen3-8b-64k:latest','deepseek-r1-14b-32k:latest')
+        # Delegate execution to ai-runtime run entrypoint
+        & pwsh -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\..\ai-runtime\run.ps1" -Mode $Mode -PromptFile $PromptFile
     automation = @('qwen3:8b','qwen2.5-coder:7b')
 }
 
