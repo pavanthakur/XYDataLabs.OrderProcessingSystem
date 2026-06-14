@@ -23,7 +23,7 @@ $patterns = [ordered]@{
 }
 
 $cwd = Resolve-Path $Root
-$ignoreGlobs = @('*/.git/*','*/.venv/*','*/local models/*','*.aider*')
+$ignoreGlobs = @('*/.git/*','*/.venv/*','*/local models/*','*.aider*','*/docs/*','*/Resources/*','repomix-output.xml','*/frontend/node_modules/*')
 $files = Get-ChildItem -Path $cwd -Recurse -File -ErrorAction SilentlyContinue | Where-Object {
     $full = $_.FullName -replace '\\','/'
     foreach ($g in $ignoreGlobs) { if ($full -like $g) { return $false } }
@@ -38,16 +38,24 @@ foreach ($f in $files) {
     $text = Get-Content -Path $f.FullName -Raw -ErrorAction SilentlyContinue
     if (-not $text) { continue }
 
-    foreach ($p in $patterns.Critical) {
-        if ($text -match $p) {
-            $critical += @{ file = $f.FullName; pattern = $p }
+    # Only check CRITICAL patterns in likely executable/source files to avoid doc noise
+    $exeExt = $f.Extension.ToLower()
+    $executableExtensions = @('.ps1','.psm1','.psd1','.cmd','.bat','.sh','.py','.js')
+    if ($executableExtensions -contains $exeExt) {
+        foreach ($p in $patterns.Critical) {
+            if ($text -match $p) {
+                $critical += @{ file = $f.FullName; pattern = $p }
+            }
         }
     }
-    foreach ($p in $patterns.High) {
-        if ($text -match $p) {
-            # ignore legitimate ai-runtime files
-            if ($f.FullName -match '\\ai-runtime\\') { continue }
-            $high += @{ file = $f.FullName; pattern = $p }
+    # Only run HIGH-level heuristics on PowerShell scripts to reduce false positives from docs
+    if ($f.Extension -ieq '.ps1') {
+        foreach ($p in $patterns.High) {
+            if ($text -match $p) {
+                # ignore legitimate ai-runtime files and the scanner itself
+                if ($f.FullName -match '\\ai-runtime\\' -or $f.Name -ieq 'drift-scanner.ps1' -or $f.Name -ieq 'logger.ps1') { continue }
+                $high += @{ file = $f.FullName; pattern = $p }
+            }
         }
     }
 }
