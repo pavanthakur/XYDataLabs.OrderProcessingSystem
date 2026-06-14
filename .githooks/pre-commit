@@ -1,0 +1,18 @@
+#!/bin/sh
+# Simple pre-commit hook: scan for obvious secrets and prevent committing .env-like files
+changed_files=$(git diff --cached --name-only)
+echo "$changed_files" | grep -E "(^|/)\.env($|\.)|\.env\b|\.pem$|\.key$" && {
+  echo "Error: Attempting to commit env or key files. Remove them from the commit." >&2
+  exit 1
+}
+# Block large generated files >5MB
+for f in $changed_files; do
+  if [ -f "$f" ]; then
+    size=$(wc -c <"$f" )
+    if [ "$size" -gt 5242880 ]; then
+      echo "Error: Attempting to commit large file $f ($size bytes)." >&2
+      exit 1
+    fi
+  fi
+done
+exit 0
