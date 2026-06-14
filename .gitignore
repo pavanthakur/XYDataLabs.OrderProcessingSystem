@@ -404,3 +404,8 @@ actionlint
 # Generated ARM templates from Bicep
 bicep/**/*.json
 !bicep/parameters/*.json
+.env.aider
+.tmp*
+.tmp_phase9_output*
+.venv/
+.aider*
