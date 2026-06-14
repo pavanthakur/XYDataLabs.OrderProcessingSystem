@@ -18,7 +18,9 @@ function Invoke-OllamaFallback {
     Write-Host "Using Ollama CLI fallback: streaming prompt file $PromptFile to ollama run $Model"
     $prompt = Get-Content -Path $PromptFile -Raw
     $start = Get-Date
-    $tmpOut = Join-Path $repoRoot '.tmp_phase9_output.txt'
+    # write temporary output to system temp with a GUID filename to avoid repo-root artifacts
+    $tmpName = 'phase9_output_{0}.txt' -f ([guid]::NewGuid().ToString())
+    $tmpOut = Join-Path $env:TEMP $tmpName
     $prompt | ollama run $Model > $tmpOut 2>&1
     $end = Get-Date
     $duration = ($end - $start).TotalMilliseconds

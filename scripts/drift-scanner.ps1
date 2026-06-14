@@ -9,8 +9,7 @@ param(
 
 Write-Host "Running AI runtime drift scanner against $Root"
 
-$patterns = [ordered]@
-{
+$patterns = [ordered]@{
     Critical = @(
         '(^|\\s)ollama\\s+run',
         '(^|\\s)python\\s+-m\\s+aider',
@@ -19,12 +18,17 @@ $patterns = [ordered]@
     High = @(
         'run-.*\\.ps1',
         'Invoke-Expression',
-        'Write-Host ".*prompt_runs' # possible ad-hoc logging'
+        'Write-Host .*prompt_runs' # possible ad-hoc logging
     )
 }
 
 $cwd = Resolve-Path $Root
-$files = Get-ChildItem -Path $cwd -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notmatch '\.git' -and $_.FullName -notmatch '\.venv' }
+$ignoreGlobs = @('*/.git/*','*/.venv/*','*/local models/*','*.aider*')
+$files = Get-ChildItem -Path $cwd -Recurse -File -ErrorAction SilentlyContinue | Where-Object {
+    $full = $_.FullName -replace '\\','/'
+    foreach ($g in $ignoreGlobs) { if ($full -like $g) { return $false } }
+    return $true
+}
 
 $report = [System.Collections.ArrayList]::new()
 $critical = @()

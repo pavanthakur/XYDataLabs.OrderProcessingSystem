@@ -15,9 +15,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup PowerShell
-        uses: PowerShell/PowerShell@v3
-
       - name: Run drift scanner
         working-directory: ${{ github.workspace }}
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/drift-scanner.ps1
