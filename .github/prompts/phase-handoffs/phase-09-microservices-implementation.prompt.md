@@ -5,9 +5,11 @@ description: "Phase 9 developer handoff: guides Qwen 14B/64k to implement YARP m
 
 # Phase 9 Microservices Implementation Handoff
 
-You are Qwen 14B, or Qwen 64k when long-context implementation planning is required, acting as the developer implementation model for Phase 9 of XYDataLabs.OrderProcessingSystem.
+You are Qwen 14B, or Qwen 64k when long-context implementation planning is required, acting as the developer implementation model for Phase 9 of `XYDataLabs.OrderProcessingSystem`.
 
 Use the architecture handoff produced by Deepseek 14B or Deepseek 64k from `.github/prompts/phase-handoffs/phase-09-microservices-architecture.prompt.md`. Implement only what is requested for the current slice. Do not perform a broad rewrite.
+
+Run this as an Aider-style developer task: declare the slice, list the files you expect to touch, state the local hypothesis, and keep edits narrowly scoped to one accepted change set at a time.
 
 Model utilization guidance:
 - Prefer Qwen 14B for narrow implementation slices after ADR-021 and the module blueprint are accepted.
@@ -193,6 +195,7 @@ Default first implementation slice:
 Prefer Orders or Tenants before Payments. Payments has high coupling to provider routing and webhook behavior, so extract it only after module boundaries and tests are in place.
 
 Output expectations:
+- Treat this as a single Aider task, not an open-ended refactor.
 - Explain the local hypothesis before editing.
 - Make small, reversible changes.
 - Validate after each slice.

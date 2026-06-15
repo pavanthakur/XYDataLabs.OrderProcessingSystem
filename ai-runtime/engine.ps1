@@ -4,8 +4,7 @@ param()
 function Get-AiderPath {
     $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
     $venvAider = Join-Path -Path $repoRoot -ChildPath ".venv\Scripts\aider.exe"
-    $venvPython = Join-Path -Path $repoRoot -ChildPath ".venv\Scripts\python.exe"
-    return @{ aiderExe = $venvAider; pythonExe = $venvPython; repoRoot = $repoRoot }
+    return @{ aiderExe = $venvAider; repoRoot = $repoRoot }
 }
 
 function Invoke-OllamaFallback {
@@ -59,17 +58,8 @@ function Invoke-Engine {
             $res = Invoke-OllamaFallback -PromptFile $PromptFile -Model $selectedModel
             $exit = $res.exit; $out = $res.out
         }
-    } elseif (Test-Path $paths.pythonExe) {
-        try {
-            & $paths.pythonExe -m aider --model ollama/$selectedModel
-            $exit = $LASTEXITCODE
-            $out = ''
-        } catch {
-            Write-Warning "Aider module failed: $_"
-            $res = Invoke-OllamaFallback -PromptFile $PromptFile -Model $selectedModel
-            $exit = $res.exit; $out = $res.out
-        }
     } else {
+        Write-Warning "Aider executable not found at $($paths.aiderExe). Falling back to Ollama CLI."
         $res = Invoke-OllamaFallback -PromptFile $PromptFile -Model $selectedModel
         $exit = $res.exit; $out = $res.out
     }
