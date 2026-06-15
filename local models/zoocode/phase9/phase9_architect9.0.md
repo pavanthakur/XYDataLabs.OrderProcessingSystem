@@ -1,6 +1,6 @@
 # Phase 9 Architect 9.0 - End-to-End Completion Roadmap
 
-Zoo model: `qwen2.5-coder:7b` by default; escalate to `deepseek-r1-14b-32k:latest` only if Qwen output is insufficient for architecture trade-offs.
+Zoo model: `qwen2.5-coder:7b` by default; escalate to `deepseek-r1:8b` only if Qwen output is insufficient for architecture trade-offs.
 
 Mode: read-only architecture orchestration. Do not write production code. Do not emit patches.
 

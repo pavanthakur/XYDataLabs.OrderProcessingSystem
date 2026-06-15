@@ -12,10 +12,10 @@ Use smaller coding models daily. Escalate to heavier reasoning models only for b
 
 | Task | Default model | Context | Notes |
 | --- | --- | --- | --- |
-| Phase runner and normal architect routing | `qwen2.5-coder:7b` | 8192 | Default for Phase 9 on this laptop. |
-| Developer implementation slices | `qwen2.5-coder:7b` | 4096-8192 | Best daily balance for C#, CQRS, React, and refactoring. |
+| Phase runner and normal architect routing | `qwen2.5-coder:7b` | 4096 | Default for Phase 9 on this laptop. |
+| Developer implementation slices | `qwen2.5-coder:7b` | 4096 | Best daily balance for C#, CQRS, React, and refactoring. |
 | Quick Ask/docs/small snippets | `qwen2.5-coder:3b` | 4096 | Use for short answers and lightweight tasks. |
-| Architecture escalation | `deepseek-r1-14b-32k:latest` | 8192-16384 | Use only when Qwen output is insufficient. |
+| Architecture/review escalation | `deepseek-r1:8b` | 4096 | Use only when Qwen output is insufficient and a bounded reasoning pass is needed. |
 | Embeddings/search | `nomic-embed-text` | N/A | Optional if a tool explicitly needs embeddings. |
 
 ## Avoid By Default
@@ -23,8 +23,8 @@ Use smaller coding models daily. Escalate to heavier reasoning models only for b
 Do not run these as default settings:
 
 ```text
-deepseek-r1-14b-32k with 32768 or 65536 context
-any 65k context window for normal Zoo Code work
+any model above 8B parameters
+any context window above 4096 tokens for normal Zoo Code work
 multiple AI assistants indexing the full repository at once
 ```
 
@@ -37,7 +37,7 @@ Architect mode:
 ```text
 Provider: Ollama
 Model: qwen2.5-coder:7b
-Context: 8192
+Context: 4096
 Mode: Architect / Ask / Chat
 Auto-approve: Off
 ```
@@ -47,7 +47,7 @@ Developer mode:
 ```text
 Provider: Ollama
 Model: qwen2.5-coder:7b
-Context: 4096 or 8192
+Context: 4096
 Mode: Code / Edit
 Auto-approve: Off
 ```
@@ -65,8 +65,8 @@ DeepSeek escalation:
 
 ```text
 Provider: Ollama
-Model: deepseek-r1-14b-32k:latest
-Context: 8192 first, 16384 only if needed
+Model: deepseek-r1:8b
+Context: 4096
 Mode: Architect / Ask / Chat
 Auto-approve: Off
 ```
@@ -100,9 +100,9 @@ ollama pull nomic-embed-text
 Keep DeepSeek installed only if you can tolerate slower architecture passes:
 
 ```powershell
-ollama pull deepseek-r1-14b-32k:latest
+ollama pull deepseek-r1:8b
 ```
 
 ## Expected Outcome
 
-With Qwen 7B and 4096-8192 context, Zoo Code should be more responsive, use less RAM, and avoid the 65k-context CPU-bound behavior seen with DeepSeek 14B.
+With Qwen 7B and 4096 context, Zoo Code should be more responsive, use less RAM, and avoid the high-context CPU-bound behavior seen with larger models.

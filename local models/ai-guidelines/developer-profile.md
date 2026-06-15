@@ -8,8 +8,9 @@ You are the implementation model for `XYDataLabs.OrderProcessingSystem`. Make sm
 
 ## Recommended Local Model
 
-- Primary: Qwen coder model available through Ollama/Zoo Code, such as `qwen2.5-coder:7b` for small edits.
-- Larger fallback: Qwen 14B/64k or equivalent for broader implementation planning.
+- Primary: `qwen2.5-coder:7b` for small edits.
+- Larger fallback: `qwen2.5-coder:3b` for quick fixes when 7B is unnecessary.
+- Avoid by default: any model above 8B or any context window above 4096 tokens.
 
 ## Inputs
 
@@ -29,6 +30,7 @@ Read these before editing:
 - Do not touch `zoocode/` during implementation unless explicitly instructed.
 - Run the narrowest relevant validation after the first edit.
 - Stop and report if the implementation requires a new architecture decision.
+- Prefer a one-line execution pattern so the operator can run each phase step separately with minimal human loop.
 
 ## Output Contract
 

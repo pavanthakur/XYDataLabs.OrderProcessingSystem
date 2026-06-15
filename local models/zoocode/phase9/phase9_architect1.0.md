@@ -1,6 +1,6 @@
-# Phase 9 Architect 1.0 - Repository Intake
+# Phase 9 Architect 1.0 - Repository Intake And Handoff
 
-Zoo model: `qwen2.5-coder:7b` by default; escalate to `deepseek-r1-14b-32k:latest` only if Qwen output is insufficient for architecture trade-offs.
+Zoo model: `qwen2.5-coder:7b` by default; escalate to `deepseek-r1:8b` only if Qwen output is insufficient for architecture trade-offs.
 
 Mode: read-only architecture. Do not write production code. Do not emit patches.
 
@@ -37,4 +37,8 @@ Required output:
 5. First safe implementation slice candidate.
 6. Explicit assumptions that need Copilot/repo-owner review.
 
-Stop after architecture output. Do not propose code edits.
+Required next handoff:
+
+- `phase9_development1.0.md`
+
+Stop after architecture output and first developer-slice handoff. Do not propose code edits.
