@@ -16,6 +16,7 @@ This directory contains automation scripts for configuring and deploying the Ord
 - Creates `Resources/Docker/.env.local` from `.env.local.example` (Docker secrets)
 - Sets `dotnet user-secrets` for VS F5 and `dotnet run` (API + UI projects)
 - Exports and trusts the HTTPS dev certificate
+- Seeds `KEYCLOAK_TENANT_ADMIN_PASSWORD` into the shared local secret flow so `start-local-frontend-profile.ps1` can launch the Phase 9.5 Keycloak-backed UI without manual env setup.
 
 **Usage**:
 ```powershell
@@ -34,6 +35,7 @@ This directory contains automation scripts for configuring and deploying the Ord
 2. ✅ Sets `dotnet user-secrets` for API: `CertPassword`, `OpenPay:MerchantId/PrivateKey/DeviceSessionId`
 3. ✅ Sets `dotnet user-secrets` for UI: `CertPassword`
 4. ✅ Exports `aspnetapp.pfx` and trusts HTTPS dev certificate
+5. ✅ Stores the Keycloak tenant admin password for the local Phase 9.5 UI bootstrap path
 
 **After Running**:
 - Visual Studio F5 on `http`/`https` profile → ready, no prompts

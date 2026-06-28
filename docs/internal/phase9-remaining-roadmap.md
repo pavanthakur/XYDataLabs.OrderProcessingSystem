@@ -78,6 +78,16 @@ These items were moved here to prevent Phase 9 from carrying Aspire work as an a
 - Aspire consolidation
 - Any future Aspire testing/deepening work tied to AppHost, manifest generation, or .NET LTS evaluation
 
+### 13.4 - Deferred Azure Keycloak Parity Check
+
+Goal:
+- Reserve a later-phase slot for any Azure-side Keycloak-shaped parity or migration test that may be useful after the local portability proof is closed.
+
+Done when:
+- The item is explicitly tracked as a later implementation concern, not part of Phase 9.5.
+- Entra ID remains the production identity model.
+- Any Azure proof is documented with clear scope boundaries and does not change the local-only Phase 9.5 contract.
+
 ## Phase 9.5 - Local Identity Portability Verification
 
 Goal:
@@ -92,6 +102,7 @@ Done when:
 Status:
 - Runtime verified in local HTTP and Docker Dev HTTP.
 - Any follow-up is documentation or cleanup only, not new 9.5 capability.
+- If Azure ever needs a Keycloak-shaped dependency for parity or migration testing, track it as a later phase item (after Phase 9 closeout) so it does not change the local-only scope of this proof.
 
 ## Closeout Rule
 

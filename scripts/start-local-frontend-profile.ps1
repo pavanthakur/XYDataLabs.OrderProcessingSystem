@@ -21,7 +21,20 @@ $keycloakUsername = 'tenant-admin'
 $keycloakPassword = $env:KEYCLOAK_TENANT_ADMIN_PASSWORD
 if ([string]::IsNullOrWhiteSpace($keycloakPassword))
 {
-    throw "KEYCLOAK_TENANT_ADMIN_PASSWORD must be set for the local Keycloak bootstrap flow."
+    $envFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local'
+    if (Test-Path $envFile)
+    {
+        $keycloakPasswordLine = Get-Content $envFile | Where-Object { $_ -like 'KEYCLOAK_TENANT_ADMIN_PASSWORD=*' } | Select-Object -First 1
+        if ($keycloakPasswordLine)
+        {
+            $keycloakPassword = $keycloakPasswordLine.Substring('KEYCLOAK_TENANT_ADMIN_PASSWORD='.Length)
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($keycloakPassword))
+    {
+        throw "KEYCLOAK_TENANT_ADMIN_PASSWORD must be set for the local Keycloak bootstrap flow."
+    }
 }
 
 $uiUrl = if ($Profile -eq 'https') { "https://localhost:$uiPort/" } else { "http://localhost:$uiPort/" }
