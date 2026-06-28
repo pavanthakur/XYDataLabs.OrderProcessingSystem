@@ -20,6 +20,8 @@ These files are repo-shared AI assets, not canonical human-facing documentation.
 
 Use `local-model-phase-handoff-guide.md` before handing a phase to Continue, Ollama, or Cline. It defines the standard model routing, review gates, ready Continue lines, and validation sequence for local-model phase execution.
 
+Use `.github/instructions/ai-operating.instructions.md` as the shared slice-sizing and drift-control rule file for local AI work.
+
 ## Naming Convention
 
 Use this pattern for future phases:

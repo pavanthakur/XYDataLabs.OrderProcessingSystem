@@ -13,8 +13,19 @@ public class IntegrationEventTypeResolver : IIntegrationEventTypeResolver
 
     public IntegrationEventTypeResolver()
     {
-        // Scan the Application assembly for anything implementing IIntegrationEvent
-        _types = Assembly.GetExecutingAssembly().GetTypes()
+        // Scan all loaded assemblies so module-specific integration events are visible too.
+        _types = AppDomain.CurrentDomain.GetAssemblies()
+            .SelectMany(assembly =>
+            {
+                try
+                {
+                    return assembly.GetTypes();
+                }
+                catch (ReflectionTypeLoadException ex)
+                {
+                    return ex.Types.Where(type => type is not null).Cast<Type>();
+                }
+            })
             .Where(t => !t.IsAbstract && !t.IsInterface && typeof(IIntegrationEvent).IsAssignableFrom(t))
             .ToDictionary(
                 t => t.Name, // Example: "OrderCreatedV1"

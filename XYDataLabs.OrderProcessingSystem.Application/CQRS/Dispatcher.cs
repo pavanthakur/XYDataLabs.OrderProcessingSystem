@@ -8,20 +8,30 @@ public sealed class Dispatcher : IDispatcher
 
     public Dispatcher(IServiceProvider provider) => _provider = provider;
 
-    public Task<TResult> SendAsync<TResult>(ICommand<TResult> command, CancellationToken cancellationToken = default)
+    public Task<TResult> SendAsync<TResult>(XYDataLabs.OrderProcessingSystem.SharedKernel.CQRS.ICommand<TResult> command, CancellationToken cancellationToken = default)
     {
-        var handlerType = typeof(ICommandHandler<,>).MakeGenericType(command.GetType(), typeof(TResult));
-        var handler = _provider.GetRequiredService(handlerType);
-        var method = handlerType.GetMethod(nameof(ICommandHandler<ICommand<TResult>, TResult>.HandleAsync))!;
+        var handler = ResolveHandler(
+            command.GetType(),
+            typeof(ICommandHandler<,>),
+            typeof(XYDataLabs.OrderProcessingSystem.SharedKernel.CQRS.ICommandHandler<,>),
+            typeof(TResult));
+        var method = handler.GetType().GetMethods()
+            .Single(m => string.Equals(m.Name, "HandleAsync", StringComparison.Ordinal)
+                && m.GetParameters().Length == 2);
 
         return BuildPipeline(command, () => (Task<TResult>)method.Invoke(handler, [command, cancellationToken])!, cancellationToken);
     }
 
-    public Task<TResult> QueryAsync<TResult>(IQuery<TResult> query, CancellationToken cancellationToken = default)
+    public Task<TResult> QueryAsync<TResult>(XYDataLabs.OrderProcessingSystem.SharedKernel.CQRS.IQuery<TResult> query, CancellationToken cancellationToken = default)
     {
-        var handlerType = typeof(IQueryHandler<,>).MakeGenericType(query.GetType(), typeof(TResult));
-        var handler = _provider.GetRequiredService(handlerType);
-        var method = handlerType.GetMethod(nameof(IQueryHandler<IQuery<TResult>, TResult>.HandleAsync))!;
+        var handler = ResolveHandler(
+            query.GetType(),
+            typeof(IQueryHandler<,>),
+            typeof(XYDataLabs.OrderProcessingSystem.SharedKernel.CQRS.IQueryHandler<,>),
+            typeof(TResult));
+        var method = handler.GetType().GetMethods()
+            .Single(m => string.Equals(m.Name, "HandleAsync", StringComparison.Ordinal)
+                && m.GetParameters().Length == 2);
 
         return BuildPipeline(query, () => (Task<TResult>)method.Invoke(handler, [query, cancellationToken])!, cancellationToken);
     }
@@ -37,10 +47,36 @@ public sealed class Dispatcher : IDispatcher
         {
             var captured = pipeline;
             var capturedBehavior = behavior;
-            var handleMethod = behaviorType.GetMethod(nameof(IPipelineBehavior<object, TResult>.HandleAsync))!;
+            var handleMethod = capturedBehavior.GetType().GetMethods()
+                .Single(m => string.Equals(m.Name, "HandleAsync", StringComparison.Ordinal)
+                    && m.GetParameters().Length == 3);
             pipeline = () => (Task<TResult>)handleMethod.Invoke(capturedBehavior, [request, captured, cancellationToken])!;
         }
 
         return pipeline();
+    }
+
+    private object ResolveHandler(
+        Type requestType,
+        Type applicationHandlerOpenGeneric,
+        Type sharedKernelHandlerOpenGeneric,
+        Type resultType)
+    {
+        var applicationHandlerType = applicationHandlerOpenGeneric.MakeGenericType(requestType, resultType);
+        var handler = _provider.GetService(applicationHandlerType);
+        if (handler is not null)
+        {
+            return handler;
+        }
+
+        var sharedKernelHandlerType = sharedKernelHandlerOpenGeneric.MakeGenericType(requestType, resultType);
+        handler = _provider.GetService(sharedKernelHandlerType);
+        if (handler is not null)
+        {
+            return handler;
+        }
+
+        throw new InvalidOperationException(
+            $"No service for type '{applicationHandlerType.FullName}' or '{sharedKernelHandlerType.FullName}' has been registered.");
     }
 }

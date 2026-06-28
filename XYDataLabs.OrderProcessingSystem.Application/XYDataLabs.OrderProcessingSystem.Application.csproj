@@ -19,7 +19,16 @@
 
   <ItemGroup>
     <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Domain\XYDataLabs.OrderProcessingSystem.Domain.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Orders.API\XYDataLabs.OrderProcessingSystem.Orders.API.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Inventory.API\XYDataLabs.OrderProcessingSystem.Inventory.API.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Notifications.API\XYDataLabs.OrderProcessingSystem.Notifications.API.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Payments.API\XYDataLabs.OrderProcessingSystem.Payments.API.csproj" />
     <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.SharedKernel\XYDataLabs.OrderProcessingSystem.SharedKernel.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Remove="Features\Orders\**" />
+  </ItemGroup>
+
 </Project>
+

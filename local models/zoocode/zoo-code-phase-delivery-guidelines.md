@@ -96,6 +96,31 @@ phaseN_development99.0.md  closeout and context sync
 
 Do not skip the architect review gate. A developer model must not invent architecture while editing.
 
+## Step 2.1 - Standard Phase Closure
+
+Every phase and sub-phase must close using the same end-to-end gates and runbook structure:
+
+1. Build cleanly with the phase-appropriate build command.
+2. Run architecture or contract tests.
+3. Run gateway or API contract tests.
+4. Run integration tests.
+5. Run Playwright or equivalent end-to-end automation.
+6. Capture the testcase matrix and pass/fail summary in the transcript log.
+7. Log warnings separately from blocking failures.
+8. Clean up orphan containers and other disposable runtime resources.
+9. Close the phase only when the full verification chain is green.
+
+Each completed phase should also have a short closeout document in the phase folder that records:
+
+- what was verified
+- key automation files
+- restart commands
+- log file locations
+- known non-blocking warnings
+- final sign-off status
+
+Use the shared standard in `local models/zoocode/phase-closure-standard.md` as the canonical closeout policy and `local models/zoocode/phase-closure-template.md` as the canonical fill-in template for each phase folder.
+
 ## Step 3 - Zoo Code Provider Profiles
 
 Create separate Zoo Code provider profiles. Do not use the same profile for every task.

@@ -1,6 +1,10 @@
-namespace XYDataLabs.OrderProcessingSystem.Application.PublicApi.Services
+using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
+using XYDataLabs.OrderProcessingSystem.Domain.Entities;
+using XYDataLabs.OrderProcessingSystem.Orders.API;
+
+namespace XYDataLabs.OrderProcessingSystem.Application.API.Services
 {
-    public class OrdersService : IOrdersService
+    public class OrdersService : IOrderModuleApi
     {
         private readonly IAppDbContext _dbContext;
 
@@ -18,9 +22,10 @@ namespace XYDataLabs.OrderProcessingSystem.Application.PublicApi.Services
 
         public async Task<Order> UpdateOrderAsync(Order order)
         {
-            _dbContext.Entry(order).State = EntityState.Modified;
+            _dbContext.Orders.Update(order);
             await _dbContext.SaveChangesAsync();
             return order;
         }
     }
 }
+

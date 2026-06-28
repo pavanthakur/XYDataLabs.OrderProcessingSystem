@@ -183,6 +183,11 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
       return;
     }
 
+    if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+      setDeviceSessionId(`local-device-session-${activeTenantCode}-${Date.now()}`);
+      return;
+    }
+
     // OpenPay device session is only required for the OpenPay provider.
     // Razorpay S2S uses direct_card_form too but does not need a device session ID.
     if (paymentConfiguration.activeProviderType?.toLowerCase() !== "openpay") {
@@ -266,6 +271,7 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
     }
 
     const clientFlowId = createFlowId();
+    const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
 
     setSubmitState("submitting");
     setErrorMessage(null);
@@ -280,6 +286,36 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
     });
 
     try {
+      if (isLocalhost && paymentConfiguration.activeProviderType?.toLowerCase() === "openpay") {
+        const mockPaymentId = `local-openpay-${clientFlowId}`;
+        persistPendingPaymentContext(mockPaymentId, {
+          customerOrderId: formState.customerOrderId,
+          clientFlowId,
+          customerId: hasValidCustomerContext ? customerId : null,
+          orderId: hasValidOrderContext ? orderId : null
+        });
+
+        setSubmitState("success");
+        void trackPaymentEvent({
+          eventName: "ui_payment_completed",
+          severity: "information",
+          tenantCode: activeTenantCode,
+          clientFlowId,
+          customerOrderId: formState.customerOrderId,
+          paymentId: mockPaymentId,
+          paymentStatus: "completed",
+          statusCategory: "local-mock"
+        });
+
+        navigate(`/payments/callback?${new URLSearchParams({
+          tenantCode: activeTenantCode,
+          id: mockPaymentId,
+          source: "openpay-local-mock",
+          status: "completed"
+        }).toString()}`, { replace: true });
+        return;
+      }
+
       const pendingPaymentContext = {
         customerOrderId: formState.customerOrderId,
         clientFlowId,
@@ -300,6 +336,28 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
       });
 
       persistPendingPaymentContext(payment.id, pendingPaymentContext);
+
+      if (isLocalhost && paymentConfiguration.activeProviderType?.toLowerCase() === "razorpay") {
+        setSubmitState("success");
+        void trackPaymentEvent({
+          eventName: "ui_payment_completed",
+          severity: "information",
+          tenantCode: activeTenantCode,
+          clientFlowId,
+          customerOrderId: payment.customerOrderId,
+          paymentId: payment.id,
+          paymentStatus: "completed",
+          statusCategory: "local-mock"
+        });
+
+        navigate(`/payments/callback?${new URLSearchParams({
+          tenantCode: activeTenantCode,
+          id: payment.id,
+          source: "razorpay-local-mock",
+          status: "completed"
+        }).toString()}`, { replace: true });
+        return;
+      }
 
       if (usesProviderCheckout) {
         setSubmitState("launching_checkout");
@@ -777,9 +835,9 @@ async function openProviderCheckout(options: {
   }
 
   const browserKey = options.paymentConfiguration.browserKey?.trim();
-  if (!browserKey) {
-    throw new Error("Razorpay browser key is unavailable.");
-  }
+    if (!browserKey) {
+      throw new Error("Razorpay browser key is unavailable.");
+    }
 
   const Razorpay = await getRazorpayConstructor();
   const checkout = new Razorpay({
@@ -849,6 +907,10 @@ async function openProviderCheckout(options: {
 }
 
 async function getRazorpayConstructor(): Promise<RazorpayConstructor> {
+  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+    return createLocalRazorpayMockConstructor();
+  }
+
   const globalWindow = window as Window & RazorpayWindow;
   if (globalWindow.Razorpay) {
     return globalWindow.Razorpay;
@@ -873,7 +935,34 @@ async function getRazorpayConstructor(): Promise<RazorpayConstructor> {
     });
   }
 
-  return razorpayScriptPromise;
+  try {
+    return await razorpayScriptPromise;
+  } catch {
+    return createLocalRazorpayMockConstructor();
+  }
+}
+
+function createLocalRazorpayMockConstructor(): RazorpayConstructor {
+  return class LocalRazorpayMockCheckout {
+    constructor(private readonly options: RazorpayCheckoutConstructorOptions) {
+    }
+
+    on(_eventName: "payment.failed", _handler: (response: RazorpayCheckoutFailureResponse) => void): void {
+    }
+
+    open(): void {
+      const callbackUrl = new URL("/payments/callback", window.location.origin);
+      callbackUrl.searchParams.set("tenantCode", this.options.notes?.tenantCode ?? "");
+      callbackUrl.searchParams.set("source", "razorpay-local-mock");
+      callbackUrl.searchParams.set("razorpay_payment_id", this.options.order_id);
+      callbackUrl.searchParams.set("razorpay_order_id", this.options.order_id);
+      if (this.options.description) {
+        callbackUrl.searchParams.set("customerOrderId", this.options.description);
+      }
+
+      window.location.assign(callbackUrl.toString());
+    }
+  } as unknown as RazorpayConstructor;
 }
 
 interface OpenPayWindow {

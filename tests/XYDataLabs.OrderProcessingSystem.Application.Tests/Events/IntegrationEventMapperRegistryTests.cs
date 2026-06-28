@@ -2,9 +2,11 @@ using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.Events;
-using XYDataLabs.OrderProcessingSystem.Application.Features.Orders.Events;
+using XYDataLabs.OrderProcessingSystem.Orders.Features.Events;
 using XYDataLabs.OrderProcessingSystem.Domain.Events;
 using XYDataLabs.OrderProcessingSystem.Domain.Identifiers;
+using XYDataLabs.OrderProcessingSystem.Orders.Features.Module;
+using XYDataLabs.OrderProcessingSystem.Payments.Features.Module;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Events;
 
@@ -15,6 +17,8 @@ public class IntegrationEventMapperRegistryTests
     {
         var services = new ServiceCollection();
         services.AddCqrs(typeof(XYDataLabs.OrderProcessingSystem.Application.StartupHelper).Assembly);
+        services.AddCqrs(typeof(OrdersModuleRegistration).Assembly);
+        services.AddCqrs(typeof(PaymentsModuleRegistration).Assembly);
 
         using var serviceProvider = services.BuildServiceProvider();
         var registry = serviceProvider.GetRequiredService<IIntegrationEventMapperRegistry>();

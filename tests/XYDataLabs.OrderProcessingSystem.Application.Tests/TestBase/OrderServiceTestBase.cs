@@ -1,5 +1,5 @@
-using XYDataLabs.OrderProcessingSystem.Application.Features.Orders.Commands;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
+using XYDataLabs.OrderProcessingSystem.Orders.Features.Commands;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase
 {

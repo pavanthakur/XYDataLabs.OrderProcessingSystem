@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FluentValidation" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Orders.Domain\XYDataLabs.OrderProcessingSystem.Orders.Domain.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Application\XYDataLabs.OrderProcessingSystem.Application.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Inventory.Features\XYDataLabs.OrderProcessingSystem.Inventory.Features.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Orders.API\XYDataLabs.OrderProcessingSystem.Orders.API.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.SharedKernel\XYDataLabs.OrderProcessingSystem.SharedKernel.csproj" />
+  </ItemGroup>
+
+</Project>
+

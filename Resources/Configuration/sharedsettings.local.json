@@ -7,11 +7,11 @@
   },
   "AllowedHosts": "*",
   "ConnectionStrings": {
-    "OrderProcessingSystemDbConnection": "Server=localhost;Database=OrderProcessingSystem_Local;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true;",
-    "TenantRegistryDbConnection": "Server=localhost;Database=OrderProcessingSystem_Local;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true;"
+    "OrderProcessingSystemDbConnection": "Server=localhost,1433;Database=OrderProcessingSystem_Local;User Id=sa;Password=Admin100@;Encrypt=False;TrustServerCertificate=True;MultipleActiveResultSets=true;",
+    "TenantRegistryDbConnection": "Server=localhost,1433;Database=OrderProcessingSystem_Local;User Id=sa;Password=Admin100@;Encrypt=False;TrustServerCertificate=True;MultipleActiveResultSets=true;"
   },
   "DedicatedTenantConnectionStrings": {
-    "TenantC": "Server=localhost;Database=OrderProcessingSystem_TenantC;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true;"
+    "TenantC": "Server=localhost,1433;Database=OrderProcessingSystem_TenantC;User Id=sa;Password=Admin100@;Encrypt=False;TrustServerCertificate=True;MultipleActiveResultSets=true;"
   },
   "Webhooks": {
     "Razorpay": {
@@ -42,6 +42,16 @@
     "UiSelectorEnabled": true,
     "UiTenantOverrideEnabled": true,
     "SwaggerSelectorEnabled": true
+  },
+  "IdentityProvider": {
+    "Enabled": true,
+    "Mode": "KeycloakLocal",
+    "Authority": "http://localhost:8081/realms/xy-phase9",
+    "Audience": "xy-order-processing",
+    "Scheme": "Bearer",
+    "Scope": "local-only-proof",
+    "ClientId": "xy-order-processing-backend",
+    "ClientSecret": "local-backend-client-secret"
   },
   "Frontend": {
     "WebBaseUrl": "http://localhost:5173"
@@ -120,7 +130,7 @@
     "Local": {
       "Enabled": true,
       "ConnectionStrings": {
-        "DefaultConnection": "Server=localhost;Database=OrderProcessingSystem_Local;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true;",
+        "DefaultConnection": "Server=localhost,1433;Database=OrderProcessingSystem_Local;User Id=sa;Password=Admin100@;Encrypt=False;TrustServerCertificate=True;MultipleActiveResultSets=true;",
         "Redis": "localhost:6379"
       }
     },

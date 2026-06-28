@@ -12,10 +12,10 @@ Use smaller coding models daily. Escalate to heavier reasoning models only for b
 
 | Task | Default model | Context | Notes |
 | --- | --- | --- | --- |
-| Phase runner and normal architect routing | `qwen2.5-coder:7b` | 4096 | Default for Phase 9 on this laptop. |
-| Developer implementation slices | `qwen2.5-coder:7b` | 4096 | Best daily balance for C#, CQRS, React, and refactoring. |
+| Phase runner and normal architect routing | `qwen2.5-coder:7b` | 16384 | Default for Phase 9 on this laptop. |
+| Developer implementation slices | `qwen2.5-coder:7b` | 16384 | Best daily balance for C#, CQRS, React, and refactoring. |
 | Quick Ask/docs/small snippets | `qwen2.5-coder:3b` | 4096 | Use for short answers and lightweight tasks. |
-| Architecture/review escalation | `deepseek-r1:8b` | 4096 | Use only when Qwen output is insufficient and a bounded reasoning pass is needed. |
+| Architecture/review escalation | `deepseek-r1:8b` | 16384 | Use only when Qwen output is insufficient and a bounded reasoning pass is needed. |
 | Embeddings/search | `nomic-embed-text` | N/A | Optional if a tool explicitly needs embeddings. |
 
 ## Avoid By Default
@@ -24,7 +24,7 @@ Do not run these as default settings:
 
 ```text
 any model above 8B parameters
-any context window above 4096 tokens for normal Zoo Code work
+any context window above 16384 tokens for normal Zoo Code work
 multiple AI assistants indexing the full repository at once
 ```
 
@@ -37,7 +37,7 @@ Architect mode:
 ```text
 Provider: Ollama
 Model: qwen2.5-coder:7b
-Context: 4096
+Context: 16384
 Mode: Architect / Ask / Chat
 Auto-approve: Off
 ```
@@ -47,7 +47,7 @@ Developer mode:
 ```text
 Provider: Ollama
 Model: qwen2.5-coder:7b
-Context: 4096
+Context: 16384
 Mode: Code / Edit
 Auto-approve: Off
 ```
@@ -57,7 +57,7 @@ Quick questions:
 ```text
 Provider: Ollama
 Model: qwen2.5-coder:3b
-Context: 4096
+Context: 16384
 Mode: Ask
 ```
 
@@ -66,7 +66,7 @@ DeepSeek escalation:
 ```text
 Provider: Ollama
 Model: deepseek-r1:8b
-Context: 4096
+Context: 16384
 Mode: Architect / Ask / Chat
 Auto-approve: Off
 ```
@@ -78,6 +78,13 @@ Auto-approve: Off
 3. Escalate only the architecture review output to DeepSeek if Qwen misses important bounded-context, ADR, or module-isolation trade-offs.
 4. Use Qwen for all developer prompts unless a single slice requires broader reasoning.
 5. Keep `repomix-output.xml` mostly for architect prompts; avoid attaching it to developer prompts by default.
+6. Build every slice context through `local models/ai-guidelines/build-slice-context.ps1` so oversized prompts fail fast before the model starts.
+
+## Phase 10 and Future Phases
+
+- Reuse the shared slice-context builder for `local models/zoocode/phase10/` and later phase packs.
+- Keep the same fail-fast sizing rule unless a phase owner explicitly approves a larger context window.
+- Treat a generated context warning as a signal to narrow the phase slice, not as something to override.
 
 ## Resource Hygiene
 
@@ -105,4 +112,4 @@ ollama pull deepseek-r1:8b
 
 ## Expected Outcome
 
-With Qwen 7B and 4096 context, Zoo Code should be more responsive, use less RAM, and avoid the high-context CPU-bound behavior seen with larger models.
+With Qwen 7B and 16384 context, Zoo Code should be more responsive, use less RAM, and avoid the high-context CPU-bound behavior seen with larger models.

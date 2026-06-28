@@ -20,16 +20,7 @@ export function buildCustomerOrderId(
 }
 
 function resolveTenantTag(tenantCode: string): string {
-  switch (tenantCode) {
-    case "TenantA":
-      return "tA";
-    case "TenantB":
-      return "tB";
-    case "TenantC":
-      return "tC";
-    default:
-      return tenantCode;
-  }
+  return tenantCode.trim().replace(/[^a-zA-Z0-9]+/g, "").slice(0, 12) || "tenant";
 }
 
 function resolveProviderTag(providerType: string): string {

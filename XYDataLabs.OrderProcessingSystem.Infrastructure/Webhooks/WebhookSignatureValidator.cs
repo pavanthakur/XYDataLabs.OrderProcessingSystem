@@ -49,12 +49,21 @@ internal sealed class WebhookSignatureValidator : IWebhookSignatureValidator
             return false;
         }
 
+        _logger.LogInformation(
+            "Webhook secret resolved for provider {ProviderName}. Key={ConfigKey} Length={SecretLength} SecretHash={SecretHash} PayloadLen={PayloadLength} PayloadHash={PayloadHash}",
+            providerName,
+            secretKey,
+            secret.Length,
+            Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(secret))).Substring(0, 12),
+            rawPayload?.Length ?? 0,
+            rawPayload is null ? "<null>" : Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(rawPayload))).Substring(0, 12));
+
         return providerName switch
         {
             var p when string.Equals(p, "Razorpay", StringComparison.OrdinalIgnoreCase)
-                => ValidateRazorpay(rawPayload, secret, signatureHeaderValue),
+                => ValidateRazorpay(rawPayload ?? string.Empty, secret, signatureHeaderValue),
             var p when string.Equals(p, "OpenPay", StringComparison.OrdinalIgnoreCase)
-                => ValidateOpenPay(rawPayload, secret, signatureHeaderValue),
+                => ValidateOpenPay(rawPayload ?? string.Empty, secret, signatureHeaderValue),
             _ => RejectUnknown(providerName)
         };
     }

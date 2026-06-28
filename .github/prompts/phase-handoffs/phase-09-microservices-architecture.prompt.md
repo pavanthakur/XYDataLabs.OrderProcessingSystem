@@ -9,11 +9,14 @@ You are Deepseek 14B, or Deepseek 64k when long-context execution is required, a
 
 Your task is to prepare the Phase 9 architecture handoff for a YARP-based microservices transition. Do not write production code. Produce an architecture decision and implementation blueprint that a developer model can safely use in this existing repository.
 
+Before responding, read `.github/instructions/ai-operating.instructions.md` and follow its slice-sizing and drift-control rules.
+
 Model utilization guidance:
 - Prefer Deepseek 14B when it is stable because ADR-021 needs architectural trade-off reasoning.
 - Use Deepseek 64k when the full repository prompt, ADR history, and current Phase 9 context need to stay in one long-context pass or when 14B execution stalls.
 - Treat Deepseek 64k output as an architecture draft that must include the same constraint checklist and stakeholder-risk section before it is accepted.
 - Do not weaken any non-negotiable constraint to fit model limitations; shorten supporting analysis before dropping architectural invariants.
+- Keep the first slice as small as possible. If the draft starts widening to multiple modules or implementation detail, stop and narrow it.
 
 Repository context:
 - Current app: .NET 8 ASP.NET Core Clean Architecture order-processing system.
@@ -34,6 +37,7 @@ Non-negotiable architecture constraints:
 - Treat DW-016 as active: payment amount/currency must become order/invoice-owned during Payments module extraction.
 - Phase 9 starts with module isolation first, service extraction second. Do not assume every module becomes an independently deployed microservice immediately.
 - Do not introduce new module names unless the repository evidence clearly supports them.
+- Do not write controller code, entity code, or migration code in the architect handoff.
 
 Required output structure:
 
@@ -73,7 +77,7 @@ For each module provide:
 - commands/queries likely owned by the module
 - events published later
 - events consumed later
-- dependencies allowed through `PublicApi` only
+- dependencies allowed through `API` only
 - extraction priority and risk level
 
 ========================
@@ -100,7 +104,7 @@ Use this structure:
 The ADR must explicitly state:
 - Phase 9 begins as a modular monolith/module-isolation effort.
 - YARP routes HTTP traffic to host boundaries, not class-library modules.
-- In-process modules communicate through `.PublicApi` contracts.
+- In-process modules communicate through `.API` contracts.
 - Independently hosted module APIs may be introduced only after module boundaries and tests are stable.
 - Orders owns order amount/currency; Payments owns payment attempts, provider references, webhook inbox behavior, and payment status transitions.
 - Tenants owns tenant registry and payment-provider routing authority.
@@ -118,7 +122,7 @@ For each initial module, provide:
 - project names following the existing repository naming style
 - recommended project references
 - folder structure
-- PublicApi interfaces and DTO names
+- API interfaces and DTO names
 - module DI registration pattern, for example `AddOrdersModule()`
 - owned DbContext or schema strategy
 - migration approach
@@ -128,25 +132,25 @@ For each initial module, provide:
 - validation command recommendations
 
 Preferred project naming pattern:
-- `XYDataLabs.OrderProcessingSystem.Orders.PublicApi`
+- `XYDataLabs.OrderProcessingSystem.Orders.API`
 - `XYDataLabs.OrderProcessingSystem.Orders.Domain`
 - `XYDataLabs.OrderProcessingSystem.Orders.Application`
 - `XYDataLabs.OrderProcessingSystem.Orders.Infrastructure`
-- `XYDataLabs.OrderProcessingSystem.Payments.PublicApi`
+- `XYDataLabs.OrderProcessingSystem.Payments.API`
 - `XYDataLabs.OrderProcessingSystem.Payments.Domain`
 - `XYDataLabs.OrderProcessingSystem.Payments.Application`
 - `XYDataLabs.OrderProcessingSystem.Payments.Infrastructure`
-- `XYDataLabs.OrderProcessingSystem.Tenants.PublicApi`
+- `XYDataLabs.OrderProcessingSystem.Tenants.API`
 - `XYDataLabs.OrderProcessingSystem.Tenants.Domain`
 - `XYDataLabs.OrderProcessingSystem.Tenants.Application`
 - `XYDataLabs.OrderProcessingSystem.Tenants.Infrastructure`
 
 Architecture tests must be added early to enforce:
-- PublicApi projects do not reference Infrastructure.
+- API projects do not reference Infrastructure.
 - Domain projects do not reference Application or Infrastructure.
 - Application projects do not reference Infrastructure.
 - Module internals are not referenced directly across modules.
-- Cross-module dependencies use `.PublicApi` contracts only.
+- Cross-module dependencies use `.API` contracts only.
 
 YARP guidance:
 - Use the existing Gateway project.
@@ -166,3 +170,4 @@ Final output must clearly separate:
 - ADR-021 draft
 - Qwen implementation handoff
 - Risks requiring stakeholder validation
+

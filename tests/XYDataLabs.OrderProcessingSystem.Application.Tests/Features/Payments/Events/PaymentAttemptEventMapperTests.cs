@@ -2,8 +2,9 @@ using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.Events;
-using XYDataLabs.OrderProcessingSystem.Application.Features.Payments.Events;
 using XYDataLabs.OrderProcessingSystem.Domain.Events;
+using XYDataLabs.OrderProcessingSystem.Payments.Features.Events;
+using XYDataLabs.OrderProcessingSystem.Payments.Features.Module;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Features.Payments.Events;
 
@@ -15,7 +16,7 @@ public class PaymentAttemptEventMapperTests
     public PaymentAttemptEventMapperTests()
     {
         var services = new ServiceCollection();
-        services.AddCqrs(typeof(XYDataLabs.OrderProcessingSystem.Application.StartupHelper).Assembly);
+        services.AddCqrs(typeof(PaymentsModuleRegistration).Assembly);
         var sp = services.BuildServiceProvider();
         _registry = sp.GetRequiredService<IIntegrationEventMapperRegistry>();
     }

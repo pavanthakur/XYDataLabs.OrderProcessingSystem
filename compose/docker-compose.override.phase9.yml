@@ -1,0 +1,8 @@
+﻿services:
+  api:
+    environment:
+      ASPNETCORE_URLS: http://+:5010
+  gateway:
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      Logging__LogLevel__Default: Information

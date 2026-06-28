@@ -63,7 +63,7 @@ public sealed class OrderMigrationTests
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The database name is generated inside the test and used only as a quoted SQL identifier on an isolated Testcontainers SQL Server instance.")]
+        Justification = "The database name is generated inside the test and used only as a quoted SQL identifier on an isolated SQL Server instance.")]
     private async Task<string> CreateDatabaseAsync(string databaseName)
     {
         var masterConnectionString = BuildConnectionString("master");
@@ -82,7 +82,7 @@ public sealed class OrderMigrationTests
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The database name is generated inside the test and used only as a quoted SQL identifier on an isolated Testcontainers SQL Server instance.")]
+        Justification = "The database name is generated inside the test and used only as a quoted SQL identifier on an isolated SQL Server instance.")]
     private async Task DropDatabaseAsync(string databaseName)
     {
         var masterConnectionString = BuildConnectionString("master");
@@ -110,18 +110,18 @@ END";
         const string sql = @"
 DECLARE @tenantId int = (SELECT TOP (1) [Id] FROM [Tenants] WHERE [Code] = 'TenantA');
 
-INSERT INTO [Customers] ([Name], [Email], [TenantId], [CreatedBy], [CreatedDate])
+INSERT INTO [dbo].[Customers] ([Name], [Email], [TenantId], [CreatedBy], [CreatedDate])
 VALUES (N'Migration Customer', N'migration-customer@test.com', @tenantId, 1, SYSUTCDATETIME());
 
 DECLARE @customerId int = SCOPE_IDENTITY();
 
-INSERT INTO [Orders] ([OrderDate], [CustomerId], [TotalPrice], [IsFulfilled], [TenantId], [CreatedBy], [CreatedDate])
+INSERT INTO [dbo].[Orders] ([OrderDate], [CustomerId], [TotalPrice], [IsFulfilled], [TenantId], [CreatedBy], [CreatedDate])
 VALUES
     (SYSUTCDATETIME(), @customerId, 10.00, 0, @tenantId, 1, SYSUTCDATETIME()),
     (SYSUTCDATETIME(), @customerId, 20.00, 1, @tenantId, 1, SYSUTCDATETIME());
 
 SELECT CAST([OrderId] AS int)
-FROM [Orders]
+FROM [dbo].[Orders]
 WHERE [CustomerId] = @customerId
 ORDER BY [OrderId];";
 
@@ -144,7 +144,7 @@ ORDER BY [OrderId];";
 
         const string sql = @"
 SELECT [OrderId], [Status], DATALENGTH([RowVersion])
-FROM [Orders]
+FROM [orders].[Orders]
 WHERE [OrderId] IN (@firstOrderId, @secondOrderId)
 ORDER BY [OrderId];";
 

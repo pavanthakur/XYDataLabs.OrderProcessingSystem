@@ -25,6 +25,7 @@ $ErrorActionPreference = 'Stop'
 
 $script:AzureSqlContext = $null
 $script:AzureSqlFirewallOpened = $false
+$script:LocalSqlPassword = $null
 
 function Get-DatabaseName {
     param(
@@ -203,14 +204,68 @@ function Invoke-LocalSqlTextQuery {
         [Parameter(Mandatory = $true)] [string] $Query
     )
 
-    $sqlcmdPath = (Get-Command sqlcmd -ErrorAction Stop).Source
     $normalizedQuery = ($Query -replace "`r?`n", ' ').Trim()
-    $output = & $sqlcmdPath -S localhost -E -d $Database -w 65535 -y 0 -Y 0 -Q "SET NOCOUNT ON; $normalizedQuery" 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        throw ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
+    $localSqlPassword = Get-LocalSqlPassword
+    $connectionString = "Server=localhost,1433;Initial Catalog=$Database;User Id=sa;Password=$localSqlPassword;Encrypt=False;TrustServerCertificate=True;MultipleActiveResultSets=True;Connection Timeout=30;"
+    $connection = [System.Data.SqlClient.SqlConnection]::new($connectionString)
+
+    try {
+        $connection.Open()
+        $command = $connection.CreateCommand()
+        $command.CommandText = "SET NOCOUNT ON; $normalizedQuery"
+        $command.CommandTimeout = 60
+
+        $reader = $command.ExecuteReader()
+        try {
+            if ($reader.FieldCount -le 0) {
+                return @()
+            }
+
+            $table = [System.Data.DataTable]::new()
+            $table.Load($reader)
+            return Normalize-SqlOutputLines -Lines @(
+                $table.Rows | ForEach-Object {
+                    if ($table.Columns.Count -gt 0) {
+                        [string] $_[$table.Columns[0].ColumnName]
+                    }
+                }
+            )
+        }
+        finally {
+            $reader.Dispose()
+        }
+    }
+    finally {
+        if ($connection.State -ne [System.Data.ConnectionState]::Closed) {
+            $connection.Close()
+        }
+
+        $connection.Dispose()
+    }
+}
+
+function Get-LocalSqlPassword {
+    if (-not [string]::IsNullOrWhiteSpace($script:LocalSqlPassword)) {
+        return $script:LocalSqlPassword
     }
 
-    return Normalize-SqlOutputLines -Lines @($output | ForEach-Object { $_.ToString() })
+    $envLocalPath = Join-Path $PSScriptRoot '..\Resources\Docker\.env.local'
+    if (-not (Test-Path $envLocalPath)) {
+        throw "Local SQL secrets file not found: $envLocalPath"
+    }
+
+    $sqlPasswordLine = Get-Content -LiteralPath $envLocalPath | Where-Object { $_ -match '^LOCAL_SQL_PASSWORD=' } | Select-Object -First 1
+    if ([string]::IsNullOrWhiteSpace($sqlPasswordLine)) {
+        throw "LOCAL_SQL_PASSWORD was not found in $envLocalPath"
+    }
+
+    $sqlPassword = $sqlPasswordLine.Split('=', 2)[1].Trim()
+    if ([string]::IsNullOrWhiteSpace($sqlPassword)) {
+        throw "LOCAL_SQL_PASSWORD in $envLocalPath is empty."
+    }
+
+    $script:LocalSqlPassword = $sqlPassword
+    return $script:LocalSqlPassword
 }
 
 function Invoke-DockerSqlTextQuery {

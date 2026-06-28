@@ -6,6 +6,8 @@ These prompts are intended to reduce missed post-deployment steps, standardize r
 
 For repo-shared AI governance, use [docs/AI-OPERATING-MODEL.md](../../docs/AI-OPERATING-MODEL.md) as the canonical protocol and [docs/internal/DEFERRED-WORK-LOG.md](../../docs/internal/DEFERRED-WORK-LOG.md) as the shared deferral register.
 
+Use [.github/instructions/ai-operating.instructions.md](../instructions/ai-operating.instructions.md) as the shared local slice-sizing and drift-control rule file.
+
 ## How To Use
 
 1. Open VS Code Chat.
@@ -37,6 +39,7 @@ Purpose:
 - Ensures progress tracking stays consistent, including architecture phase status surfaces.
 - Makes payment automation validation mandatory during phase closeout when the work touched `automation/` or the payment automation workflow surfaces.
 - Helps prevent missing updates in curriculum, daily progress, and related docs.
+- For Phase 9 closeout, verify the numbered VS Code task sequence for both `local-http` and `docker-dev-http` is documented and aligned before declaring completion.
 
 Use when:
 - A curriculum day is finished.
@@ -101,6 +104,7 @@ Purpose:
 - Runs a structured quality gate after completing any feature, task, script, or workflow.
 - Checks six categories: documentation, guardrails, unit tests, integration/architecture tests, automation/CI-CD, and Copilot context.
 - Fixes gaps immediately where possible; records any justified deferrals in `docs/internal/DEFERRED-WORK-LOG.md`.
+- For Phase 9 closeout, also verify the numbered VS Code task sequence for both `local-http` and `docker-dev-http` is documented and aligned with the closeout roadmap.
 
 Use when:
 - Finishing any feature, fix, script, or DevOps task before considering it done.
@@ -267,6 +271,7 @@ Current prompts:
 [After a phase close/freeze]
 └─ /XYDataLabs-day-complete  →  routes curriculum + roadmap + status-surface updates
    └─ [If automation scope changed] run automation dry-run matrix and record results
+   └─ [If Phase 9 closeout] verify `local-http` + `docker-dev-http` VS Code task sequences
    └─ /XYDataLabs-completion-check  →  mandatory quality gate before commit
    └─ /XYDataLabs-context-audit  →  mandatory drift audit before commit
 

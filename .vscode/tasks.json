@@ -3,7 +3,7 @@
     "tasks": [
         // Workspace
         {
-            "label": "build",
+            "label": "Workspace: Build",
             "command": "dotnet",
             "type": "process",
             "args": [
@@ -15,7 +15,7 @@
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "publish",
+            "label": "Workspace: Publish",
             "command": "dotnet",
             "type": "process",
             "args": [
@@ -27,7 +27,7 @@
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "watch",
+            "label": "Workspace: Watch",
             "command": "dotnet",
             "type": "process",
             "args": [
@@ -39,7 +39,7 @@
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "Setup: Bootstrap local dev environment",
+            "label": "Workspace: Setup Bootstrap Local Dev Environment",
             "type": "shell",
             "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/setup-local.ps1",
             "options": {
@@ -57,7 +57,7 @@
             "problemMatcher": []
         },
         {
-            "label": "Validate: AI customization",
+            "label": "Validate: AI Customization",
             "type": "shell",
             "command": "pwsh",
             "args": [
@@ -79,7 +79,7 @@
             "problemMatcher": []
         },
         {
-            "label": "Validate: Docs links",
+            "label": "Validate: Docs Links",
             "type": "shell",
             "command": "node",
             "args": [
@@ -97,7 +97,7 @@
             "problemMatcher": []
         },
         {
-            "label": "Validate: Tracked generated artifacts",
+            "label": "Validate: Tracked Generated Artifacts",
             "type": "shell",
             "command": "pwsh",
             "args": [
@@ -118,8 +118,9 @@
             },
             "problemMatcher": []
         },
+        // Artifacts: TestResults\Playwright\<timestamp>, latest pointer at TestResults\Playwright\latest-playwright-smoke.txt
         {
-            "label": "Validate: Gateway tests",
+            "label": "Validate: Gateway Tests",
             "type": "process",
             "command": "dotnet",
             "args": [
@@ -132,6 +133,187 @@
                 "cwd": "${workspaceFolder}"
             },
             "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        // Artifacts: TestResults\PaymentMatrix\<timestamp>, latest pointer at TestResults\PaymentMatrix\latest-payment-matrix.txt
+        {
+            "label": "1 Run: Local HTTP 04 Integration Suite (Local SQL, No Docker)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Cleanup: Integration test results",
+                "Internal: Ensure Local DB Ready"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/run-integration-tests-local.ps1"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Docker Dev HTTP 05 Full Validation (Profile + Suite + Smoke + Matrix, Docker Dev HTTP)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Docker Dev HTTP)",
+                "1 Run: Docker Dev HTTP 03 Integration Suite (Docker Dev HTTP)",
+                "1 Run: Docker Dev HTTP 02 Playwright Smoke (Docker Dev HTTP)"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/run-playwright-full-validation.ps1",
+                "-Target",
+                "docker-dev-http"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Docker Dev HTTP 03 Integration Suite (Docker Dev HTTP)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Docker Dev HTTP)"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/run-integration-tests-docker.ps1"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Docker Dev HTTP 02 Playwright Smoke (Docker Dev HTTP)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Docker Dev HTTP)"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/run-playwright-docker-dev-http.ps1",
+                "-StabilizationDelaySeconds",
+                "120"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Docker Dev HTTP 04 Payment Matrix (All Tenants + Providers, Docker Dev HTTP)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Docker Dev HTTP)"
+            ],
+            "type": "shell",
+            "command": "npm",
+            "args": [
+                "--prefix",
+                "automation",
+                "run",
+                "run:docker:dev:http:playwright-matrix"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Cleanup: Integration test results (script)",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/cleanup-integration-test-results.ps1"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Cleanup: Integration test results (now)",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "if (Test-Path 'TestResults\\Integration') { Remove-Item 'TestResults\\Integration' -Recurse -Force }; if (Test-Path 'tests\\XYDataLabs.OrderProcessingSystem.Integration.Tests\\TestResults\\focused.trx') { Remove-Item 'tests\\XYDataLabs.OrderProcessingSystem.Integration.Tests\\TestResults\\focused.trx' -Force }"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "none",
             "presentation": {
                 "reveal": "always",
                 "panel": "shared",
@@ -189,7 +371,7 @@
             "args": ["-NoProfile","-ExecutionPolicy","Bypass","-File","${workspaceFolder}\\ai-runtime\\run.ps1","-Mode","automation"],
             "problemMatcher": [],"group":"none","presentation":{"reveal":"always","panel":"new","focus":true}
         },
-        // Run: Local
+        // Run: Local HTTP
         {
             "label": "1 Run: 01 Frontend only",
             "dependsOrder": "sequence",
@@ -201,7 +383,7 @@
             "problemMatcher": []
         },
         {
-            "label": "1 Run: 04 VS-Style Local Http Launch",
+            "label": "1 Run: Local HTTP 04 Profile",
             "dependsOrder": "sequence",
             "dependsOn": [
                 "Internal: Stop local dev sessions",
@@ -211,7 +393,255 @@
             "problemMatcher": []
         },
         {
-            "label": "1 Run: 05 VS-Style Local Https Launch",
+            "label": "1 Run: Local HTTP 01 Env Ready + Keycloak",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Internal: Stop local dev sessions",
+                "Internal: Ensure Local DB Ready",
+                "Internal: Start local keycloak profile",
+                "Internal: Start local http profile"
+            ],
+            "isBackground": true,
+            "problemMatcher": {
+                "owner": "custom",
+                "pattern": [
+                    {
+                        "regexp": "."
+                    }
+                ],
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "Starting API for 'http' profile",
+                    "endsPattern": "Local 'http' profile is ready on ports: 5010, 5173"
+                }
+            },
+            "group": "none"
+        },
+        {
+            "label": "1 Run: Local HTTP 02 Playwright Smoke",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/test-frontend-tenant-bootstrap.ps1",
+                "-Target",
+                "local-http",
+                "--artifact-root",
+                "TestResults/Playwright/local-http",
+                "--latest-pointer-path",
+                "TestResults/Playwright/local-http/latest-playwright-smoke.txt"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Local HTTP 03 Matrix Sanity (1 Tenant, Local HTTP)",
+            "dependsOrder": "sequence",
+            "type": "shell",
+            "command": "npm",
+            "args": [
+                "--prefix",
+                "automation",
+                "run",
+                "run:local:http:playwright-sanity"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Local HTTP 05 Full Validation (All Tenants + Providers, Local HTTP)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "1 Run: Local HTTP 02 Playwright Smoke",
+                "1 Run: Local HTTP 04 Integration Suite (Local SQL, No Docker)"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/run-playwright-full-validation.ps1",
+                "-Target",
+                "local-http"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "2 Run: Local HTTPS 05 Full Validation (All Tenants + Providers, Local HTTPS)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "2 Run: Local HTTPS 02 Playwright Smoke",
+                "2 Run: Local HTTPS 03 Matrix Sanity (1 Tenant, Local HTTPS)",
+                "2 Run: Local HTTPS 04 Integration Suite (Local SQL, No Docker)",
+                "2 Run: Local HTTPS 01 Profile"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/run-playwright-full-validation.ps1",
+                "-Target",
+                "local-https"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "2 Run: Local HTTPS 02 Playwright Smoke",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/test-frontend-tenant-bootstrap.ps1",
+                "-Target",
+                "local-https",
+                "--artifact-root",
+                "TestResults/Playwright/local-https",
+                "--latest-pointer-path",
+                "TestResults/Playwright/local-https/latest-playwright-smoke.txt"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "2 Run: Local HTTPS 03 Matrix Sanity (1 Tenant, Local HTTPS)",
+            "dependsOrder": "sequence",
+            "type": "shell",
+            "command": "npm",
+            "args": [
+                "--prefix",
+                "automation",
+                "run",
+                "run:local:https:playwright-sanity"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "2 Run: Local HTTPS 04 Integration Suite (Local SQL, No Docker)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Cleanup: Integration test results",
+                "Internal: Ensure Local DB Ready"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/run-integration-tests-local.ps1"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Docker Dev HTTP)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Internal: Stop local dev sessions",
+                "1 Run: Docker Dev HTTP 01 Profile"
+            ],
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Docker Dev HTTP 02 Playwright Smoke (Docker Dev HTTP)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Docker Dev HTTP)"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/run-playwright-docker-dev-http.ps1"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "2 Run: Local HTTPS 01 Profile",
             "dependsOrder": "sequence",
             "dependsOn": [
                 "Internal: Stop local dev sessions",
@@ -221,7 +651,7 @@
             "problemMatcher": []
         },
         {
-            "label": "1 Run: 06 Gateway Baseline Http",
+            "label": "2 Run: Gateway Baseline HTTP 02",
             "dependsOrder": "sequence",
             "dependsOn": [
                 "Internal: Stop local dev sessions",
@@ -233,41 +663,41 @@
             "problemMatcher": []
         },
         {
-            "label": "1 Run: 13 Gateway over Docker Dev Http",
+            "label": "2 Run: Gateway over Docker Dev HTTP 03",
             "dependsOrder": "sequence",
             "dependsOn": [
                 "Internal: Stop local dev sessions",
-                "1 Run: 11 Docker Dev Http Profile",
+                "1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Docker Dev HTTP)",
                 "Internal: Gateway docker-dev-http profile"
             ],
             "group": "none",
             "problemMatcher": []
         },
         {
-            "label": "1 Run: 23 Gateway over Docker Stg Http",
+            "label": "3 Run: Gateway over Docker Stg HTTP 03",
             "dependsOrder": "sequence",
             "dependsOn": [
                 "Internal: Stop local dev sessions",
-                "1 Run: 21 Docker Stg Http Profile",
+                "3 Run: Docker Stg HTTP 01 Profile",
                 "Internal: Gateway docker-stg-http profile"
             ],
             "group": "none",
             "problemMatcher": []
         },
         {
-            "label": "1 Run: 33 Gateway over Docker Prod Http",
+            "label": "4 Run: Gateway over Docker Prod HTTP 03",
             "dependsOrder": "sequence",
             "dependsOn": [
                 "Internal: Stop local dev sessions",
-                "1 Run: 31 Docker Prod Http Profile",
+                "4 Run: Docker Prod HTTP 01 Profile",
                 "Internal: Gateway docker-prod-http profile"
             ],
             "group": "none",
             "problemMatcher": []
         },
-        // Run: Docker
+        // Run: Docker Dev / Stg / Prod
         {
-            "label": "1 Run: 11 Docker Dev Http Profile",
+            "label": "1 Run: Docker Dev HTTP 01 Profile",
             "type": "process",
             "command": "pwsh",
             "args": [
@@ -289,7 +719,7 @@
             "problemMatcher": []
         },
         {
-            "label": "1 Run: 12 Docker Dev Https Profile",
+            "label": "2 Run: Docker Dev HTTPS 01 Profile",
             "type": "process",
             "command": "pwsh",
             "args": [
@@ -311,7 +741,7 @@
             "problemMatcher": []
         },
         {
-            "label": "1 Run: 21 Docker Stg Http Profile",
+            "label": "3 Run: Docker Stg HTTP 01 Profile",
             "type": "process",
             "command": "pwsh",
             "args": [
@@ -333,7 +763,7 @@
             "problemMatcher": []
         },
         {
-            "label": "1 Run: 22 Docker Stg Https Profile",
+            "label": "3 Run: Docker Stg HTTPS 12 Profile",
             "type": "process",
             "command": "pwsh",
             "args": [
@@ -355,7 +785,7 @@
             "problemMatcher": []
         },
         {
-            "label": "1 Run: 31 Docker Prod Http Profile",
+            "label": "4 Run: Docker Prod HTTP 01 Profile",
             "type": "process",
             "command": "pwsh",
             "args": [
@@ -377,7 +807,7 @@
             "problemMatcher": []
         },
         {
-            "label": "1 Run: 32 Docker Prod Https Profile",
+            "label": "4 Run: Docker Prod HTTPS 12 Profile",
             "type": "process",
             "command": "pwsh",
             "args": [
@@ -398,9 +828,535 @@
             },
             "problemMatcher": []
         },
-        // Stop: Local
         {
-            "label": "2 Stop: 00 Local Dev Sessions",
+            "label": "2 Run: Docker Dev HTTPS 05 Full Validation (Profile + Suite + Smoke + Matrix, Docker Dev HTTPS)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "2 Run: Docker Dev HTTPS 01 Profile"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/run-playwright-full-validation.ps1",
+                "-Target",
+                "docker-dev-https"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "3 Run: Docker Stg HTTP 05 Full Validation (Profile + Suite + Smoke + Matrix, Docker Stg HTTP)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "3 Run: Docker Stg HTTP 02 Playwright Smoke (Docker Stg HTTP)",
+                "3 Run: Docker Stg HTTP 03 Matrix Sanity (1 Tenant, Docker Stg HTTP)",
+                "3 Run: Docker Stg HTTP 04 Integration Suite (Docker Stg HTTP)",
+                "3 Run: Docker Stg HTTP 01 Profile"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/run-playwright-full-validation.ps1",
+                "-Target",
+                "docker-stg-http"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "3 Run: Docker Stg HTTP 02 Playwright Smoke (Docker Stg HTTP)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "3 Run: Docker Stg HTTP 01 Profile"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/test-frontend-tenant-bootstrap.ps1",
+                "-Target",
+                "docker-stg-http",
+                "--artifact-root",
+                "TestResults/Playwright/docker-stg-http",
+                "--latest-pointer-path",
+                "TestResults/Playwright/docker-stg-http/latest-playwright-smoke.txt"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "3 Run: Docker Stg HTTP 03 Matrix Sanity (1 Tenant, Docker Stg HTTP)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "3 Run: Docker Stg HTTP 01 Profile"
+            ],
+            "type": "shell",
+            "command": "npm",
+            "args": [
+                "--prefix",
+                "automation",
+                "run",
+                "run:docker:stg:http:playwright-sanity"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "3 Run: Docker Stg HTTP 04 Integration Suite (Docker Stg HTTP)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "3 Run: Docker Stg HTTP 01 Profile"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/run-integration-tests-docker.ps1"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "3 Run: Docker Stg HTTPS 05 Full Validation (Profile + Suite + Smoke + Matrix, Docker Stg HTTPS)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "3 Run: Docker Stg HTTPS 02 Playwright Smoke (Docker Stg HTTPS)",
+                "3 Run: Docker Stg HTTPS 03 Matrix Sanity (1 Tenant, Docker Stg HTTPS)",
+                "3 Run: Docker Stg HTTPS 04 Integration Suite (Docker Stg HTTPS)",
+                "3 Run: Docker Stg HTTPS 12 Profile"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/run-playwright-full-validation.ps1",
+                "-Target",
+                "docker-stg-https"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "3 Run: Docker Stg HTTPS 02 Playwright Smoke (Docker Stg HTTPS)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "3 Run: Docker Stg HTTPS 12 Profile"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/test-frontend-tenant-bootstrap.ps1",
+                "-Target",
+                "docker-stg-https",
+                "--artifact-root",
+                "TestResults/Playwright/docker-stg-https",
+                "--latest-pointer-path",
+                "TestResults/Playwright/docker-stg-https/latest-playwright-smoke.txt"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "3 Run: Docker Stg HTTPS 03 Matrix Sanity (1 Tenant, Docker Stg HTTPS)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "3 Run: Docker Stg HTTPS 12 Profile"
+            ],
+            "type": "shell",
+            "command": "npm",
+            "args": [
+                "--prefix",
+                "automation",
+                "run",
+                "run:docker:stg:https:playwright-sanity"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "3 Run: Docker Stg HTTPS 04 Integration Suite (Docker Stg HTTPS)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "3 Run: Docker Stg HTTPS 12 Profile"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/run-integration-tests-docker.ps1"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "4 Run: Docker Prod HTTP 05 Full Validation (Profile + Suite + Smoke + Matrix, Docker Prod HTTP)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "4 Run: Docker Prod HTTP 02 Playwright Smoke (Docker Prod HTTP)",
+                "4 Run: Docker Prod HTTP 03 Matrix Sanity (1 Tenant, Docker Prod HTTP)",
+                "4 Run: Docker Prod HTTP 04 Integration Suite (Docker Prod HTTP)",
+                "4 Run: Docker Prod HTTP 01 Profile"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/run-playwright-full-validation.ps1",
+                "-Target",
+                "docker-prod-http"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "4 Run: Docker Prod HTTP 02 Playwright Smoke (Docker Prod HTTP)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "4 Run: Docker Prod HTTP 01 Profile"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/test-frontend-tenant-bootstrap.ps1",
+                "-Target",
+                "docker-prod-http",
+                "--artifact-root",
+                "TestResults/Playwright/docker-prod-http",
+                "--latest-pointer-path",
+                "TestResults/Playwright/docker-prod-http/latest-playwright-smoke.txt"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "4 Run: Docker Prod HTTP 03 Matrix Sanity (1 Tenant, Docker Prod HTTP)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "4 Run: Docker Prod HTTP 01 Profile"
+            ],
+            "type": "shell",
+            "command": "npm",
+            "args": [
+                "--prefix",
+                "automation",
+                "run",
+                "run:docker:prod:http:playwright-sanity"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "4 Run: Docker Prod HTTP 04 Integration Suite (Docker Prod HTTP)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "4 Run: Docker Prod HTTP 01 Profile"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/run-integration-tests-docker.ps1"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "4 Run: Docker Prod HTTPS 05 Full Validation (Profile + Suite + Smoke + Matrix, Docker Prod HTTPS)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "4 Run: Docker Prod HTTPS 02 Playwright Smoke (Docker Prod HTTPS)",
+                "4 Run: Docker Prod HTTPS 03 Matrix Sanity (1 Tenant, Docker Prod HTTPS)",
+                "4 Run: Docker Prod HTTPS 04 Integration Suite (Docker Prod HTTPS)",
+                "4 Run: Docker Prod HTTPS 12 Profile"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/run-playwright-full-validation.ps1",
+                "-Target",
+                "docker-prod-https"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "4 Run: Docker Prod HTTPS 02 Playwright Smoke (Docker Prod HTTPS)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "4 Run: Docker Prod HTTPS 12 Profile"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/test-frontend-tenant-bootstrap.ps1",
+                "-Target",
+                "docker-prod-https",
+                "--artifact-root",
+                "TestResults/Playwright/docker-prod-https",
+                "--latest-pointer-path",
+                "TestResults/Playwright/docker-prod-https/latest-playwright-smoke.txt"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "4 Run: Docker Prod HTTPS 03 Matrix Sanity (1 Tenant, Docker Prod HTTPS)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "4 Run: Docker Prod HTTPS 12 Profile"
+            ],
+            "type": "shell",
+            "command": "npm",
+            "args": [
+                "--prefix",
+                "automation",
+                "run",
+                "run:docker:prod:https:playwright-sanity"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "4 Run: Docker Prod HTTPS 04 Integration Suite (Docker Prod HTTPS)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "4 Run: Docker Prod HTTPS 12 Profile"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/run-integration-tests-docker.ps1"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "5 Run: Azure 01 Matrix Dry Run (Any Environment, Azure HTTPS)",
+            "type": "shell",
+            "command": "npm",
+            "args": [
+                "--prefix",
+                "automation",
+                "run",
+                "run:azure:matrix:dry"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "5 Run: Azure 02 Matrix (Any Environment, Azure HTTPS)",
+            "type": "shell",
+            "command": "npm",
+            "args": [
+                "--prefix",
+                "automation",
+                "run",
+                "run:azure:matrix"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        // Stop: Local Profiles
+        {
+            "label": "2 Stop: Local Dev Sessions",
             "dependsOrder": "sequence",
             "dependsOn": [
                 "Internal: Stop local dev sessions"
@@ -409,7 +1365,7 @@
             "problemMatcher": []
         },
         {
-            "label": "2 Stop: 01 Local Http Profile",
+            "label": "2 Stop: Local HTTP Profile",
             "dependsOrder": "sequence",
             "dependsOn": [
                 "Internal: Stop local http profile"
@@ -418,7 +1374,7 @@
             "problemMatcher": []
         },
         {
-            "label": "2 Stop: 02 Local Https Profile",
+            "label": "2 Stop: Local HTTPS Profile",
             "dependsOrder": "sequence",
             "dependsOn": [
                 "Internal: Stop local https profile"
@@ -426,9 +1382,9 @@
             "group": "none",
             "problemMatcher": []
         },
-        // Cleanup: Docker
+        // Cleanup: Docker Profiles
         {
-            "label": "3 Cleanup: 11 Docker Dev Http Profile",
+            "label": "3 Cleanup: Docker Dev HTTP 01 Profile",
             "type": "process",
             "command": "pwsh",
             "args": [
@@ -450,7 +1406,25 @@
             "problemMatcher": []
         },
         {
-            "label": "3 Cleanup: 12 Docker Dev Https Profile",
+            "label": "3 Cleanup: Docker Dev HTTP 40 Full Validation",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "3 Cleanup: Docker Dev HTTP 01 Profile"
+            ],
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "3 Cleanup: Docker Dev HTTPS 40 Full Validation",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "3 Cleanup: Docker Dev HTTPS 12 Profile"
+            ],
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "3 Cleanup: Docker Dev HTTPS 12 Profile",
             "type": "process",
             "command": "pwsh",
             "args": [
@@ -472,7 +1446,7 @@
             "problemMatcher": []
         },
         {
-            "label": "3 Cleanup: 21 Docker Stg Http Profile",
+            "label": "3 Cleanup: Docker Stg HTTP 21 Profile",
             "type": "process",
             "command": "pwsh",
             "args": [
@@ -494,7 +1468,7 @@
             "problemMatcher": []
         },
         {
-            "label": "3 Cleanup: 22 Docker Stg Https Profile",
+            "label": "3 Cleanup: Docker Stg HTTPS 22 Profile",
             "type": "process",
             "command": "pwsh",
             "args": [
@@ -516,7 +1490,7 @@
             "problemMatcher": []
         },
         {
-            "label": "3 Cleanup: 31 Docker Prod Http Profile",
+            "label": "3 Cleanup: Docker Prod HTTP 31 Profile",
             "type": "process",
             "command": "pwsh",
             "args": [
@@ -538,7 +1512,7 @@
             "problemMatcher": []
         },
         {
-            "label": "3 Cleanup: 32 Docker Prod Https Profile",
+            "label": "3 Cleanup: Docker Prod HTTPS 32 Profile",
             "type": "process",
             "command": "pwsh",
             "args": [
@@ -559,7 +1533,7 @@
             },
             "problemMatcher": []
         },
-        // Internal helpers
+        // Internal helpers and profile launchers
         {
             "label": "Internal: Stop local dev sessions",
             "type": "shell",
@@ -662,6 +1636,51 @@
             },
             "hide": true,
             "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "Internal: Start local keycloak profile",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/start-local-keycloak.ps1"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "hide": true,
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Internal: Ensure Local DB Ready",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/verify-local-db-ready.ps1"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
             "problemMatcher": []
         },
         {

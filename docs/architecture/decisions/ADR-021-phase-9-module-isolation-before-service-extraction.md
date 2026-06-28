@@ -17,9 +17,9 @@ Orders, Inventory, Notifications, and Payments become first-class modules inside
 - `*.Domain` — module-owned entities, value objects, domain events, and invariants
 - `*.Features` — module CQRS commands, queries, handlers, validators, DTOs, and mapping owned by the module
 - `*.Infrastructure` — module persistence, adapters, workers, migrations, and registration
-- `*.PublicApi` — interfaces and contract DTOs that other modules may reference
+- `*.API` — interfaces and contract DTOs that other modules may reference
 
-Modules may reference another module's `*.PublicApi` project only. They must not reference another module's `*.Domain`, `*.Features`, or `*.Infrastructure` project.
+Modules may reference another module's `*.API` project only. They must not reference another module's `*.Domain`, `*.Features`, or `*.Infrastructure` project.
 
 The first implementation wave keeps one API composition root and one supported local runtime path while enforcing the module boundaries with architecture tests. YARP gateway routing, Aspire-Lite orchestration, and Docker Compose parity are layered on after the module references are clean.
 
@@ -37,7 +37,7 @@ The first implementation wave keeps one API composition root and one supported l
 **Positive:**
 - The pre-Phase 9 snapshot remains a reliable recovery point before irreversible project movement.
 - Module boundaries can be tested while the current API, database, and payment flows remain available.
-- `PublicApi` contracts make allowed inter-module communication explicit before distributed calls are introduced.
+- `API` contracts make allowed inter-module communication explicit before distributed calls are introduced.
 - Existing tenant, webhook, outbox, and payment semantics carry forward without being rewritten during the first split.
 
 **Negative / Trade-offs:**
@@ -46,7 +46,7 @@ The first implementation wave keeps one API composition root and one supported l
 - EF Core migrations and seed data must be handled carefully while schemas are introduced incrementally.
 
 **Future obligations:**
-- Add NetArchTest rules that block cross-module references except through `*.PublicApi`.
+- Add NetArchTest rules that block cross-module references except through `*.API`.
 - Introduce module registration methods such as `AddOrdersModule()`, `AddInventoryModule()`, `AddNotificationsModule()`, and `AddPaymentsModule()`.
 - Preserve Docker Compose support while adding Aspire-Lite service discovery and dashboarding.
 - Keep YARP as the single local ingress once downstream service discovery is wired.

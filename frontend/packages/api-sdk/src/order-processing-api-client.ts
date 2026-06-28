@@ -16,6 +16,7 @@ export interface OrderProcessingApiClientOptions {
   baseUrl?: string;
   getTenantCode?: () => string | null;
   getTenantHeaderName?: () => string | null;
+  getAccessToken?: () => string | null;
 }
 
 const defaultTenantHeaderName = "X-Tenant-Code";
@@ -34,11 +35,13 @@ export class OrderProcessingApiClient {
   private readonly baseUrl: string;
   private readonly getTenantCode: () => string | null;
   private readonly getTenantHeaderName: () => string | null;
+  private readonly getAccessToken: () => string | null;
 
   constructor(options: OrderProcessingApiClientOptions = {}) {
     this.baseUrl = options.baseUrl?.replace(/\/$/, "") ?? "";
     this.getTenantCode = options.getTenantCode ?? (() => null);
     this.getTenantHeaderName = options.getTenantHeaderName ?? (() => null);
+    this.getAccessToken = options.getAccessToken ?? (() => null);
   }
 
   async getRuntimeConfiguration(requestedTenantCode?: string): Promise<RuntimeConfiguration> {
@@ -149,6 +152,7 @@ export class OrderProcessingApiClient {
       ...init,
       headers: {
         Accept: "application/json",
+        ...(this.getAccessToken() ? { Authorization: `Bearer ${this.getAccessToken()}` } : {}),
         ...(init?.headers ?? {})
       }
     });

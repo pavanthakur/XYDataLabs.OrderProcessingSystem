@@ -14,6 +14,72 @@ namespace XYDataLabs.OrderProcessingSystem.API.Tests.Controllers;
 public sealed class WebhookControllerTests
 {
     [Fact]
+    public async Task ReceiveAsync_Prefers_Razorpay_Specific_Header_Over_Generic_Header()
+    {
+        var dispatcher = new Mock<IDispatcher>();
+        var signatureValidator = new Mock<IWebhookSignatureValidator>();
+        var logger = new Mock<ILogger<WebhookController>>();
+
+        signatureValidator
+            .Setup(validator => validator.Validate("Razorpay", It.IsAny<string>(), "razorpay-specific"))
+            .Returns(true);
+
+        dispatcher
+            .Setup(dispatcherMock => dispatcherMock.SendAsync(It.IsAny<RecordWebhookEventCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<int>.Success(42));
+
+        var controller = new WebhookController(dispatcher.Object, signatureValidator.Object, logger.Object)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = CreateHttpContext("""{"event":"payment.captured","payment_id":"rzp_pay_123"}""")
+            }
+        };
+
+        controller.Request.Headers["X-Razorpay-Signature"] = "razorpay-specific";
+        controller.Request.Headers["X-Webhook-Signature"] = "generic-fallback";
+
+        var result = await controller.ReceiveAsync("Razorpay", CancellationToken.None);
+
+        Assert.IsType<AcceptedResult>(result);
+        signatureValidator.Verify(validator => validator.Validate("Razorpay", It.IsAny<string>(), "razorpay-specific"), Times.Once);
+        signatureValidator.Verify(validator => validator.Validate("Razorpay", It.IsAny<string>(), "generic-fallback"), Times.Never);
+    }
+
+    [Fact]
+    public async Task ReceiveAsync_Prefers_OpenPay_Specific_Header_Over_Generic_Header()
+    {
+        var dispatcher = new Mock<IDispatcher>();
+        var signatureValidator = new Mock<IWebhookSignatureValidator>();
+        var logger = new Mock<ILogger<WebhookController>>();
+
+        signatureValidator
+            .Setup(validator => validator.Validate("OpenPay", It.IsAny<string>(), "openpay-specific"))
+            .Returns(true);
+
+        dispatcher
+            .Setup(dispatcherMock => dispatcherMock.SendAsync(It.IsAny<RecordWebhookEventCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<int>.Success(42));
+
+        var controller = new WebhookController(dispatcher.Object, signatureValidator.Object, logger.Object)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = CreateHttpContext("""{"event":"payment.captured","id":"op_pay_123"}""")
+            }
+        };
+
+        controller.Request.Headers["X-OpenPay-Signature"] = "openpay-specific";
+        controller.Request.Headers["X-Webhook-Signature"] = "generic-fallback";
+
+        var result = await controller.ReceiveAsync("OpenPay", CancellationToken.None);
+
+        Assert.IsType<AcceptedResult>(result);
+        signatureValidator.Verify(validator => validator.Validate("OpenPay", It.IsAny<string>(), "openpay-specific"), Times.Once);
+        signatureValidator.Verify(validator => validator.Validate("OpenPay", It.IsAny<string>(), "generic-fallback"), Times.Never);
+    }
+
+    [Fact]
     public async Task ReceiveAsync_Extracts_Razorpay_EventType_FromPayload_WhenHeaderIsMissing()
     {
         var dispatcher = new Mock<IDispatcher>();
@@ -27,7 +93,8 @@ public sealed class WebhookControllerTests
 
         dispatcher
             .Setup(dispatcherMock => dispatcherMock.SendAsync(It.IsAny<RecordWebhookEventCommand>(), It.IsAny<CancellationToken>()))
-            .Callback<ICommand<Result<int>>, CancellationToken>((command, _) => capturedCommand = Assert.IsType<RecordWebhookEventCommand>(command))
+            .Callback((XYDataLabs.OrderProcessingSystem.SharedKernel.CQRS.ICommand<Result<int>> command, CancellationToken _) =>
+                capturedCommand = Assert.IsType<RecordWebhookEventCommand>(command))
             .ReturnsAsync(Result<int>.Success(42));
 
         var controller = new WebhookController(dispatcher.Object, signatureValidator.Object, logger.Object)

@@ -6,6 +6,7 @@ import type { ExecutePaymentAutomationRunOptions, PaymentAutomationRunOutput } f
 import { executePaymentAutomationRun, startLocalProfile } from "../orchestrator/payment-automation-executor.js";
 import { FileReportComposer } from "../report/file-report-composer.js";
 import { buildRunPrefix } from "../support/customer-order-id.js";
+import { resolveEnvironmentKey } from "../support/environment-key.js";
 
 interface LocalMatrixOptions {
   targets: string[];
@@ -18,43 +19,145 @@ interface LocalMatrixOptions {
   sandboxOtpCode: string;
   tenantTimeoutMs: number;
   autoStopLocalSessions: boolean;
+  tenantLimit: number | null;
 }
 
 interface LocalMatrixOutput {
   matrixRunId: string;
   reportDirectory: string;
+  environmentKey: string;
   startedUtc: string;
   finishedUtc: string;
+  startedIst: string;
+  finishedIst: string;
+  currentStep?: string;
+  targetCount: number;
+  targets: string[];
   targetRuns: PaymentAutomationRunOutput[];
 }
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 const automationRoot = path.resolve(currentDirectory, "../..");
+const workspaceRoot = path.resolve(automationRoot, "..");
+const statusWriterPath = path.join(workspaceRoot, "scripts", "write-playwright-run-status.ps1");
+const defaultEnvironmentKey = "local-http";
+
+function formatIstTimestamp(date: Date): string {
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    fractionalSecondDigits: 3,
+    hour12: false
+  }).format(date).replace(" ", "T") + "+05:30";
+}
+
+function formatIstStamp(date: Date): string {
+  return formatIstTimestamp(date).replace(/[:+,]/g, "-").replace(/\./g, "-");
+}
 
 async function main(): Promise<void> {
   const options = parseCliOptions(process.argv.slice(2));
   const startedAt = new Date();
-  const matrixRunId = `payment-automation-local-matrix-${startedAt.toISOString().replace(/[.:]/g, "-")}`;
-  const reportDirectory = path.join(automationRoot, "reports", matrixRunId);
-  const reportComposer = new FileReportComposer();
+  const matrixRunId = `payment-automation-local-matrix-${formatIstStamp(startedAt)}_matrix`;
+  const playrightRoot = path.join(workspaceRoot, "TestResults", "Playwright");
   const runtimeTargetCatalog = new JsonRuntimeTargetCatalog();
+  const environmentKey = options.targets.length === 1
+    ? resolveEnvironmentKey(await runtimeTargetCatalog.resolve(options.targets[0]))
+    : defaultEnvironmentKey;
+  const environmentRoot = path.join(playrightRoot, environmentKey);
+  const reportDirectory = path.join(environmentRoot, matrixRunId);
+  const latestPointerPath = path.join(environmentRoot, "latest-playwright-matrix.txt");
+  const rootMarkerPath = path.join(playrightRoot, "latest-playwright-run.txt");
+  const runPlanPath = path.join(reportDirectory, "run-plan.txt");
+  const startupLogPath = path.join(reportDirectory, "startup.log");
+  const progressLogPath = path.join(reportDirectory, "progress.log");
+  const currentStepPath = path.join(reportDirectory, "current-step.txt");
+  const reportComposer = new FileReportComposer();
+  const matrixOutput: LocalMatrixOutput = {
+    matrixRunId,
+    reportDirectory,
+    environmentKey,
+    startedUtc: startedAt.toISOString(),
+    finishedUtc: startedAt.toISOString(),
+    startedIst: formatIstTimestamp(startedAt),
+    finishedIst: formatIstTimestamp(startedAt),
+    targetCount: 0,
+    targets: options.targets,
+    targetRuns: []
+  };
 
   await mkdir(reportDirectory, { recursive: true });
-  process.stdout.write(`Starting local payment matrix ${matrixRunId}.\n`);
+  await mkdir(path.dirname(latestPointerPath), { recursive: true });
+  await mkdir(path.dirname(rootMarkerPath), { recursive: true });
+  await writeFile(latestPointerPath, `${reportDirectory}\n`, "utf8");
+  await writeFile(rootMarkerPath, `${reportDirectory}\n`, "utf8");
+  try {
+    await appendStatus(environmentKey, "local-http-matrix", "started", `runDir=${reportDirectory}`);
+    await writeFile(runPlanPath, [
+    "Local HTTP matrix sanity run",
+    `Goal: confirm local-http tenant/provider discovery and basic execution flow.`,
+    `Environment: ${environmentKey}`,
+    `Targets: ${options.targets.join(", ")}`,
+    `Requested providers: ${options.requestedProviders.length > 0 ? options.requestedProviders.join(", ") : "runtime default"}`,
+    `Tenant limit: ${options.tenantLimit ?? "none"}`,
+    `Dry run: ${options.dryRun ? "yes" : "no"}`,
+    `Verification: ${options.verify ? "yes" : "no"}`,
+    `Auto-stop local sessions: ${options.autoStopLocalSessions ? "yes" : "no"}`,
+    "",
+    "Stages:",
+    "1. Create the run folder and latest pointer files.",
+    "2. Resolve the runtime target and tenant plan.",
+    "3. Start the local profile if needed.",
+    "4. Execute each tenant/provider item in order.",
+    "5. Write summary.json and summary.md at the end."
+  ].join("\n"), "utf8");
+  await writeFile(startupLogPath, [
+    `[${formatIstTimestamp(new Date())}] Matrix startup`,
+    `environment=${environmentKey}`,
+    `targets=${options.targets.join(",")}`,
+    `requestedProviders=${options.requestedProviders.length > 0 ? options.requestedProviders.join(",") : "runtime default"}`,
+    `tenantLimit=${options.tenantLimit ?? "none"}`,
+    `dryRun=${options.dryRun}`,
+    `verify=${options.verify}`,
+    `autoStopLocalSessions=${options.autoStopLocalSessions}`,
+    `state=created-run-folder`
+  ].join("\n") + "\n", "utf8");
+  await writeFile(progressLogPath, "Matrix progress log initialized.\n", "utf8");
+  matrixOutput.currentStep = "initialized";
+  await writeFile(path.join(reportDirectory, "summary.json"), JSON.stringify({ ...matrixOutput, status: "running" }, null, 2), "utf8");
+  await writeFile(currentStepPath, "initialized\n", "utf8");
+  await writeRunMessage(startupLogPath, progressLogPath, `Starting local payment matrix ${matrixRunId}.`);
 
   const targetRuns: PaymentAutomationRunOutput[] = [];
   for (const [index, target] of options.targets.entries()) {
     const targetStart = new Date(startedAt.getTime() + (index * 1000));
     const targetRunPrefix = buildRunPrefix(targetStart);
-    process.stdout.write(`Executing target ${target} with prefix ${targetRunPrefix}.\n`);
+    matrixOutput.currentStep = `target:${target}`;
+    await writeFile(path.join(reportDirectory, "summary.json"), JSON.stringify({ ...matrixOutput, status: "running" }, null, 2), "utf8");
+    await writeFile(currentStepPath, `${matrixOutput.currentStep}\n`, "utf8");
+    await writeRunMessage(startupLogPath, progressLogPath, `Executing target ${target} with prefix ${targetRunPrefix}.`);
+    await writeRunMessage(startupLogPath, progressLogPath, `[${formatIstTimestamp(new Date())}] target=${target} state=starting-target`);
+    await writeFile(
+      path.join(reportDirectory, `progress-${index + 1}-${target}.txt`),
+      `Starting ${target} at ${formatIstTimestamp(new Date())}\n`,
+      "utf8"
+    );
 
     const runtimeTarget = await runtimeTargetCatalog.resolve(target);
+    await writeRunMessage(startupLogPath, progressLogPath, `[${formatIstTimestamp(new Date())}] target=${target} state=resolved-target runtime=${runtimeTarget.runtime} profile=${runtimeTarget.profile}`);
     if (!options.dryRun && runtimeTarget.runtime === "local") {
+      await writeRunMessage(startupLogPath, progressLogPath, `[${formatIstTimestamp(new Date())}] target=${target} state=starting-local-profile`);
       await startLocalProfile(runtimeTarget.profile, (message) => {
-        process.stdout.write(`[${target}] ${message}\n`);
+        void writeRunMessage(startupLogPath, progressLogPath, `[${target}] ${message}`).catch(() => undefined);
       });
     }
 
+    await writeRunMessage(startupLogPath, progressLogPath, `[${formatIstTimestamp(new Date())}] target=${target} state=starting-automation-run`);
     const run = await executePaymentAutomationRun({
       target,
       tenantCodes: options.tenantCodes,
@@ -65,26 +168,27 @@ async function main(): Promise<void> {
       verify: options.verify,
       sandboxOtpCode: options.sandboxOtpCode,
       tenantTimeoutMs: options.tenantTimeoutMs,
-      autoStopLocalSessions: options.autoStopLocalSessions,
+      autoStopLocalSessions: false,
+      tenantLimit: options.tenantLimit ?? undefined,
+      reportDirectoryRoot: environmentRoot,
       startedAt: targetStart,
       runPrefix: targetRunPrefix,
       logger: (message) => {
-        process.stdout.write(`[${target}] ${message}\n`);
+        void writeRunMessage(startupLogPath, progressLogPath, `[${target}] ${message}`).catch(() => undefined);
       }
     });
 
     targetRuns.push(run);
+    await writeRunMessage(startupLogPath, progressLogPath, `[${formatIstTimestamp(new Date())}] target=${target} state=completed-automation-run`);
   }
 
   const rows = targetRuns.flatMap((targetRun) => targetRun.rows);
   const markdownSummary = await reportComposer.compose(rows);
-  const matrixOutput: LocalMatrixOutput = {
-    matrixRunId,
-    reportDirectory,
-    startedUtc: startedAt.toISOString(),
-    finishedUtc: new Date().toISOString(),
-    targetRuns
-  };
+  matrixOutput.finishedUtc = new Date().toISOString();
+  matrixOutput.finishedIst = formatIstTimestamp(new Date());
+  matrixOutput.currentStep = "completed";
+  matrixOutput.targetCount = targetRuns.length;
+  matrixOutput.targetRuns = targetRuns;
 
   const targetSections = targetRuns.flatMap((targetRun) => [
     `- ${targetRun.rows[0]?.runtimeTarget ?? "unknown"}: prefix ${targetRun.runPrefix}`,
@@ -109,8 +213,43 @@ async function main(): Promise<void> {
     "utf8"
   );
   await writeFile(path.join(reportDirectory, "summary.json"), JSON.stringify(matrixOutput, null, 2), "utf8");
+  await writeFile(currentStepPath, "completed\n", "utf8");
+  await writeFile(latestPointerPath, `${reportDirectory}\n`, "utf8");
+  await writeRunMessage(startupLogPath, progressLogPath, `[${formatIstTimestamp(new Date())}] state=completed-matrix`);
 
-  process.stdout.write(`${JSON.stringify(matrixOutput, null, 2)}\n`);
+  await writeRunMessage(startupLogPath, progressLogPath, JSON.stringify(matrixOutput, null, 2));
+  await appendStatus(environmentKey, "local-http-matrix", "passed", `reportDirectory=${reportDirectory}`);
+  }
+  catch (error) {
+    await appendStatus(environmentKey, "local-http-matrix", "failed", error instanceof Error ? error.message : "Local matrix failed");
+    throw error;
+  }
+}
+
+async function writeRunMessage(startupLogPath: string, progressLogPath: string, line: string): Promise<void> {
+  process.stdout.write(`${line}\n`);
+  await writeFile(progressLogPath, `${line}\n`, { flag: "a" });
+  await writeFile(startupLogPath, `${line}\n`, { flag: "a" });
+}
+
+async function appendStatus(environmentKey: string, taskName: string, status: "started" | "passed" | "failed" | "info", message: string): Promise<void> {
+  await import("node:child_process").then(({ execFileSync }) => {
+    execFileSync("pwsh", [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      statusWriterPath,
+      "-EnvironmentKey",
+      environmentKey,
+      "-TaskName",
+      taskName,
+      "-Status",
+      status,
+      "-Message",
+      message
+    ], { stdio: "inherit" });
+  });
 }
 
 function parseCliOptions(argumentsList: string[]): LocalMatrixOptions {
@@ -124,6 +263,7 @@ function parseCliOptions(argumentsList: string[]): LocalMatrixOptions {
   let sandboxOtpCode = "999";
   let tenantTimeoutMs = 180000;
   let autoStopLocalSessions = true;
+  let tenantLimit: number | null = null;
 
   for (let index = 0; index < argumentsList.length; index += 1) {
     const argument = argumentsList[index];
@@ -146,9 +286,6 @@ function parseCliOptions(argumentsList: string[]): LocalMatrixOptions {
           requestedProviders.push(argumentsList[index + 1]);
         }
         index += 1;
-        break;
-      case "--all-providers":
-        requestedProviders.push("OpenPay", "Razorpay");
         break;
       case "--allow-partial":
         allowPartialExecution = true;
@@ -174,6 +311,10 @@ function parseCliOptions(argumentsList: string[]): LocalMatrixOptions {
       case "--keep-local-sessions":
         autoStopLocalSessions = false;
         break;
+      case "--tenant-limit":
+        tenantLimit = Number(argumentsList[index + 1] ?? tenantLimit);
+        index += 1;
+        break;
       default:
         break;
     }
@@ -189,7 +330,8 @@ function parseCliOptions(argumentsList: string[]): LocalMatrixOptions {
     verify,
     sandboxOtpCode,
     tenantTimeoutMs,
-    autoStopLocalSessions
+    autoStopLocalSessions,
+    tenantLimit
   };
 }
 

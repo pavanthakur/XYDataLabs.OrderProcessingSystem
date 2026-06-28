@@ -18,7 +18,7 @@
 - ✅ TenantC Azure correlation passed with `verify-payment-run-azure.ps1` for run prefix `OR-1780677599-5Jun`; API telemetry, UI telemetry, Azure SQL, and tenant bleed checks all passed.
 - ✅ Razorpay webhook endpoint validated on Azure with a signed synthetic `payment.captured` request using the Key Vault webhook secret: API returned `202 Accepted`; TenantC `InboxMessages` row recorded `EventType=payment.captured` and processed successfully.
 - ⚠️ Razorpay dashboard delivery is the only remaining external confirmation: no real Razorpay `/api/v1/webhook/Razorpay` request was visible in App Insights during the validation window, so monitor provider dashboard delivery/retry history and Azure App Insights for the first live provider-originated event.
-- ✅ Next: Phase 9 — YARP Microservices Architecture (Local), carrying Phase 8 event contracts and webhook semantics unchanged.
+- ✅ Next: Phase 10 — Azure transport + DLQ operations, carrying Phase 8 event contracts and webhook semantics unchanged.
 
 ### June 5, 2026 Verification Freeze — Phase 8.6 Closeout
 
@@ -55,7 +55,7 @@
 ### April 10, 2026 Planning Freeze — Phases 8-10
 
 - ✅ **Phase 8 frozen as in-monolith event foundation work**: contracts in Application, explicit `IDomainEventToIntegrationEventMapper`, deterministic `AttemptOrderId`, `PaymentAttempt` lifecycle, outbox/inbox persistence, separate publisher and reconciliation workers, and no Service Bus code in Phase 8 runtime paths
-- ✅ **Phase 9 frozen as boundary extraction work**: Orders, Inventory, Notifications, and Payments become first-class modules with `PublicApi` contracts, architecture-test enforcement, local YARP routing, and a concrete distributed tracing acceptance bar before Azure rollout starts
+- ✅ **Phase 9 frozen as boundary extraction work**: Orders, Inventory, Notifications, and Payments become first-class modules with `API` contracts, architecture-test enforcement, local YARP routing, and a concrete distributed tracing acceptance bar before Azure rollout starts
 - ✅ **Phase 10 frozen as Azure transport and operations work**: Service Bus topology remains Bicep-only, DLQ behaviour is centralised and observable from day one, and ingress/security work is gated behind transport failure drills
 
 ### April 10, 2026 Planning Freeze — Track U (UI Modernization Program)
@@ -85,15 +85,15 @@
 - ✅ `OutboxPublisherWorker` and `PaymentReconciliationWorker` now establish tenant-scoped context explicitly for non-request execution paths
 - ✅ Integration coverage now proves rollback leaves no outbox row, duplicate delivery is harmless, parallel handlers remain independent, publisher restart replays pending rows, reconciliation resolves `UnknownNeedsReconciliation`, and tenant isolation is preserved
 - ✅ Architecture guardrails and the full integration suite are green on the Phase 8 closeout branch
-- ✅ Backend Phase 8.5 is now the next active engineering phase
+- ✅ Backend Phase 10 is now the next active engineering phase
 
 ### May 10, 2026 Architecture Roadmap Extension Adopted
 
 - ✅ `ARCHITECTURE-EVOLUTION.md` now extends the post-Phase-8 roadmap with **Phase 8.7** (provider webhook receiver), **Phase 9.5** (local Keycloak portability showcase), and **Phase 11.5** (Notifications module PostgreSQL pilot)
-- ✅ Phase 9 now explicitly introduces Aspire-Lite in parallel with Docker Compose, so local orchestration, service discovery, and dashboarding start when services are first extracted
+- ✅ Phase 9 closeout is verified complete; the roadmap now treats Phase 10 as the next backend transport phase and keeps Aspire deepening in Phase 13
 - ✅ Phase 13 now records two explicit decision gates: `azd` plus Aspire-generated manifest evaluation for ACA deployment, and the .NET LTS upgrade window, both ADR-bound when implementation forces the decision
 - ✅ ADR-017 captures the portability rationale: Entra ID and Azure SQL remain authoritative for production while the roadmap proves identity-provider and RDBMS flexibility in isolated, reviewable phases
-- ✅ Backend Phase 8.5 remains the next active engineering phase; today's planning work tightened the next milestones without changing the immediate execution order
+- ✅ Backend Phase 10 is now the next active engineering phase; today's planning work tightened the next milestones without changing the immediate execution order
 
 ### Architecture Phases Completed
 
@@ -1301,4 +1301,5 @@ Once YARP implementation is complete (Day 56), you'll be ready for:
 The YARP foundation makes all subsequent work significantly easier and more production-ready.
 
 ---
+
 

@@ -10,7 +10,7 @@ You are the implementation model for `XYDataLabs.OrderProcessingSystem`. Make sm
 
 - Primary: `qwen2.5-coder:7b` for small edits.
 - Larger fallback: `qwen2.5-coder:3b` for quick fixes when 7B is unnecessary.
-- Avoid by default: any model above 8B or any context window above 4096 tokens.
+- Avoid by default: any model above 8B or any context window above 16384 tokens.
 
 ## Inputs
 
@@ -29,6 +29,7 @@ Read these before editing:
 - Do not change official docs unless the accepted slice requires it.
 - Do not touch `zoocode/` during implementation unless explicitly instructed.
 - Run the narrowest relevant validation after the first edit.
+- Do not introduce MediatR, repository abstractions, or broad handler scaffolding unless the accepted slice explicitly asks for it.
 - Stop and report if the implementation requires a new architecture decision.
 - Prefer a one-line execution pattern so the operator can run each phase step separately with minimal human loop.
 

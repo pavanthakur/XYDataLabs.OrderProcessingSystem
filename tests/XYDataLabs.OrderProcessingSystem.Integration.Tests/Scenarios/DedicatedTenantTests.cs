@@ -382,12 +382,12 @@ public sealed class DedicatedTenantTests : IAsyncLifetime
         using var command = new SqlCommand();
         command.Connection = connection;
         command.CommandText = @"
-            IF NOT EXISTS (SELECT 1 FROM Tenants WHERE Id = @Id)
+            IF NOT EXISTS (SELECT 1 FROM dbo.Tenants WHERE Id = @Id)
             BEGIN
-                SET IDENTITY_INSERT Tenants ON;
-                INSERT INTO Tenants (Id, ExternalId, Code, Name, Status, TenantTier, CreatedBy, CreatedDate)
+                SET IDENTITY_INSERT dbo.Tenants ON;
+                INSERT INTO dbo.Tenants (Id, ExternalId, Code, Name, Status, TenantTier, CreatedBy, CreatedDate)
                 VALUES (@Id, @ExternalId, @Code, @Name, @Status, @TenantTier, 1, GETUTCDATE());
-                SET IDENTITY_INSERT Tenants OFF;
+                SET IDENTITY_INSERT dbo.Tenants OFF;
             END";
 
         command.Parameters.AddWithValue("@Id", tenant.TenantId);
@@ -511,7 +511,7 @@ public sealed class DedicatedTenantTests : IAsyncLifetime
     /// </summary>
     private static async Task<int> CountCustomersByEmailAsync(string connectionString, string email)
     {
-        const string sql = "SELECT COUNT(*) FROM [Customers] WHERE Email = @Email";
+        const string sql = "SELECT COUNT(*) FROM [orders].[Customers] WHERE Email = @Email";
 
         using var connection = new SqlConnection(connectionString);
         await connection.OpenAsync();
@@ -530,7 +530,7 @@ public sealed class DedicatedTenantTests : IAsyncLifetime
     {
         const string sql = @"
             SELECT COUNT(*)
-            FROM [AuditLogs]
+            FROM [notifications].[AuditLogs]
             WHERE [EntityName] = @EntityName
               AND [EntityId] = @EntityId
               AND [Operation] = @Operation";

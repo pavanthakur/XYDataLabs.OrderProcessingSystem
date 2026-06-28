@@ -3,12 +3,22 @@ export interface TenantResolutionFailure {
   reason: string;
 }
 
+export interface TenantExecutionItem {
+  tenantCode: string;
+  tenantTier: string;
+  paymentProviderCode: string | null;
+}
+
 export interface TenantExecutionPlan {
-  resolvedTenantCodes: string[];
+  resolvedTenants: TenantExecutionItem[];
   skippedTenantCodes: string[];
   failures: TenantResolutionFailure[];
 }
 
 export interface TenantExecutionCatalog {
-  resolve(tenantCodes: string[], allowPartialExecution: boolean): Promise<TenantExecutionPlan>;
+  resolve(
+    tenantCodes: string[],
+    allowPartialExecution: boolean,
+    logger?: (message: string) => void
+  ): Promise<TenantExecutionPlan>;
 }

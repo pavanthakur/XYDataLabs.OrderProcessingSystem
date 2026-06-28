@@ -7,6 +7,7 @@ services:
     image: ${ORDERPROCESSING_SQLSERVER_IMAGE:-mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04}
     container_name: orderprocessing-sqlserver
     hostname: sql-server
+    user: root
     environment:
       - ACCEPT_EULA=Y
       - SA_PASSWORD=${LOCAL_SQL_PASSWORD}
@@ -18,6 +19,8 @@ services:
       - sql_log:/var/opt/mssql/log
       - sql_backup:/var/opt/mssql/backup
       - ../../Resources/Database/init:/docker-entrypoint-initdb.d
+    ports:
+      - "1433:1433"
     networks:
       - xy-database-network
     restart: unless-stopped
@@ -26,7 +29,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 30s
+      start_period: 90s
 
   # Redis for caching (optional)
   redis:
@@ -58,6 +61,7 @@ volumes:
 
 networks:
   xy-database-network:
+    external: true
     name: xy-database-network
     driver: bridge
     ipam:

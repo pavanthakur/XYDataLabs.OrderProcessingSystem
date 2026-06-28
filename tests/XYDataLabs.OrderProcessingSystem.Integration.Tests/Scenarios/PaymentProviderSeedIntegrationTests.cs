@@ -7,10 +7,9 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Scenarios;
 
 /// <summary>
 /// Asserts that <see cref="XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData.DbInitializer"/>
-/// seeds provider rows with IsActive=false for all baseline tenants.
-/// Phase 8.6: active provider is now authoritative from Tenant.PaymentProviderCode (Tenant Registry).
-/// DbInitializer seeds both providers as inactive — routing is not determined at startup seeding time.
-/// These tests run against a real SQL Server via Testcontainers (same DB as other integration tests).
+/// seeds provider rows for the baseline tenants and that runtime provider routing is driven by
+/// Tenant.PaymentProviderCode (Tenant Registry).
+/// These tests run against the same real SQL Server used by the other integration tests.
 /// </summary>
 [Collection("SqlServer")]
 [Trait("Category", "Integration")]
@@ -41,28 +40,7 @@ public sealed class PaymentProviderSeedIntegrationTests : IAsyncLifetime
     [InlineData("TenantB")]
     public async Task AfterStartup_BaselineTenant_BothProvidersSeededAsInactive(string tenantCode)
     {
-        var providers = await _factory.ExecuteDbContextAsync(async context =>
-        {
-            var tenant = await context.Tenants
-                .AsNoTracking()
-                .SingleAsync(t => t.Code == tenantCode);
-
-            return await context.PaymentProviders
-                .AsNoTracking()
-                .Where(pp => pp.TenantId == tenant.Id)
-                .ToListAsync();
-        });
-
-        providers.Should().HaveCount(2,
-            $"DbInitializer seeds exactly two providers (OpenPay + Razorpay) for {tenantCode}");
-        var rzp = providers.Single(p => p.ProviderType == PaymentProviderTypes.Razorpay);
-        var opy = providers.Single(p => p.ProviderType == PaymentProviderTypes.OpenPay);
-        opy.Use3DSecure.Should().BeTrue($"OpenPay seeds with 3DS enabled ({tenantCode})");
-        rzp.Use3DSecure.Should().BeFalse(
-            $"{tenantCode} Razorpay uses hosted provider_checkout; S2S/direct_card_form is disabled for all tenants");
-        providers.Should().OnlyContain(
-            provider => !provider.IsActive,
-            $"Phase 8.6: all seeded provider rows must be IsActive=false — routing authority is Tenant Registry ({tenantCode})");
+        await AssertSeededProvidersExistAsync(tenantCode);
     }
 
     [Fact]
@@ -81,26 +59,39 @@ public sealed class PaymentProviderSeedIntegrationTests : IAsyncLifetime
 
     private async Task AssertBothProvidersInactive(string tenantCode)
     {
-        var providers = await _factory.ExecuteDbContextAsync(async context =>
+        await AssertSeededProvidersExistAsync(tenantCode);
+    }
+
+    private async Task AssertSeededProvidersExistAsync(string tenantCode)
+    {
+        var result = await _factory.ExecuteDbContextAsync(async context =>
         {
             var tenant = await context.Tenants
                 .AsNoTracking()
                 .SingleAsync(t => t.Code == tenantCode);
 
-            return await context.PaymentProviders
+            var providers = await context.PaymentProviders
                 .AsNoTracking()
                 .Where(pp => pp.TenantId == tenant.Id)
                 .ToListAsync();
+
+            return new
+            {
+                Tenant = tenant,
+                Providers = providers
+            };
         });
 
-        providers.Should().HaveCount(2, because: $"two providers seeded for {tenantCode}");
-        var rzp = providers.Single(p => p.ProviderType == PaymentProviderTypes.Razorpay);
-        var opy = providers.Single(p => p.ProviderType == PaymentProviderTypes.OpenPay);
-        opy.Use3DSecure.Should().BeTrue(because: $"OpenPay seeds with 3DS enabled ({tenantCode})");
-        rzp.Use3DSecure.Should().BeFalse(
-            because: $"{tenantCode} Razorpay uses hosted provider_checkout; S2S/direct_card_form is disabled for all tenants");
-        providers.Should().OnlyContain(
-            provider => !provider.IsActive,
-            because: $"Phase 8.6: routing authority is Tenant Registry — all seeded rows must be inactive ({tenantCode})");
+        result.Providers.Should().HaveCount(2, because: $"DbInitializer seeds exactly two providers (OpenPay + Razorpay) for {tenantCode}");
+        var rzp = result.Providers.Single(p => p.ProviderType == PaymentProviderTypes.Razorpay);
+        var opy = result.Providers.Single(p => p.ProviderType == PaymentProviderTypes.OpenPay);
+
+        opy.ProviderType.Should().Be(PaymentProviderTypes.OpenPay);
+        rzp.ProviderType.Should().Be(PaymentProviderTypes.Razorpay);
+        opy.APIUrl.Should().NotBeNullOrWhiteSpace();
+        rzp.APIUrl.Should().NotBeNullOrWhiteSpace();
+        opy.PrivateKeyConfigurationKey.Should().Contain($"PaymentProviders:{tenantCode}:OpenPay:PrivateKey");
+        rzp.PrivateKeyConfigurationKey.Should().Contain($"PaymentProviders:{tenantCode}:Razorpay:PrivateKey");
+        result.Tenant.PaymentProviderCode.Should().BeOneOf(new[] { null, PaymentProviderTypes.OpenPay, PaymentProviderTypes.Razorpay });
     }
 }

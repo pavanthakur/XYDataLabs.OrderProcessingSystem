@@ -63,6 +63,17 @@ Resources/Docker/.env.local
 [Tt]est[Rr]esult*/
 [Bb]uild[Ll]og.*
 
+# Canonical test evidence folders we keep under root TestResults.
+# Everything else under TestResults is runtime-generated and should stay untracked.
+!TestResults/
+TestResults/*
+!TestResults/Integration/
+!TestResults/PaymentMatrix/
+!TestResults/Playwright/
+!TestResults/Integration/**
+!TestResults/PaymentMatrix/**
+!TestResults/Playwright/**
+
 # NUnit
 *.VisualState.xml
 TestResult.xml

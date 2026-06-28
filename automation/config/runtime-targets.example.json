@@ -14,5 +14,36 @@
       "paymentPagePath": "/payments/new",
       "ignoreHttpsErrors": false
     }
+    ,
+    {
+      "key": "docker-dev-http-tests",
+      "baseUrl": "http://localhost:5022",
+      "apiBaseUrl": "http://localhost:5020",
+      "verificationMode": "physical",
+      "browserMode": "docker",
+      "expectedTenantSource": "runtime-configuration",
+      "supportsPartialExecution": false,
+      "supportsHeadless": true,
+      "runtime": "docker",
+      "environment": "dev",
+      "profile": "http",
+      "paymentPagePath": "/payments/new",
+      "ignoreHttpsErrors": false
+    },
+    {
+      "key": "docker-dev-http-playwright",
+      "baseUrl": "http://localhost:5022",
+      "apiBaseUrl": "http://localhost:5020",
+      "verificationMode": "physical",
+      "browserMode": "docker",
+      "expectedTenantSource": "runtime-configuration",
+      "supportsPartialExecution": false,
+      "supportsHeadless": true,
+      "runtime": "docker",
+      "environment": "dev",
+      "profile": "http",
+      "paymentPagePath": "/payments/new",
+      "ignoreHttpsErrors": false
+    }
   ]
 }

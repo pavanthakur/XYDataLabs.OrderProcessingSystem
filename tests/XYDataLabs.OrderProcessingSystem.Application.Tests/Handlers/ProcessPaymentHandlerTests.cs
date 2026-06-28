@@ -4,6 +4,7 @@ using Moq;
 using XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
+using XYDataLabs.OrderProcessingSystem.Payments.Features.Commands;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers;
 
@@ -318,7 +319,7 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
 
         var handler = CreateProcessPaymentHandler(use3DSecure: false, providerType: PaymentProviderTypes.Razorpay);
 
-        var result = await handler.HandleAsync(new XYDataLabs.OrderProcessingSystem.Application.Features.Payments.Commands.ProcessPaymentCommand(
+        var result = await handler.HandleAsync(new ProcessPaymentCommand(
             Name: "John Doe",
             Email: "john@example.com",
             DeviceSessionId: string.Empty,

@@ -67,6 +67,8 @@ Then, based on their answer, apply the following routing rules automatically —
        - roadmap table status column
        - the affected phase heading/status block
        - any repeated summary/status snapshot near the end of the file
+    - If the work closes a minor sub-phase or verification lane such as Phase 8.5, 8.7, or 9.5, update the corresponding phase-roadmap and closeout docs so the sub-phase reads as verified/complete instead of pending
+    - If the work closes Phase 9 or any Phase 9 closure lane, verify the numbered VS Code task sequence for both `local-http` and `docker-dev-http` is documented and aligned before considering the phase complete
     - Treat architecture-status drift across these files as a blocking inconsistency to fix before finishing
     - If the work is a phase freeze/closeout, do not stop at the checklist change; confirm the phase now reads consistently as complete/next across all status surfaces in the same session
 

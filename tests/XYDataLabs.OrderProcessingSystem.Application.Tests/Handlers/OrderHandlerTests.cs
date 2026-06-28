@@ -3,15 +3,15 @@ using FluentAssertions;
 using FluentValidation;
 using FluentValidation.Results;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
-using XYDataLabs.OrderProcessingSystem.Application.Features.Orders.Commands;
 using XYDataLabs.OrderProcessingSystem.Domain.Identifiers;
-using XYDataLabs.OrderProcessingSystem.Application.Features.Orders.Queries;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
 using XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase;
 using Microsoft.EntityFrameworkCore;
 using Moq;
 using Xunit;
+using XYDataLabs.OrderProcessingSystem.Orders.Features.Commands;
+using XYDataLabs.OrderProcessingSystem.Orders.Features.Queries;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
 {
