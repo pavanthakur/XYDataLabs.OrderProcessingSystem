@@ -35,6 +35,19 @@ This roadmap captures the remaining concrete Phase 9 closure work and the verifi
   - `TestResults\Playwright\local-http\sequence-summary.log`
   - `TestResults\Playwright\docker-http\sequence-summary.log`
 
+### Tracked Run Order
+
+1. Local HTTP: `1 Run: Local HTTP 01 Env Ready`
+2. Local HTTP: `1 Run: Local HTTP 02 Playwright Smoke`
+3. Local HTTP: `1 Run: Local HTTP 03 Matrix Sanity (1 Tenant, Local HTTP)`
+4. Local HTTP: `1 Run: Local HTTP 04 Integration Suite (Local SQL, No Docker)`
+5. Local HTTP: `1 Run: Local HTTP 05 Full Validation (All Tenants + Providers, Local HTTP)`
+6. Docker Dev HTTP: `1 Run: Docker Dev HTTP 01 Env Ready (Docker Dev HTTP)`
+7. Docker Dev HTTP: `1 Run: Docker Dev HTTP 02 Playwright Smoke (Docker Dev HTTP)`
+8. Docker Dev HTTP: `1 Run: Docker Dev HTTP 03 Integration Suite (Docker Dev HTTP)`
+9. Docker Dev HTTP: `1 Run: Docker Dev HTTP 04 Payment Matrix (All Tenants + Providers, Docker Dev HTTP)`
+10. Docker Dev HTTP: `1 Run: Docker Dev HTTP 05 Full Validation (Profile + Suite + Smoke + Matrix, Docker Dev HTTP)`
+
 ## Phase 13 Aspire Consolidation
 
 ### 13.1 - Inner-Loop Orchestration Proof
