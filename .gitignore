@@ -74,6 +74,11 @@ TestResults/*
 !TestResults/PaymentMatrix/**
 !TestResults/Playwright/**
 
+# Generated automation and frontend runtime artifacts.
+automation/dist/
+frontend/apps/web/--latest-pointer-path/
+frontend/apps/web/test-results/
+
 # NUnit
 *.VisualState.xml
 TestResult.xml
