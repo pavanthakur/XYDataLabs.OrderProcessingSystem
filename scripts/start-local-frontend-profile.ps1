@@ -18,7 +18,11 @@ $keycloakAuthority = 'http://localhost:8081'
 $keycloakRealm = 'xy-phase9'
 $keycloakClientId = 'xy-order-processing-local-web'
 $keycloakUsername = 'tenant-admin'
-$keycloakPassword = 'LocalP@ssw0rd!'
+$keycloakPassword = $env:KEYCLOAK_TENANT_ADMIN_PASSWORD
+if ([string]::IsNullOrWhiteSpace($keycloakPassword))
+{
+    throw "KEYCLOAK_TENANT_ADMIN_PASSWORD must be set for the local Keycloak bootstrap flow."
+}
 
 $uiUrl = if ($Profile -eq 'https') { "https://localhost:$uiPort/" } else { "http://localhost:$uiPort/" }
 $apiBaseUrl = if ($Profile -eq 'https') { 'https://localhost:5011' } else { 'http://localhost:5010' }

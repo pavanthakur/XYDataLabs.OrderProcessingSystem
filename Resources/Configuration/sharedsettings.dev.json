@@ -54,7 +54,7 @@
     "Scheme": "Bearer",
     "Scope": "local-only-proof",
     "ClientId": "xy-order-processing-backend",
-    "ClientSecret": "local-backend-client-secret"
+    "ClientSecret": "__KEYCLOAK_BACKEND_CLIENT_SECRET__"
   },
   "Serilog": {
     "Using": [ "Serilog.Sinks.File" ],
