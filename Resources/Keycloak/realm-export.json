@@ -40,7 +40,7 @@
       "name": "XY Order Processing Backend",
       "protocol": "openid-connect",
       "publicClient": false,
-      "secret": "local-backend-client-secret",
+      "secret": "${KEYCLOAK_BACKEND_CLIENT_SECRET}",
       "serviceAccountsEnabled": true,
       "directAccessGrantsEnabled": false,
       "standardFlowEnabled": false,
@@ -62,7 +62,7 @@
       "credentials": [
         {
           "type": "password",
-          "value": "LocalP@ssw0rd!",
+          "value": "${KEYCLOAK_TENANT_ADMIN_PASSWORD}",
           "temporary": false
         }
       ],

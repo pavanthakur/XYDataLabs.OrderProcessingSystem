@@ -150,6 +150,7 @@ Notes:
 - The canonical evidence folders remain `TestResults\Integration`, `TestResults\PaymentMatrix`, and `TestResults\Playwright`.
 - Runtime-generated folders under `automation/dist/` and `frontend/apps/web/test-results/` stay untracked.
 - Any env or Keycloak seed files should be reviewed before commit because they may contain secret-like material.
+- `Resources/Keycloak/realm-export.json` stays as a checked-in template only; the real values must come from `.NET user-secrets` for local HTTP, `Resources/Docker/.env.local` for Docker dev HTTP, GitHub secrets in CI, and Key Vault in Azure.
 
 ### **Port Allocations**
 | Mode | API | Web |
