@@ -1,11 +1,13 @@
-using XYDataLabs.OrderProcessingSystem.Application.DTO;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
+using AppOrderDto = XYDataLabs.OrderProcessingSystem.Application.DTO.OrderDto;
+using AppOrderProductDto = XYDataLabs.OrderProcessingSystem.Application.DTO.OrderProductDto;
+using AppProductDto = XYDataLabs.OrderProcessingSystem.Application.DTO.ProductDto;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.Mappings;
 
 public static class OrderMappings
 {
-    public static OrderDto ToDto(this Order order) => new()
+    public static AppOrderDto ToDto(this Order order) => new()
     {
         OrderId = order.OrderId,
         OrderDate = order.OrderDate,
@@ -14,11 +16,11 @@ public static class OrderMappings
         Status = order.Status.ToString(),
         IsFulfilled = order.IsFulfilled,
         OrderProductDtos = order.OrderProducts
-            .Select(op => op.ToDto())
+            .Select(op => (XYDataLabs.OrderProcessingSystem.Orders.API.OrderProductDto)op.ToDto())
             .ToList()
     };
 
-    public static OrderProductDto ToDto(this OrderProduct orderProduct) => new()
+    public static AppOrderProductDto ToDto(this OrderProduct orderProduct) => new()
     {
         SysId = orderProduct.SysId,
         OrderId = orderProduct.OrderId,
@@ -28,7 +30,7 @@ public static class OrderMappings
         ProductDto = orderProduct.Product?.ToDto()
     };
 
-    public static ProductDto ToDto(this Product product) => new()
+    public static AppProductDto ToDto(this Product product) => new()
     {
         ProductId = product.ProductId,
         Name = product.Name,
@@ -36,3 +38,4 @@ public static class OrderMappings
         Price = product.Price
     };
 }
+

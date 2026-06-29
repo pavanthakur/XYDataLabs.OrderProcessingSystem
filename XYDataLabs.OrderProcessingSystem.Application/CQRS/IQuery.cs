@@ -1,6 +1,6 @@
 namespace XYDataLabs.OrderProcessingSystem.Application.CQRS;
 
 /// <summary>
-/// Marker interface for queries (read operations with no side effects).
+/// Backward-compatible alias for the shared CQRS query marker.
 /// </summary>
-public interface IQuery<TResult>;
+public interface IQuery<TResult> : XYDataLabs.OrderProcessingSystem.SharedKernel.CQRS.IQuery<TResult>;

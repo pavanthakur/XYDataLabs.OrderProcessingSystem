@@ -4,7 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure;
 using XYDataLabs.OrderProcessingSystem.Application.Events;
-using XYDataLabs.OrderProcessingSystem.Application.Features.Orders.Events;
+using XYDataLabs.OrderProcessingSystem.Orders.Features.Events;
 using System.Text.Json;
 
 namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Scenarios;
@@ -15,7 +15,6 @@ public sealed class OutboxPublisherWorkerIntegrationTests : IAsyncLifetime
 {
     private readonly SqlServerFixture _fixture;
     private IntegrationTestWebAppFactory _factory = null!;
-    private const string OutboxWorkerServiceName = "OutboxPublisherWorker";
 
     public OutboxPublisherWorkerIntegrationTests(SqlServerFixture fixture)
     {
@@ -102,7 +101,7 @@ public sealed class OutboxPublisherWorkerIntegrationTests : IAsyncLifetime
         var firstFactory = new ServiceOverrideIntegrationTestFactory(
             _fixture.ConnectionString,
             services => services.AddScoped<IEventPublisher, ThrowingEventPublisher>(),
-            enableBackgroundWorkers: true,
+            enableBackgroundWorkers: false,
             dedicatedConnectionString: _fixture.DedicatedDbConnectionString);
         _ = firstFactory.CreateClient();
 
@@ -183,11 +182,9 @@ public sealed class OutboxPublisherWorkerIntegrationTests : IAsyncLifetime
     private static async Task InvokeOutboxWorkerAsync(IServiceProvider services)
     {
         using var scope = services.CreateScope();
-        var worker = scope.ServiceProvider
-            .GetServices<Microsoft.Extensions.Hosting.IHostedService>()
-            .FirstOrDefault(service => service.GetType().Name == OutboxWorkerServiceName);
+        var worker = scope.ServiceProvider.GetService<XYDataLabs.OrderProcessingSystem.Infrastructure.Events.OutboxPublisherWorker>();
 
-        worker.Should().NotBeNull("OutboxPublisherWorker should be registered.");
+        worker.Should().NotBeNull("OutboxPublisherWorker should be registered as a concrete service.");
 
         var methodInfo = worker!.GetType().GetMethod(
             "ProcessOutboxMessagesAsync",

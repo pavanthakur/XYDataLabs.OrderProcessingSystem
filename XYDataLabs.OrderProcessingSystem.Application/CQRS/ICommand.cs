@@ -1,6 +1,6 @@
 namespace XYDataLabs.OrderProcessingSystem.Application.CQRS;
 
 /// <summary>
-/// Marker interface for commands (write operations with side effects).
+/// Backward-compatible alias for the shared CQRS command marker.
 /// </summary>
-public interface ICommand<TResult>;
+public interface ICommand<TResult> : XYDataLabs.OrderProcessingSystem.SharedKernel.CQRS.ICommand<TResult>;

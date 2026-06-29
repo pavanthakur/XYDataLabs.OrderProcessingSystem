@@ -48,7 +48,7 @@
 ### Frozen Sequencing For Phases 8-10
 
 - **Phase 8** reduces business and data-loss risk: contracts, outbox/inbox, deterministic payment recovery, in-process dispatch
-- **Phase 9** reduces structural risk: four first-class modules, `PublicApi` boundaries, local deployability, tracing acceptance bar
+- **Phase 9** reduces structural risk: four first-class modules, `API` boundaries, local deployability, tracing acceptance bar
 - **Phase 10** reduces transport and operational risk: Service Bus swap, central DLQ intake, Bicep-only topology, failure drills before ingress/security
 
 ### Track U Gate
@@ -764,8 +764,8 @@ After completing today's tasks, you will have:
 > 🏗️ **Architecture Phase 9a** — YARP gateway project: routing rules for Orders/Inventory/Notifications APIs
 >
 > **Prerequisite — Module isolation (before extraction):**
-> - Per-module project structure: `Orders`, `Inventory`, `Notifications`, and `Payments` each get `.Domain`, `.Features`, `.Infrastructure`, and `.PublicApi`
-> - PublicApi contracts: `IOrderModuleApi`, `IInventoryModuleApi` interfaces in dedicated `*.PublicApi` projects — modules depend ONLY on each other’s PublicApi
+> - Per-module project structure: `Orders`, `Inventory`, `Notifications`, and `Payments` each get `.Domain`, `.Features`, `.Infrastructure`, and `.API`
+> - API contracts: `IOrderModuleApi`, `IInventoryModuleApi` interfaces in dedicated `*.API` projects — modules depend ONLY on each other’s API
 > - `AssemblyReference.cs` markers per project for reliable handler discovery
 > - Module self-registration: `AddOrdersModule()`, `AddInventoryModule()`, `AddNotificationsModule()`, `AddPaymentsModule()`
 > - Specification pattern — composable query objects (`OrderByStatusSpec`, `ActiveCustomersSpec`) replacing inline LINQ
@@ -785,7 +785,7 @@ After completing today's tasks, you will have:
 >
 > **Additional Phase 9 deliverables:**
 > - Bounded-context and subdomain mapping — Orders, Inventory, Notifications, and Payments as business contexts with clear responsibilities
-> - Architecture tests (NetArchTest) enforcing inter-module boundaries: modules cannot reference each other’s internals, only PublicApi contracts
+> - Architecture tests (NetArchTest) enforcing inter-module boundaries: modules cannot reference each other’s internals, only API contracts
 - [ ] Add Payments module projects and register their infrastructure alongside Orders, Inventory, and Notifications
 - [ ] Register Inventory API in App Host
 - [ ] Register Notifications API in App Host
@@ -1318,18 +1318,18 @@ After completing today's tasks, you will have:
 **Days Completed:** 51 / 112
 **Percentage Complete:** 46%
 
-**Current Phase:** Backend Phase 9 — YARP Microservices Architecture (Local)
-**Current Day:** Day 74 — Phase 9 module isolation and local gateway routing kickoff
+**Current Phase:** Backend Phase 10 — Azure Transport + DLQ Operations
+**Current Day:** Day 74 — Phase 9 closeout wrap-up and Phase 10 planning kickoff
 **Last Completed Task:** Days 60-64 — Phase 8.7 provider webhooks complete (HMAC validation, Inbox idempotency, async payment handlers, Azure synthetic webhook proof, closeout gates passed)
-**Next Milestone:** Phase 9 module extraction with `PublicApi` contracts, YARP local routing, Aspire-Lite service discovery, and tracing acceptance
-**Architecture Status:** Phases 1-8.7 ✅ complete; Track U web cutover ✅ complete; Phase 9 next; roadmap extended with 9.5 and 11.5 portability milestones
+**Next Milestone:** Phase 10 Azure transport + DLQ operations, with Phase 11.5 and Phase 13 still planned as later consolidation lanes
+**Architecture Status:** Phases 1-9.5 ✅ complete; Track U web cutover ✅ complete; Phase 10 next; roadmap retains 11.5 and 13 portability/consolidation milestones
 
 **Pre-Phase-9 entry gate:**
 - ✅ Phase 8.5 complete: provider-neutral multi-provider routing, provider-aware idempotency and retry classification, and append-only payment-attempt history.
 - ✅ Phase 8.7 complete: signed provider webhooks, inbox-backed idempotency, tenant restoration from metadata, and async payment-state convergence.
 - ✅ Mandatory closeout evidence passed for strict build, solution tests, docs links, secret hygiene, AI customization, and payment automation dry-run matrices.
 - ⚠ Docker dev/http bundle produced partial evidence only: startup/health, DB readiness, OpenPay credential readiness, and API tests passed; integration leg stalled before summary and was stopped with cleanup complete.
-- Treat the current YARP gateway work as groundwork only until Phase 9 module isolation, `PublicApi` contracts, and traced gateway flow proof are implemented.
+- Treat the current YARP gateway work as groundwork only until Phase 9 module isolation, `API` contracts, and traced gateway flow proof are implemented.
 
 ---
 
@@ -1385,3 +1385,4 @@ Track these weekly:
 - Explore advanced topics: Dapr, KEDA, GitOps
 - Contribute back: document learnings, share templates
 - Obtain Azure certifications: AZ-204, AZ-400
+

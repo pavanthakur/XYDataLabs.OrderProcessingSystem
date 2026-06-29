@@ -1,6 +1,6 @@
 namespace XYDataLabs.OrderProcessingSystem.Application.CQRS;
 
-public interface ICommandHandler<in TCommand, TResult> where TCommand : ICommand<TResult>
+public interface ICommandHandler<in TCommand, TResult> : XYDataLabs.OrderProcessingSystem.SharedKernel.CQRS.ICommandHandler<TCommand, TResult>
+    where TCommand : XYDataLabs.OrderProcessingSystem.SharedKernel.CQRS.ICommand<TResult>
 {
-    Task<TResult> HandleAsync(TCommand command, CancellationToken cancellationToken = default);
 }

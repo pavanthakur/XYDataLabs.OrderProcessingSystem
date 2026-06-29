@@ -4,6 +4,7 @@ using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.Domain.Events;
 using XYDataLabs.OrderProcessingSystem.Domain.Identifiers;
 using XYDataLabs.OrderProcessingSystem.Domain.ValueObjects;
+using XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
@@ -134,6 +135,24 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
             modelBuilder.Entity<Tenant>()
                 .HasIndex(item => item.Code)
                 .IsUnique();
+
+            modelBuilder.Entity<Customer>().ToTable(nameof(Customers), ModuleSchemaNames.Orders);
+            modelBuilder.Entity<Order>().ToTable(nameof(Orders), ModuleSchemaNames.Orders);
+            modelBuilder.Entity<OrderProduct>().ToTable(nameof(OrderProducts), ModuleSchemaNames.Orders);
+            modelBuilder.Entity<Product>().ToTable(nameof(Products), ModuleSchemaNames.Inventory);
+            modelBuilder.Entity<AuditLog>().ToTable(nameof(AuditLogs), ModuleSchemaNames.Notifications);
+            modelBuilder.Entity<InboxMessage>().ToTable(nameof(InboxMessages), ModuleSchemaNames.Notifications);
+            modelBuilder.Entity<OutboxMessage>().ToTable(nameof(OutboxMessages), ModuleSchemaNames.Notifications);
+            modelBuilder.Entity<BillingCustomer>().ToTable(nameof(BillingCustomers), ModuleSchemaNames.Payments);
+            modelBuilder.Entity<BillingCustomerKeyInfo>().ToTable(nameof(BillingCustomerKeyInfos), ModuleSchemaNames.Payments);
+            modelBuilder.Entity<CardTransaction>().ToTable(nameof(CardTransactions), ModuleSchemaNames.Payments);
+            modelBuilder.Entity<PayinLog>().ToTable(nameof(PayinLogs), ModuleSchemaNames.Payments);
+            modelBuilder.Entity<PayinLogDetails>().ToTable(nameof(PayinLogDetails), ModuleSchemaNames.Payments);
+            modelBuilder.Entity<PaymentMethod>().ToTable(nameof(PaymentMethods), ModuleSchemaNames.Payments);
+            modelBuilder.Entity<PaymentProvider>().ToTable(nameof(PaymentProviders), ModuleSchemaNames.Payments);
+            modelBuilder.Entity<PaymentAttempt>().ToTable(nameof(PaymentAttempts), ModuleSchemaNames.Payments);
+            modelBuilder.Entity<PaymentAttemptHistory>().ToTable(nameof(PaymentAttemptHistories), ModuleSchemaNames.Payments);
+            modelBuilder.Entity<TransactionStatusHistory>().ToTable(nameof(TransactionStatusHistories), ModuleSchemaNames.Payments);
 
             // Configure many-to-many relationship
             modelBuilder.Entity<OrderProduct>()

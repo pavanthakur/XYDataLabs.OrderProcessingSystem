@@ -5,7 +5,7 @@ using XYDataLabs.OrderProcessingSystem.API.Extensions;
 using XYDataLabs.OrderProcessingSystem.API.Models;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
-using XYDataLabs.OrderProcessingSystem.Application.Features.Payments.Commands;
+using XYDataLabs.OrderProcessingSystem.Payments.Features.Commands;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
 

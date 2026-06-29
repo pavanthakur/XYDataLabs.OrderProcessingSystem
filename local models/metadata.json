@@ -1,0 +1,23 @@
+{
+  "purpose": "Local provenance for model-execution support files.",
+  "createdFor": "Run Zoo Code/local model phase execution using separate architect and developer profiles.",
+  "canonicalSources": [
+    ".github/copilot-instructions.md",
+    ".github/prompts/phase-handoffs/",
+    "docs/AI-OPERATING-MODEL.md",
+    "zoocode/",
+    "ARCHITECTURE-EVOLUTION.md"
+  ],
+  "localFolders": {
+    "ollama": "Local model routing and helper scripts.",
+    "ai-guidelines": "Local execution profiles and workflow rules.",
+    "zoocode": "Local copies of phase execution packs.",
+    "prompt-runs": "Optional local run evidence and model output summaries."
+  },
+  "rules": [
+    "Canonical docs remain outside local models.",
+    "zoocode folder is not modified by this local operating pack.",
+    "Architect profile runs before developer profile for phase work.",
+    "Developer profile implements one accepted slice at a time."
+  ]
+}

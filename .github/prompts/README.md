@@ -6,6 +6,8 @@ These prompts are intended to reduce missed post-deployment steps, standardize r
 
 For repo-shared AI governance, use [docs/AI-OPERATING-MODEL.md](../../docs/AI-OPERATING-MODEL.md) as the canonical protocol and [docs/internal/DEFERRED-WORK-LOG.md](../../docs/internal/DEFERRED-WORK-LOG.md) as the shared deferral register.
 
+Use [.github/instructions/ai-operating.instructions.md](../instructions/ai-operating.instructions.md) as the shared local slice-sizing and drift-control rule file.
+
 ## How To Use
 
 1. Open VS Code Chat.
@@ -15,7 +17,7 @@ For repo-shared AI governance, use [docs/AI-OPERATING-MODEL.md](../../docs/AI-OP
 Quick tip:
 
 ```text
-Ctrl+Shift+I → Agent mode → type /XYDataLabs-day-start, /XYDataLabs-day-complete, /XYDataLabs-sql-local-access, /XYDataLabs-setup-local, /XYDataLabs-docker-start, /XYDataLabs-payment-automation, /XYDataLabs-completion-check, /XYDataLabs-context-audit, /XYDataLabs-new-feature, /XYDataLabs-validate-adrs, or /XYDataLabs-verify-db-logs
+Ctrl+Shift+I → Agent mode → type /XYDataLabs-day-start, /XYDataLabs-day-complete, /XYDataLabs-sql-local-access, /XYDataLabs-setup-local, /XYDataLabs-docker-start, /XYDataLabs-payment-automation, /XYDataLabs-completion-check, /XYDataLabs-context-audit, /XYDataLabs-new-feature, /XYDataLabs-validate-adrs, /XYDataLabs-verify-db-logs, /phase-handoffs/phase-09-microservices-architecture, or /phase-handoffs/phase-09-microservices-implementation
 ```
 
 ## Available Prompts
@@ -37,6 +39,7 @@ Purpose:
 - Ensures progress tracking stays consistent, including architecture phase status surfaces.
 - Makes payment automation validation mandatory during phase closeout when the work touched `automation/` or the payment automation workflow surfaces.
 - Helps prevent missing updates in curriculum, daily progress, and related docs.
+- For Phase 9 closeout, verify the numbered VS Code task sequence for both `local-http` and `docker-dev-http` is documented and aligned before declaring completion.
 
 Use when:
 - A curriculum day is finished.
@@ -101,6 +104,7 @@ Purpose:
 - Runs a structured quality gate after completing any feature, task, script, or workflow.
 - Checks six categories: documentation, guardrails, unit tests, integration/architecture tests, automation/CI-CD, and Copilot context.
 - Fixes gaps immediately where possible; records any justified deferrals in `docs/internal/DEFERRED-WORK-LOG.md`.
+- For Phase 9 closeout, also verify the numbered VS Code task sequence for both `local-http` and `docker-dev-http` is documented and aligned with the closeout roadmap.
 
 Use when:
 - Finishing any feature, fix, script, or DevOps task before considering it done.
@@ -200,6 +204,23 @@ Prompt routing note:
 
 Note: For deep-dive queries (Q1, Q3, Q4, Q6, Q6a, Q7, Q8-B and per-tenant 3DS toggle), open `docs/runbooks/payment-db-verification.md`.
 
+### Phase Handoff Prompts
+
+Purpose:
+- Stores phase-specific architect/developer handoff prompts for external or role-specialized models.
+- Keeps AI handoff guidelines out of the canonical human-facing `docs/` tree.
+- Gives each major phase a repeatable two-prompt structure: architecture strategy first, implementation slices second.
+
+Use when:
+- Starting a major architecture phase that benefits from an architect model and developer model handoff.
+- Preparing a model-specific prompt for Continue or another local model workflow.
+- Reusing Phase 9 YARP module-isolation guidance for Deepseek 14B/64k or Qwen 14B/64k.
+
+Current prompts:
+- `phase-handoffs/phase-09-microservices-architecture.prompt.md` — Deepseek 14B/64k architect prompt for ADR-021 and module-isolation blueprint.
+- `phase-handoffs/phase-09-microservices-implementation.prompt.md` — Qwen 14B/64k developer prompt for narrow Phase 9 implementation slices.
+- `phase-handoffs/local-model-phase-handoff-guide.md` — standard local Ollama/Continue/Cline model-routing and validation guide for phase work.
+
 ## Which Prompt Should I Use?
 
 | Scenario | Prompt |
@@ -215,6 +236,7 @@ Note: For deep-dive queries (Q1, Q3, Q4, Q6, Q6a, Q7, Q8-B and per-tenant 3DS to
 | Check for stale AI context / memory drift | `/XYDataLabs-context-audit` |
 | Verify payment run: API log + UI telemetry + DB correlated | `/XYDataLabs-verify-db-logs "prod https docker"` or `/XYDataLabs-verify-db-logs "dev http azure"` |
 | Validate ADR markdown files before committing | `/XYDataLabs-validate-adrs` |
+| Prepare external-model phase handoff prompts | `/phase-handoffs/phase-09-microservices-architecture` then `/phase-handoffs/phase-09-microservices-implementation` |
 
 ## Typical Workflows
 
@@ -249,6 +271,7 @@ Note: For deep-dive queries (Q1, Q3, Q4, Q6, Q6a, Q7, Q8-B and per-tenant 3DS to
 [After a phase close/freeze]
 └─ /XYDataLabs-day-complete  →  routes curriculum + roadmap + status-surface updates
    └─ [If automation scope changed] run automation dry-run matrix and record results
+   └─ [If Phase 9 closeout] verify `local-http` + `docker-dev-http` VS Code task sequences
    └─ /XYDataLabs-completion-check  →  mandatory quality gate before commit
    └─ /XYDataLabs-context-audit  →  mandatory drift audit before commit
 

@@ -1,9 +1,11 @@
 using XYDataLabs.OrderProcessingSystem.API.Controllers;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
-using XYDataLabs.OrderProcessingSystem.Application.Features.Orders.Commands;
-using XYDataLabs.OrderProcessingSystem.Application.Features.Orders.Queries;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
+using XYDataLabs.OrderProcessingSystem.Orders.Features.Commands;
+using XYDataLabs.OrderProcessingSystem.Orders.Features.Queries;
+using ModuleOrderDto = XYDataLabs.OrderProcessingSystem.Orders.API.OrderDto;
+using ModuleOrderProductDto = XYDataLabs.OrderProcessingSystem.Orders.API.OrderProductDto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
@@ -32,18 +34,18 @@ namespace XYDataLabs.OrderProcessingSystem.API.Tests.Controllers
                 ProductIds = new List<int> { 1, 2, 3 }
             };
 
-            var orderDto = new OrderDto
+            var orderDto = new ModuleOrderDto
             {
                 OrderId = 1,
                 CustomerId = 1,
                 TotalPrice = 100,
                 OrderDate = DateTime.Now,
                 IsFulfilled = false,
-                OrderProductDtos = new List<OrderProductDto>()
+                OrderProductDtos = new List<ModuleOrderProductDto>()
             };
 
             _mockDispatcher.Setup(d => d.SendAsync(It.IsAny<CreateOrderCommand>(), default))
-                .ReturnsAsync(Result<OrderDto>.Success(orderDto));
+                .ReturnsAsync(Result<ModuleOrderDto>.Success(orderDto));
 
             // Act
             var result = await _orderController.CreateOrder(createOrderRequestDto, CancellationToken.None);
@@ -64,7 +66,7 @@ namespace XYDataLabs.OrderProcessingSystem.API.Tests.Controllers
             };
 
             _mockDispatcher.Setup(d => d.SendAsync(It.IsAny<CreateOrderCommand>(), default))
-                .ReturnsAsync(Result<OrderDto>.Failure(Error.Validation));
+                .ReturnsAsync(Result<ModuleOrderDto>.Failure(Error.Validation));
 
             // Act
             var result = await _orderController.CreateOrder(createOrderRequestDto, CancellationToken.None);
@@ -84,7 +86,7 @@ namespace XYDataLabs.OrderProcessingSystem.API.Tests.Controllers
             };
 
             _mockDispatcher.Setup(d => d.SendAsync(It.IsAny<CreateOrderCommand>(), default))
-                .ReturnsAsync(Result<OrderDto>.Failure(Error.NotFound));
+                .ReturnsAsync(Result<ModuleOrderDto>.Failure(Error.NotFound));
 
             // Act
             var result = await _orderController.CreateOrder(createOrderRequestDto, CancellationToken.None);
@@ -98,18 +100,18 @@ namespace XYDataLabs.OrderProcessingSystem.API.Tests.Controllers
         {
             // Arrange
             var orderId = 1;
-            var orderDto = new OrderDto
+            var orderDto = new ModuleOrderDto
             {
                 OrderId = orderId,
                 CustomerId = 1,
                 TotalPrice = 100,
                 OrderDate = DateTime.Now,
                 IsFulfilled = false,
-                OrderProductDtos = new List<OrderProductDto>()
+                OrderProductDtos = new List<ModuleOrderProductDto>()
             };
 
             _mockDispatcher.Setup(d => d.QueryAsync(It.IsAny<GetOrderDetailsQuery>(), default))
-                .ReturnsAsync(Result<OrderDto>.Success(orderDto));
+                .ReturnsAsync(Result<ModuleOrderDto>.Success(orderDto));
 
             // Act
             var result = await _orderController.GetOrderDetailsById(orderId, CancellationToken.None);
@@ -126,7 +128,7 @@ namespace XYDataLabs.OrderProcessingSystem.API.Tests.Controllers
             var orderId = 1;
 
             _mockDispatcher.Setup(d => d.QueryAsync(It.IsAny<GetOrderDetailsQuery>(), default))
-                .ReturnsAsync(Result<OrderDto>.Failure(Error.NotFound));
+                .ReturnsAsync(Result<ModuleOrderDto>.Failure(Error.NotFound));
 
             // Act
             var result = await _orderController.GetOrderDetailsById(orderId, CancellationToken.None);
@@ -136,3 +138,4 @@ namespace XYDataLabs.OrderProcessingSystem.API.Tests.Controllers
         }
     }
 }
+

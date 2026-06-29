@@ -3,7 +3,7 @@ param(
     [ValidateSet('standalone', 'http', 'https')]
     [string]$Profile,
 
-    [bool]$OpenBrowser = $true,
+    [object]$OpenBrowser = $false,
 
     [ValidateRange(5, 300)]
     [int]$ApiStartupTimeoutSeconds = 90,
@@ -14,6 +14,28 @@ param(
 
 $workspaceRoot = Split-Path -Parent $PSScriptRoot
 $uiPort = if ($Profile -eq 'https') { 5174 } else { 5173 }
+$keycloakAuthority = 'http://localhost:8081'
+$keycloakRealm = 'xy-phase9'
+$keycloakClientId = 'xy-order-processing-local-web'
+$keycloakUsername = 'tenant-admin'
+$keycloakPassword = $env:KEYCLOAK_TENANT_ADMIN_PASSWORD
+if ([string]::IsNullOrWhiteSpace($keycloakPassword))
+{
+    $envFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local'
+    if (Test-Path $envFile)
+    {
+        $keycloakPasswordLine = Get-Content $envFile | Where-Object { $_ -like 'KEYCLOAK_TENANT_ADMIN_PASSWORD=*' } | Select-Object -First 1
+        if ($keycloakPasswordLine)
+        {
+            $keycloakPassword = $keycloakPasswordLine.Substring('KEYCLOAK_TENANT_ADMIN_PASSWORD='.Length)
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($keycloakPassword))
+    {
+        throw "KEYCLOAK_TENANT_ADMIN_PASSWORD must be set for the local Keycloak bootstrap flow."
+    }
+}
 
 $uiUrl = if ($Profile -eq 'https') { "https://localhost:$uiPort/" } else { "http://localhost:$uiPort/" }
 $apiBaseUrl = if ($Profile -eq 'https') { 'https://localhost:5011' } else { 'http://localhost:5010' }
@@ -72,7 +94,7 @@ function Start-BrowserLaunchMonitor {
         [string]$Url,
 
         [Parameter(Mandatory = $true)]
-        [bool]$ShouldOpenBrowser,
+        [object]$ShouldOpenBrowser,
 
         [Parameter(Mandatory = $true)]
         [int]$TimeoutSeconds,
@@ -81,7 +103,18 @@ function Start-BrowserLaunchMonitor {
         [int]$PollIntervalMilliseconds
     )
 
-    if (-not $ShouldOpenBrowser)
+    $shouldOpen = $false
+    if ($ShouldOpenBrowser -is [bool]) {
+        $shouldOpen = $ShouldOpenBrowser
+    }
+    elseif ($ShouldOpenBrowser -is [string]) {
+        $shouldOpen = $ShouldOpenBrowser.Trim().ToLowerInvariant() -in @('true', '$true', '1', 'yes', 'y')
+    }
+    elseif ($null -ne $ShouldOpenBrowser) {
+        $shouldOpen = [bool]$ShouldOpenBrowser
+    }
+
+    if (-not $shouldOpen)
     {
         return
     }
@@ -169,6 +202,11 @@ else
 
 $env:ORDERPROCESSING_DEV_SERVER_PORT = "$uiPort"
 $env:ORDERPROCESSING_API_BASE_URL = $apiBaseUrl
+$env:VITE_KEYCLOAK_AUTHORITY = $keycloakAuthority
+$env:VITE_KEYCLOAK_REALM = $keycloakRealm
+$env:VITE_KEYCLOAK_CLIENT_ID = $keycloakClientId
+$env:VITE_KEYCLOAK_USERNAME = $keycloakUsername
+$env:VITE_KEYCLOAK_PASSWORD = $keycloakPassword
 
 Start-BrowserLaunchMonitor `
     -Url $uiUrl `

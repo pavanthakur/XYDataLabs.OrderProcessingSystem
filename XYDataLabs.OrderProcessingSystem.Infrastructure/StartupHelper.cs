@@ -42,7 +42,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure
                     sqlOptions => sqlOptions.EnableRetryOnFailure(
                         maxRetryCount: 5,
                         maxRetryDelay: TimeSpan.FromSeconds(30),
-                        errorNumbersToAdd: null));
+                        errorNumbersToAdd: null)
+                    .CommandTimeout(180));
             });
 
             // Business DbContext — routes to dedicated DB when tenant is resolved as Dedicated tier.
@@ -62,7 +63,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure
                     sqlOptions => sqlOptions.EnableRetryOnFailure(
                         maxRetryCount: 5,
                         maxRetryDelay: TimeSpan.FromSeconds(30),
-                        errorNumbersToAdd: null));
+                        errorNumbersToAdd: null)
+                    .CommandTimeout(180));
 
                 if (observabilityOptions.EnableEfSensitiveDataLogging)
                 {
@@ -74,6 +76,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure
 
             // Forward IAppDbContext to the EF-registered concrete context
             builder.Services.AddScoped<IAppDbContext>(sp =>
+                sp.GetRequiredService<OrderProcessingSystemDbContext>());
+            builder.Services.AddScoped<XYDataLabs.OrderProcessingSystem.SharedKernel.Abstractions.IAppDbContext>(sp =>
                 sp.GetRequiredService<OrderProcessingSystemDbContext>());
             builder.Services.AddScoped<ITenantPaymentProviderConfigurationResolver, Payments.TenantPaymentProviderConfigurationResolver>();
 
@@ -95,6 +99,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure
 
             // Phase 8 Background Publish Dispatchers
             builder.Services.AddScoped<Application.Events.IEventPublisher, Events.InMemoryEventPublisher>();
+            builder.Services.AddScoped<Events.OutboxPublisherWorker>();
+            builder.Services.AddScoped<Events.PaymentReconciliationWorker>();
             builder.Services.AddHostedService<Events.OutboxPublisherWorker>();
             builder.Services.AddHostedService<Events.PaymentReconciliationWorker>();
 

@@ -296,6 +296,7 @@ Port allocations: Local VS API (5010–5011) + UI (5173–5174) · Docker dev (5
 
 | Log + DB Correlation | `/XYDataLabs-verify-db-logs` | After any payment run on any env/profile — script-first by runtime: calls `scripts/verify-payment-run-physical.ps1` for docker/local or `scripts/verify-payment-run-azure.ps1` for azure, returns the formatted table summary by default, and falls back to manual investigation only when needed. |
 | ADR Validation | `/XYDataLabs-validate-adrs` | Before committing changes to any ADR — runs frontmatter schema check + markdownlint locally; documents how to toggle the CI counterpart. |
+| Phase Handoff Prompts | `.github/prompts/phase-handoffs/` | Phase-specific architect/developer prompts for external or role-specialized models; Phase 9 uses Deepseek 14B/64k for ADR-021/module-isolation architecture and Qwen 14B/64k for narrow implementation slices. |
 
 ---
 
@@ -305,7 +306,7 @@ Port allocations: Local VS API (5010–5011) + UI (5173–5174) · Docker dev (5
 |------|-------|---------------|
 | `TROUBLESHOOTING-INDEX.md` | Root | Quick links for common GitHub App / OIDC / workflow errors |
 | `ARCHITECTURE.md` | Root | Binding tenant, payment identifier, migration, and test standard for future model creation |
-| `ARCHITECTURE-EVOLUTION.md` | Root | 14-phase roadmap: Phase 8.7 ✅ (Provider Webhooks), Phase 9 next 📅 (YARP Microservices Architecture) |
+| `ARCHITECTURE-EVOLUTION.md` | Root | 14-phase roadmap: Phase 8.7 ✅ (Provider Webhooks), Phase 9 ✅ (YARP Microservices Architecture), Phase 9.5 ✅ (Keycloak portability); Phase 10 next 📅 (Azure transport + DLQ operations) |
 | `docs/internal/AZURE-PROGRESS-EVALUATION.md` | docs/internal | Learning progress weeks 1–10, next-step guides |
 | `docs/AI-OPERATING-MODEL.md` | docs/ | Canonical protocol for shared AI customization and governance |
 | `docs/internal/DEFERRED-WORK-LOG.md` | docs/internal | Shared register for justified deferred work |

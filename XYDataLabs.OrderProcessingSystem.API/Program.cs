@@ -3,16 +3,19 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using System.Threading.RateLimiting;
+using System.Net.Http.Json;
 using XYDataLabs.OrderProcessingSystem.API.Middleware;
 using XYDataLabs.OrderProcessingSystem.Application;
 using XYDataLabs.OrderProcessingSystem.Application.Events;
 using XYDataLabs.OrderProcessingSystem.Infrastructure;
+using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using Microsoft.OpenApi.Models;
 using Serilog;
 using Serilog.Events;
 using Serilog.Sinks.ApplicationInsights.TelemetryConverters;
 using System.Reflection;
 using XYDataLabs.OrderProcessingSystem.SharedKernel;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.Abstractions;
 using Microsoft.Extensions.Configuration;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData;
@@ -21,6 +24,7 @@ using Microsoft.ApplicationInsights;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Runtime.CompilerServices;
+using System.Security.Claims;
 using XYDataLabs.OrderProcessingSystem.Application.Utilities;
 using XYDataLabs.OrderProcessingSystem.API.Services;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Configuration;
@@ -28,11 +32,22 @@ using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
 using XYDataLabs.RazorpayAdapter;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.Multitenancy;
-using XYDataLabs.OrderProcessingSystem.Application.Features.Orders;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Customers;
-using XYDataLabs.OrderProcessingSystem.Application.Features.Payments;
+using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OpenPayAdapter;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
+using XYDataLabs.OrderProcessingSystem.ServiceDefaults;
+using XYDataLabs.OrderProcessingSystem.Payments.Features;
+using XYDataLabs.OrderProcessingSystem.Inventory.Features.Module;
+using XYDataLabs.OrderProcessingSystem.Notifications.Features.Module;
+using XYDataLabs.OrderProcessingSystem.Orders.Infrastructure.Module;
+using XYDataLabs.OrderProcessingSystem.Inventory.Infrastructure.Module;
+using XYDataLabs.OrderProcessingSystem.Notifications.Infrastructure.Module;
+using XYDataLabs.OrderProcessingSystem.Payments.Infrastructure.Module;
+using XYDataLabs.OrderProcessingSystem.Orders.Features.Module;
+using XYDataLabs.OrderProcessingSystem.Payments.Features.Module;
+using Microsoft.AspNetCore.Authentication;
+using XYDataLabs.OrderProcessingSystem.API.Security;
 
 // Bootstrap Serilog as early as possible so Log.* writes go to console immediately
 // Azure App Service Deployment - Fix for Application Not Starting
@@ -45,6 +60,7 @@ Log.Logger = new LoggerConfiguration()
     .CreateBootstrapLogger();
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddHttpClient();
 
 var isDocker = string.Equals(
     Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"),
@@ -135,6 +151,20 @@ builder.Services.AddScoped<ScopedTenantContextAccessor>();
 builder.Services.AddScoped<ITenantProvider, HeaderTenantProvider>();
 builder.Services.AddScoped<ITenantResolver, EntityFrameworkTenantResolver>();
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddAuthorization();
+
+var identityProviderSection = builder.Configuration.GetSection("IdentityProvider");
+var identityEnabled = identityProviderSection.GetValue("Enabled", false);
+if (identityEnabled)
+{
+    builder.Services
+        .AddAuthentication(options =>
+        {
+            options.DefaultAuthenticateScheme = "KeycloakLocal";
+            options.DefaultChallengeScheme = "KeycloakLocal";
+        })
+        .AddScheme<AuthenticationSchemeOptions, KeycloakIntrospectionAuthenticationHandler>("KeycloakLocal", _ => { });
+}
 
 // Configure Application Insights for environment-wise telemetry and logging
 var applicationInsightsOptions = ApplicationInsightsOptions.FromConfiguration(builder.Configuration);
@@ -163,10 +193,16 @@ else
 }
 
 // OpenTelemetry distributed tracing and metrics (Phase 3 — Observability)
+builder.AddServiceDefaults(
+    "XYDataLabs.OrderProcessingSystem.API",
+    "OrderProcessing.Orders",
+    CustomerActivitySource.Name,
+    PaymentActivitySource.Name);
+
 builder.Services.AddObservability(
     "OrderProcessingSystem.API",
     builder.Configuration,
-    OrderActivitySource.Name,
+    "OrderProcessing.Orders",
     CustomerActivitySource.Name,
     PaymentActivitySource.Name);
 
@@ -202,6 +238,25 @@ builder.Services.AddCors(options =>
 
 builder.InjectInfrastructureDependencies();
 builder.InjectApplicationDependencies();
+builder.Services.AddCqrs(typeof(OrdersModuleRegistration).Assembly);
+builder.Services.AddOrdersModule();
+builder.Services.AddCqrs(typeof(InventoryModuleRegistration).Assembly);
+builder.Services.AddInventoryModule();
+builder.Services.AddCqrs(typeof(NotificationsModuleRegistration).Assembly);
+builder.Services.AddNotificationsModule();
+builder.Services.AddCqrs(typeof(PaymentsModuleRegistration).Assembly);
+builder.Services.AddScoped<ITenantPaymentProviderResolver, TenantPaymentProviderResolver>();
+builder.Services.AddScoped<IPaymentProviderGateway>(sp =>
+{
+    var resolver = sp.GetRequiredService<ITenantPaymentProviderResolver>();
+    var providerType = resolver.ResolveCurrentTenantProvider().ProviderType;
+    return sp.GetRequiredKeyedService<IPaymentProviderGateway>(providerType);
+});
+builder.Services.AddPaymentsModule();
+builder.Services.AddScoped<IModuleDatabaseMigrator, OrdersModuleMigrator>();
+builder.Services.AddScoped<IModuleDatabaseMigrator, InventoryModuleMigrator>();
+builder.Services.AddScoped<IModuleDatabaseMigrator, NotificationsModuleMigrator>();
+builder.Services.AddScoped<IModuleDatabaseMigrator, PaymentsModuleMigrator>();
 builder.Services.AddScoped<IPaymentTelemetryTracker>(serviceProvider =>
     new ApplicationInsightsPaymentTelemetryTracker(serviceProvider.GetService<TelemetryClient>()));
 builder.Services.AddOptions<PaymentGatewayRequestDefaults>()
@@ -538,6 +593,11 @@ app.UseCors(corsPolicy);
 if (activeSettings.HttpsEnabled)
 {
     app.UseHttpsRedirection();
+}
+
+if (identityEnabled)
+{
+    app.UseAuthentication();
 }
 
 app.UseAuthorization();

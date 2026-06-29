@@ -162,6 +162,28 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
                 paymentProvider.Use3DSecure));
         }
 
+        [HttpGet("tenant-registry")]
+        [ProducesResponseType<IEnumerable<TenantRegistryResponse>>(StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetTenantRegistry(CancellationToken cancellationToken)
+        {
+            var activeTenants = await _tenantRegistry.GetActiveTenantsAsync(cancellationToken);
+
+            var registry = activeTenants
+                .Select(tenant =>
+                {
+                    var entry = _tenantRegistry.FindByCode(tenant.TenantCode);
+                    return new TenantRegistryResponse(
+                        tenant.TenantId,
+                        tenant.TenantCode,
+                        tenant.TenantName,
+                        entry?.TenantTier ?? string.Empty,
+                        entry?.PaymentProviderCode);
+                })
+                .ToList();
+
+            return Ok(registry);
+        }
+
         private string ResolveTenantCode(
             string? requestedTenantCode,
             string configuredTenantCode,
@@ -256,6 +278,13 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
             string? BrowserMerchantId,
             bool IsProduction,
             bool IsThreeDSecure);
+
+        private sealed record TenantRegistryResponse(
+            int TenantId,
+            string TenantCode,
+            string TenantName,
+            string TenantTier,
+            string? PaymentProviderCode);
 
         private sealed record AvailableTenantConfiguration(
             int TenantId,

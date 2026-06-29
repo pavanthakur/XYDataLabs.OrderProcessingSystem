@@ -66,10 +66,13 @@ public sealed class WebhookController : ControllerBase
         Request.Body.Position = 0;
 
         // Validate HMAC signature BEFORE any business deserialization.
-        // Header name is provider-specific; the validator resolves the correct header per provider.
-        var signatureHeader = Request.Headers["X-Webhook-Signature"].FirstOrDefault()
-                           ?? Request.Headers["X-Razorpay-Signature"].FirstOrDefault()
-                           ?? Request.Headers["X-OpenPay-Signature"].FirstOrDefault();
+        // Prefer the provider-specific signature header and keep X-Webhook-Signature as a compatibility fallback.
+        // This prevents a generic header from masking a provider-specific signature mismatch.
+        var signatureHeader = providerName.Equals("Razorpay", StringComparison.OrdinalIgnoreCase)
+            ? Request.Headers["X-Razorpay-Signature"].FirstOrDefault()
+              ?? Request.Headers["X-Webhook-Signature"].FirstOrDefault()
+            : Request.Headers["X-OpenPay-Signature"].FirstOrDefault()
+              ?? Request.Headers["X-Webhook-Signature"].FirstOrDefault();
 
         if (!_signatureValidator.Validate(providerName, rawPayload, signatureHeader))
         {

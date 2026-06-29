@@ -11,13 +11,20 @@ import { OrderCreatePage } from "./pages/OrderCreatePage";
 import { OrderDetailPage } from "./pages/OrderDetailPage";
 import { PaymentCallbackPage } from "./pages/PaymentCallbackPage";
 import { PaymentPage } from "./pages/PaymentPage";
+import { setAccessToken } from "./payment-flow";
 
 const tenantSession = createTenantSession();
 const configuredApiBaseUrl = (import.meta.env.VITE_ORDERPROCESSING_API_BASE_URL ?? "").trim();
+const configuredKeycloakAuthority = (import.meta.env.VITE_KEYCLOAK_AUTHORITY ?? "").trim().replace(/\/$/, "");
+const configuredKeycloakRealm = (import.meta.env.VITE_KEYCLOAK_REALM ?? "").trim();
+const configuredKeycloakClientId = (import.meta.env.VITE_KEYCLOAK_CLIENT_ID ?? "").trim();
+const configuredKeycloakUsername = (import.meta.env.VITE_KEYCLOAK_USERNAME ?? "").trim();
+const configuredKeycloakPassword = (import.meta.env.VITE_KEYCLOAK_PASSWORD ?? "").trim();
 const apiClient = createOrderProcessingApiClient({
   baseUrl: configuredApiBaseUrl.length > 0 ? configuredApiBaseUrl.replace(/\/$/, "") : "",
   getTenantCode: () => tenantSession.getActiveTenantCode(),
-  getTenantHeaderName: () => tenantSession.getTenantHeaderName()
+  getTenantHeaderName: () => tenantSession.getTenantHeaderName(),
+  getAccessToken: () => localStorage.getItem("orderprocessing.accessToken")
 });
 
 type LoadState = "idle" | "loading" | "ready" | "error";
@@ -42,11 +49,16 @@ export default function App() {
       try {
         const bootstrap = await apiClient.getRuntimeConfiguration(requestedBootstrapTenantCode ?? undefined);
         const sessionState = tenantSession.initialize(bootstrap, requestedBootstrapTenantCode);
+        const accessToken = await bootstrapLocalAccessToken();
 
         if (isCancelled) {
           return;
         }
 
+        setAccessToken(accessToken);
+        if (accessToken) {
+          localStorage.setItem("orderprocessing.accessToken", accessToken);
+        }
         setRuntimeConfiguration(bootstrap);
         setActiveTenantCode(sessionState.activeTenantCode);
         setBootstrapState("ready");
@@ -193,4 +205,37 @@ function resolveRequestedBootstrapTenantCode(pathname: string, search: string): 
   const searchParams = new URLSearchParams(search);
   const tenantCode = searchParams.get("tenantCode")?.trim();
   return tenantCode || null;
+}
+
+async function bootstrapLocalAccessToken(): Promise<string | null> {
+  if (!configuredKeycloakAuthority || !configuredKeycloakRealm || !configuredKeycloakClientId) {
+    return null;
+  }
+
+  if (!configuredKeycloakUsername || !configuredKeycloakPassword) {
+    return null;
+  }
+
+  const tokenUrl = `${configuredKeycloakAuthority}/realms/${configuredKeycloakRealm}/protocol/openid-connect/token`;
+  const body = new URLSearchParams({
+    grant_type: "password",
+    client_id: configuredKeycloakClientId,
+    username: configuredKeycloakUsername,
+    password: configuredKeycloakPassword
+  });
+
+  const response = await fetch(tokenUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: body.toString()
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const payload = await response.json().catch(() => null) as { access_token?: string } | null;
+  return payload?.access_token ?? null;
 }

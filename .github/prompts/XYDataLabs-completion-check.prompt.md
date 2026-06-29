@@ -97,6 +97,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\generate-docker-validati
 - [ ] Is `copilot-instructions.md` still accurate? (Run `/XYDataLabs-context-audit` if unsure)
 - [ ] Are relevant `/memories/repo/` files up to date with any new resource names or conventions?
 - [ ] If this task changed current phase or next-phase status: has `/XYDataLabs-context-audit` been run, or has equivalent manual verification confirmed there is no status-surface drift?
+- [ ] If this task closes Phase 9 or a Phase 9 closure lane: are the numbered VS Code task sequences for both `local-http` and `docker-dev-http` documented and aligned with the closeout roadmap before declaring completion?
 
 ---
 

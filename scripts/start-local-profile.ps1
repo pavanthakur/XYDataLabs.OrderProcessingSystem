@@ -1,34 +1,45 @@
 param(
     [Parameter(Mandatory = $true)]
     [ValidateSet('http', 'https')]
-    [string]$Profile
+    [string]$Profile,
+
+    [switch]$ReturnWhenReady
 )
 
 $workspaceRoot = Split-Path -Parent $PSScriptRoot
 $apiScriptPath = Join-Path $PSScriptRoot 'start-local-api-profile.ps1'
 $frontendScriptPath = Join-Path $PSScriptRoot 'start-local-frontend-profile.ps1'
-$expectedPorts = if ($Profile -eq 'https') { @(5011, 5174) } else { @(5010, 5173) }
+$keycloakScriptPath = Join-Path $PSScriptRoot 'start-local-keycloak.ps1'
+$statusWriter = Join-Path $PSScriptRoot 'write-playwright-run-status.ps1'
+$logRoot = Join-Path $workspaceRoot 'TestResults\Playwright\local-http'
+$sequenceEnvironmentKey = 'local-http'
+$apiReadyUrl = if ($Profile -eq 'https') { 'https://localhost:5011/health/ready' } else { 'http://localhost:5010/health/ready' }
+$uiReadyUrl = if ($Profile -eq 'https') { 'https://localhost:5174/' } else { 'http://localhost:5173/' }
 
-function Get-ListeningPorts {
+function Test-HttpReady {
     param(
         [Parameter(Mandatory = $true)]
-        [int[]]$Ports
+        [string]$Url
     )
 
-    return @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
-        Where-Object { $Ports -contains $_.LocalPort } |
-        Select-Object -ExpandProperty LocalPort -Unique |
-        Sort-Object -Unique)
-}
+    try {
+        $invokeParams = @{
+            Uri = $Url
+            TimeoutSec = 5
+            Method = 'Get'
+            ErrorAction = 'Stop'
+        }
 
-function Test-ExpectedPortsListening {
-    param(
-        [Parameter(Mandatory = $true)]
-        [int[]]$Ports
-    )
+        if ($PSVersionTable.PSVersion.Major -ge 7 -and $Url -like 'https://*') {
+            $invokeParams.SkipCertificateCheck = $true
+        }
 
-    $listeningPorts = Get-ListeningPorts -Ports $Ports
-    return @($Ports | Where-Object { $listeningPorts -contains $_ }).Count -eq $Ports.Count
+        $response = Invoke-WebRequest @invokeParams
+        return $response.StatusCode -ge 200 -and $response.StatusCode -lt 400
+    }
+    catch {
+        return $false
+    }
 }
 
 function Start-ChildProfileProcess {
@@ -44,6 +55,9 @@ function Start-ChildProfileProcess {
     )
 
     Write-Host "Starting $Name for '$ProfileName' profile..."
+    New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
+    $stdoutPath = Join-Path $logRoot ("start-local-profile-{0}-{1}-stdout.log" -f $ProfileName, $Name.ToLowerInvariant())
+    $stderrPath = Join-Path $logRoot ("start-local-profile-{0}-{1}-stderr.log" -f $ProfileName, $Name.ToLowerInvariant())
 
     return Start-Process `
         -FilePath 'pwsh' `
@@ -53,11 +67,13 @@ function Start-ChildProfileProcess {
             'Bypass'
             '-File'
             $ScriptPath
-            '-Profile'
+            "-Profile"
             $ProfileName
         ) `
         -WorkingDirectory $workspaceRoot `
-        -NoNewWindow `
+        -RedirectStandardOutput $stdoutPath `
+        -RedirectStandardError $stderrPath `
+        -WindowStyle Hidden `
         -PassThru
 }
 
@@ -66,33 +82,38 @@ $startupDeadline = (Get-Date).AddSeconds(120)
 
 try
 {
+    & pwsh -NoProfile -ExecutionPolicy Bypass -File $statusWriter -EnvironmentKey $sequenceEnvironmentKey -TaskName 'local-http-env-ready' -Status started -Message $Profile
+    & pwsh -NoProfile -ExecutionPolicy Bypass -File $keycloakScriptPath
     Start-ChildProfileProcess -Name 'API' -ScriptPath $apiScriptPath -ProfileName $Profile | Out-Null
     Start-ChildProfileProcess -Name 'UI' -ScriptPath $frontendScriptPath -ProfileName $Profile | Out-Null
 
-    Write-Host "Local '$Profile' profile is running."
-    Write-Host 'Press Ctrl+C to stop the launcher task, or use the stop task to terminate listening processes.'
+    Write-Host "Local '$Profile' profile bootstrap is running."
+    Write-Host "Waiting for API readiness at $apiReadyUrl and UI readiness at $uiReadyUrl."
 
     while ($true)
     {
         if (-not $profileBecameReady)
         {
-            if (Test-ExpectedPortsListening -Ports $expectedPorts)
+            if ((Test-HttpReady -Url $apiReadyUrl) -and (Test-HttpReady -Url $uiReadyUrl))
             {
                 $profileBecameReady = $true
-                Write-Host "Local '$Profile' profile is ready on ports: $($expectedPorts -join ', ')."
+                Write-Host "Local '$Profile' profile is ready at $apiReadyUrl and $uiReadyUrl."
+                & pwsh -NoProfile -ExecutionPolicy Bypass -File $statusWriter -EnvironmentKey $sequenceEnvironmentKey -TaskName 'local-http-env-ready' -Status passed -Message $Profile
+                if ($ReturnWhenReady) {
+                    return
+                }
+                break
             }
             elseif ((Get-Date) -ge $startupDeadline)
             {
-                $listeningPorts = Get-ListeningPorts -Ports $expectedPorts
-                $listeningPortsLabel = if ($listeningPorts.Count -gt 0) { $listeningPorts -join ', ' } else { 'none' }
-                throw "Timed out waiting for local '$Profile' profile ports. Expected: $($expectedPorts -join ', '). Listening: $listeningPortsLabel."
+                & pwsh -NoProfile -ExecutionPolicy Bypass -File $statusWriter -EnvironmentKey $sequenceEnvironmentKey -TaskName 'local-http-env-ready' -Status failed -Message $Profile
+                throw "Timed out waiting for local '$Profile' profile readiness at $apiReadyUrl and $uiReadyUrl."
             }
         }
-        elseif (-not (Test-ExpectedPortsListening -Ports $expectedPorts))
+        elseif (-not ((Test-HttpReady -Url $apiReadyUrl) -and (Test-HttpReady -Url $uiReadyUrl)))
         {
-            $listeningPorts = Get-ListeningPorts -Ports $expectedPorts
-            $listeningPortsLabel = if ($listeningPorts.Count -gt 0) { $listeningPorts -join ', ' } else { 'none' }
-            throw "Local '$Profile' profile stopped listening on expected ports. Expected: $($expectedPorts -join ', '). Listening: $listeningPortsLabel."
+            & pwsh -NoProfile -ExecutionPolicy Bypass -File $statusWriter -EnvironmentKey $sequenceEnvironmentKey -TaskName 'local-http-env-ready' -Status failed -Message $Profile
+            throw "Local '$Profile' profile stopped responding at $apiReadyUrl or $uiReadyUrl."
         }
 
         Start-Sleep -Seconds 1

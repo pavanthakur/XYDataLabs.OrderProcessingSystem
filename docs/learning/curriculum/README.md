@@ -22,9 +22,10 @@ Canonical curriculum navigation for the learning track.
 ## Current Learning Status
 
 - Completed: Days 1-43, Architecture Phases 1-8.7, Phase 8.5, Phase 8.6, and Track U U5 web cutover
-- Current: Phase 8.7 closed (June 6, 2026); Phase 9 YARP microservices architecture is the next backend phase
-- Next: Phase 9 module extraction plus Aspire-Lite, Phase 9.5 Keycloak portability, and Phase 10 Azure transport + DLQ operations behind hard entry gates
+- Current: Phase 8.7 closed (June 6, 2026); Phase 9 closeout is verified complete and the next backend phase is Phase 10
+- Next: Phase 10 Azure transport + DLQ operations behind hard entry gates; Phase 11.5 and Phase 13 remain planned consolidation lanes
 - Companion planning surface before payment automation implementation: `docs/guides/development/payment-journey-automation-blueprint.md`
 
 Last Updated: June 6, 2026
-Current Focus: Phase 9 — YARP Microservices Architecture (module isolation, PublicApi contracts, local gateway routing, and tracing acceptance)
+Current Focus: Phase 10 — Azure Transport + DLQ Operations (cloud transport, gateway handoff, and operational hardening)
+

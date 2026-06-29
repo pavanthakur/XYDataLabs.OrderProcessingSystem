@@ -14,8 +14,15 @@ public static class CqrsServiceExtensions
     {
         assembly ??= Assembly.GetCallingAssembly();
 
-        // Register all ICommandHandler<,> and IQueryHandler<,> implementations
-        var handlerInterfaces = new[] { typeof(ICommandHandler<,>), typeof(IQueryHandler<,>) };
+        // Register both application-local CQRS interfaces and the shared-kernel variants.
+        // Some feature assemblies implement the shared-kernel contracts directly.
+        var handlerInterfaces = new[]
+        {
+            typeof(ICommandHandler<,>),
+            typeof(IQueryHandler<,>),
+            typeof(XYDataLabs.OrderProcessingSystem.SharedKernel.CQRS.ICommandHandler<,>),
+            typeof(XYDataLabs.OrderProcessingSystem.SharedKernel.CQRS.IQueryHandler<,>)
+        };
 
         foreach (var type in assembly.GetTypes().Where(t => t is { IsAbstract: false, IsInterface: false }))
         {

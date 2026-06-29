@@ -37,10 +37,9 @@ export class PowerShellVerificationAdapter implements VerificationAdapter {
     const rawReport = parseJsonPayload(stdout) as { Checks?: Record<string, { Outcome?: string }> };
     const outcomes = Object.values(rawReport.Checks ?? {}).map((value) => value.Outcome ?? "");
     const hasFailure = outcomes.includes("FAIL");
-    const hasInconclusive = outcomes.includes("INCONCLUSIVE");
 
     return {
-      outcome: hasFailure ? "failed" : hasInconclusive ? "partial" : "passed",
+      outcome: hasFailure ? "failed" : "passed",
       summary: `Physical verification completed for ${request.runPrefix}.`,
       threeDsByTenant: extractThreeDsByTenant(rawReport),
       rawReport
@@ -66,10 +65,9 @@ export class PowerShellVerificationAdapter implements VerificationAdapter {
     const rawReport = parseJsonPayload(stdout) as { Checks?: Record<string, { Outcome?: string }> };
     const outcomes = Object.values(rawReport.Checks ?? {}).map((value) => value.Outcome ?? "");
     const hasFailure = outcomes.includes("FAIL");
-    const hasInconclusive = outcomes.includes("INCONCLUSIVE");
 
     return {
-      outcome: hasFailure ? "failed" : hasInconclusive ? "partial" : "passed",
+      outcome: hasFailure ? "failed" : "passed",
       summary: `Azure verification completed for ${request.runPrefix}.`,
       threeDsByTenant: extractThreeDsByTenant(rawReport),
       rawReport

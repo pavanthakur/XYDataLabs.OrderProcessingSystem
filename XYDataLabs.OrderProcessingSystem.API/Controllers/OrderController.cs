@@ -4,9 +4,10 @@ using Microsoft.AspNetCore.RateLimiting;
 using XYDataLabs.OrderProcessingSystem.API.Extensions;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
-using XYDataLabs.OrderProcessingSystem.Application.Features.Orders.Commands;
-using XYDataLabs.OrderProcessingSystem.Application.Features.Orders.Queries;
 using XYDataLabs.OrderProcessingSystem.Domain.Identifiers;
+using XYDataLabs.OrderProcessingSystem.SharedKernel.CQRS;
+using XYDataLabs.OrderProcessingSystem.Orders.Features.Commands;
+using XYDataLabs.OrderProcessingSystem.Orders.Features.Queries;
 
 namespace XYDataLabs.OrderProcessingSystem.API.Controllers
 {

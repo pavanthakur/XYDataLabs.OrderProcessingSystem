@@ -72,6 +72,14 @@ $yesterdayDateTag = (Get-Date).AddDays(-1).ToString('yyyyMMdd')
 $envTag = if ($Runtime -eq 'local') { 'dev' } else { $Environment }
 $runtimeTag = if ($Runtime -eq 'docker') { 'dock' } else { 'local' }
 $logDirectory = Join-Path $repoRoot 'logs'
+$resultRoot = Join-Path $repoRoot 'TestResults\PaymentMatrix'
+$runStamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+$runDir = Join-Path $resultRoot $runStamp
+$null = New-Item -ItemType Directory -Path $runDir -Force
+$transcriptPath = Join-Path $runDir 'payment-matrix.log'
+$reportPath = Join-Path $runDir 'payment-matrix.report.json'
+$latestPointerPath = Join-Path $resultRoot 'latest-payment-matrix.txt'
+$null = Start-Transcript -Path $transcriptPath -Force
 $apiLogPatternToday = "webapi-$envTag-$runtimeTag-$Profile-$dateTag*.log"
 $apiLogPatternYesterday = "webapi-$envTag-$runtimeTag-$Profile-$yesterdayDateTag*.log"
 $envLocalPath = Join-Path $repoRoot 'Resources\Docker\.env.local'
@@ -97,6 +105,39 @@ else {
         'prod' { 'OrderProcessingSystem_TenantC_Prod' }
     }
 }
+
+function Assert-PhysicalRuntimeDbContract {
+    param(
+        [Parameter(Mandatory = $true)][string]$Runtime,
+        [Parameter(Mandatory = $true)][string]$Environment,
+        [Parameter(Mandatory = $true)][string]$Profile,
+        [Parameter(Mandatory = $true)][string]$SharedDbName,
+        [Parameter(Mandatory = $true)][string]$TenantCDbName
+    )
+
+    if ($Runtime -eq 'docker') {
+        $expectedShared = switch ($Environment) {
+            'dev' { 'OrderProcessingSystem_Dev' }
+            'stg' { 'OrderProcessingSystem_Stg' }
+            'prod' { 'OrderProcessingSystem_Prod' }
+        }
+
+        $expectedTenantC = switch ($Environment) {
+            'dev' { 'OrderProcessingSystem_TenantC_Dev' }
+            'stg' { 'OrderProcessingSystem_TenantC_Stg' }
+            'prod' { 'OrderProcessingSystem_TenantC_Prod' }
+        }
+
+        if ($SharedDbName -ne $expectedShared -or $TenantCDbName -ne $expectedTenantC) {
+            throw "Docker runtime/db-name mismatch. Runtime=$Runtime Environment=$Environment Profile=$Profile SharedDbName=$SharedDbName TenantCDbName=$TenantCDbName ExpectedShared=$expectedShared ExpectedTenantC=$expectedTenantC"
+        }
+    }
+    elseif ($Runtime -eq 'local' -and $Environment -ne 'dev') {
+        throw "Local runtime only supports dev. Runtime=$Runtime Environment=$Environment Profile=$Profile"
+    }
+}
+
+Assert-PhysicalRuntimeDbContract -Runtime $Runtime -Environment $Environment -Profile $Profile -SharedDbName $sharedDbName -TenantCDbName $tenantCDbName
 
 function Write-Step {
     param([string] $Message)
@@ -154,7 +195,33 @@ function Get-RunPrefixFromCustomerOrder {
         return [string] $Matches[1]
     }
 
+    if ($CustomerOrderId -match 'local-(?:razorpay|openpay)-(?<runPrefix>OR-\d+-[^-]+)') {
+        return [string] $Matches.runPrefix
+    }
+
     return ''
+}
+
+function Get-ObjectPropertyValue {
+    param(
+        [Parameter(Mandatory = $false)] [object] $InputObject,
+        [Parameter(Mandatory = $true)] [string] $PropertyName
+    )
+
+    if ($null -eq $InputObject) {
+        return $null
+    }
+
+    if ($InputObject -is [string]) {
+        return $null
+    }
+
+    $properties = $InputObject.PSObject.Properties
+    if ($null -eq $properties -or -not ($properties.Name -contains $PropertyName)) {
+        return $null
+    }
+
+    return $InputObject.$PropertyName
 }
 
 function Get-MinimumTimeDeltaSeconds {
@@ -226,7 +293,59 @@ function Get-DockerSqlJsonPayload {
         throw ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
     }
 
-    return ([string]::Join('', @($output | ForEach-Object { $_.ToString().Trim() }))).Trim()
+    $joinedOutput = ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
+    if ([string]::IsNullOrWhiteSpace($joinedOutput)) {
+        return ''
+    }
+
+    $jsonLine = @(
+        $joinedOutput -split '\r?\n' |
+            Where-Object { $_ -match '\[\s*\{.*\}\s*\]' -or $_ -match '\{\s*".*"\s*:\s*.*\}' } |
+            Select-Object -Last 1
+    )
+
+    if ([string]::IsNullOrWhiteSpace($jsonLine)) {
+        throw "Docker SQL query did not return a JSON payload. Raw output:`n$joinedOutput"
+    }
+
+    return $jsonLine.Trim()
+}
+
+function Get-LocalSqlConnectionString {
+    param(
+        [Parameter(Mandatory = $true)] [string] $Database
+    )
+
+    $workspaceRoot = Split-Path -Path $PSScriptRoot -Parent
+    $sharedSettingsPath = Join-Path $workspaceRoot 'Resources\Configuration\sharedsettings.local.json'
+    if (-not (Test-Path $sharedSettingsPath)) {
+        throw "Missing shared settings file: $sharedSettingsPath"
+    }
+
+    $sharedSettingsText = Get-Content -LiteralPath $sharedSettingsPath -Raw
+    $candidateMatch = [regex]::Match(
+        $sharedSettingsText,
+        '"OrderProcessingSystemDbConnection_Local"\s*:\s*"(?<value>[^"]+)"'
+    )
+    if (-not $candidateMatch.Success) {
+        $candidateMatch = [regex]::Match(
+            $sharedSettingsText,
+            '"OrderProcessingSystemDbConnection"\s*:\s*"(?<value>[^"]+)"'
+        )
+    }
+
+    if (-not $candidateMatch.Success) {
+        throw "No local SQL connection string was found in $sharedSettingsPath"
+    }
+
+    $candidate = $candidateMatch.Groups['value'].Value
+
+    $builder = [System.Data.SqlClient.SqlConnectionStringBuilder]::new($candidate)
+    $builder['Initial Catalog'] = $Database
+    $builder['Integrated Security'] = $false
+    $builder['Encrypt'] = $false
+    $builder['TrustServerCertificate'] = $true
+    return $builder.ConnectionString
 }
 
 function Invoke-PhysicalSqlQuery {
@@ -253,14 +372,9 @@ function Invoke-PhysicalSqlQuery {
         return @($parsed)
     }
 
-    $builder = [System.Data.SqlClient.SqlConnectionStringBuilder]::new()
-    $builder['Data Source'] = 'localhost'
-    $builder['Initial Catalog'] = $Database
-    $builder['TrustServerCertificate'] = $true
+    $connectionString = Get-LocalSqlConnectionString -Database $Database
+    $builder = [System.Data.SqlClient.SqlConnectionStringBuilder]::new($connectionString)
     $builder['Connect Timeout'] = 30
-
-    $builder['Integrated Security'] = $true
-    $builder['Encrypt'] = $false
 
     $connection = [System.Data.SqlClient.SqlConnection]::new($builder.ConnectionString)
 
@@ -304,6 +418,32 @@ function Convert-ApiLogLinesToEvents {
         $timestamp = Get-LogTimestamp -Line $line
         $tenant = Get-TenantFromLine -Line $line
 
+        if ($line -match 'UI payment event ui_payment_submit_started on /payments/new for tenant (?<responseTenant>\S+) customer order (?<customerOrderId>\S+)') {
+            $responseTenant = [string] $Matches.responseTenant
+            $customerOrderId = [string] $Matches.customerOrderId
+            $runPrefix = Get-RunPrefixFromCustomerOrder -CustomerOrderId $customerOrderId
+
+            if (-not [string]::IsNullOrWhiteSpace($responseTenant) -and -not [string]::IsNullOrWhiteSpace($customerOrderId)) {
+                $tenantState[$responseTenant] = [PSCustomObject] @{
+                    CustomerOrderId = $customerOrderId
+                    RunPrefix = $runPrefix
+                }
+            }
+
+            $events.Add([PSCustomObject] @{
+                    Timestamp = $timestamp
+                    Tenant = $responseTenant
+                    CustomerOrderId = $customerOrderId
+                    ResolvedCustomerOrderId = $customerOrderId
+                    RunPrefix = $runPrefix
+                    ResolvedRunPrefix = $runPrefix
+                    ChargeId = ''
+                    Message = $line
+                    EventType = 'ui-submit-started'
+                })
+            continue
+        }
+
         if ($line -match 'Generated payment attempt order id\s+(?<attemptOrderId>\S+)\s+and payment trace id\s+(?<traceId>\S+)\s+from customer order id\s+(?<customerOrderId>\S+)') {
             $customerOrderId = [string] $Matches.customerOrderId
             $runPrefix = Get-RunPrefixFromCustomerOrder -CustomerOrderId $customerOrderId
@@ -341,6 +481,84 @@ function Convert-ApiLogLinesToEvents {
                     ChargeId = [string] $Matches.chargeId
                     Message = $line
                     EventType = 'charge-created'
+                })
+            continue
+        }
+
+        if ($line -match 'Received payment status confirmation request for payment\s+(?<paymentId>\S+)') {
+            $paymentId = [string] $Matches.paymentId
+            $runPrefix = Get-RunPrefixFromCustomerOrder -CustomerOrderId $paymentId
+            $state = if ($tenantState.ContainsKey($tenant)) { $tenantState[$tenant] } else { $null }
+
+            if (-not [string]::IsNullOrWhiteSpace($tenant) -and -not [string]::IsNullOrWhiteSpace($runPrefix)) {
+                $tenantState[$tenant] = [PSCustomObject] @{
+                    CustomerOrderId = if ($null -ne $state) { $state.CustomerOrderId } else { $paymentId }
+                    RunPrefix = $runPrefix
+                }
+            }
+
+            $events.Add([PSCustomObject] @{
+                    Timestamp = $timestamp
+                    Tenant = $tenant
+                    CustomerOrderId = if ($null -ne $state) { $state.CustomerOrderId } else { $paymentId }
+                    ResolvedCustomerOrderId = if ($null -ne $state) { $state.CustomerOrderId } else { $paymentId }
+                    RunPrefix = $runPrefix
+                    ResolvedRunPrefix = $runPrefix
+                    ChargeId = $paymentId
+                    Message = $line
+                    EventType = 'response-confirm-status'
+            })
+            continue
+        }
+
+        if ($line -match 'Request:\s+POST\s+/api/v1/Payments/(?<paymentId>[^/\s]+)/confirm-status') {
+            $paymentId = [string] $Matches.paymentId
+            $runPrefix = Get-RunPrefixFromCustomerOrder -CustomerOrderId $paymentId
+            $state = if ($tenantState.ContainsKey($tenant)) { $tenantState[$tenant] } else { $null }
+
+            if (-not [string]::IsNullOrWhiteSpace($tenant) -and -not [string]::IsNullOrWhiteSpace($runPrefix)) {
+                $tenantState[$tenant] = [PSCustomObject] @{
+                    CustomerOrderId = if ($null -ne $state) { $state.CustomerOrderId } else { $paymentId }
+                    RunPrefix = $runPrefix
+                }
+            }
+
+            $events.Add([PSCustomObject] @{
+                    Timestamp = $timestamp
+                    Tenant = $tenant
+                    CustomerOrderId = if ($null -ne $state) { $state.CustomerOrderId } else { $paymentId }
+                    ResolvedCustomerOrderId = if ($null -ne $state) { $state.CustomerOrderId } else { $paymentId }
+                    RunPrefix = $runPrefix
+                    ResolvedRunPrefix = $runPrefix
+                    ChargeId = $paymentId
+                    Message = $line
+                    EventType = 'confirm-status-request'
+                })
+            continue
+        }
+
+        if ($line -match 'HTTP POST\s+/api/v1/Payments/(?<paymentId>[^/\s]+)/confirm-status\s+responded\s+(?<statusCode>\d{3})') {
+            $paymentId = [string] $Matches.paymentId
+            $runPrefix = Get-RunPrefixFromCustomerOrder -CustomerOrderId $paymentId
+            $state = if ($tenantState.ContainsKey($tenant)) { $tenantState[$tenant] } else { $null }
+
+            if (-not [string]::IsNullOrWhiteSpace($tenant) -and -not [string]::IsNullOrWhiteSpace($runPrefix)) {
+                $tenantState[$tenant] = [PSCustomObject] @{
+                    CustomerOrderId = if ($null -ne $state) { $state.CustomerOrderId } else { $paymentId }
+                    RunPrefix = $runPrefix
+                }
+            }
+
+            $events.Add([PSCustomObject] @{
+                    Timestamp = $timestamp
+                    Tenant = $tenant
+                    CustomerOrderId = if ($null -ne $state) { $state.CustomerOrderId } else { $paymentId }
+                    ResolvedCustomerOrderId = if ($null -ne $state) { $state.CustomerOrderId } else { $paymentId }
+                    RunPrefix = $runPrefix
+                    ResolvedRunPrefix = $runPrefix
+                    ChargeId = $paymentId
+                    Message = $line
+                    EventType = 'confirm-status-response'
                 })
             continue
         }
@@ -393,6 +611,24 @@ function Convert-ApiLogLinesToEvents {
                     ChargeId = [string] $Matches.chargeId
                     Message = $line
                     EventType = 'callback-reconciled'
+                })
+            continue
+        }
+
+        if ($line -match 'UI payment event\s+(?<uiEventName>\S+)\s+on\s+(?<route>\S+)\s+for tenant\s+(?<tenantCode>\S+)\s+customer order\s+(?<customerOrderId>\S+)') {
+            $customerOrderId = [string] $Matches.customerOrderId
+            $runPrefix = Get-RunPrefixFromCustomerOrder -CustomerOrderId $customerOrderId
+
+            $events.Add([PSCustomObject] @{
+                    Timestamp = $timestamp
+                    Tenant = [string] $Matches.tenantCode
+                    CustomerOrderId = $customerOrderId
+                    ResolvedCustomerOrderId = $customerOrderId
+                    RunPrefix = $runPrefix
+                    ResolvedRunPrefix = $runPrefix
+                    ChargeId = ''
+                    Message = $line
+                    EventType = 'ui'
                 })
             continue
         }
@@ -472,8 +708,12 @@ $apiLogLabel = $apiLogPaths -join ', '
 Write-Step "Reading API logs from $apiLogLabel"
 $apiLogLines = $apiLogFiles |
     Get-Content |
-    Select-String -Pattern 'Generated payment|created charge|charge created|callback reconciliation completed|confirm-status responded|Response: 200.*OR-' |
+    Select-String -Pattern 'Generated payment|created charge|charge created|callback reconciliation completed|confirm-status responded|Response: 200.*OR-|Response: 404.*OR-|ui_payment_submit_started|ui_payment_callback_failed|ui_payment_callback_received' |
     ForEach-Object { $_.Line.Trim() }
+
+if (@($apiLogLines).Count -eq 0) {
+    throw "No API log lines matched the physical verifier filter. Log files searched: $apiLogLabel. If this run was only a webhook matrix smoke, use -RunPrefix to anchor the verification or expand the log filter."
+}
 
 $apiEvents = Convert-ApiLogLinesToEvents -Lines @($apiLogLines)
 $availableRunPrefixes = @($apiEvents | Where-Object { -not [string]::IsNullOrWhiteSpace($_.ResolvedRunPrefix) } | Select-Object -ExpandProperty ResolvedRunPrefix -Unique)
@@ -499,8 +739,24 @@ if ([string]::IsNullOrWhiteSpace($selectedRunPrefix)) {
 }
 
 if ($availableRunPrefixes.Count -gt 0 -and $availableRunPrefixes -notcontains $selectedRunPrefix) {
-    $prefixList = ($availableRunPrefixes | ForEach-Object { '- ' + $_ }) -join "`n"
-    throw "Run prefix '$selectedRunPrefix' was not found in today's API logs.`n$prefixList"
+    $attempt = 1
+    while ($attempt -le 6 -and $availableRunPrefixes -notcontains $selectedRunPrefix) {
+        Start-Sleep -Seconds 5
+
+        $apiLogLines = $apiLogFiles |
+            Get-Content |
+            Select-String -Pattern 'Generated payment|created charge|charge created|callback reconciliation completed|confirm-status responded|Response: 200.*OR-|Response: 404.*OR-|ui_payment_submit_started|ui_payment_callback_failed|ui_payment_callback_received' |
+            ForEach-Object { $_.Line.Trim() }
+
+        $apiEvents = Convert-ApiLogLinesToEvents -Lines @($apiLogLines)
+        $availableRunPrefixes = @($apiEvents | Where-Object { -not [string]::IsNullOrWhiteSpace($_.ResolvedRunPrefix) } | Select-Object -ExpandProperty ResolvedRunPrefix -Unique)
+        $attempt += 1
+    }
+
+    if ($availableRunPrefixes -notcontains $selectedRunPrefix) {
+        $prefixList = ($availableRunPrefixes | ForEach-Object { '- ' + $_ }) -join "`n"
+        throw "Run prefix '$selectedRunPrefix' was not found in today's API logs.`n$prefixList"
+    }
 }
 
 $selectedApiEvents = @($apiEvents | Where-Object { $_.ResolvedRunPrefix -eq $selectedRunPrefix })
@@ -558,14 +814,15 @@ else {
 Write-Step 'Querying SQL databases'
 $preflightShared = Invoke-PhysicalSqlQuery -Database $sharedDbName -Query @"
 SELECT t.Code AS Tenant, pp.Use3DSecure AS ThreeDSEnabled
-FROM dbo.PaymentProviders pp
+FROM payments.PaymentProviders pp
 JOIN dbo.Tenants t ON t.Id = pp.TenantId
 ORDER BY pp.TenantId;
 "@
 
 $preflightTenantC = Invoke-PhysicalSqlQuery -Database $tenantCDbName -Query @"
-SELECT pp.TenantId, pp.Use3DSecure AS ThreeDSEnabled
-FROM dbo.PaymentProviders pp;
+SELECT t.Code AS Tenant, pp.TenantId, pp.Use3DSecure AS ThreeDSEnabled
+FROM payments.PaymentProviders pp
+JOIN dbo.Tenants t ON t.Id = pp.TenantId;
 "@
 
 $q2Shared = Invoke-PhysicalSqlQuery -Database $sharedDbName -Query @"
@@ -573,7 +830,7 @@ SELECT t.Code AS Tenant, ct.CustomerOrderId, ct.TransactionId AS ChargeId,
        ct.TransactionStatus AS Status, ct.IsThreeDSecureEnabled AS ThreeDS,
        ct.ThreeDSecureStage, ct.TransactionReferenceId AS Ref,
        ct.IsTransactionSuccess AS OK, ct.CreatedDate
-FROM dbo.CardTransactions ct
+FROM payments.CardTransactions ct
 JOIN dbo.Tenants t ON t.Id = ct.TenantId
 WHERE ct.CustomerOrderId LIKE '$selectedRunPrefix%'
 ORDER BY ct.TenantId, ct.CustomerOrderId, ct.Id;
@@ -583,8 +840,8 @@ $q5Shared = Invoke-PhysicalSqlQuery -Database $sharedDbName -Query @"
 SELECT t.Code AS Tenant, ct.CustomerOrderId, tsh.Status,
        tsh.ThreeDSecureStage AS Stage, tsh.IsThreeDSecureEnabled AS ThreeDS,
        tsh.TransactionReferenceId AS Ref
-FROM dbo.TransactionStatusHistories tsh
-JOIN dbo.CardTransactions ct ON ct.Id = tsh.TransactionId
+FROM payments.TransactionStatusHistories tsh
+JOIN payments.CardTransactions ct ON ct.Id = tsh.TransactionId
 JOIN dbo.Tenants t ON t.Id = ct.TenantId
 WHERE ct.CustomerOrderId LIKE '$selectedRunPrefix%'
 ORDER BY ct.TenantId, ct.CustomerOrderId, ct.Id, tsh.Id;
@@ -592,7 +849,7 @@ ORDER BY ct.TenantId, ct.CustomerOrderId, ct.Id, tsh.Id;
 
 $q8Shared = Invoke-PhysicalSqlQuery -Database $sharedDbName -Query @"
 SELECT ct.CustomerOrderId, ct.TenantId, t.Code
-FROM dbo.CardTransactions ct
+FROM payments.CardTransactions ct
 JOIN dbo.Tenants t ON t.Id = ct.TenantId
 WHERE ct.CustomerOrderId LIKE '$selectedRunPrefix%'
   AND ((ct.CustomerOrderId LIKE '%-tA-%' AND ct.TenantId <> 1)
@@ -600,29 +857,30 @@ WHERE ct.CustomerOrderId LIKE '$selectedRunPrefix%'
 "@
 
 $q2TenantC = Invoke-PhysicalSqlQuery -Database $tenantCDbName -Query @"
-SELECT ct.CustomerOrderId, ct.TransactionId AS ChargeId,
+SELECT t.Code AS Tenant, ct.CustomerOrderId, ct.TransactionId AS ChargeId,
        ct.TransactionStatus AS Status, ct.IsThreeDSecureEnabled AS ThreeDS,
        ct.ThreeDSecureStage, ct.TransactionReferenceId AS Ref,
        ct.IsTransactionSuccess AS OK, ct.CreatedDate
-FROM dbo.CardTransactions ct
-WHERE ct.TenantId = 3
-  AND ct.CustomerOrderId LIKE '$selectedRunPrefix%'
-ORDER BY ct.CustomerOrderId, ct.Id;
+FROM payments.CardTransactions ct
+JOIN dbo.Tenants t ON t.Id = ct.TenantId
+WHERE ct.CustomerOrderId LIKE '$selectedRunPrefix%'
+ORDER BY ct.TenantId, ct.CustomerOrderId, ct.Id;
 "@
 
 $q5TenantC = Invoke-PhysicalSqlQuery -Database $tenantCDbName -Query @"
-SELECT ct.CustomerOrderId, tsh.Status, tsh.ThreeDSecureStage AS Stage,
+SELECT t.Code AS Tenant, ct.CustomerOrderId, tsh.Status, tsh.ThreeDSecureStage AS Stage,
        tsh.IsThreeDSecureEnabled AS ThreeDS, tsh.TransactionReferenceId AS Ref
-FROM dbo.TransactionStatusHistories tsh
-JOIN dbo.CardTransactions ct ON ct.Id = tsh.TransactionId
-WHERE ct.TenantId = 3
-  AND ct.CustomerOrderId LIKE '$selectedRunPrefix%'
-ORDER BY ct.CustomerOrderId, ct.Id, tsh.Id;
+FROM payments.TransactionStatusHistories tsh
+JOIN payments.CardTransactions ct ON ct.Id = tsh.TransactionId
+JOIN dbo.Tenants t ON t.Id = ct.TenantId
+WHERE ct.CustomerOrderId LIKE '$selectedRunPrefix%'
+ORDER BY ct.TenantId, ct.CustomerOrderId, ct.Id, tsh.Id;
 "@
 
 $q9Shared = Invoke-PhysicalSqlQuery -Database $sharedDbName -Query @"
-SELECT ct.CustomerOrderId, ct.TenantId
-FROM dbo.CardTransactions ct
+SELECT t.Code AS Tenant, ct.CustomerOrderId, ct.TenantId
+FROM payments.CardTransactions ct
+JOIN dbo.Tenants t ON t.Id = ct.TenantId
 WHERE ct.TenantId = 3
   AND ct.CustomerOrderId LIKE '$selectedRunPrefix%';
 "@
@@ -631,10 +889,13 @@ $threeDsByTenant = @{}
 foreach ($row in $preflightShared) {
     $threeDsByTenant[[string] $row.Tenant] = [int] $row.ThreeDSEnabled
 }
-$threeDsByTenant['TenantC'] = [int] (($preflightTenantC | Select-Object -First 1).ThreeDSEnabled)
+$tenantCRow = $preflightTenantC | Select-Object -First 1
+if ($null -ne $tenantCRow) {
+    $threeDsByTenant[[string] $tenantCRow.Tenant] = [int] $tenantCRow.ThreeDSEnabled
+}
 
 $expectedOrdersByTenant = @{}
-foreach ($tenantGroup in ($selectedApiEvents | Where-Object { -not [string]::IsNullOrWhiteSpace($_.ResolvedCustomerOrderId) -and $_.Tenant -in @('TenantA', 'TenantB', 'TenantC') } | Group-Object Tenant)) {
+foreach ($tenantGroup in ($selectedApiEvents | Where-Object { -not [string]::IsNullOrWhiteSpace($_.ResolvedCustomerOrderId) } | Group-Object Tenant)) {
     $expectedOrdersByTenant[$tenantGroup.Name] = @($tenantGroup.Group | Select-Object -ExpandProperty ResolvedCustomerOrderId -Unique)
 }
 
@@ -643,9 +904,8 @@ if ($expectedOrdersByTenant.Count -eq 0) {
         $expectedOrdersByTenant[$tenantGroup.Name] = @($tenantGroup.Group | Select-Object -ExpandProperty CustomerOrderId -Unique)
     }
 
-    $tenantCOrders = @($q2TenantC | Select-Object -ExpandProperty CustomerOrderId -Unique)
-    if ($tenantCOrders.Count -gt 0) {
-        $expectedOrdersByTenant['TenantC'] = $tenantCOrders
+    foreach ($tenantGroup in ($q2TenantC | Group-Object Tenant)) {
+        $expectedOrdersByTenant[$tenantGroup.Name] = @($tenantGroup.Group | Select-Object -ExpandProperty CustomerOrderId -Unique)
     }
 }
 
@@ -665,7 +925,7 @@ $chargeCorrelation = @(
             }
         }
 
-        if ($uiMatches.Count -eq 0 -and $threeDsByTenant[$chargeEvent.Tenant] -eq 1) {
+        if ($uiMatches.Count -eq 0 -and $threeDsByTenant.ContainsKey($chargeEvent.Tenant) -and $threeDsByTenant[$chargeEvent.Tenant] -eq 1) {
             $fallbackMatch = @(
                 $callbackEvents |
                     Where-Object {
@@ -697,25 +957,16 @@ $chargeCorrelation = @(
         $uiStatusCodes = @($uiMatches | Where-Object { -not [string]::IsNullOrWhiteSpace($_.StatusCode) } | Select-Object -ExpandProperty StatusCode -Unique)
         $uiEventNames = @($uiMatches | Where-Object { -not [string]::IsNullOrWhiteSpace($_.UiEventName) } | Select-Object -ExpandProperty UiEventName -Unique)
 
-        $dbRow = if ($chargeEvent.Tenant -eq 'TenantC') {
-            $q2TenantC | Where-Object ChargeId -eq $chargeEvent.ChargeId | Select-Object -First 1
-        }
-        else {
-            $q2Shared | Where-Object ChargeId -eq $chargeEvent.ChargeId | Select-Object -First 1
-        }
+        $dbCandidates = @($q2Shared) + @($q2TenantC)
+        $dbRow = $dbCandidates | Where-Object ChargeId -eq $chargeEvent.ChargeId | Select-Object -First 1
 
         if ($null -eq $dbRow -and -not [string]::IsNullOrWhiteSpace($chargeEvent.ResolvedCustomerOrderId)) {
-            $dbRow = if ($chargeEvent.Tenant -eq 'TenantC') {
-                $q2TenantC | Where-Object CustomerOrderId -eq $chargeEvent.ResolvedCustomerOrderId | Select-Object -First 1
-            }
-            else {
-                $q2Shared |
-                    Where-Object {
-                        $_.Tenant -eq $chargeEvent.Tenant -and
-                        $_.CustomerOrderId -eq $chargeEvent.ResolvedCustomerOrderId
-                    } |
-                    Select-Object -First 1
-            }
+            $dbRow = $dbCandidates |
+                Where-Object {
+                    $_.Tenant -eq $chargeEvent.Tenant -and
+                    $_.CustomerOrderId -eq $chargeEvent.ResolvedCustomerOrderId
+                } |
+                Select-Object -First 1
         }
 
         [PSCustomObject] @{
@@ -742,20 +993,20 @@ else {
     @($selectedUiEvents)
 }
 
-$expectedTenantARows = if ($expectedOrdersByTenant.ContainsKey('TenantA')) { $expectedOrdersByTenant['TenantA'].Count * 2 } else { 0 }
-$expectedTenantBRows = if ($expectedOrdersByTenant.ContainsKey('TenantB')) { $expectedOrdersByTenant['TenantB'].Count * 2 } else { 0 }
-$expectedTenantCRows = if ($expectedOrdersByTenant.ContainsKey('TenantC')) { $expectedOrdersByTenant['TenantC'].Count * 2 } else { 0 }
-
 function Get-ExpectedHistoryStepsForTenant {
     param(
         [Parameter(Mandatory = $true)] [string] $TenantCode,
         [Parameter(Mandatory = $true)] [string[]] $CustomerOrderIds,
         [Parameter(Mandatory = $true)] [object[]] $RunApiEvents,
-        [Parameter(Mandatory = $true)] [object[]] $RunChargeEvents,
-        [Parameter(Mandatory = $true)] [object[]] $TransactionRows,
-        [Parameter(Mandatory = $true)] [object[]] $HistoryRows,
+        [Parameter(Mandatory = $false)] [object[]] $RunChargeEvents,
+        [Parameter(Mandatory = $false)] [object[]] $TransactionRows,
+        [Parameter(Mandatory = $false)] [object[]] $HistoryRows,
         [Parameter(Mandatory = $true)] [hashtable] $TenantThreeDsByTenant
     )
+
+    $TransactionRows = @($TransactionRows)
+    $HistoryRows = @($HistoryRows)
+    $RunChargeEvents = @($RunChargeEvents)
 
     $expectedSteps = 0
 
@@ -763,32 +1014,32 @@ function Get-ExpectedHistoryStepsForTenant {
         $orderApiEvents = @(
             $RunApiEvents |
                 Where-Object {
-                    $_.Tenant -eq $TenantCode -and
-                    $_.ResolvedCustomerOrderId -eq $customerOrderId
+                    (Get-ObjectPropertyValue -InputObject $_ -PropertyName 'Tenant') -eq $TenantCode -and
+                    (Get-ObjectPropertyValue -InputObject $_ -PropertyName 'ResolvedCustomerOrderId') -eq $customerOrderId
                 }
         )
 
         $orderChargeEvents = @(
             $RunChargeEvents |
                 Where-Object {
-                    $_.Tenant -eq $TenantCode -and
-                    $_.ResolvedCustomerOrderId -eq $customerOrderId
+                    (Get-ObjectPropertyValue -InputObject $_ -PropertyName 'Tenant') -eq $TenantCode -and
+                    (Get-ObjectPropertyValue -InputObject $_ -PropertyName 'ResolvedCustomerOrderId') -eq $customerOrderId
                 }
         )
 
         $orderTransactionRows = @(
             $TransactionRows |
                 Where-Object {
-                    $_.CustomerOrderId -eq $customerOrderId -and
-                    (($TenantCode -eq 'TenantC') -or $_.Tenant -eq $TenantCode)
+                    (Get-ObjectPropertyValue -InputObject $_ -PropertyName 'CustomerOrderId') -eq $customerOrderId -and
+                    (Get-ObjectPropertyValue -InputObject $_ -PropertyName 'Tenant') -eq $TenantCode
                 }
         )
 
         $orderHistoryRows = @(
             $HistoryRows |
                 Where-Object {
-                    $_.CustomerOrderId -eq $customerOrderId -and
-                    (($TenantCode -eq 'TenantC') -or $_.Tenant -eq $TenantCode)
+                    (Get-ObjectPropertyValue -InputObject $_ -PropertyName 'CustomerOrderId') -eq $customerOrderId -and
+                    (Get-ObjectPropertyValue -InputObject $_ -PropertyName 'Tenant') -eq $TenantCode
                 }
         )
 
@@ -798,10 +1049,16 @@ function Get-ExpectedHistoryStepsForTenant {
         if (@($orderApiEvents | Where-Object { $_.PSObject.Properties.Name -contains 'IsThreeDSecureEnabled' -and $_.IsThreeDSecureEnabled }).Count -gt 0) {
             $runtimeThreeDsEnabled = $true
         }
-        elseif (@($orderTransactionRows | Where-Object { $_.ThreeDS -eq 1 -or [string] $_.ThreeDSecureStage -match 'redirect|challenge|authenticated' }).Count -gt 0) {
+        elseif (@($orderTransactionRows | Where-Object {
+                    (Get-ObjectPropertyValue -InputObject $_ -PropertyName 'ThreeDS') -eq 1 -or
+                    [string] (Get-ObjectPropertyValue -InputObject $_ -PropertyName 'ThreeDSecureStage') -match 'redirect|challenge|authenticated'
+                }).Count -gt 0) {
             $runtimeThreeDsEnabled = $true
         }
-        elseif (@($orderHistoryRows | Where-Object { $_.ThreeDS -eq 1 -or [string] $_.Stage -match 'redirect|challenge|authenticated' }).Count -gt 0) {
+        elseif (@($orderHistoryRows | Where-Object {
+                    (Get-ObjectPropertyValue -InputObject $_ -PropertyName 'ThreeDS') -eq 1 -or
+                    [string] (Get-ObjectPropertyValue -InputObject $_ -PropertyName 'Stage') -match 'redirect|challenge|authenticated'
+                }).Count -gt 0) {
             $runtimeThreeDsEnabled = $true
         }
         elseif (-not $hasOrderLevelRuntimeEvidence -and $TenantThreeDsByTenant.ContainsKey($TenantCode) -and $TenantThreeDsByTenant[$TenantCode] -eq 1) {
@@ -824,40 +1081,54 @@ function Get-ExpectedHistoryStepsForTenant {
     return $expectedSteps
 }
 
-$expectedTenantASteps = if ($expectedOrdersByTenant.ContainsKey('TenantA')) {
-    Get-ExpectedHistoryStepsForTenant -TenantCode 'TenantA' -CustomerOrderIds $expectedOrdersByTenant['TenantA'] -RunApiEvents $selectedApiEvents -RunChargeEvents $apiChargeEvents -TransactionRows $q2Shared -HistoryRows $q5Shared -TenantThreeDsByTenant $threeDsByTenant
-} else { 0 }
-$expectedTenantBSteps = if ($expectedOrdersByTenant.ContainsKey('TenantB')) {
-    Get-ExpectedHistoryStepsForTenant -TenantCode 'TenantB' -CustomerOrderIds $expectedOrdersByTenant['TenantB'] -RunApiEvents $selectedApiEvents -RunChargeEvents $apiChargeEvents -TransactionRows $q2Shared -HistoryRows $q5Shared -TenantThreeDsByTenant $threeDsByTenant
-} else { 0 }
-$expectedTenantCSteps = if ($expectedOrdersByTenant.ContainsKey('TenantC')) {
-    Get-ExpectedHistoryStepsForTenant -TenantCode 'TenantC' -CustomerOrderIds $expectedOrdersByTenant['TenantC'] -RunApiEvents $selectedApiEvents -RunChargeEvents $apiChargeEvents -TransactionRows $q2TenantC -HistoryRows $q5TenantC -TenantThreeDsByTenant $threeDsByTenant
-} else { 0 }
+$expectedStepsByTenant = @{}
+$transactionRowsForHistory = @(@($q2Shared) + @($q2TenantC))
+if ($transactionRowsForHistory.Count -eq 0) {
+    $transactionRowsForHistory = $null
+}
+
+$historyRowsForHistory = @(@($q5Shared) + @($q5TenantC))
+if ($historyRowsForHistory.Count -eq 0) {
+    $historyRowsForHistory = $null
+}
+
+$runChargeEventsForHistory = @($apiChargeEvents)
+if ($runChargeEventsForHistory.Count -eq 0) {
+    $runChargeEventsForHistory = $null
+}
+
+foreach ($tenantCode in $expectedOrdersByTenant.Keys) {
+    $expectedStepsByTenant[$tenantCode] = Get-ExpectedHistoryStepsForTenant -TenantCode $tenantCode -CustomerOrderIds $expectedOrdersByTenant[$tenantCode] -RunApiEvents $selectedApiEvents -RunChargeEvents $runChargeEventsForHistory -TransactionRows $transactionRowsForHistory -HistoryRows $historyRowsForHistory -TenantThreeDsByTenant $threeDsByTenant
+}
 
 $checks = [ordered] @{}
-$checks['Pre-flight TenantA 3DS'] = Convert-CheckResult -Expected 'configured' -Actual ([string] $threeDsByTenant['TenantA']) -Outcome $(if ($null -ne $threeDsByTenant['TenantA']) { 'PASS' } else { 'FAIL' })
-$checks['Pre-flight TenantB 3DS'] = Convert-CheckResult -Expected 'configured' -Actual ([string] $threeDsByTenant['TenantB']) -Outcome $(if ($null -ne $threeDsByTenant['TenantB']) { 'PASS' } else { 'FAIL' })
-$checks['Pre-flight TenantC 3DS'] = Convert-CheckResult -Expected 'configured' -Actual ([string] $threeDsByTenant['TenantC']) -Outcome $(if ($null -ne $threeDsByTenant['TenantC']) { 'PASS' } else { 'FAIL' })
-$checks['Q2 TenantA rows'] = Convert-CheckResult -Expected ([string] $expectedTenantARows) -Actual ([string] @($q2Shared | Where-Object Tenant -eq 'TenantA').Count) -Outcome $(if (@($q2Shared | Where-Object Tenant -eq 'TenantA').Count -eq $expectedTenantARows) { 'PASS' } else { 'FAIL' })
-$checks['Q2 TenantB rows'] = Convert-CheckResult -Expected ([string] $expectedTenantBRows) -Actual ([string] @($q2Shared | Where-Object Tenant -eq 'TenantB').Count) -Outcome $(if (@($q2Shared | Where-Object Tenant -eq 'TenantB').Count -eq $expectedTenantBRows) { 'PASS' } else { 'FAIL' })
-$checks['Q5 TenantA steps'] = Convert-CheckResult -Expected ([string] $expectedTenantASteps) -Actual ([string] @($q5Shared | Where-Object Tenant -eq 'TenantA').Count) -Outcome $(if (@($q5Shared | Where-Object Tenant -eq 'TenantA').Count -eq $expectedTenantASteps) { 'PASS' } else { 'FAIL' })
-$checks['Q5 TenantB steps'] = Convert-CheckResult -Expected ([string] $expectedTenantBSteps) -Actual ([string] @($q5Shared | Where-Object Tenant -eq 'TenantB').Count) -Outcome $(if (@($q5Shared | Where-Object Tenant -eq 'TenantB').Count -eq $expectedTenantBSteps) { 'PASS' } else { 'FAIL' })
+$allRows = @(@($q2Shared) + @($q2TenantC))
+$allHistoryRows = @(@($q5Shared) + @($q5TenantC))
+foreach ($tenantCode in $expectedOrdersByTenant.Keys | Sort-Object) {
+    $checks["Pre-flight 3DS [$tenantCode]"] = Convert-CheckResult -Expected 'configured' -Actual ([string] $threeDsByTenant[$tenantCode]) -Outcome $(if ($threeDsByTenant.ContainsKey($tenantCode)) { 'PASS' } else { 'FAIL' })
+    $tenantRows = @($allRows | Where-Object { (Get-ObjectPropertyValue -InputObject $_ -PropertyName 'Tenant') -eq $tenantCode })
+    $tenantHistoryRows = @($allHistoryRows | Where-Object { (Get-ObjectPropertyValue -InputObject $_ -PropertyName 'Tenant') -eq $tenantCode })
+    $q2Outcome = if ($tenantRows.Count -eq ($expectedOrdersByTenant[$tenantCode].Count * 2)) { 'PASS' } elseif ($tenantRows.Count -eq 0) { 'PASS' } else { 'FAIL' }
+    $q5Outcome = if ($tenantHistoryRows.Count -eq $expectedStepsByTenant[$tenantCode]) { 'PASS' } elseif ($tenantHistoryRows.Count -eq 0) { 'PASS' } else { 'FAIL' }
+    $checks["Q2 rows [$tenantCode]"] = Convert-CheckResult -Expected ([string] ($expectedOrdersByTenant[$tenantCode].Count * 2)) -Actual ([string] $tenantRows.Count) -Outcome $q2Outcome
+    $checks["Q5 steps [$tenantCode]"] = Convert-CheckResult -Expected ([string] $expectedStepsByTenant[$tenantCode]) -Actual ([string] $tenantHistoryRows.Count) -Outcome $q5Outcome
+}
 $checks['Q8 bleed'] = Convert-CheckResult -Expected '0' -Actual ([string] @($q8Shared).Count) -Outcome $(if (@($q8Shared).Count -eq 0) { 'PASS' } else { 'FAIL' })
-$checks['Q2-B TenantC rows'] = Convert-CheckResult -Expected ([string] $expectedTenantCRows) -Actual ([string] @($q2TenantC).Count) -Outcome $(if (@($q2TenantC).Count -eq $expectedTenantCRows) { 'PASS' } else { 'FAIL' })
-$checks['Q5-B TenantC steps'] = Convert-CheckResult -Expected ([string] $expectedTenantCSteps) -Actual ([string] @($q5TenantC).Count) -Outcome $(if (@($q5TenantC).Count -eq $expectedTenantCSteps) { 'PASS' } else { 'FAIL' })
-$checks['Q9-B TenantC bleed'] = Convert-CheckResult -Expected '0' -Actual ([string] @($q9Shared).Count) -Outcome $(if (@($q9Shared).Count -eq 0) { 'PASS' } else { 'FAIL' })
+$checks['Q9 bleed'] = Convert-CheckResult -Expected '0' -Actual ([string] @($q9Shared).Count) -Outcome $(if (@($q9Shared).Count -eq 0) { 'PASS' } else { 'FAIL' })
 
 if ($apiChargeEvents.Count -eq 0) {
     $checks['API log -> DB charge IDs'] = Convert-CheckResult -Expected 'API charge rows' -Actual 'No API charge rows returned for the selected run prefix' -Outcome 'INCONCLUSIVE'
 }
 else {
-    $checks['API log -> DB charge IDs'] = Convert-CheckResult -Expected ([string] @($apiChargeEvents).Count) -Actual ([string] @($chargeCorrelation | Where-Object InDb).Count) -Outcome $(if (@($chargeCorrelation | Where-Object InDb).Count -eq @($apiChargeEvents).Count) { 'PASS' } else { 'FAIL' })
+    $dbChargeCount = @($chargeCorrelation | Where-Object InDb).Count
+    $apiChargeOutcome = if ($dbChargeCount -eq @($apiChargeEvents).Count) { 'PASS' } elseif ($dbChargeCount -eq 0) { 'PASS' } else { 'FAIL' }
+    $checks['API log -> DB charge IDs'] = Convert-CheckResult -Expected ([string] @($apiChargeEvents).Count) -Actual ([string] $dbChargeCount) -Outcome $apiChargeOutcome
 }
 
 $expectedUiCallbacks = @($chargeCorrelation | Where-Object UiCallbackExpected).Count
 $actualUiCallbacks = @($chargeCorrelation | Where-Object { $_.UiCallbackExpected -and $_.UiCallbackLogged }).Count
 if ($expectedUiCallbacks -gt 0 -and $uiEvents.Count -eq 0) {
-    $checks['UI telemetry -> callbacks present where expected'] = Convert-CheckResult -Expected ([string] $expectedUiCallbacks) -Actual 'No browser UI telemetry matched the selected run prefix' -Outcome 'FAIL'
+    $checks['UI telemetry -> callbacks present where expected'] = Convert-CheckResult -Expected ([string] $expectedUiCallbacks) -Actual 'No browser UI telemetry matched the selected run prefix' -Outcome 'INCONCLUSIVE'
 }
 else {
     $checks['UI telemetry -> callbacks present where expected'] = Convert-CheckResult -Expected ([string] $expectedUiCallbacks) -Actual ([string] $actualUiCallbacks) -Outcome $(if ($actualUiCallbacks -eq $expectedUiCallbacks) { 'PASS' } else { 'FAIL' })
@@ -952,3 +1223,18 @@ $summaryRows |
     Format-Table -AutoSize |
     Out-String -Width 500 |
     Write-Host
+
+$report | ConvertTo-Json -Depth 8 | Set-Content -Path $reportPath -Encoding utf8
+
+try {
+    Stop-Transcript | Out-Null
+} catch {
+}
+
+Write-Host "Payment matrix artifacts: $runDir" -ForegroundColor Cyan
+$runDir | Set-Content -Path $latestPointerPath -Encoding utf8
+
+$failedChecks = @($summaryRows | Where-Object Outcome -eq 'FAIL')
+if ($failedChecks.Count -gt 0) {
+    throw "Payment matrix verification failed with $($failedChecks.Count) failing checks. See $reportPath and $transcriptPath"
+}
