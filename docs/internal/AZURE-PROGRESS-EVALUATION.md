@@ -93,6 +93,8 @@
 - ✅ Phase 9 closeout is verified complete; the roadmap now treats Phase 10 as the next backend transport phase and keeps Aspire deepening in Phase 13
 - ✅ Phase 13 now records two explicit decision gates: `azd` plus Aspire-generated manifest evaluation for ACA deployment, and the .NET LTS upgrade window, both ADR-bound when implementation forces the decision
 - ✅ ADR-017 captures the portability rationale: Entra ID and Azure SQL remain authoritative for production while the roadmap proves identity-provider and RDBMS flexibility in isolated, reviewable phases
+- ✅ Keycloak remains a local-only Phase 9.5 portability proof for learning and validation; Azure production continues to use Microsoft Entra ID, and any Azure-side Keycloak parity or migration testing remains deferred work rather than a numbered roadmap phase
+- ✅ Azure-side Keycloak parity, if ever needed, is deferred work tracked outside the numbered roadmap and does not change the Phase 10 start line
 - ✅ Backend Phase 10 is now the next active engineering phase; today's planning work tightened the next milestones without changing the immediate execution order
 
 ### Architecture Phases Completed

@@ -120,7 +120,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\generate-docker-validati
 **Bundle run:** `docker-validation-20260628-verified`
 
 **Known restrictions at closeout:** None for the Phase 9.5 portability proof. Any later follow-up is documentation or cleanup only.
-Azure-side Keycloak parity or migration testing, if ever needed, is deferred to the later-phase placeholder in `docs/internal/phase9-remaining-roadmap.md` and does not affect this closeout.
+Azure-side Keycloak parity or migration testing, if ever needed, is deferred outside the numbered roadmap and should be recorded in `docs/internal/DEFERRED-WORK-LOG.md`; it does not affect this closeout.
 
 ---
 

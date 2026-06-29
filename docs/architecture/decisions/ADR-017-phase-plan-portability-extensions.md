@@ -90,7 +90,7 @@ experiment does not affect Orders or Payments revenue paths.
 **Future obligations:**
 - Webhook secret rotation runbook (Phase 8.7)
 - Keycloak realm export/import scripts for reproducible local dev (Phase 9.5)
-- Azure follow-up for any Keycloak-shaped parity or migration test should be scheduled as a later implementation phase and must not replace Entra ID as the production identity model
+- Azure follow-up for any Keycloak-shaped parity or migration test should be tracked as deferred work and must not replace Entra ID as the production identity model
 - PostgreSQL backup and DR parity documentation alongside Azure SQL (Phase 11.5)
 - Architecture test enforcing no provider-specific types leak above the Notifications
   Infrastructure layer (Phase 11.5)

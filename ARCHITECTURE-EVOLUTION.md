@@ -974,6 +974,8 @@ Module-isolated, locally deployable services with proven API boundaries, a first
 
 Enterprise architecture must avoid lock-in to a single identity provider. Phase 10 wires Entra ID + JWT for cloud deployment, but the **same `JwtBearerOptions` configuration must accept tokens from Keycloak with only `Authority` and `Audience` changes**. This phase proves that portability with a runnable local demo.
 
+Keycloak remains a local-only Phase 9.5 portability proof for learning and validation; Azure production must continue to use Microsoft Entra ID, and any Azure-side Keycloak parity or migration testing should remain deferred work rather than a numbered roadmap phase.
+
 ### Key Deliverables
 
 - **Local Keycloak container** — added to Docker Compose `dev` profile (port 8080); pre-seeded realm `orderprocessing-dev` with three test tenants and roles (`admin`, `operator`, `customer`)
