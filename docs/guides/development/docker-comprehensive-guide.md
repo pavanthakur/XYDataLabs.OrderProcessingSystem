@@ -67,7 +67,7 @@ The script now provides detailed progress messages, including timers and status 
 ## 🚀 Quick Start Commands
 
 If a bootstrap fails on SQL health, restore timing, or portable NuGet sources, see:
-- [Docker Bootstrap Troubleshooting](/Q:/GIT/TestAppXY_OrderProcessingSystem/docs/reference/docker-bootstrap-troubleshooting.md)
+- [Docker Bootstrap Troubleshooting](../../reference/docker-bootstrap-troubleshooting.md)
 
 ### Immediate Startup Commands
 

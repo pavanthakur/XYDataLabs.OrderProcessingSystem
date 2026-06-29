@@ -48,7 +48,7 @@ internal sealed class GatewayWebApplicationFactory : WebApplicationFactory<Progr
                 ["ReverseProxy:Clusters:orders-cluster:Destinations:orders-api:Address"] = _ordersBaseAddress.ToString(),
                 ["ReverseProxy:Clusters:inventory-cluster:Destinations:inventory-api:Address"] = _inventoryBaseAddress.ToString(),
                 ["ReverseProxy:Clusters:notifications-cluster:Destinations:notifications-api:Address"] = _notificationsBaseAddress.ToString(),
-                ["ReverseProxy:Clusters:ui-cluster:Destinations:web-ui:Address"] = _uiBaseAddress.ToString(),
+                ["ReverseProxy:Clusters:ui-cluster:Destinations:ui-primary:Address"] = _uiBaseAddress.ToString(),
                 ["Gateway:AllowedHosts:0"] = "localhost",
                 ["Gateway:AllowedHosts:1"] = "orders.localhost",
                 ["Gateway:AllowedHosts:2"] = "inventory.localhost",

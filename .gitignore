@@ -64,15 +64,19 @@ Resources/Docker/.env.local
 [Bb]uild[Ll]og.*
 
 # Canonical test evidence folders we keep under root TestResults.
-# Everything else under TestResults is runtime-generated and should stay untracked.
+# Keep the folder skeleton, but ignore runtime-generated run outputs.
 !TestResults/
 TestResults/*
+!TestResults/.gitkeep
 !TestResults/Integration/
 !TestResults/PaymentMatrix/
 !TestResults/Playwright/
-!TestResults/Integration/**
-!TestResults/PaymentMatrix/**
-!TestResults/Playwright/**
+TestResults/Integration/*
+TestResults/PaymentMatrix/*
+TestResults/Playwright/*
+!TestResults/Integration/.gitkeep
+!TestResults/PaymentMatrix/.gitkeep
+!TestResults/Playwright/.gitkeep
 
 # Generated automation and frontend runtime artifacts.
 automation/dist/
