@@ -165,7 +165,7 @@ XYDataLabs.OrderProcessingSystem.sln
 | **10** | Azure Container Apps | ACA deployment, ACR, Service Bus, Entra ID + JWT, private networking | 📅 Planned |
 | **11** | Data Ownership & Autonomy | Database per service, remove shared DbContext, eventual consistency | 📅 Planned |
 | **11.5** | Polyglot Persistence Showcase | Notifications module PostgreSQL pilot proving provider portability while Orders/Payments stay on Azure SQL | 📅 Planned |
-| **12** | Platform Engineering & Operability | .NET 10 upgrade window, Azure App Configuration, API consumer discipline, troubleshooting/performance/cost runbooks, per-service CI/CD, observability dashboards | 📅 Planned |
+| **12** | Platform Engineering & Operability | .NET 10 upgrade assessment window, Azure App Configuration, API consumer discipline, troubleshooting/performance/cost runbooks, per-service CI/CD, observability dashboards | 📅 Planned |
 | **13** | Aspire & Final Maturity | Aspire AppHost deepening, distributed app testing, service discovery, manifest / `azd` evaluation, blue-green/canary deployment strategy | 📅 Planned |
 | **14** | CQRS Read Model (MongoDB) | Separate read/write models, projection handlers, Hangfire, tenant-scoped documents | 📅 Planned |
 
@@ -1331,7 +1331,7 @@ Provider-portability proven with one module running PostgreSQL end-to-end (local
 - **Azure AI Document Intelligence** — extract structured data from uploaded invoices/receipts in Blob Storage; Event Grid triggers Function → Document Intelligence API → enriches order metadata. Demonstrates Azure Cognitive Services integration without over-engineering.
 - **DR / Business Continuity** — documented RTO/RPO targets per service; Azure SQL geo-replication strategy; Cosmos DB multi-region (mention only); backup/restore runbook
 - **Performance / Load Testing** — Azure Load Testing or k6 for baseline performance; SLO validation under realistic load before production
-- **.NET 10 upgrade** — migrate from .NET 8 LTS to .NET 10 LTS (GA: November 2026). Steps: update `global.json` TFM, bump package versions in `Directory.Packages.props`, verify Testcontainers + NetArchTest compatibility, update Dockerfiles and CI pipeline `dotnet-version`. No architecture changes required — runtime upgrade only. .NET 9 (STS, EOL May 2026) is skipped; .NET 8 LTS support runs to November 2026, so this upgrade lands exactly on schedule.
+- **.NET 10 upgrade** — treat the move from .NET 8 LTS to .NET 10 LTS as a later runtime upgrade window, not a Phase 10 deliverable. When the window opens, the steps are: update `global.json` TFM, bump package versions in `Directory.Packages.props`, verify Testcontainers + NetArchTest compatibility, update Dockerfiles and CI pipeline `dotnet-version`. No architecture changes are required — this is a runtime upgrade only. .NET 9 (STS, EOL May 2026) is skipped; .NET 8 LTS support runs to November 2026, so the repo can keep shipping on .NET 8 until the later platform window is intentionally opened.
 
 ### Outcome
 
@@ -1359,7 +1359,7 @@ Phase 9 establishes the local orchestration seam, but a few Aspire-specific refi
 - **Integration tests** — `DistributedApplicationTestingBuilder` for end-to-end tests against the live Aspire graph; replaces hand-stitched `WebApplicationFactory` compositions where multi-service interaction is under test
 - **Full end-to-end trace correlation** across all services via the OTEL pipeline already standardized in the Phase 9 `ServiceDefaults` project
 - **Evaluate `azd` + Aspire-generated manifest as an ACA deployment path** — the .NET 10 blueprint reference uses `aspire deploy` / `azd provision` + `azd deploy` driving Aspire-generated Bicep. Compare against our hand-authored `infra/` Bicep on three axes: audit traceability (production), iteration speed (non-prod), and parameterization granularity. **Outcome captured in a new ADR**: either adopt `azd` for non-revenue-critical environments while keeping hand-authored Bicep for production, or remain on hand-authored Bicep across all environments with documented rationale.
-- **.NET LTS upgrade window** — if not already done, Phase 13 is the natural moment to evaluate upgrading from .NET 8 to the current LTS (.NET 10 GA Nov 2025). Captured under its own ADR with a compatibility matrix for EF Core, Aspire, and Azure SDK packages.
+- **.NET LTS upgrade window** — if not already done, Phase 13 is the natural moment to evaluate upgrading from .NET 8 to the then-current LTS. Capture it under its own ADR with a compatibility matrix for EF Core, Aspire, and Azure SDK packages; keep it as an evaluation gate rather than a Phase 10 commitment.
 
 ### Phase 13 Status Table
 

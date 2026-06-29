@@ -1068,7 +1068,7 @@ After completing today's tasks, you will have:
 - [ ] **Time:** 2.5 hours | **Completed:** ✅ (Phase 6 — APIM routing pending)
 
 #### Day 95: Developer Portal
-> 🏗️ **Architecture Phase 12a** — .NET 10 upgrade assessment, Azure App Configuration, Polly v8 resilience hub
+> 🏗️ **Architecture Phase 12a** — .NET 10 upgrade assessment window, Azure App Configuration, Polly v8 resilience hub
 >
 > **Additional Phase 12 deliverables:**
 > - Azure AI Document Intelligence — extract structured data from uploaded invoices/receipts in Blob Storage; Event Grid triggers Function → Document Intelligence API → enriches order metadata
@@ -1093,7 +1093,7 @@ After completing today's tasks, you will have:
 > **Additional Phase 12 deliverables:**
 > - DR / Business Continuity — documented RTO/RPO targets per service; Azure SQL geo-replication strategy; backup/restore runbook
 > - Performance / Load Testing — Azure Load Testing or k6 for baseline performance; SLO validation under realistic load
-> - .NET 10 upgrade — update `global.json` TFM, bump `Directory.Packages.props`, verify Testcontainers + NetArchTest compatibility, update Dockerfiles and CI pipeline
+> - .NET 10 upgrade assessment — when the runtime window opens, update `global.json` TFM, bump `Directory.Packages.props`, verify Testcontainers + NetArchTest compatibility, update Dockerfiles and CI pipeline
 - [ ] Enable Application Insights for APIM
 - [ ] Create custom dashboards for API metrics
 - [ ] Set up alerts for API failures and high latency
