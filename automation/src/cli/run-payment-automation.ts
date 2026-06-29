@@ -46,9 +46,6 @@ function parseCliOptions(argumentsList: string[]): ExecutePaymentAutomationRunOp
         }
         index += 1;
         break;
-      case "--all-providers":
-        requestedProviders.push("OpenPay", "Razorpay");
-        break;
       case "--allow-partial":
         allowPartialExecution = true;
         break;

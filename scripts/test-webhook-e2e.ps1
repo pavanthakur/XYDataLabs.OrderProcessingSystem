@@ -27,29 +27,156 @@
 #>
 param(
     [string]$ApiBaseUrl          = "http://localhost:5010",
-    [string]$RazorpaySecret      = $env:LOCAL_RAZORPAY_WEBHOOK_SECRET,
-    [string]$OpenPaySecret       = $env:LOCAL_OPENPAY_WEBHOOK_SECRET,
+    [string]$RazorpaySecret,
+    [string]$OpenPaySecret,
     [string]$SharedDbServer      = "localhost",
-    [string]$SharedDbName        = "OrderProcessingSystem_Local",
+    [string]$SharedDbName        = "",
     [string]$TenantCDbServer     = "localhost",
-    [string]$TenantCDbName       = "OrderProcessingSystem_TenantC",
+    [string]$TenantCDbName       = "",
     [int]   $WorkerWaitSeconds   = 15
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Continue'
 
+if ([string]::IsNullOrWhiteSpace($env:DOCKER_CONFIG)) {
+    $env:DOCKER_CONFIG = Join-Path $env:TEMP 'orderprocessing-docker-config'
+}
+if (-not (Test-Path $env:DOCKER_CONFIG)) {
+    New-Item -ItemType Directory -Path $env:DOCKER_CONFIG | Out-Null
+}
+
 $testRun = [Guid]::NewGuid().ToString("N").Substring(0, 8)
 $results = [System.Collections.Generic.List[PSCustomObject]]::new()
 $failed  = 0
+
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$envLocalPath = Join-Path $repoRoot 'Resources\Docker\.env.local'
+
+function Get-SecretValueFromEnvLocal {
+    param([Parameter(Mandatory = $true)][string]$Name)
+
+    if (-not (Test-Path $envLocalPath)) {
+        return $null
+    }
+
+    $line = Get-Content $envLocalPath | Where-Object { $_ -match "^\s*$([regex]::Escape($Name))\s*=" } | Select-Object -First 1
+    if ([string]::IsNullOrWhiteSpace($line)) {
+        return $null
+    }
+
+    $value = (($line -split '=', 2)[1]).Trim()
+    if ($value.StartsWith('"') -and $value.EndsWith('"') -and $value.Length -ge 2) {
+        $value = $value.Substring(1, $value.Length - 2)
+    }
+    if ($value.StartsWith("'") -and $value.EndsWith("'") -and $value.Length -ge 2) {
+        $value = $value.Substring(1, $value.Length - 2)
+    }
+    return $value.Trim()
+}
+
+if ([string]::IsNullOrWhiteSpace($RazorpaySecret)) {
+    $RazorpaySecret = Get-SecretValueFromEnvLocal -Name 'LOCAL_RAZORPAY_WEBHOOK_SECRET'
+}
 
 if ([string]::IsNullOrWhiteSpace($RazorpaySecret)) {
     $RazorpaySecret = 'razorpay-test-secret'
 }
 
 if ([string]::IsNullOrWhiteSpace($OpenPaySecret)) {
+    $OpenPaySecret = Get-SecretValueFromEnvLocal -Name 'LOCAL_OPENPAY_WEBHOOK_SECRET'
+}
+
+if ([string]::IsNullOrWhiteSpace($OpenPaySecret)) {
     $OpenPaySecret = 'openpay-test-secret'
 }
+
+$DockerSqlPassword = Get-SecretValueFromEnvLocal -Name 'LOCAL_SQL_PASSWORD'
+$UseDockerSql = $ApiBaseUrl -match ':502(?:0|1)(?:/|$)|:503(?:0|1)(?:/|$)|:504(?:0|1)(?:/|$)'
+
+function Resolve-Phase9DatabaseNames {
+    param(
+        [Parameter(Mandatory = $true)][string]$ApiBaseUrl,
+        [string]$SharedDbName,
+        [string]$TenantCDbName
+    )
+
+    $resolvedSharedDbName = $SharedDbName
+    $resolvedTenantCDbName = $TenantCDbName
+
+    if ([string]::IsNullOrWhiteSpace($resolvedSharedDbName)) {
+        if ($ApiBaseUrl -match ':502(?:0|1)(?:/|$)') {
+            $resolvedSharedDbName = 'OrderProcessingSystem_Dev'
+        }
+        elseif ($ApiBaseUrl -match ':503(?:0|1)(?:/|$)') {
+            $resolvedSharedDbName = 'OrderProcessingSystem_Stg'
+        }
+        elseif ($ApiBaseUrl -match ':504(?:0|1)(?:/|$)') {
+            $resolvedSharedDbName = 'OrderProcessingSystem_Prod'
+        }
+        else {
+            $resolvedSharedDbName = 'OrderProcessingSystem_Local'
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($resolvedTenantCDbName)) {
+        if ($ApiBaseUrl -match ':502(?:0|1)(?:/|$)') {
+            $resolvedTenantCDbName = 'OrderProcessingSystem_TenantC_Dev'
+        }
+        elseif ($ApiBaseUrl -match ':503(?:0|1)(?:/|$)') {
+            $resolvedTenantCDbName = 'OrderProcessingSystem_TenantC_Stg'
+        }
+        elseif ($ApiBaseUrl -match ':504(?:0|1)(?:/|$)') {
+            $resolvedTenantCDbName = 'OrderProcessingSystem_TenantC_Prod'
+        }
+        else {
+            $resolvedTenantCDbName = 'OrderProcessingSystem_TenantC'
+        }
+    }
+
+    return @{
+        SharedDbName = $resolvedSharedDbName
+        TenantCDbName = $resolvedTenantCDbName
+    }
+}
+
+$dbNames = Resolve-Phase9DatabaseNames -ApiBaseUrl $ApiBaseUrl -SharedDbName $SharedDbName -TenantCDbName $TenantCDbName
+$SharedDbName = $dbNames.SharedDbName
+$TenantCDbName = $dbNames.TenantCDbName
+
+function Assert-Phase9RuntimeDbContract {
+    param(
+        [Parameter(Mandatory = $true)][string]$ApiBaseUrl,
+        [Parameter(Mandatory = $true)][string]$SharedDbName,
+        [Parameter(Mandatory = $true)][string]$TenantCDbName,
+        [Parameter(Mandatory = $true)][bool]$UseDockerSql
+    )
+
+    $isDockerProfile = $ApiBaseUrl -match ':502(?:0|1)(?:/|$)|:503(?:0|1)(?:/|$)|:504(?:0|1)(?:/|$)'
+    if ($isDockerProfile -and -not $UseDockerSql) {
+        throw "Docker profile detected from ApiBaseUrl=$ApiBaseUrl, but Docker SQL mode was not enabled."
+    }
+
+    if ($isDockerProfile) {
+        $expectedShared = switch ($ApiBaseUrl) {
+            { $_ -match ':502(?:0|1)(?:/|$)' } { 'OrderProcessingSystem_Dev' ; break }
+            { $_ -match ':503(?:0|1)(?:/|$)' } { 'OrderProcessingSystem_Stg' ; break }
+            { $_ -match ':504(?:0|1)(?:/|$)' } { 'OrderProcessingSystem_Prod' ; break }
+        }
+
+        $expectedTenantC = switch ($ApiBaseUrl) {
+            { $_ -match ':502(?:0|1)(?:/|$)' } { 'OrderProcessingSystem_TenantC_Dev' ; break }
+            { $_ -match ':503(?:0|1)(?:/|$)' } { 'OrderProcessingSystem_TenantC_Stg' ; break }
+            { $_ -match ':504(?:0|1)(?:/|$)' } { 'OrderProcessingSystem_TenantC_Prod' ; break }
+        }
+
+        if ($SharedDbName -ne $expectedShared -or $TenantCDbName -ne $expectedTenantC) {
+            throw "Docker profile/db-name mismatch. ApiBaseUrl=$ApiBaseUrl SharedDbName=$SharedDbName TenantCDbName=$TenantCDbName ExpectedShared=$expectedShared ExpectedTenantC=$expectedTenantC"
+        }
+    }
+}
+
+Assert-Phase9RuntimeDbContract -ApiBaseUrl $ApiBaseUrl -SharedDbName $SharedDbName -TenantCDbName $TenantCDbName -UseDockerSql $UseDockerSql
 
 # ── HMAC helpers ─────────────────────────────────────────────────────────────
 function Get-RazorpaySignature([string]$Payload, [string]$Secret) {
@@ -70,21 +197,88 @@ function Get-OpenPaySignature([string]$Payload, [string]$Secret) {
     return [Convert]::ToBase64String($hash)
 }
 
+function ConvertTo-RawJsonPayload {
+    param([Parameter(Mandatory = $true)]$InputObject)
+
+    return [System.Text.Json.JsonSerializer]::Serialize(
+        $InputObject,
+        [System.Text.Json.JsonSerializerOptions]::new([System.Text.Json.JsonSerializerDefaults]::Web))
+}
+
+function New-WebhookHttpClient {
+    $handler = [System.Net.Http.HttpClientHandler]::new()
+    $handler.AllowAutoRedirect = $false
+    $handler.UseCookies = $false
+    return [System.Net.Http.HttpClient]::new($handler, $true)
+}
+
+function Get-ShortSha256([string]$Value) {
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($Value)
+    $hash = [System.Security.Cryptography.SHA256]::HashData($bytes)
+    return ([BitConverter]::ToString($hash) -replace '-', '').Substring(0, 12)
+}
+
 # ── DB helpers ───────────────────────────────────────────────────────────────
 function Invoke-Sql([string]$Server, [string]$Database, [string]$Query) {
-    $out = sqlcmd -S $Server -d $Database -E -C -Q $Query -h -1 -W 2>&1
-    return ($out | Where-Object { $_ -and ($_ -notmatch '^\s*-+\s*$') -and ($_ -notmatch '^\s*\(\d+ rows affected\)') -and ($_.Trim() -ne '') })
+    if ($UseDockerSql) {
+        if ([string]::IsNullOrWhiteSpace($DockerSqlPassword)) {
+            throw "Docker SQL mode is active for $ApiBaseUrl, but LOCAL_SQL_PASSWORD was not found in Resources\Docker\.env.local."
+        }
+
+        $out = docker exec orderprocessing-sqlserver /opt/mssql-tools18/bin/sqlcmd `
+            -S localhost `
+            -U sa `
+            -P $DockerSqlPassword `
+            -C `
+            -d $Database `
+            -Q $Query `
+            -h -1 -W 2>&1
+    } else {
+        $out = sqlcmd -S $Server -d $Database -E -C -Q $Query -h -1 -W 2>&1
+    }
+    return @(
+        $out |
+            Where-Object {
+                $_ -and
+                ($_ -notmatch '^\s*-+\s*$') -and
+                ($_ -notmatch '^\s*\(\d+ rows affected\)') -and
+                ($_.ToString().Trim() -ne '')
+            } |
+            ForEach-Object { $_.ToString().Trim() }
+    )
 }
 
 function Get-InboxStatus([int]$Id, [string]$Server, [string]$Database) {
-    $rows = Invoke-Sql $Server $Database "SELECT TOP 1 Status FROM InboxMessages WHERE Id=$Id"
-    return ($rows | Select-Object -First 1)?.ToString().Trim()
+    $rows = @(Invoke-Sql $Server $Database "SELECT TOP 1 Status FROM InboxMessages WHERE Id=$Id")
+    if (-not $rows -or $rows.Count -eq 0) {
+        return ''
+    }
+
+    return [string]$rows[0]
 }
 
 function Get-AttemptStatus([string]$ProviderRef, [int]$TenantId, [string]$Server, [string]$Database) {
-    $rows = Invoke-Sql $Server $Database `
-        "SELECT TOP 1 Status FROM PaymentAttempts WHERE ProviderReferenceId='$ProviderRef' AND TenantId=$TenantId"
-    return ($rows | Select-Object -First 1)?.ToString().Trim()
+    $rows = @(Invoke-Sql $Server $Database `
+        "SELECT TOP 1 Status FROM PaymentAttempts WHERE ProviderReferenceId='$ProviderRef' AND TenantId=$TenantId")
+    if (-not $rows -or $rows.Count -eq 0) {
+        return ''
+    }
+
+    return [string]$rows[0]
+}
+
+function Get-SqlScalarInt([string]$Server, [string]$Database, [string]$Query) {
+    $rows = @(Invoke-Sql $Server $Database $Query)
+    if (-not $rows -or $rows.Count -eq 0) {
+        return 0
+    }
+
+    $value = [string]$rows[0]
+    if ([string]::IsNullOrWhiteSpace($value)) {
+        return 0
+    }
+
+    return [int]$value
 }
 
 # ── HTTP helper ───────────────────────────────────────────────────────────────
@@ -98,26 +292,36 @@ function Send-Webhook {
         [string]$EventId,
         [string]$EventType = "payment.captured"
     )
-    $headers = @{
-        "X-Tenant-Code"          = $TenantCode
-        $SignatureHeader          = $Signature
-        "X-Provider-Event-Id"    = $EventId
-        "X-Provider-Event-Type"  = $EventType
+    $client = New-WebhookHttpClient
+    $payloadContent = [System.Net.Http.StringContent]::new($Payload, [System.Text.Encoding]::UTF8, 'application/json')
+    $request = [System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::Post, "$ApiBaseUrl/api/v1/webhook/$ProviderName")
+    $request.Content = $payloadContent
+    $request.Headers.TryAddWithoutValidation("X-Tenant-Code", $TenantCode) | Out-Null
+    $request.Headers.TryAddWithoutValidation($SignatureHeader, $Signature) | Out-Null
+    $request.Headers.TryAddWithoutValidation("X-Provider-Event-Id", $EventId) | Out-Null
+    $request.Headers.TryAddWithoutValidation("X-Provider-Event-Type", $EventType) | Out-Null
+    if ($SignatureHeader -ne 'X-Webhook-Signature') {
+        $request.Headers.TryAddWithoutValidation("X-Webhook-Signature", $Signature) | Out-Null
     }
+    $secretHash = if ($ProviderName -eq 'OpenPay') { Get-ShortSha256 $OpenPaySecret } else { Get-ShortSha256 $RazorpaySecret }
+    Write-Host ("    -> {0} payload hash={1} len={2} secret hash={3}" -f $ProviderName, (Get-ShortSha256 $Payload), $Payload.Length, $secretHash) -ForegroundColor DarkGray
     try {
-        $resp = Invoke-RestMethod `
-            -Uri "$ApiBaseUrl/api/v1/webhook/$ProviderName" `
-            -Method POST `
-            -Headers $headers `
-            -Body $Payload `
-            -ContentType "application/json" `
-            -StatusCodeVariable httpStatus `
-            -ErrorAction SilentlyContinue
-        return @{ Status = [int]$httpStatus; Body = $resp }
+        $response = $client.SendAsync($request).GetAwaiter().GetResult()
+        $body = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+        $parsed = $null
+        if (-not [string]::IsNullOrWhiteSpace($body)) {
+            try { $parsed = $body | ConvertFrom-Json -ErrorAction Stop } catch { $parsed = $body }
+        }
+        return @{
+            Status = [int]$response.StatusCode
+            Body   = $parsed
+        }
     } catch {
         $code = [int]($_.Exception.Response?.StatusCode ?? 0)
         $body = $_.ErrorDetails?.Message ?? $_.Exception.Message
         return @{ Status = $code; Body = $body }
+    } finally {
+        if ($null -ne $client) { $client.Dispose() }
     }
 }
 
@@ -304,7 +508,7 @@ function Store-InboxId([string]$Tag, $Response) {
 
 # ── S1: TenantA / Razorpay / valid HMAC ──────────────────────────────────────
 $evtS1   = "evt-${testRun}-A-rz-1"
-$payS1   = '{"payment_id":"' + $testRefs.TenantA + '","event":"payment.captured"}'
+$payS1   = ConvertTo-RawJsonPayload @{ payment_id = $testRefs.TenantA; event = 'payment.captured' }
 $sigS1   = Get-RazorpaySignature $payS1 $RazorpaySecret
 $rS1     = Send-Webhook 'Razorpay' 'TenantA' $payS1 $sigS1 'X-Razorpay-Signature' $evtS1
 Store-InboxId 'S1' $rS1
@@ -312,7 +516,7 @@ Add-Result 'S1' 'TenantA/Razorpay valid → 202' ($rS1.Status -eq 202) "HTTP=$($
 
 # ── S2: TenantB / Razorpay / valid HMAC ──────────────────────────────────────
 $evtS2   = "evt-${testRun}-B-rz-1"
-$payS2   = '{"payment_id":"' + $testRefs.TenantB + '","event":"payment.captured"}'
+$payS2   = ConvertTo-RawJsonPayload @{ payment_id = $testRefs.TenantB; event = 'payment.captured' }
 $sigS2   = Get-RazorpaySignature $payS2 $RazorpaySecret
 $rS2     = Send-Webhook 'Razorpay' 'TenantB' $payS2 $sigS2 'X-Razorpay-Signature' $evtS2
 Store-InboxId 'S2' $rS2
@@ -320,7 +524,7 @@ Add-Result 'S2' 'TenantB/Razorpay valid → 202' ($rS2.Status -eq 202) "HTTP=$($
 
 # ── S3: TenantC / OpenPay / valid HMAC ───────────────────────────────────────
 $evtS3   = "evt-${testRun}-C-op-1"
-$payS3   = '{"id":"' + $testRefs.TenantC + '","event":"payment.captured"}'
+$payS3   = ConvertTo-RawJsonPayload @{ id = $testRefs.TenantC; event = 'payment.captured' }
 $sigS3   = Get-OpenPaySignature $payS3 $OpenPaySecret
 $rS3     = Send-Webhook 'OpenPay' 'TenantC' $payS3 $sigS3 'X-OpenPay-Signature' $evtS3
 Store-InboxId 'S3' $rS3
@@ -328,7 +532,7 @@ Add-Result 'S3' 'TenantC/OpenPay valid → 202' ($rS3.Status -eq 202) "HTTP=$($r
 
 # ── S4: TenantA / Razorpay / INVALID HMAC → 401 ──────────────────────────────
 $evtS4   = "evt-${testRun}-A-rz-bad"
-$payS4   = '{"payment_id":"rzp_bad","event":"payment.captured"}'
+$payS4   = ConvertTo-RawJsonPayload @{ payment_id = 'rzp_bad'; event = 'payment.captured' }
 $sigBad  = '0000000000000000000000000000000000000000000000000000000000000000'
 $rS4     = Send-Webhook 'Razorpay' 'TenantA' $payS4 $sigBad 'X-Razorpay-Signature' $evtS4
 Add-Result 'S4' 'TenantA/Razorpay invalid HMAC → 401' ($rS4.Status -eq 401) "HTTP=$($rS4.Status)"
@@ -346,7 +550,7 @@ Add-Result 'S6' 'TenantC/OpenPay invalid HMAC → 401' ($rS6.Status -eq 401) "HT
 # ── S7: TenantA / OpenPay valid HMAC (cross-provider — TenantA uses Razorpay)
 #    Webhook accepted; InboxMsg processed; PaymentAttempt NOT found (expected warning)
 $evtS7   = "evt-${testRun}-A-op-cross"
-$payS7   = '{"id":"op_cross_nomatch_A","event":"payment.captured"}'
+$payS7   = ConvertTo-RawJsonPayload @{ id = 'op_cross_nomatch_A'; event = 'payment.captured' }
 $sigS7   = Get-OpenPaySignature $payS7 $OpenPaySecret
 $rS7     = Send-Webhook 'OpenPay' 'TenantA' $payS7 $sigS7 'X-OpenPay-Signature' $evtS7
 Store-InboxId 'S7' $rS7
@@ -354,7 +558,7 @@ Add-Result 'S7' 'TenantA/OpenPay cross-provider → 202 (PA miss OK)' ($rS7.Stat
 
 # ── S8: TenantC / Razorpay valid HMAC (cross-provider — TenantC uses OpenPay)
 $evtS8   = "evt-${testRun}-C-rz-cross"
-$payS8   = '{"payment_id":"rzp_cross_nomatch_C","event":"payment.captured"}'
+$payS8   = ConvertTo-RawJsonPayload @{ payment_id = 'rzp_cross_nomatch_C'; event = 'payment.captured' }
 $sigS8   = Get-RazorpaySignature $payS8 $RazorpaySecret
 $rS8     = Send-Webhook 'Razorpay' 'TenantC' $payS8 $sigS8 'X-Razorpay-Signature' $evtS8
 Store-InboxId 'S8' $rS8
@@ -362,7 +566,7 @@ Add-Result 'S8' 'TenantC/Razorpay cross-provider → 202 (PA miss OK)' ($rS8.Sta
 
 # ── S9a/S9b: DEDUP — same (TenantA, Razorpay) event posted twice ─────────────
 $evtS9   = "evt-${testRun}-A-rz-dedup"
-$payS9   = '{"payment_id":"rzp_dedup_test_' + $testRun + '","event":"payment.captured"}'
+$payS9   = ConvertTo-RawJsonPayload @{ payment_id = "rzp_dedup_test_$testRun"; event = 'payment.captured' }
 $sigS9   = Get-RazorpaySignature $payS9 $RazorpaySecret
 $rS9a    = Send-Webhook 'Razorpay' 'TenantA' $payS9 $sigS9 'X-Razorpay-Signature' $evtS9
 $rS9b    = Send-Webhook 'Razorpay' 'TenantA' $payS9 $sigS9 'X-Razorpay-Signature' $evtS9
@@ -373,20 +577,20 @@ Add-Result 'S10' 'TenantA/Razorpay DEDUP 2nd POST → 202' ($rS9b.Status -eq 202
 
 # ── S13: TenantA / Razorpay payment.failed — expect 202 + PA transitions to Failed ─
 $evtS13  = "evt-${testRun}-A-rz-failed"
-$payS13  = '{"payment_id":"' + $testRefs['TenantAFailed'] + '","event":"payment.failed","description":"Insufficient funds"}'
+$payS13  = ConvertTo-RawJsonPayload @{ payment_id = $testRefs['TenantAFailed']; event = 'payment.failed'; description = 'Insufficient funds' }
 $sigS13  = Get-RazorpaySignature $payS13 $RazorpaySecret
 $rS13    = Send-Webhook 'Razorpay' 'TenantA' $payS13 $sigS13 'X-Razorpay-Signature' $evtS13 -EventType 'payment.failed'
 Store-InboxId 'S13' $rS13
 Add-Result 'S13' 'TenantA/Razorpay payment.failed → 202' ($rS13.Status -eq 202) "HTTP=$($rS13.Status) InboxId=$($inboxIds['S13'])"
 
 # ── S11: Unsupported provider → 400 ──────────────────────────────────────────
-$rS11 = Send-Webhook 'Stripe' 'TenantA' '{"event":"charge.success"}' 'sig' 'X-Stripe-Signature' "evt-${testRun}-stripe"
+$rS11 = Send-Webhook 'Stripe' 'TenantA' (ConvertTo-RawJsonPayload @{ event = 'charge.success' }) 'sig' 'X-Stripe-Signature' "evt-${testRun}-stripe"
 Add-Result 'S11' "Unsupported provider 'Stripe' → 400" ($rS11.Status -eq 400) "HTTP=$($rS11.Status)"
 
 # ── S12: Missing X-Tenant-Code header → 400 ──────────────────────────────────
 try {
     $respS12 = Invoke-RestMethod -Uri "$ApiBaseUrl/api/v1/webhook/Razorpay" -Method POST `
-        -Headers @{ 'X-Razorpay-Signature' = 'sig'; 'X-Provider-Event-Id' = "evt-${testRun}-notenant" } `
+        -Headers @{ 'X-Razorpay-Signature' = 'sig'; 'X-Webhook-Signature' = 'sig'; 'X-Provider-Event-Id' = "evt-${testRun}-notenant" } `
         -Body '{}' -ContentType 'application/json' `
         -StatusCodeVariable scS12 -ErrorAction SilentlyContinue
     Add-Result 'S12' 'Missing X-Tenant-Code → 400' ([int]$scS12 -eq 400) "HTTP=$scS12"
@@ -437,9 +641,8 @@ foreach ($entry in @(
     @{ Tag='V5'; EventId=$evtS5; DbServer=$SharedDbServer; DbName=$SharedDbName; Label='TenantB/Razorpay bad HMAC' }
     @{ Tag='V6'; EventId=$evtS6; DbServer=$TenantCDbServer; DbName=$TenantCDbName; Label='TenantC/OpenPay bad HMAC' }
 )) {
-    $rows = Invoke-Sql $entry.DbServer $entry.DbName `
+    $count = Get-SqlScalarInt $entry.DbServer $entry.DbName `
         "SELECT COUNT(*) FROM InboxMessages WHERE ProviderEventId='$($entry.EventId)'"
-    $count = [int](($rows | Select-Object -First 1)?.ToString().Trim() ?? '0')
     Add-Result $entry.Tag "$($entry.Label): no InboxMsg created" ($count -eq 0) "InboxMessages with that EventId: $count"
 }
 
@@ -455,7 +658,7 @@ Add-Result 'V8' 'TenantC/Razorpay cross: InboxMsg=Processed (PA miss OK)' ($ist8
 $ist9a = if ($inboxIds['S9a']) { Get-InboxStatus $inboxIds['S9a'] $SharedDbServer $SharedDbName } else { 'no-id' }
 Add-Result 'V9'  'Dedup 1st: InboxMsg=Processed' ($ist9a -eq 'Processed') "InboxMsg[$($inboxIds['S9a'])].Status=$ist9a"
 # V10: DB-level dedup — 2nd POST must NOT insert a new row; exactly 1 InboxMessage for this ProviderEventId
-$dedupCount = [int](Invoke-Sql $SharedDbServer $SharedDbName "SELECT COUNT(*) FROM InboxMessages WHERE ProviderEventId='$evtS9'" | Select-Object -First 1).ToString().Trim()
+$dedupCount = Get-SqlScalarInt $SharedDbServer $SharedDbName "SELECT COUNT(*) FROM InboxMessages WHERE ProviderEventId='$evtS9'"
 $noS9bId    = -not $inboxIds['S9b']
 Add-Result 'V10' 'Dedup 2nd: DB-level dedup (no new row, count=1)' ($dedupCount -eq 1 -and $noS9bId) "InboxCount=$dedupCount | S9b-NoId=$noS9bId"
 
@@ -468,9 +671,8 @@ Add-Result 'V11' 'TenantA/Razorpay payment.failed: InboxMsg=Processed + PA=Faile
 
 # V12: Outbox bridge — payment.captured must have written an OutboxMessage for TenantA (S1)
 # EventType is the integration event class name: 'PaymentAttemptSucceededV1'
-$outboxCount = [int](Invoke-Sql $SharedDbServer $SharedDbName `
-    "SELECT COUNT(*) FROM OutboxMessages WHERE TenantId=$($tenants['TenantA'].Id) AND EventType LIKE '%PaymentAttemptSucceeded%'" `
-    | Select-Object -First 1).ToString().Trim()
+$outboxCount = Get-SqlScalarInt $SharedDbServer $SharedDbName `
+    "SELECT COUNT(*) FROM OutboxMessages WHERE TenantId=$($tenants['TenantA'].Id) AND EventType LIKE '%PaymentAttemptSucceeded%'"
 Add-Result 'V12' 'Outbox bridge: PaymentAttemptSucceededV1 row in OutboxMessages' ($outboxCount -ge 1) "OutboxRows=$outboxCount"
 
 # ── SUMMARY ───────────────────────────────────────────────────────────────────

@@ -10,7 +10,7 @@
   "AllowedHosts": "*",
   "ConnectionStrings": {
     "OrderProcessingSystemDbConnection": "Server=tcp:orderprocessing-sql-dev.database.windows.net,1433;Initial Catalog=OrderProcessingSystem_Dev;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;Authentication=Active Directory Default",
-    "OrderProcessingSystemDbConnection_Local": "Server=localhost,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=__LOCAL_SQL_PASSWORD__;TrustServerCertificate=True;"
+    "OrderProcessingSystemDbConnection_Local": "Server=localhost,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=__LOCAL_SQL_PASSWORD__;Encrypt=True;TrustServerCertificate=True;"
   },
   "DedicatedTenantConnectionStrings": {
     "TenantC": "Server=tcp:orderprocessing-sql-dev.database.windows.net,1433;Initial Catalog=OrderProcessingSystem_TenantC_Dev;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;Authentication=Active Directory Default"
@@ -45,6 +45,16 @@
     "UiSelectorEnabled": true,
     "UiTenantOverrideEnabled": true,
     "SwaggerSelectorEnabled": true
+  },
+  "IdentityProvider": {
+    "Enabled": false,
+    "Mode": "KeycloakLocal",
+    "Authority": "http://localhost:8081/realms/xy-phase9",
+    "Audience": "xy-order-processing",
+    "Scheme": "Bearer",
+    "Scope": "local-only-proof",
+    "ClientId": "xy-order-processing-backend",
+    "ClientSecret": "__KEYCLOAK_BACKEND_CLIENT_SECRET__"
   },
   "Serilog": {
     "Using": [ "Serilog.Sinks.File" ],

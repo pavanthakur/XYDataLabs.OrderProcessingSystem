@@ -3,7 +3,6 @@ using System.Reflection;
 using Microsoft.Extensions.Hosting;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
-using XYDataLabs.OrderProcessingSystem.Application.Features.Payments;
 using XYDataLabs.OrderProcessingSystem.Application.Utilities;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
 
@@ -29,18 +28,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application
             // cross-tenant data exposure. Changing Use3DSecure takes effect immediately
             // (no API restart required).
             builder.Services.AddScoped<AppMasterData>();
-            builder.Services.AddScoped<ITenantPaymentProviderResolver, TenantPaymentProviderResolver>();
 
-            // Unkeyed IPaymentProviderGateway factory — resolves the correct provider-specific
-            // gateway at runtime based on the active tenant's PaymentProvider.ProviderType.
-            // Each adapter (OpenPay, Razorpay, ...) registers a keyed IPaymentProviderGateway
-            // in its own AddXxxAdapter() extension. This factory delegates to the matching key.
-            builder.Services.AddScoped<IPaymentProviderGateway>(sp =>
-            {
-                var resolver = sp.GetRequiredService<ITenantPaymentProviderResolver>();
-                var providerType = resolver.ResolveCurrentTenantProvider().ProviderType;
-                return sp.GetRequiredKeyedService<IPaymentProviderGateway>(providerType);
-            });
         }
     }
 }

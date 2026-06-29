@@ -1,4 +1,6 @@
 import process from "node:process";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { chromium } from "playwright";
 
 const customerRequestPathFragment = "/api/v1/Customer/GetAllCustomers";
@@ -7,6 +9,26 @@ const defaultTimeoutMs = 60000;
 const localStorageKey = "orderprocessing.activeTenantCode";
 const runtimeConfigurationPathFragment = "/api/v1/Info/runtime-configuration";
 const tenantLabel = "Tenant";
+const defaultArtifactDirectoryName = "playwright-smoke";
+const defaultLatestPointerFileName = "latest-playwright-smoke.txt";
+
+function formatIstTimestamp(date) {
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    fractionalSecondDigits: 3,
+    hour12: false
+  }).format(date).replace(" ", "T") + "+05:30";
+}
+
+function formatIstStamp(date) {
+  return formatIstTimestamp(date).replace(/[:+,]/g, "-").replace(/\./g, "-");
+}
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
@@ -21,9 +43,43 @@ async function main() {
   }
 
   const browser = await chromium.launch({ headless: true });
+  const artifactBaseRoot = path.resolve(process.cwd(), options.artifactRoot ?? path.join("test-results", defaultArtifactDirectoryName));
+  const runStamp = `${formatIstStamp(new Date())}_smoke`;
+  const artifactRoot = path.join(artifactBaseRoot, runStamp);
+  const artifactRootDirectory = path.dirname(artifactBaseRoot);
+  const latestPointerPath = path.resolve(process.cwd(), options.latestPointerPath ?? path.join("test-results", defaultLatestPointerFileName));
+  const summaryPath = path.join(artifactRoot, "summary.json");
+  const currentStepPath = path.join(artifactRoot, "current-step.txt");
+  const rootIndexPath = path.join(artifactRootDirectory, "latest-playwright-run.txt");
+  const summary = {
+    target: options.target ?? "custom",
+    startedUtc: new Date().toISOString(),
+    startedIst: formatIstTimestamp(new Date()),
+    finishedUtc: null,
+    finishedIst: null,
+    status: "running",
+    currentStep: "initialized",
+    artifactRoot,
+    latestPointerPath,
+    discoveredTenantCode: null,
+    staleTenantCode: null,
+    expectedTenantCode: null,
+    activeTenantCode: null,
+    customerRequestTenantCode: null
+  };
+  await fs.mkdir(artifactRoot, { recursive: true });
+  await fs.mkdir(artifactRootDirectory, { recursive: true });
+  await fs.mkdir(path.dirname(latestPointerPath), { recursive: true });
+  await fs.writeFile(rootIndexPath, `${artifactRoot}\n`, "utf8");
+  await fs.writeFile(latestPointerPath, `${artifactRoot}\n`, "utf8");
+  await fs.writeFile(currentStepPath, "initialized\n", "utf8");
+  await fs.writeFile(summaryPath, JSON.stringify(summary, null, 2), "utf8");
 
   try {
     const discovery = await discoverRuntimeConfiguration(browser, options.url, options.timeoutMs);
+    summary.currentStep = "runtime-config-discovered";
+    await fs.writeFile(currentStepPath, `${summary.currentStep}\n`, "utf8");
+    await fs.writeFile(summaryPath, JSON.stringify(summary, null, 2), "utf8").catch(() => {});
     const expectedTenantCode = options.expectedTenantCode ?? discovery.runtimeConfiguration.activeTenantCode;
     const staleTenantCode = resolveStaleTenantCode(
       discovery.runtimeConfiguration.availableTenants,
@@ -35,16 +91,33 @@ async function main() {
     console.log(`Injecting stale tenant candidate into localStorage: ${staleTenantCode}`);
 
     const smokeResult = await verifyTenantBootstrap(browser, {
+      artifactRoot,
       expectedTenantCode,
       staleTenantCode,
       timeoutMs: options.timeoutMs,
-      url: options.url
+      url: options.url,
+      latestPointerPath,
+      artifactRoot
     });
 
+    summary.discoveredTenantCode = discovery.runtimeConfiguration.activeTenantCode;
+    summary.currentStep = "tenant-bootstrap-verified";
+    await fs.writeFile(currentStepPath, `${summary.currentStep}\n`, "utf8").catch(() => {});
+    await fs.writeFile(summaryPath, JSON.stringify(summary, null, 2), "utf8").catch(() => {});
+    summary.staleTenantCode = staleTenantCode;
+    summary.expectedTenantCode = expectedTenantCode;
+    summary.activeTenantCode = smokeResult.activeTenantCode;
+    summary.customerRequestTenantCode = smokeResult.customerRequestTenantCode;
     console.log(`Tenant selector resolved: ${smokeResult.activeTenantCode}`);
     console.log(`Customer request header '${smokeResult.tenantHeaderName}' used tenant: ${smokeResult.customerRequestTenantCode}`);
     console.log("Tenant bootstrap smoke test passed.");
+    summary.status = "passed";
   } finally {
+    summary.finishedUtc = new Date().toISOString();
+    summary.finishedIst = formatIstTimestamp(new Date());
+    summary.currentStep = summary.status === "passed" ? "completed" : summary.currentStep;
+    await fs.writeFile(summaryPath, JSON.stringify(summary, null, 2), "utf8").catch(() => {});
+    await fs.writeFile(currentStepPath, `${summary.currentStep}\n`, "utf8").catch(() => {});
     await browser.close();
   }
 }
@@ -53,6 +126,9 @@ function parseArgs(argv) {
   const options = {
     expectedTenantCode: null,
     help: false,
+    target: null,
+    artifactRoot: null,
+    latestPointerPath: null,
     staleTenantCode: null,
     timeoutMs: defaultTimeoutMs,
     url: null
@@ -68,6 +144,21 @@ function parseArgs(argv) {
 
     if (argument === "--url") {
       options.url = argv[++index] ?? null;
+      continue;
+    }
+
+    if (argument === "--target") {
+      options.target = argv[++index] ?? null;
+      continue;
+    }
+
+    if (argument === "--artifact-root") {
+      options.artifactRoot = argv[++index] ?? null;
+      continue;
+    }
+
+    if (argument === "--latest-pointer-path") {
+      options.latestPointerPath = argv[++index] ?? null;
       continue;
     }
 
@@ -102,6 +193,9 @@ function printHelp() {
 
 Required:
   --url <route-url>                Full UI route URL, for example https://localhost:5022/customers
+  --target <target-key>            Logical target name used in the run summary
+  --artifact-root <path>           Directory for trace/screenshot/html artifacts
+  --latest-pointer-path <path>     File that records the latest artifact root
 
 Optional:
   --expected-tenant <tenantCode>   Expected resolved tenant code; defaults to runtime bootstrap response
@@ -114,6 +208,7 @@ Optional:
 async function discoverRuntimeConfiguration(browser, url, timeoutMs) {
   return withRetry("Runtime configuration discovery", async attempt => {
     const context = await browser.newContext({ ignoreHTTPSErrors: true });
+    await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
 
     try {
       const page = await context.newPage();
@@ -130,6 +225,7 @@ async function discoverRuntimeConfiguration(browser, url, timeoutMs) {
         runtimeConfiguration
       };
     } finally {
+      await context.tracing.stop({ path: path.join(process.cwd(), "test-results", defaultArtifactDirectoryName, `runtime-config-attempt-${attempt}.zip`) }).catch(() => {});
       await context.close();
     }
   });
@@ -164,6 +260,7 @@ function resolveStaleTenantCode(availableTenants, expectedTenantCode, requestedS
 async function verifyTenantBootstrap(browser, options) {
   return withRetry("Tenant bootstrap verification", async attempt => {
     const context = await browser.newContext({ ignoreHTTPSErrors: true });
+    await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
 
     try {
       const page = await context.newPage();
@@ -217,7 +314,11 @@ async function verifyTenantBootstrap(browser, options) {
         customerRequestTenantCode,
         tenantHeaderName
       };
+    } catch (error) {
+      await captureFailureArtifacts(context, options.artifactRoot, `tenant-bootstrap-attempt-${attempt}`, error);
+      throw error;
     } finally {
+      await context.tracing.stop({ path: path.join(options.artifactRoot, `tenant-bootstrap-attempt-${attempt}.zip`) }).catch(() => {});
       await context.close();
     }
   });
@@ -247,6 +348,29 @@ async function withRetry(operationName, operation, attemptCount = defaultAttempt
   }
 
   throw new Error(`${operationName} failed after ${attemptCount} attempts. ${lastError instanceof Error ? lastError.message : String(lastError)}`);
+}
+
+async function captureFailureArtifacts(context, artifactRoot, name, error) {
+  const safeName = name.replace(/[^a-z0-9-_]+/gi, "-");
+  const screenshotPath = path.join(artifactRoot, `${safeName}.png`);
+  const htmlPath = path.join(artifactRoot, `${safeName}.html`);
+
+  try {
+    const pages = context.pages();
+    const page = pages[0];
+    if (!page) {
+      return;
+    }
+
+    await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
+    await fs.writeFile(htmlPath, await page.content(), "utf8").catch(() => {});
+    console.warn(`Captured failure artifacts for ${safeName}: ${screenshotPath}`);
+    if (error instanceof Error) {
+      console.warn(error.message);
+    }
+  } catch {
+    // Best effort only.
+  }
 }
 
 async function waitForRuntimeConfigurationResponse(page, timeoutMs, diagnostics, attempt) {

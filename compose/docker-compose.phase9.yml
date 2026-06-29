@@ -1,0 +1,90 @@
+﻿version: "3.9"
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0.6
+    command: start-dev --import-realm
+    ports:
+      - "8081:8080"
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: LocalP@ssw0rd!
+      KC_HTTP_ENABLED: "true"
+      KC_HTTP_PORT: "8080"
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      KC_PROXY: edge
+    volumes:
+      - ../Resources/Keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+    depends_on:
+      - sql-server
+
+  api:
+    build:
+      context: ..
+      dockerfile: XYDataLabs.OrderProcessingSystem.API/Dockerfile
+    container_name: xy-phase9-api
+    ports:
+      - "5010:5010"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:5010
+      ConnectionStrings__OrderProcessingSystemDbConnection: Server=sql-server,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=MyLocal1!;TrustServerCertificate=True;
+      ConnectionStrings__Redis: redis:6379
+      IdentityProvider__Enabled: "true"
+      IdentityProvider__Mode: KeycloakLocal
+      IdentityProvider__Authority: http://localhost:8081/realms/xy-phase9
+      IdentityProvider__Audience: xy-order-processing
+      IdentityProvider__Scheme: Bearer
+      IdentityProvider__ClientId: xy-order-processing-backend
+      IdentityProvider__ClientSecret: local-backend-client-secret
+    depends_on:
+      - sql-server
+      - redis
+
+  gateway:
+    build:
+      context: ..
+      dockerfile: XYDataLabs.OrderProcessingSystem.Gateway/Dockerfile
+    container_name: xy-phase9-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ReverseProxy__Clusters__api__Destinations__primary__Address: http://api:5010
+      IdentityProvider__Enabled: "true"
+      IdentityProvider__Mode: KeycloakLocal
+      IdentityProvider__Authority: http://localhost:8081/realms/xy-phase9
+      IdentityProvider__Audience: xy-order-processing
+      IdentityProvider__Scheme: Bearer
+      IdentityProvider__ClientId: xy-order-processing-backend
+      IdentityProvider__ClientSecret: local-backend-client-secret
+    depends_on:
+      - api
+
+  sql-server:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: xy-phase9-sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: MyLocal1!
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P $$MSSQL_SA_PASSWORD -Q \"SELECT 1\" -C"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: xy-phase9-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5

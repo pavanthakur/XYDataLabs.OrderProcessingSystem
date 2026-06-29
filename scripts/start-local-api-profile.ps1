@@ -3,7 +3,7 @@ param(
     [ValidateSet('http', 'https')]
     [string]$Profile,
 
-    [bool]$OpenBrowser = $true,
+    [object]$OpenBrowser = $false,
 
     [ValidateRange(5, 300)]
     [int]$StartupTimeoutSeconds = 90,
@@ -29,7 +29,7 @@ function Start-BrowserLaunchMonitor {
         [string]$LaunchUrl,
 
         [Parameter(Mandatory = $true)]
-        [bool]$ShouldOpenBrowser,
+        [object]$ShouldOpenBrowser,
 
         [Parameter(Mandatory = $true)]
         [int]$TimeoutSeconds,
@@ -38,7 +38,18 @@ function Start-BrowserLaunchMonitor {
         [int]$PollIntervalMilliseconds
     )
 
-    if (-not $ShouldOpenBrowser)
+    $shouldOpen = $false
+    if ($ShouldOpenBrowser -is [bool]) {
+        $shouldOpen = $ShouldOpenBrowser
+    }
+    elseif ($ShouldOpenBrowser -is [string]) {
+        $shouldOpen = $ShouldOpenBrowser.Trim().ToLowerInvariant() -in @('true', '$true', '1', 'yes', 'y')
+    }
+    elseif ($null -ne $ShouldOpenBrowser) {
+        $shouldOpen = [bool]$ShouldOpenBrowser
+    }
+
+    if (-not $shouldOpen)
     {
         return
     }
@@ -103,7 +114,7 @@ Start-BrowserLaunchMonitor `
 Push-Location $apiProjectPath
 try
 {
-    dotnet run --launch-profile $Profile
+    dotnet run --no-restore --no-build --launch-profile $Profile
 }
 finally
 {

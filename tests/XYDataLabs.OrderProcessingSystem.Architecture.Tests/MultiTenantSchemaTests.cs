@@ -6,6 +6,7 @@ using XYDataLabs.OrderProcessingSystem.Application.DTO;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
+using SharedAppDbContext = XYDataLabs.OrderProcessingSystem.SharedKernel.Abstractions.IAppDbContext;
 
 namespace XYDataLabs.OrderProcessingSystem.Architecture.Tests;
 
@@ -311,7 +312,7 @@ public class MultiTenantSchemaTests
     {
         using var context = CreateDbContext();
 
-        var interfaceDbSetTypes = typeof(IAppDbContext)
+        var interfaceDbSetTypes = typeof(SharedAppDbContext)
             .GetProperties()
             .Where(p => p.PropertyType.IsGenericType &&
                         p.PropertyType.GetGenericTypeDefinition() == typeof(DbSet<>))
@@ -335,7 +336,7 @@ public class MultiTenantSchemaTests
     [Fact]
     public void IAppDbContext_Should_Not_Expose_Tenant_DbSet()
     {
-        var tenantDbSet = typeof(IAppDbContext)
+        var tenantDbSet = typeof(SharedAppDbContext)
             .GetProperties()
             .Where(p => p.PropertyType.IsGenericType &&
                         p.PropertyType.GetGenericTypeDefinition() == typeof(DbSet<>))

@@ -2,7 +2,7 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using XYDataLabs.OrderProcessingSystem.Application.Events;
-using XYDataLabs.OrderProcessingSystem.Application.Features.Orders.Events;
+using XYDataLabs.OrderProcessingSystem.Orders.Features.Events;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure;
 

@@ -1,32 +1,10 @@
-using Microsoft.EntityFrameworkCore;
-using XYDataLabs.OrderProcessingSystem.Domain.Entities;
-
 namespace XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 
 /// <summary>
-/// Abstraction over the application's database context.
-/// Defined in Application so services depend on an interface, not the concrete EF Core DbContext.
-/// Implemented by OrderProcessingSystemDbContext in Infrastructure.
+/// Backward-compatible alias for the shared database context contract.
+/// New module-level feature code should depend on
+/// XYDataLabs.OrderProcessingSystem.SharedKernel.Abstractions.IAppDbContext instead.
 /// </summary>
-public interface IAppDbContext
+public interface IAppDbContext : XYDataLabs.OrderProcessingSystem.SharedKernel.Abstractions.IAppDbContext
 {
-    DbSet<AuditLog> AuditLogs { get; }
-    DbSet<Customer> Customers { get; }
-    DbSet<Product> Products { get; }
-    DbSet<Order> Orders { get; }
-    DbSet<OrderProduct> OrderProducts { get; }
-    DbSet<BillingCustomer> BillingCustomers { get; }
-    DbSet<BillingCustomerKeyInfo> BillingCustomerKeyInfos { get; }
-    DbSet<CardTransaction> CardTransactions { get; }
-    DbSet<PayinLog> PayinLogs { get; }
-    DbSet<PayinLogDetails> PayinLogDetails { get; }
-    DbSet<PaymentMethod> PaymentMethods { get; }
-    DbSet<PaymentProvider> PaymentProviders { get; }
-    DbSet<PaymentAttempt> PaymentAttempts { get; }
-    DbSet<PaymentAttemptHistory> PaymentAttemptHistories { get; }
-    DbSet<TransactionStatusHistory> TransactionStatusHistories { get; }
-    DbSet<OutboxMessage> OutboxMessages { get; }
-    DbSet<InboxMessage> InboxMessages { get; }
-
-    Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

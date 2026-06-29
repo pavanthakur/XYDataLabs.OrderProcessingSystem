@@ -1,16 +1,41 @@
+using System.Security.Claims;
 using System.Threading.RateLimiting;
+using System.Net.Http.Json;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
+using XYDataLabs.OrderProcessingSystem.ServiceDefaults;
+using XYDataLabs.OrderProcessingSystem.Gateway.Security;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddHttpClient();
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.SetMinimumLevel(LogLevel.Information);
 
 var allowedHosts = builder.Configuration
     .GetSection("Gateway:AllowedHosts")
-    .Get<string[]>() ?? ["localhost", "orders.localhost", "ui.localhost"];
+    .Get<string[]>() ?? ["localhost", "orders.localhost", "inventory.localhost", "notifications.localhost", "ui.localhost"];
 var maxRequestBodySizeBytes = builder.Configuration.GetValue<long>("Gateway:MaxRequestBodySizeBytes", 1048576L);
 
 builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks();
+builder.AddServiceDefaults("XYDataLabs.OrderProcessingSystem.Gateway");
+builder.Services.AddAuthorization();
+
+var identityProviderSection = builder.Configuration.GetSection("IdentityProvider");
+var identityEnabled = identityProviderSection.GetValue("Enabled", false);
+if (identityEnabled)
+{
+    builder.Services
+        .AddAuthentication(options =>
+        {
+            options.DefaultAuthenticateScheme = "KeycloakLocal";
+            options.DefaultChallengeScheme = "KeycloakLocal";
+        })
+        .AddScheme<AuthenticationSchemeOptions, KeycloakIntrospectionAuthenticationHandler>("KeycloakLocal", _ => { });
+}
+
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost;
@@ -45,6 +70,10 @@ var app = builder.Build();
 
 app.UseExceptionHandler();
 app.UseForwardedHeaders();
+if (identityEnabled)
+{
+    app.UseAuthentication();
+}
 
 app.Use(async (context, next) =>
 {
@@ -86,8 +115,7 @@ app.Use(async (context, next) =>
 
 app.UseRateLimiter();
 
-app.MapHealthChecks("/health/alive");
-app.MapHealthChecks("/health/ready");
+app.MapDefaultEndpoints();
 app.MapGet("/", () => Results.Ok(new
 {
     service = "XYDataLabs.OrderProcessingSystem.Gateway",
@@ -95,8 +123,12 @@ app.MapGet("/", () => Results.Ok(new
     routes = new[]
     {
         "orders.localhost:5080 -> http://localhost:5010",
+        "inventory.localhost:5080 -> http://localhost:5011",
+        "notifications.localhost:5080 -> http://localhost:5012",
         "ui.localhost:5080 -> http://localhost:5173",
         "localhost:5080/api/{**catch-all} -> http://localhost:5010",
+        "localhost:5080/inventory/{**catch-all} -> http://localhost:5011",
+        "localhost:5080/notifications/{**catch-all} -> http://localhost:5012",
         "localhost:5080/app/{**catch-all} -> http://localhost:5173"
     }
 }));

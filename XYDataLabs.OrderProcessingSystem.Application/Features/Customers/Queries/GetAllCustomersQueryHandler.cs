@@ -18,7 +18,9 @@ public sealed class GetAllCustomersQueryHandler : IQueryHandler<GetAllCustomersQ
 
     public async Task<Result<IEnumerable<CustomerDto>>> HandleAsync(GetAllCustomersQuery query, CancellationToken cancellationToken = default)
     {
-        var customers = await _context.Customers.ToListAsync(cancellationToken);
+        var customers = await _context.Customers
+            .Include(customer => customer.Orders)
+            .ToListAsync(cancellationToken);
         return Result<IEnumerable<CustomerDto>>.Success(customers.Select(c => c.ToDto()));
     }
 }

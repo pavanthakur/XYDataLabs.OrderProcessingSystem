@@ -1,7 +1,7 @@
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using XYDataLabs.OrderProcessingSystem.Application.Events;
-using XYDataLabs.OrderProcessingSystem.Application.Features.Orders.Events;
+using XYDataLabs.OrderProcessingSystem.Orders.Features.Events;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.Events;
 
 namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Scenarios;

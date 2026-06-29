@@ -1,7 +1,7 @@
 # Architecture Evolution: Monolith to Enterprise Microservices
 
 **Last Updated:** June 5, 2026
-**Current Status:** Phase 8 Closeout Matrix Validation Passed ✅ | Track U U5 Complete ✅ | Phase 8.5 Complete ✅ | Phase 8.6 Complete ✅ | Phase 8.7 Complete ✅ | Phases 9, 9.5, 10, 11, 11.5, 12-14 Planned 📅
+**Current Status:** Phase 8 Closeout Matrix Validation Passed ✅ | Track U U5 Complete ✅ | Phase 8.5 Complete ✅ | Phase 8.6 Complete ✅ | Phase 8.7 Complete ✅ | Phase 9 closeout complete for extraction/tasking ✅ | Phase 9.5 identity portability wiring implemented and runtime verified in local HTTP and Docker Dev HTTP ✅ | Phases 10, 11, 11.5, 12-14 Planned 📅
 
 ---
 
@@ -21,6 +21,14 @@ Before marking **any** architectural phase as complete, the following end-to-end
 1. **Docker Containerization Validation:** All modified or newly introduced services must successfully build, launch, and run correctly via the mapped Docker environment profiles (`dev`, `stg`, `prod`) with Docker SQL as the only valid runtime path.
 2. **Integration Test Verification:** The backend integration test suite must pass against the active Docker validation slice, confirming database access and domain logic constraints are met.
 3. **End-to-End Automation Coverage:** Playwright E2E automation (in the `automation/` workspace) must successfully navigate the full frontend-to-backend-to-payment cycle against the running containers without errors.
+
+Every phase and sub-phase closure must also follow the repository-wide phase closure standard in `local models/zoocode/phase-closure-standard.md`, including the requirement to:
+- keep the testcase matrix in the run transcript
+- fail fast on missing infrastructure
+- clean up orphan containers before sign-off
+- document the restart commands and log file locations
+
+If Phase 9 Docker bootstrap or SQL restore behavior regresses while running the closeout path, start with `docs/reference/docker-bootstrap-troubleshooting.md` before rerunning the phase bundle.
 
 For phases that touch Docker runtime orchestration, payment automation runtime targets, or phase-closeout workflow surfaces, the closeout evidence must now be captured with the generated Docker validation bundle:
 
@@ -153,7 +161,7 @@ XYDataLabs.OrderProcessingSystem.sln
 | **8.6** | Central Tenant Registry & Separation of Duties | `ITenantRegistry`, `Tenant.PaymentProviderCode` as sole routing authority, ops-owned DB, ADR-019 | ✅ **COMPLETE** |
 | **8.7** | Provider Webhook Receiver & Async Payment Lifecycle | Signed webhooks, inbox idempotency, Outbox bridge, `payment.captured`/`payment.failed` handlers, tenant-aware async payment convergence | ✅ **COMPLETE** |
 | **9** | YARP Microservices (Local) | Gateway, Orders/Inventory/Notifications APIs, Docker Compose, event-based communication | 📅 Planned |
-| **9.5** | Cloud-Portable Identity Showcase | Local Keycloak portability proof for the JWT/OIDC pipeline without changing the Azure production identity model | 📅 Planned |
+| **9.5** | Cloud-Portable Identity Showcase | Local Keycloak portability proof for the JWT/OIDC pipeline without changing the Azure production identity model | ✅ Wiring implemented and runtime verified |
 | **10** | Azure Container Apps | ACA deployment, ACR, Service Bus, Entra ID + JWT, private networking | 📅 Planned |
 | **11** | Data Ownership & Autonomy | Database per service, remove shared DbContext, eventual consistency | 📅 Planned |
 | **11.5** | Polyglot Persistence Showcase | Notifications module PostgreSQL pilot proving provider portability while Orders/Payments stay on Azure SQL | 📅 Planned |
@@ -710,7 +718,7 @@ Before extracting to separate deployables, restructure the monolith into isolate
   - `Inventory.Domain`, `Inventory.Features`, `Inventory.Infrastructure`
   - `Notifications.Domain`, `Notifications.Features`, `Notifications.Infrastructure`
 -  - `Payments.Domain`, `Payments.Features`, `Payments.Infrastructure`
-- **PublicApi contracts** — `IOrderModuleApi`, `IInventoryModuleApi` interfaces in dedicated `*.PublicApi` projects with strongly-typed request/response records. Modules depend ONLY on each other's PublicApi — never internal Domain/Features/Infrastructure
+- **API contracts** — `IOrderModuleApi`, `IInventoryModuleApi` interfaces in dedicated `*.API` projects with strongly-typed request/response records. Modules depend ONLY on each other's API — never internal Domain/Features/Infrastructure
 - **Per-module DB schemas** — each module owns its own SQL schema (`orders`, `inventory`, `notifications`, `payments`) within the shared database. Phase 11's "split databases" then becomes a connection string change, not a data migration
 - **Per-module database migrators** — `IModuleDatabaseMigrator` interface; each module owns its `DbContext` and independent migration history. Startup runs all migrators sequentially
 
@@ -727,7 +735,7 @@ Candidate expansion order:
 - **Module self-registration** — `AddOrdersModule()`, `AddInventoryModule()`, `AddNotificationsModule()`, and `AddPaymentsModule()` chain API registration, infrastructure setup, and assembly scanning. `Program.cs` stays clean as project count grows
 - **`AssemblyReference.cs` markers** — static class per project exposing `Assembly` for reliable handler discovery, endpoint registration, and architecture test scanning
 - **Bounded-context and subdomain mapping** — before extraction, explicitly model Orders, Inventory, Notifications, and Payments as business contexts with clear responsibilities, upstream/downstream relationships, and published contracts. Payments is elevated because reconciliation and recovery logic must not remain in a shared blob.
-- **Architecture tests updated** — `NetArchTest.Rules` (from Phase 5) now enforces inter-module boundaries: modules cannot reference each other's internals, only PublicApi contracts
+- **Architecture tests updated** — `NetArchTest.Rules` (from Phase 5) now enforces inter-module boundaries: modules cannot reference each other's internals, only API contracts
 - **Specification pattern** — composable query objects (`OrderByStatusSpec`, `ActiveCustomersSpec`) encapsulating EF Core `Where`/`Include`/`OrderBy` logic; reusable across handlers within a module. Introduced alongside per-module repositories — specifications replace scattered inline LINQ with testable, named query definitions
 
 ### Architecture Diagram
@@ -791,10 +799,10 @@ XYDataLabs.OrderProcessingSystem.sln
 │   └── Controllers/
 │       └── NotificationController.cs
 ├── XYDataLabs.OrderProcessingSystem.Contracts        (NEW - Shared event schemas + API DTOs)
-├── XYDataLabs.OrderProcessingSystem.Orders.PublicApi  (NEW - IOrderModuleApi + request/response records)
-├── XYDataLabs.OrderProcessingSystem.Inventory.PublicApi (NEW - IInventoryModuleApi + contracts)
-├── XYDataLabs.OrderProcessingSystem.Notifications.PublicApi (NEW - INotificationModuleApi + contracts)
-├── XYDataLabs.OrderProcessingSystem.Payments.PublicApi (NEW - IPaymentModuleApi + contracts)
+├── XYDataLabs.OrderProcessingSystem.Orders.API  (NEW - IOrderModuleApi + request/response records)
+├── XYDataLabs.OrderProcessingSystem.Inventory.API (NEW - IInventoryModuleApi + contracts)
+├── XYDataLabs.OrderProcessingSystem.Notifications.API (NEW - INotificationModuleApi + contracts)
+├── XYDataLabs.OrderProcessingSystem.Payments.API (NEW - IPaymentModuleApi + contracts)
 ├── frontend/apps/web                                 (React SPA)
 ├── XYDataLabs.OrderProcessingSystem.Orders.Domain     (Split from shared Domain)
 ├── XYDataLabs.OrderProcessingSystem.Orders.Features   (Split from shared Application)
@@ -862,7 +870,7 @@ services:
 | **Queries** (read) | Synchronous HTTP | UI → Gateway → Orders API `GET /api/v1/Order/{id}` |
 | **Workflows** (write) | Asynchronous Events | `OrderCreated` → Event Bus → Inventory reserves stock |
 | **Shared DB** | Per-module schemas | `orders.*`, `inventory.*`, `notifications.*` schemas in shared DB; split to separate DBs in Phase 11 |
-| **Module isolation** | Per-module projects | Each module owns Domain/Features/Infrastructure; cross-module communication via PublicApi contracts only |
+| **Module isolation** | Per-module projects | Each module owns Domain/Features/Infrastructure; cross-module communication via API contracts only |
 
 ### Characteristics
 
@@ -921,7 +929,7 @@ Phase 9 uses YARP to prove the internal gateway pattern and developer experience
 ### Entry Gate To Phase 10
 
 - Orders, Inventory, Notifications, and Payments compile independently.
-- PublicApi boundaries are enforced by architecture tests.
+- API boundaries are enforced by architecture tests.
 - Local end-to-end flow works through the YARP gateway.
 - The gateway rejects invalid host/header/payload combinations, removes unhealthy destinations from routing, and returns standardized ProblemDetails-style failures for gateway-generated errors.
 - At least one traced request path demonstrates tenant-aware routing plus correlation propagation from gateway to downstream services without losing `traceparent` or domain correlation metadata.
@@ -946,7 +954,7 @@ Reviewed against the canonical Microsoft `dotnet-backend-blueprint-v-10` referen
 
 - **`XYDataLabs.OrderProcessingSystem.ServiceDefaults` project** — new shared project referenced by every service host. Houses the canonical extension chain `AddServiceDefaults()` → `ConfigureOpenTelemetry()` + `AddDefaultHealthChecks()` + `AddServiceDiscovery()` + `ConfigureHttpClientDefaults(http => http.AddStandardResilienceHandler())`. Today these concerns are split between `SharedKernel` and individual `Program.cs` files; consolidating them is a prerequisite for clean per-service composition. Reinforces ADR-012 (OpenTelemetry dual export).
 - **`MapDefaultEndpoints()` extension** — standardizes `/health/ready` (full readiness, gates traffic) and `/health/alive` (liveness only) across every service host. Aligns with ADR-015 (deployment readiness probes) and removes duplicated health endpoint registration in each service.
-- **`IConfigureNamedOptions<JwtBearerOptions>` setup pattern** — replaces inline JWT wiring in `Program.cs` with a dedicated `JwtBearerOptionsSetup` registered via `ConfigureOptions<>()`. Required mechanism for Phase 9.5 (Keycloak portability) which adds a second JWT scheme via `AddPolicyScheme`.
+- **`IConfigureNamedOptions<JwtBearerOptions>` setup pattern** — replaces inline JWT wiring in `Program.cs` with a dedicated `JwtBearerOptionsSetup` registered via `ConfigureOptions<>()`. Required mechanism for Phase 9.5 (Keycloak portability) and not yet present in the current runtime wiring; it will add a second JWT scheme via `AddPolicyScheme`.
 - **`IExceptionHandler` + `AddProblemDetails` + `UseExceptionHandler`** — confirm or migrate to the .NET 8+ idiomatic exception pipeline producing RFC 7807 ProblemDetails. This is the contract provider webhooks (Phase 8.7) and external partners expect; it must be in place before microservices accept inbound traffic from a gateway.
 - **EF Core `UseAsyncSeeding` for reference data** — EF 9 idiomatic seeding hook on `DbContextOptionsBuilder`. Replaces ad-hoc startup seed code; particularly useful before Phase 11.5's PostgreSQL pilot which re-seeds the Notifications module on a different RDBMS provider.
 
@@ -954,17 +962,19 @@ Reviewed against the canonical Microsoft `dotnet-backend-blueprint-v-10` referen
 
 ### Outcome
 
-Module-isolated, locally deployable services with proven PublicApi boundaries, a first-class Payments module, dual orchestration (Docker Compose for CI + Aspire AppHost for inner-loop), a shared `ServiceDefaults` project, and unchanged event semantics ready for the Phase 10 transport swap.
+Module-isolated, locally deployable services with proven API boundaries, a first-class Payments module, dual orchestration (Docker Compose for CI + Aspire AppHost for inner-loop), a shared `ServiceDefaults` project, and unchanged event semantics ready for the Phase 10 transport swap.
 
 ---
 
-## Phase 9.5 — Cloud-Portable Identity Showcase (Keycloak Local) 📅
+## Phase 9.5 — Cloud-Portable Identity Showcase (Keycloak Local) ✅
 
 **Focus:** Demonstrate identity-provider portability by running Keycloak locally as a drop-in OIDC provider, validating that JWT auth works against any compliant IdP — not only Entra ID.
 
 ### Why This Phase Is Required
 
 Enterprise architecture must avoid lock-in to a single identity provider. Phase 10 wires Entra ID + JWT for cloud deployment, but the **same `JwtBearerOptions` configuration must accept tokens from Keycloak with only `Authority` and `Audience` changes**. This phase proves that portability with a runnable local demo.
+
+Keycloak remains a local-only Phase 9.5 portability proof for learning and validation; Azure production must continue to use Microsoft Entra ID, and any Azure-side Keycloak parity or migration testing should remain deferred work rather than a numbered roadmap phase.
 
 ### Key Deliverables
 
@@ -974,6 +984,19 @@ Enterprise architecture must avoid lock-in to a single identity provider. Phase 
 - **Claims transformation parity** — `ITenantClaimsTransformation` extracts `tenantId` from either Keycloak `realm_access.attributes.tenantId` or Entra `extension_TenantId` claim; downstream code sees the same `ClaimsPrincipal` shape
 - **Frontend integration** — React SPA's auth provider configured to use Keycloak in local docker, Entra in cloud; same `oidc-client-ts` library, only the discovery URL changes
 - **Documentation deliverable** — `docs/architecture/identity-portability.md` proving the configuration delta between Entra ID and Keycloak is < 10 lines
+
+### Phase 9.5 Status Table
+
+| Area | Status | Next Step | Phase |
+|---|---|---|---|
+| Local Keycloak portability proof | Runtime verified | Run the local HTTP and Docker Dev HTTP flows against the seeded realm | Phase 9.5 |
+| JWT / OIDC scheme switching | Runtime verified | Confirm bearer validation against the local issuer in live runs | Phase 9.5 |
+| Claims transformation parity | Runtime verified | Verify the tenant claim shape end to end during browser and API runs | Phase 9.5 |
+| React auth-provider switch | Runtime verified | Confirm the SPA requests a token from the local issuer in the live flow | Phase 9.5 |
+| Identity portability documentation | Complete | Keep the portability delta documented and reviewable | Phase 9.5 |
+| Cloud identity rollout | Not part of Phase 9.5 | Use Entra ID + JWT in Phase 10 | Phase 10 |
+| Keycloak as managed cloud IdP | Explicitly deferred | Do not move Keycloak into Azure production | Phase 10+ / deferred |
+| Federation between Keycloak and Entra | Explicitly deferred | Revisit only if a later business need appears | Phase 12+ / deferred |
 
 ### What This Phase Does NOT Do
 
@@ -988,7 +1011,7 @@ Enterprise architecture must avoid lock-in to a single identity provider. Phase 
 
 ### Outcome
 
-Identity-provider portability proven with a runnable local demo. The team has hands-on Keycloak experience (a major OSS skill in the .NET cloud-native ecosystem) without compromising the production Entra ID strategy. The architecture's auth pipeline is now demonstrably IdP-agnostic.
+Identity-provider portability is now wired into the repo with a runnable local demo path. The team has the Keycloak flow staged for live verification without compromising the production Entra ID strategy. The architecture's auth pipeline is now positioned to be demonstrably IdP-agnostic once the local and Docker Dev HTTP runs are completed.
 
 ---
 
@@ -1076,6 +1099,22 @@ contracts frozen in Phase 8.
 - **Cost governance** — scale-to-zero on all Container Apps, APIM Consumption tier (pay-per-call), autoscale RU caps on Cosmos DB, Azure Budget alerts per resource group
 - **Bicep-only topology** — Azure infrastructure remains Bicep-authored end to end. Service Bus topology is declared in a dedicated `servicebus.bicep` module with per-environment parameters; no portal drift and no Terraform split.
 
+### Phase 10 Status Table
+
+| Area | Status | Next Step | Phase |
+|---|---|---|---|
+| ACA deployment path | Planned | Deploy the service graph into Azure Container Apps with health probes and scaling | Phase 10 |
+| ACR build/push flow | Planned | Build and publish container images for the Azure workloads | Phase 10 |
+| APIM public gateway | Planned | Put APIM in front of the ACA ingress and keep YARP internal | Phase 10 |
+| Service Bus transport swap | Planned | Replace the in-memory event bus with durable topics/subscriptions | Phase 10 |
+| Blob Storage / Event Grid / Functions | Planned | Add the platform-event and DLQ reprocessing pieces | Phase 10 |
+| Entra ID + JWT cloud auth | Planned | Validate cloud identity in Azure; do not use Keycloak here | Phase 10 |
+| Private networking / secrets | Planned | Apply private endpoints, managed identity, and Key Vault wiring | Phase 10 |
+| Cost governance | Planned | Configure scale-to-zero and budget controls | Phase 10 |
+| Keycloak portability proof | Explicitly not Phase 10 | Keep Keycloak local-only in Phase 9.5 | Phase 9.5 / deferred |
+| Database-per-service split | Not Phase 10’s job | Move this to Phase 11 | Phase 11 |
+| Aspire deepening / distributed app tests | Not Phase 10’s job | Move this to Phase 13 | Phase 13 |
+
 ### Security
 
 - **Identity:** Azure Entra ID (Azure AD) for authentication
@@ -1162,6 +1201,19 @@ Secure, scalable cloud-native microservices with durable Azure transport, contro
 - Each service maintains its own read-optimized projections of data it needs from other services
 - **`XYDataLabs.OrderProcessingSystem.DurableFunctions`** — separate Azure Functions project (isolated process model) hosting Durable Function orchestrations for cross-service workflows that require compensating actions (see Distributed Workflow Strategy below)
 
+### Phase 11 Status Table
+
+| Area | Status | Next Step | Phase |
+|---|---|---|---|
+| Database per service | Planned | Split Orders, Inventory, and Notifications into independent stores | Phase 11 |
+| Shared DbContext removal | Planned | Remove shared persistence coupling between services | Phase 11 |
+| Per-service migrations | Planned | Give each service its own EF Core migration pipeline | Phase 11 |
+| Eventual consistency | Planned | Use events and local projections instead of cross-service joins | Phase 11 |
+| Durable Functions workflow support | Planned | Add orchestration for compensating workflows that need it | Phase 11 |
+| Notifications PostgreSQL pilot | Not Phase 11 core | Move the portability showcase into Phase 11.5 | Phase 11.5 |
+| Azure transport / ACA / APIM | Not Phase 11 core | Keep those as Phase 10 platform work | Phase 10 |
+| Aspire deepening / distributed testing | Not Phase 11 core | Keep that for Phase 13 | Phase 13 |
+
 ### Rules
 
 - No direct database queries across service boundaries
@@ -1233,6 +1285,19 @@ Independent, fully decoupled services with clear data ownership, Durable Functio
 - **Connection string strategy** — same `IConfiguration` key, different connection string per provider; `ServiceCollectionExtensions.AddNotificationsModule()` selects provider via `appsettings`
 - **Backup / DR alignment** — PG backup retention parity with Azure SQL configured; restore runbook documented
 
+### Phase 11.5 Status Table
+
+| Area | Status | Next Step | Phase |
+|---|---|---|---|
+| Notifications PostgreSQL pilot | Planned | Move only Notifications to PostgreSQL end to end | Phase 11.5 |
+| EF Core provider swap | Planned | Keep EF Core; change only the provider in Notifications Infrastructure | Phase 11.5 |
+| JSONB / PG-native features | Planned | Use native PostgreSQL features where they help the module | Phase 11.5 |
+| Separate PG migrations | Planned | Maintain an independent migration history for PostgreSQL | Phase 11.5 |
+| Local Docker PG support | Planned | Add PostgreSQL to local Docker Compose for the pilot | Phase 11.5 |
+| Azure Flexible Server target | Planned | Use Azure Database for PostgreSQL Flexible Server in cloud environments | Phase 11.5 |
+| Platform-wide PostgreSQL replacement | Not allowed | Keep Azure SQL as the default platform store for other modules | Deferred |
+| Cross-database transactions | Not part of Phase 11.5 | Keep using Outbox/Inbox instead | Phase 8 / deferred |
+
 ### What This Phase Does NOT Do
 
 - Does **not** migrate Orders, Inventory, or Payments — those remain on Azure SQL (revenue-critical, established operational baseline)
@@ -1278,6 +1343,15 @@ Scalable, manageable production platform with enterprise-grade operations, advan
 
 **Focus:** Developer inner-loop experience deepening, on top of the Aspire-Lite track introduced in Phase 9.
 
+### Phase 9 Carry-Forward Notes
+
+Phase 9 establishes the local orchestration seam, but a few Aspire-specific refinements are intentionally deferred so they can be revisited when package availability and the cloud maturity track are stronger:
+
+- **Provider-based Aspire resources** — replace the base container primitives with the dedicated Aspire SQL/Redis resource packages when restore is available in the environment, or when the team standardizes on a package set that supports them cleanly.
+- **Distributed application testing** — migrate the current AppHost proof toward `DistributedApplicationTestingBuilder` once the inner-loop orchestration has stabilized and the test harness can consume the live graph reliably.
+- **Publish/manifest evaluation** — compare the AppHost resource graph with Aspire-generated manifest output and `azd` flows only when there is a real deployment decision to make, so Phase 9 remains focused on local orchestration and Phase 10 remains the Azure deployment phase.
+- **Resource composition refinements** — expand `WithReference()`, `WaitFor()`, and `WithEnvironment()` usage as additional services join the graph, but keep the initial Phase 9 shape intentionally simple.
+
 ### Key Deliverables
 
 - **Deepen .NET Aspire adoption** — Aspire-Lite (`AppHost` + service discovery + dashboard) was already introduced in Phase 9; Phase 13 promotes it from "alongside Docker Compose" to the primary inner-loop orchestrator
@@ -1286,6 +1360,19 @@ Scalable, manageable production platform with enterprise-grade operations, advan
 - **Full end-to-end trace correlation** across all services via the OTEL pipeline already standardized in the Phase 9 `ServiceDefaults` project
 - **Evaluate `azd` + Aspire-generated manifest as an ACA deployment path** — the .NET 10 blueprint reference uses `aspire deploy` / `azd provision` + `azd deploy` driving Aspire-generated Bicep. Compare against our hand-authored `infra/` Bicep on three axes: audit traceability (production), iteration speed (non-prod), and parameterization granularity. **Outcome captured in a new ADR**: either adopt `azd` for non-revenue-critical environments while keeping hand-authored Bicep for production, or remain on hand-authored Bicep across all environments with documented rationale.
 - **.NET LTS upgrade window** — if not already done, Phase 13 is the natural moment to evaluate upgrading from .NET 8 to the current LTS (.NET 10 GA Nov 2025). Captured under its own ADR with a compatibility matrix for EF Core, Aspire, and Azure SDK packages.
+
+### Phase 13 Status Table
+
+| Area | Status | Next Step | Phase |
+|---|---|---|---|
+| Aspire deepening | Planned | Promote Aspire from parallel helper to primary inner-loop orchestrator | Phase 13 |
+| Distributed app testing | Planned | Move to `DistributedApplicationTestingBuilder` against the live Aspire graph | Phase 13 |
+| Manifest / `azd` evaluation | Planned | Decide on ACA deployment packaging with an ADR-backed comparison | Phase 13 |
+| Resource composition refinements | Planned | Expand `WithReference()`, `WaitFor()`, and `WithEnvironment()` usage | Phase 13 |
+| Trace correlation deepening | Planned | Keep full-service correlation aligned with the OTEL pipeline | Phase 13 |
+| .NET LTS upgrade | Planned | Evaluate the runtime upgrade window and package compatibility | Phase 13 |
+| ACA transport / identity / platform rollout | Not Phase 13 | Keep that as Phase 10 work | Phase 10 |
+| Database ownership / polyglot persistence | Not Phase 13 | Keep those as Phase 11 and 11.5 work | Phase 11 / 11.5 |
 
 ### Outcome
 
@@ -1430,7 +1517,7 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
      │
      ├── Phase 9     ─── 📅 Extract services locally (YARP + Docker Compose + Aspire-Lite)
      │
-     ├── Phase 9.5   ─── 📅 Cloud-portable identity (local Keycloak demo)
+     ├── Phase 9.5   ─── ✅ Cloud-portable identity (local Keycloak demo)
      │
      ├── Phase 10    ─── 📅 Deploy to ACA + Service Bus + APIM + Functions
      │
@@ -1492,23 +1579,102 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 - [ ] Parallel event handler execution (`Task.WhenAll` + `AggregateException` aggregation)
 
 ### Phase 9-10 📅 Microservices & Cloud
-- [ ] Module isolation: per-module project structure (Domain/Features/Infrastructure/PublicApi per module)
-- [ ] PublicApi contracts (`IOrderModuleApi`, `IInventoryModuleApi`) — inter-module communication via contracts only
-- [ ] Per-module DB schemas in shared database + `IModuleDatabaseMigrator` per module
-- [ ] Module self-registration (`AddOrdersModule()`) + `AssemblyReference.cs` markers
-- [ ] Architecture tests (NetArchTest) enforcing inter-module boundaries
-- [ ] Specification pattern — composable, testable query objects per module (replaces inline LINQ in handlers)
-- [ ] YARP reverse proxy + service extraction from isolated modules
-- [ ] Gateway cross-cutting (CORS, rate limiting, request logging, size limits)
+- [x] Module isolation: per-module project structure (Domain/Features/Infrastructure/API per module)
+- [x] API contracts (`IOrderModuleApi`, `IInventoryModuleApi`) — inter-module communication via contracts only
+- [x] Per-module DB schemas in shared database + `IModuleDatabaseMigrator` per module
+- [x] Module self-registration (`AddOrdersModule()`) + `AssemblyReference.cs` markers
+- [x] Architecture tests (NetArchTest) enforcing inter-module boundaries
+- [x] Specification pattern — composable, testable query objects per module (replaces inline LINQ in handlers)
+- [x] YARP reverse proxy + service extraction from isolated modules
+- [x] Gateway cross-cutting (CORS, rate limiting, request logging, size limits)
 - [ ] SharedContracts project for inter-service event schemas + DTOs
-- [ ] Docker Compose orchestration (including Redis)
-- [ ] Polly v8 basics (retry, circuit breaker, timeout) from day one
-- [ ] Graceful shutdown + structured concurrency
+- [x] Docker Compose orchestration (including Redis)
+- [x] Polly v8 basics (retry, circuit breaker, timeout) from day one
+- [x] Graceful shutdown + structured concurrency
 - [ ] Azure Container Apps deployment
 - [ ] Azure API Management (APIM) as public gateway (Consumption tier)
 - [ ] Azure Service Bus messaging backbone + DLQ handling
 - [ ] Azure Event Grid for platform/infrastructure events
 - [ ] Azure Functions for DLQ reprocessing (Service Bus trigger, isolated process)
+
+### Phase 9 vs Phase 10 Split
+
+#### Phase 9 closure scope
+
+- Module isolation and API boundaries
+- Per-module schemas in a shared database
+- Module self-registration and architecture tests
+- Specification standardization
+- YARP gateway and local cross-cutting concerns
+- Docker Compose orchestration
+- Graceful shutdown and local runtime proof
+- Unit, integration, and Playwright validation of the local gateway/payment flows
+
+#### Phase 10 scope
+
+- Azure Container Apps deployment
+- Azure API Management
+- Azure Service Bus and DLQ handling
+- Azure Event Grid
+- Azure Functions for DLQ reprocessing
+- Cloud deployment validation and platform hardening
+
+#### Deferred unless Phase 10 needs it
+
+- SharedContracts project for inter-service event schemas + DTOs
+- Any new service-contract refactor that exists only to support cloud/event integration
+
+### Phase 9 Closure Reality Check
+
+Phase 9 now has the local gateway proof, API boundary markers, module registration facades, per-module schema ownership, specification standardization, shared-host consolidation, traced multi-service flow proof, and graceful-shutdown proof in place. The only remaining policy decision is the explicit SharedContracts deferral.
+
+**Phase 9 closeout summary**
+- **Achieved:** local HTTP and Docker Dev HTTP validation paths are wired and ordered; task naming is normalized across Local, Docker, and Azure; Playwright smoke, matrix sanity, integration, and full-validation entrypoints are exposed consistently in VS Code.
+- **Achieved:** the matrix dry-run and runtime wiring now reflect the intended tenant/provider discovery model for local and Docker paths, including the dynamic shared vs dedicated tenant and provider assignment rules.
+- **Achieved:** shared host consolidation and traced multi-service flow proof are recorded as complete in the Phase 9 roadmap.
+- **Remaining:** record the SharedContracts decision as deferred and keep any new service-contract refactor out of Phase 9.
+- **Recommendation:** close Phase 9 as complete for wiring, runtime proof, and label hygiene; keep SharedContracts as an explicit deferred decision and move any future contract-refactor work into the next phase.
+
+#### Phase 9 automation and validation rule
+
+Phase 9-local validation must always be exercised in both local HTTP and Docker dev HTTP forms before a phase-closeout judgment is made.
+
+- Local HTTP matrix dry-run must resolve all three tenants and both payment providers.
+- Docker dev HTTP matrix dry-run must resolve the same tenant/provider coverage.
+- Local HTTP task order must remain:
+  1. `1 Run: Local HTTP 01 Env Ready + Keycloak`
+  2. `1 Run: Local HTTP 02 Playwright Smoke`
+  3. `1 Run: Local HTTP 03 Matrix Sanity (1 Tenant, Local HTTP)`
+  4. `1 Run: Local HTTP 04 Integration Suite (Local SQL, No Docker)`
+  5. `1 Run: Local HTTP 05 Full Validation (All Tenants + Providers, Local HTTP)`
+- Docker dev HTTP task order must remain:
+  1. `1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Docker Dev HTTP)`
+  2. `1 Run: Docker Dev HTTP 02 Playwright Smoke (Docker Dev HTTP)`
+  3. `1 Run: Docker Dev HTTP 03 Integration Suite (Docker Dev HTTP)`
+  4. `1 Run: Docker Dev HTTP 04 Payment Matrix (All Tenants + Providers, Docker Dev HTTP)`
+  5. `1 Run: Docker Dev HTTP 05 Full Validation (Profile + Suite + Smoke + Matrix, Docker Dev HTTP)`
+- The corresponding log pointers must be written per environment:
+  - `TestResults\Playwright\local-http\latest-playwright-smoke.txt`
+  - `TestResults\Playwright\local-http\latest-playwright-matrix.txt`
+  - `TestResults\Playwright\local-http\latest-playwright-full-validation.txt`
+  - `TestResults\Playwright\docker-http\latest-playwright-smoke.txt`
+  - `TestResults\Playwright\docker-http\latest-playwright-matrix.txt`
+  - `TestResults\Playwright\docker-http\latest-playwright-full-validation.txt`
+- The shared live progress log must stay visible during the run:
+  - `TestResults\Playwright\local-http\sequence-summary.log`
+  - `TestResults\Playwright\docker-http\sequence-summary.log`
+- Never mark Phase 9 complete unless the matrix dry-run and the actual local/Docker task paths are aligned with the labels above.
+
+- [x] API seam exists for Orders, Inventory, Notifications, and Payments
+- [x] Module registration facades exist for the four modules
+- [x] `AssemblyReference.cs` markers exist for the four API projects
+- [x] Local build and architecture-test coverage confirms the seam
+- [x] Full per-module project split implemented (`*.Domain`, `*.Features`, `*.Infrastructure`)
+- [x] Per-module DB schema ownership implemented
+- [x] Per-module migrator startup flow implemented
+- [x] Specification pattern standardization applied across the split modules
+
+Treat the unchecked items above as the remaining Phase 9 completion work. Do not mark Phase 9 fully complete until the physical module split and schema ownership are real, wired into startup, and covered by tests.
 - [ ] Azure Blob Storage for order attachments (invoices, receipts) + Event Grid integration
 - [ ] Azure Cache for Redis (managed)
 - [ ] Azure Entra ID + JWT authentication
@@ -1559,7 +1725,7 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 | **Cache** | Azure Cache for Redis (distributed cache + session state) |
 | **Error Handling** | ProblemDetails (RFC 9457) + global exception middleware |
 | **Domain Modeling** | DDD aggregate roots, state machines, value objects, domain invariants via `Result<T>` |
-| **Module Boundaries** | Per-module PublicApi contracts, `AssemblyReference.cs` markers, NetArchTest enforcement |
+| **Module Boundaries** | Per-module API contracts, `AssemblyReference.cs` markers, NetArchTest enforcement |
 | **Code Quality** | Roslyn analyzers (Roslynator, Meziantou, SonarAnalyzer) — build-time enforcement |
 | **Events** | Versioned schemas (inbox + outbox) + choreography with Saga escalation + parallel dispatch |
 | **Workflows** | Azure Durable Functions — orchestrator/activity pattern for Saga workflows with compensating actions |
@@ -1728,4 +1894,5 @@ All technical skills from a typical Azure .NET senior role are fully covered or 
 ---
 
 **Last Updated:** May 10, 2026
-**Status:** Phase 8 Closeout Matrix Validation Passed ✅ | Track U U5 Complete ✅ | Phase 8.5 Complete ✅ | Phases 8.7, 9, 9.5, 10, 11, 11.5, 12-14 Planned 📅
+**Status:** Phase 8 Closeout Matrix Validation Passed ✅ | Track U U5 Complete ✅ | Phase 8.5 Complete ✅ | Phases 8.7, 9, 10, 11, 11.5, 12-14 Planned 📅 | Phase 9.5 identity portability runtime verified ✅
+

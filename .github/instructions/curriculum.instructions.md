@@ -9,7 +9,7 @@ applyTo: "**/*CURRICULUM*,**/docs/learning/curriculum/**"
 ## Current Progress (as of June 2026)
 - Days 1-43: ✅ Complete (implementation detail in `docs/learning/implementation-notes/implementation-notes-days-29-38.md`; verification freeze completed 2026-04-10 across local, Docker, and Azure)
 - Architecture Phases 1-8.7: ✅ Complete
-- Days 44+: 📅 Next active work is backend Phase 9 module extraction with Payments included, YARP local gateway routing, Aspire-Lite service discovery, then Phase 10 Bicep-only Azure transport + DLQ operations
+- Days 44+: 📅 Next active work is backend Phase 10 Azure transport + DLQ operations; Phase 9 closeout and Phase 9.5 portability are already complete
 
 ## Checkbox Marking Convention
 - `[x]` = done

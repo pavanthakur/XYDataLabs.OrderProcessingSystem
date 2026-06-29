@@ -1,42 +1,38 @@
 using FluentAssertions;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Microsoft.Extensions.DependencyInjection;
+using System.Text.Json;
 using XYDataLabs.OrderProcessingSystem.Application.Events;
-using XYDataLabs.OrderProcessingSystem.Application.Features.Orders.Events;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
+using XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure;
+using XYDataLabs.OrderProcessingSystem.Orders.Features.Events;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 
 namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Scenarios;
 
+[Collection("SqlServer")]
 [Trait("Category", "Integration")]
-public sealed class DomainEventOutboxSqliteTests : IDisposable
+public sealed class DomainEventOutboxSqlServerTests : IClassFixture<SqlServerFixture>
 {
-    private readonly SqliteConnection _connection;
+    private readonly SqlServerFixture _fixture;
     private readonly IIntegrationEventMapperRegistry _mapperRegistry;
     private readonly TestTenantProvider _tenantProvider = new(42, "TenantSqlite");
 
-    public DomainEventOutboxSqliteTests()
+    public DomainEventOutboxSqlServerTests(SqlServerFixture fixture)
     {
-        _connection = new SqliteConnection("Data Source=:memory:");
-        _connection.Open();
+        _fixture = fixture;
         _mapperRegistry = new IntegrationEventMapperRegistry(new IDomainEventToIntegrationEventMapper[]
         {
             new OrderCreatedDomainEventMapper(),
         });
 
         using var context = CreateContext();
-        context.Database.EnsureCreated();
-    }
-
-    public void Dispose()
-    {
-        _connection.Dispose();
+        context.Database.Migrate();
     }
 
     [Fact]
-    public async Task SaveChangesAsync_Should_Persist_Outbox_And_Clear_DomainEvents_On_Success_Using_Sqlite()
+    public async Task SaveChangesAsync_Should_Persist_Outbox_And_Clear_DomainEvents_On_Success_Using_SqlServer()
     {
         await SeedBaselineEntitiesAsync();
 
@@ -50,10 +46,6 @@ public sealed class DomainEventOutboxSqliteTests : IDisposable
         var order = orderResult.Value!;
         order.CreatedBy = 1;
         order.CreatedDate = DateTime.UtcNow;
-        foreach (var orderProduct in order.OrderProducts.Select((value, index) => new { value, index }))
-        {
-            orderProduct.value.SysId = orderProduct.index + 1;
-        }
 
         context.Orders.Add(order);
         await context.SaveChangesAsync();
@@ -69,12 +61,22 @@ public sealed class DomainEventOutboxSqliteTests : IDisposable
     }
 
     [Fact]
-    public async Task SaveChangesAsync_Should_Roll_Back_Outbox_And_Keep_DomainEvents_On_Failure_Using_Sqlite()
+    public async Task SaveChangesAsync_Should_Roll_Back_Outbox_And_Keep_DomainEvents_On_Failure_Using_SqlServer()
     {
         var providerId = await SeedBaselineEntitiesAsync();
 
         await using var failingContext = CreateContext();
-        var customer = await failingContext.Customers.SingleAsync();
+        var customer = new Customer
+        {
+            Name = $"Rollback Customer {Guid.NewGuid():N}",
+            Email = $"rollback-{Guid.NewGuid():N}@test.com",
+            TenantId = _tenantProvider.TenantId,
+            CreatedBy = 1,
+            CreatedDate = DateTime.UtcNow,
+        };
+        failingContext.Customers.Add(customer);
+        await failingContext.SaveChangesAsync();
+
         var product = await failingContext.Products.SingleAsync();
 
         var orderResult = Order.Create(customer.CustomerId, new[] { product }, DateTime.UtcNow);
@@ -83,10 +85,6 @@ public sealed class DomainEventOutboxSqliteTests : IDisposable
         var order = orderResult.Value!;
         order.CreatedBy = 1;
         order.CreatedDate = DateTime.UtcNow;
-        foreach (var orderProduct in order.OrderProducts.Select((value, index) => new { value, index }))
-        {
-            orderProduct.value.SysId = orderProduct.index + 1;
-        }
         failingContext.Orders.Add(order);
 
         failingContext.PaymentMethods.Add(new PaymentMethod
@@ -115,30 +113,110 @@ public sealed class DomainEventOutboxSqliteTests : IDisposable
         order.DomainEvents.Should().ContainSingle();
 
         await using var verificationContext = CreateContext();
-        (await verificationContext.Orders.CountAsync()).Should().Be(0);
-        (await verificationContext.OutboxMessages.CountAsync()).Should().Be(0);
+        (await verificationContext.Orders.CountAsync(orderRow => orderRow.CustomerId == customer.CustomerId)).Should().Be(0);
+        (await verificationContext.OutboxMessages.CountAsync(message =>
+            message.Payload != null &&
+            message.Payload.Contains($"\"customerId\":{customer.CustomerId.Value}"))).Should().Be(0);
     }
 
     private async Task<int> SeedBaselineEntitiesAsync()
     {
         await using var context = CreateContext();
 
-        if (await context.PaymentProviders.AnyAsync())
+        var paymentMethods = await context.PaymentMethods
+            .Where(method => method.TenantId == _tenantProvider.TenantId)
+            .ToListAsync();
+        if (paymentMethods.Count > 0)
         {
-            return await context.PaymentProviders.Select(provider => provider.Id).SingleAsync();
+            context.PaymentMethods.RemoveRange(paymentMethods);
         }
 
-        context.Tenants.Add(new Tenant
+        var billingCustomers = await context.BillingCustomers
+            .Where(customer => customer.TenantId == _tenantProvider.TenantId)
+            .ToListAsync();
+        if (billingCustomers.Count > 0)
         {
-            Id = _tenantProvider.TenantId,
-            ExternalId = "ext-TenantSqlite",
-            Code = _tenantProvider.TenantCode,
-            Name = "Tenant Sqlite",
-            Status = "Active",
-            TenantTier = "SharedPool",
-            CreatedBy = 1,
-            CreatedDate = DateTime.UtcNow,
-        });
+            context.BillingCustomers.RemoveRange(billingCustomers);
+        }
+
+        var billingCustomerKeyInfos = await context.BillingCustomerKeyInfos
+            .Where(keyInfo => keyInfo.TenantId == _tenantProvider.TenantId)
+            .ToListAsync();
+        if (billingCustomerKeyInfos.Count > 0)
+        {
+            context.BillingCustomerKeyInfos.RemoveRange(billingCustomerKeyInfos);
+        }
+
+        var cardTransactions = await context.CardTransactions
+            .Where(cardTransaction => cardTransaction.TenantId == _tenantProvider.TenantId)
+            .ToListAsync();
+        if (cardTransactions.Count > 0)
+        {
+            context.CardTransactions.RemoveRange(cardTransactions);
+        }
+
+        var payinLogs = await context.PayinLogs
+            .Where(payinLog => payinLog.TenantId == _tenantProvider.TenantId)
+            .ToListAsync();
+        if (payinLogs.Count > 0)
+        {
+            context.PayinLogs.RemoveRange(payinLogs);
+        }
+
+        var paymentProviders = await context.PaymentProviders
+            .Where(provider => provider.TenantId == _tenantProvider.TenantId)
+            .ToListAsync();
+        if (paymentProviders.Count > 0)
+        {
+            context.PaymentProviders.RemoveRange(paymentProviders);
+        }
+
+        var orders = await context.Orders
+            .Where(order => order.TenantId == _tenantProvider.TenantId)
+            .ToListAsync();
+        if (orders.Count > 0)
+        {
+            context.Orders.RemoveRange(orders);
+        }
+
+        var customers = await context.Customers
+            .Where(customer => customer.TenantId == _tenantProvider.TenantId)
+            .ToListAsync();
+        if (customers.Count > 0)
+        {
+            context.Customers.RemoveRange(customers);
+        }
+
+        var products = await context.Products
+            .Where(product => product.TenantId == _tenantProvider.TenantId)
+            .ToListAsync();
+        if (products.Count > 0)
+        {
+            context.Products.RemoveRange(products);
+        }
+
+        var outboxMessages = await context.OutboxMessages
+            .Where(message => message.TenantId == _tenantProvider.TenantId)
+            .ToListAsync();
+        if (outboxMessages.Count > 0)
+        {
+            context.OutboxMessages.RemoveRange(outboxMessages);
+        }
+
+        if (context.ChangeTracker.HasChanges())
+        {
+            await context.SaveChangesAsync();
+        }
+
+        var tenantExists = await context.Tenants.AnyAsync(tenant => tenant.Id == _tenantProvider.TenantId);
+        if (!tenantExists)
+        {
+            context.Database.ExecuteSqlInterpolated($@"
+                SET IDENTITY_INSERT [dbo].[Tenants] ON;
+                INSERT INTO [dbo].[Tenants] ([Id], [ExternalId], [Code], [Name], [Status], [TenantTier], [CreatedBy], [CreatedDate])
+                VALUES ({_tenantProvider.TenantId}, {"ext-TenantSqlite"}, {_tenantProvider.TenantCode}, {"Tenant Sqlite"}, {"Active"}, {"SharedPool"}, {1}, {DateTime.UtcNow});
+                SET IDENTITY_INSERT [dbo].[Tenants] OFF;");
+        }
 
         var paymentProvider = new PaymentProvider
         {
@@ -183,31 +261,10 @@ public sealed class DomainEventOutboxSqliteTests : IDisposable
     private OrderProcessingSystemDbContext CreateContext()
     {
         var options = new DbContextOptionsBuilder<OrderProcessingSystemDbContext>()
-            .UseSqlite(_connection)
+            .UseSqlServer(_fixture.ConnectionString)
             .Options;
 
-        return new SqliteOrderProcessingSystemDbContext(options, _tenantProvider, _mapperRegistry);
-    }
-
-    private sealed class SqliteOrderProcessingSystemDbContext : OrderProcessingSystemDbContext
-    {
-        public SqliteOrderProcessingSystemDbContext(
-            DbContextOptions<OrderProcessingSystemDbContext> options,
-            ITenantProvider tenantProvider,
-            IIntegrationEventMapperRegistry integrationEventMapperRegistry)
-            : base(options, tenantProvider, integrationEventMapperRegistry)
-        {
-        }
-
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
-        {
-            base.OnModelCreating(modelBuilder);
-
-            modelBuilder.Entity<Order>()
-                .Property(order => order.RowVersion)
-                .IsConcurrencyToken()
-                .ValueGeneratedNever();
-        }
+        return new OrderProcessingSystemDbContext(options, _tenantProvider, _mapperRegistry);
     }
 
     private sealed class TestTenantProvider : ITenantProvider

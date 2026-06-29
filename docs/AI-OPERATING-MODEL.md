@@ -43,6 +43,7 @@ Use this operating model to answer four questions before making a repo-shared AI
 | `.github/instructions/` | File-pattern-based guidance |
 | `.github/prompts/README.md` | Discovery surface for reusable prompts |
 | `.github/prompts/*.prompt.md` | Reusable slash workflows |
+| `.github/prompts/phase-handoffs/*.prompt.md` | Phase-specific architect/developer handoff prompts for external or role-specialized models |
 | `.github/agents/*.agent.md` | Specialized subagent modes |
 | `.github/skills/README.md` | Discovery surface for repo-owned skills |
 | `.github/skills/*/SKILL.md` | Stable specialist workflows too large for prompts alone |

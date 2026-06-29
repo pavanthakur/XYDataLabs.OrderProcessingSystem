@@ -1,0 +1,83 @@
+{
+  "realm": "xy-phase9",
+  "enabled": true,
+  "displayName": "XY Order Processing Local",
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "rememberMe": false,
+  "clients": [
+    {
+      "clientId": "xy-order-processing-local-web",
+      "name": "XY Order Processing Local Web",
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": false,
+      "redirectUris": [
+        "http://localhost:5173/*",
+        "https://localhost:5174/*",
+        "http://localhost:5022/*",
+        "https://localhost:5023/*"
+      ],
+      "webOrigins": [
+        "http://localhost:5173",
+        "https://localhost:5174",
+        "http://localhost:5022",
+        "https://localhost:5023"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    },
+    {
+      "clientId": "xy-order-processing-backend",
+      "name": "XY Order Processing Backend",
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "${KEYCLOAK_BACKEND_CLIENT_SECRET}",
+      "serviceAccountsEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "frontchannelLogout": false,
+      "webOrigins": [
+        "+"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "tenant-admin",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "tenant-admin@example.local",
+      "firstName": "Tenant",
+      "lastName": "Admin",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${KEYCLOAK_TENANT_ADMIN_PASSWORD}",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "offline_access",
+        "tenant-admin"
+      ]
+    }
+  ],
+  "roles": {
+    "realm": [
+      {
+        "name": "tenant-admin",
+        "description": "Local tenant administrator role"
+      }
+    ]
+  }
+}

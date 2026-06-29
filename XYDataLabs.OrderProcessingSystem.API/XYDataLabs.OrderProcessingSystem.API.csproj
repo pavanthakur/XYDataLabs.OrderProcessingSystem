@@ -38,7 +38,14 @@
   <ItemGroup>
     <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Application\XYDataLabs.OrderProcessingSystem.Application.csproj" />
     <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Infrastructure\XYDataLabs.OrderProcessingSystem.Infrastructure.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Orders.Features\XYDataLabs.OrderProcessingSystem.Orders.Features.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Orders.Infrastructure\XYDataLabs.OrderProcessingSystem.Orders.Infrastructure.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Inventory.Infrastructure\XYDataLabs.OrderProcessingSystem.Inventory.Infrastructure.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Notifications.Infrastructure\XYDataLabs.OrderProcessingSystem.Notifications.Infrastructure.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Payments.Features\XYDataLabs.OrderProcessingSystem.Payments.Features.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Payments.Infrastructure\XYDataLabs.OrderProcessingSystem.Payments.Infrastructure.csproj" />
     <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.SharedKernel\XYDataLabs.OrderProcessingSystem.SharedKernel.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.ServiceDefaults\XYDataLabs.OrderProcessingSystem.ServiceDefaults.csproj" />
     <ProjectReference Include="..\XYDataLabs.OpenPayAdapter\XYDataLabs.OpenPayAdapter.csproj" />
     <ProjectReference Include="..\XYDataLabs.RazorpayAdapter\XYDataLabs.RazorpayAdapter.csproj" />
   </ItemGroup>

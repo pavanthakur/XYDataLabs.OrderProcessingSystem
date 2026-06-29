@@ -131,6 +131,27 @@ Access paths:
 - Optional host-based routes still exist for `orders.localhost` and `ui.localhost`, but the path-based routes avoid a local hosts-file dependency.
 - The Docker-targeted gateway profiles keep the same `http://localhost:5080` ingress while retargeting downstream API/UI ports via launch-profile environment overrides.
 
+### **Phase 9 closeout run order**
+
+Use this tracked sequence when you want to re-run or verify the local/Docker closeout flow without relying on generated artifacts:
+
+1. Local HTTP: `1 Run: Local HTTP 01 Env Ready`
+2. Local HTTP: `1 Run: Local HTTP 02 Playwright Smoke`
+3. Local HTTP: `1 Run: Local HTTP 03 Matrix Sanity (1 Tenant, Local HTTP)`
+4. Local HTTP: `1 Run: Local HTTP 04 Integration Suite (Local SQL, No Docker)`
+5. Local HTTP: `1 Run: Local HTTP 05 Full Validation (All Tenants + Providers, Local HTTP)`
+6. Docker Dev HTTP: `1 Run: Docker Dev HTTP 01 Env Ready (Docker Dev HTTP)`
+7. Docker Dev HTTP: `1 Run: Docker Dev HTTP 02 Playwright Smoke (Docker Dev HTTP)`
+8. Docker Dev HTTP: `1 Run: Docker Dev HTTP 03 Integration Suite (Docker Dev HTTP)`
+9. Docker Dev HTTP: `1 Run: Docker Dev HTTP 04 Payment Matrix (All Tenants + Providers, Docker Dev HTTP)`
+10. Docker Dev HTTP: `1 Run: Docker Dev HTTP 05 Full Validation (Profile + Suite + Smoke + Matrix, Docker Dev HTTP)`
+
+Notes:
+- The canonical evidence folders remain `TestResults\Integration`, `TestResults\PaymentMatrix`, and `TestResults\Playwright`.
+- Runtime-generated folders under `automation/dist/` and `frontend/apps/web/test-results/` stay untracked.
+- Any env or Keycloak seed files should be reviewed before commit because they may contain secret-like material.
+- `Resources/Keycloak/realm-export.json` stays as a checked-in template only; the real values must come from `.NET user-secrets` for local HTTP, `Resources/Docker/.env.local` for Docker dev HTTP, GitHub secrets in CI, and Key Vault in Azure.
+
 ### **Port Allocations**
 | Mode | API | Web |
 |------|-----|-----|

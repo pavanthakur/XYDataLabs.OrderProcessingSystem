@@ -59,6 +59,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
             // Azure deployments run schema migrations in workflow steps before app startup.
             if (applyMigrations)
             {
+                context.Database.SetCommandTimeout(180);
                 context.Database.Migrate();
             }
 
@@ -308,7 +309,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                 var connectionString = configuredStrings[tenant.Code]!;
 
                 var dedicatedOptions = new DbContextOptionsBuilder<OrderProcessingSystemDbContext>()
-                    .UseSqlServer(connectionString)
+                    .UseSqlServer(connectionString, sqlOptions => sqlOptions.CommandTimeout(180))
                     .Options;
 
                 // NullTenantProvider ensures EF Core query filters short-circuit safely
@@ -323,7 +324,10 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                 // For Option B (fresh dedicated DB), apply migrations so the schema exists.
                 // For Option A (same DB), this is idempotent — no-op.
                 if (applyMigrations)
+                {
+                    dedicatedContext.Database.SetCommandTimeout(180);
                     dedicatedContext.Database.Migrate();
+                }
 
                 // Look up the tenant row in the dedicated DB's own Tenants table.
                 // Migrations seed all tenant rows into every DB, so this row will exist.

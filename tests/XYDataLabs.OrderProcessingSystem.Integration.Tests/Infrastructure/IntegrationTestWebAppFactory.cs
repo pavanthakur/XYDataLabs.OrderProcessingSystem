@@ -7,8 +7,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
+using XYDataLabs.OrderProcessingSystem.Application.Events;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.Events;
+using XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 
 namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure
@@ -20,6 +22,8 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure
         private readonly string? _dedicatedConnectionString;
         private readonly bool _enableBackgroundWorkers;
         private readonly ConcurrentDictionary<string, string?> _configOverrides = new();
+        private readonly SemaphoreSlim _initializationLock = new(1, 1);
+        private bool _isInitialized;
 
         /// <summary>
         /// Creates a factory where all DbContexts use the same connection string.
@@ -51,6 +55,13 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure
             _connectionString = connectionString;
             _dedicatedConnectionString = dedicatedConnectionString;
             _enableBackgroundWorkers = enableBackgroundWorkers;
+
+            // Program.cs loads shared settings after the test host config sources.
+            // Environment variables win over the later JSON load, so set the SQL
+            // connection strings here to keep health checks and DbContexts on the
+            // local test database instead of any stale developer/Azure value.
+            Environment.SetEnvironmentVariable("ConnectionStrings__OrderProcessingSystemDbConnection", _connectionString);
+            Environment.SetEnvironmentVariable("ConnectionStrings__TenantRegistryDbConnection", _connectionString);
         }
 
         /// <summary>
@@ -82,6 +93,9 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure
                 // that cover infrastructure/routing behaviour.
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
+                    ["ConnectionStrings:OrderProcessingSystemDbConnection"] = _connectionString,
+                    ["ConnectionStrings:TenantRegistryDbConnection"] = _connectionString,
+                    ["ConnectionStrings:Redis"] = string.Empty,
                     ["OpenPay:MerchantId"] = "mt_test_integration_openpay_merchant",
                     ["OpenPay:PublicKey"] = "pk_test_integration_openpay_browser_key",
                     ["OpenPay:PrivateKey"] = "integration_test_openpay_private_key",
@@ -114,7 +128,7 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure
 
                 if (_dedicatedConnectionString is null)
                 {
-                    // Single-DB mode: all queries go to the same Testcontainers DB.
+                    // Single-DB mode: all queries go to the same SQL Server DB.
                     // This is the existing behavior — no routing, no breaking change.
                     services.AddDbContext<OrderProcessingSystemDbContext>(options =>
                         options.UseSqlServer(_connectionString));
@@ -152,6 +166,7 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure
 
         public HttpClient CreateTenantClient(string tenantCode)
         {
+            EnsureInitializedAsync().GetAwaiter().GetResult();
             var client = CreateClient();
             client.DefaultRequestHeaders.Add(TenantHeaderName, tenantCode);
             return client;
@@ -160,6 +175,7 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure
         public async Task ExecuteDbContextAsync(Func<OrderProcessingSystemDbContext, Task> action)
         {
             ArgumentNullException.ThrowIfNull(action);
+            await EnsureInitializedAsync();
 
             using var scope = Services.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<OrderProcessingSystemDbContext>();
@@ -169,6 +185,7 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure
         public async Task<TResult> ExecuteDbContextAsync<TResult>(Func<OrderProcessingSystemDbContext, Task<TResult>> action)
         {
             ArgumentNullException.ThrowIfNull(action);
+            await EnsureInitializedAsync();
 
             using var scope = Services.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<OrderProcessingSystemDbContext>();
@@ -179,6 +196,7 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure
         {
             ArgumentNullException.ThrowIfNull(tenantContext);
             ArgumentNullException.ThrowIfNull(action);
+            await EnsureInitializedAsync();
 
             using var scope = Services.CreateScope();
             var httpContextAccessor = scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>();
@@ -215,6 +233,46 @@ namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure
             foreach (var descriptor in descriptors)
             {
                 services.Remove(descriptor);
+            }
+        }
+
+        private async Task EnsureInitializedAsync()
+        {
+            if (_isInitialized)
+            {
+                return;
+            }
+
+            await _initializationLock.WaitAsync();
+            try
+            {
+                if (_isInitialized)
+                {
+                    return;
+                }
+
+                using var scope = Services.CreateScope();
+
+                var appDbContext = scope.ServiceProvider.GetRequiredService<OrderProcessingSystemDbContext>();
+                var integrationEventMapperRegistry = scope.ServiceProvider.GetRequiredService<IIntegrationEventMapperRegistry>();
+                var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+
+                DbInitializer.InitializeSharedPool(
+                    appDbContext,
+                    configuration: configuration,
+                    applyMigrations: true);
+
+                DbInitializer.InitializeDedicatedTenants(
+                    appDbContext,
+                    configuration: configuration,
+                    applyMigrations: true,
+                    integrationEventMapperRegistry);
+
+                _isInitialized = true;
+            }
+            finally
+            {
+                _initializationLock.Release();
             }
         }
 

@@ -44,8 +44,8 @@ docs/README.md
 
 - Days 1-43 are complete.
 - Track U Phase U5 is complete: the React web cutover is live and the legacy MVC UI has been retired from the runtime and solution.
-- Backend Phase 8, 8.5, 8.6, and 8.7 are verified; backend Phase 9 is now the next active engineering phase.
-- The roadmap beyond Phase 8.7 remains explicitly extended with Phase 9 (YARP module extraction), Phase 9.5 (Keycloak portability), and Phase 11.5 (PostgreSQL portability), while keeping Entra ID and Azure SQL as the production defaults.
+- Backend Phase 8, 8.5, 8.6, 8.7, 9, and 9.5 are verified; backend Phase 10 is now the next active engineering phase.
+- The roadmap beyond Phase 8.7 remains explicitly extended with Phase 10 (Azure transport + DLQ operations), Phase 11.5 (PostgreSQL portability), and Phase 13 (Aspire deepening), while keeping Entra ID and Azure SQL as the production defaults.
 - Local and Docker UI validation for the React-first runtime are complete on the supported execution paths.
 - The canonical learning source of truth is `docs/learning/curriculum/1_MASTER_CURRICULUM.md`.
 - The canonical milestone tracker is `docs/internal/AZURE-PROGRESS-EVALUATION.md`.
@@ -71,7 +71,8 @@ docs/README.md
 3. Treat `.github/` as the canonical home for workflow, prompt, and automation guidance.
 4. Prefer updating one canonical page instead of duplicating the same guidance in multiple places.
 5. Use `reference/quick-command-reference.md` before commits or deployments.
-6. Use `architecture/decisions/` when changing architecture constraints, not ad hoc notes.
+6. If Docker bootstrap, SQL health, or portable restore behavior regresses, start with `docs/reference/docker-bootstrap-troubleshooting.md`.
+7. Use `architecture/decisions/` when changing architecture constraints, not ad hoc notes.
 7. Delete stale material once any remaining actionable guidance has been folded into the canonical page that owns it.
 
 ## Lightweight Maintenance Cadence

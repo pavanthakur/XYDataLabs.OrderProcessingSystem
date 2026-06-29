@@ -7,6 +7,7 @@ export interface PendingPaymentContext {
 
 const pendingPaymentStorageKeyPrefix = "pending-payment:";
 const configuredApiBaseUrl = (import.meta.env.VITE_ORDERPROCESSING_API_BASE_URL ?? "").trim().replace(/\/$/, "");
+let configuredAccessToken = "";
 
 export function createFlowId(): string {
   if (window.crypto?.randomUUID) {
@@ -55,6 +56,10 @@ export function clearPendingPaymentContext(paymentId: string | null | undefined)
   }
 }
 
+export function setAccessToken(nextAccessToken: string | null | undefined) {
+  configuredAccessToken = (nextAccessToken ?? "").trim();
+}
+
 export function trackPaymentEvent(
   payload: Record<string, unknown>,
   options?: { useBeacon?: boolean }
@@ -81,6 +86,10 @@ export function trackPaymentEvent(
 
   if (tenantCode) {
     headers["X-Tenant-Code"] = tenantCode;
+  }
+
+  if (configuredAccessToken) {
+    headers["Authorization"] = `Bearer ${configuredAccessToken}`;
   }
 
   return fetch(resolveApiUrl("/payment/client-event"), {

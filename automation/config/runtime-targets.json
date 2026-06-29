@@ -3,6 +3,7 @@
     {
       "key": "local-http",
       "baseUrl": "http://localhost:5173",
+      "apiBaseUrl": "http://localhost:5010",
       "verificationMode": "physical",
       "browserMode": "local",
       "expectedTenantSource": "runtime-configuration",
@@ -17,6 +18,7 @@
     {
       "key": "local-https",
       "baseUrl": "https://localhost:5174",
+      "apiBaseUrl": "https://localhost:5011",
       "verificationMode": "physical",
       "browserMode": "local",
       "expectedTenantSource": "runtime-configuration",
@@ -30,6 +32,36 @@
     },
     {
       "key": "docker-dev-http",
+      "baseUrl": "http://localhost:5022",
+      "apiBaseUrl": "http://localhost:5020",
+      "verificationMode": "physical",
+      "browserMode": "docker",
+      "expectedTenantSource": "runtime-configuration",
+      "supportsPartialExecution": false,
+      "supportsHeadless": true,
+      "runtime": "docker",
+      "environment": "dev",
+      "profile": "http",
+      "paymentPagePath": "/payments/new",
+      "ignoreHttpsErrors": false
+    },
+    {
+      "key": "docker-dev-http-tests",
+      "baseUrl": "http://localhost:5022",
+      "apiBaseUrl": "http://localhost:5020",
+      "verificationMode": "physical",
+      "browserMode": "docker",
+      "expectedTenantSource": "runtime-configuration",
+      "supportsPartialExecution": false,
+      "supportsHeadless": true,
+      "runtime": "docker",
+      "environment": "dev",
+      "profile": "http",
+      "paymentPagePath": "/payments/new",
+      "ignoreHttpsErrors": false
+    },
+    {
+      "key": "docker-dev-http-playwright",
       "baseUrl": "http://localhost:5022",
       "apiBaseUrl": "http://localhost:5020",
       "verificationMode": "physical",

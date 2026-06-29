@@ -8,12 +8,12 @@ using Microsoft.Extensions.Options;
 using Moq;
 using XYDataLabs.OpenPayAdapter;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
-using XYDataLabs.OrderProcessingSystem.Application.Features.Payments.Commands;
 using XYDataLabs.OrderProcessingSystem.Application.Utilities;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
+using XYDataLabs.OrderProcessingSystem.Payments.Features.Commands;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase;
 

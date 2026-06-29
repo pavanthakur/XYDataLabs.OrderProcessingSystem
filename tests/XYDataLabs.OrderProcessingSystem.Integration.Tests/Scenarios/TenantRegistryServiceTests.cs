@@ -1,97 +1,61 @@
 using FluentAssertions;
-using Microsoft.Data.Sqlite;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.Multitenancy;
-using Xunit;
+using XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure;
 
 namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Scenarios;
 
-/// <summary>
-/// Unit-style tests for <see cref="TenantRegistryService"/> using an in-memory SQLite database.
-/// Validates FindByCode / FindByCodeAsync return correct <see cref="TenantRegistryEntry"/> records
-/// and handle null/empty/unknown inputs without throwing.
-/// </summary>
+#pragma warning disable CA2100
+
+[Collection("SqlServer")]
 [Trait("Category", "Integration")]
-public sealed class TenantRegistryServiceTests : IDisposable
+public sealed class TenantRegistryServiceTests : IAsyncLifetime
 {
-    private readonly SqliteConnection _connection;
+    private readonly SqlServerFixture _fixture;
+    private string _databaseName = string.Empty;
+    private string _connectionString = string.Empty;
 
-    public TenantRegistryServiceTests()
+    public TenantRegistryServiceTests(SqlServerFixture fixture)
     {
-        _connection = new SqliteConnection("Data Source=:memory:");
-        _connection.Open();
-
-        using var ctx = CreateContext();
-        ctx.Database.EnsureCreated();
-
-        ctx.Tenants.AddRange(
-            new Tenant
-            {
-                Id = 1,
-                ExternalId = "ext-TENANTA",
-                Code = "TenantA",
-                Name = "Tenant A",
-                Status = "Active",
-                TenantTier = "SharedPool",
-                PaymentProviderCode = "Razorpay",
-                CreatedBy = 1,
-                CreatedDate = DateTime.UtcNow
-            },
-            new Tenant
-            {
-                Id = 2,
-                ExternalId = "ext-TENANTB",
-                Code = "TenantB",
-                Name = "Tenant B",
-                Status = "Active",
-                TenantTier = "SharedPool",
-                PaymentProviderCode = "Razorpay",
-                CreatedBy = 1,
-                CreatedDate = DateTime.UtcNow
-            },
-            new Tenant
-            {
-                Id = 3,
-                ExternalId = "ext-TENANTC",
-                Code = "TenantC",
-                Name = "Tenant C",
-                Status = "Active",
-                TenantTier = "Dedicated",
-                PaymentProviderCode = "OpenPay",
-                CreatedBy = 1,
-                CreatedDate = DateTime.UtcNow
-            },
-            new Tenant
-            {
-                Id = 4,
-                ExternalId = "ext-NOPROVIDER",
-                Code = "TenantNoProvider",
-                Name = "Tenant No Provider",
-                Status = "Active",
-                TenantTier = "SharedPool",
-                PaymentProviderCode = null,
-                CreatedBy = 1,
-                CreatedDate = DateTime.UtcNow
-            });
-        ctx.SaveChanges();
+        _fixture = fixture;
     }
 
-    public void Dispose() => _connection.Dispose();
+    public async Task InitializeAsync()
+    {
+        _databaseName = $"TenantRegistry_{Guid.NewGuid():N}";
+        _connectionString = await CreateDatabaseAsync(_databaseName);
+        await using var ctx = CreateContext();
+        await ctx.Database.EnsureCreatedAsync();
 
-    // ── FindByCode ────────────────────────────────────────────────────────────
+        await ctx.Database.ExecuteSqlRawAsync(
+            """
+            SET IDENTITY_INSERT [Tenants] ON;
+            INSERT INTO [Tenants] ([Id], [ExternalId], [Code], [Name], [Status], [TenantTier], [PaymentProviderCode], [CreatedBy], [CreatedDate])
+            VALUES
+                (1, 'ext-TENANTA', 'TenantA', 'Tenant A', 'Active', 'SharedPool', 'Razorpay', 1, SYSUTCDATETIME()),
+                (2, 'ext-TENANTB', 'TenantB', 'Tenant B', 'Active', 'SharedPool', 'Razorpay', 1, SYSUTCDATETIME()),
+                (3, 'ext-TENANTC', 'TenantC', 'Tenant C', 'Active', 'Dedicated', 'OpenPay', 1, SYSUTCDATETIME()),
+                (4, 'ext-NOPROVIDER', 'TenantNoProvider', 'Tenant No Provider', 'Active', 'SharedPool', NULL, 1, SYSUTCDATETIME());
+            SET IDENTITY_INSERT [Tenants] OFF;
+            """);
+    }
+
+    public async Task DisposeAsync()
+    {
+        await DropDatabaseAsync(_databaseName);
+    }
 
     [Theory]
     [InlineData("TenantA", "Razorpay")]
     [InlineData("TenantB", "Razorpay")]
     [InlineData("TenantC", "OpenPay")]
-    public void FindByCode_KnownTenant_ReturnsEntryWithCorrectPaymentProviderCode(
-        string tenantCode, string expectedProviderCode)
+    public void FindByCode_KnownTenant_ReturnsEntryWithCorrectPaymentProviderCode(string tenantCode, string expectedProviderCode)
     {
         using var svc = CreateService();
-
         var entry = svc.FindByCode(tenantCode);
 
         entry.Should().NotBeNull();
@@ -103,7 +67,6 @@ public sealed class TenantRegistryServiceTests : IDisposable
     public void FindByCode_TenantWithNullPaymentProviderCode_ReturnsEntryWithNullProviderCode()
     {
         using var svc = CreateService();
-
         var entry = svc.FindByCode("TenantNoProvider");
 
         entry.Should().NotBeNull();
@@ -114,10 +77,7 @@ public sealed class TenantRegistryServiceTests : IDisposable
     public void FindByCode_UnknownTenant_ReturnsNull()
     {
         using var svc = CreateService();
-
-        var entry = svc.FindByCode("DoesNotExist");
-
-        entry.Should().BeNull();
+        svc.FindByCode("DoesNotExist").Should().BeNull();
     }
 
     [Theory]
@@ -127,21 +87,17 @@ public sealed class TenantRegistryServiceTests : IDisposable
     public void FindByCode_NullOrWhitespace_ReturnsNullWithoutThrowing(string? tenantCode)
     {
         using var svc = CreateService();
-
-        var act = () => svc.FindByCode(tenantCode!);
-
+        Action act = () => svc.FindByCode(tenantCode!);
         act.Should().NotThrow();
-        act().Should().BeNull();
+        svc.FindByCode(tenantCode!).Should().BeNull();
     }
 
     [Theory]
     [InlineData("TenantA", 1, "Tenant A", "SharedPool")]
     [InlineData("TenantC", 3, "Tenant C", "Dedicated")]
-    public void FindByCode_MapsAllRegistryEntryFields(
-        string tenantCode, int expectedId, string expectedName, string expectedTier)
+    public void FindByCode_MapsAllRegistryEntryFields(string tenantCode, int expectedId, string expectedName, string expectedTier)
     {
         using var svc = CreateService();
-
         var entry = svc.FindByCode(tenantCode);
 
         entry.Should().NotBeNull();
@@ -151,16 +107,12 @@ public sealed class TenantRegistryServiceTests : IDisposable
         entry.TenantTier.Should().Be(expectedTier);
     }
 
-    // ── FindByCodeAsync ───────────────────────────────────────────────────────
-
     [Theory]
     [InlineData("TenantA", "Razorpay")]
     [InlineData("TenantC", "OpenPay")]
-    public async Task FindByCodeAsync_KnownTenant_ReturnsEntryWithCorrectPaymentProviderCode(
-        string tenantCode, string expectedProviderCode)
+    public async Task FindByCodeAsync_KnownTenant_ReturnsEntryWithCorrectPaymentProviderCode(string tenantCode, string expectedProviderCode)
     {
         using var svc = CreateService();
-
         var entry = await svc.FindByCodeAsync(tenantCode);
 
         entry.Should().NotBeNull();
@@ -172,10 +124,7 @@ public sealed class TenantRegistryServiceTests : IDisposable
     public async Task FindByCodeAsync_UnknownTenant_ReturnsNull()
     {
         using var svc = CreateService();
-
-        var entry = await svc.FindByCodeAsync("DoesNotExist");
-
-        entry.Should().BeNull();
+        (await svc.FindByCodeAsync("DoesNotExist")).Should().BeNull();
     }
 
     [Theory]
@@ -184,18 +133,13 @@ public sealed class TenantRegistryServiceTests : IDisposable
     public async Task FindByCodeAsync_NullOrEmpty_ReturnsNullWithoutThrowing(string? tenantCode)
     {
         using var svc = CreateService();
-
-        var entry = await svc.FindByCodeAsync(tenantCode!);
-
-        entry.Should().BeNull();
+        (await svc.FindByCodeAsync(tenantCode!)).Should().BeNull();
     }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private TenantRegistryDbContext CreateContext()
     {
         var options = new DbContextOptionsBuilder<TenantRegistryDbContext>()
-            .UseSqlite(_connection)
+            .UseSqlServer(_connectionString)
             .Options;
         return new TenantRegistryDbContext(options);
     }
@@ -204,6 +148,30 @@ public sealed class TenantRegistryServiceTests : IDisposable
     {
         var ctx = CreateContext();
         return new ServiceWrapper(new TenantRegistryService(ctx), ctx);
+    }
+
+    private async Task<string> CreateDatabaseAsync(string databaseName)
+    {
+        var master = new SqlConnectionStringBuilder(_fixture.ConnectionString) { InitialCatalog = "master" }.ConnectionString;
+        await using var connection = new SqlConnection(master);
+        await connection.OpenAsync();
+        await using var command = new SqlCommand($"CREATE DATABASE [{databaseName}]", connection);
+        await command.ExecuteNonQueryAsync();
+        return new SqlConnectionStringBuilder(_fixture.ConnectionString) { InitialCatalog = databaseName }.ConnectionString;
+    }
+
+    private async Task DropDatabaseAsync(string databaseName)
+    {
+        var master = new SqlConnectionStringBuilder(_fixture.ConnectionString) { InitialCatalog = "master" }.ConnectionString;
+        await using var connection = new SqlConnection(master);
+        await connection.OpenAsync();
+        await using var command = new SqlCommand($@"
+IF DB_ID('{databaseName}') IS NOT NULL
+BEGIN
+    ALTER DATABASE [{databaseName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+    DROP DATABASE [{databaseName}];
+END", connection);
+        await command.ExecuteNonQueryAsync();
     }
 
     private sealed class ServiceWrapper : IDisposable
@@ -218,9 +186,7 @@ public sealed class TenantRegistryServiceTests : IDisposable
         }
 
         public TenantRegistryEntry? FindByCode(string tenantCode) => _svc.FindByCode(tenantCode);
-        public Task<TenantRegistryEntry?> FindByCodeAsync(string tenantCode, CancellationToken ct = default)
-            => _svc.FindByCodeAsync(tenantCode, ct);
-
+        public Task<TenantRegistryEntry?> FindByCodeAsync(string tenantCode, CancellationToken ct = default) => _svc.FindByCodeAsync(tenantCode, ct);
         public void Dispose() => _ctx.Dispose();
     }
 }

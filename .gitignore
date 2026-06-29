@@ -63,6 +63,26 @@ Resources/Docker/.env.local
 [Tt]est[Rr]esult*/
 [Bb]uild[Ll]og.*
 
+# Canonical test evidence folders we keep under root TestResults.
+# Keep the folder skeleton, but ignore runtime-generated run outputs.
+!TestResults/
+TestResults/*
+!TestResults/.gitkeep
+!TestResults/Integration/
+!TestResults/PaymentMatrix/
+!TestResults/Playwright/
+TestResults/Integration/*
+TestResults/PaymentMatrix/*
+TestResults/Playwright/*
+!TestResults/Integration/.gitkeep
+!TestResults/PaymentMatrix/.gitkeep
+!TestResults/Playwright/.gitkeep
+
+# Generated automation and frontend runtime artifacts.
+automation/dist/
+frontend/apps/web/--latest-pointer-path/
+frontend/apps/web/test-results/
+
 # NUnit
 *.VisualState.xml
 TestResult.xml
@@ -404,3 +424,8 @@ actionlint
 # Generated ARM templates from Bicep
 bicep/**/*.json
 !bicep/parameters/*.json
+.env.aider
+.tmp*
+.tmp_phase9_output*
+.venv/
+.aider*

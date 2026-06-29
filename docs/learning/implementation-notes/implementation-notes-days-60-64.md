@@ -70,4 +70,4 @@ Docker validation bundle evidence:
 
 - Payment lifecycle semantics are now frozen before module extraction.
 - Webhook secret flow is known for local, Docker, and Azure instead of being rediscovered during gateway work.
-- Phase 9 can focus on module isolation, PublicApi boundaries, YARP routing, and tracing without reopening provider webhook fundamentals.
+- Phase 9 can focus on module isolation, API boundaries, YARP routing, and tracing without reopening provider webhook fundamentals.

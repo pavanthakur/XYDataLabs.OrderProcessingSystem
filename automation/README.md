@@ -148,6 +148,10 @@ Notes:
 - The local matrix uses distinct verification-safe run prefixes per target so shared DB verification does not cross-contaminate `http` and `https` rows
 - The Docker matrix uses distinct verification-safe run prefixes per target so dev, staging, and prod evidence remains isolated across six target runs
 - The Azure matrix uses distinct verification-safe run prefixes per target so App Insights and Azure SQL evidence stays isolated across environments
+- Live status logs are environment-scoped and written in IST:
+  - `TestResults\Playwright\local-http\sequence-summary.log`
+  - `TestResults\Playwright\docker-http\sequence-summary.log`
+- Local HTTP and local HTTPS remain separate target families; Docker dev HTTP, Docker dev HTTPS, Docker staging HTTP/HTTPS, and Docker prod HTTP/HTTPS remain separate target families
 - The runner generates verification-friendly `CustomerOrderId` values using the `OR-<digits>-<dayTag>` prefix convention
 - Verification stays script-first through `scripts/verify-payment-run-physical.ps1` for local/Docker and `scripts/verify-payment-run-azure.ps1` for Azure
 - Sandbox OTP defaults to `999` when the provider challenge accepts arbitrary three-digit codes

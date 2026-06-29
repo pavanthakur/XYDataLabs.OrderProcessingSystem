@@ -73,6 +73,32 @@ $tenantCDbName = switch ($Environment) {
     'prod' { 'OrderProcessingSystem_TenantC_Prod' }
 }
 
+function Assert-AzureRuntimeDbContract {
+    param(
+        [Parameter(Mandatory = $true)][string]$Environment,
+        [Parameter(Mandatory = $true)][string]$SharedDbName,
+        [Parameter(Mandatory = $true)][string]$TenantCDbName
+    )
+
+    $expectedShared = switch ($Environment) {
+        'dev' { 'OrderProcessingSystem_Dev' }
+        'stg' { 'OrderProcessingSystem_Staging' }
+        'prod' { 'OrderProcessingSystem_Prod' }
+    }
+
+    $expectedTenantC = switch ($Environment) {
+        'dev' { 'OrderProcessingSystem_TenantC_Dev' }
+        'stg' { 'OrderProcessingSystem_TenantC_Staging' }
+        'prod' { 'OrderProcessingSystem_TenantC_Prod' }
+    }
+
+    if ($SharedDbName -ne $expectedShared -or $TenantCDbName -ne $expectedTenantC) {
+        throw "Azure runtime/db-name mismatch. Environment=$Environment SharedDbName=$SharedDbName TenantCDbName=$TenantCDbName ExpectedShared=$expectedShared ExpectedTenantC=$expectedTenantC"
+    }
+}
+
+Assert-AzureRuntimeDbContract -Environment $Environment -SharedDbName $sharedDbName -TenantCDbName $tenantCDbName
+
 function Write-Step {
     param([string] $Message)
     Write-Host "`n==> $Message" -ForegroundColor Cyan

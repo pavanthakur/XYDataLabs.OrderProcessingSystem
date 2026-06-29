@@ -105,6 +105,7 @@ function New-EnvLocalContent {
     param(
         [Parameter(Mandatory = $true)] [string] $SqlPassword,
         [Parameter(Mandatory = $true)] [string] $CertPassword,
+        [Parameter(Mandatory = $true)] [string] $KeycloakTenantAdminPassword,
         [Parameter(Mandatory = $true)] [string] $OpenPayMerchant,
         [Parameter(Mandatory = $true)] [string] $OpenPayPublicKey,
         [Parameter(Mandatory = $true)] [string] $OpenPayPrivateKey,
@@ -121,6 +122,7 @@ function New-EnvLocalContent {
 # Gitignored. Re-run setup-local.ps1 -Force to change passwords.
 LOCAL_SQL_PASSWORD=$SqlPassword
 LOCAL_CERT_PASSWORD=$CertPassword
+KEYCLOAK_TENANT_ADMIN_PASSWORD=$KeycloakTenantAdminPassword
 LOCAL_OPENPAY_MERCHANT_ID=$OpenPayMerchant
 LOCAL_OPENPAY_PUBLIC_KEY=$OpenPayPublicKey
 LOCAL_OPENPAY_PRIVATE_KEY=$OpenPayPrivateKey
@@ -143,6 +145,7 @@ function Write-EnvLocal {
         [Parameter(Mandatory = $true)] [string] $Path,
         [Parameter(Mandatory = $true)] [string] $SqlPassword,
         [Parameter(Mandatory = $true)] [string] $CertPassword,
+        [Parameter(Mandatory = $true)] [string] $KeycloakTenantAdminPassword,
         [Parameter(Mandatory = $true)] [string] $OpenPayMerchant,
         [Parameter(Mandatory = $true)] [string] $OpenPayPublicKey,
         [Parameter(Mandatory = $true)] [string] $OpenPayPrivateKey,
@@ -157,6 +160,7 @@ function Write-EnvLocal {
     $content = New-EnvLocalContent `
         -SqlPassword $SqlPassword `
         -CertPassword $CertPassword `
+        -KeycloakTenantAdminPassword $KeycloakTenantAdminPassword `
         -OpenPayMerchant $OpenPayMerchant `
         -OpenPayPublicKey $OpenPayPublicKey `
         -OpenPayPrivateKey $OpenPayPrivateKey `
@@ -177,6 +181,7 @@ if ((Test-Path $envLocal) -and -not $Force) {
     Write-Skip '.env.local already exists — reading passwords from it'
     $envVars         = Read-EnvLocal $envLocal
     $certPassword    = $envVars['LOCAL_CERT_PASSWORD']
+    $keycloakTenantAdminPassword = $envVars['KEYCLOAK_TENANT_ADMIN_PASSWORD']
     $sqlPassword     = $envVars['LOCAL_SQL_PASSWORD']
     $openpayMerchant = $envVars['LOCAL_OPENPAY_MERCHANT_ID']
     $openpayPublicKey = $envVars['LOCAL_OPENPAY_PUBLIC_KEY']
@@ -207,6 +212,12 @@ if ((Test-Path $envLocal) -and -not $Force) {
     if ([string]::IsNullOrWhiteSpace($certPassword)) {
         Write-Host '    [!!] LOCAL_CERT_PASSWORD is missing from .env.local - prompting to repair it.' -ForegroundColor Yellow
         $certPassword = Read-Password '  Choose HTTPS cert password (LOCAL_CERT_PASSWORD) '
+        $envLocalWasIncomplete = $true
+    }
+
+    if ([string]::IsNullOrWhiteSpace($keycloakTenantAdminPassword)) {
+        Write-Host '    [!!] KEYCLOAK_TENANT_ADMIN_PASSWORD is missing from .env.local - prompting to repair it.' -ForegroundColor Yellow
+        $keycloakTenantAdminPassword = Read-Password '  Choose Keycloak tenant admin password (KEYCLOAK_TENANT_ADMIN_PASSWORD) '
         $envLocalWasIncomplete = $true
     }
 
@@ -270,6 +281,7 @@ if ((Test-Path $envLocal) -and -not $Force) {
             -Path $envLocal `
             -SqlPassword $sqlPassword `
             -CertPassword $certPassword `
+            -KeycloakTenantAdminPassword $keycloakTenantAdminPassword `
             -OpenPayMerchant $openpayMerchant `
             -OpenPayPublicKey $openpayPublicKey `
             -OpenPayPrivateKey $openpayKey `
@@ -294,6 +306,7 @@ else {
     Write-Host ''
     $sqlPassword  = Read-Password '  Choose SQL Server password (LOCAL_SQL_PASSWORD) '
     $certPassword = Read-Password '  Choose HTTPS cert password (LOCAL_CERT_PASSWORD) '
+    $keycloakTenantAdminPassword = Read-Password '  Choose Keycloak tenant admin password (KEYCLOAK_TENANT_ADMIN_PASSWORD) '
 
     Write-Host ''
     Write-Host '  OpenPay sandbox credentials — fetching from Key Vault kv-orderprocessing-dev...' -ForegroundColor Yellow
@@ -419,6 +432,7 @@ else {
         -Path $envLocal `
         -SqlPassword $sqlPassword `
         -CertPassword $certPassword `
+        -KeycloakTenantAdminPassword $keycloakTenantAdminPassword `
         -OpenPayMerchant $openpayMerchant `
         -OpenPayPublicKey $openpayPublicKey `
         -OpenPayPrivateKey $openpayKey `

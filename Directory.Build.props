@@ -7,6 +7,9 @@
     <WarningsAsErrors>nullable</WarningsAsErrors>
     <WarningsNotAsErrors>$(WarningsNotAsErrors);CA1062;CA1303;CS1573;EF1002;S2933;S2971;S3267;S6931;S6932;S6960</WarningsNotAsErrors>
     <CodeAnalysisRuleSet>$(MSBuildThisFileDirectory)Resources\BuildConfiguration\CodeAnalysis.ruleset</CodeAnalysisRuleSet>
+    <!-- Let local restores use the already-cached packages when public feeds are unreachable.
+         CI can override this back to false if it needs strict source validation. -->
+    <RestoreIgnoreFailedSources Condition="'$(RestoreIgnoreFailedSources)' == '' and '$(ContinuousIntegrationBuild)' != 'true'">true</RestoreIgnoreFailedSources>
     <!-- Docker-specific properties to prevent Windows Principal errors -->
     <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
     <DockerUsePrincipal>false</DockerUsePrincipal>

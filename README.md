@@ -12,6 +12,51 @@
 
 ---
 
+## Manual Validation Tasks
+
+Use these VS Code tasks for the local HTTP and Docker dev HTTP flows:
+
+- `1 Run: Local HTTP 01 Env Ready`
+- `1 Run: Local HTTP 02 Playwright Smoke`
+- `1 Run: Local HTTP 03 Matrix Sanity (1 Tenant, Local HTTP)`
+- `1 Run: Local HTTP 04 Integration Suite (Local SQL, No Docker)`
+- `1 Run: Local HTTP 05 Full Validation (All Tenants + Providers, Local HTTP)`
+- `1 Run: Docker Dev HTTP 01 Env Ready (Docker Dev HTTP)`
+- `1 Run: Docker Dev HTTP 02 Playwright Smoke (Docker Dev HTTP)`
+- `1 Run: Docker Dev HTTP 03 Integration Suite (Docker Dev HTTP)`
+- `1 Run: Docker Dev HTTP 04 Payment Matrix (All Tenants + Providers, Docker Dev HTTP)`
+- `1 Run: Docker Dev HTTP 05 Full Validation (Profile + Suite + Smoke + Matrix, Docker Dev HTTP)`
+
+Result folders:
+
+- Integration: `TestResults\Integration\<timestamp>`
+- Playwright smoke: `TestResults\Playwright\local-http\<timestamp>` or `TestResults\Playwright\docker-http\<timestamp>`
+- Playwright matrix: `TestResults\Playwright\local-http\<timestamp>` or `TestResults\Playwright\docker-http\<timestamp>`
+- Full validation: `TestResults\Playwright\local-http\<timestamp>` or `TestResults\Playwright\docker-http\<timestamp>`
+- Common live status log: `TestResults\Playwright\local-http\sequence-summary.log` or `TestResults\Playwright\docker-http\sequence-summary.log`
+- The live status log timestamps are written in IST for both environment roots.
+- HTTP and HTTPS remain separate target families within each environment root.
+
+Naming convention:
+
+- Environment folders: `TestResults\Playwright\local-http\` and `TestResults\Playwright\docker-http\`
+- Run types: `latest-playwright-smoke.txt`, `latest-playwright-matrix.txt`, `latest-playwright-full-validation.txt`
+- Each run creates a timestamped subfolder under the matching environment folder
+
+Quick pointers:
+
+- `TestResults\Playwright\latest-playwright-run.txt`
+- `TestResults\Playwright\local-http\latest-playwright-smoke.txt`
+- `TestResults\Playwright\local-http\latest-playwright-matrix.txt`
+- `TestResults\Playwright\local-http\latest-playwright-full-validation.txt`
+- `TestResults\Playwright\docker-http\latest-playwright-smoke.txt`
+- `TestResults\Playwright\docker-http\latest-playwright-matrix.txt`
+- `TestResults\Playwright\docker-http\latest-playwright-full-validation.txt`
+- `TestResults\Playwright\local-http\sequence-summary.log`
+- `TestResults\Playwright\docker-http\sequence-summary.log`
+
+---
+
 ## What This Is
 
 A backend system for processing customer orders and payments across multiple tenants. Each tenant can operate on a shared database pool or a fully isolated dedicated database. The system handles the full payment lifecycle including 3D Secure authentication, card transaction tracking, and provider callback reconciliation.

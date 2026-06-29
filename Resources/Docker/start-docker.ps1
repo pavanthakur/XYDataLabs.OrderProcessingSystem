@@ -40,7 +40,7 @@ param(
 
     # Health wait timeout (interval fixed internally)
     [Parameter(Mandatory=$false)]
-    [int]$HealthTimeoutSec = 90,
+    [int]$HealthTimeoutSec = 180,
 
     # Strict mode: CI-grade behavior (fatal pre-pull failure, health wait enforced)
     [Parameter(Mandatory=$false)]
@@ -111,6 +111,13 @@ $EnterpriseConfig = @{
         BackupRequired = $true
         SecurityLevel = "production"
     }
+}
+
+if ([string]::IsNullOrWhiteSpace($env:DOCKER_CONFIG)) {
+    $env:DOCKER_CONFIG = Join-Path $env:TEMP 'orderprocessing-docker-config'
+}
+if (-not (Test-Path $env:DOCKER_CONFIG)) {
+    New-Item -ItemType Directory -Path $env:DOCKER_CONFIG | Out-Null
 }
 
 function Write-ColoredOutput {
@@ -363,6 +370,7 @@ function Wait-ForContainersHealthy {
 
         if (-not $printedHeader) {
             Write-ColoredOutput "Waiting for containers to become healthy (timeout ${TimeoutSec}s)..." "Cyan" "INFO"
+            Write-ColoredOutput "SQL Server on reused volumes can take longer to report healthy; this wait is intentionally extended to avoid false failures." "DarkGray" "INFO"
             $printedHeader = $true
         }
         Start-Sleep -Seconds $IntervalSec
@@ -689,10 +697,11 @@ try {
         Write-Host "  -Profile <profile>         Service profile (http|https|all). Default: http" -ForegroundColor White
         Write-Host "  -Down                      Stop services for environment/profile." -ForegroundColor White
         Write-Host "  -LegacyBuild               Reuse existing images (development speed)." -ForegroundColor White
-        Write-Host "  -Strict                    CI-grade: retries + fallback for base images; enforce health wait (90s default)." -ForegroundColor White
-        Write-Host "  -HealthTimeoutSec <secs>   Override health wait timeout (default 90)." -ForegroundColor White
+        Write-Host "  -Strict                    CI-grade: retries + fallback for base images; enforce health wait (180s default)." -ForegroundColor White
+        Write-Host "  -HealthTimeoutSec <secs>   Override health wait timeout (default 180)." -ForegroundColor White
         Write-Host "  -NoPrePull                 Skip base image pre-pull warm step." -ForegroundColor White
         Write-Host "  -Reset                     Stop stack (if running) + remove images for selected profile before start." -ForegroundColor White
+        Write-Host "  -Troubleshooting docs      docs/reference/docker-bootstrap-troubleshooting.md" -ForegroundColor Cyan
         Write-Host "Enterprise Parameters:" -ForegroundColor Yellow
         Write-Host "  -EnterpriseMode            Enable enterprise networks, logging, cleanup policies." -ForegroundColor White
         Write-Host "  -ConservativeClean         Adjust cleanup aggressiveness (primarily STG/prod)." -ForegroundColor White
@@ -717,6 +726,7 @@ try {
         Write-Host "  Prod enterprise w/backup: .\start-docker.ps1 -Environment prod -Profile https -EnterpriseMode -BackupFirst" -ForegroundColor White
         Write-Host "\nDeprecated Parameters (removed): -PrePullRetryCount, -UseBuildFallbackForPrePull, -FailOnPrePullError, -WaitForHealthy, -CleanImages" -ForegroundColor DarkGray
         Write-Host "Replacements: Strict handles resilience & health; Reset replaces CleanImages; NoPrePull skips warm step." -ForegroundColor DarkGray
+        Write-Host "Troubleshooting note: docs/reference/docker-bootstrap-troubleshooting.md" -ForegroundColor Cyan
         exit 0
     }
 

@@ -6,6 +6,7 @@ import type { PaymentAutomationRunOutput } from "../orchestrator/payment-automat
 import { executePaymentAutomationRun } from "../orchestrator/payment-automation-executor.js";
 import { FileReportComposer } from "../report/file-report-composer.js";
 import { buildRunPrefix } from "../support/customer-order-id.js";
+import { resolveEnvironmentKey } from "../support/environment-key.js";
 
 interface DockerMatrixOptions {
   targets: string[];
@@ -17,35 +18,116 @@ interface DockerMatrixOptions {
   verify: boolean;
   sandboxOtpCode: string;
   tenantTimeoutMs: number;
+  tenantLimit: number | null;
 }
 
 interface DockerMatrixOutput {
   matrixRunId: string;
   reportDirectory: string;
+  environmentKey: string;
   startedUtc: string;
   finishedUtc: string;
+  startedIst: string;
+  finishedIst: string;
+  currentStep?: string;
+  targetCount: number;
+  targets: string[];
   targetRuns: PaymentAutomationRunOutput[];
 }
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 const automationRoot = path.resolve(currentDirectory, "../..");
+const workspaceRoot = path.resolve(automationRoot, "..");
+function formatIstTimestamp(date: Date): string {
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    fractionalSecondDigits: 3,
+    hour12: false
+  }).format(date).replace(" ", "T") + "+05:30";
+}
+
+function formatIstStamp(date: Date): string {
+  return formatIstTimestamp(date).replace(/[:+,]/g, "-").replace(/\./g, "-");
+}
 
 async function main(): Promise<void> {
   const options = parseCliOptions(process.argv.slice(2));
   const startedAt = new Date();
-  const matrixRunId = `payment-automation-docker-matrix-${startedAt.toISOString().replace(/[.:]/g, "-")}`;
-  const reportDirectory = path.join(automationRoot, "reports", matrixRunId);
+  const matrixRunId = `payment-automation-docker-matrix-${formatIstStamp(startedAt)}_matrix`;
+  const playrightRoot = path.join(workspaceRoot, "TestResults", "Playwright");
   const reportComposer = new FileReportComposer();
   const runtimeTargetCatalog = new JsonRuntimeTargetCatalog();
+  const environmentKey = options.targets.length === 1
+    ? options.targets[0]
+    : "docker-matrix";
+  const environmentRoot = path.join(playrightRoot, environmentKey);
+  const reportDirectory = path.join(environmentRoot, matrixRunId);
+  const latestPointerPath = path.join(environmentRoot, "latest-playwright-matrix.txt");
+  const runPlanPath = path.join(reportDirectory, "run-plan.txt");
+  const startupLogPath = path.join(reportDirectory, "startup.log");
+  const progressLogPath = path.join(reportDirectory, "progress.log");
+  const currentStepPath = path.join(reportDirectory, "current-step.txt");
+  const matrixOutput: DockerMatrixOutput = {
+    matrixRunId,
+    reportDirectory,
+    environmentKey,
+    startedUtc: startedAt.toISOString(),
+    finishedUtc: startedAt.toISOString(),
+    startedIst: formatIstTimestamp(startedAt),
+    finishedIst: formatIstTimestamp(startedAt),
+    targetCount: 0,
+    targets: options.targets,
+    targetRuns: []
+  };
 
   await mkdir(reportDirectory, { recursive: true });
-  process.stdout.write(`Starting docker payment matrix ${matrixRunId}.\n`);
+  await mkdir(path.dirname(latestPointerPath), { recursive: true });
+  await writeFile(latestPointerPath, `${reportDirectory}\n`, "utf8");
+  await writeFile(startupLogPath, [
+    `[${formatIstTimestamp(new Date())}] Matrix startup`,
+    `environment=${environmentKey}`,
+    `targets=${options.targets.join(",")}`,
+    `requestedProviders=${options.requestedProviders.length > 0 ? options.requestedProviders.join(",") : "runtime default"}`,
+    `tenantLimit=${options.tenantLimit ?? "none"}`,
+    `dryRun=${options.dryRun}`,
+    `verify=${options.verify}`,
+    `state=created-run-folder`
+  ].join("\n") + "\n", "utf8");
+  await writeFile(progressLogPath, "Matrix progress log initialized.\n", "utf8");
+  await writeFile(runPlanPath, [
+    "Docker HTTP matrix sanity run",
+    `Goal: confirm docker target discovery and basic execution flow.`,
+    `Environment: ${environmentKey}`,
+    `Targets: ${options.targets.join(", ")}`,
+    `Requested providers: ${options.requestedProviders.length > 0 ? options.requestedProviders.join(", ") : "runtime default"}`,
+    `Tenant limit: ${options.tenantLimit ?? "none"}`,
+    `Dry run: ${options.dryRun ? "yes" : "no"}`,
+    `Verification: ${options.verify ? "yes" : "no"}`,
+    "",
+    "Stages:",
+    "1. Create the run folder and latest pointer files.",
+    "2. Resolve the runtime target and tenant plan.",
+    "3. Execute each tenant/provider item in order.",
+    "4. Write summary.json and summary.md at the end."
+  ].join("\n"), "utf8");
+  await writeFile(path.join(reportDirectory, "summary.json"), JSON.stringify({ ...matrixOutput, status: "running" }, null, 2), "utf8");
+  await writeFile(currentStepPath, "initialized\n", "utf8");
+  await writeRunMessage(startupLogPath, progressLogPath, `Starting docker payment matrix ${matrixRunId}.`);
 
   const targetRuns: PaymentAutomationRunOutput[] = [];
   for (const [index, target] of options.targets.entries()) {
     const targetStart = new Date(startedAt.getTime() + (index * 1000));
     const targetRunPrefix = buildRunPrefix(targetStart);
-    process.stdout.write(`Executing target ${target} with prefix ${targetRunPrefix}.\n`);
+    matrixOutput.currentStep = `target:${target}`;
+    await writeFile(path.join(reportDirectory, "summary.json"), JSON.stringify({ ...matrixOutput, status: "running" }, null, 2), "utf8");
+    await writeFile(currentStepPath, `${matrixOutput.currentStep}\n`, "utf8");
+    await writeRunMessage(startupLogPath, progressLogPath, `Executing target ${target} with prefix ${targetRunPrefix}.`);
 
     const runtimeTarget = await runtimeTargetCatalog.resolve(target);
     if (runtimeTarget.runtime !== "docker") {
@@ -62,10 +144,12 @@ async function main(): Promise<void> {
       verify: options.verify,
       sandboxOtpCode: options.sandboxOtpCode,
       tenantTimeoutMs: options.tenantTimeoutMs,
+      tenantLimit: options.tenantLimit ?? undefined,
+      reportDirectoryRoot: environmentRoot,
       startedAt: targetStart,
       runPrefix: targetRunPrefix,
       logger: (message) => {
-        process.stdout.write(`[${target}] ${message}\n`);
+        void writeRunMessage(startupLogPath, progressLogPath, `[${target}] ${message}`).catch(() => undefined);
       }
     });
 
@@ -74,13 +158,11 @@ async function main(): Promise<void> {
 
   const rows = targetRuns.flatMap((targetRun) => targetRun.rows);
   const markdownSummary = await reportComposer.compose(rows);
-  const matrixOutput: DockerMatrixOutput = {
-    matrixRunId,
-    reportDirectory,
-    startedUtc: startedAt.toISOString(),
-    finishedUtc: new Date().toISOString(),
-    targetRuns
-  };
+  matrixOutput.finishedUtc = new Date().toISOString();
+  matrixOutput.finishedIst = formatIstTimestamp(new Date());
+  matrixOutput.currentStep = "completed";
+  matrixOutput.targetCount = targetRuns.length;
+  matrixOutput.targetRuns = targetRuns;
 
   const targetSections = targetRuns.flatMap((targetRun) => [
     `- ${targetRun.rows[0]?.runtimeTarget ?? "unknown"}: prefix ${targetRun.runPrefix}`,
@@ -105,8 +187,16 @@ async function main(): Promise<void> {
     "utf8"
   );
   await writeFile(path.join(reportDirectory, "summary.json"), JSON.stringify(matrixOutput, null, 2), "utf8");
+  await writeFile(currentStepPath, "completed\n", "utf8");
+  await writeFile(latestPointerPath, `${reportDirectory}\n`, "utf8");
 
   process.stdout.write(`${JSON.stringify(matrixOutput, null, 2)}\n`);
+}
+
+async function writeRunMessage(startupLogPath: string, progressLogPath: string, line: string): Promise<void> {
+  process.stdout.write(`${line}\n`);
+  await writeFile(progressLogPath, `${line}\n`, { flag: "a" });
+  await writeFile(startupLogPath, `${line}\n`, { flag: "a" });
 }
 
 function parseCliOptions(argumentsList: string[]): DockerMatrixOptions {
@@ -119,6 +209,7 @@ function parseCliOptions(argumentsList: string[]): DockerMatrixOptions {
   let verify = true;
   let sandboxOtpCode = "999";
   let tenantTimeoutMs = 180000;
+  let tenantLimit: number | null = null;
 
   for (let index = 0; index < argumentsList.length; index += 1) {
     const argument = argumentsList[index];
@@ -142,9 +233,6 @@ function parseCliOptions(argumentsList: string[]): DockerMatrixOptions {
         }
         index += 1;
         break;
-      case "--all-providers":
-        requestedProviders.push("OpenPay", "Razorpay");
-        break;
       case "--allow-partial":
         allowPartialExecution = true;
         break;
@@ -164,6 +252,10 @@ function parseCliOptions(argumentsList: string[]): DockerMatrixOptions {
         break;
       case "--tenant-timeout-ms":
         tenantTimeoutMs = Number(argumentsList[index + 1] ?? tenantTimeoutMs);
+        index += 1;
+        break;
+      case "--tenant-limit":
+        tenantLimit = Number(argumentsList[index + 1] ?? tenantLimit);
         index += 1;
         break;
       default:
@@ -189,7 +281,8 @@ function parseCliOptions(argumentsList: string[]): DockerMatrixOptions {
     headless,
     verify,
     sandboxOtpCode,
-    tenantTimeoutMs
+    tenantTimeoutMs,
+    tenantLimit
   };
 }
 

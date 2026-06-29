@@ -100,6 +100,18 @@ When running locally or in Docker:
 3. Docker development should use `Resources/Docker/.env.local` for `LOCAL_SQL_PASSWORD`, `LOCAL_CERT_PASSWORD`, and local OpenPay values
 4. Key Vault is **not** accessed locally
 
+### Local Keycloak Seed Template
+
+`Resources/Keycloak/realm-export.json` is a source-controlled template only. It is allowed to carry the identity shape, realm, clients, roles, and user layout needed for Phase 9.5, but it must not contain real environment secrets.
+
+Use environment-specific secret stores for the runtime values instead:
+- Local HTTP: `.NET user-secrets`
+- Docker dev HTTP: `Resources/Docker/.env.local`
+- GitHub Actions: GitHub secrets
+- Azure: Key Vault
+
+If the Keycloak seed needs a client secret or test password, keep a placeholder token in the export file and resolve the actual value from the active environment at runtime.
+
 ## Security Features
 
 ### Managed Identity

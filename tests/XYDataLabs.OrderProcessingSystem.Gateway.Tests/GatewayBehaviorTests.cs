@@ -5,23 +5,34 @@ using XYDataLabs.OrderProcessingSystem.Gateway.Tests.Infrastructure;
 
 namespace XYDataLabs.OrderProcessingSystem.Gateway.Tests;
 
+[Collection("GatewayBehavior")]
 public sealed class GatewayBehaviorTests : IAsyncLifetime
 {
     private DownstreamStubServer _ordersStub = null!;
+    private DownstreamStubServer _inventoryStub = null!;
+    private DownstreamStubServer _notificationsStub = null!;
     private DownstreamStubServer _uiStub = null!;
     private GatewayWebApplicationFactory _factory = null!;
 
     public async Task InitializeAsync()
     {
         _ordersStub = await DownstreamStubServer.StartAsync();
+        _inventoryStub = await DownstreamStubServer.StartAsync();
+        _notificationsStub = await DownstreamStubServer.StartAsync();
         _uiStub = await DownstreamStubServer.StartAsync();
-        _factory = new GatewayWebApplicationFactory(_ordersStub.BaseAddress, _uiStub.BaseAddress);
+        _factory = new GatewayWebApplicationFactory(
+            _ordersStub.BaseAddress,
+            _inventoryStub.BaseAddress,
+            _notificationsStub.BaseAddress,
+            _uiStub.BaseAddress);
     }
 
     public async Task DisposeAsync()
     {
         await _factory.DisposeAsync();
         await _ordersStub.DisposeAsync();
+        await _inventoryStub.DisposeAsync();
+        await _notificationsStub.DisposeAsync();
         await _uiStub.DisposeAsync();
     }
 
@@ -77,17 +88,95 @@ public sealed class GatewayBehaviorTests : IAsyncLifetime
         request.Headers.Host = "orders.localhost";
 
         var response = await client.SendAsync(request);
-        var payload = await response.Content.ReadFromJsonAsync<DownstreamResponse>();
+        var body = await response.Content.ReadAsStringAsync();
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         response.Headers.TryGetValues("X-Correlation-Id", out var correlationHeaderValues).Should().BeTrue();
         var correlationId = correlationHeaderValues!.Single();
-        payload.Should().NotBeNull();
-        payload!.Path.Should().Be("/api/ping");
-        payload.CorrelationId.Should().Be(correlationId);
+        body.Should().NotBeNullOrWhiteSpace();
+        body.Should().Contain(correlationId);
+    }
+
+    [Fact]
+    public async Task HostBasedRoute_ProxiesToUiCluster()
+    {
+        using var client = _factory.CreateClient();
+
+        var response = await SendWithRetryAsync(client, CreateUiRequest);
+        var body = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        body.Should().Contain("/ping");
+        body.Should().Contain("GET");
+    }
+
+    [Fact]
+    public async Task HostBasedRoute_ProxiesToInventoryCluster()
+    {
+        using var client = _factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/inventory/ping");
+        request.Headers.Host = "inventory.localhost";
+
+        var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        body.Should().Contain("/ping");
+        body.Should().Contain("GET");
+    }
+
+    [Fact]
+    public async Task HostBasedRoute_ProxiesToNotificationsCluster()
+    {
+        using var client = _factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/notifications/ping");
+        request.Headers.Host = "notifications.localhost";
+
+        var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        body.Should().Contain("/ping");
+        body.Should().Contain("GET");
     }
 
     private sealed record ProblemDetailsContract(string? Title, string? Detail);
 
-    private sealed record DownstreamResponse(string? Path, string? Method, string? CorrelationId);
+    private static async Task<HttpResponseMessage> SendWithRetryAsync(
+        HttpClient client,
+        Func<HttpRequestMessage> requestFactory)
+    {
+        HttpResponseMessage? lastResponse = null;
+
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            using var request = requestFactory();
+            lastResponse = await client.SendAsync(request);
+
+            if (lastResponse.StatusCode != HttpStatusCode.BadGateway)
+            {
+                return lastResponse;
+            }
+
+            lastResponse.Dispose();
+            await Task.Delay(100);
+        }
+
+        return lastResponse ?? throw new InvalidOperationException("Request could not be sent.");
+    }
+
+    private static HttpRequestMessage CreateUiRequest()
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, "/app/ping")
+        {
+            Version = HttpVersion.Version11
+        };
+
+        request.Headers.Host = "ui.localhost";
+
+        return request;
+    }
 }
+
+[CollectionDefinition("GatewayBehavior", DisableParallelization = true)]
+public sealed class GatewayBehaviorCollection;

@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('local-http', 'local-https', 'docker-dev-http', 'docker-dev-https', 'docker-stg-http', 'docker-stg-https', 'docker-prod-http', 'docker-prod-https', 'all-docker')]
+    [ValidateSet('local-http', 'local-https', 'docker-dev-http', 'docker-dev-http-tests', 'docker-dev-http-playwright', 'docker-dev-https', 'docker-stg-http', 'docker-stg-https', 'docker-prod-http', 'docker-prod-https', 'all-docker')]
     [string]$Target,
 
     [string]$Url,
@@ -13,17 +13,50 @@ param(
 
     [string]$ExpectedTenant,
 
-    [string]$StaleTenant
+    [string]$StaleTenant,
+
+    [ValidateRange(5, 300)]
+    [int]$UrlReadyTimeoutSeconds = 120,
+
+    [ValidateRange(100, 5000)]
+    [int]$UrlReadyPollIntervalMilliseconds = 1000
 )
 
 $workspaceRoot = Split-Path -Parent $PSScriptRoot
 $frontendRoot = Join-Path $workspaceRoot 'frontend'
 $webRoot = Join-Path $frontendRoot 'apps/web'
+$statusWriter = Join-Path $workspaceRoot 'scripts\write-playwright-run-status.ps1'
+$environmentKey = if ($Target -like 'docker-*') { 'docker-http' } elseif ($Target -eq 'local-https' -or $Url -like 'https://*') { 'local-https' } else { 'local-http' }
+
+function Resolve-PlaywrightArtifactRootName
+{
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$TargetName
+    )
+
+    switch ($TargetName)
+    {
+        'local-http' { return 'local-http' }
+        'local-https' { return 'local-https' }
+        'docker-dev-http' { return 'docker-dev-http' }
+        'docker-dev-http-tests' { return 'docker-dev-http' }
+        'docker-dev-http-playwright' { return 'docker-dev-http' }
+        'docker-dev-https' { return 'docker-dev-https' }
+        'docker-stg-http' { return 'docker-stg-http' }
+        'docker-stg-https' { return 'docker-stg-https' }
+        'docker-prod-http' { return 'docker-prod-http' }
+        'docker-prod-https' { return 'docker-prod-https' }
+        default { return 'local-http' }
+    }
+}
 
 $knownTargets = [ordered]@{
     'local-http' = 'http://localhost:5173/customers'
     'local-https' = 'https://localhost:5174/customers'
     'docker-dev-http' = 'http://localhost:5022/customers'
+    'docker-dev-http-tests' = 'http://localhost:5022/customers'
+    'docker-dev-http-playwright' = 'http://localhost:5022/customers'
     'docker-dev-https' = 'https://localhost:5023/customers'
     'docker-stg-http' = 'http://localhost:5032/customers'
     'docker-stg-https' = 'https://localhost:5033/customers'
@@ -83,9 +116,80 @@ else
     $targetUrls += @{ Name = $Target; Url = $knownTargets[$Target] }
 }
 
+function Resolve-PathForWorkspace
+{
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$BasePath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$PathValue
+    )
+
+    return [System.IO.Path]::GetFullPath((Join-Path $BasePath $PathValue))
+}
+
+function Wait-ForUrlReadiness
+{
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Url,
+
+        [Parameter(Mandatory = $true)]
+        [int]$TimeoutSeconds,
+
+        [Parameter(Mandatory = $true)]
+        [int]$PollIntervalMilliseconds
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    Write-Host "Waiting for smoke target to respond: $Url"
+
+    while ((Get-Date) -lt $deadline)
+    {
+        try
+        {
+            $invokeParams = @{
+                UseBasicParsing = $true
+                Uri = $Url
+                TimeoutSec = 5
+            }
+
+            if ($PSVersionTable.PSVersion.Major -ge 7 -and $Url -like 'https://*')
+            {
+                $invokeParams.SkipCertificateCheck = $true
+            }
+
+            $response = Invoke-WebRequest @invokeParams
+            if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 500)
+            {
+                Write-Host "Smoke target is ready: $Url"
+                return
+            }
+        }
+        catch
+        {
+        }
+
+        Start-Sleep -Milliseconds $PollIntervalMilliseconds
+    }
+
+    throw "Timed out waiting for smoke target readiness at $Url after $TimeoutSeconds seconds."
+}
+
 foreach ($targetUrl in $targetUrls)
 {
     Write-Host "Running tenant bootstrap smoke test for $($targetUrl.Name): $($targetUrl.Url)" -ForegroundColor Cyan
+    & pwsh -NoProfile -ExecutionPolicy Bypass -File $statusWriter -EnvironmentKey $environmentKey -TaskName "${environmentKey}-smoke" -Status started -Message $targetUrl.Name
+    Wait-ForUrlReadiness -Url $targetUrl.Url -TimeoutSeconds $UrlReadyTimeoutSeconds -PollIntervalMilliseconds $UrlReadyPollIntervalMilliseconds
+
+    $playwrightRootPath = Resolve-PathForWorkspace -BasePath $workspaceRoot -PathValue 'TestResults\Playwright'
+    $artifactRootName = Resolve-PlaywrightArtifactRootName -TargetName $targetUrl.Name
+    $artifactRootPath = Resolve-PathForWorkspace -BasePath $workspaceRoot -PathValue ("TestResults\Playwright\{0}" -f $artifactRootName)
+    $latestPointerPath = Resolve-PathForWorkspace -BasePath $workspaceRoot -PathValue ("TestResults\Playwright\{0}\latest-playwright-smoke.txt" -f $artifactRootName)
+    $rootPointerPath = Resolve-PathForWorkspace -BasePath $workspaceRoot -PathValue 'TestResults\Playwright\latest-playwright-run.txt'
+    New-Item -ItemType Directory -Path $playwrightRootPath -Force | Out-Null
+    Set-Content -Path $rootPointerPath -Value $artifactRootPath -Encoding utf8
 
     $arguments = @(
         '--prefix'
@@ -97,6 +201,10 @@ foreach ($targetUrl in $targetUrls)
         $targetUrl.Url
         '--timeout-ms'
         $TimeoutMs.ToString()
+        '--artifact-root'
+        $artifactRootPath
+        '--latest-pointer-path'
+        $latestPointerPath
     )
 
     if (-not [string]::IsNullOrWhiteSpace($ExpectedTenant))
@@ -113,6 +221,9 @@ foreach ($targetUrl in $targetUrls)
 
     if ($LASTEXITCODE -ne 0)
     {
+        & pwsh -NoProfile -ExecutionPolicy Bypass -File $statusWriter -EnvironmentKey $environmentKey -TaskName "${environmentKey}-smoke" -Status failed -Message $targetUrl.Name
         throw "Tenant bootstrap smoke test failed for $($targetUrl.Name)."
     }
+
+    & pwsh -NoProfile -ExecutionPolicy Bypass -File $statusWriter -EnvironmentKey $environmentKey -TaskName "${environmentKey}-smoke" -Status passed -Message $targetUrl.Name
 }

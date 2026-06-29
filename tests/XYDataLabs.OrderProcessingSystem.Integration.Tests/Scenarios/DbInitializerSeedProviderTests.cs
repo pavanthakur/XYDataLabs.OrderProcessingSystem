@@ -1,58 +1,44 @@
 using FluentAssertions;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using XYDataLabs.OrderProcessingSystem.Application.Events;
-using XYDataLabs.OrderProcessingSystem.Application.Features.Orders.Events;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData;
+using XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure;
+using XYDataLabs.OrderProcessingSystem.Orders.Features.Events;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
 
 namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Scenarios;
 
-/// <summary>
-/// Validates that <see cref="DbInitializer"/> preserves database-selected providers and falls back
-/// to a generic seed default only when a tenant has no active provider row yet.
-/// These tests run against an in-memory SQLite database so they are fast and require no container.
-/// </summary>
+[Collection("SqlServer")]
 [Trait("Category", "Integration")]
-public sealed class DbInitializerSeedProviderTests : IDisposable
+public sealed class DbInitializerSeedProviderTests : IClassFixture<SqlServerFixture>
 {
-    // Mirrors DbInitializer.StartupSeedTenantCodes — both tenants must be present before Initialize() runs.
-    private const int TenantAId = 1001;
-    private const int TenantBId = 1002;
-    private const int UnknownTenantId = 9999;
+    private const string TenantACode = "TenantA";
+    private const string TenantBCode = "TenantB";
+    private const string UnknownTenantCode = "UnknownTenant";
 
-    private readonly SqliteConnection _connection;
+    private readonly SqlServerFixture _fixture;
     private readonly IIntegrationEventMapperRegistry _emptyRegistry;
 
-    public DbInitializerSeedProviderTests()
+    public DbInitializerSeedProviderTests(SqlServerFixture fixture)
     {
-        _connection = new SqliteConnection("Data Source=:memory:");
-        _connection.Open();
-
+        _fixture = fixture;
         _emptyRegistry = new IntegrationEventMapperRegistry(
             new IDomainEventToIntegrationEventMapper[] { new OrderCreatedDomainEventMapper() });
-
-        using var context = CreateContext();
-        context.Database.EnsureCreated();
     }
 
-    public void Dispose() => _connection.Dispose();
-
     [Theory]
-    [InlineData("TenantA", TenantAId, false, true)]  // TenantA: Razorpay 3DS off (Checkout JS popup, SAQ A), OpenPay on
-    [InlineData("TenantB", TenantBId, false, true)]  // TenantB: Razorpay 3DS off (Checkout JS popup, SAQ A), OpenPay on
+    [InlineData(TenantACode, false, true)]
+    [InlineData(TenantBCode, false, true)]
     public void Initialize_WhenNoProviderRowsExist_SeedsBothProvidersAsInactive(
-        string tenantCode, int tenantId, bool expectedRazorpay3DS, bool expectedOpenPay3DS)
+        string tenantCode, bool expectedRazorpay3DS, bool expectedOpenPay3DS)
     {
-        // Phase 8.6: active provider is authoritative from Tenant.PaymentProviderCode (Tenant Registry).
-        // DbInitializer seeds both providers with IsActive=false for every tenant on a fresh database.
-        // Use3DSecure is determined by the seed-data dictionary in DbInitializer (DB is source of truth at runtime).
         using var seedContext = CreateContext();
-        SeedBothBaselineTenants(seedContext);
+        var tenantIds = SeedBothBaselineTenants(seedContext);
+        var tenantId = GetTenantId(tenantIds, tenantCode);
 
         DbInitializer.Initialize(
             seedContext,
@@ -68,31 +54,29 @@ public sealed class DbInitializerSeedProviderTests : IDisposable
         providers.Should().HaveCount(2, $"DbInitializer seeds both OpenPay and Razorpay for every tenant ({tenantCode})");
         var rzp = providers.Single(p => p.ProviderType == PaymentProviderTypes.Razorpay);
         var opy = providers.Single(p => p.ProviderType == PaymentProviderTypes.OpenPay);
-        opy.Use3DSecure.Should().Be(expectedOpenPay3DS,
-            $"{tenantCode} OpenPay Use3DSecure should match seed-data dictionary default");
-        rzp.Use3DSecure.Should().Be(expectedRazorpay3DS,
-            $"{tenantCode} Razorpay Use3DSecure should match seed-data dictionary default");
+        opy.Use3DSecure.Should().Be(expectedOpenPay3DS, $"{tenantCode} OpenPay Use3DSecure should match seed-data dictionary default");
+        rzp.Use3DSecure.Should().Be(expectedRazorpay3DS, $"{tenantCode} Razorpay Use3DSecure should match seed-data dictionary default");
         providers.Should().OnlyContain(
             provider => !provider.IsActive,
             $"new provider rows must be seeded IsActive=false — active provider is resolved from Tenant Registry (Tenant.PaymentProviderCode), not DbInitializer ({tenantCode})");
     }
 
     [Theory]
-    [InlineData("TenantA", TenantAId)]
-    [InlineData("TenantB", TenantBId)]
+    [InlineData(TenantACode)]
+    [InlineData(TenantBCode)]
     public void Initialize_WhenProvidersAlreadyExist_PreservesDatabaseSelectedActiveState(
-        string tenantCode, int tenantId)
+        string tenantCode)
     {
         using var seedContext = CreateContext();
-        SeedBothBaselineTenants(seedContext);
+        var tenantIds = SeedBothBaselineTenants(seedContext);
+        var tenantId = GetTenantId(tenantIds, tenantCode);
 
-        // Pre-seed both providers with wrong IsActive state (inverted).
         seedContext.PaymentProviders.AddRange(
             new PaymentProvider
             {
                 Name = "OpenPay",
                 APIUrl = "https://sandbox-api.openpay.mx/v1",
-                IsActive = true,   // wrong: TenantA/B should have OpenPay inactive
+                IsActive = true,
                 IsProduction = false,
                 ProviderType = PaymentProviderTypes.OpenPay,
                 Use3DSecure = true,
@@ -104,7 +88,7 @@ public sealed class DbInitializerSeedProviderTests : IDisposable
             {
                 Name = "Razorpay",
                 APIUrl = "https://api.razorpay.com/v1",
-                IsActive = false,  // wrong: TenantA/B should have Razorpay active
+                IsActive = false,
                 IsProduction = false,
                 ProviderType = PaymentProviderTypes.Razorpay,
                 Use3DSecure = false,
@@ -114,32 +98,22 @@ public sealed class DbInitializerSeedProviderTests : IDisposable
             });
         seedContext.SaveChanges();
 
-        DbInitializer.Initialize(
-            seedContext,
-            configuration: null,
-            applyMigrations: false,
-            integrationEventMapperRegistry: _emptyRegistry);
+        DbInitializer.Initialize(seedContext, null, false, _emptyRegistry);
 
-        var providers = seedContext.PaymentProviders
-            .IgnoreQueryFilters()
-            .Where(pp => pp.TenantId == tenantId)
-            .ToList();
-
-        providers.Single(pp => pp.ProviderType == PaymentProviderTypes.Razorpay).IsActive
-            .Should().BeFalse($"startup seeding must preserve the runtime-selected inactive state for {tenantCode}");
-
-        providers.Single(pp => pp.ProviderType == PaymentProviderTypes.OpenPay).IsActive
-            .Should().BeTrue($"startup seeding must preserve the runtime-selected active state for {tenantCode}");
+        var providers = seedContext.PaymentProviders.IgnoreQueryFilters().Where(pp => pp.TenantId == tenantId).ToList();
+        providers.Single(pp => pp.ProviderType == PaymentProviderTypes.Razorpay).IsActive.Should().BeFalse($"startup seeding must preserve the runtime-selected inactive state for {tenantCode}");
+        providers.Single(pp => pp.ProviderType == PaymentProviderTypes.OpenPay).IsActive.Should().BeTrue($"startup seeding must preserve the runtime-selected active state for {tenantCode}");
     }
 
     [Theory]
-    [InlineData("TenantA", TenantAId, PaymentProviderTypes.Razorpay)]
-    [InlineData("TenantB", TenantBId, PaymentProviderTypes.Razorpay)]
+    [InlineData(TenantACode, PaymentProviderTypes.Razorpay)]
+    [InlineData(TenantBCode, PaymentProviderTypes.Razorpay)]
     public void Initialize_WhenActiveProviderAlreadyExists_AddsMissingProviderInactive(
-        string tenantCode, int tenantId, string activeProviderType)
+        string tenantCode, string activeProviderType)
     {
         using var seedContext = CreateContext();
-        SeedBothBaselineTenants(seedContext);
+        var tenantIds = SeedBothBaselineTenants(seedContext);
+        var tenantId = GetTenantId(tenantIds, tenantCode);
 
         seedContext.PaymentProviders.Add(new PaymentProvider
         {
@@ -157,17 +131,9 @@ public sealed class DbInitializerSeedProviderTests : IDisposable
         });
         seedContext.SaveChanges();
 
-        DbInitializer.Initialize(
-            seedContext,
-            configuration: null,
-            applyMigrations: false,
-            integrationEventMapperRegistry: _emptyRegistry);
+        DbInitializer.Initialize(seedContext, null, false, _emptyRegistry);
 
-        var providers = seedContext.PaymentProviders
-            .IgnoreQueryFilters()
-            .Where(pp => pp.TenantId == tenantId)
-            .ToList();
-
+        var providers = seedContext.PaymentProviders.IgnoreQueryFilters().Where(pp => pp.TenantId == tenantId).ToList();
         providers.Should().HaveCount(2, $"DbInitializer should backfill the missing provider for {tenantCode}");
         providers.Count(pp => pp.IsActive).Should().Be(1, "adding a missing provider must not introduce dual-active state");
         providers.Single(pp => pp.ProviderType == activeProviderType).IsActive.Should().BeTrue();
@@ -177,51 +143,31 @@ public sealed class DbInitializerSeedProviderTests : IDisposable
     [Fact]
     public void Initialize_AlwaysSeedsBothProvidersAsInactiveRegardlessOfTenantState()
     {
-        // Phase 8.6: DbInitializer no longer resolves an active provider.
-        // All StartupSeedTenantCodes tenants should have both providers seeded as inactive,
-        // regardless of whether provider rows previously existed.
         using var seedContext = CreateContext();
 
-        SeedTenant(seedContext, TenantAId, "TenantA");
-        SeedTenant(seedContext, TenantBId, "TenantB");
-        seedContext.SaveChanges();
-        SeedStubSampleData(seedContext, TenantAId);
-        SeedStubSampleData(seedContext, TenantBId);
+        var tenantIds = SeedBothBaselineTenants(seedContext);
+        SeedStubSampleData(seedContext, tenantIds.TenantAId);
+        SeedStubSampleData(seedContext, tenantIds.TenantBId);
 
-        SeedTenant(seedContext, UnknownTenantId, "UnknownTenant");
-        seedContext.SaveChanges();
+        var unknownTenantId = SeedTenant(seedContext, UnknownTenantCode);
 
-        DbInitializer.Initialize(
-            seedContext,
-            configuration: null,
-            applyMigrations: false,
-            integrationEventMapperRegistry: _emptyRegistry);
+        DbInitializer.Initialize(seedContext, null, false, _emptyRegistry);
 
-        foreach (var tenantId in new[] { TenantAId, TenantBId })
+        foreach (var tenantId in new[] { tenantIds.TenantAId, tenantIds.TenantBId })
         {
-            var providers = seedContext.PaymentProviders
-                .IgnoreQueryFilters()
-                .Where(pp => pp.TenantId == tenantId)
-                .ToList();
-
+            var providers = seedContext.PaymentProviders.IgnoreQueryFilters().Where(pp => pp.TenantId == tenantId).ToList();
             providers.Should().HaveCount(2, $"DbInitializer seeds both providers for TenantId={tenantId}");
-            providers.Should().OnlyContain(
-                pp => !pp.IsActive,
-                $"all seeded providers must be inactive — routing authority is Tenant Registry (TenantId={tenantId})");
+            providers.Should().OnlyContain(pp => !pp.IsActive, $"all seeded providers must be inactive — routing authority is Tenant Registry (TenantId={tenantId})");
         }
 
-        // UnknownTenant (outside StartupSeedTenantCodes) should have no providers seeded.
-        seedContext.PaymentProviders
-            .IgnoreQueryFilters()
-            .Where(pp => pp.TenantId == UnknownTenantId)
-            .Should().BeEmpty("DbInitializer only seeds providers for StartupSeedTenantCodes");
+        seedContext.PaymentProviders.IgnoreQueryFilters().Where(pp => pp.TenantId == unknownTenantId).Should().BeEmpty("DbInitializer only seeds providers for StartupSeedTenantCodes");
     }
 
     [Fact]
     public void Initialize_WithConfiguration_BackfillsProviderRuntimeFields()
     {
         using var seedContext = CreateContext();
-        SeedBothBaselineTenants(seedContext);
+        var tenantIds = SeedBothBaselineTenants(seedContext);
 
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -236,17 +182,9 @@ public sealed class DbInitializerSeedProviderTests : IDisposable
             })
             .Build();
 
-        DbInitializer.Initialize(
-            seedContext,
-            configuration: configuration,
-            applyMigrations: false,
-            integrationEventMapperRegistry: _emptyRegistry);
+        DbInitializer.Initialize(seedContext, configuration, false, _emptyRegistry);
 
-        var tenantAProviders = seedContext.PaymentProviders
-            .IgnoreQueryFilters()
-            .Where(pp => pp.TenantId == TenantAId)
-            .ToList();
-
+        var tenantAProviders = seedContext.PaymentProviders.IgnoreQueryFilters().Where(pp => pp.TenantId == tenantIds.TenantAId).ToList();
         tenantAProviders.Single(pp => pp.ProviderType == PaymentProviderTypes.OpenPay)
             .Should().Match<PaymentProvider>(provider =>
                 provider.MerchantId == "mt_seed_openpay"
@@ -263,42 +201,97 @@ public sealed class DbInitializerSeedProviderTests : IDisposable
                 && !provider.Use3DSecure);
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────────
-
     private OrderProcessingSystemDbContext CreateContext()
     {
         var options = new DbContextOptionsBuilder<OrderProcessingSystemDbContext>()
-            .UseSqlite(_connection)
+            .UseSqlServer(_fixture.ConnectionString)
             .Options;
 
-        // HasTenantContext=false: EF global query filter short-circuits to true so all rows are visible.
-        // This mirrors how DbInitializer is called at startup (no active HTTP context / no tenant scope).
-        return new SqliteOrderProcessingSystemDbContext(options, new NoTenantProvider(), _emptyRegistry);
+        return new OrderProcessingSystemDbContext(options, new NoTenantProvider(), _emptyRegistry);
     }
 
-    private static void SeedBothBaselineTenants(OrderProcessingSystemDbContext context)
+    private static (int TenantAId, int TenantBId) SeedBothBaselineTenants(OrderProcessingSystemDbContext context)
     {
-        SeedTenant(context, TenantAId, "TenantA");
-        SeedTenant(context, TenantBId, "TenantB");
-        context.SaveChanges();
+        var tenantAId = SeedTenant(context, TenantACode);
+        var tenantBId = SeedTenant(context, TenantBCode);
 
-        // Pre-populate stub sample data so SeedTenantSampleData() skips those paths.
-        // Avoids SQLite-incompatible SysId sequence behaviour in SeedOrders.
-        SeedStubSampleData(context, TenantAId);
-        SeedStubSampleData(context, TenantBId);
-    }
+        var tenantIds = new[] { tenantAId, tenantBId };
 
-    private static void SeedTenant(
-        OrderProcessingSystemDbContext context,
-        int tenantId,
-        string tenantCode)
-    {
-        if (context.Tenants.Any(t => t.Id == tenantId))
-            return;
-
-        context.Tenants.Add(new Tenant
+        // Clear the full dependent payment graph first so SQL Server does not reject
+        // provider cleanup when existing BillingCustomers still point at PaymentMethods.
+        var cardTransactions = context.CardTransactions
+            .IgnoreQueryFilters()
+            .Where(transaction => tenantIds.Contains(transaction.TenantId))
+            .ToList();
+        if (cardTransactions.Count > 0)
         {
-            Id = tenantId,
+            context.CardTransactions.RemoveRange(cardTransactions);
+            context.SaveChanges();
+        }
+
+        var billingCustomerKeyInfos = context.BillingCustomerKeyInfos
+            .IgnoreQueryFilters()
+            .Where(keyInfo => tenantIds.Contains(keyInfo.TenantId))
+            .ToList();
+        if (billingCustomerKeyInfos.Count > 0)
+        {
+            context.BillingCustomerKeyInfos.RemoveRange(billingCustomerKeyInfos);
+            context.SaveChanges();
+        }
+
+        var billingCustomers = context.BillingCustomers
+            .IgnoreQueryFilters()
+            .Where(customer => tenantIds.Contains(customer.TenantId))
+            .ToList();
+        if (billingCustomers.Count > 0)
+        {
+            context.BillingCustomers.RemoveRange(billingCustomers);
+            context.SaveChanges();
+        }
+
+        var payinLogs = context.PayinLogs
+            .IgnoreQueryFilters()
+            .Where(log => tenantIds.Contains(log.TenantId))
+            .ToList();
+        if (payinLogs.Count > 0)
+        {
+            context.PayinLogs.RemoveRange(payinLogs);
+            context.SaveChanges();
+        }
+
+        var existingPaymentMethods = context.PaymentMethods
+            .IgnoreQueryFilters()
+            .Where(method => tenantIds.Contains(method.TenantId))
+            .ToList();
+        if (existingPaymentMethods.Count > 0)
+        {
+            context.PaymentMethods.RemoveRange(existingPaymentMethods);
+            context.SaveChanges();
+        }
+
+        var existingProviders = context.PaymentProviders
+            .IgnoreQueryFilters()
+            .Where(provider => tenantIds.Contains(provider.TenantId))
+            .ToList();
+        if (existingProviders.Count > 0)
+        {
+            context.PaymentProviders.RemoveRange(existingProviders);
+            context.SaveChanges();
+        }
+
+        return (tenantAId, tenantBId);
+    }
+
+    private static int SeedTenant(OrderProcessingSystemDbContext context, string tenantCode)
+    {
+        var existing = context.Tenants.SingleOrDefault(t => t.Code == tenantCode);
+        if (existing is not null)
+        {
+            return existing.Id;
+        }
+
+        var tenant = new Tenant
+        {
             ExternalId = $"ext-{tenantCode.ToUpperInvariant()}",
             Code = tenantCode,
             Name = $"Test {tenantCode}",
@@ -306,14 +299,16 @@ public sealed class DbInitializerSeedProviderTests : IDisposable
             TenantTier = "SharedPool",
             CreatedBy = 1,
             CreatedDate = DateTime.UtcNow
-        });
+        };
+
+        context.Tenants.Add(tenant);
+        context.SaveChanges();
+        return tenant.Id;
     }
 
-    /// <summary>
-    /// Inserts one stub Customer, Product, and Order per tenant so DbInitializer's
-    /// <c>if (!context.X.Any(...))</c> guards skip sample-data seeding.
-    /// This avoids SQLite-incompatible sequence/domain-event behaviour in <c>SeedOrders</c>.
-    /// </summary>
+    private static int GetTenantId((int TenantAId, int TenantBId) tenantIds, string tenantCode)
+        => tenantCode == TenantACode ? tenantIds.TenantAId : tenantIds.TenantBId;
+
     private static void SeedStubSampleData(OrderProcessingSystemDbContext context, int tenantId)
     {
         context.Customers.Add(new Customer
@@ -326,11 +321,7 @@ public sealed class DbInitializerSeedProviderTests : IDisposable
         });
         context.SaveChanges();
 
-        var customerId = context.Customers
-            .IgnoreQueryFilters()
-            .Where(c => c.TenantId == tenantId)
-            .Select(c => c.CustomerId)
-            .First();
+        var customerId = context.Customers.IgnoreQueryFilters().Where(c => c.TenantId == tenantId).Select(c => c.CustomerId).First();
 
         context.Products.Add(new Product
         {
@@ -343,45 +334,15 @@ public sealed class DbInitializerSeedProviderTests : IDisposable
         });
         context.SaveChanges();
 
-        var productId = context.Products
-            .IgnoreQueryFilters()
-            .Where(p => p.TenantId == tenantId)
-            .Select(p => p.ProductId)
-            .First();
+        var productId = context.Products.IgnoreQueryFilters().Where(p => p.TenantId == tenantId).Select(p => p.ProductId).First();
 
-        // Insert an Order row directly to satisfy the "any orders?" guard without triggering domain events.
-        // RowVersion is required NOT NULL in the SQLite schema (even with ValueGeneratedNever override).
-        context.Database.ExecuteSqlRaw(
-            $"INSERT INTO Orders (CustomerId, TenantId, CreatedBy, CreatedDate, OrderDate, Status, TotalPrice, RowVersion) VALUES ({customerId.Value}, {tenantId}, 1, datetime('now'), datetime('now'), 'Pending', 0, X'0000000000000001')");
+        context.Database.ExecuteSqlInterpolated($"""
+            INSERT INTO [orders].[Orders] (CustomerId, TenantId, CreatedBy, CreatedDate, OrderDate, Status, TotalPrice)
+            VALUES ({customerId.Value}, {tenantId}, 1, {DateTime.UtcNow}, {DateTime.UtcNow}, {"Pending"}, {0m})
+            """);
         context.SaveChanges();
     }
 
-    private sealed class SqliteOrderProcessingSystemDbContext : OrderProcessingSystemDbContext
-    {
-        public SqliteOrderProcessingSystemDbContext(
-            DbContextOptions<OrderProcessingSystemDbContext> options,
-            ITenantProvider tenantProvider,
-            IIntegrationEventMapperRegistry integrationEventMapperRegistry)
-            : base(options, tenantProvider, integrationEventMapperRegistry)
-        {
-        }
-
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
-        {
-            base.OnModelCreating(modelBuilder);
-
-            // SQLite does not support rowversion — disable optimistic concurrency for these tests.
-            modelBuilder.Entity<Order>()
-                .Property(o => o.RowVersion)
-                .IsConcurrencyToken()
-                .ValueGeneratedNever();
-        }
-    }
-
-    /// <summary>
-    /// Tenant provider with no active tenant context. EF global query filter short-circuits to true
-    /// (all rows visible), matching the startup context in which DbInitializer runs.
-    /// </summary>
     private sealed class NoTenantProvider : ITenantProvider
     {
         public bool HasTenantContext => false;
