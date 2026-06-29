@@ -124,6 +124,31 @@ Azure-side Keycloak parity or migration testing, if ever needed, is deferred out
 
 ---
 
+### Phase 9 Closeout Verification Recap ✅
+
+**Verified on:** June 29, 2026
+
+**Validation summary:**
+- `dev` merged cleanly into `staging` with merge commit `25d9e12`.
+- `git status --short` was clean after the staging verification pass.
+- `dotnet build .\XYDataLabs.OrderProcessingSystem.sln --no-restore` passed on `staging`.
+- The requested test suites passed on `staging`:
+  - `Domain.Tests`
+  - `Application.Tests`
+  - `Gateway.Tests`
+  - `Integration.Tests`
+- `node scripts/validate-doc-links.js` passed.
+- Automation dry-runs passed for:
+  - `run:local:matrix:dry`
+  - `run:docker:matrix:dry` for `docker-dev-http`
+- `run:azure:matrix:dry` hit an external Azure SQL login failure in the sandbox and was treated as environment-specific, not a repo regression.
+
+**Known restriction at verification time:**
+- Azure dry-run coverage in this sandbox depends on external SQL credentials and live environment access.
+- The failed Azure dry-run did not change the Phase 9 closeout status because the local and docker-dev-http validation gates were already green and the failure was external to repo changes.
+
+---
+
 ## Script Bug History (for reference)
 
 | Date | Bug | Fix |
