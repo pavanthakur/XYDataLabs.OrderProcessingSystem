@@ -534,6 +534,13 @@ What is adopted directly:
 | `.github/copilot-instructions.md` § 10 | Links to ADR-018 + this strategy doc |
 | `ARCHITECTURE-EVOLUTION.md` | Cross-links to this doc near the phase roadmap |
 
+When the day-complete prompt is used for a milestone closeout, it should also preserve the current phase ladder in the closeout note:
+
+- Phase 10: HTTP + Blob, Service Bus, SQL hardening, Key Vault
+- Phase 11: Durable Functions and database autonomy
+- Phase 12: Redis cache policy and App Configuration
+- Post-14: Azure AI Search and Azure OpenAI as optional horizons
+
 ## 6. References
 
 - [ADR-018: Blueprint and snapshot strategy](../architecture/decisions/ADR-018-blueprint-and-snapshot-strategy.md)

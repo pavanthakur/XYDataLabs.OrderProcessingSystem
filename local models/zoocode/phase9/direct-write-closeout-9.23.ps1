@@ -57,6 +57,15 @@ Do not mark Phase 9 complete until:
 - integration tests pass,
 - Playwright end-to-end verification completes,
 - and any warnings or deferred items are explicitly recorded.
+
+## Next Roadmap Sequence
+
+After Phase 9 closes, keep the next architecture sequence separate and explicit:
+
+- Phase 10: HTTP + Blob, Service Bus, SQL hardening, Key Vault
+- Phase 11: Durable Functions and database autonomy
+- Phase 12: Redis cache policy and App Configuration
+- Post-14 horizons: Azure AI Search and Azure OpenAI as optional expansions
 '@
 
 $remediationContent = Get-Content -LiteralPath $remediationDoc -Raw

@@ -25,6 +25,14 @@ When returning after a gap:
 - Come back here to get the correct bundle invocation for that phase before running.
 - If Docker bootstrap or SQL restore behavior is acting up, read `docs/reference/docker-bootstrap-troubleshooting.md` before rerunning the closeout bundle.
 
+For future planning after Phase 9 and 9.5:
+
+- Phase 10 carries the core Azure transport and hardening ladder: HTTP + Blob, Service Bus, queue trigger, SQL, and Key Vault.
+- Phase 11 carries orchestration and data-ownership work: Durable Functions and database autonomy.
+- Phase 12 carries platform engineering and operational maturity: Redis cache policy and App Configuration.
+- Post-14 horizons carry optional expansions: Azure AI Search and Azure OpenAI.
+- Treat these as the next architecture sequence, not as Phase 9 blockers.
+
 ---
 
 ## Phase Entries

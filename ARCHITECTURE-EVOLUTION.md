@@ -1,14 +1,14 @@
 # Architecture Evolution: Monolith to Enterprise Microservices
 
-**Last Updated:** June 5, 2026
-**Current Status:** Phase 8 Closeout Matrix Validation Passed ✅ | Track U U5 Complete ✅ | Phase 8.5 Complete ✅ | Phase 8.6 Complete ✅ | Phase 8.7 Complete ✅ | Phase 9 closeout complete for extraction/tasking ✅ | Phase 9.5 identity portability wiring implemented and runtime verified in local HTTP and Docker Dev HTTP ✅ | Phases 10, 11, 11.5, 12-14 Planned 📅
+**Last Updated:** July 1, 2026
+**Current Status:** Phase 8 Closeout Matrix Validation Passed ✅ | Track U U5 Complete ✅ | Phase 8.5 Complete ✅ | Phase 8.6 Complete ✅ | Phase 8.7 Complete ✅ | Phase 9 closeout complete for extraction/tasking ✅ | Phase 9.5 identity portability wiring implemented and runtime verified in local HTTP and Docker Dev HTTP ✅ | Phases 10, 11, 11.5, 12-14 Planned 📅 | Post-14 Horizons captured 📘
 
 ---
 
 ## 📊 Architecture Evolution Overview
 
 This document tracks the architectural evolution of the XYDataLabs Order Processing System across
-**14 phases** — from a monolithic application deployed on Azure App Service to a production-grade,
+**14 core phases** plus post-14 horizons — from a monolithic application deployed on Azure App Service to a production-grade,
 event-driven microservices platform with YARP gateway, Azure Container Apps, .NET Aspire
 orchestration, Azure Service Bus messaging, multi-tenancy, and CQRS read/write separation
 with MongoDB.
@@ -171,6 +171,156 @@ XYDataLabs.OrderProcessingSystem.sln
 
 ---
 
+## Post-Phase-9 Execution Ladder
+
+After Phase 9 and 9.5, the architecture sequence is intentionally narrowed so each later phase solves one class of risk before the next one starts.
+
+### Phase 10 - Azure Transport And Messaging Operations
+
+Primary objective:
+- Move the split architecture onto Azure transport primitives without changing the business semantics already proven in the local and Docker validation lanes.
+
+Broad checklist:
+- Lock the Service Bus topology: queues, topics, subscriptions, DLQ ownership, replay path, and delivery expectations.
+- Keep Event Grid use explicit and separate from Service Bus work-distribution semantics.
+- Define the microservice communication matrix explicitly: sync read path, async command path, event broadcast path, timeout ownership, and compensation trigger points.
+- Introduce Azure Functions only where they add operational value: queue-trigger processing, DLQ intake or replay support, timer-based health or reconciliation checks, and blob-event handling.
+- Provision transport resources through Bicep modules and environment parameters only.
+- Keep database migrations and demo seeding out of API startup; use a dedicated migrator or deployment-time startup step instead.
+- Standardize retry, timeout, poison-message, and DLQ operating policy before adding more features.
+- Add idempotency rules for external command entry points and replay-sensitive handlers.
+- Apply least-privilege RBAC for services, functions, and operators.
+- Prove correlation continuity through gateway calls, brokered messages, and Azure-triggered processing.
+- Add a first-class error-handling contract across gateway, APIs, workers, and functions so operational failures are diagnosable and client-facing responses remain consistent.
+- Add operator-facing runbooks for DLQ triage, replay, and stuck-message diagnosis.
+- Treat ACA as the likely hosting outcome of this phase, not the educational goal by itself; transport correctness comes before hosting polish.
+
+Execution lanes:
+- Lane 1: Service Bus topology, subscriptions, DLQ ownership, and replay discipline.
+- Lane 2: Event Grid boundaries, blob-event handling, and platform-trigger separation.
+- Lane 3: Azure Functions responsibilities, queue triggers, timer triggers, and reconciliation helpers.
+- Lane 4: Migrator and seeder flow, so schema changes and demo data never depend on API startup.
+- Lane 5: ACA deployment, ingress, and networking only after transport failure drills pass.
+
+Exit intent:
+- The system can run on Azure transport with observable, replayable, idempotent message handling.
+
+### Phase 11 - Saga Orchestration And Data Ownership
+
+Primary objective:
+- Turn the split modules into genuinely autonomous services with explicit orchestration and service-owned persistence.
+
+Broad checklist:
+- Enforce database-per-service and remove remaining shared-schema assumptions.
+- ADR the saga style: Durable Functions versus custom process manager.
+- Implement the fulfillment flow with compensation, timeout handling, and replay-safe steps.
+- Define authoritative ownership for every externally visible business field.
+- Add reconciliation logic and drift detection between service state and projections.
+- Keep migrations and data evolution independent per service.
+
+Execution lanes:
+- Lane 1: service-owned stores and shared-schema removal.
+- Lane 2: saga orchestration choice, compensation flow, and timeout handling.
+- Lane 3: reconciliation and drift detection between operational state and read surfaces.
+- Lane 4: migration ownership and service-local data evolution.
+
+Exit intent:
+- Cross-service consistency is event-driven, compensations are tested, and service autonomy is real.
+
+### Phase 11.5 - PostgreSQL Portability Proof
+
+Primary objective:
+- Prove bounded RDBMS portability without changing the platform-wide Azure SQL production posture.
+
+Broad checklist:
+- Limit PostgreSQL to the Notifications pilot.
+- Validate migration, observability, and operational parity for the pilot slice.
+- Record the trade-offs clearly without allowing the pilot to become a hidden second standard.
+
+Execution lanes:
+- Lane 1: Notifications-only provider swap and module boundary validation.
+- Lane 2: provider-specific migrations, schema behavior, and local Docker support.
+- Lane 3: operational parity checks for logging, metrics, and deployment flow.
+- Lane 4: trade-off documentation so the pilot never becomes a silent default.
+
+### Phase 12 - Platform Engineering And Operability
+
+Primary objective:
+- Raise the system from technically functional to operationally dependable.
+
+Broad checklist:
+- Consolidate App Configuration, Key Vault, options validation, and rollout safety.
+- Make exception handling explicit: global exception middleware, `ProblemDetails`, and clean business-vs-infrastructure error boundaries.
+- Standardize structured logging and correlation: Serilog, `CorrelationId`, request metadata, and trace-friendly log enrichment.
+- Add validation as a first-class boundary concern: FluentValidation, pipeline behaviors, and request-shape enforcement before handlers.
+- Add feature flags with environment and tenant-aware rollout discipline.
+- Standardize cache policy, tenant-safe keys, and invalidation discipline.
+- Keep resilience explicit: retries, timeout, circuit breaker, and fallback policy decisions should be documented rather than scattered.
+- Carry API versioning and deprecation posture as a platform concern, not an ad hoc controller tweak.
+- Maintain health checks for database, cache, storage, and transport dependencies as an operational contract.
+- Standardize rate-limiting and tenant-aware quota policy as operational guardrails, not one-off endpoint tweaks.
+- Mature per-service CI/CD, rollback, and image-scanning flows.
+- Harden API consumer experience: error contracts, versioning posture, generated-client expectations, and documentation quality.
+- Improve API consumer experience deliberately: stable OpenAPI surface, stronger docs UX, and explicit contract governance for frontend and operator tooling.
+- Add the required runbooks, dashboards, alerts, and cost/performance operating guidance.
+- Establish a background-job lane for replay, rebuild, cleanup, and maintenance work where these tasks do not belong in request handlers.
+- Finish the .NET 10 assessment and keep the runtime-upgrade decision evidence-based.
+
+Execution lanes:
+- Lane 1: configuration, Key Vault, and rollout safety.
+- Lane 2: validation, error handling, structured logging, and health checks.
+- Lane 3: feature flags, rate limiting, quotas, and cache conventions.
+- Lane 4: consumer experience, OpenAPI quality, API versioning, and contract governance.
+- Lane 5: CI/CD, rollback, image scanning, and operator runbooks.
+- Lane 6: background jobs and the .NET 10 evidence gate.
+
+Exit intent:
+- Deployment, rollback, configuration rollout, and incident response are all repeatable and documented.
+
+### Phase 13 - Aspire Deepening And Orchestration Quality
+
+Primary objective:
+- Improve inner-loop and orchestration quality after transport and autonomy are already stable.
+
+Broad checklist:
+- Validate AppHost as a genuine developer-experience improvement while Docker remains the strict baseline.
+- Assess generated manifests and `azd` only with explicit evidence and ADR-backed decisions.
+- Keep this phase focused on orchestration maturity, not on reopening earlier service-boundary decisions.
+
+Execution lanes:
+- Lane 1: AppHost and local orchestration quality.
+- Lane 2: distributed app testing against the live Aspire graph.
+- Lane 3: manifest and `azd` evaluation for deployment packaging.
+- Lane 4: trace and resource-composition refinements only after the deployment story is evidence-backed.
+
+### Phase 14 - CQRS Read Model Maturity
+
+Primary objective:
+- Add projection-driven read autonomy only after service autonomy and transport operations are already trustworthy.
+
+Broad checklist:
+- Separate read models where scale, reporting, or UX needs justify them.
+- Build projection replay, rebuild, and repair operations as first-class support paths.
+- Keep eventual consistency windows explicit in both backend and frontend design.
+
+Execution lanes:
+- Lane 1: projection handlers and event-to-document translation.
+- Lane 2: read-store shape, partitioning, and query optimization.
+- Lane 3: rebuild and backfill jobs for operational maintenance.
+- Lane 4: tenant-safe read isolation and replay-friendly projection discipline.
+
+Exit intent:
+- Read-side autonomy improves system capability without reducing operational clarity.
+
+### Cross-Phase Decision Rules
+
+- Hosting decisions must stay explicit: App Service, Azure Functions, ACA, or later AKS each need an ADR-backed reason.
+- Service Bus, Event Grid, and direct sync calls must be chosen by delivery semantics, not convenience.
+- Security defaults remain managed identity, RBAC, Key Vault, and claims-based boundaries.
+- Every phase must preserve distributed tracing, idempotency, and executable closeout proof.
+
+---
+
 ## Enterprise Alignment Rules For Phases 8.5-14
 
 The Julio Casal bootcamp stack is being used here as an **enterprise capability benchmark**, not as a blanket instruction to replace every Azure-first production choice already made in this repository.
@@ -200,6 +350,65 @@ The Julio Casal bootcamp stack is being used here as an **enterprise capability 
 - Do **not** replace Azure SQL platform-wide with PostgreSQL; keep PostgreSQL isolated to the Phase 11.5 Notifications pilot.
 - Do **not** replace Entra ID in production with Keycloak; keep Keycloak as the local-only Phase 9.5 portability showcase.
 - Do **not** add a separate Blazor implementation phase unless a product-specific need appears.
+
+### Enterprise Standardization Backlog
+
+The external starter-kit benchmark is useful as an enterprise guide, but we are **adopting patterns selectively** rather than copying it wholesale. This backlog maps the most relevant enterprise patterns into the existing phase plan so the roadmap stays consistent with the current architecture and with the Azure production posture already chosen in this repo.
+
+| Pattern area | Decision | Phase | Notes |
+|---|---|---|---|
+| One-command inner-loop orchestration | Adopt | Phase 9 + Phase 13 | Aspire AppHost enters in Phase 9 as the local orchestration seam; Phase 13 deepens it with distributed app testing and manifest/`azd` evaluation. |
+| Shared service defaults, health checks, service discovery, resilient `HttpClient` setup | Adopt | Phase 9 | Standardize common host wiring through `ServiceDefaults` instead of repeating it in each service. |
+| Gateway edge validation, request filtering, and consistent ProblemDetails responses | Adopt | Phase 9 + Phase 10 | Keep YARP boundary behavior explicit before cloud transport rollout. |
+| Module contracts, architecture tests, and per-module persistence boundaries | Adopt | Phase 9 + Phase 11 | Preserve the current Clean Architecture boundaries; do not replace them with a wholesale vertical-slice rewrite. |
+| Dedicated module contract assemblies / versioned DTO packages | Adopt | Phase 9 + Phase 11 | Use explicit module contracts where cross-module compilation is needed; do not leak internals between modules. |
+| Centralized configuration, secret hygiene, and per-environment rollout safety | Adopt | Phase 10 + Phase 12 | Use App Configuration, Key Vault, and environment-scoped secrets only after the platform transport is stable. |
+| Validation, ProblemDetails, structured logging, and health checks | Adopt | Phase 12 | Treat these as foundational platform behaviors, not per-endpoint extras. |
+| Resilience policy, retry, timeout, and circuit-breaker standards | Adopt | Phase 9 + Phase 12 | Keep Polly and failure semantics explicit across services and outbound integrations. |
+| One-shot migrator and seeder flow | Adopt | Phase 10 | Prefer deployment-time or startup orchestration for repeatable migrations and seed data instead of ad hoc manual setup. |
+| Dedicated migrator / no API-startup migrations | Adopt | Phase 10 | Keep schema upgrades and demo seeding as explicit operational steps so startup failures and runtime side effects stay predictable. |
+| Idempotency key support at external write boundaries | Adopt | Phase 10 + Phase 12 | Apply to replay-sensitive commands and public write endpoints where duplicate submission is a real risk. |
+| Observability depth, dashboards, and production troubleshooting runbooks | Adopt | Phase 12 | Treat this as platform engineering, not feature work. |
+| Feature flags with tenant-aware rollout | Adopt | Phase 12 | Use for controlled activation and safer rollout, not as a substitute for architecture decisions. |
+| API documentation and consumer experience | Adopt | Phase 12 + Track U | Keep OpenAPI / Scalar-style docs, generated clients, and clear consumer guidance as a first-class product surface. |
+| Frontend runtime config and typed API client | Adopt | Track U + Phase 12 | Keep environment-specific configuration out of rebuilds; prefer a typed client surface over ad hoc fetch calls. |
+| Data ownership, service autonomy, and eventual consistency | Adopt | Phase 11 | Split databases after the transport and boundary work is proven. |
+| Polyglot persistence pilot | Adapt | Phase 11.5 | Keep PostgreSQL isolated to the Notifications module proof; do not change the primary Azure SQL posture. |
+| Source-generated CQRS engine modernization | Assess first, then decide | Phase 13 assessment | Keep the current hand-rolled CQRS as the active baseline; revisit source-generated Mediator only if maintenance cost or feature throughput makes the change worthwhile. |
+| Permission catalog and policy registry | Adopt | Phase 10 + Phase 12 | Keep coarse and fine-grained authorization rules explicit even though the production IdP stays Entra-based. |
+| Tenant provisioning, migrations, and seeding | Adopt | Phase 10 + Phase 11 | Make tenant onboarding explicit: provisioning, per-tenant upgrades, and seed data should be repeatable and environment-aware. |
+| One-shot migrator and demo seeder policy | Adopt | Phase 10 | Keep migrations and demo seeding out of API startup; run them through a dedicated startup or deployment step. |
+| Soft-delete and audit interceptors | Adopt | Phase 11 + Phase 12 | Add explicit soft-delete and audit policy only where module behavior and compliance needs justify it. |
+| Cache policy conventions | Adopt | Phase 12 | Keep Redis as the baseline cache, but standardize TTLs, invalidation, and tenant-safe cache keys instead of ad hoc caching. |
+| Background worker lane for maintenance / rebuild / replay tasks | Adopt | Phase 12 + Phase 14 | Treat scheduled jobs, rebuilds, and replay operations as first-class operational code, not ad hoc scripts. |
+| Tenant-aware quota, idempotency, and rate-limit controls | Adopt | Phase 9 + Phase 10 | Keep operational guardrails explicit at the gateway and cloud edge. |
+| File/storage ingestion and attachment flow | Adopt | Phase 10 | Keep Blob-backed attachment handling, upload abstraction, and downstream processing in the cloud transport phase, not as a local-only helper. |
+| Mailing / notification dispatch | Adopt | Phase 11 + Phase 12 | Keep outbound mail or async notification delivery under the Notifications module instead of scattering providers across features. |
+| CQRS read models, projections, and snapshot/rebuild jobs | Adopt | Phase 14 | These belong after service autonomy and orchestration maturity are in place. |
+| Alternate identity provider parity proof | Defer to local-only proof | Phase 9.5 | Keycloak remains a portability showcase; Azure production continues to use Microsoft Entra ID. |
+| SignalR / SSE real-time UI streams | Defer unless product need appears | Phase 13+ / product need | Keep real-time UI channels out of the base roadmap until a concrete user journey requires them. |
+| Admin impersonation / delegated support workflows | Defer unless product need appears | Phase 12+ / product need | Only add delegated support flows if the product genuinely needs staff-level troubleshooting or customer support impersonation. |
+| Multi-frontend expansion beyond the current web client | Defer unless product need appears | Phase 13+ / product need | The repo already has one active React web client; a second client or admin console should be justified by product scope, not architecture fashion. |
+| Template / CLI packaging of the repo as a starter kit | Defer to productization track | Phase 14+ / separate track | Useful only if we intentionally decide to publish the architecture as a reusable template. |
+| ASP.NET Identity / session-based app auth | Reject for production path | N/A | Production auth is claims-based Entra/Keycloak OIDC; do not introduce a second auth stack unless a product requirement forces it. |
+| .NET 10 runtime migration from .NET 8 | Assess first, then decide | Phase 12 assessment, Phase 13 gate | This is **not** a Phase 10 deliverable. Phase 12 owns compatibility evidence and upgrade readiness; Phase 13 is the explicit go/no-go gate if the upgrade is still justified. |
+| Path-scoped CI, warnings-as-errors, and full automated test matrix | Adopt | Phase 12 + Phase 13 | Keep backend, frontend, integration, and Playwright coverage split by path so failures are visible without running the whole world every time. |
+| Wholesale rewrite to a different starter-kit architecture | Reject | N/A | Keep the current repo’s Clean Architecture, eventing model, and Azure-first production choices. Use the starter-kit guidance for pattern ideas only. |
+
+#### Practical rule for roadmap reading
+
+- If the item changes the cloud transport, gateway, or service split, it belongs in Phase 10 or 11.
+- If the item changes build/deploy/runtime governance, it belongs in Phase 12.
+- If the item changes developer experience or orchestration quality, it belongs in Phase 13.
+- If the item changes read-model shape or reporting strategy, it belongs in Phase 14.
+- If the item is only a portability or learning proof, keep it isolated like Phase 9.5 and do not promote it into production planning.
+- If the item is a second auth stack, alternate platform rewrite, or unrelated technology swap, reject it unless a product requirement forces it.
+
+#### Planning labels
+
+- **Planned** means the item is still intended work and belongs in the numbered roadmap.
+- **Assessment** means the item needs evidence, compatibility checks, or an ADR-backed decision before implementation is allowed.
+- **Deferred** means the item is intentionally out of scope for the current phase and must stay in deferred-work tracking until a new business need appears.
 
 ## Parallel Track U — UI Modernization Program 📅
 
@@ -709,6 +918,8 @@ When Service Bus replaces the in-memory event bus in Phase 10, webhook-derived e
 **Focus:** Create extractable module boundaries and local deployability without changing the
 event semantics frozen in Phase 8.
 
+**Why this phase exists:** Phase 9 is the structural proof point. It isolates module boundaries, gateway routing, and local orchestration so the repo can prove service shape before any Azure transport, database split, or workflow expansion is introduced.
+
 ### Module Isolation (First Step — Before Extraction)
 
 Before extracting to separate deployables, restructure the monolith into isolated modules:
@@ -970,6 +1181,8 @@ Module-isolated, locally deployable services with proven API boundaries, a first
 
 **Focus:** Demonstrate identity-provider portability by running Keycloak locally as a drop-in OIDC provider, validating that JWT auth works against any compliant IdP — not only Entra ID.
 
+**Why this phase is separate:** Phase 9.5 is intentionally narrow. It proves the auth pipeline is IdP-agnostic without changing the production identity model, and it depends on the local Docker topology already proven in Phase 9.
+
 ### Why This Phase Is Required
 
 Enterprise architecture must avoid lock-in to a single identity provider. Phase 10 wires Entra ID + JWT for cloud deployment, but the **same `JwtBearerOptions` configuration must accept tokens from Keycloak with only `Authority` and `Audience` changes**. This phase proves that portability with a runnable local demo.
@@ -1019,6 +1232,8 @@ Identity-provider portability is now wired into the repo with a runnable local d
 
 **Focus:** Introduce durable Azure transport and DLQ operations without changing the
 contracts frozen in Phase 8.
+
+**Why this phase is separate:** Phase 10 is the cloud transport and hardening phase. It exists only after the local module and identity proofs are stable, because Azure resources, failure drills, and security wiring are prerequisites for Service Bus, APIM, Functions, Blob, and Key Vault.
 
 ### Architecture Diagram
 
@@ -1101,19 +1316,19 @@ contracts frozen in Phase 8.
 
 ### Phase 10 Status Table
 
-| Area | Status | Next Step | Phase |
+| Area | Status | Meaning | Next Step |
 |---|---|---|---|
-| ACA deployment path | Planned | Deploy the service graph into Azure Container Apps with health probes and scaling | Phase 10 |
-| ACR build/push flow | Planned | Build and publish container images for the Azure workloads | Phase 10 |
-| APIM public gateway | Planned | Put APIM in front of the ACA ingress and keep YARP internal | Phase 10 |
-| Service Bus transport swap | Planned | Replace the in-memory event bus with durable topics/subscriptions | Phase 10 |
-| Blob Storage / Event Grid / Functions | Planned | Add the platform-event and DLQ reprocessing pieces | Phase 10 |
-| Entra ID + JWT cloud auth | Planned | Validate cloud identity in Azure; do not use Keycloak here | Phase 10 |
-| Private networking / secrets | Planned | Apply private endpoints, managed identity, and Key Vault wiring | Phase 10 |
-| Cost governance | Planned | Configure scale-to-zero and budget controls | Phase 10 |
-| Keycloak portability proof | Explicitly not Phase 10 | Keep Keycloak local-only in Phase 9.5 | Phase 9.5 / deferred |
-| Database-per-service split | Not Phase 10’s job | Move this to Phase 11 | Phase 11 |
-| Aspire deepening / distributed app tests | Not Phase 10’s job | Move this to Phase 13 | Phase 13 |
+| Transport foundation | Next | Service Bus, Event Grid, and Functions are the first implementation lane | Finalize topology and message contracts |
+| Cloud hosting outcome | Next | ACA is the hosting target only after transport failure drills pass | Deploy the service graph into ACA |
+| Public gateway | Next | APIM fronts ACA; YARP stays internal | Wire APIM after ingress and routing are stable |
+| Images and registry | Next | ACR is the build/push lane for container workloads | Publish the Azure workload images |
+| Identity and auth | Next | Entra ID + JWT is the Azure identity lane; Keycloak remains out of Phase 10 | Validate cloud identity in Azure |
+| Secrets and networking | Next | Private endpoints, managed identity, and Key Vault are the security baseline | Apply private networking and secret wiring |
+| Cost controls | Next | Scale-to-zero and budget controls are operational gates, not afterthoughts | Configure cost governance and alerts |
+| SharedContracts | Deferred / candidate for Phase 10 | Introduce only if Phase 10 transport wiring proves a shared schema package is needed across services | Keep service-local contracts until a real duplication problem appears |
+| Phase 9.5 portability proof | Deferred / not Phase 10 | Keep Keycloak local-only in Phase 9.5 | No Azure-side Keycloak parity in this phase |
+| Database-per-service split | Not Phase 10 | Database-per-service belongs to Phase 11 | Move this to Phase 11 |
+| Aspire deepening / distributed app tests | Not Phase 10 | Distributed app tests and manifest evaluation belong later | Move this to Phase 13 |
 
 ### Security
 
@@ -1157,6 +1372,8 @@ Secure, scalable cloud-native microservices with durable Azure transport, contro
 ## Phase 11 — Data Ownership & Service Autonomy 📅
 
 **Focus:** True microservice boundaries — each service owns its data.
+
+**Why this phase is separate:** Phase 11 starts only after transport is stable because data ownership, per-service migrations, and eventual consistency are only meaningful once the services already exist as separate operational units.
 
 ### Architecture Diagram
 
@@ -1261,6 +1478,8 @@ Independent, fully decoupled services with clear data ownership, Durable Functio
 
 **Focus:** Demonstrate database-engine portability by migrating one module's persistence layer to PostgreSQL while the rest of the system continues on Azure SQL. Proves the EF Core abstraction holds against a different RDBMS without leaking provider details into Domain or Features.
 
+**Why this phase is separate:** Phase 11.5 is a narrow portability showcase. It is intentionally not a platform rewrite; it proves one isolated module can move to PostgreSQL while Azure SQL remains the default for the rest of the system.
+
 ### Why This Phase Is Required
 
 - **Cloud-portability proof** — Azure SQL is excellent but expensive at scale; PostgreSQL on Azure Database for PostgreSQL Flexible Server (or AWS RDS, GCP Cloud SQL) is a common cost-driven alternative
@@ -1319,6 +1538,8 @@ Provider-portability proven with one module running PostgreSQL end-to-end (local
 
 **Focus:** Operational excellence — configuration, observability dashboards, and advanced resilience.
 
+**Why this phase is separate:** Phase 12 is about operating the platform well, not expanding the core business model. Configuration, secrets, observability, CI/CD, and resilience conventions matter only after service ownership and cloud transport are already in place.
+
 ### Key Deliverables
 
 - **Central configuration** — Azure App Configuration for feature flags and shared settings
@@ -1342,6 +1563,8 @@ Scalable, manageable production platform with enterprise-grade operations, advan
 ## Phase 13 — Aspire & Developer Experience 📅
 
 **Focus:** Developer inner-loop experience deepening, on top of the Aspire-Lite track introduced in Phase 9.
+
+**Why this phase is separate:** Phase 13 deepens the orchestration and test harness after the service graph is already stable. It is about proving the live Aspire graph, distributed tests, and deployment packaging choices, not about adding new business capabilities.
 
 ### Phase 9 Carry-Forward Notes
 
@@ -1383,6 +1606,8 @@ Enterprise-grade, cloud-native system with excellent developer inner-loop experi
 ## Phase 14 — CQRS Read Model with Cosmos DB (MongoDB API) 📅
 
 **Focus:** Separate read and write models for performance and scalability.
+
+**Why this phase is separate:** Phase 14 is the final architectural read-model step. It depends on the earlier event flow, service ownership, and operational foundation so the read side can be optimized without reintroducing coupling to the write model.
 
 ### Architecture Diagram
 
@@ -1478,7 +1703,7 @@ True CQRS with read/write separation, high-performance queries via Cosmos DB (Mo
 
 ## Comparison Matrix
 
-| Feature | Baseline (Monolith) | Phase 9 (YARP Local) | Phase 10 (ACA Cloud) | Phase 14 (Final State) |
+| Feature | Baseline (Monolith) | Phase 9 (YARP Local) | Phase 10 (ACA Cloud) | Phase 14 (Core State) |
 |---------|--------------------|--------------------|--------------------|-----------------------|
 | **Deployment** | 2 App Services | Docker Compose (7 containers) | ACA (auto-scaling) | ACA + Cosmos DB |
 | **Communication** | In-process | Events + HTTP | Service Bus + Event Grid + HTTP | Service Bus + Event Grid + HTTP |
@@ -1489,6 +1714,101 @@ True CQRS with read/write separation, high-performance queries via Cosmos DB (Mo
 | **Resilience** | None | Polly basics (retry + CB) | Polly + advanced + DLQ | Polly + dead-letter + retry |
 | **API Gateway** | N/A | YARP (local) | APIM (public) + YARP (internal) | APIM + YARP |
 | **Dev Experience** | VS F5 | Docker Compose | ACA deploy | .NET Aspire |
+
+---
+
+## Azure Functions Capability Ladder (Assignment Plan) 📅
+
+The assignment set below is folded into the roadmap as a single capability ladder rather than as disconnected exercises. The sequence stays intentional: request/response and storage first, orchestration and background processing next, then configuration and performance work, and only after that the optional search and AI expansions.
+
+| Assignment | Capability | Roadmap Phase | Aspire role |
+|---|---|---|---|
+| 1 | HTTP Function + Blob Storage persistence | Phase 10 | Use Azurite locally, Storage Account in Azure, and environment-driven connection strings / managed identity |
+| 2 | Durable Function orchestration | Phase 11 | Host orchestrator + activity functions for long-running workflows and compensation |
+| 3 | HTTP to Service Bus queue | Phase 10 | Model command dispatch and async transport behind the Azure messaging lane |
+| 4 | Queue-trigger processing | Phase 10 / 11 | Use queue-triggered workers for background jobs, retries, and structured logging |
+| 5 | API with Azure SQL Database | Phase 10 / 11 | Keep Azure SQL as source of truth and harden the data-access boundary |
+| 6 | Cache-aside pattern with Redis | Phase 12 | Treat cache policy, TTL, and invalidation as part of platform performance work |
+| 7 | Search API with Azure AI Search | Post-14 Horizon 15/16 | Optional search/discovery capability; promote only if the product needs a real search surface |
+| 8 | AI summary storage with Azure OpenAI + Blob Storage | Post-14 Horizon 15/16 | Optional AI enrichment lane; keep it isolated from the core architecture closeout |
+| 9 | Configuration + feature flags API | Phase 12 | Use Azure App Configuration as the runtime configuration backbone |
+| 10 | Secure secret retrieval with Key Vault | Phase 10 / 12 | Use managed identity and Key Vault for secret access without hardcoding |
+
+### Real Project Fit For The Assignment Ladder
+
+Use each assignment as a thin slice of the order-processing platform, not as a separate toy sample:
+
+- Assignment 1 maps to an HTTP Function that persists a lightweight order or user-provisioning artifact in Blob Storage and reads it back safely.
+- Assignment 2 maps to payment or fulfillment orchestration where the durable workflow must survive retries, delays, and compensating actions.
+- Assignment 3 maps to the API boundary that turns an order-created action into a Service Bus command for downstream processing.
+- Assignment 4 maps to background queue processing for notifications, enrichment, or replay support.
+- Assignment 5 maps to an Azure SQL-backed API slice that writes authoritative order or customer data and returns a summary result.
+- Assignment 6 maps to cache-aside reads for catalog, customer, tenant, or order lookups while SQL remains the source of truth.
+- Assignment 7 maps to a search endpoint for order history, support lookup, or product discovery if the domain needs indexed reads.
+- Assignment 8 maps to AI-generated summaries for support notes, operational digests, or order-event descriptions stored in Blob Storage.
+- Assignment 9 maps to App Configuration and feature-flag control for a new checkout, notification, or operator workflow.
+- Assignment 10 maps to secure retrieval of provider keys, webhook secrets, or database credentials through Key Vault and managed identity.
+
+### Roadmap Rules For The Assignment Ladder
+
+- Assignments 1, 3, 4, 5, and 10 belong to the core Azure transport and platform hardening path.
+- Assignment 2 belongs to the workflow and orchestration path and must stay deterministic.
+- Assignments 6 and 9 belong to the platform engineering and operations path.
+- Assignments 7 and 8 are valuable but optional expansions, so they stay in post-14 horizons unless a concrete product need moves them earlier.
+- Aspire should host the full environment graph for each phase, but the production technologies should still be introduced only when the roadmap phase asks for them.
+
+### Phase-By-Phase Rationale
+
+This roadmap is intentionally split by dependency shape, not by assignment count. Each phase unlocks the next one and keeps the earlier proof stable.
+
+- **Phase 9** exists first because module boundaries, YARP routing, Docker orchestration, and traced local flows must be proven before cloud transport or workflow changes are worth carrying.
+- **Phase 9.5** stays separate because identity portability is a narrow proof: it validates local Keycloak shape without changing the production Entra model.
+- **Phase 10** absorbs assignments 1, 3, 4, 5, and 10 because they are the cloud transport and resource-hardening primitives: Blob, Service Bus, SQL, and secret access need Azure-hosted infrastructure and secure wiring.
+- **Phase 11** absorbs assignment 2 because Durable Functions and database autonomy are about workflow orchestration and service ownership, which only make sense after the transport layer is stable.
+- **Phase 11.5** remains isolated because PostgreSQL is a portability showcase for one module, not a platform-wide store replacement.
+- **Phase 12** absorbs assignments 6 and 9 because cache policy and configuration management are cross-cutting operational concerns that only pay off once the service graph and identity/transport backbone are already settled.
+- **Phase 13** stays focused on Aspire deepening and distributed app testing because those improvements are about developer experience and live-graph validation, not business capability.
+- **Phase 14** is reserved for CQRS read models because Cosmos DB projections only make sense after event flow, service ownership, and operational discipline already exist.
+- **Post-14 horizons** keep Azure AI Search and Azure OpenAI separate because they are feature expansion lanes, not prerequisites for the core architecture closeout.
+
+---
+
+## Post-14 Horizons 📅
+
+These lanes are intentionally beyond the core 14-phase architecture. They capture technically important concepts that should be considered if the product grows further, but they do not block the current Phase 14 closeout.
+
+### Horizon 15 — Productization & Supportability
+
+**Focus:** make the platform easier to operate, support, and reuse internally.
+
+### Horizon 15 Candidate Items
+
+- **Source-generated CQRS assessment** — evaluate a source-generated mediator/CQRS engine only if the maintenance cost or feature throughput justifies moving away from the hand-rolled baseline.
+- **Tenant lifecycle automation** — explicit provisioning, tenant upgrades, and repeatable seeding so onboarding is a routine operation rather than a manual runbook.
+- **Dedicated migrator/seeder lane** — keep migration and seed execution out of request startup and run it through deployment or admin workflows.
+- **Soft-delete and audit policy** — standardize audit/interception behavior where compliance or business retention requires it.
+- **Cache policy conventions** — define tenant-safe cache keys, TTLs, and invalidation rules instead of ad hoc caching.
+- **Notification dispatch** — keep outbound mail and async notification delivery inside a single module boundary.
+- **Generated API docs and SDKs** — treat OpenAPI/Scalar-style docs and typed client generation as a first-class consumable surface.
+- **Path-scoped CI and test governance** — preserve warnings-as-errors, path-specific pipelines, and the full automated matrix without forcing everything through one giant workflow.
+
+### Horizon 16 — Optional Channels & Expansion
+
+**Focus:** add optional user-facing channels and support workflows only when product need is clear.
+
+### Horizon 16 Candidate Items
+
+- **Real-time UI updates** — SignalR or SSE-style updates for dashboards and live user interactions.
+- **Delegated support / impersonation** — staff-grade support workflows for troubleshooting or service operations, only if the business needs them.
+- **Multi-frontend expansion** — admin console, mobile client, or additional web surfaces beyond the current React web app.
+- **Search and discovery** — add a dedicated search/indexing experience if the domain needs efficient cross-entity lookup.
+- **Template / CLI packaging** — productize the repo as an internal starter kit or bootstrap template only if reuse becomes a real objective.
+
+### Horizon Rules
+
+- These horizons do **not** change the current Phase 14 closeout criteria.
+- They should only be promoted into a numbered phase when the product justifies the investment.
+- Keep them out of the active implementation queue until the current roadmap is closed and a new business case appears.
 
 ---
 
@@ -1601,14 +1921,14 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 
 #### Phase 9 closure scope
 
-- Module isolation and API boundaries
-- Per-module schemas in a shared database
-- Module self-registration and architecture tests
-- Specification standardization
-- YARP gateway and local cross-cutting concerns
-- Docker Compose orchestration
-- Graceful shutdown and local runtime proof
-- Unit, integration, and Playwright validation of the local gateway/payment flows
+- Done: module isolation and API boundaries
+- Done: per-module schemas in a shared database
+- Done: module self-registration and architecture tests
+- Done: specification standardization
+- Done: YARP gateway and local cross-cutting concerns
+- Done: Docker Compose orchestration
+- Done: graceful shutdown and local runtime proof
+- Done: unit, integration, and Playwright validation of the local gateway/payment flows
 
 #### Phase 10 scope
 
@@ -1624,6 +1944,36 @@ Baseline (Monolith) ─── ✅ Running on Azure App Service
 - SharedContracts project for inter-service event schemas + DTOs
 - Any new service-contract refactor that exists only to support cloud/event integration
 
+#### SharedContracts implementation plan
+
+If the repo proves that the same event/DTO shape is being duplicated across multiple services during Phase 10 transport work, introduce a small `SharedContracts` project as a thin, versioned package that contains only shared integration-event DTOs and envelope types.
+
+Use it only for:
+- cross-service event schemas that genuinely need a stable shared shape
+- versioned message contracts that must be consumed by more than one service
+- any minimal common envelope metadata that would otherwise drift between services
+
+Do not use it for:
+- service-specific request/response models
+- domain entities
+- gateway-only DTOs
+- anything that would weaken module boundaries
+
+Implementation order:
+1. Keep Phase 9 clean and do not add new contract refactors there.
+2. During Phase 10, only add `SharedContracts` if the transport/workflow code shows real duplication.
+3. Keep the package tiny and versioned, with one-way dependency from services to contracts.
+4. Revisit Phase 11 only if saga orchestration or service autonomy reveals a stronger need.
+
+#### Phase 9 remaining status
+
+| Item | Status | Notes |
+|---|---|---|
+| SharedContracts project for inter-service event schemas + DTOs | Deferred / Candidate for Phase 10 | Keep out of Phase 9; promote only if Phase 10 transport work proves real duplication across services |
+| Any new service-contract refactor for cloud/event integration | Deferred | Do not reopen Phase 9 boundaries for this work |
+| Physical module split, schema ownership, startup wiring, and test coverage | Done | Already reflected as completed in the Phase 9 closeout summary below |
+| Local HTTP and Docker Dev HTTP validation alignment | Done | Keep task naming and run order aligned with the labeled flows |
+
 ### Phase 9 Closure Reality Check
 
 Phase 9 now has the local gateway proof, API boundary markers, module registration facades, per-module schema ownership, specification standardization, shared-host consolidation, traced multi-service flow proof, and graceful-shutdown proof in place. The only remaining policy decision is the explicit SharedContracts deferral.
@@ -1634,6 +1984,12 @@ Phase 9 now has the local gateway proof, API boundary markers, module registrati
 - **Achieved:** shared host consolidation and traced multi-service flow proof are recorded as complete in the Phase 9 roadmap.
 - **Remaining:** record the SharedContracts decision as deferred and keep any new service-contract refactor out of Phase 9.
 - **Recommendation:** close Phase 9 as complete for wiring, runtime proof, and label hygiene; keep SharedContracts as an explicit deferred decision and move any future contract-refactor work into the next phase.
+
+**Phase 9.5 status summary**
+- **Achieved:** local HTTP and Docker Dev HTTP portability proof is runtime verified.
+- **Achieved:** Keycloak remains local-only and the production identity model remains Entra ID.
+- **Deferred:** any Azure-side Keycloak parity or migration testing remains outside this phase.
+- **Done:** Phase 9.5 is retained as a portability showcase, not as a production identity change.
 
 #### Phase 9 automation and validation rule
 
@@ -1708,7 +2064,7 @@ Treat the unchecked items above as the remaining Phase 9 completion work. Do not
 
 ---
 
-## Final Architecture State (After Phase 14)
+## Core Architecture State (After Phase 14)
 
 | Capability | Implementation |
 |-----------|----------------|

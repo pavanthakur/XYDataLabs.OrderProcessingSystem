@@ -54,6 +54,13 @@ Purpose: capture the actual remaining Phase 9 work from the current repository s
 Phase 9 is complete for the implemented module, gateway, schema, specification, tracing, shared-host, and shutdown proofs.
 The remaining work is documentation hygiene and the deferred SharedContracts decision, not new Phase 9 capability.
 
+The next roadmap sequence after Phase 9 is intentionally separate:
+
+- Phase 10: HTTP + Blob, Service Bus, SQL hardening, Key Vault
+- Phase 11: Durable Functions and database autonomy
+- Phase 12: Redis cache policy and App Configuration
+- Post-14 horizons: Azure AI Search and Azure OpenAI as optional expansions
+
 ## Closeout Summary
 
 - **Achieved:** local and Docker Dev validation paths are wired and labeled consistently; VS Code task naming now reads cleanly across Local, Docker, and Azure.

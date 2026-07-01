@@ -35,3 +35,10 @@
 - Needs correction:
 - Deferred:
 - Notes:
+
+## Roadmap Alignment
+
+- Current phase:
+- Next phase:
+- Optional horizon items:
+- Explicitly deferred items:

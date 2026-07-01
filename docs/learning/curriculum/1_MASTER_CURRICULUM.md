@@ -7,6 +7,83 @@
 
 ---
 
+## 🧭 Learning Strategy
+
+You are learning Azure, .NET, microservices, Service Bus, Docker, and Kubernetes from a practical enterprise angle.
+
+Keep the path simple:
+
+1. Learn one concept well before adding the next one.
+2. Prefer a working vertical slice over a broad framework tour.
+3. Treat Azure Service Bus, Event Grid, Azure Functions, and error handling as the core enterprise messaging lane.
+4. Keep Azure SQL as the source of truth; use PostgreSQL, Cosmos DB, Keycloak, Aspire, and advanced orchestration only when the roadmap explicitly asks for them.
+5. Use Docker and Aspire to understand the system shape, not as extra complexity to master first.
+6. Aim to prove principal-architect thinking through clean boundaries, clear tradeoffs, and repeatable operational flow.
+7. Adopt only the enterprise patterns that materially improve architecture quality; do not try to replicate a large starter kit feature-for-feature.
+
+### Core Learning Lanes
+
+| Lane | Learn First | Why It Matters | Defer Until Later |
+|---|---|---|---|
+| 1 | Azure basics, App Service, OIDC, GitHub Actions | Gives you a working deployment and identity baseline | Do not move to microservices before this is comfortable |
+| 2 | API design, CQRS, validation, ProblemDetails, structured logging, health checks, testing | Teaches clean service behavior and error handling | Do not add infrastructure patterns too early |
+| 3 | Azure Service Bus, Event Grid, Azure Functions, DLQ | This is the enterprise messaging backbone you asked for | Avoid over-engineering extra event frameworks first |
+| 4 | Microservice communication, YARP gateway, idempotency, retries, Polly resilience, API versioning | Teaches service-to-service flow and failure handling | Do not split databases before communication is stable |
+| 5 | Docker, Aspire, ACA, ACR | Helps you run and observe the system locally and in Azure after communication rules are clear | Keep Kubernetes-specific depth optional unless needed |
+| 6 | Observability, caching, runbooks, CI/CD, cost controls | Makes the system enterprise-ready and supportable | Do not skip error handling and health checks |
+| 7 | Optional horizons: Cosmos DB, PostgreSQL pilot, Keycloak, search, real-time UI | Useful advanced proof points, but not the core path | Only promote when the core lanes are already solid |
+
+### What Success Looks Like
+
+- You can explain why each service or Azure component exists.
+- You can trace a request through API, gateway, messaging, and background processing.
+- You can describe the failure path, retry path, and dead-letter path.
+- You can deploy the system locally and in Azure without hidden steps.
+- You can discuss tradeoffs like simplicity vs. scale, coupling vs. isolation, and portability vs. platform fit.
+- You can justify why a capability was adopted, deferred, or rejected instead of copying a framework or article wholesale.
+- You can explain where validation, logging, resilience, versioning, and health checks belong in the architecture instead of bolting them on late.
+
+### Assignment-to-Phase Map
+
+This assignment ladder is now part of the future learning and architecture plan:
+
+| Assignment | Capability | Planned Phase |
+|---|---|---|
+| 1 | HTTP Function + Blob Storage | Phase 10 |
+| 2 | Durable Function orchestration | Phase 11 |
+| 3 | HTTP to Service Bus queue | Phase 10 |
+| 4 | Queue-trigger processing | Phase 10 / 11 |
+| 5 | API with Azure SQL Database | Phase 10 / 11 |
+| 6 | Cache-aside with Redis | Phase 12 |
+| 7 | Search API with Azure AI Search | Post-14 Horizon 15/16 |
+| 8 | AI summary storage with Azure OpenAI + Blob Storage | Post-14 Horizon 15/16 |
+| 9 | Configuration + feature flags API | Phase 12 |
+| 10 | Secure secret retrieval with Key Vault | Phase 10 / 12 |
+
+### Real Project Fit
+
+Use these assignments as thin slices of the actual order-processing system, not as standalone toy apps:
+
+- Assignment 1 maps to a lightweight Azure Function for order-related blob notes or user-provisioning metadata, using `users` as the storage shape and Blob as the persistence lesson.
+- Assignment 2 maps to long-running payment, fulfillment, or reconciliation orchestration where Durable Functions coordinate a step that must outlive one HTTP request.
+- Assignment 3 maps to sending order-created or invoice-ready messages into Service Bus from an API boundary.
+- Assignment 4 maps to queue-trigger processing for background work such as notifications, retryable enrichments, or replay support.
+- Assignment 5 maps to a request/response API slice that writes to Azure SQL and returns an authoritative count or status summary.
+- Assignment 6 maps to cache-aside reads for product, customer, tenant, or order lookups where SQL remains the source of truth.
+- Assignment 7 maps to a search endpoint for catalog, order history, or support lookup once the project has a real indexed read model.
+- Assignment 8 maps to AI-assisted summary generation for support notes, release notes, or order-event digests that are stored back to Blob.
+- Assignment 9 maps to App Configuration-driven rollout of a feature such as a new checkout, notification, or operator-mode behavior.
+- Assignment 10 maps to secure retrieval of provider keys, database secrets, or webhook credentials through Key Vault and managed identity.
+
+Core rule:
+
+- Keep the Aspire AppHost as the orchestrator for every assignment.
+- Use Azurite, SQL, Service Bus, Redis, App Configuration, and Key Vault as the core infrastructure lane.
+- Treat Azure AI Search and Azure OpenAI as optional post-14 expansions unless the product specifically needs them earlier.
+- Keep ACA as the likely cloud-hosting outcome for the transport phase, but not as the primary learning objective ahead of messaging, validation, and communication design.
+
+---
+
 ## 🎯 WHAT'S NEXT? (Your Current Focus)
 
 **✅ COMPLETED SO FAR (Days 1-43 + Architecture Phases 1-8.7):**
@@ -51,6 +128,22 @@
 - **Phase 9** reduces structural risk: four first-class modules, `API` boundaries, local deployability, tracing acceptance bar
 - **Phase 10** reduces transport and operational risk: Service Bus swap, central DLQ intake, Bicep-only topology, failure drills before ingress/security
 
+### Post-Phase-9 Principal-Architect Sequence
+
+- **Phase 10** is the Azure transport lane: Service Bus topology, Event Grid boundary discipline, DLQ operations, replay, RBAC, and end-to-end trace continuity.
+- **Phase 10** also adopts the missing enterprise essentials that matter here: dedicated migrator or seeder flow, idempotency-key discipline, Azure Functions responsibility boundaries, and explicit gateway-to-service and service-to-service error-handling rules.
+- **Phase 11** is the orchestration and autonomy lane: saga choice, compensation, timeout handling, and database-per-service enforcement.
+- **Phase 11** should be executed in order: service-owned stores first, saga flow second, reconciliation and drift detection third, migrations last.
+- **Phase 11.5** is the bounded PostgreSQL portability proof for Notifications only.
+- **Phase 12** is the platform-engineering lane: App Configuration, Key Vault rollout safety, feature flags, cache policy, quota and rate-limit policy, per-service CI/CD, rollback, runbooks, API consumer experience, and the .NET 10 assessment.
+- **Phase 12** should also be executed in order: configuration and rollout safety first, consumer experience second, CI/CD and runbooks third, background jobs and runtime-upgrade evidence last.
+- **Phase 13** is the Aspire-deepening lane after transport and autonomy are stable.
+- **Phase 13** should be executed in order: AppHost quality first, distributed testing second, manifest and `azd` evaluation third, trace/composition refinements last.
+- **Phase 14** is the CQRS read-model lane once service ownership and operational replay paths are trustworthy.
+- **Phase 14** should be executed in order: projection handlers first, read-store shaping second, rebuild/backfill jobs third, tenant-safe query discipline last.
+
+Use this rule when planning future work: do not mix transport work, service-autonomy work, Aspire deepening, and read-model expansion into the same execution slice.
+
 ### Track U Gate
 
 - **Track U** reduces frontend migration risk: contract freeze, generated SDK, React web replacement, API ownership of callback/telemetry, and MVC removal rules
@@ -82,7 +175,7 @@ See `ARCHITECTURE-EVOLUTION.md` for full phase details.
 | 8.7 | Provider Webhooks & Async Payment Lifecycle | Days 60–64 | ✅ Complete |
 | 9 | YARP Microservices | Days 74–79 | 📅 Next |
 | 9.5 | Cloud-Portable Identity Showcase (Keycloak Local) | Days 80–82 | 📅 Planned |
-| 10 | Azure Container Apps | Days 87–93 (transport drills gate ingress/security) | 📅 Planned |
+| 10 | Azure Transport, Messaging, and ACA Hosting | Days 87–93 (transport drills gate ingress/security and hosting sign-off) | 📅 Planned |
 | 11 | Data Ownership & Autonomy | Days 100, 102 | 📅 Planned |
 | 11.5 | Polyglot Persistence Showcase (PostgreSQL Notifications Pilot) | Day 103 | 📅 Planned |
 | 12 | Platform Engineering | Days 95, 97 | 📅 Planned |
@@ -110,12 +203,18 @@ The expanded .NET 10 + Aspire + cloud-native skill tree is being imported as an 
 | Capability imported from the modern bootcamp stack | Planned implementation surface |
 |---|---|
 | API consumer experience: contract discipline, versioning, problem details, generated SDK expectations, pagination/filtering/sorting | Track U carry-forward + Phase 8.5 + Phase 9 + Phase 12 |
+| Validation, structured logging, ProblemDetails, and health checks | Phase 2 + Phase 12 |
 | Worker services, async messaging, idempotency, DLQ thinking, replay and reconciliation | Phase 8 + Phase 8.7 + Phase 10 |
+| Dedicated migrator or seeder flow, no API-startup schema mutation | Phase 10 |
 | Configuration management, Options Pattern discipline, App Configuration, Key Vault-backed rollout safety | Phase 10 + Phase 12 |
+| Resilience policy, retry, timeout, circuit breaker, fallback | Phase 4 + Phase 12 |
+| Feature flags, tenant-aware rollout, and operator-safe activation | Phase 12 |
 | Distributed tracing, correlation, service dependency visibility, advanced OpenTelemetry usage | Phase 9 + Phase 10 + Phase 13 |
 | Cloud networking, ingress, CORS, TLS, API gateway, Front Door / APIM style concerns | Phase 10 + Phase 12 |
 | Integration testing, Testcontainers discipline, distributed app testability | Phase 9 + Phase 13 |
+| API consumer experience, stronger docs UX, and explicit contract governance | Phase 12 |
 | Performance, caching, cost awareness, troubleshooting and diagnostics runbooks | Phase 12 + Phase 13 |
+| Background jobs for replay, rebuild, cleanup, and maintenance | Phase 12 + Phase 14 |
 | Modern local development and orchestration experience | Phase 9 (Aspire-Lite) + Phase 13 |
 
 Use this as the rule for future edits: import the **enterprise pattern** when it strengthens the architecture, but only import the **specific technology** when it improves this repository's Azure-first production story or is intentionally isolated as a portability showcase.
@@ -906,44 +1005,64 @@ After completing today's tasks, you will have:
 
 ---
 
-### Week 12: Azure Container Apps (ACA) with Aspire Deployment — 🏗️ *Architecture Phase 10*
+### Week 12: Azure Transport, Messaging, and ACA Hosting — 🏗️ *Architecture Phase 10*
 **Reference:** Containerization-ACA-Aspire-Learning-Path.md → Module 3
-> 🏗️ **Architecture Phase 10** maps 1:1 to this week. ACA deployment IS the architecture phase.
+> 🏗️ **Architecture Phase 10** maps to this week, but the primary learning goal is transport and enterprise communication design first. ACA is the likely hosting outcome, not the sole objective.
 >
-> **Phase 10 Azure services beyond ACA basics:**
+> **Phase 10 core services and decisions:**
+> - Azure Service Bus — queue and topic topology, delivery semantics, retry policy, DLQ ownership, replay flow, and message metadata standards
+> - Event Grid — event broadcast only where fan-out semantics are clearer than Service Bus work distribution
 > - Azure Functions — Service Bus-triggered DLQ reprocessor (isolated process model); timer-triggered projection health checks
+> - Dedicated migrator and seeder path — keep schema upgrades and demo seed out of API startup
 > - Azure Blob Storage — order file attachments (invoices, receipts) with managed identity access + private endpoint; `BlobCreated` events via Event Grid
+> - Error handling — consistent gateway, API, worker, and function failure contracts plus traceable operator diagnostics
 > - Private networking — VNet integration, private endpoints for SQL, Key Vault, Redis, and Blob Storage; NSG rules for ACA VNet; private DNS zones
 > - JWT authentication — Entra ID token validation at APIM (policy-based) and YARP gateway, token propagation to downstream services after transport failure drills pass
 > - Cost governance — scale-to-zero on all Container Apps, APIM Consumption tier (pay-per-call), autoscale RU caps on Cosmos DB, Azure Budget alerts per resource group
 > - DLQ handling — central intake, alert threshold on DLQ depth and oldest message age, explicit dead-letter reason/description, poison message quarantine, and no blind bulk replay
 
-#### Day 87: Log Analytics Workspace
-**Reference:** ACA-Migration-Plan.md → Phase 3
-- [ ] Create LAW via CLI or Bicep
-- [ ] Understand workspace structure and queries
-- [ ] Write first KQL query
+### Phase 10 Status Snapshot
+
+| Area | Status | Meaning |
+|---|---|---|
+| Service Bus / Event Grid / Functions | Next | The first Phase 10 implementation lane is transport, platform events, and DLQ operations |
+| ACA hosting outcome | Next | ACA is the deployment target only after the transport failure drills pass |
+| APIM / YARP edge | Next | APIM is the public gateway, YARP stays internal |
+| Blob / SQL / Redis / Key Vault wiring | Next | These are the Azure-hosted backing services for the transport phase |
+| Entra ID + JWT | Next | Keycloak remains local-only; Azure production identity stays Entra-based |
+| Cost governance and observability | Next | Operational proof and budget controls are mandatory, not optional polish |
+| Phase 9.5 portability proof | Deferred | Keycloak parity or migration work is not part of Phase 10 |
+| Phase 11/13 work | Not Phase 10 | Database autonomy and Aspire deepening are later phases |
+
+#### Day 87: Service Bus Topology And Communication Rules
+- [ ] Define queue vs topic vs Event Grid usage for each backend interaction
+- [ ] Record the message metadata contract: correlation id, causation id, tenant code, message id, attempt count, and failure category
+- [ ] Decide and document retry ownership: client retry, function retry, broker redelivery, or operator replay
+- [ ] Define the gateway-to-service and service-to-service error-handling expectations before cloud hosting work begins
 - [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
 
-#### Day 88: Deploy Aspire to ACA (Automated)
-**Reference:** .NET Aspire Azure deployment
-- [ ] Use `azd init` to initialize Azure Developer CLI
-- [ ] Run `azd up` to deploy entire Aspire app to Container Apps
-- [ ] Aspire automatically creates: ACA Environment, Container Apps, LAW
-- [ ] Verify all microservices deployed (Orders, Inventory, Notifications, UI)
-- [ ] Test service discovery in Azure Container Apps
+#### Day 88: Azure Functions And DLQ Operational Model
+- [ ] Define which Functions exist in this phase and why: queue-trigger worker, DLQ intake or replay support, timer-based reconciliation or health check, blob-event handler
+- [ ] Define poison-message policy, quarantine rules, and operator replay decision points
+- [ ] Add the dedicated migrator or seeder flow to the operational plan so runtime startup stays predictable
+- [ ] Decide where idempotency-key support is required at external write boundaries
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
-#### Day 89: Aspire Manifest to Bicep
-**Reference:** Aspire deployment manifests
-- [ ] Generate deployment manifest: `dotnet run --publisher manifest`
-- [ ] Convert manifest to Bicep (manual or tool-assisted)
-- [ ] Understand Aspire-generated resource definitions
+#### Day 89: Observability, Log Analytics, And Bicep Topology
+- [ ] Create LAW via CLI or Bicep
+- [ ] Understand workspace structure and first KQL queries for traces, failed messages, and DLQ depth
+- [ ] Author the transport Bicep modules and per-environment parameters first
 - [ ] Author the dedicated `servicebus.bicep` topology module with per-environment parameters for TTL, `maxDeliveryCount`, forwarding, and `deadLetteringOnMessageExpiration`
-- [ ] Compare `azd up` (automated) vs manual Bicep deployment
+- [ ] Define alert rules for oldest dead-letter age, DLQ depth, failed dispatch, and replay failures
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
-#### Day 90: ACA Ingress & Networking
+#### Day 90: ACA Hosting Outcome - Deploy And Verify
+- [ ] Use `azd init` to initialize Azure Developer CLI
+- [ ] Run `azd up` to deploy the current stack to Container Apps
+- [ ] Verify the hosted services match the planned transport and communication design
+- [ ] Compare `azd up` (automated) vs manual Bicep deployment boundaries
+
+#### Day 91: ACA Ingress, Networking, And Service Communication
 > 🏗️ **Phase 10 networking** — Private endpoints for SQL/KV/Redis/Blob, VNet integration for ACA environment, NSG rules, private DNS zones for internal service resolution
 - [ ] Prepare ingress and networking configuration, but do not enable public ingress/sign-off until transport failure drills pass
 - [ ] Configure internal ingress for Inventory/Notifications APIs
@@ -951,33 +1070,28 @@ After completing today's tasks, you will have:
 - [ ] View distributed traces in Application Insights
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
-#### Day 91: ACA Scaling & Performance
+#### Day 92: ACA Scaling, Key Vault, And Production Configuration
 - [ ] Configure autoscaling rules (CPU, HTTP requests)
 - [ ] Set minReplicas=1, maxReplicas=5 for each service
 - [ ] Test scale-out under load (optional: use Azure Load Testing)
-- [ ] Monitor scaling events in Log Analytics
-- [ ] **Time:** 2 hours | **Completed:** ___/___/___
-
-#### Day 92: Aspire + Azure Resources Integration
-> 🏗️ **Phase 10 services** — Add Azure Blob Storage for order attachments, Azure Functions DLQ reprocessor (Service Bus trigger), Event Grid for blob lifecycle events
 - [ ] Connect to Azure SQL Database (not Aspire-managed)
 - [ ] Connect to Azure Cache for Redis (not Aspire-managed)
 - [ ] Use Azure Key Vault for secrets in ACA
-- [ ] Wire the central DLQ intake Azure Function and map forwarded dead-letter traffic to `DeliveryFailureCategory`
+- [ ] Monitor scaling events in Log Analytics
 - [ ] Test production-ready configuration
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 #### Day 93: Review & Compare
 > 🏗️ **Phase 10 cost governance** — Scale-to-zero analysis, APIM Consumption tier costing, Azure Budget alerts per resource group, blue-green deployment with ACA revisions, canary release traffic shifting
 - [ ] Compare App Service vs ACA vs Aspire local
-- [ ] Document Aspire benefits (observability, service discovery, config)
+- [ ] Document Aspire benefits and limits: observability, service discovery, config, and where it should not replace clear architecture decisions
 - [ ] Cost analysis: ACA pricing model
-- [ ] Decide: Aspire for development, ACA for production
+- [ ] Decide: Aspire for development, ACA as the current preferred hosting outcome for this phase
 - [ ] Run the mandatory transport failure drills: subscription failure → DLQ, alert fires, intake classifies, operator inspects reason, transient replays, poison quarantines, business flow resumes
 - [ ] Confirm ingress and security rollout remain blocked until the drills above pass
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
-> **Observability note:** OpenTelemetry, distributed tracing, custom metrics, KQL queries, alerts, and workbooks are covered as part of the .NET Aspire observability deep-dive in Days 78-79 and the ACA Log Analytics work in Day 87. The Aspire Service Defaults project wires OTel automatically.
+> **Observability note:** OpenTelemetry, distributed tracing, custom metrics, KQL queries, alerts, and workbooks are part of the transport-learning proof as much as the hosting proof. The goal is not only to deploy, but to diagnose communication failures and replay decisions with confidence.
 
 ---
 
@@ -1322,7 +1436,19 @@ After completing today's tasks, you will have:
 **Current Day:** Day 74 — Phase 9 closeout wrap-up and Phase 10 planning kickoff
 **Last Completed Task:** Days 60-64 — Phase 8.7 provider webhooks complete (HMAC validation, Inbox idempotency, async payment handlers, Azure synthetic webhook proof, closeout gates passed)
 **Next Milestone:** Phase 10 Azure transport + DLQ operations, with Phase 11.5 and Phase 13 still planned as later consolidation lanes
-**Architecture Status:** Phases 1-9.5 ✅ complete; Track U web cutover ✅ complete; Phase 10 next; roadmap retains 11.5 and 13 portability/consolidation milestones
+**Architecture Status:** Phases 1-9.5 ✅ complete; Track U web cutover ✅ complete; Phase 10 next; Phase 9 shared-contract refactor remains deferred; Phase 9.5 remains local-only Entra/Keycloak portability proof; roadmap retains 11.5 and 13 portability/consolidation milestones
+
+**Phase 9 / 9.5 Status Snapshot**
+
+| Area | Status | Meaning |
+|---|---|---|
+| Phase 9 core wiring | Done | Physical module split, schema ownership, startup wiring, and test coverage are represented as complete |
+| Phase 9 contract refactor | Deferred / Candidate for Phase 10 | `SharedContracts` stays out of Phase 9; introduce it only if Phase 10 transport work proves real cross-service duplication |
+| Phase 9 validation labels | Done | Local HTTP and Docker Dev HTTP task names remain aligned with the closeout proof |
+| Phase 9.5 portability proof | Done | Keycloak portability is runtime verified locally and on Docker Dev HTTP |
+| Phase 9.5 production identity | Deferred | No Azure-side Keycloak parity or migration work in this phase; Entra ID remains authoritative |
+| Remaining unchecked curriculum items in this band | Phase 10 prep | These are transport, storage, and platform-hardening setup items, not reopened Phase 9 work |
+| SharedContracts implementation trigger | Phase 10 candidate | Add a thin shared package only if the transport work produces duplicated event/DTO shapes across services |
 
 **Pre-Phase-9 entry gate:**
 - ✅ Phase 8.5 complete: provider-neutral multi-provider routing, provider-aware idempotency and retry classification, and append-only payment-attempt history.
