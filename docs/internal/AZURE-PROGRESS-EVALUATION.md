@@ -7,7 +7,7 @@
 
 ---
 
-## 🟢 Current State (June 2026) — Phase 8.7 Complete
+## 🟢 Current State (July 2026) — Phase 10 Planning Aligned
 
 ### June 5, 2026 Verification Freeze — Phase 8.7 Closeout
 
@@ -91,11 +91,34 @@
 
 - ✅ `ARCHITECTURE-EVOLUTION.md` now extends the post-Phase-8 roadmap with **Phase 8.7** (provider webhook receiver), **Phase 9.5** (local Keycloak portability showcase), and **Phase 11.5** (Notifications module PostgreSQL pilot)
 - ✅ Phase 9 closeout is verified complete; the roadmap now treats Phase 10 as the next backend transport phase and keeps Aspire deepening in Phase 13
+- ✅ The roadmap now also carries an enterprise standardization backlog: module contracts, service defaults, migration/seeding flow, docs/client UX, policy catalog, worker jobs, tenant-aware guardrails, and CQRS read-model maturity are all phase-mapped instead of being left implicit
+- ✅ `.NET 10` remains an assessment item for Phase 12 with a Phase 13 go/no-go gate; it is not a Phase 10 deliverable
+- ✅ The backlog also captures deeper enterprise-operating concepts that still need explicit future-proofing: source-generated CQRS assessment, per-tenant provisioning/migrations, one-shot migrator + seeder policy, soft-delete/audit interceptors, cache conventions, Scalar/OpenAPI client UX, delegated support workflows, and path-scoped CI/test rigor
+- ✅ Post-14 horizons are now called out separately for productization/supportability and optional experience expansion so the core Phase 14 closeout stays clean while the next architectural growth lanes are still visible
+- ✅ The learning plan itself is now simplified into core lanes and optional horizons so the curriculum stays approachable while still proving enterprise-ready design thinking
+- ✅ The Azure Functions assignment ladder is now absorbed into the roadmap: HTTP + Blob, Service Bus, queue trigger, SQL, Durable Functions, Redis, App Configuration, and Key Vault map into Phases 10-12; Azure AI Search and Azure OpenAI remain post-14 optional expansions unless product need promotes them earlier
 - ✅ Phase 13 now records two explicit decision gates: `azd` plus Aspire-generated manifest evaluation for ACA deployment, and the .NET LTS upgrade window, both ADR-bound when implementation forces the decision
 - ✅ ADR-017 captures the portability rationale: Entra ID and Azure SQL remain authoritative for production while the roadmap proves identity-provider and RDBMS flexibility in isolated, reviewable phases
 - ✅ Keycloak remains a local-only Phase 9.5 portability proof for learning and validation; Azure production continues to use Microsoft Entra ID, and any Azure-side Keycloak parity or migration testing remains deferred work rather than a numbered roadmap phase
 - ✅ Azure-side Keycloak parity, if ever needed, is deferred work tracked outside the numbered roadmap and does not change the Phase 10 start line
 - ✅ Backend Phase 10 is now the next active engineering phase; today's planning work tightened the next milestones without changing the immediate execution order
+
+### July 1, 2026 Post-Phase-9 Planning Alignment
+
+- ✅ The post-Phase-9 plan is now clarified in the owning roadmap surfaces instead of a new side document.
+- ✅ Phase 10 is explicitly framed as Azure transport and messaging operations: Service Bus topology, Event Grid boundaries, microservice communication rules, Azure Functions responsibilities, DLQ discipline, replay, RBAC, and trace continuity.
+- ✅ Phase 11 is explicitly framed as saga orchestration plus database-per-service autonomy, with Durable Functions versus custom process manager remaining an ADR-bound choice.
+- ✅ Phase 11.5 remains the bounded PostgreSQL portability proof for Notifications only.
+- ✅ Phase 12 is now clearly the platform engineering lane: App Configuration, Key Vault rollout safety, feature flags, cache policy, quota and rate-limit discipline, per-service CI/CD, rollback, runbooks, and the .NET 10 assessment.
+- ✅ Phase 13 remains Aspire deepening only after transport and autonomy are stable.
+- ✅ Phase 14 remains the CQRS read-model maturity lane after service autonomy is proven.
+- ✅ The learning plan now keeps ACA as the likely hosting outcome of Phase 10, but not the sole educational objective; transport and enterprise communication concerns come first.
+
+### Roadmap Label Rules
+
+- **Planned** means the work is still on the numbered roadmap and should be sequenced into an upcoming phase.
+- **Assessment** means the item is evidence-driven and needs compatibility or ADR review before implementation.
+- **Deferred** means the item is intentionally outside the active phase and stays in deferred-work tracking until a product need appears.
 
 ### Architecture Phases Completed
 

@@ -1,0 +1,3 @@
+# Ignore runtime venv and logs generated during prompt-run tooling.
+.venv/
+*.log

@@ -6,6 +6,7 @@ cache/
 prompt-runs/*
 !prompt-runs/README.md
 !prompt-runs/run-record-template.md
+!prompt-runs/.gitignore
 
 # Local generated model/tool artifacts
 *.tmp

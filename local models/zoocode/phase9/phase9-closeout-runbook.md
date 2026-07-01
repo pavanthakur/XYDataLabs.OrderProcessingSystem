@@ -106,3 +106,8 @@ powershell -ExecutionPolicy Bypass -File "local models\zoocode\phase9\run-phase9
 - Ollama stays as the controlled model runtime for the scripts.
 - If a gate fails, the log for that gate is the primary triage source.
 - `SharedContracts` remains deferred unless a later phase explicitly needs it.
+- After Phase 9 closeout, the next roadmap sequence is:
+  - Phase 10: HTTP + Blob, Service Bus, SQL hardening, Key Vault
+  - Phase 11: Durable Functions and database autonomy
+  - Phase 12: Redis cache policy and App Configuration
+  - Post-14 horizons: Azure AI Search and Azure OpenAI as optional expansions

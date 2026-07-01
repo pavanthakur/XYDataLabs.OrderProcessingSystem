@@ -6,7 +6,15 @@ This roadmap captures the remaining concrete Phase 9 closure work and the verifi
 
 - Phase 9 module extraction, split-module boundaries, and Docker/local task wiring are in place.
 - Local Keycloak portability wiring for Phase 9.5 is implemented in the repo and runtime-verified in local HTTP and Docker Dev HTTP.
-- What remains for Phase 9 is the residual module-extraction and consolidation work listed below, plus any follow-up cleanup surfaced by those runs.
+- The remaining Phase 9 items are only the deferred `SharedContracts` decision and any cleanup that stays within the existing split-module proof.
+- Phase 9.5 has no active implementation work left beyond keeping it local-only and not promoting Keycloak into Azure production.
+
+### Label Rules
+
+- **Complete** means the item is already verified and should not be treated as a blocker.
+- **Planned** means the item is still intended work for a later phase or follow-up lane.
+- **Deferred** means the item is intentionally out of scope for this phase and should stay separate until explicitly revisited.
+- **Assessment** means the item needs evidence or a gate decision before implementation moves forward.
 
 ## Phase 9 Closure Lane
 
@@ -17,10 +25,44 @@ This roadmap captures the remaining concrete Phase 9 closure work and the verifi
 | 9.37 Shared host consolidation | Complete | Health checks, OpenTelemetry, service discovery, and HttpClient resilience are standardized through `ServiceDefaults` without changing Docker Compose behavior. |
 | 9.39 Traced multi-service flow proof | Complete | A single request preserves correlation metadata end to end and the proof repeats reliably. |
 | 9.40 Final acceptance matrix | Complete | The matrix states complete/partial/open items and ties each one to a concrete command or test. |
+| SharedContracts decision | Deferred | Keep out of Phase 9 unless a later phase truly needs it. |
+| Any new service-contract refactor | Deferred | Do not reopen Phase 9 boundaries for cloud/event integration. |
+
+### SharedContracts Implementation Plan
+
+If Phase 10 transport work shows that the same event or DTO shape is being copied across multiple services, introduce a thin `SharedContracts` project as a versioned package with only the shared integration contracts.
+
+Use it only for:
+- cross-service event schemas that genuinely need a stable shared shape
+- versioned message contracts consumed by more than one service
+- minimal common envelope metadata that would otherwise drift between services
+
+Do not use it for:
+- service-specific request/response models
+- domain entities
+- gateway-only DTOs
+- anything that weakens module boundaries
+
+Implementation order:
+1. Keep Phase 9 clean and do not add new contract refactors there.
+2. During Phase 10, add `SharedContracts` only if transport/workflow code proves real duplication.
+3. Keep the package tiny and versioned, with services depending on it one way only.
+4. Revisit Phase 11 only if saga orchestration or service autonomy shows a stronger need.
+
+### SharedContracts Checklist
+
+| Item | Status | Done When |
+|---|---|---|
+| Phase 10 duplication check | Next | Transport/workflow code has confirmed that the same event/DTO shape is being duplicated across multiple services. |
+| SharedContracts project shape | Deferred | The package is thin, versioned, and contains only shared integration-event DTOs and envelope types. |
+| Service dependency direction | Deferred | Services depend on contracts, never the other way around. |
+| Scope guardrails | Deferred | The package contains no domain entities, service-specific request/response models, or gateway-only DTOs. |
+| Phase 11 revisit gate | Deferred | Orchestration or service autonomy proves a stronger need later. |
 
 ### Current Exit Criteria
 
 - Phase 9.5 remains verified and closed.
+- Phase 9.5 stays local-only; no Azure-side Keycloak parity or migration test belongs here.
 - Phase 13 Aspire work remains separate from the Phase 9 blocker list.
 - The Phase 9 closeout matrix and roadmap stay aligned with the compact lane above.
 - Any Azure-side Keycloak parity or migration test, if ever needed, belongs in deferred-work tracking and must not be added to the numbered roadmap.
@@ -71,7 +113,7 @@ Done when:
 - If Aspire fails, it is fixed and rerun before the consolidation phase is closed.
 - The consolidation path is documented as the next phase rather than a Phase 9 blocker.
 
-### 13.3 - Reference Only: Former Phase 9.38 / 9.41 Aspire Items
+### 13.3 - Deferred Phase 13 Items: Former Phase 9.38 / 9.41 Aspire Items
 
 These items were moved here to prevent Phase 9 from carrying Aspire work as an artificial blocker.
 
@@ -93,6 +135,7 @@ Done when:
 Status:
 - Runtime verified in local HTTP and Docker Dev HTTP.
 - Any follow-up is documentation or cleanup only, not new 9.5 capability.
+- Azure production stays on Entra ID.
 - If Azure ever needs a Keycloak-shaped dependency for parity or migration testing, track it as deferred work so it does not change the local-only scope of this proof.
 
 ## Closeout Rule

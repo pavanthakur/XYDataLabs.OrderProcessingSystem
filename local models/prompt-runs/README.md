@@ -19,4 +19,11 @@ Each run folder can contain:
 - `output-summary.md` for accepted model output
 - `validation.txt` for command output summary
 
+For milestone closeout or day-complete records, include the current roadmap alignment in the run record:
+
+- Current phase
+- Next phase
+- Optional horizon items
+- Explicitly deferred items
+
 Do not commit prompt run records unless they are intentionally part of a reviewed architecture handoff.

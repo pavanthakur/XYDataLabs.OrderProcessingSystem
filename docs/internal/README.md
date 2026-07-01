@@ -1,6 +1,6 @@
 # Internal Hub
 
-Active internal operating material that supports the repository but is not part of the main guide, reference, or curriculum trees.
+Active internal operating material that supports the repository but is not part of the main guide, quick-reference, or curriculum trees.
 
 Use these documents:
 
