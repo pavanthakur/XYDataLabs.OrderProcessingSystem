@@ -32,7 +32,7 @@ param messageTtl string = 'P7D'
 
 var rgName = 'rg-${baseName}-${environment}'
 var keyVaultName = 'kv-${take(baseName, 15)}-${environment}'
-var keyVaultUri = 'https://${keyVaultName}.vault.azure.net/'
+var keyVaultUri = 'https://${keyVaultName}${az.environment().suffixes.keyvaultDns}/'
 
 resource appRg 'Microsoft.Resources/resourceGroups@2022-09-01' = {
   name: rgName
@@ -58,6 +58,19 @@ module serviceBus 'modules/servicebus.bicep' = {
     messageTtl: messageTtl
   }
 }
+
+resource serviceBusNamespace 'Microsoft.ServiceBus/namespaces@2022-10-01-preview' existing = {
+  scope: appRg
+  name: serviceBus.outputs.serviceBusNamespaceName
+}
+
+resource transportAuthRule 'Microsoft.ServiceBus/namespaces/authorizationRules@2022-10-01-preview' existing = {
+  scope: appRg
+  parent: serviceBusNamespace
+  name: serviceBus.outputs.transportAuthRuleName
+}
+
+var serviceBusConnectionString = listKeys(transportAuthRule.id, '2022-10-01-preview').primaryConnectionString
 
 module logAnalytics 'modules/loganalytics.phase10.bicep' = {
   name: 'loganalytics-phase10-${environment}'
@@ -103,7 +116,7 @@ module containerApps 'modules/containerapps.bicep' = {
     logAnalyticsWorkspaceId: logAnalytics.outputs.logAnalyticsWorkspaceId
     keyVaultUri: keyVaultUri
     serviceBusTopicName: serviceBus.outputs.orderEventsTopic
-    serviceBusConnectionString: serviceBus.outputs.serviceBusConnectionString
+    serviceBusConnectionString: serviceBusConnectionString
     inventorySubscriptionName: serviceBus.outputs.inventorySubscription
     notificationsSubscriptionName: serviceBus.outputs.notificationsSubscription
     deadLetterTopicName: serviceBus.outputs.deadLetterTopic
@@ -124,7 +137,7 @@ module functions 'modules/functions.bicep' = {
     appInsightsInstrumentationKey: insights.outputs.appInsightsInstrumentationKey
     keyVaultUri: keyVaultUri
     serviceBusTopicName: serviceBus.outputs.orderEventsTopic
-    serviceBusConnectionString: serviceBus.outputs.serviceBusConnectionString
+    serviceBusConnectionString: serviceBusConnectionString
     deadLetterTopicName: serviceBus.outputs.deadLetterTopic
     deadLetterSubscriptionName: serviceBus.outputs.deadLetterSubscription
     maxDeliveryCount: maxDeliveryCount
