@@ -680,8 +680,8 @@ cleanupInfra: false
 |----------|--------------|--------------|-------------|
 | Resource Group | `rg-orderprocessing-dev` | `rg-orderprocessing-stg` | `rg-orderprocessing-prod` |
 | App Service Plan | `asp-orderprocessing-dev` | `asp-orderprocessing-stg` | `asp-orderprocessing-prod` |
-| API Web App | `pavanthakur-orderprocessing-api-xyapp-dev` | `…-stg` | `…-prod` |
-| UI Web App | `pavanthakur-orderprocessing-ui-xyapp-dev` | `…-stg` | `…-prod` |
+| API Web App | `orderprocessing-api-dev` | `…-stg` | `…-prod` |
+| UI Web App | `orderprocessing-ui-dev` | `…-stg` | `…-prod` |
 | Application Insights | `ai-orderprocessing-dev` | `…-stg` | `…-prod` |
 | SQL Server | `orderprocessing-sql-dev` | `…-stg` | `…-prod` |
 | SQL Database | `OrderProcessingSystem_Dev` | `…_Stg` | `…_Prod` |
@@ -763,8 +763,8 @@ Watch Actions → the `deploy-api-to-azure.yml` workflow should trigger and succ
 ## 🚀 Next Steps After Bootstrap
 
 1. **Verify live endpoints**
-   - Dev API: https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net
-   - Dev UI: https://pavanthakur-orderprocessing-ui-xyapp-dev.azurewebsites.net
+   - Dev API: https://orderprocessing-api-dev.azurewebsites.net
+   - Dev UI: https://orderprocessing-ui-dev.azurewebsites.net
 
 2. **Enable continuous deployment**  
    Push to `dev` → auto-deploys to dev environment.  

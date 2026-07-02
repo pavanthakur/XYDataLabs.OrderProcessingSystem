@@ -99,7 +99,6 @@ module containerApps 'modules/containerapps.bicep' = {
     location: location
     environment: environment
     baseName: baseName
-    githubOwner: githubOwner
     appInsightsConnectionString: insights.outputs.appInsightsConnectionString
     appInsightsInstrumentationKey: insights.outputs.appInsightsInstrumentationKey
     logAnalyticsWorkspaceId: logAnalytics.outputs.logAnalyticsWorkspaceId

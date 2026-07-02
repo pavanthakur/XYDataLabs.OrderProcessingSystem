@@ -9,9 +9,6 @@ param environment string
 @description('Base application name')
 param baseName string = 'orderprocessing'
 
-@description('GitHub owner / org prefix for global uniqueness')
-param githubOwner string
-
 @description('Log Analytics workspace resource id for the ACA environment')
 param logAnalyticsWorkspaceId string = ''
 
@@ -52,10 +49,10 @@ param maxDeliveryCount int = 10
 param messageTtl string = 'P7D'
 
 var environmentName = 'aca-${baseName}-${environment}'
-var gatewayName = '${baseName}-gateway-${environment}'
-var ordersName = '${baseName}-orders-${environment}'
-var inventoryName = '${baseName}-inventory-${environment}'
-var notificationsName = '${baseName}-notifications-${environment}'
+var gatewayName = '${baseName}-gate-${environment}'
+var ordersName = '${baseName}-ord-${environment}'
+var inventoryName = '${baseName}-inv-${environment}'
+var notificationsName = '${baseName}-notif-${environment}'
 var uiName = '${baseName}-ui-${environment}'
 var commonEnv = [
   {
