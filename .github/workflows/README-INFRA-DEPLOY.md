@@ -46,6 +46,7 @@ It supports three execution modes:
 
    **Current Azure Deployment:**
    - Uses `infra/main.phase10.bicep` and `infra/parameters/phase10-<env>.json`
+   - Resources follow the environment-suffixed naming pattern so Phase X cleanup can remove the matching stack
    - The workflow summary shows transport-stack outputs
 
 ---
@@ -236,7 +237,7 @@ Example:
 pavanthakur-orderprocessing-api-xyapp-dev
 ```
 
-This ensures global uniqueness for App Service names.
+This ensures global uniqueness for App Service names and keeps cleanup aligned with the exact environment that was deployed.
 
 ---
 

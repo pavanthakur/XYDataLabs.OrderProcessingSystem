@@ -31,8 +31,8 @@ The bootstrap process uses **two GitHub Actions workflows** that together take a
 │  │  ├── deployApi       → API code deployed to Azure App Service        │  │
 │  │  └── deployUi        → UI code deployed to Azure App Service         │  │
 │  │                                                                      │  │
-│  │  PHASE X — Cleanup (⚠️ DESTRUCTIVE — deletes everything)             │  │
-│  │  └── cleanupInfra    → Deletes App Services, SQL, Key Vault, RG     │  │
+│  │  PHASE X — Cleanup (⚠️ DESTRUCTIVE — deletes matching env stack)    │  │
+│  │  └── cleanupInfra    → Deletes the matching env stack: App Services, SQL, Key Vault, RG     │  │
 │  └──────────────────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -380,8 +380,8 @@ Navigate to: **GitHub → Actions → Azure Bootstrap & Deploy → Run workflow*
 |---|---|
 | **Type** | Boolean (default: `false`) |
 | **Phase** | 🗑️ Phase X — ⚠️ **DESTRUCTIVE** |
-| **When to enable** | Only when you want to **permanently delete** all Azure resources for the selected environment(s). |
-| **What it does** | Stops and deletes UI and API App Services (blocking), then deletes the entire Resource Group with `--no-wait` (fire-and-forget). |
+| **When to enable** | Only when you want to **permanently delete** the Azure stack for the selected environment(s). |
+| **What it does** | Stops and deletes the environment-matched UI and API App Services (blocking), then deletes the entire Resource Group with `--no-wait` (fire-and-forget). |
 | **Requires** | `AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID` secrets (from Phase 1). |
 | **⚠️ WARNING** | This action is **irreversible**. All resources in the environment's Resource Group will be destroyed. Re-run Phase 2 (`bootstrapInfra`) to recreate them. |
 | **Idempotent** | ✅ Yes — safe to re-run if cleanup failed partway through. |
@@ -535,7 +535,7 @@ Add `APP_ID` and `APP_PRIVATE_KEY` to repository secrets before proceeding.
 
 4. Click **Run workflow**
 
-**What gets created**: `rg-orderprocessing-dev` resource group with App Service Plan, API + UI Web Apps, Application Insights, Azure SQL Server & Database, Key Vault.
+**What gets created**: `rg-orderprocessing-dev` resource group with the environment-matched App Service Plan, API + UI Web Apps, Application Insights, Azure SQL Server & Database, Key Vault.
 
 > 💡 **Re-running Phase 2 is safe**: Every resource is idempotent — existing resources are skipped, missing ones are created. Run it any time infrastructure needs to be refreshed.
 
@@ -715,7 +715,7 @@ After the full bootstrap, verify each area:
 
 ### Azure Portal
 - [ ] [Microsoft Entra ID → App registrations](https://portal.azure.com/#blade/Microsoft_AAD_IAM/ActiveDirectoryMenuBlade/RegisteredApps) → `GitHub-Actions-OIDC` exists with federated credentials
-- [ ] [Resource Groups](https://portal.azure.com/#blade/HubsExtension/BrowseResourceGroups) → `rg-orderprocessing-dev` exists with App Service Plan, 2 Web Apps, App Insights
+- [ ] [Resource Groups](https://portal.azure.com/#blade/HubsExtension/BrowseResourceGroups) → `rg-orderprocessing-dev` exists with the matching environment-scoped stack
 
 ### End-to-End Test
 ```bash

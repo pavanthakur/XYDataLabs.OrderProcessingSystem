@@ -6,10 +6,10 @@
     "environment": { "value": "dev" },
     "baseName": { "value": "orderprocessing" },
     "githubOwner": { "value": "pavanthakur" },
-    "orderEventsTopicName": { "value": "order-events" },
-    "inventorySubscriptionName": { "value": "inventory-order-created" },
-    "notificationsSubscriptionName": { "value": "notifications-order-created" },
-    "deadLetterSubscriptionName": { "value": "dlq-replay" },
+    "orderEventsTopicName": { "value": "order-events-dev" },
+    "inventorySubscriptionName": { "value": "inventory-order-created-dev" },
+    "notificationsSubscriptionName": { "value": "notifications-order-created-dev" },
+    "deadLetterSubscriptionName": { "value": "dlq-replay-dev" },
     "maxDeliveryCount": { "value": 10 },
     "messageTtl": { "value": "P7D" }
   }

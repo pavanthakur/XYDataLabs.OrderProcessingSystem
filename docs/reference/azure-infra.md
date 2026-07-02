@@ -26,6 +26,9 @@ az group list --output table
 # List resources in a resource group
 az resource list --resource-group rg-orderprocessing-dev --output table
 
+# List environment-scoped resources for the current phase
+az resource list --resource-group rg-orderprocessing-stg --output table
+
 # Check OIDC app and credentials
 az ad app list --display-name "GitHub-Actions-OIDC" --output table
 az ad app federated-credential list --id <app-object-id>
@@ -140,6 +143,12 @@ gh workflow run "Azure Bootstrap & Deploy" `
     -f environment=dev `
     -f cleanupInfra=true
 
+# Cleanup staging environment with the same environment-matched naming pattern
+gh workflow run "Azure Bootstrap & Deploy" `
+    --ref staging `
+    -f environment=staging `
+    -f cleanupInfra=true
+
 # Monitor workflow runs
 gh run list -L 5
 gh run watch --exit-status
@@ -240,6 +249,7 @@ az upgrade
 
 ## 📋 Pre-Flight Checklist — Before Deploying to Production
 - [ ] All tests pass in dev environment
+- [ ] Phase X cleanup deletes the matching `appname-env` stack only
 - [ ] All tests pass in staging environment
 - [ ] Code review completed
 - [ ] Documentation updated

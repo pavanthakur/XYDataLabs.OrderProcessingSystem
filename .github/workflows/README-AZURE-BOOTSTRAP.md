@@ -4,7 +4,7 @@ Day-to-day workflow for Azure infrastructure provisioning, application deploymen
 
 ## 🎯 Purpose
 
-This workflow (`azure-bootstrap.yml`) handles **infrastructure and deployment operations** for the Order Processing System. It provisions Azure resources (Phase A), triggers API/UI deployments, and can tear down environments (Phase X).
+This workflow (`azure-bootstrap.yml`) handles **infrastructure and deployment operations** for the Order Processing System. It provisions Azure resources (Phase A), triggers API/UI deployments, and can tear down the same environment-scoped Azure stack through Phase X.
 
 > ⚠️ **Prerequisite**: The [Azure Initial Setup](README-AZURE-INITIAL-SETUP.md) workflow must have completed successfully before this workflow can run. That workflow handles Phase 0 (GitHub App), Phase 1a (OIDC), and Phase 1b (environment secret configuration) — all one-time setup steps.
 
@@ -91,7 +91,7 @@ See [`README-AZURE-INITIAL-SETUP.md`](README-AZURE-INITIAL-SETUP.md) for the one
 | `bootstrapInfra` | boolean | `true` | **Phase A** — Provisions Resource Group, App Service Plan, Web Apps, App Insights, Azure SQL, Key Vault + managed identity. |
 | `deployApi` | boolean | `true` | **Deploy** — Triggers `deploy-api-to-azure.yml` after bootstrap succeeds (or independently if bootstrap is not selected). |
 | `deployUi` | boolean | `true` | **Deploy** — Triggers `deploy-ui-to-azure.yml` after bootstrap succeeds (or independently if bootstrap is not selected). This deploys the React frontend to the Azure UI App Service. |
-| `cleanupInfra` | boolean | `false` | **Phase X (DESTRUCTIVE)** — Deletes UI App, API App, then entire Resource Group. ⚠️ Irreversible. Do NOT combine with bootstrap. |
+| `cleanupInfra` | boolean | `false` | **Phase X (DESTRUCTIVE)** — Deletes the environment-matched UI App, API App, then the entire Resource Group. ⚠️ Irreversible. Do NOT combine with bootstrap. |
 
 ---
 
@@ -135,10 +135,10 @@ Step 3: az account show — verify login succeeded before making changes
 **Needs**: `validate-inputs`
 
 - Authenticates to Azure using OIDC (`AZUREAPPSERVICE_*` environment secrets)
-- Stops and deletes UI App Service (blocking)
-- Stops and deletes API App Service (blocking)
-- Deletes the entire Resource Group (`az group delete --no-wait`)
-- ⚠️ **Irreversible** — all resources in the resource group are destroyed (SQL, Key Vault, App Insights, App Service Plan)
+- Stops and deletes the environment-matched UI App Service (blocking)
+- Stops and deletes the environment-matched API App Service (blocking)
+- Deletes the entire environment Resource Group (`az group delete --no-wait`)
+- ⚠️ **Irreversible** — all resources in that environment stack are destroyed (SQL, Key Vault, App Insights, App Service Plan)
 
 ### 4. `summary`
 **Runs**: always (after bootstrap and cleanup jobs complete)  
@@ -240,7 +240,7 @@ cleanupInfra: true      # ⚠️ DESTRUCTIVE — deletes everything
 Prompt reference for manual post-deploy commands:
 - [Prompt README](../../.github/prompts/README.md)
 
-After a **full clean deployment** (resource group deleted and recreated), the bootstrap workflow automatically recreates the SQL contained user for the App Service managed identity.
+After a **full clean deployment** (the environment resource group was deleted and recreated), the bootstrap workflow automatically recreates the SQL contained user for the App Service managed identity.
 
 **Bootstrap handles this automatically — no manual steps required:**
 ```powershell

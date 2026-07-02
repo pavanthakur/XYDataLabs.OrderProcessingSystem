@@ -6,10 +6,10 @@
     "environment": { "value": "staging" },
     "baseName": { "value": "orderprocessing" },
     "githubOwner": { "value": "pavanthakur" },
-    "orderEventsTopicName": { "value": "order-events" },
-    "inventorySubscriptionName": { "value": "inventory-order-created" },
-    "notificationsSubscriptionName": { "value": "notifications-order-created" },
-    "deadLetterSubscriptionName": { "value": "dlq-replay" },
+    "orderEventsTopicName": { "value": "order-events-staging" },
+    "inventorySubscriptionName": { "value": "inventory-order-created-staging" },
+    "notificationsSubscriptionName": { "value": "notifications-order-created-staging" },
+    "deadLetterSubscriptionName": { "value": "dlq-replay-staging" },
     "maxDeliveryCount": { "value": 10 },
     "messageTtl": { "value": "P7D" }
   }
