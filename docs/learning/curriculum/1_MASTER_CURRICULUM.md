@@ -1338,7 +1338,7 @@ After completing today's tasks, you will have:
 ---
 
 ### Week 17: Final Migration (ACA Cutover + Decommission)
-**Reference:** Containerization-ACA-Aspire-Learning-Path.md → Module 7 + ACA-Migration-Plan.md → Phase 10-13
+**Reference:** Containerization-ACA-Aspire-Learning-Path.md → Module 7 + ACA-Migration-Plan.md → Phase 11-14
 
 #### Day 106: .NET Aspire Overview
 - [ ] Understand Aspire AppHost pattern
@@ -1360,7 +1360,7 @@ After completing today's tasks, you will have:
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 #### Day 109: Final Blue/Green Cutover
-**Reference:** ACA-Migration-Plan.md → Phase 10
+**Reference:** ACA-Migration-Plan.md → Phase 11
 > 🏗️ **Architecture Phase 13a** — Blue-green/canary with Aspire managed deployments
 - [ ] Shift production traffic to ACA
 - [ ] Monitor for ≥72 hours
@@ -1368,21 +1368,21 @@ After completing today's tasks, you will have:
 - [ ] **Time:** 2 hours | **Completed:** ___/___/___
 
 #### Day 110: Decommission App Service
-**Reference:** ACA-Migration-Plan.md → Phase 11
+**Reference:** ACA-Migration-Plan.md → Phase 12
 - [ ] After stability window, scale App Service to 0
 - [ ] Archive App Service Bicep definitions
 - [ ] Delete App Service resources
 - [ ] **Time:** 1 hour | **Completed:** ___/___/___
 
 #### Day 111: Optimize & Cost Analysis
-**Reference:** ACA-Migration-Plan.md → Phase 12
+**Reference:** ACA-Migration-Plan.md → Phase 13
 - [ ] Tune ACA autoscaling (KEDA)
 - [ ] Review Azure Cost Analysis
 - [ ] Set cost alerts and budgets
 - [ ] **Time:** 1.5 hours | **Completed:** ___/___/___
 
 #### Day 112: Final Documentation
-**Reference:** ACA-Migration-Plan.md → Phase 13
+**Reference:** ACA-Migration-Plan.md → Phase 14
 - [ ] Update architecture diagrams
 - [ ] Publish ops runbooks to repo
 - [ ] Create deployment summary report

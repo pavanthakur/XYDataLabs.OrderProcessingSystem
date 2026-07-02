@@ -4,9 +4,11 @@ This directory contains the production-ready Azure infrastructure definition for
 
 ## Modules
 
-- `main.bicep` – Subscription-scope entrypoint; creates Resource Group and deploys modules.
+- `main.bicep` – Legacy subscription-scope hosting entrypoint; creates Resource Group and deploys the App Service-based modules.
+- `main.phase10.bicep` – Phase 10 transport entrypoint; creates Resource Group and deploys the transport-first Service Bus / Log Analytics / ACA / Functions modules and wires the Service Bus transport connection into the runtime.
 - `modules/hosting.bicep` – App Service Plan + API and UI Web Apps with connection string configuration.
 - `modules/insights.bicep` – Application Insights instance.
+- `modules/loganalytics.phase10.bicep` – Log Analytics workspace for the Phase 10 transport slice.
 - `modules/sql.bicep` – Azure SQL Server and Database with firewall rules.
 - `modules/identity.bicep` – (Optional) Creates GitHub OIDC App Registration + federated credentials using an Azure CLI deploymentScript.
 
@@ -21,10 +23,18 @@ Located in `infra/parameters/`:
 - `dev.json`
 - `staging.json`
 - `prod.json`
+- `phase10-dev.json`
+- `phase10-staging.json`
+- `phase10-prod.json`
 
 Adjust `appServiceSku`, `enableIdentity`, or `location` per environment as needed.
 
 ## Commands
+
+### Phase 10 Transport Stack
+```powershell
+az deployment sub what-if --location centralindia --template-file infra/main.phase10.bicep --parameters @infra/parameters/phase10-dev.json
+```
 
 ### Validate (What-If)
 ```powershell

@@ -5,6 +5,11 @@ Generated: 2025-11-20
 ## Objective
 Move the Order Processing System from Azure App Service (Web Apps) to Azure Container Apps (ACA) using a phased, low-risk approach that preserves CI/CD, hardens identity and observability first, then gradually introduces containers and ACA.
 
+Note: the repository-wide Phase 10 now refers to the transport and messaging slice tracked in
+[docs/internal/phase10-implementation-checklist.md](../../internal/phase10-implementation-checklist.md).
+This guide keeps the ACA hosting phases that follow that transport slice, so the first hosting cutover
+step is numbered after Phase 10.
+
 ## Scope & Assumptions
 - Subscription: 19f22d2f-1557-479b-a9b7-6dc6af67980c (Pay-As-You-Go)
 - Region: centralindia
@@ -14,7 +19,7 @@ Move the Order Processing System from Azure App Service (Web Apps) to Azure Cont
 
 ## Current Baseline (Today)
 - Compute: App Service plan + 2 Web Apps (API/UI)
-- Infra as Code: Bicep (subscription-scope `infra/main.bicep`, modules for hosting, insights, identity)
+- Infra as Code: Bicep (subscription-scope `infra/main.bicep` for legacy hosting, `infra/main.phase10.bicep` for the transport slice, modules for hosting, insights, identity)
 - Identity: GitHub Actions OIDC → Azure; identity.bicep uses deploymentScripts (to harden)
 - Observability: Application Insights; Log Analytics & diag settings pending
 
@@ -86,8 +91,8 @@ graph TB
         P5[Phase 5-6: Containerize]
         P7[Phase 7: ACA Environment]
         P8[Phase 8-9: Deploy Canary]
-        P10[Phase 10: Blue/Green]
-        P11[Phase 11: Decommission]
+        P11[Phase 11: Blue/Green]
+        P12[Phase 12: Decommission]
         
         P0 --> P1
         P1 --> P2
@@ -96,8 +101,8 @@ graph TB
         P4 --> P5
         P5 --> P7
         P7 --> P8
-        P8 --> P10
-        P10 --> P11
+        P8 --> P11
+        P11 --> P12
     end
     
     style GH2 fill:#0078d4,color:#fff
@@ -152,11 +157,12 @@ sequenceDiagram
 **Phase 7b:** Networking & edge (Front Door/App Gateway + WAF)  
 **Phase 8:** Deploy API to ACA (canary)  
 **Phase 9:** Deploy UI to ACA (canary)  
-**Phase 10:** Blue/green cutover plan  
-**Phase 11:** Decommission App Service  
-**Phase 12:** Optimize & scale  
-**Phase 12b:** SRE enhancements (SLOs, workbooks, synthetic tests)  
-**Phase 13:** Documentation & runbooks
+**Phase 10:** Transport and messaging operations
+**Phase 11:** Blue/green cutover plan
+**Phase 12:** Decommission App Service
+**Phase 13:** Optimize & scale
+**Phase 13b:** SRE enhancements (SLOs, workbooks, synthetic tests)
+**Phase 14:** Documentation & runbooks
 
 Each phase has acceptance criteria and rollback steps.
 
@@ -432,7 +438,21 @@ Rollback:
 
 ---
 
-## Phase 10 — Blue/Green Cutover
+## Phase 10 — Transport & Messaging Operations
+- Implement the order-created transport slice from the internal Phase 10 checklist.
+- Keep Service Bus, DLQ handling, replay, and metadata mapping separate from the hosting cutover.
+- Verify the transport path is observable, including workspace-backed ACA logging and App Insights, while the in-memory fallback remains available for local development.
+- Deploy the transport slice with `infra/main.phase10.bicep` and `infra/parameters/phase10-*.json`; keep `infra/main.bicep` reserved for the later hosting path.
+
+Acceptance:
+- Transport-first Phase 10 work is ready to move ahead of the ACA blue/green cutover.
+
+Rollback:
+- Leave the hosting migration phases unchanged; revert only the transport slice changes if needed.
+
+---
+
+## Phase 11 — Blue/Green Cutover
 - Enable/adjust ingress; shift traffic gradually (e.g., by DNS/front door)
 - Monitor errors and latency; be ready to revert
 
@@ -444,7 +464,7 @@ Rollback:
 
 ---
 
-## Phase 11 — Decommission App Service
+## Phase 12 — Decommission App Service
 - After stability window, remove App Service resources
 - Keep IaC definition archived for rollback window timeframe
 
@@ -456,7 +476,7 @@ Rollback:
 
 ---
 
-## Phase 12 — Optimize & Scale
+## Phase 13 — Optimize & Scale
 - Tune autoscaling (KEDA), CPU/memory limits
 - Add resource quota guards and cost budgets
 
@@ -465,7 +485,7 @@ Acceptance:
 
 ---
 
-## Phase 12b — SRE Enhancements
+## Phase 13b — SRE Enhancements
 **Measure reliability and respond proactively**
 
 - Define SLOs/SLIs (e.g., API p95 latency <200ms; 99.9% availability)
@@ -490,7 +510,7 @@ Rollback:
 
 ---
 
-## Phase 13 — Documentation & Runbooks
+## Phase 14 — Documentation & Runbooks
 - Update architecture diagrams and READMEs
 - Add ops runbooks: release, rollback, incident, cost, DR
 

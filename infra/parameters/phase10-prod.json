@@ -1,0 +1,16 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": { "value": "centralindia" },
+    "environment": { "value": "prod" },
+    "baseName": { "value": "orderprocessing" },
+    "githubOwner": { "value": "pavanthakur" },
+    "orderEventsTopicName": { "value": "order-events" },
+    "inventorySubscriptionName": { "value": "inventory-order-created" },
+    "notificationsSubscriptionName": { "value": "notifications-order-created" },
+    "deadLetterSubscriptionName": { "value": "dlq-replay" },
+    "maxDeliveryCount": { "value": 10 },
+    "messageTtl": { "value": "P7D" }
+  }
+}

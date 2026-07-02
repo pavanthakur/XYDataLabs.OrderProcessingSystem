@@ -6,6 +6,10 @@ Use these documents:
 
 - `AZURE-PROGRESS-EVALUATION.md` — active Azure learning and architecture progress tracker
 - `azure-bootstrap-improvements-backlog.md` — active internal backlog for bootstrap, IaC, CI/CD, and hosting improvements
+- `phase9-remaining-roadmap.md` — short Phase 9 closeout and Phase 10 pointer
+- `phase10-implementation-checklist.md` — file-by-file Phase 10 implementation checklist anchored on the order-created transport slice
+- `docs/runbooks/phase10-azure-smoke.md` — first Azure what-if / deploy / transport smoke runbook for Phase 10
+- `docs/runbooks/servicebus-dlq-replay.md` — operator guide for DLQ triage and replay
 - `DEFERRED-WORK-LOG.md` — shared register for justified engineering and AI-governance deferrals
 
 Rule: keep only live trackers and backlogs here; move human-facing guidance to `docs/guides/`, `docs/reference/`, or `docs/learning/`.
