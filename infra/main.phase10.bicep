@@ -59,18 +59,7 @@ module serviceBus 'modules/servicebus.bicep' = {
   }
 }
 
-resource serviceBusNamespace 'Microsoft.ServiceBus/namespaces@2022-10-01-preview' existing = {
-  scope: appRg
-  name: serviceBus.outputs.serviceBusNamespaceName
-}
-
-resource transportAuthRule 'Microsoft.ServiceBus/namespaces/authorizationRules@2022-10-01-preview' existing = {
-  scope: appRg
-  parent: serviceBusNamespace
-  name: serviceBus.outputs.transportAuthRuleName
-}
-
-var serviceBusConnectionString = listKeys(transportAuthRule.id, '2022-10-01-preview').primaryConnectionString
+var serviceBusConnectionString = serviceBus.outputs.transportAuthRuleConnectionString
 
 module logAnalytics 'modules/loganalytics.phase10.bicep' = {
   name: 'loganalytics-phase10-${environment}'

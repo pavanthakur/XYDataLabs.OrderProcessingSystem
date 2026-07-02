@@ -7,6 +7,17 @@ Anchor flow for the first slice:
 - `Service Bus` carries the durable handoff.
 - `Inventory` and `Notifications` consume the downstream event.
 - `SharedContracts` stays deferred unless the transport slice proves a real duplication need.
+- `infra/modules/servicebus.bicep` owns the transport topology, auth-rule naming, and connection-string lookup, while `infra/main.phase10.bicep` consumes that module output instead of exposing a secret from a child lookup.
+
+## Tracker Status
+
+| Area | Status | Notes |
+|---|---|---|
+| Phase 10 repo transport wiring | In progress | The Service Bus topology, transport adapter layer, startup seam, and DLQ replay path are in the repo; Azure proof is still pending. |
+| Phase 10 docs and runbooks | Done | The checklist, smoke runbook, DLQ replay guide, and progress tracker are aligned with the transport-first order. |
+| SharedContracts extraction | Deferred | Keep it out unless transport work proves real duplication across multiple services. |
+| Azure dev what-if / deploy | Pending Azure auth | The Bicep shape is updated and locally compiled, but the cloud validation still needs a working Azure login/session and deployment run. |
+| Phase 10 smoke / replay testing | Pending deployment | Start after a successful dev deployment and verify publish, consume, DLQ, and replay behavior end to end. |
 
 Use the existing envelope and metadata types as the canonical shape:
 - `XYDataLabs.OrderProcessingSystem.Application/Events/EventEnvelope.cs`
@@ -132,6 +143,7 @@ Treat these as the smallest useful implementation slice for the first order-crea
 
 - `infra/modules/servicebus.bicep` declares the order-created topic/subscription shape.
 - The module parameterizes queue/topic names, `maxDeliveryCount`, TTL, dead-letter forwarding, and a transport auth rule.
+- The module stays resource-group scoped so the namespace, topics, and subscriptions are created where the app resource group lives.
 - The module makes the first flow explicit for `Orders`, `Inventory`, and `Notifications` without introducing a generic shared-contract layer.
 
 ### 3. Messaging adapter layer
@@ -153,7 +165,7 @@ Treat these as the smallest useful implementation slice for the first order-crea
 - `infra/modules/containerapps.bicep` supplies the ACA compute layer for the first slice.
 - `infra/modules/loganalytics.phase10.bicep` supplies the workspace used by ACA logs and workspace-based observability.
 - `infra/modules/functions.bicep` supplies the DLQ intake/replay function and any reconciliation helper the first slice needs.
-- `infra/main.phase10.bicep` composes the Log Analytics, ACA, Service Bus, Functions, Key Vault, and Insights modules and wires the Service Bus transport connection into the runtime.
+- `infra/main.phase10.bicep` composes the Log Analytics, ACA, Service Bus, Functions, Key Vault, and Insights modules and wires the Service Bus transport connection into the runtime from the Service Bus module output.
 - `infra/modules/keyvault.phase10.bicep`, `infra/modules/insights.phase10.bicep`, and `infra/modules/identity.phase10.bicep` are extended only enough to support the first transport slice.
 - `infra/parameters/dev.json`, `infra/parameters/staging.json`, and `infra/parameters/prod.json` carry the Phase 10 configuration values for that slice.
 

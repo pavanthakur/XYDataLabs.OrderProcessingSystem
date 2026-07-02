@@ -109,6 +109,7 @@
 - ✅ Phase 10 is explicitly framed as Azure transport and messaging operations: Service Bus topology, Event Grid boundaries, microservice communication rules, Azure Functions responsibilities, DLQ discipline, replay, RBAC, and trace continuity.
 - ✅ The Phase 10 file-by-file implementation checklist is now published at `docs/internal/phase10-implementation-checklist.md` and anchors the first order-created transport slice.
 - ✅ The first Phase 10 transport implementation pass is underway: Service Bus metadata mapping, replay-safe broker identity, DLQ replay worker behavior, a DLQ replay subscription, and the actual Service Bus connection path are being wired to the same transport-first contract.
+- ✅ The Service Bus module now stays focused on topology plus the transport auth rule and connection-string lookup, while `infra/main.phase10.bicep` consumes that module output for runtime wiring.
 - ✅ The supporting observability surface now includes a dedicated Log Analytics workspace so ACA logs and App Insights can share the same transport-slice workspace.
 - ✅ Phase 11 is explicitly framed as saga orchestration plus database-per-service autonomy, with Durable Functions versus custom process manager remaining an ADR-bound choice.
 - ✅ Phase 11.5 remains the bounded PostgreSQL portability proof for Notifications only.
