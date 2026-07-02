@@ -105,7 +105,7 @@ jobs:
           az deployment sub what-if `
             --location "${{ inputs.location }}" `
             --template-file "$templateFile" `
-            --parameters @"$parameterFile" `
+            --parameters "@$parameterFile" `
             --only-show-errors `
             --no-pretty-print
         continue-on-error: false
