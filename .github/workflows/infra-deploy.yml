@@ -39,6 +39,7 @@ jobs:
     # only runs when dryRun=true (mutually exclusive with this job's condition).
     if: github.event_name == 'workflow_dispatch' && !inputs.dryRun
     uses: ./.github/workflows/validate-deployment.yml
+    secrets: inherit
     with:
       environment: ${{ inputs.environment }}
       run-whatif: true
