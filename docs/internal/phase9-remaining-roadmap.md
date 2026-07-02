@@ -59,6 +59,17 @@ Implementation order:
 | Scope guardrails | Deferred | The package contains no domain entities, service-specific request/response models, or gateway-only DTOs. |
 | Phase 11 revisit gate | Deferred | Orchestration or service autonomy proves a stronger need later. |
 
+### Phase 10 Kickoff Pointer
+
+The file-by-file Phase 10 implementation checklist now lives in
+[docs/internal/phase10-implementation-checklist.md](./phase10-implementation-checklist.md).
+
+Use that checklist as the single detailed source for the first transport slice. Keep the phase order transport-first:
+- `Orders` emits the `OrderCreatedV1` integration event.
+- `Service Bus` carries the durable handoff.
+- `Inventory` and `Notifications` consume the downstream event.
+- `SharedContracts` stays deferred unless the transport slice proves real duplication across services.
+
 ### Current Exit Criteria
 
 - Phase 9.5 remains verified and closed.

@@ -14,9 +14,10 @@ enterprise architect role is expected to demonstrate:
    authorisation, and bank-confirmed captures all arrive asynchronously through signed provider
    events.
 
-2. **Identity-provider portability.** Phase 10 wires Microsoft Entra ID + JWT for the cloud
-   deployment. The architecture is technically IdP-agnostic, but the plan never proves that
-   portability with a runnable demo. Modern enterprise hiring increasingly expects hands-on
+2. **Identity-provider portability.** The roadmap now keeps the cloud production model on
+   Microsoft Entra ID + JWT while proving portability separately with the Phase 9.5 local
+   Keycloak showcase. The architecture is technically IdP-agnostic, but the plan still needs a
+   runnable demo to prove that portability. Modern enterprise hiring increasingly expects hands-on
    Keycloak experience as the canonical OSS OIDC reference.
 
 3. **Persistence-engine portability.** Phase 11 establishes database-per-service on Azure SQL.

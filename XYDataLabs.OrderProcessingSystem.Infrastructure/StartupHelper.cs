@@ -11,10 +11,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Azure.Messaging.ServiceBus;
 using XYDataLabs.OrderProcessingSystem.SharedKernel;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Configuration;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
+using XYDataLabs.OrderProcessingSystem.Infrastructure.Messaging;
 
 namespace XYDataLabs.OrderProcessingSystem.Infrastructure
 {
@@ -97,8 +99,33 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure
             // Phase 8 Idempotency Guard
             builder.Services.AddScoped<Application.Events.IIdempotencyGuard, Events.SqlIdempotencyGuard>();
 
+            // Phase 10 Transport Layer (Service Bus is opt-in; in-memory remains the local fallback)
+            builder.Services.Configure<ServiceBusOptions>(builder.Configuration.GetSection(ServiceBusOptions.SectionName));
+            builder.Services.AddSingleton<ServiceBusMessageFactory>();
+            builder.Services.AddHostedService<Messaging.DlqReplayWorker>();
+
+            var serviceBusEnabled = builder.Configuration.GetSection(ServiceBusOptions.SectionName).GetValue("Enabled", false);
+            if (serviceBusEnabled)
+            {
+                var connectionString = builder.Configuration.GetSection(ServiceBusOptions.SectionName).GetValue<string>("ConnectionString")
+                    ?? builder.Configuration.GetConnectionString("ServiceBus");
+
+                if (!string.IsNullOrWhiteSpace(connectionString))
+                {
+                    builder.Services.AddSingleton(_ => new ServiceBusClient(connectionString));
+                    builder.Services.AddScoped<Application.Events.IEventPublisher, ServiceBusEventPublisher>();
+                }
+                else
+                {
+                    builder.Services.AddScoped<Application.Events.IEventPublisher, Events.InMemoryEventPublisher>();
+                }
+            }
+            else
+            {
+                builder.Services.AddScoped<Application.Events.IEventPublisher, Events.InMemoryEventPublisher>();
+            }
+
             // Phase 8 Background Publish Dispatchers
-            builder.Services.AddScoped<Application.Events.IEventPublisher, Events.InMemoryEventPublisher>();
             builder.Services.AddScoped<Events.OutboxPublisherWorker>();
             builder.Services.AddScoped<Events.PaymentReconciliationWorker>();
             builder.Services.AddHostedService<Events.OutboxPublisherWorker>();
