@@ -29,7 +29,7 @@ on:
         type: boolean
         default: true
       cleanupInfra:
-        description: '🗑️ Phase X (DESTRUCTIVE) — Cleanup Infrastructure | Deletes UI App, API App, then the entire Resource Group. ⚠️ IRREVERSIBLE — use only for teardown/reset. Do NOT combine with Bootstrap.'
+        description: '🗑️ Phase X (DESTRUCTIVE) — Cleanup Infrastructure | Deletes the environment-matched app stack, then the entire Resource Group. ⚠️ IRREVERSIBLE — use only for teardown/reset. Do NOT combine with Bootstrap.'
         required: true
         type: boolean
         default: false
@@ -2678,8 +2678,8 @@ jobs:
           $baseName    = 'orderprocessing'
           $githubOwner = '${{ github.repository_owner }}'
           $rg          = "rg-$baseName-$env"
-          $apiApp      = "$githubOwner-$baseName-api-xyapp-$env"
-          $uiApp       = "$githubOwner-$baseName-ui-xyapp-$env"
+          $apiApp      = "$baseName-api-$env"
+          $uiApp       = "$baseName-ui-$env"
 
           Write-Host "📋 Resources targeted for deletion:" -ForegroundColor Yellow
           Write-Host "  Resource Group : $rg" -ForegroundColor Gray
@@ -2765,8 +2765,8 @@ jobs:
           $baseName    = 'orderprocessing'
           $githubOwner = '${{ github.repository_owner }}'
           $rg          = "rg-$baseName-$env"
-          $apiApp      = "$githubOwner-$baseName-api-xyapp-$env"
-          $uiApp       = "$githubOwner-$baseName-ui-xyapp-$env"
+          $apiApp      = "$baseName-api-$env"
+          $uiApp       = "$baseName-ui-$env"
 
           Write-Host "📋 Resources targeted for deletion:" -ForegroundColor Yellow
           Write-Host "  Resource Group : $rg" -ForegroundColor Gray
@@ -2848,8 +2848,8 @@ jobs:
           $baseName    = 'orderprocessing'
           $githubOwner = '${{ github.repository_owner }}'
           $rg          = "rg-$baseName-$env"
-          $apiApp      = "$githubOwner-$baseName-api-xyapp-$env"
-          $uiApp       = "$githubOwner-$baseName-ui-xyapp-$env"
+          $apiApp      = "$baseName-api-$env"
+          $uiApp       = "$baseName-ui-$env"
 
           Write-Host "📋 Resources targeted for deletion:" -ForegroundColor Yellow
           Write-Host "  Resource Group : $rg" -ForegroundColor Gray
