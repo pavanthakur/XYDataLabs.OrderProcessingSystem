@@ -40,6 +40,11 @@ Actions → "Azure Bootstrap & Deploy" → Run workflow:
 - API: `pavanthakur-orderprocessing-api-xyapp-dev`
 - UI: `pavanthakur-orderprocessing-ui-xyapp-dev`
 
+## Naming Rule for New Azure Assets
+- Use the same `appname-env` pattern for any new Azure service, queue, topic, subscription, or cleanup target
+- Keep deployment and Phase X cleanup names symmetric so the teardown can safely remove exactly what the deployment created
+- Prefer `stg` for staging resource suffixes in Azure resource names when the resource itself uses an abbreviated environment code
+
 ## Required Secrets
 - GitHub environment secrets: `AZUREAPPSERVICE_CLIENTID`, `AZUREAPPSERVICE_TENANTID`, `AZUREAPPSERVICE_SUBSCRIPTIONID`
 - GitHub repository secrets: `APP_ID` + `APP_PRIVATE_KEY` — GitHub App (for configure-github-secrets workflow)

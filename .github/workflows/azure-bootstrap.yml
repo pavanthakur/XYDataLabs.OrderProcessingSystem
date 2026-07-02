@@ -2634,8 +2634,10 @@ jobs:
 
   # ─────────────────────────────────────────────────────────────────────────────
   # PHASE X — CLEANUP JOBS (DESTRUCTIVE)
-  # Deletes App Services individually, then the entire Resource Group.
-  # Uses same OIDC credential pattern as bootstrap jobs.
+  # Deletes the app-layer services first, then deletes the entire
+  # environment-specific Resource Group so every Azure resource created by
+  # the matching deployment path is removed in one teardown flow.
+  # Uses the same OIDC credential pattern as bootstrap jobs.
   # ─────────────────────────────────────────────────────────────────────────────
 
   cleanup-dev:
@@ -2683,7 +2685,7 @@ jobs:
           Write-Host "  Resource Group : $rg" -ForegroundColor Gray
           Write-Host "  UI App Service : $uiApp" -ForegroundColor Gray
           Write-Host "  API App Service: $apiApp" -ForegroundColor Gray
-          Write-Host "  All remaining resources (SQL, Key Vault, App Insights, ASP) deleted with Resource Group" -ForegroundColor Gray
+          Write-Host "  All remaining resources created for this environment are deleted with the Resource Group" -ForegroundColor Gray
           Write-Host ""
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
 
@@ -2715,7 +2717,7 @@ jobs:
           $rgExists = az group exists --name $rg 2>$null
           if ($rgExists -eq "true") {
             az group delete --name $rg --yes --no-wait
-            Write-Host "  ✅ Resource Group deletion initiated (background). All remaining resources will be removed." -ForegroundColor Green
+          Write-Host "  ✅ Resource Group deletion initiated (background). All Azure infra for this environment will be removed." -ForegroundColor Green
           } else {
             Write-Host "  ⚠️  Resource Group $rg not found — already deleted or never created." -ForegroundColor Yellow
           }
@@ -2770,7 +2772,7 @@ jobs:
           Write-Host "  Resource Group : $rg" -ForegroundColor Gray
           Write-Host "  UI App Service : $uiApp" -ForegroundColor Gray
           Write-Host "  API App Service: $apiApp" -ForegroundColor Gray
-          Write-Host "  All remaining resources (SQL, Key Vault, App Insights, ASP) deleted with Resource Group" -ForegroundColor Gray
+          Write-Host "  All remaining resources created for this environment are deleted with the Resource Group" -ForegroundColor Gray
           Write-Host ""
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
 
@@ -2798,7 +2800,7 @@ jobs:
           $rgExists = az group exists --name $rg 2>$null
           if ($rgExists -eq "true") {
             az group delete --name $rg --yes --no-wait
-            Write-Host "  ✅ Resource Group deletion initiated (background). All remaining resources will be removed." -ForegroundColor Green
+            Write-Host "  ✅ Resource Group deletion initiated (background). All Azure infra for this environment will be removed." -ForegroundColor Green
           } else {
             Write-Host "  ⚠️  Resource Group $rg not found — already deleted or never created." -ForegroundColor Yellow
           }
@@ -2853,7 +2855,7 @@ jobs:
           Write-Host "  Resource Group : $rg" -ForegroundColor Gray
           Write-Host "  UI App Service : $uiApp" -ForegroundColor Gray
           Write-Host "  API App Service: $apiApp" -ForegroundColor Gray
-          Write-Host "  All remaining resources (SQL, Key Vault, App Insights, ASP) deleted with Resource Group" -ForegroundColor Gray
+          Write-Host "  All remaining resources created for this environment are deleted with the Resource Group" -ForegroundColor Gray
           Write-Host ""
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
 
@@ -2881,7 +2883,7 @@ jobs:
           $rgExists = az group exists --name $rg 2>$null
           if ($rgExists -eq "true") {
             az group delete --name $rg --yes --no-wait
-            Write-Host "  ✅ Resource Group deletion initiated (background). All remaining resources will be removed." -ForegroundColor Green
+            Write-Host "  ✅ Resource Group deletion initiated (background). All Azure infra for this environment will be removed." -ForegroundColor Green
           } else {
             Write-Host "  ⚠️  Resource Group $rg not found — already deleted or never created." -ForegroundColor Yellow
           }
@@ -2918,7 +2920,7 @@ jobs:
           "| 🏗️ Bootstrap Infrastructure | ``${{ inputs.bootstrapInfra }}`` |" >> $env:GITHUB_STEP_SUMMARY
           "| 🔄 Deploy API | ``${{ inputs.deployApi }}`` |" >> $env:GITHUB_STEP_SUMMARY
           "| 🔄 Deploy UI | ``${{ inputs.deployUi }}`` |" >> $env:GITHUB_STEP_SUMMARY
-          "| ⚠️ [Phase X] Cleanup Infrastructure | ``${{ inputs.cleanupInfra }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| ⚠️ [Phase X] Cleanup Infrastructure | ``${{ inputs.cleanupInfra }}`` | Matching teardown for the selected environment |" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
           
           "### ✅ Job Execution Results" >> $env:GITHUB_STEP_SUMMARY
@@ -3052,7 +3054,7 @@ jobs:
           "|----------|------------|-------|" >> $env:GITHUB_STEP_SUMMARY
           "| GitHub Environments + OIDC Secrets | ✅ Yes | Re-created by 'Azure Initial Setup' workflow |" >> $env:GITHUB_STEP_SUMMARY
           "| APP_ID + APP_PRIVATE_KEY secrets | ⚠️ Caution | Must re-run setup-github-app-from-manifest.ps1 after deletion |" >> $env:GITHUB_STEP_SUMMARY
-          "| Azure Resource Groups | ⚠️ Caution | Re-created by Bootstrap Infrastructure, but destroys all resources |" >> $env:GITHUB_STEP_SUMMARY
+          "| Azure Resource Groups | ⚠️ Caution | Re-created by Bootstrap Infrastructure, and Phase X removes the full environment stack |" >> $env:GITHUB_STEP_SUMMARY
 
           "" >> $env:GITHUB_STEP_SUMMARY
           "---" >> $env:GITHUB_STEP_SUMMARY

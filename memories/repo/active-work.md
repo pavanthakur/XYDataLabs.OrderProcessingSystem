@@ -14,6 +14,12 @@
 - Phase 10 is the next active engineering phase.
 - `dev` was merged to `staging` as commit `25d9e12`.
 - The Phase 9 closeout prompts require documented, aligned VS Code task sequences for `local-http` and `docker-dev-http`.
+- Azure infra naming and teardown should stay environment-scoped and symmetric:
+  - Resource groups use `rg-<base>-<env>`
+  - App/service names use `<owner>-<base>-<service>-<env>`
+  - Phase X cleanup in `azure-bootstrap.yml` is the matching teardown for the same environment stack
+  - Service Bus and related transport names in Phase 10 should also carry the environment suffix so deploy and cleanup stay aligned
+- Going forward, any new Azure service, queue, topic, subscription, or similar infra should follow the same `appname-env` pattern for easy identification and cleanup.
 
 ## If returning after a long gap
 - Current focus: Phase 10 Azure transport + DLQ operations.
