@@ -2676,7 +2676,6 @@ jobs:
 
           $env         = 'dev'
           $baseName    = 'orderprocessing'
-          $githubOwner = '${{ github.repository_owner }}'
           $rg          = "rg-$baseName-$env"
           $apiApp      = "$baseName-api-$env"
           $uiApp       = "$baseName-ui-$env"
@@ -2763,7 +2762,6 @@ jobs:
 
           $env         = 'stg'
           $baseName    = 'orderprocessing'
-          $githubOwner = '${{ github.repository_owner }}'
           $rg          = "rg-$baseName-$env"
           $apiApp      = "$baseName-api-$env"
           $uiApp       = "$baseName-ui-$env"
@@ -2846,7 +2844,6 @@ jobs:
 
           $env         = 'prod'
           $baseName    = 'orderprocessing'
-          $githubOwner = '${{ github.repository_owner }}'
           $rg          = "rg-$baseName-$env"
           $apiApp      = "$baseName-api-$env"
           $uiApp       = "$baseName-ui-$env"
