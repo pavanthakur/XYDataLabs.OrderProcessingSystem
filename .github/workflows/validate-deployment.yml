@@ -53,6 +53,21 @@ on:
         required: false
         type: string
         default: 'GitHub-Actions-OIDC'
+      template-file:
+        description: 'Bicep template file to validate'
+        required: false
+        type: string
+        default: 'infra/main.bicep'
+      parameter-file:
+        description: 'Parameter file to validate'
+        required: false
+        type: string
+        default: 'infra/parameters/dev.json'
+      location:
+        description: 'Azure region used for subscription-scope what-if'
+        required: false
+        type: string
+        default: 'centralindia'
 permissions:
   id-token: write
   contents: read
@@ -79,9 +94,20 @@ jobs:
         shell: pwsh
         run: |
           Write-Host "Running what-if for ${{ inputs.environment }}" -ForegroundColor Cyan
-          ./Resources/Azure-Deployment/validate-parameters-whatif.ps1 `
-            -Environment ${{ inputs.environment }} `
-            -ResourceGroupPrefix 'rg-orderprocessing'
+          $templateFile = "${{ inputs.template-file }}"
+          $parameterFile = "${{ inputs.parameter-file }}"
+          if (-not (Test-Path $templateFile)) {
+            throw "Template file not found: $templateFile"
+          }
+          if (-not (Test-Path $parameterFile)) {
+            throw "Parameter file not found: $parameterFile"
+          }
+          az deployment sub what-if `
+            --location "${{ inputs.location }}" `
+            --template-file "$templateFile" `
+            --parameters @"$parameterFile" `
+            --only-show-errors `
+            --no-pretty-print
         continue-on-error: false
 
       - name: Verify OIDC Credentials
