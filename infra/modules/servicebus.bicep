@@ -1,4 +1,4 @@
-targetScope = 'subscription'
+targetScope = 'resourceGroup'
 
 @description('Azure region for Service Bus resources')
 param location string
@@ -37,11 +37,6 @@ resource sbNamespace 'Microsoft.ServiceBus/namespaces@2022-10-01-preview' = {
   sku: {
     name: 'Standard'
     tier: 'Standard'
-  }
-  properties: {
-    isAutoInflateEnabled: false
-    maximumThroughputUnits: 0
-    zoneRedundant: false
   }
 }
 
@@ -116,4 +111,4 @@ output inventorySubscription string = inventorySubscription.name
 output notificationsSubscription string = notificationsSubscription.name
 output deadLetterTopic string = dlqTopic.name
 output deadLetterSubscription string = dlqReplaySubscription.name
-output serviceBusConnectionString string = listKeys(transportAuthRule.id, '2022-10-01-preview').primaryConnectionString
+output transportAuthRuleName string = transportAuthRule.name

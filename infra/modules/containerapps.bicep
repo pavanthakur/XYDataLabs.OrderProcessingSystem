@@ -30,6 +30,9 @@ param serviceBusTopicName string = 'order-events'
 @description('Service Bus connection string for the Phase 10 transport slice')
 param serviceBusConnectionString string = ''
 
+@description('Container CPU cores as a JSON numeric string')
+param cpuCores string = '0.25'
+
 @description('Inventory subscription name')
 param inventorySubscriptionName string = 'inventory-order-created'
 
@@ -150,7 +153,7 @@ resource gatewayApp 'Microsoft.App/containerApps@2024-03-01' = {
           image: 'placeholder'
           env: commonEnv
           resources: {
-            cpu: 0.25
+            cpu: json(cpuCores)
             memory: '0.5Gi'
           }
         }
@@ -180,7 +183,7 @@ resource ordersApp 'Microsoft.App/containerApps@2024-03-01' = {
           image: 'placeholder'
           env: concat(commonEnv, publisherEnv)
           resources: {
-            cpu: 0.25
+            cpu: json(cpuCores)
             memory: '0.5Gi'
           }
         }
@@ -204,7 +207,7 @@ resource inventoryApp 'Microsoft.App/containerApps@2024-03-01' = {
           image: 'placeholder'
           env: concat(commonEnv, inventoryEnv)
           resources: {
-            cpu: 0.25
+            cpu: json(cpuCores)
             memory: '0.5Gi'
           }
         }
@@ -228,7 +231,7 @@ resource notificationsApp 'Microsoft.App/containerApps@2024-03-01' = {
           image: 'placeholder'
           env: concat(commonEnv, notificationsEnv)
           resources: {
-            cpu: 0.25
+            cpu: json(cpuCores)
             memory: '0.5Gi'
           }
         }
@@ -258,7 +261,7 @@ resource uiApp 'Microsoft.App/containerApps@2024-03-01' = {
           image: 'placeholder'
           env: commonEnv
           resources: {
-            cpu: 0.25
+            cpu: json(cpuCores)
             memory: '0.5Gi'
           }
         }
