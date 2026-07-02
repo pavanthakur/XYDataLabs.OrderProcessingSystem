@@ -16,7 +16,7 @@
 - The Phase 9 closeout prompts require documented, aligned VS Code task sequences for `local-http` and `docker-dev-http`.
 - Azure infra naming and teardown should stay environment-scoped and symmetric:
   - Resource groups use `rg-<base>-<env>`
-  - App/service names use `<owner>-<base>-<service>-<env>`
+  - App/service names use `<base>-<service>-<env>` for Phase 10 infra and matching cleanup
   - Phase X cleanup in `azure-bootstrap.yml` is the matching teardown for the same environment stack
   - Service Bus and related transport names in Phase 10 should also carry the environment suffix so deploy and cleanup stay aligned
 - Going forward, any new Azure service, queue, topic, subscription, or similar infra should follow the same `appname-env` pattern for easy identification and cleanup.

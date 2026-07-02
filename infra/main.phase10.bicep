@@ -122,6 +122,7 @@ module functions 'modules/functions.bicep' = {
     location: location
     environment: environment
     baseName: baseName
+    sku: 'B1'
     appInsightsConnectionString: insights.outputs.appInsightsConnectionString
     appInsightsInstrumentationKey: insights.outputs.appInsightsInstrumentationKey
     keyVaultUri: keyVaultUri

@@ -9,6 +9,9 @@ param environment string
 @description('Base application name')
 param baseName string = 'orderprocessing'
 
+@description('App Service Plan SKU used for the Function App host')
+param sku string = 'B1'
+
 @description('Application Insights connection string')
 param appInsightsConnectionString string = ''
 
@@ -36,7 +39,25 @@ param maxDeliveryCount int = 10
 @description('Message TTL in ISO 8601 duration format')
 param messageTtl string = 'P7D'
 
-var functionAppName = 'func-${baseName}-${environment}'
+var functionAppName = '${baseName}-functions-${environment}'
+
+resource plan 'Microsoft.Web/serverfarms@2023-12-01' = {
+  name: 'asp-${baseName}-${environment}'
+  location: location
+  sku: {
+    name: sku
+    tier: sku == 'F1' ? 'Free' : sku
+  }
+  properties: {
+    reserved: false
+  }
+  tags: {
+    env: environment
+    app: baseName
+    component: 'functions'
+  }
+}
+
 var appSettings = [
   {
     name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
@@ -92,6 +113,7 @@ resource app 'Microsoft.Web/sites@2023-12-01' = {
     type: 'SystemAssigned'
   }
   properties: {
+    serverFarmId: plan.id
     httpsOnly: true
     siteConfig: {
       appSettings: appSettings

@@ -52,11 +52,11 @@ param maxDeliveryCount int = 10
 param messageTtl string = 'P7D'
 
 var environmentName = 'aca-${baseName}-${environment}'
-var gatewayName = '${githubOwner}-${baseName}-gateway-aca-${environment}'
-var ordersName = '${githubOwner}-${baseName}-orders-aca-${environment}'
-var inventoryName = '${githubOwner}-${baseName}-inventory-aca-${environment}'
-var notificationsName = '${githubOwner}-${baseName}-notifications-aca-${environment}'
-var uiName = '${githubOwner}-${baseName}-ui-aca-${environment}'
+var gatewayName = '${baseName}-gateway-${environment}'
+var ordersName = '${baseName}-orders-${environment}'
+var inventoryName = '${baseName}-inventory-${environment}'
+var notificationsName = '${baseName}-notifications-${environment}'
+var uiName = '${baseName}-ui-${environment}'
 var commonEnv = [
   {
     name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
