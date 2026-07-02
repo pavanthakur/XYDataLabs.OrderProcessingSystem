@@ -17,7 +17,7 @@ Use [.github/instructions/ai-operating.instructions.md](../instructions/ai-opera
 Quick tip:
 
 ```text
-Ctrl+Shift+I → Agent mode → type /XYDataLabs-day-start, /XYDataLabs-day-complete, /XYDataLabs-sql-local-access, /XYDataLabs-setup-local, /XYDataLabs-docker-start, /XYDataLabs-payment-automation, /XYDataLabs-completion-check, /XYDataLabs-context-audit, /XYDataLabs-new-feature, /XYDataLabs-validate-adrs, /XYDataLabs-verify-db-logs, /phase-handoffs/phase-09-microservices-architecture, or /phase-handoffs/phase-09-microservices-implementation
+Ctrl+Shift+I → Agent mode → type /XYDataLabs-day-start, /XYDataLabs-day-complete, /XYDataLabs-sql-local-access, /XYDataLabs-setup-local, /XYDataLabs-docker-start, /XYDataLabs-payment-automation, /XYDataLabs-completion-check, /XYDataLabs-context-audit, /XYDataLabs-new-feature, /XYDataLabs-validate-adrs, /XYDataLabs-verify-db-logs, /azure-deploy-test, /phase-handoffs/phase-09-microservices-architecture, or /phase-handoffs/phase-09-microservices-implementation
 ```
 
 ## Available Prompts
@@ -203,6 +203,32 @@ Prompt routing note:
 - User-facing output should be the formatted pass/fail table first; use JSON only when the user explicitly asks for machine-readable output or when temporary parsing is needed behind the scenes.
 
 Note: For deep-dive queries (Q1, Q3, Q4, Q6, Q6a, Q7, Q8-B and per-tenant 3DS toggle), open `docs/runbooks/payment-db-verification.md`.
+
+### `/azure-deploy-test`
+
+Purpose:
+- Guides a safe Azure deploy-and-smoke session for the active transport stack.
+- Explains the split between Bicep infrastructure and GitHub Actions orchestration.
+- Keeps the operator focused on `what-if`, deploy, output verification, transport smoke, and replay smoke.
+
+Use when:
+- You are preparing or reviewing an Azure deployment for the active transport stack.
+- You need a command-first explanation of what to commit, what to ignore, and what to verify after deploy.
+- You want a standard answer for whether a workflow change is needed or whether the existing workflow is enough.
+
+Important notes:
+- `infra/main.phase10.bicep` is the source of truth for the current transport slice.
+- GitHub Actions should orchestrate the deployment, not model the Azure resources.
+- Always use the deployment outputs before verification or smoke tests.
+- Keep `.azure-cli` and other local auth caches out of the commit.
+
+Workflow:
+1. Read `docs/guides/deployment/azure-deploy-smoke.md`.
+2. Run `az deployment sub what-if` against `infra/main.phase10.bicep`.
+3. Deploy with `az deployment sub create`.
+4. Verify Service Bus, Function App, Container Apps, Log Analytics, Managed Environment, and App Insights using deployment outputs.
+5. Run the transport publish/consume smoke and replay smoke.
+6. Update docs or workflow YAML only if the deployment shape or automation behavior changed.
 
 ### Phase Handoff Prompts
 

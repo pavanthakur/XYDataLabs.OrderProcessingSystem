@@ -2,7 +2,9 @@
 
 ## 🎯 Overview
 
-The `infra-deploy.yml` workflow deploys Azure infrastructure using Bicep templates. It supports three deployment modes:
+The `infra-deploy.yml` workflow deploys the active Azure infrastructure surface using Bicep templates.
+
+It supports three execution modes:
 
 1. **Manual deployment** (workflow_dispatch) - Full control via GitHub UI
 2. **Automatic deployment** (push to branches) - Branch-based deployment
@@ -26,8 +28,6 @@ The `infra-deploy.yml` workflow deploys Azure infrastructure using Bicep templat
    |-----------|-------------|---------|---------|
    | **Environment** | Target environment | dev, staging, prod | dev |
    | **Location** | Azure region | Any region string | centralindia |
-   | **App Service SKU** | App Service tier | F1, B1, B2, S1, P1v3 | F1 |
-   | **Enable Identity** | OIDC identity setup | true/false | true |
    | **Dry Run** | What-if only (no deploy) | true/false | true |
 
 4. **Run Types:**
@@ -43,6 +43,10 @@ The `infra-deploy.yml` workflow deploys Azure infrastructure using Bicep templat
    - Deploys actual infrastructure
    - Creates/updates Azure resources
    - **Use carefully!**
+
+   **Current Azure Deployment:**
+   - Uses `infra/main.phase10.bicep` and `infra/parameters/phase10-<env>.json`
+   - The workflow summary shows transport-stack outputs
 
 ---
 
@@ -68,22 +72,10 @@ Dry Run: FALSE ⚠️
 ```
 **Result:** Creates dev environment in Azure
 
-### Scenario 3: Upgrade to Paid Tier
-```
-Environment: dev
-Location: centralindia
-App Service SKU: B1 (instead of F1)
-Enable Identity: true
-Dry Run: FALSE ⚠️
-```
-**Result:** Upgrades App Service Plan (incurs cost!)
-
-### Scenario 4: Deploy Staging
+### Scenario 3: Deploy Staging
 ```
 Environment: staging
 Location: centralindia
-App Service SKU: B2
-Enable Identity: true
 Dry Run: FALSE ⚠️
 ```
 **Result:** Creates separate staging environment
@@ -96,14 +88,14 @@ When you push to specific branches:
 
 | Branch | Environment | Parameter File | Trigger |
 |--------|-------------|----------------|---------|
-| `dev` | dev | `infra/parameters/dev.json` | Any push to `infra/**` |
-| `staging` | staging | `infra/parameters/staging.json` | Any push to `infra/**` |
-| `main` | prod | `infra/parameters/prod.json` | Any push to `infra/**` |
+| `dev` | dev | `infra/parameters/phase10-dev.json` | Any push to `infra/**` |
+| `staging` | staging | `infra/parameters/phase10-staging.json` | Any push to `infra/**` |
+| `main` | prod | `infra/parameters/phase10-prod.json` | Any push to `infra/**` |
 
 **Example:**
 ```bash
 # Make changes to Bicep files
-git add infra/main.bicep
+git add infra/main.phase10.bicep
 git commit -m "Update infrastructure"
 git push origin dev  # Triggers automatic deployment
 ```
@@ -115,7 +107,7 @@ git push origin dev  # Triggers automatic deployment
 When you create a PR with infra changes:
 
 1. Workflow runs automatically
-2. Executes `az deployment sub what-if`
+2. Detects the active infrastructure files and runs the matching `what-if`
 3. Shows predicted changes in PR comments
 4. **No actual deployment** occurs
 
@@ -141,9 +133,22 @@ After successful deployment, the workflow provides:
 
 ### Available Outputs
 - **Resource Group Name:** `rg-orderprocessing-{env}`
-- **API Hostname:** `{owner}-orderprocessing-api-xyapp-{env}.azurewebsites.net`
-- **UI Hostname:** `{owner}-orderprocessing-ui-xyapp-{env}.azurewebsites.net`
+- **Service Bus Namespace:** transport namespace
+- **Log Analytics Workspace:** workspace name
+- **Managed Environment:** container apps environment
+- **Gateway / Orders / Inventory / Notifications / UI:** container app names
+- **Function App:** function host name
+- **Key Vault:** vault name
 - **App Insights Name:** `ai-orderprocessing-{env}`
+
+- Resource Group
+- Service Bus Namespace
+- Log Analytics Workspace
+- Managed Environment
+- Gateway / Orders / Inventory / Notifications / UI container app names
+- Function App
+- Key Vault
+- App Insights
 
 ---
 
