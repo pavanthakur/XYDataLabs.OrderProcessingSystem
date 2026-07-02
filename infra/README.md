@@ -5,7 +5,7 @@ This directory contains the production-ready Azure infrastructure definition for
 ## Modules
 
 - `main.bicep` – Legacy subscription-scope hosting entrypoint; creates Resource Group and deploys the App Service-based modules.
-- `main.phase10.bicep` – Phase 10 transport entrypoint; creates Resource Group and deploys the transport-first Service Bus / Log Analytics / ACA / Functions modules and wires the Service Bus transport connection into the runtime.
+- `main.phase10.bicep` – Phase 10 transport entrypoint; creates Resource Group and deploys the transport-first Service Bus / Log Analytics / ACA / Functions modules, then consumes the Service Bus transport connection output from the Service Bus module for runtime wiring.
 - `modules/hosting.bicep` – App Service Plan + API and UI Web Apps with connection string configuration.
 - `modules/insights.bicep` – Application Insights instance.
 - `modules/loganalytics.phase10.bicep` – Log Analytics workspace for the Phase 10 transport slice.

@@ -14,4 +14,5 @@ Use these documents:
 - `azure-deployment-scripts-index.md` — index and usage guide for Azure deployment scripts
 - `infrastructure-overview.md` — infrastructure-as-code overview for the canonical infra subtree
 - `bicep-overview.md` — Bicep deployment overview for the canonical Bicep subtree
+- `azure-deploy-smoke.md` — deploy, verify, and smoke-test quick start for the active Azure surface
 - `retry-logic-implementation.md` — deployment retry strategy and implementation reference

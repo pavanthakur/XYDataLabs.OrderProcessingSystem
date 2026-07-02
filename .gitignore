@@ -429,3 +429,5 @@ bicep/**/*.json
 .tmp_phase9_output*
 .venv/
 .aider*
+.azure-cli/
+infra/main.phase10.json

@@ -112,3 +112,8 @@ output notificationsSubscription string = notificationsSubscription.name
 output deadLetterTopic string = dlqTopic.name
 output deadLetterSubscription string = dlqReplaySubscription.name
 output transportAuthRuleName string = transportAuthRule.name
+#disable-next-line use-resource-symbol-reference
+var transportAuthRuleConnectionString = listKeys(transportAuthRule.id, '2022-10-01-preview').primaryConnectionString
+
+@secure()
+output transportAuthRuleConnectionString string = transportAuthRuleConnectionString
