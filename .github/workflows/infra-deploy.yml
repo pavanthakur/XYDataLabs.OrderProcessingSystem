@@ -45,6 +45,9 @@ jobs:
       run-whatif: true
       verify-oidc: false
       check-config: true   # SharedSettings structural drift is now a hard gate (MissingKeyGroups=0 required; Diffs are expected per-env)
+      template-file: infra/main.phase10.bicep
+      parameter-file: infra/parameters/phase10-${{ inputs.environment }}.json
+      location: ${{ inputs.location }}
 
   validate:
     name: Bicep What-If (Dry Run)
