@@ -54,6 +54,7 @@ var ordersName = '${baseName}-ord-${environment}'
 var inventoryName = '${baseName}-inv-${environment}'
 var notificationsName = '${baseName}-notif-${environment}'
 var uiName = '${baseName}-ui-${environment}'
+var defaultImage = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 var commonEnv = [
   {
     name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
@@ -147,7 +148,7 @@ resource gatewayApp 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'gateway'
-          image: 'placeholder'
+          image: defaultImage
           env: commonEnv
           resources: {
             cpu: json(cpuCores)
@@ -177,7 +178,7 @@ resource ordersApp 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'orders'
-          image: 'placeholder'
+          image: defaultImage
           env: concat(commonEnv, publisherEnv)
           resources: {
             cpu: json(cpuCores)
@@ -201,7 +202,7 @@ resource inventoryApp 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'inventory'
-          image: 'placeholder'
+          image: defaultImage
           env: concat(commonEnv, inventoryEnv)
           resources: {
             cpu: json(cpuCores)
@@ -225,7 +226,7 @@ resource notificationsApp 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'notifications'
-          image: 'placeholder'
+          image: defaultImage
           env: concat(commonEnv, notificationsEnv)
           resources: {
             cpu: json(cpuCores)
@@ -255,7 +256,7 @@ resource uiApp 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'ui'
-          image: 'placeholder'
+          image: defaultImage
           env: commonEnv
           resources: {
             cpu: json(cpuCores)
