@@ -16,7 +16,15 @@ const openPayConfiguration = {
 } satisfies PaymentConfiguration;
 
 describe("PaymentPage", () => {
+  function useNonLocalHostname(): void {
+    Object.defineProperty(window.location, "hostname", {
+      configurable: true,
+      value: "app.example.test"
+    });
+  }
+
   it("allows entering a two-digit expiry month without resetting to 01", async () => {
+    useNonLocalHostname();
     (window as Window & { OpenPay?: unknown }).OpenPay = {
       setId: vi.fn(),
       setApiKey: vi.fn(),
@@ -49,6 +57,7 @@ describe("PaymentPage", () => {
   });
 
   it("routes a non-3DS payment into the shared status summary page", async () => {
+    useNonLocalHostname();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
 
     (window as Window & { OpenPay?: unknown }).OpenPay = {
@@ -141,6 +150,7 @@ describe("PaymentPage", () => {
   });
 
   it("shows a redirect loader before navigating to the 3D Secure challenge", async () => {
+    useNonLocalHostname();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
 
     const assignSpy = vi.spyOn(window.location, "assign").mockImplementation(() => undefined);
@@ -208,6 +218,7 @@ describe("PaymentPage", () => {
   }, 10000);
 
   it("launches Razorpay checkout and routes the success callback into the shared status page", async () => {
+    useNonLocalHostname();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
 
     const razorpayOpen = vi.fn();
