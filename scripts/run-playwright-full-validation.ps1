@@ -2,7 +2,9 @@
 
 param(
     [ValidateSet('local-http', 'local-https', 'docker-dev-http', 'docker-dev-https', 'docker-stg-http', 'docker-stg-https', 'docker-prod-http', 'docker-prod-https')]
-    [string]$Target = 'local-http'
+    [string]$Target = 'local-http',
+
+    [switch]$SkipProfileStart
 )
 
 $ErrorActionPreference = 'Stop'
@@ -142,6 +144,23 @@ function Invoke-Step {
     }
 }
 
+function Test-UrlReachable {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Url,
+
+        [int]$TimeoutSec = 5
+    )
+
+    try {
+        $response = Invoke-WebRequest -UseBasicParsing -Uri $Url -TimeoutSec $TimeoutSec
+        return $response.StatusCode -ge 200 -and $response.StatusCode -lt 500
+    }
+    catch {
+        return $false
+    }
+}
+
 try {
     if ($Target -eq 'local-http') {
         Invoke-Step -Name 'local-http-profile' -Command { pwsh -NoProfile -ExecutionPolicy Bypass -File 'scripts/start-local-profile.ps1' -Profile http -ReturnWhenReady }
@@ -166,8 +185,41 @@ try {
             default { 'dev' }
         }
         $dockerProfile = if ($Target -like '*https') { 'https' } else { 'http' }
-        Invoke-Step -Name "$Target-stop-local-sessions" -Command { pwsh -NoProfile -ExecutionPolicy Bypass -File 'scripts/stop-local-dev-sessions.ps1' }
-        Invoke-Step -Name "$Target-profile" -Command { pwsh -NoProfile -ExecutionPolicy Bypass -Command "& '.\\Resources\\Docker\\start-docker.ps1' -Environment $dockerEnvironment -Profile $dockerProfile -NoPrePull -LegacyBuild" }
+        $targetAlive = $false
+        if ($Target -eq 'docker-dev-http') {
+            $targetAlive = Test-UrlReachable -Url 'http://localhost:5022/'
+        }
+        elseif ($Target -eq 'docker-dev-https') {
+            $targetAlive = Test-UrlReachable -Url 'https://localhost:5023/'
+        }
+        elseif ($Target -eq 'docker-stg-http') {
+            $targetAlive = Test-UrlReachable -Url 'http://localhost:5032/'
+        }
+        elseif ($Target -eq 'docker-stg-https') {
+            $targetAlive = Test-UrlReachable -Url 'https://localhost:5033/'
+        }
+        elseif ($Target -eq 'docker-prod-http') {
+            $targetAlive = Test-UrlReachable -Url 'http://localhost:5042/'
+        }
+        elseif ($Target -eq 'docker-prod-https') {
+            $targetAlive = Test-UrlReachable -Url 'https://localhost:5043/'
+        }
+
+        if ($SkipProfileStart -or $targetAlive) {
+            $reason = if ($SkipProfileStart) { 'requested by caller' } else { 'target already reachable' }
+            Add-Content -Path $progressLogPath -Value "[$(Get-IstTimestamp)] Skipping $Target-profile because $reason."
+            $summary.steps += [ordered]@{
+                name = "$Target-profile"
+                status = 'skipped'
+                startedUtc = (Get-Date).ToUniversalTime().ToString('o')
+                finishedUtc = (Get-Date).ToUniversalTime().ToString('o')
+                log = 'not-applicable'
+            }
+        }
+        else {
+            Invoke-Step -Name "$Target-stop-local-sessions" -Command { pwsh -NoProfile -ExecutionPolicy Bypass -File 'scripts/stop-local-dev-sessions.ps1' }
+            Invoke-Step -Name "$Target-profile" -Command { pwsh -NoProfile -ExecutionPolicy Bypass -Command "& '.\\Resources\\Docker\\start-docker.ps1' -Environment $dockerEnvironment -Profile $dockerProfile -NoPrePull -LegacyBuild" }
+        }
         Invoke-Step -Name "$Target-integration" -Command { pwsh -NoProfile -ExecutionPolicy Bypass -File 'scripts/run-integration-tests-docker.ps1' }
         Invoke-Step -Name "$Target-smoke" -Command { pwsh -NoProfile -ExecutionPolicy Bypass -File 'scripts/test-frontend-tenant-bootstrap.ps1' -Target $Target }
         Invoke-Step -Name "$Target-matrix" -Command { npm --prefix automation run run:docker:matrix -- --target $Target }

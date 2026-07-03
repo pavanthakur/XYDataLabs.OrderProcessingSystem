@@ -26,7 +26,7 @@ services:
       - "8081:8080"
     environment:
       KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: LocalP@ssw0rd!
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_TENANT_ADMIN_PASSWORD}
       KC_HTTP_ENABLED: "true"
       KC_HTTP_PORT: "8080"
       KC_HEALTH_ENABLED: "true"
@@ -135,7 +135,7 @@ services:
         VITE_KEYCLOAK_REALM: xy-phase9
         VITE_KEYCLOAK_CLIENT_ID: xy-order-processing-local-web
         VITE_KEYCLOAK_USERNAME: tenant-admin
-        VITE_KEYCLOAK_PASSWORD: LocalP@ssw0rd!
+        VITE_KEYCLOAK_PASSWORD: ${KEYCLOAK_TENANT_ADMIN_PASSWORD}
     ports:
       - "5022:5022"
     environment:

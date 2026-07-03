@@ -12,6 +12,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $workspaceRoot = Split-Path -Parent $PSScriptRoot
 $composeFile = Join-Path $workspaceRoot 'compose\docker-compose.phase10.yml'
+$envFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local'
 $logRoot = Join-Path $workspaceRoot 'TestResults\Playwright\phase10-docker-http'
 $latestPointerPath = Join-Path $logRoot 'latest-playwright-profile.txt'
 $rootMarkerPath = Join-Path $workspaceRoot 'TestResults\Playwright\latest-playwright-run.txt'
@@ -105,7 +106,7 @@ try {
 
     if ($Action -eq 'down') {
         Add-Content -Path $progressLogPath -Value 'Stopping Phase 10 local container stack.'
-        & docker compose -f $composeFile --profile $Profile down -v 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-down.log')
+        & docker compose --env-file $envFile -f $composeFile --profile $Profile down -v 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-down.log')
         if ($LASTEXITCODE -ne 0) {
             throw "Docker compose down failed with exit code $LASTEXITCODE"
         }
@@ -118,8 +119,8 @@ try {
     foreach ($port in @(8081, 1433, 6379, 5022)) {
         Stop-ContainersOnPort -Port $port
     }
-    & docker compose -f $composeFile --profile $Profile down -v 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-preflight-down.log') | Out-Null
-    & docker compose -f $composeFile --profile $Profile up -d --build 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-up.log')
+    & docker compose --env-file $envFile -f $composeFile --profile $Profile down -v 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-preflight-down.log') | Out-Null
+    & docker compose --env-file $envFile -f $composeFile --profile $Profile up -d --build 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-up.log')
     if ($LASTEXITCODE -ne 0) {
         throw "Docker compose up failed with exit code $LASTEXITCODE"
     }

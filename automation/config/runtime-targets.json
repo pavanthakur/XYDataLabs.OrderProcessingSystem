@@ -33,7 +33,7 @@
     {
       "key": "docker-dev-http",
       "baseUrl": "http://localhost:5022",
-      "apiBaseUrl": "http://localhost:5020",
+      "apiBaseUrl": "http://localhost:5080",
       "verificationMode": "physical",
       "browserMode": "docker",
       "expectedTenantSource": "runtime-configuration",
@@ -48,7 +48,7 @@
     {
       "key": "docker-dev-http-tests",
       "baseUrl": "http://localhost:5022",
-      "apiBaseUrl": "http://localhost:5020",
+      "apiBaseUrl": "http://localhost:5080",
       "verificationMode": "physical",
       "browserMode": "docker",
       "expectedTenantSource": "runtime-configuration",
@@ -63,7 +63,7 @@
     {
       "key": "docker-dev-http-playwright",
       "baseUrl": "http://localhost:5022",
-      "apiBaseUrl": "http://localhost:5020",
+      "apiBaseUrl": "http://localhost:5080",
       "verificationMode": "physical",
       "browserMode": "docker",
       "expectedTenantSource": "runtime-configuration",

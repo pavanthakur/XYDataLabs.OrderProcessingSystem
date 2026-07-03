@@ -102,7 +102,7 @@ try {
     Write-ProgressLine 'Waiting for gateway, UI, and Keycloak readiness...'
     Wait-ForUrl -Url 'http://localhost:5080/health/alive' -TimeoutSec 300
     Wait-ForUrl -Url 'http://localhost:5022/' -TimeoutSec 300
-    Wait-ForUrl -Url 'http://localhost:8081/health/ready' -TimeoutSec 300
+    Wait-ForUrl -Url 'http://localhost:8081/' -TimeoutSec 300
     $summary.steps += [ordered]@{
         name = 'readiness'
         status = 'passed'

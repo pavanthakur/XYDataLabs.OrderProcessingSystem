@@ -277,11 +277,11 @@ function Invoke-DockerSqlTextQuery {
     $normalizedQuery = ($Query -replace "`r?`n", ' ').Trim()
     $escapedQuery = $normalizedQuery.Replace('"', '\"')
     $shellCommand = [string]::Format(
-        'if [ -x /opt/mssql-tools18/bin/sqlcmd ]; then SQLCMD=/opt/mssql-tools18/bin/sqlcmd; else SQLCMD=/opt/mssql-tools/bin/sqlcmd; fi; "$SQLCMD" -C -S localhost -U sa -P "$SA_PASSWORD" -d "{0}" -w 65535 -y 0 -Y 0 -Q "SET NOCOUNT ON; {1}"',
+        'if [ -x /opt/mssql-tools18/bin/sqlcmd ]; then SQLCMD=/opt/mssql-tools18/bin/sqlcmd; else SQLCMD=/opt/mssql-tools/bin/sqlcmd; fi; "$SQLCMD" -C -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -d "{0}" -w 65535 -y 0 -Y 0 -Q "SET NOCOUNT ON; {1}"',
         $Database,
         $escapedQuery)
 
-    $output = docker exec orderprocessing-sqlserver /bin/sh -lc $shellCommand 2>&1
+    $output = docker compose --env-file (Join-Path $PSScriptRoot '..\Resources\Docker\.env.local') -f (Join-Path $PSScriptRoot '..\compose\docker-compose.phase10.yml') --profile apps exec -T sql-server /bin/sh -lc $shellCommand 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
     }
@@ -347,7 +347,7 @@ function Invoke-SqlTextQuery {
     }
 
     if ($Runtime -eq 'docker') {
-        return Invoke-DockerSqlTextQuery -Database $Database -Query $Query
+        return Invoke-LocalSqlTextQuery -Database $Database -Query $Query
     }
 
     return Invoke-LocalSqlTextQuery -Database $Database -Query $Query
