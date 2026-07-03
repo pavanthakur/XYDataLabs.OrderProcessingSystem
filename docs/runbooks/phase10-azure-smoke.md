@@ -54,6 +54,29 @@ To launch the deployment from GitHub:
 6. Set `environment`, `location`, and, if needed, `bindAliases`, `aliasMode`, and `publicDomain`.
 7. Click `Run workflow` to start the deployment.
 
+## VS Code Local Validation Path
+
+Use these tasks when you want a local replica of the Phase 10 service graph before touching Azure:
+
+1. `1 Run: Phase 10 Local Container Stack 00 Start`
+2. `1 Run: Phase 10 Local Container Stack 01 Wait Ready + Keycloak`
+3. `1 Run: Phase 10 Local Container Stack 02 Playwright Smoke`
+4. `1 Run: Phase 10 Local Container Stack 03 Integration Suite`
+5. `1 Run: Phase 10 Local Container Stack 04 Payment Matrix`
+6. `1 Run: Phase 10 Local Container Stack 05 Full Validation`
+7. `1 Run: Phase 10 Local Container Stack 06 Cleanup After Validation`
+
+Log locations for the local container stack:
+
+- `TestResults\Playwright\phase10-docker-http\<timestamp>_profile\...`
+- `TestResults\Playwright\phase10-docker-http\<timestamp>_profile\01-env-ready.log`
+- `TestResults\Playwright\phase10-docker-http\<timestamp>_smoke\...`
+- `TestResults\Integration\<timestamp>\...`
+- `TestResults\Playwright\phase10-docker-http\<timestamp>_endtoend\summary.json`
+- `TestResults\Playwright\phase10-docker-http\latest-playwright-profile.txt`
+- `TestResults\Playwright\phase10-docker-http\latest-playwright-smoke.txt`
+- `TestResults\Playwright\latest-playwright-run.txt`
+
 ## Quick Command Checklist
 
 Use this if you want the shortest possible runbook for the first Azure dev proof.
