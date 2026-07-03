@@ -20,6 +20,28 @@ If you want human-friendly public URLs, choose:
 
 When alias binding is enabled, supply a real `publicDomain` value such as `contoso.com`.
 
+Shared operator rule:
+- Local Docker and Azure Container Apps should be treated as the same Phase 10 service graph with different hosting targets.
+- Both hosts now consume the same `orderprocessing-*` service image family, so the only contract difference is the runtime host and ingress surface.
+- The service names stay environment-suffixed and split by responsibility, so cleanup and redeploy can safely target the exact gateway, Orders, Inventory, Notifications, and UI resources.
+- The public hostname layer is the only thing that changes between the two hosts: localhost ports in Docker, ACA ingress or friendly aliases in Azure.
+- The `AZUREAPPSERVICE_*` GitHub secrets referenced in this repo are environment-scoped OIDC identifiers carried forward from the earlier setup flow; they are used by the active Phase 10 Container Apps workflows, not to imply an App Service deployment target.
+
+## Runtime Verification Checklist
+
+Use this checklist to prove the shared contract is behaving the same way across both hosts:
+
+1. Local Phase 10 stack
+   - Start the local Phase 10 container stack.
+   - Confirm the gateway, Orders, Inventory, Notifications, and UI containers all start with the `orderprocessing-*` image family.
+   - Run the local smoke path and confirm the gateway and UI respond on their local ports.
+2. Azure infra deploy
+   - Run `infra-deploy.yml` with the target environment and confirm the deployment summary reports the expected gateway and UI ingress outputs.
+   - Verify the published image refs match the service-specific `orderprocessing-*` contract for gateway, Orders, Inventory, Notifications, and UI.
+3. Azure smoke and automation
+   - Run the Phase 10 Azure smoke after the deployment completes.
+   - Confirm publish, consume, DLQ, and replay checks pass before promoting aliases or treating the environment as ready.
+
 ## GitHub UI Path
 
 To launch the deployment from GitHub:

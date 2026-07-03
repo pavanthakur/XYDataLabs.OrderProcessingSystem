@@ -1,6 +1,8 @@
 # GitHub Actions Workflows - CI/CD Automation
 
-This directory contains GitHub Actions workflows for automated CI/CD deployment to Azure App Services using OIDC authentication.
+This directory contains GitHub Actions workflows for automated CI/CD deployment across the historical App Service path and the current Phase 10 Azure Container Apps path using OIDC authentication.
+
+> **Phase 10 note:** The active deployment, image build, and validation flows are the container-app workflows (`infra-deploy.yml`, `build-phase10-images.yml`, and the Phase 10 smoke runbook). Legacy App Service workflows remain only for historical compatibility and should not be treated as the target runtime model for Phase 10.
 
 ## 📋 Overview
 
@@ -10,7 +12,7 @@ This repo uses a small set of primary operational workflows, with additional sup
 |----------|-------------|------------|-------------|
 | `ci.yml` | Pull requests to dev/staging/main | Validation only | PR build/test gate for the .NET solution plus React frontend typecheck, tests, and build |
 | `azure-initial-setup.yml` | Manual | One-time setup | **[See README-AZURE-INITIAL-SETUP.md](./README-AZURE-INITIAL-SETUP.md)** - Phase 0 (GitHub App), Phase 1a (OIDC), Phase 1b (secrets) |
-| `azure-bootstrap.yml` | Manual | Infrastructure + deploy | **[See README-AZURE-BOOTSTRAP.md](./README-AZURE-BOOTSTRAP.md)** - Phase 2 (infrastructure), API/UI deploy, Phase X (cleanup) |
+| `azure-bootstrap.yml` | Manual | Legacy App Service stack | **[See README-AZURE-BOOTSTRAP.md](./README-AZURE-BOOTSTRAP.md)** - Phase 2 (infrastructure), API/UI deploy, Phase X (cleanup) |
 | `configure-github-secrets.yml` | Called by initial-setup | Secret configuration | **[See README-CONFIGURE-GITHUB-SECRETS.md](./README-CONFIGURE-GITHUB-SECRETS.md)** - GitHub App setup and secret management (can run independently) |
 | `infra-deploy.yml` | Manual | dev/staging/prod | **[See README-INFRA-DEPLOY.md](./README-INFRA-DEPLOY.md)** - Deploys Phase 10 Bicep infrastructure with manual workflow dispatch, optional friendly alias planning, and guarded alias binding |
 | `build-phase10-images.yml` | Manual or push to service host paths | GHCR | Builds and pushes the Phase 10 container images for gateway, orders, inventory, notifications, and UI |
@@ -32,7 +34,7 @@ This repo uses a small set of primary operational workflows, with additional sup
 |----------|------|
 | `ci.yml` | PR gate for build and unit/architecture test validation |
 | `azure-initial-setup.yml` | One-time repository and OIDC bootstrap |
-| `azure-bootstrap.yml` | Main day-to-day environment bootstrap and coordinated deployment entrypoint |
+| `azure-bootstrap.yml` | Legacy App Service day-to-day environment bootstrap and coordinated deployment entrypoint |
 | `build-phase10-images.yml` | Phase 10 container image build/push entrypoint for GHCR |
 | `deploy-api-to-azure.yml` | Legacy API deployment path retained for the App Service stack |
 | `deploy-ui-to-azure.yml` | Legacy React frontend deployment path retained for the App Service stack |
@@ -59,7 +61,7 @@ This repo uses a small set of primary operational workflows, with additional sup
 | `staging` | orderprocessing-api-xyapp-stg | orderprocessing-ui-xyapp-stg |
 | `main` | orderprocessing-api-xyapp-prod | orderprocessing-ui-xyapp-prod |
 
-The table above is the legacy App Service surface. Phase 10 infra now publishes Container Apps plus ingress endpoints from the Bicep deployment summary, and `build-phase10-images.yml` publishes the distinct gateway/orders/inventory/notifications/UI runtime images for those apps.
+The table above intentionally shows both surfaces. The legacy App Service workflows remain for historical compatibility, while Phase 10 infra publishes Container Apps plus ingress endpoints from the Bicep deployment summary, and `build-phase10-images.yml` publishes the distinct gateway/orders/inventory/notifications/UI runtime images for those apps.
 
 When running `infra-deploy.yml`, the key manual inputs are:
 
@@ -431,7 +433,9 @@ After infrastructure is deployed:
 
 3. **Monitor workflow**: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions
 
-4. **Verify deployment**: https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net
+4. **Verify deployment**:
+   - Legacy App Service URL if you are exercising the old stack
+   - Phase 10 Container Apps ingress URL from the infra deployment summary if you are exercising the current stack
 
 5. **Promote to staging** (after dev validation):
    ```bash

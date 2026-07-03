@@ -23,8 +23,8 @@ New-Item -ItemType Directory -Path (Split-Path -Parent $rootMarkerPath) -Force |
 Set-Content -Path $latestPointerPath -Value $runDir -Encoding utf8
 Set-Content -Path $rootMarkerPath -Value $runDir -Encoding utf8
 Set-Content -Path (Join-Path $runDir 'run-plan.txt') -Value @(
-    'Phase 10 Docker HTTP smoke run',
-    'Goal: validate the browser flow against the Phase 10 Docker HTTP stack.',
+    'Phase 10 local container stack smoke run',
+    'Goal: validate the browser flow against the Phase 10 local container stack.',
     'Stages:',
     '1. Wait for gateway and UI readiness.',
     '2. Stabilize the environment.',

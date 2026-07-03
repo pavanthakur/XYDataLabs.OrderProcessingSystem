@@ -132,6 +132,13 @@ Current VS Code validation paths:
 - The new Phase 10-friendly aliases are `Phase 10: Local Container Stack 01 Start`, `Phase 10: Local Container Stack 02 Smoke`, `Phase 10: Local Container Stack 03 Full Validation`, and `Phase 10: Local Container Stack Cleanup`.
 - Use the local Phase 10 aliases when you want the newer split-service local validation path without changing the older task contract.
 
+Shared local/Azure contract:
+- Service names follow the same `appname-env` shape wherever we control them: local Docker service names, Azure Container App names, and cleanup targets all use the environment suffix so the deploy and teardown steps stay symmetrical.
+- Phase 10 local Docker and Azure Container Apps both use the same `orderprocessing-*` service image family, which keeps image creation and deployment inputs aligned across hosts.
+- The runtime payload is service-specific in both places: gateway, Orders, Inventory, Notifications, and UI each get their own image or container artifact rather than a single shared image.
+- Azure keeps the public ingress hostnames platform-generated unless a friendly alias is explicitly bound. That means the operator flow is still the same even though the public URL is different: deploy, verify outputs, smoke, then promote or alias.
+- The preferred automation rule is the same across both platforms: keep the compute names deterministic, keep the environment suffix explicit, and keep cleanup keyed off the exact names created by the deployment.
+
 Access paths:
 - Gateway health: `http://localhost:5080/health`
 - Gateway home: `http://localhost:5080/`

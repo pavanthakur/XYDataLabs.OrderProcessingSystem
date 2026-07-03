@@ -767,7 +767,7 @@
             "problemMatcher": []
         },
         {
-            "label": "1 Run: Phase 10 Docker HTTP 00 Start Profile",
+            "label": "1 Run: Phase 10 Local Container Stack 00 Start",
             "dependsOrder": "sequence",
             "dependsOn": [
                 "Internal: Stop local dev sessions",
@@ -778,19 +778,19 @@
             "problemMatcher": []
         },
         {
-            "label": "1 Run: Phase 10 Docker HTTP 01 Wait Ready + Keycloak",
+            "label": "1 Run: Phase 10 Local Container Stack 01 Wait Ready + Keycloak",
             "dependsOrder": "sequence",
             "dependsOn": [
-                "1 Run: Phase 10 Docker HTTP 00 Start Profile"
+                "1 Run: Phase 10 Local Container Stack 00 Start"
             ],
             "group": "none",
             "problemMatcher": []
         },
         {
-            "label": "1 Run: Phase 10 Docker HTTP 02 Playwright Smoke",
+            "label": "1 Run: Phase 10 Local Container Stack 02 Playwright Smoke",
             "dependsOrder": "sequence",
             "dependsOn": [
-                "1 Run: Phase 10 Docker HTTP 01 Wait Ready + Keycloak"
+                "1 Run: Phase 10 Local Container Stack 01 Wait Ready + Keycloak"
             ],
             "type": "shell",
             "command": "pwsh",
@@ -815,10 +815,10 @@
             "problemMatcher": []
         },
         {
-            "label": "1 Run: Phase 10 Docker HTTP 03 Integration Suite",
+            "label": "1 Run: Phase 10 Local Container Stack 03 Integration Suite",
             "dependsOrder": "sequence",
             "dependsOn": [
-                "1 Run: Phase 10 Docker HTTP 01 Wait Ready + Keycloak"
+                "1 Run: Phase 10 Local Container Stack 01 Wait Ready + Keycloak"
             ],
             "type": "shell",
             "command": "pwsh",
@@ -841,10 +841,10 @@
             "problemMatcher": []
         },
         {
-            "label": "1 Run: Phase 10 Docker HTTP 04 Payment Matrix",
+            "label": "1 Run: Phase 10 Local Container Stack 04 Payment Matrix",
             "dependsOrder": "sequence",
             "dependsOn": [
-                "1 Run: Phase 10 Docker HTTP 01 Wait Ready + Keycloak"
+                "1 Run: Phase 10 Local Container Stack 01 Wait Ready + Keycloak"
             ],
             "type": "shell",
             "command": "npm",
@@ -866,13 +866,13 @@
             "problemMatcher": []
         },
         {
-            "label": "1 Run: Phase 10 Docker HTTP 05 Full Validation",
+            "label": "1 Run: Phase 10 Local Container Stack 05 Full Validation",
             "dependsOrder": "sequence",
             "dependsOn": [
-                "1 Run: Phase 10 Docker HTTP 01 Wait Ready + Keycloak",
-                "1 Run: Phase 10 Docker HTTP 02 Playwright Smoke",
-                "1 Run: Phase 10 Docker HTTP 03 Integration Suite",
-                "1 Run: Phase 10 Docker HTTP 04 Payment Matrix"
+                "1 Run: Phase 10 Local Container Stack 01 Wait Ready + Keycloak",
+                "1 Run: Phase 10 Local Container Stack 02 Playwright Smoke",
+                "1 Run: Phase 10 Local Container Stack 03 Integration Suite",
+                "1 Run: Phase 10 Local Container Stack 04 Payment Matrix"
             ],
             "group": "none",
             "problemMatcher": []
@@ -1621,7 +1621,7 @@
         },
         // Cleanup: Docker Profiles
         {
-            "label": "3 Cleanup: Docker Dev HTTP 01 Profile",
+            "label": "3 Cleanup: Phase 10 Local Container Stack 01 Profile",
             "type": "process",
             "command": "pwsh",
             "args": [
@@ -1629,7 +1629,7 @@
                 "-ExecutionPolicy",
                 "Bypass",
                 "-Command",
-                "& '.\\Resources\\Docker\\start-docker.ps1' -Environment dev -Profile http -Down; $images = @('xydatalabs-orderprocessingsystem-api-http:dev', 'xydatalabs-orderprocessingsystem-ui-http:dev'); foreach ($image in $images) { $imageId = docker images -q $image 2>$null; if ($imageId) { docker rmi -f $image | Out-Null; Write-Host \"Removed image $image\" } else { Write-Host \"Image not found: $image\" } }"
+                "& '.\\Resources\\Docker\\start-docker.ps1' -Environment dev -Profile http -Down; $images = @('ghcr.io/pavanthakur/orderprocessing-gateway:dev', 'ghcr.io/pavanthakur/orderprocessing-orders:dev', 'ghcr.io/pavanthakur/orderprocessing-inventory:dev', 'ghcr.io/pavanthakur/orderprocessing-notifications:dev', 'ghcr.io/pavanthakur/orderprocessing-ui:dev'); foreach ($image in $images) { $imageId = docker images -q $image 2>$null; if ($imageId) { docker rmi -f $image | Out-Null; Write-Host \"Removed image $image\" } else { Write-Host \"Image not found: $image\" } }"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
@@ -1643,10 +1643,10 @@
             "problemMatcher": []
         },
         {
-            "label": "Phase 10: Docker Dev HTTP Cleanup",
+            "label": "Phase 10: Local Container Stack Cleanup",
             "dependsOrder": "sequence",
             "dependsOn": [
-                "3 Cleanup: Docker Dev HTTP 01 Profile"
+                "3 Cleanup: Phase 10 Local Container Stack 01 Profile"
             ],
             "group": "none",
             "problemMatcher": []
@@ -1655,7 +1655,7 @@
             "label": "3 Cleanup: Docker Dev HTTP 40 Full Validation",
             "dependsOrder": "sequence",
             "dependsOn": [
-                "3 Cleanup: Docker Dev HTTP 01 Profile"
+                "3 Cleanup: Phase 10 Local Container Stack 01 Profile"
             ],
             "group": "none",
             "problemMatcher": []

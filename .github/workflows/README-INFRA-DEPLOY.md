@@ -4,6 +4,8 @@
 
 The `infra-deploy.yml` workflow deploys the active Azure infrastructure surface using Bicep templates.
 
+> **Phase 10 note:** This guide describes the active Azure Container Apps deployment path for Phase 10. Legacy App Service references remain only for historical compatibility and should not be treated as the current target runtime model.
+
 It supports three execution modes:
 
 1. **Manual deployment** (workflow_dispatch) - Full control via GitHub UI
@@ -50,8 +52,15 @@ It supports three execution modes:
    **Current Azure Deployment:**
    - Uses `infra/main.phase10.bicep` and `infra/parameters/phase10-<env>.json`
    - Resources follow the environment-suffixed naming pattern so Phase X cleanup can remove the matching stack
+   - Gateway, Orders, Inventory, Notifications, and UI are deployed as separate Container Apps with separate images, matching the split-service Docker validation lane
    - The workflow summary shows transport-stack outputs
    - If `Bind Aliases` is enabled, provide a real `Public Domain` so the workflow can derive env-aware public names like `api-dev.contoso.com`
+
+**Shared contract with local Docker validation:**
+- same environment suffix pattern (`dev`, `staging`, `prod`)
+- same split-service shape (gateway/orders/inventory/notifications/UI)
+- same cleanup symmetry (`appname-env` resources can be torn down safely)
+- different public URL style only at the hosting layer: local Docker uses fixed localhost ports, Azure Container Apps uses generated ingress plus optional aliases
 
 ---
 

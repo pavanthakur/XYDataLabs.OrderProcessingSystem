@@ -50,7 +50,7 @@
 - ✅ Latest Phase 7 baseline validated on all three execution paths: local dev, Docker dev, and Azure dev
 - ✅ `verify-payment-run-physical.ps1` passed for local + Docker; `verify-payment-run-azure.ps1` passed for Azure
 - ✅ Azure Initial Setup now proven end-to-end: OIDC app registration, 6 federated credentials, environment-scoped `AZUREAPPSERVICE_*` secrets across dev/staging/prod, and repo-level `OIDC_SP_OBJECT_ID`
-- ✅ Azure Bootstrap & Deploy for dev succeeded end-to-end: infrastructure provisioned, API deployed, UI deployed, endpoints live
+- ✅ Legacy Azure Bootstrap & Deploy for dev succeeded end-to-end: infrastructure provisioned, API deployed, UI deployed, endpoints live. Current Phase 10 work uses `infra-deploy.yml` plus `build-phase10-images.yml` instead of extending that path.
 
 ### April 10, 2026 Planning Freeze — Phases 8-10
 

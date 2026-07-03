@@ -25,8 +25,14 @@ Always follow the rules in these instruction files when they apply:
 - **OIDC only** — no stored service principal secrets. All workflows use `azure/login@v3` with federated credentials.
 - **Branch→Environment mapping**: `dev`→dev, `staging`→staging, `main`→prod. Reject cross-environment deploys.
 - **Staging suffix is `stg`** in Azure resource names (not `staging`). Scripts map via `$envSuffix = switch ($Environment) { 'staging' { 'stg' } default { $Environment } }`.
-- **Two-workflow split**: `azure-initial-setup.yml` (one-time OIDC/secrets) vs `azure-bootstrap.yml` (day-to-day infra + deploy).
+- **Two-track split**: `azure-initial-setup.yml` (one-time OIDC/secrets) plus `azure-bootstrap.yml` for the legacy App Service path and `infra-deploy.yml` for the current Phase 10 Container Apps path.
 - **Bicep subscription scope**: Use `az deployment sub create` for subscription-scoped templates. Never `az deployment group create` for subscription-scope.
+
+## Phase 10 guidance
+
+- Treat `infra-deploy.yml` as the primary path for new Azure container infrastructure.
+- Keep gateway, Orders, Inventory, Notifications, and UI as separate Container Apps and keep their image/build configuration aligned with local Docker.
+- Use the Phase 10 smoke runbook and deployment summary URLs to verify the current stack.
 
 ## Workflow Role
 

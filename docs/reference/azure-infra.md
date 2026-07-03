@@ -3,6 +3,8 @@
 **Part of:** [quick-command-reference.md](./quick-command-reference.md)  
 **Last Updated:** March 20, 2026
 
+> **Current Phase 10 note:** The commands below include the legacy Azure Bootstrap & Deploy flow for historical reference. The active container-app path uses `infra-deploy.yml` and `build-phase10-images.yml`, with the Phase 10 smoke runbook for verification.
+
 ---
 
 ## 🔧 Azure CLI Commands

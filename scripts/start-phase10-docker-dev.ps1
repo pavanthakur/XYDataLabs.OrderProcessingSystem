@@ -27,8 +27,8 @@ New-Item -ItemType Directory -Path (Split-Path -Parent $rootMarkerPath) -Force |
 Set-Content -Path $latestPointerPath -Value $runDir -Encoding utf8
 Set-Content -Path $rootMarkerPath -Value $runDir -Encoding utf8
 Set-Content -Path (Join-Path $runDir 'run-plan.txt') -Value @(
-    'Phase 10 Docker HTTP profile run',
-    'Goal: start the Phase 10 Docker container stack with SQL and Redis.',
+    'Phase 10 local container stack run',
+    'Goal: start the Phase 10 local container stack with SQL and Redis.',
     'Stages:',
     '1. Bring up the compose stack.',
     '2. Wait Ready + Keycloak.',
@@ -104,7 +104,7 @@ try {
     }
 
     if ($Action -eq 'down') {
-        Add-Content -Path $progressLogPath -Value 'Stopping Phase 10 Docker HTTP stack.'
+        Add-Content -Path $progressLogPath -Value 'Stopping Phase 10 local container stack.'
         & docker compose -f $composeFile --profile $Profile down -v 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-down.log')
         if ($LASTEXITCODE -ne 0) {
             throw "Docker compose down failed with exit code $LASTEXITCODE"
@@ -114,8 +114,10 @@ try {
         return
     }
 
-    Add-Content -Path $progressLogPath -Value 'Starting Phase 10 Docker HTTP stack.'
-    Stop-ContainersOnPort -Port 8081
+    Add-Content -Path $progressLogPath -Value 'Starting Phase 10 local container stack.'
+    foreach ($port in @(8081, 1433, 6379, 5022)) {
+        Stop-ContainersOnPort -Port $port
+    }
     & docker compose -f $composeFile --profile $Profile down -v 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-preflight-down.log') | Out-Null
     & docker compose -f $composeFile --profile $Profile up -d --build 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-up.log')
     if ($LASTEXITCODE -ne 0) {
@@ -125,8 +127,8 @@ try {
     Wait-ForUrl -Url 'http://localhost:5080/health/alive' -TimeoutSec $HealthTimeoutSec
     Wait-ForUrl -Url 'http://localhost:5022/' -TimeoutSec $HealthTimeoutSec
 
-    Add-Content -Path $progressLogPath -Value 'Phase 10 Docker HTTP stack is ready.'
-    Write-Host 'Phase 10 Docker stack is ready.'
+    Add-Content -Path $progressLogPath -Value 'Phase 10 local container stack is ready.'
+    Write-Host 'Phase 10 local container stack is ready.'
     Write-Host 'Gateway: http://localhost:5080'
     Write-Host 'UI:      http://localhost:5022'
     Write-Host 'Orders:  http://localhost:5081'

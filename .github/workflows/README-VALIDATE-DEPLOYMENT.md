@@ -3,6 +3,12 @@
 ## Overview
 Reusable workflow that runs validation checks before infrastructure or application deployments to detect configuration drift, security issues, and breaking changes.
 
+For the current Phase 10 transport slice, this workflow is the preview gate for:
+- `infra/main.phase10.bicep`
+- `infra/parameters/phase10-dev.json`
+- `infra/parameters/phase10-staging.json`
+- `infra/parameters/phase10-prod.json`
+
 ## Features
 - **Bicep What-If Analysis**: Preview infrastructure changes before deployment
 - **OIDC Credential Verification**: Audit federated identity configuration integrity
@@ -14,6 +20,11 @@ Reusable workflow that runs validation checks before infrastructure or applicati
 ### Automated (Integrated with infra-deploy.yml)
 Pre-validation runs automatically before manual infrastructure deployments triggered by `infra-deploy.yml`.
 It can also be run directly for targeted checks.
+
+### Phase 10 testing contract
+- The validation step is expected to preview the same environment-suffixed stack that the Docker validation lane exercises locally.
+- The workflow should be treated as a shared guardrail for the Phase 10 container app graph, not as a separate legacy App Service check.
+- Any future infra test that targets the Phase 10 transport slice should reuse this workflow so `what-if`, OIDC verification, and configuration drift checks stay in one place.
 
 ### Manual Trigger
 ```bash
@@ -134,3 +145,4 @@ By default, `verify-oidc-credentials.ps1` reads expected environment subjects fr
 - [Validation Scripts](../../Resources/Azure-Deployment/README.md)
 - [Infrastructure Deployment](./README-INFRA-DEPLOY.md)
 - [Operations Quick Links](../../docs/reference/operations-quick-links.md)
+- [Phase 10 Azure Smoke Runbook](../../docs/runbooks/phase10-azure-smoke.md)

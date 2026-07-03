@@ -12,6 +12,11 @@ This guide documents the deployment history and the current Azure path for the O
 **Current Focus (Curriculum Day 31)**: Execute manual infrastructure dry run (`infra-deploy.yml`) prior to real deployment
 
 Phase 10 is the active operational path. App Service material in this guide is retained as historical reference unless a section explicitly says it applies to the legacy stack.
+If you are looking for the current container-app workflow, use:
+- `infra-deploy.yml`
+- `build-phase10-images.yml`
+- `docs/runbooks/phase10-azure-smoke.md`
+- `docs/guides/deployment/README-INFRA-DEPLOY.md`
 
 ### 🆕 Recent Enhancements (November 24, 2025)
 
@@ -30,6 +35,8 @@ Phase 10 is the active operational path. App Service material in this guide is r
 - ✅ **Cleanup Jobs**: Phase X cleanup can delete all resources per environment
   - Stops and deletes App Services, then deletes Resource Group
   - Guarded by `cleanupInfra` checkbox (default: off)
+
+> **Note:** The workflow items below are the legacy App Service path. For the current Phase 10 container-app path, use the infra deploy and Phase 10 image workflows instead of the App Service bootstrap/deploy flow.
 
 **Key Benefit**: Prerequisites are now validated upfront, preventing bootstrap failures and providing clear error messages.
 
@@ -1080,6 +1087,8 @@ Run a manual workflow and confirm the `azure/login@v3` step succeeds with OIDC (
 
 ### 4.1 API Deployment Workflow
 
+> **Legacy compatibility note:** this section describes the App Service deploy workflow. For the current Phase 10 path, use `build-phase10-images.yml` plus `infra-deploy.yml` and verify the container-app ingress URLs from the deployment summary.
+
 **File**: `.github/workflows/deploy-api-to-azure.yml`
 
 **Key Configuration** (excerpt):
@@ -1147,6 +1156,8 @@ Exit code `1` aborts deployment (infra not ready); exit code `0` proceeds.
 - **Manual**: `workflow_dispatch` via GitHub UI
 
 ### 4.2 UI Deployment Workflow
+
+> **Legacy compatibility note:** this section describes the App Service UI deploy workflow. For the current Phase 10 path, use the UI container image from `build-phase10-images.yml` and the ingress URL from `infra-deploy.yml`.
 
 **File**: `.github/workflows/deploy-ui-to-azure.yml`
 
@@ -1218,6 +1229,8 @@ git push
 
 ### 5.3 Monitor Deployment
 
+> **Legacy compatibility note:** App Service portal steps below apply only to the old stack. Current Phase 10 validation is done via GitHub Actions summaries, Azure Container Apps logs, and the Phase 10 smoke runbook.
+
 1. **GitHub Actions UI**:
    - Navigate to: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions
    - Click on the running workflow
@@ -1229,6 +1242,8 @@ git push
    - Go to **Deployment Center** → **Logs** to see deployment history
 
 ### 5.4 Verify Deployment
+
+> **Current Phase 10 equivalent:** verify the Gateway and UI ingress URLs reported in the `infra-deploy.yml` summary, then run the Phase 10 smoke and matrix checks.
 
 **Check Application URLs**:
 ```powershell

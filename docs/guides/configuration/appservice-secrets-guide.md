@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide explains the secrets required for deploying to Azure App Service across different environments (dev, staging, prod). These secrets enable OIDC (OpenID Connect) authentication, which is the recommended and most secure way to authenticate GitHub Actions with Azure.
+This guide explains the secrets required for deploying to Azure App Service across different environments (dev, staging, prod). It is retained as legacy App Service guidance; the current Phase 10 container-app path uses `infra-deploy.yml` plus the Phase 10 image build workflow, but the OIDC pattern remains the same.
 
 ## Table of Contents
 

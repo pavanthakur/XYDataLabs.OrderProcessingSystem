@@ -69,6 +69,8 @@ azure-bootstrap.yml (significantly reduced)
 Day-to-day: infrastructure provisioning + app deployment.
 ```
 
+> **Current Phase 10 note:** This architecture reflects the legacy App Service bootstrap split. The active container-app path now uses `infra-deploy.yml` for infrastructure and `build-phase10-images.yml` for image delivery, with the Phase 10 smoke runbook as the verification loop.
+
 ### Dedicated GitHub Secrets Workflow
 
 ```

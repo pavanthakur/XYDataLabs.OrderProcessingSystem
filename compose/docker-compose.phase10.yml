@@ -41,7 +41,7 @@ services:
     profiles: ["identity", "apps", "all"]
 
   orderprocessing-ord-dev:
-    image: xydatalabs-orderprocessingsystem-orders-api:dev
+    image: ghcr.io/pavanthakur/orderprocessing-orders:dev
     build:
       context: ..
       dockerfile: XYDataLabs.OrderProcessingSystem.Orders.API/Dockerfile
@@ -56,7 +56,7 @@ services:
     profiles: ["apps", "all"]
 
   orderprocessing-inv-dev:
-    image: xydatalabs-orderprocessingsystem-inventory-api:dev
+    image: ghcr.io/pavanthakur/orderprocessing-inventory:dev
     build:
       context: ..
       dockerfile: XYDataLabs.OrderProcessingSystem.Inventory.API/Dockerfile
@@ -71,7 +71,7 @@ services:
     profiles: ["apps", "all"]
 
   orderprocessing-notif-dev:
-    image: xydatalabs-orderprocessingsystem-notifications-api:dev
+    image: ghcr.io/pavanthakur/orderprocessing-notifications:dev
     build:
       context: ..
       dockerfile: XYDataLabs.OrderProcessingSystem.Notifications.API/Dockerfile
@@ -86,7 +86,7 @@ services:
     profiles: ["apps", "all"]
 
   orderprocessing-gate-dev:
-    image: xydatalabs-orderprocessingsystem-gateway:dev
+    image: ghcr.io/pavanthakur/orderprocessing-gateway:dev
     build:
       context: ..
       dockerfile: XYDataLabs.OrderProcessingSystem.Gateway/Dockerfile
@@ -124,7 +124,7 @@ services:
     profiles: ["apps", "all"]
 
   orderprocessing-ui-dev:
-    image: xydatalabs-orderprocessingsystem-ui:dev
+    image: ghcr.io/pavanthakur/orderprocessing-ui:dev
     build:
       context: ..
       dockerfile: frontend/apps/web/Dockerfile

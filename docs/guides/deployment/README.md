@@ -4,9 +4,9 @@ Canonical deployment and infrastructure guidance for Azure bootstrap, provisioni
 
 Use these documents:
 
-- `quick-start-azure-bootstrap.md` — fast-start orientation for the bootstrap workflow model
+- `quick-start-azure-bootstrap.md` — legacy bootstrap workflow reference; the current Phase 10 Azure container-app path uses `infra-deploy.yml`, `build-phase10-images.yml`, and the Phase 10 runbook
 - `azure-deployment-guide.md` — detailed Azure deployment guide with the current Phase 10 path up front and legacy App Service history below
-- `workflow-separation-architecture.md` — rationale and structure for splitting one-time setup from day-to-day bootstrap workflows
+- `workflow-separation-architecture.md` — rationale and structure for splitting one-time setup from day-to-day bootstrap workflows in the legacy App Service model; Phase 10 uses the container-app deployment path instead
 - `azure-guides-overview.md` — Azure learning and deployment guide navigation hub retained as a canonical overview
 - `bootstrap-script-flow.md` — detailed bootstrap script execution flow and sequencing guide
 - `sku-upgrade-slot-testing.md` — App Service SKU upgrade and slot testing guidance for the archived App Service path

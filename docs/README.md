@@ -9,7 +9,7 @@ Choose the path that matches your intent:
 1. `DEVELOPER-OPERATING-MODEL.md` — reading order and update rules
 2. `AI-OPERATING-MODEL.md` — enterprise protocol for shared Copilot instructions, prompts, agents, validation, and deferrals
 3. `learning/curriculum/1_MASTER_CURRICULUM.md` — active execution source of truth
-4. `guides/deployment/README.md` — deployment and infrastructure guidance
+4. `guides/deployment/README.md` — deployment and infrastructure guidance, with the current Phase 10 Azure container-app path first and legacy bootstrap history below
 5. `guides/configuration/README.md` — secrets, identity, and environment guidance
 6. `reference/quick-command-reference.md` — daily commands and validation
 7. `architecture/decisions/` — architecture constraints and ADRs
