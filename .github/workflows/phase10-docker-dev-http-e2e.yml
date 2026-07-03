@@ -1,0 +1,104 @@
+name: Phase 10 Docker Dev HTTP End-to-End
+
+on:
+  workflow_dispatch:
+    inputs:
+      stabilizationDelaySeconds:
+        description: 'Seconds to wait before smoke and validation'
+        required: true
+        default: 120
+        type: number
+      skipStartIfNeeded:
+        description: 'Reuse an already running stack instead of starting it'
+        required: true
+        default: false
+        type: boolean
+  pull_request:
+    branches:
+      - dev
+      - staging
+      - main
+    paths:
+      - '.github/workflows/phase10-docker-dev-http-e2e.yml'
+      - 'scripts/run-phase10-docker-dev-e2e-hook.ps1'
+      - 'scripts/run-phase10-local-container-stack-end-to-end.ps1'
+      - 'scripts/run-phase10-docker-dev-smoke.ps1'
+      - 'scripts/run-integration-tests-docker.ps1'
+      - 'scripts/run-playwright-full-validation.ps1'
+      - 'scripts/start-phase10-docker-dev.ps1'
+      - 'compose/docker-compose.phase10.yml'
+      - '.vscode/tasks.json'
+      - 'automation/package.json'
+      - 'automation/README.md'
+
+permissions:
+  contents: read
+
+jobs:
+  phase10-docker-dev-http-e2e:
+    name: Phase 10 Docker Dev HTTP End-to-End
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      STABILIZATION_DELAY_SECONDS: ${{ github.event_name == 'workflow_dispatch' && inputs.stabilizationDelaySeconds || 120 }}
+      SKIP_START_IF_NEEDED: ${{ github.event_name == 'workflow_dispatch' && inputs.skipStartIfNeeded || false }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Confirm Docker availability
+        run: docker info
+
+      - name: Run Phase 10 Docker Dev HTTP hook
+        shell: pwsh
+        run: |
+          $args = @(
+            '-NoProfile',
+            '-ExecutionPolicy', 'Bypass',
+            '-File', 'scripts/run-phase10-docker-dev-e2e-hook.ps1',
+            '-StabilizationDelaySeconds', $env:STABILIZATION_DELAY_SECONDS
+          )
+          if ($env:SKIP_START_IF_NEEDED -eq 'true') {
+            $args += '-SkipStartIfNeeded'
+          }
+          & pwsh @args
+
+      - name: Upload Phase 10 logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase10-docker-dev-http-e2e-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            TestResults/Playwright/phase10-docker-http/**
+            TestResults/Integration/**
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Write summary
+        if: always()
+        shell: pwsh
+        run: |
+          $summary = @()
+          $summary += "## Phase 10 Docker Dev HTTP End-to-End"
+          $summary += ""
+          $summary += "- Hook: `scripts/run-phase10-docker-dev-e2e-hook.ps1`"
+          $summary += "- Automation alias: `npm --prefix automation run run:docker:dev:http:e2e-hook`"
+          $summary += "- Logs: `TestResults/Playwright/phase10-docker-http`"
+          $summary += "- Latest smoke pointer: `TestResults/Playwright/phase10-docker-http/latest-playwright-smoke.txt`"
+          $summary += "- Latest full-validation pointer: `TestResults/Playwright/phase10-docker-http/latest-playwright-full-validation.txt`"
+          $summary += "- End-to-end summary JSON: `TestResults/Playwright/phase10-docker-http/<timestamp>_endtoend/summary.json`"
+          $summary += "- Artifact bundle: `phase10-docker-dev-http-e2e-${{ github.run_id }}-${{ github.run_attempt }}`"
+          $summary += ""
+          $summary += "### Expected sequence"
+          $summary += "1. Ready + Keycloak"
+          $summary += "2. Playwright smoke"
+          $summary += "3. Integration suite"
+          $summary += "4. Payment matrix"
+          $summary += "5. Full validation"
+          $summary += ""
+          $summary += "### Artifacts"
+          $summary += "- End-to-end summary JSON"
+          $summary += "- Smoke pointer file"
+          $summary += "- Full-validation pointer file"
+          $summary -join "`n" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8

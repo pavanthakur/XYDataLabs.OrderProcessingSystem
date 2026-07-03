@@ -200,6 +200,30 @@
             "problemMatcher": []
         },
         {
+            "label": "1 Run: Docker Dev HTTP 00 End-to-End Hook (Start + Ready + Smoke + Suite + Matrix + Full Validation)",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/run-phase10-docker-dev-e2e-hook.ps1",
+                "-StabilizationDelaySeconds",
+                "120"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
             "label": "1 Run: Docker Dev HTTP 03 Integration Suite (Docker Dev HTTP)",
             "dependsOrder": "sequence",
             "dependsOn": [

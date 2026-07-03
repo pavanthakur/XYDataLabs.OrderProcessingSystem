@@ -16,6 +16,7 @@ This repo uses a small set of primary operational workflows, with additional sup
 | `configure-github-secrets.yml` | Called by initial-setup | Secret configuration | **[See README-CONFIGURE-GITHUB-SECRETS.md](./README-CONFIGURE-GITHUB-SECRETS.md)** - GitHub App setup and secret management (can run independently) |
 | `infra-deploy.yml` | Manual | dev/staging/prod | **[See README-INFRA-DEPLOY.md](./README-INFRA-DEPLOY.md)** - Deploys Phase 10 Bicep infrastructure with manual workflow dispatch, optional friendly alias planning, and guarded alias binding |
 | `build-phase10-images.yml` | Manual or push to service host paths | GHCR | Builds and pushes the Phase 10 container images for gateway, orders, inventory, notifications, and UI |
+| `phase10-docker-dev-http-e2e.yml` | Manual or PR changes to Phase 10 Docker hook paths | Validation only | Runs the local Docker Dev HTTP end-to-end hook in CI and uploads the same Phase 10 logs used by the VS Code task and runbook |
 | `validate-deployment.yml` | Called by infra-deploy | Reusable workflow | **[See README-VALIDATE-DEPLOYMENT.md](./README-VALIDATE-DEPLOYMENT.md)** - Pre-deployment validation workflow |
 | `test-validate-deployment.yml` | Manual or PR changes | Test only | **[Quick Start](./QUICK-START-TEST-VALIDATION.md)** \| **[Full Docs](./README-TEST-VALIDATE-DEPLOYMENT.md)** - Tests validation workflow independently |
 | `deploy-api-to-azure.yml` | API/Backend code changes | All branches (dev/staging/main) | Legacy App Service deployment path for the API |
@@ -25,6 +26,21 @@ This repo uses a small set of primary operational workflows, with additional sup
 | `validate-adrs.yml` | ADR file, script, or lint config changes | Push/PR to main/dev/staging, or manual | **[See README-VALIDATE-ADRS.md](./README-VALIDATE-ADRS.md)** — Validates ADR filename pattern, H1 heading, `**Status:**` frontmatter, and markdownlint rules |
 | `validate-ai-customization.yml` | Shared AI customization changes | Push/PR to main/dev/staging, or manual | Validates shared Copilot instructions, prompts, agents, operating-model docs, and their discovery surfaces |
 | `validate-doc-links.yml` | Docs or validator changes | Push/PR to main/dev/staging, or manual | Validates local markdown links and heading anchors for the canonical `docs/` tree |
+
+### Phase 10 Hook Mapping
+
+The `phase10-docker-dev-http-e2e.yml` workflow is the CI mirror of the local Phase 10 hook:
+
+- Local entrypoint: `scripts/run-phase10-docker-dev-e2e-hook.ps1`
+- Automation alias: `npm --prefix automation run run:docker:dev:http:e2e-hook`
+- CI entrypoint: `.github/workflows/phase10-docker-dev-http-e2e.yml`
+- GitHub summary pointers:
+  - `TestResults/Playwright/phase10-docker-http/latest-playwright-smoke.txt`
+  - `TestResults/Playwright/phase10-docker-http/latest-playwright-full-validation.txt`
+  - `TestResults/Playwright/phase10-docker-http/<timestamp>_endtoend/summary.json`
+  - `phase10-docker-dev-http-e2e-${{ github.run_id }}-${{ github.run_attempt }}`
+
+Use the local hook for interactive debugging and the CI workflow to prove the same sequence still passes on a runner and produces the expected artifacts.
 
 ### Workflow Categories
 
@@ -36,6 +52,7 @@ This repo uses a small set of primary operational workflows, with additional sup
 | `azure-initial-setup.yml` | One-time repository and OIDC bootstrap |
 | `azure-bootstrap.yml` | Legacy App Service day-to-day environment bootstrap and coordinated deployment entrypoint |
 | `build-phase10-images.yml` | Phase 10 container image build/push entrypoint for GHCR |
+| `phase10-docker-dev-http-e2e.yml` | Phase 10 Docker Dev HTTP merge gate and artifact-producing validation path |
 | `deploy-api-to-azure.yml` | Legacy API deployment path retained for the App Service stack |
 | `deploy-ui-to-azure.yml` | Legacy React frontend deployment path retained for the App Service stack |
 

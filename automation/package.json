@@ -12,6 +12,7 @@
     "run:docker:dev:http": "tsx ./src/cli/run-payment-automation.ts --target docker-dev-http",
     "run:docker:dev:http:tests": "tsx ./src/cli/run-payment-automation.ts --target docker-dev-http-tests",
     "run:docker:dev:http:playwright": "tsx ./src/cli/run-payment-automation.ts --target docker-dev-http-playwright",
+    "run:docker:dev:http:e2e-hook": "pwsh -NoProfile -ExecutionPolicy Bypass -File ../scripts/run-phase10-docker-dev-e2e-hook.ps1",
     "run:local:matrix": "tsx ./src/cli/run-local-matrix.ts",
     "run:local:http:playwright-matrix": "tsx ./src/cli/run-local-matrix.ts --target local-http --skip-verification --tenant TenantA --tenant TenantB --tenant TenantC",
     "run:local:https:playwright-matrix": "tsx ./src/cli/run-local-matrix.ts --target local-https --skip-verification --tenant TenantA --tenant TenantB --tenant TenantC",

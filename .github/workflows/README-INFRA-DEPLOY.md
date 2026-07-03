@@ -62,6 +62,10 @@ It supports three execution modes:
 - same cleanup symmetry (`appname-env` resources can be torn down safely)
 - different public URL style only at the hosting layer: local Docker uses fixed localhost ports, Azure Container Apps uses generated ingress plus optional aliases
 
+**Related validation gate:**
+- `phase10-docker-dev-http-e2e.yml` runs the same hook-based Docker Dev HTTP sequence in CI and uploads the matching `TestResults/Playwright/phase10-docker-http` artifacts.
+- Use the hook as the merge gate for the local Docker validation chain, and use `infra-deploy.yml` for Azure Container Apps deployment and alias planning.
+
 ---
 
 ## 📋 Example Scenarios
