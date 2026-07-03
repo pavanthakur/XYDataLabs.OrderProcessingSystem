@@ -1,0 +1,17 @@
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
+WORKDIR /app
+EXPOSE 8080
+
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /src
+COPY ["XYDataLabs.OrderProcessingSystem.Notifications.API/XYDataLabs.OrderProcessingSystem.Notifications.API.csproj", "XYDataLabs.OrderProcessingSystem.Notifications.API/"]
+RUN dotnet restore "./XYDataLabs.OrderProcessingSystem.Notifications.API/XYDataLabs.OrderProcessingSystem.Notifications.API.csproj"
+COPY . .
+WORKDIR "/src/XYDataLabs.OrderProcessingSystem.Notifications.API"
+RUN dotnet publish "./XYDataLabs.OrderProcessingSystem.Notifications.API.csproj" -c Release -o /app/publish /p:UseAppHost=false
+
+FROM base AS final
+WORKDIR /app
+COPY --from=build /app/publish .
+ENV ASPNETCORE_URLS=http://+:8080
+ENTRYPOINT ["dotnet", "XYDataLabs.OrderProcessingSystem.Notifications.API.dll"]

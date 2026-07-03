@@ -1,8 +1,8 @@
 <#
 .SYNOPSIS
-  Bootstrap enterprise-grade Azure infra: Resource Groups, AppService Plans and WebApps (API + UI) + GitHub OIDC.
+  Bootstrap the legacy Azure App Service infra: Resource Groups, AppService Plans and WebApps (API + UI) + GitHub OIDC.
 .DESCRIPTION
-  Merged/finalized script (consolidates orig, draft, and before-final). Includes logging, retry helpers, "super-retry" webapp create, post-deploy self-test and OIDC + RBAC setup.
+  Merged/finalized script (consolidates orig, draft, and before-final). Includes logging, retry helpers, "super-retry" webapp create, post-deploy self-test and OIDC + RBAC setup for the legacy App Service path.
 .PARAMETER SubscriptionId
   Optional: Azure subscription id to operate in.
 .PARAMETER BaseName
@@ -12,9 +12,9 @@
 .PARAMETER Environment
   Target environment: 'dev', 'stg', or 'prod' (required).
 .PARAMETER ApiSuffix
-  API suffix for web app names (default: 'api-xyapp').
+  API suffix for legacy web app names (default: 'api-xyapp').
 .PARAMETER UiSuffix
-  UI suffix for web app names (default: 'ui-xyapp').
+  UI suffix for legacy web app names (default: 'ui-xyapp').
 .PARAMETER DevSku
   Plan sku for dev (default 'F1')
 .PARAMETER StagingSku

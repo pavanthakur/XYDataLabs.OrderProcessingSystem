@@ -1,5 +1,5 @@
 ﻿# diagnose-keyvault-access.ps1
-# Comprehensive diagnostic script to identify Key Vault access issues
+# Comprehensive diagnostic script to identify Key Vault access issues on the legacy App Service path
 
 param(
     [Parameter(Mandatory=$false)]

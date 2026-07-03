@@ -29,6 +29,9 @@ It supports three execution modes:
    | **Environment** | Target environment | dev, staging, prod | dev |
    | **Location** | Azure region | Any region string | centralindia |
    | **Dry Run** | What-if only (no deploy) | true/false | true |
+   | **Public Domain** | Optional DNS suffix for friendly aliases | Any real domain suffix | empty |
+   | **Bind Aliases** | Enable alias planning / binding checks | true/false | false |
+   | **Alias Mode** | Choose direct ACA binding or front-door planning | direct / frontdoor | direct |
 
 4. **Run Types:**
 
@@ -48,6 +51,7 @@ It supports three execution modes:
    - Uses `infra/main.phase10.bicep` and `infra/parameters/phase10-<env>.json`
    - Resources follow the environment-suffixed naming pattern so Phase X cleanup can remove the matching stack
    - The workflow summary shows transport-stack outputs
+   - If `Bind Aliases` is enabled, provide a real `Public Domain` so the workflow can derive env-aware public names like `api-dev.contoso.com`
 
 ---
 
@@ -57,8 +61,6 @@ It supports three execution modes:
 ```
 Environment: dev
 Location: centralindia
-App Service SKU: F1
-Enable Identity: true
 Dry Run: TRUE ✅
 ```
 **Result:** Shows what would be deployed, no actual changes
@@ -67,8 +69,6 @@ Dry Run: TRUE ✅
 ```
 Environment: dev
 Location: centralindia
-App Service SKU: F1
-Enable Identity: true
 Dry Run: FALSE ⚠️
 ```
 **Result:** Creates dev environment in Azure
@@ -134,7 +134,7 @@ After successful deployment, the workflow provides:
 
 ### Available Outputs
 - **Resource Group Name:** `rg-orderprocessing-{env}`
-- **Service Bus Namespace:** transport namespace
+- **Service Bus Namespace:** `sb-orderprocessing-{env}`
 - **Log Analytics Workspace:** workspace name
 - **Managed Environment:** container apps environment
 - **Gateway / Orders / Inventory / Notifications / UI:** container app names
@@ -227,17 +227,20 @@ The `identity.bicep` module requires a **User-Assigned Managed Identity** with M
 **Tip:** Always use F1 or B1 for learning/dev!
 
 ### Resource Naming
-Resources are named with pattern:
+Phase 10 resources are named with the environment-suffixed pattern:
 ```
-{githubOwner}-{baseName}-{component}-{environment}
-```
-
-Example:
-```
-pavanthakur-orderprocessing-api-xyapp-dev
+{component}-{environment}
 ```
 
-This ensures global uniqueness for App Service names and keeps cleanup aligned with the exact environment that was deployed.
+Examples:
+```
+orderprocessing-gate-dev
+orderprocessing-ui-dev
+sb-orderprocessing-dev
+kv-orderprocessing-dev
+```
+
+This keeps deployment and cleanup aligned with the exact environment that was deployed.
 
 ---
 
@@ -256,8 +259,8 @@ This ensures global uniqueness for App Service names and keeps cleanup aligned w
 **Solution:** Verify service principal has Contributor role
 
 ### Issue: "Name already taken"
-**Cause:** App Service name collision  
-**Solution:** Change `githubOwner` parameter or `baseName`
+**Cause:** Resource name collision  
+**Solution:** Check the environment suffix and ensure the target stack was cleaned up before redeploying
 
 ---
 

@@ -13,7 +13,8 @@ This directory contains the production-ready Azure infrastructure definition for
 - `modules/identity.bicep` – (Optional) Creates GitHub OIDC App Registration + federated credentials using an Azure CLI deploymentScript.
 
 ## Naming Convention
-`{githubOwner}-{baseName}-{component}-xyapp-{environment}` for web apps.
+Legacy App Service naming used `{githubOwner}-{baseName}-{component}-xyapp-{environment}` for web apps.
+Phase 10 transport infra now uses shorter container app names with environment suffixes and publishes ingress URLs from deployment outputs.
 Resource group: `rg-{baseName}-{environment}`
 App Service Plan: `asp-{baseName}-{environment}`
 Application Insights: `ai-{baseName}-{environment}`

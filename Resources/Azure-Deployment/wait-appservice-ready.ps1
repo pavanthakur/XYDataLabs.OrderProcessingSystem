@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-  Waits for one or more Azure App Services (and optional App Service Plan) to reach readiness before CI/CD deployment.
+  Waits for one or more legacy Azure App Services (and optional App Service Plan) to reach readiness before CI/CD deployment.
 .DESCRIPTION
   Polls the App Service Plan provisioning state and each Web App's runtime state & HTTP responsiveness.
-  Intended for GitHub Actions gating: fail early if environment not yet stable (prevents premature deployments).
+  Intended for GitHub Actions gating on the legacy App Service path: fail early if environment not yet stable (prevents premature deployments).
   Success criteria for each WebApp:
     - Exists via CLI
     - state == Running

@@ -11,6 +11,11 @@
     "notificationsSubscriptionName": { "value": "notifications-order-created-prod" },
     "deadLetterSubscriptionName": { "value": "dlq-replay-prod" },
     "maxDeliveryCount": { "value": 10 },
-    "messageTtl": { "value": "P7D" }
+    "messageTtl": { "value": "P7D" },
+    "gatewayImage": { "value": "ghcr.io/pavanthakur/orderprocessing-gateway:phase10" },
+    "ordersImage": { "value": "ghcr.io/pavanthakur/orderprocessing-orders:phase10" },
+    "inventoryImage": { "value": "ghcr.io/pavanthakur/orderprocessing-inventory:phase10" },
+    "notificationsImage": { "value": "ghcr.io/pavanthakur/orderprocessing-notifications:phase10" },
+    "uiImage": { "value": "ghcr.io/pavanthakur/orderprocessing-ui:phase10" }
   }
 }

@@ -30,4 +30,13 @@ Key scripts referenced by the guide:
 - `setup-appinsights-dev.ps1` → Workspace-based API App Insights + API auto-instrumentation + API/UI diagnostics to Log Analytics
 - `test-enterprise-deployment.ps1` → Orchestrates an end-to-end from-scratch test
 
+Legacy App Service helpers are still available for historical reference, but Phase 10 is the active path:
+- `deploy-api-to-azure.yml`
+- `deploy-ui-to-azure.yml`
+- `Resources/Azure-Deployment/wait-appservice-ready.ps1`
+- `Resources/Azure-Deployment/verify-deployment-endpoints.ps1`
+- `Resources/Azure-Deployment/configure-app-environment.ps1`
+
+If you are working on the current Azure transport stack, start with the Phase 10 runbook and infra deployment summary instead of the legacy App Service helpers.
+
 For details, troubleshooting, and validation steps, see the main guide.

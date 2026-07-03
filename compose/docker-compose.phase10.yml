@@ -1,0 +1,155 @@
+services:
+  sql-server:
+    image: mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: LocalP@ssw0rd1!
+      MSSQL_PID: Express
+    ports:
+      - "1433:1433"
+    networks:
+      - xy-phase10-network
+    profiles: ["data", "apps", "all"]
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - xy-phase10-network
+    profiles: ["data", "apps", "all"]
+
+  keycloak-local:
+    image: quay.io/keycloak/keycloak:25.0.6
+    command: start-dev --import-realm
+    ports:
+      - "8081:8080"
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: LocalP@ssw0rd!
+      KC_HTTP_ENABLED: "true"
+      KC_HTTP_PORT: "8080"
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      KC_PROXY: edge
+    volumes:
+      - ../Resources/Keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+    networks:
+      - xy-phase10-network
+    profiles: ["identity", "apps", "all"]
+
+  orderprocessing-ord-dev:
+    image: xydatalabs-orderprocessingsystem-orders-api:dev
+    build:
+      context: ..
+      dockerfile: XYDataLabs.OrderProcessingSystem.Orders.API/Dockerfile
+      target: final
+    ports:
+      - "5081:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+    networks:
+      - xy-phase10-network
+    profiles: ["apps", "all"]
+
+  orderprocessing-inv-dev:
+    image: xydatalabs-orderprocessingsystem-inventory-api:dev
+    build:
+      context: ..
+      dockerfile: XYDataLabs.OrderProcessingSystem.Inventory.API/Dockerfile
+      target: final
+    ports:
+      - "5082:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+    networks:
+      - xy-phase10-network
+    profiles: ["apps", "all"]
+
+  orderprocessing-notif-dev:
+    image: xydatalabs-orderprocessingsystem-notifications-api:dev
+    build:
+      context: ..
+      dockerfile: XYDataLabs.OrderProcessingSystem.Notifications.API/Dockerfile
+      target: final
+    ports:
+      - "5083:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+    networks:
+      - xy-phase10-network
+    profiles: ["apps", "all"]
+
+  orderprocessing-gate-dev:
+    image: xydatalabs-orderprocessingsystem-gateway:dev
+    build:
+      context: ..
+      dockerfile: XYDataLabs.OrderProcessingSystem.Gateway/Dockerfile
+      target: final
+    ports:
+      - "5080:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      Gateway__AllowedHosts__0: localhost
+      Gateway__AllowedHosts__1: orders.localhost
+      Gateway__AllowedHosts__2: inventory.localhost
+      Gateway__AllowedHosts__3: notifications.localhost
+      Gateway__AllowedHosts__4: ui.localhost
+      ReverseProxy__Clusters__orders-cluster__Destinations__orders-primary__Address: http://orderprocessing-ord-dev:8080
+      ReverseProxy__Clusters__inventory-cluster__Destinations__inventory-primary__Address: http://orderprocessing-inv-dev:8080
+      ReverseProxy__Clusters__notifications-cluster__Destinations__notifications-primary__Address: http://orderprocessing-notif-dev:8080
+      ReverseProxy__Clusters__ui-cluster__Destinations__ui-primary__Address: http://orderprocessing-ui-dev:8080
+      IdentityProvider__Enabled: "true"
+      IdentityProvider__Mode: KeycloakLocal
+      IdentityProvider__Authority: http://keycloak-local:8080/realms/xy-phase9
+      IdentityProvider__Audience: xy-order-processing
+      IdentityProvider__Scheme: Bearer
+    depends_on:
+      orderprocessing-ord-dev:
+        condition: service_started
+      orderprocessing-inv-dev:
+        condition: service_started
+      orderprocessing-notif-dev:
+        condition: service_started
+      keycloak-local:
+        condition: service_started
+    networks:
+      - xy-phase10-network
+    profiles: ["apps", "all"]
+
+  orderprocessing-ui-dev:
+    image: xydatalabs-orderprocessingsystem-ui:dev
+    build:
+      context: ..
+      dockerfile: frontend/apps/web/Dockerfile
+      target: final
+      args:
+        VITE_ORDERPROCESSING_API_BASE_URL: http://localhost:5080
+        VITE_KEYCLOAK_AUTHORITY: http://localhost:8081
+        VITE_KEYCLOAK_REALM: xy-phase9
+        VITE_KEYCLOAK_CLIENT_ID: xy-order-processing-local-web
+        VITE_KEYCLOAK_USERNAME: tenant-admin
+        VITE_KEYCLOAK_PASSWORD: LocalP@ssw0rd!
+    ports:
+      - "5022:5022"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 5022
+      USE_HTTPS: "false"
+    depends_on:
+      orderprocessing-gate-dev:
+        condition: service_started
+    networks:
+      - xy-phase10-network
+    profiles: ["apps", "all"]
+
+networks:
+  xy-phase10-network:
+    name: xy-phase10-network
+    driver: bridge

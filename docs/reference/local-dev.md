@@ -124,27 +124,42 @@ Docker-targeted gateway profiles:
 - Production Docker gateway: `pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-local-gateway-profile.ps1 -Profile docker-prod-http`
 - VS Code tasks: `1 Run: 13 Gateway over Docker Dev Http`, `1 Run: 23 Gateway over Docker Stg Http`, `1 Run: 33 Gateway over Docker Prod Http`
 
+Current VS Code validation paths:
+- The existing 5-task `docker-dev-http` sequence is the canonical full Docker validation lane.
+- Use the Docker lane when you want the full Phase 10 verification path: start profile, wait ready, Playwright smoke, integration suite, payment matrix, and full validation.
+- The local Phase 10 lane stays the faster developer loop and focuses on profile start plus smoke.
+- Phase 10 split-service validation has its own local container-app lane because it introduces separate gateway, Orders, Inventory, Notifications, and UI containers.
+- The new Phase 10-friendly aliases are `Phase 10: Local Container Stack 01 Start`, `Phase 10: Local Container Stack 02 Smoke`, `Phase 10: Local Container Stack 03 Full Validation`, and `Phase 10: Local Container Stack Cleanup`.
+- Use the local Phase 10 aliases when you want the newer split-service local validation path without changing the older task contract.
+
 Access paths:
-- Gateway health: `http://localhost:5080/health/alive`
-- API through gateway: `http://localhost:5080/swagger/index.html`
-- React UI through gateway: `http://localhost:5080/app/`
-- Optional host-based routes still exist for `orders.localhost` and `ui.localhost`, but the path-based routes avoid a local hosts-file dependency.
-- The Docker-targeted gateway profiles keep the same `http://localhost:5080` ingress while retargeting downstream API/UI ports via launch-profile environment overrides.
+- Gateway health: `http://localhost:5080/health`
+- Gateway home: `http://localhost:5080/`
+- React UI: `http://localhost:5022/customers`
+- Orders service: `http://localhost:5081/health`
+- Inventory service: `http://localhost:5082/health`
+- Notifications service: `http://localhost:5083/health`
+- The local Phase 10 container stack uses service-name routing inside Docker so the gateway can talk to Orders, Inventory, Notifications, and UI as separate containers.
 
 ### **Phase 9 closeout run order**
 
 Use this tracked sequence when you want to re-run or verify the local/Docker closeout flow without relying on generated artifacts:
+
+| Lane | Purpose | Steps |
+|---|---|---|
+| Local Phase 10 quick loop | Fast developer validation | `01 Wait Ready + Keycloak`, `02 Playwright Smoke` |
+| Docker Dev HTTP full validation | Full Phase 10 verification | `01 Wait Ready + Keycloak`, `02 Playwright Smoke`, `03 Integration Suite`, `04 Payment Matrix`, `05 Full Validation` |
 
 1. Local HTTP: `1 Run: Local HTTP 01 Env Ready`
 2. Local HTTP: `1 Run: Local HTTP 02 Playwright Smoke`
 3. Local HTTP: `1 Run: Local HTTP 03 Matrix Sanity (1 Tenant, Local HTTP)`
 4. Local HTTP: `1 Run: Local HTTP 04 Integration Suite (Local SQL, No Docker)`
 5. Local HTTP: `1 Run: Local HTTP 05 Full Validation (All Tenants + Providers, Local HTTP)`
-6. Docker Dev HTTP: `1 Run: Docker Dev HTTP 01 Env Ready (Docker Dev HTTP)`
-7. Docker Dev HTTP: `1 Run: Docker Dev HTTP 02 Playwright Smoke (Docker Dev HTTP)`
-8. Docker Dev HTTP: `1 Run: Docker Dev HTTP 03 Integration Suite (Docker Dev HTTP)`
-9. Docker Dev HTTP: `1 Run: Docker Dev HTTP 04 Payment Matrix (All Tenants + Providers, Docker Dev HTTP)`
-10. Docker Dev HTTP: `1 Run: Docker Dev HTTP 05 Full Validation (Profile + Suite + Smoke + Matrix, Docker Dev HTTP)`
+6. Docker Dev HTTP: `1 Run: Docker Dev HTTP 01 Wait Ready + Keycloak`
+7. Docker Dev HTTP: `1 Run: Docker Dev HTTP 02 Playwright Smoke`
+8. Docker Dev HTTP: `1 Run: Docker Dev HTTP 03 Integration Suite`
+9. Docker Dev HTTP: `1 Run: Docker Dev HTTP 04 Payment Matrix`
+10. Docker Dev HTTP: `1 Run: Docker Dev HTTP 05 Full Validation`
 
 Notes:
 - The canonical evidence folders remain `TestResults\Integration`, `TestResults\PaymentMatrix`, and `TestResults\Playwright`.

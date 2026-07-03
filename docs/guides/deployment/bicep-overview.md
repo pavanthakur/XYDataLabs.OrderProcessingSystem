@@ -10,6 +10,7 @@ That split matters:
 - GitHub Actions decides when to run `what-if`, deployment, and smoke checks.
 
 The legacy App Service template guidance in this folder remains as historical context, but Phase 10 now uses a transport-first Azure deployment model.
+If you need the older flow, see [Legacy App Service Path](legacy-appservice-path-index.md).
 
 ## Current Bicep Surfaces
 

@@ -14,6 +14,8 @@ For Phase 10, the repo uses:
 - `infra/parameters/phase10-dev.json`, `infra/parameters/phase10-staging.json`, and `infra/parameters/phase10-prod.json`
 - `docs/runbooks/phase10-azure-smoke.md` for the exact deploy, verify, and smoke sequence
 
+Older App Service references in this folder are historical context only; the Phase 10 runbook is the active operational path.
+
 ## Why Bicep Was Added
 
 The earlier GitHub workflow approach was fine for orchestration, but it does not replace declarative Azure infrastructure.

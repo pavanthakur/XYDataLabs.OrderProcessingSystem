@@ -1,5 +1,5 @@
 # verify-deployment-endpoints.ps1
-# Verify all deployment endpoints are accessible
+# Verify all legacy deployment endpoints are accessible
 # Usage: ./verify-deployment-endpoints.ps1 -Environment dev [-GitHubOwner pavanthakur]
 
 param(
@@ -68,14 +68,14 @@ $uiBaseUrl = "https://$uiAppName.azurewebsites.net"
 
 Write-Host "Configuration:" -ForegroundColor Yellow
 Write-Host "  Environment:    $Environment" -ForegroundColor Gray
-Write-Host "  API App:        $apiAppName" -ForegroundColor Gray
-Write-Host "  UI App:         $uiAppName" -ForegroundColor Gray
+Write-Host "  Legacy API App: $apiAppName" -ForegroundColor Gray
+Write-Host "  Legacy UI App:  $uiAppName" -ForegroundColor Gray
 Write-Host ""
 
 $allSuccess = $true
 
 # Test API Base URL
-Write-Host "[1/3] Testing API base endpoint..." -ForegroundColor Cyan
+Write-Host "[1/3] Testing legacy API base endpoint..." -ForegroundColor Cyan
 Write-Host "      URL: $apiBaseUrl" -ForegroundColor Gray
 try {
     $response = Invoke-WebRequest -Uri $apiBaseUrl -Method Get -TimeoutSec 30 -UseBasicParsing -ErrorAction Stop
@@ -96,7 +96,7 @@ try {
 Write-Host ""
 
 # Test Swagger URL
-Write-Host "[2/3] Testing Swagger UI..." -ForegroundColor Cyan
+Write-Host "[2/3] Testing legacy Swagger UI..." -ForegroundColor Cyan
 Write-Host "      URL: $apiSwaggerUrl" -ForegroundColor Gray
 try {
     $response = Invoke-WebRequest -Uri $apiSwaggerUrl -Method Get -TimeoutSec 30 -UseBasicParsing -ErrorAction Stop
@@ -118,7 +118,7 @@ try {
 Write-Host ""
 
 # Test UI URL
-Write-Host "[3/3] Testing UI endpoint..." -ForegroundColor Cyan
+Write-Host "[3/3] Testing legacy UI endpoint..." -ForegroundColor Cyan
 Write-Host "      URL: $uiBaseUrl" -ForegroundColor Gray
 try {
     $response = Invoke-WebRequest -Uri $uiBaseUrl -Method Get -TimeoutSec 30 -UseBasicParsing -ErrorAction Stop
@@ -152,8 +152,8 @@ Write-Host ""
 # Azure Portal Links
 Write-Host "🔗 Azure Portal:" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "  API App Service:  https://portal.azure.com/#view/Microsoft_Azure_WACenterPoint/WebsiteBlade/id/%2Fsubscriptions%2F{subscription-id}%2FresourceGroups%2Frg-$BaseName-$Environment%2Fproviders%2FMicrosoft.Web%2Fsites%2F$apiAppName" -ForegroundColor Gray
-Write-Host "  UI App Service:   https://portal.azure.com/#view/Microsoft_Azure_WACenterPoint/WebsiteBlade/id/%2Fsubscriptions%2F{subscription-id}%2FresourceGroups%2Frg-$BaseName-$Environment%2Fproviders%2FMicrosoft.Web%2Fsites%2F$uiAppName" -ForegroundColor Gray
+Write-Host "  Legacy API App Service:  https://portal.azure.com/#view/Microsoft_Azure_WACenterPoint/WebsiteBlade/id/%2Fsubscriptions%2F{subscription-id}%2FresourceGroups%2Frg-$BaseName-$Environment%2Fproviders%2FMicrosoft.Web%2Fsites%2F$apiAppName" -ForegroundColor Gray
+Write-Host "  Legacy UI App Service:   https://portal.azure.com/#view/Microsoft_Azure_WACenterPoint/WebsiteBlade/id/%2Fsubscriptions%2F{subscription-id}%2FresourceGroups%2Frg-$BaseName-$Environment%2Fproviders%2FMicrosoft.Web%2Fsites%2F$uiAppName" -ForegroundColor Gray
 Write-Host ""
 
 if ($allSuccess) {

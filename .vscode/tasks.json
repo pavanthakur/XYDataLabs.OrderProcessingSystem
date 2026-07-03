@@ -173,8 +173,9 @@
             "dependsOrder": "sequence",
             "dependsOn": [
                 "1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Docker Dev HTTP)",
+                "1 Run: Docker Dev HTTP 02 Playwright Smoke (Docker Dev HTTP)",
                 "1 Run: Docker Dev HTTP 03 Integration Suite (Docker Dev HTTP)",
-                "1 Run: Docker Dev HTTP 02 Playwright Smoke (Docker Dev HTTP)"
+                "1 Run: Docker Dev HTTP 04 Payment Matrix (All Tenants + Providers, Docker Dev HTTP)"
             ],
             "type": "shell",
             "command": "pwsh",
@@ -225,7 +226,7 @@
             "problemMatcher": []
         },
         {
-            "label": "1 Run: Docker Dev HTTP 02 Playwright Smoke (Docker Dev HTTP)",
+            "label": "1 Run: Docker Dev HTTP 02 Playwright Smoke (Docker Dev HTTP, 120s Stabilization)",
             "dependsOrder": "sequence",
             "dependsOn": [
                 "1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Docker Dev HTTP)"
@@ -638,6 +639,242 @@
                 "panel": "new",
                 "focus": true
             },
+            "problemMatcher": []
+        },
+        {
+            "label": "Phase 10: Local Container Stack 00 Build",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Internal: Build Phase 10 local stack"
+            ],
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "Phase 10: Local Container Stack 01 Start",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Phase 10: Local Container Stack 00 Build",
+                "Internal: Stop local dev sessions",
+                "Internal: Start Phase 10 local stack"
+            ],
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "Phase 10: Local Container Stack 02 Smoke",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Phase 10: Local Container Stack 01 Start"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/run-phase10-docker-dev-smoke.ps1",
+                "-StabilizationDelaySeconds",
+                "120"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Phase 10: Local Container Stack 03 Full Validation",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Phase 10: Local Container Stack 00 Build",
+                "Phase 10: Local Container Stack 01 Start",
+                "Phase 10: Local Container Stack 02 Smoke"
+            ],
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "Phase 10: Local Container Stack Cleanup",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Internal: Stop Phase 10 local stack"
+            ],
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Phase 10 Local HTTP 00 Start Profile",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Internal: Stop local dev sessions",
+                "Internal: Start Phase 10 local http profile"
+            ],
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Phase 10 Local HTTP 01 Wait Ready + Keycloak",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "1 Run: Phase 10 Local HTTP 00 Start Profile"
+            ],
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Phase 10 Local HTTP 02 Playwright Smoke",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "1 Run: Phase 10 Local HTTP 01 Wait Ready + Keycloak"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/test-frontend-tenant-bootstrap.ps1",
+                "-Target",
+                "phase10-local-http"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Phase 10 Local HTTP 03 Full Validation",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "1 Run: Phase 10 Local HTTP 01 Wait Ready + Keycloak",
+                "1 Run: Phase 10 Local HTTP 02 Playwright Smoke"
+            ],
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Phase 10 Docker HTTP 00 Start Profile",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Internal: Stop local dev sessions",
+                "Phase 10: Local Container Stack 00 Build",
+                "Internal: Start Phase 10 local stack"
+            ],
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Phase 10 Docker HTTP 01 Wait Ready + Keycloak",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "1 Run: Phase 10 Docker HTTP 00 Start Profile"
+            ],
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Phase 10 Docker HTTP 02 Playwright Smoke",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "1 Run: Phase 10 Docker HTTP 01 Wait Ready + Keycloak"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/run-phase10-docker-dev-smoke.ps1",
+                "-StabilizationDelaySeconds",
+                "120"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Phase 10 Docker HTTP 03 Integration Suite",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "1 Run: Phase 10 Docker HTTP 01 Wait Ready + Keycloak"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/run-integration-tests-docker.ps1"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Phase 10 Docker HTTP 04 Payment Matrix",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "1 Run: Phase 10 Docker HTTP 01 Wait Ready + Keycloak"
+            ],
+            "type": "shell",
+            "command": "npm",
+            "args": [
+                "--prefix",
+                "automation",
+                "run",
+                "run:docker:dev:http:playwright-matrix"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Phase 10 Docker HTTP 05 Full Validation",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "1 Run: Phase 10 Docker HTTP 01 Wait Ready + Keycloak",
+                "1 Run: Phase 10 Docker HTTP 02 Playwright Smoke",
+                "1 Run: Phase 10 Docker HTTP 03 Integration Suite",
+                "1 Run: Phase 10 Docker HTTP 04 Payment Matrix"
+            ],
+            "group": "none",
             "problemMatcher": []
         },
         {
@@ -1406,6 +1643,15 @@
             "problemMatcher": []
         },
         {
+            "label": "Phase 10: Docker Dev HTTP Cleanup",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "3 Cleanup: Docker Dev HTTP 01 Profile"
+            ],
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
             "label": "3 Cleanup: Docker Dev HTTP 40 Full Validation",
             "dependsOrder": "sequence",
             "dependsOn": [
@@ -1908,6 +2154,101 @@
             "runOptions": {
                 "instanceLimit": 2
             },
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Internal: Start Phase 10 local stack",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "docker compose -f compose/docker-compose.phase10.yml --profile apps up -d --build"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "hide": true,
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Internal: Start Phase 10 local http stack",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/start-phase10-local-profile.ps1",
+                "-Profile",
+                "http",
+                "-ReturnWhenReady"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "hide": true,
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Internal: Build Phase 10 local stack",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "& { docker compose -f compose/docker-compose.phase10.yml --profile apps build }"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "hide": true,
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Internal: Stop Phase 10 local stack",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "docker compose -f compose/docker-compose.phase10.yml --profile apps down -v"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "hide": true,
+            "group": "none",
             "presentation": {
                 "reveal": "always",
                 "panel": "new",

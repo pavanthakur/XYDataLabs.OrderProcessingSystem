@@ -17,6 +17,24 @@ on:
         required: true
         default: 'centralindia'
         type: string
+      publicDomain:
+        description: 'Optional public DNS zone suffix used to build friendly aliases, e.g. contoso.com'
+        required: false
+        default: ''
+        type: string
+      bindAliases:
+        description: 'Enable friendly alias summary and binding hints'
+        required: false
+        default: false
+        type: boolean
+      aliasMode:
+        description: 'Friendly alias mode: direct ACA binding or front-door/DNS summary only'
+        required: false
+        default: 'direct'
+        type: choice
+        options:
+          - direct
+          - frontdoor
       dryRun:
         description: 'Dry run (what-if only)'
         required: true
@@ -175,6 +193,8 @@ jobs:
           INVENTORY_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.inventoryContainerAppName.value" -o tsv)
           NOTIFICATIONS_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.notificationsContainerAppName.value" -o tsv)
           UI_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.uiContainerAppName.value" -o tsv)
+          GATEWAY_FQDN=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.gatewayContainerAppFqdn.value" -o tsv)
+          UI_FQDN=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.uiContainerAppFqdn.value" -o tsv)
           FUNC_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.functionAppName.value" -o tsv)
           KV_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.keyVaultName.value" -o tsv)
           AI_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.appInsightsName.value" -o tsv)
@@ -188,9 +208,92 @@ jobs:
           echo "inventory=${INVENTORY_NAME}" >> $GITHUB_OUTPUT
           echo "notifications=${NOTIFICATIONS_NAME}" >> $GITHUB_OUTPUT
           echo "ui=${UI_NAME}" >> $GITHUB_OUTPUT
+          echo "gatewayFqdn=${GATEWAY_FQDN}" >> $GITHUB_OUTPUT
+          echo "uiFqdn=${UI_FQDN}" >> $GITHUB_OUTPUT
           echo "function=${FUNC_NAME}" >> $GITHUB_OUTPUT
           echo "keyvault=${KV_NAME}" >> $GITHUB_OUTPUT
           echo "insights=${AI_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Resolve Friendly Aliases
+        id: aliases
+        shell: bash
+        run: |
+          DOMAIN_SUFFIX="${{ inputs.publicDomain }}"
+          if [ "${{ inputs.bindAliases }}" = "true" ] && [ -z "$DOMAIN_SUFFIX" ]; then
+            echo "bindAliases is enabled but no publicDomain was provided."
+            echo "Provide a real domain suffix such as contoso.com so aliases can be bound correctly."
+            exit 1
+          fi
+          if [ -z "$DOMAIN_SUFFIX" ]; then
+            DOMAIN_SUFFIX="yourdomain.com"
+          fi
+
+          case "${{ steps.params.outputs.env }}" in
+            dev)
+              API_ALIAS="api-dev.${DOMAIN_SUFFIX}"
+              UI_ALIAS="ui-dev.${DOMAIN_SUFFIX}"
+              ;;
+            staging)
+              API_ALIAS="api-staging.${DOMAIN_SUFFIX}"
+              UI_ALIAS="ui-staging.${DOMAIN_SUFFIX}"
+              ;;
+            prod)
+              API_ALIAS="api.${DOMAIN_SUFFIX}"
+              UI_ALIAS="ui.${DOMAIN_SUFFIX}"
+              ;;
+            *)
+              echo "Unsupported environment: ${{ steps.params.outputs.env }}"
+              exit 1
+              ;;
+          esac
+
+          echo "apiAlias=${API_ALIAS}" >> $GITHUB_OUTPUT
+          echo "uiAlias=${UI_ALIAS}" >> $GITHUB_OUTPUT
+
+          echo "Friendly alias mapping:" >> $GITHUB_STEP_SUMMARY
+          echo "- API: ${API_ALIAS}" >> $GITHUB_STEP_SUMMARY
+          echo "- UI: ${UI_ALIAS}" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ inputs.bindAliases }}" = "true" ]; then
+            echo "Alias binding is enabled for this run. Use the friendly alias summary below to bind DNS or Front Door to the live ACA FQDNs." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Bind Friendly Aliases
+        if: ${{ inputs.bindAliases && inputs.aliasMode == 'direct' }}
+        shell: bash
+        run: |
+          RG_NAME="${{ steps.outputs.outputs.rg }}"
+          GW_APP="${{ steps.outputs.outputs.gateway }}"
+          UI_APP="${{ steps.outputs.outputs.ui }}"
+          API_ALIAS="${{ steps.aliases.outputs.apiAlias }}"
+          UI_ALIAS="${{ steps.aliases.outputs.uiAlias }}"
+
+          echo "Binding ${API_ALIAS} to ${GW_APP} in ${RG_NAME}..."
+          az containerapp hostname bind \
+            --resource-group "${RG_NAME}" \
+            --name "${GW_APP}" \
+            --hostname "${API_ALIAS}" \
+            --validation-method CNAME
+
+          echo "Binding ${UI_ALIAS} to ${UI_APP} in ${RG_NAME}..."
+          az containerapp hostname bind \
+            --resource-group "${RG_NAME}" \
+            --name "${UI_APP}" \
+            --hostname "${UI_ALIAS}" \
+            --validation-method CNAME
+
+          echo "Friendly alias bindings completed." >> $GITHUB_STEP_SUMMARY
+          echo "- API Alias bound to Gateway Container App" >> $GITHUB_STEP_SUMMARY
+          echo "- UI Alias bound to UI Container App" >> $GITHUB_STEP_SUMMARY
+
+      - name: Front Door / DNS Alias Guidance
+        if: ${{ inputs.bindAliases && inputs.aliasMode == 'frontdoor' }}
+        run: |
+          echo "Friendly alias mode: frontdoor" >> $GITHUB_STEP_SUMMARY
+          echo "Use the resolved friendly aliases below as the public names for Front Door or DNS CNAMEs." >> $GITHUB_STEP_SUMMARY
+          echo "- API origin: https://${{ steps.outputs.outputs.gatewayFqdn }}" >> $GITHUB_STEP_SUMMARY
+          echo "- UI origin: https://${{ steps.outputs.outputs.uiFqdn }}" >> $GITHUB_STEP_SUMMARY
+          echo "- API public name: https://${{ steps.aliases.outputs.apiAlias }}" >> $GITHUB_STEP_SUMMARY
+          echo "- UI public name: https://${{ steps.aliases.outputs.uiAlias }}" >> $GITHUB_STEP_SUMMARY
       
       - name: Deployment Summary
         run: |
@@ -212,11 +315,16 @@ jobs:
           echo "- **Inventory Container App:** ${{ steps.outputs.outputs.inventory }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Notifications Container App:** ${{ steps.outputs.outputs.notifications }}" >> $GITHUB_STEP_SUMMARY
           echo "- **UI Container App:** ${{ steps.outputs.outputs.ui }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Gateway URL:** https://${{ steps.outputs.outputs.gatewayFqdn }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **UI URL:** https://${{ steps.outputs.outputs.uiFqdn }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **API Alias:** https://${{ steps.aliases.outputs.apiAlias }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **UI Alias:** https://${{ steps.aliases.outputs.uiAlias }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Function App:** ${{ steps.outputs.outputs.function }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Key Vault:** ${{ steps.outputs.outputs.keyvault }}" >> $GITHUB_STEP_SUMMARY
           echo "- **App Insights:** ${{ steps.outputs.outputs.insights }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### ✅ Next Steps" >> $GITHUB_STEP_SUMMARY
           echo "1. Verify the outputs against the runbook." >> $GITHUB_STEP_SUMMARY
-          echo "2. Run the transport publish/consume smoke." >> $GITHUB_STEP_SUMMARY
-          echo "3. Run the replay smoke." >> $GITHUB_STEP_SUMMARY
+          echo "2. Bind the friendly aliases to the Container App FQDNs or Front Door." >> $GITHUB_STEP_SUMMARY
+          echo "3. Run the transport publish/consume smoke." >> $GITHUB_STEP_SUMMARY
+          echo "4. Run the replay smoke." >> $GITHUB_STEP_SUMMARY

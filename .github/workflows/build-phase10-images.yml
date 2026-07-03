@@ -1,0 +1,71 @@
+name: Build Phase 10 Service Images
+
+on:
+  workflow_dispatch:
+    inputs:
+      imageTag:
+        description: 'Image tag to publish'
+        required: true
+        default: 'phase10'
+        type: string
+  push:
+    branches: [dev, staging, main]
+    paths:
+      - 'XYDataLabs.OrderProcessingSystem.Gateway/**'
+      - 'XYDataLabs.OrderProcessingSystem.Orders.API/**'
+      - 'XYDataLabs.OrderProcessingSystem.Inventory.API/**'
+      - 'XYDataLabs.OrderProcessingSystem.Notifications.API/**'
+      - 'frontend/**'
+      - '.github/workflows/build-phase10-images.yml'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: gateway
+            image: ghcr.io/${{ github.repository_owner }}/orderprocessing-gateway
+            dockerfile: XYDataLabs.OrderProcessingSystem.Gateway/Dockerfile
+            context: .
+          - name: orders
+            image: ghcr.io/${{ github.repository_owner }}/orderprocessing-orders
+            dockerfile: XYDataLabs.OrderProcessingSystem.Orders.API/Dockerfile
+            context: .
+          - name: inventory
+            image: ghcr.io/${{ github.repository_owner }}/orderprocessing-inventory
+            dockerfile: XYDataLabs.OrderProcessingSystem.Inventory.API/Dockerfile
+            context: .
+          - name: notifications
+            image: ghcr.io/${{ github.repository_owner }}/orderprocessing-notifications
+            dockerfile: XYDataLabs.OrderProcessingSystem.Notifications.API/Dockerfile
+            context: .
+          - name: ui
+            image: ghcr.io/${{ github.repository_owner }}/orderprocessing-ui
+            dockerfile: frontend/apps/web/Dockerfile
+            context: .
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: |
+            ${{ matrix.image }}:${{ github.event_name == 'workflow_dispatch' && inputs.imageTag || github.sha }}
+            ${{ matrix.image }}:latest

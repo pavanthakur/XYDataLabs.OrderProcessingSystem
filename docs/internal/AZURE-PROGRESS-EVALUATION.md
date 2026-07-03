@@ -111,6 +111,7 @@
 - ✅ The first Phase 10 transport implementation pass is underway: Service Bus metadata mapping, replay-safe broker identity, DLQ replay worker behavior, a DLQ replay subscription, and the actual Service Bus connection path are being wired to the same transport-first contract.
 - ✅ The Service Bus module now stays focused on topology plus the transport auth rule and connection-string lookup, while `infra/main.phase10.bicep` consumes that module output for runtime wiring.
 - ✅ Azure naming for Phase 10 now follows the same environment-suffixed convention as the workflow stack, so deployment and Phase X cleanup stay symmetric across dev, staging, and prod.
+- ✅ Phase 10 Container Apps now require explicit image references instead of the old hello-world placeholder, so the gateway/UI health check can verify the real runtime image.
 - ✅ The supporting observability surface now includes a dedicated Log Analytics workspace so ACA logs and App Insights can share the same transport-slice workspace.
 - ✅ Phase 11 is explicitly framed as saga orchestration plus database-per-service autonomy, with Durable Functions versus custom process manager remaining an ADR-bound choice.
 - ✅ Phase 11.5 remains the bounded PostgreSQL portability proof for Notifications only.

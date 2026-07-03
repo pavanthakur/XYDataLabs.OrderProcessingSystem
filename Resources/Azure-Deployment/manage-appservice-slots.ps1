@@ -1,8 +1,8 @@
 <#
 .SYNOPSIS
-  Manage Azure App Service deployment slots (create, list, deploy, warmup, swap, rollback, delete).
+  Manage legacy Azure App Service deployment slots (create, list, deploy, warmup, swap, rollback, delete).
 .DESCRIPTION
-  Provides repeatable operations for blue/green or canary style deployments for a single Web App.
+  Provides repeatable operations for blue/green or canary style deployments for a single legacy Web App.
   Maintains a simple state file recording last successful swap for rollback.
 .PARAMETER ResourceGroup
   Resource group containing the Web App.

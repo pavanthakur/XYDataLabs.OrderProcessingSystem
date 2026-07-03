@@ -1,5 +1,5 @@
 ﻿# verify-azure-setup.ps1
-# Verify Azure resources and configuration for Order Processing System
+# Verify Azure resources and configuration for the legacy App Service path in Order Processing System
 
 param(
     [Parameter(Mandatory=$false)]
