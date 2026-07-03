@@ -1,5 +1,5 @@
 # provision-azure-sql.ps1
-# Automated Azure SQL Database provisioning for CI/CD pipelines
+# Automated Azure SQL Database provisioning for legacy App Service CI/CD pipelines
 # No manual steps required - fully automated deployment
 
 param(

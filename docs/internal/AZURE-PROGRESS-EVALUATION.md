@@ -50,7 +50,7 @@
 - ✅ Latest Phase 7 baseline validated on all three execution paths: local dev, Docker dev, and Azure dev
 - ✅ `verify-payment-run-physical.ps1` passed for local + Docker; `verify-payment-run-azure.ps1` passed for Azure
 - ✅ Azure Initial Setup now proven end-to-end: OIDC app registration, 6 federated credentials, environment-scoped `AZUREAPPSERVICE_*` secrets across dev/staging/prod, and repo-level `OIDC_SP_OBJECT_ID`
-- ✅ Azure Bootstrap & Deploy for dev succeeded end-to-end: infrastructure provisioned, API deployed, UI deployed, endpoints live
+- ✅ Legacy Azure Bootstrap & Deploy for dev succeeded end-to-end: infrastructure provisioned, API deployed, UI deployed, endpoints live. Current Phase 10 work uses `infra-deploy.yml` plus `build-phase10-images.yml` instead of extending that path.
 
 ### April 10, 2026 Planning Freeze — Phases 8-10
 
@@ -111,6 +111,7 @@
 - ✅ The first Phase 10 transport implementation pass is underway: Service Bus metadata mapping, replay-safe broker identity, DLQ replay worker behavior, a DLQ replay subscription, and the actual Service Bus connection path are being wired to the same transport-first contract.
 - ✅ The Service Bus module now stays focused on topology plus the transport auth rule and connection-string lookup, while `infra/main.phase10.bicep` consumes that module output for runtime wiring.
 - ✅ Azure naming for Phase 10 now follows the same environment-suffixed convention as the workflow stack, so deployment and Phase X cleanup stay symmetric across dev, staging, and prod.
+- ✅ Phase 10 Container Apps now require explicit image references instead of the old hello-world placeholder, so the gateway/UI health check can verify the real runtime image.
 - ✅ The supporting observability surface now includes a dedicated Log Analytics workspace so ACA logs and App Insights can share the same transport-slice workspace.
 - ✅ Phase 11 is explicitly framed as saga orchestration plus database-per-service autonomy, with Durable Functions versus custom process manager remaining an ADR-bound choice.
 - ✅ Phase 11.5 remains the bounded PostgreSQL portability proof for Notifications only.

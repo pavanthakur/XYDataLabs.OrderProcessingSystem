@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('local-http', 'local-https', 'docker-dev-http', 'docker-dev-http-tests', 'docker-dev-http-playwright', 'docker-dev-https', 'docker-stg-http', 'docker-stg-https', 'docker-prod-http', 'docker-prod-https', 'all-docker')]
+    [ValidateSet('local-http', 'local-https', 'phase10-local-http', 'phase10-docker-http', 'docker-dev-http', 'docker-dev-http-tests', 'docker-dev-http-playwright', 'docker-dev-https', 'docker-stg-http', 'docker-stg-https', 'docker-prod-http', 'docker-prod-https', 'all-docker')]
     [string]$Target,
 
     [string]$Url,
@@ -26,7 +26,13 @@ $workspaceRoot = Split-Path -Parent $PSScriptRoot
 $frontendRoot = Join-Path $workspaceRoot 'frontend'
 $webRoot = Join-Path $frontendRoot 'apps/web'
 $statusWriter = Join-Path $workspaceRoot 'scripts\write-playwright-run-status.ps1'
-$environmentKey = if ($Target -like 'docker-*') { 'docker-http' } elseif ($Target -eq 'local-https' -or $Url -like 'https://*') { 'local-https' } else { 'local-http' }
+$environmentKey = switch ($Target) {
+    'phase10-local-http' { 'phase10-local-http' }
+    'phase10-docker-http' { 'phase10-docker-http' }
+    default {
+        if ($Target -like 'docker-*') { 'docker-http' } elseif ($Target -eq 'local-https' -or $Url -like 'https://*') { 'local-https' } else { 'local-http' }
+    }
+}
 
 function Resolve-PlaywrightArtifactRootName
 {
@@ -39,6 +45,8 @@ function Resolve-PlaywrightArtifactRootName
     {
         'local-http' { return 'local-http' }
         'local-https' { return 'local-https' }
+        'phase10-local-http' { return 'phase10-local-http' }
+        'phase10-docker-http' { return 'phase10-docker-http' }
         'docker-dev-http' { return 'docker-dev-http' }
         'docker-dev-http-tests' { return 'docker-dev-http' }
         'docker-dev-http-playwright' { return 'docker-dev-http' }
@@ -54,6 +62,8 @@ function Resolve-PlaywrightArtifactRootName
 $knownTargets = [ordered]@{
     'local-http' = 'http://localhost:5173/customers'
     'local-https' = 'https://localhost:5174/customers'
+    'phase10-local-http' = 'http://localhost:5173/customers'
+    'phase10-docker-http' = 'http://localhost:5022/customers'
     'docker-dev-http' = 'http://localhost:5022/customers'
     'docker-dev-http-tests' = 'http://localhost:5022/customers'
     'docker-dev-http-playwright' = 'http://localhost:5022/customers'

@@ -1,6 +1,8 @@
 # GitHub Actions Workflows - CI/CD Automation
 
-This directory contains GitHub Actions workflows for automated CI/CD deployment to Azure App Services using OIDC authentication.
+This directory contains GitHub Actions workflows for automated CI/CD deployment across the historical App Service path and the current Phase 10 Azure Container Apps path using OIDC authentication.
+
+> **Phase 10 note:** The active deployment, image build, and validation flows are the container-app workflows (`infra-deploy.yml`, `build-phase10-images.yml`, and the Phase 10 smoke runbook). Legacy App Service workflows remain only for historical compatibility and should not be treated as the target runtime model for Phase 10.
 
 ## 📋 Overview
 
@@ -10,13 +12,14 @@ This repo uses a small set of primary operational workflows, with additional sup
 |----------|-------------|------------|-------------|
 | `ci.yml` | Pull requests to dev/staging/main | Validation only | PR build/test gate for the .NET solution plus React frontend typecheck, tests, and build |
 | `azure-initial-setup.yml` | Manual | One-time setup | **[See README-AZURE-INITIAL-SETUP.md](./README-AZURE-INITIAL-SETUP.md)** - Phase 0 (GitHub App), Phase 1a (OIDC), Phase 1b (secrets) |
-| `azure-bootstrap.yml` | Manual | Infrastructure + deploy | **[See README-AZURE-BOOTSTRAP.md](./README-AZURE-BOOTSTRAP.md)** - Phase 2 (infrastructure), API/UI deploy, Phase X (cleanup) |
+| `azure-bootstrap.yml` | Manual | Legacy App Service stack | **[See README-AZURE-BOOTSTRAP.md](./README-AZURE-BOOTSTRAP.md)** - Phase 2 (infrastructure), API/UI deploy, Phase X (cleanup) |
 | `configure-github-secrets.yml` | Called by initial-setup | Secret configuration | **[See README-CONFIGURE-GITHUB-SECRETS.md](./README-CONFIGURE-GITHUB-SECRETS.md)** - GitHub App setup and secret management (can run independently) |
-| `infra-deploy.yml` | Manual | dev/staging/prod | **[See README-INFRA-DEPLOY.md](./README-INFRA-DEPLOY.md)** - Deploys Bicep infrastructure with manual workflow dispatch |
+| `infra-deploy.yml` | Manual | dev/staging/prod | **[See README-INFRA-DEPLOY.md](./README-INFRA-DEPLOY.md)** - Deploys Phase 10 Bicep infrastructure with manual workflow dispatch, optional friendly alias planning, and guarded alias binding |
+| `build-phase10-images.yml` | Manual or push to service host paths | GHCR | Builds and pushes the Phase 10 container images for gateway, orders, inventory, notifications, and UI |
 | `validate-deployment.yml` | Called by infra-deploy | Reusable workflow | **[See README-VALIDATE-DEPLOYMENT.md](./README-VALIDATE-DEPLOYMENT.md)** - Pre-deployment validation workflow |
 | `test-validate-deployment.yml` | Manual or PR changes | Test only | **[Quick Start](./QUICK-START-TEST-VALIDATION.md)** \| **[Full Docs](./README-TEST-VALIDATE-DEPLOYMENT.md)** - Tests validation workflow independently |
-| `deploy-api-to-azure.yml` | API/Backend code changes | All branches (dev/staging/main) | Builds and deploys API to environment-specific Azure Web App |
-| `deploy-ui-to-azure.yml` | React frontend changes | All branches (dev/staging/main) | Builds and deploys the React frontend to the environment-specific Azure UI App Service, then runs a browser smoke check against the deployed tenant bootstrap flow |
+| `deploy-api-to-azure.yml` | API/Backend code changes | All branches (dev/staging/main) | Legacy App Service deployment path for the API |
+| `deploy-ui-to-azure.yml` | React frontend changes | All branches (dev/staging/main) | Legacy App Service deployment path for the UI, including browser smoke against the tenant bootstrap flow |
 | `publish-template-package.yml` | Manual | Artifact only or package registry | **[See README-PUBLISH-TEMPLATE-PACKAGE.md](./README-PUBLISH-TEMPLATE-PACKAGE.md)** - Packs `XYDataLabs.SaaS.Templates`, validates the packaged `dotnet new` smoke flow, uploads the `.nupkg`, and optionally publishes it |
 | `validate-template-package-governance.yml` | Pull requests for Layer 1 template changes, or manual | Validation only | **[See README-VALIDATE-TEMPLATE-PACKAGE-GOVERNANCE.md](./README-VALIDATE-TEMPLATE-PACKAGE-GOVERNANCE.md)** - Forces a `PackageVersion` decision for Layer 1 template changes and runs packaged smoke validation |
 | `validate-adrs.yml` | ADR file, script, or lint config changes | Push/PR to main/dev/staging, or manual | **[See README-VALIDATE-ADRS.md](./README-VALIDATE-ADRS.md)** — Validates ADR filename pattern, H1 heading, `**Status:**` frontmatter, and markdownlint rules |
@@ -31,16 +34,17 @@ This repo uses a small set of primary operational workflows, with additional sup
 |----------|------|
 | `ci.yml` | PR gate for build and unit/architecture test validation |
 | `azure-initial-setup.yml` | One-time repository and OIDC bootstrap |
-| `azure-bootstrap.yml` | Main day-to-day environment bootstrap and coordinated deployment entrypoint |
-| `deploy-api-to-azure.yml` | Normal API deployment path for code changes |
-| `deploy-ui-to-azure.yml` | Active React frontend deployment path for the Azure UI App Service |
+| `azure-bootstrap.yml` | Legacy App Service day-to-day environment bootstrap and coordinated deployment entrypoint |
+| `build-phase10-images.yml` | Phase 10 container image build/push entrypoint for GHCR |
+| `deploy-api-to-azure.yml` | Legacy API deployment path retained for the App Service stack |
+| `deploy-ui-to-azure.yml` | Legacy React frontend deployment path retained for the App Service stack |
 
 **Support workflows** exist for specialized validation, secondary entrypoints, or troubleshooting rather than the default delivery path:
 
 | Workflow | Role |
 |----------|------|
 | `configure-github-secrets.yml` | Secondary/manual secret configuration and GitHub App troubleshooting path |
-| `infra-deploy.yml` | Infra-only Bicep deployment entrypoint |
+| `infra-deploy.yml` | Phase 10 infra-only Bicep deployment entrypoint with env-aware alias planning |
 | `publish-template-package.yml` | Manual package publication path for the Layer 1 `dotnet new` template after packaged smoke validation |
 | `validate-template-package-governance.yml` | Automatic PR guardrail that requires a package-version decision and packaged smoke validation for Layer 1 template changes |
 | `validate-deployment.yml` | Reusable preflight validation called by infra deployment |
@@ -56,6 +60,21 @@ This repo uses a small set of primary operational workflows, with additional sup
 | `dev` | orderprocessing-api-xyapp-dev | orderprocessing-ui-xyapp-dev |
 | `staging` | orderprocessing-api-xyapp-stg | orderprocessing-ui-xyapp-stg |
 | `main` | orderprocessing-api-xyapp-prod | orderprocessing-ui-xyapp-prod |
+
+The table above intentionally shows both surfaces. The legacy App Service workflows remain for historical compatibility, while Phase 10 infra publishes Container Apps plus ingress endpoints from the Bicep deployment summary, and `build-phase10-images.yml` publishes the distinct gateway/orders/inventory/notifications/UI runtime images for those apps.
+
+When running `infra-deploy.yml`, the key manual inputs are:
+
+| Input | Purpose |
+|-------|---------|
+| `environment` | Selects `dev`, `staging`, or `prod` |
+| `location` | Azure region for the deployment |
+| `dryRun` | Runs what-if only when enabled |
+| `publicDomain` | Optional DNS suffix for friendly aliases such as `api-dev.contoso.com` |
+| `bindAliases` | Enables alias planning and direct binding checks |
+| `aliasMode` | Chooses either `direct` ACA custom-domain binding or `frontdoor` alias planning |
+
+If `bindAliases=true`, supply a real `publicDomain`. The workflow will fail fast instead of using a placeholder domain.
 
 Workflow YAML still enforces this policy explicitly.
 Azure deployment scripts consume the same defaults from `Resources/Azure-Deployment/branch-policy.json`; if governance changes, update the workflow guards and the shared policy file together.
@@ -109,6 +128,11 @@ Workflows trigger automatically based on **what code changed**:
 git add XYDataLabs.OrderProcessingSystem.API/
 git commit -m "feat: Update API endpoint"
 git push origin dev  # Deploys API only to dev environment
+
+# Change a Phase 10 service host and push → triggers build-phase10-images.yml
+git add XYDataLabs.OrderProcessingSystem.Orders.API/
+git commit -m "feat: Update Orders host"
+git push origin dev  # Builds and pushes the Orders image to GHCR
 
 # Change React web code and push → triggers deploy-ui-to-azure.yml
 git add frontend/
@@ -409,7 +433,9 @@ After infrastructure is deployed:
 
 3. **Monitor workflow**: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions
 
-4. **Verify deployment**: https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net
+4. **Verify deployment**:
+   - Legacy App Service URL if you are exercising the old stack
+   - Phase 10 Container Apps ingress URL from the infra deployment summary if you are exercising the current stack
 
 5. **Promote to staging** (after dev validation):
    ```bash

@@ -1,5 +1,5 @@
-# GitHub Actions OIDC Setup for Azure App Service Deployment
-# Run this script once to configure federated identity credentials
+# GitHub Actions OIDC Setup for legacy Azure App Service Deployment
+# Run this script once to configure federated identity credentials for the legacy App Service path
 #
 # IMPORTANT: After running this script, you MUST:
 # 1. Add the three secrets to GitHub repository secrets (Settings → Secrets and variables → Actions)

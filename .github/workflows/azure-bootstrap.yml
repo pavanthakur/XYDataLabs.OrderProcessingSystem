@@ -212,7 +212,7 @@ jobs:
           $phaseXIcon = if ($doCleanup) { '🔴 WILL RUN (⚠️ DESTRUCTIVE — IRREVERSIBLE)' } else { '⏭️  SKIPPED' }
           Write-Host "  Phase X — Cleanup Infrastructure   : $phaseXIcon" -ForegroundColor $(if ($doCleanup) { 'Red' } else { 'DarkGray' })
           if ($doCleanup) {
-            Write-Host "             └─ ⚠️  Deletes: UI App Service, API App Service, then entire Resource Group" -ForegroundColor Red
+            Write-Host "             └─ ⚠️  Deletes: Phase 10 apps, then entire Resource Group" -ForegroundColor Red
             Write-Host "             └─ All SQL, Key Vault, App Insights, ASP removed with Resource Group" -ForegroundColor Red
             Write-Host "             └─ Azure auth: environment-scoped AZUREAPPSERVICE_* secrets" -ForegroundColor Green
             if ($doBootstrap) {
@@ -612,8 +612,8 @@ jobs:
             Write-Host "  Resource Group: rg-orderprocessing-dev" -ForegroundColor Gray
             Write-Host "  SQL Server: orderprocessing-sql-dev" -ForegroundColor Gray
             Write-Host "  Database: OrderProcessingSystem_Dev" -ForegroundColor Gray
-            Write-Host "  API App: ${{ github.repository_owner }}-orderprocessing-api-xyapp-dev" -ForegroundColor Gray
-            Write-Host "  UI App: ${{ github.repository_owner }}-orderprocessing-ui-xyapp-dev" -ForegroundColor Gray
+            Write-Host "  API App: orderprocessing-api-dev" -ForegroundColor Gray
+            Write-Host "  UI App : orderprocessing-ui-dev" -ForegroundColor Gray
             Write-Host ""
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
             Write-Host ""
@@ -631,7 +631,7 @@ jobs:
             $sqlAdminPassword = $null
             
             # The provision script is idempotent - it creates SQL Server/Database if they don't exist
-            # and configures connection strings on the App Services
+            # and configures connection strings on the current app services
             # Note: Script probes SQL connectivity after creating firewall rules (exits early on success, max 5 min)
             ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment dev -BaseName orderprocessing -Location centralindia -GitHubOwner '${{ github.repository_owner }}' -AdminPassword $sqlAdminPasswordSecure
             
@@ -719,7 +719,7 @@ jobs:
             
             # Populate secrets - script will auto-retrieve App Insights connection string
             # OPENPAY_* / RAZORPAY_* must be set as GitHub environment secrets before running
-            # bootstrap. RedirectUrl is derived automatically from the App Service naming convention.
+            # bootstrap. RedirectUrl is derived automatically from the environment-suffixed naming convention.
             ./Resources/Azure-Deployment/populate-keyvault-secrets.ps1 `
               -Environment dev `
               -BaseName orderprocessing `
@@ -965,7 +965,7 @@ jobs:
             exit 1
           }
 
-      - name: Configure App Service Environment
+      - name: Configure App Environment
         if: success()
         run: |
           Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
@@ -1418,8 +1418,8 @@ jobs:
             Write-Host "  Resource Group: rg-orderprocessing-stg" -ForegroundColor Gray
             Write-Host "  SQL Server: orderprocessing-sql-stg" -ForegroundColor Gray
             Write-Host "  Database: OrderProcessingSystem_Staging" -ForegroundColor Gray
-            Write-Host "  API App: ${{ github.repository_owner }}-orderprocessing-api-xyapp-stg" -ForegroundColor Gray
-            Write-Host "  UI App: ${{ github.repository_owner }}-orderprocessing-ui-xyapp-stg" -ForegroundColor Gray
+            Write-Host "  API App: orderprocessing-api-stg" -ForegroundColor Gray
+            Write-Host "  UI App : orderprocessing-ui-stg" -ForegroundColor Gray
             Write-Host ""
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
             Write-Host ""
@@ -1437,7 +1437,7 @@ jobs:
             $sqlAdminPassword = $null
             
             # The provision script is idempotent - it creates SQL Server/Database if they don't exist
-            # and configures connection strings on the App Services
+            # and configures connection strings on the current app services
             # Note: Script probes SQL connectivity after creating firewall rules (exits early on success, max 5 min)
             ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment staging -BaseName orderprocessing -Location centralindia -GitHubOwner '${{ github.repository_owner }}' -AdminPassword $sqlAdminPasswordSecure
             
@@ -1771,7 +1771,7 @@ jobs:
             exit 1
           }
 
-      - name: Configure App Service Environment
+      - name: Configure App Environment
         if: success()
         run: |
           Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
@@ -2219,8 +2219,8 @@ jobs:
             Write-Host "  Resource Group: rg-orderprocessing-prod" -ForegroundColor Gray
             Write-Host "  SQL Server: orderprocessing-sql-prod" -ForegroundColor Gray
             Write-Host "  Database: OrderProcessingSystem_Prod" -ForegroundColor Gray
-            Write-Host "  API App: ${{ github.repository_owner }}-orderprocessing-api-xyapp-prod" -ForegroundColor Gray
-            Write-Host "  UI App: ${{ github.repository_owner }}-orderprocessing-ui-xyapp-prod" -ForegroundColor Gray
+            Write-Host "  API App: orderprocessing-api-prod" -ForegroundColor Gray
+            Write-Host "  UI App : orderprocessing-ui-prod" -ForegroundColor Gray
             Write-Host ""
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
             Write-Host ""
@@ -2238,7 +2238,7 @@ jobs:
             $sqlAdminPassword = $null
             
             # The provision script is idempotent - it creates SQL Server/Database if they don't exist
-            # and configures connection strings on the App Services
+            # and configures connection strings on the current app services
             # Note: Script probes SQL connectivity after creating firewall rules (exits early on success, max 5 min)
             ./Resources/Azure-Deployment/provision-azure-sql.ps1 -Environment prod -BaseName orderprocessing -Location centralindia -GitHubOwner '${{ github.repository_owner }}' -AdminPassword $sqlAdminPasswordSecure
             
@@ -2570,7 +2570,7 @@ jobs:
             exit 1
           }
 
-      - name: Configure App Service Environment
+      - name: Configure App Environment
         if: success()
         run: |
           Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
@@ -2634,9 +2634,9 @@ jobs:
 
   # ─────────────────────────────────────────────────────────────────────────────
   # PHASE X — CLEANUP JOBS (DESTRUCTIVE)
-  # Deletes the app-layer services first, then deletes the entire
+  # Deletes the current app-layer services first, then deletes the entire
   # environment-specific Resource Group so every Azure resource created by
-  # the matching deployment path is removed in one teardown flow.
+  # the current deployment path is removed in one teardown flow.
   # Uses the same OIDC credential pattern as bootstrap jobs.
   # ─────────────────────────────────────────────────────────────────────────────
 
@@ -3042,7 +3042,7 @@ jobs:
           "| Resource | Automated? | Trigger |" >> $env:GITHUB_STEP_SUMMARY
           "|----------|-----------|---------|" >> $env:GITHUB_STEP_SUMMARY
           "| 🔑 OIDC + GitHub Secrets | ✅ Prerequisite | 'Azure Initial Setup' workflow |" >> $env:GITHUB_STEP_SUMMARY
-          "| ☁️ Azure Resource Groups + App Services | ✅ Yes | Bootstrap Infrastructure = true |" >> $env:GITHUB_STEP_SUMMARY
+          "| ☁️ Azure Resource Groups + App Layers | ✅ Yes | Bootstrap Infrastructure = true |" >> $env:GITHUB_STEP_SUMMARY
           "| 🗄️ Azure SQL Database | ✅ Yes | Bootstrap Infrastructure = true |" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
           "### 🗑️ What Can Be Safely Deleted and Re-Created" >> $env:GITHUB_STEP_SUMMARY
@@ -3285,11 +3285,7 @@ jobs:
               }
             });
 
-            // Build Azure app URLs (staging env uses 'stg' suffix in resource names)
-            const owner     = context.repo.owner.toLowerCase();
-            const envSuffix = targetEnv === 'staging' ? 'stg' : targetEnv;
-            const apiUrl    = `https://${owner}-orderprocessing-api-xyapp-${envSuffix}.azurewebsites.net/swagger`;
-            const uiUrl     = `https://${owner}-orderprocessing-ui-xyapp-${envSuffix}.azurewebsites.net`;
+            core.notice(`Phase 10 endpoints are published from the infra deployment summary.`);
 
             // Expose outputs so the Bootstrap Summary job can embed run links and URLs
             if (deployApi) {
@@ -3300,8 +3296,8 @@ jobs:
               core.setOutput('ui_run_url',     uiRun ? uiRun.html_url     : '');
               core.setOutput('ui_run_number',  uiRun ? String(uiRun.run_number)  : '');
             }
-            core.setOutput('api_url', deployApi ? apiUrl : '');
-            core.setOutput('ui_url',  deployUi  ? uiUrl  : '');
+            core.setOutput('api_url', '');
+            core.setOutput('ui_url',  '');
             core.setOutput('errors',  errors.join('\n'));
 
             if (errors.length > 0) {

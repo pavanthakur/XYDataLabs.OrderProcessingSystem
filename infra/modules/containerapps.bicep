@@ -48,13 +48,27 @@ param maxDeliveryCount int = 10
 @description('Message TTL in ISO 8601 duration format')
 param messageTtl string = 'P7D'
 
+@description('Gateway container image reference')
+param gatewayImage string
+
+@description('Orders container image reference')
+param ordersImage string
+
+@description('Inventory container image reference')
+param inventoryImage string
+
+@description('Notifications container image reference')
+param notificationsImage string
+
+@description('UI container image reference')
+param uiImage string
+
 var environmentName = 'aca-${baseName}-${environment}'
 var gatewayName = '${baseName}-gate-${environment}'
 var ordersName = '${baseName}-ord-${environment}'
 var inventoryName = '${baseName}-inv-${environment}'
 var notificationsName = '${baseName}-notif-${environment}'
 var uiName = '${baseName}-ui-${environment}'
-var defaultImage = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 var commonEnv = [
   {
     name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
@@ -148,7 +162,7 @@ resource gatewayApp 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'gateway'
-          image: defaultImage
+          image: gatewayImage
           env: commonEnv
           resources: {
             cpu: json(cpuCores)
@@ -178,7 +192,7 @@ resource ordersApp 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'orders'
-          image: defaultImage
+          image: ordersImage
           env: concat(commonEnv, publisherEnv)
           resources: {
             cpu: json(cpuCores)
@@ -202,7 +216,7 @@ resource inventoryApp 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'inventory'
-          image: defaultImage
+          image: inventoryImage
           env: concat(commonEnv, inventoryEnv)
           resources: {
             cpu: json(cpuCores)
@@ -226,7 +240,7 @@ resource notificationsApp 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'notifications'
-          image: defaultImage
+          image: notificationsImage
           env: concat(commonEnv, notificationsEnv)
           resources: {
             cpu: json(cpuCores)
@@ -256,7 +270,7 @@ resource uiApp 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'ui'
-          image: defaultImage
+          image: uiImage
           env: commonEnv
           resources: {
             cpu: json(cpuCores)
@@ -274,6 +288,8 @@ output ordersContainerAppName string = ordersApp.name
 output inventoryContainerAppName string = inventoryApp.name
 output notificationsContainerAppName string = notificationsApp.name
 output uiContainerAppName string = uiApp.name
+output gatewayContainerAppFqdn string = gatewayApp.properties.configuration.ingress.fqdn
+output uiContainerAppFqdn string = uiApp.properties.configuration.ingress.fqdn
 output gatewayPrincipalId string = gatewayApp.identity.principalId
 output ordersPrincipalId string = ordersApp.identity.principalId
 output inventoryPrincipalId string = inventoryApp.identity.principalId

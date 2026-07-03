@@ -16,12 +16,25 @@ builder.Logging.SetMinimumLevel(LogLevel.Information);
 var allowedHosts = builder.Configuration
     .GetSection("Gateway:AllowedHosts")
     .Get<string[]>() ?? ["localhost", "orders.localhost", "inventory.localhost", "notifications.localhost", "ui.localhost"];
+var allowedOrigins = builder.Configuration
+    .GetSection("Gateway:AllowedOrigins")
+    .Get<string[]>() ?? ["http://localhost:5022", "http://localhost:5173"];
 var maxRequestBodySizeBytes = builder.Configuration.GetValue<long>("Gateway:MaxRequestBodySizeBytes", 1048576L);
 
 builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks();
 builder.AddServiceDefaults("XYDataLabs.OrderProcessingSystem.Gateway");
 builder.Services.AddAuthorization();
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("local-phase10-browser", policy =>
+    {
+        policy.WithOrigins(allowedOrigins)
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
+    });
+});
 
 var identityProviderSection = builder.Configuration.GetSection("IdentityProvider");
 var identityEnabled = identityProviderSection.GetValue("Enabled", false);
@@ -70,6 +83,7 @@ var app = builder.Build();
 
 app.UseExceptionHandler();
 app.UseForwardedHeaders();
+app.UseCors("local-phase10-browser");
 if (identityEnabled)
 {
     app.UseAuthentication();

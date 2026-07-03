@@ -126,7 +126,7 @@ All workflows live in `.github/workflows/`. Each has a companion `README-*.md` i
 |---------------|------|---------|---------|
 | `ci.yml` | CI - Build and Test | Pull requests to dev/staging/main | PR validation gate: restore, build, and run unit/architecture tests before merge. |
 | `azure-initial-setup.yml` | Azure Initial Setup | Manual dispatch | **One-time setup**: Phase 0 (GitHub App), Phase 1a (OIDC), Phase 1b (secrets). Run once per repository. |
-| `azure-bootstrap.yml` | Azure Bootstrap & Deploy | Manual dispatch | **Day-to-day**: Phase 2 (infrastructure), API/UI deploy, Phase X (cleanup). Requires Initial Setup first. |
+| `azure-bootstrap.yml` | Azure Bootstrap & Deploy | Manual dispatch | **Legacy App Service day-to-day**: Phase 2 (infrastructure), API/UI deploy, Phase X (cleanup). Requires Initial Setup first. |
 | `configure-github-secrets.yml` | Configure GitHub Secrets | Called by initial-setup | GitHub App validation, OIDC secret configuration (can run independently for troubleshooting). |
 | `infra-deploy.yml` | Deploy Azure Infrastructure | Push to dev/staging/main or manual | Deploys Bicep IaC with what-if dry-run support. |
 | `validate-deployment.yml` | Pre-Deployment Validation | Called by `infra-deploy` or manually | Reusable workflow: Bicep what-if, OIDC verification, SharedSettings diff. |
@@ -143,8 +143,9 @@ All workflows live in `.github/workflows/`. Each has a companion `README-*.md` i
 
 | Category | Workflows | Usage |
 |----------|-----------|-------|
-| **Primary** | `ci.yml`, `azure-initial-setup.yml`, `azure-bootstrap.yml`, `deploy-api-to-azure.yml`, `deploy-ui-to-azure.yml` | Default paths for PR validation, initial setup, day-to-day deployment, and normal API/UI delivery |
-| **Support** | `configure-github-secrets.yml`, `infra-deploy.yml`, `publish-template-package.yml`, `validate-template-package-governance.yml`, `validate-deployment.yml`, `test-validate-deployment.yml`, `validate-ai-customization.yml`, `validate-adrs.yml`, `validate-doc-links.yml` | Secondary validation, infra-only entrypoints, package publication, troubleshooting, and governance guardrails |
+| **Primary** | `ci.yml`, `azure-initial-setup.yml`, `infra-deploy.yml`, `build-phase10-images.yml` | Default paths for PR validation, initial setup, current Phase 10 deployment, and container image delivery |
+| **Legacy / compatibility** | `azure-bootstrap.yml`, `deploy-api-to-azure.yml`, `deploy-ui-to-azure.yml` | Legacy App Service deployment and cleanup path retained for historical compatibility |
+| **Support** | `configure-github-secrets.yml`, `publish-template-package.yml`, `validate-template-package-governance.yml`, `validate-deployment.yml`, `test-validate-deployment.yml`, `validate-ai-customization.yml`, `validate-adrs.yml`, `validate-doc-links.yml` | Secondary validation, package publication, troubleshooting, and governance guardrails |
 
 ### Branch → Environment Mapping
 
@@ -161,7 +162,9 @@ Setup and day-to-day operations are split into two focused workflows:
 | Workflow | Phases | Default inputs |
 |----------|--------|---------------|
 | **Azure Initial Setup** (`azure-initial-setup.yml`) | Phase 0, 1a, 1b | All enabled, environment=`all` |
-| **Azure Bootstrap & Deploy** (`azure-bootstrap.yml`) | Phase 2, Deploy, Phase X | All enabled except cleanup, environment=`dev` |
+| **Azure Bootstrap & Deploy** (`azure-bootstrap.yml`) | Phase 2, Deploy, Phase X | Legacy App Service path; all enabled except cleanup, environment=`dev` |
+
+| **Deploy Azure Infrastructure** (`infra-deploy.yml`) | Phase 10 infra | Current Container Apps path; environment=`dev`, `staging`, or `prod` |
 
 Phase details, OIDC setup steps, deployment guard, and secrets reference: see `.github/workflows/README-AZURE-INITIAL-SETUP.md` and `README-AZURE-BOOTSTRAP.md`.
 

@@ -3,6 +3,8 @@
 
 All commands in one place. Also available as topic-specific deep dives in this canonical `docs/reference/` subtree:
 
+> **Current Phase 10 note:** The legacy Azure Bootstrap & Deploy workflow references in this guide are historical. For the active container-app path, use `infra-deploy.yml`, `build-phase10-images.yml`, and the Phase 10 smoke runbook.
+
 | Topic | File |
 |-------|------|
 | Git, validation, daily workflow | [git-workflow.md](git-workflow.md) |

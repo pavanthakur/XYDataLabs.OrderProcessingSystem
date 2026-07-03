@@ -5,7 +5,7 @@ Canonical guidance for application secrets, Azure Key Vault usage, and deploymen
 Use these documents:
 
 - `key-vault-integration.md` — Key Vault integration, secret naming, and runtime loading behavior
-- `appservice-secrets-guide.md` — required Azure App Service deployment secrets and OIDC setup expectations
+- `appservice-secrets-guide.md` — legacy Azure App Service deployment secrets and OIDC setup expectations; current Phase 10 container-app deployment uses `infra-deploy.yml` plus the image build workflow
 - `app-insights-automated-setup.md` — automated Application Insights setup and telemetry configuration guidance
 - `quick-setup-github-app.md` — fast-start GitHub App setup guidance for repository automation
 - `github-app-authentication.md` — detailed GitHub App authentication and token flow reference

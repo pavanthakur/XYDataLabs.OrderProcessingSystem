@@ -2,7 +2,10 @@
 
 ## 🗺️ High-Level Summary
 
-The bootstrap process uses **two GitHub Actions workflows** that together take a brand-new repository from zero to a fully deployed Azure environment:
+The bootstrap process uses **two GitHub Actions workflows** that together take a brand-new repository from zero to a fully deployed Azure environment.
+
+This guide still reflects the older App Service bootstrap surface in several walkthrough sections, but the current Phase 10 operational path is documented in the Phase 10 runbook and infra deployment summary.
+If you are working on the current container-app stack, treat this as legacy bootstrap reference and use `infra-deploy.yml` plus the Phase 10 image build workflow for the active path.
 
 | Workflow | File | Purpose |
 |----------|------|---------|
@@ -763,15 +766,31 @@ Watch Actions → the `deploy-api-to-azure.yml` workflow should trigger and succ
 ## 🚀 Next Steps After Bootstrap
 
 1. **Verify live endpoints**
-   - Dev API: https://orderprocessing-api-dev.azurewebsites.net
-   - Dev UI: https://orderprocessing-ui-dev.azurewebsites.net
+   - Phase 10 API: the Gateway Container App ingress URL from the infra deployment summary
+   - Phase 10 UI: the UI Container App ingress URL from the infra deployment summary
+   - Legacy App Service URLs remain only for the older deployment path
 
-2. **Enable continuous deployment**  
-   Push to `dev` → auto-deploys to dev environment.  
-   Push to `main` → auto-deploys to prod environment.
+2. **Use local Docker as the image preflight**
+   - Before pushing a new Phase 10 image set to Azure, validate the same service host set locally with `.\Resources\Docker\start-docker.ps1 -Environment dev -Profile http`
+   - If you are changing the new container images, prefer a clean rebuild first with `-Reset` so the local run catches stale-image issues before Azure does
+   - This is the fastest way to verify the new gateway/orders/inventory/notifications/UI image split before the cloud deploy
 
-3. **Add Application Insights telemetry**  
+3. **Enable continuous deployment**
+   - For the legacy App Service path, push to `dev` or `main` to trigger the corresponding App Service deploy workflow.
+   - For the current Phase 10 path, update the container-image and infra workflows, then use the Phase 10 deployment summary and smoke runbook as the verification loop.
+
+4. **Add Application Insights telemetry**  
   Follow: `docs/guides/configuration/app-insights-automated-setup.md`
+
+5. **Make the Azure URLs friendlier**
+   - The default `azurecontainerapps.io` hostnames are platform-generated and intentionally long
+   - For human-friendly URLs, add custom domains to the Container Apps or place Front Door/Application Gateway in front of them
+   - Suggested pattern:
+     - `api-dev.<your-domain>`
+     - `ui-dev.<your-domain>`
+   - If you want one public front door, route `/` to UI and `/api` to the gateway
+   - This is the Container Apps equivalent of the old App Service naming style, where the app name stayed readable but the public URL was aliased to your own domain
+   - The aliasing recommendation applies to the current Phase 10 stack; the old App Service URLs remain only as historical references
 
 ---
 

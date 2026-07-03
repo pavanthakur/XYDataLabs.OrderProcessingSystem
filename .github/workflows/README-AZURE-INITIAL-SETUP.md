@@ -4,13 +4,13 @@ One-time setup workflow that configures the GitHub App, Azure OIDC trust, and Gi
 
 ## 🎯 Purpose
 
-This workflow (`azure-initial-setup.yml`) handles all **one-time prerequisite setup** that must complete before the [Azure Bootstrap & Deploy](README-AZURE-BOOTSTRAP.md) workflow can run. It sequences:
+This workflow (`azure-initial-setup.yml`) handles all **one-time prerequisite setup** that must complete before the current Phase 10 deployment path can run. The legacy [Azure Bootstrap & Deploy](README-AZURE-BOOTSTRAP.md) workflow is retained only for historical App Service references; the active path is `infra-deploy.yml` plus `build-phase10-images.yml`. It sequences:
 
 - **Phase 0** — GitHub App instructions (manual prerequisite)
 - **Phase 1a** — Azure AD App Registration + OIDC federated credentials
 - **Phase 1b** — GitHub environment secrets (`AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID`)
 
-> **Run this workflow once per repository.** After it completes, use the **Azure Bootstrap & Deploy** workflow for all infrastructure provisioning and deployments.
+> **Run this workflow once per repository.** After it completes, use the Phase 10 infrastructure and image workflows for current deployments. Only use **Azure Bootstrap & Deploy** if you are maintaining the legacy App Service path.
 
 ---
 
@@ -53,7 +53,7 @@ See [quick-setup-github-app.md](../../docs/guides/configuration/quick-setup-gith
 
 > ℹ️ Some Azure CLI versions still show the older alias `https://microsoft.com/devicelogin`. Either URL is valid.
 
-After completion, proceed to the **Azure Bootstrap & Deploy** workflow for infrastructure.
+After completion, proceed to the current Phase 10 infrastructure workflow for the transport stack.
 
 > ⚠️ **Before running Bootstrap**: You must also add the payment provider secrets manually to each target **GitHub environment**: `OPENPAY_MERCHANT_ID`, `OPENPAY_PUBLIC_KEY`, `OPENPAY_PRIVATE_KEY`, `OPENPAY_DEVICE_SESSION_ID`, `RAZORPAY_MERCHANT_ID`, and `RAZORPAY_PRIVATE_KEY`. These are payment credentials that must never pass through workflow inputs. The target bootstrap job will fail immediately with guidance if any are missing.
 
@@ -144,7 +144,8 @@ If the same error still appears after propagation, add `Directory.Read.All`, gra
 
 | Workflow | Purpose |
 |----------|---------|
-| [Azure Bootstrap & Deploy](README-AZURE-BOOTSTRAP.md) | Infrastructure provisioning + deployment (Phase A/X) — run **after** this workflow |
+| [Azure Bootstrap & Deploy](README-AZURE-BOOTSTRAP.md) | Legacy App Service infrastructure provisioning + deployment (Phase A/X) — use only for the archived path |
+| Phase 10 Infra Deploy (`infra-deploy.yml`) | Current Azure Container Apps infrastructure deployment — run after initial setup |
 | [Configure GitHub Secrets](README-CONFIGURE-GITHUB-SECRETS.md) | Reusable workflow called by Phase 1b |
 
 ---

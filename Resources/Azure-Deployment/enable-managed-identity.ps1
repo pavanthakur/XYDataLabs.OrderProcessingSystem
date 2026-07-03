@@ -1,6 +1,6 @@
 ﻿# enable-managed-identity.ps1
-# Enable System-Assigned Managed Identity for App Services and grant Key Vault access
-# This script addresses the issue where Managed Identity is not assigned or doesn't have Key Vault access
+# Enable System-Assigned Managed Identity for legacy App Services and grant Key Vault access
+# This script addresses the issue where Managed Identity is not assigned or doesn't have Key Vault access on the legacy path
 
 param(
     [Parameter(Mandatory=$true)]

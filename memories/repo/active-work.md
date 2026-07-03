@@ -20,6 +20,7 @@
   - Phase 10 ACA abbreviations are `gate`, `ord`, `inv`, `notif`, and `ui`
   - Phase X cleanup in `azure-bootstrap.yml` is the matching teardown for the same environment stack
   - Service Bus and related transport names in Phase 10 should also carry the environment suffix so deploy and cleanup stay aligned
+- Phase 10 deployment summaries should publish Container App ingress URLs for the gateway and UI; old `azurewebsites.net` links are legacy App Service paths.
 - Going forward, any new Azure service, queue, topic, subscription, or similar infra should follow the same `appname-env` pattern for easy identification and cleanup.
 
 ## If returning after a long gap

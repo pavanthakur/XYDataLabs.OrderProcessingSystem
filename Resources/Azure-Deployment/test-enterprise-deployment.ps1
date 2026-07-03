@@ -1,8 +1,8 @@
 <#
 .SYNOPSIS
-  End-to-end test orchestrator for enterprise Azure deployment tooling.
+  End-to-end test orchestrator for legacy Azure deployment tooling.
 .DESCRIPTION
-  Provisions infrastructure, tests OIDC, App Insights, slots, then optionally cleans up.
+  Provisions legacy App Service infrastructure, tests OIDC, App Insights, slots, then optionally cleans up.
   Logs all steps and validates success criteria. Safe for dry-run mode.
 .PARAMETER SubscriptionId
   Azure subscription ID (uses current context if omitted).

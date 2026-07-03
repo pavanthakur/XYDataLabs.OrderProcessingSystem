@@ -4,10 +4,10 @@
 
 **Last Updated**: November 23, 2025  
 **Feature**: Automated Application Insights configuration per environment  
-**Integration**: Azure Bootstrap Workflow + App Service automatic instrumentation  
+**Integration**: Legacy Azure Bootstrap Workflow + App Service automatic instrumentation  
 **Environments**: dev, staging, prod (separate App Insights instances)
 
-This document describes the automated Application Insights setup that is now integrated into the Azure bootstrap workflow. This approach follows enterprise best practices for observability and telemetry.
+This document describes the automated Application Insights setup that is now integrated into the legacy Azure bootstrap workflow. The current Phase 10 container-app path uses `infra-deploy.yml` plus the Phase 10 image build workflow, but the observability pattern below remains useful as historical App Service guidance.
 
 ---
 

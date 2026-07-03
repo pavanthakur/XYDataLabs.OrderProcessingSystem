@@ -1,8 +1,8 @@
 # setup-sql-managed-identity.ps1
-# Creates SQL contained users for App Service managed identities and grants roles.
-# Run ONCE per environment after:
+# Creates SQL contained users for legacy App Service managed identities and grants roles.
+# Run ONCE per environment after the legacy App Service path is provisioned:
 #   1. Bicep has deployed SQL Server with Azure AD admin set (aadAdminObjectId param)
-#   2. App Service exists with SystemAssigned managed identity
+#   2. Legacy App Service exists with SystemAssigned managed identity
 #
 # Automation note:
 #   - For GitHub Actions, this script also supports SQL authentication mode.

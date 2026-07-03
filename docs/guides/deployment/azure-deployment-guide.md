@@ -1,8 +1,8 @@
-# Azure App Service Deployment Guide
+# Azure Deployment Guide
 
 ## Overview
 
-This guide documents the complete setup process for deploying the Order Processing System to Azure App Service using GitHub Actions with OIDC authentication.
+This guide documents the deployment history and the current Azure path for the Order Processing System using GitHub Actions with OIDC authentication.
 
 **Date Completed**: November 16, 2025  
 **Last Updated**: November 24, 2025 (Added Pre-Validation and Enhanced Bootstrap Workflow)  
@@ -10,6 +10,13 @@ This guide documents the complete setup process for deploying the Order Processi
 **Target Environments**: dev, staging, production (branch-mapped)  
 **Azure Region (Primary)**: Central India  
 **Current Focus (Curriculum Day 31)**: Execute manual infrastructure dry run (`infra-deploy.yml`) prior to real deployment
+
+Phase 10 is the active operational path. App Service material in this guide is retained as historical reference unless a section explicitly says it applies to the legacy stack.
+If you are looking for the current container-app workflow, use:
+- `infra-deploy.yml`
+- `build-phase10-images.yml`
+- `docs/runbooks/phase10-azure-smoke.md`
+- `docs/guides/deployment/README-INFRA-DEPLOY.md`
 
 ### 🆕 Recent Enhancements (November 24, 2025)
 
@@ -28,6 +35,8 @@ This guide documents the complete setup process for deploying the Order Processi
 - ✅ **Cleanup Jobs**: Phase X cleanup can delete all resources per environment
   - Stops and deletes App Services, then deletes Resource Group
   - Guarded by `cleanupInfra` checkbox (default: off)
+
+> **Note:** The workflow items below are the legacy App Service path. For the current Phase 10 container-app path, use the infra deploy and Phase 10 image workflows instead of the App Service bootstrap/deploy flow.
 
 **Key Benefit**: Prerequisites are now validated upfront, preventing bootstrap failures and providing clear error messages.
 
@@ -404,6 +413,58 @@ This ensures global uniqueness of Azure Web App names by prefixing with the GitH
 | **API** | `pavanthakur-orderprocessing-api-xyapp` | https://pavanthakur-orderprocessing-api-xyapp.azurewebsites.net | .NET 8 |
 | **UI** | `pavanthakur-orderprocessing-ui-xyapp` | https://pavanthakur-orderprocessing-ui-xyapp.azurewebsites.net | .NET 8 |
 
+These are legacy App Service endpoints retained for historical reference. Phase 10 uses Container Apps and publishes ingress URLs from the infra deployment summary.
+
+For a friendlier server URL experience, prefer one of these patterns:
+
+- Custom domains on the Container Apps themselves, such as `api-dev.<your-domain>` and `ui-dev.<your-domain>`
+- Azure Front Door or Application Gateway in front of the Container Apps, with `/` routed to UI and `/api` routed to the gateway
+
+The default `azurecontainerapps.io` hostnames are fine for initial validation, but custom domains or a front door are the right fix if you want URLs that feel like the local Docker ingress.
+
+For the cleanest operator experience, treat the generated ACA hostname as an internal deployment detail and publish one of these friendlier patterns instead:
+
+- `api-dev.<your-domain>` and `ui-dev.<your-domain>` for direct custom-domain bindings
+- `api-dev.<your-domain>` and `ui-dev.<your-domain>` behind Azure Front Door or Application Gateway
+- a single front-door hostname with `/api` routed to the gateway and `/` routed to the UI
+
+The Phase 10 deployment workflow supports both approaches through the same alias planning step:
+
+- `bindAliases=false` keeps the run as a summary-only deployment and prints the friendly aliases in the deployment summary.
+- `bindAliases=true` requires a real `publicDomain` value and enables environment-aware alias binding or alias guidance.
+- `aliasMode=direct` attempts direct custom-domain binding against the Container Apps.
+- `aliasMode=frontdoor` keeps the workflow in alias-planning mode for a front door or DNS layer you manage separately.
+
+If you are not ready to own DNS and certificate validation yet, leave alias binding disabled and use the generated ACA hostname for verification.
+
+If you want the same "clean name" experience you had in App Service, keep the Container App names as-is and add friendly public aliases:
+
+| Environment | API alias | UI alias |
+|------------|-----------|----------|
+| dev | `api-dev.yourdomain.com` | `ui-dev.yourdomain.com` |
+| staging | `api-staging.yourdomain.com` | `ui-staging.yourdomain.com` |
+| prod | `api.yourdomain.com` | `ui.yourdomain.com` |
+
+Use either:
+- direct custom domain bindings on the Container Apps, or
+- Azure Front Door/Application Gateway with DNS records pointing to the front door
+
+That gives you the same naming convenience as the old App Service setup. The better public experience comes from aliasing the apps, not from changing the ACA hostname itself.
+
+#### Suggested Portal Path
+
+1. Open the Container App in Azure Portal.
+2. Go to `Settings` or `Ingress`.
+3. Add a custom domain such as `api-dev.yourdomain.com` or `ui-dev.yourdomain.com`.
+4. Bind TLS if required by your domain setup.
+5. Update DNS so the friendly hostname resolves to the app or to Front Door.
+
+If you prefer a single public entrypoint, create Front Door first and map:
+- `/` to UI
+- `/api` to the gateway
+
+That keeps the server-side URLs short while preserving the same local Docker style of easy-to-remember access paths.
+
 ### Azure Resources by Environment
 
 #### Development Environment (`dev` branch)
@@ -412,8 +473,8 @@ This ensures global uniqueness of Azure Web App names by prefixing with the GitH
 |--------------|---------------|---------------|
 | Resource Group | `rg-orderprocessing-dev` | Central India |
 | App Service Plan | `asp-orderprocessing-dev` | Windows, F1 (Free tier) |
-| API Web App | `pavanthakur-orderprocessing-api-xyapp-dev` | .NET 8, Auto-deploy from `dev` branch |
-| UI Web App | `pavanthakur-orderprocessing-ui-xyapp-dev` | .NET 8, Auto-deploy from `dev` branch |
+| API Web App | `pavanthakur-orderprocessing-api-xyapp-dev` | Legacy App Service path |
+| UI Web App | `pavanthakur-orderprocessing-ui-xyapp-dev` | Legacy App Service path |
 | Application Insights | `ai-orderprocessing-dev` | Monitoring & diagnostics |
 | Federated Credential | `github-dev-oidc` | Subject: `ref:refs/heads/dev` |
 
@@ -423,8 +484,8 @@ This ensures global uniqueness of Azure Web App names by prefixing with the GitH
 |--------------|---------------|---------------|
 | Resource Group | `rg-orderprocessing-staging` | Central India |
 | App Service Plan | `asp-orderprocessing-staging` | Windows, F1 (Free tier) |
-| API Web App | `pavanthakur-orderprocessing-api-xyapp-staging` | .NET 8, Auto-deploy from `staging` branch |
-| UI Web App | `pavanthakur-orderprocessing-ui-xyapp-staging` | .NET 8, Auto-deploy from `staging` branch |
+| API Web App | `pavanthakur-orderprocessing-api-xyapp-staging` | Legacy App Service path |
+| UI Web App | `pavanthakur-orderprocessing-ui-xyapp-staging` | Legacy App Service path |
 | Application Insights | `ai-orderprocessing-staging` | Monitoring & diagnostics |
 | Federated Credential | `github-staging-oidc` | Subject: `ref:refs/heads/staging` |
 
@@ -444,9 +505,9 @@ Workflow YAML enforces this mapping explicitly, and Azure deployment scripts con
 
 | Branch | Purpose | Azure Resources | Federated Credential | Auto-Deploy |
 |--------|---------|-----------------|---------------------|-------------|
-| `dev` | Testing & Development | `rg-orderprocessing-dev`<br>`pavanthakur-orderprocessing-api-xyapp-dev`<br>`pavanthakur-orderprocessing-ui-xyapp-dev` | `github-dev-oidc`<br>Subject: `repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev` | ✅ Yes |
-| `staging` | Pre-production Validation | `rg-orderprocessing-stg`<br>`pavanthakur-orderprocessing-api-xyapp-stg`<br>`pavanthakur-orderprocessing-ui-xyapp-stg` | `github-staging-oidc`<br>Subject: `repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/staging` | ✅ Yes |
-| `main` | Production | `rg-orderprocessing-prod`<br>`pavanthakur-orderprocessing-api-xyapp-prod`<br>`pavanthakur-orderprocessing-ui-xyapp-prod` | `github-main-oidc`<br>Subject: `repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/main` | ✅ Yes |
+| `dev` | Testing & Development | `rg-orderprocessing-dev`<br>`pavanthakur-orderprocessing-api-xyapp-dev`<br>`pavanthakur-orderprocessing-ui-xyapp-dev` | `github-dev-oidc`<br>Subject: `repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/dev` | Legacy only |
+| `staging` | Pre-production Validation | `rg-orderprocessing-stg`<br>`pavanthakur-orderprocessing-api-xyapp-stg`<br>`pavanthakur-orderprocessing-ui-xyapp-stg` | `github-staging-oidc`<br>Subject: `repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/staging` | Legacy only |
+| `main` | Production | `rg-orderprocessing-prod`<br>`pavanthakur-orderprocessing-api-xyapp-prod`<br>`pavanthakur-orderprocessing-ui-xyapp-prod` | `github-main-oidc`<br>Subject: `repo:pavanthakur/XYDataLabs.OrderProcessingSystem:ref:refs/heads/main` | Legacy only |
 
 ### Branch Workflow
 
@@ -1026,6 +1087,8 @@ Run a manual workflow and confirm the `azure/login@v3` step succeeds with OIDC (
 
 ### 4.1 API Deployment Workflow
 
+> **Legacy compatibility note:** this section describes the App Service deploy workflow. For the current Phase 10 path, use `build-phase10-images.yml` plus `infra-deploy.yml` and verify the container-app ingress URLs from the deployment summary.
+
 **File**: `.github/workflows/deploy-api-to-azure.yml`
 
 **Key Configuration** (excerpt):
@@ -1093,6 +1156,8 @@ Exit code `1` aborts deployment (infra not ready); exit code `0` proceeds.
 - **Manual**: `workflow_dispatch` via GitHub UI
 
 ### 4.2 UI Deployment Workflow
+
+> **Legacy compatibility note:** this section describes the App Service UI deploy workflow. For the current Phase 10 path, use the UI container image from `build-phase10-images.yml` and the ingress URL from `infra-deploy.yml`.
 
 **File**: `.github/workflows/deploy-ui-to-azure.yml`
 
@@ -1164,6 +1229,8 @@ git push
 
 ### 5.3 Monitor Deployment
 
+> **Legacy compatibility note:** App Service portal steps below apply only to the old stack. Current Phase 10 validation is done via GitHub Actions summaries, Azure Container Apps logs, and the Phase 10 smoke runbook.
+
 1. **GitHub Actions UI**:
    - Navigate to: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions
    - Click on the running workflow
@@ -1175,6 +1242,8 @@ git push
    - Go to **Deployment Center** → **Logs** to see deployment history
 
 ### 5.4 Verify Deployment
+
+> **Current Phase 10 equivalent:** verify the Gateway and UI ingress URLs reported in the `infra-deploy.yml` summary, then run the Phase 10 smoke and matrix checks.
 
 **Check Application URLs**:
 ```powershell

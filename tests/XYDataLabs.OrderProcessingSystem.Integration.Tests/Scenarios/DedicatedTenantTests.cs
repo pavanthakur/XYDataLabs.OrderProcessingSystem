@@ -350,14 +350,18 @@ public sealed class DedicatedTenantTests : IAsyncLifetime
                 return $"CustomerId={customer.CustomerId}";
             });
 
+        var tenantId = dedicatedTenant.TenantId;
+
         var dedicatedAuditCount = await CountAuditLogsAsync(
             _fixture.DedicatedDbConnectionString,
+            tenantId,
             "Customer",
             entityId,
             "Created");
 
         var sharedAuditCount = await CountAuditLogsAsync(
             _fixture.ConnectionString,
+            tenantId,
             "Customer",
             entityId,
             "Created");
@@ -526,12 +530,18 @@ public sealed class DedicatedTenantTests : IAsyncLifetime
         return Convert.ToInt32(result, System.Globalization.CultureInfo.InvariantCulture);
     }
 
-    private static async Task<int> CountAuditLogsAsync(string connectionString, string entityName, string entityId, string operation)
+    private static async Task<int> CountAuditLogsAsync(
+        string connectionString,
+        int tenantId,
+        string entityName,
+        string entityId,
+        string operation)
     {
         const string sql = @"
             SELECT COUNT(*)
             FROM [notifications].[AuditLogs]
-            WHERE [EntityName] = @EntityName
+            WHERE [TenantId] = @TenantId
+              AND [EntityName] = @EntityName
               AND [EntityId] = @EntityId
               AND [Operation] = @Operation";
 
@@ -541,6 +551,7 @@ public sealed class DedicatedTenantTests : IAsyncLifetime
         using var command = new SqlCommand();
         command.Connection = connection;
         command.CommandText = sql;
+        command.Parameters.AddWithValue("@TenantId", tenantId);
         command.Parameters.AddWithValue("@EntityName", entityName);
         command.Parameters.AddWithValue("@EntityId", entityId);
         command.Parameters.AddWithValue("@Operation", operation);

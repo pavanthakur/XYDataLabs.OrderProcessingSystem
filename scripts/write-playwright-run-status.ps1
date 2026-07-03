@@ -2,7 +2,7 @@
 
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('local-http', 'local-https', 'docker-http', 'docker-https', 'azure-https')]
+    [ValidateSet('local-http', 'local-https', 'phase10-local-http', 'phase10-docker-http', 'docker-http', 'docker-https', 'azure-https')]
     [string]$EnvironmentKey,
 
     [Parameter(Mandatory = $true)]

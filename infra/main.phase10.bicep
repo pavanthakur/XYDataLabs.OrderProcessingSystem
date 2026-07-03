@@ -30,6 +30,21 @@ param maxDeliveryCount int = 10
 @description('Message TTL in ISO 8601 duration format')
 param messageTtl string = 'P7D'
 
+@description('Gateway container image reference')
+param gatewayImage string
+
+@description('Orders container image reference')
+param ordersImage string
+
+@description('Inventory container image reference')
+param inventoryImage string
+
+@description('Notifications container image reference')
+param notificationsImage string
+
+@description('UI container image reference')
+param uiImage string
+
 var rgName = 'rg-${baseName}-${environment}'
 var keyVaultName = 'kv-${take(baseName, 15)}-${environment}'
 var keyVaultUri = 'https://${keyVaultName}${az.environment().suffixes.keyvaultDns}/'
@@ -103,6 +118,11 @@ module containerApps 'modules/containerapps.bicep' = {
     appInsightsInstrumentationKey: insights.outputs.appInsightsInstrumentationKey
     logAnalyticsWorkspaceId: logAnalytics.outputs.logAnalyticsWorkspaceId
     keyVaultUri: keyVaultUri
+    gatewayImage: gatewayImage
+    ordersImage: ordersImage
+    inventoryImage: inventoryImage
+    notificationsImage: notificationsImage
+    uiImage: uiImage
     serviceBusTopicName: serviceBus.outputs.orderEventsTopic
     serviceBusConnectionString: serviceBusConnectionString
     inventorySubscriptionName: serviceBus.outputs.inventorySubscription
@@ -158,6 +178,8 @@ output ordersContainerAppName string = containerApps.outputs.ordersContainerAppN
 output inventoryContainerAppName string = containerApps.outputs.inventoryContainerAppName
 output notificationsContainerAppName string = containerApps.outputs.notificationsContainerAppName
 output uiContainerAppName string = containerApps.outputs.uiContainerAppName
+output gatewayContainerAppFqdn string = containerApps.outputs.gatewayContainerAppFqdn
+output uiContainerAppFqdn string = containerApps.outputs.uiContainerAppFqdn
 output functionAppName string = functions.outputs.functionAppName
 output keyVaultName string = keyVault.outputs.keyVaultName
 output appInsightsName string = insights.outputs.appInsightsName

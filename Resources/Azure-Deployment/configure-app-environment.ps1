@@ -1,10 +1,10 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    Configures Azure App Service environment variables for OrderProcessingSystem applications.
+    Configures legacy Azure App Service environment variables for OrderProcessingSystem applications.
 
 .DESCRIPTION
-    This script configures the ASPNETCORE_ENVIRONMENT variable on Azure App Services
+    This script configures the ASPNETCORE_ENVIRONMENT variable on legacy Azure App Services
     to ensure proper environment detection in the deployed applications.
 
 .PARAMETER Environment
@@ -98,8 +98,8 @@ Write-Host ""
 Write-Host "Configuration:" -ForegroundColor Yellow
 Write-Host "  Environment:             $($config.Name)" -ForegroundColor Gray
 Write-Host "  Resource Group:          $($config.ResourceGroup)" -ForegroundColor Gray
-Write-Host "  API App:                 $($config.ApiApp)" -ForegroundColor Gray
-Write-Host "  UI App:                  $($config.UiApp)" -ForegroundColor Gray
+    Write-Host "  Legacy API App:          $($config.ApiApp)" -ForegroundColor Gray
+    Write-Host "  Legacy UI App:           $($config.UiApp)" -ForegroundColor Gray
 Write-Host "  ASPNETCORE_ENVIRONMENT:  $($config.AspNetCoreEnvironment)" -ForegroundColor Gray
 Write-Host "  KEY_VAULT_NAME:          $($config.KeyVaultName)" -ForegroundColor Gray
 Write-Host ""
@@ -131,7 +131,7 @@ try {
     Write-Host ""
     
     # Configure API App Service
-    Write-Host "[3/5] Configuring API App Service environment..." -ForegroundColor Cyan
+    Write-Host "[3/5] Configuring legacy API App Service environment..." -ForegroundColor Cyan
     Write-Host "  Setting ASPNETCORE_ENVIRONMENT=$($config.AspNetCoreEnvironment) and KEY_VAULT_NAME=$($config.KeyVaultName) on $($config.ApiApp)..." -ForegroundColor Gray
     
     $null = az webapp config appsettings set `
@@ -144,11 +144,11 @@ try {
         throw "Failed to configure API app settings. Check that the app exists and you have permissions."
     }
     
-    Write-Host "  ✅ API App environment configured" -ForegroundColor Green
+    Write-Host "  ✅ Legacy API App environment configured" -ForegroundColor Green
     Write-Host ""
     
     # Configure UI App Service
-    Write-Host "[4/5] Configuring UI App Service environment..." -ForegroundColor Cyan
+    Write-Host "[4/5] Configuring legacy UI App Service environment..." -ForegroundColor Cyan
     Write-Host "  Setting ASPNETCORE_ENVIRONMENT=$($config.AspNetCoreEnvironment) on $($config.UiApp)..." -ForegroundColor Gray
     
     $null = az webapp config appsettings set `
@@ -161,7 +161,7 @@ try {
         throw "Failed to configure UI app settings. Check that the app exists and you have permissions."
     }
     
-    Write-Host "  ✅ UI App environment configured" -ForegroundColor Green
+    Write-Host "  ✅ Legacy UI App environment configured" -ForegroundColor Green
     Write-Host ""
     
     # Verify configuration
@@ -225,13 +225,13 @@ try {
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
     Write-Host ""
     Write-Host "Environment Configuration Complete:" -ForegroundColor Yellow
-    Write-Host "  API App:  https://$($config.ApiApp).azurewebsites.net" -ForegroundColor Gray
-    Write-Host "  UI App:   https://$($config.UiApp).azurewebsites.net" -ForegroundColor Gray
+    Write-Host "  Legacy API App: https://$($config.ApiApp).azurewebsites.net" -ForegroundColor Gray
+    Write-Host "  Legacy UI App:  https://$($config.UiApp).azurewebsites.net" -ForegroundColor Gray
     Write-Host ""
     Write-Host "Next Steps:" -ForegroundColor Yellow
     Write-Host "  1. Deploy application code using GitHub Actions workflows" -ForegroundColor Gray
-    Write-Host "  2. Test API: https://$($config.ApiApp).azurewebsites.net/swagger" -ForegroundColor Gray
-    Write-Host "  3. Test UI:  https://$($config.UiApp).azurewebsites.net/" -ForegroundColor Gray
+    Write-Host "  2. Test legacy API: https://$($config.ApiApp).azurewebsites.net/swagger" -ForegroundColor Gray
+    Write-Host "  3. Test legacy UI:  https://$($config.UiApp).azurewebsites.net/" -ForegroundColor Gray
     Write-Host ""
     
     exit 0
