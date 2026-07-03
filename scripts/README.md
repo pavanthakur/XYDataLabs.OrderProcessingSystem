@@ -694,6 +694,88 @@ See: [github-app-authentication.md](../docs/guides/configuration/github-app-auth
 
 These scripts integrate with two workflows:
 
+### Phase 10 Docker Dev HTTP End-to-End Hook
+```
+run-phase10-docker-dev-e2e-hook.ps1
+  ├── starts the Docker dev HTTP stack if needed
+  ├── runs the Phase 10 ready/smoke/integration/matrix/full-validation chain
+  └── writes logs and latest pointer files under TestResults\Playwright\phase10-docker-http
+```
+
+Use this hook when you want a single command that produces the same end-to-end testing logs as the standalone Phase 10 scripts, but without having to manually chain the steps.
+
+You can also launch the same hook from the automation workspace:
+
+```powershell
+npm --prefix automation run run:docker:dev:http:e2e-hook
+```
+
+### Detailed Usage
+
+Use the hook when you want a single reproducible local validation pass for the Phase 10 Docker dev HTTP stack.
+
+Quick start:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-phase10-docker-dev-e2e-hook.ps1
+```
+
+Expected outputs:
+
+- `TestResults\Playwright\phase10-docker-http\latest-playwright-profile.txt`
+- `TestResults\Playwright\phase10-docker-http\latest-playwright-smoke.txt`
+- `TestResults\Integration\<timestamp>\...`
+- `TestResults\Playwright\phase10-docker-http\<timestamp>_endtoend\summary.json`
+
+What it does:
+
+1. Checks whether the gateway and UI endpoints are already reachable on localhost.
+2. Starts the Phase 10 Docker dev HTTP stack only if it is not already up.
+3. Runs the Phase 10 local end-to-end chain in order:
+   - ready + Keycloak
+   - Playwright smoke
+   - integration suite
+   - payment matrix
+   - full validation
+4. Writes a log trail and summary pointers under `TestResults\Playwright\phase10-docker-http`.
+5. Performs cleanup at the end of the run so the local stack returns to a known state.
+
+Recommended entrypoints:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-phase10-docker-dev-e2e-hook.ps1
+npm --prefix automation run run:docker:dev:http:e2e-hook
+```
+
+Useful options:
+
+- `-StabilizationDelaySeconds 120` waits longer before smoke and validation so the stack can settle.
+- `-SkipStartIfNeeded` reuses an already running Docker dev HTTP stack and fails fast if the stack is not reachable.
+
+Expected log outputs:
+
+- `TestResults\Playwright\phase10-docker-http\<timestamp>_profile\01-env-ready.log`
+- `TestResults\Playwright\phase10-docker-http\<timestamp>_smoke\...`
+- `TestResults\Integration\<timestamp>\...`
+- `TestResults\Playwright\phase10-docker-http\<timestamp>_endtoend\summary.json`
+- `TestResults\Playwright\phase10-docker-http\latest-playwright-profile.txt`
+- `TestResults\Playwright\phase10-docker-http\latest-playwright-smoke.txt`
+- `TestResults\Playwright\latest-playwright-run.txt`
+
+Cleanup behavior:
+
+- The hook reuses a live stack when possible.
+- The final cleanup is handled by the Phase 10 local container stack script.
+- Image cleanup removes the local `ghcr.io/pavanthakur/orderprocessing-*` dev images after validation completes.
+- If you want to keep the stack alive for manual inspection, use the lower-level scripts instead of the hook.
+
+Troubleshooting:
+
+- If the hook fails immediately, confirm Docker Desktop is running and the engine is available.
+- If the hook reports the stack is not reachable, check local ports `5022` and `5080` for conflicts.
+- If the UI or gateway container keeps restarting, inspect the container logs in Docker Desktop or run the individual stack step scripts to isolate the failing phase.
+- If the hook reaches cleanup before you can inspect logs, rerun with the lower-level step tasks instead of the single-command hook.
+
 ### Azure Initial Setup Workflow Flow
 ```
 azure-initial-setup.yml (Phase 0/1a/1b)

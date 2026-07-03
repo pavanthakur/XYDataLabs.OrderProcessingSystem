@@ -74,6 +74,38 @@ Run all supported tenants against one Azure target:
 npm --prefix automation run run -- --target azure-prod
 ```
 
+## Phase 10 Docker Dev HTTP End-to-End Hook
+
+Run the Phase 10 Docker Dev HTTP end-to-end hook from the automation workspace:
+
+```powershell
+npm --prefix automation run run:docker:dev:http:e2e-hook
+```
+
+This command starts the Docker dev HTTP stack if needed, runs the Phase 10 ready/smoke/integration/matrix/full-validation chain, and writes the same log trail used by the VS Code task and runbook.
+
+Use it when you want the browser automation workspace to drive the same Phase 10 end-to-end proof as the script entrypoint, without switching to VS Code tasks manually.
+
+Typical use:
+
+1. Start Docker Desktop.
+2. Ensure the Phase 10 Docker dev HTTP stack is reachable, or let the hook start it.
+3. Run the command above.
+4. Review the `TestResults\Playwright\phase10-docker-http` pointers and the generated logs.
+5. Use the cleanup output to confirm the stack returned to a clean state.
+
+Quick start:
+
+```powershell
+npm --prefix automation run run:docker:dev:http:e2e-hook
+```
+
+Troubleshooting:
+
+- If the command cannot start the stack, check that Docker Desktop is running before retrying.
+- If the gateway or UI still time out, confirm the local ports used by the Docker dev HTTP stack are free.
+- If you need to debug a specific phase, run the lower-level local stack tasks from VS Code instead of the single hook.
+
 ## Local Matrix Run
 
 Run both local profiles in one command and produce an aggregate matrix summary:

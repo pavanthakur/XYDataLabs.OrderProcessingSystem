@@ -27,6 +27,10 @@ Shared operator rule:
 - The public hostname layer is the only thing that changes between the two hosts: localhost ports in Docker, ACA ingress or friendly aliases in Azure.
 - The `AZUREAPPSERVICE_*` GitHub secrets referenced in this repo are environment-scoped OIDC identifiers carried forward from the earlier setup flow; they are used by the active Phase 10 Container Apps workflows, not to imply an App Service deployment target.
 
+Local-vs-CI guidance:
+- Use the local hook or VS Code tasks when you need to debug the Docker stack interactively.
+- Use the GitHub Actions workflow as the pre-merge gate to confirm the same sequence still passes on a runner and still writes the expected log pointers and artifacts.
+
 ## Runtime Verification Checklist
 
 Use this checklist to prove the shared contract is behaving the same way across both hosts:
@@ -76,6 +80,45 @@ Log locations for the local container stack:
 - `TestResults\Playwright\phase10-docker-http\latest-playwright-profile.txt`
 - `TestResults\Playwright\phase10-docker-http\latest-playwright-smoke.txt`
 - `TestResults\Playwright\latest-playwright-run.txt`
+
+### Single-Command End-to-End Hook
+
+If you want the same validation flow without launching the individual tasks one by one, use:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-phase10-docker-dev-e2e-hook.ps1
+```
+
+Or from the automation workspace:
+
+```powershell
+npm --prefix automation run run:docker:dev:http:e2e-hook
+```
+
+Use the hook when:
+
+- you want the stack started automatically if it is not already running
+- you want a single pass that includes ready, smoke, integration, matrix, and full validation
+- you want the same log trail for repeatable validation and handoff
+
+Quick start:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-phase10-docker-dev-e2e-hook.ps1
+```
+
+Use the individual tasks when:
+
+- you are debugging a single step
+- you want to pause between phases
+- you want to keep the stack alive after one stage for manual inspection
+
+### Common Troubleshooting
+
+- If the hook fails before the stack starts, verify Docker Desktop is running and the engine is healthy.
+- If the browser or smoke step times out, verify that the local ports for the gateway and UI are not already in use.
+- If the gateway revision keeps activating or restarting, open the Container Apps logs and inspect the startup-probe failure details.
+- If you need persistent logs for investigation, run the individual stack tasks instead of the single-command hook so cleanup does not happen until you ask for it.
 
 ## Quick Command Checklist
 
