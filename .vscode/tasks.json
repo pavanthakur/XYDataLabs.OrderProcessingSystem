@@ -767,7 +767,7 @@
             "problemMatcher": []
         },
         {
-            "label": "1 Run: Phase 10 Local Container Stack 00 Start",
+            "label": "1 Run: Phase 10 Local Container Stack 00 Start Stack Only",
             "dependsOrder": "sequence",
             "dependsOn": [
                 "Internal: Stop local dev sessions",
@@ -783,7 +783,26 @@
             "dependsOn": [
                 "1 Run: Phase 10 Local Container Stack 00 Start"
             ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/wait-phase10-local-container-stack-ready.ps1",
+                "-StabilizationDelaySeconds",
+                "120"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
             "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
             "problemMatcher": []
         },
         {
@@ -875,6 +894,30 @@
                 "1 Run: Phase 10 Local Container Stack 04 Payment Matrix"
             ],
             "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Phase 10 Local Container Stack 06 Cleanup After Validation",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/run-phase10-local-container-stack-end-to-end.ps1",
+                "-StabilizationDelaySeconds",
+                "120"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
             "problemMatcher": []
         },
         {
