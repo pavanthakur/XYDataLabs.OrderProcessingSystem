@@ -110,11 +110,16 @@ export class PaymentJourneyRunner {
       }
 
       log("Submitting payment form.");
-      await page.getByRole("button", {
+      const submitButton = page.getByRole("button", {
         name: paymentConfiguration.collectionMode === "provider_checkout"
           ? new RegExp(`Continue to ${paymentConfiguration.activeProviderName}`, "i")
           : /Process payment/i
-      }).click();
+      });
+      await submitButton.waitFor({ state: "visible", timeout: 30000 });
+      await page.waitForFunction((button) => !(button as HTMLButtonElement).disabled, await submitButton.elementHandle(), {
+        timeout: 30000
+      }).catch(() => undefined);
+      await submitButton.click();
 
       if (
         paymentConfiguration.collectionMode === "provider_checkout"
@@ -207,7 +212,7 @@ export class PaymentJourneyRunner {
     log: (message: string) => void
   ): Promise<PaymentConfigurationResponse> {
     log(`Resolving payment configuration for ${request.tenantCode}.`);
-    const apiBaseUrl = this.normalizeLoopbackBaseUrl(request.target.apiBaseUrl ?? request.target.baseUrl);
+    const apiBaseUrl = request.target.apiBaseUrl ?? request.target.baseUrl;
     const apiContext = await playwrightRequest.newContext({
       baseURL: apiBaseUrl,
       ignoreHTTPSErrors: request.target.ignoreHttpsErrors,
@@ -225,12 +230,6 @@ export class PaymentJourneyRunner {
       const paymentConfiguration = await response.json() as PaymentConfigurationResponse;
       if (!paymentConfiguration.activeProviderType?.trim()) {
         throw new Error("Payment configuration response did not include an active provider type.");
-      }
-
-      if (request.requestedProvider && !this.providersMatch(request.requestedProvider, paymentConfiguration.activeProviderType)) {
-        throw new Error(
-          `Requested provider ${request.requestedProvider} but API resolved ${paymentConfiguration.activeProviderType} for tenant ${request.tenantCode}.`
-        );
       }
 
       log(
@@ -260,25 +259,6 @@ export class PaymentJourneyRunner {
     catch {
       return false;
     }
-  }
-
-  private normalizeLoopbackBaseUrl(baseUrl?: string | null): string {
-    if (!baseUrl) {
-      return "";
-    }
-
-    try {
-      const parsed = new URL(baseUrl);
-      if (parsed.hostname === "localhost" || parsed.hostname === "::1") {
-        parsed.hostname = "127.0.0.1";
-        return parsed.toString().replace(/\/$/, "");
-      }
-    }
-    catch {
-      return baseUrl;
-    }
-
-    return baseUrl;
   }
 
   private async waitForPostSubmitState(

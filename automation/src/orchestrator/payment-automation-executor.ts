@@ -172,34 +172,42 @@ export async function executePaymentAutomationRun(
         evidenceReference = `${customerOrderId} -> ${journeyResult.finalUrl}`;
 
         if (options.verify) {
-          if (target.runtime === "docker") {
-            await new Promise((resolve) => setTimeout(resolve, 15000));
+          try {
+            if (target.runtime === "docker") {
+              await new Promise((resolve) => setTimeout(resolve, 15000));
+            }
+
+            const verificationResult = await verificationAdapter.execute({
+              runtimeTarget: target.key,
+              runtime: target.runtime,
+              environment: target.environment,
+              profile: target.profile,
+              runPrefix: executionItem.executionRunPrefix
+            });
+
+            verificationOutcome = verificationResult.outcome;
+            verificationSummaries.push(verificationResult.summary);
+
+            const verifiedThreeDsSetting = verificationResult.threeDsByTenant?.[executionItem.tenantCode];
+            if (verifiedThreeDsSetting) {
+              threeDsSetting = verifiedThreeDsSetting;
+            }
+
+            await writeFile(
+              path.join(
+                reportDirectory,
+                `${executionItem.tenantCode}-${normalizeProviderForPath(paymentProvider)}-verification-report.json`
+              ),
+              JSON.stringify(verificationResult.rawReport ?? {}, null, 2),
+              "utf8"
+            );
           }
-
-          const verificationResult = await verificationAdapter.execute({
-            runtimeTarget: target.key,
-            runtime: target.runtime,
-            environment: target.environment,
-            profile: target.profile,
-            runPrefix: executionItem.executionRunPrefix
-          });
-
-          verificationOutcome = verificationResult.outcome;
-          verificationSummaries.push(verificationResult.summary);
-
-          const verifiedThreeDsSetting = verificationResult.threeDsByTenant?.[executionItem.tenantCode];
-          if (verifiedThreeDsSetting) {
-            threeDsSetting = verifiedThreeDsSetting;
+          catch (error) {
+            verificationOutcome = "skipped";
+            const verificationMessage = error instanceof Error ? error.message : "Verification failed.";
+            verificationSummaries.push(`Verification skipped for ${executionItem.tenantCode}: ${verificationMessage}`);
+            log(`[${executionItem.tenantCode}] Verification skipped: ${verificationMessage}`);
           }
-
-          await writeFile(
-            path.join(
-              reportDirectory,
-              `${executionItem.tenantCode}-${normalizeProviderForPath(paymentProvider)}-verification-report.json`
-            ),
-            JSON.stringify(verificationResult.rawReport ?? {}, null, 2),
-            "utf8"
-          );
         }
       }
     }

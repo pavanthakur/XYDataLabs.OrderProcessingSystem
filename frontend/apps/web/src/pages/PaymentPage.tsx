@@ -76,7 +76,7 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
   const isManualFlow = !hasValidOrderContext;
   const usesProviderCheckout = paymentConfiguration?.collectionMode === "provider_checkout";
   const activeProviderName = paymentConfiguration?.activeProviderName ?? "payment provider";
-  const requiresDeviceSessionId = !usesProviderCheckout
+  const requiresDeviceSessionId = paymentConfiguration?.collectionMode === "direct_card_form"
     && paymentConfiguration?.activeProviderType?.toLowerCase() === "openpay";
 
   useEffect(() => {

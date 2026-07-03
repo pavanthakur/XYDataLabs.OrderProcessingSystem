@@ -224,13 +224,18 @@ async function bootstrapLocalAccessToken(): Promise<string | null> {
     password: configuredKeycloakPassword
   });
 
-  const response = await fetch(tokenUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded"
-    },
-    body: body.toString()
-  });
+  let response: Response;
+  try {
+    response = await fetch(tokenUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: body.toString()
+    });
+  } catch {
+    return null;
+  }
 
   if (!response.ok) {
     return null;
