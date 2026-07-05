@@ -1,4 +1,4 @@
-name: CI — Build, Test, and Frontend Validation
+name: CI — PR Validation Only (No Deployment)
 
 on:
   pull_request:
@@ -98,3 +98,23 @@ jobs:
         # Integration tests require Testcontainers + Docker daemon (Linux containers).
         # windows-latest runner does not support Linux containers.
         # Run locally or promote to a dedicated linux runner when Testcontainers CI is needed.
+
+      - name: PR Validation Summary
+        if: always()
+        shell: pwsh
+        run: |
+          "## ✅ PR Validation Complete" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "> **This workflow validates pull requests only. It does not deploy to Azure.**" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "### Deployment Information" >> $env:GITHUB_STEP_SUMMARY
+          "- Azure deployment is handled by [deploy-api-to-azure.yml](https://github.com/${{ github.repository }}/actions/workflows/deploy-api-to-azure.yml)" >> $env:GITHUB_STEP_SUMMARY
+          "- Deployment is triggered automatically on **push** to ``dev``, ``staging``, or ``main`` (when relevant paths change)" >> $env:GITHUB_STEP_SUMMARY
+          "- Deployment can also be triggered manually via **workflow_dispatch** from the Actions tab" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "### Branch → Environment Mapping" >> $env:GITHUB_STEP_SUMMARY
+          "| Branch | Environment |" >> $env:GITHUB_STEP_SUMMARY
+          "|--------|-------------|" >> $env:GITHUB_STEP_SUMMARY
+          "| ``dev`` | dev |" >> $env:GITHUB_STEP_SUMMARY
+          "| ``staging`` | staging |" >> $env:GITHUB_STEP_SUMMARY
+          "| ``main`` | prod |" >> $env:GITHUB_STEP_SUMMARY
