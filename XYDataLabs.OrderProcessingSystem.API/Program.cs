@@ -503,6 +503,7 @@ app.UseSerilogRequestLogging(options =>
 });
 
 var swaggerTenantSelectorScriptPath = GetVersionedWebAssetPath(app, "swagger-assets/tenant-selector.js");
+var swaggerHostBannerScriptPath = GetVersionedWebAssetPath(app, "swagger-assets/host-banner.js");
 
 // Configure the HTTP request pipeline.
 // Environment-specific middleware configuration using our simplified profile names
@@ -525,6 +526,8 @@ if (string.Equals(environmentName, Constants.Environments.Dev, StringComparison.
             // that code will set the same global — no other changes needed here.
             options.UseRequestInterceptor("(req) => { const t = window.OrderProcessingActiveTenant; if (t) req.headers['X-Tenant-Code'] = t; return req; }");
         }
+
+        options.InjectJavascript(swaggerHostBannerScriptPath);
     });
     
 }

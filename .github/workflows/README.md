@@ -4,6 +4,8 @@ This directory contains GitHub Actions workflows for automated CI/CD deployment 
 
 > **Phase 10 note:** The active deployment, image build, and validation flows are the container-app workflows (`phase10-deploy-orchestrator.yml`, `infra-deploy.yml`, `build-phase10-images.yml`, and the Phase 10 smoke runbook). Legacy App Service workflows remain only for historical compatibility and should not be treated as the target runtime model for Phase 10.
 
+> **Repo-wide enterprise rule:** Prefer Azure-native identity and runtime services when practical. Use OIDC for Azure login, the GitHub App for repository-secret automation, ACR for Azure runtime image pulls when available, and document any GHCR bridge or other exception explicitly with a closure plan. Every deployable workflow should preserve env-suffixed naming, cleanup symmetry, source-level retention, and traceable summary links.
+
 ## Workflow Inventory
 
 Current assessment:
@@ -36,6 +38,17 @@ Use this rule before removing anything:
 | `azure-bootstrap.yml` | Historical | No for Phase 10 | Legacy App Service compatibility path only |
 | `deploy-api-to-azure.yml` | Historical | No for Phase 10 | Legacy App Service API deployment only |
 | `deploy-ui-to-azure.yml` | Historical | No for Phase 10 | Legacy App Service UI deployment only |
+
+### Default Review Stance
+
+Before approving any workflow or infrastructure change, ask:
+
+1. Is the Azure login path passwordless and OIDC-based?
+2. Is the runtime registry Azure-native unless there is a documented exception?
+3. Is there a matching cleanup path and retention policy?
+4. Do the resource names stay env-suffixed and predictable?
+5. Do the workflow summary and child jobs expose traceable links?
+6. If we are bridging with GHCR, is ACR recorded as the follow-up implementation?
 
 ### Which Workflow Should I Click?
 

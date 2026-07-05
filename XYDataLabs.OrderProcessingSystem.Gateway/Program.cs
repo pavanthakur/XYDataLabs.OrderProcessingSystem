@@ -97,11 +97,15 @@ app.Use(async (context, next) =>
         return;
     }
 
-    if (!allowedHosts.Contains(context.Request.Host.Host, StringComparer.OrdinalIgnoreCase))
+    var requestHost = context.Request.Host.Host;
+    var isAzureContainerAppsHost = requestHost.EndsWith(".azurecontainerapps.io", StringComparison.OrdinalIgnoreCase);
+    var isAllowedHost = allowedHosts.Contains(requestHost, StringComparer.OrdinalIgnoreCase) || isAzureContainerAppsHost;
+
+    if (!isAllowedHost)
     {
         await Results.Problem(
             title: "Unsupported gateway host.",
-            detail: $"Host '{context.Request.Host.Host}' is not configured for this gateway.",
+            detail: $"Host '{requestHost}' is not configured for this gateway.",
             statusCode: StatusCodes.Status400BadRequest,
             extensions: new Dictionary<string, object?>(StringComparer.Ordinal)
             {
@@ -130,10 +134,11 @@ app.Use(async (context, next) =>
 app.UseRateLimiter();
 
 app.MapDefaultEndpoints();
-app.MapGet("/", () => Results.Ok(new
+app.MapGet("/", (HttpContext context) => Results.Ok(new
 {
     service = "XYDataLabs.OrderProcessingSystem.Gateway",
     status = "healthy",
+    acceptedHost = context.Request.Host.Host,
     routes = new[]
     {
         "orders.localhost:5080 -> http://localhost:5010",
