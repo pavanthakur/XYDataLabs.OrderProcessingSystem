@@ -74,6 +74,7 @@ jobs:
           echo "| cleanupInfra | ${{ inputs.cleanupInfra }} |" >> $GITHUB_STEP_SUMMARY
           echo "| environment | ${{ inputs.environment }} |" >> $GITHUB_STEP_SUMMARY
           echo "| location | ${{ inputs.location }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ghcr_read_token_present | ${{ secrets.GHCR_READ_TOKEN != '' }} |" >> $GITHUB_STEP_SUMMARY
 
   route:
     name: Deploy Route
@@ -192,6 +193,18 @@ jobs:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+
+      - name: Validate GHCR Pull Credentials
+        shell: bash
+        run: |
+          if [ -z "${{ secrets.GHCR_READ_TOKEN }}" ]; then
+            echo "❌ GHCR_READ_TOKEN is missing from the '${{ inputs.environment }}' environment." >> $GITHUB_STEP_SUMMARY
+            echo "Azure Container Apps need this token to pull private GHCR images during revision startup." >> $GITHUB_STEP_SUMMARY
+            echo "Add GHCR_READ_TOKEN as an environment secret with read:packages access, then rerun the workflow." >> $GITHUB_STEP_SUMMARY
+            echo "GHCR_READ_TOKEN is missing from the '${{ inputs.environment }}' environment." >&2
+            exit 1
+          fi
+          echo "✅ GHCR pull token detected for '${{ inputs.environment }}'." >> $GITHUB_STEP_SUMMARY
       
       - name: What-If (subscription scope)
         run: |
@@ -257,6 +270,34 @@ jobs:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+
+      - name: Validate GHCR Pull Credentials
+        shell: bash
+        run: |
+          if [ -z "${{ secrets.GHCR_READ_TOKEN }}" ]; then
+            echo "❌ GHCR_READ_TOKEN is missing from the '${{ inputs.environment }}' environment." >> $GITHUB_STEP_SUMMARY
+            echo "Azure Container Apps need this token to pull private GHCR images during revision startup." >> $GITHUB_STEP_SUMMARY
+            echo "Add GHCR_READ_TOKEN as an environment secret with read:packages access, then rerun the workflow." >> $GITHUB_STEP_SUMMARY
+            echo "GHCR_READ_TOKEN is missing from the '${{ inputs.environment }}' environment." >&2
+            exit 1
+          fi
+          echo "✅ GHCR pull token detected for '${{ inputs.environment }}'." >> $GITHUB_STEP_SUMMARY
+
+      - name: Check Deleted Key Vault Conflicts
+        shell: bash
+        run: |
+          KV_NAME="kv-orderprocessing-${{ steps.params.outputs.envSuffix }}"
+          echo "Checking deleted Key Vault state for ${KV_NAME}..."
+
+          if az keyvault list-deleted --query "[?name=='${KV_NAME}'] | length(@)" -o tsv | grep -q '^1$'; then
+            echo "❌ A deleted Key Vault named '${KV_NAME}' still exists in Azure." >> $GITHUB_STEP_SUMMARY
+            echo "Azure keeps Key Vault names reserved while the deleted vault is retained or until purge fully settles." >> $GITHUB_STEP_SUMMARY
+            echo "Purge the deleted vault or wait for propagation, then rerun the workflow." >> $GITHUB_STEP_SUMMARY
+            echo "Deleted Key Vault conflict detected for '${KV_NAME}'." >&2
+            exit 1
+          fi
+
+          echo "✅ No deleted Key Vault conflict detected for '${KV_NAME}'." >> $GITHUB_STEP_SUMMARY
 
       - name: Enable Key Vault for template deployment
         run: |
