@@ -147,6 +147,7 @@ Source-of-truth controls:
 - GitHub Actions artifact retention is set per upload step where practical.
 - GHCR package retention is handled by `phase10-retention-cleanup.yml`.
 - Azure Log Analytics retention is configured on the workspace itself.
+- Azure Container Apps image pulls use a GHCR read token supplied as the environment secret `GHCR_READ_TOKEN`.
 
 Default cleanup policy:
 

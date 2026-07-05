@@ -45,6 +45,12 @@ param notificationsImage string
 @description('UI container image reference')
 param uiImage string
 
+@description('GHCR username used for image pulls')
+param ghcrUsername string = ''
+
+@description('GHCR read token used for image pulls')
+param ghcrReadToken string = ''
+
 var rgName = 'rg-${baseName}-${environment}'
 var keyVaultName = 'kv-${take(baseName, 15)}-${environment}'
 var keyVaultUri = 'https://${keyVaultName}${az.environment().suffixes.keyvaultDns}/'
@@ -123,6 +129,8 @@ module containerApps 'modules/containerapps.bicep' = {
     inventoryImage: inventoryImage
     notificationsImage: notificationsImage
     uiImage: uiImage
+    ghcrUsername: ghcrUsername
+    ghcrReadToken: ghcrReadToken
     serviceBusTopicName: serviceBus.outputs.orderEventsTopic
     serviceBusConnectionString: serviceBusConnectionString
     inventorySubscriptionName: serviceBus.outputs.inventorySubscription
