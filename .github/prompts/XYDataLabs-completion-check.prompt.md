@@ -98,6 +98,14 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\generate-docker-validati
 - [ ] Are relevant `/memories/repo/` files up to date with any new resource names or conventions?
 - [ ] If this task changed current phase or next-phase status: has `/XYDataLabs-context-audit` been run, or has equivalent manual verification confirmed there is no status-surface drift?
 - [ ] If this task closes Phase 9 or a Phase 9 closure lane: are the numbered VS Code task sequences for both `local-http` and `docker-dev-http` documented and aligned with the closeout roadmap before declaring completion?
+- [ ] If this task touched Azure deployment or container image delivery: did you apply the enterprise default review stance automatically?
+  - Azure OIDC for Azure login
+  - GitHub App for repo-secret automation
+  - ACR preferred for Azure runtime image pulls
+  - GHCR allowed only as a documented bridge
+  - env-suffixed names and cleanup symmetry preserved
+  - retention configured at the source
+  - summary and child-job traceability links present
 
 ---
 

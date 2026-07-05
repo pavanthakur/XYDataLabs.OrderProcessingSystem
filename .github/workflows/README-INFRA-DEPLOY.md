@@ -161,6 +161,42 @@ Default cleanup policy:
 | GitHub artifacts | workflow upload step + `phase10-retention-cleanup.yml` | `retention-days: 14` |
 | Azure Log Analytics | workspace setting / Bicep / Azure policy | Managed outside the deploy wrapper |
 
+### Phase 10 Follow-up: ACR Migration Plan
+
+ACR is the recommended medium-term follow-up for reducing registry credential sprawl:
+
+| Step | Goal | Current / Future |
+|---|---|---|
+| Keep `GHCR_READ_TOKEN` | Preserve the current private GHCR runtime path until ACR is ready | Current |
+| Add ACR registry | Host Phase 10 images in Azure instead of GHCR | Future |
+| Switch image publish path | Push build artifacts to ACR from the wrapper build step | Future |
+| Switch image pull path | Let Azure Container Apps pull from ACR with Azure-native auth | Future |
+| Retire GHCR runtime token | Remove the GHCR pull secret once ACR is stable | Future |
+
+Target end state:
+
+- `GitHub-Actions-OIDC` remains the Azure login path
+- GitHub App remains the repository automation path
+- ACR becomes the runtime image registry
+- `GHCR_READ_TOKEN` is no longer needed for container pulls
+
+### Enterprise Guardrails
+
+Treat the following as the default architecture review checklist for any new Phase 10 implementation or follow-up change:
+
+| Guardrail | Default expectation |
+|---|---|
+| Identity | Use Azure OIDC for Azure login; never add stored Azure client secrets |
+| Registry | Prefer ACR for Azure runtime image pulls; GHCR is a bridge, not the end state |
+| GitHub automation | Use the GitHub App for repo-secret automation only |
+| Cleanup | Every deployable resource must have a matching cleanup path |
+| Naming | Use env-suffixed names consistently (`appname-env`) for deploy and cleanup symmetry |
+| Retention | Set retention at the source for images, artifacts, and logs; do not rely on manual cleanup |
+| Summaries | Every workflow must expose a top-level summary and child-job traceability links |
+| Review stance | Treat enterprise fit as the default: Azure-native when practical, exceptions documented explicitly |
+
+If a new implementation deviates from these defaults, document the exception in the relevant workflow or ADR and give it a follow-up closure trigger.
+
 ---
 
 ## 📋 Example Scenarios

@@ -321,6 +321,7 @@ jobs:
           echo "| OIDC + GitHub Secrets | ✅ Prerequisite | Azure Initial Setup workflow |" >> $GITHUB_STEP_SUMMARY
           echo "| Phase 10 service images | ✅ Yes | build-phase10-images.yml or wrapper run |" >> $GITHUB_STEP_SUMMARY
           echo "| Resource Group + Service Bus + Log Analytics + App Insights + Container Apps + Function App + Key Vault | ✅ Yes | phase10-deploy-orchestrator.yml with cleanupInfra=false |" >> $GITHUB_STEP_SUMMARY
+          echo "| ACR migration follow-up | 🔜 Planned | Replace GHCR runtime pulls with Azure Container Registry |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🗑️ What Can Be Safely Deleted and Re-Created" >> $GITHUB_STEP_SUMMARY
           echo "| Resource | Can Delete? | Notes |" >> $GITHUB_STEP_SUMMARY
@@ -354,4 +355,5 @@ jobs:
             echo "1. Verify the output URLs against the runbook." >> $GITHUB_STEP_SUMMARY
             echo "2. Run the transport publish/consume smoke." >> $GITHUB_STEP_SUMMARY
             echo "3. Run the replay smoke." >> $GITHUB_STEP_SUMMARY
+            echo "4. Track the ACR migration follow-up before retiring the GHCR runtime token." >> $GITHUB_STEP_SUMMARY
           fi

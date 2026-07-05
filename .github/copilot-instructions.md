@@ -16,6 +16,13 @@ understanding of the codebase.
 A **.NET 8 Clean Architecture** order-processing application used as a **learning project** to
 practice Azure cloud deployment, CI/CD automation, and enterprise DevOps patterns.
 
+Enterprise default for workflow and infrastructure changes:
+- prefer Azure-native identity and runtime services when practical
+- use OIDC for Azure login
+- use the GitHub App for repository-secret automation
+- prefer ACR for Azure runtime image pulls; treat GHCR as a bridge unless an exception is documented
+- preserve env-suffixed naming, cleanup symmetry, source retention, and summary traceability links
+
 - **Production URL (dev)**: `https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net/swagger`
 - **UI (dev)**: `https://pavanthakur-orderprocessing-ui-xyapp-dev.azurewebsites.net`
 - **GitHub repository**: `https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem`
