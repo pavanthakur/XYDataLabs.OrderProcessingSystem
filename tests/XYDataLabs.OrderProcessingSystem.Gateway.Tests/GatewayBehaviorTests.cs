@@ -63,6 +63,19 @@ public sealed class GatewayBehaviorTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Request_WithAzureContainerAppsHost_AllowsGatewayRequest()
+    {
+        using var client = _factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/ping");
+        request.Headers.Host = "orderprocessing-gate-dev.bluebay-335bed8c.centralindia.azurecontainerapps.io";
+
+        var response = await client.SendAsync(request);
+
+        response.StatusCode.Should().BeOneOf(HttpStatusCode.OK, HttpStatusCode.BadGateway);
+        response.StatusCode.Should().NotBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task Request_ExceedingConfiguredPayloadLimit_ReturnsPayloadTooLarge()
     {
         using var client = _factory.CreateClient();
