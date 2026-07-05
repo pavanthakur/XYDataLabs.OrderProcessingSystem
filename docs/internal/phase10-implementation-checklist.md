@@ -108,7 +108,7 @@ Use this order so the first slice stays transport-first and the repo does not dr
    - `XYDataLabs.OrderProcessingSystem.Infrastructure/Messaging/ServiceBusMessageFactory.cs`
    - `XYDataLabs.OrderProcessingSystem.Infrastructure/Messaging/ServiceBusEventPublisher.cs`
    - `XYDataLabs.OrderProcessingSystem.Infrastructure/Messaging/DlqReplayWorker.cs`
-4. Wire the new transport layer into the app bootstrap:
+4. Wire the new transport layer into the app runtime wiring:
    - `XYDataLabs.OrderProcessingSystem.Infrastructure/StartupHelper.cs`
    - `XYDataLabs.OrderProcessingSystem.Infrastructure/Events/InMemoryEventPublisher.cs` stays as the local fallback
 5. Add the supporting Azure stack around that first flow:
@@ -165,7 +165,7 @@ Treat these as the smallest useful implementation slice for the first order-crea
 - `ServiceBusEventPublisher.cs` implements `IEventPublisher` for Service Bus and uses the options, metadata mapper, and factory.
 - `DlqReplayWorker.cs` classifies dead letters and separates replayable messages from poison or expired messages.
 
-### 4. App bootstrap and runtime wiring
+### 4. App runtime wiring
 
 - `XYDataLabs.OrderProcessingSystem.Infrastructure/StartupHelper.cs` registers the Service Bus transport adapter and DLQ worker.
 - `XYDataLabs.OrderProcessingSystem.Infrastructure/Events/InMemoryEventPublisher.cs` remains as the local fallback implementation.
