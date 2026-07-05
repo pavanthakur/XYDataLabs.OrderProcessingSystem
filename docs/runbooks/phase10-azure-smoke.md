@@ -11,6 +11,20 @@ This runbook covers the first live check for the Phase 10 transport slice define
 - The Service Bus namespace, transport auth rule, and connection-string lookup are owned by `infra/modules/servicebus.bicep`; `infra/main.phase10.bicep` consumes that module output during deployment.
 - GitHub Actions entrypoint: `phase10-deploy-orchestrator.yml` (which calls `infra-deploy.yml` internally)
 - Friendly alias inputs: `publicDomain`, `bindAliases`, `aliasMode`
+- Phase 10 does not currently deploy Azure SQL Server or Azure Cache for Redis. Those resources belong to the older bootstrap/App Service path or to later platform work, not to the current transport-first container-app stack.
+- Application Insights is part of the Phase 10 deployment and should appear in the target resource group when the deployment succeeds.
+
+| Area | Legacy bootstrap (`azure-bootstrap.yml`) | Active Phase 10 (`phase10-deploy-orchestrator.yml`) |
+|---|---|---|
+| Hosting model | Azure App Service | Azure Container Apps |
+| Image/build path | API/UI code deployment to App Service | Separate service image build + container-app deploy |
+| SQL Server | Created by bootstrap path | Not created by Phase 10 path |
+| Redis | Historically part of broader app/platform planning | Not created by Phase 10 path |
+| App Insights | Created and configured | Created and configured |
+| Key Vault | Created and used for app secrets | Created and used for runtime secrets |
+| Service Bus | Not the bootstrap focus | Core Phase 10 transport resource |
+| Runtime URL style | `azurewebsites.net` | Container Apps ingress or friendly alias |
+| Cleanup | Legacy app-stack teardown | Environment-scoped Phase 10 RG teardown |
 
 If you want human-friendly public URLs, choose:
 
@@ -32,6 +46,7 @@ Shared operator rule:
 - Both hosts now consume the same `orderprocessing-*` service image family, so the only contract difference is the runtime host and ingress surface.
 - The service names stay environment-suffixed and split by responsibility, so cleanup and redeploy can safely target the exact gateway, Orders, Inventory, Notifications, and UI resources.
 - The public hostname layer is the only thing that changes between the two hosts: localhost ports in Docker, ACA ingress or friendly aliases in Azure.
+- If you are comparing this path to `azure-bootstrap.yml`, use that workflow only as a historical App Service reference. It used to create the SQL/App Service surface as part of bootstrap; Phase 10 deliberately replaces that with the container-app transport stack and does not expect SQL or Redis from the active deployment path.
 - The `AZUREAPPSERVICE_*` GitHub secrets referenced in this repo are environment-scoped OIDC identifiers carried forward from the earlier setup flow; they are used by the active Phase 10 Container Apps workflows, not to imply an App Service deployment target.
 - The Phase 10 wrapper is the single end-to-end delivery entry point for Phase 10. On a real deployment it runs in this order: preflight -> image build -> Azure deploy or cleanup workflow -> summary. Dry run stops after validation and does not build or deploy.
 - If the architecture is expanded to include shared foundation resources again, they should be owned by the wrapper-owned infra path, not by the legacy App Service workflows.
@@ -84,6 +99,7 @@ Use this checklist to prove the shared contract is behaving the same way across 
 2. Azure infra deploy
    - Run `phase10-deploy-orchestrator.yml` with the target environment and confirm the deployment summary reports the expected gateway and UI ingress outputs.
    - Verify the published image refs match the service-specific `orderprocessing-*` contract for gateway, Orders, Inventory, Notifications, and UI.
+   - Verify the resource group contains Service Bus, Log Analytics, Application Insights, Container Apps, Functions, and Key Vault. Do not expect SQL Server or Redis from this path.
 3. Azure smoke and automation
    - Run the Phase 10 Azure smoke after the deployment completes.
    - Confirm publish, consume, DLQ, and replay checks pass before promoting aliases or treating the environment as ready.
