@@ -1,21 +1,25 @@
-name: Deploy Azure Infrastructure
+name: Deploy Azure Infrastructure (Internal)
 
 on:
-  workflow_dispatch:
+  workflow_call:
+    outputs:
+      gatewayFqdn:
+        description: 'Gateway ingress FQDN'
+        value: ${{ jobs.deploy.outputs.gatewayFqdn }}
+      uiFqdn:
+        description: 'UI ingress FQDN'
+        value: ${{ jobs.deploy.outputs.uiFqdn }}
+      deploymentName:
+        description: 'Deployment name'
+        value: ${{ jobs.deploy.outputs.deploymentName }}
     inputs:
       environment:
         description: 'Target environment'
         required: true
-        default: 'dev'
-        type: choice
-        options:
-          - dev
-          - staging
-          - prod
+        type: string
       location:
         description: 'Azure region'
         required: true
-        default: 'centralindia'
         type: string
       publicDomain:
         description: 'Optional public DNS zone suffix used to build friendly aliases, e.g. contoso.com'
@@ -31,14 +35,15 @@ on:
         description: 'Friendly alias mode: direct ACA binding or front-door/DNS summary only'
         required: false
         default: 'direct'
-        type: choice
-        options:
-          - direct
-          - frontdoor
+        type: string
       dryRun:
         description: 'Dry run (what-if only)'
         required: true
-        default: true
+        type: boolean
+      cleanupInfra:
+        description: 'Destructive cleanup (tears down the environment-scoped resource group)'
+        required: true
+        default: false
         type: boolean
   pull_request:
     branches: [main]
@@ -55,7 +60,7 @@ jobs:
     # Intentionally independent of the `validate` job — on dryRun=false, `validate` is skipped
     # by its own condition and `pre-validate` runs alone. They never race because `validate`
     # only runs when dryRun=true (mutually exclusive with this job's condition).
-    if: github.event_name == 'workflow_dispatch' && !inputs.dryRun
+    if: github.event_name == 'workflow_call' && !inputs.dryRun
     uses: ./.github/workflows/validate-deployment.yml
     secrets: inherit
     with:
@@ -69,9 +74,9 @@ jobs:
 
   validate:
     name: Bicep What-If (Dry Run)
-    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.dryRun)
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_call' && inputs.dryRun)
     runs-on: ubuntu-latest
-    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'dev' }}
+    environment: ${{ github.event_name == 'workflow_call' && inputs.environment || 'dev' }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -80,7 +85,7 @@ jobs:
       - name: Determine parameters
         id: params
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "${{ github.event_name }}" = "workflow_call" ]; then
             echo "template=infra/main.phase10.bicep" >> $GITHUB_OUTPUT
             echo "params=infra/parameters/phase10-${{ inputs.environment }}.json" >> $GITHUB_OUTPUT
             echo "phase10=true" >> $GITHUB_OUTPUT
@@ -124,11 +129,15 @@ jobs:
 
   deploy:
     name: Deploy Infrastructure
-    if: github.event_name == 'workflow_dispatch' && !inputs.dryRun
+    if: github.event_name == 'workflow_call' && !inputs.dryRun
     needs: pre-validate
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     timeout-minutes: 45
+    outputs:
+      gatewayFqdn: ${{ steps.outputs.outputs.gatewayFqdn }}
+      uiFqdn: ${{ steps.outputs.outputs.uiFqdn }}
+      deploymentName: ${{ steps.params.outputs.deploymentName }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -328,3 +337,57 @@ jobs:
           echo "2. Bind the friendly aliases to the Container App FQDNs or Front Door." >> $GITHUB_STEP_SUMMARY
           echo "3. Run the transport publish/consume smoke." >> $GITHUB_STEP_SUMMARY
           echo "4. Run the replay smoke." >> $GITHUB_STEP_SUMMARY
+
+  cleanup:
+    name: Cleanup Infrastructure
+    if: github.event_name == 'workflow_call' && !inputs.dryRun && inputs.cleanupInfra
+    needs: pre-validate
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Determine parameters
+        id: params
+        run: |
+          echo "env=${{ inputs.environment }}" >> $GITHUB_OUTPUT
+          if [ "${{ inputs.environment }}" = "staging" ]; then ENV_SUFFIX="stg"; else ENV_SUFFIX="${{ inputs.environment }}"; fi
+          echo "envSuffix=${ENV_SUFFIX}" >> $GITHUB_OUTPUT
+          echo "location=${{ inputs.location }}" >> $GITHUB_OUTPUT
+          echo "deploymentName=infra-cleanup-${{ github.run_id }}-${{ github.run_attempt }}" >> $GITHUB_OUTPUT
+
+      - name: Azure CLI Login (OIDC)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+
+      - name: Confirm cleanup target
+        shell: bash
+        run: |
+          RG_NAME="rg-orderprocessing-${{ steps.params.outputs.envSuffix }}"
+          echo "About to delete resource group: ${RG_NAME}"
+          echo "This will remove the entire Phase 10 environment for: ${{ steps.params.outputs.env }}"
+          echo "Proceeding with teardown because cleanupInfra=true and dryRun=false."
+
+      - name: Delete resource group
+        shell: bash
+        run: |
+          RG_NAME="rg-orderprocessing-${{ steps.params.outputs.envSuffix }}"
+          az group delete --name "${RG_NAME}" --yes --no-wait
+
+      - name: Cleanup Summary
+        run: |
+          echo "## 🗑️ Cleanup Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**GitHub Environment:** ${{ steps.params.outputs.env }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Azure Resource Suffix:** ${{ steps.params.outputs.envSuffix }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Location:** ${{ steps.params.outputs.location }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Mode:** Phase X cleanup / destructive teardown" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ✅ Cleanup Requested" >> $GITHUB_STEP_SUMMARY
+          echo "- Resource group delete has been queued for rg-orderprocessing-${{ steps.params.outputs.envSuffix }}" >> $GITHUB_STEP_SUMMARY

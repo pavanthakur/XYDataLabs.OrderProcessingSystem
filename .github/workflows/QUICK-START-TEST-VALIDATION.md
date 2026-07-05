@@ -132,7 +132,7 @@ oidc-app-name: xydatalabsgithubapp  # If you named your app differently
 Once all tests pass:
 
 1. **Test Infrastructure Deployment**
-   - Go to Actions → Deploy Azure Infrastructure
+   - Go to Actions → Phase 10 Deploy Orchestrator
    - Set `Dry Run = true`
    - Review what-if output
 

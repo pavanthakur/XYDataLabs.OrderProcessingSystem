@@ -53,9 +53,31 @@ az deployment sub show --name <deploymentName> --query "properties.outputs"
 ```
 
 ## GitHub Actions
-Workflow: `.github/workflows/infra-deploy.yml`
+Workflow: `.github/workflows/phase10-deploy-orchestrator.yml` (current wrapper) / `.github/workflows/infra-deploy.yml` (internal reusable workflow)
+
+### Phase 10 workflow ownership
+
+`phase10-deploy-orchestrator.yml` is the Phase 10 operator entrypoint for Azure runtime resources. It calls `infra-deploy.yml`, which is the internal lifecycle owner for the Azure runtime stack and the replacement for the old App Service bootstrap/deploy lane.
+
+- `dryRun=true` performs what-if validation
+- `dryRun=false` and `cleanupInfra=false` deploys or updates the Phase 10 stack
+- `dryRun=false` and `cleanupInfra=true` destroys the environment-scoped Phase 10 stack
+
+Supporting workflows:
+- `azure-initial-setup.yml` sets up GitHub App / OIDC / environment secrets
+- `build-phase10-images.yml` publishes the runtime images
+- `phase10-deploy-orchestrator.yml` is the current manual entrypoint
+- `phase10-docker-dev-http-e2e.yml` verifies the local Docker and CI validation path
+
+Legacy compatibility workflows:
+- `azure-bootstrap.yml`
+- `deploy-api-to-azure.yml`
+- `deploy-ui-to-azure.yml`
+
+### Trigger behavior
 - PR changes to `infra/**` trigger a `what-if`.
 - Manual workflow dispatch performs infrastructure deployment using the selected environment parameter file.
+- Manual workflow dispatch with `cleanupInfra=true` performs the Phase X teardown path and deletes the environment-scoped resource group.
 
 ## Identity Notes
 The `identity.bicep` module uses `deploymentScripts` and expects a user-assigned managed identity with necessary Graph permissions for production. For now, directory-wide permissions may be required to allow app registration and federated credential creation.

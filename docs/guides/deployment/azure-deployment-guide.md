@@ -9,10 +9,11 @@ This guide documents the deployment history and the current Azure path for the O
 **Deployment Method**: GitHub Actions CI/CD with OIDC (Passwordless Authentication)  
 **Target Environments**: dev, staging, production (branch-mapped)  
 **Azure Region (Primary)**: Central India  
-**Current Focus (Curriculum Day 31)**: Execute manual infrastructure dry run (`infra-deploy.yml`) prior to real deployment
+**Current Focus (Curriculum Day 31)**: Execute manual infrastructure dry run via `phase10-deploy-orchestrator.yml` prior to real deployment
 
 Phase 10 is the active operational path. App Service material in this guide is retained as historical reference unless a section explicitly says it applies to the legacy stack.
 If you are looking for the current container-app workflow, use:
+- `phase10-deploy-orchestrator.yml`
 - `infra-deploy.yml`
 - `build-phase10-images.yml`
 - `docs/runbooks/phase10-azure-smoke.md`
@@ -74,17 +75,17 @@ For Infrastructure and Database deployment:
 
 ---
 
-## ⚙️ Manual Infrastructure Deployment via GitHub Actions (`infra-deploy.yml`)
+## ⚙️ Manual Infrastructure Deployment via GitHub Actions (`phase10-deploy-orchestrator.yml`)
 
 ### Why This Workflow Exists
-The **`infra-deploy.yml`** workflow enables a controlled, parameterized, and auditable Azure infrastructure deployment using Bicep modules with two modes:
+The **`phase10-deploy-orchestrator.yml`** workflow enables a controlled, parameterized, and auditable Azure infrastructure deployment using Bicep modules with two modes:
 1. **Dry Run (What-If / Validation)** – Safe preview, no changes applied.
 2. **Real Deployment** – Applies infrastructure changes once validated.
 
 It supports iterative learning (Curriculum Day 31) and prevents accidental production changes by requiring explicit manual triggers and clear inputs.
 
 ### Location
-`/.github/workflows/infra-deploy.yml`
+`/.github/workflows/phase10-deploy-orchestrator.yml`
 
 ---
 
@@ -110,7 +111,7 @@ This section provides a complete walkthrough for executing your first manual inf
 **Steps:**
 1. Open browser: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions
 2. **IMPORTANT**: At the top of the page, change the branch filter from "main" to **"dev"**
-3. Click on **"Deploy Azure Infrastructure"** workflow (left sidebar)
+3. Click on **"Phase 10 Deploy Orchestrator"** workflow (left sidebar)
 4. Click **"Run workflow"** button (dropdown on right)
 5. Fill in parameters:
    ```
@@ -261,7 +262,7 @@ After completing these tasks, you will have:
 
 ### Execution Steps (Manual Trigger)
 1. Navigate: GitHub Repository → `Actions` tab.
-2. Select workflow: `Infrastructure Deploy (infra-deploy.yml)`.
+2. Select workflow: `Phase 10 Deploy Orchestrator`.
 3. Click `Run workflow`.
 4. Fill inputs (start with: environment=`dev`, location=`centralindia`, appServiceSku=`F1`, enableIdentity=`false`, dryRun=`true`).
 5. Click `Run workflow` and wait for both jobs:
@@ -272,7 +273,7 @@ After completing these tasks, you will have:
 
 ### 🔄 Dry Run Quick Reference (GitHub Actions)
 Use this condensed checklist whenever you need to validate changes safely before applying:
-1. Open: Repository → `Actions` → select `Infrastructure Deploy (infra-deploy.yml)`.
+1. Open: Repository → `Actions` → select `Phase 10 Deploy Orchestrator`.
 2. Click: `Run workflow` (top-right of workflow page).
 3. Branch: ensure `dev` (or target environment branch when branching strategy evolves).
 4. Parameters:
@@ -1087,7 +1088,7 @@ Run a manual workflow and confirm the `azure/login@v3` step succeeds with OIDC (
 
 ### 4.1 API Deployment Workflow
 
-> **Legacy compatibility note:** this section describes the App Service deploy workflow. For the current Phase 10 path, use `build-phase10-images.yml` plus `infra-deploy.yml` and verify the container-app ingress URLs from the deployment summary.
+> **Historical note:** this section describes the App Service deploy workflow. For the current Phase 10 path, use `build-phase10-images.yml` plus `phase10-deploy-orchestrator.yml` (which calls `infra-deploy.yml` internally) and verify the container-app ingress URLs from the deployment summary.
 
 **File**: `.github/workflows/deploy-api-to-azure.yml`
 
@@ -1157,7 +1158,7 @@ Exit code `1` aborts deployment (infra not ready); exit code `0` proceeds.
 
 ### 4.2 UI Deployment Workflow
 
-> **Legacy compatibility note:** this section describes the App Service UI deploy workflow. For the current Phase 10 path, use the UI container image from `build-phase10-images.yml` and the ingress URL from `infra-deploy.yml`.
+> **Historical note:** this section describes the App Service UI deploy workflow. For the current Phase 10 path, use the UI container image from `build-phase10-images.yml` and the ingress URL from `phase10-deploy-orchestrator.yml` / `infra-deploy.yml`.
 
 **File**: `.github/workflows/deploy-ui-to-azure.yml`
 
@@ -1243,7 +1244,7 @@ git push
 
 ### 5.4 Verify Deployment
 
-> **Current Phase 10 equivalent:** verify the Gateway and UI ingress URLs reported in the `infra-deploy.yml` summary, then run the Phase 10 smoke and matrix checks.
+> **Current Phase 10 equivalent:** verify the Gateway and UI ingress URLs reported in the `phase10-deploy-orchestrator.yml` / `infra-deploy.yml` summary, then run the Phase 10 smoke and matrix checks.
 
 **Check Application URLs**:
 ```powershell

@@ -2,7 +2,74 @@
 
 This directory contains GitHub Actions workflows for automated CI/CD deployment across the historical App Service path and the current Phase 10 Azure Container Apps path using OIDC authentication.
 
-> **Phase 10 note:** The active deployment, image build, and validation flows are the container-app workflows (`infra-deploy.yml`, `build-phase10-images.yml`, and the Phase 10 smoke runbook). Legacy App Service workflows remain only for historical compatibility and should not be treated as the target runtime model for Phase 10.
+> **Phase 10 note:** The active deployment, image build, and validation flows are the container-app workflows (`phase10-deploy-orchestrator.yml`, `infra-deploy.yml`, `build-phase10-images.yml`, and the Phase 10 smoke runbook). Legacy App Service workflows remain only for historical compatibility and should not be treated as the target runtime model for Phase 10.
+
+## Workflow Inventory
+
+Current assessment:
+
+- Total workflow YAMLs in `.github/workflows`: `19`
+- Actively useful today: `16`
+- Legacy compatibility only: `3`
+- Not a workflow file: `Copilot cloud agent`
+
+Use this rule before removing anything:
+
+- If a workflow is still referenced by docs, scripts, badges, or another workflow, keep it until the dependency is retired.
+- If you want to remove a workflow, test the matching workflow or script path first so you know the current behavior and failure mode.
+
+### Naming Convention
+
+- Workflows marked `(Internal)` are child or reusable workflows.
+- They are intended to be called by `phase10-deploy-orchestrator.yml` or trusted automation, not run directly as the primary operator path.
+- The wrapper workflow is the only manual Phase 10 entrypoint.
+
+### Phase 10 Structure
+
+| Workflow | Category | Direct Click? | Purpose |
+|---|---|---|---|
+| `phase10-deploy-orchestrator.yml` | Wrapper | Yes | Manual Phase 10 entrypoint that runs build, deploy, or cleanup and prints the operator summary |
+| `build-phase10-images.yml` | Internal | No | Builds and publishes the Phase 10 service images |
+| `infra-deploy.yml` | Internal | No | Deploys or cleans up the Phase 10 Azure stack and returns live URLs |
+| `phase10-docker-dev-http-e2e.yml` | Validation | Sometimes | Mirrors the local Docker Dev HTTP hook in CI |
+| `azure-initial-setup.yml` | Bootstrap | Yes | One-time GitHub App + OIDC + secrets setup |
+| `azure-bootstrap.yml` | Historical | No for Phase 10 | Legacy App Service compatibility path only |
+| `deploy-api-to-azure.yml` | Historical | No for Phase 10 | Legacy App Service API deployment only |
+| `deploy-ui-to-azure.yml` | Historical | No for Phase 10 | Legacy App Service UI deployment only |
+
+### Which Workflow Should I Click?
+
+| If you want to... | Click this workflow |
+|---|---|
+| Run Phase 10 deploy, dry run, or cleanup from GitHub UI | `phase10-deploy-orchestrator.yml` |
+| Build and publish Phase 10 images indirectly | `phase10-deploy-orchestrator.yml` |
+| Deploy or clean up the Azure Phase 10 stack indirectly | `phase10-deploy-orchestrator.yml` |
+| Verify the local Docker Dev HTTP hook in CI | `phase10-docker-dev-http-e2e.yml` |
+| Do one-time GitHub App and OIDC bootstrap | `azure-initial-setup.yml` |
+| Work on archived App Service compatibility only | `azure-bootstrap.yml`, `deploy-api-to-azure.yml`, or `deploy-ui-to-azure.yml` |
+
+| Workflow | Usage | Keep / Remove | Test before removal? |
+|----------|-------|---------------|----------------------|
+| `validate-prompts.yml` | Prompt file governance and secret-pattern checks | Keep | Yes, if changing the validator path |
+| `azure-bootstrap.yml` | Legacy App Service bootstrap/deploy/cleanup | Keep for legacy compatibility | Yes |
+| `azure-initial-setup.yml` | One-time GitHub App, OIDC, and secrets bootstrap | Keep | Only if refactoring initial setup |
+| `build-phase10-images.yml` | Builds/pushes Phase 10 container images | Keep as internal reusable workflow | Yes, if changing image contracts |
+| `ci.yml` | Main PR build/test/frontend validation gate | Keep | Yes, if changing CI flow |
+| `configure-github-secrets.yml` | Secret configuration and troubleshooting support | Keep | Yes, if changing setup flow |
+| `Copilot cloud agent` | Not a workflow file in this repo | N/A | N/A |
+| `deploy-api-to-azure.yml` | Legacy App Service API deployment | Keep for legacy compatibility | Yes |
+| `deploy-ui-to-azure.yml` | Legacy App Service UI deployment | Keep for legacy compatibility | Yes |
+| `drift-check.yml` | Broad repository drift scanning | Keep unless you intentionally drop drift scanning | Yes |
+| `infra-deploy.yml` | Active Phase 10 Azure Container Apps deployment | Keep as internal reusable workflow | Yes, if changing IaC flow |
+| `phase10-deploy-orchestrator.yml` | Manual Phase 10 wrapper for build + deploy or cleanup | Keep as the only direct Phase 10 entrypoint | Yes, if changing wrapper flow |
+| `phase10-docker-dev-http-e2e.yml` | CI mirror of the local Phase 10 Docker hook | Keep | Yes, if changing hook or log paths |
+| `validate-deployment.yml` | Reusable pre-deployment validation | Keep | Yes, if changing validation rules |
+| `publish-template-package.yml` | Template packaging / publishing | Keep | Yes, before publishing-path changes |
+| `test-validate-deployment.yml` | Tests the validation workflow itself | Keep | Yes, definitely |
+| `validate-adrs.yml` | ADR governance | Keep | Yes, if changing ADR rules |
+| `validate-ai-customization.yml` | AI/prompt governance | Keep | Yes, if changing AI assets |
+| `validate-doc-links.yml` | Docs link/anchor validation | Keep | Yes, if changing docs rules |
+| `validate-template-package-governance.yml` | Template package governance | Keep | Yes, if changing template versioning |
 
 ## 📋 Overview
 
@@ -14,8 +81,9 @@ This repo uses a small set of primary operational workflows, with additional sup
 | `azure-initial-setup.yml` | Manual | One-time setup | **[See README-AZURE-INITIAL-SETUP.md](./README-AZURE-INITIAL-SETUP.md)** - Phase 0 (GitHub App), Phase 1a (OIDC), Phase 1b (secrets) |
 | `azure-bootstrap.yml` | Manual | Legacy App Service stack | **[See README-AZURE-BOOTSTRAP.md](./README-AZURE-BOOTSTRAP.md)** - Phase 2 (infrastructure), API/UI deploy, Phase X (cleanup) |
 | `configure-github-secrets.yml` | Called by initial-setup | Secret configuration | **[See README-CONFIGURE-GITHUB-SECRETS.md](./README-CONFIGURE-GITHUB-SECRETS.md)** - GitHub App setup and secret management (can run independently) |
-| `infra-deploy.yml` | Manual | dev/staging/prod | **[See README-INFRA-DEPLOY.md](./README-INFRA-DEPLOY.md)** - Deploys Phase 10 Bicep infrastructure with manual workflow dispatch, optional friendly alias planning, and guarded alias binding |
-| `build-phase10-images.yml` | Manual or push to service host paths | GHCR | Builds and pushes the Phase 10 container images for gateway, orders, inventory, notifications, and UI |
+| `phase10-deploy-orchestrator.yml` | Manual | dev/staging/prod | **[See README-INFRA-DEPLOY.md](./README-INFRA-DEPLOY.md)** - Wrapper that drives the Phase 10 image build plus infra deploy/cleanup flows |
+| `infra-deploy.yml` | Reusable internal workflow | dev/staging/prod | Internal Phase 10 Bicep deployment and cleanup workflow with alias planning and guarded alias binding |
+| `build-phase10-images.yml` | Push to service host paths or wrapper-called internal workflow | GHCR | Builds and pushes the Phase 10 container images for gateway, orders, inventory, notifications, and UI |
 | `phase10-docker-dev-http-e2e.yml` | Manual or PR changes to Phase 10 Docker hook paths | Validation only | Runs the local Docker Dev HTTP end-to-end hook in CI and uploads the same Phase 10 logs used by the VS Code task and runbook |
 | `validate-deployment.yml` | Called by infra-deploy | Reusable workflow | **[See README-VALIDATE-DEPLOYMENT.md](./README-VALIDATE-DEPLOYMENT.md)** - Pre-deployment validation workflow |
 | `test-validate-deployment.yml` | Manual or PR changes | Test only | **[Quick Start](./QUICK-START-TEST-VALIDATION.md)** \| **[Full Docs](./README-TEST-VALIDATE-DEPLOYMENT.md)** - Tests validation workflow independently |
@@ -51,7 +119,8 @@ Use the local hook for interactive debugging and the CI workflow to prove the sa
 | `ci.yml` | PR gate for build and unit/architecture test validation |
 | `azure-initial-setup.yml` | One-time repository and OIDC bootstrap |
 | `azure-bootstrap.yml` | Legacy App Service day-to-day environment bootstrap and coordinated deployment entrypoint |
-| `build-phase10-images.yml` | Phase 10 container image build/push entrypoint for GHCR |
+| `build-phase10-images.yml` | Phase 10 container image build/push internal reusable workflow for GHCR |
+| `phase10-deploy-orchestrator.yml` | Phase 10 manual wrapper that drives build + deploy or cleanup |
 | `phase10-docker-dev-http-e2e.yml` | Phase 10 Docker Dev HTTP merge gate and artifact-producing validation path |
 | `deploy-api-to-azure.yml` | Legacy API deployment path retained for the App Service stack |
 | `deploy-ui-to-azure.yml` | Legacy React frontend deployment path retained for the App Service stack |
@@ -61,7 +130,7 @@ Use the local hook for interactive debugging and the CI workflow to prove the sa
 | Workflow | Role |
 |----------|------|
 | `configure-github-secrets.yml` | Secondary/manual secret configuration and GitHub App troubleshooting path |
-| `infra-deploy.yml` | Phase 10 infra-only Bicep deployment entrypoint with env-aware alias planning |
+| `infra-deploy.yml` | Phase 10 infra-only internal reusable workflow with env-aware alias planning |
 | `publish-template-package.yml` | Manual package publication path for the Layer 1 `dotnet new` template after packaged smoke validation |
 | `validate-template-package-governance.yml` | Automatic PR guardrail that requires a package-version decision and packaged smoke validation for Layer 1 template changes |
 | `validate-deployment.yml` | Reusable preflight validation called by infra deployment |
@@ -80,7 +149,14 @@ Use the local hook for interactive debugging and the CI workflow to prove the sa
 
 The table above intentionally shows both surfaces. The legacy App Service workflows remain for historical compatibility, while Phase 10 infra publishes Container Apps plus ingress endpoints from the Bicep deployment summary, and `build-phase10-images.yml` publishes the distinct gateway/orders/inventory/notifications/UI runtime images for those apps.
 
-When running `infra-deploy.yml`, the key manual inputs are:
+For Phase 10, the expected click path is:
+
+1. Open `phase10-deploy-orchestrator.yml`
+2. Run the wrapper manually for `dev`, `staging`, or `prod`
+3. Let it call `build-phase10-images.yml` and `infra-deploy.yml` internally
+4. Use `cleanupInfra=true` when you want teardown instead of deployment
+
+When the wrapper calls `infra-deploy.yml`, the key inputs are:
 
 | Input | Purpose |
 |-------|---------|
@@ -433,8 +509,9 @@ act push -W .github/workflows/deploy-dev.yml
 ### For Infrastructure Deployment
 **👉 After validation tests pass:**
 1. **Read the guide**: [README-INFRA-DEPLOY.md](./README-INFRA-DEPLOY.md)
-2. **Run dry run**: Go to Actions → Deploy Azure Infrastructure → Run workflow
-3. **Deploy infrastructure**: Set dry run = false after validation
+2. **Run the wrapper**: Go to Actions → Phase 10 Deploy Orchestrator → Run workflow
+3. **Dry run first**: Set `dryRun = true`
+4. **Deploy or cleanup**: Set `dryRun = false` and choose `cleanupInfra` as needed
 
 ### For Application Deployment
 After infrastructure is deployed:
