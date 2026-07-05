@@ -566,7 +566,7 @@ jobs:
           }
 
           Write-Host ""
-          Write-Host "ℹ️  After initial setup completes, use 'Azure Bootstrap & Deploy' workflow" -ForegroundColor Cyan
+          Write-Host "ℹ️  After initial setup completes, use 'Phase 10 Deploy Orchestrator' workflow" -ForegroundColor Cyan
           Write-Host "   for infrastructure provisioning (Phase 2) and deployments." -ForegroundColor Cyan
           Write-Host ""
 
@@ -1804,9 +1804,9 @@ jobs:
           "" >> $env:GITHUB_STEP_SUMMARY
           "## 💳 Payment Provider Secrets (OpenPay + Razorpay)" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
-          "> These secrets are needed for the payment-provider flows used by the repo. They are environment-scoped, set manually by an authorized person, and never written by this workflow." >> $env:GITHUB_STEP_SUMMARY
+          "> These secrets are only needed for payment-provider flows that explicitly use them. They are environment-scoped, set manually by an authorized person, and never written by this workflow." >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
-          "Add these six environment secrets to each target GitHub environment you plan to bootstrap:" >> $env:GITHUB_STEP_SUMMARY
+          "Add these six environment secrets to each target GitHub environment you plan to configure:" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
           "- ``OPENPAY_MERCHANT_ID``" >> $env:GITHUB_STEP_SUMMARY
           "- ``OPENPAY_PUBLIC_KEY``" >> $env:GITHUB_STEP_SUMMARY
@@ -1815,18 +1815,18 @@ jobs:
           "- ``RAZORPAY_MERCHANT_ID``" >> $env:GITHUB_STEP_SUMMARY
           "- ``RAZORPAY_PRIVATE_KEY``" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
-          "### ⚠️ Action Required — Add Payment Provider Secrets Before Running Legacy Bootstrap / Payment Runs" >> $env:GITHUB_STEP_SUMMARY
+          "### ⚠️ Action Required — Add Payment Provider Secrets Only If Your Deployment Path Uses Them" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
           "1. Go to **[Settings → Environments]($environmentsUrl)**" >> $env:GITHUB_STEP_SUMMARY
           "2. Open each target environment (``dev``, ``staging``, and/or ``prod``)" >> $env:GITHUB_STEP_SUMMARY
           "3. Add all six values under **Environment secrets**" >> $env:GITHUB_STEP_SUMMARY
-          "4. Then run the workflow that owns your payment-enabled deployment path (legacy bootstrap or payment run) — it validates its environment secrets before proceeding" >> $env:GITHUB_STEP_SUMMARY
+          "4. Then run the workflow that owns your payment-enabled deployment path — it validates its environment secrets before proceeding" >> $env:GITHUB_STEP_SUMMARY
 
           # Console output mirror
           Write-Host ""
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
           Write-Host "💳 Payment Provider Secrets (OpenPay + Razorpay)" -ForegroundColor Cyan
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
-          Write-Host "  Payment provider secrets are environment-scoped and must be added manually." -ForegroundColor Yellow
+          Write-Host "  Payment provider secrets are environment-scoped and must be added manually when your deployment path uses them." -ForegroundColor Yellow
           Write-Host "  Add them at: $environmentsUrl" -ForegroundColor Yellow
           Write-Host "  Each payment-enabled deployment path validates the target environment before proceeding." -ForegroundColor Gray
