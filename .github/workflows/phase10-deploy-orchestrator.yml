@@ -1,4 +1,4 @@
-name: Phase 10 Deploy Orchestrator
+name: Phase 10 Azure Deploy Orchestrator
 
 on:
   workflow_dispatch:
@@ -82,10 +82,10 @@ jobs:
           echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Azure login | validated by azure/login |" >> $GITHUB_STEP_SUMMARY
           echo "| Environment suffix | ${ENV_SUFFIX} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Resource Group | will be created by infra deployment if absent |" >> $GITHUB_STEP_SUMMARY
-          echo "| Key Vault | will be created by infra deployment if absent |" >> $GITHUB_STEP_SUMMARY
+          echo "| Resource Group | will be created by Azure deployment if absent |" >> $GITHUB_STEP_SUMMARY
+          echo "| Key Vault | will be created by Azure deployment if absent |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Phase 10 preflight completed. Clean environments are allowed to continue into infra deployment." >> $GITHUB_STEP_SUMMARY
+          echo "Phase 10 preflight completed. Clean environments are allowed to continue into Azure deployment." >> $GITHUB_STEP_SUMMARY
 
   build_images:
     name: Build Phase 10 Images
@@ -96,7 +96,7 @@ jobs:
       imageTag: phase10
 
   deploy_or_cleanup:
-    name: Deploy or Cleanup Phase 10
+    name: Deploy Azure Phase 10
     needs: [preflight, build_images]
     if: ${{ always() && (inputs.dryRun || inputs.cleanupInfra || needs.build_images.result == 'success') }}
     uses: ./.github/workflows/infra-deploy.yml
@@ -139,6 +139,25 @@ jobs:
           echo "| Build Phase 10 Images | ${{ needs.build_images.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Deploy or Cleanup Phase 10 | ${{ needs.deploy_or_cleanup.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Summary | success |" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ inputs.cleanupInfra }}" = "true" ]; then
+            echo "| Deploy Gate | cleanup requested; deploy leg replaced by teardown |" >> $GITHUB_STEP_SUMMARY
+            echo "| Deploy Status Note | expected teardown path, not an Azure deploy run |" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ inputs.dryRun }}" = "true" ]; then
+            echo "| Deploy Gate | dry-run requested; build and deploy legs skipped |" >> $GITHUB_STEP_SUMMARY
+            echo "| Deploy Status Note | expected validation-only run |" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.preflight.result }}" != "success" ]; then
+            echo "| Deploy Gate | blocked by Phase 10 preflight failure |" >> $GITHUB_STEP_SUMMARY
+            echo "| Deploy Status Note | fix preflight before expecting Azure deployment |" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.build_images.result }}" != "success" ]; then
+            echo "| Deploy Gate | blocked by image build failure |" >> $GITHUB_STEP_SUMMARY
+            echo "| Deploy Status Note | fix the image build before expecting Azure deployment |" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.deploy_or_cleanup.result }}" != "success" ]; then
+            echo "| Deploy Gate | Azure deployment or cleanup failed in the child workflow |" >> $GITHUB_STEP_SUMMARY
+            echo "| Deploy Status Note | inspect the Deploy Azure Phase 10 job logs for the exact failure |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Deploy Gate | deployment path enabled |" >> $GITHUB_STEP_SUMMARY
+            echo "| Deploy Status Note | Azure deployment should have started or completed normally |" >> $GITHUB_STEP_SUMMARY
+          fi
           if [ "${{ inputs.dryRun }}" = "true" ] || [ "${{ inputs.cleanupInfra }}" = "true" ]; then
             echo "| Build Skipped | Yes |" >> $GITHUB_STEP_SUMMARY
           else
@@ -169,17 +188,17 @@ jobs:
           echo "| Wrapper Run ID | ${{ github.run_id }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Wrapper Run Attempt | ${{ github.run_attempt }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Wrapper Run URL | https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Deploy Workflow Output Name | ${{ needs.deploy_or_cleanup.outputs.deploymentName || '(not deployed)' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Deployment Name | ${{ needs.deploy_or_cleanup.outputs.deploymentName || '(not deployed)' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Gateway URL | https://${{ needs.deploy_or_cleanup.outputs.gatewayFqdn || 'n/a' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Gateway Swagger | https://${{ needs.deploy_or_cleanup.outputs.gatewayFqdn || 'n/a' }}/swagger |" >> $GITHUB_STEP_SUMMARY
           echo "| UI URL | https://${{ needs.deploy_or_cleanup.outputs.uiFqdn || 'n/a' }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📎 Child Summary Links" >> $GITHUB_STEP_SUMMARY
           echo "- Open the Build Phase 10 Images job for the per-service image logs." >> $GITHUB_STEP_SUMMARY
-          echo "- Open the Deploy or Cleanup Phase 10 job for the Azure deployment details or teardown trace." >> $GITHUB_STEP_SUMMARY
+          echo "- Open the Deploy Azure Phase 10 job for the Azure deployment details or teardown trace." >> $GITHUB_STEP_SUMMARY
           echo "- The detailed outputs remain in the nested child workflow summaries below this wrapper." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "> Child workflow details are available in the nested build and infra jobs below this wrapper summary." >> $GITHUB_STEP_SUMMARY
+          echo "> Child workflow details are available in the nested build and Azure deployment jobs below this wrapper summary." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### ✅ Verification Checklist" >> $GITHUB_STEP_SUMMARY
           if [ "${{ inputs.cleanupInfra }}" = "true" ]; then

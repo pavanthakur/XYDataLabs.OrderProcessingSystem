@@ -33,9 +33,9 @@ Shared operator rule:
 - The service names stay environment-suffixed and split by responsibility, so cleanup and redeploy can safely target the exact gateway, Orders, Inventory, Notifications, and UI resources.
 - The public hostname layer is the only thing that changes between the two hosts: localhost ports in Docker, ACA ingress or friendly aliases in Azure.
 - The `AZUREAPPSERVICE_*` GitHub secrets referenced in this repo are environment-scoped OIDC identifiers carried forward from the earlier setup flow; they are used by the active Phase 10 Container Apps workflows, not to imply an App Service deployment target.
-- The Phase 10 wrapper is the bootstrap-style single end-to-end delivery entry point for Phase 10. On a real deployment it runs in this order: preflight -> image build -> internal deploy or cleanup workflow -> summary. Dry run stops after validation and does not build or deploy.
+- The Phase 10 wrapper is the single end-to-end delivery entry point for Phase 10. On a real deployment it runs in this order: preflight -> image build -> Azure deploy or cleanup workflow -> summary. Dry run stops after validation and does not build or deploy.
 - If the architecture is expanded to include shared foundation resources again, they should be owned by the wrapper-owned infra path, not by the legacy App Service workflows.
-- The wrapper summary is the top-level checkpoint; the nested build and infra jobs hold the detailed child summaries, service-by-service logs, and deployment outputs.
+- The wrapper summary is the top-level checkpoint; the nested build and Azure deployment jobs hold the detailed child summaries, service-by-service logs, and deployment outputs.
 - In practice, use the wrapper summary for the overall result, then open the child build and deploy jobs for per-service logs and Azure deployment details.
 - Cleanup is split by storage layer:
   - `cleanupInfra=true` removes the Azure environment-scoped resource group and everything inside it.

@@ -1,4 +1,4 @@
-name: Deploy Azure Infrastructure (Internal)
+name: Deploy Azure Phase 10 Resources (Internal)
 
 on:
   workflow_call:
@@ -128,7 +128,7 @@ jobs:
             --parameters @"${PARAM_FILE}"
 
   deploy:
-    name: Deploy Infrastructure
+    name: Deploy Azure Phase 10
     if: github.event_name == 'workflow_call' && !inputs.dryRun
     needs: pre-validate
     runs-on: ubuntu-latest
@@ -164,19 +164,17 @@ jobs:
 
       - name: Enable Key Vault for template deployment
         run: |
-          # ARM needs enabledForTemplateDeployment=true to resolve KV parameter references.
-          # This may be false on first apply (Bicep sets it to true, but can't read the secret
-          # to start the deployment unless it's already true — chicken-and-egg).
-          # Bootstrap must be run before this workflow: KV is created by bootstrap, not by this Bicep.
+          # Phase 10 creates its own Key Vault in the same deployment.
+          # If the vault already exists, keep template deployment enabled for follow-up runs.
           KV_NAME="kv-orderprocessing-${{ steps.params.outputs.envSuffix }}"
           KV_ID=$(az keyvault show --name "$KV_NAME" --query id -o tsv 2>/dev/null || true)
           if [ -z "$KV_ID" ]; then
-            echo "ERROR: Key Vault '$KV_NAME' not found. Run 'Azure Bootstrap & Deploy' first to provision the environment before running infra deploy."
-            exit 1
+            echo "Key Vault '$KV_NAME' does not exist yet. Continuing so the Phase 10 deployment can create it."
+          else
+            echo "Enabling enabledForTemplateDeployment on $KV_NAME..."
+            az keyvault update --name "$KV_NAME" --enabled-for-template-deployment true
+            echo "Done."
           fi
-          echo "Enabling enabledForTemplateDeployment on $KV_NAME..."
-          az keyvault update --name "$KV_NAME" --enabled-for-template-deployment true
-          echo "Done."
 
       - name: Deploy (subscription scope)
         id: deploy
