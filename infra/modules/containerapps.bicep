@@ -172,6 +172,7 @@ resource gatewayApp 'Microsoft.App/containerApps@2024-03-01' = {
   properties: {
     managedEnvironmentId: acaEnvironment.id
     configuration: {
+      secrets: registrySecrets
       registries: registryConfigs
       ingress: {
         external: true
@@ -203,6 +204,7 @@ resource ordersApp 'Microsoft.App/containerApps@2024-03-01' = {
   properties: {
     managedEnvironmentId: acaEnvironment.id
     configuration: {
+      secrets: registrySecrets
       registries: registryConfigs
       ingress: {
         external: false
@@ -234,9 +236,9 @@ resource inventoryApp 'Microsoft.App/containerApps@2024-03-01' = {
   properties: {
     managedEnvironmentId: acaEnvironment.id
     configuration: {
+      secrets: registrySecrets
       registries: registryConfigs
     }
-    secrets: registrySecrets
     template: {
       containers: [
         {
@@ -262,9 +264,9 @@ resource notificationsApp 'Microsoft.App/containerApps@2024-03-01' = {
   properties: {
     managedEnvironmentId: acaEnvironment.id
     configuration: {
+      secrets: registrySecrets
       registries: registryConfigs
     }
-    secrets: registrySecrets
     template: {
       containers: [
         {
@@ -290,6 +292,7 @@ resource uiApp 'Microsoft.App/containerApps@2024-03-01' = {
   properties: {
     managedEnvironmentId: acaEnvironment.id
     configuration: {
+      secrets: registrySecrets
       registries: registryConfigs
       ingress: {
         external: true
