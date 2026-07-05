@@ -110,10 +110,42 @@ jobs:
       cleanupInfra: ${{ inputs.cleanupInfra }}
     secrets: inherit
 
+  gate_diagnostic:
+    name: Deploy Gate Diagnostic
+    runs-on: ubuntu-latest
+    needs: [preflight, build_images, deploy_or_cleanup]
+    if: always()
+    steps:
+      - name: Write gate diagnostic
+        shell: bash
+        run: |
+          echo "## 🔎 Deploy Gate Diagnostic" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| dryRun | ${{ inputs.dryRun }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| cleanupInfra | ${{ inputs.cleanupInfra }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| preflight | ${{ needs.preflight.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| build_images | ${{ needs.build_images.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| deploy_or_cleanup | ${{ needs.deploy_or_cleanup.result }} |" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ inputs.dryRun }}" = "true" ]; then
+            echo "| decision | dry-run path, deploy intentionally skipped |" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ inputs.cleanupInfra }}" = "true" ]; then
+            echo "| decision | cleanup path, deploy intentionally replaced by teardown |" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.preflight.result }}" != "success" ]; then
+            echo "| decision | blocked before build/deploy by preflight |" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.build_images.result }}" != "success" ]; then
+            echo "| decision | blocked before deploy by image build |" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.deploy_or_cleanup.result }}" = "success" ]; then
+            echo "| decision | deploy path enabled and child workflow completed |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| decision | deploy path should have run, but child workflow was skipped or failed |" >> $GITHUB_STEP_SUMMARY
+          fi
+
   summary:
     name: Phase 10 Run Summary
     runs-on: ubuntu-latest
-    needs: [preflight, build_images, deploy_or_cleanup]
+    needs: [preflight, build_images, deploy_or_cleanup, gate_diagnostic]
     if: always()
     steps:
       - name: Write summary
