@@ -96,6 +96,11 @@ The SQL module provisions:
 - Firewall rule to allow Azure services
 - Connection string automatically configured in App Services
 
+Phase 10 note:
+- The active `main.phase10.bicep` entrypoint does not invoke `modules/sql.bicep` today.
+- Phase 10 is intentionally transport-first and currently deploys Service Bus, Log Analytics, Application Insights, Container Apps, Functions, Key Vault, and the container images.
+- If you need SQL Server or Redis in Azure, treat that as a separate later-phase addition or legacy bootstrap responsibility, not an output of the current Phase 10 wrapper.
+
 **Security Note**: SQL admin credentials are stored as secure parameters. In production, consider using:
 - Azure Key Vault for credential management
 - Managed Identity for SQL authentication
