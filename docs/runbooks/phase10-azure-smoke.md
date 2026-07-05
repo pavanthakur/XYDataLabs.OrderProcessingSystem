@@ -20,6 +20,13 @@ If you want human-friendly public URLs, choose:
 
 When alias binding is enabled, supply a real `publicDomain` value such as `contoso.com`.
 
+Quick chooser:
+
+- Pick `direct` if you want the custom domain to land directly on the Container App ingress.
+- Pick `frontdoor` if you want the run to only prepare the alias plan for a Front Door or DNS layer.
+- Leave aliasing off for dry run and first deploys unless you already own the public domain.
+- `direct` is the safer default when you are testing the Phase 10 path for the first time.
+
 Shared operator rule:
 - Local Docker and Azure Container Apps should be treated as the same Phase 10 service graph with different hosting targets.
 - Both hosts now consume the same `orderprocessing-*` service image family, so the only contract difference is the runtime host and ingress surface.

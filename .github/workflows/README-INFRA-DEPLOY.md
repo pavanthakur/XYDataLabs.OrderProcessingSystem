@@ -62,6 +62,13 @@ It supports three execution modes:
 | **Bind Aliases** | Enable alias planning / binding checks | true/false | false |
 | **Alias Mode** | Choose direct ACA binding or front-door planning | direct / frontdoor | direct |
 
+   Alias guidance:
+
+   - Leave `Public Domain` empty and `Bind Aliases=false` for your first dry run.
+   - Use `Alias Mode=direct` when you want a custom domain to point straight at the Container App ingress.
+   - Use `Alias Mode=frontdoor` when you want the workflow to stay in planning mode for a DNS or Front Door layer you manage separately.
+   - Only enable `Bind Aliases=true` after the base deployment works and you have a real domain suffix to use.
+
 4. **Run Types:**
 
    **🧪 Dry Run (What-If Analysis):**
