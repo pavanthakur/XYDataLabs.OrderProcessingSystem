@@ -8,7 +8,13 @@ The `infra-deploy.yml` workflow deploys the active Azure infrastructure surface 
 
 ## Phase 10 Ownership
 
-Use this workflow as the single lifecycle owner for the Azure runtime stack:
+Use `phase10-deploy-orchestrator.yml` as the bootstrap-style single lifecycle owner for the Azure delivery path:
+
+- one wrapper for humans to click
+- one end-to-end sequence for deploy or cleanup
+- internal reusable workflows for image build and infra execution
+
+The active wrapper may own both the Phase 10 runtime stack and any shared foundation resources we intentionally keep in scope:
 
 - `dryRun=true` runs what-if only
 - `dryRun=false` and `cleanupInfra=false` deploys or updates the Phase 10 stack, creating the environment-scoped Azure resources when they are missing
@@ -25,12 +31,25 @@ The workflow summary surfaces the resources that matter for runtime and cleanup:
 - Function App
 - Key Vault
 
+### Workflow Ownership Table
+
+| workflow | click target | owns RG creation | builds images | deploys app | cleanup | current or legacy |
+|---|---|---:|---:|---:|---:|---|
+| `phase10-deploy-orchestrator.yml` | yes | yes, through the internal infra path | yes | yes, through the internal infra path | yes | current |
+| `build-phase10-images.yml` | no, internal only | no | yes | no | no | current |
+| `infra-deploy.yml` | no, internal only | yes, through Bicep | no | yes | yes | current |
+| `phase10-retention-cleanup.yml` | yes | no | no | no | yes, packages/artifacts only | current |
+| `azure-bootstrap.yml` | yes, but legacy | yes, legacy App Service stack | no | yes, legacy API/UI apps | yes | legacy |
+| `deploy-api-to-azure.yml` | no, legacy child | no | no | yes | no | legacy |
+| `deploy-ui-to-azure.yml` | no, legacy child | no | no | yes | no | legacy |
+
 If you are looking for the other responsibilities in the new Phase 10 model:
 
 - `azure-initial-setup.yml` handles one-time repository and OIDC setup
 - `build-phase10-images.yml` handles image publication
 - `phase10-docker-dev-http-e2e.yml` handles local-vs-CI validation
-- `azure-bootstrap.yml`, `deploy-api-to-azure.yml`, and `deploy-ui-to-azure.yml` are legacy App Service compatibility workflows only
+- `azure-bootstrap.yml`, `deploy-api-to-azure.yml`, and `deploy-ui-to-azure.yml` are legacy App Service workflows only and should not be treated as the active Phase 10 path
+- `phase10-retention-cleanup.yml` is the scheduled housekeeping workflow for GHCR image versions and stale GitHub Actions artifacts; it does not deploy or tear down Azure infrastructure
 
 It supports three execution modes:
 
@@ -94,19 +113,52 @@ It supports three execution modes:
    - Uses `infra/main.phase10.bicep` and `infra/parameters/phase10-<env>.json`
    - Resources follow the environment-suffixed naming pattern so Phase X cleanup can remove the matching stack
    - Gateway, Orders, Inventory, Notifications, and UI are deployed as separate Container Apps with separate images, matching the split-service Docker validation lane
-   - The workflow summary shows transport-stack outputs
+   - The workflow summary shows transport-stack outputs and any wrapper-owned shared foundation outputs we choose to keep in scope
    - If `Bind Aliases` is enabled, provide a real `Public Domain` so the workflow can derive env-aware public names like `api-dev.contoso.com`
+   - The wrapper execution order is intentionally `preflight -> build images -> internal deploy or cleanup -> summary`, so a real run should show the image job before the internal infra workflow in Actions
+   - The wrapper summary is only the top-level checkpoint; detailed logs and outputs live in the nested build and infra jobs under the run
+   - If you need per-service image logs or deployment traceability, open the child jobs under the wrapper rather than relying on the top-level summary alone
 
 **Shared contract with local Docker validation:**
 - same environment suffix pattern (`dev`, `staging`, `prod`)
 - same split-service shape (gateway/orders/inventory/notifications/UI)
 - same cleanup symmetry (`appname-env` resources can be torn down safely)
 - different public URL style only at the hosting layer: local Docker uses fixed localhost ports, Azure Container Apps uses generated ingress plus optional aliases
+- the image build stage is intentionally grouped into one wrapper step with one individual log block per service, so exported run logs may be consolidated even though the Actions UI still shows each service build separately
 
 **Related validation gate:**
 - `phase10-docker-dev-http-e2e.yml` runs the same hook-based Docker Dev HTTP sequence in CI and uploads the matching `TestResults/Playwright/phase10-docker-http` artifacts.
 - Use the hook as the merge gate for the local Docker validation chain, and use `phase10-deploy-orchestrator.yml` to drive `infra-deploy.yml` for Azure Container Apps deployment and alias planning.
 - Use the same workflow with `Cleanup Infra=true` to tear down the environment-scoped Phase 10 stack when you want to reset the environment.
+
+### Cleanup and Retention Boundaries
+
+Phase 10 cleanup is intentionally scoped to the Azure environment stack:
+
+- `Cleanup Infra=true` deletes the environment-scoped Azure resource group and the resources inside it.
+- `Cleanup Infra=true` does **not** delete GHCR images that were published by the build workflow.
+- `Cleanup Infra=true` does **not** purge historical GitHub Actions logs or artifacts beyond the repository retention settings.
+- `Cleanup Infra=true` does **not** change Azure Log Analytics or Application Insights retention policies.
+
+If image or log storage needs active housekeeping, add a separate scheduled cleanup workflow or retention policy for that storage layer. Keep that concern separate from the deployment wrapper so the deploy path stays predictable.
+
+Source-of-truth controls:
+
+- GitHub Actions artifact retention is set per upload step where practical.
+- GHCR package retention is handled by `phase10-retention-cleanup.yml`.
+- Azure Log Analytics retention is configured on the workspace itself.
+
+Default cleanup policy:
+
+- Keep the last `10` GHCR package versions per image.
+- Delete GitHub Actions artifacts older than `14` days.
+- Run the scheduled cleanup workflow in delete mode, but keep the manual `workflow_dispatch` entry in dry-run mode unless you explicitly disable it for an audit run.
+
+| Area | Source of truth | Default |
+|---|---|---|
+| GHCR images | `phase10-retention-cleanup.yml` | Keep last `10` versions per image |
+| GitHub artifacts | workflow upload step + `phase10-retention-cleanup.yml` | `retention-days: 14` |
+| Azure Log Analytics | workspace setting / Bicep / Azure policy | Managed outside the deploy wrapper |
 
 ---
 
