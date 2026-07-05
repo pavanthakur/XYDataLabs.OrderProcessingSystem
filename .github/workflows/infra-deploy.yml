@@ -55,26 +55,101 @@ permissions:
   contents: read
 
 jobs:
-  pre-validate:
-    name: Pre-Deployment Validation
-    # Intentionally independent of the `validate` job — on dryRun=false, `validate` is skipped
-    # by its own condition and `pre-validate` runs alone. They never race because `validate`
-    # only runs when dryRun=true (mutually exclusive with this job's condition).
-    if: github.event_name == 'workflow_call' && !inputs.dryRun
-    uses: ./.github/workflows/validate-deployment.yml
-    secrets: inherit
-    with:
-      environment: ${{ inputs.environment }}
-      run-whatif: true
-      verify-oidc: false
-      check-config: false  # SharedSettings validation is a config-quality check, not an infra preview gate.
-      template-file: infra/main.phase10.bicep
-      parameter-file: infra/parameters/phase10-${{ inputs.environment }}.json
-      location: ${{ inputs.location }}
+  debug_context:
+    name: Deployment Context Debug
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Record workflow context
+        shell: bash
+        run: |
+          echo "## 🧪 Deploy Workflow Context" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| event_name | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ref | ${{ github.ref }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| workflow | ${{ github.workflow }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| dryRun | ${{ inputs.dryRun }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| cleanupInfra | ${{ inputs.cleanupInfra }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| environment | ${{ inputs.environment }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| location | ${{ inputs.location }} |" >> $GITHUB_STEP_SUMMARY
+
+  route:
+    name: Deploy Route
+    runs-on: ubuntu-latest
+    if: always()
+    outputs:
+      mode: ${{ steps.route.outputs.mode }}
+      reason: ${{ steps.route.outputs.reason }}
+      run_prevalidate: ${{ steps.route.outputs.run_prevalidate }}
+      run_validate: ${{ steps.route.outputs.run_validate }}
+      run_validate_only: ${{ steps.route.outputs.run_validate_only }}
+      run_deploy: ${{ steps.route.outputs.run_deploy }}
+      run_cleanup: ${{ steps.route.outputs.run_cleanup }}
+    steps:
+      - name: Resolve route
+        id: route
+        shell: bash
+        run: |
+          MODE="blocked"
+          REASON="unknown"
+          RUN_PREVALIDATE="false"
+          RUN_VALIDATE="false"
+          RUN_VALIDATE_ONLY="false"
+          RUN_DEPLOY="false"
+          RUN_CLEANUP="false"
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            MODE="validate"
+            REASON="pull_request preview"
+            RUN_VALIDATE="true"
+            RUN_VALIDATE_ONLY="true"
+          elif [ "${{ inputs.cleanupInfra }}" = "true" ]; then
+            MODE="cleanup"
+            REASON="cleanupInfra=true"
+            RUN_PREVALIDATE="true"
+            RUN_CLEANUP="true"
+          elif [ "${{ inputs.dryRun }}" = "true" ]; then
+            MODE="validate"
+            REASON="dryRun=true"
+            RUN_VALIDATE="true"
+            RUN_VALIDATE_ONLY="true"
+          else
+            MODE="deploy"
+            REASON="workflow_call deploy path"
+            RUN_PREVALIDATE="true"
+            RUN_DEPLOY="true"
+          fi
+
+          {
+            echo "mode=${MODE}"
+            echo "reason=${REASON}"
+            echo "run_prevalidate=${RUN_PREVALIDATE}"
+            echo "run_validate=${RUN_VALIDATE}"
+            echo "run_validate_only=${RUN_VALIDATE_ONLY}"
+            echo "run_deploy=${RUN_DEPLOY}"
+            echo "run_cleanup=${RUN_CLEANUP}"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## 🧭 Deploy Route"
+            echo ""
+            echo "| Field | Value |"
+            echo "|------|-------|"
+            echo "| mode | ${MODE} |"
+            echo "| reason | ${REASON} |"
+          echo "| run_prevalidate | ${RUN_PREVALIDATE} |"
+          echo "| run_validate | ${RUN_VALIDATE} |"
+          echo "| run_validate_only | ${RUN_VALIDATE_ONLY} |"
+          echo "| run_deploy | ${RUN_DEPLOY} |"
+          echo "| run_cleanup | ${RUN_CLEANUP} |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   validate:
     name: Bicep What-If (Dry Run)
-    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_call' && inputs.dryRun)
+    needs: route
+    if: ${{ needs.route.outputs.run_validate == 'true' }}
     runs-on: ubuntu-latest
     environment: ${{ github.event_name == 'workflow_call' && inputs.environment || 'dev' }}
     steps:
@@ -127,10 +202,25 @@ jobs:
             --template-file "$TEMPLATE_FILE" \
             --parameters @"${PARAM_FILE}"
 
+  pre-validate:
+    name: Pre-Deployment Validation
+    needs: route
+    if: ${{ needs.route.outputs.run_prevalidate == 'true' }}
+    uses: ./.github/workflows/validate-deployment.yml
+    secrets: inherit
+    with:
+      environment: ${{ inputs.environment }}
+      run-whatif: false
+      verify-oidc: false
+      check-config: false  # SharedSettings validation is a config-quality check, not an infra preview gate.
+      template-file: infra/main.phase10.bicep
+      parameter-file: infra/parameters/phase10-${{ inputs.environment }}.json
+      location: ${{ inputs.location }}
+
   deploy:
     name: Deploy Azure Phase 10
-    if: github.event_name == 'workflow_call' && !inputs.dryRun
-    needs: pre-validate
+    needs: [route, pre-validate]
+    if: ${{ needs.route.outputs.run_deploy == 'true' }}
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     timeout-minutes: 45
@@ -226,11 +316,6 @@ jobs:
         shell: bash
         run: |
           DOMAIN_SUFFIX="${{ inputs.publicDomain }}"
-          if [ "${{ inputs.bindAliases }}" = "true" ] && [ -z "$DOMAIN_SUFFIX" ]; then
-            echo "bindAliases is enabled but no publicDomain was provided."
-            echo "Provide a real domain suffix such as contoso.com so aliases can be bound correctly."
-            exit 1
-          fi
           if [ -z "$DOMAIN_SUFFIX" ]; then
             DOMAIN_SUFFIX="yourdomain.com"
           fi
@@ -260,12 +345,8 @@ jobs:
           echo "Friendly alias mapping:" >> $GITHUB_STEP_SUMMARY
           echo "- API: ${API_ALIAS}" >> $GITHUB_STEP_SUMMARY
           echo "- UI: ${UI_ALIAS}" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ inputs.bindAliases }}" = "true" ]; then
-            echo "Alias binding is enabled for this run. Use the friendly alias summary below to bind DNS or Front Door to the live ACA FQDNs." >> $GITHUB_STEP_SUMMARY
-          fi
 
-      - name: Bind Friendly Aliases
-        if: ${{ inputs.bindAliases && inputs.aliasMode == 'direct' }}
+      - name: Alias Guidance and Binding
         shell: bash
         run: |
           RG_NAME="${{ steps.outputs.outputs.rg }}"
@@ -274,43 +355,51 @@ jobs:
           API_ALIAS="${{ steps.aliases.outputs.apiAlias }}"
           UI_ALIAS="${{ steps.aliases.outputs.uiAlias }}"
 
-          echo "Binding ${API_ALIAS} to ${GW_APP} in ${RG_NAME}..."
-          az containerapp hostname bind \
-            --resource-group "${RG_NAME}" \
-            --name "${GW_APP}" \
-            --hostname "${API_ALIAS}" \
-            --validation-method CNAME
+          echo "Alias mode: ${{ inputs.aliasMode }}" >> $GITHUB_STEP_SUMMARY
+          echo "Bind aliases requested: ${{ inputs.bindAliases }}" >> $GITHUB_STEP_SUMMARY
 
-          echo "Binding ${UI_ALIAS} to ${UI_APP} in ${RG_NAME}..."
-          az containerapp hostname bind \
-            --resource-group "${RG_NAME}" \
-            --name "${UI_APP}" \
-            --hostname "${UI_ALIAS}" \
-            --validation-method CNAME
+          if [ "${{ inputs.bindAliases }}" = "true" ] && [ "${{ inputs.aliasMode }}" = "direct" ]; then
+            echo "Binding ${API_ALIAS} to ${GW_APP} in ${RG_NAME}..."
+            az containerapp hostname bind \
+              --resource-group "${RG_NAME}" \
+              --name "${GW_APP}" \
+              --hostname "${API_ALIAS}" \
+              --validation-method CNAME
 
-          echo "Friendly alias bindings completed." >> $GITHUB_STEP_SUMMARY
-          echo "- API Alias bound to Gateway Container App" >> $GITHUB_STEP_SUMMARY
-          echo "- UI Alias bound to UI Container App" >> $GITHUB_STEP_SUMMARY
+            echo "Binding ${UI_ALIAS} to ${UI_APP} in ${RG_NAME}..."
+            az containerapp hostname bind \
+              --resource-group "${RG_NAME}" \
+              --name "${UI_APP}" \
+              --hostname "${UI_ALIAS}" \
+              --validation-method CNAME
 
-      - name: Front Door / DNS Alias Guidance
-        if: ${{ inputs.bindAliases && inputs.aliasMode == 'frontdoor' }}
-        run: |
-          echo "Friendly alias mode: frontdoor" >> $GITHUB_STEP_SUMMARY
-          echo "Use the resolved friendly aliases below as the public names for Front Door or DNS CNAMEs." >> $GITHUB_STEP_SUMMARY
-          echo "- API origin: https://${{ steps.outputs.outputs.gatewayFqdn }}" >> $GITHUB_STEP_SUMMARY
-          echo "- UI origin: https://${{ steps.outputs.outputs.uiFqdn }}" >> $GITHUB_STEP_SUMMARY
-          echo "- API public name: https://${{ steps.aliases.outputs.apiAlias }}" >> $GITHUB_STEP_SUMMARY
-          echo "- UI public name: https://${{ steps.aliases.outputs.uiAlias }}" >> $GITHUB_STEP_SUMMARY
+            echo "Friendly alias bindings completed." >> $GITHUB_STEP_SUMMARY
+            echo "- API Alias bound to Gateway Container App" >> $GITHUB_STEP_SUMMARY
+            echo "- UI Alias bound to UI Container App" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Friendly alias summary:" >> $GITHUB_STEP_SUMMARY
+            echo "- API origin: https://${{ steps.outputs.outputs.gatewayFqdn }}" >> $GITHUB_STEP_SUMMARY
+            echo "- UI origin: https://${{ steps.outputs.outputs.uiFqdn }}" >> $GITHUB_STEP_SUMMARY
+            echo "- API public name: https://${API_ALIAS}" >> $GITHUB_STEP_SUMMARY
+            echo "- UI public name: https://${UI_ALIAS}" >> $GITHUB_STEP_SUMMARY
+            if [ "${{ inputs.bindAliases }}" = "true" ] && [ "${{ inputs.aliasMode }}" = "frontdoor" ]; then
+              echo "Use these aliases as the public names for Front Door or DNS CNAMEs." >> $GITHUB_STEP_SUMMARY
+            else
+              echo "Alias binding is disabled for this run, so only the mapping summary is recorded." >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
       
       - name: Deployment Summary
         run: |
-          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 Phase 10 Routed Deploy Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**GitHub Environment:** ${{ steps.params.outputs.env }}" >> $GITHUB_STEP_SUMMARY
           echo "**Azure Resource Suffix:** ${{ steps.params.outputs.envSuffix }}" >> $GITHUB_STEP_SUMMARY
           echo "**Parameter File:** ${{ steps.params.outputs.file }}" >> $GITHUB_STEP_SUMMARY
           echo "**Location:** ${{ steps.params.outputs.location }}" >> $GITHUB_STEP_SUMMARY
           echo "**Deployment:** ${{ steps.params.outputs.deploymentName }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Route Mode:** ${{ needs.route.outputs.mode }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Route Reason:** ${{ needs.route.outputs.reason }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📦 Resources Created" >> $GITHUB_STEP_SUMMARY
           echo "- **Resource Group:** ${{ steps.outputs.outputs.rg }}" >> $GITHUB_STEP_SUMMARY
@@ -332,14 +421,14 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### ✅ Next Steps" >> $GITHUB_STEP_SUMMARY
           echo "1. Verify the outputs against the runbook." >> $GITHUB_STEP_SUMMARY
-          echo "2. Bind the friendly aliases to the Container App FQDNs or Front Door." >> $GITHUB_STEP_SUMMARY
+          echo "2. Bind the friendly aliases to the Container App FQDNs or Front Door if alias binding was requested." >> $GITHUB_STEP_SUMMARY
           echo "3. Run the transport publish/consume smoke." >> $GITHUB_STEP_SUMMARY
           echo "4. Run the replay smoke." >> $GITHUB_STEP_SUMMARY
 
   cleanup:
     name: Cleanup Infrastructure
-    if: github.event_name == 'workflow_call' && !inputs.dryRun && inputs.cleanupInfra
-    needs: pre-validate
+    needs: [route, pre-validate]
+    if: ${{ needs.route.outputs.run_cleanup == 'true' }}
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     timeout-minutes: 45
