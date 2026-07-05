@@ -18,6 +18,16 @@ Anchor flow for the first slice:
 | SharedContracts extraction | Deferred | Keep it out unless transport work proves real duplication across multiple services. |
 | Azure dev what-if / deploy | Pending Azure auth | The Bicep shape is updated and locally compiled, but the cloud validation still needs a working Azure login/session and deployment run. |
 | Phase 10 smoke / replay testing | Pending deployment | Start after a successful dev deployment and verify publish, consume, DLQ, and replay behavior end to end. |
+| Cleanup policy closeout | Separate follow-up | GHCR cleanup, artifact retention, and Log Analytics retention stay outside the deploy wrapper; finalize the workspace policy choice last. |
+
+### Cleanup Policy Snapshot
+
+| Area | Current state | Remaining? |
+|---|---|---|
+| Azure resource-group teardown | Covered by `cleanupInfra=true` in the Phase 10 wrapper | No |
+| GHCR package cleanup | Covered by `phase10-retention-cleanup.yml` | No |
+| GitHub artifact retention | Covered by `retention-days` plus optional cleanup in the housekeeping workflow | No for the updated workflows |
+| Azure Log Analytics retention | Separate workspace/Bicep/Azure Policy decision | Yes, optional follow-up |
 
 Use the existing envelope and metadata types as the canonical shape:
 - `XYDataLabs.OrderProcessingSystem.Application/Events/EventEnvelope.cs`
@@ -31,6 +41,7 @@ Phase 10 is ready to call complete only when all of the following are true:
 
 - The first transport slice is anchored on the order-created path and still uses the canonical envelope contract.
 - `SharedContracts` is still deferred unless the transport slice proves real duplication across services.
+- Cleanup policy remains a final follow-up item after the Phase 10 transport and deploy path are stable: GHCR cleanup is enforced by the scheduled cleanup workflow, artifact retention is handled at upload plus cleanup, and Log Analytics retention is decided separately at the workspace/IaC/policy layer.
 - `infra/modules/servicebus.bicep` defines the topic/subscription topology, TTL, dead-letter forwarding, ownership rules, and transport credentials needed by the first flow.
 - `ServiceBusOptions.cs`, `MessageMetadataMapper.cs`, `ServiceBusMessageFactory.cs`, `ServiceBusEventPublisher.cs`, and `DlqReplayWorker.cs` exist and are wired together as the broker-facing adapter layer.
 - `StartupHelper.cs` registers the Service Bus adapter and DLQ worker while preserving the in-memory publisher as the local fallback.

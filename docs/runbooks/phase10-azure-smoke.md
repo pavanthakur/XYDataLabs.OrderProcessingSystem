@@ -33,10 +33,45 @@ Shared operator rule:
 - The service names stay environment-suffixed and split by responsibility, so cleanup and redeploy can safely target the exact gateway, Orders, Inventory, Notifications, and UI resources.
 - The public hostname layer is the only thing that changes between the two hosts: localhost ports in Docker, ACA ingress or friendly aliases in Azure.
 - The `AZUREAPPSERVICE_*` GitHub secrets referenced in this repo are environment-scoped OIDC identifiers carried forward from the earlier setup flow; they are used by the active Phase 10 Container Apps workflows, not to imply an App Service deployment target.
+- The Phase 10 wrapper is the bootstrap-style single end-to-end delivery entry point for Phase 10. On a real deployment it runs in this order: preflight -> image build -> internal deploy or cleanup workflow -> summary. Dry run stops after validation and does not build or deploy.
+- If the architecture is expanded to include shared foundation resources again, they should be owned by the wrapper-owned infra path, not by the legacy App Service workflows.
+- The wrapper summary is the top-level checkpoint; the nested build and infra jobs hold the detailed child summaries, service-by-service logs, and deployment outputs.
+- In practice, use the wrapper summary for the overall result, then open the child build and deploy jobs for per-service logs and Azure deployment details.
+- Cleanup is split by storage layer:
+  - `cleanupInfra=true` removes the Azure environment-scoped resource group and everything inside it.
+  - GHCR images are not removed by the deployment wrapper today.
+  - GitHub Actions logs and artifacts follow repository retention settings unless a dedicated cleanup flow is added.
+  - Log Analytics and Application Insights retain their own retention policies unless you change them separately.
+  - `phase10-retention-cleanup.yml` handles GHCR package version cleanup and stale artifact cleanup without touching Azure deployment resources.
+
+Retention source of truth:
+- Artifact retention should be set on the upload step whenever the workflow owns the artifact.
+- GHCR package retention is handled by the scheduled cleanup workflow.
+- Azure Log Analytics retention is configured on the workspace, not in the deploy wrapper.
+
+Default retention policy:
+- Keep the last `10` GHCR package versions per image.
+- Delete GitHub Actions artifacts older than `14` days.
+- Use dry-run only for manual cleanup previews; the scheduled cleanup run should perform the actual deletion.
+
+| Area | Source of truth | Default |
+|---|---|---|
+| GHCR images | `phase10-retention-cleanup.yml` | Keep last `10` versions per image |
+| GitHub artifacts | workflow upload step + `phase10-retention-cleanup.yml` | `retention-days: 14` |
+| Azure Log Analytics | workspace setting / Bicep / Azure policy | Managed outside the deploy wrapper |
+
+| Area | Current state | Remaining? |
+|---|---|---|
+| Azure resource-group teardown | Covered by `cleanupInfra=true` in the Phase 10 wrapper | No |
+| GHCR package cleanup | Covered by `phase10-retention-cleanup.yml` | No |
+| GitHub artifact retention | Covered by `retention-days` plus optional cleanup in the housekeeping workflow | No for the updated workflows |
+| Azure Log Analytics retention | Separate workspace/Bicep/Azure Policy decision | Yes, optional follow-up |
 
 Local-vs-CI guidance:
 - Use the local hook or VS Code tasks when you need to debug the Docker stack interactively.
 - Use the GitHub Actions workflow as the pre-merge gate to confirm the same sequence still passes on a runner and still writes the expected log pointers and artifacts.
+- In the GitHub Actions run view, the five Phase 10 image builds are expected to appear as one grouped `Build Phase 10 Images` stage with one individual log block per service (`gateway`, `orders`, `inventory`, `notifications`, `ui`).
+- If you export the run log, those five service logs may be consolidated into a single file even though the Actions UI still shows them individually.
 
 ## Runtime Verification Checklist
 
@@ -107,6 +142,7 @@ Use the hook when:
 - you want the stack started automatically if it is not already running
 - you want a single pass that includes ready, smoke, integration, matrix, and full validation
 - you want the same log trail for repeatable validation and handoff
+- you want the local order to match the Phase 10 wrapper expectation before you move to Azure
 
 Quick start:
 
