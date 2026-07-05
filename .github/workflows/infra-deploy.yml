@@ -183,6 +183,8 @@ jobs:
             echo "envSuffix=dev" >> $GITHUB_OUTPUT
             echo "location=centralindia" >> $GITHUB_OUTPUT
           fi
+          echo "ghcrUsername=${{ github.repository_owner }}" >> $GITHUB_OUTPUT
+          echo "ghcrReadToken=${{ secrets.GHCR_READ_TOKEN }}" >> $GITHUB_OUTPUT
       
       - name: Azure CLI Login (OIDC)
         uses: azure/login@v3
@@ -200,7 +202,9 @@ jobs:
           az deployment sub what-if \
             --location "$LOCATION" \
             --template-file "$TEMPLATE_FILE" \
-            --parameters @"${PARAM_FILE}"
+            --parameters @"${PARAM_FILE}" \
+            --parameters ghcrUsername="${{ steps.params.outputs.ghcrUsername }}" \
+            --parameters ghcrReadToken="${{ steps.params.outputs.ghcrReadToken }}"
 
   pre-validate:
     name: Pre-Deployment Validation
@@ -244,6 +248,8 @@ jobs:
           echo "template=infra/main.phase10.bicep" >> $GITHUB_OUTPUT
           echo "file=infra/parameters/phase10-${{ inputs.environment }}.json" >> $GITHUB_OUTPUT
           echo "phase10=true" >> $GITHUB_OUTPUT
+          echo "ghcrUsername=${{ github.repository_owner }}" >> $GITHUB_OUTPUT
+          echo "ghcrReadToken=${{ secrets.GHCR_READ_TOKEN }}" >> $GITHUB_OUTPUT
       
       - name: Azure CLI Login (OIDC)
         uses: azure/login@v3
@@ -273,7 +279,9 @@ jobs:
             --name ${{ steps.params.outputs.deploymentName }} \
             --location ${{ steps.params.outputs.location }} \
             --template-file ${{ steps.params.outputs.template }} \
-            --parameters @${{ steps.params.outputs.file }}
+            --parameters @${{ steps.params.outputs.file }} \
+            --parameters ghcrUsername="${{ steps.params.outputs.ghcrUsername }}" \
+            --parameters ghcrReadToken="${{ steps.params.outputs.ghcrReadToken }}"
       
       - name: Get Deployment Outputs
         id: outputs

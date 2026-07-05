@@ -63,6 +63,12 @@ param notificationsImage string
 @description('UI container image reference')
 param uiImage string
 
+@description('GHCR username used for image pulls')
+param ghcrUsername string = ''
+
+@description('GHCR read token used for image pulls')
+param ghcrReadToken string = ''
+
 var environmentName = 'aca-${baseName}-${environment}'
 var gatewayName = '${baseName}-gate-${environment}'
 var ordersName = '${baseName}-ord-${environment}'
@@ -129,6 +135,19 @@ var notificationsEnv = concat(publisherEnv, [
     value: notificationsSubscriptionName
   }
 ])
+var registryConfigs = !empty(ghcrUsername) && !empty(ghcrReadToken) ? [
+  {
+    server: 'ghcr.io'
+    username: ghcrUsername
+    passwordSecretRef: 'ghcr-pull-token'
+  }
+] : []
+var registrySecrets = !empty(ghcrReadToken) ? [
+  {
+    name: 'ghcr-pull-token'
+    value: ghcrReadToken
+  }
+] : []
 
 resource acaEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' = {
   name: environmentName
@@ -153,6 +172,7 @@ resource gatewayApp 'Microsoft.App/containerApps@2024-03-01' = {
   properties: {
     managedEnvironmentId: acaEnvironment.id
     configuration: {
+      registries: registryConfigs
       ingress: {
         external: true
         targetPort: 8080
@@ -183,6 +203,7 @@ resource ordersApp 'Microsoft.App/containerApps@2024-03-01' = {
   properties: {
     managedEnvironmentId: acaEnvironment.id
     configuration: {
+      registries: registryConfigs
       ingress: {
         external: false
         targetPort: 8080
@@ -212,6 +233,10 @@ resource inventoryApp 'Microsoft.App/containerApps@2024-03-01' = {
   }
   properties: {
     managedEnvironmentId: acaEnvironment.id
+    configuration: {
+      registries: registryConfigs
+    }
+    secrets: registrySecrets
     template: {
       containers: [
         {
@@ -236,6 +261,10 @@ resource notificationsApp 'Microsoft.App/containerApps@2024-03-01' = {
   }
   properties: {
     managedEnvironmentId: acaEnvironment.id
+    configuration: {
+      registries: registryConfigs
+    }
+    secrets: registrySecrets
     template: {
       containers: [
         {
@@ -261,6 +290,7 @@ resource uiApp 'Microsoft.App/containerApps@2024-03-01' = {
   properties: {
     managedEnvironmentId: acaEnvironment.id
     configuration: {
+      registries: registryConfigs
       ingress: {
         external: true
         targetPort: 8080
