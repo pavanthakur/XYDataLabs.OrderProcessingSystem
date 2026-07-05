@@ -22,21 +22,3 @@ jobs:
       - name: Run prompt validator
         working-directory: ${{ github.workspace }}
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/validate-prompts.ps1
-name: CI - Validate AI Prompts
-on:
-  push:
-    paths:
-      - '.github/prompts/**'
-  pull_request:
-    paths:
-      - '.github/prompts/**'
-
-jobs:
-  validate-prompts:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Run prompt validation script
-        shell: pwsh
-        run: |
-          pwsh -NoProfile -ExecutionPolicy Bypass -File .github\ci\validate-prompts.ps1

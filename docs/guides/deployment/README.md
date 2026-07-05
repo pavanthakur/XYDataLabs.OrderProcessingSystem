@@ -16,3 +16,15 @@ Use these documents:
 - `bicep-overview.md` — Bicep deployment overview for the canonical Bicep subtree
 - `azure-deploy-smoke.md` — deploy, verify, and smoke-test quick start for the active Azure surface
 - `retry-logic-implementation.md` — deployment retry strategy and implementation reference
+
+Phase 10 cleanup and provisioning now use the same wrapper-driven path:
+- `phase10-deploy-orchestrator.yml` for the manual operator entrypoint
+- `infra-deploy.yml` for the internal deploy/cleanup implementation
+- `dryRun=true` for what-if validation
+- `dryRun=false` and `cleanupInfra=false` for deployment
+- `dryRun=false` and `cleanupInfra=true` for destructive teardown of the environment-scoped stack
+
+This is the replacement for the old App Service-era bootstrap/deploy split:
+- `azure-bootstrap.yml` remains only as a historical compatibility reference
+- `deploy-api-to-azure.yml` and `deploy-ui-to-azure.yml` remain only as historical compatibility references
+- platform resources such as Service Bus, App Insights, Key Vault, and the Container Apps environment belong to `infra-deploy.yml`

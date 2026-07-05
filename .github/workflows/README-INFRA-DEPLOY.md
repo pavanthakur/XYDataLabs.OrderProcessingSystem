@@ -6,21 +6,47 @@ The `infra-deploy.yml` workflow deploys the active Azure infrastructure surface 
 
 > **Phase 10 note:** This guide describes the active Azure Container Apps deployment path for Phase 10. Legacy App Service references remain only for historical compatibility and should not be treated as the current target runtime model.
 
+## Phase 10 Ownership
+
+Use this workflow as the single lifecycle owner for the Azure runtime stack:
+
+- `dryRun=true` runs what-if only
+- `dryRun=false` and `cleanupInfra=false` deploys or updates the Phase 10 stack
+- `dryRun=false` and `cleanupInfra=true` tears down the environment-scoped Phase 10 stack
+
+The workflow summary surfaces the resources that matter for runtime and cleanup:
+
+- Resource Group
+- Service Bus
+- Log Analytics Workspace
+- Application Insights
+- Container Apps environment
+- Gateway / Orders / Inventory / Notifications / UI Container Apps
+- Function App
+- Key Vault
+
+If you are looking for the other responsibilities in the new Phase 10 model:
+
+- `azure-initial-setup.yml` handles one-time repository and OIDC setup
+- `build-phase10-images.yml` handles image publication
+- `phase10-docker-dev-http-e2e.yml` handles local-vs-CI validation
+- `azure-bootstrap.yml`, `deploy-api-to-azure.yml`, and `deploy-ui-to-azure.yml` are legacy App Service compatibility workflows only
+
 It supports three execution modes:
 
-1. **Manual deployment** (workflow_dispatch) - Full control via GitHub UI
-2. **Automatic deployment** (push to branches) - Branch-based deployment
-3. **Validation** (pull requests) - What-if analysis only
+1. **Wrapper-driven deployment** - Invoked by `phase10-deploy-orchestrator.yml` for the normal manual Phase 10 path
+2. **Automatic validation** (pull requests) - What-if analysis only
+3. **Reusable workflow call** - Internal invocation from the wrapper or other trusted automation
 
 ---
 
-## 🚀 Manual Deployment (Recommended for Testing)
+## 🚀 Wrapper-Driven Deployment (Recommended for Testing)
 
 ### How to Run from GitHub UI
 
 1. **Navigate to Actions Tab:**
    - Go to: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions
-   - Find: "Deploy Azure Infrastructure" workflow
+   - Find: "Phase 10 Deploy Orchestrator"
 
 2. **Click "Run workflow" button** (top right)
 
@@ -30,10 +56,11 @@ It supports three execution modes:
    |-----------|-------------|---------|---------|
    | **Environment** | Target environment | dev, staging, prod | dev |
    | **Location** | Azure region | Any region string | centralindia |
-   | **Dry Run** | What-if only (no deploy) | true/false | true |
-   | **Public Domain** | Optional DNS suffix for friendly aliases | Any real domain suffix | empty |
-   | **Bind Aliases** | Enable alias planning / binding checks | true/false | false |
-   | **Alias Mode** | Choose direct ACA binding or front-door planning | direct / frontdoor | direct |
+| **Dry Run** | What-if only (no deploy) | true/false | true |
+| **Cleanup Infra** | Destructive teardown of the environment-scoped resource group | true/false | false |
+| **Public Domain** | Optional DNS suffix for friendly aliases | Any real domain suffix | empty |
+| **Bind Aliases** | Enable alias planning / binding checks | true/false | false |
+| **Alias Mode** | Choose direct ACA binding or front-door planning | direct / frontdoor | direct |
 
 4. **Run Types:**
 
@@ -49,7 +76,13 @@ It supports three execution modes:
    - Creates/updates Azure resources
    - **Use carefully!**
 
-   **Current Azure Deployment:**
+   **🗑️ Cleanup / Teardown:**
+   - Set `Dry Run` = `false`
+   - Set `Cleanup Infra` = `true`
+   - Deletes the environment-scoped resource group for the selected environment
+   - Use this only when you want to remove the full Phase 10 stack
+
+**Current Azure Deployment:**
    - Uses `infra/main.phase10.bicep` and `infra/parameters/phase10-<env>.json`
    - Resources follow the environment-suffixed naming pattern so Phase X cleanup can remove the matching stack
    - Gateway, Orders, Inventory, Notifications, and UI are deployed as separate Container Apps with separate images, matching the split-service Docker validation lane
@@ -64,7 +97,8 @@ It supports three execution modes:
 
 **Related validation gate:**
 - `phase10-docker-dev-http-e2e.yml` runs the same hook-based Docker Dev HTTP sequence in CI and uploads the matching `TestResults/Playwright/phase10-docker-http` artifacts.
-- Use the hook as the merge gate for the local Docker validation chain, and use `infra-deploy.yml` for Azure Container Apps deployment and alias planning.
+- Use the hook as the merge gate for the local Docker validation chain, and use `phase10-deploy-orchestrator.yml` to drive `infra-deploy.yml` for Azure Container Apps deployment and alias planning.
+- Use the same workflow with `Cleanup Infra=true` to tear down the environment-scoped Phase 10 stack when you want to reset the environment.
 
 ---
 
@@ -306,17 +340,15 @@ This workflow corresponds to:
 ### Check Workflow Status
 ```bash
 gh workflow list
-gh workflow view "Deploy Azure Infrastructure"
+gh workflow view "Phase 10 Deploy Orchestrator"
 gh run list --workflow=infra-deploy.yml
 ```
 
 ### Trigger Manual Run (via CLI)
 ```bash
-gh workflow run infra-deploy.yml \
+gh workflow run phase10-deploy-orchestrator.yml \
   -f environment=dev \
   -f location=centralindia \
-  -f appServiceSku=F1 \
-  -f enableIdentity=false \
   -f dryRun=true
 ```
 

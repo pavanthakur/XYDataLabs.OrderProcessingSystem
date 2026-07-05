@@ -1,12 +1,12 @@
 # Azure Bootstrap & Deploy Workflow
 
-Legacy day-to-day workflow for Azure App Service infrastructure provisioning, application deployment, and environment cleanup.
+Archived App Service compatibility workflow for Azure infrastructure provisioning, application deployment, and environment cleanup.
 
 ## 🎯 Purpose
 
-This workflow (`azure-bootstrap.yml`) handles the **legacy App Service infrastructure and deployment operations** for the Order Processing System. It provisions Azure resources (Phase A), triggers API/UI deployments, and can tear down the same environment-scoped Azure stack through Phase X.
+This workflow (`azure-bootstrap.yml`) is retained for **legacy App Service compatibility only**. It provisions the old App Service-based resources (Phase A), triggers API/UI deployments, and can tear down the matching environment-scoped App Service stack through Phase X.
 
-For the current Phase 10 transport slice, use `infra-deploy.yml`, the Phase 10 image build workflow, and the Phase 10 smoke runbook instead of extending this legacy surface.
+For the current Phase 10 transport slice, use `infra-deploy.yml`, `build-phase10-images.yml`, and the Phase 10 smoke runbook instead of extending this archived surface.
 
 > ⚠️ **Prerequisite**: The [Azure Initial Setup](README-AZURE-INITIAL-SETUP.md) workflow must have completed successfully before this workflow can run. That workflow handles Phase 0 (GitHub App), Phase 1a (OIDC), and Phase 1b (environment secret configuration) — all one-time setup steps.
 
@@ -67,7 +67,7 @@ See [`README-AZURE-INITIAL-SETUP.md`](README-AZURE-INITIAL-SETUP.md) for the one
 1. Run the **Azure Initial Setup** workflow first — see [README-AZURE-INITIAL-SETUP.md](README-AZURE-INITIAL-SETUP.md)
 2. Return here after it completes successfully
 
-**Bootstrap infrastructure** (legacy App Service day-to-day only):
+**Bootstrap infrastructure** (legacy App Service compatibility only):
 
 1. Go to **Actions → Azure Bootstrap & Deploy → Run workflow**
 2. Set **"Use workflow from"** to the branch matching your target environment
@@ -87,7 +87,7 @@ See [`README-AZURE-INITIAL-SETUP.md`](README-AZURE-INITIAL-SETUP.md) for the one
 >
 > Azure deployment scripts use the same default mapping from `Resources/Azure-Deployment/branch-policy.json`; if you ever change branch governance, keep the workflow checks and that shared policy file aligned.
 
-> **Phase 10 note:** If you are working on the current container-app implementation, do not use this bootstrap path as the primary flow. Use `infra-deploy.yml`, `build-phase10-images.yml`, and the Phase 10 smoke runbook instead.
+> **Phase 10 note:** If you are working on the current container-app implementation, do not use this bootstrap path as the primary flow. Use `infra-deploy.yml`, `build-phase10-images.yml`, and the Phase 10 smoke runbook instead. This workflow remains only for archived App Service compatibility.
 
 ---
 

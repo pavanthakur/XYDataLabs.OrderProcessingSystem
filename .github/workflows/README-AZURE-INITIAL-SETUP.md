@@ -4,13 +4,13 @@ One-time setup workflow that configures the GitHub App, Azure OIDC trust, and Gi
 
 ## 🎯 Purpose
 
-This workflow (`azure-initial-setup.yml`) handles all **one-time prerequisite setup** that must complete before the current Phase 10 deployment path can run. The legacy [Azure Bootstrap & Deploy](README-AZURE-BOOTSTRAP.md) workflow is retained only for historical App Service references; the active path is `infra-deploy.yml` plus `build-phase10-images.yml`. It sequences:
+This workflow (`azure-initial-setup.yml`) handles all **one-time prerequisite setup** that must complete before the current Phase 10 deployment path can run. The legacy [Azure Bootstrap & Deploy](README-AZURE-BOOTSTRAP.md) workflow is retained only for archived App Service compatibility; the active path is `infra-deploy.yml` plus `build-phase10-images.yml`. It sequences:
 
 - **Phase 0** — GitHub App instructions (manual prerequisite)
 - **Phase 1a** — Azure AD App Registration + OIDC federated credentials
 - **Phase 1b** — GitHub environment secrets (`AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID`)
 
-> **Run this workflow once per repository.** After it completes, use the Phase 10 infrastructure and image workflows for current deployments. Only use **Azure Bootstrap & Deploy** if you are maintaining the legacy App Service path.
+> **Run this workflow once per repository.** After it completes, use the Phase 10 infrastructure and image workflows for current deployments. Only use **Azure Bootstrap & Deploy** if you are maintaining the archived App Service path.
 
 ---
 

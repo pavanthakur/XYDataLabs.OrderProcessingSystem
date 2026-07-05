@@ -9,7 +9,7 @@ This runbook covers the first live check for the Phase 10 transport slice define
 - Transport path: `Orders -> Service Bus -> Inventory/Notifications`
 - Replay path: `order-events-dlq -> dlq-replay -> order-events`
 - The Service Bus namespace, transport auth rule, and connection-string lookup are owned by `infra/modules/servicebus.bicep`; `infra/main.phase10.bicep` consumes that module output during deployment.
-- GitHub Actions entrypoint: `infra-deploy.yml`
+- GitHub Actions entrypoint: `phase10-deploy-orchestrator.yml` (which calls `infra-deploy.yml` internally)
 - Friendly alias inputs: `publicDomain`, `bindAliases`, `aliasMode`
 
 If you want human-friendly public URLs, choose:
@@ -40,7 +40,7 @@ Use this checklist to prove the shared contract is behaving the same way across 
    - Confirm the gateway, Orders, Inventory, Notifications, and UI containers all start with the `orderprocessing-*` image family.
    - Run the local smoke path and confirm the gateway and UI respond on their local ports.
 2. Azure infra deploy
-   - Run `infra-deploy.yml` with the target environment and confirm the deployment summary reports the expected gateway and UI ingress outputs.
+   - Run `phase10-deploy-orchestrator.yml` with the target environment and confirm the deployment summary reports the expected gateway and UI ingress outputs.
    - Verify the published image refs match the service-specific `orderprocessing-*` contract for gateway, Orders, Inventory, Notifications, and UI.
 3. Azure smoke and automation
    - Run the Phase 10 Azure smoke after the deployment completes.
@@ -52,10 +52,10 @@ To launch the deployment from GitHub:
 
 1. Open the repository in GitHub.
 2. Select the `Actions` tab.
-3. Click `Deploy Azure Infrastructure`.
+3. Click `Phase 10 Deploy Orchestrator`.
 4. Click `Run workflow`.
 5. Choose the target branch.
-6. Set `environment`, `location`, and, if needed, `bindAliases`, `aliasMode`, and `publicDomain`.
+6. Set `environment`, `location`, and, if needed, `bindAliases`, `aliasMode`, `publicDomain`, and `cleanupInfra`.
 7. Click `Run workflow` to start the deployment.
 
 ## VS Code Local Validation Path
@@ -188,7 +188,7 @@ Expected:
 3. Confirm the repo is clean enough to deploy the current Phase 10 stack.
 4. Confirm the target environment is `dev`, `staging`, or `prod`.
 5. If `az bicep version` fails, run `az bicep install` once so the local compiler is available for preview and deployment validation.
-6. If you are running from GitHub Actions, open `Actions > Deploy Azure Infrastructure > Run workflow`, then set `environment`, `location`, and optionally `publicDomain`, `bindAliases`, and `aliasMode`.
+6. If you are running from GitHub Actions, open `Actions > Phase 10 Deploy Orchestrator > Run workflow`, then set `environment`, `location`, and optionally `publicDomain`, `bindAliases`, `aliasMode`, and `cleanupInfra`.
 
 ## Minimal Flow
 

@@ -5,7 +5,7 @@ Purpose: Single-click access to the highest value operational artifacts for prov
 ## Included Items (Why)
 - [azure-deployment-guide.md](../guides/deployment/azure-deployment-guide.md): End-to-end deployment and dry-run playbook.
 - [sku-upgrade-slot-testing.md](../guides/deployment/sku-upgrade-slot-testing.md): Safe process for scaling and upgrading App Service SKU.
-- [infra-deploy.yml](../../.github/workflows/infra-deploy.yml) / [README-INFRA-DEPLOY.md](../../.github/workflows/README-INFRA-DEPLOY.md): Infrastructure workflow trigger and usage details.
+- [phase10-deploy-orchestrator.yml](../../.github/workflows/phase10-deploy-orchestrator.yml) / [README-INFRA-DEPLOY.md](../../.github/workflows/README-INFRA-DEPLOY.md): Phase 10 wrapper trigger and internal infra usage details.
 - [test-validate-deployment.yml](../../.github/workflows/test-validate-deployment.yml) / [README-TEST-VALIDATE-DEPLOYMENT.md](../../.github/workflows/README-TEST-VALIDATE-DEPLOYMENT.md): Test pre-deployment validation workflow independently.
 - [validate-deployment.yml](../../.github/workflows/validate-deployment.yml) / [README-VALIDATE-DEPLOYMENT.md](../../.github/workflows/README-VALIDATE-DEPLOYMENT.md): Reusable pre-deployment validation workflow.
 - Bootstrap / Provision / Migrations / App Insights / Readiness / Slots / Enterprise Test scripts: Core lifecycle tasks from first resource creation through validation & slot operations.
@@ -18,7 +18,7 @@ Purpose: Single-click access to the highest value operational artifacts for prov
 ## Usage Flow (Common Scenario)
 1. Read [azure-deployment-guide.md](../guides/deployment/azure-deployment-guide.md) for sequence overview.
 2. Test [test-validate-deployment.yml](../../.github/workflows/test-validate-deployment.yml) to verify pre-deployment checks work correctly.
-3. Trigger [infra-deploy.yml](../../.github/workflows/infra-deploy.yml) with `dryRun=true` for validation.
+3. Trigger [phase10-deploy-orchestrator.yml](../../.github/workflows/phase10-deploy-orchestrator.yml) with `dryRun=true` for validation.
 4. Run bootstrap-enterprise-infra.ps1 if doing local/manual scripted provisioning.
 5. provision-azure-sql.ps1 -> run-database-migrations.ps1 -> setup-appinsights-dev.ps1.
 6. wait-appservice-ready.ps1 to ensure app endpoints respond.
@@ -38,7 +38,7 @@ Include: why needed, frequency of use, and any doc link supporting addition.
 
 ## Troubleshooting Pointers
 - Validation issues: run test-validate-deployment.yml to isolate config/credential/template problems.
-- Provision failures: check infra-deploy.yml run logs + bootstrap script output.
+- Provision failures: check infra-deploy.yml run logs via the wrapper run + bootstrap script output.
 - Identity issues: verify identity.bicep parameters and OIDC federated credentials.
 - Slow readiness: inspect wait-appservice-ready.ps1 timings & App Service diagnostics.
 - Configuration drift: run validate-sharedsettings-diff.ps1 or use test-validate-deployment workflow.

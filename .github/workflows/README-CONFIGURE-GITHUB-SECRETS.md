@@ -2,7 +2,7 @@
 
 ## Overview
 
-This workflow handles GitHub App setup and secret configuration. It was separated from the main bootstrap workflow to improve modularity, readability, and independent execution tracking.
+This workflow handles GitHub App setup and secret configuration. It was separated from the legacy bootstrap workflow to improve modularity, readability, and independent execution tracking.
 
 ## 🔑 Key Concept: Two Authentication Systems
 
@@ -22,7 +22,7 @@ The GitHub App (`APP_ID` + `APP_PRIVATE_KEY`) is used **only to write `AZUREAPPS
 The `AZUREAPPSERVICE_*` secrets (`CLIENTID`, `TENANTID`, `SUBSCRIPTIONID`) are the output of Phase 1a. They represent an Azure identity (Entra ID App Registration with federated credentials).
 
 - **This workflow (Phase 1b) does NOT use these to authenticate to Azure.** It only stores their values as GitHub secrets.
-- Phase A (bootstrap infra) and Deploy workflows use `azure/login@v3` with these secrets to authenticate to Azure.
+- Phase A (legacy bootstrap infra) and Deploy workflows use `azure/login@v3` with these secrets to authenticate to Azure.
 
 ### Why Phase 1b "depends on" OIDC credentials
 
@@ -38,8 +38,8 @@ Phase 1b needs the OIDC credential **values** to store them — not to authentic
 |-----|------------------------|-------|
 | **Phase 1b (this workflow)** | ❌ No | GitHub App token only |
 | Phase 1a (re-run) | ✅ Yes | Same credentials as Phase A |
-| Phase A (bootstrap-dev/staging/prod) | ✅ Yes | 3-step pattern: Validate → Login → Verify |
-| Deploy (deploy-api/ui) | ✅ Yes | 2-step pattern: Check → Login (conditional) |
+| Phase A (legacy bootstrap-dev/staging/prod) | ✅ Yes | 3-step pattern: Validate → Login → Verify |
+| Deploy (legacy deploy-api/ui) | ✅ Yes | 2-step pattern: Check → Login (conditional) |
 
 Each job calls `azure/login@v3` independently because GitHub Actions jobs run on isolated runners and cannot share login state.
 
@@ -210,8 +210,8 @@ When `environment: all` is selected:
 4. summary
 ```
 
-> **Note:** Infrastructure bootstrap (Phase A) and deployments are handled by the separate
-> `azure-bootstrap.yml` workflow, which runs _after_ initial setup is complete.
+> **Note:** The legacy App Service bootstrap (Phase A) and deployments are handled by the separate
+> `azure-bootstrap.yml` workflow, which is retained for compatibility only and runs _after_ initial setup is complete.
 
 ### Context Passing
 
@@ -239,7 +239,7 @@ configureSecrets: true   ← Phase 1b
 setupGitHubApp:   false  ← already done in Phase 0
 ```
 
-> **Note:** These inputs are on `azure-initial-setup.yml`. Infrastructure bootstrap (`bootstrapInfra`)
+> **Note:** These inputs are on `azure-initial-setup.yml`. The legacy App Service bootstrap (`bootstrapInfra`)
 > and deployments (`deployApi`/`deployUi`) are separate inputs on `azure-bootstrap.yml`.
 
 ### Step 1 — `validate-inputs` (azure-initial-setup.yml)
@@ -448,7 +448,7 @@ azure-initial-setup.yml:
 # 2. Configures all secrets
 # 3. Validates configuration
 
-# After initial setup completes, run infrastructure bootstrap separately:
+# After initial setup completes, the legacy App Service bootstrap can be run separately if needed:
 # azure-bootstrap.yml → bootstrapInfra: true, deployApi: true, deployUi: true
 ```
 
@@ -614,7 +614,7 @@ The workflow automatically validates configuration at the end:
 ## Related Workflows
 
 - **azure-initial-setup.yml**: Calls this workflow (Phase 0 → 1a → 1b)
-- **azure-bootstrap.yml**: Infrastructure bootstrap & deploy (Phase A + deployments) — runs after initial setup
+- **azure-bootstrap.yml**: Legacy infrastructure bootstrap & deploy (Phase A + deployments) — retained for compatibility after initial setup
 - **deploy-api-to-azure.yml**: API deployment (uses configured secrets)
 - **deploy-ui-to-azure.yml**: UI deployment (uses configured secrets)
 
@@ -624,8 +624,8 @@ The workflow automatically validates configuration at the end:
 - Extracted jobs: setup-github-app, configure-secrets, validate-configuration
 - Added workflow_call support for integration
 - Added comprehensive validation and error handling
-- **v1.1**: Workflow split — now called exclusively by `azure-initial-setup.yml` (no longer by `azure-bootstrap.yml`). Phase 0/1a/1b live in Initial Setup; Phase A + deployments live in Bootstrap & Deploy.
-- **v1.2**: Phase 2/3 naming retired — renamed to Phase A (bootstrap) and Deploy. Backtick rendering fix in step summaries. LASTEXITCODE false exit-1 fix, fail-hard behavior, and comprehensive diagnostics added.
+- **v1.1**: Workflow split — now called exclusively by `azure-initial-setup.yml` (no longer by `azure-bootstrap.yml`). Phase 0/1a/1b live in Initial Setup; Phase A + deployments live in the legacy Bootstrap & Deploy workflow.
+- **v1.2**: Phase 2/3 naming retired — renamed to Phase A (bootstrap) and Deploy. Backtick rendering fix in step summaries. LASTEXITCODE false exit-1 fix, fail-hard behavior, and comprehensive diagnostics added. Legacy compatibility wording added after the Phase 10 container-app migration.
 
 ---
 
