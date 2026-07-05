@@ -130,7 +130,7 @@ gh workflow run "Azure Bootstrap & Deploy" `
     -f deployUi=true `
     -f cleanupInfra=false
 
-# API-only deploy (most common — infra already exists):
+# API-only deploy (most common — for an existing App Service stack):
 gh workflow run "Azure Bootstrap & Deploy" `
     --ref dev `
     -f environment=dev `
