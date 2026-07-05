@@ -94,7 +94,7 @@ jobs:
           Write-Host "  ──────────────────────────────────────────────────────────────────────" -ForegroundColor DarkGray
           Write-Host "" -ForegroundColor Gray
           Write-Host "  ℹ️  This workflow handles one-time Azure setup (Phase 0, 1a, 1b)." -ForegroundColor Cyan
-          Write-Host "     For infrastructure bootstrap & deployments, use 'Azure Bootstrap & Deploy'." -ForegroundColor Cyan
+          Write-Host "     For the active Phase 10 path, use 'Phase 10 Deploy Orchestrator'." -ForegroundColor Cyan
           Write-Host "" -ForegroundColor Gray
           Write-Host "========================================================================" -ForegroundColor Cyan
           Write-Host "" -ForegroundColor Gray
@@ -1663,7 +1663,7 @@ jobs:
           Write-Host "    Configure Secrets  : $(& $iconFor $configSecrets) $configSecrets"
           Write-Host ""
           if ($allSuccess -and $appSecretsOk) {
-            Write-Host "  ✅ Initial Setup Complete — proceed to Azure Bootstrap & Deploy" -ForegroundColor Green
+            Write-Host "  ✅ Initial Setup Complete — proceed to Phase 10 Deploy Orchestrator" -ForegroundColor Green
           } elseif (-not $appSecretsOk) {
             Write-Host "  ⚠️  GitHub App secrets missing — complete Phase 0 manual steps first" -ForegroundColor Yellow
           } else {
@@ -1785,12 +1785,12 @@ jobs:
             "" >> $env:GITHUB_STEP_SUMMARY
             "## ✅ Initial Setup Complete — Next Steps" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
-            "OIDC credentials and GitHub secrets are configured. You can now use the **Azure Bootstrap & Deploy** workflow:" >> $env:GITHUB_STEP_SUMMARY
+            "OIDC credentials and GitHub secrets are configured. For the active Phase 10 path, you can now use the **Phase 10 Deploy Orchestrator** workflow:" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
-            "1. Go to **[Actions → Azure Bootstrap & Deploy](https://github.com/${{ github.repository }}/actions/workflows/azure-bootstrap.yml)**" >> $env:GITHUB_STEP_SUMMARY
-            "2. Set **Use workflow from** = branch matching your target environment (dev→dev, staging→staging, main→prod)" >> $env:GITHUB_STEP_SUMMARY
-            "3. Select your target **Environment**" >> $env:GITHUB_STEP_SUMMARY
-            "4. Check ✅ **Bootstrap Infrastructure**, ✅ **Deploy API**, ✅ **Deploy UI**" >> $env:GITHUB_STEP_SUMMARY
+            "1. Go to **[Actions → Phase 10 Deploy Orchestrator](https://github.com/${{ github.repository }}/actions/workflows/phase10-deploy-orchestrator.yml)**" >> $env:GITHUB_STEP_SUMMARY
+            "2. Select your target **Environment**" >> $env:GITHUB_STEP_SUMMARY
+            "3. Start with **Dry Run** if you want a what-if preview" >> $env:GITHUB_STEP_SUMMARY
+            "4. Use **Cleanup Infra** only when you intend to tear down the environment-scoped Phase 10 stack" >> $env:GITHUB_STEP_SUMMARY
             "5. Click **Run workflow**" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
           }
@@ -1804,7 +1804,7 @@ jobs:
           "" >> $env:GITHUB_STEP_SUMMARY
           "## 💳 Payment Provider Secrets (OpenPay + Razorpay)" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
-          "> These secrets must be present **before running Azure Bootstrap & Deploy**. They are environment-scoped, set manually by an authorized person, and never written by this workflow." >> $env:GITHUB_STEP_SUMMARY
+          "> These secrets are needed for the payment-provider flows used by the repo. They are environment-scoped, set manually by an authorized person, and never written by this workflow." >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
           "Add these six environment secrets to each target GitHub environment you plan to bootstrap:" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
@@ -1815,12 +1815,12 @@ jobs:
           "- ``RAZORPAY_MERCHANT_ID``" >> $env:GITHUB_STEP_SUMMARY
           "- ``RAZORPAY_PRIVATE_KEY``" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
-          "### ⚠️ Action Required — Add Payment Provider Secrets Before Running Bootstrap" >> $env:GITHUB_STEP_SUMMARY
+          "### ⚠️ Action Required — Add Payment Provider Secrets Before Running Legacy Bootstrap / Payment Runs" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
           "1. Go to **[Settings → Environments]($environmentsUrl)**" >> $env:GITHUB_STEP_SUMMARY
           "2. Open each target environment (``dev``, ``staging``, and/or ``prod``)" >> $env:GITHUB_STEP_SUMMARY
           "3. Add all six values under **Environment secrets**" >> $env:GITHUB_STEP_SUMMARY
-          "4. Then run **Azure Bootstrap & Deploy** — the target bootstrap job validates its environment secrets before proceeding" >> $env:GITHUB_STEP_SUMMARY
+          "4. Then run the workflow that owns your payment-enabled deployment path (legacy bootstrap or payment run) — it validates its environment secrets before proceeding" >> $env:GITHUB_STEP_SUMMARY
 
           # Console output mirror
           Write-Host ""
@@ -1829,4 +1829,4 @@ jobs:
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
           Write-Host "  Payment provider secrets are environment-scoped and must be added manually." -ForegroundColor Yellow
           Write-Host "  Add them at: $environmentsUrl" -ForegroundColor Yellow
-          Write-Host "  Each bootstrap job validates the target environment before proceeding." -ForegroundColor Gray
+          Write-Host "  Each payment-enabled deployment path validates the target environment before proceeding." -ForegroundColor Gray

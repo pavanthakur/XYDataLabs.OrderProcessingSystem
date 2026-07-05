@@ -6,6 +6,7 @@ The bootstrap process uses **two GitHub Actions workflows** that together take a
 
 This guide still reflects the older App Service bootstrap surface in several walkthrough sections, but the current Phase 10 operational path is documented in the Phase 10 runbook and infra deployment summary.
 If you are working on the current container-app stack, treat this as legacy bootstrap reference and use `phase10-deploy-orchestrator.yml` plus the Phase 10 image build workflow for the active path. The Phase 10 wrapper can deploy into a clean environment because the infra workflow creates the missing environment-scoped resources when needed.
+If your goal is the current Phase 10 runtime, do not follow the legacy Phase 2 / Phase X steps below unless you are explicitly maintaining the old App Service path.
 
 | Workflow | File | Purpose |
 |----------|------|---------|
