@@ -15,6 +15,7 @@ on:
       - 'XYDataLabs.OpenPayAdapter/**'           # Multitenant payment: ProcessPaymentCommandHandler uses OpenPayAdapterService for per-tenant Use3DSecure routing
       - 'XYDataLabs.RazorpayAdapter/**'          # Multitenant payment: ProcessPaymentCommandHandler uses RazorpayAdapterService for tenant-selected hosted checkout
       - 'Resources/Configuration/**'
+      - 'Resources/Azure-Deployment/**'
       - '.github/workflows/deploy-api-to-azure.yml'
   workflow_dispatch:
 
@@ -141,10 +142,10 @@ jobs:
             Write-Host ""
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
             Write-Host ""
-            Write-Host "ℹ️  Skipping deployment (credentials not configured)" -ForegroundColor Yellow
+            Write-Host "ℹ️  Failing deployment (credentials not configured)" -ForegroundColor Red
             Write-Host ""
             "credentialsConfigured=false" >> $env:GITHUB_OUTPUT
-            exit 0
+            exit 1
           }
       
       - name: Set target web app name
@@ -194,20 +195,20 @@ jobs:
 
           $groupExists = az group exists --name $rgName
           if ($groupExists -ne 'true') {
-            Write-Host "⚠️  Target resource group '$rgName' does not exist. Skipping deployment." -ForegroundColor Yellow
+            Write-Host "❌ Target resource group '$rgName' does not exist. Failing deployment." -ForegroundColor Red
             Write-Host "ℹ️  Bootstrap the $targetEnv environment before merging branch changes that should deploy there." -ForegroundColor Yellow
             "infraReady=false" >> $env:GITHUB_OUTPUT
-            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## Deployment Skipped - Environment Not Bootstrapped`n- GitHub environment: $targetEnv`n- Azure resource suffix: $envSuffix`n- Resource group missing: $rgName`n- Expected app service: $appName`n- Run Azure Bootstrap & Deploy with bootstrapInfra=true for this environment, then re-run deployment.`n"
-            exit 0
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## ❌ Deployment Failed - Environment Not Bootstrapped`n- GitHub environment: $targetEnv`n- Azure resource suffix: $envSuffix`n- Resource group missing: $rgName`n- Expected app service: $appName`n- Run Azure Bootstrap & Deploy with bootstrapInfra=true for this environment, then re-run deployment.`n"
+            exit 1
           }
 
           $webAppId = az webapp show --name $appName --resource-group $rgName --query id -o tsv 2>$null
           if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($webAppId)) {
-            Write-Host "⚠️  Target app service '$appName' does not exist in '$rgName'. Skipping deployment." -ForegroundColor Yellow
+            Write-Host "❌ Target app service '$appName' does not exist in '$rgName'. Failing deployment." -ForegroundColor Red
             Write-Host "ℹ️  Bootstrap may not have been run for $targetEnv, or the app was deleted separately." -ForegroundColor Yellow
             "infraReady=false" >> $env:GITHUB_OUTPUT
-            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## Deployment Skipped - App Service Missing`n- GitHub environment: $targetEnv`n- Azure resource suffix: $envSuffix`n- Resource group: $rgName`n- Missing app service: $appName`n- Run Azure Bootstrap & Deploy with bootstrapInfra=true for this environment, then re-run deployment.`n"
-            exit 0
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## ❌ Deployment Failed - App Service Missing`n- GitHub environment: $targetEnv`n- Azure resource suffix: $envSuffix`n- Resource group: $rgName`n- Missing app service: $appName`n- Run Azure Bootstrap & Deploy with bootstrapInfra=true for this environment, then re-run deployment.`n"
+            exit 1
           }
 
           Write-Host "✅ Target infrastructure exists: $rgName / $appName" -ForegroundColor Green
@@ -595,7 +596,7 @@ jobs:
           $credentialsConfigured = "${{ steps.check-credentials.outputs.credentialsConfigured }}"
           $infraReady = "${{ steps.check-target.outputs.infraReady }}"
           $appUrl = if ($credentialsConfigured -ne 'true') {
-            "https://$app.azurewebsites.net/health/ready (target URL; deployment skipped before Azure login)"
+            "https://$app.azurewebsites.net/health/ready (target URL; deployment failed before Azure login)"
           } elseif ($infraReady -ne 'true') {
             "https://$app.azurewebsites.net/health/ready (target URL; app not provisioned yet)"
           } else {
@@ -603,9 +604,9 @@ jobs:
           }
 
           $status = if ($credentialsConfigured -ne 'true') {
-            '⏭️ SKIPPED - credentials missing'
+            '❌ FAILED - Azure credentials missing'
           } elseif ($infraReady -ne 'true') {
-            '⏭️ SKIPPED - environment not bootstrapped'
+            '❌ FAILED - environment not bootstrapped'
           } elseif ('${{ job.status }}' -eq 'success') {
             '✅ SUCCESS'
           } else {
