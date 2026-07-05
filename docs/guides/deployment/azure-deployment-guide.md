@@ -83,6 +83,7 @@ The **`phase10-deploy-orchestrator.yml`** workflow enables a controlled, paramet
 2. **Real Deployment** – Applies infrastructure changes once validated.
 
 It supports iterative learning (Curriculum Day 31) and prevents accidental production changes by requiring explicit manual triggers and clear inputs.
+For Phase 10, the wrapper is allowed to deploy into a clean environment because the infrastructure workflow creates the environment-scoped Azure resources when they are missing.
 
 ### Location
 `/.github/workflows/phase10-deploy-orchestrator.yml`

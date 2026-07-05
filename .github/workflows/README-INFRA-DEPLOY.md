@@ -11,7 +11,7 @@ The `infra-deploy.yml` workflow deploys the active Azure infrastructure surface 
 Use this workflow as the single lifecycle owner for the Azure runtime stack:
 
 - `dryRun=true` runs what-if only
-- `dryRun=false` and `cleanupInfra=false` deploys or updates the Phase 10 stack
+- `dryRun=false` and `cleanupInfra=false` deploys or updates the Phase 10 stack, creating the environment-scoped Azure resources when they are missing
 - `dryRun=false` and `cleanupInfra=true` tears down the environment-scoped Phase 10 stack
 
 The workflow summary surfaces the resources that matter for runtime and cleanup:
@@ -74,6 +74,7 @@ It supports three execution modes:
    - Set `Dry Run` = `false`
    - Deploys actual infrastructure
    - Creates/updates Azure resources
+   - Works for a clean environment as long as the GitHub OIDC secrets are configured
    - **Use carefully!**
 
    **🗑️ Cleanup / Teardown:**
@@ -118,7 +119,7 @@ Environment: dev
 Location: centralindia
 Dry Run: FALSE ⚠️
 ```
-**Result:** Creates dev environment in Azure
+**Result:** Creates or updates the dev environment in Azure
 
 ### Scenario 3: Deploy Staging
 ```
