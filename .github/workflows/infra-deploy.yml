@@ -74,7 +74,7 @@ jobs:
           echo "| cleanupInfra | ${{ inputs.cleanupInfra }} |" >> $GITHUB_STEP_SUMMARY
           echo "| environment | ${{ inputs.environment }} |" >> $GITHUB_STEP_SUMMARY
           echo "| location | ${{ inputs.location }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| ghcr_read_token_present | ${{ secrets.GHCR_READ_TOKEN != '' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ghcr_read_token_check | validated in the environment-scoped deploy/validate job |" >> $GITHUB_STEP_SUMMARY
 
   route:
     name: Routed Deploy Decision
@@ -504,6 +504,55 @@ jobs:
               echo "Alias binding is disabled for this run, so only the mapping summary is recorded." >> $GITHUB_STEP_SUMMARY
             fi
           fi
+
+      - name: Post-Deployment Endpoint Smoke
+        shell: bash
+        run: |
+          GATEWAY_HEALTH="https://${{ steps.outputs.outputs.gatewayFqdn }}/"
+          ORDERS_SMOKE="https://${{ steps.outputs.outputs.gatewayFqdn }}/api/v1/Info/runtime-configuration"
+          UI_URL="https://${{ steps.outputs.outputs.uiFqdn }}/customers"
+
+          smoke_url() {
+            local name="$1"
+            local url="$2"
+            local expected="$3"
+            local attempt
+            local body
+
+            echo "Checking ${name}: ${url}"
+            for attempt in {1..18}; do
+              body="$(curl --fail --show-error --silent --location --max-time 30 "$url" || true)"
+              if [ -n "$body" ]; then
+                if [ -z "$expected" ] || printf '%s' "$body" | grep -Fq "$expected"; then
+                  echo "✅ ${name} responded on attempt ${attempt}" >> $GITHUB_STEP_SUMMARY
+                  return 0
+                fi
+              fi
+
+              echo "Attempt ${attempt}/18 did not pass for ${name}; waiting 10 seconds..."
+              sleep 10
+            done
+
+            echo "❌ ${name} did not pass endpoint smoke after 18 attempts." >> $GITHUB_STEP_SUMMARY
+            echo "URL: ${url}" >> $GITHUB_STEP_SUMMARY
+            echo "Expected marker: ${expected:-any response body}" >> $GITHUB_STEP_SUMMARY
+            echo "${name} endpoint smoke failed for ${url}" >&2
+            return 1
+          }
+
+          {
+            echo "## 🔎 Phase 10 Post-Deployment Endpoint Smoke"
+            echo ""
+            echo "| Check | URL | Expected |"
+            echo "|------|-----|----------|"
+            echo "| Gateway Health | ${GATEWAY_HEALTH} | healthy |"
+            echo "| Orders API Smoke | ${ORDERS_SMOKE} | runtime |"
+            echo "| UI Reachability | ${UI_URL} | <!doctype html |"
+          } >> $GITHUB_STEP_SUMMARY
+
+          smoke_url "Gateway Health" "$GATEWAY_HEALTH" "healthy"
+          smoke_url "Orders API Smoke" "$ORDERS_SMOKE" "runtime"
+          smoke_url "UI Reachability" "$UI_URL" "<!doctype html"
       
       - name: Deployment Summary
         run: |
