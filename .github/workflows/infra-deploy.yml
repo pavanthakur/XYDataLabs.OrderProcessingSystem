@@ -598,9 +598,9 @@ jobs:
           echo "### ✅ Next Steps" >> $GITHUB_STEP_SUMMARY
           echo "1. Verify the outputs against the runbook." >> $GITHUB_STEP_SUMMARY
           echo "2. Bind the friendly aliases to the Container App FQDNs or Front Door if alias binding was requested." >> $GITHUB_STEP_SUMMARY
-          echo "3. Run the **Phase 10 Azure Runtime Smoke** workflow." >> $GITHUB_STEP_SUMMARY
+          echo "3. Run the **02 Phase 10 Azure Runtime Smoke** workflow." >> $GITHUB_STEP_SUMMARY
           echo "4. Confirm Gateway/API/UI runtime checks pass in that workflow summary." >> $GITHUB_STEP_SUMMARY
-          echo "5. Run the **Phase 10 Azure Transport Smoke** workflow." >> $GITHUB_STEP_SUMMARY
+          echo "5. Run the **03 Phase 10 Azure Transport Smoke** workflow." >> $GITHUB_STEP_SUMMARY
           echo "6. Confirm publish/consume, DLQ forwarding, and replay checks pass in that workflow summary." >> $GITHUB_STEP_SUMMARY
 
   cleanup:

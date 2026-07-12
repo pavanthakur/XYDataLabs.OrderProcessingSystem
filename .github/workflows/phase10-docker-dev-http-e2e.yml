@@ -1,4 +1,4 @@
-name: Phase 10 Docker Dev HTTP End-to-End
+name: 00 Phase 10 Docker Dev HTTP End-to-End
 
 on:
   workflow_dispatch:
@@ -36,7 +36,7 @@ permissions:
 
 jobs:
   phase10-docker-dev-http-e2e:
-    name: Phase 10 Docker Dev HTTP End-to-End
+    name: 00 Phase 10 Docker Dev HTTP End-to-End
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -80,7 +80,7 @@ jobs:
         shell: pwsh
         run: |
           $summary = @()
-          $summary += "## Phase 10 Docker Dev HTTP End-to-End"
+          $summary += "## 00 Phase 10 Docker Dev HTTP End-to-End"
           $summary += ""
           $summary += "- Hook: `scripts/run-phase10-docker-dev-e2e-hook.ps1`"
           $summary += "- Automation alias: `npm --prefix automation run run:docker:dev:http:e2e-hook`"

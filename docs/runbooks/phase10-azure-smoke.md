@@ -35,6 +35,23 @@ Keep these out of the active Phase 10 path unless a later review proves they are
 - Broad shared-contract extraction without real duplication
 - Extra platform layers that do not strengthen the current Azure transport slice
 
+### Workflow Order
+
+Use the numbered Phase 10 workflows in this order:
+
+| Order | Workflow | Use it for |
+|---|---|---|
+| `00` | `00 Phase 10 Docker Dev HTTP End-to-End` | Local or CI parity for the current container graph |
+| `01` | `01 Phase 10 Azure Deploy Orchestrator` | Azure deploy, dry run, or cleanup |
+| `02` | `02 Phase 10 Azure Runtime Smoke` | Runtime proof for gateway, API routing, and UI after deploy |
+| `03` | `03 Phase 10 Azure Transport Smoke` | Transport proof for Service Bus publish, consume, DLQ, and replay |
+
+Rule of thumb:
+- Run `00` before Azure work when you want to validate the container shape locally or in CI.
+- Run `01` when you want to change Azure resources.
+- Run `02` right after `01` finishes successfully.
+- Run `03` after `02` passes.
+
 | Area | Legacy bootstrap (`azure-bootstrap.yml`) | Active Phase 10 (`phase10-deploy-orchestrator.yml`) |
 |---|---|---|
 | Hosting model | Azure App Service | Azure Container Apps |
@@ -212,9 +229,9 @@ Use this checklist to prove the shared contract is behaving the same way across 
    - The gateway accepts the public ACA hostname and the same-environment `orderprocessing-gate-<env>` service name.
    - The gateway must not preserve the original public `Host` header when forwarding to internal Container Apps; ACA expects the destination service host for service-to-service routing.
 3. Azure smoke and automation
-   - Run `Phase 10 Azure Runtime Smoke` after the deployment completes.
+   - Run `02 Phase 10 Azure Runtime Smoke` after the deployment completes.
    - Confirm gateway health, gateway-routed API bootstrap, UI reachability, and UI API proxy bootstrap pass.
-   - Run `Phase 10 Azure Transport Smoke` after runtime smoke passes.
+   - Run `03 Phase 10 Azure Transport Smoke` after runtime smoke passes.
    - Confirm publish, consume, DLQ, and replay checks pass before promoting aliases or treating the environment as ready.
 
 ## GitHub UI Path
@@ -223,11 +240,22 @@ To launch the deployment from GitHub:
 
 1. Open the repository in GitHub.
 2. Select the `Actions` tab.
-3. Click `Phase 10 Deploy Orchestrator`.
+3. Click `01 Phase 10 Azure Deploy Orchestrator`.
 4. Click `Run workflow`.
 5. Choose the target branch.
 6. Set `environment`, `location`, and, if needed, `bindAliases`, `aliasMode`, `publicDomain`, and `cleanupInfra`.
 7. Click `Run workflow` to start the deployment.
+
+After the deploy finishes:
+
+1. Open **Actions**.
+2. Click **02 Phase 10 Azure Runtime Smoke**.
+3. Select the same target environment.
+4. Click **Run workflow**.
+5. Open **Actions** again.
+6. Click **03 Phase 10 Azure Transport Smoke**.
+7. Select the same target environment.
+8. Click **Run workflow**.
 
 ## VS Code Local Validation Path
 
@@ -527,7 +555,7 @@ Confirm:
 Use the GitHub workflow first:
 
 1. Open **Actions**.
-2. Click **Phase 10 Azure Runtime Smoke**.
+2. Click **02 Phase 10 Azure Runtime Smoke**.
 3. Click **Run workflow**.
 4. Select the same target environment used by the deploy run, for example `dev`.
 5. Click **Run workflow**.
@@ -565,7 +593,7 @@ The local command requires Azure CLI login and access to the selected Phase 10 r
 Use the GitHub workflow first:
 
 1. Open **Actions**.
-2. Click **Phase 10 Azure Transport Smoke**.
+2. Click **03 Phase 10 Azure Transport Smoke**.
 3. Click **Run workflow**.
 4. Select the same target environment used by the deploy run, for example `dev`.
 5. Click **Run workflow**.
