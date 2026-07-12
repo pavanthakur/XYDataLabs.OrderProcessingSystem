@@ -598,8 +598,8 @@ jobs:
           echo "### ✅ Next Steps" >> $GITHUB_STEP_SUMMARY
           echo "1. Verify the outputs against the runbook." >> $GITHUB_STEP_SUMMARY
           echo "2. Bind the friendly aliases to the Container App FQDNs or Front Door if alias binding was requested." >> $GITHUB_STEP_SUMMARY
-          echo "3. Run the transport publish/consume smoke." >> $GITHUB_STEP_SUMMARY
-          echo "4. Run the replay smoke." >> $GITHUB_STEP_SUMMARY
+          echo "3. Run the **Phase 10 Azure Transport Smoke** workflow." >> $GITHUB_STEP_SUMMARY
+          echo "4. Confirm publish/consume, DLQ forwarding, and replay checks pass in that workflow summary." >> $GITHUB_STEP_SUMMARY
 
   cleanup:
     name: Cleanup Infrastructure (Internal)

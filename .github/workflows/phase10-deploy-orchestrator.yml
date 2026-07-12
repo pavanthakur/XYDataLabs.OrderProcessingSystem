@@ -307,7 +307,7 @@ jobs:
             echo "1. Open the Gateway Health URL and confirm the accepted Azure host is shown." >> $GITHUB_STEP_SUMMARY
             echo "2. Open the Orders API smoke URL through the gateway and confirm the API route resolves." >> $GITHUB_STEP_SUMMARY
             echo "3. Open the UI URL and confirm the frontend resolves successfully." >> $GITHUB_STEP_SUMMARY
-            echo "4. Run the transport publish/consume smoke and replay smoke." >> $GITHUB_STEP_SUMMARY
+            echo "4. Run the **Phase 10 Azure Transport Smoke** workflow for publish/consume, DLQ, and replay proof." >> $GITHUB_STEP_SUMMARY
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📎 Copyable Verification Targets" >> $GITHUB_STEP_SUMMARY
@@ -356,7 +356,7 @@ jobs:
             echo "2. Re-run the wrapper after the missing environment resources exist." >> $GITHUB_STEP_SUMMARY
           else
             echo "1. Verify the output URLs against the runbook." >> $GITHUB_STEP_SUMMARY
-            echo "2. Run the transport publish/consume smoke." >> $GITHUB_STEP_SUMMARY
-            echo "3. Run the replay smoke." >> $GITHUB_STEP_SUMMARY
+            echo "2. Run the **Phase 10 Azure Transport Smoke** workflow." >> $GITHUB_STEP_SUMMARY
+            echo "3. Confirm publish/consume, DLQ forwarding, and replay checks pass in that workflow summary." >> $GITHUB_STEP_SUMMARY
             echo "4. Track the ACR migration follow-up before retiring the GHCR runtime token." >> $GITHUB_STEP_SUMMARY
           fi
