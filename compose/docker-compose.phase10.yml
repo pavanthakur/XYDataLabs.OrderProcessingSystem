@@ -40,8 +40,8 @@ services:
       - xy-phase10-network
     profiles: ["identity", "apps", "all"]
 
-  orderprocessing-ord-dev:
-    image: ghcr.io/pavanthakur/orderprocessing-orders:dev
+  orders:
+    image: ghcr.io/${PHASE10_IMAGE_OWNER:-pavanthakur}/orderprocessing-orders:${PHASE10_IMAGE_TAG:-dev}
     build:
       context: ..
       dockerfile: XYDataLabs.OrderProcessingSystem.Orders.API/Dockerfile
@@ -52,11 +52,13 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
     networks:
-      - xy-phase10-network
+      xy-phase10-network:
+        aliases:
+          - orderprocessing-ord-${PHASE10_ENV_SUFFIX:-local}
     profiles: ["apps", "all"]
 
-  orderprocessing-inv-dev:
-    image: ghcr.io/pavanthakur/orderprocessing-inventory:dev
+  inventory:
+    image: ghcr.io/${PHASE10_IMAGE_OWNER:-pavanthakur}/orderprocessing-inventory:${PHASE10_IMAGE_TAG:-dev}
     build:
       context: ..
       dockerfile: XYDataLabs.OrderProcessingSystem.Inventory.API/Dockerfile
@@ -67,11 +69,13 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
     networks:
-      - xy-phase10-network
+      xy-phase10-network:
+        aliases:
+          - orderprocessing-inv-${PHASE10_ENV_SUFFIX:-local}
     profiles: ["apps", "all"]
 
-  orderprocessing-notif-dev:
-    image: ghcr.io/pavanthakur/orderprocessing-notifications:dev
+  notifications:
+    image: ghcr.io/${PHASE10_IMAGE_OWNER:-pavanthakur}/orderprocessing-notifications:${PHASE10_IMAGE_TAG:-dev}
     build:
       context: ..
       dockerfile: XYDataLabs.OrderProcessingSystem.Notifications.API/Dockerfile
@@ -82,11 +86,13 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
     networks:
-      - xy-phase10-network
+      xy-phase10-network:
+        aliases:
+          - orderprocessing-notif-${PHASE10_ENV_SUFFIX:-local}
     profiles: ["apps", "all"]
 
-  orderprocessing-gate-dev:
-    image: ghcr.io/pavanthakur/orderprocessing-gateway:dev
+  gateway:
+    image: ghcr.io/${PHASE10_IMAGE_OWNER:-pavanthakur}/orderprocessing-gateway:${PHASE10_IMAGE_TAG:-dev}
     build:
       context: ..
       dockerfile: XYDataLabs.OrderProcessingSystem.Gateway/Dockerfile
@@ -101,30 +107,32 @@ services:
       Gateway__AllowedHosts__2: inventory.localhost
       Gateway__AllowedHosts__3: notifications.localhost
       Gateway__AllowedHosts__4: ui.localhost
-      ReverseProxy__Clusters__orders-cluster__Destinations__orders-primary__Address: http://orderprocessing-ord-dev:8080
-      ReverseProxy__Clusters__inventory-cluster__Destinations__inventory-primary__Address: http://orderprocessing-inv-dev:8080
-      ReverseProxy__Clusters__notifications-cluster__Destinations__notifications-primary__Address: http://orderprocessing-notif-dev:8080
-      ReverseProxy__Clusters__ui-cluster__Destinations__ui-primary__Address: http://orderprocessing-ui-dev:5022
+      ReverseProxy__Clusters__orders-cluster__Destinations__orders-primary__Address: http://orderprocessing-ord-${PHASE10_ENV_SUFFIX:-local}:8080
+      ReverseProxy__Clusters__inventory-cluster__Destinations__inventory-primary__Address: http://orderprocessing-inv-${PHASE10_ENV_SUFFIX:-local}:8080
+      ReverseProxy__Clusters__notifications-cluster__Destinations__notifications-primary__Address: http://orderprocessing-notif-${PHASE10_ENV_SUFFIX:-local}:8080
+      ReverseProxy__Clusters__ui-cluster__Destinations__ui-primary__Address: http://orderprocessing-ui-${PHASE10_ENV_SUFFIX:-local}:5022
       IdentityProvider__Enabled: "true"
       IdentityProvider__Mode: KeycloakLocal
       IdentityProvider__Authority: http://keycloak-local:8080/realms/xy-phase9
       IdentityProvider__Audience: xy-order-processing
       IdentityProvider__Scheme: Bearer
     depends_on:
-      orderprocessing-ord-dev:
+      orders:
         condition: service_started
-      orderprocessing-inv-dev:
+      inventory:
         condition: service_started
-      orderprocessing-notif-dev:
+      notifications:
         condition: service_started
       keycloak-local:
         condition: service_started
     networks:
-      - xy-phase10-network
+      xy-phase10-network:
+        aliases:
+          - orderprocessing-gate-${PHASE10_ENV_SUFFIX:-local}
     profiles: ["apps", "all"]
 
-  orderprocessing-ui-dev:
-    image: ghcr.io/pavanthakur/orderprocessing-ui:dev
+  ui:
+    image: ghcr.io/${PHASE10_IMAGE_OWNER:-pavanthakur}/orderprocessing-ui:${PHASE10_IMAGE_TAG:-dev}
     build:
       context: ..
       dockerfile: frontend/apps/web/Dockerfile
@@ -142,12 +150,14 @@ services:
       HOST: 0.0.0.0
       PORT: 5022
       USE_HTTPS: "false"
-      ORDERPROCESSING_API_BASE_URL: http://orderprocessing-gate-dev:8080
+      ORDERPROCESSING_API_BASE_URL: http://orderprocessing-gate-${PHASE10_ENV_SUFFIX:-local}:8080
     depends_on:
-      orderprocessing-gate-dev:
+      gateway:
         condition: service_started
     networks:
-      - xy-phase10-network
+      xy-phase10-network:
+        aliases:
+          - orderprocessing-ui-${PHASE10_ENV_SUFFIX:-local}
     profiles: ["apps", "all"]
 
 networks:
