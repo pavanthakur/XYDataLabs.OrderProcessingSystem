@@ -517,25 +517,36 @@ jobs:
             local url="$2"
             local expected="$3"
             local attempt
+            local response
             local body
+            local status
 
             echo "Checking ${name}: ${url}"
             for attempt in {1..18}; do
-              body="$(curl --fail --show-error --silent --location --max-time 30 "$url" || true)"
+              response="$(curl --show-error --silent --location --max-time 30 --write-out '\n%{http_code}' "$url" || true)"
+              status="$(printf '%s' "$response" | tail -n 1)"
+              body="$(printf '%s' "$response" | sed '$d')"
               if [ -n "$body" ]; then
-                if [ -z "$expected" ] || printf '%s' "$body" | grep -Fq "$expected"; then
+                if [[ "$status" =~ ^[0-9]{3}$ ]] && [ "$status" -ge 200 ] && [ "$status" -lt 400 ] && { [ -z "$expected" ] || printf '%s' "$body" | grep -Fq "$expected"; }; then
                   echo "✅ ${name} responded on attempt ${attempt}" >> $GITHUB_STEP_SUMMARY
+                  echo "- ${name} status: ${status}" >> $GITHUB_STEP_SUMMARY
                   return 0
                 fi
               fi
 
-              echo "Attempt ${attempt}/18 did not pass for ${name}; waiting 10 seconds..."
+              echo "Attempt ${attempt}/18 did not pass for ${name}; status=${status:-none}; waiting 10 seconds..."
               sleep 10
             done
 
             echo "❌ ${name} did not pass endpoint smoke after 18 attempts." >> $GITHUB_STEP_SUMMARY
             echo "URL: ${url}" >> $GITHUB_STEP_SUMMARY
+            echo "Last HTTP status: ${status:-none}" >> $GITHUB_STEP_SUMMARY
             echo "Expected marker: ${expected:-any response body}" >> $GITHUB_STEP_SUMMARY
+            echo "Last response preview:" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            printf '%s' "$body" | head -c 1000 >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
             echo "${name} endpoint smoke failed for ${url}" >&2
             return 1
           }
@@ -546,12 +557,12 @@ jobs:
             echo "| Check | URL | Expected |"
             echo "|------|-----|----------|"
             echo "| Gateway Health | ${GATEWAY_HEALTH} | healthy |"
-            echo "| Orders API Smoke | ${ORDERS_SMOKE} | runtime |"
+            echo "| Orders API Smoke | ${ORDERS_SMOKE} | activeTenantCode |"
             echo "| UI Reachability | ${UI_URL} | <!doctype html |"
           } >> $GITHUB_STEP_SUMMARY
 
           smoke_url "Gateway Health" "$GATEWAY_HEALTH" "healthy"
-          smoke_url "Orders API Smoke" "$ORDERS_SMOKE" "runtime"
+          smoke_url "Orders API Smoke" "$ORDERS_SMOKE" "activeTenantCode"
           smoke_url "UI Reachability" "$UI_URL" "<!doctype html"
       
       - name: Deployment Summary
