@@ -284,7 +284,8 @@ jobs:
           echo "| Wrapper Run URL | https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Deployment Name | ${{ needs.deploy_or_cleanup.outputs.deploymentName || '(not deployed)' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Gateway URL | https://${{ needs.deploy_or_cleanup.outputs.gatewayFqdn || 'n/a' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Gateway Swagger | https://${{ needs.deploy_or_cleanup.outputs.gatewayFqdn || 'n/a' }}/swagger |" >> $GITHUB_STEP_SUMMARY
+          echo "| Gateway Health | https://${{ needs.deploy_or_cleanup.outputs.gatewayFqdn || 'n/a' }}/ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Orders API Smoke | https://${{ needs.deploy_or_cleanup.outputs.gatewayFqdn || 'n/a' }}/api/v1/Info/runtime-configuration |" >> $GITHUB_STEP_SUMMARY
           echo "| UI URL | https://${{ needs.deploy_or_cleanup.outputs.uiFqdn || 'n/a' }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📎 Child Summary Links" >> $GITHUB_STEP_SUMMARY
@@ -303,16 +304,18 @@ jobs:
             echo "1. Review the what-if delta and compare it to the expected resource changes." >> $GITHUB_STEP_SUMMARY
             echo "2. Re-run the wrapper with dryRun=false when the plan is approved." >> $GITHUB_STEP_SUMMARY
           else
-            echo "1. Open the Gateway Swagger URL and confirm the API surface is reachable." >> $GITHUB_STEP_SUMMARY
-            echo "2. Open the UI URL and confirm the frontend resolves successfully." >> $GITHUB_STEP_SUMMARY
-            echo "3. Run the transport publish/consume smoke and replay smoke." >> $GITHUB_STEP_SUMMARY
+            echo "1. Open the Gateway Health URL and confirm the accepted Azure host is shown." >> $GITHUB_STEP_SUMMARY
+            echo "2. Open the Orders API smoke URL through the gateway and confirm the API route resolves." >> $GITHUB_STEP_SUMMARY
+            echo "3. Open the UI URL and confirm the frontend resolves successfully." >> $GITHUB_STEP_SUMMARY
+            echo "4. Run the transport publish/consume smoke and replay smoke." >> $GITHUB_STEP_SUMMARY
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📎 Copyable Verification Targets" >> $GITHUB_STEP_SUMMARY
           echo "| Target | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| Run URL | https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Gateway Swagger | https://${{ needs.deploy_or_cleanup.outputs.gatewayFqdn || 'n/a' }}/swagger |" >> $GITHUB_STEP_SUMMARY
+          echo "| Gateway Health | https://${{ needs.deploy_or_cleanup.outputs.gatewayFqdn || 'n/a' }}/ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Orders API Smoke | https://${{ needs.deploy_or_cleanup.outputs.gatewayFqdn || 'n/a' }}/api/v1/Info/runtime-configuration |" >> $GITHUB_STEP_SUMMARY
           echo "| UI | https://${{ needs.deploy_or_cleanup.outputs.uiFqdn || 'n/a' }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🏗️ What Gets Created Automatically" >> $GITHUB_STEP_SUMMARY

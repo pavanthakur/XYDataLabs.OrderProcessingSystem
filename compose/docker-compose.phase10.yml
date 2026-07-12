@@ -104,7 +104,7 @@ services:
       ReverseProxy__Clusters__orders-cluster__Destinations__orders-primary__Address: http://orderprocessing-ord-dev:8080
       ReverseProxy__Clusters__inventory-cluster__Destinations__inventory-primary__Address: http://orderprocessing-inv-dev:8080
       ReverseProxy__Clusters__notifications-cluster__Destinations__notifications-primary__Address: http://orderprocessing-notif-dev:8080
-      ReverseProxy__Clusters__ui-cluster__Destinations__ui-primary__Address: http://orderprocessing-ui-dev:8080
+      ReverseProxy__Clusters__ui-cluster__Destinations__ui-primary__Address: http://orderprocessing-ui-dev:5022
       IdentityProvider__Enabled: "true"
       IdentityProvider__Mode: KeycloakLocal
       IdentityProvider__Authority: http://keycloak-local:8080/realms/xy-phase9

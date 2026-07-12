@@ -1,23 +1,27 @@
 # Gateway
 
-YARP reverse proxy — local entry point that routes requests to the API and UI. Not deployed to Azure (Azure uses direct App Service URLs).
+YARP reverse proxy for the Phase 10 containerized service graph. Locally it routes to Docker service names or localhost ports; in Azure Container Apps the deployment injects the internal Container Apps FQDNs through configuration.
 
-## Routes (local only — port 5080)
+## Routes
 
 | Route | Match | Forwards to |
 |-------|-------|-------------|
-| `orders-host` | `orders.localhost/*` | API `http://localhost:5010/` |
-| `orders-path` | `localhost/api/*` | API `http://localhost:5010/` |
-| `orders-swagger` | `localhost/swagger/*` | API `http://localhost:5010/` |
-| `ui-host` | `ui.localhost/*` | UI `http://localhost:5173/` |
-| `ui-path` | `localhost/app/*` → strips `/app` prefix | UI `http://localhost:5173/` |
+| `orders-path` | `/api/*` | Orders API |
+| `inventory-path` | `/inventory/*` | Inventory API |
+| `notifications-path` | `/notifications/*` | Notifications API |
+| `ui-path` | `/app/*` | UI |
+
+## Verification
+
+- Gateway health: `/`
+- Orders API smoke through gateway: `/api/v1/Info/runtime-configuration`
 
 ## Purpose
 
 - Experiments with modular monolith routing and future microservice decomposition patterns.
-- Used in Gateway launch profiles: `1 Run: 06 Gateway Baseline Http` and Docker gateway profiles.
+- Used in Gateway launch profiles, Phase 10 Docker profiles, and the Azure Container Apps Phase 10 deployment.
 
 ## Rules
 
 - No business logic — pure routing config in `appsettings.json`.
-- Gateway tests in `tests/XYDataLabs.OrderProcessingSystem.Gateway.Tests/` verify host-based routing behaviour.
+- Gateway tests in `tests/XYDataLabs.OrderProcessingSystem.Gateway.Tests/` verify routing behaviour.
