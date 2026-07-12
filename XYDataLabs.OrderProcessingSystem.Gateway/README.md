@@ -2,6 +2,8 @@
 
 YARP reverse proxy for the Phase 10 containerized service graph. Locally it routes to Docker service names or localhost ports; in Azure Container Apps the deployment injects same-environment Container Apps service names through configuration.
 
+For Azure Container Apps, forwarded requests use the destination service host instead of preserving the original public gateway host. ACA routes internal calls by service host, so the gateway accepts its public ACA hostname and its internal `orderprocessing-gate-<env>` service-name shape, then forwards to `orderprocessing-<service>-<env>` destinations.
+
 ## Routes
 
 | Route | Match | Forwards to |

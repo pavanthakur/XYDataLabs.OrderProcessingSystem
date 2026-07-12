@@ -107,6 +107,7 @@ services:
       Gateway__AllowedHosts__2: inventory.localhost
       Gateway__AllowedHosts__3: notifications.localhost
       Gateway__AllowedHosts__4: ui.localhost
+      Gateway__AllowedHosts__5: orderprocessing-gate-${PHASE10_ENV_SUFFIX:-local}
       ReverseProxy__Clusters__orders-cluster__Destinations__orders-primary__Address: http://orderprocessing-ord-${PHASE10_ENV_SUFFIX:-local}:8080
       ReverseProxy__Clusters__inventory-cluster__Destinations__inventory-primary__Address: http://orderprocessing-inv-${PHASE10_ENV_SUFFIX:-local}:8080
       ReverseProxy__Clusters__notifications-cluster__Destinations__notifications-primary__Address: http://orderprocessing-notif-${PHASE10_ENV_SUFFIX:-local}:8080

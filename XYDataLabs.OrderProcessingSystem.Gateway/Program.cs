@@ -99,7 +99,10 @@ app.Use(async (context, next) =>
 
     var requestHost = context.Request.Host.Host;
     var isAzureContainerAppsHost = requestHost.EndsWith(".azurecontainerapps.io", StringComparison.OrdinalIgnoreCase);
-    var isAllowedHost = allowedHosts.Contains(requestHost, StringComparer.OrdinalIgnoreCase) || isAzureContainerAppsHost;
+    var isInternalGatewayServiceHost = requestHost.StartsWith("orderprocessing-gate-", StringComparison.OrdinalIgnoreCase);
+    var isAllowedHost = allowedHosts.Contains(requestHost, StringComparer.OrdinalIgnoreCase)
+        || isAzureContainerAppsHost
+        || isInternalGatewayServiceHost;
 
     if (!isAllowedHost)
     {
