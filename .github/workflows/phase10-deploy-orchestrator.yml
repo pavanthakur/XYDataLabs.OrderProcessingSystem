@@ -96,7 +96,7 @@ jobs:
       imageTag: phase10
 
   route_child_workflow:
-    name: Phase 10 Route Child Workflow
+    name: Phase 10 Routed Child Workflow
     runs-on: ubuntu-latest
     needs: [preflight, build_images]
     if: always()
@@ -138,7 +138,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
           {
-            echo "## 🧭 Phase 10 Workflow Route"
+            echo "## 🧭 Phase 10 Routed Child Workflow"
             echo ""
             echo "| Field | Value |"
             echo "|------|-------|"
@@ -148,7 +148,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   deploy_or_cleanup:
-    name: Deploy Azure Phase 10
+    name: Deploy Azure Phase 10 Resources (Internal)
     needs: [route_child_workflow]
     if: ${{ needs.route_child_workflow.outputs.should_call == 'true' }}
     uses: ./.github/workflows/infra-deploy.yml
@@ -163,7 +163,7 @@ jobs:
     secrets: inherit
 
   gate_diagnostic:
-    name: Deploy Gate Diagnostic
+    name: Phase 10 Routed Gate Diagnostic
     runs-on: ubuntu-latest
     needs: [preflight, build_images, route_child_workflow, deploy_or_cleanup]
     if: always()
@@ -171,7 +171,7 @@ jobs:
       - name: Write gate diagnostic
         shell: bash
         run: |
-          echo "## 🔎 Deploy Gate Diagnostic" >> $GITHUB_STEP_SUMMARY
+          echo "## 🔎 Phase 10 Routed Gate Diagnostic" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
@@ -193,7 +193,7 @@ jobs:
           elif [ "${{ needs.build_images.result }}" != "success" ]; then
             echo "| decision | blocked before deploy by image build |" >> $GITHUB_STEP_SUMMARY
           elif [ "${{ needs.route_child_workflow.result }}" != "success" ]; then
-            echo "| decision | route job did not authorize child workflow invocation |" >> $GITHUB_STEP_SUMMARY
+            echo "| decision | routed child workflow did not authorize child workflow invocation |" >> $GITHUB_STEP_SUMMARY
           elif [ "${{ needs.deploy_or_cleanup.result }}" = "success" ]; then
             echo "| decision | deploy or cleanup child workflow completed |" >> $GITHUB_STEP_SUMMARY
           else
@@ -227,7 +227,7 @@ jobs:
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Phase 10 Preflight | ${{ needs.preflight.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Build Phase 10 Images | ${{ needs.build_images.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Phase 10 Route | ${{ needs.route_child_workflow.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Phase 10 Routed Child Workflow | ${{ needs.route_child_workflow.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Deploy Azure Phase 10 Resources (Internal) | ${{ needs.deploy_or_cleanup.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Summary | success |" >> $GITHUB_STEP_SUMMARY
           if [ "${{ inputs.cleanupInfra }}" = "true" ]; then
@@ -243,8 +243,8 @@ jobs:
             echo "| Route Gate | blocked by image build failure |" >> $GITHUB_STEP_SUMMARY
             echo "| Route Status Note | fix the image build before expecting Azure deployment |" >> $GITHUB_STEP_SUMMARY
           elif [ "${{ needs.route_child_workflow.result }}" != "success" ]; then
-            echo "| Route Gate | route job did not authorize the child workflow call |" >> $GITHUB_STEP_SUMMARY
-            echo "| Route Status Note | inspect the route job summary for the call mode and reason |" >> $GITHUB_STEP_SUMMARY
+            echo "| Route Gate | routed child workflow did not authorize the child workflow call |" >> $GITHUB_STEP_SUMMARY
+            echo "| Route Status Note | inspect the routed child workflow summary for the call mode and reason |" >> $GITHUB_STEP_SUMMARY
           elif [ "${{ needs.deploy_or_cleanup.result }}" != "success" ]; then
             echo "| Route Gate | Azure deployment or cleanup failed in the child workflow |" >> $GITHUB_STEP_SUMMARY
             echo "| Route Status Note | inspect the Deploy Azure Phase 10 Resources (Internal) job logs for the exact failure |" >> $GITHUB_STEP_SUMMARY
@@ -289,7 +289,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📎 Child Summary Links" >> $GITHUB_STEP_SUMMARY
           echo "- Open the Build Phase 10 Images job for the per-service image logs." >> $GITHUB_STEP_SUMMARY
-          echo "- Open the Phase 10 Route job to see whether the reusable workflow call was authorized." >> $GITHUB_STEP_SUMMARY
+          echo "- Open the Phase 10 Routed Child Workflow job to see whether the reusable workflow call was authorized." >> $GITHUB_STEP_SUMMARY
           echo "- Open the Deploy Azure Phase 10 Resources (Internal) job for the Azure deployment details or teardown trace." >> $GITHUB_STEP_SUMMARY
           echo "- The detailed outputs remain in the nested child workflow summaries below this wrapper." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY

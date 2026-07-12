@@ -505,14 +505,17 @@ Default rule after Phase 14:
 ## 4. Divergences from Julio Casal's `dotnet-backend-blueprint`
 
 The blueprint draws on Julio Casal's `dotnet-backend-blueprint` v10 skeleton template pattern
-but diverges where this repo's existing investments produce stronger architect-level signal:
+but diverges where this repo's existing investments produce stronger architect-level signal.
+
+This is a compatibility note, not a style debate. The repo already standardizes on
+layered clean architecture, custom CQRS dispatching, and explicit boundary tests.
 
 | Aspect | Julio's blueprint | This blueprint | Reason |
 |---|---|---|---|
-| Architecture style | Vertical Slice + minimal APIs | Clean Architecture + hand-rolled CQRS | Already invested; produces stronger domain isolation; senior architect signal |
+| Architecture style | Vertical Slice + minimal APIs | Clean Architecture + custom CQRS orchestration | Already invested; keeps domain isolation explicit and aligns with the repo's tested boundary model |
 | Auth | Keycloak | Azure AD + JWT primary; Keycloak as Phase 9.5 portability showcase (ADR-017) | Multi-tenant SaaS market expects Entra/AAD primary |
-| Local orchestration | .NET Aspire | Docker Compose matrix + VS F5 profiles; Aspire optional in Phase 13+ | Already proven in this repo |
-| Deploy target | `aspire deploy` to Azure Container Apps | OIDC GitHub Actions → App Service; ACA in Phase 11 | Already proven; ACA is a Phase 11 migration |
+| Local orchestration | .NET Aspire | Docker Compose matrix + VS Code / F5 profiles; Aspire optional in Phase 13+ | Already proven in this repo and matches the repo's current inner-loop tooling |
+| Deploy target | `aspire deploy` to Azure Container Apps | OIDC GitHub Actions → App Service today; ACA in Phase 11 | Already proven; the repo uses workflow-driven deployment now and can move to ACA when the phase gate is reached |
 | RDBMS | PostgreSQL | SQL Server primary; PostgreSQL as Phase 11.5 portability showcase (ADR-017) | Already proven; ADR-017 sequences PG as polyglot showcase |
 | Template mechanism | `dotnet new` only | `dotnet new` (Layer 1) + GitHub template repo (Layer 2) | Layer 1 alone cannot ship workflows / Bicep / frontend / Docker / docs |
 | Frontend | None | React 18 + Vite + tenant-session bootstrap | Multi-product SaaS needs a UI shell |

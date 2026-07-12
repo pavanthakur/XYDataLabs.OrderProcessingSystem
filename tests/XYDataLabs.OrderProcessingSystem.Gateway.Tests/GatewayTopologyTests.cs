@@ -6,7 +6,7 @@ namespace XYDataLabs.OrderProcessingSystem.Gateway.Tests;
 public sealed class GatewayTopologyTests
 {
     [Fact]
-    public void Gateway_AppSettings_Should_Define_The_Phase9_Local_Topology()
+    public void Gateway_AppSettings_Should_Define_The_Phase10_ContainerTopology()
     {
         var config = new ConfigurationBuilder()
             .AddJsonFile(Path.Combine(AppContext.BaseDirectory, @"..\..\..\..\..\XYDataLabs.OrderProcessingSystem.Gateway\appsettings.json"), optional: false)
@@ -17,10 +17,10 @@ public sealed class GatewayTopologyTests
         config["ReverseProxy:Routes:notifications-route:Match:Path"].Should().Be("/notifications/{**catch-all}");
         config["ReverseProxy:Routes:ui-route:Match:Path"].Should().Be("/app/{**catch-all}");
 
-        config["ReverseProxy:Routes:orders-api-route:Match:Hosts:0"].Should().Be("orders.localhost");
-        config["ReverseProxy:Routes:inventory-route:Match:Hosts:0"].Should().Be("inventory.localhost");
-        config["ReverseProxy:Routes:notifications-route:Match:Hosts:0"].Should().Be("notifications.localhost");
-        config["ReverseProxy:Routes:ui-route:Match:Hosts:0"].Should().Be("ui.localhost");
+        config["ReverseProxy:Routes:orders-api-route:Match:Hosts:0"].Should().BeNull();
+        config["ReverseProxy:Routes:inventory-route:Match:Hosts:0"].Should().BeNull();
+        config["ReverseProxy:Routes:notifications-route:Match:Hosts:0"].Should().BeNull();
+        config["ReverseProxy:Routes:ui-route:Match:Hosts:0"].Should().BeNull();
 
         config["Gateway:AllowedHosts:0"].Should().Be("localhost");
         config["Gateway:AllowedHosts:1"].Should().Be("orders.localhost");

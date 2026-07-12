@@ -139,6 +139,7 @@ app.MapGet("/", (HttpContext context) => Results.Ok(new
     service = "XYDataLabs.OrderProcessingSystem.Gateway",
     status = "healthy",
     acceptedHost = context.Request.Host.Host,
+    summary = $"Accepted host: {context.Request.Host.Host}",
     routes = new[]
     {
         "orders.localhost:5080 -> http://localhost:5010",

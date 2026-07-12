@@ -298,12 +298,16 @@ Monolithic Application on Azure App Service
 ## Historical March 2026 Next-Phase Snapshot — Superseded
 
 This section is retained only as historical planning context from before the Phase 8 closeout and Track U completion.
-Use the May 2026 current-state block above, `ARCHITECTURE-EVOLUTION.md`, and `docs/learning/curriculum/1_MASTER_CURRICULUM.md` for the active phase and next-step truth.
+It is not active guidance.
+
+Use the May 2026 current-state block above, `ARCHITECTURE-EVOLUTION.md`, and
+`docs/learning/curriculum/1_MASTER_CURRICULUM.md` for the active phase and next-step truth.
 
 ### Phase 2 Goal: Transform Monolith → Microservices
-This is a **learning exercise** to understand microservices architecture patterns. The production monolith will continue running on Azure while you build the microservices architecture locally.
+This was a **local learning exercise** for microservices architecture patterns.
+The production monolith continued running on Azure while the microservices shape was explored locally.
 
-**Target Architecture (Week 5-6):**
+**Historical Target Architecture (Week 5-6):**
 ```
 YARP Microservices Architecture (Local Development)
 ├── YARP Gateway (Port 8080) - NEW PROJECT ⭐

@@ -100,6 +100,7 @@ Phase 10 note:
 - The active `main.phase10.bicep` entrypoint does not invoke `modules/sql.bicep` today.
 - Phase 10 is intentionally transport-first and currently deploys Service Bus, Log Analytics, Application Insights, Container Apps, Functions, Key Vault, and the container images.
 - If you need SQL Server or Redis in Azure, treat that as a separate later-phase addition or legacy bootstrap responsibility, not an output of the current Phase 10 wrapper.
+- For a production-grade containerized solution, prefer ACR for runtime images, Managed Identity for Azure access, and Front Door/WAF for public ingress when you need a controlled external endpoint.
 
 **Security Note**: SQL admin credentials are stored as secure parameters. In production, consider using:
 - Azure Key Vault for credential management

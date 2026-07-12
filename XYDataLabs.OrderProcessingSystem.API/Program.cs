@@ -48,6 +48,7 @@ using XYDataLabs.OrderProcessingSystem.Orders.Features.Module;
 using XYDataLabs.OrderProcessingSystem.Payments.Features.Module;
 using Microsoft.AspNetCore.Authentication;
 using XYDataLabs.OrderProcessingSystem.API.Security;
+using XYDataLabs.OrderProcessingSystem.API.Responses;
 
 // Bootstrap Serilog as early as possible so Log.* writes go to console immediately
 // Azure App Service Deployment - Fix for Application Not Starting
@@ -570,13 +571,11 @@ else
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;
             context.Response.ContentType = "application/json";
-            await context.Response.WriteAsJsonAsync(new
-            {
-                message = "Swagger UI is not available in the Production environment.",
-                reason = "API documentation is intentionally disabled in production. Use the dev or staging environment to explore the API.",
-                environment = environmentName,
-                swaggerAvailableAt = devSwaggerUrl
-            });
+            await context.Response.WriteAsJsonAsync(
+                EndpointSummaryFactory.BuildSwaggerUnavailableSummary(
+                    environmentName,
+                    context.Request.Host.Host,
+                    devSwaggerUrl));
             return;
         }
         await next(context);
