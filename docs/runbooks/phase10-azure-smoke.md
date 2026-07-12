@@ -207,6 +207,7 @@ Use this checklist to prove the shared contract is behaving the same way across 
    - Open the Gateway Health URL from the summary and confirm `acceptedHost` matches the Azure Container Apps hostname.
    - Open the Orders API smoke URL from the summary: `/api/v1/Info/runtime-configuration`.
    - Open the UI URL from the summary and confirm the frontend responds.
+   - On direct UI Container Apps URLs, the UI server proxies same-origin `/api/*` calls to the gateway through `ORDERPROCESSING_API_BASE_URL`.
 3. Azure smoke and automation
    - Run the Phase 10 Azure smoke after the deployment completes.
    - Confirm publish, consume, DLQ, and replay checks pass before promoting aliases or treating the environment as ready.

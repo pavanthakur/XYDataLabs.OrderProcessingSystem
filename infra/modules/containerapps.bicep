@@ -153,6 +153,12 @@ var gatewayEnv = concat(commonEnv, [
     value: 'http://${uiName}'
   }
 ])
+var uiEnv = concat(commonEnv, [
+  {
+    name: 'ORDERPROCESSING_API_BASE_URL'
+    value: 'http://${gatewayName}'
+  }
+])
 var registryConfigs = !empty(ghcrUsername) && !empty(ghcrReadToken) ? [
   {
     server: 'ghcr.io'
@@ -346,7 +352,7 @@ resource uiApp 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: 'ui'
           image: uiImage
-          env: commonEnv
+          env: uiEnv
           resources: {
             cpu: json(cpuCores)
             memory: '0.5Gi'

@@ -142,6 +142,7 @@ services:
       HOST: 0.0.0.0
       PORT: 5022
       USE_HTTPS: "false"
+      ORDERPROCESSING_API_BASE_URL: http://orderprocessing-gate-dev:8080
     depends_on:
       orderprocessing-gate-dev:
         condition: service_started
