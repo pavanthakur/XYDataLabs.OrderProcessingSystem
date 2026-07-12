@@ -135,6 +135,24 @@ var notificationsEnv = concat(publisherEnv, [
     value: notificationsSubscriptionName
   }
 ])
+var gatewayEnv = concat(commonEnv, [
+  {
+    name: 'ReverseProxy__Clusters__orders-cluster__Destinations__orders-primary__Address'
+    value: 'https://${ordersApp.properties.configuration.ingress.fqdn}'
+  }
+  {
+    name: 'ReverseProxy__Clusters__inventory-cluster__Destinations__inventory-primary__Address'
+    value: 'https://${inventoryApp.properties.configuration.ingress.fqdn}'
+  }
+  {
+    name: 'ReverseProxy__Clusters__notifications-cluster__Destinations__notifications-primary__Address'
+    value: 'https://${notificationsApp.properties.configuration.ingress.fqdn}'
+  }
+  {
+    name: 'ReverseProxy__Clusters__ui-cluster__Destinations__ui-primary__Address'
+    value: 'https://${uiApp.properties.configuration.ingress.fqdn}'
+  }
+])
 var registryConfigs = !empty(ghcrUsername) && !empty(ghcrReadToken) ? [
   {
     server: 'ghcr.io'
@@ -184,13 +202,17 @@ resource gatewayApp 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: 'gateway'
           image: gatewayImage
-          env: commonEnv
+          env: gatewayEnv
           resources: {
             cpu: json(cpuCores)
             memory: '0.5Gi'
           }
         }
       ]
+      scale: {
+        minReplicas: 1
+        maxReplicas: 10
+      }
     }
   }
 }
@@ -223,6 +245,10 @@ resource ordersApp 'Microsoft.App/containerApps@2024-03-01' = {
           }
         }
       ]
+      scale: {
+        minReplicas: 1
+        maxReplicas: 10
+      }
     }
   }
 }
@@ -238,6 +264,10 @@ resource inventoryApp 'Microsoft.App/containerApps@2024-03-01' = {
     configuration: {
       secrets: registrySecrets
       registries: registryConfigs
+      ingress: {
+        external: false
+        targetPort: 8080
+      }
     }
     template: {
       containers: [
@@ -251,6 +281,10 @@ resource inventoryApp 'Microsoft.App/containerApps@2024-03-01' = {
           }
         }
       ]
+      scale: {
+        minReplicas: 1
+        maxReplicas: 10
+      }
     }
   }
 }
@@ -266,6 +300,10 @@ resource notificationsApp 'Microsoft.App/containerApps@2024-03-01' = {
     configuration: {
       secrets: registrySecrets
       registries: registryConfigs
+      ingress: {
+        external: false
+        targetPort: 8080
+      }
     }
     template: {
       containers: [
@@ -279,6 +317,10 @@ resource notificationsApp 'Microsoft.App/containerApps@2024-03-01' = {
           }
         }
       ]
+      scale: {
+        minReplicas: 1
+        maxReplicas: 10
+      }
     }
   }
 }
@@ -296,7 +338,7 @@ resource uiApp 'Microsoft.App/containerApps@2024-03-01' = {
       registries: registryConfigs
       ingress: {
         external: true
-        targetPort: 8080
+        targetPort: 5022
       }
     }
     template: {
@@ -311,6 +353,10 @@ resource uiApp 'Microsoft.App/containerApps@2024-03-01' = {
           }
         }
       ]
+      scale: {
+        minReplicas: 1
+        maxReplicas: 10
+      }
     }
   }
 }

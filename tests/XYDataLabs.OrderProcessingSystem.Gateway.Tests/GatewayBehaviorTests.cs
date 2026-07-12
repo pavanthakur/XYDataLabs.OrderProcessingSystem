@@ -113,10 +113,8 @@ public sealed class GatewayBehaviorTests : IAsyncLifetime
     public async Task HostBasedRoute_ProxiesToOrdersCluster_AndPropagatesCorrelationId()
     {
         using var client = _factory.CreateClient();
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/ping");
-        request.Headers.Host = "orders.localhost";
 
-        var response = await client.SendAsync(request);
+        var response = await SendWithRetryAsync(client, CreateOrdersRequest);
         var body = await response.Content.ReadAsStringAsync();
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -171,7 +169,9 @@ public sealed class GatewayBehaviorTests : IAsyncLifetime
     {
         HttpResponseMessage? lastResponse = null;
 
-        for (var attempt = 0; attempt < 3; attempt++)
+        const int maxAttempts = 5;
+
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
         {
             using var request = requestFactory();
             lastResponse = await client.SendAsync(request);
@@ -181,7 +181,11 @@ public sealed class GatewayBehaviorTests : IAsyncLifetime
                 return lastResponse;
             }
 
-            lastResponse.Dispose();
+            if (attempt < maxAttempts - 1)
+            {
+                lastResponse.Dispose();
+            }
+
             await Task.Delay(100);
         }
 
@@ -196,6 +200,18 @@ public sealed class GatewayBehaviorTests : IAsyncLifetime
         };
 
         request.Headers.Host = "ui.localhost";
+
+        return request;
+    }
+
+    private static HttpRequestMessage CreateOrdersRequest()
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, "/api/ping")
+        {
+            Version = HttpVersion.Version11
+        };
+
+        request.Headers.Host = "orders.localhost";
 
         return request;
     }

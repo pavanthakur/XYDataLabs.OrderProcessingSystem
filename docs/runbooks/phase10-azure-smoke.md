@@ -21,7 +21,7 @@ These are the Phase 10 experience improvements that are worth carrying in the ac
 
 | Include now | Why it belongs in Phase 10 |
 |---|---|
-| Gateway and Swagger echo the accepted host in success and health summaries | Faster diagnosis when the Azure host is rejected or routed incorrectly |
+| Gateway health and routed API smoke echo or prove the accepted Azure host | Faster diagnosis when the Azure host is rejected or routed incorrectly |
 | Deploy summary shows the real gateway/UI URLs, wrapper run ID, and child workflow links | Operators should not have to hunt across nested jobs to confirm the deployment result |
 | Preflight logs the exact skip reason, not just `skipped` | Distinguishes gate logic from failure and shortens triage time |
 | Cleanup stays symmetric with creation using the same env suffix and resource scope | Prevents partial teardown and name drift across dev/staging/prod |
@@ -72,7 +72,7 @@ Practical rule:
 - The active target is the containerized solution, not the old App Service runtime model.
 - Use Container Apps ingress or friendly aliases so Azure behaves like the local Docker service graph.
 - SQL and Redis can be added to the active path, but they need to be intentionally reintroduced into the Bicep and workflow inputs rather than assumed from the portal.
-- The gateway health summary and the Swagger-block response both echo the accepted host, so capture that value first when diagnosing Azure host mismatches.
+- The gateway health summary echoes the accepted host, so capture that value first when diagnosing Azure host mismatches. Use the routed Orders API smoke URL to prove the gateway can reach the backend service.
 
 ### Enterprise platform priorities
 
@@ -157,7 +157,7 @@ Retention source of truth:
 
 | Area | Phase 10 status | Notes |
 |---|---|---|
-| Accepted-host echo in gateway and Swagger summaries | Include now | Helps operators confirm the routed Azure host immediately |
+| Accepted-host echo in gateway health plus routed API smoke | Include now | Helps operators confirm the routed Azure host and backend route immediately |
 | Wrapper deploy summary with run links and actual URLs | Include now | Matches the operator flow already used by the build/deploy jobs |
 | Skip-reason logging in preflight | Include now | Better than a bare `skipped` label |
 | Symmetric cleanup by env-suffixed name | Include now | Required for predictable dev/staging/prod teardown |
@@ -204,6 +204,9 @@ Use this checklist to prove the shared contract is behaving the same way across 
    - Run `phase10-deploy-orchestrator.yml` with the target environment and confirm the deployment summary reports the expected gateway and UI ingress outputs.
    - Verify the published image refs match the service-specific `orderprocessing-*` contract for gateway, Orders, Inventory, Notifications, and UI.
    - Verify the resource group contains Service Bus, Log Analytics, Application Insights, Container Apps, Functions, and Key Vault. Do not expect SQL Server or Redis from this path.
+   - Open the Gateway Health URL from the summary and confirm `acceptedHost` matches the Azure Container Apps hostname.
+   - Open the Orders API smoke URL from the summary: `/api/v1/Info/runtime-configuration`.
+   - Open the UI URL from the summary and confirm the frontend responds.
 3. Azure smoke and automation
    - Run the Phase 10 Azure smoke after the deployment completes.
    - Confirm publish, consume, DLQ, and replay checks pass before promoting aliases or treating the environment as ready.
