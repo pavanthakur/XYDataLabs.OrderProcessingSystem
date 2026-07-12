@@ -15,6 +15,7 @@ Anchor flow for the first slice:
 |---|---|---|
 | Phase 10 repo transport wiring | In progress | The Service Bus topology, transport adapter layer, startup seam, and DLQ replay path are in the repo; Azure proof is still pending. |
 | Phase 10 docs and runbooks | Done | The checklist, smoke runbook, DLQ replay guide, and progress tracker are aligned with the transport-first order. |
+| Phase 10 operator-experience hardening | In progress | Accepted-host echo, deploy-summary traceability, skip-reason logging, cleanup symmetry, local-vs-CI mapping, and per-service build logs are the intended active improvements. |
 | SharedContracts extraction | Deferred | Keep it out unless transport work proves real duplication across multiple services. |
 | Azure dev what-if / deploy | Pending Azure auth | The Bicep shape is updated and locally compiled, but the cloud validation still needs a working Azure login/session and deployment run. |
 | Phase 10 smoke / replay testing | Pending deployment | Start after a successful dev deployment and verify publish, consume, DLQ, and replay behavior end to end. |

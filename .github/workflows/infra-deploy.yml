@@ -77,7 +77,7 @@ jobs:
           echo "| ghcr_read_token_present | ${{ secrets.GHCR_READ_TOKEN != '' }} |" >> $GITHUB_STEP_SUMMARY
 
   route:
-    name: Deploy Route
+    name: Routed Deploy Decision
     runs-on: ubuntu-latest
     if: always()
     outputs:
@@ -134,7 +134,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
           {
-            echo "## 🧭 Deploy Route"
+            echo "## 🧭 Routed Deploy Decision"
             echo ""
             echo "| Field | Value |"
             echo "|------|-------|"
@@ -194,6 +194,32 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
 
+      - name: Ensure Azure resource providers are registered
+        shell: bash
+        run: |
+          PROVIDERS=(
+            Microsoft.App
+            Microsoft.AlertsManagement
+            Microsoft.ContainerRegistry
+            Microsoft.Insights
+            Microsoft.KeyVault
+            Microsoft.ManagedIdentity
+            Microsoft.OperationalInsights
+            Microsoft.ServiceBus
+          )
+
+          echo "Registering Azure providers needed by the Phase 10 stack..."
+          for PROVIDER in "${PROVIDERS[@]}"; do
+            STATE=$(az provider show --namespace "$PROVIDER" --query registrationState -o tsv 2>/dev/null || echo "NotRegistered")
+            if [ "$STATE" != "Registered" ]; then
+              echo " - registering $PROVIDER (current: $STATE)"
+              az provider register --namespace "$PROVIDER" --wait
+            else
+              echo " - $PROVIDER already registered"
+            fi
+          done
+          echo "✅ Azure resource providers are ready."
+
       - name: Validate GHCR Pull Credentials
         shell: bash
         run: |
@@ -235,9 +261,9 @@ jobs:
       location: ${{ inputs.location }}
 
   deploy:
-    name: Deploy Azure Phase 10
+    name: Deploy Azure Phase 10 Resources (Internal)
     needs: [route, pre-validate]
-    if: ${{ needs.route.outputs.run_deploy == 'true' }}
+    if: ${{ always() && needs.route.outputs.run_deploy == 'true' }}
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     timeout-minutes: 45
@@ -249,6 +275,21 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Confirm routed validation finished
+        if: ${{ needs['pre-validate'].result != 'success' }}
+        shell: bash
+        run: |
+          echo "## ❌ Routed deploy blocked" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| route mode | ${{ needs.route.outputs.mode }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| route reason | ${{ needs.route.outputs.reason }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| pre-validate result | ${{ needs['pre-validate'].result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| decision | deploy was requested, but the validation gate did not complete successfully |" >> $GITHUB_STEP_SUMMARY
+          echo "Validation must complete successfully before the routed deploy continues." >&2
+          exit 1
       
       - name: Determine parameters
         id: params
@@ -270,6 +311,32 @@ jobs:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+
+      - name: Ensure Azure resource providers are registered
+        shell: bash
+        run: |
+          PROVIDERS=(
+            Microsoft.App
+            Microsoft.AlertsManagement
+            Microsoft.ContainerRegistry
+            Microsoft.Insights
+            Microsoft.KeyVault
+            Microsoft.ManagedIdentity
+            Microsoft.OperationalInsights
+            Microsoft.ServiceBus
+          )
+
+          echo "Registering Azure providers needed by the Phase 10 stack..."
+          for PROVIDER in "${PROVIDERS[@]}"; do
+            STATE=$(az provider show --namespace "$PROVIDER" --query registrationState -o tsv 2>/dev/null || echo "NotRegistered")
+            if [ "$STATE" != "Registered" ]; then
+              echo " - registering $PROVIDER (current: $STATE)"
+              az provider register --namespace "$PROVIDER" --wait
+            else
+              echo " - $PROVIDER already registered"
+            fi
+          done
+          echo "✅ Azure resource providers are ready."
 
       - name: Validate GHCR Pull Credentials
         shell: bash
@@ -475,9 +542,9 @@ jobs:
           echo "4. Run the replay smoke." >> $GITHUB_STEP_SUMMARY
 
   cleanup:
-    name: Cleanup Infrastructure
+    name: Cleanup Infrastructure (Internal)
     needs: [route, pre-validate]
-    if: ${{ needs.route.outputs.run_cleanup == 'true' }}
+    if: ${{ always() && needs.route.outputs.run_cleanup == 'true' }}
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     timeout-minutes: 45
@@ -485,6 +552,21 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Confirm routed validation finished
+        if: ${{ needs['pre-validate'].result != 'success' }}
+        shell: bash
+        run: |
+          echo "## ❌ Routed cleanup blocked" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| route mode | ${{ needs.route.outputs.mode }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| route reason | ${{ needs.route.outputs.reason }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| pre-validate result | ${{ needs['pre-validate'].result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| decision | cleanup was requested, but the validation gate did not complete successfully |" >> $GITHUB_STEP_SUMMARY
+          echo "Validation must complete successfully before the routed cleanup continues." >&2
+          exit 1
 
       - name: Determine parameters
         id: params

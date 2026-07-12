@@ -13,6 +13,27 @@ This runbook covers the first live check for the Phase 10 transport slice define
 - Friendly alias inputs: `publicDomain`, `bindAliases`, `aliasMode`
 - Phase 10 does not currently deploy Azure SQL Server or Azure Cache for Redis. Those resources belong to the older bootstrap/App Service path or to later platform work, not to the current transport-first container-app stack.
 - Application Insights is part of the Phase 10 deployment and should appear in the target resource group when the deployment succeeds.
+- The Phase 10 deploy workflow now auto-registers the Azure resource providers it depends on, including `Microsoft.AlertsManagement`, so a clean subscription can still proceed without manual provider setup.
+
+## Phase 10 Operator Checklist
+
+These are the Phase 10 experience improvements that are worth carrying in the active path:
+
+| Include now | Why it belongs in Phase 10 |
+|---|---|
+| Gateway and Swagger echo the accepted host in success and health summaries | Faster diagnosis when the Azure host is rejected or routed incorrectly |
+| Deploy summary shows the real gateway/UI URLs, wrapper run ID, and child workflow links | Operators should not have to hunt across nested jobs to confirm the deployment result |
+| Preflight logs the exact skip reason, not just `skipped` | Distinguishes gate logic from failure and shortens triage time |
+| Cleanup stays symmetric with creation using the same env suffix and resource scope | Prevents partial teardown and name drift across dev/staging/prod |
+| Local-vs-CI mapping is documented in the runbook | Keeps VS Code tasks and GitHub Actions aligned for repeatable validation |
+| Build logs stay per service while the summary consolidates the end result | Preserves detailed logs without losing the top-level operator view |
+| Retention cleanup exists for GHCR and artifacts | Keeps storage and log accumulation under control without touching Azure runtime resources |
+
+Keep these out of the active Phase 10 path unless a later review proves they are needed:
+
+- ACR migration
+- Broad shared-contract extraction without real duplication
+- Extra platform layers that do not strengthen the current Azure transport slice
 
 | Area | Legacy bootstrap (`azure-bootstrap.yml`) | Active Phase 10 (`phase10-deploy-orchestrator.yml`) |
 |---|---|---|
@@ -25,6 +46,74 @@ This runbook covers the first live check for the Phase 10 transport slice define
 | Service Bus | Not the bootstrap focus | Core Phase 10 transport resource |
 | Runtime URL style | `azurewebsites.net` | Container Apps ingress or friendly alias |
 | Cleanup | Legacy app-stack teardown | Environment-scoped Phase 10 RG teardown |
+
+If you want Azure to match the local Docker containerized experience, treat the following as the explicit follow-up plan:
+
+| Requirement | Current Phase 10 state | What would be needed to match the containerized target |
+|---|---|---|
+| SQL Server | Not deployed | Reintroduce the SQL module and wire its outputs into the CI/CD parameter flow |
+| Redis | Not deployed | Add an Azure Cache for Redis module and pass its connection settings through the deployment workflow |
+| App Service URLs | Not part of the containerized target | Use Container Apps ingress plus friendly aliases / Front Door names; do not expect `azurewebsites.net` from the active path |
+
+### CI/CD implementation plan for containerized parity
+
+If the goal is to make Azure Portal and the CI/CD path look like the local Docker container graph, the implementation needs to be explicit:
+
+| Step | What changes | Owner workflow |
+|---|---|---|
+| 1 | Keep the App Service surface archived and treat Container Apps as the supported runtime path | `phase10-deploy-orchestrator.yml` |
+| 2 | Reintroduce SQL Server as a first-class module and expose its outputs in deployment summaries | `infra-deploy.yml` / `phase10-deploy-orchestrator.yml` |
+| 3 | Add Redis as a first-class module and wire its connection details into app configuration | `infra-deploy.yml` / `phase10-deploy-orchestrator.yml` |
+| 4 | Decide on the public URL shape: create friendly aliases for Container Apps via DNS / Front Door | `infra-deploy.yml` alias planning and binding |
+| 5 | Update the run summary so portal links, SQL/Redis state, and cleanup status are visible in one place | wrapper summary and child deployment summary |
+| 6 | Keep the cleanup path symmetrical so every created resource can be removed from the same CI/CD entrypoint | `cleanupInfra=true` or an explicit legacy teardown path |
+
+Practical rule:
+- The active target is the containerized solution, not the old App Service runtime model.
+- Use Container Apps ingress or friendly aliases so Azure behaves like the local Docker service graph.
+- SQL and Redis can be added to the active path, but they need to be intentionally reintroduced into the Bicep and workflow inputs rather than assumed from the portal.
+- The gateway health summary and the Swagger-block response both echo the accepted host, so capture that value first when diagnosing Azure host mismatches.
+
+### Enterprise platform priorities
+
+Treat the following as the production baseline for the containerized path:
+
+| Capability | Why it matters | Target posture |
+|---|---|---|
+| Azure Container Registry | Managed Azure-native runtime image registry | P0 before production |
+| Managed Identity + Key Vault | Secretless access and reduced credential sprawl | P0 |
+| Azure Monitor + Application Insights + Log Analytics | Operational visibility, tracing, and alerts | P0 |
+| Azure Front Door + WAF | Global ingress, TLS, custom domains, and protection | P1 |
+| Environment promotion | Separate dev / QA / UAT / prod boundaries | P1 |
+| CI/CD hardening | Image signing, SBOM, vulnerability and policy checks | P1 |
+
+Treat SQL and Redis as business-driven services:
+
+| Service | Recommendation |
+|---|---|
+| Azure SQL | Deploy only if the domain requires relational persistence |
+| Azure Cache for Redis | Deploy only if caching, session storage, rate limiting, or pub/sub is required |
+
+The practical implication is:
+- local Docker remains the service-graph reference
+- Azure remains containerized, not App Service-based
+- public ingress should use Container Apps + aliases or Front Door/WAF
+- GHCR is transitional until ACR is fully wired into the delivery path
+
+### Implementation matrix
+
+Use this matrix as the concrete follow-through plan for the Azure portal / CI/CD end state:
+
+| Concern | Current state | Enterprise target | Where to change | Verification target |
+|---|---|---|---|---|
+| Runtime images | GHCR with `GHCR_READ_TOKEN` | ACR with Azure-native auth | `build-phase10-images.yml`, `infra-deploy.yml`, `README-INFRA-DEPLOY.md` | Container Apps revisions pull from ACR successfully |
+| Azure identity | OIDC for login only | OIDC + Managed Identity for runtime access | `phase10-deploy-orchestrator.yml`, `infra/main.phase10.bicep`, identity modules | No stored Azure client secrets; runtime auth uses identity |
+| Public ingress | Container Apps FQDN only | Container Apps FQDN + friendly alias or Front Door/WAF | `infra-deploy.yml` alias handling, wrapper summary | Stable public URL and summary link for gateway/UI |
+| SQL Server | Not in active Phase 10 | Add only if the application requires relational persistence | `infra/main.phase10.bicep`, workflow inputs, runbook | SQL output appears in Azure summary and portal |
+| Redis | Not in active Phase 10 | Add only if caching/session/rate-limit needs justify it | `infra/main.phase10.bicep`, workflow inputs, runbook | Redis output appears in Azure summary and portal |
+| App Service URLs | Legacy only | Not the active target; replace with containerized ingress/aliases | Archive docs/workflows, keep Phase 10 docs containerized | No operator expects `azurewebsites.net` for Phase 10 |
+| Observability | App Insights + LAW present | Add Monitor/trace/alerts as production baseline | `infra/main.phase10.bicep`, monitoring modules | Logs, traces, and alerts visible end to end |
+| Cleanup | RG teardown plus retention workflow | Symmetric lifecycle for all created resources | `phase10-deploy-orchestrator.yml`, retention cleanup workflow | Every created artifact/resource has a deletion story |
 
 If you want human-friendly public URLs, choose:
 
@@ -63,6 +152,21 @@ Retention source of truth:
 - Artifact retention should be set on the upload step whenever the workflow owns the artifact.
 - GHCR package retention is handled by the scheduled cleanup workflow.
 - Azure Log Analytics retention is configured on the workspace, not in the deploy wrapper.
+
+### Phase 10 include-now / defer-later checklist
+
+| Area | Phase 10 status | Notes |
+|---|---|---|
+| Accepted-host echo in gateway and Swagger summaries | Include now | Helps operators confirm the routed Azure host immediately |
+| Wrapper deploy summary with run links and actual URLs | Include now | Matches the operator flow already used by the build/deploy jobs |
+| Skip-reason logging in preflight | Include now | Better than a bare `skipped` label |
+| Symmetric cleanup by env-suffixed name | Include now | Required for predictable dev/staging/prod teardown |
+| Local-vs-CI task mapping | Include now | Prevents drift between VS Code and GitHub Actions |
+| Per-service build logs plus consolidated summary | Include now | Retains detail without losing the executive view |
+| GHCR + artifact retention cleanup | Include now | Reduces storage and noise without expanding Azure scope |
+| ACR migration | Defer | Separate platform decision, not required for the current Phase 10 slice |
+| Broad shared-contract extraction | Defer | Add only when duplication is proven across multiple services |
+| New platform layer unrelated to transport/deploy/operator UX | Defer | Avoid scope creep in Phase 10 |
 
 Default retention policy:
 - Keep the last `10` GHCR package versions per image.
@@ -178,6 +282,7 @@ Use the individual tasks when:
 - If the browser or smoke step times out, verify that the local ports for the gateway and UI are not already in use.
 - If the gateway revision keeps activating or restarting, open the Container Apps logs and inspect the startup-probe failure details.
 - If you need persistent logs for investigation, run the individual stack tasks instead of the single-command hook so cleanup does not happen until you ask for it.
+- If Azure deployment fails with `MissingSubscriptionRegistration` for `Microsoft.AlertsManagement`, rerun the workflow after provider registration or confirm the workflow step `Ensure Azure resource providers are registered` completed successfully.
 
 ## Quick Command Checklist
 

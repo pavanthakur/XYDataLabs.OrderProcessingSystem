@@ -9,6 +9,7 @@ Use these documents:
 - `phase9-remaining-roadmap.md` — short Phase 9 closeout and Phase 10 pointer
 - `phase10-implementation-checklist.md` — file-by-file Phase 10 implementation checklist anchored on the order-created transport slice
 - `docs/runbooks/phase10-azure-smoke.md` — first Azure what-if / deploy / transport smoke runbook for Phase 10
+- `repo-architecture-layer-mapping.md` — repo-specific mapping of the common 7-layer diagram to the actual solution projects
 - `docs/reference/local-dev.md` — current local vs Docker validation paths, including the Phase 10 quick loop and five-step Docker flow
 - `docs/runbooks/servicebus-dlq-replay.md` — operator guide for DLQ triage and replay
 - `DEFERRED-WORK-LOG.md` — shared register for justified engineering and AI-governance deferrals

@@ -31,6 +31,8 @@ The workflow summary surfaces the resources that matter for runtime and cleanup:
 - Function App
 - Key Vault
 
+The reusable deploy workflow also registers the Azure resource providers it depends on before it applies the Bicep template. That includes `Microsoft.AlertsManagement`, which avoids a clean-subscription failure when Azure tries to create monitoring-related resources during deployment.
+
 ### Workflow Ownership Table
 
 | workflow | click target | owns RG creation | builds images | deploys app | cleanup | current or legacy |
@@ -161,17 +163,17 @@ Default cleanup policy:
 | GitHub artifacts | workflow upload step + `phase10-retention-cleanup.yml` | `retention-days: 14` |
 | Azure Log Analytics | workspace setting / Bicep / Azure policy | Managed outside the deploy wrapper |
 
-### Phase 10 Follow-up: ACR Migration Plan
+### Enterprise platform priorities
 
-ACR is the recommended medium-term follow-up for reducing registry credential sprawl:
+ACR should be treated as a production prerequisite for the runtime image path, not just a convenience follow-up:
 
 | Step | Goal | Current / Future |
 |---|---|---|
-| Keep `GHCR_READ_TOKEN` | Preserve the current private GHCR runtime path until ACR is ready | Current |
-| Add ACR registry | Host Phase 10 images in Azure instead of GHCR | Future |
-| Switch image publish path | Push build artifacts to ACR from the wrapper build step | Future |
-| Switch image pull path | Let Azure Container Apps pull from ACR with Azure-native auth | Future |
-| Retire GHCR runtime token | Remove the GHCR pull secret once ACR is stable | Future |
+| Keep `GHCR_READ_TOKEN` | Preserve the current private GHCR runtime path until ACR cutover is complete | Transitional |
+| Add ACR registry | Host Phase 10 images in Azure instead of GHCR | P0 before production |
+| Switch image publish path | Push build artifacts to ACR from the wrapper build step | P0 before production |
+| Switch image pull path | Let Azure Container Apps pull from ACR with Azure-native auth | P0 before production |
+| Retire GHCR runtime token | Remove the GHCR pull secret once ACR is stable | After ACR cutover |
 
 Target end state:
 
@@ -179,6 +181,24 @@ Target end state:
 - GitHub App remains the repository automation path
 - ACR becomes the runtime image registry
 - `GHCR_READ_TOKEN` is no longer needed for container pulls
+- Managed identity becomes the normal runtime identity pattern for Azure resources
+- Front Door / WAF becomes the preferred public ingress layer when public exposure is required
+
+### Containerized parity follow-up plan
+
+If the goal is to make the Azure Portal experience match the local Docker container graph, the CI/CD path needs an explicit parity plan:
+
+| Need | What to add back or decide | Workflow touchpoint |
+|---|---|---|
+| SQL Server | Reintroduce the SQL module and surface its outputs in the deployment summary | `infra-deploy.yml` / `phase10-deploy-orchestrator.yml` |
+| Redis | Add an Azure Cache for Redis module and wire its connection details into app settings | `infra-deploy.yml` / `phase10-deploy-orchestrator.yml` |
+| App Service URLs | Not part of the active containerized target; use friendly aliases / Front Door names for Container Apps | alias planning in `infra-deploy.yml` |
+| Portal visibility | Summarize the live portal endpoints and resource inventory in one run summary | wrapper summary + internal deployment summary |
+
+Rule of thumb:
+- the active target is the containerized solution, not the old App Service runtime model
+- Container Apps means friendly aliases or Front Door, not App Service hostnames
+- SQL and Redis must be intentionally reintroduced into the active Bicep/workflow chain if they are required in Azure
 
 ### Enterprise Guardrails
 

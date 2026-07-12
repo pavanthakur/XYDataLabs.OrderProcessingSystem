@@ -47,6 +47,22 @@ public sealed class GatewayBehaviorTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task GatewayRoot_WithAzureContainerAppsHost_ReturnsAcceptedHostSummary()
+    {
+        using var client = _factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/");
+        request.Headers.Host = "orderprocessing-gate-dev.bluebay-335bed8c.centralindia.azurecontainerapps.io";
+
+        var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        body.Should().Contain("acceptedHost");
+        body.Should().Contain("summary");
+        body.Should().Contain("orderprocessing-gate-dev.bluebay-335bed8c.centralindia.azurecontainerapps.io");
+    }
+
+    [Fact]
     public async Task Request_WithUnsupportedHost_ReturnsProblemDetailsBadRequest()
     {
         using var client = _factory.CreateClient();
@@ -127,10 +143,7 @@ public sealed class GatewayBehaviorTests : IAsyncLifetime
     public async Task HostBasedRoute_ProxiesToInventoryCluster()
     {
         using var client = _factory.CreateClient();
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/inventory/ping");
-        request.Headers.Host = "inventory.localhost";
-
-        var response = await client.SendAsync(request);
+        var response = await SendWithRetryAsync(client, CreateInventoryRequest);
         var body = await response.Content.ReadAsStringAsync();
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -142,10 +155,7 @@ public sealed class GatewayBehaviorTests : IAsyncLifetime
     public async Task HostBasedRoute_ProxiesToNotificationsCluster()
     {
         using var client = _factory.CreateClient();
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/notifications/ping");
-        request.Headers.Host = "notifications.localhost";
-
-        var response = await client.SendAsync(request);
+        var response = await SendWithRetryAsync(client, CreateNotificationsRequest);
         var body = await response.Content.ReadAsStringAsync();
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -186,6 +196,30 @@ public sealed class GatewayBehaviorTests : IAsyncLifetime
         };
 
         request.Headers.Host = "ui.localhost";
+
+        return request;
+    }
+
+    private static HttpRequestMessage CreateInventoryRequest()
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, "/inventory/ping")
+        {
+            Version = HttpVersion.Version11
+        };
+
+        request.Headers.Host = "inventory.localhost";
+
+        return request;
+    }
+
+    private static HttpRequestMessage CreateNotificationsRequest()
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, "/notifications/ping")
+        {
+            Version = HttpVersion.Version11
+        };
+
+        request.Headers.Host = "notifications.localhost";
 
         return request;
     }
