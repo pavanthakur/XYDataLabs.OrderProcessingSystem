@@ -1,0 +1,146 @@
+name: Phase 10 Azure Transport Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      location:
+        description: 'Azure region'
+        required: true
+        default: 'centralindia'
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  transport_smoke:
+    name: Phase 10 Azure Transport Smoke
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Azure CLI Login (OIDC)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+
+      - name: Resolve Phase 10 transport topology
+        id: topology
+        shell: bash
+        run: |
+          if [ "${{ inputs.environment }}" = "staging" ]; then
+            ENV_SUFFIX="stg"
+          else
+            ENV_SUFFIX="${{ inputs.environment }}"
+          fi
+
+          RG_NAME="rg-orderprocessing-${ENV_SUFFIX}"
+          SB_NAMESPACE="sb-orderprocessing-${ENV_SUFFIX}"
+          TOPIC_NAME="order-events-${ENV_SUFFIX}"
+          INVENTORY_SUB="inventory-order-created-${ENV_SUFFIX}"
+          NOTIFICATIONS_SUB="notifications-order-created-${ENV_SUFFIX}"
+          DLQ_TOPIC="order-events-dlq"
+          DLQ_REPLAY_SUB="dlq-replay-${ENV_SUFFIX}"
+          SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
+          RESOURCE_GROUP_URL="https://portal.azure.com/#/resource/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/overview"
+          SERVICE_BUS_URL="https://portal.azure.com/#/resource/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/providers/Microsoft.ServiceBus/namespaces/${SB_NAMESPACE}/overview"
+
+          echo "envSuffix=${ENV_SUFFIX}" >> "$GITHUB_OUTPUT"
+          echo "resourceGroup=${RG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "namespace=${SB_NAMESPACE}" >> "$GITHUB_OUTPUT"
+          echo "topic=${TOPIC_NAME}" >> "$GITHUB_OUTPUT"
+          echo "inventorySubscription=${INVENTORY_SUB}" >> "$GITHUB_OUTPUT"
+          echo "notificationsSubscription=${NOTIFICATIONS_SUB}" >> "$GITHUB_OUTPUT"
+          echo "deadLetterTopic=${DLQ_TOPIC}" >> "$GITHUB_OUTPUT"
+          echo "deadLetterSubscription=${DLQ_REPLAY_SUB}" >> "$GITHUB_OUTPUT"
+          echo "subscriptionId=${SUBSCRIPTION_ID}" >> "$GITHUB_OUTPUT"
+          echo "resourceGroupUrl=${RESOURCE_GROUP_URL}" >> "$GITHUB_OUTPUT"
+          echo "serviceBusUrl=${SERVICE_BUS_URL}" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Phase 10 Azure Transport Smoke Context"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Environment | ${{ inputs.environment }} |"
+            echo "| Azure Resource Suffix | ${ENV_SUFFIX} |"
+            echo "| Resource Group | ${RG_NAME} |"
+            echo "| Service Bus Namespace | ${SB_NAMESPACE} |"
+            echo "| Topic | ${TOPIC_NAME} |"
+            echo "| Inventory Subscription | ${INVENTORY_SUB} |"
+            echo "| Notifications Subscription | ${NOTIFICATIONS_SUB} |"
+            echo "| DLQ Topic | ${DLQ_TOPIC} |"
+            echo "| Replay Subscription | ${DLQ_REPLAY_SUB} |"
+            echo ""
+            echo "### Azure Links"
+            echo ""
+            echo "- [Resource group](${RESOURCE_GROUP_URL})"
+            echo "- [Service Bus namespace](${SERVICE_BUS_URL})"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify Service Bus topology exists
+        shell: bash
+        run: |
+          RG_NAME="${{ steps.topology.outputs.resourceGroup }}"
+          SB_NAMESPACE="${{ steps.topology.outputs.namespace }}"
+          TOPIC_NAME="${{ steps.topology.outputs.topic }}"
+          INVENTORY_SUB="${{ steps.topology.outputs.inventorySubscription }}"
+          NOTIFICATIONS_SUB="${{ steps.topology.outputs.notificationsSubscription }}"
+          DLQ_TOPIC="${{ steps.topology.outputs.deadLetterTopic }}"
+          DLQ_REPLAY_SUB="${{ steps.topology.outputs.deadLetterSubscription }}"
+
+          az servicebus namespace show --resource-group "$RG_NAME" --name "$SB_NAMESPACE" --only-show-errors 1>/dev/null
+          az servicebus topic show --resource-group "$RG_NAME" --namespace-name "$SB_NAMESPACE" --name "$TOPIC_NAME" --only-show-errors 1>/dev/null
+          az servicebus topic subscription show --resource-group "$RG_NAME" --namespace-name "$SB_NAMESPACE" --topic-name "$TOPIC_NAME" --name "$INVENTORY_SUB" --only-show-errors 1>/dev/null
+          az servicebus topic subscription show --resource-group "$RG_NAME" --namespace-name "$SB_NAMESPACE" --topic-name "$TOPIC_NAME" --name "$NOTIFICATIONS_SUB" --only-show-errors 1>/dev/null
+          az servicebus topic show --resource-group "$RG_NAME" --namespace-name "$SB_NAMESPACE" --name "$DLQ_TOPIC" --only-show-errors 1>/dev/null
+          az servicebus topic subscription show --resource-group "$RG_NAME" --namespace-name "$SB_NAMESPACE" --topic-name "$DLQ_TOPIC" --name "$DLQ_REPLAY_SUB" --only-show-errors 1>/dev/null
+
+          echo "✅ Service Bus topology exists." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run transport publish consume replay smoke
+        shell: pwsh
+        run: |
+          $summaryPath = Join-Path $env:RUNNER_TEMP 'phase10-azure-transport-smoke.md'
+          $runId = "phase10-transport-${{ steps.topology.outputs.envSuffix }}-${{ github.run_id }}-${{ github.run_attempt }}"
+
+          & pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-phase10-azure-transport-smoke.ps1 `
+            -Environment '${{ inputs.environment }}' `
+            -ResourceGroupName '${{ steps.topology.outputs.resourceGroup }}' `
+            -ServiceBusNamespaceName '${{ steps.topology.outputs.namespace }}' `
+            -RunId $runId `
+            -SummaryPath $summaryPath
+
+          $smokeExitCode = $LASTEXITCODE
+          if (Test-Path -LiteralPath $summaryPath) {
+            Get-Content -LiteralPath $summaryPath | Add-Content -Path $env:GITHUB_STEP_SUMMARY
+          }
+
+          if ($smokeExitCode -ne 0) {
+            throw "Phase 10 Azure transport smoke failed with exit code $smokeExitCode."
+          }
+
+      - name: Upload transport smoke summary
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: phase10-azure-transport-smoke-${{ inputs.environment }}
+          path: ${{ runner.temp }}/phase10-azure-transport-smoke.md
+          if-no-files-found: ignore
+          retention-days: 14

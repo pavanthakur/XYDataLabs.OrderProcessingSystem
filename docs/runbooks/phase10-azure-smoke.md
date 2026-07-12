@@ -522,28 +522,60 @@ Confirm:
 
 ### 7. Transport Smoke
 
+Use the GitHub workflow first:
+
+1. Open **Actions**.
+2. Click **Phase 10 Azure Transport Smoke**.
+3. Click **Run workflow**.
+4. Select the same target environment used by the deploy run, for example `dev`.
+5. Keep the region as `centralindia` unless the environment was deployed elsewhere.
+6. Click **Run workflow**.
+
+The workflow runs `scripts/run-phase10-azure-transport-smoke.ps1`, which calls the `tools/Phase10.TransportSmoke` .NET utility.
+
+The smoke verifies:
+
+1. The Service Bus namespace, main topic, fan-out subscriptions, DLQ topic, and replay subscription exist.
+2. A controlled `OrderCreatedV1` smoke message can be published to `order-events-<env>`.
+3. `inventory-order-created-<env>` receives and completes its copy.
+4. `notifications-order-created-<env>` receives and completes its copy.
+5. A controlled message can be dead-lettered from the inventory subscription and forwarded to `order-events-dlq`.
+6. `dlq-replay-<env>` receives the dead-lettered message.
+7. A replay message can be republished to `order-events-<env>`.
+8. Inventory and Notifications both receive and complete the replay message.
+
+Expected workflow summary:
+
+| Check | Expected |
+|---|---|
+| Publish fanout | PASS |
+| Inventory fan-out consume | PASS |
+| Notifications fan-out consume | PASS |
+| Inventory controlled dead-letter | PASS |
+| DLQ replay subscription receive | PASS |
+| Publish replay | PASS |
+| Inventory replay consume | PASS |
+| Notifications replay consume | PASS |
+
+Local equivalent:
+
 ```powershell
-# Trigger the first order-created path through the running service.
-# Use the repo's existing local or Azure request path for an order create.
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-phase10-azure-transport-smoke.ps1 -Environment dev
 ```
 
-1. Send or trigger a single `OrderCreatedV1` flow through the `Orders` service.
-2. Confirm the message is published to Service Bus.
-3. Confirm the downstream consumer receives the message once.
-4. Confirm duplicate delivery remains harmless if the message is replayed.
-5. Confirm dead-lettered messages are visible through the `order-events-dlq` path.
+The local command requires Azure CLI login and access to the `phase10-transport` Service Bus auth rule.
 
 ### 8. Replay Smoke
 
-```powershell
-# Use a controlled failure or seeded dead-letter message to exercise replay.
-```
+The automated transport smoke includes the first replay proof:
 
-1. Force a controlled transient failure for one replayable message.
-2. Confirm the message lands in the dead-letter topic.
-3. Confirm `DlqReplayWorker` rehydrates the canonical envelope.
-4. Confirm the replayed message is sent back to `order-events`.
-5. Confirm poison or unclassified messages remain quarantined.
+1. It dead-letters a controlled message from the inventory subscription.
+2. It verifies forwarding to `order-events-dlq`.
+3. It receives the message from `dlq-replay-<env>`.
+4. It republishes a replay message to `order-events-<env>`.
+5. It verifies both downstream subscriptions receive the replayed flow.
+
+This proves the operator replay route exists. A later failure-drill can still validate poison-message quarantine and alert behavior.
 
 ## Success Criteria
 

@@ -31,6 +31,7 @@ Use this rule before removing anything:
 | Workflow | Category | Direct Click? | Purpose |
 |---|---|---|---|
 | `phase10-deploy-orchestrator.yml` | Wrapper | Yes | Manual Phase 10 entrypoint that runs build, deploy, or cleanup and prints the operator summary |
+| `phase10-azure-transport-smoke.yml` | Validation | Yes, after deploy | Publishes, consumes, dead-letters, and replays a controlled Service Bus smoke flow |
 | `build-phase10-images.yml` | Internal | No | Builds and publishes the Phase 10 service images |
 | `infra-deploy.yml` | Internal | No | Deploys or cleans up the Phase 10 Azure stack and returns live URLs |
 | `phase10-docker-dev-http-e2e.yml` | Validation | Sometimes | Mirrors the local Docker Dev HTTP hook in CI |
@@ -55,6 +56,7 @@ Before approving any workflow or infrastructure change, ask:
 | If you want to... | Click this workflow |
 |---|---|
 | Run Phase 10 deploy, dry run, or cleanup from GitHub UI | `phase10-deploy-orchestrator.yml` |
+| Prove Phase 10 Service Bus publish/consume/DLQ/replay after deploy | `phase10-azure-transport-smoke.yml` |
 | Build and publish Phase 10 images indirectly | `phase10-deploy-orchestrator.yml` |
 | Deploy or clean up the Azure Phase 10 stack indirectly | `phase10-deploy-orchestrator.yml` |
 | Verify the local Docker Dev HTTP hook in CI | `phase10-docker-dev-http-e2e.yml` |
@@ -75,6 +77,7 @@ Before approving any workflow or infrastructure change, ask:
 | `drift-check.yml` | Broad repository drift scanning | Keep unless you intentionally drop drift scanning | Yes |
 | `infra-deploy.yml` | Active Phase 10 Azure Container Apps deployment | Keep as internal reusable workflow | Yes, if changing IaC flow |
 | `phase10-deploy-orchestrator.yml` | Manual Phase 10 wrapper for build + deploy or cleanup | Keep as the only direct Phase 10 entrypoint | Yes, if changing wrapper flow |
+| `phase10-azure-transport-smoke.yml` | Manual Phase 10 transport/operator smoke after deploy | Keep as the direct post-deploy transport proof | Yes, if changing Service Bus topology or smoke contracts |
 | `phase10-docker-dev-http-e2e.yml` | CI mirror of the local Phase 10 Docker hook | Keep | Yes, if changing hook or log paths |
 | `validate-deployment.yml` | Reusable pre-deployment validation | Keep | Yes, if changing validation rules |
 | `publish-template-package.yml` | Template packaging / publishing | Keep | Yes, before publishing-path changes |
@@ -95,6 +98,7 @@ This repo uses a small set of primary operational workflows, with additional sup
 | `azure-bootstrap.yml` | Manual | Legacy App Service stack | **[See README-AZURE-BOOTSTRAP.md](./README-AZURE-BOOTSTRAP.md)** - Phase 2 (infrastructure), API/UI deploy, Phase X (cleanup) |
 | `configure-github-secrets.yml` | Called by initial-setup | Secret configuration | **[See README-CONFIGURE-GITHUB-SECRETS.md](./README-CONFIGURE-GITHUB-SECRETS.md)** - GitHub App setup and secret management (can run independently) |
 | `phase10-deploy-orchestrator.yml` | Manual | dev/staging/prod | **[See README-INFRA-DEPLOY.md](./README-INFRA-DEPLOY.md)** - Wrapper that drives the Phase 10 image build plus infra deploy/cleanup flows |
+| `phase10-azure-transport-smoke.yml` | Manual after deploy | dev/staging/prod | Runs the Phase 10 Service Bus publish, consume, DLQ forwarding, and replay smoke and writes a pass/fail operator summary |
 | `infra-deploy.yml` | Reusable internal workflow | dev/staging/prod | Internal Phase 10 Bicep deployment and cleanup workflow with alias planning and guarded alias binding |
 | `build-phase10-images.yml` | Push to service host paths or wrapper-called internal workflow | GHCR | Builds and pushes the Phase 10 container images for gateway, orders, inventory, notifications, and UI |
 | `phase10-docker-dev-http-e2e.yml` | Manual or PR changes to Phase 10 Docker hook paths | Validation only | Runs the local Docker Dev HTTP end-to-end hook in CI and uploads the same Phase 10 logs used by the VS Code task and runbook |
@@ -134,6 +138,7 @@ Use the local hook for interactive debugging and the CI workflow to prove the sa
 | `azure-bootstrap.yml` | Legacy App Service day-to-day environment bootstrap and coordinated deployment entrypoint |
 | `build-phase10-images.yml` | Phase 10 container image build/push internal reusable workflow for GHCR |
 | `phase10-deploy-orchestrator.yml` | Phase 10 manual wrapper that drives build + deploy or cleanup |
+| `phase10-azure-transport-smoke.yml` | Phase 10 post-deploy Service Bus publish/consume/DLQ/replay validation |
 | `phase10-docker-dev-http-e2e.yml` | Phase 10 Docker Dev HTTP merge gate and artifact-producing validation path |
 | `deploy-api-to-azure.yml` | Legacy API deployment path retained for the App Service stack |
 | `deploy-ui-to-azure.yml` | Legacy React frontend deployment path retained for the App Service stack |
