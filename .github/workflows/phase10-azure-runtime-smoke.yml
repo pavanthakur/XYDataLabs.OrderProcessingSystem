@@ -12,11 +12,6 @@ on:
           - dev
           - staging
           - prod
-      location:
-        description: 'Azure region'
-        required: true
-        default: 'centralindia'
-        type: string
 
 permissions:
   contents: read

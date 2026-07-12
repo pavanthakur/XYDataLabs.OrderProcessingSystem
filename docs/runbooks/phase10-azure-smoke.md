@@ -530,8 +530,7 @@ Use the GitHub workflow first:
 2. Click **Phase 10 Azure Runtime Smoke**.
 3. Click **Run workflow**.
 4. Select the same target environment used by the deploy run, for example `dev`.
-5. Keep the region as `centralindia` unless the environment was deployed elsewhere.
-6. Click **Run workflow**.
+5. Click **Run workflow**.
 
 The workflow runs `scripts/run-phase10-azure-runtime-smoke.ps1`.
 
@@ -569,8 +568,7 @@ Use the GitHub workflow first:
 2. Click **Phase 10 Azure Transport Smoke**.
 3. Click **Run workflow**.
 4. Select the same target environment used by the deploy run, for example `dev`.
-5. Keep the region as `centralindia` unless the environment was deployed elsewhere.
-6. Click **Run workflow**.
+5. Click **Run workflow**.
 
 The workflow runs `scripts/run-phase10-azure-transport-smoke.ps1`, which calls the `tools/Phase10.TransportSmoke` .NET utility.
 

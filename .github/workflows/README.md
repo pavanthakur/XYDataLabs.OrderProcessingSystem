@@ -181,6 +181,8 @@ For Phase 10, the expected click path is:
 5. Run `phase10-azure-transport-smoke.yml` for the same environment
 6. Use `cleanupInfra=true` when you want teardown instead of deployment
 
+The runtime and transport smoke workflows resolve their resource group, gateway, UI, and Service Bus targets from the selected environment. They do not ask for a region input.
+
 When the wrapper calls `infra-deploy.yml`, the key inputs are:
 
 | Input | Purpose |
