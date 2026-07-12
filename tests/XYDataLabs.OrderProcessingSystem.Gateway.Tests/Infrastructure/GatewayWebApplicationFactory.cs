@@ -29,15 +29,12 @@ internal sealed class GatewayWebApplicationFactory : WebApplicationFactory<Progr
                 ["ReverseProxy:Routes:orders-api-route:ClusterId"] = "orders-cluster",
                 ["ReverseProxy:Routes:orders-api-route:Match:Path"] = "/api/{**catch-all}",
                 ["ReverseProxy:Routes:orders-api-route:Transforms:0:PathRemovePrefix"] = "/api",
-                ["ReverseProxy:Routes:orders-api-route:Transforms:1:RequestHeaderOriginalHost"] = "true",
                 ["ReverseProxy:Routes:inventory-route:ClusterId"] = "inventory-cluster",
                 ["ReverseProxy:Routes:inventory-route:Match:Path"] = "/inventory/{**catch-all}",
                 ["ReverseProxy:Routes:inventory-route:Transforms:0:PathRemovePrefix"] = "/inventory",
-                ["ReverseProxy:Routes:inventory-route:Transforms:1:RequestHeaderOriginalHost"] = "true",
                 ["ReverseProxy:Routes:notifications-route:ClusterId"] = "notifications-cluster",
                 ["ReverseProxy:Routes:notifications-route:Match:Path"] = "/notifications/{**catch-all}",
                 ["ReverseProxy:Routes:notifications-route:Transforms:0:PathRemovePrefix"] = "/notifications",
-                ["ReverseProxy:Routes:notifications-route:Transforms:1:RequestHeaderOriginalHost"] = "true",
                 ["ReverseProxy:Routes:ui-route:ClusterId"] = "ui-cluster",
                 ["ReverseProxy:Routes:ui-route:Match:Path"] = "/app/{**catch-all}",
                 ["ReverseProxy:Routes:ui-route:Transforms:0:PathRemovePrefix"] = "/app",
@@ -50,6 +47,7 @@ internal sealed class GatewayWebApplicationFactory : WebApplicationFactory<Progr
                 ["Gateway:AllowedHosts:2"] = "inventory.localhost",
                 ["Gateway:AllowedHosts:3"] = "notifications.localhost",
                 ["Gateway:AllowedHosts:4"] = "ui.localhost",
+                ["Gateway:AllowedHosts:5"] = "orderprocessing-gate-local",
                 ["Gateway:MaxRequestBodySizeBytes"] = "1048576"
             });
         });

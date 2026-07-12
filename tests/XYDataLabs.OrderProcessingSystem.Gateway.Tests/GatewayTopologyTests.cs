@@ -21,6 +21,10 @@ public sealed class GatewayTopologyTests
         config["ReverseProxy:Routes:inventory-route:Match:Hosts:0"].Should().BeNull();
         config["ReverseProxy:Routes:notifications-route:Match:Hosts:0"].Should().BeNull();
         config["ReverseProxy:Routes:ui-route:Match:Hosts:0"].Should().BeNull();
+        config["ReverseProxy:Routes:orders-api-route:Transforms:1:RequestHeaderOriginalHost"].Should().BeNull();
+        config["ReverseProxy:Routes:inventory-route:Transforms:1:RequestHeaderOriginalHost"].Should().BeNull();
+        config["ReverseProxy:Routes:notifications-route:Transforms:1:RequestHeaderOriginalHost"].Should().BeNull();
+        config["ReverseProxy:Routes:ui-route:Transforms:1:RequestHeaderOriginalHost"].Should().BeNull();
 
         config["Gateway:AllowedHosts:0"].Should().Be("localhost");
         config["Gateway:AllowedHosts:1"].Should().Be("orders.localhost");

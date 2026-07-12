@@ -137,6 +137,10 @@ var notificationsEnv = concat(publisherEnv, [
 ])
 var gatewayEnv = concat(commonEnv, [
   {
+    name: 'Gateway__AllowedHosts__5'
+    value: gatewayName
+  }
+  {
     name: 'ReverseProxy__Clusters__orders-cluster__Destinations__orders-primary__Address'
     value: 'http://${ordersName}'
   }
