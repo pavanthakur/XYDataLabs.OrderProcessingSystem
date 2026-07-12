@@ -138,19 +138,25 @@ var notificationsEnv = concat(publisherEnv, [
 var gatewayEnv = concat(commonEnv, [
   {
     name: 'ReverseProxy__Clusters__orders-cluster__Destinations__orders-primary__Address'
-    value: 'https://${ordersApp.properties.configuration.ingress.fqdn}'
+    value: 'http://${ordersName}'
   }
   {
     name: 'ReverseProxy__Clusters__inventory-cluster__Destinations__inventory-primary__Address'
-    value: 'https://${inventoryApp.properties.configuration.ingress.fqdn}'
+    value: 'http://${inventoryName}'
   }
   {
     name: 'ReverseProxy__Clusters__notifications-cluster__Destinations__notifications-primary__Address'
-    value: 'https://${notificationsApp.properties.configuration.ingress.fqdn}'
+    value: 'http://${notificationsName}'
   }
   {
     name: 'ReverseProxy__Clusters__ui-cluster__Destinations__ui-primary__Address'
-    value: 'https://${uiApp.properties.configuration.ingress.fqdn}'
+    value: 'http://${uiName}'
+  }
+])
+var uiEnv = concat(commonEnv, [
+  {
+    name: 'ORDERPROCESSING_API_BASE_URL'
+    value: 'http://${gatewayName}'
   }
 ])
 var registryConfigs = !empty(ghcrUsername) && !empty(ghcrReadToken) ? [
@@ -346,7 +352,7 @@ resource uiApp 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: 'ui'
           image: uiImage
-          env: commonEnv
+          env: uiEnv
           resources: {
             cpu: json(cpuCores)
             memory: '0.5Gi'

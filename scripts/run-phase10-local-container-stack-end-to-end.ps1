@@ -188,12 +188,14 @@ finally {
                 throw "Docker compose down failed with exit code $LASTEXITCODE"
             }
 
+            $imageOwner = if ([string]::IsNullOrWhiteSpace($env:PHASE10_IMAGE_OWNER)) { 'pavanthakur' } else { $env:PHASE10_IMAGE_OWNER }
+            $imageTag = if ([string]::IsNullOrWhiteSpace($env:PHASE10_IMAGE_TAG)) { 'dev' } else { $env:PHASE10_IMAGE_TAG }
             $images = @(
-                'ghcr.io/pavanthakur/orderprocessing-gateway:dev',
-                'ghcr.io/pavanthakur/orderprocessing-orders:dev',
-                'ghcr.io/pavanthakur/orderprocessing-inventory:dev',
-                'ghcr.io/pavanthakur/orderprocessing-notifications:dev',
-                'ghcr.io/pavanthakur/orderprocessing-ui:dev'
+                "ghcr.io/$imageOwner/orderprocessing-gateway:$imageTag",
+                "ghcr.io/$imageOwner/orderprocessing-orders:$imageTag",
+                "ghcr.io/$imageOwner/orderprocessing-inventory:$imageTag",
+                "ghcr.io/$imageOwner/orderprocessing-notifications:$imageTag",
+                "ghcr.io/$imageOwner/orderprocessing-ui:$imageTag"
             )
 
             foreach ($image in $images) {

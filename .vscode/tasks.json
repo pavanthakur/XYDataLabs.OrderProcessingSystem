@@ -1696,7 +1696,7 @@
                 "-ExecutionPolicy",
                 "Bypass",
                 "-Command",
-                "& '.\\Resources\\Docker\\start-docker.ps1' -Environment dev -Profile http -Down; $images = @('ghcr.io/pavanthakur/orderprocessing-gateway:dev', 'ghcr.io/pavanthakur/orderprocessing-orders:dev', 'ghcr.io/pavanthakur/orderprocessing-inventory:dev', 'ghcr.io/pavanthakur/orderprocessing-notifications:dev', 'ghcr.io/pavanthakur/orderprocessing-ui:dev'); foreach ($image in $images) { $imageId = docker images -q $image 2>$null; if ($imageId) { docker rmi -f $image | Out-Null; Write-Host \"Removed image $image\" } else { Write-Host \"Image not found: $image\" } }"
+                "& '.\\Resources\\Docker\\start-docker.ps1' -Environment dev -Profile http -Down; $imageOwner = if ([string]::IsNullOrWhiteSpace($env:PHASE10_IMAGE_OWNER)) { 'pavanthakur' } else { $env:PHASE10_IMAGE_OWNER }; $imageTag = if ([string]::IsNullOrWhiteSpace($env:PHASE10_IMAGE_TAG)) { 'dev' } else { $env:PHASE10_IMAGE_TAG }; $images = @(\"ghcr.io/$imageOwner/orderprocessing-gateway:$imageTag\", \"ghcr.io/$imageOwner/orderprocessing-orders:$imageTag\", \"ghcr.io/$imageOwner/orderprocessing-inventory:$imageTag\", \"ghcr.io/$imageOwner/orderprocessing-notifications:$imageTag\", \"ghcr.io/$imageOwner/orderprocessing-ui:$imageTag\"); foreach ($image in $images) { $imageId = docker images -q $image 2>$null; if ($imageId) { docker rmi -f $image | Out-Null; Write-Host \"Removed image $image\" } else { Write-Host \"Image not found: $image\" } }"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"

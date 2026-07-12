@@ -135,6 +135,7 @@ Shared operator rule:
 - Both hosts now consume the same `orderprocessing-*` service image family, so the only contract difference is the runtime host and ingress surface.
 - The service names stay environment-suffixed and split by responsibility, so cleanup and redeploy can safely target the exact gateway, Orders, Inventory, Notifications, and UI resources.
 - The public hostname layer is the only thing that changes between the two hosts: localhost ports in Docker, ACA ingress or friendly aliases in Azure.
+- Local Phase 10 Docker uses the same naming convention through network aliases. By default aliases resolve as `orderprocessing-*-local`; override `PHASE10_ENV_SUFFIX`, `PHASE10_IMAGE_OWNER`, or `PHASE10_IMAGE_TAG` when validating a staging/prod-shaped local image set.
 - If you are comparing this path to `azure-bootstrap.yml`, use that workflow only as a historical App Service reference. It used to create the SQL/App Service surface as part of bootstrap; Phase 10 deliberately replaces that with the container-app transport stack and does not expect SQL or Redis from the active deployment path.
 - The `AZUREAPPSERVICE_*` GitHub secrets referenced in this repo are environment-scoped OIDC identifiers carried forward from the earlier setup flow; they are used by the active Phase 10 Container Apps workflows, not to imply an App Service deployment target.
 - The Phase 10 wrapper is the single end-to-end delivery entry point for Phase 10. On a real deployment it runs in this order: preflight -> image build -> Azure deploy or cleanup workflow -> summary. Dry run stops after validation and does not build or deploy.
@@ -207,6 +208,7 @@ Use this checklist to prove the shared contract is behaving the same way across 
    - Open the Gateway Health URL from the summary and confirm `acceptedHost` matches the Azure Container Apps hostname.
    - Open the Orders API smoke URL from the summary: `/api/v1/Info/runtime-configuration`.
    - Open the UI URL from the summary and confirm the frontend responds.
+   - On direct UI Container Apps URLs, the UI server proxies same-origin `/api/*` calls to the gateway through `ORDERPROCESSING_API_BASE_URL`.
 3. Azure smoke and automation
    - Run the Phase 10 Azure smoke after the deployment completes.
    - Confirm publish, consume, DLQ, and replay checks pass before promoting aliases or treating the environment as ready.

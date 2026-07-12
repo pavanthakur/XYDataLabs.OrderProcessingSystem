@@ -1,6 +1,6 @@
 # Gateway
 
-YARP reverse proxy for the Phase 10 containerized service graph. Locally it routes to Docker service names or localhost ports; in Azure Container Apps the deployment injects the internal Container Apps FQDNs through configuration.
+YARP reverse proxy for the Phase 10 containerized service graph. Locally it routes to Docker service names or localhost ports; in Azure Container Apps the deployment injects same-environment Container Apps service names through configuration.
 
 ## Routes
 

@@ -1,5 +1,5 @@
-import { createServer as createHttpServer } from "node:http";
-import { createServer as createHttpsServer } from "node:https";
+import { createServer as createHttpServer, request as createHttpRequest } from "node:http";
+import { createServer as createHttpsServer, request as createHttpsRequest } from "node:https";
 import { createReadStream, existsSync, readFileSync } from "node:fs";
 import { extname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,6 +11,7 @@ const port = Number.parseInt(process.env.PORT ?? "5022", 10);
 const useHttps = /^true$/i.test(process.env.USE_HTTPS ?? "false");
 const pfxPath = process.env.PFX_PATH ?? "";
 const pfxPassword = process.env.PFX_PASSWORD ?? "";
+const apiBaseUrl = (process.env.ORDERPROCESSING_API_BASE_URL ?? "").trim().replace(/\/$/, "");
 
 const contentTypes = new Map([
   [".css", "text/css; charset=utf-8"],
@@ -48,6 +49,11 @@ function resolveRequestPath(requestUrl) {
 }
 
 function requestHandler(request, response) {
+  if (shouldProxyApiRequest(request.url)) {
+    proxyApiRequest(request, response);
+    return;
+  }
+
   const filePath = resolveRequestPath(request.url);
   if (!filePath) {
     response.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
@@ -58,6 +64,42 @@ function requestHandler(request, response) {
   const contentType = contentTypes.get(extname(filePath).toLowerCase()) ?? "application/octet-stream";
   response.writeHead(200, { "Content-Type": contentType, "Cache-Control": "no-cache" });
   createReadStream(filePath).pipe(response);
+}
+
+function shouldProxyApiRequest(requestUrl) {
+  if (!apiBaseUrl) {
+    return false;
+  }
+
+  const candidate = new URL(requestUrl ?? "/", `http://${host}:${port}`);
+  return candidate.pathname.startsWith("/api/") || candidate.pathname.startsWith("/payment/");
+}
+
+function proxyApiRequest(request, response) {
+  const incomingUrl = new URL(request.url ?? "/", `http://${host}:${port}`);
+  const targetUrl = new URL(`${incomingUrl.pathname}${incomingUrl.search}`, apiBaseUrl);
+  const proxyFactory = targetUrl.protocol === "https:" ? createHttpsRequest : createHttpRequest;
+  const proxyHeaders = { ...request.headers, host: targetUrl.host };
+
+  const proxyRequest = proxyFactory(
+    targetUrl,
+    {
+      method: request.method,
+      headers: proxyHeaders
+    },
+    (proxyResponse) => {
+      response.writeHead(proxyResponse.statusCode ?? 502, proxyResponse.headers);
+      proxyResponse.pipe(response);
+    }
+  );
+
+  proxyRequest.on("error", (error) => {
+    console.error(`Unable to proxy ${incomingUrl.pathname} to ${apiBaseUrl}:`, error);
+    response.writeHead(502, { "Content-Type": "application/json; charset=utf-8" });
+    response.end(JSON.stringify({ error: "API proxy failed." }));
+  });
+
+  request.pipe(proxyRequest);
 }
 
 const server = useHttps
