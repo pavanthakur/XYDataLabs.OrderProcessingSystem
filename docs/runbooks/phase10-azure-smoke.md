@@ -212,7 +212,9 @@ Use this checklist to prove the shared contract is behaving the same way across 
    - The gateway accepts the public ACA hostname and the same-environment `orderprocessing-gate-<env>` service name.
    - The gateway must not preserve the original public `Host` header when forwarding to internal Container Apps; ACA expects the destination service host for service-to-service routing.
 3. Azure smoke and automation
-   - Run the Phase 10 Azure smoke after the deployment completes.
+   - Run `Phase 10 Azure Runtime Smoke` after the deployment completes.
+   - Confirm gateway health, gateway-routed API bootstrap, UI reachability, and UI API proxy bootstrap pass.
+   - Run `Phase 10 Azure Transport Smoke` after runtime smoke passes.
    - Confirm publish, consume, DLQ, and replay checks pass before promoting aliases or treating the environment as ready.
 
 ## GitHub UI Path
@@ -520,7 +522,45 @@ Confirm:
 - the Orders, Inventory, and Notifications apps have the transport-first Service Bus settings in their environment payloads
 - the Gateway and UI container apps exist in the same ACA environment
 
-### 7. Transport Smoke
+### 7. Runtime Smoke
+
+Use the GitHub workflow first:
+
+1. Open **Actions**.
+2. Click **Phase 10 Azure Runtime Smoke**.
+3. Click **Run workflow**.
+4. Select the same target environment used by the deploy run, for example `dev`.
+5. Click **Run workflow**.
+
+The workflow runs `scripts/run-phase10-azure-runtime-smoke.ps1`.
+
+The smoke verifies:
+
+1. The Gateway Container App exists for the selected environment.
+2. The UI Container App exists for the selected environment.
+3. The Gateway public ACA URL returns a healthy response and echoes the accepted Azure host.
+4. The Gateway-routed Orders API bootstrap endpoint returns runtime configuration JSON.
+5. The UI static route serves the React shell.
+6. The UI server-side API proxy returns runtime configuration JSON through same-origin `/api/*`.
+
+Expected workflow summary:
+
+| Check | Expected |
+|---|---|
+| Gateway health | PASS |
+| Gateway routed API runtime configuration | PASS |
+| UI static route | PASS |
+| UI API proxy runtime configuration | PASS |
+
+Local equivalent:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-phase10-azure-runtime-smoke.ps1 -Environment dev
+```
+
+The local command requires Azure CLI login and access to the selected Phase 10 resource group.
+
+### 8. Transport Smoke
 
 Use the GitHub workflow first:
 
@@ -528,8 +568,7 @@ Use the GitHub workflow first:
 2. Click **Phase 10 Azure Transport Smoke**.
 3. Click **Run workflow**.
 4. Select the same target environment used by the deploy run, for example `dev`.
-5. Keep the region as `centralindia` unless the environment was deployed elsewhere.
-6. Click **Run workflow**.
+5. Click **Run workflow**.
 
 The workflow runs `scripts/run-phase10-azure-transport-smoke.ps1`, which calls the `tools/Phase10.TransportSmoke` .NET utility.
 
@@ -565,7 +604,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-phase10-azure-transpor
 
 The local command requires Azure CLI login and access to the `phase10-transport` Service Bus auth rule.
 
-### 8. Replay Smoke
+### 9. Replay Smoke
 
 The automated transport smoke includes the first replay proof:
 
