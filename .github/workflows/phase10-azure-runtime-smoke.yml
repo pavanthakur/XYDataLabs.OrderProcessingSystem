@@ -1,4 +1,4 @@
-name: Phase 10 Azure Runtime Smoke
+name: 02 Phase 10 Azure Runtime Smoke
 
 on:
   workflow_dispatch:
@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   runtime_smoke:
-    name: Phase 10 Azure Runtime Smoke
+    name: 02 Phase 10 Azure Runtime Smoke
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     timeout-minutes: 20
@@ -59,7 +59,7 @@ jobs:
           echo "uiApp=${UI_APP}" >> "$GITHUB_OUTPUT"
 
           {
-            echo "## Phase 10 Azure Runtime Smoke Context"
+            echo "## 02 Phase 10 Azure Runtime Smoke Context"
             echo ""
             echo "| Field | Value |"
             echo "|---|---|"

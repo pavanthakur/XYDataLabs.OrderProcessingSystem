@@ -1,4 +1,4 @@
-name: Phase 10 Azure Transport Smoke
+name: 03 Phase 10 Azure Transport Smoke
 
 on:
   workflow_dispatch:
@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   transport_smoke:
-    name: Phase 10 Azure Transport Smoke
+    name: 03 Phase 10 Azure Transport Smoke
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     timeout-minutes: 20
@@ -69,7 +69,7 @@ jobs:
           echo "serviceBusUrl=${SERVICE_BUS_URL}" >> "$GITHUB_OUTPUT"
 
           {
-            echo "## Phase 10 Azure Transport Smoke Context"
+            echo "## 03 Phase 10 Azure Transport Smoke Context"
             echo ""
             echo "| Field | Value |"
             echo "|---|---|"

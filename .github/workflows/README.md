@@ -30,16 +30,27 @@ Use this rule before removing anything:
 
 | Workflow | Category | Direct Click? | Purpose |
 |---|---|---|---|
-| `phase10-deploy-orchestrator.yml` | Wrapper | Yes | Manual Phase 10 entrypoint that runs build, deploy, or cleanup and prints the operator summary |
-| `phase10-azure-runtime-smoke.yml` | Validation | Yes, after deploy | Verifies Gateway health, Gateway-routed API bootstrap, UI reachability, and UI API proxy bootstrap |
-| `phase10-azure-transport-smoke.yml` | Validation | Yes, after runtime smoke | Publishes, consumes, dead-letters, and replays a controlled Service Bus smoke flow |
+| `00 Phase 10 Docker Dev HTTP End-to-End` | Validation | Sometimes | Mirrors the local Docker Dev HTTP hook in CI |
+| `01 Phase 10 Azure Deploy Orchestrator` | Wrapper | Yes | Manual Phase 10 entrypoint that runs build, deploy, or cleanup and prints the operator summary |
+| `02 Phase 10 Azure Runtime Smoke` | Validation | Yes, after deploy | Verifies Gateway health, Gateway-routed API bootstrap, UI reachability, and UI API proxy bootstrap |
+| `03 Phase 10 Azure Transport Smoke` | Validation | Yes, after runtime smoke | Publishes, consumes, dead-letters, and replays a controlled Service Bus smoke flow |
 | `build-phase10-images.yml` | Internal | No | Builds and publishes the Phase 10 service images |
 | `infra-deploy.yml` | Internal | No | Deploys or cleans up the Phase 10 Azure stack and returns live URLs |
-| `phase10-docker-dev-http-e2e.yml` | Validation | Sometimes | Mirrors the local Docker Dev HTTP hook in CI |
 | `azure-initial-setup.yml` | Bootstrap | Yes | One-time GitHub App + OIDC + secrets setup |
 | `azure-bootstrap.yml` | Historical | No for Phase 10 | Legacy App Service compatibility path only |
 | `deploy-api-to-azure.yml` | Historical | No for Phase 10 | Legacy App Service API deployment only |
 | `deploy-ui-to-azure.yml` | Historical | No for Phase 10 | Legacy App Service UI deployment only |
+
+### Phase 10 Sequence
+
+Use the numbered workflows in this order:
+
+| Order | Workflow | Use it for |
+|---|---|---|
+| `00` | `00 Phase 10 Docker Dev HTTP End-to-End` | Local/CI parity for the containerized service graph, before Azure work |
+| `01` | `01 Phase 10 Azure Deploy Orchestrator` | Build, deploy, dry run, or cleanup for the Azure Phase 10 stack |
+| `02` | `02 Phase 10 Azure Runtime Smoke` | Prove gateway health, routed API runtime config, and UI readiness after deploy |
+| `03` | `03 Phase 10 Azure Transport Smoke` | Prove Service Bus publish/consume, DLQ forwarding, and replay after runtime smoke |
 
 ### Default Review Stance
 
@@ -56,12 +67,12 @@ Before approving any workflow or infrastructure change, ask:
 
 | If you want to... | Click this workflow |
 |---|---|
-| Run Phase 10 deploy, dry run, or cleanup from GitHub UI | `phase10-deploy-orchestrator.yml` |
-| Prove Phase 10 Gateway/API/UI runtime behavior after deploy | `phase10-azure-runtime-smoke.yml` |
-| Prove Phase 10 Service Bus publish/consume/DLQ/replay after runtime smoke | `phase10-azure-transport-smoke.yml` |
-| Build and publish Phase 10 images indirectly | `phase10-deploy-orchestrator.yml` |
-| Deploy or clean up the Azure Phase 10 stack indirectly | `phase10-deploy-orchestrator.yml` |
-| Verify the local Docker Dev HTTP hook in CI | `phase10-docker-dev-http-e2e.yml` |
+| Verify the local Docker Dev HTTP hook in CI | `00 Phase 10 Docker Dev HTTP End-to-End` |
+| Run Phase 10 deploy, dry run, or cleanup from GitHub UI | `01 Phase 10 Azure Deploy Orchestrator` |
+| Prove Phase 10 Gateway/API/UI runtime behavior after deploy | `02 Phase 10 Azure Runtime Smoke` |
+| Prove Phase 10 Service Bus publish/consume/DLQ/replay after runtime smoke | `03 Phase 10 Azure Transport Smoke` |
+| Build and publish Phase 10 images indirectly | `01 Phase 10 Azure Deploy Orchestrator` |
+| Deploy or clean up the Azure Phase 10 stack indirectly | `01 Phase 10 Azure Deploy Orchestrator` |
 | Do one-time GitHub App and OIDC bootstrap | `azure-initial-setup.yml` |
 | Work on archived App Service compatibility only | `azure-bootstrap.yml`, `deploy-api-to-azure.yml`, or `deploy-ui-to-azure.yml` |
 
@@ -174,12 +185,22 @@ The table above intentionally shows both surfaces. The legacy App Service workfl
 
 For Phase 10, the expected click path is:
 
-1. Open `phase10-deploy-orchestrator.yml`
-2. Run the wrapper manually for `dev`, `staging`, or `prod`
-3. Let it call `build-phase10-images.yml` and `infra-deploy.yml` internally
-4. Run `phase10-azure-runtime-smoke.yml` for the same environment
-5. Run `phase10-azure-transport-smoke.yml` for the same environment
-6. Use `cleanupInfra=true` when you want teardown instead of deployment
+1. Optionally run `00 Phase 10 Docker Dev HTTP End-to-End` for local/CI container parity.
+2. Open `01 Phase 10 Azure Deploy Orchestrator`.
+3. Run the wrapper manually for `dev`, `staging`, or `prod`.
+4. Let it call `build-phase10-images.yml` and `infra-deploy.yml` internally.
+5. Run `02 Phase 10 Azure Runtime Smoke` for the same environment.
+6. Run `03 Phase 10 Azure Transport Smoke` for the same environment.
+7. Use `cleanupInfra=true` when you want teardown instead of deployment.
+
+In plain terms:
+
+| Number | What it means |
+|---|---|
+| `00` | Local parity check. Use it when you want the Docker container graph to behave like the current Phase 10 Azure shape. |
+| `01` | Azure delivery entrypoint. Use it for deploy, dry run, or cleanup. |
+| `02` | Runtime proof. Use it after Azure deploy to verify gateway/API/UI behavior. |
+| `03` | Transport proof. Use it after runtime smoke to verify Service Bus fan-out, DLQ, and replay. |
 
 The runtime and transport smoke workflows resolve their resource group, gateway, UI, and Service Bus targets from the selected environment. They do not ask for a region input.
 
