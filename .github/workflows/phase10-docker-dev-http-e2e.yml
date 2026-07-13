@@ -139,7 +139,7 @@ jobs:
 
       - name: Upload Phase 10 logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: phase10-docker-dev-http-e2e-${{ github.run_id }}-${{ github.run_attempt }}
           path: |

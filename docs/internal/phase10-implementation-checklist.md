@@ -13,13 +13,23 @@ Anchor flow for the first slice:
 
 | Area | Status | Notes |
 |---|---|---|
-| Phase 10 repo transport wiring | In progress | The Service Bus topology, transport adapter layer, startup seam, and DLQ replay path are in the repo; Azure proof is still pending. |
+| Phase 10 repo transport wiring | Verified in dev | The Service Bus topology, transport adapter layer, startup seam, and DLQ replay path are in the repo and proved by the July 13, 2026 Azure dev transport smoke. |
 | Phase 10 docs and runbooks | Done | The checklist, smoke runbook, DLQ replay guide, and progress tracker are aligned with the transport-first order. |
-| Phase 10 operator-experience hardening | In progress | Accepted-host echo, deploy-summary traceability, skip-reason logging, cleanup symmetry, local-vs-CI mapping, and per-service build logs are the intended active improvements. |
+| Phase 10 operator-experience hardening | Verified in dev | Accepted-host echo, deploy-summary traceability, skip-reason logging, cleanup symmetry, local-vs-CI mapping, and per-service build logs are present in the active workflow path. |
 | SharedContracts extraction | Deferred | Keep it out unless transport work proves real duplication across multiple services. |
-| Azure dev what-if / deploy | Pending Azure auth | The Bicep shape is updated and locally compiled, but the cloud validation still needs a working Azure login/session and deployment run. |
-| Phase 10 smoke / replay testing | Pending deployment | Start after a successful dev deployment and verify publish, consume, DLQ, and replay behavior end to end. |
+| Azure dev deploy | Verified | GitHub Actions run `29273224237` built the Phase 10 images and deployed the dev Container Apps transport stack successfully. |
+| Phase 10 runtime smoke | Verified | GitHub Actions run `29273711615` proved gateway health, gateway-routed API JSON, UI static route, and UI API proxy bootstrap. |
+| Phase 10 transport / replay smoke | Verified | GitHub Actions run `29273881488` proved Service Bus publish, fan-out consume, controlled DLQ forwarding, DLQ replay receive, and replay publish/consume. |
 | Cleanup policy closeout | Separate follow-up | GHCR cleanup, artifact retention, and Log Analytics retention stay outside the deploy wrapper; finalize the workspace policy choice last. |
+
+### Verified Azure Dev Proof
+
+| Proof | Run | Result | What it proves |
+|---|---|---|---|
+| Deploy orchestrator | `29273224237` | PASS | Preflight, per-service image build, and Azure dev resource deployment completed through the wrapper path. |
+| Runtime smoke | `29273711615` | PASS | Gateway health, gateway-routed API runtime configuration, UI route, and UI API proxy returned `200`. |
+| Transport smoke | `29273881488` | PASS | Service Bus topic/subscriptions, fan-out consume, controlled DLQ forwarding, DLQ replay receive, and replay publish/consume passed. |
+| Local/CI container parity | `29268434294` | PASS | Docker Dev HTTP E2E passed smoke, integration, payment matrix, and cleanup on the optional CI parity workflow. |
 
 ### Cleanup Policy Snapshot
 
@@ -48,6 +58,7 @@ Phase 10 is ready to call complete only when all of the following are true:
 - `StartupHelper.cs` registers the Service Bus adapter and DLQ worker while preserving the in-memory publisher as the local fallback.
 - The supporting Azure modules, parameter files, and docs all describe the same transport-first order.
 - The regression/architecture tests prove the new transport work does not blur module boundaries, idempotency, or replay behavior.
+- The dev Azure proof remains green across the deploy orchestrator, runtime smoke, and transport smoke workflows listed above.
 
 If any one of those items is not true, Phase 10 is still in progress.
 
