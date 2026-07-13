@@ -68,8 +68,11 @@ jobs:
           echo "| Older Than Days | ${{ steps.params.outputs.olderThanDays }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Cleanup Artifacts | ${{ steps.params.outputs.cleanupArtifacts }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Repository | ${{ github.repository }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Scheduled Run | Sundays at 03:00 UTC |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "This workflow targets GHCR package versions and GitHub Actions artifacts. It does not touch Azure resource groups, Container Apps, Key Vault, or Log Analytics." >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Azure resource cleanup remains manual through the Phase 10 deploy orchestrator with cleanupInfra=true." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Delete old GHCR versions
         uses: actions/github-script@v7
@@ -93,24 +96,34 @@ jobs:
             const summary = [];
 
             for (const package_name of packageNames) {
-              const versions = await github.paginate(
-                ownerType === 'Organization'
-                  ? 'GET /orgs/{org}/packages/{package_type}/{package_name}/versions'
-                  : 'GET /users/{username}/packages/{package_type}/{package_name}/versions',
-                ownerType === 'Organization'
-                  ? {
-                      org: owner,
-                      package_type: 'container',
-                      package_name,
-                      per_page: 100
-                    }
-                  : {
-                      username: owner,
-                      package_type: 'container',
-                      package_name,
-                      per_page: 100
-                    }
-              );
+              let versions = [];
+              try {
+                versions = await github.paginate(
+                  ownerType === 'Organization'
+                    ? 'GET /orgs/{org}/packages/{package_type}/{package_name}/versions'
+                    : 'GET /users/{username}/packages/{package_type}/{package_name}/versions',
+                  ownerType === 'Organization'
+                    ? {
+                        org: owner,
+                        package_type: 'container',
+                        package_name,
+                        per_page: 100
+                      }
+                    : {
+                        username: owner,
+                        package_type: 'container',
+                        package_name,
+                        per_page: 100
+                      }
+                );
+              } catch (error) {
+                if (error.status === 404) {
+                  summary.push(`SKIP ${package_name} package not found`);
+                  continue;
+                }
+
+                throw error;
+              }
 
               const sorted = versions
                 .slice()
