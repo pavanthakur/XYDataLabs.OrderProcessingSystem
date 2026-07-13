@@ -107,10 +107,11 @@ jobs:
           "" >> $env:GITHUB_STEP_SUMMARY
           "> **This workflow validates pull requests only. It does not deploy to Azure.**" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
-          "### Deployment Information" >> $env:GITHUB_STEP_SUMMARY
-          "- Azure deployment is handled by [deploy-api-to-azure.yml](https://github.com/${{ github.repository }}/actions/workflows/deploy-api-to-azure.yml)" >> $env:GITHUB_STEP_SUMMARY
-          "- Deployment is triggered automatically on **push** to ``dev``, ``staging``, or ``main`` (when relevant paths change)" >> $env:GITHUB_STEP_SUMMARY
-          "- Deployment can also be triggered manually via **workflow_dispatch** from the Actions tab" >> $env:GITHUB_STEP_SUMMARY
+          "### Phase 10 Deployment Information" >> $env:GITHUB_STEP_SUMMARY
+          "- This CI workflow runs on pull requests to ``dev``, ``staging``, or ``main`` when relevant validation paths change." >> $env:GITHUB_STEP_SUMMARY
+          "- It does **not** run on direct pushes or merges." >> $env:GITHUB_STEP_SUMMARY
+          "- Azure deployment is handled manually through [01 Phase 10 Azure Deploy Orchestrator](https://github.com/${{ github.repository }}/actions/workflows/phase10-deploy-orchestrator.yml)." >> $env:GITHUB_STEP_SUMMARY
+          "- After deployment, run [02 Phase 10 Azure Runtime Smoke](https://github.com/${{ github.repository }}/actions/workflows/phase10-azure-runtime-smoke.yml), then [03 Phase 10 Azure Transport Smoke](https://github.com/${{ github.repository }}/actions/workflows/phase10-azure-transport-smoke.yml)." >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
           "### Branch → Environment Mapping" >> $env:GITHUB_STEP_SUMMARY
           "| Branch | Environment |" >> $env:GITHUB_STEP_SUMMARY
