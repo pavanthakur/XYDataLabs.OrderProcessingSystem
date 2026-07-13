@@ -51,6 +51,7 @@ Rule of thumb:
 - Run `02` right after `01` finishes successfully.
 - Run `03` after `02` passes.
 - Run `99` only when you want optional local/CI parity for the Docker container shape.
+- Workflow `99` always starts its own Docker stack on GitHub-hosted runners. Reusing an already running stack is a local script-only option via `scripts/run-phase10-docker-dev-e2e-hook.ps1 -SkipStartIfNeeded`.
 
 ### Workflow Responsibilities
 
