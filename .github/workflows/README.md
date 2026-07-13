@@ -53,7 +53,7 @@ Use the numbered workflows in this order:
 | `03` | `03 Phase 10 Azure Transport Smoke` | Prove Service Bus publish/consume, DLQ forwarding, and replay after runtime smoke |
 | `99` | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Optional local/CI parity for the containerized service graph |
 
-Workflow `99` is not required for Azure deployment if the local hook has already passed, but it is useful as a CI parity gate. The GitHub runner generates a CI-only `Resources/Docker/.env.local` with non-secret sandbox values before starting Docker because the real local file is intentionally gitignored.
+Workflow `99` is not required for Azure deployment if the local hook has already passed, but it is useful as a CI parity gate. The GitHub runner generates a CI-only `Resources/Docker/.env.local` with non-secret sandbox values and installs the EF Core CLI before starting Docker because the real local file and local tools are intentionally machine-specific.
 
 ### Default Review Stance
 
