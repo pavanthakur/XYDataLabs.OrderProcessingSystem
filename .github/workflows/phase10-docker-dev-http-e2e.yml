@@ -72,6 +72,13 @@ jobs:
           Set-Content -LiteralPath $envPath -Value $content -Encoding utf8
           Write-Host "Created CI-only Docker env file at $envPath"
 
+      - name: Install EF Core CLI
+        shell: pwsh
+        run: |
+          dotnet tool install --global dotnet-ef --version 8.0.13
+          "$HOME/.dotnet/tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          dotnet ef --version
+
       - name: Run Phase 10 Docker Dev HTTP hook
         shell: pwsh
         run: |
