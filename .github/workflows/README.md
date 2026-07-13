@@ -36,6 +36,7 @@ Use this rule before removing anything:
 | `03 Phase 10 Azure Transport Smoke` | Validation | Yes, after runtime smoke | Publishes, consumes, dead-letters, and replays a controlled Service Bus smoke flow |
 | `build-phase10-images.yml` | Internal | No | Builds and publishes the Phase 10 service images |
 | `infra-deploy.yml` | Internal | No | Deploys or cleans up the Phase 10 Azure stack and returns live URLs |
+| `phase10-retention-cleanup.yml` | Internal housekeeping | No for deploy | Scheduled/manual cleanup for old GHCR package versions and workflow artifacts |
 | `azure-initial-setup.yml` | Bootstrap | Yes | One-time GitHub App + OIDC + secrets setup |
 | `azure-bootstrap.yml` | Historical | No for Phase 10 | Legacy App Service compatibility path only |
 | `deploy-api-to-azure.yml` | Historical | No for Phase 10 | Legacy App Service API deployment only |
@@ -73,8 +74,36 @@ Before approving any workflow or infrastructure change, ask:
 | Prove Phase 10 Service Bus publish/consume/DLQ/replay after runtime smoke | `03 Phase 10 Azure Transport Smoke` |
 | Build and publish Phase 10 images indirectly | `01 Phase 10 Azure Deploy Orchestrator` |
 | Deploy or clean up the Azure Phase 10 stack indirectly | `01 Phase 10 Azure Deploy Orchestrator` |
+| Clean old Phase 10 GHCR versions and workflow artifacts | Let `Phase 10 Retention Cleanup (Internal)` run on schedule; run manually only for housekeeping |
 | Do one-time GitHub App and OIDC bootstrap | `azure-initial-setup.yml` |
 | Work on archived App Service compatibility only | `azure-bootstrap.yml`, `deploy-api-to-azure.yml`, or `deploy-ui-to-azure.yml` |
+
+### Phase 10 Workflow Responsibilities
+
+| Workflow | Click target | Owns RG creation | Builds images | Deploys app | Cleanup | Current or legacy |
+|---|---|---|---|---|---|---|
+| `00 Phase 10 Docker Dev HTTP End-to-End` | Optional validation | No | Local/runner build only | Local Docker only | Local Docker cleanup | Current validation |
+| `01 Phase 10 Azure Deploy Orchestrator` | Primary Phase 10 click target | Routes to internal deploy workflow | Routes to internal image workflow | Routes to internal deploy workflow | Routes Azure RG cleanup when `cleanupInfra=true` | Current wrapper |
+| `02 Phase 10 Azure Runtime Smoke` | Post-deploy smoke | No | No | No | No | Current validation |
+| `03 Phase 10 Azure Transport Smoke` | Post-runtime-smoke transport proof | No | No | No | No | Current validation |
+| `Build Phase 10 Service Images (Internal)` | Do not click for normal deploy | No | Yes | No | No | Current internal |
+| `Deploy Azure Phase 10 Resources (Internal)` | Do not click for normal deploy | Yes | No | Yes | Yes | Current internal |
+| `Phase 10 Retention Cleanup (Internal)` | Housekeeping only | No | No | No | GHCR/artifact retention only | Current internal |
+| `Azure Bootstrap & Deploy` | Do not use for Phase 10 | Legacy App Service stack | No | Legacy App Service only | Legacy App Service RG path | Legacy |
+| `Deploy API to Azure App Service` | Do not use for Phase 10 | No | No | Legacy API only | No | Legacy |
+| `Deploy React Frontend to Azure App Service` | Do not use for Phase 10 | No | No | Legacy UI only | No | Legacy |
+
+For detailed operator steps, use [Phase 10 Azure Smoke Runbook](../../docs/runbooks/phase10-azure-smoke.md). For the local equivalent of workflow `00`, use either:
+
+```powershell
+npm --prefix automation run xydatalabs-test-docker-local-e2e-dev
+```
+
+or the VS Code task:
+
+```text
+1 Run: xydatalabs-test-docker-local-e2e-dev (Docker Dev HTTP E2E)
+```
 
 | Workflow | Usage | Keep / Remove | Test before removal? |
 |----------|-------|---------------|----------------------|
@@ -93,6 +122,7 @@ Before approving any workflow or infrastructure change, ask:
 | `phase10-azure-runtime-smoke.yml` | Manual Phase 10 runtime/API/UI smoke after deploy | Keep as the direct post-deploy runtime proof | Yes, if changing gateway/API/UI runtime contracts |
 | `phase10-azure-transport-smoke.yml` | Manual Phase 10 transport/operator smoke after deploy | Keep as the direct post-deploy transport proof | Yes, if changing Service Bus topology or smoke contracts |
 | `phase10-docker-dev-http-e2e.yml` | CI mirror of the local Phase 10 Docker hook | Keep | Yes, if changing hook or log paths |
+| `phase10-retention-cleanup.yml` | Scheduled/manual Phase 10 GHCR and artifact housekeeping | Keep | Yes, if changing retention thresholds |
 | `validate-deployment.yml` | Reusable pre-deployment validation | Keep | Yes, if changing validation rules |
 | `publish-template-package.yml` | Template packaging / publishing | Keep | Yes, before publishing-path changes |
 | `test-validate-deployment.yml` | Tests the validation workflow itself | Keep | Yes, definitely |
@@ -132,7 +162,9 @@ This repo uses a small set of primary operational workflows, with additional sup
 The `phase10-docker-dev-http-e2e.yml` workflow is the CI mirror of the local Phase 10 hook:
 
 - Local entrypoint: `scripts/run-phase10-docker-dev-e2e-hook.ps1`
-- Automation alias: `npm --prefix automation run run:docker:dev:http:e2e-hook`
+- Preferred automation alias: `npm --prefix automation run xydatalabs-test-docker-local-e2e-dev`
+- Compatibility automation alias: `npm --prefix automation run run:docker:dev:http:e2e-hook`
+- VS Code task: `1 Run: xydatalabs-test-docker-local-e2e-dev (Docker Dev HTTP E2E)`
 - CI entrypoint: `.github/workflows/phase10-docker-dev-http-e2e.yml`
 - GitHub summary pointers:
   - `TestResults/Playwright/phase10-docker-http/latest-playwright-smoke.txt`

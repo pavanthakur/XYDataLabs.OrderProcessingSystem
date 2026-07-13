@@ -704,7 +704,17 @@ run-phase10-docker-dev-e2e-hook.ps1
 
 Use this hook when you want a single command that produces the same end-to-end testing logs as the standalone Phase 10 scripts, but without having to manually chain the steps.
 
-You can also launch the same hook from the automation workspace:
+Primary references:
+
+```powershell
+npm --prefix automation run xydatalabs-test-docker-local-e2e-dev
+```
+
+```text
+VS Code task: 1 Run: xydatalabs-test-docker-local-e2e-dev (Docker Dev HTTP E2E)
+```
+
+Compatibility alias:
 
 ```powershell
 npm --prefix automation run run:docker:dev:http:e2e-hook
@@ -717,7 +727,7 @@ Use the hook when you want a single reproducible local validation pass for the P
 Quick start:
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-phase10-docker-dev-e2e-hook.ps1
+npm --prefix automation run xydatalabs-test-docker-local-e2e-dev
 ```
 
 Expected outputs:
@@ -743,12 +753,14 @@ What it does:
 Recommended entrypoints:
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-phase10-docker-dev-e2e-hook.ps1
-npm --prefix automation run run:docker:dev:http:e2e-hook
+npm --prefix automation run xydatalabs-test-docker-local-e2e-dev
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-phase10-docker-dev-e2e-hook.ps1 -StabilizationDelaySeconds 60
 ```
 
 Useful options:
 
+- `npm --prefix automation run xydatalabs-test-docker-local-e2e-dev` is the named local dev E2E run-hook and uses the standard 60-second stabilization window.
+- `1 Run: xydatalabs-test-docker-local-e2e-dev (Docker Dev HTTP E2E)` is the matching VS Code task.
 - `-StabilizationDelaySeconds 120` waits longer before smoke and validation so the stack can settle.
 - `-SkipStartIfNeeded` reuses an already running Docker dev HTTP stack and fails fast if the stack is not reachable.
 

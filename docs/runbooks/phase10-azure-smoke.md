@@ -52,6 +52,21 @@ Rule of thumb:
 - Run `02` right after `01` finishes successfully.
 - Run `03` after `02` passes.
 
+### Workflow Responsibilities
+
+| Workflow | Click target | Owns RG creation | Builds images | Deploys app | Cleanup | Current or legacy |
+|---|---|---|---|---|---|---|
+| `00 Phase 10 Docker Dev HTTP End-to-End` | Optional validation | No | Local/runner build only | Local Docker only | Local Docker cleanup | Current validation |
+| `01 Phase 10 Azure Deploy Orchestrator` | Primary Phase 10 click target | Routes to internal deploy workflow | Routes to internal image workflow | Routes to internal deploy workflow | Routes Azure RG cleanup when `cleanupInfra=true` | Current wrapper |
+| `02 Phase 10 Azure Runtime Smoke` | Post-deploy smoke | No | No | No | No | Current validation |
+| `03 Phase 10 Azure Transport Smoke` | Post-runtime-smoke transport proof | No | No | No | No | Current validation |
+| `Build Phase 10 Service Images (Internal)` | Do not click for normal deploy | No | Yes | No | No | Current internal |
+| `Deploy Azure Phase 10 Resources (Internal)` | Do not click for normal deploy | Yes | No | Yes | Yes | Current internal |
+| `Phase 10 Retention Cleanup (Internal)` | Housekeeping only | No | No | No | GHCR/artifact retention only | Current internal |
+| `Azure Bootstrap & Deploy` | Do not use for Phase 10 | Legacy App Service stack | No | Legacy App Service only | Legacy App Service RG path | Legacy |
+| `Deploy API to Azure App Service` | Do not use for Phase 10 | No | No | Legacy API only | No | Legacy |
+| `Deploy React Frontend to Azure App Service` | Do not use for Phase 10 | No | No | Legacy UI only | No | Legacy |
+
 | Area | Legacy bootstrap (`azure-bootstrap.yml`) | Active Phase 10 (`phase10-deploy-orchestrator.yml`) |
 |---|---|---|
 | Hosting model | Azure App Service | Azure Container Apps |
@@ -261,7 +276,7 @@ After the deploy finishes:
 
 Use these tasks when you want a local replica of the Phase 10 service graph before touching Azure:
 
-1. `1 Run: Phase 10 Local Container Stack 00 Start`
+1. `1 Run: Phase 10 Local Container Stack 00 Start Stack Only`
 2. `1 Run: Phase 10 Local Container Stack 01 Wait Ready + Keycloak`
 3. `1 Run: Phase 10 Local Container Stack 02 Playwright Smoke`
 4. `1 Run: Phase 10 Local Container Stack 03 Integration Suite`
@@ -282,16 +297,22 @@ Log locations for the local container stack:
 
 ### Single-Command End-to-End Hook
 
-If you want the same validation flow without launching the individual tasks one by one, use:
+If you want the same validation flow without launching the individual tasks one by one, use the named run-hook:
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-phase10-docker-dev-e2e-hook.ps1
+npm --prefix automation run xydatalabs-test-docker-local-e2e-dev
 ```
 
-Or from the automation workspace:
+Equivalent VS Code task:
+
+```text
+1 Run: xydatalabs-test-docker-local-e2e-dev (Docker Dev HTTP E2E)
+```
+
+Direct script form:
 
 ```powershell
-npm --prefix automation run run:docker:dev:http:e2e-hook
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-phase10-docker-dev-e2e-hook.ps1 -StabilizationDelaySeconds 60
 ```
 
 Use the hook when:
@@ -304,7 +325,7 @@ Use the hook when:
 Quick start:
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-phase10-docker-dev-e2e-hook.ps1
+npm --prefix automation run xydatalabs-test-docker-local-e2e-dev
 ```
 
 Use the individual tasks when:

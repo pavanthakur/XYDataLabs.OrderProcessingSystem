@@ -1,7 +1,7 @@
 #Requires -Version 7.0
 
 param(
-    [ValidateRange(60, 900)]
+    [ValidateRange(30, 900)]
     [int]$StabilizationDelaySeconds = 120
 )
 
@@ -10,6 +10,7 @@ $workspaceRoot = Split-Path -Parent $PSScriptRoot
 $composeFile = Join-Path $workspaceRoot 'compose\docker-compose.phase10.yml'
 $envFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local'
 $logRoot = Join-Path $workspaceRoot 'TestResults\Playwright\phase10-docker-http'
+$dockerConfigRoot = Join-Path $workspaceRoot '.tmp\docker-config'
 $runStamp = "$(Get-Date -Format 'yyyyMMdd-HHmmss')_endtoend"
 $runDir = Join-Path $logRoot $runStamp
 $summaryPath = Join-Path $runDir 'summary.json'
@@ -21,6 +22,10 @@ $rootMarkerPath = Join-Path $workspaceRoot 'TestResults\Playwright\latest-playwr
 New-Item -ItemType Directory -Path $runDir -Force | Out-Null
 New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
 New-Item -ItemType Directory -Path (Split-Path -Parent $rootMarkerPath) -Force | Out-Null
+New-Item -ItemType Directory -Path $dockerConfigRoot -Force | Out-Null
+
+$previousDockerConfig = $env:DOCKER_CONFIG
+$env:DOCKER_CONFIG = $dockerConfigRoot
 
 Set-Content -Path $latestPointerPath -Value $runDir -Encoding utf8
 Set-Content -Path $rootMarkerPath -Value $runDir -Encoding utf8
@@ -145,6 +150,17 @@ try {
         log = 'run-phase10-docker-dev-smoke.log'
     }
 
+    Invoke-LoggedCommand -Name 'integration-prep' -Script {
+        dotnet build-server shutdown
+    } | Out-Null
+    $summary.steps += [ordered]@{
+        name = 'integration-prep'
+        status = 'passed'
+        startedUtc = (Get-Date).ToUniversalTime().ToString('o')
+        finishedUtc = (Get-Date).ToUniversalTime().ToString('o')
+        log = 'integration-prep.log'
+    }
+
     Invoke-LoggedCommand -Name 'integration' -Script {
         & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspaceRoot 'scripts\run-integration-tests-docker.ps1')
     } | Out-Null
@@ -231,6 +247,14 @@ finally {
             error = $_.Exception.Message
         }
         Write-ProgressLine "Cleanup failed: $($_.Exception.Message)"
+    }
+    finally {
+        if ([string]::IsNullOrWhiteSpace($previousDockerConfig)) {
+            Remove-Item Env:DOCKER_CONFIG -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:DOCKER_CONFIG = $previousDockerConfig
+        }
     }
 
     $summary.finishedUtc = (Get-Date).ToUniversalTime().ToString('o')

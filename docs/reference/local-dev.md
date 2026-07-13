@@ -132,6 +132,12 @@ Current VS Code validation paths:
 - The new Phase 10-friendly aliases are `Phase 10: Local Container Stack 01 Start`, `Phase 10: Local Container Stack 02 Smoke`, `Phase 10: Local Container Stack 03 Full Validation`, and `Phase 10: Local Container Stack Cleanup`.
 - Use the local Phase 10 aliases when you want the newer split-service local validation path without changing the older task contract.
 
+Preferred Phase 10 Docker E2E references:
+- Terminal run-hook: `npm --prefix automation run xydatalabs-test-docker-local-e2e-dev`
+- VS Code task: `1 Run: xydatalabs-test-docker-local-e2e-dev (Docker Dev HTTP E2E)`
+- Direct script equivalent: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\run-phase10-docker-dev-e2e-hook.ps1 -StabilizationDelaySeconds 60`
+- Use this when you want one command that starts the stack if needed, runs ready/smoke/integration/matrix/full validation, writes the log trail, and cleans up the local stack.
+
 Shared local/Azure contract:
 - Service names follow the same `appname-env` shape wherever we control them: local Docker service names, Azure Container App names, and cleanup targets all use the environment suffix so the deploy and teardown steps stay symmetrical.
 - Phase 10 local Docker and Azure Container Apps both use the same `orderprocessing-*` service image family, which keeps image creation and deployment inputs aligned across hosts.

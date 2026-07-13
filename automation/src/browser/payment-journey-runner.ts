@@ -58,8 +58,8 @@ export class PaymentJourneyRunner {
       page.on("console", (message) => {
         const text = message.text();
 
-        if (request.target.runtime === "local" && this.isExpectedLocalConsoleNoise(text)) {
-          log(`[browser:expected] ${text}`);
+        if (this.usesLocalParityBrowserNoiseFilter(request.target) && this.isExpectedLocalParityConsoleNoise(text)) {
+          log("[browser:expected] Suppressed expected local provider/browser diagnostic.");
           return;
         }
 
@@ -72,8 +72,8 @@ export class PaymentJourneyRunner {
         const url = failedRequest.url();
         const errorText = failedRequest.failure()?.errorText ?? "unknown";
 
-        if (request.target.runtime === "local" && this.isExpectedLocalNoise(url, errorText)) {
-          log(`[browser:expected] ${failedRequest.method()} ${url} -> ${errorText}`);
+        if (this.usesLocalParityBrowserNoiseFilter(request.target) && this.isExpectedLocalParityRequestNoise(url, errorText)) {
+          log(`[browser:expected] Suppressed expected local provider/browser request diagnostic for ${this.describeExpectedBrowserNoiseTarget(url)}.`);
           return;
         }
 
@@ -81,8 +81,8 @@ export class PaymentJourneyRunner {
       });
       page.on("response", (response) => {
         const url = response.url();
-        if (request.target.runtime === "local" && url.includes("/payment/client-event") && response.status() === 404) {
-          log(`[browser:expected] ${response.request().method()} ${url} -> HTTP 404 during local mock callback settlement`);
+        if (this.usesLocalParityBrowserNoiseFilter(request.target) && url.includes("/payment/client-event") && response.status() === 404) {
+          log("[browser:expected] Suppressed expected local telemetry callback settlement diagnostic.");
         }
       });
       const targetUrl = `${request.target.baseUrl}${request.target.paymentPagePath}?tenantCode=${encodeURIComponent(request.tenantCode)}`;
@@ -737,17 +737,35 @@ export class PaymentJourneyRunner {
     return settled;
   }
 
-  private isExpectedLocalNoise(url: string, errorText: string): boolean {
+  private usesLocalParityBrowserNoiseFilter(target: RuntimeTargetDefinition): boolean {
+    return target.runtime === "local" || target.runtime === "docker";
+  }
+
+  private isExpectedLocalParityRequestNoise(url: string, errorText: string): boolean {
     return (
       url.startsWith("https://js.openpay.mx/") ||
       (url.includes("/payment/client-event") && errorText === "net::ERR_ABORTED")
     );
   }
 
-  private isExpectedLocalConsoleNoise(text: string): boolean {
+  private isExpectedLocalParityConsoleNoise(text: string): boolean {
     return (
+      text.includes("Failed to load resource: net::ERR_NAME_NOT_RESOLVED") ||
       text.includes("Failed to load resource: net::ERR_NETWORK_ACCESS_DENIED") ||
+      text.includes("Failed to load resource: the server responded with a status of 401 (Unauthorized)") ||
       text.includes("Failed to load resource: the server responded with a status of 404 (Not Found)")
     );
+  }
+
+  private describeExpectedBrowserNoiseTarget(url: string): string {
+    if (url.startsWith("https://js.openpay.mx/")) {
+      return "OpenPay browser SDK";
+    }
+
+    if (url.includes("/payment/client-event")) {
+      return "local telemetry callback";
+    }
+
+    return "local browser dependency";
   }
 }

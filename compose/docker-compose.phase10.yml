@@ -3,7 +3,8 @@ services:
     image: mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04
     environment:
       ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: LocalP@ssw0rd1!
+      SA_PASSWORD: ${LOCAL_SQL_PASSWORD}
+      MSSQL_SA_PASSWORD: ${LOCAL_SQL_PASSWORD}
       MSSQL_PID: Express
     ports:
       - "1433:1433"
@@ -51,6 +52,32 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__OrderProcessingSystemDbConnection: Server=sql-server,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
+      DedicatedTenantConnectionStrings__TenantC: Server=sql-server,1433;Database=OrderProcessingSystem_TenantC_Dev;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
+      ConnectionStrings__Redis: redis:6379
+      OpenPay__MerchantId: ${LOCAL_OPENPAY_MERCHANT_ID}
+      OpenPay__PublicKey: ${LOCAL_OPENPAY_PUBLIC_KEY}
+      OpenPay__PrivateKey: ${LOCAL_OPENPAY_PRIVATE_KEY}
+      OpenPay__DeviceSessionId: ${LOCAL_OPENPAY_DEVICE_SESSION_ID}
+      Razorpay__MerchantId: ${LOCAL_RAZORPAY_MERCHANT_ID}
+      Razorpay__PrivateKey: ${LOCAL_RAZORPAY_PRIVATE_KEY}
+      Webhooks__Razorpay__Secret: ${LOCAL_RAZORPAY_WEBHOOK_SECRET}
+      Webhooks__OpenPay__Secret: ${LOCAL_OPENPAY_WEBHOOK_SECRET}
+      IdentityProvider__Enabled: "true"
+      IdentityProvider__Mode: KeycloakLocal
+      IdentityProvider__Authority: http://keycloak-local:8080/realms/xy-phase9
+      IdentityProvider__Audience: xy-order-processing
+      IdentityProvider__Scheme: Bearer
+      IdentityProvider__ClientId: xy-order-processing-backend
+      IdentityProvider__ClientSecret: local-backend-client-secret
+      PaymentProviders__TenantA__OpenPay__PrivateKey: ${LOCAL_OPENPAY_PRIVATE_KEY}
+      PaymentProviders__TenantB__OpenPay__PrivateKey: ${LOCAL_OPENPAY_PRIVATE_KEY}
+      PaymentProviders__TenantC__OpenPay__PrivateKey: ${LOCAL_OPENPAY_PRIVATE_KEY}
+      PaymentProviders__TenantA__Razorpay__PrivateKey: ${LOCAL_RAZORPAY_PRIVATE_KEY}
+      PaymentProviders__TenantB__Razorpay__PrivateKey: ${LOCAL_RAZORPAY_PRIVATE_KEY}
+      PaymentProviders__TenantC__Razorpay__PrivateKey: ${LOCAL_RAZORPAY_PRIVATE_KEY}
+    volumes:
+      - ../logs:/logs
     networks:
       xy-phase10-network:
         aliases:
@@ -68,6 +95,32 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__OrderProcessingSystemDbConnection: Server=sql-server,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
+      DedicatedTenantConnectionStrings__TenantC: Server=sql-server,1433;Database=OrderProcessingSystem_TenantC_Dev;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
+      ConnectionStrings__Redis: redis:6379
+      OpenPay__MerchantId: ${LOCAL_OPENPAY_MERCHANT_ID}
+      OpenPay__PublicKey: ${LOCAL_OPENPAY_PUBLIC_KEY}
+      OpenPay__PrivateKey: ${LOCAL_OPENPAY_PRIVATE_KEY}
+      OpenPay__DeviceSessionId: ${LOCAL_OPENPAY_DEVICE_SESSION_ID}
+      Razorpay__MerchantId: ${LOCAL_RAZORPAY_MERCHANT_ID}
+      Razorpay__PrivateKey: ${LOCAL_RAZORPAY_PRIVATE_KEY}
+      Webhooks__Razorpay__Secret: ${LOCAL_RAZORPAY_WEBHOOK_SECRET}
+      Webhooks__OpenPay__Secret: ${LOCAL_OPENPAY_WEBHOOK_SECRET}
+      IdentityProvider__Enabled: "true"
+      IdentityProvider__Mode: KeycloakLocal
+      IdentityProvider__Authority: http://keycloak-local:8080/realms/xy-phase9
+      IdentityProvider__Audience: xy-order-processing
+      IdentityProvider__Scheme: Bearer
+      IdentityProvider__ClientId: xy-order-processing-backend
+      IdentityProvider__ClientSecret: local-backend-client-secret
+      PaymentProviders__TenantA__OpenPay__PrivateKey: ${LOCAL_OPENPAY_PRIVATE_KEY}
+      PaymentProviders__TenantB__OpenPay__PrivateKey: ${LOCAL_OPENPAY_PRIVATE_KEY}
+      PaymentProviders__TenantC__OpenPay__PrivateKey: ${LOCAL_OPENPAY_PRIVATE_KEY}
+      PaymentProviders__TenantA__Razorpay__PrivateKey: ${LOCAL_RAZORPAY_PRIVATE_KEY}
+      PaymentProviders__TenantB__Razorpay__PrivateKey: ${LOCAL_RAZORPAY_PRIVATE_KEY}
+      PaymentProviders__TenantC__Razorpay__PrivateKey: ${LOCAL_RAZORPAY_PRIVATE_KEY}
+    volumes:
+      - ../logs:/logs
     networks:
       xy-phase10-network:
         aliases:
@@ -85,6 +138,32 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__OrderProcessingSystemDbConnection: Server=sql-server,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
+      DedicatedTenantConnectionStrings__TenantC: Server=sql-server,1433;Database=OrderProcessingSystem_TenantC_Dev;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
+      ConnectionStrings__Redis: redis:6379
+      OpenPay__MerchantId: ${LOCAL_OPENPAY_MERCHANT_ID}
+      OpenPay__PublicKey: ${LOCAL_OPENPAY_PUBLIC_KEY}
+      OpenPay__PrivateKey: ${LOCAL_OPENPAY_PRIVATE_KEY}
+      OpenPay__DeviceSessionId: ${LOCAL_OPENPAY_DEVICE_SESSION_ID}
+      Razorpay__MerchantId: ${LOCAL_RAZORPAY_MERCHANT_ID}
+      Razorpay__PrivateKey: ${LOCAL_RAZORPAY_PRIVATE_KEY}
+      Webhooks__Razorpay__Secret: ${LOCAL_RAZORPAY_WEBHOOK_SECRET}
+      Webhooks__OpenPay__Secret: ${LOCAL_OPENPAY_WEBHOOK_SECRET}
+      IdentityProvider__Enabled: "true"
+      IdentityProvider__Mode: KeycloakLocal
+      IdentityProvider__Authority: http://keycloak-local:8080/realms/xy-phase9
+      IdentityProvider__Audience: xy-order-processing
+      IdentityProvider__Scheme: Bearer
+      IdentityProvider__ClientId: xy-order-processing-backend
+      IdentityProvider__ClientSecret: local-backend-client-secret
+      PaymentProviders__TenantA__OpenPay__PrivateKey: ${LOCAL_OPENPAY_PRIVATE_KEY}
+      PaymentProviders__TenantB__OpenPay__PrivateKey: ${LOCAL_OPENPAY_PRIVATE_KEY}
+      PaymentProviders__TenantC__OpenPay__PrivateKey: ${LOCAL_OPENPAY_PRIVATE_KEY}
+      PaymentProviders__TenantA__Razorpay__PrivateKey: ${LOCAL_RAZORPAY_PRIVATE_KEY}
+      PaymentProviders__TenantB__Razorpay__PrivateKey: ${LOCAL_RAZORPAY_PRIVATE_KEY}
+      PaymentProviders__TenantC__Razorpay__PrivateKey: ${LOCAL_RAZORPAY_PRIVATE_KEY}
+    volumes:
+      - ../logs:/logs
     networks:
       xy-phase10-network:
         aliases:
@@ -117,6 +196,10 @@ services:
       IdentityProvider__Authority: http://keycloak-local:8080/realms/xy-phase9
       IdentityProvider__Audience: xy-order-processing
       IdentityProvider__Scheme: Bearer
+      IdentityProvider__ClientId: xy-order-processing-backend
+      IdentityProvider__ClientSecret: local-backend-client-secret
+    volumes:
+      - ../logs:/logs
     depends_on:
       orders:
         condition: service_started
@@ -152,6 +235,8 @@ services:
       PORT: 5022
       USE_HTTPS: "false"
       ORDERPROCESSING_API_BASE_URL: http://orderprocessing-gate-${PHASE10_ENV_SUFFIX:-local}:8080
+    volumes:
+      - ../logs:/logs
     depends_on:
       gateway:
         condition: service_started

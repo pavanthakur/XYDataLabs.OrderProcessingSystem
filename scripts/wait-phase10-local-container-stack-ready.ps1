@@ -8,6 +8,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $workspaceRoot = Split-Path -Parent $PSScriptRoot
 $logRoot = Join-Path $workspaceRoot 'TestResults\Playwright\phase10-docker-http'
+$dockerConfigRoot = Join-Path $workspaceRoot '.tmp\docker-config'
 $runStamp = "$(Get-Date -Format 'yyyyMMdd-HHmmss')_profile"
 $runDir = Join-Path $logRoot $runStamp
 $startupLogPath = Join-Path $runDir '01-env-ready.log'
@@ -19,6 +20,10 @@ $rootMarkerPath = Join-Path $workspaceRoot 'TestResults\Playwright\latest-playwr
 New-Item -ItemType Directory -Path $runDir -Force | Out-Null
 New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
 New-Item -ItemType Directory -Path (Split-Path -Parent $rootMarkerPath) -Force | Out-Null
+New-Item -ItemType Directory -Path $dockerConfigRoot -Force | Out-Null
+
+$previousDockerConfig = $env:DOCKER_CONFIG
+$env:DOCKER_CONFIG = $dockerConfigRoot
 
 Set-Content -Path $latestPointerPath -Value $runDir -Encoding utf8
 Set-Content -Path $rootMarkerPath -Value $runDir -Encoding utf8
@@ -143,4 +148,10 @@ finally {
     Set-Content -Path $summaryPath -Value ($summary | ConvertTo-Json -Depth 6) -Encoding utf8
     Set-Content -Path $latestPointerPath -Value $runDir -Encoding utf8
     Set-Content -Path $rootMarkerPath -Value $runDir -Encoding utf8
+    if ([string]::IsNullOrWhiteSpace($previousDockerConfig)) {
+        Remove-Item Env:DOCKER_CONFIG -ErrorAction SilentlyContinue
+    }
+    else {
+        $env:DOCKER_CONFIG = $previousDockerConfig
+    }
 }
