@@ -588,6 +588,8 @@ jobs:
           echo "- **Notifications Container App:** ${{ steps.outputs.outputs.notifications }}" >> $GITHUB_STEP_SUMMARY
           echo "- **UI Container App:** ${{ steps.outputs.outputs.ui }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Gateway URL:** https://${{ steps.outputs.outputs.gatewayFqdn }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Orders API Smoke:** https://${{ steps.outputs.outputs.gatewayFqdn }}/api/v1/Info/runtime-configuration" >> $GITHUB_STEP_SUMMARY
+          echo "- **Swagger:** Not a Phase 10 smoke gate; use the Orders API smoke endpoint for routed API proof." >> $GITHUB_STEP_SUMMARY
           echo "- **UI URL:** https://${{ steps.outputs.outputs.uiFqdn }}" >> $GITHUB_STEP_SUMMARY
           echo "- **API Alias:** https://${{ steps.aliases.outputs.apiAlias }}" >> $GITHUB_STEP_SUMMARY
           echo "- **UI Alias:** https://${{ steps.aliases.outputs.uiAlias }}" >> $GITHUB_STEP_SUMMARY

@@ -17,9 +17,13 @@
 - ✅ The local Docker Dev HTTP E2E path now has a named run-hook, `npm --prefix automation run xydatalabs-test-docker-local-e2e-dev`, plus a matching VS Code task, `1 Run: xydatalabs-test-docker-local-e2e-dev (Docker Dev HTTP E2E)`.
 - ✅ The latest Phase 10 Docker Dev HTTP E2E proof passed in GitHub Actions run `29268434294` with smoke, integration, matrix, and cleanup logs under `TestResults/Playwright/phase10-docker-http`.
 - ✅ The optional GitHub workflow `99` now always starts a fresh Docker stack on the hosted runner; the local-only `-SkipStartIfNeeded` reuse switch is intentionally not exposed in the GitHub UI.
+- ✅ The Phase 10 Azure dev deploy proof passed in GitHub Actions run `29273224237`: preflight, service image build, and Container Apps deployment completed through the wrapper path.
+- ✅ The Phase 10 Azure runtime smoke passed in GitHub Actions run `29273711615`: gateway health, gateway-routed API JSON, UI static route, and UI API proxy returned `200`.
+- ✅ The Phase 10 Azure transport smoke passed in GitHub Actions run `29273881488`: Service Bus publish, fan-out consume, controlled DLQ forwarding, DLQ replay receive, and replay publish/consume all passed.
 - ✅ Gateway Azure diagnostics now echo the accepted host so ACA host-header mismatches can be diagnosed from the health response and smoke summaries.
 - ✅ Runtime smoke and transport smoke are separate post-deploy checks: runtime proves gateway/API/UI reachability, while transport proves Service Bus publish, consume, DLQ, and replay behavior.
 - ✅ Phase 10 retention cleanup is documented as housekeeping for GHCR package versions and GitHub artifacts; Azure teardown remains owned by the Phase 10 wrapper `cleanupInfra=true` path.
+- ✅ Phase 10 transport/operator baseline is now proven in dev across deploy, runtime smoke, transport smoke, and optional Docker parity.
 - 🔜 ACR migration remains the preferred enterprise registry direction, but it is a follow-up implementation, not a blocker for the current GHCR-backed Phase 10 transport/operator baseline.
 - 🔜 SQL Server and Azure Cache for Redis are intentionally outside the current Phase 10 transport baseline unless a later platform expansion requires full application persistence parity in Azure Container Apps.
 

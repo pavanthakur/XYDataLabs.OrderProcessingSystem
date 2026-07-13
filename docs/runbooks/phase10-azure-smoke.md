@@ -53,6 +53,24 @@ Rule of thumb:
 - Run `99` only when you want optional local/CI parity for the Docker container shape.
 - Workflow `99` always starts its own Docker stack on GitHub-hosted runners. Reusing an already running stack is a local script-only option via `scripts/run-phase10-docker-dev-e2e-hook.ps1 -SkipStartIfNeeded`.
 
+### Latest Verified Dev Proof
+
+Use this as the current known-good Phase 10 baseline when comparing future workflow runs.
+
+| Date | Workflow | Run | Result | Verified |
+|---|---|---|---|---|
+| 2026-07-13 | `01 Phase 10 Azure Deploy Orchestrator` | `29273224237` | PASS | Preflight, image build, and Azure dev Container Apps deployment. |
+| 2026-07-13 | `02 Phase 10 Azure Runtime Smoke` | `29273711615` | PASS | Gateway health, gateway-routed API runtime configuration, UI route, and UI API proxy. |
+| 2026-07-13 | `03 Phase 10 Azure Transport Smoke` | `29273881488` | PASS | Service Bus publish, fan-out consume, controlled DLQ forwarding, DLQ replay receive, and replay publish/consume. |
+| 2026-07-13 | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | `29268434294` | PASS | Optional Docker Dev HTTP E2E smoke, integration, matrix, and cleanup parity. |
+
+Current dev URLs from the latest deploy proof:
+
+| Target | URL |
+|---|---|
+| Gateway | `https://orderprocessing-gate-dev.bluebay-335bed8c.centralindia.azurecontainerapps.io` |
+| UI | `https://orderprocessing-ui-dev.bluebay-335bed8c.centralindia.azurecontainerapps.io` |
+
 ### Workflow Responsibilities
 
 | Workflow | Click target | Owns RG creation | Builds images | Deploys app | Cleanup | Current or legacy |
@@ -172,6 +190,7 @@ Shared operator rule:
 - If you are comparing this path to `azure-bootstrap.yml`, use that workflow only as a historical App Service reference. It used to create the SQL/App Service surface as part of bootstrap; Phase 10 deliberately replaces that with the container-app transport stack and does not expect SQL or Redis from the active deployment path.
 - The `AZUREAPPSERVICE_*` GitHub secrets referenced in this repo are environment-scoped OIDC identifiers carried forward from the earlier setup flow; they are used by the active Phase 10 Container Apps workflows, not to imply an App Service deployment target.
 - The Phase 10 wrapper is the single end-to-end delivery entry point for Phase 10. On a real deployment it runs in this order: preflight -> image build -> Azure deploy or cleanup workflow -> summary. Dry run stops after validation and does not build or deploy.
+- Swagger is not the Phase 10 smoke gate. Use the gateway health URL plus the routed Orders API smoke URL (`/api/v1/Info/runtime-configuration`) to prove the current Container Apps gateway/API path.
 - If the architecture is expanded to include shared foundation resources again, they should be owned by the wrapper-owned infra path, not by the legacy App Service workflows.
 - The wrapper summary is the top-level checkpoint; the nested build and Azure deployment jobs hold the detailed child summaries, service-by-service logs, and deployment outputs.
 - In practice, use the wrapper summary for the overall result, then open the child build and deploy jobs for per-service logs and Azure deployment details.
