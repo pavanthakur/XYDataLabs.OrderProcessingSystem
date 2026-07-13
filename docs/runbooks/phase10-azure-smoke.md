@@ -41,25 +41,25 @@ Use the numbered Phase 10 workflows in this order:
 
 | Order | Workflow | Use it for |
 |---|---|---|
-| `00` | `00 Phase 10 Docker Dev HTTP End-to-End` | Local or CI parity for the current container graph |
 | `01` | `01 Phase 10 Azure Deploy Orchestrator` | Azure deploy, dry run, or cleanup |
 | `02` | `02 Phase 10 Azure Runtime Smoke` | Runtime proof for gateway, API routing, and UI after deploy |
 | `03` | `03 Phase 10 Azure Transport Smoke` | Transport proof for Service Bus publish, consume, DLQ, and replay |
+| `99` | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Optional local or CI parity for the current container graph |
 
 Rule of thumb:
-- Run `00` before Azure work when you want to validate the container shape locally or in CI.
 - Run `01` when you want to change Azure resources.
 - Run `02` right after `01` finishes successfully.
 - Run `03` after `02` passes.
+- Run `99` only when you want optional local/CI parity for the Docker container shape.
 
 ### Workflow Responsibilities
 
 | Workflow | Click target | Owns RG creation | Builds images | Deploys app | Cleanup | Current or legacy |
 |---|---|---|---|---|---|---|
-| `00 Phase 10 Docker Dev HTTP End-to-End` | Optional validation | No | Local/runner build only | Local Docker only | Local Docker cleanup | Current validation |
 | `01 Phase 10 Azure Deploy Orchestrator` | Primary Phase 10 click target | Routes to internal deploy workflow | Routes to internal image workflow | Routes to internal deploy workflow | Routes Azure RG cleanup when `cleanupInfra=true` | Current wrapper |
 | `02 Phase 10 Azure Runtime Smoke` | Post-deploy smoke | No | No | No | No | Current validation |
 | `03 Phase 10 Azure Transport Smoke` | Post-runtime-smoke transport proof | No | No | No | No | Current validation |
+| `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Optional validation | No | Local/runner build only | Local Docker only | Local Docker cleanup | Current validation |
 | `Build Phase 10 Service Images (Internal)` | Do not click for normal deploy | No | Yes | No | No | Current internal |
 | `Deploy Azure Phase 10 Resources (Internal)` | Do not click for normal deploy | Yes | No | Yes | Yes | Current internal |
 | `Phase 10 Retention Cleanup (Internal)` | Housekeeping only | No | No | No | GHCR/artifact retention only | Current internal |

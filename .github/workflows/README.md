@@ -30,10 +30,10 @@ Use this rule before removing anything:
 
 | Workflow | Category | Direct Click? | Purpose |
 |---|---|---|---|
-| `00 Phase 10 Docker Dev HTTP End-to-End` | Validation | Sometimes | Mirrors the local Docker Dev HTTP hook in CI |
 | `01 Phase 10 Azure Deploy Orchestrator` | Wrapper | Yes | Manual Phase 10 entrypoint that runs build, deploy, or cleanup and prints the operator summary |
 | `02 Phase 10 Azure Runtime Smoke` | Validation | Yes, after deploy | Verifies Gateway health, Gateway-routed API bootstrap, UI reachability, and UI API proxy bootstrap |
 | `03 Phase 10 Azure Transport Smoke` | Validation | Yes, after runtime smoke | Publishes, consumes, dead-letters, and replays a controlled Service Bus smoke flow |
+| `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Validation | Optional | Mirrors the local Docker Dev HTTP hook in CI |
 | `build-phase10-images.yml` | Internal | No | Builds and publishes the Phase 10 service images |
 | `infra-deploy.yml` | Internal | No | Deploys or cleans up the Phase 10 Azure stack and returns live URLs |
 | `phase10-retention-cleanup.yml` | Internal housekeeping | No for deploy | Scheduled/manual cleanup for old GHCR package versions and workflow artifacts |
@@ -48,10 +48,12 @@ Use the numbered workflows in this order:
 
 | Order | Workflow | Use it for |
 |---|---|---|
-| `00` | `00 Phase 10 Docker Dev HTTP End-to-End` | Local/CI parity for the containerized service graph, before Azure work |
 | `01` | `01 Phase 10 Azure Deploy Orchestrator` | Build, deploy, dry run, or cleanup for the Azure Phase 10 stack |
 | `02` | `02 Phase 10 Azure Runtime Smoke` | Prove gateway health, routed API runtime config, and UI readiness after deploy |
 | `03` | `03 Phase 10 Azure Transport Smoke` | Prove Service Bus publish/consume, DLQ forwarding, and replay after runtime smoke |
+| `99` | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Optional local/CI parity for the containerized service graph |
+
+Workflow `99` is not required for Azure deployment if the local hook has already passed, but it is useful as a CI parity gate. The GitHub runner generates a CI-only `Resources/Docker/.env.local` with non-secret sandbox values before starting Docker because the real local file is intentionally gitignored.
 
 ### Default Review Stance
 
@@ -68,7 +70,7 @@ Before approving any workflow or infrastructure change, ask:
 
 | If you want to... | Click this workflow |
 |---|---|
-| Verify the local Docker Dev HTTP hook in CI | `00 Phase 10 Docker Dev HTTP End-to-End` |
+| Verify the local Docker Dev HTTP hook in CI | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` |
 | Run Phase 10 deploy, dry run, or cleanup from GitHub UI | `01 Phase 10 Azure Deploy Orchestrator` |
 | Prove Phase 10 Gateway/API/UI runtime behavior after deploy | `02 Phase 10 Azure Runtime Smoke` |
 | Prove Phase 10 Service Bus publish/consume/DLQ/replay after runtime smoke | `03 Phase 10 Azure Transport Smoke` |
@@ -82,10 +84,10 @@ Before approving any workflow or infrastructure change, ask:
 
 | Workflow | Click target | Owns RG creation | Builds images | Deploys app | Cleanup | Current or legacy |
 |---|---|---|---|---|---|---|
-| `00 Phase 10 Docker Dev HTTP End-to-End` | Optional validation | No | Local/runner build only | Local Docker only | Local Docker cleanup | Current validation |
 | `01 Phase 10 Azure Deploy Orchestrator` | Primary Phase 10 click target | Routes to internal deploy workflow | Routes to internal image workflow | Routes to internal deploy workflow | Routes Azure RG cleanup when `cleanupInfra=true` | Current wrapper |
 | `02 Phase 10 Azure Runtime Smoke` | Post-deploy smoke | No | No | No | No | Current validation |
 | `03 Phase 10 Azure Transport Smoke` | Post-runtime-smoke transport proof | No | No | No | No | Current validation |
+| `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Optional validation | No | Local/runner build only | Local Docker only | Local Docker cleanup | Current validation |
 | `Build Phase 10 Service Images (Internal)` | Do not click for normal deploy | No | Yes | No | No | Current internal |
 | `Deploy Azure Phase 10 Resources (Internal)` | Do not click for normal deploy | Yes | No | Yes | Yes | Current internal |
 | `Phase 10 Retention Cleanup (Internal)` | Housekeeping only | No | No | No | GHCR/artifact retention only | Current internal |
@@ -93,7 +95,7 @@ Before approving any workflow or infrastructure change, ask:
 | `Deploy API to Azure App Service` | Do not use for Phase 10 | No | No | Legacy API only | No | Legacy |
 | `Deploy React Frontend to Azure App Service` | Do not use for Phase 10 | No | No | Legacy UI only | No | Legacy |
 
-For detailed operator steps, use [Phase 10 Azure Smoke Runbook](../../docs/runbooks/phase10-azure-smoke.md). For the local equivalent of workflow `00`, use either:
+For detailed operator steps, use [Phase 10 Azure Smoke Runbook](../../docs/runbooks/phase10-azure-smoke.md). For the local equivalent of workflow `99`, use either:
 
 ```powershell
 npm --prefix automation run xydatalabs-test-docker-local-e2e-dev
@@ -217,22 +219,22 @@ The table above intentionally shows both surfaces. The legacy App Service workfl
 
 For Phase 10, the expected click path is:
 
-1. Optionally run `00 Phase 10 Docker Dev HTTP End-to-End` for local/CI container parity.
-2. Open `01 Phase 10 Azure Deploy Orchestrator`.
-3. Run the wrapper manually for `dev`, `staging`, or `prod`.
-4. Let it call `build-phase10-images.yml` and `infra-deploy.yml` internally.
-5. Run `02 Phase 10 Azure Runtime Smoke` for the same environment.
-6. Run `03 Phase 10 Azure Transport Smoke` for the same environment.
+1. Open `01 Phase 10 Azure Deploy Orchestrator`.
+2. Run the wrapper manually for `dev`, `staging`, or `prod`.
+3. Let it call `build-phase10-images.yml` and `infra-deploy.yml` internally.
+4. Run `02 Phase 10 Azure Runtime Smoke` for the same environment.
+5. Run `03 Phase 10 Azure Transport Smoke` for the same environment.
+6. Optionally run `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` when you want CI parity for the local Docker hook.
 7. Use `cleanupInfra=true` when you want teardown instead of deployment.
 
 In plain terms:
 
 | Number | What it means |
 |---|---|
-| `00` | Local parity check. Use it when you want the Docker container graph to behave like the current Phase 10 Azure shape. |
 | `01` | Azure delivery entrypoint. Use it for deploy, dry run, or cleanup. |
 | `02` | Runtime proof. Use it after Azure deploy to verify gateway/API/UI behavior. |
 | `03` | Transport proof. Use it after runtime smoke to verify Service Bus fan-out, DLQ, and replay. |
+| `99` | Optional local parity check. Use it when you want the Docker container graph to behave like the current Phase 10 Azure shape on a runner. |
 
 The runtime and transport smoke workflows resolve their resource group, gateway, UI, and Service Bus targets from the selected environment. They do not ask for a region input.
 
