@@ -79,6 +79,12 @@ jobs:
           "$HOME/.dotnet/tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           dotnet ef --version
 
+      - name: Install frontend smoke dependencies
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install chromium
+
       - name: Run Phase 10 Docker Dev HTTP hook
         shell: pwsh
         run: |
@@ -92,6 +98,49 @@ jobs:
             $args += '-SkipStartIfNeeded'
           }
           & pwsh @args
+
+      - name: Print failure diagnostics
+        if: failure()
+        shell: pwsh
+        run: |
+          $logRoot = Join-Path $PWD 'TestResults/Playwright/phase10-docker-http'
+          $candidateFiles = @(
+            (Join-Path $logRoot 'latest-playwright-full-validation.txt'),
+            (Join-Path $logRoot 'latest-playwright-smoke.txt'),
+            (Join-Path $PWD 'TestResults/Playwright/latest-playwright-run.txt')
+          )
+
+          foreach ($pointer in $candidateFiles) {
+            if (-not (Test-Path -LiteralPath $pointer)) {
+              continue
+            }
+
+            $runDir = (Get-Content -LiteralPath $pointer -Raw).Trim()
+            if ([string]::IsNullOrWhiteSpace($runDir) -or -not (Test-Path -LiteralPath $runDir)) {
+              continue
+            }
+
+            Write-Host ""
+            Write-Host "=== Phase 10 diagnostic run directory ===" -ForegroundColor Cyan
+            Write-Host $runDir
+
+            $summary = Join-Path $runDir 'summary.json'
+            if (Test-Path -LiteralPath $summary) {
+              Write-Host ""
+              Write-Host "--- summary.json ---" -ForegroundColor Yellow
+              Get-Content -LiteralPath $summary -Tail 120
+            }
+
+            $logs = Get-ChildItem -LiteralPath $runDir -File -Filter '*.log' -ErrorAction SilentlyContinue |
+              Sort-Object LastWriteTime -Descending |
+              Select-Object -First 5
+
+            foreach ($log in $logs) {
+              Write-Host ""
+              Write-Host "--- $($log.Name) tail ---" -ForegroundColor Yellow
+              Get-Content -LiteralPath $log.FullName -Tail 80
+            }
+          }
 
       - name: Upload Phase 10 logs
         if: always()
