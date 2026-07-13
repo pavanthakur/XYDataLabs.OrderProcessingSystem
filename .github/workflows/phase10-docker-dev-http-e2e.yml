@@ -85,6 +85,10 @@ jobs:
           npm ci
           npx playwright install chromium
 
+      - name: Install automation matrix dependencies
+        working-directory: automation
+        run: npm ci
+
       - name: Run Phase 10 Docker Dev HTTP hook
         shell: pwsh
         run: |
