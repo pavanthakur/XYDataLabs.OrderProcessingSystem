@@ -12,11 +12,15 @@ For Azure Container Apps, forwarded requests use the destination service host in
 | `inventory-path` | `/inventory/*` | Inventory API |
 | `notifications-path` | `/notifications/*` | Notifications API |
 | `ui-path` | `/app/*` | UI |
+| `payment-telemetry` | `/payment/client-event` | Gateway telemetry sink for payment and callback UI events |
+| `payment-confirmation` | `/api/v1/Payments/{paymentId}/confirm-status` | Gateway compatibility handler for the local callback reconciliation flow |
 
 ## Verification
 
 - Gateway health: `/`
 - Orders API smoke through gateway: `/api/v1/Info/runtime-configuration`
+- Payment UI telemetry: `POST /payment/client-event`
+- Payment callback reconciliation: `POST /api/v1/Payments/{paymentId}/confirm-status`
 
 ## Purpose
 

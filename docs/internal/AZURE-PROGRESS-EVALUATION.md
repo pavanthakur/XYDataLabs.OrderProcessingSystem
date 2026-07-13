@@ -9,6 +9,19 @@
 
 ## 🟢 Current State (July 2026) — Phase 10 Planning Aligned
 
+### July 13, 2026 Phase 10 Operator Baseline
+
+- ✅ Phase 10 now has a numbered operator workflow sequence: `00 Phase 10 Docker Dev HTTP End-to-End`, `01 Phase 10 Azure Deploy Orchestrator`, `02 Phase 10 Azure Runtime Smoke`, and `03 Phase 10 Azure Transport Smoke`.
+- ✅ The Phase 10 wrapper is the single Azure entry point for dry run, build, deploy, and resource-group cleanup; image build and Azure resource deployment remain internal child workflow responsibilities.
+- ✅ The workflow README and Phase 10 runbook now document which workflows to click, which workflows are internal, and which legacy App Service workflows should not be used for the active container-app path.
+- ✅ The local Docker Dev HTTP E2E path now has a named run-hook, `npm --prefix automation run xydatalabs-test-docker-local-e2e-dev`, plus a matching VS Code task, `1 Run: xydatalabs-test-docker-local-e2e-dev (Docker Dev HTTP E2E)`.
+- ✅ The latest Phase 10 Docker Dev HTTP E2E proof passed with smoke, integration, matrix, full validation, and cleanup logs under `TestResults/Playwright/phase10-docker-http`.
+- ✅ Gateway Azure diagnostics now echo the accepted host so ACA host-header mismatches can be diagnosed from the health response and smoke summaries.
+- ✅ Runtime smoke and transport smoke are separate post-deploy checks: runtime proves gateway/API/UI reachability, while transport proves Service Bus publish, consume, DLQ, and replay behavior.
+- ✅ Phase 10 retention cleanup is documented as housekeeping for GHCR package versions and GitHub artifacts; Azure teardown remains owned by the Phase 10 wrapper `cleanupInfra=true` path.
+- 🔜 ACR migration remains the preferred enterprise registry direction, but it is a follow-up implementation, not a blocker for the current GHCR-backed Phase 10 transport/operator baseline.
+- 🔜 SQL Server and Azure Cache for Redis are intentionally outside the current Phase 10 transport baseline unless a later platform expansion requires full application persistence parity in Azure Container Apps.
+
 ### June 5, 2026 Verification Freeze — Phase 8.7 Closeout
 
 - ✅ Phase 8.7 complete: Provider Webhook Receiver & Event-Driven Payment Lifecycle — signed provider webhooks, Inbox idempotency, async processor, `payment.captured` / `payment.failed` handlers, Outbox bridge, `PaymentAttempt.RowVersion`, and webhook metrics.

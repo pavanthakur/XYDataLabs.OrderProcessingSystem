@@ -200,17 +200,14 @@
             "problemMatcher": []
         },
         {
-            "label": "1 Run: Docker Dev HTTP 00 End-to-End Hook (Start + Ready + Smoke + Suite + Matrix + Full Validation)",
+            "label": "1 Run: xydatalabs-test-docker-local-e2e-dev (Docker Dev HTTP E2E)",
             "type": "shell",
-            "command": "pwsh",
+            "command": "npm",
             "args": [
-                "-NoProfile",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-File",
-                "scripts/run-phase10-docker-dev-e2e-hook.ps1",
-                "-StabilizationDelaySeconds",
-                "120"
+                "--prefix",
+                "automation",
+                "run",
+                "xydatalabs-test-docker-local-e2e-dev"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
@@ -805,7 +802,7 @@
             "label": "1 Run: Phase 10 Local Container Stack 01 Wait Ready + Keycloak",
             "dependsOrder": "sequence",
             "dependsOn": [
-                "1 Run: Phase 10 Local Container Stack 00 Start"
+                "1 Run: Phase 10 Local Container Stack 00 Start Stack Only"
             ],
             "type": "shell",
             "command": "pwsh",

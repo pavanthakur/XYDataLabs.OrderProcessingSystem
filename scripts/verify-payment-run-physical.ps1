@@ -80,8 +80,12 @@ $transcriptPath = Join-Path $runDir 'payment-matrix.log'
 $reportPath = Join-Path $runDir 'payment-matrix.report.json'
 $latestPointerPath = Join-Path $resultRoot 'latest-payment-matrix.txt'
 $null = Start-Transcript -Path $transcriptPath -Force
-$apiLogPatternToday = "webapi-$envTag-$runtimeTag-$Profile-$dateTag*.log"
-$apiLogPatternYesterday = "webapi-$envTag-$runtimeTag-$Profile-$yesterdayDateTag*.log"
+$logPrefixes = @('gateway', 'webapi')
+$apiLogPatterns = @(
+    $logPrefixes | ForEach-Object { "$_-$envTag-$runtimeTag-$Profile-$dateTag*.log" }
+    $logPrefixes | ForEach-Object { "$_-$envTag-$runtimeTag-$Profile-$yesterdayDateTag*.log" }
+    $logPrefixes | ForEach-Object { "$_-$envTag-$runtimeTag-$Profile-.log" }
+)
 $envLocalPath = Join-Path $repoRoot 'Resources\Docker\.env.local'
 
 $sharedDbName = if ($Runtime -eq 'local') {
@@ -270,47 +274,6 @@ function Get-SqlPasswordFromEnvLocal {
     return [string] $password
 }
 
-function Get-DockerSqlJsonPayload {
-    param(
-        [Parameter(Mandatory = $true)] [string] $Database,
-        [Parameter(Mandatory = $true)] [string] $Query
-    )
-
-    $normalizedQuery = $Query.Trim()
-    if ($normalizedQuery.EndsWith(';')) {
-        $normalizedQuery = $normalizedQuery.Substring(0, $normalizedQuery.Length - 1)
-    }
-
-    $jsonQuery = "$normalizedQuery FOR JSON PATH, INCLUDE_NULL_VALUES;"
-    $escapedQuery = $jsonQuery.Replace('"', '\"')
-    $shellCommand = [string]::Format(
-           'if [ -x /opt/mssql-tools18/bin/sqlcmd ]; then SQLCMD=/opt/mssql-tools18/bin/sqlcmd; else SQLCMD=/opt/mssql-tools/bin/sqlcmd; fi; "$SQLCMD" -C -S localhost -U sa -P "$SA_PASSWORD" -d "{0}" -w 65535 -y 0 -Y 0 -Q "SET NOCOUNT ON; {1}"',
-        $Database,
-        $escapedQuery)
-
-    $output = docker exec orderprocessing-sqlserver /bin/sh -lc $shellCommand 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        throw ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
-    }
-
-    $joinedOutput = ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
-    if ([string]::IsNullOrWhiteSpace($joinedOutput)) {
-        return ''
-    }
-
-    $jsonLine = @(
-        $joinedOutput -split '\r?\n' |
-            Where-Object { $_ -match '\[\s*\{.*\}\s*\]' -or $_ -match '\{\s*".*"\s*:\s*.*\}' } |
-            Select-Object -Last 1
-    )
-
-    if ([string]::IsNullOrWhiteSpace($jsonLine)) {
-        throw "Docker SQL query did not return a JSON payload. Raw output:`n$joinedOutput"
-    }
-
-    return $jsonLine.Trim()
-}
-
 function Get-LocalSqlConnectionString {
     param(
         [Parameter(Mandatory = $true)] [string] $Database
@@ -348,31 +311,28 @@ function Get-LocalSqlConnectionString {
     return $builder.ConnectionString
 }
 
+function Get-DockerSqlConnectionString {
+    param(
+        [Parameter(Mandatory = $true)] [string] $Database
+    )
+
+    $password = Get-SqlPasswordFromEnvLocal
+    return "Server=localhost,1433;Database=$Database;User Id=sa;Password=$password;Encrypt=False;TrustServerCertificate=True;MultipleActiveResultSets=true;"
+}
+
 function Invoke-PhysicalSqlQuery {
     param(
         [Parameter(Mandatory = $true)] [string] $Database,
         [Parameter(Mandatory = $true)] [string] $Query
     )
 
-    if ($Runtime -eq 'docker') {
-        $jsonPayload = Get-DockerSqlJsonPayload -Database $Database -Query $Query
-        if ([string]::IsNullOrWhiteSpace($jsonPayload)) {
-            return @()
-        }
-
-        $parsed = $jsonPayload | ConvertFrom-Json -Depth 20
-        if ($null -eq $parsed) {
-            return @()
-        }
-
-        if ($parsed -is [System.Array]) {
-            return @($parsed)
-        }
-
-        return @($parsed)
+    $connectionString = if ($Runtime -eq 'docker') {
+        Get-DockerSqlConnectionString -Database $Database
+    }
+    else {
+        Get-LocalSqlConnectionString -Database $Database
     }
 
-    $connectionString = Get-LocalSqlConnectionString -Database $Database
     $builder = [System.Data.SqlClient.SqlConnectionStringBuilder]::new($connectionString)
     $builder['Connect Timeout'] = 30
 
@@ -688,10 +648,10 @@ if (-not (Test-Path $logDirectory)) {
     throw "API log directory not found: $logDirectory"
 }
 
-$apiLogFiles = @(
-    Get-ChildItem -Path $logDirectory -Filter $apiLogPatternToday -File -ErrorAction SilentlyContinue
-    Get-ChildItem -Path $logDirectory -Filter $apiLogPatternYesterday -File -ErrorAction SilentlyContinue
-)
+$apiLogFiles = @()
+foreach ($pattern in $apiLogPatterns) {
+    $apiLogFiles += Get-ChildItem -Path $logDirectory -Filter $pattern -File -ErrorAction SilentlyContinue
+}
 if ($null -ne $apiLogFiles) {
     $apiLogFiles = @($apiLogFiles | Sort-Object Name -Unique)
 } else {
@@ -699,7 +659,8 @@ if ($null -ne $apiLogFiles) {
 }
 
 if ($apiLogFiles.Count -eq 0) {
-    throw "API log files not found for patterns '$apiLogPatternToday' or '$apiLogPatternYesterday' in $logDirectory"
+    $patternList = $apiLogPatterns -join "', '"
+    throw "API or gateway log files not found for patterns '$patternList' in $logDirectory"
 }
 
 $apiLogPaths = @($apiLogFiles | Select-Object -ExpandProperty FullName)

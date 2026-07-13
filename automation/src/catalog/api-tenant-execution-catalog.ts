@@ -48,7 +48,15 @@ export class ApiTenantExecutionCatalog implements TenantExecutionCatalog {
     }
     catch (error) {
       const message = error instanceof Error ? error.message : "Unknown tenant registry API failure.";
-      logger?.(`Tenant registry API lookup failed (${message}); falling back to local SQL.`);
+      if (this.target.runtime === "azure") {
+        logger?.(`Tenant registry API lookup failed (${message}); falling back to local SQL.`);
+      }
+      else if (message.includes("status 404")) {
+        logger?.(`Tenant registry API returned 404 on the ${this.target.runtime} parity path; using local SQL fallback.`);
+      }
+      else {
+        logger?.(`Tenant registry API lookup unavailable on the ${this.target.runtime} parity path (${message}); using local SQL fallback.`);
+      }
       return await loadTenantRegistryFromDatabase(this.target.runtime, this.target.environment, logger);
     }
   }
