@@ -15,7 +15,8 @@
 - ✅ The Phase 10 wrapper is the single Azure entry point for dry run, build, deploy, and resource-group cleanup; image build and Azure resource deployment remain internal child workflow responsibilities.
 - ✅ The workflow README and Phase 10 runbook now document which workflows to click, which workflows are internal, and which legacy App Service workflows should not be used for the active container-app path.
 - ✅ The local Docker Dev HTTP E2E path now has a named run-hook, `npm --prefix automation run xydatalabs-test-docker-local-e2e-dev`, plus a matching VS Code task, `1 Run: xydatalabs-test-docker-local-e2e-dev (Docker Dev HTTP E2E)`.
-- ✅ The latest Phase 10 Docker Dev HTTP E2E proof passed with smoke, integration, matrix, full validation, and cleanup logs under `TestResults/Playwright/phase10-docker-http`.
+- ✅ The latest Phase 10 Docker Dev HTTP E2E proof passed in GitHub Actions run `29268434294` with smoke, integration, matrix, and cleanup logs under `TestResults/Playwright/phase10-docker-http`.
+- ✅ The optional GitHub workflow `99` now always starts a fresh Docker stack on the hosted runner; the local-only `-SkipStartIfNeeded` reuse switch is intentionally not exposed in the GitHub UI.
 - ✅ Gateway Azure diagnostics now echo the accepted host so ACA host-header mismatches can be diagnosed from the health response and smoke summaries.
 - ✅ Runtime smoke and transport smoke are separate post-deploy checks: runtime proves gateway/API/UI reachability, while transport proves Service Bus publish, consume, DLQ, and replay behavior.
 - ✅ Phase 10 retention cleanup is documented as housekeeping for GHCR package versions and GitHub artifacts; Azure teardown remains owned by the Phase 10 wrapper `cleanupInfra=true` path.

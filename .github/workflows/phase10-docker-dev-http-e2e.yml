@@ -8,11 +8,6 @@ on:
         required: true
         default: 120
         type: number
-      skipStartIfNeeded:
-        description: 'Reuse an already running stack instead of starting it'
-        required: true
-        default: false
-        type: boolean
   pull_request:
     branches:
       - dev
@@ -41,7 +36,6 @@ jobs:
     timeout-minutes: 90
     env:
       STABILIZATION_DELAY_SECONDS: ${{ github.event_name == 'workflow_dispatch' && inputs.stabilizationDelaySeconds || 120 }}
-      SKIP_START_IF_NEEDED: ${{ github.event_name == 'workflow_dispatch' && inputs.skipStartIfNeeded || false }}
 
     steps:
       - name: Checkout code
@@ -98,9 +92,6 @@ jobs:
             '-File', 'scripts/run-phase10-docker-dev-e2e-hook.ps1',
             '-StabilizationDelaySeconds', $env:STABILIZATION_DELAY_SECONDS
           )
-          if ($env:SKIP_START_IF_NEEDED -eq 'true') {
-            $args += '-SkipStartIfNeeded'
-          }
           & pwsh @args
 
       - name: Print failure diagnostics
