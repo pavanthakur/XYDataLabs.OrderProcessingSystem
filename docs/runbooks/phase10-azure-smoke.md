@@ -28,10 +28,10 @@ These are the Phase 10 experience improvements that are worth carrying in the ac
 | Local-vs-CI mapping is documented in the runbook | Keeps VS Code tasks and GitHub Actions aligned for repeatable validation |
 | Build logs stay per service while the summary consolidates the end result | Preserves detailed logs without losing the top-level operator view |
 | Retention cleanup exists for GHCR and artifacts | Keeps storage and log accumulation under control without touching Azure runtime resources |
+| ACR cleanup is planned with the ACR cutover | Prevents the enterprise registry migration from creating a new image-retention gap |
 
-Keep these out of the active Phase 10 path unless a later review proves they are needed:
+Keep these out of the active Phase 10 transport baseline unless a later review proves they are needed:
 
-- ACR migration
 - Broad shared-contract extraction without real duplication
 - Extra platform layers that do not strengthen the current Azure transport slice
 
@@ -165,6 +165,7 @@ Use this matrix as the concrete follow-through plan for the Azure portal / CI/CD
 | App Service URLs | Legacy only | Not the active target; replace with containerized ingress/aliases | Archive docs/workflows, keep Phase 10 docs containerized | No operator expects `azurewebsites.net` for Phase 10 |
 | Observability | App Insights + LAW present | Add Monitor/trace/alerts as production baseline | `infra/main.phase10.bicep`, monitoring modules | Logs, traces, and alerts visible end to end |
 | Cleanup | RG teardown plus retention workflow | Symmetric lifecycle for all created resources | `phase10-deploy-orchestrator.yml`, retention cleanup workflow | Every created artifact/resource has a deletion story |
+| ACR image retention | Not active until ACR cutover | Scheduled ACR cleanup or purge policy | ACR cutover workflow / retention cleanup workflow | Stale ACR tags/manifests are removed without deleting active revision images |
 
 If you want human-friendly public URLs, choose:
 
@@ -197,14 +198,33 @@ Shared operator rule:
 - Cleanup is split by storage layer:
   - `cleanupInfra=true` removes the Azure environment-scoped resource group and everything inside it.
   - GHCR images are not removed by the deployment wrapper today.
-  - GitHub Actions logs and artifacts follow repository retention settings unless a dedicated cleanup flow is added.
-  - Log Analytics and Application Insights retain their own retention policies unless you change them separately.
+  - GitHub Actions logs follow repository or organization retention settings.
+  - Phase 10 artifacts uploaded by runtime, transport, and optional Docker E2E workflows use `retention-days: 14`.
+  - Log Analytics uses the workspace retention value from `infra/modules/loganalytics.phase10.bicep`, currently defaulted to `30` days.
   - `phase10-retention-cleanup.yml` handles GHCR package version cleanup and stale artifact cleanup without touching Azure deployment resources.
 
 Retention source of truth:
 - Artifact retention should be set on the upload step whenever the workflow owns the artifact.
 - GHCR package retention is handled by the scheduled cleanup workflow.
-- Azure Log Analytics retention is configured on the workspace, not in the deploy wrapper.
+- Azure Log Analytics retention is configured on the workspace module, not in the deploy wrapper.
+
+### Scheduled Cleanup Policy
+
+Phase 10 uses scheduled housekeeping for generated storage, not for live Azure environments:
+
+| Storage layer | Owner | Automatic cleanup | Default policy |
+|---|---|---|---|
+| GHCR container package versions | `Phase 10 Retention Cleanup (Internal)` | Yes, Sundays at `03:00 UTC` | Keep the latest `10` versions per image and delete older versions only when they are older than `30` days |
+| GitHub Actions artifacts | Upload steps plus `Phase 10 Retention Cleanup (Internal)` | Yes | Uploaded Phase 10 smoke artifacts retain for `14` days; scheduled cleanup deletes stale artifacts older than `30` days as a backup |
+| GitHub Actions logs | Repository or organization Actions settings | Yes, by platform setting | Keep at the repo/org standard; do not manage logs from the deploy wrapper |
+| Azure Resource Group and live services | `01 Phase 10 Azure Deploy Orchestrator` | No | Manual only with `cleanupInfra=true` |
+| Azure Log Analytics | `infra/modules/loganalytics.phase10.bicep` | Yes, by workspace retention | Default `30` days unless environment policy changes it |
+| Future ACR images | Future ACR cleanup workflow or ACR purge policy | Required with ACR cutover | Replace GHCR runtime cleanup after ACR cutover; keep latest approved versions and purge stale unreferenced images |
+
+Architectural rule:
+- It is safe to schedule cleanup for generated build outputs and stale image versions.
+- It is not safe to schedule destructive Azure environment deletion for dev/staging/prod.
+- Azure environment cleanup must remain an explicit operator action.
 
 ### Phase 10 include-now / defer-later checklist
 
@@ -217,27 +237,30 @@ Retention source of truth:
 | Local-vs-CI task mapping | Include now | Prevents drift between VS Code and GitHub Actions |
 | Per-service build logs plus consolidated summary | Include now | Retains detail without losing the executive view |
 | GHCR + artifact retention cleanup | Include now | Reduces storage and noise without expanding Azure scope |
-| ACR migration | Defer | Separate platform decision, not required for the current Phase 10 slice |
+| ACR migration + ACR image cleanup | Include in the ACR cutover slice | ACR is the enterprise registry target; cleanup must ship with the cutover, not after it |
 | Broad shared-contract extraction | Defer | Add only when duplication is proven across multiple services |
 | New platform layer unrelated to transport/deploy/operator UX | Defer | Avoid scope creep in Phase 10 |
 
 Default retention policy:
 - Keep the last `10` GHCR package versions per image.
-- Delete GitHub Actions artifacts older than `14` days.
+- Upload Phase 10 smoke artifacts with `retention-days: 14`.
+- Delete stale GitHub Actions artifacts older than `30` days in the scheduled cleanup workflow as a backup.
 - Use dry-run only for manual cleanup previews; the scheduled cleanup run should perform the actual deletion.
 
 | Area | Source of truth | Default |
 |---|---|---|
 | GHCR images | `phase10-retention-cleanup.yml` | Keep last `10` versions per image |
-| GitHub artifacts | workflow upload step + `phase10-retention-cleanup.yml` | `retention-days: 14` |
-| Azure Log Analytics | workspace setting / Bicep / Azure policy | Managed outside the deploy wrapper |
+| Future ACR images | ACR cleanup workflow or ACR purge policy | Keep latest approved versions; delete stale unreferenced images after the ACR cutover |
+| GitHub artifacts | workflow upload step + `phase10-retention-cleanup.yml` | Upload retention `14` days; scheduled cleanup threshold `30` days |
+| Azure Log Analytics | `infra/modules/loganalytics.phase10.bicep` / Azure policy | Workspace retention default `30` days |
 
 | Area | Current state | Remaining? |
 |---|---|---|
 | Azure resource-group teardown | Covered by `cleanupInfra=true` in the Phase 10 wrapper | No |
 | GHCR package cleanup | Covered by `phase10-retention-cleanup.yml` | No |
+| ACR package cleanup | Required when ACR becomes the active runtime registry | Yes, in the ACR cutover slice |
 | GitHub artifact retention | Covered by `retention-days` plus optional cleanup in the housekeeping workflow | No for the updated workflows |
-| Azure Log Analytics retention | Separate workspace/Bicep/Azure Policy decision | Yes, optional follow-up |
+| Azure Log Analytics retention | Covered by the workspace module default; environment-specific policy can tune it later | No blocker |
 
 Local-vs-CI guidance:
 - Use the local hook or VS Code tasks when you need to debug the Docker stack interactively.
