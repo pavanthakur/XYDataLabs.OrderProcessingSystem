@@ -20,8 +20,8 @@ Anchor flow for the first slice:
 | Azure dev deploy | Verified | GitHub Actions run `29273224237` built the Phase 10 images and deployed the dev Container Apps transport stack successfully. |
 | Phase 10 runtime smoke | Verified | GitHub Actions run `29273711615` proved gateway health, gateway-routed API JSON, UI static route, and UI API proxy bootstrap. |
 | Phase 10 transport / replay smoke | Verified | GitHub Actions run `29273881488` proved Service Bus publish, fan-out consume, controlled DLQ forwarding, DLQ replay receive, and replay publish/consume. |
-| Cleanup policy closeout | Covered for Phase 10 | GHCR cleanup and stale artifact cleanup are scheduled by `phase10-retention-cleanup.yml`, Phase 10 smoke artifacts use `retention-days: 14`, Azure teardown remains manual through `cleanupInfra=true`, and Log Analytics defaults to `30` days in the workspace module. |
-| ACR image cleanup policy | Required with ACR cutover | When Phase 10 moves runtime images from GHCR to ACR, the same implementation slice must add ACR image retention or purge automation before GHCR cleanup is retired. |
+| Cleanup policy closeout | Covered for Phase 10 | GHCR cleanup, ACR stale-tag cleanup, and stale artifact cleanup are scheduled by `phase10-retention-cleanup.yml`, Phase 10 smoke artifacts use `retention-days: 14`, Azure teardown remains manual through `cleanupInfra=true`, and Log Analytics defaults to `30` days in the workspace module. |
+| ACR image cleanup policy | Implemented with ACR cutover | The retention workflow cleans dev/staging/prod ACR tags while preserving images referenced by active Container App revisions. |
 
 ### Verified Azure Dev Proof
 
@@ -38,30 +38,30 @@ Anchor flow for the first slice:
 |---|---|---|
 | Azure resource-group teardown | Covered by `cleanupInfra=true` in the Phase 10 wrapper | No |
 | GHCR package cleanup | Covered by `phase10-retention-cleanup.yml`; weekly schedule keeps latest `10` package versions and deletes older versions after `30` days | No |
-| ACR package cleanup | Not active until ACR cutover | Yes, required in the same ACR implementation slice |
+| ACR package cleanup | Covered by `phase10-retention-cleanup.yml`; weekly schedule keeps latest `10` tags per service, deletes stale tags after `30` days, and skips active Container App revision images | No |
 | GitHub artifact retention | Covered by `retention-days: 14` on Phase 10 uploads plus scheduled stale-artifact cleanup after `30` days | No |
 | Azure Log Analytics retention | Covered by `infra/modules/loganalytics.phase10.bicep` default `30` day workspace retention | No blocker |
 | Azure resource-group scheduled deletion | Intentionally not automated | No; keep destructive cleanup manual |
 
 ### ACR Cleanup Implementation Plan
 
-ACR is the enterprise target for Phase 10 runtime images. The ACR cutover is not complete until image cleanup is implemented alongside the image publishing and runtime pull changes.
+ACR is the enterprise target for Phase 10 runtime images. The ACR cutover is not complete unless image cleanup is implemented alongside image publishing and runtime pull changes.
 
 | Step | Implementation requirement | Done when |
 |---|---|---|
-| 1 | Provision ACR with environment-aware naming and tags from the Phase 10 infra path | ACR appears in the target resource group or platform resource group with `env` and `app` tags |
+| 1 | Provision ACR with environment-aware naming and tags from the Phase 10 infra path | ACR appears in the target resource group with `env`, `app`, and `component` tags |
 | 2 | Build and push gateway, Orders, Inventory, Notifications, and UI images to ACR | The Phase 10 build workflow publishes service-specific ACR image refs |
 | 3 | Grant Container Apps runtime identity `AcrPull` | Container Apps pull ACR images without `GHCR_READ_TOKEN` |
-| 4 | Add ACR image cleanup automation | A scheduled cleanup or ACR purge task keeps the latest approved image versions and deletes stale tags/manifests |
+| 4 | Add ACR image cleanup automation | `phase10-retention-cleanup.yml` keeps the latest approved image versions and deletes stale tags/manifests |
 | 5 | Retire GHCR runtime dependency | `GHCR_READ_TOKEN` is no longer required by the active Azure deployment path |
 | 6 | Update summaries and runbooks | Deploy summary identifies ACR image refs and the cleanup policy owner |
 
-Recommended ACR retention default for dev:
+ACR retention default for dev:
 - Keep the latest `10` image versions per service.
 - Delete untagged or stale image manifests older than `30` days.
 - Keep cleanup in dry-run mode for the first manual validation, then enable the schedule after one successful ACR-backed deploy.
 
-Recommended ACR retention posture for staging/prod:
+ACR retention posture for staging/prod:
 - Use a longer retention window than dev.
 - Keep release tags that map to deployed revisions.
 - Do not delete images referenced by active or rollback Container App revisions.
@@ -79,7 +79,7 @@ Phase 10 is ready to call complete only when all of the following are true:
 - The first transport slice is anchored on the order-created path and still uses the canonical envelope contract.
 - `SharedContracts` is still deferred unless the transport slice proves real duplication across services.
 - Cleanup policy is explicit: GHCR cleanup is enforced by the scheduled cleanup workflow, artifact retention is handled at upload plus scheduled cleanup, Azure Log Analytics retention is set at the workspace module default, and destructive Azure resource cleanup stays manual through `cleanupInfra=true`.
-- If ACR is included in the Phase 10 closeout, ACR image cleanup is included in the same implementation slice and GHCR cleanup is left only as transitional housekeeping until runtime pulls move fully to ACR.
+- If ACR is included in the Phase 10 closeout, ACR image cleanup is included in the same implementation slice and GHCR cleanup is left only as transitional or historical housekeeping.
 - `infra/modules/servicebus.bicep` defines the topic/subscription topology, TTL, dead-letter forwarding, ownership rules, and transport credentials needed by the first flow.
 - `ServiceBusOptions.cs`, `MessageMetadataMapper.cs`, `ServiceBusMessageFactory.cs`, `ServiceBusEventPublisher.cs`, and `DlqReplayWorker.cs` exist and are wired together as the broker-facing adapter layer.
 - `StartupHelper.cs` registers the Service Bus adapter and DLQ worker while preserving the in-memory publisher as the local fallback.
@@ -219,7 +219,7 @@ Treat these as the smallest useful implementation slice for the first order-crea
 - `infra/modules/functions.bicep` supplies the DLQ intake/replay function and any reconciliation helper the first slice needs.
 - `infra/main.phase10.bicep` composes the Log Analytics, ACA, Service Bus, Functions, Key Vault, and Insights modules and wires the Service Bus transport connection into the runtime from the Service Bus module output.
 - The Phase 10 deployment parameters must supply real image refs for the Container Apps so the gateway and UI revisions can become healthy, with distinct backend images for Orders, Inventory, and Notifications.
-- `build-phase10-images.yml` publishes those host images to GHCR so the deployment parameters can point at real service-specific tags.
+- `phase10-deploy-orchestrator.yml` calls `build-phase10-images.yml` to publish those host images to ACR so the deployment parameters can point at real service-specific tags.
 - `infra/modules/keyvault.phase10.bicep`, `infra/modules/insights.phase10.bicep`, and `infra/modules/identity.phase10.bicep` are extended only enough to support the first transport slice.
 - Before smoke testing, verify the gateway revision is using the intended image and has at least one running replica.
 - `infra/parameters/dev.json`, `infra/parameters/staging.json`, and `infra/parameters/prod.json` carry the Phase 10 configuration values for that slice.

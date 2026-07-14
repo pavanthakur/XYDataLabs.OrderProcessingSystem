@@ -36,7 +36,7 @@ Use this rule before removing anything:
 | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Validation | Optional | Mirrors the local Docker Dev HTTP hook in CI |
 | `build-phase10-images.yml` | Internal | No | Builds and publishes the Phase 10 service images |
 | `infra-deploy.yml` | Internal | No | Deploys or cleans up the Phase 10 Azure stack and returns live URLs |
-| `phase10-retention-cleanup.yml` | Internal housekeeping | No for deploy | Scheduled/manual cleanup for old GHCR package versions and workflow artifacts |
+| `phase10-retention-cleanup.yml` | Internal housekeeping | No for deploy | Scheduled/manual cleanup for ACR image tags, fallback GHCR package versions, and workflow artifacts |
 | `azure-initial-setup.yml` | Bootstrap | Yes | One-time GitHub App + OIDC + secrets setup |
 | `azure-bootstrap.yml` | Historical | No for Phase 10 | Legacy App Service compatibility path only |
 | `deploy-api-to-azure.yml` | Historical | No for Phase 10 | Legacy App Service API deployment only |
@@ -64,7 +64,7 @@ Before approving any workflow or infrastructure change, ask:
 3. Is there a matching cleanup path and retention policy?
 4. Do the resource names stay env-suffixed and predictable?
 5. Do the workflow summary and child jobs expose traceable links?
-6. If we are bridging with GHCR, is ACR recorded as the follow-up implementation?
+6. If we are bridging with GHCR, is the exception explicit and time-bound?
 
 ### Which Workflow Should I Click?
 
@@ -76,7 +76,7 @@ Before approving any workflow or infrastructure change, ask:
 | Prove Phase 10 Service Bus publish/consume/DLQ/replay after runtime smoke | `03 Phase 10 Azure Transport Smoke` |
 | Build and publish Phase 10 images indirectly | `01 Phase 10 Azure Deploy Orchestrator` |
 | Deploy or clean up the Azure Phase 10 stack indirectly | `01 Phase 10 Azure Deploy Orchestrator` |
-| Clean old Phase 10 GHCR versions and workflow artifacts | Let `Phase 10 Retention Cleanup (Internal)` run on schedule; run manually only for housekeeping |
+| Clean old Phase 10 ACR tags, fallback GHCR versions, and workflow artifacts | Let `Phase 10 Retention Cleanup (Internal)` run on schedule; run manually only for housekeeping |
 | Do one-time GitHub App and OIDC bootstrap | `azure-initial-setup.yml` |
 | Work on archived App Service compatibility only | `azure-bootstrap.yml`, `deploy-api-to-azure.yml`, or `deploy-ui-to-azure.yml` |
 
@@ -90,7 +90,7 @@ Before approving any workflow or infrastructure change, ask:
 | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Optional validation | No | Local/runner build only | Local Docker only | Local Docker cleanup | Current validation |
 | `Build Phase 10 Service Images (Internal)` | Do not click for normal deploy | No | Yes | No | No | Current internal |
 | `Deploy Azure Phase 10 Resources (Internal)` | Do not click for normal deploy | Yes | No | Yes | Yes | Current internal |
-| `Phase 10 Retention Cleanup (Internal)` | Housekeeping only | No | No | No | GHCR/artifact retention only | Current internal |
+| `Phase 10 Retention Cleanup (Internal)` | Housekeeping only | No | No | No | ACR/GHCR/artifact retention only | Current internal |
 | `Azure Bootstrap & Deploy` | Do not use for Phase 10 | Legacy App Service stack | No | Legacy App Service only | Legacy App Service RG path | Legacy |
 | `Deploy API to Azure App Service` | Do not use for Phase 10 | No | No | Legacy API only | No | Legacy |
 | `Deploy React Frontend to Azure App Service` | Do not use for Phase 10 | No | No | Legacy UI only | No | Legacy |
@@ -112,7 +112,7 @@ or the VS Code task:
 | `validate-prompts.yml` | Prompt file governance and secret-pattern checks | Keep | Yes, if changing the validator path |
 | `azure-bootstrap.yml` | Legacy App Service bootstrap/deploy/cleanup | Keep for legacy compatibility | Yes |
 | `azure-initial-setup.yml` | One-time GitHub App, OIDC, and secrets bootstrap | Keep | Only if refactoring initial setup |
-| `build-phase10-images.yml` | Builds/pushes Phase 10 container images | Keep as internal reusable workflow | Yes, if changing image contracts |
+| `build-phase10-images.yml` | Builds/pushes Phase 10 container images to ACR through the wrapper | Keep as internal reusable workflow | Yes, if changing image contracts |
 | `ci.yml` | Main PR build/test/frontend validation gate | Keep | Yes, if changing CI flow |
 | `configure-github-secrets.yml` | Secret configuration and troubleshooting support | Keep | Yes, if changing setup flow |
 | `Copilot cloud agent` | Not a workflow file in this repo | N/A | N/A |
@@ -124,7 +124,7 @@ or the VS Code task:
 | `phase10-azure-runtime-smoke.yml` | Manual Phase 10 runtime/API/UI smoke after deploy | Keep as the direct post-deploy runtime proof | Yes, if changing gateway/API/UI runtime contracts |
 | `phase10-azure-transport-smoke.yml` | Manual Phase 10 transport/operator smoke after deploy | Keep as the direct post-deploy transport proof | Yes, if changing Service Bus topology or smoke contracts |
 | `phase10-docker-dev-http-e2e.yml` | CI mirror of the local Phase 10 Docker hook | Keep | Yes, if changing hook or log paths |
-| `phase10-retention-cleanup.yml` | Scheduled/manual Phase 10 GHCR and artifact housekeeping | Keep | Yes, if changing retention thresholds |
+| `phase10-retention-cleanup.yml` | Scheduled/manual Phase 10 ACR, fallback GHCR, and artifact housekeeping | Keep | Yes, if changing retention thresholds |
 | `validate-deployment.yml` | Reusable pre-deployment validation | Keep | Yes, if changing validation rules |
 | `publish-template-package.yml` | Template packaging / publishing | Keep | Yes, before publishing-path changes |
 | `test-validate-deployment.yml` | Tests the validation workflow itself | Keep | Yes, definitely |
@@ -147,7 +147,7 @@ This repo uses a small set of primary operational workflows, with additional sup
 | `phase10-azure-runtime-smoke.yml` | Manual after deploy | dev/staging/prod | Runs the Phase 10 Gateway/API/UI runtime smoke and writes a pass/fail operator summary |
 | `phase10-azure-transport-smoke.yml` | Manual after deploy | dev/staging/prod | Runs the Phase 10 Service Bus publish, consume, DLQ forwarding, and replay smoke and writes a pass/fail operator summary |
 | `infra-deploy.yml` | Reusable internal workflow | dev/staging/prod | Internal Phase 10 Bicep deployment and cleanup workflow with alias planning and guarded alias binding |
-| `build-phase10-images.yml` | Push to service host paths or wrapper-called internal workflow | GHCR | Builds and pushes the Phase 10 container images for gateway, orders, inventory, notifications, and UI |
+| `build-phase10-images.yml` | Wrapper-called internal workflow | ACR | Builds and pushes the Phase 10 container images for gateway, orders, inventory, notifications, and UI |
 | `phase10-docker-dev-http-e2e.yml` | Manual or PR changes to Phase 10 Docker hook paths | Validation only | Runs the local Docker Dev HTTP end-to-end hook in CI and uploads the same Phase 10 logs used by the VS Code task and runbook |
 | `validate-deployment.yml` | Called by infra-deploy | Reusable workflow | **[See README-VALIDATE-DEPLOYMENT.md](./README-VALIDATE-DEPLOYMENT.md)** - Pre-deployment validation workflow |
 | `test-validate-deployment.yml` | Manual or PR changes | Test only | **[Quick Start](./QUICK-START-TEST-VALIDATION.md)** \| **[Full Docs](./README-TEST-VALIDATE-DEPLOYMENT.md)** - Tests validation workflow independently |
@@ -185,7 +185,7 @@ Use the local hook for interactive debugging and the CI workflow to prove the sa
 | `ci.yml` | PR gate for build and unit/architecture test validation |
 | `azure-initial-setup.yml` | One-time repository and OIDC bootstrap |
 | `azure-bootstrap.yml` | Legacy App Service day-to-day environment bootstrap and coordinated deployment entrypoint |
-| `build-phase10-images.yml` | Phase 10 container image build/push internal reusable workflow for GHCR |
+| `build-phase10-images.yml` | Phase 10 container image build/push internal reusable workflow for ACR |
 | `phase10-deploy-orchestrator.yml` | Phase 10 manual wrapper that drives build + deploy or cleanup |
 | `phase10-azure-runtime-smoke.yml` | Phase 10 post-deploy Gateway/API/UI runtime validation |
 | `phase10-azure-transport-smoke.yml` | Phase 10 post-deploy Service Bus publish/consume/DLQ/replay validation |
@@ -215,7 +215,7 @@ Use the local hook for interactive debugging and the CI workflow to prove the sa
 | `staging` | orderprocessing-api-xyapp-stg | orderprocessing-ui-xyapp-stg |
 | `main` | orderprocessing-api-xyapp-prod | orderprocessing-ui-xyapp-prod |
 
-The table above intentionally shows both surfaces. The legacy App Service workflows remain for historical compatibility, while Phase 10 infra publishes Container Apps plus ingress endpoints from the Bicep deployment summary, and `build-phase10-images.yml` publishes the distinct gateway/orders/inventory/notifications/UI runtime images for those apps.
+The table above intentionally shows both surfaces. The legacy App Service workflows remain for historical compatibility, while Phase 10 infra publishes Container Apps plus ingress endpoints from the Bicep deployment summary, and the wrapper calls `build-phase10-images.yml` to publish distinct gateway/orders/inventory/notifications/UI runtime images to ACR for those apps.
 
 For Phase 10, the expected click path is:
 
@@ -304,10 +304,10 @@ git add XYDataLabs.OrderProcessingSystem.API/
 git commit -m "feat: Update API endpoint"
 git push origin dev  # Deploys API only to dev environment
 
-# Change a Phase 10 service host and push → triggers build-phase10-images.yml
+# Change a Phase 10 service host and push → validate through PR/CI, then use the Phase 10 wrapper for image build + deploy
 git add XYDataLabs.OrderProcessingSystem.Orders.API/
 git commit -m "feat: Update Orders host"
-git push origin dev  # Builds and pushes the Orders image to GHCR
+git push origin dev  # CI validates; run 01 Phase 10 Azure Deploy Orchestrator to publish the ACR image and deploy
 
 # Change React web code and push → triggers deploy-ui-to-azure.yml
 git add frontend/

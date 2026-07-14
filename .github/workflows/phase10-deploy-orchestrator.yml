@@ -90,15 +90,84 @@ jobs:
   build_images:
     name: Build Phase 10 Images
     if: ${{ !inputs.dryRun && !inputs.cleanupInfra }}
-    needs: [preflight]
+    needs: [preflight, prepare_acr]
     uses: ./.github/workflows/build-phase10-images.yml
     with:
       imageTag: phase10
+      registryLoginServer: ${{ needs.prepare_acr.outputs.acrLoginServer }}
+      registryName: ${{ needs.prepare_acr.outputs.acrName }}
+      environment: ${{ inputs.environment }}
+    secrets: inherit
+
+  prepare_acr:
+    name: Prepare Phase 10 ACR
+    if: ${{ !inputs.dryRun && !inputs.cleanupInfra }}
+    needs: [preflight]
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    outputs:
+      resourceGroup: ${{ steps.outputs.outputs.resourceGroup }}
+      acrName: ${{ steps.outputs.outputs.acrName }}
+      acrLoginServer: ${{ steps.outputs.outputs.acrLoginServer }}
+      acrPullIdentityId: ${{ steps.outputs.outputs.acrPullIdentityId }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Azure CLI Login (OIDC)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+
+      - name: Deploy ACR bootstrap
+        id: deploy
+        shell: bash
+        run: |
+          DEPLOYMENT_NAME="acr-${{ github.run_id }}-${{ github.run_attempt }}"
+          az deployment sub create \
+            --name "$DEPLOYMENT_NAME" \
+            --location "${{ inputs.location }}" \
+            --template-file infra/main.phase10.acr.bicep \
+            --parameters \
+              location="${{ inputs.location }}" \
+              environment="${{ inputs.environment }}" \
+              baseName="orderprocessing" \
+              githubOwner="${{ github.repository_owner }}"
+          echo "deploymentName=$DEPLOYMENT_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Capture ACR outputs
+        id: outputs
+        shell: bash
+        run: |
+          DEPLOYMENT_NAME="${{ steps.deploy.outputs.deploymentName }}"
+          RG_NAME=$(az deployment sub show --name "$DEPLOYMENT_NAME" --query "properties.outputs.resourceGroupName.value" -o tsv)
+          ACR_NAME=$(az deployment sub show --name "$DEPLOYMENT_NAME" --query "properties.outputs.acrName.value" -o tsv)
+          ACR_LOGIN_SERVER=$(az deployment sub show --name "$DEPLOYMENT_NAME" --query "properties.outputs.acrLoginServer.value" -o tsv)
+          ACR_PULL_IDENTITY_ID=$(az deployment sub show --name "$DEPLOYMENT_NAME" --query "properties.outputs.acrPullIdentityId.value" -o tsv)
+
+          echo "resourceGroup=${RG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "acrName=${ACR_NAME}" >> "$GITHUB_OUTPUT"
+          echo "acrLoginServer=${ACR_LOGIN_SERVER}" >> "$GITHUB_OUTPUT"
+          echo "acrPullIdentityId=${ACR_PULL_IDENTITY_ID}" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## 🧰 Phase 10 ACR Prepared"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Resource Group | ${RG_NAME} |"
+            echo "| ACR Name | ${ACR_NAME} |"
+            echo "| ACR Login Server | ${ACR_LOGIN_SERVER} |"
+            echo "| Pull Identity | ${ACR_PULL_IDENTITY_ID} |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   route_child_workflow:
     name: Phase 10 Routed Child Workflow
     runs-on: ubuntu-latest
-    needs: [preflight, build_images]
+    needs: [preflight, prepare_acr, build_images]
     if: always()
     outputs:
       should_call: ${{ steps.route.outputs.should_call }}
@@ -121,12 +190,14 @@ jobs:
             SHOULD_CALL="true"
             ROUTE_MODE="cleanup"
             ROUTE_REASON="destructive cleanup path"
-          elif [ "${{ needs.preflight.result }}" = "success" ] && [ "${{ needs.build_images.result }}" = "success" ]; then
+          elif [ "${{ needs.preflight.result }}" = "success" ] && [ "${{ needs.prepare_acr.result }}" = "success" ] && [ "${{ needs.build_images.result }}" = "success" ]; then
             SHOULD_CALL="true"
             ROUTE_MODE="deploy"
-            ROUTE_REASON="preflight and image build completed"
+            ROUTE_REASON="preflight, ACR preparation, and image build completed"
           elif [ "${{ needs.preflight.result }}" != "success" ]; then
             ROUTE_REASON="blocked by preflight result: ${{ needs.preflight.result }}"
+          elif [ "${{ needs.prepare_acr.result }}" != "success" ]; then
+            ROUTE_REASON="blocked by ACR preparation result: ${{ needs.prepare_acr.result }}"
           else
             ROUTE_REASON="blocked by image build result: ${{ needs.build_images.result }}"
           fi
@@ -149,8 +220,8 @@ jobs:
 
   deploy_or_cleanup:
     name: Deploy Azure Phase 10 Resources (Internal)
-    needs: [route_child_workflow]
-    if: ${{ needs.route_child_workflow.outputs.should_call == 'true' }}
+    needs: [prepare_acr, route_child_workflow]
+    if: ${{ always() && needs.route_child_workflow.outputs.should_call == 'true' }}
     uses: ./.github/workflows/infra-deploy.yml
     with:
       environment: ${{ inputs.environment }}
@@ -160,12 +231,19 @@ jobs:
       aliasMode: ${{ inputs.aliasMode }}
       dryRun: ${{ inputs.dryRun }}
       cleanupInfra: ${{ inputs.cleanupInfra }}
+      acrLoginServer: ${{ needs.prepare_acr.outputs.acrLoginServer }}
+      acrPullIdentityId: ${{ needs.prepare_acr.outputs.acrPullIdentityId }}
+      gatewayImage: ${{ needs.prepare_acr.outputs.acrLoginServer && format('{0}/orderprocessing-gateway:phase10', needs.prepare_acr.outputs.acrLoginServer) || '' }}
+      ordersImage: ${{ needs.prepare_acr.outputs.acrLoginServer && format('{0}/orderprocessing-orders:phase10', needs.prepare_acr.outputs.acrLoginServer) || '' }}
+      inventoryImage: ${{ needs.prepare_acr.outputs.acrLoginServer && format('{0}/orderprocessing-inventory:phase10', needs.prepare_acr.outputs.acrLoginServer) || '' }}
+      notificationsImage: ${{ needs.prepare_acr.outputs.acrLoginServer && format('{0}/orderprocessing-notifications:phase10', needs.prepare_acr.outputs.acrLoginServer) || '' }}
+      uiImage: ${{ needs.prepare_acr.outputs.acrLoginServer && format('{0}/orderprocessing-ui:phase10', needs.prepare_acr.outputs.acrLoginServer) || '' }}
     secrets: inherit
 
   gate_diagnostic:
     name: Phase 10 Routed Gate Diagnostic
     runs-on: ubuntu-latest
-    needs: [preflight, build_images, route_child_workflow, deploy_or_cleanup]
+    needs: [preflight, prepare_acr, build_images, route_child_workflow, deploy_or_cleanup]
     if: always()
     steps:
       - name: Write gate diagnostic
@@ -178,6 +256,7 @@ jobs:
           echo "| dryRun | ${{ inputs.dryRun }} |" >> $GITHUB_STEP_SUMMARY
           echo "| cleanupInfra | ${{ inputs.cleanupInfra }} |" >> $GITHUB_STEP_SUMMARY
           echo "| preflight | ${{ needs.preflight.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| prepare_acr | ${{ needs.prepare_acr.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| build_images | ${{ needs.build_images.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| route_child_workflow | ${{ needs.route_child_workflow.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| route_mode | ${{ needs.route_child_workflow.outputs.route_mode }} |" >> $GITHUB_STEP_SUMMARY
@@ -190,6 +269,8 @@ jobs:
             echo "| decision | cleanup path, deploy intentionally replaced by teardown |" >> $GITHUB_STEP_SUMMARY
           elif [ "${{ needs.preflight.result }}" != "success" ]; then
             echo "| decision | blocked before build/deploy by preflight |" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.prepare_acr.result }}" != "success" ]; then
+            echo "| decision | blocked before image build by ACR preparation |" >> $GITHUB_STEP_SUMMARY
           elif [ "${{ needs.build_images.result }}" != "success" ]; then
             echo "| decision | blocked before deploy by image build |" >> $GITHUB_STEP_SUMMARY
           elif [ "${{ needs.route_child_workflow.result }}" != "success" ]; then
@@ -203,7 +284,7 @@ jobs:
   summary:
     name: Phase 10 Run Summary
     runs-on: ubuntu-latest
-    needs: [preflight, build_images, route_child_workflow, deploy_or_cleanup, gate_diagnostic]
+    needs: [preflight, prepare_acr, build_images, route_child_workflow, deploy_or_cleanup, gate_diagnostic]
     if: always()
     steps:
       - name: Write summary
@@ -226,6 +307,7 @@ jobs:
           echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Phase 10 Preflight | ${{ needs.preflight.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Prepare Phase 10 ACR | ${{ needs.prepare_acr.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Build Phase 10 Images | ${{ needs.build_images.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Phase 10 Routed Child Workflow | ${{ needs.route_child_workflow.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Deploy Azure Phase 10 Resources (Internal) | ${{ needs.deploy_or_cleanup.result }} |" >> $GITHUB_STEP_SUMMARY
@@ -239,6 +321,9 @@ jobs:
           elif [ "${{ needs.preflight.result }}" != "success" ]; then
             echo "| Route Gate | blocked by Phase 10 preflight failure |" >> $GITHUB_STEP_SUMMARY
             echo "| Route Status Note | fix preflight before expecting Azure deployment |" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.prepare_acr.result }}" != "success" ]; then
+            echo "| Route Gate | blocked by ACR preparation failure |" >> $GITHUB_STEP_SUMMARY
+            echo "| Route Status Note | fix ACR creation/login before expecting image build or Azure deployment |" >> $GITHUB_STEP_SUMMARY
           elif [ "${{ needs.build_images.result }}" != "success" ]; then
             echo "| Route Gate | blocked by image build failure |" >> $GITHUB_STEP_SUMMARY
             echo "| Route Status Note | fix the image build before expecting Azure deployment |" >> $GITHUB_STEP_SUMMARY
@@ -283,6 +368,7 @@ jobs:
           echo "| Wrapper Run Attempt | ${{ github.run_attempt }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Wrapper Run URL | https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Deployment Name | ${{ needs.deploy_or_cleanup.outputs.deploymentName || '(not deployed)' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ACR Login Server | ${{ needs.prepare_acr.outputs.acrLoginServer || '(not prepared)' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Gateway URL | https://${{ needs.deploy_or_cleanup.outputs.gatewayFqdn || 'n/a' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Gateway Health | https://${{ needs.deploy_or_cleanup.outputs.gatewayFqdn || 'n/a' }}/ |" >> $GITHUB_STEP_SUMMARY
           echo "| Orders API Smoke | https://${{ needs.deploy_or_cleanup.outputs.gatewayFqdn || 'n/a' }}/api/v1/Info/runtime-configuration |" >> $GITHUB_STEP_SUMMARY
@@ -325,9 +411,9 @@ jobs:
           echo "| Resource | Automated? | Trigger |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|------------|---------|" >> $GITHUB_STEP_SUMMARY
           echo "| OIDC + GitHub Secrets | ✅ Prerequisite | Azure Initial Setup workflow |" >> $GITHUB_STEP_SUMMARY
-          echo "| Phase 10 service images | ✅ Yes | build-phase10-images.yml or wrapper run |" >> $GITHUB_STEP_SUMMARY
+          echo "| Azure Container Registry + AcrPull identity | ✅ Yes | phase10-deploy-orchestrator.yml with cleanupInfra=false |" >> $GITHUB_STEP_SUMMARY
+          echo "| Phase 10 service images | ✅ Yes | build-phase10-images.yml publishes to ACR from the wrapper run |" >> $GITHUB_STEP_SUMMARY
           echo "| Resource Group + Service Bus + Log Analytics + App Insights + Container Apps + Function App + Key Vault | ✅ Yes | phase10-deploy-orchestrator.yml with cleanupInfra=false |" >> $GITHUB_STEP_SUMMARY
-          echo "| ACR migration follow-up | 🔜 Planned | Replace GHCR runtime pulls with Azure Container Registry |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🗑️ What Can Be Safely Deleted and Re-Created" >> $GITHUB_STEP_SUMMARY
           echo "| Resource | Can Delete? | Notes |" >> $GITHUB_STEP_SUMMARY
@@ -363,5 +449,5 @@ jobs:
             echo "3. Confirm Gateway/API/UI runtime checks pass in that workflow summary." >> $GITHUB_STEP_SUMMARY
             echo "4. Run the **03 Phase 10 Azure Transport Smoke** workflow." >> $GITHUB_STEP_SUMMARY
             echo "5. Confirm publish/consume, DLQ forwarding, and replay checks pass in that workflow summary." >> $GITHUB_STEP_SUMMARY
-            echo "6. Track the ACR migration follow-up before retiring the GHCR runtime token." >> $GITHUB_STEP_SUMMARY
+            echo "6. Confirm ACR image refs and retention ownership before retiring the GHCR fallback token." >> $GITHUB_STEP_SUMMARY
           fi

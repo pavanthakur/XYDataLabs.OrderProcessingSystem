@@ -48,10 +48,10 @@ The reusable deploy workflow also registers the Azure resource providers it depe
 If you are looking for the other responsibilities in the new Phase 10 model:
 
 - `azure-initial-setup.yml` handles one-time repository and OIDC setup
-- `build-phase10-images.yml` handles image publication
+- `build-phase10-images.yml` handles wrapper-driven ACR image publication
 - `phase10-docker-dev-http-e2e.yml` handles local-vs-CI validation
 - `azure-bootstrap.yml`, `deploy-api-to-azure.yml`, and `deploy-ui-to-azure.yml` are legacy App Service workflows only and should not be treated as the active Phase 10 path
-- `phase10-retention-cleanup.yml` is the scheduled housekeeping workflow for GHCR image versions and stale GitHub Actions artifacts; it does not deploy or tear down Azure infrastructure
+- `phase10-retention-cleanup.yml` is the scheduled housekeeping workflow for ACR image tags, fallback GHCR image versions, and stale GitHub Actions artifacts; it does not deploy or tear down Azure infrastructure
 
 It supports three execution modes:
 
@@ -138,7 +138,7 @@ It supports three execution modes:
 Phase 10 cleanup is intentionally scoped to the Azure environment stack:
 
 - `Cleanup Infra=true` deletes the environment-scoped Azure resource group and the resources inside it.
-- `Cleanup Infra=true` does **not** delete GHCR images that were published by the build workflow.
+- `Cleanup Infra=true` does **not** delete container images that were published by the build workflow.
 - `Cleanup Infra=true` does **not** purge historical GitHub Actions logs or artifacts beyond the repository retention settings.
 - `Cleanup Infra=true` does **not** change Azure Log Analytics or Application Insights retention policies.
 
@@ -147,19 +147,22 @@ If image or log storage needs active housekeeping, add a separate scheduled clea
 Source-of-truth controls:
 
 - GitHub Actions artifact retention is set per upload step where practical.
-- GHCR package retention is handled by `phase10-retention-cleanup.yml`.
+- GHCR package retention is handled by `phase10-retention-cleanup.yml` for fallback or historical packages.
+- ACR image retention is handled by `phase10-retention-cleanup.yml` for the active Phase 10 runtime image path.
 - Azure Log Analytics retention is configured on the workspace itself.
-- Azure Container Apps image pulls use a GHCR read token supplied as the environment secret `GHCR_READ_TOKEN`.
+- Azure Container Apps image pulls use ACR with managed identity. `GHCR_READ_TOKEN` is only a fallback bridge when GHCR image refs are explicitly supplied.
 
 Default cleanup policy:
 
-- Keep the last `10` GHCR package versions per image.
+- Keep the last `10` GHCR package versions per image when fallback packages exist.
+- Keep the last `10` ACR tags per service image, skip tags referenced by active Container App revisions, and delete stale tags older than `30` days.
 - Delete GitHub Actions artifacts older than `14` days.
 - Run the scheduled cleanup workflow in delete mode, but keep the manual `workflow_dispatch` entry in dry-run mode unless you explicitly disable it for an audit run.
 
 | Area | Source of truth | Default |
 |---|---|---|
-| GHCR images | `phase10-retention-cleanup.yml` | Keep last `10` versions per image |
+| ACR images | `phase10-retention-cleanup.yml` | Keep last `10` tags per service and preserve active revision images |
+| GHCR images | `phase10-retention-cleanup.yml` | Keep last `10` versions per fallback image |
 | GitHub artifacts | workflow upload step + `phase10-retention-cleanup.yml` | `retention-days: 14` |
 | Azure Log Analytics | workspace setting / Bicep / Azure policy | Managed outside the deploy wrapper |
 
@@ -169,11 +172,11 @@ ACR should be treated as a production prerequisite for the runtime image path, n
 
 | Step | Goal | Current / Future |
 |---|---|---|
-| Keep `GHCR_READ_TOKEN` | Preserve the current private GHCR runtime path until ACR cutover is complete | Transitional |
-| Add ACR registry | Host Phase 10 images in Azure instead of GHCR | P0 before production |
-| Switch image publish path | Push build artifacts to ACR from the wrapper build step | P0 before production |
-| Switch image pull path | Let Azure Container Apps pull from ACR with Azure-native auth | P0 before production |
-| Retire GHCR runtime token | Remove the GHCR pull secret once ACR is stable | After ACR cutover |
+| Add ACR registry | Host Phase 10 images in Azure instead of GHCR | Current Phase 10 target |
+| Switch image publish path | Push build artifacts to ACR from the wrapper build step | Current Phase 10 target |
+| Switch image pull path | Let Azure Container Apps pull from ACR with Azure-native auth | Current Phase 10 target |
+| Keep `GHCR_READ_TOKEN` | Preserve a fallback bridge only when GHCR image refs are explicitly supplied | Transitional fallback |
+| Retire GHCR runtime token | Remove the GHCR pull secret once the ACR path is stable across environments | After ACR verification |
 
 Target end state:
 

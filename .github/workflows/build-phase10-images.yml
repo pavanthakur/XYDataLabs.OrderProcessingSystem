@@ -8,45 +8,52 @@ on:
         required: false
         default: 'phase10'
         type: string
-  push:
-    branches: [dev, staging, main]
-    paths:
-      - 'XYDataLabs.OrderProcessingSystem.Gateway/**'
-      - 'XYDataLabs.OrderProcessingSystem.Orders.API/**'
-      - 'XYDataLabs.OrderProcessingSystem.Inventory.API/**'
-      - 'XYDataLabs.OrderProcessingSystem.Notifications.API/**'
-      - 'frontend/**'
-      - '.github/workflows/build-phase10-images.yml'
-
+      registryLoginServer:
+        description: 'Optional ACR login server. Falls back to GHCR when omitted.'
+        required: false
+        default: ''
+        type: string
+      registryName:
+        description: 'Optional ACR name used for Azure login.'
+        required: false
+        default: ''
+        type: string
+      environment:
+        description: 'Target GitHub environment for Azure-backed registry login.'
+        required: false
+        default: 'dev'
+        type: string
 permissions:
   contents: read
+  id-token: write
   packages: write
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'workflow_call' && inputs.environment || 'dev' }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - name: gateway
-            image: ghcr.io/${{ github.repository_owner }}/orderprocessing-gateway
+            repository: orderprocessing-gateway
             dockerfile: XYDataLabs.OrderProcessingSystem.Gateway/Dockerfile
             context: .
           - name: orders
-            image: ghcr.io/${{ github.repository_owner }}/orderprocessing-orders
+            repository: orderprocessing-orders
             dockerfile: XYDataLabs.OrderProcessingSystem.Orders.API/Dockerfile
             context: .
           - name: inventory
-            image: ghcr.io/${{ github.repository_owner }}/orderprocessing-inventory
+            repository: orderprocessing-inventory
             dockerfile: XYDataLabs.OrderProcessingSystem.Inventory.API/Dockerfile
             context: .
           - name: notifications
-            image: ghcr.io/${{ github.repository_owner }}/orderprocessing-notifications
+            repository: orderprocessing-notifications
             dockerfile: XYDataLabs.OrderProcessingSystem.Notifications.API/Dockerfile
             context: .
           - name: ui
-            image: ghcr.io/${{ github.repository_owner }}/orderprocessing-ui
+            repository: orderprocessing-ui
             dockerfile: frontend/apps/web/Dockerfile
             context: .
 
@@ -62,8 +69,30 @@ jobs:
             TAG="${{ github.sha }}"
           fi
           echo "imageTag=$TAG" >> $GITHUB_OUTPUT
+          if [ -n "${{ inputs.registryLoginServer }}" ]; then
+            echo "image=${{ inputs.registryLoginServer }}/${{ matrix.repository }}" >> $GITHUB_OUTPUT
+            echo "registry=acr" >> $GITHUB_OUTPUT
+          else
+            echo "image=ghcr.io/${{ github.repository_owner }}/${{ matrix.repository }}" >> $GITHUB_OUTPUT
+            echo "registry=ghcr" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Azure CLI Login for ACR
+        if: ${{ steps.tag.outputs.registry == 'acr' }}
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+
+      - name: Log in to Azure Container Registry
+        if: ${{ steps.tag.outputs.registry == 'acr' }}
+        shell: bash
+        run: |
+          az acr login --name "${{ inputs.registryName }}"
 
       - name: Log in to GitHub Container Registry
+        if: ${{ steps.tag.outputs.registry == 'ghcr' }}
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -77,5 +106,18 @@ jobs:
           file: ${{ matrix.dockerfile }}
           push: true
           tags: |
-            ${{ matrix.image }}:${{ steps.tag.outputs.imageTag }}
-            ${{ matrix.image }}:latest
+            ${{ steps.tag.outputs.image }}:${{ steps.tag.outputs.imageTag }}
+            ${{ steps.tag.outputs.image }}:latest
+
+      - name: Image summary
+        shell: bash
+        run: |
+          {
+            echo "## Image published: ${{ matrix.name }}"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Registry | ${{ steps.tag.outputs.registry }} |"
+            echo "| Repository | ${{ steps.tag.outputs.image }} |"
+            echo "| Tag | ${{ steps.tag.outputs.imageTag }} |"
+          } >> "$GITHUB_STEP_SUMMARY"

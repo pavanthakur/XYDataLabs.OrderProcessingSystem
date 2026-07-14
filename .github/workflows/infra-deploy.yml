@@ -45,6 +45,41 @@ on:
         required: true
         default: false
         type: boolean
+      acrLoginServer:
+        description: 'Optional ACR login server for Phase 10 runtime images'
+        required: false
+        default: ''
+        type: string
+      acrPullIdentityId:
+        description: 'Optional user-assigned identity resource id used by ACA for ACR pulls'
+        required: false
+        default: ''
+        type: string
+      gatewayImage:
+        description: 'Gateway image override'
+        required: false
+        default: ''
+        type: string
+      ordersImage:
+        description: 'Orders image override'
+        required: false
+        default: ''
+        type: string
+      inventoryImage:
+        description: 'Inventory image override'
+        required: false
+        default: ''
+        type: string
+      notificationsImage:
+        description: 'Notifications image override'
+        required: false
+        default: ''
+        type: string
+      uiImage:
+        description: 'UI image override'
+        required: false
+        default: ''
+        type: string
   pull_request:
     branches: [main]
     paths:
@@ -75,6 +110,7 @@ jobs:
           echo "| environment | ${{ inputs.environment }} |" >> $GITHUB_STEP_SUMMARY
           echo "| location | ${{ inputs.location }} |" >> $GITHUB_STEP_SUMMARY
           echo "| ghcr_read_token_check | validated in the environment-scoped deploy/validate job |" >> $GITHUB_STEP_SUMMARY
+          echo "| acr_login_server | ${{ inputs.acrLoginServer || '(not provided)' }} |" >> $GITHUB_STEP_SUMMARY
 
   route:
     name: Routed Deploy Decision
@@ -186,6 +222,23 @@ jobs:
           fi
           echo "ghcrUsername=${{ github.repository_owner }}" >> $GITHUB_OUTPUT
           echo "ghcrReadToken=${{ secrets.GHCR_READ_TOKEN }}" >> $GITHUB_OUTPUT
+            ACR_NAME="$(printf 'xyops%s' "${{ github.repository_owner }}orderprocessing${{ github.event_name == 'workflow_call' && inputs.environment || 'dev' }}" | tr '[:upper:]' '[:lower:]' | tr -d '-')"
+          ACR_LOGIN_SERVER="${{ inputs.acrLoginServer }}"
+          if [ -z "$ACR_LOGIN_SERVER" ]; then
+            ACR_LOGIN_SERVER="${ACR_NAME}.azurecr.io"
+          fi
+          echo "acrLoginServer=${ACR_LOGIN_SERVER}" >> $GITHUB_OUTPUT
+          echo "acrPullIdentityId=${{ inputs.acrPullIdentityId }}" >> $GITHUB_OUTPUT
+          echo "gatewayImage=${{ inputs.gatewayImage || '' }}" >> $GITHUB_OUTPUT
+          echo "ordersImage=${{ inputs.ordersImage || '' }}" >> $GITHUB_OUTPUT
+          echo "inventoryImage=${{ inputs.inventoryImage || '' }}" >> $GITHUB_OUTPUT
+          echo "notificationsImage=${{ inputs.notificationsImage || '' }}" >> $GITHUB_OUTPUT
+          echo "uiImage=${{ inputs.uiImage || '' }}" >> $GITHUB_OUTPUT
+          if [ -z "${{ inputs.gatewayImage }}" ]; then echo "gatewayImage=${ACR_LOGIN_SERVER}/orderprocessing-gateway:phase10" >> $GITHUB_OUTPUT; fi
+          if [ -z "${{ inputs.ordersImage }}" ]; then echo "ordersImage=${ACR_LOGIN_SERVER}/orderprocessing-orders:phase10" >> $GITHUB_OUTPUT; fi
+          if [ -z "${{ inputs.inventoryImage }}" ]; then echo "inventoryImage=${ACR_LOGIN_SERVER}/orderprocessing-inventory:phase10" >> $GITHUB_OUTPUT; fi
+          if [ -z "${{ inputs.notificationsImage }}" ]; then echo "notificationsImage=${ACR_LOGIN_SERVER}/orderprocessing-notifications:phase10" >> $GITHUB_OUTPUT; fi
+          if [ -z "${{ inputs.uiImage }}" ]; then echo "uiImage=${ACR_LOGIN_SERVER}/orderprocessing-ui:phase10" >> $GITHUB_OUTPUT; fi
       
       - name: Azure CLI Login (OIDC)
         uses: azure/login@v3
@@ -220,9 +273,14 @@ jobs:
           done
           echo "✅ Azure resource providers are ready."
 
-      - name: Validate GHCR Pull Credentials
+      - name: Validate Registry Pull Configuration
         shell: bash
         run: |
+          if [ -n "${{ steps.params.outputs.acrLoginServer }}" ]; then
+            echo "✅ ACR runtime image path selected: ${{ steps.params.outputs.acrLoginServer }}" >> $GITHUB_STEP_SUMMARY
+            exit 0
+          fi
+
           if [ -z "${{ secrets.GHCR_READ_TOKEN }}" ]; then
             echo "❌ GHCR_READ_TOKEN is missing from the '${{ inputs.environment }}' environment." >> $GITHUB_STEP_SUMMARY
             echo "Azure Container Apps need this token to pull private GHCR images during revision startup." >> $GITHUB_STEP_SUMMARY
@@ -243,7 +301,14 @@ jobs:
             --template-file "$TEMPLATE_FILE" \
             --parameters @"${PARAM_FILE}" \
             --parameters ghcrUsername="${{ steps.params.outputs.ghcrUsername }}" \
-            --parameters ghcrReadToken="${{ steps.params.outputs.ghcrReadToken }}"
+            --parameters ghcrReadToken="${{ steps.params.outputs.ghcrReadToken }}" \
+            --parameters acrLoginServer="${{ steps.params.outputs.acrLoginServer }}" \
+            --parameters acrPullIdentityId="${{ steps.params.outputs.acrPullIdentityId }}" \
+            --parameters gatewayImage="${{ steps.params.outputs.gatewayImage }}" \
+            --parameters ordersImage="${{ steps.params.outputs.ordersImage }}" \
+            --parameters inventoryImage="${{ steps.params.outputs.inventoryImage }}" \
+            --parameters notificationsImage="${{ steps.params.outputs.notificationsImage }}" \
+            --parameters uiImage="${{ steps.params.outputs.uiImage }}"
 
   pre-validate:
     name: Pre-Deployment Validation
@@ -304,6 +369,23 @@ jobs:
           echo "phase10=true" >> $GITHUB_OUTPUT
           echo "ghcrUsername=${{ github.repository_owner }}" >> $GITHUB_OUTPUT
           echo "ghcrReadToken=${{ secrets.GHCR_READ_TOKEN }}" >> $GITHUB_OUTPUT
+          ACR_LOGIN_SERVER="${{ inputs.acrLoginServer }}"
+          if [ -z "$ACR_LOGIN_SERVER" ]; then
+            ACR_NAME="$(printf 'xyops%s' "${{ github.repository_owner }}orderprocessing${{ inputs.environment }}" | tr '[:upper:]' '[:lower:]' | tr -d '-')"
+            ACR_LOGIN_SERVER="${ACR_NAME}.azurecr.io"
+          fi
+          echo "acrLoginServer=${ACR_LOGIN_SERVER}" >> $GITHUB_OUTPUT
+          echo "acrPullIdentityId=${{ inputs.acrPullIdentityId }}" >> $GITHUB_OUTPUT
+          echo "gatewayImage=${{ inputs.gatewayImage || '' }}" >> $GITHUB_OUTPUT
+          echo "ordersImage=${{ inputs.ordersImage || '' }}" >> $GITHUB_OUTPUT
+          echo "inventoryImage=${{ inputs.inventoryImage || '' }}" >> $GITHUB_OUTPUT
+          echo "notificationsImage=${{ inputs.notificationsImage || '' }}" >> $GITHUB_OUTPUT
+          echo "uiImage=${{ inputs.uiImage || '' }}" >> $GITHUB_OUTPUT
+          if [ -z "${{ inputs.gatewayImage }}" ]; then echo "gatewayImage=${ACR_LOGIN_SERVER}/orderprocessing-gateway:phase10" >> $GITHUB_OUTPUT; fi
+          if [ -z "${{ inputs.ordersImage }}" ]; then echo "ordersImage=${ACR_LOGIN_SERVER}/orderprocessing-orders:phase10" >> $GITHUB_OUTPUT; fi
+          if [ -z "${{ inputs.inventoryImage }}" ]; then echo "inventoryImage=${ACR_LOGIN_SERVER}/orderprocessing-inventory:phase10" >> $GITHUB_OUTPUT; fi
+          if [ -z "${{ inputs.notificationsImage }}" ]; then echo "notificationsImage=${ACR_LOGIN_SERVER}/orderprocessing-notifications:phase10" >> $GITHUB_OUTPUT; fi
+          if [ -z "${{ inputs.uiImage }}" ]; then echo "uiImage=${ACR_LOGIN_SERVER}/orderprocessing-ui:phase10" >> $GITHUB_OUTPUT; fi
       
       - name: Azure CLI Login (OIDC)
         uses: azure/login@v3
@@ -338,9 +420,14 @@ jobs:
           done
           echo "✅ Azure resource providers are ready."
 
-      - name: Validate GHCR Pull Credentials
+      - name: Validate Registry Pull Configuration
         shell: bash
         run: |
+          if [ -n "${{ steps.params.outputs.acrLoginServer }}" ]; then
+            echo "✅ ACR runtime image path selected: ${{ steps.params.outputs.acrLoginServer }}" >> $GITHUB_STEP_SUMMARY
+            exit 0
+          fi
+
           if [ -z "${{ secrets.GHCR_READ_TOKEN }}" ]; then
             echo "❌ GHCR_READ_TOKEN is missing from the '${{ inputs.environment }}' environment." >> $GITHUB_STEP_SUMMARY
             echo "Azure Container Apps need this token to pull private GHCR images during revision startup." >> $GITHUB_STEP_SUMMARY
@@ -389,7 +476,14 @@ jobs:
             --template-file ${{ steps.params.outputs.template }} \
             --parameters @${{ steps.params.outputs.file }} \
             --parameters ghcrUsername="${{ steps.params.outputs.ghcrUsername }}" \
-            --parameters ghcrReadToken="${{ steps.params.outputs.ghcrReadToken }}"
+            --parameters ghcrReadToken="${{ steps.params.outputs.ghcrReadToken }}" \
+            --parameters acrLoginServer="${{ steps.params.outputs.acrLoginServer }}" \
+            --parameters acrPullIdentityId="${{ steps.params.outputs.acrPullIdentityId }}" \
+            --parameters gatewayImage="${{ steps.params.outputs.gatewayImage }}" \
+            --parameters ordersImage="${{ steps.params.outputs.ordersImage }}" \
+            --parameters inventoryImage="${{ steps.params.outputs.inventoryImage }}" \
+            --parameters notificationsImage="${{ steps.params.outputs.notificationsImage }}" \
+            --parameters uiImage="${{ steps.params.outputs.uiImage }}"
       
       - name: Get Deployment Outputs
         id: outputs
@@ -411,6 +505,8 @@ jobs:
           FUNC_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.functionAppName.value" -o tsv)
           KV_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.keyVaultName.value" -o tsv)
           AI_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.appInsightsName.value" -o tsv)
+          ACR_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.acrName.value" -o tsv)
+          ACR_LOGIN_SERVER=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.acrLoginServer.value" -o tsv)
 
           echo "rg=${RG_NAME}" >> $GITHUB_OUTPUT
           echo "sb=${SB_NAME}" >> $GITHUB_OUTPUT
@@ -426,6 +522,8 @@ jobs:
           echo "function=${FUNC_NAME}" >> $GITHUB_OUTPUT
           echo "keyvault=${KV_NAME}" >> $GITHUB_OUTPUT
           echo "insights=${AI_NAME}" >> $GITHUB_OUTPUT
+          echo "acr=${ACR_NAME}" >> $GITHUB_OUTPUT
+          echo "acrLoginServer=${ACR_LOGIN_SERVER}" >> $GITHUB_OUTPUT
 
       - name: Resolve Friendly Aliases
         id: aliases
@@ -596,6 +694,8 @@ jobs:
           echo "- **Function App:** ${{ steps.outputs.outputs.function }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Key Vault:** ${{ steps.outputs.outputs.keyvault }}" >> $GITHUB_STEP_SUMMARY
           echo "- **App Insights:** ${{ steps.outputs.outputs.insights }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Azure Container Registry:** ${{ steps.outputs.outputs.acr }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **ACR Login Server:** ${{ steps.outputs.outputs.acrLoginServer }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### ✅ Next Steps" >> $GITHUB_STEP_SUMMARY
           echo "1. Verify the outputs against the runbook." >> $GITHUB_STEP_SUMMARY
