@@ -213,8 +213,12 @@ The expanded .NET 10 + Aspire + cloud-native skill tree is being imported as an 
 | Cloud networking, ingress, CORS, TLS, API gateway, Front Door / APIM style concerns | Phase 10 + Phase 12 |
 | Integration testing, Testcontainers discipline, distributed app testability | Phase 9 + Phase 13 |
 | API consumer experience, stronger docs UX, and explicit contract governance | Phase 12 |
+| ACR image ownership, cleanup, SBOM, vulnerability scanning, and supply-chain evidence | Phase 10 ACR cutover + Phase 12 |
+| Observability dashboards, dependency maps, alerts, and incident workbooks | Phase 12 + Phase 13 |
 | Performance, caching, cost awareness, troubleshooting and diagnostics runbooks | Phase 12 + Phase 13 |
 | Background jobs for replay, rebuild, cleanup, and maintenance | Phase 12 + Phase 14 |
+| AKS/Kubernetes or Kafka adoption | Post-14 assessment only unless a concrete platform or product requirement appears |
+| Azure AI Search, Azure OpenAI, AI agents, and AI-assisted product features | Post-14 horizons unless a product use case promotes them |
 | Modern local development and orchestration experience | Phase 9 (Aspire-Lite) + Phase 13 |
 
 Use this as the rule for future edits: import the **enterprise pattern** when it strengthens the architecture, but only import the **specific technology** when it improves this repository's Azure-first production story or is intentionally isolated as a portability showcase.

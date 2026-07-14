@@ -260,9 +260,10 @@ Broad checklist:
 - Maintain health checks for database, cache, storage, and transport dependencies as an operational contract.
 - Standardize rate-limiting and tenant-aware quota policy as operational guardrails, not one-off endpoint tweaks.
 - Mature per-service CI/CD, rollback, and image-scanning flows.
+- Add supply-chain guardrails: SBOM generation, vulnerability scanning, registry retention, and evidence retention for release artifacts.
 - Harden API consumer experience: error contracts, versioning posture, generated-client expectations, and documentation quality.
 - Improve API consumer experience deliberately: stable OpenAPI surface, stronger docs UX, and explicit contract governance for frontend and operator tooling.
-- Add the required runbooks, dashboards, alerts, and cost/performance operating guidance.
+- Add the required runbooks, Azure Monitor dashboards, Application Insights workbooks, alert rules, and cost/performance operating guidance.
 - Establish a background-job lane for replay, rebuild, cleanup, and maintenance work where these tasks do not belong in request handlers.
 - Finish the .NET 10 assessment and keep the runtime-upgrade decision evidence-based.
 
@@ -342,7 +343,10 @@ The Julio Casal bootcamp stack is being used here as an **enterprise capability 
 | Configuration management, Options Pattern discipline, App Configuration, secret rollout safety | Phase 10 + Phase 12 |
 | Cloud networking, ingress, gateway, CORS, TLS, Front Door / APIM concerns | Phase 10 + Phase 12 |
 | Integration and distributed testing, including containerized and orchestration-aware validation | Phase 9 + Phase 13 |
+| Container registry ownership, image retention, SBOM, scanning, and supply-chain evidence | Phase 10 ACR cutover + Phase 12 |
 | Performance, caching, cost optimization, production troubleshooting and diagnostics | Phase 12 + Phase 13 |
+| Optional Kubernetes or Kafka adoption | Post-14 assessment only, unless a concrete platform requirement appears earlier |
+| AI-assisted product capabilities: Azure AI Search, Azure OpenAI, AI agents, and summarization | Post-14 horizons only, unless a product requirement promotes them |
 | Modern local development and orchestration | Phase 9 (Aspire-Lite) + Phase 13 |
 
 ### Explicit non-goals for the current production path
@@ -385,6 +389,11 @@ The external starter-kit benchmark is useful as an enterprise guide, but we are 
 | File/storage ingestion and attachment flow | Adopt | Phase 10 | Keep Blob-backed attachment handling, upload abstraction, and downstream processing in the cloud transport phase, not as a local-only helper. |
 | Mailing / notification dispatch | Adopt | Phase 11 + Phase 12 | Keep outbound mail or async notification delivery under the Notifications module instead of scattering providers across features. |
 | CQRS read models, projections, and snapshot/rebuild jobs | Adopt | Phase 14 | These belong after service autonomy and orchestration maturity are in place. |
+| Azure Container Registry, runtime image ownership, and image retention | Adopt | Phase 10 + Phase 12 | ACR is the enterprise runtime-image target; cleanup, SBOM, and scan evidence must travel with the cutover instead of becoming a later afterthought. |
+| Observability dashboards, alert workbooks, and dependency maps | Adopt | Phase 12 + Phase 13 | Move beyond raw traces by creating operator-facing dashboards for gateway, transport, ACA revisions, DLQ, latency, and dependency health. |
+| AKS / Kubernetes platform adoption | Assess only | Post-14 / platform need | ACA remains the current default. Promote AKS only if the system needs cluster-level control, custom operators, service mesh depth, or enterprise platform standardization. |
+| Kafka / streaming platform adoption | Assess only | Post-14 / product need | Service Bus remains the work-distribution and enterprise messaging default. Promote Kafka only for high-throughput event streams, replayable logs, or cross-domain analytics needs that Service Bus/Event Grid do not satisfy. |
+| Azure AI Search, Azure OpenAI, and AI agent capabilities | Defer to product horizon | Horizon 16+ | Keep AI features out of the core platform unless a real support, search, summarization, or automation use case appears. |
 | Alternate identity provider parity proof | Defer to local-only proof | Phase 9.5 | Keycloak remains a portability showcase; Azure production continues to use Microsoft Entra ID. |
 | SignalR / SSE real-time UI streams | Defer unless product need appears | Phase 13+ / product need | Keep real-time UI channels out of the base roadmap until a concrete user journey requires them. |
 | Admin impersonation / delegated support workflows | Defer unless product need appears | Phase 12+ / product need | Only add delegated support flows if the product genuinely needs staff-level troubleshooting or customer support impersonation. |
@@ -1791,6 +1800,8 @@ These lanes are intentionally beyond the core 14-phase architecture. They captur
 - **Notification dispatch** — keep outbound mail and async notification delivery inside a single module boundary.
 - **Generated API docs and SDKs** — treat OpenAPI/Scalar-style docs and typed client generation as a first-class consumable surface.
 - **Path-scoped CI and test governance** — preserve warnings-as-errors, path-specific pipelines, and the full automated matrix without forcing everything through one giant workflow.
+- **Enterprise observability workbooks** — deepen Azure Monitor, Application Insights, dependency maps, SLO views, DLQ dashboards, cost views, and incident triage workbooks after the core platform is stable.
+- **Supply-chain evidence maturity** — standardize SBOM retention, vulnerability scan retention, signed-image evidence, and release traceability once ACR is the active registry.
 
 ### Horizon 16 — Optional Channels & Expansion
 
@@ -1802,6 +1813,9 @@ These lanes are intentionally beyond the core 14-phase architecture. They captur
 - **Delegated support / impersonation** — staff-grade support workflows for troubleshooting or service operations, only if the business needs them.
 - **Multi-frontend expansion** — admin console, mobile client, or additional web surfaces beyond the current React web app.
 - **Search and discovery** — add a dedicated search/indexing experience if the domain needs efficient cross-entity lookup.
+- **Azure AI Search / Azure OpenAI / AI agents** — add AI-assisted search, summarization, support automation, or operator copilots only when the product has a concrete user journey.
+- **Kafka or streaming platform assessment** — evaluate Kafka only if the product needs high-throughput streams, long retention, stream processing, or replayable analytics beyond Service Bus/Event Grid.
+- **AKS / Kubernetes platform assessment** — evaluate AKS only if the application needs cluster-level extensibility, custom ingress/service mesh, platform team standardization, or Kubernetes-native operations beyond ACA.
 - **Template / CLI packaging** — productize the repo as an internal starter kit or bootstrap template only if reuse becomes a real objective.
 
 ### Horizon Rules
