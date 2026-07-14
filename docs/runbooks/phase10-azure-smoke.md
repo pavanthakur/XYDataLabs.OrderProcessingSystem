@@ -56,6 +56,14 @@ az role assignment create \
 
 Use the object id printed in the `Prepare Phase 10 ACR` summary, or the object id shown in the failed Azure deployment log. Keep this scoped to the environment resource group unless there is a deliberate platform decision to centralize deployment identity permissions.
 
+Reusable helper:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/emit-phase10-acr-rbac-prereq.ps1 -Environment dev -SubscriptionId <subscription-id> -ClientId <client-id>
+```
+
+The helper works after `az login` and prints both the grant command and the verify command for the active environment scope.
+
 ### Workflow Order
 
 Use the numbered Phase 10 workflows in this order:
