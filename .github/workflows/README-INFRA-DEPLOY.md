@@ -59,6 +59,8 @@ It supports three execution modes:
 2. **Automatic validation** (pull requests) - What-if analysis only
 3. **Reusable workflow call** - Internal invocation from the wrapper or other trusted automation
 
+Dry-run What-If uses Azure validation level `ProviderNoRbac`. This keeps the preview useful when the template contains role assignments such as `AcrPull`, because preview should not fail only because the caller lacks role-assignment write permission. Real deployment still uses the normal deployment path and therefore still requires the GitHub OIDC principal to have permission to create the `AcrPull` role assignment for Container Apps.
+
 ---
 
 ## 🚀 Wrapper-Driven Deployment (Recommended for Testing)

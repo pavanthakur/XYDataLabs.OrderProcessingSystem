@@ -300,6 +300,7 @@ jobs:
             --location "$LOCATION" \
             --template-file "$TEMPLATE_FILE" \
             --parameters @"${PARAM_FILE}" \
+            --validation-level ProviderNoRbac \
             --parameters ghcrUsername="${{ steps.params.outputs.ghcrUsername }}" \
             --parameters ghcrReadToken="${{ steps.params.outputs.ghcrReadToken }}" \
             --parameters acrLoginServer="${{ steps.params.outputs.acrLoginServer }}" \
