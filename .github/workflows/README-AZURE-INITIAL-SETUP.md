@@ -10,6 +10,13 @@ This workflow (`azure-initial-setup.yml`) handles all **one-time prerequisite se
 - **Phase 1a** — Azure AD App Registration + OIDC federated credentials
 - **Phase 1b** — GitHub environment secrets (`AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID`)
 
+For a clean Phase 10 redeploy, keep one stable bootstrap identity authorized at **subscription scope** with either:
+
+- `Owner`, or
+- `User Access Administrator`
+
+That is the recommended model when the environment resource group may be deleted and recreated later. It allows the same OIDC app to re-create the RG and reapply the ACR bootstrap role assignment without introducing a manual permission loop on every rebuild.
+
 > **Run this workflow once per repository.** After it completes, use the Phase 10 infrastructure and image workflows for current deployments. Only use **Azure Bootstrap & Deploy** if you are maintaining the archived App Service path.
 
 ---
