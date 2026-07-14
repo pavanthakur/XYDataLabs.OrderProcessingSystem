@@ -61,6 +61,8 @@ It supports three execution modes:
 
 Dry-run What-If uses Azure validation level `ProviderNoRbac`. This keeps the preview useful when the template contains role assignments such as `AcrPull`, because preview should not fail only because the caller lacks role-assignment write permission. Real deployment still uses the normal deployment path and therefore still requires the GitHub OIDC principal to have permission to create the `AcrPull` role assignment for Container Apps.
 
+For Phase 10 ACR deployment, grant the GitHub OIDC deployment principal `User Access Administrator` at the environment resource-group scope, for example `rg-orderprocessing-dev`. Keep the assignment scoped to the environment resource group unless a platform owner explicitly chooses a broader deployment identity model.
+
 ---
 
 ## 🚀 Wrapper-Driven Deployment (Recommended for Testing)

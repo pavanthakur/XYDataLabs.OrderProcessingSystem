@@ -34,6 +34,28 @@ Keep these out of the active Phase 10 transport baseline unless a later review p
 - Broad shared-contract extraction without real duplication
 - Extra platform layers that do not strengthen the current Azure transport slice
 
+### ACR RBAC Prerequisite
+
+Phase 10 uses ACR plus managed identity for runtime image pulls. That means the deployment creates or updates an `AcrPull` role assignment on the ACR registry.
+
+For each target environment, the GitHub OIDC deployment principal needs:
+
+| Scope | Required capability |
+|---|---|
+| `/subscriptions/<subscription-id>/resourceGroups/rg-orderprocessing-<env>` | Existing deployment permissions plus role-assignment write permission |
+
+The minimum practical additional role for the current workflow shape is:
+
+```bash
+az role assignment create \
+  --assignee-object-id <github-oidc-service-principal-object-id> \
+  --assignee-principal-type ServicePrincipal \
+  --role "User Access Administrator" \
+  --scope "/subscriptions/<subscription-id>/resourceGroups/rg-orderprocessing-dev"
+```
+
+Use the object id printed in the `Prepare Phase 10 ACR` summary, or the object id shown in the failed Azure deployment log. Keep this scoped to the environment resource group unless there is a deliberate platform decision to centralize deployment identity permissions.
+
 ### Workflow Order
 
 Use the numbered Phase 10 workflows in this order:

@@ -122,6 +122,39 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
 
+      - name: Summarize ACR RBAC prerequisite
+        shell: bash
+        run: |
+          SUBSCRIPTION_ID="${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}"
+          RESOURCE_GROUP="rg-orderprocessing-${{ inputs.environment }}"
+          PRINCIPAL_OBJECT_ID=$(az ad sp show --id "${{ secrets.AZUREAPPSERVICE_CLIENTID }}" --query id -o tsv 2>/dev/null || true)
+          if [ -z "$PRINCIPAL_OBJECT_ID" ]; then
+            PRINCIPAL_OBJECT_ID="(service-principal-object-id-from-failed-log)"
+          fi
+
+          {
+            echo "## 🔐 ACR RBAC Prerequisite"
+            echo ""
+            echo "Phase 10 deploy creates an ACR pull identity and assigns it \`AcrPull\` on the registry."
+            echo "The GitHub OIDC deployment principal therefore needs role-assignment write permission at the target resource-group scope."
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Resource group scope | /subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP} |"
+            echo "| Deployment principal object id | ${PRINCIPAL_OBJECT_ID} |"
+            echo "| Minimum practical extra role | User Access Administrator at the resource-group scope |"
+            echo ""
+            echo "If ACR bootstrap fails with \`Microsoft.Authorization/roleAssignments/write\`, run this once from an Azure account that has Owner/User Access Administrator:"
+            echo ""
+            echo "\`\`\`bash"
+            echo "az role assignment create \\"
+            echo "  --assignee-object-id ${PRINCIPAL_OBJECT_ID} \\"
+            echo "  --assignee-principal-type ServicePrincipal \\"
+            echo "  --role \"User Access Administrator\" \\"
+            echo "  --scope \"/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}\""
+            echo "\`\`\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Deploy ACR bootstrap
         id: deploy
         shell: bash
