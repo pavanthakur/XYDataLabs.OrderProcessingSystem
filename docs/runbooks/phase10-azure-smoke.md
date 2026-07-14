@@ -34,9 +34,37 @@ Keep these out of the active Phase 10 transport baseline unless a later review p
 - Broad shared-contract extraction without real duplication
 - Extra platform layers that do not strengthen the current Azure transport slice
 
-### ACR RBAC Prerequisite
+### ACR Foundation And Cleanup Plan
 
-Phase 10 uses ACR plus managed identity for runtime image pulls. That means the deployment creates or updates an `AcrPull` role assignment on the ACR registry.
+Phase 10 uses ACR plus managed identity for runtime image pulls. The current transitional workflow can create environment-scoped ACR resources and assign `AcrPull`, but that still requires a caller with `Microsoft.Authorization/roleAssignments/write`.
+
+The enterprise target is to move ACR and the pull identity into a persistent platform foundation so the normal app deploy no longer manages IAM.
+
+| Area | Target owner | Cleanup behavior |
+|---|---|---|
+| App environment RG | `01 Phase 10 Azure Deploy Orchestrator` | Deleted only when `cleanupInfra=true` |
+| ACR registry | Platform foundation | Persistent; not deleted by app environment cleanup |
+| Pull identity and ACR RBAC | Platform foundation | Created once; not recreated per app RG |
+| ACR images and tags | `Phase 10 Retention Cleanup (Internal)` | Scheduled pruning; preserves active revision images |
+| GitHub artifacts | Workflow upload steps plus retention cleanup | Retained by `retention-days` and scheduled artifact cleanup |
+
+Target implementation sequence:
+
+1. Create a persistent platform/foundation resource group for shared deployment assets.
+2. Create the platform ACR once outside `rg-orderprocessing-<env>`.
+3. Create a stable user-assigned managed identity once.
+4. Assign `AcrPull` on the platform ACR to that identity once.
+5. Change Phase 10 Bicep and workflow inputs to reference the existing ACR login server and pull identity resource id.
+6. Remove ACR role-assignment creation from normal Phase 10 app deployment.
+7. Keep `phase10-retention-cleanup.yml` as the scheduled ACR image hygiene workflow.
+
+That gives the intended operating model:
+
+- no manual RG-level permission step after app cleanup
+- no subscription-scope `User Access Administrator` requirement for the normal app deploy identity
+- app environment RGs can be deleted and recreated cleanly
+- ACR image history survives app RG cleanup
+- scheduled image cleanup remains meaningful
 
 For each target environment, the GitHub OIDC deployment principal needs:
 
@@ -44,7 +72,7 @@ For each target environment, the GitHub OIDC deployment principal needs:
 |---|---|
 | `/subscriptions/<subscription-id>/resourceGroups/rg-orderprocessing-<env>` | Existing deployment permissions plus role-assignment write permission |
 
-The minimum practical additional role for the current workflow shape is:
+The minimum practical additional role for the current transitional workflow shape is:
 
 ```bash
 az role assignment create \
@@ -54,7 +82,7 @@ az role assignment create \
   --scope "/subscriptions/<subscription-id>/resourceGroups/rg-orderprocessing-dev"
 ```
 
-Use the object id printed in the `Prepare Phase 10 ACR` summary, or the object id shown in the failed Azure deployment log. Keep this scoped to the environment resource group unless there is a deliberate platform decision to centralize deployment identity permissions.
+Use the object id printed in the `Prepare Phase 10 ACR` summary, or the object id shown in the failed Azure deployment log. Keep this scoped to the environment resource group only while the app workflow owns ACR role assignment creation. The preferred final design is the persistent platform ACR model above.
 
 Reusable helper:
 
@@ -63,6 +91,16 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/emit-phase10-acr-rbac-prer
 ```
 
 The helper works after `az login` and prints both the grant command and the verify command for the active environment scope.
+
+ACR retention rules stay separate from app deployment:
+
+| Rule | Policy |
+|---|---|
+| Preserve active images | Query active Container App revisions and do not delete referenced tags |
+| Keep recent history | Keep the latest `10` tags per service image |
+| Age-based cleanup | Delete stale tags older than `30` days by default |
+| Protected tags | Keep release tags such as `phase10`, `latest`, or future signed release labels when marked protected |
+| Environment-aware tags | Prefer `dev-<sha>`, `staging-<sha>`, and `prod-<sha>` if the tagging model becomes environment-specific |
 
 ### Workflow Order
 

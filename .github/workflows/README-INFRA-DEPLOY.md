@@ -59,9 +59,11 @@ It supports three execution modes:
 2. **Automatic validation** (pull requests) - What-if analysis only
 3. **Reusable workflow call** - Internal invocation from the wrapper or other trusted automation
 
-Dry-run What-If uses Azure validation level `ProviderNoRbac`. This keeps the preview useful when the template contains role assignments such as `AcrPull`, because preview should not fail only because the caller lacks role-assignment write permission. Real deployment still uses the normal deployment path and therefore still requires the GitHub OIDC principal to have permission to create the `AcrPull` role assignment for Container Apps.
+Dry-run What-If uses Azure validation level `ProviderNoRbac`. This keeps the preview useful when the template contains role assignments such as `AcrPull`, because preview should not fail only because the caller lacks role-assignment write permission.
 
-For Phase 10 ACR deployment, grant the GitHub OIDC deployment principal `User Access Administrator` at the environment resource-group scope, for example `rg-orderprocessing-dev`. Keep the assignment scoped to the environment resource group unless a platform owner explicitly chooses a broader deployment identity model.
+The current transitional ACR workflow creates the registry pull role assignment during deploy, so real deployment still needs the caller to have permission to create that assignment. The enterprise target is different: move ACR and the pull identity into a persistent platform foundation, assign `AcrPull` once there, and let the normal Phase 10 app deployment reference the existing ACR login server and identity.
+
+Until that platform foundation exists, grant the GitHub OIDC deployment principal `User Access Administrator` at the environment resource-group scope, for example `rg-orderprocessing-dev`. After the platform foundation is implemented, the normal app deploy identity should not need role-assignment write permission.
 
 ---
 
@@ -143,6 +145,7 @@ Phase 10 cleanup is intentionally scoped to the Azure environment stack:
 
 - `Cleanup Infra=true` deletes the environment-scoped Azure resource group and the resources inside it.
 - `Cleanup Infra=true` does **not** delete container images that were published by the build workflow.
+- In the target platform foundation model, `Cleanup Infra=true` also does **not** delete the platform ACR or the stable pull identity.
 - `Cleanup Infra=true` does **not** purge historical GitHub Actions logs or artifacts beyond the repository retention settings.
 - `Cleanup Infra=true` does **not** change Azure Log Analytics or Application Insights retention policies.
 
@@ -160,6 +163,7 @@ Default cleanup policy:
 
 - Keep the last `10` GHCR package versions per image when fallback packages exist.
 - Keep the last `10` ACR tags per service image, skip tags referenced by active Container App revisions, and delete stale tags older than `30` days.
+- Keep platform ACR resources persistent; prune image tags, not the registry.
 - Delete GitHub Actions artifacts older than `14` days.
 - Run the scheduled cleanup workflow in delete mode, but keep the manual `workflow_dispatch` entry in dry-run mode unless you explicitly disable it for an audit run.
 
