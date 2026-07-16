@@ -13,7 +13,7 @@ param githubOwner string
 param platformSuffix string = 'platform'
 
 @description('Create the AcrPull role assignment from the platform ACR to the runtime pull identity. Requires roleAssignments/write at the registry scope.')
-param assignAcrPullRole bool = true
+param assignAcrPullRole bool = false
 
 var platformRgName = 'rg-${baseName}-${platformSuffix}'
 

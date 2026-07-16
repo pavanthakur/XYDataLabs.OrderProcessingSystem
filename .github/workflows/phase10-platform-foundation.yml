@@ -25,7 +25,7 @@ on:
       assignAcrPullRole:
         description: 'Create or refresh AcrPull for the runtime pull identity'
         required: true
-        default: true
+        default: false
         type: boolean
 
 permissions:
@@ -123,5 +123,5 @@ jobs:
           fi
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "This workflow owns the persistent platform ACR and the runtime pull identity." >> "$GITHUB_STEP_SUMMARY"
-          echo "When Assign AcrPull is true, this workflow also creates the one-time registry pull grant required by Azure Container Apps." >> "$GITHUB_STEP_SUMMARY"
+          echo "When Assign AcrPull is true and the caller has roleAssignments/write at the registry scope, this workflow also creates the one-time registry pull grant required by Azure Container Apps." >> "$GITHUB_STEP_SUMMARY"
           echo "Run it once, then let the Phase 10 deploy orchestrator consume the resulting ACR details without creating registry RBAC inside the app environment RG." >> "$GITHUB_STEP_SUMMARY"
