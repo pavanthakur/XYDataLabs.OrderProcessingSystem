@@ -237,14 +237,34 @@ jobs:
           if [ -z "$ACR_PULL_IDENTITY_ID" ]; then
             ACR_PULL_IDENTITY_ID="/subscriptions/${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}/resourceGroups/rg-orderprocessing-platform/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-orderprocessing-acr-pull-platform"
           fi
+          GATEWAY_IMAGE="${{ inputs.gatewayImage }}"
+          if [ -z "$GATEWAY_IMAGE" ]; then
+            GATEWAY_IMAGE="${ACR_LOGIN_SERVER}/orderprocessing-gateway:phase10"
+          fi
+          ORDERS_IMAGE="${{ inputs.ordersImage }}"
+          if [ -z "$ORDERS_IMAGE" ]; then
+            ORDERS_IMAGE="${ACR_LOGIN_SERVER}/orderprocessing-orders:phase10"
+          fi
+          INVENTORY_IMAGE="${{ inputs.inventoryImage }}"
+          if [ -z "$INVENTORY_IMAGE" ]; then
+            INVENTORY_IMAGE="${ACR_LOGIN_SERVER}/orderprocessing-inventory:phase10"
+          fi
+          NOTIFICATIONS_IMAGE="${{ inputs.notificationsImage }}"
+          if [ -z "$NOTIFICATIONS_IMAGE" ]; then
+            NOTIFICATIONS_IMAGE="${ACR_LOGIN_SERVER}/orderprocessing-notifications:phase10"
+          fi
+          UI_IMAGE="${{ inputs.uiImage }}"
+          if [ -z "$UI_IMAGE" ]; then
+            UI_IMAGE="${ACR_LOGIN_SERVER}/orderprocessing-ui:phase10"
+          fi
           echo "platformAcrName=${ACR_NAME}" >> $GITHUB_OUTPUT
           echo "acrLoginServer=${ACR_LOGIN_SERVER}" >> $GITHUB_OUTPUT
           echo "acrPullIdentityId=${ACR_PULL_IDENTITY_ID}" >> $GITHUB_OUTPUT
-          if [ -z "${{ inputs.gatewayImage }}" ]; then echo "gatewayImage=${ACR_LOGIN_SERVER}/orderprocessing-gateway:phase10" >> $GITHUB_OUTPUT; fi
-          if [ -z "${{ inputs.ordersImage }}" ]; then echo "ordersImage=${ACR_LOGIN_SERVER}/orderprocessing-orders:phase10" >> $GITHUB_OUTPUT; fi
-          if [ -z "${{ inputs.inventoryImage }}" ]; then echo "inventoryImage=${ACR_LOGIN_SERVER}/orderprocessing-inventory:phase10" >> $GITHUB_OUTPUT; fi
-          if [ -z "${{ inputs.notificationsImage }}" ]; then echo "notificationsImage=${ACR_LOGIN_SERVER}/orderprocessing-notifications:phase10" >> $GITHUB_OUTPUT; fi
-          if [ -z "${{ inputs.uiImage }}" ]; then echo "uiImage=${ACR_LOGIN_SERVER}/orderprocessing-ui:phase10" >> $GITHUB_OUTPUT; fi
+          echo "gatewayImage=${GATEWAY_IMAGE}" >> $GITHUB_OUTPUT
+          echo "ordersImage=${ORDERS_IMAGE}" >> $GITHUB_OUTPUT
+          echo "inventoryImage=${INVENTORY_IMAGE}" >> $GITHUB_OUTPUT
+          echo "notificationsImage=${NOTIFICATIONS_IMAGE}" >> $GITHUB_OUTPUT
+          echo "uiImage=${UI_IMAGE}" >> $GITHUB_OUTPUT
       
       - name: Azure CLI Login (OIDC)
         uses: azure/login@v3
@@ -382,14 +402,34 @@ jobs:
           if [ -z "$ACR_PULL_IDENTITY_ID" ]; then
             ACR_PULL_IDENTITY_ID="/subscriptions/${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}/resourceGroups/rg-orderprocessing-platform/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-orderprocessing-acr-pull-platform"
           fi
+          GATEWAY_IMAGE="${{ inputs.gatewayImage }}"
+          if [ -z "$GATEWAY_IMAGE" ]; then
+            GATEWAY_IMAGE="${ACR_LOGIN_SERVER}/orderprocessing-gateway:phase10"
+          fi
+          ORDERS_IMAGE="${{ inputs.ordersImage }}"
+          if [ -z "$ORDERS_IMAGE" ]; then
+            ORDERS_IMAGE="${ACR_LOGIN_SERVER}/orderprocessing-orders:phase10"
+          fi
+          INVENTORY_IMAGE="${{ inputs.inventoryImage }}"
+          if [ -z "$INVENTORY_IMAGE" ]; then
+            INVENTORY_IMAGE="${ACR_LOGIN_SERVER}/orderprocessing-inventory:phase10"
+          fi
+          NOTIFICATIONS_IMAGE="${{ inputs.notificationsImage }}"
+          if [ -z "$NOTIFICATIONS_IMAGE" ]; then
+            NOTIFICATIONS_IMAGE="${ACR_LOGIN_SERVER}/orderprocessing-notifications:phase10"
+          fi
+          UI_IMAGE="${{ inputs.uiImage }}"
+          if [ -z "$UI_IMAGE" ]; then
+            UI_IMAGE="${ACR_LOGIN_SERVER}/orderprocessing-ui:phase10"
+          fi
           echo "platformAcrName=${ACR_NAME}" >> $GITHUB_OUTPUT
           echo "acrLoginServer=${ACR_LOGIN_SERVER}" >> $GITHUB_OUTPUT
           echo "acrPullIdentityId=${ACR_PULL_IDENTITY_ID}" >> $GITHUB_OUTPUT
-          if [ -z "${{ inputs.gatewayImage }}" ]; then echo "gatewayImage=${ACR_LOGIN_SERVER}/orderprocessing-gateway:phase10" >> $GITHUB_OUTPUT; fi
-          if [ -z "${{ inputs.ordersImage }}" ]; then echo "ordersImage=${ACR_LOGIN_SERVER}/orderprocessing-orders:phase10" >> $GITHUB_OUTPUT; fi
-          if [ -z "${{ inputs.inventoryImage }}" ]; then echo "inventoryImage=${ACR_LOGIN_SERVER}/orderprocessing-inventory:phase10" >> $GITHUB_OUTPUT; fi
-          if [ -z "${{ inputs.notificationsImage }}" ]; then echo "notificationsImage=${ACR_LOGIN_SERVER}/orderprocessing-notifications:phase10" >> $GITHUB_OUTPUT; fi
-          if [ -z "${{ inputs.uiImage }}" ]; then echo "uiImage=${ACR_LOGIN_SERVER}/orderprocessing-ui:phase10" >> $GITHUB_OUTPUT; fi
+          echo "gatewayImage=${GATEWAY_IMAGE}" >> $GITHUB_OUTPUT
+          echo "ordersImage=${ORDERS_IMAGE}" >> $GITHUB_OUTPUT
+          echo "inventoryImage=${INVENTORY_IMAGE}" >> $GITHUB_OUTPUT
+          echo "notificationsImage=${NOTIFICATIONS_IMAGE}" >> $GITHUB_OUTPUT
+          echo "uiImage=${UI_IMAGE}" >> $GITHUB_OUTPUT
       
       - name: Azure CLI Login (OIDC)
         uses: azure/login@v3
