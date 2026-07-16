@@ -69,6 +69,13 @@ param acrLoginServer string = ''
 @description('User-assigned managed identity resource id used by Container Apps to pull from ACR')
 param acrPullIdentityId string = ''
 
+@description('ACR pull token username used when role-assignment-free registry auth is selected')
+param acrRegistryUsername string = ''
+
+@secure()
+@description('ACR pull token password used when role-assignment-free registry auth is selected')
+param acrRegistryPassword string = ''
+
 var environmentName = 'aca-${baseName}-${environment}'
 var gatewayName = '${baseName}-gate-${environment}'
 var ordersName = '${baseName}-ord-${environment}'
@@ -163,18 +170,33 @@ var uiEnv = concat(commonEnv, [
     value: 'http://${gatewayName}'
   }
 ])
-var registryConfigs = [
+var registryPasswordSecretName = 'acr-pull-token-password'
+var useRegistryPassword = !empty(acrRegistryUsername) && !empty(acrRegistryPassword)
+var registryConfigs = useRegistryPassword ? [
+  {
+    server: acrLoginServer
+    username: acrRegistryUsername
+    passwordSecretRef: registryPasswordSecretName
+  }
+] : [
   {
     server: acrLoginServer
     identity: acrPullIdentityId
   }
 ]
-var registrySecrets = []
-var appIdentity = {
+var registrySecrets = useRegistryPassword ? [
+  {
+    name: registryPasswordSecretName
+    value: acrRegistryPassword
+  }
+] : []
+var appIdentity = !empty(acrPullIdentityId) ? {
   type: 'SystemAssigned, UserAssigned'
   userAssignedIdentities: {
     '${acrPullIdentityId}': {}
   }
+} : {
+  type: 'SystemAssigned'
 }
 
 resource acaEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' = {

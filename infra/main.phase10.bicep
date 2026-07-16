@@ -54,6 +54,13 @@ param platformAcrLoginServer string = ''
 @description('Platform user-assigned managed identity resource id used by Container Apps to pull from ACR')
 param platformAcrPullIdentityId string = ''
 
+@description('ACR pull token username used by Container Apps when the deploy path does not own Azure RBAC grants')
+param acrRegistryUsername string = ''
+
+@secure()
+@description('ACR pull token password used by Container Apps when the deploy path does not own Azure RBAC grants')
+param acrRegistryPassword string = ''
+
 var rgName = 'rg-${baseName}-${environment}'
 var keyVaultName = 'kv-${take(baseName, 15)}-${environment}'
 var keyVaultUri = 'https://${keyVaultName}${az.environment().suffixes.keyvaultDns}/'
@@ -134,6 +141,8 @@ module containerApps 'modules/containerapps.bicep' = {
     uiImage: uiImage
     acrLoginServer: platformAcrLoginServer
     acrPullIdentityId: platformAcrPullIdentityId
+    acrRegistryUsername: acrRegistryUsername
+    acrRegistryPassword: acrRegistryPassword
     serviceBusTopicName: serviceBus.outputs.orderEventsTopic
     serviceBusConnectionString: serviceBusConnectionString
     inventorySubscriptionName: serviceBus.outputs.inventorySubscription
