@@ -45,11 +45,14 @@ param notificationsImage string
 @description('UI container image reference')
 param uiImage string
 
-@description('GHCR username used for image pulls')
-param ghcrUsername string = ''
+@description('Platform ACR registry name used for the Phase 10 runtime image path')
+param platformAcrName string = ''
 
-@description('GHCR read token used for image pulls')
-param ghcrReadToken string = ''
+@description('Platform ACR login server used for image pulls')
+param platformAcrLoginServer string = ''
+
+@description('Platform user-assigned managed identity resource id used by Container Apps to pull from ACR')
+param platformAcrPullIdentityId string = ''
 
 var rgName = 'rg-${baseName}-${environment}'
 var keyVaultName = 'kv-${take(baseName, 15)}-${environment}'
@@ -129,8 +132,8 @@ module containerApps 'modules/containerapps.bicep' = {
     inventoryImage: inventoryImage
     notificationsImage: notificationsImage
     uiImage: uiImage
-    ghcrUsername: ghcrUsername
-    ghcrReadToken: ghcrReadToken
+    acrLoginServer: platformAcrLoginServer
+    acrPullIdentityId: platformAcrPullIdentityId
     serviceBusTopicName: serviceBus.outputs.orderEventsTopic
     serviceBusConnectionString: serviceBusConnectionString
     inventorySubscriptionName: serviceBus.outputs.inventorySubscription
@@ -191,4 +194,7 @@ output uiContainerAppFqdn string = containerApps.outputs.uiContainerAppFqdn
 output functionAppName string = functions.outputs.functionAppName
 output keyVaultName string = keyVault.outputs.keyVaultName
 output appInsightsName string = insights.outputs.appInsightsName
+output acrName string = platformAcrName
+output acrLoginServer string = platformAcrLoginServer
+output acrPullIdentityId string = platformAcrPullIdentityId
 output oidcClientId string = identity.outputs.clientId

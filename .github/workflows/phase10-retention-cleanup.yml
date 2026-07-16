@@ -23,6 +23,11 @@ on:
         required: true
         default: true
         type: boolean
+      cleanupAcr:
+        description: 'Also clean stale ACR image tags after ACR cutover'
+        required: true
+        default: true
+        type: boolean
   schedule:
     - cron: '0 3 * * 0'
 
@@ -30,6 +35,7 @@ permissions:
   contents: read
   packages: write
   actions: write
+  id-token: write
 
 jobs:
   cleanup:
@@ -49,11 +55,13 @@ jobs:
             echo "keepLastPackages=${{ inputs.keepLastPackages }}" >> "$GITHUB_OUTPUT"
             echo "olderThanDays=${{ inputs.olderThanDays }}" >> "$GITHUB_OUTPUT"
             echo "cleanupArtifacts=${{ inputs.cleanupArtifacts }}" >> "$GITHUB_OUTPUT"
+            echo "cleanupAcr=${{ inputs.cleanupAcr }}" >> "$GITHUB_OUTPUT"
           else
             echo "dryRun=false" >> "$GITHUB_OUTPUT"
             echo "keepLastPackages=10" >> "$GITHUB_OUTPUT"
             echo "olderThanDays=30" >> "$GITHUB_OUTPUT"
             echo "cleanupArtifacts=true" >> "$GITHUB_OUTPUT"
+            echo "cleanupAcr=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Preview cleanup scope
@@ -67,10 +75,11 @@ jobs:
           echo "| Keep Last Packages | ${{ steps.params.outputs.keepLastPackages }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Older Than Days | ${{ steps.params.outputs.olderThanDays }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Cleanup Artifacts | ${{ steps.params.outputs.cleanupArtifacts }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Cleanup ACR | ${{ steps.params.outputs.cleanupAcr }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Repository | ${{ github.repository }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Scheduled Run | Sundays at 03:00 UTC |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "This workflow targets GHCR package versions and GitHub Actions artifacts. It does not touch Azure resource groups, Container Apps, Key Vault, or Log Analytics." >> "$GITHUB_STEP_SUMMARY"
+          echo "This workflow targets GHCR package versions, the shared platform ACR image tags, and GitHub Actions artifacts. It does not touch the app environment resource groups, Container Apps, Key Vault, or Log Analytics." >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Azure resource cleanup remains manual through the Phase 10 deploy orchestrator with cleanupInfra=true." >> "$GITHUB_STEP_SUMMARY"
 
@@ -212,7 +221,125 @@ jobs:
         shell: bash
         run: |
           if [ "${{ steps.params.outputs.dryRun }}" = "true" ]; then
-            echo "Dry run completed. No GHCR packages or artifacts were deleted." >> "$GITHUB_STEP_SUMMARY"
+            echo "Dry run completed. No GHCR packages, ACR tags, or artifacts were deleted." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "Retention cleanup completed." >> "$GITHUB_STEP_SUMMARY"
           fi
+
+  cleanup_acr:
+    name: Cleanup ACR Images (Platform)
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.cleanupAcr == true) }}
+    environment: dev
+
+    steps:
+      - name: Capture retention inputs
+        id: params
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "dryRun=${{ inputs.dryRun }}" >> "$GITHUB_OUTPUT"
+            echo "keepLastPackages=${{ inputs.keepLastPackages }}" >> "$GITHUB_OUTPUT"
+            echo "olderThanDays=${{ inputs.olderThanDays }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "dryRun=false" >> "$GITHUB_OUTPUT"
+            echo "keepLastPackages=10" >> "$GITHUB_OUTPUT"
+            echo "olderThanDays=30" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Azure CLI Login (OIDC)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+
+      - name: Delete stale ACR tags
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PLATFORM_SUFFIX="platform"
+          ACR_NAME="$(printf 'xyops%s' "${{ github.repository_owner }}orderprocessing${PLATFORM_SUFFIX}" | tr '[:upper:]' '[:lower:]' | tr -d '-')"
+          RG_NAME="rg-orderprocessing-${PLATFORM_SUFFIX}"
+          DRY_RUN="${{ steps.params.outputs.dryRun }}"
+          KEEP_LAST="${{ steps.params.outputs.keepLastPackages }}"
+          OLDER_THAN_DAYS="${{ steps.params.outputs.olderThanDays }}"
+          CUTOFF_EPOCH="$(date -u -d "${OLDER_THAN_DAYS} days ago" +%s)"
+          REPOSITORIES=(
+            orderprocessing-gateway
+            orderprocessing-orders
+            orderprocessing-inventory
+            orderprocessing-notifications
+            orderprocessing-ui
+          )
+
+          {
+            echo "## ACR retention: platform"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| ACR | ${ACR_NAME} |"
+            echo "| Resource Group | ${RG_NAME} |"
+            echo "| Dry Run | ${DRY_RUN} |"
+            echo "| Keep Last | ${KEEP_LAST} |"
+            echo "| Older Than Days | ${OLDER_THAN_DAYS} |"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if ! az acr show --name "$ACR_NAME" --only-show-errors 1>/dev/null 2>&1; then
+            echo "ACR '${ACR_NAME}' does not exist yet. Skipping platform cleanup." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          ACTIVE_IMAGES="$(az containerapp list --query "[].properties.template.containers[].image" -o tsv 2>/dev/null || true)"
+
+          for REPOSITORY in "${REPOSITORIES[@]}"; do
+            if ! az acr repository show --name "$ACR_NAME" --repository "$REPOSITORY" --only-show-errors 1>/dev/null 2>&1; then
+              echo "- SKIP ${REPOSITORY}: repository not found" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+
+            TAGS_JSON="$(az acr repository show-tags --name "$ACR_NAME" --repository "$REPOSITORY" --orderby time_desc --detail -o json)"
+            TAG_COUNT="$(printf '%s' "$TAGS_JSON" | jq 'length')"
+
+            if [ "$TAG_COUNT" -eq 0 ]; then
+              echo "- SKIP ${REPOSITORY}: no tags" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+
+            INDEX=0
+            printf '%s' "$TAGS_JSON" | jq -c '.[]' | while read -r TAG_ITEM; do
+              TAG_NAME="$(printf '%s' "$TAG_ITEM" | jq -r '.name')"
+              UPDATED_AT="$(printf '%s' "$TAG_ITEM" | jq -r '.lastUpdateTime // .createdTime')"
+              UPDATED_EPOCH="$(date -u -d "$UPDATED_AT" +%s)"
+              IMAGE_REF="${ACR_NAME}.azurecr.io/${REPOSITORY}:${TAG_NAME}"
+
+              if [ "$INDEX" -lt "$KEEP_LAST" ]; then
+                echo "- KEEP ${REPOSITORY}:${TAG_NAME}: within latest ${KEEP_LAST}" >> "$GITHUB_STEP_SUMMARY"
+                INDEX=$((INDEX + 1))
+                continue
+              fi
+
+              if [ "$UPDATED_EPOCH" -ge "$CUTOFF_EPOCH" ]; then
+                echo "- KEEP ${REPOSITORY}:${TAG_NAME}: newer than ${OLDER_THAN_DAYS} days" >> "$GITHUB_STEP_SUMMARY"
+                INDEX=$((INDEX + 1))
+                continue
+              fi
+
+              if printf '%s\n' "$ACTIVE_IMAGES" | grep -Fxq "$IMAGE_REF"; then
+                echo "- KEEP ${REPOSITORY}:${TAG_NAME}: referenced by active Container App revision" >> "$GITHUB_STEP_SUMMARY"
+                INDEX=$((INDEX + 1))
+                continue
+              fi
+
+              if [ "$DRY_RUN" = "true" ]; then
+                echo "- DRY RUN DELETE ${REPOSITORY}:${TAG_NAME}" >> "$GITHUB_STEP_SUMMARY"
+              else
+                az acr repository delete --name "$ACR_NAME" --image "${REPOSITORY}:${TAG_NAME}" --yes --only-show-errors
+                echo "- DELETE ${REPOSITORY}:${TAG_NAME}" >> "$GITHUB_STEP_SUMMARY"
+              fi
+
+              INDEX=$((INDEX + 1))
+            done
+          done

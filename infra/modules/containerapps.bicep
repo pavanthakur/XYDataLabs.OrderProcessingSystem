@@ -63,11 +63,11 @@ param notificationsImage string
 @description('UI container image reference')
 param uiImage string
 
-@description('GHCR username used for image pulls')
-param ghcrUsername string = ''
+@description('Azure Container Registry login server used for image pulls')
+param acrLoginServer string = ''
 
-@description('GHCR read token used for image pulls')
-param ghcrReadToken string = ''
+@description('User-assigned managed identity resource id used by Container Apps to pull from ACR')
+param acrPullIdentityId string = ''
 
 var environmentName = 'aca-${baseName}-${environment}'
 var gatewayName = '${baseName}-gate-${environment}'
@@ -163,19 +163,19 @@ var uiEnv = concat(commonEnv, [
     value: 'http://${gatewayName}'
   }
 ])
-var registryConfigs = !empty(ghcrUsername) && !empty(ghcrReadToken) ? [
+var registryConfigs = [
   {
-    server: 'ghcr.io'
-    username: ghcrUsername
-    passwordSecretRef: 'ghcr-pull-token'
+    server: acrLoginServer
+    identity: acrPullIdentityId
   }
-] : []
-var registrySecrets = !empty(ghcrReadToken) ? [
-  {
-    name: 'ghcr-pull-token'
-    value: ghcrReadToken
+]
+var registrySecrets = []
+var appIdentity = {
+  type: 'SystemAssigned, UserAssigned'
+  userAssignedIdentities: {
+    '${acrPullIdentityId}': {}
   }
-] : []
+}
 
 resource acaEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' = {
   name: environmentName
@@ -194,9 +194,7 @@ resource acaEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' = {
 resource gatewayApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: gatewayName
   location: location
-  identity: {
-    type: 'SystemAssigned'
-  }
+  identity: appIdentity
   properties: {
     managedEnvironmentId: acaEnvironment.id
     configuration: {
@@ -230,9 +228,7 @@ resource gatewayApp 'Microsoft.App/containerApps@2024-03-01' = {
 resource ordersApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: ordersName
   location: location
-  identity: {
-    type: 'SystemAssigned'
-  }
+  identity: appIdentity
   properties: {
     managedEnvironmentId: acaEnvironment.id
     configuration: {
@@ -266,9 +262,7 @@ resource ordersApp 'Microsoft.App/containerApps@2024-03-01' = {
 resource inventoryApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: inventoryName
   location: location
-  identity: {
-    type: 'SystemAssigned'
-  }
+  identity: appIdentity
   properties: {
     managedEnvironmentId: acaEnvironment.id
     configuration: {
@@ -302,9 +296,7 @@ resource inventoryApp 'Microsoft.App/containerApps@2024-03-01' = {
 resource notificationsApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: notificationsName
   location: location
-  identity: {
-    type: 'SystemAssigned'
-  }
+  identity: appIdentity
   properties: {
     managedEnvironmentId: acaEnvironment.id
     configuration: {
@@ -338,9 +330,7 @@ resource notificationsApp 'Microsoft.App/containerApps@2024-03-01' = {
 resource uiApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: uiName
   location: location
-  identity: {
-    type: 'SystemAssigned'
-  }
+  identity: appIdentity
   properties: {
     managedEnvironmentId: acaEnvironment.id
     configuration: {

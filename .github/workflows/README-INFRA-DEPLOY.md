@@ -13,6 +13,7 @@ Use `phase10-deploy-orchestrator.yml` as the bootstrap-style single lifecycle ow
 - one wrapper for humans to click
 - one end-to-end sequence for deploy or cleanup
 - internal reusable workflows for image build and infra execution
+- `00 Azure Platform Foundation` owns the persistent ACR registry and pull identity
 
 The active wrapper may own both the Phase 10 runtime stack and any shared foundation resources we intentionally keep in scope:
 
@@ -37,6 +38,7 @@ The reusable deploy workflow also registers the Azure resource providers it depe
 
 | workflow | click target | owns RG creation | builds images | deploys app | cleanup | current or legacy |
 |---|---|---:|---:|---:|---:|---|
+| `phase10-platform-foundation.yml` | yes | yes, platform RG only | no | no | no | current |
 | `phase10-deploy-orchestrator.yml` | yes | yes, through the internal infra path | yes | yes, through the internal infra path | yes | current |
 | `build-phase10-images.yml` | no, internal only | no | yes | no | no | current |
 | `infra-deploy.yml` | no, internal only | yes, through Bicep | no | yes | yes | current |
@@ -47,17 +49,42 @@ The reusable deploy workflow also registers the Azure resource providers it depe
 
 If you are looking for the other responsibilities in the new Phase 10 model:
 
+- `phase10-platform-foundation.yml` owns the persistent platform ACR and runtime pull identity
 - `azure-initial-setup.yml` handles one-time repository and OIDC setup
-- `build-phase10-images.yml` handles image publication
+- `build-phase10-images.yml` handles wrapper-driven ACR image publication
 - `phase10-docker-dev-http-e2e.yml` handles local-vs-CI validation
 - `azure-bootstrap.yml`, `deploy-api-to-azure.yml`, and `deploy-ui-to-azure.yml` are legacy App Service workflows only and should not be treated as the active Phase 10 path
-- `phase10-retention-cleanup.yml` is the scheduled housekeeping workflow for GHCR image versions and stale GitHub Actions artifacts; it does not deploy or tear down Azure infrastructure
+- `phase10-retention-cleanup.yml` is the scheduled housekeeping workflow for ACR image tags, historical GHCR cleanup-only image versions, and stale GitHub Actions artifacts; it does not deploy or tear down Azure infrastructure
 
 It supports three execution modes:
 
 1. **Wrapper-driven deployment** - Invoked by `phase10-deploy-orchestrator.yml` for the normal manual Phase 10 path
 2. **Automatic validation** (pull requests) - What-if analysis only
 3. **Reusable workflow call** - Internal invocation from the wrapper or other trusted automation
+
+Dry-run What-If uses Azure validation level `ProviderNoRbac`. This keeps the preview useful when the template contains role assignments such as `AcrPull`, because preview should not fail only because the caller lacks role-assignment write permission.
+
+The current Phase 10 architecture now splits ACR ownership into a persistent platform workflow and an environment-scoped app workflow. `00 Azure Platform Foundation` creates the registry and runtime pull identity once, and `01 Phase 10 Azure Deploy Orchestrator` consumes those values without creating registry RBAC inside the app resource group.
+
+The normal app deploy identity should not need `roleAssignments/write` for the Phase 10 environment RG. Keep elevated permissions only on the one-time platform foundation workflow.
+
+### Initial Setup vs Platform Foundation
+
+These workflows overlap in that they are both bootstrap-style, but they own different trust boundaries:
+
+| Workflow | Primary purpose | Runs when | Owns |
+|---|---|---|---|
+| `Azure Initial Setup` | Repository and auth bootstrap | First-time repo setup, or when GitHub App / OIDC secrets must be recreated | GitHub App, Azure OIDC app registration, GitHub environment secrets |
+| `00 Azure Platform Foundation` | Persistent Azure platform bootstrap | Once, then only if the shared platform foundation changes | Shared ACR, pull identity, one-time `AcrPull` assignment |
+| `01 Phase 10 Azure Deploy Orchestrator` | App environment lifecycle | Normal deploy, dry run, or cleanup | App RG, Container Apps, Service Bus, Key Vault, App Insights, Functions |
+
+Recommended order:
+
+1. Run `Azure Initial Setup` if repository auth is not ready.
+2. Run `00 Azure Platform Foundation` once to create the shared ACR and pull identity.
+3. Run `01 Phase 10 Azure Deploy Orchestrator` for normal deploys and cleanups.
+
+Do not merge `Azure Initial Setup` with `00 Azure Platform Foundation` unless you deliberately want a single high-privilege bootstrap path. Keeping them separate preserves cleaner ownership and a smaller blast radius.
 
 ---
 
@@ -138,7 +165,8 @@ It supports three execution modes:
 Phase 10 cleanup is intentionally scoped to the Azure environment stack:
 
 - `Cleanup Infra=true` deletes the environment-scoped Azure resource group and the resources inside it.
-- `Cleanup Infra=true` does **not** delete GHCR images that were published by the build workflow.
+- `Cleanup Infra=true` does **not** delete container images that were published by the build workflow.
+- In the target platform foundation model, `Cleanup Infra=true` also does **not** delete the platform ACR or the stable pull identity.
 - `Cleanup Infra=true` does **not** purge historical GitHub Actions logs or artifacts beyond the repository retention settings.
 - `Cleanup Infra=true` does **not** change Azure Log Analytics or Application Insights retention policies.
 
@@ -147,19 +175,23 @@ If image or log storage needs active housekeeping, add a separate scheduled clea
 Source-of-truth controls:
 
 - GitHub Actions artifact retention is set per upload step where practical.
-- GHCR package retention is handled by `phase10-retention-cleanup.yml`.
+- Historical GHCR package retention is handled by `phase10-retention-cleanup.yml` for cleanup-only packages.
+- ACR image retention is handled by `phase10-retention-cleanup.yml` for the active Phase 10 runtime image path.
 - Azure Log Analytics retention is configured on the workspace itself.
-- Azure Container Apps image pulls use a GHCR read token supplied as the environment secret `GHCR_READ_TOKEN`.
+- Azure Container Apps image pulls use ACR with managed identity.
 
 Default cleanup policy:
 
-- Keep the last `10` GHCR package versions per image.
+- Keep the last `10` historical GHCR package versions per image.
+- Keep the last `10` ACR tags per service image, skip tags referenced by active Container App revisions, and delete stale tags older than `30` days.
+- Keep platform ACR resources persistent; prune image tags, not the registry.
 - Delete GitHub Actions artifacts older than `14` days.
 - Run the scheduled cleanup workflow in delete mode, but keep the manual `workflow_dispatch` entry in dry-run mode unless you explicitly disable it for an audit run.
 
 | Area | Source of truth | Default |
 |---|---|---|
-| GHCR images | `phase10-retention-cleanup.yml` | Keep last `10` versions per image |
+| ACR images | `phase10-retention-cleanup.yml` | Keep last `10` tags per service and preserve active revision images |
+| GHCR images | `phase10-retention-cleanup.yml` | Keep last `10` versions per historical image |
 | GitHub artifacts | workflow upload step + `phase10-retention-cleanup.yml` | `retention-days: 14` |
 | Azure Log Analytics | workspace setting / Bicep / Azure policy | Managed outside the deploy wrapper |
 
@@ -169,18 +201,18 @@ ACR should be treated as a production prerequisite for the runtime image path, n
 
 | Step | Goal | Current / Future |
 |---|---|---|
-| Keep `GHCR_READ_TOKEN` | Preserve the current private GHCR runtime path until ACR cutover is complete | Transitional |
-| Add ACR registry | Host Phase 10 images in Azure instead of GHCR | P0 before production |
-| Switch image publish path | Push build artifacts to ACR from the wrapper build step | P0 before production |
-| Switch image pull path | Let Azure Container Apps pull from ACR with Azure-native auth | P0 before production |
-| Retire GHCR runtime token | Remove the GHCR pull secret once ACR is stable | After ACR cutover |
+| Add ACR registry | Host Phase 10 images in Azure ACR | Current Phase 10 target |
+| Switch image publish path | Push build artifacts to ACR from the wrapper build step | Current Phase 10 target |
+| Switch image pull path | Let Azure Container Apps pull from ACR with Azure-native auth | Current Phase 10 target |
+| Historical GHCR cleanup | Keep only the cleanup-only path for old package versions | Retained for retention workflow |
+| Historical GHCR runtime token | No longer needed for the active Phase 10 runtime image path | Completed for active deploy path |
 
 Target end state:
 
 - `GitHub-Actions-OIDC` remains the Azure login path
 - GitHub App remains the repository automation path
 - ACR becomes the runtime image registry
-- `GHCR_READ_TOKEN` is no longer needed for container pulls
+- `GHCR_READ_TOKEN` is no longer needed for active Phase 10 container pulls
 - Managed identity becomes the normal runtime identity pattern for Azure resources
 - Front Door / WAF becomes the preferred public ingress layer when public exposure is required
 
@@ -207,7 +239,7 @@ Treat the following as the default architecture review checklist for any new Pha
 | Guardrail | Default expectation |
 |---|---|
 | Identity | Use Azure OIDC for Azure login; never add stored Azure client secrets |
-| Registry | Prefer ACR for Azure runtime image pulls; GHCR is a bridge, not the end state |
+| Registry | Prefer ACR for Azure runtime image pulls; historical GHCR remains cleanup-only |
 | GitHub automation | Use the GitHub App for repo-secret automation only |
 | Cleanup | Every deployable resource must have a matching cleanup path |
 | Naming | Use env-suffixed names consistently (`appname-env`) for deploy and cleanup symmetry |
