@@ -22,9 +22,9 @@
 - ✅ The Phase 10 Azure transport smoke passed in GitHub Actions run `29273881488`: Service Bus publish, fan-out consume, controlled DLQ forwarding, DLQ replay receive, and replay publish/consume all passed.
 - ✅ Gateway Azure diagnostics now echo the accepted host so ACA host-header mismatches can be diagnosed from the health response and smoke summaries.
 - ✅ Runtime smoke and transport smoke are separate post-deploy checks: runtime proves gateway/API/UI reachability, while transport proves Service Bus publish, consume, DLQ, and replay behavior.
-- ✅ Phase 10 retention cleanup is documented as housekeeping for GHCR package versions and GitHub artifacts; Azure teardown remains owned by the Phase 10 wrapper `cleanupInfra=true` path.
+- ✅ Phase 10 retention cleanup is documented as housekeeping for historical GHCR cleanup-only package versions and GitHub artifacts; Azure teardown remains owned by the Phase 10 wrapper `cleanupInfra=true` path.
 - ✅ Phase 10 transport/operator baseline is now proven in dev across deploy, runtime smoke, transport smoke, and optional Docker parity.
-- 🔜 ACR migration remains the preferred enterprise registry direction, but it is a follow-up implementation, not a blocker for the current GHCR-backed Phase 10 transport/operator baseline.
+- 🔜 ACR remains the preferred enterprise registry direction, but it is a follow-up implementation, not a blocker for the current ACR-backed Phase 10 transport/operator baseline.
 - 🔜 SQL Server and Azure Cache for Redis are intentionally outside the current Phase 10 transport baseline unless a later platform expansion requires full application persistence parity in Azure Container Apps.
 
 ### June 5, 2026 Verification Freeze — Phase 8.7 Closeout

@@ -431,3 +431,4 @@ bicep/**/*.json
 .aider*
 .azure-cli/
 infra/main.phase10.json
+infra/main.phase10.acr.json

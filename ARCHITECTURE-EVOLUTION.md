@@ -1311,7 +1311,7 @@ contracts frozen in Phase 8.
 - Deploy to **Azure Container Apps** (managed environment, auto-scaling, scale-to-zero)
 - **Gateway deployment path** — YARP is packaged and deployed as a first-class workload with its own container image, health probes, configuration surface, and deployment step; it is not piggybacked onto the Orders API or UI artifact
 - **Azure API Management (APIM)** — Consumption tier as public-facing gateway; subscription keys, external rate limiting, developer portal, API analytics. YARP becomes the internal east-west proxy behind APIM: `Internet → APIM → ACA Ingress → YARP → Services`. This rollout starts only after transport failure drills pass.
-- **Azure Container Registry (ACR)** — build and push container images
+- **Azure Container Registry (ACR)** — build and push container images. Enterprise target: persistent platform/foundation ACR outside the environment app resource group, with a stable pull identity and one-time `AcrPull` assignment owned by platform bootstrap rather than normal app deployment
 - **Azure Service Bus** — replace the in-memory event bus behind `IEventPublisher` with durable topics + subscriptions; handlers and envelopes remain unchanged
 - **Azure Event Grid** — platform/infrastructure event routing (deployment notifications, blob lifecycle); Service Bus remains for domain events. Decision rule: Event Grid = reactive fan-out, Service Bus = reliable delivery with sessions/DLQ
 - **Azure Functions** — central DLQ intake processor (isolated process model) that categorises failures before any replay action; timer-triggered Function for scheduled projection health checks (Phase 14)
@@ -1330,7 +1330,7 @@ contracts frozen in Phase 8.
 | Transport foundation | Next | Service Bus, Event Grid, and Functions are the first implementation lane | Finalize topology and message contracts |
 | Cloud hosting outcome | Next | ACA is the hosting target only after transport failure drills pass | Deploy the service graph into ACA |
 | Public gateway | Next | APIM fronts ACA; YARP stays internal | Wire APIM after ingress and routing are stable |
-| Images and registry | Next | ACR is the build/push lane for container workloads | Publish the Azure workload images |
+| Images and registry | Next | ACR is the build/push lane for container workloads; target model is persistent platform ACR plus stable pull identity | Publish the Azure workload images and move ACR/RBAC out of the app RG lifecycle |
 | Identity and auth | Next | Entra ID + JWT is the Azure identity lane; Keycloak remains out of Phase 10 | Validate cloud identity in Azure |
 | Secrets and networking | Next | Private endpoints, managed identity, and Key Vault are the security baseline | Apply private networking and secret wiring |
 | Cost controls | Next | Scale-to-zero and budget controls are operational gates, not afterthoughts | Configure cost governance and alerts |
@@ -1338,6 +1338,29 @@ contracts frozen in Phase 8.
 | Phase 9.5 portability proof | Deferred / not Phase 10 | Keep Keycloak local-only in Phase 9.5 | No Azure-side Keycloak parity in this phase |
 | Database-per-service split | Not Phase 10 | Database-per-service belongs to Phase 11 | Move this to Phase 11 |
 | Aspire deepening / distributed app tests | Not Phase 10 | Distributed app tests and manifest evaluation belong later | Move this to Phase 13 |
+
+### Platform ACR And Image Lifecycle Plan
+
+The normal Phase 10 app deployment should not need to create Azure RBAC assignments once the platform foundation is in place. Azure requires a trusted identity somewhere for `roleAssignments/write`, so the final design moves that responsibility out of the app deployment path.
+
+| Concern | Owner | Phase 10 target |
+|---|---|---|
+| Platform ACR | Platform foundation | Persistent registry outside `rg-orderprocessing-<env>` |
+| Pull identity | Platform foundation | Stable user-assigned managed identity shared by Container Apps |
+| `AcrPull` assignment | Platform foundation | Assigned once to the pull identity; not recreated by normal app deploy |
+| App environment RG | Phase 10 deploy wrapper | Recreated freely with `cleanupInfra=true` / redeploy |
+| ACR image cleanup | Retention cleanup workflow | Scheduled tag pruning that preserves active revision images and release tags |
+
+Implementation order:
+
+1. Create the platform/foundation resource group.
+2. Create ACR and the stable pull identity once.
+3. Assign `AcrPull` to the pull identity once.
+4. Change Phase 10 Bicep and workflow inputs to reference existing ACR and pull identity values.
+5. Remove ACR role-assignment creation from normal Phase 10 app deployment.
+6. Keep scheduled ACR cleanup separate from app resource-group cleanup.
+
+This keeps app environment cleanup simple while preserving image history, avoiding repeated manual RG-level permission grants, and keeping normal deploy identity scope smaller.
 
 ### Security
 

@@ -94,6 +94,8 @@ jobs:
           Write-Host "  ──────────────────────────────────────────────────────────────────────" -ForegroundColor DarkGray
           Write-Host "" -ForegroundColor Gray
           Write-Host "  ℹ️  This workflow handles one-time Azure setup (Phase 0, 1a, 1b)." -ForegroundColor Cyan
+          Write-Host "     For clean Phase 10 redeploys, keep one stable bootstrap identity authorized at subscription scope" -ForegroundColor Cyan
+          Write-Host "     (Owner or User Access Administrator). That lets the same OIDC app survive RG deletion/recreation." -ForegroundColor Cyan
           Write-Host "     For the active Phase 10 path, use 'Phase 10 Deploy Orchestrator'." -ForegroundColor Cyan
           Write-Host "" -ForegroundColor Gray
           Write-Host "========================================================================" -ForegroundColor Cyan
@@ -1652,6 +1654,8 @@ jobs:
           Write-Host "📊 INITIAL SETUP SUMMARY" -ForegroundColor Cyan
           Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
           Write-Host "  Environment : ${{ inputs.environment }}" -ForegroundColor Gray
+          Write-Host "  Bootstrap identity recommendation : keep one stable subscription-scope Owner/User Access Administrator assignment" -ForegroundColor Gray
+          Write-Host "  RG recreation behavior             : subscription-scope bootstrap survives cleanup and re-creates the RG cleanly" -ForegroundColor Gray
           Write-Host "  Phase 0 (GitHub App)       : ${{ inputs.setupGitHubApp }}" -ForegroundColor Gray
           Write-Host "  Phase 1a (Setup OIDC)      : ${{ inputs.setupOidc }}" -ForegroundColor Gray
           Write-Host "  Phase 1b (Configure Secrets): ${{ inputs.configureSecrets }}" -ForegroundColor Gray
@@ -1682,6 +1686,8 @@ jobs:
           "| Parameter | Value |" >> $env:GITHUB_STEP_SUMMARY
           "|-----------|-------|" >> $env:GITHUB_STEP_SUMMARY
           "| 🎯 Environment | ``${{ inputs.environment }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| 🔐 Bootstrap identity model | ``Stable subscription-scope Owner/User Access Administrator`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| ♻️ RG recreation behavior | ``Survives resource-group deletion and recreation`` |" >> $env:GITHUB_STEP_SUMMARY
           "| ℹ️ [Phase 0] Setup GitHub App | ``${{ inputs.setupGitHubApp }}`` |" >> $env:GITHUB_STEP_SUMMARY
           "| 🔑 [Phase 1a] Setup OIDC | ``${{ inputs.setupOidc }}`` |" >> $env:GITHUB_STEP_SUMMARY
           "| 🔑 [Phase 1b] Configure Secrets | ``${{ inputs.configureSecrets }}`` |" >> $env:GITHUB_STEP_SUMMARY
@@ -1715,6 +1721,7 @@ jobs:
           "|----------|-----------|---------|" >> $env:GITHUB_STEP_SUMMARY
           "| 🏢 Microsoft Entra ID App Registration | ✅ Yes | Setup OIDC = true |" >> $env:GITHUB_STEP_SUMMARY
           "| 🔑 Azure Federated Credentials (OIDC) | ✅ Yes | Setup OIDC = true |" >> $env:GITHUB_STEP_SUMMARY
+          "| 🔐 Stable bootstrap identity permission | ✅ Recommended | Owner or User Access Administrator at subscription scope |" >> $env:GITHUB_STEP_SUMMARY
           "| 🌐 GitHub Environments (dev/staging/prod) | ✅ Yes | Configure Secrets = true |" >> $env:GITHUB_STEP_SUMMARY
           "| 🔐 GitHub OIDC Secrets (AZUREAPPSERVICE_*) | ✅ Yes | Configure Secrets = true |" >> $env:GITHUB_STEP_SUMMARY
           "| 🤖 GitHub App (APP_ID + APP_PRIVATE_KEY) | ⚠️ Manual | One-time setup required |" >> $env:GITHUB_STEP_SUMMARY
