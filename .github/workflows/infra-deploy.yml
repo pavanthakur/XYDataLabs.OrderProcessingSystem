@@ -302,16 +302,57 @@ jobs:
       - name: Validate Registry Pull Configuration
         shell: bash
         run: |
-          if [ -n "${{ steps.params.outputs.acrLoginServer }}" ] && [ -n "${{ steps.params.outputs.acrPullIdentityId }}" ]; then
-            echo "✅ ACR runtime image path selected: ${{ steps.params.outputs.acrLoginServer }}" >> $GITHUB_STEP_SUMMARY
-            exit 0
+          ACR_NAME="${{ steps.params.outputs.platformAcrName }}"
+          ACR_LOGIN_SERVER="${{ steps.params.outputs.acrLoginServer }}"
+          ACR_PULL_IDENTITY_ID="${{ steps.params.outputs.acrPullIdentityId }}"
+
+          if [ -z "$ACR_LOGIN_SERVER" ] || [ -z "$ACR_PULL_IDENTITY_ID" ]; then
+            echo "❌ Phase 10 deployment requires platform ACR inputs." >> $GITHUB_STEP_SUMMARY
+            echo "Run the 00 Azure Platform Foundation workflow first, then rerun this workflow with the platform ACR details available." >> $GITHUB_STEP_SUMMARY
+            echo "Phase 10 deployment requires platform ACR inputs." >&2
+            exit 1
           fi
 
-          echo "❌ Phase 10 deployment requires platform ACR inputs." >> $GITHUB_STEP_SUMMARY
-          echo "Run the 00 Azure Platform Foundation workflow first, then rerun this workflow with the platform ACR details available." >> $GITHUB_STEP_SUMMARY
-          echo "Phase 10 deployment requires platform ACR inputs." >&2
-          exit 1
-      
+          ACR_ID=$(az acr show --name "$ACR_NAME" --query id -o tsv 2>/dev/null || true)
+          PULL_PRINCIPAL_ID=$(az identity show --ids "$ACR_PULL_IDENTITY_ID" --query principalId -o tsv 2>/dev/null || true)
+
+          if [ -z "$ACR_ID" ] || [ -z "$PULL_PRINCIPAL_ID" ]; then
+            echo "❌ Phase 10 platform ACR or pull identity could not be resolved." >> $GITHUB_STEP_SUMMARY
+            echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+            echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+            echo "| ACR Name | ${ACR_NAME} |" >> $GITHUB_STEP_SUMMARY
+            echo "| ACR ID | ${ACR_ID:-'(not found)'} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Pull Identity | ${ACR_PULL_IDENTITY_ID} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Pull Principal ID | ${PULL_PRINCIPAL_ID:-'(not found)'} |" >> $GITHUB_STEP_SUMMARY
+            echo "Phase 10 platform ACR or pull identity could not be resolved." >&2
+            exit 1
+          fi
+
+          ROLE_COUNT=$(az role assignment list \
+            --assignee "$PULL_PRINCIPAL_ID" \
+            --scope "$ACR_ID" \
+            --query "[?roleDefinitionName=='AcrPull'] | length(@)" \
+            -o tsv)
+
+          if [ "$ROLE_COUNT" = "0" ]; then
+            echo "❌ Phase 10 platform pull identity is missing AcrPull on the platform ACR." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+            echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+            echo "| ACR Login Server | ${ACR_LOGIN_SERVER} |" >> $GITHUB_STEP_SUMMARY
+            echo "| ACR ID | ${ACR_ID} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Pull Identity | ${ACR_PULL_IDENTITY_ID} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Pull Principal ID | ${PULL_PRINCIPAL_ID} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Required Role | AcrPull |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Run **00 Azure Platform Foundation** with **Assign AcrPull = true**, then rerun this deploy." >> $GITHUB_STEP_SUMMARY
+            echo "Missing AcrPull assignment for Phase 10 runtime pull identity." >&2
+            exit 1
+          fi
+
+          echo "✅ ACR runtime image path selected: ${ACR_LOGIN_SERVER}" >> $GITHUB_STEP_SUMMARY
+          echo "✅ AcrPull is assigned to the Phase 10 runtime pull identity." >> $GITHUB_STEP_SUMMARY
+
       - name: What-If (subscription scope)
         run: |
           ENV_SUFFIX=${{ steps.params.outputs.envSuffix }}
@@ -467,15 +508,56 @@ jobs:
       - name: Validate Registry Pull Configuration
         shell: bash
         run: |
-          if [ -n "${{ steps.params.outputs.acrLoginServer }}" ] && [ -n "${{ steps.params.outputs.acrPullIdentityId }}" ]; then
-            echo "✅ ACR runtime image path selected: ${{ steps.params.outputs.acrLoginServer }}" >> $GITHUB_STEP_SUMMARY
-            exit 0
+          ACR_NAME="${{ steps.params.outputs.platformAcrName }}"
+          ACR_LOGIN_SERVER="${{ steps.params.outputs.acrLoginServer }}"
+          ACR_PULL_IDENTITY_ID="${{ steps.params.outputs.acrPullIdentityId }}"
+
+          if [ -z "$ACR_LOGIN_SERVER" ] || [ -z "$ACR_PULL_IDENTITY_ID" ]; then
+            echo "❌ Phase 10 deployment requires platform ACR inputs." >> $GITHUB_STEP_SUMMARY
+            echo "Run the 00 Azure Platform Foundation workflow first, then rerun this workflow with the platform ACR details available." >> $GITHUB_STEP_SUMMARY
+            echo "Phase 10 deployment requires platform ACR inputs." >&2
+            exit 1
           fi
 
-          echo "❌ Phase 10 deployment requires platform ACR inputs." >> $GITHUB_STEP_SUMMARY
-          echo "Run the 00 Azure Platform Foundation workflow first, then rerun this workflow with the platform ACR details available." >> $GITHUB_STEP_SUMMARY
-          echo "Phase 10 deployment requires platform ACR inputs." >&2
-          exit 1
+          ACR_ID=$(az acr show --name "$ACR_NAME" --query id -o tsv 2>/dev/null || true)
+          PULL_PRINCIPAL_ID=$(az identity show --ids "$ACR_PULL_IDENTITY_ID" --query principalId -o tsv 2>/dev/null || true)
+
+          if [ -z "$ACR_ID" ] || [ -z "$PULL_PRINCIPAL_ID" ]; then
+            echo "❌ Phase 10 platform ACR or pull identity could not be resolved." >> $GITHUB_STEP_SUMMARY
+            echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+            echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+            echo "| ACR Name | ${ACR_NAME} |" >> $GITHUB_STEP_SUMMARY
+            echo "| ACR ID | ${ACR_ID:-'(not found)'} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Pull Identity | ${ACR_PULL_IDENTITY_ID} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Pull Principal ID | ${PULL_PRINCIPAL_ID:-'(not found)'} |" >> $GITHUB_STEP_SUMMARY
+            echo "Phase 10 platform ACR or pull identity could not be resolved." >&2
+            exit 1
+          fi
+
+          ROLE_COUNT=$(az role assignment list \
+            --assignee "$PULL_PRINCIPAL_ID" \
+            --scope "$ACR_ID" \
+            --query "[?roleDefinitionName=='AcrPull'] | length(@)" \
+            -o tsv)
+
+          if [ "$ROLE_COUNT" = "0" ]; then
+            echo "❌ Phase 10 platform pull identity is missing AcrPull on the platform ACR." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+            echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+            echo "| ACR Login Server | ${ACR_LOGIN_SERVER} |" >> $GITHUB_STEP_SUMMARY
+            echo "| ACR ID | ${ACR_ID} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Pull Identity | ${ACR_PULL_IDENTITY_ID} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Pull Principal ID | ${PULL_PRINCIPAL_ID} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Required Role | AcrPull |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Run **00 Azure Platform Foundation** with **Assign AcrPull = true**, then rerun this deploy." >> $GITHUB_STEP_SUMMARY
+            echo "Missing AcrPull assignment for Phase 10 runtime pull identity." >&2
+            exit 1
+          fi
+
+          echo "✅ ACR runtime image path selected: ${ACR_LOGIN_SERVER}" >> $GITHUB_STEP_SUMMARY
+          echo "✅ AcrPull is assigned to the Phase 10 runtime pull identity." >> $GITHUB_STEP_SUMMARY
 
       - name: Check Deleted Key Vault Conflicts
         shell: bash
@@ -523,6 +605,37 @@ jobs:
             --parameters inventoryImage="${{ steps.params.outputs.inventoryImage }}" \
             --parameters notificationsImage="${{ steps.params.outputs.notificationsImage }}" \
             --parameters uiImage="${{ steps.params.outputs.uiImage }}"
+
+      - name: Print Deployment Failure Details
+        if: ${{ failure() && steps.deploy.outcome == 'failure' }}
+        shell: bash
+        run: |
+          DEPLOYMENT_NAME="${{ steps.params.outputs.deploymentName }}"
+          ENV_SUFFIX="${{ steps.params.outputs.envSuffix }}"
+          RG_NAME="rg-orderprocessing-${ENV_SUFFIX}"
+          NESTED_DEPLOYMENT_NAME="containerapps-${ENV_SUFFIX}"
+
+          echo "## ❌ Phase 10 Azure deployment failed" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Field | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Subscription deployment | ${DEPLOYMENT_NAME} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Resource group | ${RG_NAME} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Nested deployment | ${NESTED_DEPLOYMENT_NAME} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "Subscription-scope deployment operations:"
+          az deployment operation sub list \
+            --name "$DEPLOYMENT_NAME" \
+            --query "[].{provisioningState:properties.provisioningState,resource:properties.targetResource.resourceName,type:properties.targetResource.resourceType,statusCode:properties.statusCode,message:properties.statusMessage.error.message}" \
+            -o table || true
+
+          echo "Container Apps nested deployment operations:"
+          az deployment operation group list \
+            --resource-group "$RG_NAME" \
+            --name "$NESTED_DEPLOYMENT_NAME" \
+            --query "[].{provisioningState:properties.provisioningState,resource:properties.targetResource.resourceName,type:properties.targetResource.resourceType,statusCode:properties.statusCode,message:properties.statusMessage.error.message}" \
+            -o table || true
       
       - name: Get Deployment Outputs
         id: outputs
