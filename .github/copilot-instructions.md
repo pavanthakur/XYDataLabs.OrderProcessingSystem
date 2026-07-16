@@ -299,6 +299,7 @@ Port allocations: Local VS API (5010–5011) + UI (5173–5174) · Docker dev (5
 | Day Complete Router | `/XYDataLabs-day-complete` | After each curriculum day or phase-freeze closeout — routes updates to all correct documents, syncs architecture status surfaces, and makes payment automation dry-run validation mandatory when automation scope changed before a phase-close commit |
 | Completion Check | `/XYDataLabs-completion-check` | After any feature, task, script, or fix — 6-category quality gate: documented? guardrailed? unit tested? integration tested? automated, including payment automation dry-run matrix when relevant? context current? |
 | Docker Start | `/XYDataLabs-docker-start` | Launches the supported Docker and local runtime profiles from one interactive entry point and prints the correct API/UI URLs. |
+| Azure Deploy and Smoke | `/azure-deploy-test` | Guides a safe Azure deploy-and-smoke session for the active transport stack and keeps deployment, outputs, and smoke validation aligned. |
 | Payment Automation | `/XYDataLabs-payment-automation` | Launches the separate payment automation workspace from one interactive entry point for local, Docker, and Azure targets plus local/Docker/Azure matrix runs, including dry-run and tenant selection support. |
 | Local Setup | `/XYDataLabs-setup-local` | After a fresh git clone — runs setup-local.ps1, summarises VS F5 and Docker next steps |
 | SQL Local Access | `/XYDataLabs-sql-local-access` | Opens or closes Azure SQL firewall for local IP after a fresh bootstrap/deploy. Prints SSMS connection details. |
@@ -306,6 +307,7 @@ Port allocations: Local VS API (5010–5011) + UI (5173–5174) · Docker dev (5
 
 | Log + DB Correlation | `/XYDataLabs-verify-db-logs` | After any payment run on any env/profile — script-first by runtime: calls `scripts/verify-payment-run-physical.ps1` for docker/local or `scripts/verify-payment-run-azure.ps1` for azure, returns the formatted table summary by default, and falls back to manual investigation only when needed. |
 | ADR Validation | `/XYDataLabs-validate-adrs` | Before committing changes to any ADR — runs frontmatter schema check + markdownlint locally; documents how to toggle the CI counterpart. |
+| Azure Deploy and Smoke Prompt | `.github/prompts/azure-deploy-test.prompt.md` | Phase 10 Azure deploy, verify, and smoke-test prompt for the transport stack. |
 | Phase Handoff Prompts | `.github/prompts/phase-handoffs/` | Phase-specific architect/developer prompts for external or role-specialized models; Phase 9 uses Deepseek 14B/64k for ADR-021/module-isolation architecture and Qwen 14B/64k for narrow implementation slices. |
 
 ---
