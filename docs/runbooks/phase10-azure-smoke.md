@@ -74,6 +74,15 @@ For the current active path:
 | Platform foundation workflow | One-time setup for the persistent ACR and pull identity; `AcrPull` is an optional privileged fallback |
 | Normal Phase 10 deploy workflow | Environment-scoped deployment rights only; creates scoped ACR pull-token credentials and needs no `roleAssignments/write` |
 
+`Assign AcrPull` usage in `00 Azure Platform Foundation`:
+
+| Input | Use it when |
+|---|---|
+| `Assign AcrPull = false` | You want the normal Phase 10 enterprise path. This is the default and the recommended choice. |
+| `Assign AcrPull = true` | You are running the platform workflow with a privileged Azure identity that already has `roleAssignments/write` and you explicitly want the workflow to create the ACR RBAC grant. |
+
+Leave it `false` for normal dev/staging/prod Phase 10 runs.
+
 ACR retention rules stay separate from app deployment:
 
 | Rule | Policy |

@@ -68,6 +68,15 @@ The current Phase 10 architecture now splits ACR ownership into a persistent pla
 
 The normal app deploy identity should not need `roleAssignments/write` for Phase 10. The `Assign AcrPull` option in `00 Azure Platform Foundation` is a privileged-only fallback for teams that explicitly choose managed-identity registry pulls.
 
+Use this setting as follows:
+
+| Input | Recommended use |
+|---|---|
+| `Assign AcrPull = false` | Default for the normal enterprise path. Use this for Phase 10 platform bootstrap and all routine redeploys. |
+| `Assign AcrPull = true` | Only for a privileged platform-admin run that already has `roleAssignments/write` and intentionally wants the platform workflow to create the ACR pull grant. |
+
+If you are following the current Phase 10 normal path, leave `Assign AcrPull` set to `false`.
+
 ### Initial Setup vs Platform Foundation
 
 These workflows overlap in that they are both bootstrap-style, but they own different trust boundaries:
