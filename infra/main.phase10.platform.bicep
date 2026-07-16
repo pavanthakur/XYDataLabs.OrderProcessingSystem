@@ -12,6 +12,9 @@ param githubOwner string
 @description('Platform suffix used to keep the persistent foundation distinct from environment RGs')
 param platformSuffix string = 'platform'
 
+@description('Create the AcrPull role assignment from the platform ACR to the runtime pull identity. Requires roleAssignments/write at the registry scope.')
+param assignAcrPullRole bool = true
+
 var platformRgName = 'rg-${baseName}-${platformSuffix}'
 
 resource platformRg 'Microsoft.Resources/resourceGroups@2022-09-01' = {
@@ -32,7 +35,7 @@ module acr 'modules/acr.phase10.bicep' = {
     environment: platformSuffix
     baseName: baseName
     githubOwner: githubOwner
-    assignAcrPullRole: false
+    assignAcrPullRole: assignAcrPullRole
   }
 }
 

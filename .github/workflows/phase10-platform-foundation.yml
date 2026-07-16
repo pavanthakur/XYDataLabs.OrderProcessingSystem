@@ -22,6 +22,11 @@ on:
         required: true
         default: false
         type: boolean
+      assignAcrPullRole:
+        description: 'Create or refresh AcrPull for the runtime pull identity'
+        required: true
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -75,7 +80,8 @@ jobs:
               location="${{ inputs.location }}" \
               baseName="orderprocessing" \
               githubOwner="${{ github.repository_owner }}" \
-              platformSuffix="${{ steps.params.outputs.platformSuffix }}"
+              platformSuffix="${{ steps.params.outputs.platformSuffix }}" \
+              assignAcrPullRole="${{ inputs.assignAcrPullRole }}"
 
       - name: Deploy platform foundation
         if: ${{ !inputs.dryRun }}
@@ -91,7 +97,8 @@ jobs:
               location="${{ inputs.location }}" \
               baseName="orderprocessing" \
               githubOwner="${{ github.repository_owner }}" \
-              platformSuffix="${{ steps.params.outputs.platformSuffix }}"
+              platformSuffix="${{ steps.params.outputs.platformSuffix }}" \
+              assignAcrPullRole="${{ inputs.assignAcrPullRole }}"
           echo "deploymentName=$DEPLOYMENT_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Summarize platform foundation
@@ -108,6 +115,7 @@ jobs:
           echo "| ACR Name | ${{ steps.params.outputs.acrName }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| ACR Login Server | ${{ steps.params.outputs.acrLoginServer }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Pull Identity ID | ${{ steps.params.outputs.acrPullIdentityId }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Assign AcrPull | ${{ inputs.assignAcrPullRole }} |" >> "$GITHUB_STEP_SUMMARY"
           if [ "${{ inputs.dryRun }}" = "true" ]; then
             echo "| Mode | what-if only |" >> "$GITHUB_STEP_SUMMARY"
           else
@@ -115,5 +123,5 @@ jobs:
           fi
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "This workflow owns the persistent platform ACR and the runtime pull identity." >> "$GITHUB_STEP_SUMMARY"
-          echo "The AcrPull role assignment is intentionally not created by this template unless a privileged platform path enables it." >> "$GITHUB_STEP_SUMMARY"
+          echo "When Assign AcrPull is true, this workflow also creates the one-time registry pull grant required by Azure Container Apps." >> "$GITHUB_STEP_SUMMARY"
           echo "Run it once, then let the Phase 10 deploy orchestrator consume the resulting ACR details without creating registry RBAC inside the app environment RG." >> "$GITHUB_STEP_SUMMARY"
