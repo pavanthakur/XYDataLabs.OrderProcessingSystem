@@ -70,7 +70,7 @@ For the current active path:
 
 | Scope | Required capability |
 |---|---|
-| Platform foundation workflow | One-time elevated Azure rights to create the persistent ACR and assign `AcrPull` |
+| Platform foundation workflow | One-time setup for the persistent ACR and pull identity; the `AcrPull` grant is now handled by a privileged platform path if needed |
 | Normal Phase 10 deploy workflow | Environment-scoped deployment rights only; no `roleAssignments/write` needed |
 
 ACR retention rules stay separate from app deployment:

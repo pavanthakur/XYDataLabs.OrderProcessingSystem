@@ -67,7 +67,7 @@ __VERIFY_COMMAND__
 
 ### Why this exists
 
-The Phase 10 ACR bootstrap creates the AcrPull role assignment on the registry. That means the GitHub OIDC deployment principal needs Microsoft.Authorization/roleAssignments/write at the environment resource-group scope the first time the stack is created or recreated.
+The Phase 10 ACR bootstrap now separates registry creation from the role-assignment step. If you need `AcrPull` to be created by automation, the deployment principal must already have `Microsoft.Authorization/roleAssignments/write` at the target scope. Otherwise, keep the platform bootstrap path RBAC-free and manage the grant through a privileged platform workflow.
 '@
 
 $summary = $summary.Replace('__ENV__', $Environment)

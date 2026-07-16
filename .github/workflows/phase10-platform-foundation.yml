@@ -115,4 +115,5 @@ jobs:
           fi
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "This workflow owns the persistent platform ACR and the runtime pull identity." >> "$GITHUB_STEP_SUMMARY"
+          echo "The AcrPull role assignment is intentionally not created by this template unless a privileged platform path enables it." >> "$GITHUB_STEP_SUMMARY"
           echo "Run it once, then let the Phase 10 deploy orchestrator consume the resulting ACR details without creating registry RBAC inside the app environment RG." >> "$GITHUB_STEP_SUMMARY"

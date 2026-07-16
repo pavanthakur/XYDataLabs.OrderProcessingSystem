@@ -32,6 +32,7 @@ module acr 'modules/acr.phase10.bicep' = {
     environment: platformSuffix
     baseName: baseName
     githubOwner: githubOwner
+    assignAcrPullRole: false
   }
 }
 

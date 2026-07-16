@@ -23,6 +23,9 @@ param githubOwner string
 ])
 param skuName string = 'Basic'
 
+@description('Controls whether this template creates the AcrPull assignment on the registry. Leave disabled for callers that do not have roleAssignments/write at the target scope.')
+param assignAcrPullRole bool = false
+
 var registryNameSeed = toLower(replace('${githubOwner}${baseName}${environment}', '-', ''))
 var registryName = take('xyops${registryNameSeed}', 50)
 var acrPullIdentityName = 'id-${baseName}-acr-pull-${environment}'
@@ -57,7 +60,7 @@ resource acrPullIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-
   }
 }
 
-resource acrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource acrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (assignAcrPullRole) {
   name: guid(registry.id, acrPullIdentity.id, 'AcrPull')
   scope: registry
   properties: {
