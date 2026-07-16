@@ -1,0 +1,118 @@
+name: 00 Azure Platform Foundation
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'GitHub environment to use for secret access and audit trail'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      location:
+        description: 'Azure region'
+        required: true
+        default: 'centralindia'
+        type: string
+      dryRun:
+        description: 'Dry run (what-if only)'
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy_platform:
+    name: Deploy Platform Foundation
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Azure CLI Login (OIDC)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+
+      - name: Capture platform names
+        id: params
+        shell: bash
+        run: |
+          PLATFORM_SUFFIX="platform"
+          PLATFORM_RG="rg-orderprocessing-${PLATFORM_SUFFIX}"
+          PLATFORM_ACR_NAME="$(printf 'xyops%s' "${{ github.repository_owner }}orderprocessing${PLATFORM_SUFFIX}" | tr '[:upper:]' '[:lower:]' | tr -d '-')"
+          PLATFORM_ACR_LOGIN_SERVER="${PLATFORM_ACR_NAME}.azurecr.io"
+          PLATFORM_PULL_IDENTITY_NAME="id-orderprocessing-acr-pull-${PLATFORM_SUFFIX}"
+          PLATFORM_PULL_IDENTITY_ID="/subscriptions/${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}/resourceGroups/${PLATFORM_RG}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/${PLATFORM_PULL_IDENTITY_NAME}"
+
+          echo "platformSuffix=${PLATFORM_SUFFIX}" >> "$GITHUB_OUTPUT"
+          echo "platformRg=${PLATFORM_RG}" >> "$GITHUB_OUTPUT"
+          echo "acrName=${PLATFORM_ACR_NAME}" >> "$GITHUB_OUTPUT"
+          echo "acrLoginServer=${PLATFORM_ACR_LOGIN_SERVER}" >> "$GITHUB_OUTPUT"
+          echo "acrPullIdentityId=${PLATFORM_PULL_IDENTITY_ID}" >> "$GITHUB_OUTPUT"
+          echo "acrPullIdentityName=${PLATFORM_PULL_IDENTITY_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: What-If platform foundation
+        if: ${{ inputs.dryRun }}
+        shell: bash
+        run: |
+          az deployment sub what-if \
+            --location "${{ inputs.location }}" \
+            --template-file infra/main.phase10.platform.bicep \
+            --validation-level ProviderNoRbac \
+            --parameters \
+              location="${{ inputs.location }}" \
+              baseName="orderprocessing" \
+              githubOwner="${{ github.repository_owner }}" \
+              platformSuffix="${{ steps.params.outputs.platformSuffix }}"
+
+      - name: Deploy platform foundation
+        if: ${{ !inputs.dryRun }}
+        id: deploy
+        shell: bash
+        run: |
+          DEPLOYMENT_NAME="phase10-platform-foundation-${{ github.run_id }}-${{ github.run_attempt }}"
+          az deployment sub create \
+            --name "$DEPLOYMENT_NAME" \
+            --location "${{ inputs.location }}" \
+            --template-file infra/main.phase10.platform.bicep \
+            --parameters \
+              location="${{ inputs.location }}" \
+              baseName="orderprocessing" \
+              githubOwner="${{ github.repository_owner }}" \
+              platformSuffix="${{ steps.params.outputs.platformSuffix }}"
+          echo "deploymentName=$DEPLOYMENT_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Summarize platform foundation
+        shell: bash
+        run: |
+          echo "## 🧱 Azure Platform Foundation" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Field | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Environment | ${{ inputs.environment }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Location | ${{ inputs.location }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Dry Run | ${{ inputs.dryRun }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Platform RG | ${{ steps.params.outputs.platformRg }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| ACR Name | ${{ steps.params.outputs.acrName }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| ACR Login Server | ${{ steps.params.outputs.acrLoginServer }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Pull Identity ID | ${{ steps.params.outputs.acrPullIdentityId }} |" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ inputs.dryRun }}" = "true" ]; then
+            echo "| Mode | what-if only |" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "| Mode | deploy |" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "This workflow owns the persistent platform ACR and the runtime pull identity." >> "$GITHUB_STEP_SUMMARY"
+          echo "Run it once, then let the Phase 10 deploy orchestrator consume the resulting ACR details without creating registry RBAC inside the app environment RG." >> "$GITHUB_STEP_SUMMARY"

@@ -9,13 +9,13 @@ on:
         default: 'phase10'
         type: string
       registryLoginServer:
-        description: 'Optional ACR login server. Falls back to GHCR when omitted.'
-        required: false
+        description: 'ACR login server for the persistent Phase 10 platform registry.'
+        required: true
         default: ''
         type: string
       registryName:
-        description: 'Optional ACR name used for Azure login.'
-        required: false
+        description: 'ACR name used for Azure login.'
+        required: true
         default: ''
         type: string
       environment:
@@ -26,7 +26,6 @@ on:
 permissions:
   contents: read
   id-token: write
-  packages: write
 
 jobs:
   build-and-push:
@@ -64,18 +63,18 @@ jobs:
         id: tag
         shell: bash
         run: |
+          if [ -z "${{ inputs.registryLoginServer }}" ] || [ -z "${{ inputs.registryName }}" ]; then
+            echo "Phase 10 image builds require the persistent platform ACR inputs." >&2
+            exit 1
+          fi
+
           TAG="${{ inputs.imageTag }}"
           if [ -z "$TAG" ]; then
             TAG="${{ github.sha }}"
           fi
           echo "imageTag=$TAG" >> $GITHUB_OUTPUT
-          if [ -n "${{ inputs.registryLoginServer }}" ]; then
-            echo "image=${{ inputs.registryLoginServer }}/${{ matrix.repository }}" >> $GITHUB_OUTPUT
-            echo "registry=acr" >> $GITHUB_OUTPUT
-          else
-            echo "image=ghcr.io/${{ github.repository_owner }}/${{ matrix.repository }}" >> $GITHUB_OUTPUT
-            echo "registry=ghcr" >> $GITHUB_OUTPUT
-          fi
+          echo "image=${{ inputs.registryLoginServer }}/${{ matrix.repository }}" >> $GITHUB_OUTPUT
+          echo "registry=acr" >> $GITHUB_OUTPUT
 
       - name: Azure CLI Login for ACR
         if: ${{ steps.tag.outputs.registry == 'acr' }}
@@ -90,14 +89,6 @@ jobs:
         shell: bash
         run: |
           az acr login --name "${{ inputs.registryName }}"
-
-      - name: Log in to GitHub Container Registry
-        if: ${{ steps.tag.outputs.registry == 'ghcr' }}
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push image
         uses: docker/build-push-action@v6

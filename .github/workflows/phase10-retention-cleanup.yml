@@ -79,7 +79,7 @@ jobs:
           echo "| Repository | ${{ github.repository }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Scheduled Run | Sundays at 03:00 UTC |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "This workflow targets GHCR package versions, ACR image tags, and GitHub Actions artifacts. It does not touch Azure resource groups, Container Apps, Key Vault, or Log Analytics." >> "$GITHUB_STEP_SUMMARY"
+          echo "This workflow targets GHCR package versions, the shared platform ACR image tags, and GitHub Actions artifacts. It does not touch the app environment resource groups, Container Apps, Key Vault, or Log Analytics." >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Azure resource cleanup remains manual through the Phase 10 deploy orchestrator with cleanupInfra=true." >> "$GITHUB_STEP_SUMMARY"
 
@@ -227,14 +227,10 @@ jobs:
           fi
 
   cleanup_acr:
-    name: Cleanup ACR Images (${{ matrix.environment }})
+    name: Cleanup ACR Images (Platform)
     runs-on: ubuntu-latest
     if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.cleanupAcr == true) }}
-    strategy:
-      fail-fast: false
-      matrix:
-        environment: [dev, staging, prod]
-    environment: ${{ matrix.environment }}
+    environment: dev
 
     steps:
       - name: Capture retention inputs
@@ -263,9 +259,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          ENVIRONMENT="${{ matrix.environment }}"
-          ACR_NAME="$(printf 'xyops%s' "${{ github.repository_owner }}orderprocessing${ENVIRONMENT}" | tr '[:upper:]' '[:lower:]' | tr -d '-')"
-          RG_NAME="rg-orderprocessing-${ENVIRONMENT}"
+          PLATFORM_SUFFIX="platform"
+          ACR_NAME="$(printf 'xyops%s' "${{ github.repository_owner }}orderprocessing${PLATFORM_SUFFIX}" | tr '[:upper:]' '[:lower:]' | tr -d '-')"
+          RG_NAME="rg-orderprocessing-${PLATFORM_SUFFIX}"
           DRY_RUN="${{ steps.params.outputs.dryRun }}"
           KEEP_LAST="${{ steps.params.outputs.keepLastPackages }}"
           OLDER_THAN_DAYS="${{ steps.params.outputs.olderThanDays }}"
@@ -279,7 +275,7 @@ jobs:
           )
 
           {
-            echo "## ACR retention: ${ENVIRONMENT}"
+            echo "## ACR retention: platform"
             echo ""
             echo "| Field | Value |"
             echo "|---|---|"
@@ -292,11 +288,11 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
           if ! az acr show --name "$ACR_NAME" --only-show-errors 1>/dev/null 2>&1; then
-            echo "ACR '${ACR_NAME}' does not exist yet. Skipping ${ENVIRONMENT}." >> "$GITHUB_STEP_SUMMARY"
+            echo "ACR '${ACR_NAME}' does not exist yet. Skipping platform cleanup." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
-          ACTIVE_IMAGES="$(az containerapp list --resource-group "$RG_NAME" --query "[].properties.template.containers[].image" -o tsv 2>/dev/null || true)"
+          ACTIVE_IMAGES="$(az containerapp list --query "[].properties.template.containers[].image" -o tsv 2>/dev/null || true)"
 
           for REPOSITORY in "${REPOSITORIES[@]}"; do
             if ! az acr repository show --name "$ACR_NAME" --repository "$REPOSITORY" --only-show-errors 1>/dev/null 2>&1; then

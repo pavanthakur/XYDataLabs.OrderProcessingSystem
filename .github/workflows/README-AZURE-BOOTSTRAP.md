@@ -1,6 +1,6 @@
 # Azure Bootstrap & Deploy Workflow
 
-Archived App Service compatibility workflow for Azure infrastructure provisioning, application deployment, and environment cleanup.
+Archived App Service compatibility reference for Azure infrastructure provisioning, application deployment, and environment cleanup.
 
 ## 🎯 Purpose
 

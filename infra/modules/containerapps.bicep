@@ -63,12 +63,6 @@ param notificationsImage string
 @description('UI container image reference')
 param uiImage string
 
-@description('GHCR username used for image pulls')
-param ghcrUsername string = ''
-
-@description('GHCR read token used for image pulls')
-param ghcrReadToken string = ''
-
 @description('Azure Container Registry login server used for image pulls')
 param acrLoginServer string = ''
 
@@ -169,33 +163,18 @@ var uiEnv = concat(commonEnv, [
     value: 'http://${gatewayName}'
   }
 ])
-var useAcr = !empty(acrLoginServer) && !empty(acrPullIdentityId)
-var useGhcr = !useAcr && !empty(ghcrUsername) && !empty(ghcrReadToken)
-var registryConfigs = useAcr ? [
+var registryConfigs = [
   {
     server: acrLoginServer
     identity: acrPullIdentityId
   }
-] : useGhcr ? [
-  {
-    server: 'ghcr.io'
-    username: ghcrUsername
-    passwordSecretRef: 'ghcr-pull-token'
-  }
-] : []
-var registrySecrets = useGhcr ? [
-  {
-    name: 'ghcr-pull-token'
-    value: ghcrReadToken
-  }
-] : []
-var appIdentity = useAcr ? {
+]
+var registrySecrets = []
+var appIdentity = {
   type: 'SystemAssigned, UserAssigned'
   userAssignedIdentities: {
     '${acrPullIdentityId}': {}
   }
-} : {
-  type: 'SystemAssigned'
 }
 
 resource acaEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' = {

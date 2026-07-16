@@ -45,17 +45,14 @@ param notificationsImage string
 @description('UI container image reference')
 param uiImage string
 
-@description('GHCR username used for image pulls')
-param ghcrUsername string = ''
+@description('Platform ACR registry name used for the Phase 10 runtime image path')
+param platformAcrName string = ''
 
-@description('GHCR read token used for image pulls')
-param ghcrReadToken string = ''
+@description('Platform ACR login server used for image pulls')
+param platformAcrLoginServer string = ''
 
-@description('Azure Container Registry login server used for image pulls')
-param acrLoginServer string = ''
-
-@description('User-assigned managed identity resource id used by Container Apps to pull from ACR')
-param acrPullIdentityId string = ''
+@description('Platform user-assigned managed identity resource id used by Container Apps to pull from ACR')
+param platformAcrPullIdentityId string = ''
 
 var rgName = 'rg-${baseName}-${environment}'
 var keyVaultName = 'kv-${take(baseName, 15)}-${environment}'
@@ -119,20 +116,6 @@ module identity 'modules/identity.phase10.bicep' = {
   }
 }
 
-module acr 'modules/acr.phase10.bicep' = {
-  name: 'acr-phase10-${environment}'
-  scope: appRg
-  params: {
-    location: location
-    environment: environment
-    baseName: baseName
-    githubOwner: githubOwner
-  }
-}
-
-var resolvedAcrLoginServer = !empty(acrLoginServer) ? acrLoginServer : acr.outputs.registryLoginServer
-var resolvedAcrPullIdentityId = !empty(acrPullIdentityId) ? acrPullIdentityId : acr.outputs.acrPullIdentityId
-
 module containerApps 'modules/containerapps.bicep' = {
   name: 'containerapps-${environment}'
   scope: appRg
@@ -149,10 +132,8 @@ module containerApps 'modules/containerapps.bicep' = {
     inventoryImage: inventoryImage
     notificationsImage: notificationsImage
     uiImage: uiImage
-    ghcrUsername: ghcrUsername
-    ghcrReadToken: ghcrReadToken
-    acrLoginServer: resolvedAcrLoginServer
-    acrPullIdentityId: resolvedAcrPullIdentityId
+    acrLoginServer: platformAcrLoginServer
+    acrPullIdentityId: platformAcrPullIdentityId
     serviceBusTopicName: serviceBus.outputs.orderEventsTopic
     serviceBusConnectionString: serviceBusConnectionString
     inventorySubscriptionName: serviceBus.outputs.inventorySubscription
@@ -213,7 +194,7 @@ output uiContainerAppFqdn string = containerApps.outputs.uiContainerAppFqdn
 output functionAppName string = functions.outputs.functionAppName
 output keyVaultName string = keyVault.outputs.keyVaultName
 output appInsightsName string = insights.outputs.appInsightsName
-output acrName string = acr.outputs.registryName
-output acrLoginServer string = resolvedAcrLoginServer
-output acrPullIdentityId string = resolvedAcrPullIdentityId
+output acrName string = platformAcrName
+output acrLoginServer string = platformAcrLoginServer
+output acrPullIdentityId string = platformAcrPullIdentityId
 output oidcClientId string = identity.outputs.clientId

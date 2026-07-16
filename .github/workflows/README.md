@@ -4,7 +4,7 @@ This directory contains GitHub Actions workflows for automated CI/CD deployment 
 
 > **Phase 10 note:** The active deployment, image build, and validation flows are the container-app workflows (`phase10-deploy-orchestrator.yml`, `infra-deploy.yml`, `build-phase10-images.yml`, and the Phase 10 smoke runbook). Legacy App Service workflows remain only for historical compatibility and should not be treated as the target runtime model for Phase 10.
 
-> **Repo-wide enterprise rule:** Prefer Azure-native identity and runtime services when practical. Use OIDC for Azure login, the GitHub App for repository-secret automation, ACR for Azure runtime image pulls, and Front Door/WAF for public ingress when needed. Treat SQL and Redis as requirement-driven services, not defaults. Document any GHCR bridge or other exception explicitly with a closure plan. Every deployable workflow should preserve env-suffixed naming, cleanup symmetry, source-level retention, and traceable summary links.
+> **Repo-wide enterprise rule:** Prefer Azure-native identity and runtime services when practical. Use OIDC for Azure login, the GitHub App for repository-secret automation, ACR for Azure runtime image pulls, and Front Door/WAF for public ingress when needed. Treat SQL and Redis as requirement-driven services, not defaults. Document any historical GHCR cleanup-only exception explicitly with a closure plan. Every deployable workflow should preserve env-suffixed naming, cleanup symmetry, source-level retention, and traceable summary links.
 
 ## Workflow Inventory
 
@@ -30,13 +30,14 @@ Use this rule before removing anything:
 
 | Workflow | Category | Direct Click? | Purpose |
 |---|---|---|---|
-| `01 Phase 10 Azure Deploy Orchestrator` | Wrapper | Yes | Manual Phase 10 entrypoint that runs build, deploy, or cleanup and prints the operator summary |
+| `00 Azure Platform Foundation` | Bootstrap | Yes | One-time persistent ACR registry and pull identity setup for the shared platform used by dev, staging, and prod |
+| `01 Phase 10 Azure Deploy Orchestrator` | Wrapper | Yes | Manual Phase 10 entrypoint that runs build, deploy, or cleanup for the selected environment and prints the operator summary |
 | `02 Phase 10 Azure Runtime Smoke` | Validation | Yes, after deploy | Verifies Gateway health, Gateway-routed API bootstrap, UI reachability, and UI API proxy bootstrap |
 | `03 Phase 10 Azure Transport Smoke` | Validation | Yes, after runtime smoke | Publishes, consumes, dead-letters, and replays a controlled Service Bus smoke flow |
 | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Validation | Optional | Mirrors the local Docker Dev HTTP hook in CI |
 | `build-phase10-images.yml` | Internal | No | Builds and publishes the Phase 10 service images |
 | `infra-deploy.yml` | Internal | No | Deploys or cleans up the Phase 10 Azure stack and returns live URLs |
-| `phase10-retention-cleanup.yml` | Internal housekeeping | No for deploy | Scheduled/manual cleanup for ACR image tags, fallback GHCR package versions, and workflow artifacts |
+| `phase10-retention-cleanup.yml` | Internal housekeeping | No for deploy | Scheduled/manual cleanup for ACR image tags, historical GHCR cleanup-only package versions, and workflow artifacts |
 | `azure-initial-setup.yml` | Bootstrap | Yes | One-time GitHub App + OIDC + secrets setup |
 | `azure-bootstrap.yml` | Historical | No for Phase 10 | Legacy App Service compatibility path only |
 | `deploy-api-to-azure.yml` | Historical | No for Phase 10 | Legacy App Service API deployment only |
@@ -48,9 +49,10 @@ Use the numbered workflows in this order:
 
 | Order | Workflow | Use it for |
 |---|---|---|
-| `01` | `01 Phase 10 Azure Deploy Orchestrator` | Build, deploy, dry run, or cleanup for the Azure Phase 10 stack |
-| `02` | `02 Phase 10 Azure Runtime Smoke` | Prove gateway health, routed API runtime config, and UI readiness after deploy |
-| `03` | `03 Phase 10 Azure Transport Smoke` | Prove Service Bus publish/consume, DLQ forwarding, and replay after runtime smoke |
+| `00` | `00 Azure Platform Foundation` | Create or refresh the persistent shared platform ACR and pull identity used by dev, staging, and prod |
+| `01` | `01 Phase 10 Azure Deploy Orchestrator` | Build, deploy, dry run, or cleanup for the selected Azure Phase 10 environment |
+| `02` | `02 Phase 10 Azure Runtime Smoke` | Prove gateway health, routed API runtime config, and UI readiness after deploy for the selected environment |
+| `03` | `03 Phase 10 Azure Transport Smoke` | Prove Service Bus publish/consume, DLQ forwarding, and replay after runtime smoke for the selected environment |
 | `99` | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Optional local/CI parity for the containerized service graph |
 
 Workflow `99` is not required for Azure deployment if the local hook has already passed, but it is useful as a CI parity gate. The GitHub runner is always a fresh machine, so the workflow starts its own Docker stack instead of trying to reuse one. It generates a CI-only `Resources/Docker/.env.local` with non-secret sandbox values and installs the EF Core CLI before starting Docker because the real local file and local tools are intentionally machine-specific. Reusing an already running stack is supported only by the local script switch `-SkipStartIfNeeded`.
@@ -64,19 +66,20 @@ Before approving any workflow or infrastructure change, ask:
 3. Is there a matching cleanup path and retention policy?
 4. Do the resource names stay env-suffixed and predictable?
 5. Do the workflow summary and child jobs expose traceable links?
-6. If we are bridging with GHCR, is the exception explicit and time-bound?
+6. If any historical GHCR cleanup remains, is the exception explicit, cleanup-only, and time-bound?
 
 ### Which Workflow Should I Click?
 
 | If you want to... | Click this workflow |
 |---|---|
+| Bootstrap or refresh the shared Phase 10 ACR foundation | `00 Azure Platform Foundation` |
 | Verify the local Docker Dev HTTP hook in CI | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` |
 | Run Phase 10 deploy, dry run, or cleanup from GitHub UI | `01 Phase 10 Azure Deploy Orchestrator` |
 | Prove Phase 10 Gateway/API/UI runtime behavior after deploy | `02 Phase 10 Azure Runtime Smoke` |
 | Prove Phase 10 Service Bus publish/consume/DLQ/replay after runtime smoke | `03 Phase 10 Azure Transport Smoke` |
 | Build and publish Phase 10 images indirectly | `01 Phase 10 Azure Deploy Orchestrator` |
 | Deploy or clean up the Azure Phase 10 stack indirectly | `01 Phase 10 Azure Deploy Orchestrator` |
-| Clean old Phase 10 ACR tags, fallback GHCR versions, and workflow artifacts | Let `Phase 10 Retention Cleanup (Internal)` run on schedule; run manually only for housekeeping |
+| Clean old Phase 10 ACR tags, historical GHCR cleanup-only versions, and workflow artifacts | Let `Phase 10 Retention Cleanup (Internal)` run on schedule; run manually only for housekeeping |
 | Do one-time GitHub App and OIDC bootstrap | `azure-initial-setup.yml` |
 | Work on archived App Service compatibility only | `azure-bootstrap.yml`, `deploy-api-to-azure.yml`, or `deploy-ui-to-azure.yml` |
 
@@ -84,13 +87,14 @@ Before approving any workflow or infrastructure change, ask:
 
 | Workflow | Click target | Owns RG creation | Builds images | Deploys app | Cleanup | Current or legacy |
 |---|---|---|---|---|---|---|
+| `00 Azure Platform Foundation` | Platform bootstrap | Yes, platform RG only | No | No | No | Current bootstrap |
 | `01 Phase 10 Azure Deploy Orchestrator` | Primary Phase 10 click target | Routes to internal deploy workflow | Routes to internal image workflow | Routes to internal deploy workflow | Routes Azure RG cleanup when `cleanupInfra=true` | Current wrapper |
 | `02 Phase 10 Azure Runtime Smoke` | Post-deploy smoke | No | No | No | No | Current validation |
 | `03 Phase 10 Azure Transport Smoke` | Post-runtime-smoke transport proof | No | No | No | No | Current validation |
 | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Optional validation | No | Local/runner build only | Local Docker only | Local Docker cleanup | Current validation |
 | `Build Phase 10 Service Images (Internal)` | Do not click for normal deploy | No | Yes | No | No | Current internal |
 | `Deploy Azure Phase 10 Resources (Internal)` | Do not click for normal deploy | Yes | No | Yes | Yes | Current internal |
-| `Phase 10 Retention Cleanup (Internal)` | Housekeeping only | No | No | No | ACR/GHCR/artifact retention only | Current internal |
+| `Phase 10 Retention Cleanup (Internal)` | Housekeeping only | No | No | No | ACR plus historical GHCR cleanup-only plus artifact retention only | Current internal |
 | `Azure Bootstrap & Deploy` | Do not use for Phase 10 | Legacy App Service stack | No | Legacy App Service only | Legacy App Service RG path | Legacy |
 | `Deploy API to Azure App Service` | Do not use for Phase 10 | No | No | Legacy API only | No | Legacy |
 | `Deploy React Frontend to Azure App Service` | Do not use for Phase 10 | No | No | Legacy UI only | No | Legacy |
@@ -124,7 +128,7 @@ or the VS Code task:
 | `phase10-azure-runtime-smoke.yml` | Manual Phase 10 runtime/API/UI smoke after deploy | Keep as the direct post-deploy runtime proof | Yes, if changing gateway/API/UI runtime contracts |
 | `phase10-azure-transport-smoke.yml` | Manual Phase 10 transport/operator smoke after deploy | Keep as the direct post-deploy transport proof | Yes, if changing Service Bus topology or smoke contracts |
 | `phase10-docker-dev-http-e2e.yml` | CI mirror of the local Phase 10 Docker hook | Keep | Yes, if changing hook or log paths |
-| `phase10-retention-cleanup.yml` | Scheduled/manual Phase 10 ACR, fallback GHCR, and artifact housekeeping | Keep | Yes, if changing retention thresholds |
+| `phase10-retention-cleanup.yml` | Scheduled/manual Phase 10 ACR, historical GHCR cleanup-only, and artifact housekeeping | Keep | Yes, if changing retention thresholds |
 | `validate-deployment.yml` | Reusable pre-deployment validation | Keep | Yes, if changing validation rules |
 | `publish-template-package.yml` | Template packaging / publishing | Keep | Yes, before publishing-path changes |
 | `test-validate-deployment.yml` | Tests the validation workflow itself | Keep | Yes, definitely |
@@ -141,11 +145,13 @@ This repo uses a small set of primary operational workflows, with additional sup
 |----------|-------------|------------|-------------|
 | `ci.yml` | Pull requests to dev/staging/main | Validation only | PR build/test gate for the .NET solution plus React frontend typecheck, tests, and build |
 | `azure-initial-setup.yml` | Manual | One-time setup | **[See README-AZURE-INITIAL-SETUP.md](./README-AZURE-INITIAL-SETUP.md)** - Phase 0 (GitHub App), Phase 1a (OIDC), Phase 1b (secrets) |
+| `phase10-platform-foundation.yml` | Manual | Platform foundation | **[See README-INFRA-DEPLOY.md](./README-INFRA-DEPLOY.md)** - Persistent ACR and pull identity bootstrap for the active Phase 10 path |
 | `azure-bootstrap.yml` | Manual | Legacy App Service stack | **[See README-AZURE-BOOTSTRAP.md](./README-AZURE-BOOTSTRAP.md)** - Phase 2 (infrastructure), API/UI deploy, Phase X (cleanup) |
 | `configure-github-secrets.yml` | Called by initial-setup | Secret configuration | **[See README-CONFIGURE-GITHUB-SECRETS.md](./README-CONFIGURE-GITHUB-SECRETS.md)** - GitHub App setup and secret management (can run independently) |
 | `phase10-deploy-orchestrator.yml` | Manual | dev/staging/prod | **[See README-INFRA-DEPLOY.md](./README-INFRA-DEPLOY.md)** - Wrapper that drives the Phase 10 image build plus infra deploy/cleanup flows |
 | `phase10-azure-runtime-smoke.yml` | Manual after deploy | dev/staging/prod | Runs the Phase 10 Gateway/API/UI runtime smoke and writes a pass/fail operator summary |
 | `phase10-azure-transport-smoke.yml` | Manual after deploy | dev/staging/prod | Runs the Phase 10 Service Bus publish, consume, DLQ forwarding, and replay smoke and writes a pass/fail operator summary |
+| `phase10-platform-foundation.yml` | Manual platform bootstrap | shared foundation | Persistent ACR and pull identity setup for the active Phase 10 path |
 | `infra-deploy.yml` | Reusable internal workflow | dev/staging/prod | Internal Phase 10 Bicep deployment and cleanup workflow with alias planning and guarded alias binding |
 | `build-phase10-images.yml` | Wrapper-called internal workflow | ACR | Builds and pushes the Phase 10 container images for gateway, orders, inventory, notifications, and UI |
 | `phase10-docker-dev-http-e2e.yml` | Manual or PR changes to Phase 10 Docker hook paths | Validation only | Runs the local Docker Dev HTTP end-to-end hook in CI and uploads the same Phase 10 logs used by the VS Code task and runbook |

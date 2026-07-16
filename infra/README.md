@@ -5,8 +5,9 @@ This directory contains the production-ready Azure infrastructure definition for
 ## Modules
 
 - `main.bicep` – Legacy subscription-scope hosting entrypoint; creates Resource Group and deploys the App Service-based modules.
-- `main.phase10.acr.bicep` – Phase 10 ACR bootstrap entrypoint; creates the environment resource group, Azure Container Registry, and AcrPull managed identity before image publishing.
-- `main.phase10.bicep` – Phase 10 transport entrypoint; creates Resource Group and deploys the transport-first Service Bus / Log Analytics / ACA / Functions modules, then consumes the Service Bus transport connection output from the Service Bus module for runtime wiring.
+- `main.phase10.platform.bicep` – Persistent Phase 10 platform foundation entrypoint; creates the shared platform resource group, Azure Container Registry, and AcrPull managed identity once.
+- `main.phase10.acr.bicep` – Phase 10 ACR bootstrap module; creates the Azure Container Registry and AcrPull managed identity for a resource-group scoped caller when the platform foundation owns the scope.
+- `main.phase10.bicep` – Phase 10 transport entrypoint; creates the app environment Resource Group and deploys the transport-first Service Bus / Log Analytics / ACA / Functions modules, then consumes the Service Bus transport connection output from the Service Bus module for runtime wiring.
 - `modules/acr.phase10.bicep` – Azure Container Registry plus the runtime pull identity used by Container Apps.
 - `modules/hosting.bicep` – App Service Plan + API and UI Web Apps with connection string configuration.
 - `modules/insights.bicep` – Application Insights instance.
@@ -16,7 +17,7 @@ This directory contains the production-ready Azure infrastructure definition for
 
 ## Naming Convention
 Legacy App Service naming used `{githubOwner}-{baseName}-{component}-xyapp-{environment}` for web apps.
-Phase 10 transport infra now uses shorter container app names with environment suffixes and publishes ingress URLs from deployment outputs. ACR uses Azure-safe alphanumeric naming derived from `xyops{githubOwner}{baseName}{environment}`.
+Phase 10 transport infra now uses shorter container app names with environment suffixes and publishes ingress URLs from deployment outputs. The platform ACR uses Azure-safe alphanumeric naming derived from `xyops{githubOwner}{baseName}platform`.
 Resource group: `rg-{baseName}-{environment}`
 App Service Plan: `asp-{baseName}-{environment}`
 Application Insights: `ai-{baseName}-{environment}`
@@ -37,6 +38,11 @@ Adjust `appServiceSku`, `enableIdentity`, or `location` per environment as neede
 ### Phase 10 Transport Stack
 ```powershell
 az deployment sub what-if --location centralindia --template-file infra/main.phase10.bicep --parameters @infra/parameters/phase10-dev.json
+```
+
+### Phase 10 Platform Foundation
+```powershell
+az deployment sub what-if --location centralindia --template-file infra/main.phase10.platform.bicep --parameters location=centralindia baseName=orderprocessing githubOwner=<github-owner> platformSuffix=platform
 ```
 
 ### Validate (What-If)
@@ -70,7 +76,7 @@ Supporting workflows:
 - `build-phase10-images.yml` publishes the runtime images to ACR when called by the wrapper
 - `phase10-deploy-orchestrator.yml` is the current manual entrypoint
 - `phase10-docker-dev-http-e2e.yml` verifies the local Docker and CI validation path
-- `phase10-retention-cleanup.yml` handles GHCR fallback cleanup, ACR stale-tag cleanup, and stale GitHub artifact cleanup
+- `phase10-retention-cleanup.yml` handles historical GHCR retention, ACR stale-tag cleanup, and stale GitHub artifact cleanup
 
 Legacy compatibility workflows:
 - `azure-bootstrap.yml`
@@ -101,7 +107,8 @@ The SQL module provisions:
 
 Phase 10 note:
 - The active `main.phase10.bicep` entrypoint does not invoke `modules/sql.bicep` today.
-- Phase 10 is intentionally transport-first and currently deploys ACR, Service Bus, Log Analytics, Application Insights, Container Apps, Functions, Key Vault, and the container images.
+- Phase 10 is intentionally transport-first and currently deploys Service Bus, Log Analytics, Application Insights, Container Apps, Functions, Key Vault, and the container images.
+- The persistent ACR registry and runtime pull identity are deployed once by `main.phase10.platform.bicep`.
 - If you need SQL Server or Redis in Azure, treat that as a separate later-phase addition or legacy bootstrap responsibility, not an output of the current Phase 10 wrapper.
 - For a production-grade containerized solution, use ACR for runtime images, Managed Identity for Azure access, and Front Door/WAF for public ingress when you need a controlled external endpoint.
 
