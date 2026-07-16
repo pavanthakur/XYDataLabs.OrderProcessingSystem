@@ -409,7 +409,7 @@ jobs:
           echo "| Gateway URL | https://${{ needs.deploy_or_cleanup.outputs.gatewayFqdn || 'n/a' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Gateway Health | https://${{ needs.deploy_or_cleanup.outputs.gatewayFqdn || 'n/a' }}/ |" >> $GITHUB_STEP_SUMMARY
           echo "| Orders API Smoke | https://${{ needs.deploy_or_cleanup.outputs.gatewayFqdn || 'n/a' }}/api/v1/Info/runtime-configuration |" >> $GITHUB_STEP_SUMMARY
-          echo "| Swagger | Not a Phase 10 smoke gate; use Orders API Smoke for the current routed API proof. |" >> $GITHUB_STEP_SUMMARY
+          echo "| Swagger | Reference only; use the routed Orders API smoke endpoint for Phase 10 proof. |" >> $GITHUB_STEP_SUMMARY
           echo "| UI URL | https://${{ needs.deploy_or_cleanup.outputs.uiFqdn || 'n/a' }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📎 Child Summary Links" >> $GITHUB_STEP_SUMMARY
@@ -441,7 +441,7 @@ jobs:
           echo "| Run URL | https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Gateway Health | https://${{ needs.deploy_or_cleanup.outputs.gatewayFqdn || 'n/a' }}/ |" >> $GITHUB_STEP_SUMMARY
           echo "| Orders API Smoke | https://${{ needs.deploy_or_cleanup.outputs.gatewayFqdn || 'n/a' }}/api/v1/Info/runtime-configuration |" >> $GITHUB_STEP_SUMMARY
-          echo "| Swagger | Not used for Phase 10 smoke; validate the routed API smoke URL instead. |" >> $GITHUB_STEP_SUMMARY
+          echo "| Swagger | Reference only; validate the routed Orders API smoke URL instead. |" >> $GITHUB_STEP_SUMMARY
           echo "| UI | https://${{ needs.deploy_or_cleanup.outputs.uiFqdn || 'n/a' }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🏗️ What Gets Created Automatically" >> $GITHUB_STEP_SUMMARY
@@ -467,7 +467,7 @@ jobs:
           elif [ "${{ needs.preflight.result }}" != "success" ]; then
             echo "- Setup-needed mode: the wrapper stopped before deploy because Phase 10 prerequisites were missing." >> $GITHUB_STEP_SUMMARY
           else
-            echo "- Install/deploy mode: the wrapper built images and routed the Phase 10 runtime stack deployment." >> $GITHUB_STEP_SUMMARY
+            echo "- Deploy mode: the wrapper built images and routed the Phase 10 runtime stack deployment." >> $GITHUB_STEP_SUMMARY
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🚀 Next Steps" >> $GITHUB_STEP_SUMMARY
