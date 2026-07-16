@@ -20,7 +20,7 @@ on:
       dryRun:
         description: 'Dry run (what-if only)'
         required: true
-        default: true
+        default: false
         type: boolean
 
 permissions:
