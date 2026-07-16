@@ -62,11 +62,11 @@ It supports three execution modes:
 2. **Automatic validation** (pull requests) - What-if analysis only
 3. **Reusable workflow call** - Internal invocation from the wrapper or other trusted automation
 
-Dry-run What-If uses Azure validation level `ProviderNoRbac`. This keeps the preview useful when the template contains role assignments such as `AcrPull`, because preview should not fail only because the caller lacks role-assignment write permission.
+Dry-run What-If uses Azure validation level `ProviderNoRbac`. This keeps previews useful even when optional privileged paths exist, because preview should not fail only because the caller lacks role-assignment write permission.
 
-The current Phase 10 architecture now splits ACR ownership into a persistent platform workflow and an environment-scoped app workflow. `00 Azure Platform Foundation` creates the registry and runtime pull identity once, and `01 Phase 10 Azure Deploy Orchestrator` consumes those values without creating registry RBAC inside the app resource group.
+The current Phase 10 architecture now splits ACR ownership into a persistent platform workflow and an environment-scoped app workflow. `00 Azure Platform Foundation` creates the registry and runtime pull identity once. `01 Phase 10 Azure Deploy Orchestrator` consumes the ACR and prepares a scoped pull token for Container Apps, so the normal deploy path does not create registry RBAC inside the app resource group.
 
-The normal app deploy identity should not need `roleAssignments/write` for the Phase 10 environment RG. Keep elevated permissions only on the one-time platform foundation workflow.
+The normal app deploy identity should not need `roleAssignments/write` for Phase 10. The `Assign AcrPull` option in `00 Azure Platform Foundation` is a privileged-only fallback for teams that explicitly choose managed-identity registry pulls.
 
 ### Initial Setup vs Platform Foundation
 
@@ -75,13 +75,13 @@ These workflows overlap in that they are both bootstrap-style, but they own diff
 | Workflow | Primary purpose | Runs when | Owns |
 |---|---|---|---|
 | `Azure Initial Setup` | Repository and auth bootstrap | First-time repo setup, or when GitHub App / OIDC secrets must be recreated | GitHub App, Azure OIDC app registration, GitHub environment secrets |
-| `00 Azure Platform Foundation` | Persistent Azure platform bootstrap | Once, then only if the shared platform foundation changes | Shared ACR, pull identity, one-time `AcrPull` assignment |
+| `00 Azure Platform Foundation` | Persistent Azure platform bootstrap | Once, then only if the shared platform foundation changes | Shared ACR and pull identity; optional privileged `AcrPull` fallback |
 | `01 Phase 10 Azure Deploy Orchestrator` | App environment lifecycle | Normal deploy, dry run, or cleanup | App RG, Container Apps, Service Bus, Key Vault, App Insights, Functions |
 
 Recommended order:
 
 1. Run `Azure Initial Setup` if repository auth is not ready.
-2. Run `00 Azure Platform Foundation` once to create the shared ACR and pull identity.
+2. Run `00 Azure Platform Foundation` once to create the shared ACR and pull identity. Keep `Assign AcrPull=false` for the normal path.
 3. Run `01 Phase 10 Azure Deploy Orchestrator` for normal deploys and cleanups.
 
 Do not merge `Azure Initial Setup` with `00 Azure Platform Foundation` unless you deliberately want a single high-privilege bootstrap path. Keeping them separate preserves cleaner ownership and a smaller blast radius.
