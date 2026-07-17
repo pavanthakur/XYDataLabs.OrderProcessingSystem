@@ -273,3 +273,30 @@ Only then should the repo gain:
 - any common message contracts that would otherwise drift
 
 Do not create that project early. The default Phase 10 position is still service-local contracts until real duplication appears.
+
+## Next Parity Expansion Track
+
+The transport baseline is proven in dev, so the next implementation branch should align Azure with the current local Docker parity instead of broadening the transport slice blindly.
+
+### Target order
+
+1. Reintroduce SQL as an explicit Azure app-resource concern where the runtime actually needs it.
+2. Reintroduce Redis as an explicit Azure app-resource concern only if the current service configuration proves it is still required in Azure.
+3. Tighten ACR lifecycle policy so image publishing, active revision protection, and stale-tag cleanup stay in the same workflow family.
+4. Keep platform foundation persistent and keep app cleanup scoped to the environment RG.
+5. Redeploy `dev` only after the next change set is reviewed and ready for smoke validation.
+
+### Implementation guardrails
+
+- Treat the local Docker SQL/Redis composition as the comparison baseline for environment variables, secret naming, and service boundaries.
+- Keep SQL and Redis out of the platform foundation RG unless a real shared-platform requirement appears.
+- Keep `00 Azure Platform Foundation` focused on persistent ACR and pull identity, with `Assign AcrPull=false` as the default.
+- Keep image lifecycle tightening in the scheduled retention workflow, not in the deploy wrapper.
+- Update wrapper summaries only after the Azure and local contract are aligned.
+
+### Suggested next change-set deliverables
+
+- A SQL/Redis parity matrix that lists the local Docker source, the Azure owner, and the environment-specific value source.
+- A Phase 10 workflow update that carries SQL and Redis only when they are intentionally reintroduced into Azure.
+- A retention policy note that explains how ACR image tags, historical GHCR cleanup-only packages, and artifacts are pruned without touching the active runtime image set.
+- A redeploy checklist for `dev` so the next run happens only after the new contract is committed and reviewed.
