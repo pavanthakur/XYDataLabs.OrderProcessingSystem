@@ -278,6 +278,8 @@ Do not create that project early. The default Phase 10 position is still service
 
 The transport baseline is proven in dev, so the next implementation branch should align Azure with the current local Docker parity instead of broadening the transport slice blindly.
 
+Use [docs/internal/phase10-parity-matrix.md](./phase10-parity-matrix.md) as the single source of truth for the SQL / Redis / ACR follow-up.
+
 ### Target order
 
 1. Reintroduce SQL as an explicit Azure app-resource concern where the runtime actually needs it.

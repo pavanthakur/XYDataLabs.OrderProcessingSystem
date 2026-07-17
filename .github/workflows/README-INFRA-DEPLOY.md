@@ -229,6 +229,8 @@ Target end state:
 
 If the goal is to make the Azure Portal experience match the local Docker container graph, the CI/CD path needs an explicit parity plan:
 
+Use [docs/internal/phase10-parity-matrix.md](../../docs/internal/phase10-parity-matrix.md) as the source-of-truth table for the SQL, Redis, ACR, and cleanup ownership split before changing the Azure workflow chain.
+
 | Need | What to add back or decide | Workflow touchpoint |
 |---|---|---|
 | SQL Server | Reintroduce the SQL module and surface its outputs in the deployment summary | `infra-deploy.yml` / `phase10-deploy-orchestrator.yml` |
