@@ -63,6 +63,12 @@ param notificationsImage string
 @description('UI container image reference')
 param uiImage string
 
+@description('Optional SQL connection string for Phase 10 parity runs')
+param sqlConnectionString string = ''
+
+@description('Optional Redis connection string for Phase 10 parity runs')
+param redisConnectionString string = ''
+
 @description('Azure Container Registry login server used for image pulls')
 param acrLoginServer string = ''
 
@@ -96,6 +102,18 @@ var commonEnv = [
     value: keyVaultUri
   }
 ]
+var sqlEnv = !empty(sqlConnectionString) ? [
+  {
+    name: 'ConnectionStrings__OrderProcessingSystemDbConnection'
+    value: sqlConnectionString
+  }
+] : []
+var redisEnv = !empty(redisConnectionString) ? [
+  {
+    name: 'ConnectionStrings__Redis'
+    value: redisConnectionString
+  }
+] : []
 var publisherEnv = [
   {
     name: 'ServiceBus__Enabled'
@@ -130,6 +148,7 @@ var publisherEnv = [
     value: 'true'
   }
 ]
+var runtimeCommonEnv = concat(commonEnv, sqlEnv, redisEnv)
 var inventoryEnv = concat(publisherEnv, [
   {
     name: 'ServiceBus__SubscriptionName'
@@ -142,29 +161,7 @@ var notificationsEnv = concat(publisherEnv, [
     value: notificationsSubscriptionName
   }
 ])
-var gatewayEnv = concat(commonEnv, [
-  {
-    name: 'Gateway__AllowedHosts__5'
-    value: gatewayName
-  }
-  {
-    name: 'ReverseProxy__Clusters__orders-cluster__Destinations__orders-primary__Address'
-    value: 'http://${ordersName}'
-  }
-  {
-    name: 'ReverseProxy__Clusters__inventory-cluster__Destinations__inventory-primary__Address'
-    value: 'http://${inventoryName}'
-  }
-  {
-    name: 'ReverseProxy__Clusters__notifications-cluster__Destinations__notifications-primary__Address'
-    value: 'http://${notificationsName}'
-  }
-  {
-    name: 'ReverseProxy__Clusters__ui-cluster__Destinations__ui-primary__Address'
-    value: 'http://${uiName}'
-  }
-])
-var uiEnv = concat(commonEnv, [
+var uiEnv = concat(runtimeCommonEnv, [
   {
     name: 'ORDERPROCESSING_API_BASE_URL'
     value: 'http://${gatewayName}'
@@ -232,7 +229,28 @@ resource gatewayApp 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: 'gateway'
           image: gatewayImage
-          env: gatewayEnv
+          env: concat(runtimeCommonEnv, [
+            {
+              name: 'Gateway__AllowedHosts__5'
+              value: gatewayName
+            }
+            {
+              name: 'ReverseProxy__Clusters__orders-cluster__Destinations__orders-primary__Address'
+              value: 'http://${ordersName}'
+            }
+            {
+              name: 'ReverseProxy__Clusters__inventory-cluster__Destinations__inventory-primary__Address'
+              value: 'http://${inventoryName}'
+            }
+            {
+              name: 'ReverseProxy__Clusters__notifications-cluster__Destinations__notifications-primary__Address'
+              value: 'http://${notificationsName}'
+            }
+            {
+              name: 'ReverseProxy__Clusters__ui-cluster__Destinations__ui-primary__Address'
+              value: 'http://${uiName}'
+            }
+          ])
           resources: {
             cpu: json(cpuCores)
             memory: '0.5Gi'
@@ -266,7 +284,7 @@ resource ordersApp 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: 'orders'
           image: ordersImage
-          env: concat(commonEnv, publisherEnv)
+          env: concat(runtimeCommonEnv, publisherEnv)
           resources: {
             cpu: json(cpuCores)
             memory: '0.5Gi'
@@ -300,7 +318,7 @@ resource inventoryApp 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: 'inventory'
           image: inventoryImage
-          env: concat(commonEnv, inventoryEnv)
+          env: concat(runtimeCommonEnv, inventoryEnv)
           resources: {
             cpu: json(cpuCores)
             memory: '0.5Gi'
@@ -334,7 +352,7 @@ resource notificationsApp 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: 'notifications'
           image: notificationsImage
-          env: concat(commonEnv, notificationsEnv)
+          env: concat(runtimeCommonEnv, notificationsEnv)
           resources: {
             cpu: json(cpuCores)
             memory: '0.5Gi'

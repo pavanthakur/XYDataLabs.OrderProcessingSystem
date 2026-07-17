@@ -57,6 +57,15 @@ Use the numbered workflows in this order:
 
 Workflow `99` is not required for Azure deployment if the local hook has already passed, but it is useful as a CI parity gate. The GitHub runner is always a fresh machine, so the workflow starts its own Docker stack instead of trying to reuse one. It generates a CI-only `Resources/Docker/.env.local` with non-secret sandbox values and installs the EF Core CLI before starting Docker because the real local file and local tools are intentionally machine-specific. Reusing an already running stack is supported only by the local script switch `-SkipStartIfNeeded`.
 
+The CI run packet is deterministic and single-rooted:
+
+- Run packet root: `TestResults/Playwright/phase10-docker-http/phase10-docker-dev-http-<github.run_id>-<github.run_attempt>`
+- Run summary: `run-summary.md`
+- JSON summary: `run-summary.json`
+- Integration logs: `integration/`
+
+That mirrors the local hook so the same summary path and log folder shape can be used for troubleshooting on either surface.
+
 ### Default Review Stance
 
 Before approving any workflow or infrastructure change, ask:
@@ -175,9 +184,11 @@ The `phase10-docker-dev-http-e2e.yml` workflow is the CI mirror of the local Pha
 - VS Code task: `1 Run: xydatalabs-test-docker-local-e2e-dev (Docker Dev HTTP E2E)`
 - CI entrypoint: `.github/workflows/phase10-docker-dev-http-e2e.yml`
 - GitHub summary pointers:
+  - `TestResults/Playwright/phase10-docker-http/latest-playwright-run.txt`
   - `TestResults/Playwright/phase10-docker-http/latest-playwright-smoke.txt`
   - `TestResults/Playwright/phase10-docker-http/latest-playwright-full-validation.txt`
-  - `TestResults/Playwright/phase10-docker-http/<timestamp>_endtoend/summary.json`
+  - `TestResults/Playwright/phase10-docker-http/phase10-docker-dev-http-<github.run_id>-<github.run_attempt>/run-summary.md`
+  - `TestResults/Playwright/phase10-docker-http/phase10-docker-dev-http-<github.run_id>-<github.run_attempt>/run-summary.json`
   - `phase10-docker-dev-http-e2e-${{ github.run_id }}-${{ github.run_attempt }}`
 
 Use the local hook for interactive debugging and the CI workflow to prove the same sequence still passes on a runner and produces the expected artifacts.

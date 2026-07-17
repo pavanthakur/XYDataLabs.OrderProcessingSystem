@@ -20,6 +20,7 @@ Anchor flow for the first slice:
 | Azure dev deploy | Verified | GitHub Actions run `29273224237` built the Phase 10 images and deployed the dev Container Apps transport stack successfully. |
 | Phase 10 runtime smoke | Verified | GitHub Actions run `29273711615` proved gateway health, gateway-routed API JSON, UI static route, and UI API proxy bootstrap. |
 | Phase 10 transport / replay smoke | Verified | GitHub Actions run `29273881488` proved Service Bus publish, fan-out consume, controlled DLQ forwarding, DLQ replay receive, and replay publish/consume. |
+| SQL / Redis parity wiring | Wired, off by default | The wrapper and child deploy workflows now carry `deploySql` and `deployRedis` switches, but they stay off until the next dev parity run is intentionally approved. |
 | Cleanup policy closeout | Covered for Phase 10 | Historical GHCR retention, ACR stale-tag cleanup, and stale artifact cleanup are scheduled by `phase10-retention-cleanup.yml`, Phase 10 smoke artifacts use `retention-days: 14`, Azure teardown remains manual through `cleanupInfra=true`, and Log Analytics defaults to `30` days in the workspace module. |
 | ACR image cleanup policy | Implemented with ACR cutover | The retention workflow cleans dev/staging/prod ACR tags while preserving images referenced by active Container App revisions. |
 
@@ -52,9 +53,10 @@ ACR is the enterprise target for Phase 10 runtime images. The ACR cutover is not
 | 1 | Provision the persistent platform ACR and runtime pull identity from `00 Azure Platform Foundation` | The platform resource group contains the registry and pull identity; `AcrPull` is granted only when the privileged platform path is allowed to manage RBAC |
 | 2 | Build and push gateway, Orders, Inventory, Notifications, and UI images to ACR | The Phase 10 build workflow publishes service-specific ACR image refs |
 | 3 | Point the app deployment at the platform ACR and pull identity | Container Apps pull ACR images without `GHCR_READ_TOKEN` and without the app deployment itself creating RG-level role assignments |
-| 4 | Add ACR image cleanup automation | `phase10-retention-cleanup.yml` keeps the latest approved image versions and deletes stale tags/manifests |
-| 5 | Retire GHCR runtime dependency | `GHCR_READ_TOKEN` is no longer required by the active Azure deployment path |
-| 6 | Update summaries and runbooks | Deploy summary identifies ACR image refs and the cleanup policy owner |
+| 4 | Carry SQL and Redis parity through the deploy workflow as explicit opt-in flags | The wrapper and child workflow expose `deploySql` and `deployRedis` but leave them off by default until the next dev parity run is approved |
+| 5 | Add ACR image cleanup automation | `phase10-retention-cleanup.yml` keeps the latest approved image versions and deletes stale tags/manifests |
+| 6 | Retire GHCR runtime dependency | `GHCR_READ_TOKEN` is no longer required by the active Azure deployment path |
+| 7 | Update summaries and runbooks | Deploy summary identifies ACR image refs, parity flags, and the cleanup policy owner |
 
 ACR retention default for dev:
 - Keep the latest `10` image versions per service.
@@ -273,3 +275,32 @@ Only then should the repo gain:
 - any common message contracts that would otherwise drift
 
 Do not create that project early. The default Phase 10 position is still service-local contracts until real duplication appears.
+
+## Next Parity Expansion Track
+
+The transport baseline is proven in dev, so the next implementation branch should align Azure with the current local Docker parity instead of broadening the transport slice blindly.
+
+Use [docs/internal/phase10-parity-matrix.md](./phase10-parity-matrix.md) as the single source of truth for the SQL / Redis / ACR follow-up.
+
+### Target order
+
+1. Reintroduce SQL as an explicit Azure app-resource concern where the runtime actually needs it.
+2. Reintroduce Redis as an explicit Azure app-resource concern only if the current service configuration proves it is still required in Azure.
+3. Tighten ACR lifecycle policy so image publishing, active revision protection, and stale-tag cleanup stay in the same workflow family.
+4. Keep platform foundation persistent and keep app cleanup scoped to the environment RG.
+5. Redeploy `dev` only after the next change set is reviewed and ready for smoke validation.
+
+### Implementation guardrails
+
+- Treat the local Docker SQL/Redis composition as the comparison baseline for environment variables, secret naming, and service boundaries.
+- Keep SQL and Redis out of the platform foundation RG unless a real shared-platform requirement appears.
+- Keep `00 Azure Platform Foundation` focused on persistent ACR and pull identity, with `Assign AcrPull=false` as the default.
+- Keep image lifecycle tightening in the scheduled retention workflow, not in the deploy wrapper.
+- Update wrapper summaries only after the Azure and local contract are aligned.
+
+### Suggested next change-set deliverables
+
+- A SQL/Redis parity matrix that lists the local Docker source, the Azure owner, and the environment-specific value source.
+- A Phase 10 workflow update that carries SQL and Redis only when they are intentionally reintroduced into Azure.
+- A retention policy note that explains how ACR image tags, historical GHCR cleanup-only packages, and artifacts are pruned without touching the active runtime image set.
+- A redeploy checklist for `dev` so the next run happens only after the new contract is committed and reviewed.

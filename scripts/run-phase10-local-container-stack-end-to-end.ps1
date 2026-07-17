@@ -2,7 +2,10 @@
 
 param(
     [ValidateRange(30, 900)]
-    [int]$StabilizationDelaySeconds = 120
+    [int]$StabilizationDelaySeconds = 120,
+
+    [ValidateSet('minimal', 'normal', 'detailed', 'quiet')]
+    [string]$IntegrationConsoleVerbosity = 'minimal'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -11,12 +14,18 @@ $composeFile = Join-Path $workspaceRoot 'compose\docker-compose.phase10.yml'
 $envFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local'
 $logRoot = Join-Path $workspaceRoot 'TestResults\Playwright\phase10-docker-http'
 $dockerConfigRoot = Join-Path $workspaceRoot '.tmp\docker-config'
-$runStamp = "$(Get-Date -Format 'yyyyMMdd-HHmmss')_endtoend"
-$runDir = Join-Path $logRoot $runStamp
-$summaryPath = Join-Path $runDir 'summary.json'
+$runDir = if ([string]::IsNullOrWhiteSpace($env:PHASE10_RUN_ROOT)) {
+    Join-Path $logRoot "$(Get-Date -Format 'yyyyMMdd-HHmmssfff')_endtoend"
+}
+else {
+    $env:PHASE10_RUN_ROOT
+}
+$summaryPath = Join-Path $runDir 'e2e-summary.json'
+$diagnosticsPath = Join-Path $runDir 'diagnostics.json'
 $startupLogPath = Join-Path $runDir '00-end-to-end.log'
 $progressLogPath = Join-Path $runDir 'progress.log'
 $latestPointerPath = Join-Path $logRoot 'latest-playwright-full-validation.txt'
+$latestFailurePointerPath = Join-Path $logRoot 'latest-playwright-failure.txt'
 $rootMarkerPath = Join-Path $workspaceRoot 'TestResults\Playwright\latest-playwright-run.txt'
 
 New-Item -ItemType Directory -Path $runDir -Force | Out-Null
@@ -29,7 +38,7 @@ $env:DOCKER_CONFIG = $dockerConfigRoot
 
 Set-Content -Path $latestPointerPath -Value $runDir -Encoding utf8
 Set-Content -Path $rootMarkerPath -Value $runDir -Encoding utf8
-Set-Content -Path (Join-Path $runDir 'run-plan.txt') -Value @(
+Set-Content -Path (Join-Path $runDir 'end-to-end-run-plan.txt') -Value @(
     'Phase 10 local container stack end-to-end run',
     'Goal: validate the already-started Phase 10 local container stack and clean it up afterwards.',
     'Stages:',
@@ -52,13 +61,13 @@ function Write-ProgressLine {
 
 function Assert-DockerAvailable {
     try {
-        & docker info 2>&1 | Out-Null
+        $output = & docker ps 2>&1
         if ($LASTEXITCODE -ne 0) {
-            throw "Docker is not available."
+            throw ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
         }
     }
     catch {
-        throw 'Docker Desktop is not running or the Docker engine is unavailable. Start Docker Desktop and retry the Phase 10 local container stack task.'
+        throw "Docker Desktop is not running or the Docker engine is unavailable. Start Docker Desktop and retry the Phase 10 local container stack task. Details: $($_.Exception.Message)"
     }
 }
 
@@ -147,7 +156,7 @@ try {
         status = 'passed'
         startedUtc = (Get-Date).ToUniversalTime().ToString('o')
         finishedUtc = (Get-Date).ToUniversalTime().ToString('o')
-        log = 'run-phase10-docker-dev-smoke.log'
+        log = 'smoke.log'
     }
 
     Invoke-LoggedCommand -Name 'integration-prep' -Script {
@@ -162,14 +171,14 @@ try {
     }
 
     Invoke-LoggedCommand -Name 'integration' -Script {
-        & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspaceRoot 'scripts\run-integration-tests-docker.ps1')
+        & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspaceRoot 'scripts\run-integration-tests-docker.ps1') -ConsoleVerbosity $IntegrationConsoleVerbosity
     } | Out-Null
     $summary.steps += [ordered]@{
         name = 'integration'
         status = 'passed'
         startedUtc = (Get-Date).ToUniversalTime().ToString('o')
         finishedUtc = (Get-Date).ToUniversalTime().ToString('o')
-        log = 'run-integration-tests-docker.log'
+        log = 'integration.log'
     }
 
     Invoke-LoggedCommand -Name 'matrix' -Script {
@@ -180,7 +189,7 @@ try {
         status = 'passed'
         startedUtc = (Get-Date).ToUniversalTime().ToString('o')
         finishedUtc = (Get-Date).ToUniversalTime().ToString('o')
-        log = 'npm-run-docker-dev-http-playwright-matrix.log'
+        log = 'matrix.log'
     }
 }
 catch {
@@ -260,6 +269,47 @@ finally {
     $summary.finishedUtc = (Get-Date).ToUniversalTime().ToString('o')
     $summary.status = if ($runFailed) { 'failed' } else { 'passed' }
     Set-Content -Path $summaryPath -Value ($summary | ConvertTo-Json -Depth 6) -Encoding utf8
+    $diagnostics = [ordered]@{
+        target = $summary.target
+        mode = 'endtoend'
+        status = $summary.status
+        startedUtc = $summary.startedUtc
+        finishedUtc = $summary.finishedUtc
+        runDir = $runDir
+        summaryPath = $summaryPath
+        logs = [ordered]@{
+            startup = $startupLogPath
+            progress = $progressLogPath
+            smoke = Join-Path $runDir 'smoke.log'
+            integrationPrep = Join-Path $runDir 'integration-prep.log'
+            integration = Join-Path $runDir 'integration.log'
+            integrationDetails = Join-Path $runDir 'integration'
+            matrix = Join-Path $runDir 'matrix.log'
+            cleanup = Join-Path $runDir 'docker-compose-down.log'
+        }
+        latestPointers = [ordered]@{
+            run = $rootMarkerPath
+            fullValidation = $latestPointerPath
+            failure = $latestFailurePointerPath
+        }
+        failure = if ($runFailed) {
+            [ordered]@{
+                step = ($summary.steps | Where-Object { $_.name -eq 'failure' } | Select-Object -First 1)
+                note = 'See the integration log and the step log path recorded in the step details.'
+            }
+        } else {
+            $null
+        }
+    }
+    Set-Content -Path $diagnosticsPath -Value ($diagnostics | ConvertTo-Json -Depth 8) -Encoding utf8
     Set-Content -Path $latestPointerPath -Value $runDir -Encoding utf8
     Set-Content -Path $rootMarkerPath -Value $runDir -Encoding utf8
+    if ($runFailed) {
+        Set-Content -Path $latestFailurePointerPath -Value $runDir -Encoding utf8
+    }
+    Write-Host "Phase 10 Docker end-to-end run directory: $runDir" -ForegroundColor Cyan
+    Write-Host "Phase 10 Docker end-to-end diagnostics: $diagnosticsPath" -ForegroundColor Cyan
+    if ($runFailed) {
+        Write-Host "Phase 10 Docker end-to-end latest failure pointer: $latestFailurePointerPath" -ForegroundColor Yellow
+    }
 }

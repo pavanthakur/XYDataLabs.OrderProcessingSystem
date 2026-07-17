@@ -8,6 +8,7 @@ Use these documents:
 - `azure-bootstrap-improvements-backlog.md` — active internal backlog for bootstrap, IaC, CI/CD, and hosting improvements
 - `phase9-remaining-roadmap.md` — short Phase 9 closeout and Phase 10 pointer
 - `phase10-implementation-checklist.md` — file-by-file Phase 10 implementation checklist anchored on the order-created transport slice
+- `phase10-parity-matrix.md` — next SQL/Redis/ACR parity change set, based on local Docker versus Azure
 - `docs/runbooks/phase10-azure-smoke.md` — first Azure what-if / deploy / transport smoke runbook for Phase 10
 - `repo-architecture-layer-mapping.md` — repo-specific mapping of the common 7-layer diagram to the actual solution projects
 - `docs/reference/local-dev.md` — current local vs Docker validation paths, including the Phase 10 quick loop and five-step Docker flow
