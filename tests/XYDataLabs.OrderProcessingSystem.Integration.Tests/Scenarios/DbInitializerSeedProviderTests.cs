@@ -37,6 +37,7 @@ public sealed class DbInitializerSeedProviderTests : IClassFixture<SqlServerFixt
         string tenantCode, bool expectedRazorpay3DS, bool expectedOpenPay3DS)
     {
         using var seedContext = CreateContext();
+        ResetTenantGraph(seedContext, TenantACode, TenantBCode, UnknownTenantCode);
         var tenantIds = SeedBothBaselineTenants(seedContext);
         var tenantId = GetTenantId(tenantIds, tenantCode);
 
@@ -68,6 +69,7 @@ public sealed class DbInitializerSeedProviderTests : IClassFixture<SqlServerFixt
         string tenantCode)
     {
         using var seedContext = CreateContext();
+        ResetTenantGraph(seedContext, TenantACode, TenantBCode, UnknownTenantCode);
         var tenantIds = SeedBothBaselineTenants(seedContext);
         var tenantId = GetTenantId(tenantIds, tenantCode);
 
@@ -112,6 +114,7 @@ public sealed class DbInitializerSeedProviderTests : IClassFixture<SqlServerFixt
         string tenantCode, string activeProviderType)
     {
         using var seedContext = CreateContext();
+        ResetTenantGraph(seedContext, TenantACode, TenantBCode, UnknownTenantCode);
         var tenantIds = SeedBothBaselineTenants(seedContext);
         var tenantId = GetTenantId(tenantIds, tenantCode);
 
@@ -144,6 +147,7 @@ public sealed class DbInitializerSeedProviderTests : IClassFixture<SqlServerFixt
     public void Initialize_AlwaysSeedsBothProvidersAsInactiveRegardlessOfTenantState()
     {
         using var seedContext = CreateContext();
+        ResetTenantGraph(seedContext, TenantACode, TenantBCode, UnknownTenantCode);
 
         var tenantIds = SeedBothBaselineTenants(seedContext);
         SeedStubSampleData(seedContext, tenantIds.TenantAId);
@@ -167,6 +171,7 @@ public sealed class DbInitializerSeedProviderTests : IClassFixture<SqlServerFixt
     public void Initialize_WithConfiguration_BackfillsProviderRuntimeFields()
     {
         using var seedContext = CreateContext();
+        ResetTenantGraph(seedContext, TenantACode, TenantBCode, UnknownTenantCode);
         var tenantIds = SeedBothBaselineTenants(seedContext);
 
         var configuration = new ConfigurationBuilder()
@@ -280,6 +285,45 @@ public sealed class DbInitializerSeedProviderTests : IClassFixture<SqlServerFixt
         }
 
         return (tenantAId, tenantBId);
+    }
+
+    private static void ResetTenantGraph(OrderProcessingSystemDbContext context, params string[] tenantCodes)
+    {
+        var tenantIds = context.Tenants
+            .IgnoreQueryFilters()
+            .Where(tenant => tenantCodes.Contains(tenant.Code))
+            .Select(tenant => tenant.Id)
+            .ToList();
+
+        if (tenantIds.Count == 0)
+        {
+            return;
+        }
+
+        var tenantIdList = string.Join(", ", tenantIds);
+
+        // Use set-based SQL so cleanup can remove historical rows whose enum
+        // string values no longer materialize through the current EF model.
+        context.Database.ExecuteSqlRaw($"""
+            DELETE FROM [payments].[PaymentAttemptHistories] WHERE [TenantId] IN ({tenantIdList});
+            DELETE FROM [payments].[TransactionStatusHistories] WHERE [TenantId] IN ({tenantIdList});
+            DELETE FROM [payments].[PayinLogDetails] WHERE [TenantId] IN ({tenantIdList});
+            DELETE FROM [payments].[CardTransactions] WHERE [TenantId] IN ({tenantIdList});
+            DELETE FROM [payments].[PaymentAttempts] WHERE [TenantId] IN ({tenantIdList});
+            DELETE FROM [payments].[BillingCustomerKeyInfos] WHERE [TenantId] IN ({tenantIdList});
+            DELETE FROM [payments].[BillingCustomers] WHERE [TenantId] IN ({tenantIdList});
+            DELETE FROM [payments].[PayinLogs] WHERE [TenantId] IN ({tenantIdList});
+            DELETE FROM [payments].[PaymentMethods] WHERE [TenantId] IN ({tenantIdList});
+            DELETE FROM [payments].[PaymentProviders] WHERE [TenantId] IN ({tenantIdList});
+            DELETE FROM [orders].[OrderProducts] WHERE [TenantId] IN ({tenantIdList});
+            DELETE FROM [orders].[Orders] WHERE [TenantId] IN ({tenantIdList});
+            DELETE FROM [inventory].[Products] WHERE [TenantId] IN ({tenantIdList});
+            DELETE FROM [orders].[Customers] WHERE [TenantId] IN ({tenantIdList});
+            DELETE FROM [notifications].[InboxMessages] WHERE [TenantId] IN ({tenantIdList});
+            DELETE FROM [notifications].[OutboxMessages] WHERE [TenantId] IN ({tenantIdList});
+            DELETE FROM [notifications].[AuditLogs] WHERE [TenantId] IN ({tenantIdList});
+            DELETE FROM [dbo].[Tenants] WHERE [Id] IN ({tenantIdList});
+            """);
     }
 
     private static int SeedTenant(OrderProcessingSystemDbContext context, string tenantCode)

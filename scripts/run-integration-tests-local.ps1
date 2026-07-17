@@ -1,7 +1,10 @@
 #Requires -Version 7.0
 
 param(
-    [string] $WorkspaceRoot = (Split-Path -Parent $PSScriptRoot)
+    [string]$WorkspaceRoot = (Split-Path -Parent $PSScriptRoot),
+
+    [ValidateSet('minimal', 'normal', 'detailed', 'quiet')]
+    [string]$ConsoleVerbosity = 'minimal'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -51,7 +54,7 @@ try {
         --filter Category=Integration `
         --results-directory $runDir `
         --logger "trx;LogFileName=$trxName" `
-        --logger "console;verbosity=minimal" 2>&1 | Tee-Object -FilePath (Join-Path $runDir $logName)
+        --logger "console;verbosity=$ConsoleVerbosity" 2>&1 | Tee-Object -FilePath (Join-Path $runDir $logName)
     $exitCode = $LASTEXITCODE
     if ($exitCode -eq 0) {
         & pwsh -NoProfile -ExecutionPolicy Bypass -File $statusWriter -EnvironmentKey 'local-http' -TaskName 'local-http-integration' -Status passed -Message "trx=$trxName"

@@ -14,6 +14,7 @@ This runbook covers the first live check for the Phase 10 transport slice define
 - The persistent ACR registry and the runtime pull identity are owned by `00 Azure Platform Foundation`.
 - Friendly alias inputs: `publicDomain`, `bindAliases`, `aliasMode`
 - Phase 10 does not currently deploy Azure SQL Server or Azure Cache for Redis. Those resources belong to the older bootstrap/App Service path or to later platform work, not to the current transport-first container-app stack.
+- For the next implementation slice, use [docs/internal/phase10-parity-matrix.md](../internal/phase10-parity-matrix.md) as the SQL / Redis / ACR source of truth before changing Azure again.
 - Application Insights is part of the Phase 10 deployment and should appear in the target resource group when the deployment succeeds.
 - The Phase 10 deploy workflow now auto-registers the Azure resource providers it depends on, including `Microsoft.AlertsManagement`, so a clean subscription can still proceed without manual provider setup.
 

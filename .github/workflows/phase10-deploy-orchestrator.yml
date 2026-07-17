@@ -45,6 +45,16 @@ on:
         required: true
         default: false
         type: boolean
+      deploySql:
+        description: 'Include the Azure SQL parity slice in the next Phase 10 deployment'
+        required: true
+        default: false
+        type: boolean
+      deployRedis:
+        description: 'Include the Azure Cache for Redis parity slice in the next Phase 10 deployment'
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -265,6 +275,8 @@ jobs:
       aliasMode: ${{ inputs.aliasMode }}
       dryRun: ${{ inputs.dryRun }}
       cleanupInfra: ${{ inputs.cleanupInfra }}
+      deploySql: ${{ inputs.deploySql }}
+      deployRedis: ${{ inputs.deployRedis }}
       acrName: ${{ needs.resolve_platform.outputs.acrName }}
       acrLoginServer: ${{ needs.resolve_platform.outputs.acrLoginServer }}
       acrPullIdentityId: ${{ needs.resolve_platform.outputs.acrPullIdentityId }}
@@ -334,6 +346,8 @@ jobs:
           echo "| Location | ${{ inputs.location }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Dry Run | ${{ inputs.dryRun }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Cleanup Infra | ${{ inputs.cleanupInfra }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Deploy SQL Parity Slice | ${{ inputs.deploySql }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Deploy Redis Parity Slice | ${{ inputs.deployRedis }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Bind Aliases | ${{ inputs.bindAliases }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Alias Mode | ${{ inputs.aliasMode }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Public Domain | ${{ inputs.publicDomain || '(none)' }} |" >> $GITHUB_STEP_SUMMARY
@@ -378,6 +392,8 @@ jobs:
             echo "| Build Skipped | No |" >> $GITHUB_STEP_SUMMARY
           fi
           echo "| Cleanup Requested | ${{ inputs.cleanupInfra }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| SQL Parity Requested | ${{ inputs.deploySql }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Redis Parity Requested | ${{ inputs.deployRedis }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📊 Environment Execution" >> $GITHUB_STEP_SUMMARY
           echo "| Environment | Result |" >> $GITHUB_STEP_SUMMARY

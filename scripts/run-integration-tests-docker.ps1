@@ -2,15 +2,23 @@
 
 param(
     [Parameter(Mandatory = $false)]
-    [string]$WorkspaceRoot = (Split-Path -Parent $PSScriptRoot)
+    [string]$WorkspaceRoot = (Split-Path -Parent $PSScriptRoot),
+
+    [Parameter(Mandatory = $false)]
+    [ValidateSet('minimal', 'normal', 'detailed', 'quiet')]
+    [string]$ConsoleVerbosity = 'minimal'
 )
 
 $ErrorActionPreference = 'Stop'
 
 $testProject = Join-Path $WorkspaceRoot 'tests\XYDataLabs.OrderProcessingSystem.Integration.Tests\XYDataLabs.OrderProcessingSystem.Integration.Tests.csproj'
 $resultsRoot = Join-Path $WorkspaceRoot 'TestResults\Integration'
-$runStamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$runDir = Join-Path $resultsRoot $runStamp
+$runDir = if ([string]::IsNullOrWhiteSpace($env:PHASE10_RUN_ROOT)) {
+    Join-Path $resultsRoot (Get-Date -Format 'yyyyMMdd-HHmmss')
+}
+else {
+    Join-Path $env:PHASE10_RUN_ROOT 'integration'
+}
 $trxName = 'integration-tests-docker.trx'
 $logName = 'integration-tests-docker.log'
 $envLocalPath = Join-Path $WorkspaceRoot 'Resources\Docker\.env.local'
@@ -57,7 +65,7 @@ try {
         --filter Category=Integration `
         --results-directory $runDir `
         --logger "trx;LogFileName=$trxName" `
-        --logger "console;verbosity=minimal" 2>&1 | Tee-Object -FilePath (Join-Path $runDir $logName)
+        --logger "console;verbosity=$ConsoleVerbosity" 2>&1 | Tee-Object -FilePath (Join-Path $runDir $logName)
     $exitCode = $LASTEXITCODE
     if ($exitCode -eq 0) {
         & pwsh -NoProfile -ExecutionPolicy Bypass -File $statusWriter -EnvironmentKey 'docker-http' -TaskName 'docker-http-integration' -Status passed -Message "trx=$trxName"

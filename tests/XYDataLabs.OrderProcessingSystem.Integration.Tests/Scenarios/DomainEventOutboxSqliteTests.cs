@@ -34,6 +34,7 @@ public sealed class DomainEventOutboxSqlServerTests : IClassFixture<SqlServerFix
     [Fact]
     public async Task SaveChangesAsync_Should_Persist_Outbox_And_Clear_DomainEvents_On_Success_Using_SqlServer()
     {
+        await ResetTenantGraphAsync();
         await SeedBaselineEntitiesAsync();
 
         await using var context = CreateContext();
@@ -63,6 +64,7 @@ public sealed class DomainEventOutboxSqlServerTests : IClassFixture<SqlServerFix
     [Fact]
     public async Task SaveChangesAsync_Should_Roll_Back_Outbox_And_Keep_DomainEvents_On_Failure_Using_SqlServer()
     {
+        await ResetTenantGraphAsync();
         var providerId = await SeedBaselineEntitiesAsync();
 
         await using var failingContext = CreateContext();
@@ -211,7 +213,7 @@ public sealed class DomainEventOutboxSqlServerTests : IClassFixture<SqlServerFix
         var tenantExists = await context.Tenants.AnyAsync(tenant => tenant.Id == _tenantProvider.TenantId);
         if (!tenantExists)
         {
-            context.Database.ExecuteSqlInterpolated($@"
+            await context.Database.ExecuteSqlInterpolatedAsync($@"
                 SET IDENTITY_INSERT [dbo].[Tenants] ON;
                 INSERT INTO [dbo].[Tenants] ([Id], [ExternalId], [Code], [Name], [Status], [TenantTier], [CreatedBy], [CreatedDate])
                 VALUES ({_tenantProvider.TenantId}, {"ext-TenantSqlite"}, {_tenantProvider.TenantCode}, {"Tenant Sqlite"}, {"Active"}, {"SharedPool"}, {1}, {DateTime.UtcNow});
@@ -256,6 +258,114 @@ public sealed class DomainEventOutboxSqlServerTests : IClassFixture<SqlServerFix
         await context.SaveChangesAsync();
 
         return paymentProvider.Id;
+    }
+
+    private async Task ResetTenantGraphAsync()
+    {
+        await using var context = CreateContext();
+
+        var tenantId = _tenantProvider.TenantId;
+
+        var cardTransactions = await context.CardTransactions
+            .IgnoreQueryFilters()
+            .Where(transaction => transaction.TenantId == tenantId)
+            .ToListAsync();
+        if (cardTransactions.Count > 0)
+        {
+            context.CardTransactions.RemoveRange(cardTransactions);
+            await context.SaveChangesAsync();
+        }
+
+        var billingCustomerKeyInfos = await context.BillingCustomerKeyInfos
+            .IgnoreQueryFilters()
+            .Where(keyInfo => keyInfo.TenantId == tenantId)
+            .ToListAsync();
+        if (billingCustomerKeyInfos.Count > 0)
+        {
+            context.BillingCustomerKeyInfos.RemoveRange(billingCustomerKeyInfos);
+            await context.SaveChangesAsync();
+        }
+
+        var billingCustomers = await context.BillingCustomers
+            .IgnoreQueryFilters()
+            .Where(customer => customer.TenantId == tenantId)
+            .ToListAsync();
+        if (billingCustomers.Count > 0)
+        {
+            context.BillingCustomers.RemoveRange(billingCustomers);
+            await context.SaveChangesAsync();
+        }
+
+        var payinLogs = await context.PayinLogs
+            .IgnoreQueryFilters()
+            .Where(payinLog => payinLog.TenantId == tenantId)
+            .ToListAsync();
+        if (payinLogs.Count > 0)
+        {
+            context.PayinLogs.RemoveRange(payinLogs);
+            await context.SaveChangesAsync();
+        }
+
+        var paymentMethods = await context.PaymentMethods
+            .IgnoreQueryFilters()
+            .Where(method => method.TenantId == tenantId)
+            .ToListAsync();
+        if (paymentMethods.Count > 0)
+        {
+            context.PaymentMethods.RemoveRange(paymentMethods);
+            await context.SaveChangesAsync();
+        }
+
+        var paymentProviders = await context.PaymentProviders
+            .IgnoreQueryFilters()
+            .Where(provider => provider.TenantId == tenantId)
+            .ToListAsync();
+        if (paymentProviders.Count > 0)
+        {
+            context.PaymentProviders.RemoveRange(paymentProviders);
+            await context.SaveChangesAsync();
+        }
+
+        var orders = await context.Orders
+            .IgnoreQueryFilters()
+            .Where(order => order.TenantId == tenantId)
+            .ToListAsync();
+        if (orders.Count > 0)
+        {
+            context.Orders.RemoveRange(orders);
+            await context.SaveChangesAsync();
+        }
+
+        var products = await context.Products
+            .IgnoreQueryFilters()
+            .Where(product => product.TenantId == tenantId)
+            .ToListAsync();
+        if (products.Count > 0)
+        {
+            context.Products.RemoveRange(products);
+            await context.SaveChangesAsync();
+        }
+
+        var customers = await context.Customers
+            .IgnoreQueryFilters()
+            .Where(customer => customer.TenantId == tenantId)
+            .ToListAsync();
+        if (customers.Count > 0)
+        {
+            context.Customers.RemoveRange(customers);
+            await context.SaveChangesAsync();
+        }
+
+        var outboxMessages = await context.OutboxMessages
+            .IgnoreQueryFilters()
+            .Where(message => message.TenantId == tenantId)
+            .ToListAsync();
+        if (outboxMessages.Count > 0)
+        {
+            context.OutboxMessages.RemoveRange(outboxMessages);
+            await context.SaveChangesAsync();
+        }
+
     }
 
     private OrderProcessingSystemDbContext CreateContext()
