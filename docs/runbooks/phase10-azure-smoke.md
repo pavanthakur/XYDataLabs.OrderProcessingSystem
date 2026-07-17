@@ -113,6 +113,22 @@ Rule of thumb:
 - Run `99` only when you want optional local/CI parity for the Docker container shape.
 - Workflow `99` always starts its own Docker stack on GitHub-hosted runners. Reusing an already running stack is a local script-only option via `scripts/run-phase10-docker-dev-e2e-hook.ps1 -SkipStartIfNeeded`.
 
+### Environment Operating Matrix
+
+Use the same Phase 10 sequence in each environment, changing only the target environment value.
+
+| Environment | Platform foundation | Azure deploy or cleanup | Runtime smoke | Transport smoke | Cleanup note |
+|---|---|---|---|---|---|
+| `dev` | Run `00` once, then only when platform ACR or pull identity must be recreated | Run `01` with `cleanupInfra=false` for deploys and `cleanupInfra=true` for teardown | Run `02` after a successful deploy | Run `03` after `02` passes | Deletes `rg-orderprocessing-dev` only; platform foundation stays persistent |
+| `staging` | Run `00` once, then only when platform ACR or pull identity must be recreated | Run `01` with `cleanupInfra=false` for deploys and `cleanupInfra=true` for teardown | Run `02` after a successful deploy | Run `03` after `02` passes | Deletes `rg-orderprocessing-staging` only; platform foundation stays persistent |
+| `prod` | Run `00` once, then only when platform ACR or pull identity must be recreated | Run `01` with `cleanupInfra=false` for deploys and `cleanupInfra=true` only during approved teardown | Run `02` after a successful deploy | Run `03` after `02` passes | Deletes `rg-orderprocessing-prod` only; platform foundation stays persistent |
+
+Default selection guidance:
+
+- Keep `Assign AcrPull=false` for normal dev/staging/prod runs.
+- Use `Assign AcrPull=true` only for a privileged platform-admin run that already has `roleAssignments/write`.
+- Use `99` only for optional local or CI parity checks, not for the main Azure environment lifecycle.
+
 ### Latest Verified Dev Proof
 
 Use this as the current known-good Phase 10 baseline when comparing future workflow runs.
