@@ -83,14 +83,43 @@ jobs:
         working-directory: automation
         run: npm ci
 
+      - name: Resolve run packet context
+        id: run_packet
+        shell: pwsh
+        run: |
+          $runId = "phase10-docker-dev-http-${{ github.run_id }}-${{ github.run_attempt }}"
+          $runRoot = Join-Path (Join-Path $PWD 'TestResults/Playwright/phase10-docker-http') $runId
+          $summaryPath = Join-Path $runRoot 'run-summary.md'
+          $summaryJsonPath = Join-Path $runRoot 'run-summary.json'
+          $latestPointerPath = Join-Path (Join-Path $PWD 'TestResults/Playwright/phase10-docker-http') 'latest-playwright-run.txt'
+          $latestFailurePointerPath = Join-Path (Join-Path $PWD 'TestResults/Playwright/phase10-docker-http') 'latest-playwright-failure.txt'
+
+          New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
+
+          "run_id=$runId" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "run_root=$runRoot" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "summary_path=$summaryPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "summary_json_path=$summaryJsonPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "latest_pointer_path=$latestPointerPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "latest_failure_pointer_path=$latestFailurePointerPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+          Write-Host "Resolved Phase 10 run packet context:"
+          Write-Host "  Run ID: $runId"
+          Write-Host "  Run Root: $runRoot"
+          Write-Host "  Summary: $summaryPath"
+
       - name: Run Phase 10 Docker Dev HTTP hook
         shell: pwsh
+        env:
+          PHASE10_RUN_ID: ${{ steps.run_packet.outputs.run_id }}
+          PHASE10_RUN_ROOT: ${{ steps.run_packet.outputs.run_root }}
         run: |
           $args = @(
             '-NoProfile',
             '-ExecutionPolicy', 'Bypass',
             '-File', 'scripts/run-phase10-docker-dev-e2e-hook.ps1',
-            '-StabilizationDelaySeconds', $env:STABILIZATION_DELAY_SECONDS
+            '-StabilizationDelaySeconds', $env:STABILIZATION_DELAY_SECONDS,
+            '-RunId', $env:PHASE10_RUN_ID
           )
           & pwsh @args
 
@@ -98,12 +127,35 @@ jobs:
         if: failure()
         shell: pwsh
         run: |
+          $runRoot = '${{ steps.run_packet.outputs.run_root }}'
+          $summaryPath = '${{ steps.run_packet.outputs.summary_path }}'
+          $summaryJsonPath = '${{ steps.run_packet.outputs.summary_json_path }}'
           $logRoot = Join-Path $PWD 'TestResults/Playwright/phase10-docker-http'
           $candidateFiles = @(
+            $summaryPath,
+            $summaryJsonPath,
             (Join-Path $logRoot 'latest-playwright-full-validation.txt'),
             (Join-Path $logRoot 'latest-playwright-smoke.txt'),
             (Join-Path $PWD 'TestResults/Playwright/latest-playwright-run.txt')
           )
+
+          if (-not [string]::IsNullOrWhiteSpace($runRoot) -and (Test-Path -LiteralPath $runRoot)) {
+            Write-Host ""
+            Write-Host "=== Phase 10 resolved run packet ===" -ForegroundColor Cyan
+            Write-Host $runRoot
+
+            if (Test-Path -LiteralPath $summaryPath) {
+              Write-Host ""
+              Write-Host "--- run-summary.md ---" -ForegroundColor Yellow
+              Get-Content -LiteralPath $summaryPath -Tail 160
+            }
+
+            if (Test-Path -LiteralPath $summaryJsonPath) {
+              Write-Host ""
+              Write-Host "--- run-summary.json ---" -ForegroundColor Yellow
+              Get-Content -LiteralPath $summaryJsonPath -Tail 160
+            }
+          }
 
           foreach ($pointer in $candidateFiles) {
             if (-not (Test-Path -LiteralPath $pointer)) {
@@ -143,8 +195,7 @@ jobs:
         with:
           name: phase10-docker-dev-http-e2e-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            TestResults/Playwright/phase10-docker-http/**
-            TestResults/Integration/**
+            TestResults/Playwright/phase10-docker-http/${{ steps.run_packet.outputs.run_id }}/**
           if-no-files-found: warn
           retention-days: 14
 
@@ -152,16 +203,19 @@ jobs:
         if: always()
         shell: pwsh
         run: |
+          $runId = '${{ steps.run_packet.outputs.run_id }}'
+          $runRoot = '${{ steps.run_packet.outputs.run_root }}'
+          $summaryPath = '${{ steps.run_packet.outputs.summary_path }}'
+          $summaryJsonPath = '${{ steps.run_packet.outputs.summary_json_path }}'
           $summary = @()
           $summary += '## 99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)'
           $summary += ''
           $summary += '- Hook: `scripts/run-phase10-docker-dev-e2e-hook.ps1`'
           $summary += '- Automation alias: `npm --prefix automation run xydatalabs-test-docker-local-e2e-dev`'
           $summary += '- Compatibility alias: `npm --prefix automation run run:docker:dev:http:e2e-hook`'
-          $summary += '- Logs: `TestResults/Playwright/phase10-docker-http`'
-          $summary += '- Latest smoke pointer: `TestResults/Playwright/phase10-docker-http/latest-playwright-smoke.txt`'
-          $summary += '- Latest full-validation pointer: `TestResults/Playwright/phase10-docker-http/latest-playwright-full-validation.txt`'
-          $summary += '- End-to-end summary JSON: `TestResults/Playwright/phase10-docker-http/<timestamp>_endtoend/summary.json`'
+          $summary += ('- Run packet root: `' + $runRoot + '`')
+          $summary += ('- Run summary: `' + $summaryPath + '`')
+          $summary += ('- JSON summary: `' + $summaryJsonPath + '`')
           $summary += '- Artifact bundle: `phase10-docker-dev-http-e2e-${{ github.run_id }}-${{ github.run_attempt }}`'
           $summary += ''
           $summary += '### Expected sequence'
@@ -173,6 +227,8 @@ jobs:
           $summary += ''
           $summary += '### Artifacts'
           $summary += '- End-to-end summary JSON'
+          $summary += '- Run summary markdown'
           $summary += '- Smoke pointer file'
           $summary += '- Full-validation pointer file'
+          $summary += ('- Deterministic run packet id: `' + $runId + '`')
           $summary -join "`n" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8
