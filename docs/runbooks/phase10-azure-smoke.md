@@ -46,7 +46,8 @@ The enterprise target is to keep ACR and the pull identity in a persistent platf
 |---|---|---|
 | App environment RG | `01 Phase 10 Azure Deploy Orchestrator` | Deleted only when `cleanupInfra=true` |
 | ACR registry | `00 Azure Platform Foundation` | Persistent; not deleted by app environment cleanup |
-| Pull identity and ACR RBAC | `00 Azure Platform Foundation` | Created once; not recreated per app RG |
+| Pull identity | `00 Azure Platform Foundation` | Created once; not recreated per app RG |
+| Optional AcrPull RBAC fallback | `00 Azure Platform Foundation` | Privileged-only path; not required by the normal Phase 10 deploy |
 | ACR images and tags | `Phase 10 Retention Cleanup (Internal)` | Scheduled pruning; preserves active revision images |
 | GitHub artifacts | Workflow upload steps plus retention cleanup | Retained by `retention-days` and scheduled artifact cleanup |
 
@@ -70,8 +71,17 @@ For the current active path:
 
 | Scope | Required capability |
 |---|---|
-| Platform foundation workflow | One-time setup for the persistent ACR and pull identity; the `AcrPull` grant is now handled by a privileged platform path if needed |
-| Normal Phase 10 deploy workflow | Environment-scoped deployment rights only; no `roleAssignments/write` needed |
+| Platform foundation workflow | One-time setup for the persistent ACR and pull identity; `AcrPull` is an optional privileged fallback |
+| Normal Phase 10 deploy workflow | Environment-scoped deployment rights only; creates scoped ACR pull-token credentials and needs no `roleAssignments/write` |
+
+`Assign AcrPull` usage in `00 Azure Platform Foundation`:
+
+| Input | Use it when |
+|---|---|
+| `Assign AcrPull = false` | You want the normal Phase 10 enterprise path. This is the default and the recommended choice. |
+| `Assign AcrPull = true` | You are running the platform workflow with a privileged Azure identity that already has `roleAssignments/write` and you explicitly want the workflow to create the ACR RBAC grant. |
+
+Leave it `false` for normal dev/staging/prod Phase 10 runs.
 
 ACR retention rules stay separate from app deployment:
 

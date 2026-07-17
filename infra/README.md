@@ -5,7 +5,7 @@ This directory contains the production-ready Azure infrastructure definition for
 ## Modules
 
 - `main.bicep` – Legacy subscription-scope hosting entrypoint; creates Resource Group and deploys the App Service-based modules.
-- `main.phase10.platform.bicep` – Persistent Phase 10 platform foundation entrypoint; creates the shared platform resource group, Azure Container Registry, and AcrPull managed identity once.
+- `main.phase10.platform.bicep` – Persistent Phase 10 platform foundation entrypoint; creates the shared platform resource group, Azure Container Registry, and ACR pull identity once.
 - `main.phase10.acr.bicep` – Phase 10 ACR bootstrap module; creates the Azure Container Registry and AcrPull managed identity for a resource-group scoped caller when the platform foundation owns the scope. The AcrPull assignment itself is now optional and disabled by default so the template can run without `roleAssignments/write`.
 - `main.phase10.bicep` – Phase 10 transport entrypoint; creates the app environment Resource Group and deploys the transport-first Service Bus / Log Analytics / ACA / Functions modules, then consumes the Service Bus transport connection output from the Service Bus module for runtime wiring.
 - `modules/acr.phase10.bicep` – Azure Container Registry plus the runtime pull identity used by Container Apps.
@@ -109,7 +109,7 @@ Phase 10 note:
 - The active `main.phase10.bicep` entrypoint does not invoke `modules/sql.bicep` today.
 - Phase 10 is intentionally transport-first and currently deploys Service Bus, Log Analytics, Application Insights, Container Apps, Functions, Key Vault, and the container images.
 - The persistent ACR registry and runtime pull identity are deployed once by `main.phase10.platform.bicep`.
-- The template no longer tries to self-grant `AcrPull` during the same deployment unless the privileged platform bootstrap path explicitly enables it.
+- The template no longer tries to self-grant `AcrPull` during the normal deployment path. `01 Phase 10 Azure Deploy Orchestrator` prepares scoped ACR pull-token credentials for Container Apps, while `AcrPull` remains an optional privileged fallback.
 - If you need SQL Server or Redis in Azure, treat that as a separate later-phase addition or legacy bootstrap responsibility, not an output of the current Phase 10 wrapper.
 - For a production-grade containerized solution, use ACR for runtime images, Managed Identity for Azure access, and Front Door/WAF for public ingress when you need a controlled external endpoint.
 
