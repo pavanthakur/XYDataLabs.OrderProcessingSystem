@@ -13,6 +13,7 @@ This directory contains the production-ready Azure infrastructure definition for
 - `modules/insights.bicep` – Application Insights instance.
 - `modules/loganalytics.phase10.bicep` – Log Analytics workspace for the Phase 10 transport slice.
 - `modules/sql.bicep` – Azure SQL Server and Database with firewall rules.
+- `modules/redis.phase10.bicep` – Azure Cache for Redis for the optional Phase 10 parity slice.
 - `modules/identity.bicep` – (Optional) Creates GitHub OIDC App Registration + federated credentials using an Azure CLI deploymentScript.
 
 ## Naming Convention
@@ -106,11 +107,11 @@ The SQL module provisions:
 - Connection string automatically configured in App Services
 
 Phase 10 note:
-- The active `main.phase10.bicep` entrypoint does not invoke `modules/sql.bicep` today.
+- The active `main.phase10.bicep` entrypoint now exposes opt-in parity switches for `modules/sql.bicep` and `modules/redis.phase10.bicep`, but both remain disabled by default until the next dev parity run is intentionally approved.
 - Phase 10 is intentionally transport-first and currently deploys Service Bus, Log Analytics, Application Insights, Container Apps, Functions, Key Vault, and the container images.
 - The persistent ACR registry and runtime pull identity are deployed once by `main.phase10.platform.bicep`.
 - The template no longer tries to self-grant `AcrPull` during the normal deployment path. `01 Phase 10 Azure Deploy Orchestrator` prepares scoped ACR pull-token credentials for Container Apps, while `AcrPull` remains an optional privileged fallback.
-- If you need SQL Server or Redis in Azure, treat that as a separate later-phase addition or legacy bootstrap responsibility, not an output of the current Phase 10 wrapper.
+- If you need SQL Server or Redis in Azure, use the wrapper parity switches deliberately (`deploySql` / `deployRedis`) and treat the default off state as the current baseline until the dev parity run is approved.
 - For a production-grade containerized solution, use ACR for runtime images, Managed Identity for Azure access, and Front Door/WAF for public ingress when you need a controlled external endpoint.
 
 **Security Note**: SQL admin credentials are stored as secure parameters. In production, consider using:

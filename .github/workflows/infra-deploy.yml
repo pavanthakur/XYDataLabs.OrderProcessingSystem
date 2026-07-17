@@ -45,6 +45,16 @@ on:
         required: true
         default: false
         type: boolean
+      deploySql:
+        description: 'Deploy the Phase 10 Azure SQL parity slice'
+        required: true
+        default: false
+        type: boolean
+      deployRedis:
+        description: 'Deploy the Phase 10 Azure Redis parity slice'
+        required: true
+        default: false
+        type: boolean
       acrLoginServer:
         description: 'Optional ACR login server for Phase 10 runtime images'
         required: false
@@ -112,6 +122,8 @@ jobs:
           echo "| workflow | ${{ github.workflow }} |" >> $GITHUB_STEP_SUMMARY
           echo "| dryRun | ${{ inputs.dryRun }} |" >> $GITHUB_STEP_SUMMARY
           echo "| cleanupInfra | ${{ inputs.cleanupInfra }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| deploySql | ${{ inputs.deploySql }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| deployRedis | ${{ inputs.deployRedis }} |" >> $GITHUB_STEP_SUMMARY
           echo "| environment | ${{ inputs.environment }} |" >> $GITHUB_STEP_SUMMARY
           echo "| location | ${{ inputs.location }} |" >> $GITHUB_STEP_SUMMARY
           echo "| acr_login_server | ${{ inputs.acrLoginServer || '(not provided)' }} |" >> $GITHUB_STEP_SUMMARY
@@ -206,9 +218,19 @@ jobs:
             echo "params=infra/parameters/phase10-${{ inputs.environment }}.json" >> $GITHUB_OUTPUT
             echo "phase10=true" >> $GITHUB_OUTPUT
             echo "env=${{ inputs.environment }}" >> $GITHUB_OUTPUT
+            echo "deploySql=${{ inputs.deploySql }}" >> $GITHUB_OUTPUT
+            echo "deployRedis=${{ inputs.deployRedis }}" >> $GITHUB_OUTPUT
+            echo "sqlAdminUsername=sqladmin" >> $GITHUB_OUTPUT
             if [ "${{ inputs.environment }}" = "staging" ]; then ENV_SUFFIX="stg"; else ENV_SUFFIX="${{ inputs.environment }}"; fi
             echo "envSuffix=${ENV_SUFFIX}" >> $GITHUB_OUTPUT
             echo "location=${{ inputs.location }}" >> $GITHUB_OUTPUT
+            if [ "${{ inputs.deploySql }}" = "true" ]; then
+              SQL_ADMIN_PASSWORD="$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-24)Aa1!"
+              echo "::add-mask::${SQL_ADMIN_PASSWORD}"
+              echo "sqlAdminPassword=${SQL_ADMIN_PASSWORD}" >> $GITHUB_OUTPUT
+            else
+              echo "sqlAdminPassword=" >> $GITHUB_OUTPUT
+            fi
           else
             CHANGED_FILES="$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }})"
             if printf '%s\n' "$CHANGED_FILES" | grep -Eq '^infra/(main\.phase10\.bicep|parameters/phase10-)'; then
@@ -223,6 +245,10 @@ jobs:
             echo "env=dev" >> $GITHUB_OUTPUT
             echo "envSuffix=dev" >> $GITHUB_OUTPUT
             echo "location=centralindia" >> $GITHUB_OUTPUT
+            echo "deploySql=false" >> $GITHUB_OUTPUT
+            echo "deployRedis=false" >> $GITHUB_OUTPUT
+            echo "sqlAdminUsername=sqladmin" >> $GITHUB_OUTPUT
+            echo "sqlAdminPassword=" >> $GITHUB_OUTPUT
           fi
           PLATFORM_SUFFIX="platform"
           ACR_NAME="${{ inputs.acrName }}"
@@ -339,6 +365,10 @@ jobs:
             --template-file "$TEMPLATE_FILE" \
             --parameters @"${PARAM_FILE}" \
             --validation-level ProviderNoRbac \
+            --parameters deploySql="${{ steps.params.outputs.deploySql }}" \
+            --parameters deployRedis="${{ steps.params.outputs.deployRedis }}" \
+            --parameters sqlAdminUsername="${{ steps.params.outputs.sqlAdminUsername }}" \
+            --parameters sqlAdminPassword="${{ steps.params.outputs.sqlAdminPassword }}" \
             --parameters platformAcrName="${{ steps.params.outputs.platformAcrName }}" \
             --parameters platformAcrLoginServer="${{ steps.params.outputs.acrLoginServer }}" \
             --parameters platformAcrPullIdentityId="${{ steps.params.outputs.acrPullIdentityId }}" \
@@ -373,6 +403,10 @@ jobs:
     outputs:
       gatewayFqdn: ${{ steps.outputs.outputs.gatewayFqdn }}
       uiFqdn: ${{ steps.outputs.outputs.uiFqdn }}
+      sqlServerFqdn: ${{ steps.outputs.outputs.sqlServerFqdn }}
+      sqlDatabaseName: ${{ steps.outputs.outputs.sqlDatabaseName }}
+      redisHostName: ${{ steps.outputs.outputs.redisHost }}
+      redisSslPort: ${{ steps.outputs.outputs.redisSslPort }}
       deploymentName: ${{ steps.params.outputs.deploymentName }}
     steps:
       - uses: actions/checkout@v6
@@ -608,6 +642,10 @@ jobs:
             --location ${{ steps.params.outputs.location }} \
             --template-file ${{ steps.params.outputs.template }} \
             --parameters @${{ steps.params.outputs.file }} \
+            --parameters deploySql="${{ steps.params.outputs.deploySql }}" \
+            --parameters deployRedis="${{ steps.params.outputs.deployRedis }}" \
+            --parameters sqlAdminUsername="${{ steps.params.outputs.sqlAdminUsername }}" \
+            --parameters sqlAdminPassword="${{ steps.params.outputs.sqlAdminPassword }}" \
             --parameters platformAcrName="${{ steps.params.outputs.platformAcrName }}" \
             --parameters platformAcrLoginServer="${{ steps.params.outputs.acrLoginServer }}" \
             --parameters platformAcrPullIdentityId="${{ steps.params.outputs.acrPullIdentityId }}" \
@@ -672,6 +710,12 @@ jobs:
           AI_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.appInsightsName.value" -o tsv)
           ACR_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.acrName.value" -o tsv)
           ACR_LOGIN_SERVER=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.acrLoginServer.value" -o tsv)
+          SQL_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.sqlServerName.value" -o tsv)
+          SQL_FQDN=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.sqlServerFqdn.value" -o tsv)
+          SQL_DB_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.sqlDatabaseName.value" -o tsv)
+          REDIS_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.redisName.value" -o tsv)
+          REDIS_HOST=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.redisHostName.value" -o tsv)
+          REDIS_SSL_PORT=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.redisSslPort.value" -o tsv)
 
           echo "rg=${RG_NAME}" >> $GITHUB_OUTPUT
           echo "sb=${SB_NAME}" >> $GITHUB_OUTPUT
@@ -689,6 +733,12 @@ jobs:
           echo "insights=${AI_NAME}" >> $GITHUB_OUTPUT
           echo "acr=${ACR_NAME}" >> $GITHUB_OUTPUT
           echo "acrLoginServer=${ACR_LOGIN_SERVER}" >> $GITHUB_OUTPUT
+          echo "sqlServer=${SQL_NAME}" >> $GITHUB_OUTPUT
+          echo "sqlServerFqdn=${SQL_FQDN}" >> $GITHUB_OUTPUT
+          echo "sqlDatabase=${SQL_DB_NAME}" >> $GITHUB_OUTPUT
+          echo "redis=${REDIS_NAME}" >> $GITHUB_OUTPUT
+          echo "redisHost=${REDIS_HOST}" >> $GITHUB_OUTPUT
+          echo "redisSslPort=${REDIS_SSL_PORT}" >> $GITHUB_OUTPUT
 
       - name: Resolve Friendly Aliases
         id: aliases
@@ -861,6 +911,18 @@ jobs:
           echo "- **App Insights:** ${{ steps.outputs.outputs.insights }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Azure Container Registry:** ${{ steps.outputs.outputs.acr }}" >> $GITHUB_STEP_SUMMARY
           echo "- **ACR Login Server:** ${{ steps.outputs.outputs.acrLoginServer }}" >> $GITHUB_STEP_SUMMARY
+          if [ -n "${{ steps.outputs.outputs.sqlServerFqdn }}" ]; then
+            echo "- **SQL Server FQDN:** ${{ steps.outputs.outputs.sqlServerFqdn }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **SQL Database:** ${{ steps.outputs.outputs.sqlDatabaseName }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **SQL Server FQDN:** (not deployed)" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -n "${{ steps.outputs.outputs.redisHost }}" ]; then
+            echo "- **Redis Host:** ${{ steps.outputs.outputs.redisHost }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Redis SSL Port:** ${{ steps.outputs.outputs.redisSslPort }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Redis Host:** (not deployed)" >> $GITHUB_STEP_SUMMARY
+          fi
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### ✅ Next Steps" >> $GITHUB_STEP_SUMMARY
           echo "1. Verify the outputs against the runbook." >> $GITHUB_STEP_SUMMARY

@@ -12,8 +12,8 @@ The next change set should use the local Docker container graph as the contract 
 
 | Concern | Local Docker reference | Azure Phase 10 target | Owner | Current status |
 |---|---|---|---|---|
-| SQL | `Resources/Docker/docker-compose.database.yml` + `docker-compose.dev.yml`; connection string key `ConnectionStrings__OrderProcessingSystemDbConnection`; secret source `LOCAL_SQL_PASSWORD` | Reintroduce as an environment-scoped Azure app resource when the parity branch lands | `01 Phase 10 Azure Deploy Orchestrator` | Not in active Azure baseline |
-| Redis | Compose-managed `redis:7-alpine` service; app config points at `Redis: localhost:6379` | Reintroduce as an environment-scoped Azure cache only if a real Azure runtime need is confirmed | `01 Phase 10 Azure Deploy Orchestrator` | Not in active Azure baseline |
+| SQL | `Resources/Docker/docker-compose.database.yml` + `docker-compose.dev.yml`; connection string key `ConnectionStrings__OrderProcessingSystemDbConnection`; secret source `LOCAL_SQL_PASSWORD` | Workflow/Bicep plumbing is in place behind `deploySql=false` until the next dev parity run intentionally turns it on | `01 Phase 10 Azure Deploy Orchestrator` | Wired, off by default |
+| Redis | Compose-managed `redis:7-alpine` service; app config points at `Redis: localhost:6379` | Workflow/Bicep plumbing is in place behind `deployRedis=false` until the next dev parity run intentionally turns it on | `01 Phase 10 Azure Deploy Orchestrator` | Wired, off by default |
 | ACR | Local build/pull parity is represented by the Docker hook and image build logs | Persistent platform ACR in `rg-orderprocessing-platform` with scoped pull-token runtime auth | `00 Azure Platform Foundation` + deploy wrapper | Implemented |
 | ACR cleanup | Local parity keeps the container graph disposable between runs | Scheduled image cleanup keeps active Container App revisions safe while pruning stale tags | `Phase 10 Retention Cleanup (Internal)` | Implemented |
 | App RG cleanup | `docker compose down` and local cleanup hook reset the dev stack | `cleanupInfra=true` deletes the environment RG only | `01 Phase 10 Azure Deploy Orchestrator` | Implemented |
@@ -28,10 +28,10 @@ The next change set should use the local Docker container graph as the contract 
 
 ## Suggested Next Change Set
 
-1. Add explicit SQL and Redis workflow inputs to the Phase 10 deploy path.
+1. Flip `deploySql=true` and `deployRedis=true` for the next dev-only parity redeploy when the new slice is approved.
 2. Reintroduce the Azure SQL module only where the runtime actually needs it.
-3. Add Azure Cache for Redis only if the current Azure runtime path still requires it.
-4. Update the wrapper summary to show SQL and Redis ownership and cleanup scope.
+3. Keep Azure Cache for Redis aligned with the local Docker contract only if the runtime still needs it after the dev proof.
+4. Update the wrapper summary to show SQL/Redis ownership and cleanup scope.
 5. Keep the retention workflow responsible for stale image and artifact cleanup.
 
 ## Operating Notes

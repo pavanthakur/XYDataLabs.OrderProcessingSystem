@@ -45,6 +45,31 @@ param notificationsImage string
 @description('UI container image reference')
 param uiImage string
 
+@description('Deploy Azure SQL for the Phase 10 parity slice')
+param deploySql bool = false
+
+@description('Deploy Azure Cache for Redis for the Phase 10 parity slice')
+param deployRedis bool = false
+
+@description('SQL Server admin username')
+param sqlAdminUsername string = 'sqladmin'
+
+@secure()
+@description('SQL Server admin password')
+param sqlAdminPassword string = ''
+
+@description('Database service objective (Basic, S0, S1, etc)')
+param databaseServiceObjective string = 'Basic'
+
+@description('Redis SKU name')
+param redisSkuName string = 'Basic'
+
+@description('Redis SKU family')
+param redisSkuFamily string = 'C'
+
+@description('Redis SKU capacity')
+param redisCapacity int = 0
+
 @description('Platform ACR registry name used for the Phase 10 runtime image path')
 param platformAcrName string = ''
 
@@ -91,6 +116,37 @@ module serviceBus 'modules/servicebus.bicep' = {
 }
 
 var serviceBusConnectionString = serviceBus.outputs.transportAuthRuleConnectionString
+
+module sql 'modules/sql.bicep' = if (deploySql) {
+  name: 'sql-phase10-${environment}'
+  scope: appRg
+  params: {
+    location: location
+    environment: environment
+    baseName: baseName
+    sqlAdminUsername: sqlAdminUsername
+    sqlAdminPassword: sqlAdminPassword
+    databaseServiceObjective: databaseServiceObjective
+  }
+}
+
+module redis 'modules/redis.phase10.bicep' = if (deployRedis) {
+  name: 'redis-phase10-${environment}'
+  scope: appRg
+  params: {
+    location: location
+    environment: environment
+    baseName: baseName
+    skuName: redisSkuName
+    skuFamily: redisSkuFamily
+    capacity: redisCapacity
+  }
+}
+
+#disable-next-line BCP318
+var sqlConnectionString = deploySql ? 'Server=tcp:${sql.outputs.sqlServerFqdn},1433;Initial Catalog=${sql.outputs.databaseName};User ID=${sqlAdminUsername};Password=${sqlAdminPassword};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;' : ''
+#disable-next-line BCP318
+var redisConnectionString = deployRedis ? '${redis.outputs.redisHostName}:${string(redis.outputs.redisSslPort)},password=${redis.outputs.redisPrimaryKey},ssl=True,abortConnect=False' : ''
 
 module logAnalytics 'modules/loganalytics.phase10.bicep' = {
   name: 'loganalytics-phase10-${environment}'
@@ -139,6 +195,8 @@ module containerApps 'modules/containerapps.bicep' = {
     inventoryImage: inventoryImage
     notificationsImage: notificationsImage
     uiImage: uiImage
+    sqlConnectionString: sqlConnectionString
+    redisConnectionString: redisConnectionString
     acrLoginServer: platformAcrLoginServer
     acrPullIdentityId: platformAcrPullIdentityId
     acrRegistryUsername: acrRegistryUsername
@@ -207,3 +265,15 @@ output acrName string = platformAcrName
 output acrLoginServer string = platformAcrLoginServer
 output acrPullIdentityId string = platformAcrPullIdentityId
 output oidcClientId string = identity.outputs.clientId
+#disable-next-line BCP318
+output sqlServerName string = deploySql ? sql.outputs.sqlServerName : ''
+#disable-next-line BCP318
+output sqlServerFqdn string = deploySql ? sql.outputs.sqlServerFqdn : ''
+#disable-next-line BCP318
+output sqlDatabaseName string = deploySql ? sql.outputs.databaseName : ''
+#disable-next-line BCP318
+output redisName string = deployRedis ? redis.outputs.redisName : ''
+#disable-next-line BCP318
+output redisHostName string = deployRedis ? redis.outputs.redisHostName : ''
+#disable-next-line BCP318
+output redisSslPort int = deployRedis ? redis.outputs.redisSslPort : 0

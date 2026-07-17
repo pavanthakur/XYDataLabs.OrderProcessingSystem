@@ -113,9 +113,11 @@ Do not merge `Azure Initial Setup` with `00 Azure Platform Foundation` unless yo
    |-----------|-------------|---------|---------|
    | **Environment** | Target environment | dev, staging, prod | dev |
    | **Location** | Azure region | Any region string | centralindia |
-| **Dry Run** | What-if only (no deploy) | true/false | true |
-| **Cleanup Infra** | Destructive teardown of the environment-scoped resource group | true/false | false |
-| **Public Domain** | Optional DNS suffix for friendly aliases | Any real domain suffix | empty |
+   | **Dry Run** | What-if only (no deploy) | true/false | true |
+   | **Cleanup Infra** | Destructive teardown of the environment-scoped resource group | true/false | false |
+   | **Deploy SQL Parity Slice** | Optional Azure SQL follow-up aligned to the local Docker contract | true/false | false |
+   | **Deploy Redis Parity Slice** | Optional Azure Redis follow-up aligned to the local Docker contract | true/false | false |
+   | **Public Domain** | Optional DNS suffix for friendly aliases | Any real domain suffix | empty |
 | **Bind Aliases** | Enable alias planning / binding checks | true/false | false |
 | **Alias Mode** | Choose direct ACA binding or front-door planning | direct / frontdoor | direct |
 
@@ -156,6 +158,7 @@ Do not merge `Azure Initial Setup` with `00 Azure Platform Foundation` unless yo
    - The wrapper execution order is intentionally `preflight -> build images -> internal deploy or cleanup -> summary`, so a real run should show the image job before the internal infra workflow in Actions
    - The wrapper summary is only the top-level checkpoint; detailed logs and outputs live in the nested build and infra jobs under the run
    - If you need per-service image logs or deployment traceability, open the child jobs under the wrapper rather than relying on the top-level summary alone
+   - `deploySql=false` and `deployRedis=false` are the safe defaults; flip them on only when you are intentionally running the next Azure parity slice
 
 **Shared contract with local Docker validation:**
 - same environment suffix pattern (`dev`, `staging`, `prod`)
