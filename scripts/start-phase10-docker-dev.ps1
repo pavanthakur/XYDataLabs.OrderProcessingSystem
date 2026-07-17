@@ -16,12 +16,18 @@ $envFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local'
 $logRoot = Join-Path $workspaceRoot 'TestResults\Playwright\phase10-docker-http'
 $dockerConfigRoot = Join-Path $workspaceRoot '.tmp\docker-config'
 $latestPointerPath = Join-Path $logRoot 'latest-playwright-profile.txt'
+$latestFailurePointerPath = Join-Path $logRoot 'latest-playwright-failure.txt'
 $rootMarkerPath = Join-Path $workspaceRoot 'TestResults\Playwright\latest-playwright-run.txt'
-$runStamp = "$(Get-Date -Format 'yyyyMMdd-HHmmss')_profile"
-$runDir = Join-Path $logRoot $runStamp
+$runDir = if ([string]::IsNullOrWhiteSpace($env:PHASE10_RUN_ROOT)) {
+    Join-Path $logRoot "$(Get-Date -Format 'yyyyMMdd-HHmmssfff')_profile"
+}
+else {
+    $env:PHASE10_RUN_ROOT
+}
 $startupLogPath = Join-Path $runDir '00-start-profile.log'
 $progressLogPath = Join-Path $runDir '01-env-ready.log'
-$summaryPath = Join-Path $runDir 'summary.json'
+$summaryPath = Join-Path $runDir 'profile-summary.json'
+$diagnosticsPath = Join-Path $runDir 'profile-diagnostics.json'
 
 New-Item -ItemType Directory -Path $runDir -Force | Out-Null
 New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
@@ -32,7 +38,7 @@ $previousDockerConfig = $env:DOCKER_CONFIG
 $env:DOCKER_CONFIG = $dockerConfigRoot
 Set-Content -Path $latestPointerPath -Value $runDir -Encoding utf8
 Set-Content -Path $rootMarkerPath -Value $runDir -Encoding utf8
-Set-Content -Path (Join-Path $runDir 'run-plan.txt') -Value @(
+Set-Content -Path (Join-Path $runDir 'profile-run-plan.txt') -Value @(
     'Phase 10 local container stack run',
     'Goal: start the Phase 10 local container stack with SQL and Redis.',
     'Stages:',
@@ -207,7 +213,7 @@ function Invoke-Phase10EfDatabaseUpdate {
         [string]$SqlPassword
     )
 
-    $connectionString = "Server=localhost,1433;Database=$DatabaseName;User Id=sa;Password=$SqlPassword;Encrypt=False;TrustServerCertificate=True;MultipleActiveResultSets=true;"
+    $connectionString = "Server=localhost,1433;Database=$DatabaseName;User Id=sa;Password=$SqlPassword;Encrypt=False;TrustServerCertificate=True;MultipleActiveResultSets=true;Connection Timeout=60;"
     $arguments = @(
         'ef', 'database', 'update',
         '--project', 'XYDataLabs.OrderProcessingSystem.Infrastructure',
@@ -217,9 +223,19 @@ function Invoke-Phase10EfDatabaseUpdate {
         '--verbose'
     )
 
-    $output = & dotnet @arguments 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        throw ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
+    for ($attempt = 1; $attempt -le 5; $attempt++) {
+        $output = & dotnet @arguments 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            return
+        }
+
+        $message = ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
+        Add-Content -Path $progressLogPath -Value "EF migration attempt $attempt failed for $DatabaseName. $message"
+        if ($attempt -eq 5) {
+            throw $message
+        }
+
+        Start-Sleep -Seconds 10
     }
 }
 
@@ -358,8 +374,37 @@ try {
 finally {
     $summary.finishedUtc = (Get-Date).ToUniversalTime().ToString('o')
     Set-Content -Path $summaryPath -Value ($summary | ConvertTo-Json -Depth 5) -Encoding utf8
+    $diagnostics = [ordered]@{
+        target = $summary.target
+        mode = 'profile'
+        status = $summary.status
+        startedUtc = $summary.startedUtc
+        finishedUtc = $summary.finishedUtc
+        runDir = $runDir
+        summaryPath = $summaryPath
+        logs = [ordered]@{
+            startup = $startupLogPath
+            progress = $progressLogPath
+            composeUp = Join-Path $runDir 'docker-compose-up.log'
+            composeDown = Join-Path $runDir 'docker-compose-down.log'
+        }
+        latestPointers = [ordered]@{
+            run = $rootMarkerPath
+            profile = $latestPointerPath
+            failure = $latestFailurePointerPath
+        }
+    }
+    Set-Content -Path $diagnosticsPath -Value ($diagnostics | ConvertTo-Json -Depth 6) -Encoding utf8
     Set-Content -Path $latestPointerPath -Value $runDir -Encoding utf8
     Set-Content -Path $rootMarkerPath -Value $runDir -Encoding utf8
+    if ($summary.status -eq 'failed') {
+        Set-Content -Path $latestFailurePointerPath -Value $runDir -Encoding utf8
+    }
+    Write-Host "Phase 10 Docker profile run directory: $runDir" -ForegroundColor Cyan
+    Write-Host "Phase 10 Docker profile diagnostics: $diagnosticsPath" -ForegroundColor Cyan
+    if ($summary.status -eq 'failed') {
+        Write-Host "Phase 10 Docker profile latest failure pointer: $latestFailurePointerPath" -ForegroundColor Yellow
+    }
     if ([string]::IsNullOrWhiteSpace($previousDockerConfig)) {
         Remove-Item Env:DOCKER_CONFIG -ErrorAction SilentlyContinue
     }
