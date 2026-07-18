@@ -456,6 +456,12 @@ jobs:
           echo "template=infra/main.phase10.bicep" >> $GITHUB_OUTPUT
           echo "file=infra/parameters/phase10-${{ inputs.environment }}.json" >> $GITHUB_OUTPUT
           echo "phase10=true" >> $GITHUB_OUTPUT
+          echo "deploySql=true" >> $GITHUB_OUTPUT
+          echo "deployRedis=true" >> $GITHUB_OUTPUT
+          echo "sqlAdminUsername=sqladmin" >> $GITHUB_OUTPUT
+          SQL_ADMIN_PASSWORD="$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-24)Aa1!"
+          echo "::add-mask::${SQL_ADMIN_PASSWORD}"
+          echo "sqlAdminPassword=${SQL_ADMIN_PASSWORD}" >> $GITHUB_OUTPUT
           PLATFORM_SUFFIX="platform"
           ACR_NAME="${{ inputs.acrName }}"
           if [ -z "$ACR_NAME" ]; then

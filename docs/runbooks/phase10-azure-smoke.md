@@ -11,10 +11,10 @@ This runbook covers the first live check for the Phase 10 transport slice define
 - Replay path: `order-events-dlq -> dlq-replay -> order-events`
 - The Service Bus namespace, transport auth rule, and connection-string lookup are owned by `infra/modules/servicebus.bicep`; `infra/main.phase10.bicep` consumes that module output during deployment.
 - GitHub Actions entrypoint: `phase10-deploy-orchestrator.yml` (which calls `infra-deploy.yml` internally)
-- The persistent ACR registry and the runtime pull identity are owned by `00 Azure Platform Foundation`.
+- The persistent ACR registry and the runtime pull identity are owned by `00 Azure Platform Foundation` and live in `rg-orderprocessing-platform`.
 - Friendly alias inputs: `publicDomain`, `bindAliases`, `aliasMode`
-- Phase 10 does not currently deploy Azure SQL Server or Azure Cache for Redis. Those resources belong to the older bootstrap/App Service path or to later platform work, not to the current transport-first container-app stack.
-- For the next implementation slice, use [docs/internal/phase10-parity-matrix.md](../internal/phase10-parity-matrix.md) as the SQL / Redis / ACR source of truth before changing Azure again.
+- The active `01 Phase 10 Azure Deploy Orchestrator` path does deploy Azure SQL Server and Azure Cache for Redis into the environment-scoped app resource group when the baseline runs; they are not part of `rg-orderprocessing-platform`.
+- For the next implementation slice, use [docs/internal/phase10-parity-matrix.md](../internal/phase10-parity-matrix.md) as the SQL / Redis / ACR ownership source of truth before changing Azure again.
 - Application Insights is part of the Phase 10 deployment and should appear in the target resource group when the deployment succeeds.
 - `00 Azure Platform Foundation` registers the Azure resource providers used by the Phase 10 platform and app stacks. `01 Phase 10 Azure Deploy Orchestrator` verifies those providers are already registered and fails early with a clear "run 00 first" message if a clean subscription is missing them.
 
@@ -168,20 +168,20 @@ Current dev URLs from the latest deploy proof:
 |---|---|---|
 | Hosting model | Azure App Service | Azure Container Apps |
 | Image/build path | API/UI code deployment to App Service | Separate service image build + container-app deploy |
-| SQL Server | Created by bootstrap path | Not created by Phase 10 path |
-| Redis | Historically part of broader app/platform planning | Not created by Phase 10 path |
+| SQL Server | Created by the active Phase 10 baseline | Created by `01 Phase 10 Azure Deploy Orchestrator` in the environment RG |
+| Redis | Created by the active Phase 10 baseline | Created by `01 Phase 10 Azure Deploy Orchestrator` in the environment RG |
 | App Insights | Created and configured | Created and configured |
 | Key Vault | Created and used for app secrets | Created and used for runtime secrets |
 | Service Bus | Not the bootstrap focus | Core Phase 10 transport resource |
 | Runtime URL style | `azurewebsites.net` | Container Apps ingress or friendly alias |
 | Cleanup | Legacy app-stack teardown | Environment-scoped Phase 10 RG teardown |
 
-If you want Azure to match the local Docker containerized experience, treat the following as the explicit follow-up plan:
+If you want Azure to match the local Docker containerized experience, treat the following as the explicit verification plan for the active Phase 10 baseline:
 
 | Requirement | Current Phase 10 state | What would be needed to match the containerized target |
 |---|---|---|
-| SQL Server | Not deployed | Reintroduce the SQL module and wire its outputs into the CI/CD parameter flow |
-| Redis | Not deployed | Add an Azure Cache for Redis module and pass its connection settings through the deployment workflow |
+| SQL Server | Included in the active Phase 10 baseline | Verify the SQL module outputs appear in the deployment summary and portal |
+| Redis | Included in the active Phase 10 baseline | Verify the Redis module outputs appear in the deployment summary and portal |
 | App Service URLs | Not part of the containerized target | Use Container Apps ingress plus friendly aliases / Front Door names; do not expect `azurewebsites.net` from the active path |
 
 ### CI/CD implementation plan for containerized parity
@@ -191,8 +191,8 @@ If the goal is to make Azure Portal and the CI/CD path look like the local Docke
 | Step | What changes | Owner workflow |
 |---|---|---|
 | 1 | Keep the App Service surface archived and treat Container Apps as the supported runtime path | `phase10-deploy-orchestrator.yml` |
-| 2 | Reintroduce SQL Server as a first-class module and expose its outputs in deployment summaries | `infra-deploy.yml` / `phase10-deploy-orchestrator.yml` |
-| 3 | Add Redis as a first-class module and wire its connection details into app configuration | `infra-deploy.yml` / `phase10-deploy-orchestrator.yml` |
+| 2 | Keep SQL Server as a first-class module and expose its outputs in deployment summaries | `infra-deploy.yml` / `phase10-deploy-orchestrator.yml` |
+| 3 | Keep Redis as a first-class module and wire its connection details into app configuration | `infra-deploy.yml` / `phase10-deploy-orchestrator.yml` |
 | 4 | Decide on the public URL shape: create friendly aliases for Container Apps via DNS / Front Door | `infra-deploy.yml` alias planning and binding |
 | 5 | Update the run summary so portal links, SQL/Redis state, and cleanup status are visible in one place | wrapper summary and child deployment summary |
 | 6 | Keep the cleanup path symmetrical so every created resource can be removed from the same CI/CD entrypoint | `cleanupInfra=true` or an explicit legacy teardown path |
@@ -200,7 +200,7 @@ If the goal is to make Azure Portal and the CI/CD path look like the local Docke
 Practical rule:
 - The active target is the containerized solution, not the old App Service runtime model.
 - Use Container Apps ingress or friendly aliases so Azure behaves like the local Docker service graph.
-- SQL and Redis can be added to the active path, but they need to be intentionally reintroduced into the Bicep and workflow inputs rather than assumed from the portal.
+- SQL and Redis are part of the active path and should be verified from the Bicep outputs, workflow summary, and Azure portal after each deploy.
 - The gateway health summary echoes the accepted host, so capture that value first when diagnosing Azure host mismatches. Use the routed Orders API smoke URL to prove the gateway can reach the backend service.
 
 ### Enterprise platform priorities
@@ -238,8 +238,8 @@ Use this matrix as the concrete follow-through plan for the Azure portal / CI/CD
 | Runtime images | ACR cutover in progress | ACR with Azure-native auth | `build-phase10-images.yml`, `phase10-deploy-orchestrator.yml`, `infra-deploy.yml`, `README-INFRA-DEPLOY.md` | Container Apps revisions pull from ACR successfully |
 | Azure identity | OIDC for login only | OIDC + Managed Identity for runtime access | `phase10-deploy-orchestrator.yml`, `infra/main.phase10.bicep`, identity modules | No stored Azure client secrets; runtime auth uses identity |
 | Public ingress | Container Apps FQDN only | Container Apps FQDN + friendly alias or Front Door/WAF | `infra-deploy.yml` alias handling, wrapper summary | Stable public URL and summary link for gateway/UI |
-| SQL Server | Not in active Phase 10 | Add only if the application requires relational persistence | `infra/main.phase10.bicep`, workflow inputs, runbook | SQL output appears in Azure summary and portal |
-| Redis | Not in active Phase 10 | Add only if caching/session/rate-limit needs justify it | `infra/main.phase10.bicep`, workflow inputs, runbook | Redis output appears in Azure summary and portal |
+| SQL Server | Included in active Phase 10 baseline | Verify the SQL output appears in Azure summary and portal | `infra/main.phase10.bicep`, workflow outputs, runbook | SQL output appears in Azure summary and portal |
+| Redis | Included in active Phase 10 baseline | Verify the Redis output appears in Azure summary and portal | `infra/main.phase10.bicep`, workflow outputs, runbook | Redis output appears in Azure summary and portal |
 | App Service URLs | Legacy only | Not the active target; replace with containerized ingress/aliases | Archive docs/workflows, keep Phase 10 docs containerized | No operator expects `azurewebsites.net` for Phase 10 |
 | Observability | App Insights + LAW present | Add Monitor/trace/alerts as production baseline | `infra/main.phase10.bicep`, monitoring modules | Logs, traces, and alerts visible end to end |
 | Cleanup | RG teardown plus retention workflow | Symmetric lifecycle for all created resources | `phase10-deploy-orchestrator.yml`, retention cleanup workflow | Every created artifact/resource has a deletion story |
@@ -359,7 +359,7 @@ Use this checklist to prove the shared contract is behaving the same way across 
 2. Azure infra deploy
    - Run `phase10-deploy-orchestrator.yml` with the target environment and confirm the deployment summary reports the expected gateway and UI ingress outputs.
    - Verify the published image refs match the service-specific `orderprocessing-*` contract for gateway, Orders, Inventory, Notifications, and UI.
-   - Verify the resource group contains Service Bus, Log Analytics, Application Insights, Container Apps, Functions, Key Vault, SQL Server, SQL Database, and Azure Cache for Redis.
+   - Verify the environment resource group contains Service Bus, Log Analytics, Application Insights, Container Apps, Functions, Key Vault, SQL Server, SQL Database, and Azure Cache for Redis.
    - Open the Gateway Health URL from the summary and confirm `acceptedHost` matches the Azure Container Apps hostname.
    - Open the Orders API smoke URL from the summary: `/api/v1/Info/runtime-configuration`.
    - Open the UI URL from the summary and confirm the frontend responds.
