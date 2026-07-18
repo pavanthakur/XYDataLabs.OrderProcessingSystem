@@ -50,6 +50,7 @@ interface ExecutionItem {
   tenantCode: string;
   tenantTier: string;
   paymentProviderCode?: string | null;
+  shouldPrepareProviderFixture: boolean;
   executionRunPrefix: string;
 }
 
@@ -133,7 +134,7 @@ export async function executePaymentAutomationRun(
     let stopAfterCurrentItem = false;
 
     try {
-      if (!options.dryRun && executionItem.paymentProviderCode) {
+      if (!options.dryRun && executionItem.paymentProviderCode && executionItem.shouldPrepareProviderFixture) {
         provisioner = new PowerShellPaymentProviderProvisioner({
           target,
           requestedProvider: executionItem.paymentProviderCode,
@@ -318,6 +319,7 @@ function buildExecutionItems(
       tenantCode: tenant.tenantCode,
       tenantTier: tenant.tenantTier,
       paymentProviderCode: tenant.paymentProviderCode,
+      shouldPrepareProviderFixture: false,
       executionRunPrefix: index === 0 ? defaultRunPrefix : buildRunPrefix(new Date(startedAt.getTime() + (index * 1000)))
     }));
   }
@@ -331,6 +333,7 @@ function buildExecutionItems(
         tenantCode: tenant.tenantCode,
         tenantTier: tenant.tenantTier,
         paymentProviderCode: requestedProvider,
+        shouldPrepareProviderFixture: true,
         executionRunPrefix: executionIndex === 0 ? defaultRunPrefix : buildRunPrefix(executionStartedAt)
       };
     })
