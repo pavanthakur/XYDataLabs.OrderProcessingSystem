@@ -64,7 +64,7 @@ jobs:
           GATEWAY_APP="orderprocessing-gate-${ENV_SUFFIX}"
           UI_APP="orderprocessing-ui-${ENV_SUFFIX}"
           SQL_SERVER="orderprocessing-sql-${ENV_SUFFIX}"
-          REDIS_NAME="redis-orderprocessing-${ENV_SUFFIX}"
+          REDIS_NAME="orderprocessing-redis-${ENV_SUFFIX}"
           SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
 
           GATEWAY_FQDN="$(az containerapp show --resource-group "$RG_NAME" --name "$GATEWAY_APP" --query properties.configuration.ingress.fqdn -o tsv)"
@@ -120,7 +120,12 @@ jobs:
           REDIS_NAME="${{ steps.topology.outputs.redisName }}"
 
           az sql server show --resource-group "$RG_NAME" --name "$SQL_SERVER" --only-show-errors 1>/dev/null
-          az redis show --resource-group "$RG_NAME" --name "$REDIS_NAME" --only-show-errors 1>/dev/null
+          az resource show \
+            --resource-group "$RG_NAME" \
+            --resource-type "Microsoft.Cache/redisEnterprise" \
+            --name "$REDIS_NAME" \
+            --only-show-errors \
+            1>/dev/null
 
           {
             echo ""
