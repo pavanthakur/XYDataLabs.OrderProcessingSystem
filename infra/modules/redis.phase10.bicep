@@ -8,7 +8,7 @@ param environment string
 param baseName string = 'orderprocessing'
 
 @description('Redis SKU name')
-param skuName string = 'Basic'
+param skuName string = 'Standard'
 
 @description('Redis SKU family')
 param skuFamily string = 'C'
@@ -21,21 +21,19 @@ var redisName = '${baseName}-redis-${environment}'
 resource redis 'Microsoft.Cache/redis@2024-11-01' = {
   name: redisName
   location: location
-  #disable-next-line BCP187
-  sku: {
-    name: skuName
-    family: skuFamily
-    capacity: capacity
-  }
   #disable-next-line BCP035
   properties: {
+    sku: {
+      name: skuName
+      family: skuFamily
+      capacity: capacity
+    }
     enableNonSslPort: false
     minimumTlsVersion: '1.2'
     publicNetworkAccess: 'Enabled'
     redisVersion: '6'
     redisConfiguration: {
       'maxmemory-policy': 'volatile-lru'
-      'preferred-data-persistence-auth-method': ''
     }
   }
   tags: {

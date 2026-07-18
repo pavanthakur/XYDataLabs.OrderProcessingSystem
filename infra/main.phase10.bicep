@@ -62,7 +62,7 @@ param sqlAdminPassword string = ''
 param databaseServiceObjective string = 'Basic'
 
 @description('Redis SKU name')
-param redisSkuName string = 'Basic'
+param redisSkuName string = 'Standard'
 
 @description('Redis SKU family')
 param redisSkuFamily string = 'C'
