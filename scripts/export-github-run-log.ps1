@@ -3,11 +3,9 @@ param(
     [string]$Url,
 
     [Parameter(Mandatory = $false)]
-    [ValidatePattern('^\d+$')]
     [string]$RunId,
 
     [Parameter(Mandatory = $false)]
-    [ValidatePattern('^\d+$')]
     [string]$JobId,
 
     [string]$OutputRoot = (Join-Path $PWD 'TestResults/GitHubActions'),
@@ -65,8 +63,12 @@ function Resolve-GitHubActionsIds {
         throw "RunId is required. Pass -Url '<GitHub Actions job URL>' or -RunId <run-id> -JobId <job-id>."
     }
 
-    if ([string]::IsNullOrWhiteSpace($resolvedJobId)) {
-        throw "JobId is required. Pass a job URL containing '/job/<job-id>' or add -JobId <job-id>."
+    if ($resolvedRunId -notmatch '^\d+$') {
+        throw "RunId must be numeric. Value: '$resolvedRunId'."
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($resolvedJobId) -and $resolvedJobId -notmatch '^\d+$') {
+        throw "JobId must be numeric. Value: '$resolvedJobId'."
     }
 
     return [pscustomobject]@{
@@ -82,15 +84,19 @@ $JobId = $ids.JobId
 $runDirectory = Join-Path $OutputRoot $RunId
 New-Item -ItemType Directory -Force -Path $runDirectory | Out-Null
 
-$logPath = Join-Path $runDirectory "job-$JobId.log"
-$summaryPath = Join-Path $runDirectory "job-$JobId.summary.txt"
+$isJobScoped = -not [string]::IsNullOrWhiteSpace($JobId)
+$logFileName = if ($isJobScoped) { "job-$JobId.log" } else { "run-$RunId.log" }
+$summaryFileName = if ($isJobScoped) { "job-$JobId.summary.txt" } else { "run-$RunId.summary.txt" }
+$scopeLabel = if ($isJobScoped) { "job" } else { "run" }
+$logPath = Join-Path $runDirectory $logFileName
+$summaryPath = Join-Path $runDirectory $summaryFileName
 $latestLogPath = Join-Path $OutputRoot 'latest-job.log'
 $latestSummaryPath = Join-Path $OutputRoot 'latest-job.summary.txt'
 $latestPathFile = Join-Path $OutputRoot 'latest-job-log-path.txt'
 
 if ($ResolveOnly) {
     Write-Host "RunId: $RunId"
-    Write-Host "JobId: $JobId"
+    Write-Host "JobId: $(if ($isJobScoped) { $JobId } else { '(run-level export)' })"
     Write-Host "LogPath: $logPath"
     Write-Host "LatestLogPath: $latestLogPath"
     return
@@ -105,11 +111,18 @@ if ($LASTEXITCODE -ne 0) {
     throw "GitHub CLI is not authenticated. Run 'gh auth login -h github.com' in this terminal. Details: $authText"
 }
 
-Write-Info "Exporting GitHub Actions job log..."
-$logOutput = & $ghPath run view $RunId --job $JobId --log 2>&1
+Write-Info "Exporting GitHub Actions $scopeLabel log..."
+if ($isJobScoped) {
+    $logOutput = & $ghPath run view $RunId --job $JobId --log 2>&1
+}
+else {
+    $logOutput = & $ghPath run view $RunId --log 2>&1
+}
+
 if ($LASTEXITCODE -ne 0) {
     $failureText = ($logOutput | Out-String).Trim()
-    throw "Failed to export GitHub Actions job log for run '$RunId', job '$JobId'. Details: $failureText"
+    $target = if ($isJobScoped) { "run '$RunId', job '$JobId'" } else { "run '$RunId'" }
+    throw "Failed to export GitHub Actions $scopeLabel log for $target. Details: $failureText"
 }
 
 $logOutput | Set-Content -LiteralPath $logPath -Encoding utf8
@@ -118,7 +131,7 @@ Copy-Item -LiteralPath $logPath -Destination $latestLogPath -Force
 $summary = @(
     "GitHub Actions Job Log Export"
     "RunId: $RunId"
-    "JobId: $JobId"
+    "JobId: $(if ($isJobScoped) { $JobId } else { '(run-level export)' })"
     "ExportedAtLocal: $(Get-Date -Format o)"
     "LogPath: $logPath"
     "LatestLogPath: $latestLogPath"

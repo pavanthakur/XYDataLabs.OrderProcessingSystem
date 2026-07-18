@@ -107,8 +107,8 @@ The SQL module provisions:
 - Connection string automatically configured in App Services
 
 Phase 10 note:
-- The active `main.phase10.bicep` entrypoint now exposes opt-in parity switches for `modules/sql.bicep` and `modules/redis.phase10.bicep`, but both remain disabled by default until the next dev parity run is intentionally approved.
-- Phase 10 is intentionally transport-first and currently deploys Service Bus, Log Analytics, Application Insights, Container Apps, Functions, Key Vault, and the container images.
+- The active `main.phase10.bicep` entrypoint includes `modules/sql.bicep` and `modules/redis.phase10.bicep` in the default Phase 10 baseline.
+- Phase 10 is intentionally transport-first and currently deploys Service Bus, Log Analytics, Application Insights, Container Apps, Functions, Key Vault, SQL Server, SQL Database, Azure Cache for Redis, and the container images.
 - The persistent ACR registry and runtime pull identity are deployed once by `main.phase10.platform.bicep`.
 - The template no longer tries to self-grant `AcrPull` during the normal deployment path. `01 Phase 10 Azure Deploy Orchestrator` prepares scoped ACR pull-token credentials for Container Apps, while `AcrPull` remains an optional privileged fallback.
 - SQL Server and Redis are part of the automatic Phase 10 baseline. The normal wrapper path no longer asks for `deploySql` or `deployRedis`; if a future exception is needed, document it explicitly in the workflow or ADR.
