@@ -24,6 +24,9 @@ param notificationsPrincipalId string = ''
 @description('Principal ID allowed to read secrets for Functions')
 param functionsPrincipalId string = ''
 
+@description('Deployment workflow service principal object ID allowed to read secrets for Azure verification scripts')
+param deploymentPrincipalObjectId string = ''
+
 @description('SQL Server admin password to persist in Key Vault for later SQL and managed-identity workflows')
 @secure()
 param sqlAdminPassword string = ''
@@ -50,7 +53,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   }
 }
 
-resource accessPolicies 'Microsoft.KeyVault/vaults/accessPolicies@2023-07-01' = if (!empty(gatewayPrincipalId) || !empty(ordersPrincipalId)) {
+resource accessPolicies 'Microsoft.KeyVault/vaults/accessPolicies@2023-07-01' = if (!empty(gatewayPrincipalId) || !empty(ordersPrincipalId) || !empty(inventoryPrincipalId) || !empty(notificationsPrincipalId) || !empty(functionsPrincipalId) || !empty(deploymentPrincipalObjectId)) {
   name: 'add'
   parent: keyVault
   properties: {
@@ -107,6 +110,18 @@ resource accessPolicies 'Microsoft.KeyVault/vaults/accessPolicies@2023-07-01' = 
         {
           tenantId: subscription().tenantId
           objectId: functionsPrincipalId
+          permissions: {
+            secrets: [
+              'get'
+              'list'
+            ]
+          }
+        }
+      ] : [],
+      !empty(deploymentPrincipalObjectId) ? [
+        {
+          tenantId: subscription().tenantId
+          objectId: deploymentPrincipalObjectId
           permissions: {
             secrets: [
               'get'
