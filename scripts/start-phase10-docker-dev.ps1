@@ -53,6 +53,18 @@ if (-not (Test-Path $composeFile)) {
     throw "Compose file not found: $composeFile"
 }
 
+function Assert-DockerAvailable {
+    try {
+        $output = & docker ps 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
+        }
+    }
+    catch {
+        throw "Docker Desktop is not reachable from this shell. Start Docker Desktop, make sure this Windows user can access the Docker engine, then rerun the Phase 10 clean Azure-parity hook. Details: $($_.Exception.Message)"
+    }
+}
+
 function Wait-ForUrl {
     param(
         [string]$Url,
@@ -172,6 +184,25 @@ function Get-Phase10Databases {
     )
 }
 
+function Get-LatestPhase10MigrationId {
+    $migrationsPath = Join-Path $workspaceRoot 'XYDataLabs.OrderProcessingSystem.Infrastructure\Migrations'
+    $migrationFiles = @(
+        Get-ChildItem -LiteralPath $migrationsPath -Filter '*.cs' -File |
+            Where-Object {
+                $_.Name -notlike '*.Designer.cs' -and
+                $_.Name -ne 'OrderProcessingSystemDbContextModelSnapshot.cs' -and
+                $_.BaseName -match '^\d+_'
+            } |
+            Sort-Object Name
+    )
+
+    if ($migrationFiles.Count -eq 0) {
+        throw "No EF migration files were found under $migrationsPath."
+    }
+
+    return $migrationFiles[-1].BaseName
+}
+
 function Invoke-Phase10SqlCmdInComposeContainer {
     param(
         [Parameter(Mandatory = $true)]
@@ -204,35 +235,143 @@ function Invoke-Phase10SqlCmdInComposeContainer {
     }
 }
 
+function Get-Phase10SqlScalar {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Database,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Query
+    )
+
+    $output = @(Invoke-Phase10SqlCmdInComposeContainer -Database $Database -Query $Query)
+    $lines = @(
+        $output |
+            ForEach-Object { $_.ToString().Trim() } |
+            Where-Object {
+                -not [string]::IsNullOrWhiteSpace($_) -and
+                $_ -notmatch '^\(\d+ rows? affected\)$'
+            }
+    )
+
+    if ($lines.Count -eq 0) {
+        return ''
+    }
+
+    return $lines[-1]
+}
+
+function Test-Phase10MigrationApplied {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$DatabaseName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ExpectedMigrationId
+    )
+
+    $query = @"
+IF OBJECT_ID(N'dbo.__EFMigrationsHistory', N'U') IS NULL
+BEGIN
+    SELECT N'__EFMigrationsHistory missing';
+END
+ELSE
+BEGIN
+    SELECT TOP (1) [MigrationId] FROM [__EFMigrationsHistory] ORDER BY [MigrationId] DESC;
+END
+"@
+
+    $appliedMigration = Get-Phase10SqlScalar -Database $DatabaseName -Query $query
+    return ($appliedMigration -eq $ExpectedMigrationId)
+}
+
+function Invoke-Phase10SqlScriptInComposeContainer {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$DatabaseName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ScriptPath
+    )
+
+    $containerId = (& docker compose --env-file $envFile -f $composeFile --profile $Profile ps -q sql-server 2>&1)
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($containerId)) {
+        throw "Could not resolve the Phase 10 sql-server container id."
+    }
+
+    $containerScriptPath = "/tmp/phase10-$DatabaseName-migrations.sql"
+    & docker cp $ScriptPath "${containerId}:$containerScriptPath" 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to copy migration script into the sql-server container: $ScriptPath"
+    }
+
+    $sqlPassword = Get-EnvLocalValue -Name 'LOCAL_SQL_PASSWORD'
+    $shellCommand = "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '$sqlPassword' -C -b -I -d '$DatabaseName' -i '$containerScriptPath'"
+    $output = & docker compose --env-file $envFile -f $composeFile --profile $Profile exec -T sql-server /bin/sh -lc $shellCommand 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        $message = ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
+        throw "Failed to apply EF migration script to $DatabaseName. $message"
+    }
+
+    return @($output | ForEach-Object { $_.ToString() })
+}
+
 function Invoke-Phase10EfDatabaseUpdate {
     param(
         [Parameter(Mandatory = $true)]
         [string]$DatabaseName,
 
         [Parameter(Mandatory = $true)]
-        [string]$SqlPassword
+        [string]$SqlPassword,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ExpectedMigrationId
     )
 
-    $connectionString = "Server=localhost,1433;Database=$DatabaseName;User Id=sa;Password=$SqlPassword;Encrypt=False;TrustServerCertificate=True;MultipleActiveResultSets=true;Connection Timeout=60;"
     $arguments = @(
-        'ef', 'database', 'update',
+        'ef', 'migrations', 'script',
+        '--idempotent',
         '--project', 'XYDataLabs.OrderProcessingSystem.Infrastructure',
         '--startup-project', 'XYDataLabs.OrderProcessingSystem.API',
         '--context', 'OrderProcessingSystemDbContext',
-        '--connection', $connectionString,
         '--verbose'
     )
 
     for ($attempt = 1; $attempt -le 5; $attempt++) {
-        $output = & dotnet @arguments 2>&1
-        if ($LASTEXITCODE -eq 0) {
+        $attemptLogPath = Join-Path $runDir "ef-script-$DatabaseName-attempt-$attempt.log"
+        $scriptPath = Join-Path $runDir "ef-script-$DatabaseName-attempt-$attempt.sql"
+        $scriptArguments = @($arguments + @('--output', $scriptPath))
+        Add-Content -Path $progressLogPath -Value "Starting EF migration script attempt $attempt for $DatabaseName. Log: $attemptLogPath Script: $scriptPath"
+
+        $output = & dotnet @scriptArguments 2>&1
+        $exitCode = $LASTEXITCODE
+        $message = ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
+        Set-Content -Path $attemptLogPath -Value $message -Encoding utf8
+
+        if ($exitCode -eq 0 -and (Test-Path $scriptPath)) {
+            $applyOutput = Invoke-Phase10SqlScriptInComposeContainer -DatabaseName $DatabaseName -ScriptPath $scriptPath
+            Set-Content -Path (Join-Path $runDir "ef-apply-$DatabaseName-attempt-$attempt.log") -Value $applyOutput -Encoding utf8
+        }
+
+        if ($exitCode -eq 0 -and (Test-Phase10MigrationApplied -DatabaseName $DatabaseName -ExpectedMigrationId $ExpectedMigrationId)) {
+            Add-Content -Path $progressLogPath -Value "EF migration verified for ${DatabaseName}: $ExpectedMigrationId"
             return
         }
 
-        $message = ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
-        Add-Content -Path $progressLogPath -Value "EF migration attempt $attempt failed for $DatabaseName. $message"
+        $appliedMigration = Get-Phase10SqlScalar -Database $DatabaseName -Query @"
+IF OBJECT_ID(N'dbo.__EFMigrationsHistory', N'U') IS NULL
+BEGIN
+    SELECT N'__EFMigrationsHistory missing';
+END
+ELSE
+BEGIN
+    SELECT TOP (1) [MigrationId] FROM [__EFMigrationsHistory] ORDER BY [MigrationId] DESC;
+END
+"@
+
+        Add-Content -Path $progressLogPath -Value "EF migration script attempt $attempt did not verify for $DatabaseName. ExitCode=$exitCode Expected=$ExpectedMigrationId Actual=$appliedMigration Log=$attemptLogPath Script=$scriptPath"
         if ($attempt -eq 5) {
-            throw $message
+            throw "EF migration failed to verify for $DatabaseName after $attempt attempt(s). Expected '$ExpectedMigrationId', actual '$appliedMigration'. See $attemptLogPath."
         }
 
         Start-Sleep -Seconds 10
@@ -240,56 +379,86 @@ function Invoke-Phase10EfDatabaseUpdate {
 }
 
 function Invoke-Phase10DatabaseBootstrap {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$SqlPassword,
-
-        [Parameter(Mandatory = $true)]
-        [string]$OpenPayMerchantId,
-
-        [Parameter(Mandatory = $true)]
-        [string]$OpenPayPublicKey
-    )
-
     Write-Host 'Applying Phase 10 local EF migrations...' -ForegroundColor Cyan
+    $latestMigrationId = Get-LatestPhase10MigrationId
     foreach ($databaseName in @('OrderProcessingSystem_Dev', 'OrderProcessingSystem_TenantC_Dev')) {
         Write-Host "  Migrating $databaseName..." -ForegroundColor Yellow
-        Invoke-Phase10EfDatabaseUpdate -DatabaseName $databaseName -SqlPassword $SqlPassword
+        $localSqlPassword = Get-EnvLocalValue -Name 'LOCAL_SQL_PASSWORD'
+        Invoke-Phase10EfDatabaseUpdate -DatabaseName $databaseName -SqlPassword $localSqlPassword -ExpectedMigrationId $latestMigrationId
     }
+}
 
-    Write-Host 'Seeding Phase 10 local payment-provider rows...' -ForegroundColor Cyan
-    $escapedOpenPayMerchantId = Escape-SqlLiteral -Value $OpenPayMerchantId
-    $escapedOpenPayPublicKey = Escape-SqlLiteral -Value $OpenPayPublicKey
-    $providerSeedQuery = @"
-DECLARE @TenantId int = (SELECT TOP (1) [Id] FROM [dbo].[Tenants] WHERE [Code] = '{0}' ORDER BY [Id]);
+function Assert-Phase10DatabaseAzureParity {
+    Write-Host 'Validating Phase 10 local database parity with clean Azure deployment...' -ForegroundColor Cyan
 
-IF @TenantId IS NULL
-BEGIN
-    THROW 50000, 'Required tenant row was not found.', 1;
-END
-
-IF NOT EXISTS (
-    SELECT 1
-    FROM [payments].[PaymentProviders]
-    WHERE [TenantId] = @TenantId AND [Name] = 'OpenPay'
-)
-BEGIN
-    INSERT INTO [payments].[PaymentProviders]
-        ([Name], [APIUrl], [IsProduction], [IsActive], [ProviderType], [MerchantId], [PublicKey], [PrivateKeyConfigurationKey], [Use3DSecure], [TenantId], [CreatedBy], [CreatedDate])
-    VALUES
-        ('OpenPay', 'https://sandbox-api.openpay.mx/v1', 0, 1, 'OpenPay', '{1}', '{2}', 'PaymentProviders:{0}:OpenPay:PrivateKey', 1, @TenantId, 1, GETUTCDATE());
-END
-"@
-
-    foreach ($databaseName in @('OrderProcessingSystem_Dev', 'OrderProcessingSystem_TenantC_Dev')) {
-        $tenantCodes = if ($databaseName -eq 'OrderProcessingSystem_Dev') { @('TenantA', 'TenantB') } else { @('TenantC') }
-
-        foreach ($tenantCode in $tenantCodes) {
-            $query = [string]::Format($providerSeedQuery, $tenantCode, $escapedOpenPayMerchantId, $escapedOpenPayPublicKey)
-            Invoke-Phase10SqlCmdInComposeContainer -Database $databaseName -Query $query | Out-Null
-            Add-Content -Path $progressLogPath -Value "Seeded OpenPay provider for $tenantCode in $databaseName"
+    $latestMigrationId = Get-LatestPhase10MigrationId
+    foreach ($databaseName in (Get-Phase10Databases)) {
+        $appliedMigration = Get-Phase10SqlScalar -Database $databaseName -Query 'SELECT TOP (1) [MigrationId] FROM [__EFMigrationsHistory] ORDER BY [MigrationId] DESC;'
+        if ($appliedMigration -ne $latestMigrationId) {
+            throw "Database $databaseName is not on the latest EF migration. Expected '$latestMigrationId', found '$appliedMigration'."
         }
+
+        Add-Content -Path $progressLogPath -Value "Verified latest migration for ${databaseName}: $appliedMigration"
     }
+
+    $providerChecks = @(
+        [pscustomobject]@{ Database = 'OrderProcessingSystem_Dev'; TenantCode = 'TenantA'; ProviderType = 'Razorpay' },
+        [pscustomobject]@{ Database = 'OrderProcessingSystem_Dev'; TenantCode = 'TenantA'; ProviderType = 'OpenPay' },
+        [pscustomobject]@{ Database = 'OrderProcessingSystem_Dev'; TenantCode = 'TenantB'; ProviderType = 'Razorpay' },
+        [pscustomobject]@{ Database = 'OrderProcessingSystem_Dev'; TenantCode = 'TenantB'; ProviderType = 'OpenPay' },
+        [pscustomobject]@{ Database = 'OrderProcessingSystem_TenantC_Dev'; TenantCode = 'TenantC'; ProviderType = 'Razorpay' },
+        [pscustomobject]@{ Database = 'OrderProcessingSystem_TenantC_Dev'; TenantCode = 'TenantC'; ProviderType = 'OpenPay' }
+    )
+
+    foreach ($check in $providerChecks) {
+        $query = @"
+SELECT COUNT_BIG(*)
+FROM [payments].[PaymentProviders] pp
+INNER JOIN [dbo].[Tenants] t ON t.[Id] = pp.[TenantId]
+WHERE t.[Code] = '$($check.TenantCode)'
+  AND pp.[ProviderType] = '$($check.ProviderType)'
+  AND pp.[PrivateKeyConfigurationKey] = 'PaymentProviders:$($check.TenantCode):$($check.ProviderType):PrivateKey';
+"@
+        $countText = Get-Phase10SqlScalar -Database $check.Database -Query $query
+        [long]$count = 0
+        [void][long]::TryParse($countText, [ref]$count)
+        if ($count -lt 1) {
+            throw "Payment-provider baseline is missing in $($check.Database): tenant=$($check.TenantCode), provider=$($check.ProviderType). This would fail a clean Azure payment matrix run."
+        }
+
+        Add-Content -Path $progressLogPath -Value "Verified provider baseline: $($check.Database) / $($check.TenantCode) / $($check.ProviderType)"
+    }
+
+    $tenantRoutingChecks = @(
+        [pscustomobject]@{ Database = 'OrderProcessingSystem_Dev'; TenantCode = 'TenantA'; ExpectedProvider = 'Razorpay' },
+        [pscustomobject]@{ Database = 'OrderProcessingSystem_Dev'; TenantCode = 'TenantB'; ExpectedProvider = 'Razorpay' },
+        [pscustomobject]@{ Database = 'OrderProcessingSystem_TenantC_Dev'; TenantCode = 'TenantC'; ExpectedProvider = 'OpenPay' }
+    )
+
+    foreach ($check in $tenantRoutingChecks) {
+        $query = "SELECT TOP (1) ISNULL([PaymentProviderCode], '') FROM [dbo].[Tenants] WHERE [Code] = '$($check.TenantCode)';"
+        $actualProvider = Get-Phase10SqlScalar -Database $check.Database -Query $query
+        if ($actualProvider -ne $check.ExpectedProvider) {
+            throw "Tenant payment routing mismatch in $($check.Database): tenant=$($check.TenantCode), expected=$($check.ExpectedProvider), actual=$actualProvider."
+        }
+
+        Add-Content -Path $progressLogPath -Value "Verified tenant payment route: $($check.Database) / $($check.TenantCode) -> $actualProvider"
+    }
+}
+
+function Assert-Phase10RedisAzureParity {
+    Write-Host 'Validating Phase 10 local Redis parity...' -ForegroundColor Cyan
+    $output = & docker compose --env-file $envFile -f $composeFile --profile $Profile exec -T redis redis-cli ping 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "Redis readiness check failed. $([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() })))"
+    }
+
+    $response = ([string]::Join('', @($output | ForEach-Object { $_.ToString() }))).Trim()
+    if ($response -ne 'PONG') {
+        throw "Redis readiness check returned '$response' instead of PONG."
+    }
+
+    Add-Content -Path $progressLogPath -Value 'Verified Redis readiness: PONG'
 }
 
 function Ensure-Phase10Databases {
@@ -320,6 +489,7 @@ try {
     }
 
     if ($Action -eq 'down') {
+        Assert-DockerAvailable
         Add-Content -Path $progressLogPath -Value 'Stopping Phase 10 local container stack.'
         & docker compose --env-file $envFile -f $composeFile --profile $Profile down -v 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-down.log')
         if ($LASTEXITCODE -ne 0) {
@@ -330,6 +500,7 @@ try {
         return
     }
 
+    Assert-DockerAvailable
     Add-Content -Path $progressLogPath -Value 'Starting Phase 10 local container stack.'
     foreach ($port in @(8081, 1433, 6379, 5022)) {
         Stop-ContainersOnPort -Port $port
@@ -337,27 +508,25 @@ try {
     & docker compose --env-file $envFile -f $composeFile --profile $Profile down -v 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-preflight-down.log') | Out-Null
     $imageTag = if ([string]::IsNullOrWhiteSpace($env:PHASE10_IMAGE_TAG)) { 'dev' } else { $env:PHASE10_IMAGE_TAG }
     Remove-Phase10LocalImages -ImageTag $imageTag
-    & docker compose --env-file $envFile -f $composeFile --profile $Profile up -d --build 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-up.log')
+    & docker compose --env-file $envFile -f $composeFile --profile $Profile up -d sql-server redis keycloak-local 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-platform-up.log')
     if ($LASTEXITCODE -ne 0) {
-        throw "Docker compose up failed with exit code $LASTEXITCODE"
+        throw "Docker compose platform dependency startup failed with exit code $LASTEXITCODE"
     }
 
     Ensure-Phase10Databases
     $localSqlPassword = Get-EnvLocalValue -Name 'LOCAL_SQL_PASSWORD'
-    $localOpenPayMerchantId = Get-EnvLocalValue -Name 'LOCAL_OPENPAY_MERCHANT_ID'
-    $localOpenPayPublicKey = Get-EnvLocalValue -Name 'LOCAL_OPENPAY_PUBLIC_KEY'
-
     if ([string]::IsNullOrWhiteSpace($localSqlPassword)) {
         throw "LOCAL_SQL_PASSWORD was not found in $envFile."
     }
-    if ([string]::IsNullOrWhiteSpace($localOpenPayMerchantId)) {
-        throw "LOCAL_OPENPAY_MERCHANT_ID was not found in $envFile."
-    }
-    if ([string]::IsNullOrWhiteSpace($localOpenPayPublicKey)) {
-        throw "LOCAL_OPENPAY_PUBLIC_KEY was not found in $envFile."
-    }
 
-    Invoke-Phase10DatabaseBootstrap -SqlPassword $localSqlPassword -OpenPayMerchantId $localOpenPayMerchantId -OpenPayPublicKey $localOpenPayPublicKey
+    Invoke-Phase10DatabaseBootstrap
+    Assert-Phase10DatabaseAzureParity
+    Assert-Phase10RedisAzureParity
+
+    & docker compose --env-file $envFile -f $composeFile --profile $Profile up -d --build orders inventory notifications gateway ui 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-apps-up.log')
+    if ($LASTEXITCODE -ne 0) {
+        throw "Docker compose app startup failed with exit code $LASTEXITCODE"
+    }
 
     Wait-ForUrl -Url 'http://localhost:5080/health/alive' -TimeoutSec $HealthTimeoutSec
     Wait-ForUrl -Url 'http://localhost:5022/' -TimeoutSec $HealthTimeoutSec
@@ -370,6 +539,11 @@ try {
     Write-Host 'Inventory: http://localhost:5082'
     Write-Host 'Notifications: http://localhost:5083'
     $summary.status = 'passed'
+}
+catch {
+    $summary.status = 'failed'
+    Set-Content -Path $latestFailurePointerPath -Value $runDir -Encoding utf8
+    throw
 }
 finally {
     $summary.finishedUtc = (Get-Date).ToUniversalTime().ToString('o')
@@ -385,7 +559,8 @@ finally {
         logs = [ordered]@{
             startup = $startupLogPath
             progress = $progressLogPath
-            composeUp = Join-Path $runDir 'docker-compose-up.log'
+            composePlatformUp = Join-Path $runDir 'docker-compose-platform-up.log'
+            composeAppsUp = Join-Path $runDir 'docker-compose-apps-up.log'
             composeDown = Join-Path $runDir 'docker-compose-down.log'
         }
         latestPointers = [ordered]@{

@@ -205,7 +205,8 @@ function Invoke-AppInsightsQuery {
                 --app $appInsightsName `
                 --resource-group $resourceGroup `
                 --analytics-query $normalizedQuery `
-                --output json
+                --output json `
+                --only-show-errors
 
             if (-not $raw) {
                 throw "App Insights query returned no response."
@@ -776,9 +777,28 @@ WHERE ct.TenantId = 3
 
 $threeDsByTenant = @{}
 foreach ($row in $preflightShared) {
-    $threeDsByTenant[[string] $row.Tenant] = [int] $row.ThreeDSEnabled
+    $tenantCode = [string] (Get-ObjectPropertyValue -Object $row -PropertyName 'Tenant')
+    $threeDsValue = Get-ObjectPropertyValue -Object $row -PropertyName 'ThreeDSEnabled'
+
+    if ([string]::IsNullOrWhiteSpace($tenantCode) -or $null -eq $threeDsValue) {
+        throw "Shared payment-provider preflight returned an invalid row. Expected columns: Tenant, ThreeDSEnabled."
+    }
+
+    $threeDsByTenant[$tenantCode] = [int] $threeDsValue
 }
-$threeDsByTenant['TenantC'] = [int] (($preflightTenantC | Select-Object -First 1).ThreeDSEnabled)
+
+foreach ($tenantCode in @('TenantA', 'TenantB')) {
+    if (-not $threeDsByTenant.ContainsKey($tenantCode)) {
+        throw "Shared payment-provider baseline is missing for $tenantCode in database '$sharedDbName'. Run 01 Phase 10 Azure Deploy Orchestrator so migrations seed the baseline before payment verification."
+    }
+}
+
+$tenantCPreflightRow = $preflightTenantC | Select-Object -First 1
+$tenantCThreeDs = Get-ObjectPropertyValue -Object $tenantCPreflightRow -PropertyName 'ThreeDSEnabled'
+if ($null -eq $tenantCThreeDs) {
+    throw "TenantC payment-provider baseline is missing in dedicated database '$tenantCDbName'. Run 01 Phase 10 Azure Deploy Orchestrator so migrations seed the baseline before payment verification."
+}
+$threeDsByTenant['TenantC'] = [int] $tenantCThreeDs
 
 $expectedOrdersByTenant = @{}
 foreach ($tenantGroup in ($selectedApiEvents | Where-Object { -not [string]::IsNullOrWhiteSpace($_.ResolvedCustomerOrderId) } | Group-Object Tenant)) {

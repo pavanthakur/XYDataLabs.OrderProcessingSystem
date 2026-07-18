@@ -440,6 +440,7 @@ jobs:
       uiFqdn: ${{ steps.outputs.outputs.uiFqdn }}
       sqlServerFqdn: ${{ steps.outputs.outputs.sqlServerFqdn }}
       sqlDatabaseName: ${{ steps.outputs.outputs.sqlDatabaseName }}
+      tenantCDatabaseName: ${{ steps.outputs.outputs.tenantCDatabaseName }}
       redisHostName: ${{ steps.outputs.outputs.redisHost }}
       redisSslPort: ${{ steps.outputs.outputs.redisSslPort }}
       deploymentName: ${{ steps.params.outputs.deploymentName }}
@@ -822,6 +823,7 @@ jobs:
           SQL_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.sqlServerName.value" -o tsv)
           SQL_FQDN=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.sqlServerFqdn.value" -o tsv)
           SQL_DB_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.sqlDatabaseName.value" -o tsv)
+          TENANT_C_DB_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.tenantCDatabaseName.value" -o tsv)
           REDIS_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.redisName.value" -o tsv)
           REDIS_HOST=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.redisHostName.value" -o tsv)
           REDIS_SSL_PORT=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.redisSslPort.value" -o tsv)
@@ -846,6 +848,7 @@ jobs:
           echo "sqlServerFqdn=${SQL_FQDN}" >> $GITHUB_OUTPUT
           echo "sqlDatabase=${SQL_DB_NAME}" >> $GITHUB_OUTPUT
           echo "sqlDatabaseName=${SQL_DB_NAME}" >> $GITHUB_OUTPUT
+          echo "tenantCDatabaseName=${TENANT_C_DB_NAME}" >> $GITHUB_OUTPUT
           echo "redis=${REDIS_NAME}" >> $GITHUB_OUTPUT
           echo "redisHost=${REDIS_HOST}" >> $GITHUB_OUTPUT
           echo "redisSslPort=${REDIS_SSL_PORT}" >> $GITHUB_OUTPUT
@@ -1071,7 +1074,8 @@ jobs:
           echo "- **ACR Login Server:** ${{ steps.outputs.outputs.acrLoginServer }}" >> $GITHUB_STEP_SUMMARY
           if [ -n "${{ steps.outputs.outputs.sqlServerFqdn }}" ]; then
             echo "- **SQL Server FQDN:** ${{ steps.outputs.outputs.sqlServerFqdn }}" >> $GITHUB_STEP_SUMMARY
-            echo "- **SQL Database:** ${{ steps.outputs.outputs.sqlDatabaseName }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **SQL Shared Database:** ${{ steps.outputs.outputs.sqlDatabaseName }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **SQL TenantC Dedicated Database:** ${{ steps.outputs.outputs.tenantCDatabaseName }}" >> $GITHUB_STEP_SUMMARY
           else
             echo "- **SQL Server FQDN:** (not deployed)" >> $GITHUB_STEP_SUMMARY
           fi
