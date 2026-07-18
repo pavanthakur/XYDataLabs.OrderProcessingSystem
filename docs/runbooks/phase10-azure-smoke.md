@@ -104,6 +104,7 @@ Use the numbered Phase 10 workflows in this order:
 | `01` | `01 Phase 10 Azure Deploy Orchestrator` | Azure deploy, dry run, or cleanup |
 | `02` | `02 Phase 10 Azure Runtime Smoke` | Runtime proof for gateway, API routing, and UI after deploy |
 | `03` | `03 Phase 10 Azure Transport Smoke` | Transport proof for Service Bus publish, consume, DLQ, and replay |
+| `04` | `04 Phase 10 Azure Payment Matrix` | All-tenant browser/payment E2E proof against the live Azure Container Apps URLs |
 | `99` | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Optional local or CI parity for the current container graph |
 
 Rule of thumb:
@@ -111,6 +112,7 @@ Rule of thumb:
 - Run `01` when you want to change Azure resources.
 - Run `02` right after `01` finishes successfully.
 - Run `03` after `02` passes.
+- Run `04` after `03` passes when you want the Azure equivalent of the local all-tenant Docker payment matrix.
 - Run `99` only when you want optional local/CI parity for the Docker container shape.
 - Workflow `99` always starts its own Docker stack on GitHub-hosted runners. Reusing an already running stack is a local script-only option via `scripts/run-phase10-docker-dev-e2e-hook.ps1 -SkipStartIfNeeded`.
 
@@ -120,9 +122,9 @@ Use the same Phase 10 sequence in each environment, changing only the target env
 
 | Environment | Platform foundation | Azure deploy or cleanup | Runtime smoke | Transport smoke | Cleanup note |
 |---|---|---|---|---|---|
-| `dev` | Run `00` once, then only when platform ACR or pull identity must be recreated | Run `01` with `cleanupInfra=false` for deploys and `cleanupInfra=true` for teardown | Run `02` after a successful deploy | Run `03` after `02` passes | Deletes `rg-orderprocessing-dev` only; platform foundation stays persistent |
-| `staging` | Run `00` once, then only when platform ACR or pull identity must be recreated | Run `01` with `cleanupInfra=false` for deploys and `cleanupInfra=true` for teardown | Run `02` after a successful deploy | Run `03` after `02` passes | Deletes `rg-orderprocessing-staging` only; platform foundation stays persistent |
-| `prod` | Run `00` once, then only when platform ACR or pull identity must be recreated | Run `01` with `cleanupInfra=false` for deploys and `cleanupInfra=true` only during approved teardown | Run `02` after a successful deploy | Run `03` after `02` passes | Deletes `rg-orderprocessing-prod` only; platform foundation stays persistent |
+| `dev` | Run `00` once, then only when platform ACR or pull identity must be recreated | Run `01` with `cleanupInfra=false` for deploys and `cleanupInfra=true` for teardown | Run `02` after a successful deploy | Run `03` after `02` passes; run `04` for all-tenant payment E2E | Deletes `rg-orderprocessing-dev` only; platform foundation stays persistent |
+| `staging` | Run `00` once, then only when platform ACR or pull identity must be recreated | Run `01` with `cleanupInfra=false` for deploys and `cleanupInfra=true` for teardown | Run `02` after a successful deploy | Run `03` after `02` passes; run `04` for all-tenant payment E2E | Deletes `rg-orderprocessing-staging` only; platform foundation stays persistent |
+| `prod` | Run `00` once, then only when platform ACR or pull identity must be recreated | Run `01` with `cleanupInfra=false` for deploys and `cleanupInfra=true` only during approved teardown | Run `02` after a successful deploy | Run `03` after `02` passes; run `04` only during approved production validation | Deletes `rg-orderprocessing-prod` only; platform foundation stays persistent |
 
 Default selection guidance:
 
@@ -156,6 +158,7 @@ Current dev URLs from the latest deploy proof:
 | `01 Phase 10 Azure Deploy Orchestrator` | Primary Phase 10 click target | Routes to internal deploy workflow | Routes to internal image workflow | Routes to internal deploy workflow | Routes Azure RG cleanup when `cleanupInfra=true` | Current wrapper |
 | `02 Phase 10 Azure Runtime Smoke` | Post-deploy smoke | No | No | No | No | Current validation |
 | `03 Phase 10 Azure Transport Smoke` | Post-runtime-smoke transport proof | No | No | No | No | Current validation |
+| `04 Phase 10 Azure Payment Matrix` | Post-transport payment E2E | No | No | No | No | Current validation |
 | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Optional validation | No | Local/runner build only | Local Docker only | Local Docker cleanup | Current validation |
 | `Build Phase 10 Service Images (Internal)` | Do not click for normal deploy | No | Yes | No | No | Current internal |
 | `Deploy Azure Phase 10 Resources (Internal)` | Do not click for normal deploy | Yes | No | Yes | Yes | Current internal |

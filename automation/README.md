@@ -7,8 +7,9 @@ to backend test projects.
 ## Current Status
 
 The initial local and Docker pilots are implemented for the React payment flow and OpenPay sandbox 3DS.
-Azure App Service execution is now also catalog-driven for `dev`, `stg`, and `prod`, with verification
-staying script-first through Application Insights and Azure SQL.
+Azure execution is catalog-driven for `dev`, `stg`, and `prod`. The active Phase 10 path resolves
+Azure Container Apps URLs at workflow runtime, with verification staying script-first through
+Application Insights and Azure SQL.
 
 ## Initial Scope
 
@@ -180,6 +181,25 @@ Dry-run the Azure matrix without browser execution or verification:
 npm --prefix automation run run:azure:matrix:dry
 ```
 
+Run the Phase 10 dev Azure E2E alias after `01`, `02`, and `03` have passed:
+
+```powershell
+npm --prefix automation run xydatalabs-test-azure-e2e-dev
+```
+
+GitHub Actions should use `04 Phase 10 Azure Payment Matrix` instead of hardcoded URLs. That
+workflow resolves the live Gateway and UI Container Apps FQDNs and injects them through target
+override variables:
+
+```text
+XYDATALABS_RUNTIME_TARGET_AZURE_DEV_BASE_URL
+XYDATALABS_RUNTIME_TARGET_AZURE_DEV_API_BASE_URL
+XYDATALABS_RUNTIME_TARGET_AZURE_STG_BASE_URL
+XYDATALABS_RUNTIME_TARGET_AZURE_STG_API_BASE_URL
+XYDATALABS_RUNTIME_TARGET_AZURE_PROD_BASE_URL
+XYDATALABS_RUNTIME_TARGET_AZURE_PROD_API_BASE_URL
+```
+
 Notes:
 
 - Supported local targets are `local-http` and `local-https`
@@ -199,7 +219,7 @@ Notes:
 - Single-target local runs auto-start the selected local profile when needed and stop it automatically after verification; use `--keep-local-sessions` to leave local sessions running
 - Local matrix runs stop all exercised local profiles automatically after the matrix completes; use `--keep-local-sessions` to opt out
 - Docker target and Docker matrix runs assume the selected Docker profile or profiles are already running
-- Azure target and Azure matrix runs assume the selected Azure App Service environments are already deployed and reachable, and that `az login` plus Azure SQL/Key Vault access are available for verification
+- Azure target and Azure matrix runs assume the selected Azure Container Apps environment is already deployed and reachable, SQL and Redis exist for the target environment, and that `az login` plus Azure SQL/Key Vault access are available for verification
 
 ## Canonical Planning Reference
 

@@ -35,6 +35,7 @@
     "run:docker:prod:https:playwright-sanity": "tsx ./src/cli/run-docker-matrix.ts --target docker-prod-https --skip-verification --tenant-limit 1",
     "run:docker:matrix:dry": "tsx ./src/cli/run-docker-matrix.ts --dry-run",
     "run:azure:matrix": "tsx ./src/cli/run-azure-matrix.ts",
+    "xydatalabs-test-azure-e2e-dev": "tsx ./src/cli/run-azure-matrix.ts --target azure-dev --tenant TenantA --tenant TenantB --tenant TenantC",
     "run:azure:matrix:dry": "tsx ./src/cli/run-azure-matrix.ts --dry-run"
   },
   "devDependencies": {

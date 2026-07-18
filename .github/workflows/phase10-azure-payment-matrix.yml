@@ -1,0 +1,217 @@
+name: 04 Phase 10 Azure Payment Matrix
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      tenantTimeoutMs:
+        description: 'Per-tenant timeout in milliseconds'
+        required: true
+        default: 180000
+        type: number
+      skipVerification:
+        description: 'Skip App Insights and Azure SQL verification after browser flow'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  azure_payment_matrix:
+    name: 04 Phase 10 Azure Payment Matrix
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Azure CLI Login (OIDC)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+
+      - name: Resolve Phase 10 Azure E2E topology
+        id: topology
+        shell: bash
+        run: |
+          if [ "${{ inputs.environment }}" = "staging" ]; then
+            ENV_SUFFIX="stg"
+            TARGET_KEY="azure-stg"
+          elif [ "${{ inputs.environment }}" = "prod" ]; then
+            ENV_SUFFIX="prod"
+            TARGET_KEY="azure-prod"
+          else
+            ENV_SUFFIX="dev"
+            TARGET_KEY="azure-dev"
+          fi
+
+          RG_NAME="rg-orderprocessing-${ENV_SUFFIX}"
+          GATEWAY_APP="orderprocessing-gate-${ENV_SUFFIX}"
+          UI_APP="orderprocessing-ui-${ENV_SUFFIX}"
+          SQL_SERVER="orderprocessing-sql-${ENV_SUFFIX}"
+          REDIS_NAME="redis-orderprocessing-${ENV_SUFFIX}"
+          SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
+
+          GATEWAY_FQDN="$(az containerapp show --resource-group "$RG_NAME" --name "$GATEWAY_APP" --query properties.configuration.ingress.fqdn -o tsv)"
+          UI_FQDN="$(az containerapp show --resource-group "$RG_NAME" --name "$UI_APP" --query properties.configuration.ingress.fqdn -o tsv)"
+
+          if [ -z "$GATEWAY_FQDN" ] || [ -z "$UI_FQDN" ]; then
+            echo "Failed to resolve Gateway/UI Container App ingress FQDNs." >&2
+            exit 1
+          fi
+
+          GATEWAY_BASE_URL="https://${GATEWAY_FQDN}"
+          UI_BASE_URL="https://${UI_FQDN}"
+          RESOURCE_GROUP_URL="https://portal.azure.com/#/resource/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/overview"
+          GATEWAY_URL="https://portal.azure.com/#/resource/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/providers/Microsoft.App/containerApps/${GATEWAY_APP}/overview"
+          UI_URL="https://portal.azure.com/#/resource/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/providers/Microsoft.App/containerApps/${UI_APP}/overview"
+
+          echo "envSuffix=${ENV_SUFFIX}" >> "$GITHUB_OUTPUT"
+          echo "targetKey=${TARGET_KEY}" >> "$GITHUB_OUTPUT"
+          echo "resourceGroup=${RG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "gatewayApp=${GATEWAY_APP}" >> "$GITHUB_OUTPUT"
+          echo "uiApp=${UI_APP}" >> "$GITHUB_OUTPUT"
+          echo "sqlServer=${SQL_SERVER}" >> "$GITHUB_OUTPUT"
+          echo "redisName=${REDIS_NAME}" >> "$GITHUB_OUTPUT"
+          echo "gatewayBaseUrl=${GATEWAY_BASE_URL}" >> "$GITHUB_OUTPUT"
+          echo "uiBaseUrl=${UI_BASE_URL}" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## 04 Phase 10 Azure Payment Matrix Context"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Environment | ${{ inputs.environment }} |"
+            echo "| Azure Resource Suffix | ${ENV_SUFFIX} |"
+            echo "| Runtime Target | ${TARGET_KEY} |"
+            echo "| Resource Group | ${RG_NAME} |"
+            echo "| Gateway Base URL | ${GATEWAY_BASE_URL} |"
+            echo "| UI Base URL | ${UI_BASE_URL} |"
+            echo "| SQL Server | ${SQL_SERVER} |"
+            echo "| Redis | ${REDIS_NAME} |"
+            echo ""
+            echo "### Azure Links"
+            echo ""
+            echo "- [Resource group](${RESOURCE_GROUP_URL})"
+            echo "- [Gateway Container App](${GATEWAY_URL})"
+            echo "- [UI Container App](${UI_URL})"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify SQL and Redis baseline resources exist
+        shell: bash
+        run: |
+          RG_NAME="${{ steps.topology.outputs.resourceGroup }}"
+          SQL_SERVER="${{ steps.topology.outputs.sqlServer }}"
+          REDIS_NAME="${{ steps.topology.outputs.redisName }}"
+
+          az sql server show --resource-group "$RG_NAME" --name "$SQL_SERVER" --only-show-errors 1>/dev/null
+          az redis show --resource-group "$RG_NAME" --name "$REDIS_NAME" --only-show-errors 1>/dev/null
+
+          {
+            echo ""
+            echo "### SQL and Redis Baseline"
+            echo ""
+            echo "| Resource | Status |"
+            echo "|---|---|"
+            echo "| SQL Server ${SQL_SERVER} | Present |"
+            echo "| Redis ${REDIS_NAME} | Present |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Install automation dependencies
+        working-directory: automation
+        run: npm ci
+
+      - name: Install Playwright browser
+        working-directory: automation
+        run: npx playwright install chromium
+
+      - name: Run all-tenant Azure payment matrix
+        shell: bash
+        env:
+          XYDATALABS_RUNTIME_TARGET_AZURE_DEV_BASE_URL: ${{ steps.topology.outputs.uiBaseUrl }}
+          XYDATALABS_RUNTIME_TARGET_AZURE_DEV_API_BASE_URL: ${{ steps.topology.outputs.gatewayBaseUrl }}
+          XYDATALABS_RUNTIME_TARGET_AZURE_STG_BASE_URL: ${{ steps.topology.outputs.uiBaseUrl }}
+          XYDATALABS_RUNTIME_TARGET_AZURE_STG_API_BASE_URL: ${{ steps.topology.outputs.gatewayBaseUrl }}
+          XYDATALABS_RUNTIME_TARGET_AZURE_PROD_BASE_URL: ${{ steps.topology.outputs.uiBaseUrl }}
+          XYDATALABS_RUNTIME_TARGET_AZURE_PROD_API_BASE_URL: ${{ steps.topology.outputs.gatewayBaseUrl }}
+        run: |
+          EXTRA_ARGS=()
+          if [ "${{ inputs.skipVerification }}" = "true" ]; then
+            EXTRA_ARGS+=("--skip-verification")
+          fi
+
+          npm --prefix automation run run:azure:matrix -- \
+            --target "${{ steps.topology.outputs.targetKey }}" \
+            --tenant TenantA \
+            --tenant TenantB \
+            --tenant TenantC \
+            --tenant-timeout-ms "${{ inputs.tenantTimeoutMs }}" \
+            "${EXTRA_ARGS[@]}"
+
+      - name: Resolve Azure matrix run packet
+        id: run_packet
+        if: always()
+        shell: pwsh
+        run: |
+          $environmentKey = 'azure-https'
+          $pointerPath = Join-Path $PWD "TestResults/Playwright/$environmentKey/latest-playwright-matrix.txt"
+          $runRoot = ''
+          if (Test-Path -LiteralPath $pointerPath) {
+            $runRoot = (Get-Content -LiteralPath $pointerPath -Raw).Trim()
+          }
+
+          $summaryPath = if (-not [string]::IsNullOrWhiteSpace($runRoot)) { Join-Path $runRoot 'summary.md' } else { '' }
+          $summaryJsonPath = if (-not [string]::IsNullOrWhiteSpace($runRoot)) { Join-Path $runRoot 'summary.json' } else { '' }
+
+          "run_root=$runRoot" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "summary_path=$summaryPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "summary_json_path=$summaryJsonPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+          if (-not [string]::IsNullOrWhiteSpace($summaryPath) -and (Test-Path -LiteralPath $summaryPath)) {
+            Get-Content -LiteralPath $summaryPath | Add-Content -Path $env:GITHUB_STEP_SUMMARY
+          }
+
+      - name: Print failure diagnostics
+        if: failure()
+        shell: pwsh
+        run: |
+          $runRoot = '${{ steps.run_packet.outputs.run_root }}'
+          if ([string]::IsNullOrWhiteSpace($runRoot) -or -not (Test-Path -LiteralPath $runRoot)) {
+            Write-Host 'No Azure matrix run packet was resolved.'
+            return
+          }
+
+          Write-Host "Azure matrix run packet: $runRoot"
+          foreach ($fileName in @('summary.md', 'summary.json', 'progress.log', 'startup.log')) {
+            $path = Join-Path $runRoot $fileName
+            if (Test-Path -LiteralPath $path) {
+              Write-Host ""
+              Write-Host "--- $fileName ---"
+              Get-Content -LiteralPath $path -Tail 160
+            }
+          }
+
+      - name: Upload Azure payment matrix run packet
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: phase10-azure-payment-matrix-${{ inputs.environment }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            TestResults/Playwright/azure-https/**
+          if-no-files-found: warn
+          retention-days: 14
