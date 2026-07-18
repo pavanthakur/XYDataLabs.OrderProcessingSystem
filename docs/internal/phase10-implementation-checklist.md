@@ -1,6 +1,7 @@
 # Phase 10 Implementation Checklist
 
 This checklist turns the Phase 10 kickoff into a repo-specific transport plan.
+It intentionally does **not** reopen Phase 1-9 work; any new enterprise refinements must be captured here in Phase 10 or pushed into later phases.
 
 Anchor flow for the first slice:
 - `Orders` emits the `OrderCreatedV1` integration event.
@@ -17,6 +18,7 @@ Anchor flow for the first slice:
 | Phase 10 docs and runbooks | Done | The checklist, smoke runbook, DLQ replay guide, and progress tracker are aligned with the transport-first order. |
 | Phase 10 operator-experience hardening | Verified in dev | Accepted-host echo, deploy-summary traceability, skip-reason logging, cleanup symmetry, local-vs-CI mapping, and per-service build logs are present in the active workflow path. |
 | SharedContracts extraction | Deferred | Keep it out unless transport work proves real duplication across multiple services. |
+| Earlier phase scope | Frozen | Do not back-port new enterprise refinements into Phases 1-9; keep them in Phase 10 or later only. |
 | Azure dev deploy | Verified | GitHub Actions run `29273224237` built the Phase 10 images and deployed the dev Container Apps transport stack successfully. |
 | Phase 10 runtime smoke | Verified | GitHub Actions run `29273711615` proved gateway health, gateway-routed API JSON, UI static route, and UI API proxy bootstrap. |
 | Phase 10 transport / replay smoke | Verified | GitHub Actions run `29273881488` proved Service Bus publish, fan-out consume, controlled DLQ forwarding, DLQ replay receive, and replay publish/consume. |
@@ -297,6 +299,23 @@ Use [docs/internal/phase10-parity-matrix.md](./phase10-parity-matrix.md) as the 
 - Keep `00 Azure Platform Foundation` focused on persistent ACR, pull identity, and subscription-level Azure resource-provider registration, with `Assign AcrPull=false` as the default.
 - Keep image lifecycle tightening in the scheduled retention workflow, not in the deploy wrapper.
 - Update wrapper summaries only after the Azure and local contract are aligned.
+
+## Enterprise Execution Packet Track
+
+Use this track to absorb the enterprise run-correlation plan without reopening Phases 1-9. Phase 10 owns the operator-facing proof packet for the transport and Azure parity lane; later phases can deepen the same convention for broader CI/CD and observability.
+
+| Enterprise plan item | Roadmap home | Phase 10 decision | Later-phase carry-forward |
+|---|---|---|---|
+| Commit current runhook and integration fixes | Phase 10 | Keep the Docker dev HTTP hook and Azure smoke workflow changes as the stable transport/operator baseline. | Use the same baseline as regression evidence before Phase 11 data autonomy work. |
+| Single `runId` / run-root convention | Phase 10 | Keep local Phase 10 Docker validation output under one generated run folder and one summary path. | Phase 12 extends the convention to broader CI evidence packets. |
+| GitHub Actions artifact packet | Phase 10 + Phase 12 | Phase 10 workflows should publish or summarize one run packet per execution where test artifacts are produced. | Phase 12 standardizes artifact retention, coverage, release evidence, and failure links across non-Phase-10 workflows. |
+| GitHub workflow summary | Phase 10 | Current wrapper and smoke workflows must show run ID, resource links, endpoint links, status, and next operator action. | Phase 12 turns this into a repo-wide summary contract. |
+| Secret management | Phase 10 + Phase 12 | Use Key Vault, GitHub environment secrets, OIDC, and generated SQL credentials only through workflow-controlled paths. | Phase 12 hardens rotation, options validation, and rollout safety. |
+| SQL managed identity hardening | Phase 12 | Not required to close the current transport baseline; do not block Phase 10 on removing SQL admin bootstrap credentials. | Replace stored SQL credentials with managed identity once the Azure parity path is stable. |
+| Structured logging with `runId` | Phase 10 + Phase 12 | Keep run-level correlation in validation hooks and workflow summaries. | Phase 12 standardizes Serilog enrichment across services and operators. |
+| OpenTelemetry trace/span expansion | Phase 13+ | Do not add new tracing complexity just to close Phase 10; keep existing correlation and App Insights proof intact. | Add deeper cross-service trace/span mapping when distributed app testing and orchestration maturity justify it. |
+
+Phase 10 exit remains focused on transport/operator proof. Anything that broadens governance across the whole repo belongs in Phase 12; anything that deepens distributed tracing and orchestration belongs in Phase 13+.
 
 ### Suggested next change-set deliverables
 

@@ -390,6 +390,11 @@ The external starter-kit benchmark is useful as an enterprise guide, but we are 
 | Mailing / notification dispatch | Adopt | Phase 11 + Phase 12 | Keep outbound mail or async notification delivery under the Notifications module instead of scattering providers across features. |
 | CQRS read models, projections, and snapshot/rebuild jobs | Adopt | Phase 14 | These belong after service autonomy and orchestration maturity are in place. |
 | Azure Container Registry, runtime image ownership, and image retention | Adopt | Phase 10 + Phase 12 | ACR is the enterprise runtime-image target; cleanup, SBOM, and scan evidence must travel with the cutover instead of becoming a later afterthought. |
+| Single execution packet: `runId`, one run folder, one summary, and one uploaded artifact bundle | Adopt | Phase 10 + Phase 12 | Phase 10 keeps the transport/operator validation packet consistent; Phase 12 generalizes the pattern across CI, coverage, release evidence, and retention. |
+| Workflow summary contract with resource links, endpoint links, status, and next operator action | Adopt | Phase 10 + Phase 12 | Phase 10 wrappers and smoke workflows already need this for Azure validation; Phase 12 makes it a repo-wide CI/CD standard. |
+| SQL credential hardening with managed identity | Defer until platform baseline is stable | Phase 12 | Phase 10 may bootstrap SQL with generated credentials stored through controlled secret paths; managed identity for SQL becomes the hardening target after Azure parity is proven. |
+| Structured logs enriched with `runId` plus component, timestamp, and level | Adopt | Phase 10 + Phase 12 | Phase 10 starts with validation hooks and operator summaries; Phase 12 standardizes service/runtime logging policy. |
+| OpenTelemetry trace/span expansion over the run packet | Assess after baseline | Phase 13+ | Keep the current correlation and App Insights proof intact. Add deeper trace/span mapping only when distributed app testing and orchestration maturity justify the extra complexity. |
 | Observability dashboards, alert workbooks, and dependency maps | Adopt | Phase 12 + Phase 13 | Move beyond raw traces by creating operator-facing dashboards for gateway, transport, ACA revisions, DLQ, latency, and dependency health. |
 | AKS / Kubernetes platform adoption | Assess only | Post-14 / platform need | ACA remains the current default. Promote AKS only if the system needs cluster-level control, custom operators, service mesh depth, or enterprise platform standardization. |
 | Kafka / streaming platform adoption | Assess only | Post-14 / product need | Service Bus remains the work-distribution and enterprise messaging default. Promote Kafka only for high-throughput event streams, replayable logs, or cross-domain analytics needs that Service Bus/Event Grid do not satisfy. |
@@ -1324,6 +1329,8 @@ contracts frozen in Phase 8.
 - **Bicep-only topology** — Azure infrastructure remains Bicep-authored end to end. Service Bus topology is declared in a dedicated `servicebus.bicep` module with per-environment parameters; no portal drift and no Terraform split.
 
 ### Phase 10 Status Table
+
+> Scope note: the refinements below are Phase 10 or later only. Earlier phase decisions stay frozen unless a separate review explicitly reopens them.
 
 | Area | Status | Meaning | Next Step |
 |---|---|---|---|
