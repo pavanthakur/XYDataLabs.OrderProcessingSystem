@@ -4,7 +4,7 @@ This document records the next implementation slice after the Phase 10 transport
 
 The baseline is already proven in dev:
 - local Docker Dev HTTP uses compose-managed SQL Server and Redis
-- Azure dev currently proves the transport/operator path without SQL or Redis in the active Phase 10 stack
+- Azure dev now treats SQL and Azure Managed Redis as part of the active Phase 10 baseline stack
 
 The next change set should use the local Docker container graph as the contract and then reintroduce Azure SQL and Azure Redis only when the workflow wiring is ready.
 
@@ -13,7 +13,7 @@ The next change set should use the local Docker container graph as the contract 
 | Concern | Local Docker reference | Azure Phase 10 target | Owner | Current status |
 |---|---|---|---|---|
 | SQL | `Resources/Docker/docker-compose.database.yml` + `docker-compose.dev.yml`; connection string key `ConnectionStrings__OrderProcessingSystemDbConnection`; secret source `LOCAL_SQL_PASSWORD` | Part of the automatic Phase 10 baseline path in Azure | `01 Phase 10 Azure Deploy Orchestrator` | Automatic baseline |
-| Redis | Compose-managed `redis:7-alpine` service; app config points at `Redis: localhost:6379` | Part of the automatic Phase 10 baseline path in Azure | `01 Phase 10 Azure Deploy Orchestrator` | Automatic baseline |
+| Redis | Compose-managed `redis:7-alpine` service; app config points at `Redis: localhost:6379` | Azure Managed Redis `Balanced_B0` with TLS port `10000` as part of the automatic Phase 10 baseline path | `01 Phase 10 Azure Deploy Orchestrator` | Automatic baseline |
 | ACR | Local build/pull parity is represented by the Docker hook and image build logs | Persistent platform ACR in `rg-orderprocessing-platform` with scoped pull-token runtime auth | `00 Azure Platform Foundation` + deploy wrapper | Implemented |
 | ACR cleanup | Local parity keeps the container graph disposable between runs | Scheduled image cleanup keeps active Container App revisions safe while pruning stale tags | `Phase 10 Retention Cleanup (Internal)` | Implemented |
 | App RG cleanup | `docker compose down` and local cleanup hook reset the dev stack | `cleanupInfra=true` deletes the environment RG only | `01 Phase 10 Azure Deploy Orchestrator` | Implemented |
@@ -30,7 +30,7 @@ The next change set should use the local Docker container graph as the contract 
 
 1. Keep SQL and Redis in the automatic baseline path and verify they remain aligned with the local Docker contract.
 2. Reintroduce or remove the Azure SQL and Redis modules only if a future architecture review changes the contract.
-3. Keep Azure Cache for Redis aligned with the local Docker contract only if the runtime still needs it after the dev proof.
+3. Keep Azure Managed Redis aligned with the local Docker contract only if the runtime still needs it after the dev proof.
 4. Update the wrapper summary to show SQL/Redis ownership and cleanup scope.
 5. Keep the retention workflow responsible for stale image and artifact cleanup.
 
