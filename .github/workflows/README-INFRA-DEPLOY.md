@@ -115,8 +115,6 @@ Do not merge `Azure Initial Setup` with `00 Azure Platform Foundation` unless yo
    | **Location** | Azure region | Any region string | centralindia |
    | **Dry Run** | What-if only (no deploy) | true/false | true |
    | **Cleanup Infra** | Destructive teardown of the environment-scoped resource group | true/false | false |
-   | **Deploy SQL Parity Slice** | Optional Azure SQL follow-up aligned to the local Docker contract | true/false | false |
-   | **Deploy Redis Parity Slice** | Optional Azure Redis follow-up aligned to the local Docker contract | true/false | false |
    | **Public Domain** | Optional DNS suffix for friendly aliases | Any real domain suffix | empty |
 | **Bind Aliases** | Enable alias planning / binding checks | true/false | false |
 | **Alias Mode** | Choose direct ACA binding or front-door planning | direct / frontdoor | direct |
@@ -158,11 +156,12 @@ Do not merge `Azure Initial Setup` with `00 Azure Platform Foundation` unless yo
    - The wrapper execution order is intentionally `preflight -> build images -> internal deploy or cleanup -> summary`, so a real run should show the image job before the internal infra workflow in Actions
    - The wrapper summary is only the top-level checkpoint; detailed logs and outputs live in the nested build and infra jobs under the run
    - If you need per-service image logs or deployment traceability, open the child jobs under the wrapper rather than relying on the top-level summary alone
-   - `deploySql=false` and `deployRedis=false` are the safe defaults; flip them on only when you are intentionally running the next Azure parity slice
+   - SQL Server and Redis are part of the automatic baseline now, so the wrapper no longer asks for parity toggles in the normal operator form
 
 **Shared contract with local Docker validation:**
 - same environment suffix pattern (`dev`, `staging`, `prod`)
 - same split-service shape (gateway/orders/inventory/notifications/UI)
+- same baseline SQL and Redis availability in the active Phase 10 path
 - same cleanup symmetry (`appname-env` resources can be torn down safely)
 - different public URL style only at the hosting layer: local Docker uses fixed localhost ports, Azure Container Apps uses generated ingress plus optional aliases
 - the image build stage is intentionally grouped into one wrapper step with one individual log block per service, so exported run logs may be consolidated even though the Actions UI still shows each service build separately
@@ -216,6 +215,7 @@ ACR should be treated as a production prerequisite for the runtime image path, n
 | Add ACR registry | Host Phase 10 images in Azure ACR | Current Phase 10 target |
 | Switch image publish path | Push build artifacts to ACR from the wrapper build step | Current Phase 10 target |
 | Switch image pull path | Let Azure Container Apps pull from ACR with Azure-native auth | Current Phase 10 target |
+| SQL / Redis baseline | Deploy SQL Server and Redis as part of the default Phase 10 path | Current Phase 10 target |
 | Historical GHCR cleanup | Keep only the cleanup-only path for old package versions | Retained for retention workflow |
 | Historical GHCR runtime token | No longer needed for the active Phase 10 runtime image path | Completed for active deploy path |
 
@@ -236,8 +236,8 @@ Use [docs/internal/phase10-parity-matrix.md](../../docs/internal/phase10-parity-
 
 | Need | What to add back or decide | Workflow touchpoint |
 |---|---|---|
-| SQL Server | Reintroduce the SQL module and surface its outputs in the deployment summary | `infra-deploy.yml` / `phase10-deploy-orchestrator.yml` |
-| Redis | Add an Azure Cache for Redis module and wire its connection details into app settings | `infra-deploy.yml` / `phase10-deploy-orchestrator.yml` |
+| SQL Server | Already part of the automatic baseline Phase 10 deployment path | `infra-deploy.yml` / `phase10-deploy-orchestrator.yml` |
+| Redis | Already part of the automatic baseline Phase 10 deployment path | `infra-deploy.yml` / `phase10-deploy-orchestrator.yml` |
 | App Service URLs | Not part of the active containerized target; use friendly aliases / Front Door names for Container Apps | alias planning in `infra-deploy.yml` |
 | Portal visibility | Summarize the live portal endpoints and resource inventory in one run summary | wrapper summary + internal deployment summary |
 

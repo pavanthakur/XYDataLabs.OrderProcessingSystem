@@ -13,7 +13,7 @@ This directory contains the production-ready Azure infrastructure definition for
 - `modules/insights.bicep` – Application Insights instance.
 - `modules/loganalytics.phase10.bicep` – Log Analytics workspace for the Phase 10 transport slice.
 - `modules/sql.bicep` – Azure SQL Server and Database with firewall rules.
-- `modules/redis.phase10.bicep` – Azure Cache for Redis for the optional Phase 10 parity slice.
+- `modules/redis.phase10.bicep` – Azure Cache for Redis for the Phase 10 baseline runtime slice.
 - `modules/identity.bicep` – (Optional) Creates GitHub OIDC App Registration + federated credentials using an Azure CLI deploymentScript.
 
 ## Naming Convention
@@ -111,7 +111,7 @@ Phase 10 note:
 - Phase 10 is intentionally transport-first and currently deploys Service Bus, Log Analytics, Application Insights, Container Apps, Functions, Key Vault, and the container images.
 - The persistent ACR registry and runtime pull identity are deployed once by `main.phase10.platform.bicep`.
 - The template no longer tries to self-grant `AcrPull` during the normal deployment path. `01 Phase 10 Azure Deploy Orchestrator` prepares scoped ACR pull-token credentials for Container Apps, while `AcrPull` remains an optional privileged fallback.
-- If you need SQL Server or Redis in Azure, use the wrapper parity switches deliberately (`deploySql` / `deployRedis`) and treat the default off state as the current baseline until the dev parity run is approved.
+- SQL Server and Redis are part of the automatic Phase 10 baseline. The normal wrapper path no longer asks for `deploySql` or `deployRedis`; if a future exception is needed, document it explicitly in the workflow or ADR.
 - For a production-grade containerized solution, use ACR for runtime images, Managed Identity for Azure access, and Front Door/WAF for public ingress when you need a controlled external endpoint.
 
 **Security Note**: SQL admin credentials are stored as secure parameters. In production, consider using:

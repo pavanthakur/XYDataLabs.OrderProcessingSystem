@@ -46,14 +46,14 @@ on:
         default: false
         type: boolean
       deploySql:
-        description: 'Deploy the Phase 10 Azure SQL parity slice'
-        required: true
-        default: false
+        description: 'Deploy the Phase 10 Azure SQL baseline slice'
+        required: false
+        default: true
         type: boolean
       deployRedis:
-        description: 'Deploy the Phase 10 Azure Redis parity slice'
-        required: true
-        default: false
+        description: 'Deploy the Phase 10 Azure Redis baseline slice'
+        required: false
+        default: true
         type: boolean
       acrLoginServer:
         description: 'Optional ACR login server for Phase 10 runtime images'
@@ -122,8 +122,7 @@ jobs:
           echo "| workflow | ${{ github.workflow }} |" >> $GITHUB_STEP_SUMMARY
           echo "| dryRun | ${{ inputs.dryRun }} |" >> $GITHUB_STEP_SUMMARY
           echo "| cleanupInfra | ${{ inputs.cleanupInfra }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| deploySql | ${{ inputs.deploySql }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| deployRedis | ${{ inputs.deployRedis }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| SQL Server + Redis baseline | automatic | Included in the default Phase 10 path |" >> $GITHUB_STEP_SUMMARY
           echo "| environment | ${{ inputs.environment }} |" >> $GITHUB_STEP_SUMMARY
           echo "| location | ${{ inputs.location }} |" >> $GITHUB_STEP_SUMMARY
           echo "| acr_login_server | ${{ inputs.acrLoginServer || '(not provided)' }} |" >> $GITHUB_STEP_SUMMARY
