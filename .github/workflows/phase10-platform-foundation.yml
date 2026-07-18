@@ -68,6 +68,43 @@ jobs:
           echo "acrPullIdentityId=${PLATFORM_PULL_IDENTITY_ID}" >> "$GITHUB_OUTPUT"
           echo "acrPullIdentityName=${PLATFORM_PULL_IDENTITY_NAME}" >> "$GITHUB_OUTPUT"
 
+      - name: Ensure Azure resource providers are registered
+        if: ${{ !inputs.dryRun }}
+        shell: bash
+        run: |
+          PROVIDERS=(
+            Microsoft.App
+            Microsoft.AlertsManagement
+            Microsoft.Cache
+            Microsoft.ContainerRegistry
+            Microsoft.Insights
+            Microsoft.KeyVault
+            Microsoft.ManagedIdentity
+            Microsoft.OperationalInsights
+            Microsoft.ServiceBus
+            Microsoft.Sql
+          )
+
+          echo "Registering Azure providers needed by the Phase 10 platform and app stacks..."
+          echo "## 🔌 Azure Resource Provider Registration" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Provider | Result |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+
+          for PROVIDER in "${PROVIDERS[@]}"; do
+            STATE=$(az provider show --namespace "$PROVIDER" --query registrationState -o tsv 2>/dev/null || echo "NotRegistered")
+            if [ "$STATE" != "Registered" ]; then
+              echo " - registering $PROVIDER (current: $STATE)"
+              az provider register --namespace "$PROVIDER" --wait
+              echo "| ${PROVIDER} | registered by 00 Azure Platform Foundation |" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo " - $PROVIDER already registered"
+              echo "| ${PROVIDER} | already registered |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+
+          echo "✅ Azure resource providers are ready."
+
       - name: What-If platform foundation
         if: ${{ inputs.dryRun }}
         shell: bash
@@ -116,6 +153,11 @@ jobs:
           echo "| ACR Login Server | ${{ steps.params.outputs.acrLoginServer }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Pull Identity ID | ${{ steps.params.outputs.acrPullIdentityId }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Assign AcrPull | ${{ inputs.assignAcrPullRole }} |" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ inputs.dryRun }}" = "true" ]; then
+            echo "| Provider Registration | skipped in dry-run mode |" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "| Provider Registration | completed or already registered |" >> "$GITHUB_STEP_SUMMARY"
+          fi
           if [ "${{ inputs.dryRun }}" = "true" ]; then
             echo "| Mode | what-if only |" >> "$GITHUB_STEP_SUMMARY"
           else

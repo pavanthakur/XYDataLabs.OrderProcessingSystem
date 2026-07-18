@@ -30,7 +30,7 @@ Use this rule before removing anything:
 
 | Workflow | Category | Direct Click? | Purpose |
 |---|---|---|---|
-| `00 Azure Platform Foundation` | Bootstrap | Yes | One-time persistent ACR registry and pull identity setup for the shared platform used by dev, staging, and prod |
+| `00 Azure Platform Foundation` | Bootstrap | Yes | One-time persistent ACR registry, pull identity, and Azure resource-provider registration for the shared platform used by dev, staging, and prod |
 | `01 Phase 10 Azure Deploy Orchestrator` | Wrapper | Yes | Manual Phase 10 entrypoint that runs build, deploy, or cleanup for the selected environment and prints the operator summary |
 | `02 Phase 10 Azure Runtime Smoke` | Validation | Yes, after deploy | Verifies Gateway health, Gateway-routed API bootstrap, UI reachability, and UI API proxy bootstrap |
 | `03 Phase 10 Azure Transport Smoke` | Validation | Yes, after runtime smoke | Publishes, consumes, dead-letters, and replays a controlled Service Bus smoke flow |
@@ -49,7 +49,7 @@ Use the numbered workflows in this order:
 
 | Order | Workflow | Use it for |
 |---|---|---|
-| `00` | `00 Azure Platform Foundation` | Create or refresh the persistent shared platform ACR and pull identity used by dev, staging, and prod |
+| `00` | `00 Azure Platform Foundation` | Create or refresh the persistent shared platform ACR, pull identity, and Azure resource-provider registration used by dev, staging, and prod |
 | `01` | `01 Phase 10 Azure Deploy Orchestrator` | Build, deploy, dry run, or cleanup for the selected Azure Phase 10 environment |
 | `02` | `02 Phase 10 Azure Runtime Smoke` | Prove gateway health, routed API runtime config, and UI readiness after deploy for the selected environment |
 | `03` | `03 Phase 10 Azure Transport Smoke` | Prove Service Bus publish/consume, DLQ forwarding, and replay after runtime smoke for the selected environment |
@@ -81,7 +81,7 @@ Before approving any workflow or infrastructure change, ask:
 
 | If you want to... | Click this workflow |
 |---|---|
-| Bootstrap or refresh the shared Phase 10 ACR foundation | `00 Azure Platform Foundation` |
+| Bootstrap or refresh the shared Phase 10 ACR foundation and provider registration | `00 Azure Platform Foundation` |
 | Verify the local Docker Dev HTTP hook in CI | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` |
 | Run Phase 10 deploy, dry run, or cleanup from GitHub UI | `01 Phase 10 Azure Deploy Orchestrator` |
 | Prove Phase 10 Gateway/API/UI runtime behavior after deploy | `02 Phase 10 Azure Runtime Smoke` |

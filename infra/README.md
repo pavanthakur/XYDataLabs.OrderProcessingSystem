@@ -110,6 +110,7 @@ Phase 10 note:
 - The active `main.phase10.bicep` entrypoint includes `modules/sql.bicep` and `modules/redis.phase10.bicep` in the default Phase 10 baseline.
 - Phase 10 is intentionally transport-first and currently deploys Service Bus, Log Analytics, Application Insights, Container Apps, Functions, Key Vault, SQL Server, SQL Database, Azure Cache for Redis, and the container images.
 - The persistent ACR registry and runtime pull identity are deployed once by `main.phase10.platform.bicep`.
+- Azure resource-provider registration is owned by `00 Azure Platform Foundation`; normal `01 Phase 10 Azure Deploy Orchestrator` runs only verify provider readiness.
 - The template no longer tries to self-grant `AcrPull` during the normal deployment path. `01 Phase 10 Azure Deploy Orchestrator` prepares scoped ACR pull-token credentials for Container Apps, while `AcrPull` remains an optional privileged fallback.
 - SQL Server and Redis are part of the automatic Phase 10 baseline. The normal wrapper path no longer asks for `deploySql` or `deployRedis`; if a future exception is needed, document it explicitly in the workflow or ADR.
 - For a production-grade containerized solution, use ACR for runtime images, Managed Identity for Azure access, and Front Door/WAF for public ingress when you need a controlled external endpoint.

@@ -294,7 +294,7 @@ Use [docs/internal/phase10-parity-matrix.md](./phase10-parity-matrix.md) as the 
 
 - Treat the local Docker SQL/Redis composition as the comparison baseline for environment variables, secret naming, and service boundaries, while keeping the Azure deploy path automatic.
 - Keep SQL and Redis out of the platform foundation RG unless a real shared-platform requirement appears.
-- Keep `00 Azure Platform Foundation` focused on persistent ACR and pull identity, with `Assign AcrPull=false` as the default.
+- Keep `00 Azure Platform Foundation` focused on persistent ACR, pull identity, and subscription-level Azure resource-provider registration, with `Assign AcrPull=false` as the default.
 - Keep image lifecycle tightening in the scheduled retention workflow, not in the deploy wrapper.
 - Update wrapper summaries only after the Azure and local contract are aligned.
 
