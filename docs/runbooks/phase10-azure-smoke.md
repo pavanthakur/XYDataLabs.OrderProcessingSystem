@@ -274,6 +274,7 @@ Shared operator rule:
 - In practice, use the wrapper summary for the overall result, then open the child build and deploy jobs for per-service logs and Azure deployment details.
 - Cleanup is split by storage layer:
   - `cleanupInfra=true` removes the Azure environment-scoped resource group and everything inside it.
+  - The cleanup path also checks the environment Key Vault soft-delete reservation and purges it when present, so deterministic names like `kv-orderprocessing-dev` can be recreated on the next deploy.
 - ACR image tags and historical GHCR packages are not removed by the deployment wrapper.
   - GitHub Actions logs follow repository or organization retention settings.
   - Phase 10 artifacts uploaded by runtime, transport, and optional Docker E2E workflows use `retention-days: 14`.
@@ -296,7 +297,7 @@ Phase 10 uses scheduled housekeeping for generated storage, not for live Azure e
 | GHCR container package versions | `Phase 10 Retention Cleanup (Internal)` | Yes, Sundays at `03:00 UTC` | Keep the latest `10` historical versions per image and delete older versions only when they are older than `30` days |
 | GitHub Actions artifacts | Upload steps plus `Phase 10 Retention Cleanup (Internal)` | Yes | Uploaded Phase 10 smoke artifacts retain for `14` days; scheduled cleanup deletes stale artifacts older than `30` days as a backup |
 | GitHub Actions logs | Repository or organization Actions settings | Yes, by platform setting | Keep at the repo/org standard; do not manage logs from the deploy wrapper |
-| Azure Resource Group and live services | `01 Phase 10 Azure Deploy Orchestrator` | No | Manual only with `cleanupInfra=true` |
+| Azure Resource Group and live services | `01 Phase 10 Azure Deploy Orchestrator` | No | Manual only with `cleanupInfra=true`; cleanup also purges the environment Key Vault name reservation when Azure exposes it |
 | Azure Log Analytics | `infra/modules/loganalytics.phase10.bicep` | Yes, by workspace retention | Default `30` days unless environment policy changes it |
 
 Architectural rule:
@@ -357,7 +358,7 @@ Use this checklist to prove the shared contract is behaving the same way across 
 2. Azure infra deploy
    - Run `phase10-deploy-orchestrator.yml` with the target environment and confirm the deployment summary reports the expected gateway and UI ingress outputs.
    - Verify the published image refs match the service-specific `orderprocessing-*` contract for gateway, Orders, Inventory, Notifications, and UI.
-   - Verify the resource group contains Service Bus, Log Analytics, Application Insights, Container Apps, Functions, and Key Vault. Do not expect SQL Server or Redis from this path.
+   - Verify the resource group contains Service Bus, Log Analytics, Application Insights, Container Apps, Functions, Key Vault, SQL Server, SQL Database, and Azure Cache for Redis.
    - Open the Gateway Health URL from the summary and confirm `acceptedHost` matches the Azure Container Apps hostname.
    - Open the Orders API smoke URL from the summary: `/api/v1/Info/runtime-configuration`.
    - Open the UI URL from the summary and confirm the frontend responds.

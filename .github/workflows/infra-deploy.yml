@@ -309,6 +309,8 @@ jobs:
             Microsoft.KeyVault
             Microsoft.ManagedIdentity
             Microsoft.OperationalInsights
+            Microsoft.Sql
+            Microsoft.Cache
             Microsoft.ServiceBus
           )
 
@@ -498,6 +500,8 @@ jobs:
             Microsoft.KeyVault
             Microsoft.ManagedIdentity
             Microsoft.OperationalInsights
+            Microsoft.Sql
+            Microsoft.Cache
             Microsoft.ServiceBus
           )
 
@@ -603,17 +607,48 @@ jobs:
 
           echo "✅ ACR scoped pull token prepared for Container Apps runtime image pulls." >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Check Deleted Key Vault Conflicts
+      - name: Resolve Deleted Key Vault Reservation
         shell: bash
         run: |
           KV_NAME="kv-orderprocessing-${{ steps.params.outputs.envSuffix }}"
+          LOCATION="${{ steps.params.outputs.location }}"
           echo "Checking deleted Key Vault state for ${KV_NAME}..."
 
           if az keyvault list-deleted --query "[?name=='${KV_NAME}'] | length(@)" -o tsv | grep -q '^1$'; then
-            echo "❌ A deleted Key Vault named '${KV_NAME}' still exists in Azure." >> $GITHUB_STEP_SUMMARY
-            echo "Azure keeps Key Vault names reserved while the deleted vault is retained or until purge fully settles." >> $GITHUB_STEP_SUMMARY
-            echo "Purge the deleted vault or wait for propagation, then rerun the workflow." >> $GITHUB_STEP_SUMMARY
-            echo "Deleted Key Vault conflict detected for '${KV_NAME}'." >&2
+            echo "A deleted Key Vault named '${KV_NAME}' is still reserved by Azure soft-delete."
+            echo "Attempting to purge '${KV_NAME}' in '${LOCATION}' before deployment..."
+
+            if ! PURGE_OUTPUT=$(az keyvault purge --name "${KV_NAME}" --location "${LOCATION}" --only-show-errors 2>&1); then
+              echo "## ❌ Deleted Key Vault reservation could not be purged" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+              echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+              echo "| Key Vault | ${KV_NAME} |" >> $GITHUB_STEP_SUMMARY
+              echo "| Location | ${LOCATION} |" >> $GITHUB_STEP_SUMMARY
+              echo "| Reason | Azure denied or failed the purge operation |" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo '```text' >> $GITHUB_STEP_SUMMARY
+              echo "${PURGE_OUTPUT}" >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              echo "Deleted Key Vault reservation could not be purged for '${KV_NAME}'." >&2
+              exit 1
+            fi
+
+            for attempt in {1..30}; do
+              if ! az keyvault list-deleted --query "[?name=='${KV_NAME}'] | length(@)" -o tsv | grep -q '^1$'; then
+                echo "✅ Purged deleted Key Vault reservation for '${KV_NAME}'." >> $GITHUB_STEP_SUMMARY
+                exit 0
+              fi
+
+              echo "Waiting for Key Vault purge propagation (${attempt}/30)..."
+              sleep 10
+            done
+
+            echo "## ❌ Deleted Key Vault reservation still visible after purge" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Azure accepted the purge request, but '${KV_NAME}' is still visible in deleted vaults after waiting." >> $GITHUB_STEP_SUMMARY
+            echo "Wait a few minutes for Azure propagation, then rerun the workflow." >> $GITHUB_STEP_SUMMARY
+            echo "Deleted Key Vault reservation still visible after purge for '${KV_NAME}'." >&2
             exit 1
           fi
 
@@ -986,7 +1021,43 @@ jobs:
         shell: bash
         run: |
           RG_NAME="rg-orderprocessing-${{ steps.params.outputs.envSuffix }}"
-          az group delete --name "${RG_NAME}" --yes --no-wait
+          az group delete --name "${RG_NAME}" --yes
+
+      - name: Purge environment Key Vault reservation
+        shell: bash
+        run: |
+          KV_NAME="kv-orderprocessing-${{ steps.params.outputs.envSuffix }}"
+          LOCATION="${{ steps.params.outputs.location }}"
+
+          echo "Checking whether ${KV_NAME} entered Key Vault soft-delete after RG cleanup..."
+          for attempt in {1..30}; do
+            if az keyvault list-deleted --query "[?name=='${KV_NAME}'] | length(@)" -o tsv | grep -q '^1$'; then
+              echo "Deleted Key Vault '${KV_NAME}' detected. Purging the name reservation..."
+              if ! PURGE_OUTPUT=$(az keyvault purge --name "${KV_NAME}" --location "${LOCATION}" --only-show-errors 2>&1); then
+                echo "## ⚠️ Cleanup completed, but Key Vault purge failed" >> $GITHUB_STEP_SUMMARY
+                echo "" >> $GITHUB_STEP_SUMMARY
+                echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+                echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+                echo "| Key Vault | ${KV_NAME} |" >> $GITHUB_STEP_SUMMARY
+                echo "| Location | ${LOCATION} |" >> $GITHUB_STEP_SUMMARY
+                echo "| Impact | Next deploy may be blocked until the deleted vault is purged or expires |" >> $GITHUB_STEP_SUMMARY
+                echo "" >> $GITHUB_STEP_SUMMARY
+                echo '```text' >> $GITHUB_STEP_SUMMARY
+                echo "${PURGE_OUTPUT}" >> $GITHUB_STEP_SUMMARY
+                echo '```' >> $GITHUB_STEP_SUMMARY
+                echo "Key Vault purge failed for '${KV_NAME}'." >&2
+                exit 1
+              fi
+
+              echo "✅ Purged deleted Key Vault reservation for '${KV_NAME}'." >> $GITHUB_STEP_SUMMARY
+              exit 0
+            fi
+
+            echo "Waiting for deleted Key Vault '${KV_NAME}' to appear (${attempt}/30)..."
+            sleep 10
+          done
+
+          echo "No deleted Key Vault reservation found for '${KV_NAME}' after RG cleanup." >> $GITHUB_STEP_SUMMARY
 
       - name: Cleanup Summary
         run: |
@@ -998,4 +1069,5 @@ jobs:
           echo "**Mode:** Phase X cleanup / destructive teardown" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### ✅ Cleanup Requested" >> $GITHUB_STEP_SUMMARY
-          echo "- Resource group delete has been queued for rg-orderprocessing-${{ steps.params.outputs.envSuffix }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Resource group delete completed for rg-orderprocessing-${{ steps.params.outputs.envSuffix }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Deleted Key Vault name reservation was checked and purged when present." >> $GITHUB_STEP_SUMMARY
