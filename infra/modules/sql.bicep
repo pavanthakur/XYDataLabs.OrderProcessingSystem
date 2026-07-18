@@ -33,6 +33,7 @@ param aadAdminLogin string = ''
 
 var sqlServerName = '${baseName}-sql-${environment}'
 var databaseName = 'OrderProcessingSystem_${toUpper(substring(environment, 0, 1))}${substring(environment, 1)}'
+var tenantCDatabaseName = 'OrderProcessingSystem_TenantC_${toUpper(substring(environment, 0, 1))}${substring(environment, 1)}'
 
 resource sqlServer 'Microsoft.Sql/servers@2023-08-01-preview' = {
   name: sqlServerName
@@ -85,6 +86,33 @@ resource database 'Microsoft.Sql/servers/databases@2023-08-01-preview' = {
   }
 }
 
+// TenantC is intentionally kept as the dedicated-tier parity database for the
+// payment matrix and Azure verification path.
+resource tenantCDatabase 'Microsoft.Sql/servers/databases@2023-08-01-preview' = {
+  parent: sqlServer
+  name: tenantCDatabaseName
+  location: location
+  sku: {
+    name: databaseServiceObjective
+    tier: databaseServiceObjective == 'Basic' ? 'Basic' : 'Standard'
+  }
+  properties: {
+    collation: 'SQL_Latin1_General_CP1_CI_AS'
+    maxSizeBytes: maxSizeGB * 1024 * 1024 * 1024
+    catalogCollation: 'SQL_Latin1_General_CP1_CI_AS'
+    zoneRedundant: false
+    readScale: 'Disabled'
+    requestedBackupStorageRedundancy: 'Local'
+  }
+  tags: {
+    env: environment
+    app: baseName
+    component: 'database'
+    tenant: 'TenantC'
+    tenancy: 'dedicated'
+  }
+}
+
 // Azure AD administrator — required for Managed Identity connections from App Services.
 // Set aadAdminObjectId + aadAdminLogin in parameters/{env}.json, then run:
 //   Resources/Azure-Deployment/setup-sql-managed-identity.ps1 -Environment dev
@@ -102,3 +130,4 @@ resource sqlAadAdmin 'Microsoft.Sql/servers/administrators@2023-08-01-preview' =
 output sqlServerName string = sqlServer.name
 output sqlServerFqdn string = sqlServer.properties.fullyQualifiedDomainName
 output databaseName string = database.name
+output tenantCDatabaseName string = tenantCDatabase.name

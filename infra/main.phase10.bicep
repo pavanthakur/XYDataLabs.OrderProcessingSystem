@@ -277,6 +277,8 @@ output sqlServerFqdn string = deploySql ? sql.outputs.sqlServerFqdn : ''
 #disable-next-line BCP318
 output sqlDatabaseName string = deploySql ? sql.outputs.databaseName : ''
 #disable-next-line BCP318
+output tenantCDatabaseName string = deploySql ? sql.outputs.tenantCDatabaseName : ''
+#disable-next-line BCP318
 output redisName string = deployRedis ? redis.outputs.redisName : ''
 #disable-next-line BCP318
 output redisHostName string = deployRedis ? redis.outputs.redisHostName : ''
