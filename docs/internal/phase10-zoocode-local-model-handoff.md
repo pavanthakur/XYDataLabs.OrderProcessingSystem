@@ -1,6 +1,6 @@
-# Phase 10 RooCode Local Model Handoff
+# Phase 10 Zoo Code Local Model Handoff
 
-Purpose: use RooCode with local models as a bounded assistant for Phase 10 staging/prod promotion planning, log triage, checklist drafting, and documentation review after the Azure dev baseline has already been validated.
+Purpose: use Zoo Code with local models as a bounded assistant for Phase 10 staging/prod promotion planning, log triage, checklist drafting, and documentation review after the Azure dev baseline has already been validated.
 
 This is an operator-assist lane. It does not replace the active GitHub Actions deployment path, the Phase 10 smoke workflows, or final human/Codex review before repo changes.
 
@@ -37,7 +37,7 @@ Recommended model lanes:
 
 | Lane | Suggested local model size | Use |
 |---|---|---|
-| Fast checklist / summary | 3B to 4B instruct/coder model | Quick RooCode planning and log summaries. |
+| Fast checklist / summary | 3B to 4B instruct/coder model | Quick Zoo Code planning and log summaries. |
 | Focused code/doc review | 7B or 8B Q4 model if stable on your machine | Small file batches only. |
 | Architecture escalation | Cloud/Codex or a larger local model only if available | Do not force a 4 GB GPU into large architecture prompts. |
 
@@ -49,17 +49,17 @@ Practical candidates:
 
 Avoid making 14B+ models the default on this machine.
 
-## RooCode Setup Options
+## Zoo Code Setup Options
 
 Use one of these local backends:
 
-| Backend | Typical endpoint | RooCode configuration idea |
+| Backend | Typical endpoint | Zoo Code configuration idea |
 |---|---|---|
-| Ollama native | `http://localhost:11434` | Use RooCode's Ollama provider if available. |
-| Ollama OpenAI-compatible | `http://localhost:11434/v1` | Use an OpenAI-compatible provider with a dummy API key if RooCode requires one. |
-| LM Studio OpenAI-compatible | `http://localhost:1234/v1` | Start the local server in LM Studio, then point RooCode at it. |
+| Ollama native | `http://localhost:11434` | Use Zoo Code's Ollama provider profile. |
+| Ollama OpenAI-compatible | `http://localhost:11434/v1` | Use an OpenAI-compatible provider with a dummy API key if Zoo Code requires one. |
+| LM Studio OpenAI-compatible | `http://localhost:1234/v1` | Start the local server in LM Studio, then point Zoo Code at it. |
 
-Before using RooCode, confirm the local model is available:
+Before using Zoo Code, confirm the local model is available:
 
 ```powershell
 ollama list
@@ -70,11 +70,11 @@ Keep context small:
 
 - Attach only the specific docs or logs needed.
 - Prefer one task per prompt.
-- Ask RooCode for a proposed patch or checklist, not direct broad changes.
+- Ask Zoo Code for a proposed patch or checklist, not direct broad changes.
 
 ## Handoff Boundary
 
-RooCode may:
+Zoo Code may:
 
 - inspect `docs/internal/phase10-implementation-checklist.md`
 - inspect `docs/runbooks/phase10-azure-smoke.md`
@@ -84,7 +84,7 @@ RooCode may:
 - produce a risk list and suggested verification order
 - propose doc wording changes
 
-RooCode must not directly:
+Zoo Code must not directly:
 
 - run Azure deploy or cleanup workflows
 - change GitHub secrets, Key Vault secrets, RBAC, or identity wiring
@@ -92,7 +92,7 @@ RooCode must not directly:
 - rewrite workflow IAM or destructive cleanup behavior
 - introduce new architecture layers without an explicit roadmap entry
 
-## Recommended RooCode Prompt
+## Recommended Zoo Code Prompt
 
 Use this as the first handoff prompt:
 
@@ -154,18 +154,18 @@ For each staging/prod run, capture:
 - any warnings or skipped checks
 - next operator action
 
-If RooCode summarizes evidence, it should include the run IDs and exact workflow names.
+If Zoo Code summarizes evidence, it should include the run IDs and exact workflow names.
 
-## Validation After RooCode Output
+## Validation After Zoo Code Output
 
-If RooCode suggests docs or script changes, use the normal repo validation path:
+If Zoo Code suggests docs or script changes, use the normal repo validation path:
 
 ```powershell
 git diff --check
 node scripts/validate-doc-links.js
 ```
 
-If RooCode suggests local parity validation, use the existing hook:
+If Zoo Code suggests local parity validation, use the existing hook:
 
 ```powershell
 npm --prefix automation run xydatalabs-test-docker-local-e2e-dev

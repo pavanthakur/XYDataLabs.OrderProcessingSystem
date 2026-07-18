@@ -13,15 +13,15 @@ This folder is an execution cockpit, not the canonical documentation source. Can
 | `zoocode/` | Local execution copies of phase packs for manual model runs. |
 | `prompt-runs/` | Optional run records, model outputs, review notes, and validation evidence. |
 
-## RooCode Handoff
+## Zoo Code Handoff
 
-Use RooCode/local models as an operator-assist lane, not as the source of truth for deployment decisions.
+Use Zoo Code/local models as an operator-assist lane, not as the source of truth for deployment decisions.
 
 Canonical Phase 10 handoff guidance lives in:
 
-- `docs/internal/phase10-roocode-local-model-handoff.md`
+- `docs/internal/phase10-zoocode-local-model-handoff.md`
 
-Use that document when asking RooCode to draft staging/prod promotion checklists, summarize workflow logs, or identify documentation gaps after the dev baseline has been validated.
+Use that document when asking Zoo Code to draft staging/prod promotion checklists, summarize workflow logs, or identify documentation gaps after the dev baseline has been validated.
 
 ## Recommended Flow
 
