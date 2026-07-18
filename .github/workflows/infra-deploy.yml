@@ -529,6 +529,24 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
 
+      - name: Resolve deployment principal
+        id: deployment_principal
+        shell: bash
+        run: |
+          CLIENT_ID="${{ secrets.AZUREAPPSERVICE_CLIENTID }}"
+          PRINCIPAL_OBJECT_ID="$(az ad sp show --id "$CLIENT_ID" --query id -o tsv 2>/dev/null || true)"
+
+          if [ -z "$PRINCIPAL_OBJECT_ID" ]; then
+            echo "## ❌ Could not resolve deployment principal" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "The Phase 10 deploy needs the OIDC service principal object id so Bicep can grant Key Vault secret read access for Azure verification." >> "$GITHUB_STEP_SUMMARY"
+            echo "Could not resolve Azure service principal object id for the configured OIDC client id." >&2
+            exit 1
+          fi
+
+          echo "objectId=${PRINCIPAL_OBJECT_ID}" >> "$GITHUB_OUTPUT"
+          echo "✅ Deployment principal resolved for Key Vault verification access." >> "$GITHUB_STEP_SUMMARY"
+
       - name: Verify Azure resource providers are registered
         shell: bash
         run: |
