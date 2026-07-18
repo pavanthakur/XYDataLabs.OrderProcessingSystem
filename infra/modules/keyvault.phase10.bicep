@@ -24,6 +24,10 @@ param notificationsPrincipalId string = ''
 @description('Principal ID allowed to read secrets for Functions')
 param functionsPrincipalId string = ''
 
+@description('SQL Server admin password to persist in Key Vault for later SQL and managed-identity workflows')
+@secure()
+param sqlAdminPassword string = ''
+
 var shortBaseName = take(baseName, 15)
 var keyVaultName = 'kv-${shortBaseName}-${environment}'
 
@@ -112,6 +116,14 @@ resource accessPolicies 'Microsoft.KeyVault/vaults/accessPolicies@2023-07-01' = 
         }
       ] : []
     )
+  }
+}
+
+resource sqlAdminPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(sqlAdminPassword)) {
+  parent: keyVault
+  name: 'sql-admin-password'
+  properties: {
+    value: sqlAdminPassword
   }
 }
 

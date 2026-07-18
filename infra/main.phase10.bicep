@@ -244,6 +244,7 @@ module keyVault 'modules/keyvault.phase10.bicep' = {
     inventoryPrincipalId: containerApps.outputs.inventoryPrincipalId
     notificationsPrincipalId: containerApps.outputs.notificationsPrincipalId
     functionsPrincipalId: functions.outputs.functionPrincipalId
+    sqlAdminPassword: sqlAdminPassword
   }
 }
 
