@@ -59,22 +59,33 @@ Exports a GitHub Actions job log into a local, predictable diagnostics folder.
 
 **Purpose**:
 - Captures failed GitHub Actions job logs when the Codex shell cannot reach the GitHub API directly
+- Accepts either a GitHub Actions job URL or explicit `RunId` / `JobId`
 - Stores logs under `TestResults/GitHubActions/<run-id>/`
-- Prints the exact log path to share back for diagnosis
+- Writes a stable per-job log plus `TestResults/GitHubActions/latest-job.log`
+- Prints the exact log path for diagnosis
 
 **Usage**:
 ```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\export-github-run-log.ps1 -Url "https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/runs/29636818068/job/88060724976"
+
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\export-github-run-log.ps1 -RunId 29636818068 -JobId 88060724976
 ```
 
 **Output**:
-- `TestResults/GitHubActions/<run-id>/job-<job-id>-<timestamp>.log`
-- `TestResults/GitHubActions/<run-id>/job-<job-id>-<timestamp>.summary.txt`
+- `TestResults/GitHubActions/<run-id>/job-<job-id>.log`
+- `TestResults/GitHubActions/<run-id>/job-<job-id>.summary.txt`
+- `TestResults/GitHubActions/latest-job.log`
+- `TestResults/GitHubActions/latest-job-log-path.txt`
 
 **Prerequisites**:
 - GitHub CLI installed
 - `gh auth login -h github.com` completed in the terminal where you run the script
 - Network access to `api.github.com` from that terminal
+
+**Diagnosis Flow**:
+1. Run the script from a normal PowerShell terminal with the failed GitHub Actions job URL.
+2. Tell Codex the export is complete.
+3. Codex reads `TestResults/GitHubActions/latest-job.log` and continues diagnosis.
 
 ### validate-ai-customization.ps1
 
