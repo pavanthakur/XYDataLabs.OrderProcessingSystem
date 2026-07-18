@@ -25,7 +25,7 @@
 - ✅ Phase 10 retention cleanup is documented as housekeeping for historical GHCR cleanup-only package versions and GitHub artifacts; Azure teardown remains owned by the Phase 10 wrapper `cleanupInfra=true` path.
 - ✅ Phase 10 transport/operator baseline is now proven in dev across deploy, runtime smoke, transport smoke, and optional Docker parity.
 - 🔜 ACR remains the preferred enterprise registry direction, but it is a follow-up implementation, not a blocker for the current ACR-backed Phase 10 transport/operator baseline.
-- ✅ SQL Server and Azure Cache for Redis are now part of the automatic Phase 10 baseline path, so the wrapper no longer asks for parity toggles in the normal operator form.
+- ✅ SQL Server and Azure Managed Redis are now part of the automatic Phase 10 baseline path, so the wrapper no longer asks for parity toggles in the normal operator form.
 - 🔜 The next implementation branch should keep treating the local Docker SQL/Redis composition as the contract while preserving the automatic Azure baseline; ACR lifecycle tightening belongs in the same change set rather than a separate ad hoc cleanup pass.
 
 ### June 5, 2026 Verification Freeze — Phase 8.7 Closeout

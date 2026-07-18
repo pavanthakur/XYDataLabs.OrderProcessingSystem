@@ -11,6 +11,26 @@ export class JsonRuntimeTargetCatalog implements RuntimeTargetCatalog {
       throw new Error(`Unknown runtime target: ${targetKey}`);
     }
 
+    return applyRuntimeOverrides(target);
+  }
+}
+
+function applyRuntimeOverrides(target: RuntimeTargetDefinition): RuntimeTargetDefinition {
+  const environmentKey = normalizeEnvironmentKey(target.key);
+  const baseUrl = process.env[`XYDATALABS_RUNTIME_TARGET_${environmentKey}_BASE_URL`];
+  const apiBaseUrl = process.env[`XYDATALABS_RUNTIME_TARGET_${environmentKey}_API_BASE_URL`];
+
+  if (!baseUrl && !apiBaseUrl) {
     return target;
   }
+
+  return {
+    ...target,
+    baseUrl: baseUrl?.trim() || target.baseUrl,
+    apiBaseUrl: apiBaseUrl?.trim() || target.apiBaseUrl
+  };
+}
+
+function normalizeEnvironmentKey(value: string): string {
+  return value.trim().toUpperCase().replace(/[^A-Z0-9]+/g, "_");
 }

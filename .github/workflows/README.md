@@ -34,6 +34,7 @@ Use this rule before removing anything:
 | `01 Phase 10 Azure Deploy Orchestrator` | Wrapper | Yes | Manual Phase 10 entrypoint that runs build, deploy, or cleanup for the selected environment and prints the operator summary |
 | `02 Phase 10 Azure Runtime Smoke` | Validation | Yes, after deploy | Verifies Gateway health, Gateway-routed API bootstrap, UI reachability, and UI API proxy bootstrap |
 | `03 Phase 10 Azure Transport Smoke` | Validation | Yes, after runtime smoke | Publishes, consumes, dead-letters, and replays a controlled Service Bus smoke flow |
+| `04 Phase 10 Azure Payment Matrix` | Validation | Yes, after transport smoke | Runs the all-tenant Azure browser/payment matrix against live Phase 10 Container Apps URLs and uploads one run packet |
 | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Validation | Optional | Mirrors the local Docker Dev HTTP hook in CI |
 | `build-phase10-images.yml` | Internal | No | Builds and publishes the Phase 10 service images |
 | `infra-deploy.yml` | Internal | No | Deploys or cleans up the Phase 10 Azure stack and returns live URLs |
@@ -53,6 +54,7 @@ Use the numbered workflows in this order:
 | `01` | `01 Phase 10 Azure Deploy Orchestrator` | Build, deploy, dry run, or cleanup for the selected Azure Phase 10 environment |
 | `02` | `02 Phase 10 Azure Runtime Smoke` | Prove gateway health, routed API runtime config, and UI readiness after deploy for the selected environment |
 | `03` | `03 Phase 10 Azure Transport Smoke` | Prove Service Bus publish/consume, DLQ forwarding, and replay after runtime smoke for the selected environment |
+| `04` | `04 Phase 10 Azure Payment Matrix` | Prove all-tenant browser/payment E2E against the live Azure Container Apps URLs |
 | `99` | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Optional local/CI parity for the containerized service graph |
 
 Workflow `99` is not required for Azure deployment if the local hook has already passed, but it is useful as a CI parity gate. The GitHub runner is always a fresh machine, so the workflow starts its own Docker stack instead of trying to reuse one. It generates a CI-only `Resources/Docker/.env.local` with non-secret sandbox values and installs the EF Core CLI before starting Docker because the real local file and local tools are intentionally machine-specific. Reusing an already running stack is supported only by the local script switch `-SkipStartIfNeeded`.
@@ -86,6 +88,7 @@ Before approving any workflow or infrastructure change, ask:
 | Run Phase 10 deploy, dry run, or cleanup from GitHub UI | `01 Phase 10 Azure Deploy Orchestrator` |
 | Prove Phase 10 Gateway/API/UI runtime behavior after deploy | `02 Phase 10 Azure Runtime Smoke` |
 | Prove Phase 10 Service Bus publish/consume/DLQ/replay after runtime smoke | `03 Phase 10 Azure Transport Smoke` |
+| Prove all-tenant Azure browser/payment E2E after runtime and transport are green | `04 Phase 10 Azure Payment Matrix` |
 | Build and publish Phase 10 images indirectly | `01 Phase 10 Azure Deploy Orchestrator` |
 | Deploy or clean up the Azure Phase 10 stack indirectly | `01 Phase 10 Azure Deploy Orchestrator` |
 | Clean old Phase 10 ACR tags, historical GHCR cleanup-only versions, and workflow artifacts | Let `Phase 10 Retention Cleanup (Internal)` run on schedule; run manually only for housekeeping |
@@ -100,6 +103,7 @@ Before approving any workflow or infrastructure change, ask:
 | `01 Phase 10 Azure Deploy Orchestrator` | Primary Phase 10 click target | Routes to internal deploy workflow | Routes to internal image workflow | Routes to internal deploy workflow | Routes Azure RG cleanup when `cleanupInfra=true` | Current wrapper |
 | `02 Phase 10 Azure Runtime Smoke` | Post-deploy smoke | No | No | No | No | Current validation |
 | `03 Phase 10 Azure Transport Smoke` | Post-runtime-smoke transport proof | No | No | No | No | Current validation |
+| `04 Phase 10 Azure Payment Matrix` | Post-transport payment E2E | No | No | No | No | Current validation |
 | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Optional validation | No | Local/runner build only | Local Docker only | Local Docker cleanup | Current validation |
 | `Build Phase 10 Service Images (Internal)` | Do not click for normal deploy | No | Yes | No | No | Current internal |
 | `Deploy Azure Phase 10 Resources (Internal)` | Do not click for normal deploy | Yes | No | Yes | Yes | Current internal |

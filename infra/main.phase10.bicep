@@ -48,7 +48,7 @@ param uiImage string
 @description('Deploy Azure SQL as part of the default Phase 10 baseline')
 param deploySql bool = true
 
-@description('Deploy Azure Cache for Redis as part of the default Phase 10 baseline')
+@description('Deploy Azure Managed Redis as part of the default Phase 10 baseline')
 param deployRedis bool = true
 
 @description('SQL Server admin username')
@@ -61,14 +61,14 @@ param sqlAdminPassword string = ''
 @description('Database service objective (Basic, S0, S1, etc)')
 param databaseServiceObjective string = 'Basic'
 
-@description('Redis SKU name')
-param redisSkuName string = 'Basic'
+@description('Azure Managed Redis SKU name. Balanced_B0 is the smallest Phase 10 dev/test baseline.')
+param redisSkuName string = 'Balanced_B0'
 
-@description('Redis SKU family')
-param redisSkuFamily string = 'C'
+@description('Azure Managed Redis database clustering policy')
+param redisClusteringPolicy string = 'EnterpriseCluster'
 
-@description('Redis SKU capacity')
-param redisCapacity int = 0
+@description('Azure Managed Redis high availability mode')
+param redisHighAvailability string = 'Disabled'
 
 @description('Platform ACR registry name used for the Phase 10 runtime image path')
 param platformAcrName string = ''
@@ -138,8 +138,8 @@ module redis 'modules/redis.phase10.bicep' = if (deployRedis) {
     environment: environment
     baseName: baseName
     skuName: redisSkuName
-    skuFamily: redisSkuFamily
-    capacity: redisCapacity
+    clusteringPolicy: redisClusteringPolicy
+    highAvailability: redisHighAvailability
   }
 }
 

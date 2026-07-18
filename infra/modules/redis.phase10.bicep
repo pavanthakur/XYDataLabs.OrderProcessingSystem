@@ -7,36 +7,27 @@ param environment string
 @description('Base application name')
 param baseName string = 'orderprocessing'
 
-@description('Redis SKU name')
-param skuName string = 'Basic'
+@description('Azure Managed Redis SKU name. Use Balanced_B0 for the smallest Phase 10 dev/test baseline.')
+param skuName string = 'Balanced_B0'
 
-@description('Redis SKU family')
-param skuFamily string = 'C'
+@description('Azure Managed Redis database clustering policy. EnterpriseCluster keeps the endpoint compatible with non-clustered client usage.')
+param clusteringPolicy string = 'EnterpriseCluster'
 
-@description('Redis SKU capacity')
-param capacity int = 0
+@description('Enable high availability. Keep Disabled for dev/test cost control; use Enabled for production readiness.')
+param highAvailability string = 'Disabled'
 
 var redisName = '${baseName}-redis-${environment}'
 
-resource redis 'Microsoft.Cache/redis@2024-11-01' = {
+resource redis 'Microsoft.Cache/redisEnterprise@2025-04-01' = {
   name: redisName
   location: location
-  #disable-next-line BCP187
   sku: {
     name: skuName
-    family: skuFamily
-    capacity: capacity
   }
-  #disable-next-line BCP035
   properties: {
-    enableNonSslPort: false
+    encryption: {}
+    highAvailability: highAvailability
     minimumTlsVersion: '1.2'
-    publicNetworkAccess: 'Enabled'
-    redisVersion: '6'
-    redisConfiguration: {
-      'maxmemory-policy': 'volatile-lru'
-      'preferred-data-persistence-auth-method': ''
-    }
   }
   tags: {
     env: environment
@@ -45,11 +36,24 @@ resource redis 'Microsoft.Cache/redis@2024-11-01' = {
   }
 }
 
+resource redisDatabase 'Microsoft.Cache/redisEnterprise/databases@2025-04-01' = {
+  parent: redis
+  name: 'default'
+  properties: {
+    accessKeysAuthentication: 'Enabled'
+    clientProtocol: 'Encrypted'
+    clusteringPolicy: clusteringPolicy
+    evictionPolicy: 'VolatileLRU'
+    modules: []
+    port: 10000
+  }
+}
+
 #disable-next-line use-resource-symbol-reference
-var redisPrimaryKey = listKeys(redis.id, '2024-11-01').primaryKey
+var redisPrimaryKey = listKeys(redisDatabase.id, '2025-04-01').primaryKey
 
 output redisName string = redis.name
 output redisHostName string = redis.properties.hostName
-output redisSslPort int = redis.properties.sslPort
+output redisSslPort int = redisDatabase.properties.port
 output redisPrimaryKey string = redisPrimaryKey
-output redisConnectionString string = '${redis.properties.hostName}:${string(redis.properties.sslPort)},password=${redisPrimaryKey},ssl=True,abortConnect=False'
+output redisConnectionString string = '${redis.properties.hostName}:${string(redisDatabase.properties.port)},password=${redisPrimaryKey},ssl=True,abortConnect=False'

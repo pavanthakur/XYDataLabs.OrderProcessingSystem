@@ -10,6 +10,7 @@ import type { ExecutiveSummaryRow } from "../contracts/report-composer.js";
 import { PowerShellPaymentProviderProvisioner } from "../adapters/fixtures/powershell-payment-provider-provisioner.js";
 import { ApiTenantExecutionCatalog } from "../catalog/api-tenant-execution-catalog.js";
 import { JsonRuntimeTargetCatalog } from "../catalog/json-runtime-target-catalog.js";
+import { StaticTenantExecutionCatalog } from "../catalog/static-tenant-execution-catalog.js";
 import { PaymentJourneyRunner } from "../browser/payment-journey-runner.js";
 import { FileReportComposer } from "../report/file-report-composer.js";
 import { buildCustomerOrderId, buildRunPrefix } from "../support/customer-order-id.js";
@@ -49,6 +50,7 @@ interface ExecutionItem {
   tenantCode: string;
   tenantTier: string;
   paymentProviderCode?: string | null;
+  shouldPrepareProviderFixture: boolean;
   executionRunPrefix: string;
 }
 
@@ -64,7 +66,9 @@ export async function executePaymentAutomationRun(
   const target = await runtimeTargetCatalog.resolve(options.target);
   log(`Resolved runtime target ${target.key} (${target.runtime}/${target.profile}).`);
   log(`Resolving tenant execution plan for ${options.target}.`);
-  const tenantExecutionCatalog = new ApiTenantExecutionCatalog(target);
+  const tenantExecutionCatalog = !options.dryRun && target.expectedTenantSource === "runtime-configuration"
+    ? new ApiTenantExecutionCatalog(target)
+    : new StaticTenantExecutionCatalog();
   const tenantPlan = await tenantExecutionCatalog.resolve(
     options.tenantCodes,
     options.allowPartialExecution || target.supportsPartialExecution,
@@ -130,7 +134,7 @@ export async function executePaymentAutomationRun(
     let stopAfterCurrentItem = false;
 
     try {
-      if (!options.dryRun && executionItem.paymentProviderCode) {
+      if (!options.dryRun && executionItem.paymentProviderCode && executionItem.shouldPrepareProviderFixture) {
         provisioner = new PowerShellPaymentProviderProvisioner({
           target,
           requestedProvider: executionItem.paymentProviderCode,
@@ -315,6 +319,7 @@ function buildExecutionItems(
       tenantCode: tenant.tenantCode,
       tenantTier: tenant.tenantTier,
       paymentProviderCode: tenant.paymentProviderCode,
+      shouldPrepareProviderFixture: false,
       executionRunPrefix: index === 0 ? defaultRunPrefix : buildRunPrefix(new Date(startedAt.getTime() + (index * 1000)))
     }));
   }
@@ -328,6 +333,7 @@ function buildExecutionItems(
         tenantCode: tenant.tenantCode,
         tenantTier: tenant.tenantTier,
         paymentProviderCode: requestedProvider,
+        shouldPrepareProviderFixture: true,
         executionRunPrefix: executionIndex === 0 ? defaultRunPrefix : buildRunPrefix(executionStartedAt)
       };
     })

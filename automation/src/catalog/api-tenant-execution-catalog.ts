@@ -29,8 +29,7 @@ export class ApiTenantExecutionCatalog implements TenantExecutionCatalog {
 
   private async loadTenantRegistry(
     apiBaseUrl: string,
-    activeTenantCode: string,
-    tenantHeaderName: string,
+    runtimeConfiguration: RuntimeConfigurationResponse,
     logger?: (message: string) => void
   ): Promise<TenantRegistryResponseItem[]> {
     const tenantRegistryUrl = `${apiBaseUrl}/api/v1/Info/tenant-registry`;
@@ -42,14 +41,15 @@ export class ApiTenantExecutionCatalog implements TenantExecutionCatalog {
         this.target.ignoreHttpsErrors,
         30000,
         {
-          [tenantHeaderName]: activeTenantCode
+          [runtimeConfiguration.tenantHeaderName]: runtimeConfiguration.activeTenantCode
         }
       );
     }
     catch (error) {
       const message = error instanceof Error ? error.message : "Unknown tenant registry API failure.";
       if (this.target.runtime === "azure") {
-        logger?.(`Tenant registry API lookup failed (${message}); falling back to local SQL.`);
+        logger?.(`Tenant registry API lookup failed (${message}); deriving Azure tenant plan from runtime configuration.`);
+        return buildTenantRegistryFromRuntimeConfiguration(runtimeConfiguration);
       }
       else if (message.includes("status 404")) {
         logger?.(`Tenant registry API returned 404 on the ${this.target.runtime} parity path; using local SQL fallback.`);
@@ -72,8 +72,7 @@ export class ApiTenantExecutionCatalog implements TenantExecutionCatalog {
 
     const registry = await this.loadTenantRegistry(
       apiBaseUrl,
-      runtimeConfiguration.activeTenantCode,
-      runtimeConfiguration.tenantHeaderName,
+      runtimeConfiguration,
       logger
     );
     logger?.(`Tenant registry returned ${registry.length} record(s).`);
@@ -394,6 +393,18 @@ async function resolveDockerSqlConnectionString(connectionString: string): Promi
   }
 
   return connectionString.replace("__LOCAL_SQL_PASSWORD__", password);
+}
+
+function buildTenantRegistryFromRuntimeConfiguration(
+  runtimeConfiguration: RuntimeConfigurationResponse
+): TenantRegistryResponseItem[] {
+  return runtimeConfiguration.availableTenants.map((tenant) => ({
+    tenantId: tenant.tenantId,
+    tenantCode: tenant.tenantCode,
+    tenantName: tenant.tenantName,
+    tenantTier: tenant.tenantCode === "TenantC" ? "Dedicated" : "SharedPool",
+    paymentProviderCode: tenant.tenantCode === "TenantC" ? "OpenPay" : "Razorpay"
+  }));
 }
 
 function compareTenantPriority(
