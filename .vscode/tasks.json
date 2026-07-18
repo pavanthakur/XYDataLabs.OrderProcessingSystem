@@ -169,13 +169,45 @@
             "problemMatcher": []
         },
         {
-            "label": "1 Run: Docker Dev HTTP 05 Full Validation (Profile + Suite + Smoke + Matrix, Docker Dev HTTP)",
+            "label": "1 Run: Docker Dev HTTP 05 Full Validation",
             "dependsOrder": "sequence",
             "dependsOn": [
-                "1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Docker Dev HTTP)",
-                "1 Run: Docker Dev HTTP 02 Playwright Smoke (Docker Dev HTTP)",
-                "1 Run: Docker Dev HTTP 03 Integration Suite (Docker Dev HTTP)",
-                "1 Run: Docker Dev HTTP 04 Payment Matrix (All Tenants + Providers, Docker Dev HTTP)"
+                "1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Clean, Docker Dev HTTP)",
+                "1 Run: Docker Dev HTTP 02 Playwright Smoke",
+                "1 Run: Docker Dev HTTP 03 Integration Suite",
+                "1 Run: Docker Dev HTTP 04 Payment Matrix"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/run-playwright-full-validation.ps1",
+                "-Target",
+                "docker-dev-http"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Docker Dev HTTP 05 Full Validation (Reuse Existing, Docker Dev HTTP)",
+            "hide": true,
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Reuse Existing, Docker Dev HTTP)",
+                "1 Run: Docker Dev HTTP 02 Playwright Smoke (Reuse Existing, Docker Dev HTTP)",
+                "1 Run: Docker Dev HTTP 03 Integration Suite (Reuse Existing, Docker Dev HTTP)",
+                "1 Run: Docker Dev HTTP 04 Payment Matrix (Reuse Existing, Docker Dev HTTP)"
             ],
             "type": "shell",
             "command": "pwsh",
@@ -221,10 +253,10 @@
             "problemMatcher": []
         },
         {
-            "label": "1 Run: Docker Dev HTTP 03 Integration Suite (Docker Dev HTTP)",
+            "label": "1 Run: Docker Dev HTTP 03 Integration Suite",
             "dependsOrder": "sequence",
             "dependsOn": [
-                "1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Docker Dev HTTP)"
+                "1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Clean, Docker Dev HTTP)"
             ],
             "type": "shell",
             "command": "pwsh",
@@ -247,10 +279,37 @@
             "problemMatcher": []
         },
         {
-            "label": "1 Run: Docker Dev HTTP 02 Playwright Smoke (Docker Dev HTTP, 120s Stabilization)",
+            "label": "1 Run: Docker Dev HTTP 03 Integration Suite (Reuse Existing, Docker Dev HTTP)",
+            "hide": true,
             "dependsOrder": "sequence",
             "dependsOn": [
-                "1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Docker Dev HTTP)"
+                "1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Reuse Existing, Docker Dev HTTP)"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/run-integration-tests-docker.ps1"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Docker Dev HTTP 02 Playwright Smoke",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Clean, Docker Dev HTTP)"
             ],
             "type": "shell",
             "command": "pwsh",
@@ -275,10 +334,65 @@
             "problemMatcher": []
         },
         {
-            "label": "1 Run: Docker Dev HTTP 04 Payment Matrix (All Tenants + Providers, Docker Dev HTTP)",
+            "label": "1 Run: Docker Dev HTTP 02 Playwright Smoke (Reuse Existing, Docker Dev HTTP, 120s Stabilization)",
+            "hide": true,
             "dependsOrder": "sequence",
             "dependsOn": [
-                "1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Docker Dev HTTP)"
+                "1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Reuse Existing, Docker Dev HTTP)"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/run-playwright-docker-dev-http.ps1",
+                "-StabilizationDelaySeconds",
+                "120"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Docker Dev HTTP 04 Payment Matrix",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Clean, Docker Dev HTTP)"
+            ],
+            "type": "shell",
+            "command": "npm",
+            "args": [
+                "--prefix",
+                "automation",
+                "run",
+                "run:docker:dev:http:playwright-matrix"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Docker Dev HTTP 04 Payment Matrix (Reuse Existing, Docker Dev HTTP)",
+            "hide": true,
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Reuse Existing, Docker Dev HTTP)"
             ],
             "type": "shell",
             "command": "npm",
@@ -627,20 +741,65 @@
             "problemMatcher": []
         },
         {
-            "label": "1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Docker Dev HTTP)",
+            "label": "1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Clean, Docker Dev HTTP)",
             "dependsOrder": "sequence",
             "dependsOn": [
                 "Internal: Stop local dev sessions",
-                "1 Run: Docker Dev HTTP 01 Profile"
+                "1 Run: Docker Dev HTTP 01 Profile (Clean)"
             ],
             "group": "none",
             "problemMatcher": []
         },
         {
-            "label": "1 Run: Docker Dev HTTP 02 Playwright Smoke (Docker Dev HTTP)",
+            "label": "1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Reuse Existing, Docker Dev HTTP)",
             "dependsOrder": "sequence",
             "dependsOn": [
-                "1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Docker Dev HTTP)"
+                "1 Run: Docker Dev HTTP 01 Profile (Reuse Existing)"
+            ],
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Docker Dev HTTP)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Clean, Docker Dev HTTP)"
+            ],
+            "hide": true,
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Docker Dev HTTP 02 Playwright Smoke (Clean, Docker Dev HTTP)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Clean, Docker Dev HTTP)"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/run-playwright-docker-dev-http.ps1"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Docker Dev HTTP 02 Playwright Smoke (Reuse Existing, Docker Dev HTTP)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Reuse Existing, Docker Dev HTTP)"
             ],
             "type": "shell",
             "command": "pwsh",
@@ -678,6 +837,15 @@
                 "Phase 10: Local Container Stack 00 Build",
                 "Internal: Stop local dev sessions",
                 "Internal: Start Phase 10 local stack"
+            ],
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "Phase 10: Local Container Stack 01 Start (Reuse Existing)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Internal: Start Phase 10 local stack (reuse existing)"
             ],
             "group": "none",
             "problemMatcher": []
@@ -731,7 +899,7 @@
             "problemMatcher": []
         },
         {
-            "label": "1 Run: Phase 10 Local HTTP 00 Start Profile",
+            "label": "1 Run: Phase 10 Local HTTP 00 Start Profile (Clean)",
             "dependsOrder": "sequence",
             "dependsOn": [
                 "Internal: Stop local dev sessions",
@@ -741,10 +909,19 @@
             "problemMatcher": []
         },
         {
+            "label": "1 Run: Phase 10 Local HTTP 00 Start Profile (Reuse Existing)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Internal: Start Phase 10 local http profile (reuse existing)"
+            ],
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
             "label": "1 Run: Phase 10 Local HTTP 01 Wait Ready + Keycloak",
             "dependsOrder": "sequence",
             "dependsOn": [
-                "1 Run: Phase 10 Local HTTP 00 Start Profile"
+                "1 Run: Phase 10 Local HTTP 00 Start Profile (Clean)"
             ],
             "group": "none",
             "problemMatcher": []
@@ -788,7 +965,7 @@
             "problemMatcher": []
         },
         {
-            "label": "1 Run: Phase 10 Local Container Stack 00 Start Stack Only",
+            "label": "1 Run: Phase 10 Local Container Stack 00 Start Stack Only (Clean)",
             "dependsOrder": "sequence",
             "dependsOn": [
                 "Internal: Stop local dev sessions",
@@ -799,10 +976,19 @@
             "problemMatcher": []
         },
         {
+            "label": "1 Run: Phase 10 Local Container Stack 00 Start Stack Only (Reuse Existing)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Internal: Start Phase 10 local stack (reuse existing)"
+            ],
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
             "label": "1 Run: Phase 10 Local Container Stack 01 Wait Ready + Keycloak",
             "dependsOrder": "sequence",
             "dependsOn": [
-                "1 Run: Phase 10 Local Container Stack 00 Start Stack Only"
+                "1 Run: Phase 10 Local Container Stack 00 Start Stack Only (Clean)"
             ],
             "type": "shell",
             "command": "pwsh",
@@ -998,7 +1184,7 @@
         },
         // Run: Docker Dev / Stg / Prod
         {
-            "label": "1 Run: Docker Dev HTTP 01 Profile",
+            "label": "1 Run: Docker Dev HTTP 01 Profile (Clean)",
             "type": "process",
             "command": "pwsh",
             "args": [
@@ -1007,6 +1193,28 @@
                 "Bypass",
                 "-Command",
                 "& '.\\Resources\\Docker\\start-docker.ps1' -Environment dev -Profile http -Reset -NoPrePull"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Docker Dev HTTP 01 Profile (Reuse Existing)",
+            "type": "process",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "& '.\\Resources\\Docker\\start-docker.ps1' -Environment dev -Profile http -NoPrePull"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
@@ -2249,6 +2457,29 @@
             "problemMatcher": []
         },
         {
+            "label": "Internal: Start Phase 10 local stack (reuse existing)",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "docker compose -f compose/docker-compose.phase10.yml --profile apps up -d"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "hide": true,
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
             "label": "Internal: Start Phase 10 local http stack",
             "type": "shell",
             "command": "pwsh",
@@ -2260,6 +2491,33 @@
                 "scripts/start-phase10-local-profile.ps1",
                 "-Profile",
                 "http",
+                "-ReturnWhenReady"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "hide": true,
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Internal: Start Phase 10 local http stack (reuse existing)",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/start-phase10-local-profile.ps1",
+                "-Profile",
+                "http",
+                "-ReuseExistingStack",
                 "-ReturnWhenReady"
             ],
             "options": {

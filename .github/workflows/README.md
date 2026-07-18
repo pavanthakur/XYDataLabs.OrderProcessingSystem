@@ -197,6 +197,14 @@ The `phase10-docker-dev-http-e2e.yml` workflow is the CI mirror of the local Pha
 
 Use the local hook for interactive debugging and the CI workflow to prove the same sequence still passes on a runner and produces the expected artifacts.
 
+The local hook runs clean Azure-parity by default: it recreates the local Phase 10 stack, applies EF migrations, verifies SQL/Redis/payment-provider baseline readiness, and then runs smoke, integration, and matrix validation. Use the direct script switch `-ReuseExistingStack` only for faster diagnosis when you intentionally want to keep the current local containers and database state.
+
+For the local HTTP launcher, the same operator idea applies:
+
+- Clean start: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/start-phase10-local-profile.ps1 -Profile http`
+- Reuse existing stack: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/start-phase10-local-profile.ps1 -Profile http -ReuseExistingStack`
+- Reuse only, without auto-start: add `-SkipStartIfNeeded`
+
 ### Workflow Categories
 
 **Primary workflows** are the workflows the team should think about first for normal delivery and operations:

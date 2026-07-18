@@ -129,19 +129,38 @@ Current VS Code validation paths:
 - Use the Docker lane when you want the full Phase 10 verification path: start profile, wait ready, Playwright smoke, integration suite, payment matrix, and full validation.
 - The local Phase 10 lane stays the faster developer loop and focuses on profile start plus smoke.
 - Phase 10 split-service validation has its own local container-app lane because it introduces separate gateway, Orders, Inventory, Notifications, and UI containers.
-- The new Phase 10-friendly aliases are `Phase 10: Local Container Stack 01 Start`, `Phase 10: Local Container Stack 02 Smoke`, `Phase 10: Local Container Stack 03 Full Validation`, and `Phase 10: Local Container Stack Cleanup`.
+- The new Phase 10-friendly aliases are `Phase 10: Local Container Stack 01 Start`, `Phase 10: Local Container Stack 01 Start (Reuse Existing)`, `Phase 10: Local Container Stack 02 Smoke`, `Phase 10: Local Container Stack 03 Full Validation`, and `Phase 10: Local Container Stack Cleanup`.
 - Use the local Phase 10 aliases when you want the newer split-service local validation path without changing the older task contract.
+
+Local HTTP clean vs reuse commands:
+
+- Clean start: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/start-phase10-local-profile.ps1 -Profile http`
+- Reuse an already-running local HTTP stack: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/start-phase10-local-profile.ps1 -Profile http -ReuseExistingStack`
+- Reuse only, without auto-start: add `-SkipStartIfNeeded` to the reuse command
+- Stop local HTTP processes: `pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop-local-dev-sessions.ps1 -Profile http`
+- VS Code task labels:
+  - `1 Run: Phase 10 Local HTTP 00 Start Profile (Clean)`
+  - `1 Run: Phase 10 Local HTTP 00 Start Profile (Reuse Existing)`
+  - `1 Run: Phase 10 Local HTTP 01 Wait Ready + Keycloak`
+  - `1 Run: Phase 10 Local Container Stack 00 Start Stack Only (Clean)`
+  - `1 Run: Phase 10 Local Container Stack 00 Start Stack Only (Reuse Existing)`
 
 Preferred Phase 10 Docker E2E references:
 - Terminal run-hook: `npm --prefix automation run xydatalabs-test-docker-local-e2e-dev`
 - VS Code task: `1 Run: xydatalabs-test-docker-local-e2e-dev (Docker Dev HTTP E2E)`
 - Direct script equivalent: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\run-phase10-docker-dev-e2e-hook.ps1 -StabilizationDelaySeconds 60`
-- Use this when you want one command that starts the stack if needed, runs ready/smoke/integration/matrix/full validation, writes the log trail, and cleans up the local stack.
+- Use this when you want one command that recreates the stack in clean Azure-parity mode, applies EF migrations, verifies SQL/Redis/payment-provider baseline readiness, runs ready/smoke/integration/matrix/full validation, writes the log trail, and cleans up the local stack.
+- Use `-ReuseExistingStack` on the direct script only when you intentionally want a faster debugging pass against the current local containers and database state.
+- Clean Docker run: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\run-phase10-docker-dev-e2e-hook.ps1 -StabilizationDelaySeconds 60`
+- Reuse Docker stack: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\run-phase10-docker-dev-e2e-hook.ps1 -StabilizationDelaySeconds 60 -ReuseExistingStack`
+- Reuse Docker stack without auto-start: add `-SkipStartIfNeeded`
 
 Shared local/Azure contract:
 - Service names follow the same `appname-env` shape wherever we control them: local Docker service names, Azure Container App names, and cleanup targets all use the environment suffix so the deploy and teardown steps stay symmetrical.
 - Phase 10 local Docker and Azure Container Apps both use the same `orderprocessing-*` service image family, which keeps image creation and deployment inputs aligned across hosts.
 - The runtime payload is service-specific in both places: gateway, Orders, Inventory, Notifications, and UI each get their own image or container artifact rather than a single shared image.
+- The clean local Phase 10 hook is the pre-Azure parity gate: if migrations, TenantC dedicated DB, payment-provider baseline, tenant payment routing, or Redis readiness are broken locally, do not run Azure `01` yet.
+- For the local container-stack and Docker Dev HTTP lanes, the recommended operating pattern is: make `00` the clean setup/start step, then let `01` through `05` reuse that same running stack. Use the explicit reuse variants only when you are intentionally debugging startup or want to skip the teardown/rebuild cycle.
 - Azure keeps the public ingress hostnames platform-generated unless a friendly alias is explicitly bound. That means the operator flow is still the same even though the public URL is different: deploy, verify outputs, smoke, then promote or alias.
 - The preferred automation rule is the same across both platforms: keep the compute names deterministic, keep the environment suffix explicit, and keep cleanup keyed off the exact names created by the deployment.
 
@@ -161,18 +180,19 @@ Use this tracked sequence when you want to re-run or verify the local/Docker clo
 | Lane | Purpose | Steps |
 |---|---|---|
 | Local Phase 10 quick loop | Fast developer validation | `01 Wait Ready + Keycloak`, `02 Playwright Smoke` |
-| Docker Dev HTTP full validation | Full Phase 10 verification | `01 Wait Ready + Keycloak`, `02 Playwright Smoke`, `03 Integration Suite`, `04 Payment Matrix`, `05 Full Validation` |
+| Docker Dev HTTP full validation | Full Phase 10 verification | Clean or reuse profile start, then `01 Wait Ready + Keycloak`, `02 Playwright Smoke`, `03 Integration Suite`, `04 Payment Matrix`, `05 Full Validation` |
 
 1. Local HTTP: `1 Run: Local HTTP 01 Env Ready`
 2. Local HTTP: `1 Run: Local HTTP 02 Playwright Smoke`
 3. Local HTTP: `1 Run: Local HTTP 03 Matrix Sanity (1 Tenant, Local HTTP)`
 4. Local HTTP: `1 Run: Local HTTP 04 Integration Suite (Local SQL, No Docker)`
 5. Local HTTP: `1 Run: Local HTTP 05 Full Validation (All Tenants + Providers, Local HTTP)`
-6. Docker Dev HTTP: `1 Run: Docker Dev HTTP 01 Wait Ready + Keycloak`
-7. Docker Dev HTTP: `1 Run: Docker Dev HTTP 02 Playwright Smoke`
-8. Docker Dev HTTP: `1 Run: Docker Dev HTTP 03 Integration Suite`
-9. Docker Dev HTTP: `1 Run: Docker Dev HTTP 04 Payment Matrix`
-10. Docker Dev HTTP: `1 Run: Docker Dev HTTP 05 Full Validation`
+6. Docker Dev HTTP: `1 Run: Docker Dev HTTP 01 Profile (Clean)` or `1 Run: Docker Dev HTTP 01 Profile (Reuse Existing)`
+7. Docker Dev HTTP: `1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Clean, Docker Dev HTTP)` or `1 Run: Docker Dev HTTP 01 Env Ready + Keycloak (Reuse Existing, Docker Dev HTTP)`
+8. Docker Dev HTTP: `1 Run: Docker Dev HTTP 02 Playwright Smoke`
+9. Docker Dev HTTP: `1 Run: Docker Dev HTTP 03 Integration Suite`
+10. Docker Dev HTTP: `1 Run: Docker Dev HTTP 04 Payment Matrix`
+11. Docker Dev HTTP: `1 Run: Docker Dev HTTP 05 Full Validation`
 
 Notes:
 - The canonical evidence folders remain `TestResults\Integration`, `TestResults\PaymentMatrix`, and `TestResults\Playwright`.

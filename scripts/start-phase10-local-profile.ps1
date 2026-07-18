@@ -5,7 +5,11 @@ param(
     [ValidateSet('http')]
     [string]$Profile,
 
-    [switch]$ReturnWhenReady
+    [switch]$ReturnWhenReady,
+
+    [switch]$ReuseExistingStack,
+
+    [switch]$SkipStartIfNeeded
 )
 
 $workspaceRoot = Split-Path -Parent $PSScriptRoot
@@ -83,6 +87,7 @@ function Start-ChildProfileProcess {
 }
 
 $profileBecameReady = $false
+$reusedExistingStack = $false
 $startupDeadline = (Get-Date).AddSeconds(120)
 
 try
@@ -113,12 +118,39 @@ try
     }
 
     & pwsh -NoProfile -ExecutionPolicy Bypass -File $statusWriter -EnvironmentKey $sequenceEnvironmentKey -TaskName 'phase10-local-http-env-ready' -Status started -Message $Profile
-    Add-Content -Path $progressLogPath -Value 'Starting Phase 10 local HTTP stack.'
-    & pwsh -NoProfile -ExecutionPolicy Bypass -File $keycloakScriptPath
-    Start-ChildProfileProcess -Name 'API' -ScriptPath $apiScriptPath -ProfileName $Profile | Out-Null
-    Start-ChildProfileProcess -Name 'UI' -ScriptPath $frontendScriptPath -ProfileName $Profile | Out-Null
 
-    Write-Host "Phase 10 local '$Profile' profile bootstrap is running."
+    $apiReady = Test-HttpReady -Url $apiReadyUrl
+    $uiReady = Test-HttpReady -Url $uiReadyUrl
+
+    if (-not $ReuseExistingStack)
+    {
+        Add-Content -Path $progressLogPath -Value 'Starting Phase 10 local HTTP stack in clean mode.'
+        & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'stop-local-dev-sessions.ps1') -Profile $Profile | Out-Null
+        & pwsh -NoProfile -ExecutionPolicy Bypass -File $keycloakScriptPath
+        Start-ChildProfileProcess -Name 'API' -ScriptPath $apiScriptPath -ProfileName $Profile | Out-Null
+        Start-ChildProfileProcess -Name 'UI' -ScriptPath $frontendScriptPath -ProfileName $Profile | Out-Null
+        Write-Host "Phase 10 local '$Profile' profile bootstrap is running in clean mode."
+    }
+    elseif (-not ($apiReady -and $uiReady))
+    {
+        if ($SkipStartIfNeeded)
+        {
+            throw 'Phase 10 local HTTP stack is not reachable. Start the local profile or omit -SkipStartIfNeeded to let the launcher bring the stack up.'
+        }
+
+        Add-Content -Path $progressLogPath -Value 'Phase 10 local HTTP stack was not reachable; starting it now in reuse mode.'
+        & pwsh -NoProfile -ExecutionPolicy Bypass -File $keycloakScriptPath
+        Start-ChildProfileProcess -Name 'API' -ScriptPath $apiScriptPath -ProfileName $Profile | Out-Null
+        Start-ChildProfileProcess -Name 'UI' -ScriptPath $frontendScriptPath -ProfileName $Profile | Out-Null
+        Write-Host "Phase 10 local '$Profile' profile bootstrap is running in reuse mode."
+    }
+    else
+    {
+        $reusedExistingStack = $true
+        Add-Content -Path $progressLogPath -Value 'Phase 10 local HTTP stack is already reachable. Reusing the live stack.'
+        Write-Host "Phase 10 local '$Profile' profile is already reachable. Reusing the live stack."
+    }
+
     Write-Host "Waiting for API readiness at $apiReadyUrl and UI readiness at $uiReadyUrl."
 
     while ($true)
@@ -132,6 +164,7 @@ try
                 Write-Host "Phase 10 local '$Profile' profile is ready at $apiReadyUrl and $uiReadyUrl."
                 & pwsh -NoProfile -ExecutionPolicy Bypass -File $statusWriter -EnvironmentKey $sequenceEnvironmentKey -TaskName 'phase10-local-http-env-ready' -Status passed -Message $Profile
                 $summary.status = 'passed'
+                $summary.reusedExistingStack = $reusedExistingStack
                 if ($ReturnWhenReady) {
                     return
                 }

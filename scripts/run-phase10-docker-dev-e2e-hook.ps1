@@ -9,6 +9,8 @@ param(
 
     [string]$RunId = '',
 
+    [switch]$ReuseExistingStack,
+
     [switch]$SkipStartIfNeeded
 )
 
@@ -87,6 +89,7 @@ $runSummary = [ordered]@{
     integrationRunPath = Join-Path $runRoot 'integration'
     latestPointerPath = $latestPointerPath
     latestFailurePointerPath = $latestFailurePointerPath
+    cleanAzureParity = -not $ReuseExistingStack
     error = $null
 }
 
@@ -142,7 +145,14 @@ try {
     $gatewayReady = Test-UrlReachable -Url 'http://localhost:5080/health/alive'
     $uiReady = Test-UrlReachable -Url 'http://localhost:5022/'
 
-    if (-not ($gatewayReady -and $uiReady)) {
+    if (-not $ReuseExistingStack) {
+        Write-Host 'Starting Phase 10 Docker dev HTTP stack in clean Azure-parity mode...' -ForegroundColor Cyan
+        & pwsh -NoProfile -ExecutionPolicy Bypass -File $stackStartScript -Action up -Profile apps -HealthTimeoutSec 300
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to start the Phase 10 Docker dev HTTP stack with exit code $LASTEXITCODE."
+        }
+    }
+    elseif (-not ($gatewayReady -and $uiReady)) {
         if ($SkipStartIfNeeded) {
             throw 'Phase 10 Docker dev HTTP stack is not reachable. Start Docker Desktop or omit -SkipStartIfNeeded to let the hook bring the stack up.'
         }

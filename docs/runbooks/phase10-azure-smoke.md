@@ -402,13 +402,20 @@ After the deploy finishes:
 
 Use these tasks when you want a local replica of the Phase 10 service graph before touching Azure:
 
-1. `1 Run: Phase 10 Local Container Stack 00 Start Stack Only`
-2. `1 Run: Phase 10 Local Container Stack 01 Wait Ready + Keycloak`
-3. `1 Run: Phase 10 Local Container Stack 02 Playwright Smoke`
-4. `1 Run: Phase 10 Local Container Stack 03 Integration Suite`
-5. `1 Run: Phase 10 Local Container Stack 04 Payment Matrix`
-6. `1 Run: Phase 10 Local Container Stack 05 Full Validation`
-7. `1 Run: Phase 10 Local Container Stack 06 Cleanup After Validation`
+1. `1 Run: Phase 10 Local Container Stack 00 Start Stack Only (Clean)`
+2. `1 Run: Phase 10 Local Container Stack 00 Start Stack Only (Reuse Existing)`
+3. `1 Run: Phase 10 Local Container Stack 01 Wait Ready + Keycloak`
+4. `1 Run: Phase 10 Local Container Stack 02 Playwright Smoke`
+5. `1 Run: Phase 10 Local Container Stack 03 Integration Suite`
+6. `1 Run: Phase 10 Local Container Stack 04 Payment Matrix`
+7. `1 Run: Phase 10 Local Container Stack 05 Full Validation`
+8. `1 Run: Phase 10 Local Container Stack 06 Cleanup After Validation`
+
+Recommended operator pattern:
+
+- Use the clean `00` step to build and start the stack once.
+- Let `01` through `05` reuse that same running stack by default.
+- Use the reuse variants only for faster debug loops when you intentionally want to skip teardown and rebuild.
 
 Log locations for the local container stack:
 
@@ -441,9 +448,26 @@ Direct script form:
 pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-phase10-docker-dev-e2e-hook.ps1 -StabilizationDelaySeconds 60
 ```
 
+By default, the hook runs in clean Azure-parity mode. It tears down and recreates the Phase 10 local stack, applies EF migrations to the shared and TenantC databases, verifies the payment-provider baseline rows, checks tenant payment routing, verifies Redis, and then runs smoke, integration, and payment matrix validation. This is the preferred local gate before rerunning Azure `01`.
+
+Use `-ReuseExistingStack` only for a faster inner-loop diagnosis when you intentionally want to keep the current local containers and database state:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-phase10-docker-dev-e2e-hook.ps1 -StabilizationDelaySeconds 60 -ReuseExistingStack
+```
+
+If you want the same clean-vs-reuse behavior for the local HTTP profile launcher, use the Phase 10 local profile script directly:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/start-phase10-local-profile.ps1 -Profile http
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/start-phase10-local-profile.ps1 -Profile http -ReuseExistingStack
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/start-phase10-local-profile.ps1 -Profile http -ReuseExistingStack -SkipStartIfNeeded
+```
+
 Use the hook when:
 
-- you want the stack started automatically if it is not already running
+- you want a clean local stack that behaves like a fresh Azure app-RG deployment
+- you want migration-owned seed/baseline issues caught before Azure
 - you want a single pass that includes ready, smoke, integration, matrix, and full validation
 - you want the same log trail for repeatable validation and handoff
 - you want the local order to match the Phase 10 wrapper expectation before you move to Azure

@@ -742,6 +742,15 @@ run-phase10-docker-dev-e2e-hook.ps1
 
 Use this hook when you want a single command that produces the same end-to-end testing logs as the standalone Phase 10 scripts, but without having to manually chain the steps.
 
+Clean vs reuse modes:
+
+- Clean Azure-parity run:
+  `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-phase10-docker-dev-e2e-hook.ps1 -StabilizationDelaySeconds 60`
+- Reuse an already-running Docker stack:
+  `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-phase10-docker-dev-e2e-hook.ps1 -StabilizationDelaySeconds 60 -ReuseExistingStack`
+- Fail fast if the stack is missing:
+  add `-SkipStartIfNeeded` to the reuse command.
+
 Primary references:
 
 ```powershell
@@ -818,6 +827,24 @@ Cleanup behavior:
 - The final cleanup is handled by the Phase 10 local container stack script.
 - Image cleanup removes the local `ghcr.io/pavanthakur/orderprocessing-*` dev images after validation completes.
 - If you want to keep the stack alive for manual inspection, use the lower-level scripts instead of the hook.
+
+### Phase 10 Local HTTP Launcher
+
+Use the local HTTP launcher when you want the non-Docker developer loop with the same clean-vs-reuse choice:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/start-phase10-local-profile.ps1 -Profile http
+```
+
+Clean vs reuse modes:
+
+- Clean start: run the command above with no extra switches.
+- Reuse an already-running local HTTP stack:
+  `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/start-phase10-local-profile.ps1 -Profile http -ReuseExistingStack`
+- Reuse only, without auto-start:
+  add `-SkipStartIfNeeded` to the reuse command.
+
+Use this when you want the API, UI, and gateway local HTTP baseline without Docker, and use the Docker hook when you want the container-parity path.
 
 Troubleshooting:
 
