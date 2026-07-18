@@ -77,6 +77,7 @@ TestResults/Playwright/*
 !TestResults/Integration/.gitkeep
 !TestResults/PaymentMatrix/.gitkeep
 !TestResults/Playwright/.gitkeep
+TestResults/GitHubActions/
 
 # Generated automation and frontend runtime artifacts.
 automation/dist/
