@@ -53,6 +53,29 @@ This directory contains automation scripts for configuring and deploying the Ord
 
 ## 🆕 GitHub App Automation Scripts
 
+### export-github-run-log.ps1
+
+Exports a GitHub Actions job log into a local, predictable diagnostics folder.
+
+**Purpose**:
+- Captures failed GitHub Actions job logs when the Codex shell cannot reach the GitHub API directly
+- Stores logs under `TestResults/GitHubActions/<run-id>/`
+- Prints the exact log path to share back for diagnosis
+
+**Usage**:
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\export-github-run-log.ps1 -RunId 29636818068 -JobId 88060724976
+```
+
+**Output**:
+- `TestResults/GitHubActions/<run-id>/job-<job-id>-<timestamp>.log`
+- `TestResults/GitHubActions/<run-id>/job-<job-id>-<timestamp>.summary.txt`
+
+**Prerequisites**:
+- GitHub CLI installed
+- `gh auth login -h github.com` completed in the terminal where you run the script
+- Network access to `api.github.com` from that terminal
+
 ### validate-ai-customization.ps1
 
 Deterministic validator for shared Copilot customization assets.
