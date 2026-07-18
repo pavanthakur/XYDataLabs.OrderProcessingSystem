@@ -45,11 +45,11 @@ param notificationsImage string
 @description('UI container image reference')
 param uiImage string
 
-@description('Deploy Azure SQL for the Phase 10 parity slice')
-param deploySql bool = false
+@description('Deploy Azure SQL as part of the default Phase 10 baseline')
+param deploySql bool = true
 
-@description('Deploy Azure Cache for Redis for the Phase 10 parity slice')
-param deployRedis bool = false
+@description('Deploy Azure Cache for Redis as part of the default Phase 10 baseline')
+param deployRedis bool = true
 
 @description('SQL Server admin username')
 param sqlAdminUsername string = 'sqladmin'
