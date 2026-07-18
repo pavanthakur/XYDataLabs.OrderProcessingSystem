@@ -32,7 +32,7 @@ The workflow summary surfaces the resources that matter for runtime and cleanup:
 - Function App
 - Key Vault
 
-The reusable deploy workflow also registers the Azure resource providers it depends on before it applies the Bicep template. That includes `Microsoft.AlertsManagement`, which avoids a clean-subscription failure when Azure tries to create monitoring-related resources during deployment.
+`00 Azure Platform Foundation` registers the Azure resource providers used by the Phase 10 platform and app stacks when `Dry Run=false`. The reusable app deploy workflow only verifies that those providers are already registered, so normal `01 Phase 10 Azure Deploy Orchestrator` runs stay faster and fail with a clear "run 00 first" message on a clean subscription.
 
 ### Workflow Ownership Table
 
@@ -84,7 +84,7 @@ These workflows overlap in that they are both bootstrap-style, but they own diff
 | Workflow | Primary purpose | Runs when | Owns |
 |---|---|---|---|
 | `Azure Initial Setup` | Repository and auth bootstrap | First-time repo setup, or when GitHub App / OIDC secrets must be recreated | GitHub App, Azure OIDC app registration, GitHub environment secrets |
-| `00 Azure Platform Foundation` | Persistent Azure platform bootstrap | Once, then only if the shared platform foundation changes | Shared ACR and pull identity; optional privileged `AcrPull` fallback |
+| `00 Azure Platform Foundation` | Persistent Azure platform bootstrap | Once, then only if the shared platform foundation or provider registration must be refreshed | Shared ACR, pull identity, Azure resource-provider registration, optional privileged `AcrPull` fallback |
 | `01 Phase 10 Azure Deploy Orchestrator` | App environment lifecycle | Normal deploy, dry run, or cleanup | App RG, Container Apps, Service Bus, Key Vault, App Insights, Functions |
 
 Recommended order:

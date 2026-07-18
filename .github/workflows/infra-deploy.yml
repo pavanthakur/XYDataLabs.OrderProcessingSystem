@@ -298,33 +298,49 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
 
-      - name: Ensure Azure resource providers are registered
+      - name: Verify Azure resource providers are registered
         shell: bash
         run: |
           PROVIDERS=(
             Microsoft.App
             Microsoft.AlertsManagement
+            Microsoft.Cache
             Microsoft.ContainerRegistry
             Microsoft.Insights
             Microsoft.KeyVault
             Microsoft.ManagedIdentity
             Microsoft.OperationalInsights
-            Microsoft.Sql
-            Microsoft.Cache
             Microsoft.ServiceBus
+            Microsoft.Sql
           )
 
-          echo "Registering Azure providers needed by the Phase 10 stack..."
+          MISSING=()
+          echo "Verifying Azure providers needed by the Phase 10 stack..."
           for PROVIDER in "${PROVIDERS[@]}"; do
             STATE=$(az provider show --namespace "$PROVIDER" --query registrationState -o tsv 2>/dev/null || echo "NotRegistered")
             if [ "$STATE" != "Registered" ]; then
-              echo " - registering $PROVIDER (current: $STATE)"
-              az provider register --namespace "$PROVIDER" --wait
+              echo " - $PROVIDER is $STATE"
+              MISSING+=("${PROVIDER}:${STATE}")
             else
               echo " - $PROVIDER already registered"
             fi
           done
-          echo "✅ Azure resource providers are ready."
+
+          if [ "${#MISSING[@]}" -gt 0 ]; then
+            echo "## ❌ Azure resource providers are not ready" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Run **00 Azure Platform Foundation** first. Provider registration is a subscription-level platform concern and is intentionally not performed by the normal app deploy path." >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Provider | State |" >> "$GITHUB_STEP_SUMMARY"
+            echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+            for ENTRY in "${MISSING[@]}"; do
+              echo "| ${ENTRY%%:*} | ${ENTRY#*:} |" >> "$GITHUB_STEP_SUMMARY"
+            done
+            echo "Missing Azure provider registrations. Run 00 Azure Platform Foundation before rerunning 01." >&2
+            exit 1
+          fi
+
+          echo "✅ Azure resource providers are ready." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Validate Registry Pull Configuration
         shell: bash
@@ -489,33 +505,49 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
 
-      - name: Ensure Azure resource providers are registered
+      - name: Verify Azure resource providers are registered
         shell: bash
         run: |
           PROVIDERS=(
             Microsoft.App
             Microsoft.AlertsManagement
+            Microsoft.Cache
             Microsoft.ContainerRegistry
             Microsoft.Insights
             Microsoft.KeyVault
             Microsoft.ManagedIdentity
             Microsoft.OperationalInsights
-            Microsoft.Sql
-            Microsoft.Cache
             Microsoft.ServiceBus
+            Microsoft.Sql
           )
 
-          echo "Registering Azure providers needed by the Phase 10 stack..."
+          MISSING=()
+          echo "Verifying Azure providers needed by the Phase 10 stack..."
           for PROVIDER in "${PROVIDERS[@]}"; do
             STATE=$(az provider show --namespace "$PROVIDER" --query registrationState -o tsv 2>/dev/null || echo "NotRegistered")
             if [ "$STATE" != "Registered" ]; then
-              echo " - registering $PROVIDER (current: $STATE)"
-              az provider register --namespace "$PROVIDER" --wait
+              echo " - $PROVIDER is $STATE"
+              MISSING+=("${PROVIDER}:${STATE}")
             else
               echo " - $PROVIDER already registered"
             fi
           done
-          echo "✅ Azure resource providers are ready."
+
+          if [ "${#MISSING[@]}" -gt 0 ]; then
+            echo "## ❌ Azure resource providers are not ready" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Run **00 Azure Platform Foundation** first. Provider registration is a subscription-level platform concern and is intentionally not performed by the normal app deploy path." >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Provider | State |" >> "$GITHUB_STEP_SUMMARY"
+            echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+            for ENTRY in "${MISSING[@]}"; do
+              echo "| ${ENTRY%%:*} | ${ENTRY#*:} |" >> "$GITHUB_STEP_SUMMARY"
+            done
+            echo "Missing Azure provider registrations. Run 00 Azure Platform Foundation before rerunning 01." >&2
+            exit 1
+          fi
+
+          echo "✅ Azure resource providers are ready." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Validate Registry Pull Configuration
         shell: bash
@@ -770,6 +802,7 @@ jobs:
           echo "sqlServer=${SQL_NAME}" >> $GITHUB_OUTPUT
           echo "sqlServerFqdn=${SQL_FQDN}" >> $GITHUB_OUTPUT
           echo "sqlDatabase=${SQL_DB_NAME}" >> $GITHUB_OUTPUT
+          echo "sqlDatabaseName=${SQL_DB_NAME}" >> $GITHUB_OUTPUT
           echo "redis=${REDIS_NAME}" >> $GITHUB_OUTPUT
           echo "redisHost=${REDIS_HOST}" >> $GITHUB_OUTPUT
           echo "redisSslPort=${REDIS_SSL_PORT}" >> $GITHUB_OUTPUT

@@ -16,7 +16,7 @@ This runbook covers the first live check for the Phase 10 transport slice define
 - Phase 10 does not currently deploy Azure SQL Server or Azure Cache for Redis. Those resources belong to the older bootstrap/App Service path or to later platform work, not to the current transport-first container-app stack.
 - For the next implementation slice, use [docs/internal/phase10-parity-matrix.md](../internal/phase10-parity-matrix.md) as the SQL / Redis / ACR source of truth before changing Azure again.
 - Application Insights is part of the Phase 10 deployment and should appear in the target resource group when the deployment succeeds.
-- The Phase 10 deploy workflow now auto-registers the Azure resource providers it depends on, including `Microsoft.AlertsManagement`, so a clean subscription can still proceed without manual provider setup.
+- `00 Azure Platform Foundation` registers the Azure resource providers used by the Phase 10 platform and app stacks. `01 Phase 10 Azure Deploy Orchestrator` verifies those providers are already registered and fails early with a clear "run 00 first" message if a clean subscription is missing them.
 
 ## Phase 10 Operator Checklist
 
@@ -107,7 +107,7 @@ Use the numbered Phase 10 workflows in this order:
 | `99` | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Optional local or CI parity for the current container graph |
 
 Rule of thumb:
-- Run `00` once before the first app deploy, and again only if you intentionally recreate the platform foundation.
+- Run `00` once before the first app deploy, and again only if you intentionally recreate the platform foundation or need to refresh subscription-level provider registration.
 - Run `01` when you want to change Azure resources.
 - Run `02` right after `01` finishes successfully.
 - Run `03` after `02` passes.
@@ -128,6 +128,7 @@ Default selection guidance:
 
 - Keep `Assign AcrPull=false` for normal dev/staging/prod runs.
 - Use `Assign AcrPull=true` only for a privileged platform-admin run that already has `roleAssignments/write`.
+- In `00`, use `Dry Run=false` when you want provider registration and platform resources actually created or refreshed. `Dry Run=true` is non-mutating and skips provider registration.
 - Use `99` only for optional local or CI parity checks, not for the main Azure environment lifecycle.
 
 ### Latest Verified Dev Proof
@@ -462,7 +463,7 @@ Use the individual tasks when:
 - If the browser or smoke step times out, verify that the local ports for the gateway and UI are not already in use.
 - If the gateway revision keeps activating or restarting, open the Container Apps logs and inspect the startup-probe failure details.
 - If you need persistent logs for investigation, run the individual stack tasks instead of the single-command hook so cleanup does not happen until you ask for it.
-- If Azure deployment fails with `MissingSubscriptionRegistration` for `Microsoft.AlertsManagement`, rerun the workflow after provider registration or confirm the workflow step `Ensure Azure resource providers are registered` completed successfully.
+- If Azure deployment fails before Bicep because a provider is not registered, run `00 Azure Platform Foundation` first. Provider registration is subscription-scoped, so deleting `rg-orderprocessing-dev`, `rg-orderprocessing-staging`, or `rg-orderprocessing-prod` does not unregister providers.
 
 ## Quick Command Checklist
 
