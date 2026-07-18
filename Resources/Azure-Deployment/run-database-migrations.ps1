@@ -31,13 +31,28 @@ function Write-Ok($m){ Write-Host $m -ForegroundColor Green }
 function Write-Warn($m){ Write-Host $m -ForegroundColor Yellow }
 function Write-Err($m){ Write-Host $m -ForegroundColor Red }
 
+function Add-DotNetGlobalToolPath {
+    $toolPath = if ($IsWindows) {
+        Join-Path $env:USERPROFILE '.dotnet\tools'
+    } else {
+        Join-Path $HOME '.dotnet/tools'
+    }
+
+    if ((Test-Path $toolPath) -and (($env:PATH -split [IO.Path]::PathSeparator) -notcontains $toolPath)) {
+        $env:PATH = "$toolPath$([IO.Path]::PathSeparator)$env:PATH"
+    }
+}
+
 function Ensure-DotNetEf8 {
+    Add-DotNetGlobalToolPath
+
     try {
         $tools = dotnet tool list -g 2>$null
         $efLine = $tools | Where-Object { $_ -match '^dotnet-ef\s+' }
         if (-not $efLine) {
             Write-Info "Installing dotnet-ef 8.0.13..."
             dotnet tool install --global dotnet-ef --version 8.0.13 | Out-Null
+            Add-DotNetGlobalToolPath
             return
         }
         $version = ($efLine -split '\s+')[1]
@@ -45,6 +60,7 @@ function Ensure-DotNetEf8 {
             Write-Info "Switching dotnet-ef to 8.0.13 (current: $version)..."
             dotnet tool uninstall --global dotnet-ef | Out-Null
             dotnet tool install --global dotnet-ef --version 8.0.13 | Out-Null
+            Add-DotNetGlobalToolPath
         } else {
             Write-Info "dotnet-ef version $version meets requirements."
         }

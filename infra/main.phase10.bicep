@@ -86,6 +86,9 @@ param acrRegistryUsername string = ''
 @description('ACR pull token password used by Container Apps when the deploy path does not own Azure RBAC grants')
 param acrRegistryPassword string = ''
 
+@description('Deployment workflow service principal object ID allowed to read Key Vault secrets for Azure verification scripts')
+param deploymentPrincipalObjectId string = ''
+
 var rgName = 'rg-${baseName}-${environment}'
 var keyVaultName = 'kv-${take(baseName, 15)}-${environment}'
 var keyVaultUri = 'https://${keyVaultName}${az.environment().suffixes.keyvaultDns}/'
@@ -244,6 +247,7 @@ module keyVault 'modules/keyvault.phase10.bicep' = {
     inventoryPrincipalId: containerApps.outputs.inventoryPrincipalId
     notificationsPrincipalId: containerApps.outputs.notificationsPrincipalId
     functionsPrincipalId: functions.outputs.functionPrincipalId
+    deploymentPrincipalObjectId: deploymentPrincipalObjectId
     sqlAdminPassword: sqlAdminPassword
   }
 }

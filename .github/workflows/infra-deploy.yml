@@ -298,6 +298,24 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
 
+      - name: Resolve deployment principal
+        id: deployment_principal
+        shell: bash
+        run: |
+          CLIENT_ID="${{ secrets.AZUREAPPSERVICE_CLIENTID }}"
+          PRINCIPAL_OBJECT_ID="$(az ad sp show --id "$CLIENT_ID" --query id -o tsv 2>/dev/null || true)"
+
+          if [ -z "$PRINCIPAL_OBJECT_ID" ]; then
+            echo "## ❌ Could not resolve deployment principal" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "The Phase 10 deploy needs the OIDC service principal object id so Bicep can grant Key Vault secret read access for Azure verification." >> "$GITHUB_STEP_SUMMARY"
+            echo "Could not resolve Azure service principal object id for the configured OIDC client id." >&2
+            exit 1
+          fi
+
+          echo "objectId=${PRINCIPAL_OBJECT_ID}" >> "$GITHUB_OUTPUT"
+          echo "✅ Deployment principal resolved for Key Vault verification access." >> "$GITHUB_STEP_SUMMARY"
+
       - name: Verify Azure resource providers are registered
         shell: bash
         run: |
@@ -511,6 +529,24 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
 
+      - name: Resolve deployment principal
+        id: deployment_principal
+        shell: bash
+        run: |
+          CLIENT_ID="${{ secrets.AZUREAPPSERVICE_CLIENTID }}"
+          PRINCIPAL_OBJECT_ID="$(az ad sp show --id "$CLIENT_ID" --query id -o tsv 2>/dev/null || true)"
+
+          if [ -z "$PRINCIPAL_OBJECT_ID" ]; then
+            echo "## ❌ Could not resolve deployment principal" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "The Phase 10 deploy needs the OIDC service principal object id so Bicep can grant Key Vault secret read access for Azure verification." >> "$GITHUB_STEP_SUMMARY"
+            echo "Could not resolve Azure service principal object id for the configured OIDC client id." >&2
+            exit 1
+          fi
+
+          echo "objectId=${PRINCIPAL_OBJECT_ID}" >> "$GITHUB_OUTPUT"
+          echo "✅ Deployment principal resolved for Key Vault verification access." >> "$GITHUB_STEP_SUMMARY"
+
       - name: Verify Azure resource providers are registered
         shell: bash
         run: |
@@ -721,6 +757,7 @@ jobs:
             --parameters platformAcrName="${{ steps.params.outputs.platformAcrName }}" \
             --parameters platformAcrLoginServer="${{ steps.params.outputs.acrLoginServer }}" \
             --parameters platformAcrPullIdentityId="${{ steps.params.outputs.acrPullIdentityId }}" \
+            --parameters deploymentPrincipalObjectId="${{ steps.deployment_principal.outputs.objectId }}" \
             --parameters acrRegistryUsername="${{ steps.acr_pull_token.outputs.username }}" \
             --parameters acrRegistryPassword="${{ steps.acr_pull_token.outputs.password }}" \
             --parameters gatewayImage="${{ steps.params.outputs.gatewayImage }}" \
@@ -812,6 +849,54 @@ jobs:
           echo "redis=${REDIS_NAME}" >> $GITHUB_OUTPUT
           echo "redisHost=${REDIS_HOST}" >> $GITHUB_OUTPUT
           echo "redisSslPort=${REDIS_SSL_PORT}" >> $GITHUB_OUTPUT
+
+      - name: Run Azure SQL Migrations
+        if: ${{ steps.params.outputs.deploySql == 'true' }}
+        shell: pwsh
+        run: |
+          Write-Host "Running Phase 10 Azure SQL migrations for ${{ steps.params.outputs.env }}..."
+
+          ./Resources/Azure-Deployment/run-database-migrations.ps1 `
+            -Environment "${{ steps.params.outputs.env }}" `
+            -BaseName "orderprocessing" `
+            -AdminUsername "${{ steps.params.outputs.sqlAdminUsername }}" `
+            -AdminPassword "${{ steps.params.outputs.sqlAdminPassword }}" `
+            -Owner "${{ github.repository_owner }}"
+
+          if ($LASTEXITCODE -ne 0) {
+              throw "Phase 10 Azure SQL migrations failed with exit code $LASTEXITCODE."
+          }
+
+          "✅ Phase 10 Azure SQL migrations completed." | Add-Content -Path $env:GITHUB_STEP_SUMMARY
+
+      - name: Refresh Backend Apps After SQL Migration
+        if: ${{ steps.params.outputs.deploySql == 'true' }}
+        shell: bash
+        run: |
+          RG_NAME="${{ steps.outputs.outputs.rg }}"
+          REVISION_MARKER="${{ github.run_id }}-${{ github.run_attempt }}"
+          BACKEND_APPS=(
+            "${{ steps.outputs.outputs.gateway }}"
+            "${{ steps.outputs.outputs.orders }}"
+            "${{ steps.outputs.outputs.inventory }}"
+            "${{ steps.outputs.outputs.notifications }}"
+          )
+
+          echo "Refreshing backend Container Apps after SQL migrations..."
+          for APP_NAME in "${BACKEND_APPS[@]}"; do
+            if [ -z "$APP_NAME" ]; then
+              continue
+            fi
+
+            echo "Refreshing ${APP_NAME}..."
+            az containerapp update \
+              --resource-group "$RG_NAME" \
+              --name "$APP_NAME" \
+              --set-env-vars "Phase10__SchemaMigrationRun=${REVISION_MARKER}" \
+              --only-show-errors 1>/dev/null
+          done
+
+          echo "✅ Phase 10 backend Container Apps refreshed after SQL migrations." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Resolve Friendly Aliases
         id: aliases

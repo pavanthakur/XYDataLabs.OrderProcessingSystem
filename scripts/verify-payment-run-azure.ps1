@@ -705,14 +705,14 @@ foreach ($row in $uiRows) {
 Write-Step "Querying Azure SQL"
 $preflightShared = Invoke-AzureSqlQuery -Database $sharedDbName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
 SELECT t.Code AS Tenant, pp.Use3DSecure AS ThreeDSEnabled
-FROM dbo.PaymentProviders pp
+FROM payments.PaymentProviders pp
 JOIN dbo.Tenants t ON t.Id = pp.TenantId
 ORDER BY pp.TenantId;
 "@
 
 $preflightTenantC = Invoke-AzureSqlQuery -Database $tenantCDbName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
 SELECT pp.TenantId, pp.Use3DSecure AS ThreeDSEnabled
-FROM dbo.PaymentProviders pp;
+FROM payments.PaymentProviders pp;
 "@
 
 $q2Shared = Invoke-AzureSqlQuery -Database $sharedDbName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
@@ -720,7 +720,7 @@ SELECT t.Code AS Tenant, ct.CustomerOrderId, ct.TransactionId AS ChargeId,
        ct.TransactionStatus AS Status, ct.IsThreeDSecureEnabled AS ThreeDS,
        ct.ThreeDSecureStage, ct.TransactionReferenceId AS Ref,
        ct.IsTransactionSuccess AS OK, ct.CreatedDate
-FROM dbo.CardTransactions ct
+FROM payments.CardTransactions ct
 JOIN dbo.Tenants t ON t.Id = ct.TenantId
 WHERE ct.CustomerOrderId LIKE '$selectedRunPrefix%'
 ORDER BY ct.TenantId, ct.CustomerOrderId, ct.Id;
@@ -730,8 +730,8 @@ $q5Shared = Invoke-AzureSqlQuery -Database $sharedDbName -UserName $sqlAdminUser
 SELECT t.Code AS Tenant, ct.CustomerOrderId, tsh.Status,
        tsh.ThreeDSecureStage AS Stage, tsh.IsThreeDSecureEnabled AS ThreeDS,
        tsh.TransactionReferenceId AS Ref
-FROM dbo.TransactionStatusHistories tsh
-JOIN dbo.CardTransactions ct ON ct.Id = tsh.TransactionId
+FROM payments.TransactionStatusHistories tsh
+JOIN payments.CardTransactions ct ON ct.Id = tsh.TransactionId
 JOIN dbo.Tenants t ON t.Id = ct.TenantId
 WHERE ct.CustomerOrderId LIKE '$selectedRunPrefix%'
 ORDER BY ct.TenantId, ct.CustomerOrderId, ct.Id, tsh.Id;
@@ -739,7 +739,7 @@ ORDER BY ct.TenantId, ct.CustomerOrderId, ct.Id, tsh.Id;
 
 $q8Shared = Invoke-AzureSqlQuery -Database $sharedDbName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
 SELECT ct.CustomerOrderId, ct.TenantId, t.Code
-FROM dbo.CardTransactions ct
+FROM payments.CardTransactions ct
 JOIN dbo.Tenants t ON t.Id = ct.TenantId
 WHERE ct.CustomerOrderId LIKE '$selectedRunPrefix%'
   AND ((ct.CustomerOrderId LIKE '%-tA-%' AND ct.TenantId <> 1)
@@ -751,7 +751,7 @@ SELECT ct.CustomerOrderId, ct.TransactionId AS ChargeId,
        ct.TransactionStatus AS Status, ct.IsThreeDSecureEnabled AS ThreeDS,
        ct.ThreeDSecureStage, ct.TransactionReferenceId AS Ref,
        ct.IsTransactionSuccess AS OK, ct.CreatedDate
-FROM dbo.CardTransactions ct
+FROM payments.CardTransactions ct
 WHERE ct.TenantId = 3
   AND ct.CustomerOrderId LIKE '$selectedRunPrefix%'
 ORDER BY ct.CustomerOrderId, ct.Id;
@@ -760,8 +760,8 @@ ORDER BY ct.CustomerOrderId, ct.Id;
 $q5TenantC = Invoke-AzureSqlQuery -Database $tenantCDbName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
 SELECT ct.CustomerOrderId, tsh.Status, tsh.ThreeDSecureStage AS Stage,
        tsh.IsThreeDSecureEnabled AS ThreeDS, tsh.TransactionReferenceId AS Ref
-FROM dbo.TransactionStatusHistories tsh
-JOIN dbo.CardTransactions ct ON ct.Id = tsh.TransactionId
+FROM payments.TransactionStatusHistories tsh
+JOIN payments.CardTransactions ct ON ct.Id = tsh.TransactionId
 WHERE ct.TenantId = 3
   AND ct.CustomerOrderId LIKE '$selectedRunPrefix%'
 ORDER BY ct.CustomerOrderId, ct.Id, tsh.Id;
@@ -769,7 +769,7 @@ ORDER BY ct.CustomerOrderId, ct.Id, tsh.Id;
 
 $q9Shared = Invoke-AzureSqlQuery -Database $sharedDbName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
 SELECT ct.CustomerOrderId, ct.TenantId
-FROM dbo.CardTransactions ct
+FROM payments.CardTransactions ct
 WHERE ct.TenantId = 3
   AND ct.CustomerOrderId LIKE '$selectedRunPrefix%';
 "@
