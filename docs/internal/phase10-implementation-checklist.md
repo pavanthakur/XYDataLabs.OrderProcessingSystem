@@ -26,6 +26,30 @@ Anchor flow for the first slice:
 | Cleanup policy closeout | Covered for Phase 10 | Historical GHCR retention, ACR stale-tag cleanup, and stale artifact cleanup are scheduled by `phase10-retention-cleanup.yml`, Phase 10 smoke artifacts use `retention-days: 14`, Azure teardown remains manual through `cleanupInfra=true`, and Log Analytics defaults to `30` days in the workspace module. |
 | ACR image cleanup policy | Implemented with ACR cutover | The retention workflow cleans dev/staging/prod ACR tags while preserving images referenced by active Container App revisions. |
 
+### Enterprise Standard Placement
+
+Use this table to keep the enterprise plan aligned with the current Phase 10 scope instead of mixing everything into the same release slice.
+
+| Enterprise item | Where it fits | Why |
+|---|---|---|
+| Single `runId` correlation, one run folder, one summary, one artifact packet | Phase 10 now | This is the execution model and operator UX standard for the current repo flow. |
+| GitHub Actions summary and per-run artifact packet | Phase 10 now | This shortens diagnosis and makes CI output deterministic. |
+| Secure secrets via GitHub Secrets / Key Vault | Phase 10 now | Required for the live Azure deploy and local parity paths already in the repo. |
+| Structured logging with `runId` | Phase 10 now | Needed for the current deploy / smoke / transport traceability. |
+| Clean/reuse local validation modes | Phase 10 now | Keeps the operator flow fast while still allowing full rebuilds when needed. |
+| ACR lifecycle cleanup plus artifact retention | Phase 10 now | Required to keep image and log storage under control for the live Phase 10 path. |
+| Azure platform foundation ACR and pull identity | Phase 10 now | Supports the persistent registry/runtime-pull model without manual RG-level IAM. |
+| SQL / Redis parity in Azure | Phase 10 now | Covered by the active Phase 10 baseline and should remain part of the default deploy path. |
+| Managed Identity for SQL runtime access | Phase 11+ hardening | Valuable enterprise hardening, but it is not required for the current Phase 10 transport/operator baseline. |
+| OpenTelemetry trace/span expansion | Phase 11+ observability | Best treated as the next observability layer after runId-based correlation is stable. |
+| SharedContracts extraction | Deferred unless duplication is proven | Keep module boundaries clean until transport code proves real cross-service duplication. |
+
+Practical rule:
+
+- **Phase 10 now** owns execution shape, operator UX, cleanup hygiene, platform foundation, SQL/Redis parity, and live Azure proof.
+- **Phase 11+** should own security hardening and distributed tracing once the current Phase 10 baseline is stable.
+- **Deferred** items only move forward when the repo proves the need with real duplication or an explicit hardening gate.
+
 ### Verified Azure Dev Proof
 
 | Proof | Run | Result | What it proves |

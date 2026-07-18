@@ -37,6 +37,18 @@ Keep these out of the active Phase 10 transport baseline unless a later review p
 - Broad shared-contract extraction without real duplication
 - Extra platform layers that do not strengthen the current Azure transport slice
 
+### Enterprise Standard Placement
+
+The operator-facing rule is simple:
+
+- **Phase 10 now** owns the execution shape, operator UX, cleanup hygiene, platform foundation, SQL/Redis parity, and live Azure proof.
+- **Phase 11+** should carry the next hardening layer, especially Managed Identity for SQL and broader OpenTelemetry-based tracing.
+- **Deferred** items stay out of the active transport slice until the repo proves the need with real duplication or an explicit hardening gate.
+
+For the detailed placement map, use the internal checklist:
+
+- [docs/internal/phase10-implementation-checklist.md](../internal/phase10-implementation-checklist.md)
+
 ### ACR Foundation And Cleanup Plan
 
 Phase 10 uses ACR plus managed identity for runtime image pulls. The active architecture creates the persistent platform ACR and pull identity once in `00 Azure Platform Foundation`, then lets the normal app deploy reuse those values without creating registry RBAC inside the environment RG.
