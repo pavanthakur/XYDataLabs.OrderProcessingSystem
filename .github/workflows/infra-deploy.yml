@@ -850,6 +850,54 @@ jobs:
           echo "redisHost=${REDIS_HOST}" >> $GITHUB_OUTPUT
           echo "redisSslPort=${REDIS_SSL_PORT}" >> $GITHUB_OUTPUT
 
+      - name: Run Azure SQL Migrations
+        if: ${{ steps.params.outputs.deploySql == 'true' }}
+        shell: pwsh
+        run: |
+          Write-Host "Running Phase 10 Azure SQL migrations for ${{ steps.params.outputs.env }}..."
+
+          ./Resources/Azure-Deployment/run-database-migrations.ps1 `
+            -Environment "${{ steps.params.outputs.env }}" `
+            -BaseName "orderprocessing" `
+            -AdminUsername "${{ steps.params.outputs.sqlAdminUsername }}" `
+            -AdminPassword "${{ steps.params.outputs.sqlAdminPassword }}" `
+            -Owner "${{ github.repository_owner }}"
+
+          if ($LASTEXITCODE -ne 0) {
+              throw "Phase 10 Azure SQL migrations failed with exit code $LASTEXITCODE."
+          }
+
+          "✅ Phase 10 Azure SQL migrations completed." | Add-Content -Path $env:GITHUB_STEP_SUMMARY
+
+      - name: Refresh Backend Apps After SQL Migration
+        if: ${{ steps.params.outputs.deploySql == 'true' }}
+        shell: bash
+        run: |
+          RG_NAME="${{ steps.outputs.outputs.rg }}"
+          REVISION_MARKER="${{ github.run_id }}-${{ github.run_attempt }}"
+          BACKEND_APPS=(
+            "${{ steps.outputs.outputs.gateway }}"
+            "${{ steps.outputs.outputs.orders }}"
+            "${{ steps.outputs.outputs.inventory }}"
+            "${{ steps.outputs.outputs.notifications }}"
+          )
+
+          echo "Refreshing backend Container Apps after SQL migrations..."
+          for APP_NAME in "${BACKEND_APPS[@]}"; do
+            if [ -z "$APP_NAME" ]; then
+              continue
+            fi
+
+            echo "Refreshing ${APP_NAME}..."
+            az containerapp update \
+              --resource-group "$RG_NAME" \
+              --name "$APP_NAME" \
+              --set-env-vars "Phase10__SchemaMigrationRun=${REVISION_MARKER}" \
+              --only-show-errors 1>/dev/null
+          done
+
+          echo "✅ Phase 10 backend Container Apps refreshed after SQL migrations." >> "$GITHUB_STEP_SUMMARY"
+
       - name: Resolve Friendly Aliases
         id: aliases
         shell: bash
