@@ -11,6 +11,7 @@ Use these documents:
 - `phase10-parity-matrix.md` — next SQL/Redis/ACR parity change set, based on local Docker versus Azure
 - `phase10-zoocode-local-model-handoff.md` — bounded Zoo Code/local-model handoff for staging/prod promotion planning after dev validation
 - `docs/runbooks/phase10-azure-smoke.md` — first Azure what-if / deploy / transport smoke runbook for Phase 10
+- `docs/guides/development/phase10-tool-prerequisites.md` — canonical developer-machine setup and readiness gate before Phase 10 implementation work
 - `repo-architecture-layer-mapping.md` — repo-specific mapping of the common 7-layer diagram to the actual solution projects
 - `docs/reference/local-dev.md` — current local vs Docker validation paths, including the Phase 10 quick loop and five-step Docker flow
 - `docs/runbooks/servicebus-dlq-replay.md` — operator guide for DLQ triage and replay

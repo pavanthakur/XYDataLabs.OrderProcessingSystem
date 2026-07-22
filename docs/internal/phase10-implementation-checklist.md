@@ -3,6 +3,8 @@
 This checklist turns the Phase 10 kickoff into a repo-specific transport plan.
 It intentionally does **not** reopen Phase 1-9 work; any new enterprise refinements must be captured here in Phase 10 or pushed into later phases.
 
+Before starting or changing Phase 10 implementation work, validate the developer machine against the canonical tool setup and Environment Readiness Gate in [Phase 10 Tool Prerequisites](../guides/development/phase10-tool-prerequisites.md). Keep installation commands there instead of duplicating them in this checklist.
+
 Anchor flow for the first slice:
 - `Orders` emits the `OrderCreatedV1` integration event.
 - `Service Bus` carries the durable handoff.
@@ -21,7 +23,9 @@ Anchor flow for the first slice:
 | Earlier phase scope | Frozen | Do not back-port new enterprise refinements into Phases 1-9; keep them in Phase 10 or later only. |
 | Azure dev deploy | Verified | GitHub Actions run `29273224237` built the Phase 10 images and deployed the dev Container Apps transport stack successfully. |
 | Phase 10 runtime smoke | Verified | GitHub Actions run `29273711615` proved gateway health, gateway-routed API JSON, UI static route, and UI API proxy bootstrap. |
-| Phase 10 transport / replay smoke | Verified | GitHub Actions run `29273881488` proved Service Bus publish, fan-out consume, controlled DLQ forwarding, DLQ replay receive, and replay publish/consume. |
+| Phase 10 transport / replay smoke | Verified | GitHub Actions run `29273881488` proved Service Bus publish, fan-out consume, controlled DLQ forwarding, DLQ replay receive, and replay publish/consume through the smoke path; it did not prove an implemented Azure Functions worker. |
+| Azure Functions infrastructure | Provisioned host only | `infra/modules/functions.bicep` creates the Function App host and identity plumbing, but no Azure Functions isolated worker project or trigger code exists yet. |
+| Azure Functions worker implementation | Pending | Add the DLQ intake/replay worker project, trigger code, deployment artifact, and a smoke proof that executes the real function code. |
 | SQL / Redis baseline wiring | Automatic baseline | The wrapper and child deploy workflows include SQL and Redis as part of the default Phase 10 path; no manual parity toggle is required in the normal operator form. |
 | Cleanup policy closeout | Covered for Phase 10 | Historical GHCR retention, ACR stale-tag cleanup, and stale artifact cleanup are scheduled by `phase10-retention-cleanup.yml`, Phase 10 smoke artifacts use `retention-days: 14`, Azure teardown remains manual through `cleanupInfra=true`, and Log Analytics defaults to `30` days in the workspace module. |
 | ACR image cleanup policy | Implemented with ACR cutover | The retention workflow cleans dev/staging/prod ACR tags while preserving images referenced by active Container App revisions. |
@@ -132,7 +136,10 @@ If any one of those items is not true, Phase 10 is still in progress.
 | `infra/modules/containerapps.bicep` (new) | Add the ACA environment and the initial container apps for the gateway, Orders, Inventory, Notifications, and UI. | The first transport slice has a deployable ACA compute layer. |
 | `infra/modules/servicebus.bicep` (new) | Declare the order-created topic/subscription topology, dead-letter forwarding, TTL, `maxDeliveryCount`, queue/topic ownership rules, and a transport auth rule for the first slice. | The first flow can be provisioned end-to-end from Bicep. |
 | `infra/modules/loganalytics.phase10.bicep` (new) | Provision the Log Analytics workspace that backs ACA logging and workspace-based observability for the transport slice. | ACA logs and App Insights share the same observability workspace. |
-| `infra/modules/functions.bicep` (new) | Add the DLQ intake/replay worker and any timer-based reconciliation function required by the first slice. | DLQ classification and replay can run outside request handlers. |
+| `infra/modules/functions.bicep` | Provision the Function App host, identity, settings, and diagnostics for the future worker. | The Azure portal may show a Function App resource, but that only proves the host exists. |
+| `XYDataLabs.OrderProcessingSystem.Functions/XYDataLabs.OrderProcessingSystem.Functions.csproj` (new) | Add the Azure Functions isolated worker project for Phase 10 DLQ intake/replay. | The repo contains deployable Function code instead of only infrastructure. |
+| `XYDataLabs.OrderProcessingSystem.Functions/DlqIntakeFunction.cs` (new) | Consume forwarded Service Bus DLQ messages, classify failure category, and route replayable versus poison payloads. | The real Function trigger performs central DLQ intake and logs correlation metadata. |
+| `XYDataLabs.OrderProcessingSystem.Functions/DlqReplayFunction.cs` (new) | Provide the guarded replay path for approved dead-letter messages. | Replay is explicit, traceable, and cannot blindly bulk-publish poison messages. |
 | `infra/modules/keyvault.phase10.bicep` | Grant the new runtime identities access to the secrets required by ACA and transport code. | Managed identity can resolve secrets without new hardcoded values. |
 | `infra/modules/insights.phase10.bicep` | Extend diagnostics for ACA, Service Bus, Functions, and replay traces. | Correlation and DLQ depth are observable. |
 | `infra/modules/identity.phase10.bicep` | Add the identity wiring needed for ACA deployment/runtime access without introducing long-lived secrets. | Deployment and runtime access work with federated identity or managed identity only. |
@@ -182,6 +189,9 @@ Use this order so the first slice stays transport-first and the repo does not dr
    - `infra/modules/loganalytics.phase10.bicep`
    - `infra/modules/containerapps.bicep`
    - `infra/modules/functions.bicep`
+   - `XYDataLabs.OrderProcessingSystem.Functions/XYDataLabs.OrderProcessingSystem.Functions.csproj`
+   - `XYDataLabs.OrderProcessingSystem.Functions/DlqIntakeFunction.cs`
+   - `XYDataLabs.OrderProcessingSystem.Functions/DlqReplayFunction.cs`
    - `infra/main.phase10.bicep`
    - `infra/parameters/dev.json`
    - `infra/parameters/staging.json`
@@ -244,7 +254,8 @@ Treat these as the smallest useful implementation slice for the first order-crea
 - `infra/modules/containerapps.bicep` now requires explicit image references for the gateway, Orders, Inventory, Notifications, and UI instead of falling back to the hello-world placeholder, and the backend service images are now split per service.
 - `XYDataLabs.OrderProcessingSystem.Gateway/`, `XYDataLabs.OrderProcessingSystem.Orders.API/`, `XYDataLabs.OrderProcessingSystem.Inventory.API/`, and `XYDataLabs.OrderProcessingSystem.Notifications.API/` now each have a minimal ASP.NET Core host so the image refs map to real runnable containers.
 - `infra/modules/loganalytics.phase10.bicep` supplies the workspace used by ACA logs and workspace-based observability.
-- `infra/modules/functions.bicep` supplies the DLQ intake/replay function and any reconciliation helper the first slice needs.
+- `infra/modules/functions.bicep` supplies the Function App host and runtime settings.
+- `XYDataLabs.OrderProcessingSystem.Functions` supplies the actual DLQ intake/replay Function code. This project is still pending and must be added before the portal Function App should be treated as implemented behavior.
 - `infra/main.phase10.bicep` composes the Log Analytics, ACA, Service Bus, Functions, Key Vault, and Insights modules and wires the Service Bus transport connection into the runtime from the Service Bus module output.
 - The Phase 10 deployment parameters must supply real image refs for the Container Apps so the gateway and UI revisions can become healthy, with distinct backend images for Orders, Inventory, and Notifications.
 - `phase10-deploy-orchestrator.yml` calls `build-phase10-images.yml` to publish those host images to ACR so the deployment parameters can point at real service-specific tags.
