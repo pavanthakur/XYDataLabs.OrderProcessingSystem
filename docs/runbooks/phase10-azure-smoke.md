@@ -117,15 +117,15 @@ Use the numbered Phase 10 workflows in this order:
 | `02` | `02 Phase 10 Azure Runtime Smoke` | Runtime proof for gateway, API routing, and UI after deploy |
 | `03` | `03 Phase 10 Azure Transport Smoke` | Transport proof for Service Bus publish, consume, DLQ, and replay |
 | `04` | `04 Phase 10 Azure Payment Matrix` | All-tenant browser/payment E2E proof against the live Azure Container Apps URLs |
-| `99` | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Optional local or CI parity for the current container graph |
+| `99` | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | CI pre-deployment clean-room parity for the current container graph when the change affects Compose, gateway, images, workflows, Bicep, transport, or payment automation |
 
 Rule of thumb:
 - Run `00` once before the first app deploy, and again only if you intentionally recreate the platform foundation or need to refresh subscription-level provider registration.
-- Run `01` when you want to change Azure resources.
+- Run `01` when you want to deploy Azure resources. Use the same workflow in cleanup mode only when intentionally removing or resetting an environment.
 - Run `02` right after `01` finishes successfully.
 - Run `03` after `02` passes.
 - Run `04` after `03` passes when you want the Azure equivalent of the local all-tenant Docker payment matrix.
-- Run `99` only when you want optional local/CI parity for the Docker container shape.
+- Run `99` as the clean-room pre-deployment parity gate before Azure when a change affects Compose, gateway, service images, workflow, Bicep, transport, or payment-matrix behavior.
 - Workflow `99` always starts its own Docker stack on GitHub-hosted runners. Reusing an already running stack is a local script-only option via `scripts/run-phase10-docker-dev-e2e-hook.ps1 -SkipStartIfNeeded`.
 
 ### Environment Operating Matrix
