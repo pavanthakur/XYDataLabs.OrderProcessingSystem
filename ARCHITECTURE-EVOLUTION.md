@@ -1322,7 +1322,7 @@ contracts frozen in Phase 8.
 - **Azure Container Registry (ACR)** — build and push container images. Enterprise target: persistent platform/foundation ACR outside the environment app resource group, with a stable pull identity and one-time `AcrPull` assignment owned by platform bootstrap rather than normal app deployment
 - **Azure Service Bus** — replace the in-memory event bus behind `IEventPublisher` with durable topics + subscriptions; handlers and envelopes remain unchanged
 - **Azure Event Grid** — platform/infrastructure event routing (deployment notifications, blob lifecycle); Service Bus remains for domain events. Decision rule: Event Grid = reactive fan-out, Service Bus = reliable delivery with sessions/DLQ
-- **Azure Functions** — planned central DLQ intake processor (isolated process model) that categorises failures before any replay action; timer-triggered Function for scheduled projection health checks remains Phase 14. Phase 10 currently has Function App infrastructure only; the worker project and trigger code are pending.
+- **Azure Functions** — planned central DLQ intake processor (isolated process model) that categorises failures before any replay action; timer-triggered Function for scheduled projection health checks remains Phase 14. Phase 10 now has Function App infrastructure plus a local .NET 8 isolated worker scaffold and initial DLQ intake trigger; replay/quarantine behavior and Azure deployment proof remain pending.
 - **Azure Blob Storage** — order file attachments (invoices, receipts, proof of delivery); managed identity access, private endpoint. `BlobCreated` events routed via Event Grid to trigger downstream processing (e.g. Document Intelligence extraction in Phase 12)
 - **Azure Cache for Redis** — managed Redis replacing local container; used for distributed cache and session state
 - **Observability** — App Insights + OpenTelemetry distributed tracing across all services; `traceparent`, `CorrelationId`, `CausationId`, `TenantId`, and `MessageId` propagate through every message so dead-lettered events can be traced back to the originating order and tenant
@@ -1337,7 +1337,7 @@ contracts frozen in Phase 8.
 
 | Area | Status | Meaning | Next Step |
 |---|---|---|---|
-| Transport foundation | Next | Service Bus and Event Grid are the first implementation lane; Function App infrastructure exists, but Function worker code is still pending | Finalize topology, message contracts, and the first DLQ Function worker |
+| Transport foundation | Next | Service Bus and Event Grid are the first implementation lane; Function App infrastructure and local Functions worker scaffold exist, but Azure-deployed Function behavior is still pending | Finalize replay/quarantine behavior, deployment artifact, and Azure Function smoke proof |
 | Cloud hosting outcome | Next | ACA is the hosting target only after transport failure drills pass | Deploy the service graph into ACA |
 | Public gateway | Next | APIM fronts ACA; YARP stays internal | Wire APIM after ingress and routing are stable |
 | Images and registry | Next | ACR is the build/push lane for container workloads; target model is persistent platform ACR plus stable pull identity | Publish the Azure workload images and move ACR/RBAC out of the app RG lifecycle |
@@ -1377,15 +1377,14 @@ This keeps app environment cleanup simple while preserving image history, avoidi
 - Done:
   - Function App infrastructure module exists: `infra/modules/functions.bicep`
   - Function identity output is wired into Phase 10 Key Vault access plumbing
-  - Service Bus transport smoke proof is documented, but it does not prove an implemented Azure Functions worker
+  - Local Azure Functions worker scaffold exists with startup validation and an initial DLQ intake trigger
+  - Service Bus transport smoke proof is documented, but it does not yet prove deployed Azure Functions behavior
 - Pending:
   - Azure Container Apps deployment path
   - ACR build/push flow
   - APIM public gateway
   - Service Bus transport swap
   - Blob Storage / Event Grid / Functions code
-  - Azure Functions isolated worker project
-  - DLQ intake trigger implementation
   - DLQ replay / quarantine implementation
   - Function deployment artifact and smoke proof
   - Entra ID + JWT cloud auth

@@ -58,6 +58,7 @@ Generated\ Files/
 **/obj/**/Docker/
 .dockerignore
 Resources/Docker/.env.local
+**/local.settings.json
 
 # MSTest test Results
 [Tt]est[Rr]esult*/

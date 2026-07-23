@@ -81,8 +81,8 @@ Changes to the approved tool version matrix should be reviewed alongside CI/CD u
 | GitHub CLI | Current supported stable |
 | Azure Developer CLI | Optional; current supported stable when used |
 | Azure Functions Core Tools | v4 |
-| Azurite | Docker image, pinned tag |
-| Service Bus emulator | Docker image, pinned tag |
+| Azurite | repo-local Docker build `xydatalabs/phase10-azurite:3.35.0-local` using pinned npm package `azurite@3.35.0` |
+| Service Bus emulator | `mcr.microsoft.com/azure-messaging/servicebus-emulator:1.1.2` |
 | SQL Server container | Existing pinned SQL 2022 image |
 | Redis container | Existing pinned Redis 7 image |
 | `jq` | Optional; current supported stable when used |
@@ -378,6 +378,19 @@ Docker runs:
 
 Use this mode for repeatable validation and CI parity.
 
+Phase 10 compose profiles are explicit and composable:
+
+| Profile | Owns |
+|---|---|
+| `data` | SQL Server and Redis |
+| `identity` | local Keycloak |
+| `storage` | Azurite |
+| `messaging` | Service Bus emulator plus its dedicated emulator SQL dependency |
+| `apps` | gateway, service APIs, and UI |
+| `functions` | Dockerized Functions worker after the local Functions project can run |
+
+There is intentionally no `all` profile. Scripts and tasks must select the required profiles explicitly so infrastructure-only, messaging, application, and full-validation paths stay debuggable.
+
 ### Docker Backing Services And Debug Mode
 
 Use this mode for daily bug fixes and breakpoint debugging.
@@ -396,6 +409,8 @@ Visual Studio, VS Code, or command-line processes run:
 - gateway
 - Functions worker
 - UI
+
+Use this mode for Phase 10 Stage 3 debugging: keep backing services close to production in Docker, but run the code you are changing from the IDE for breakpoints.
 
 ### Aspire Optional Inner Loop Mode
 
@@ -430,7 +445,7 @@ The local identity path is debug-friendly and portable. The Azure path remains p
 ## Local Secrets Strategy
 
 - Non-Docker local secrets use `.NET user-secrets`.
-- Docker local secrets use `Resources/Docker/.env.local`.
+- Docker local defaults come from `Resources/Docker/.env.local.example`; Docker local secrets and machine-specific overrides use `Resources/Docker/.env.local`.
 - CI secrets use GitHub secrets.
 - Azure runtime secrets use Key Vault.
 - Azure SDK local identity uses `DefaultAzureCredential` through `az login`.
@@ -505,6 +520,7 @@ These ports are the expected local defaults for Phase 10 tooling and backing ser
 | Azurite Table | `10002` |
 | Service Bus Emulator AMQP | `5672`, if selected |
 | Service Bus Emulator health/management | `5300`, if selected |
+| Azure Functions Core Tools host | `7071`, when running the Functions worker locally |
 | Keycloak | repo profile-defined; current Phase 10 Docker stack uses `8081` host to `8080` container |
 | Gateway | repo profile-defined |
 | UI | repo profile-defined |

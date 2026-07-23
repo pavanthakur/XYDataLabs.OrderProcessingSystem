@@ -1,4 +1,4 @@
-
+﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.12.35514.174
@@ -420,6 +420,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XYDataLabs.OrderProcessingS
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XYDataLabs.OrderProcessingSystem.Payments.Infrastructure", "XYDataLabs.OrderProcessingSystem.Payments.Infrastructure\XYDataLabs.OrderProcessingSystem.Payments.Infrastructure.csproj", "{081A7D4E-9B55-4F8F-9DD6-AB57F038AD42}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XYDataLabs.OrderProcessingSystem.Functions", "XYDataLabs.OrderProcessingSystem.Functions\XYDataLabs.OrderProcessingSystem.Functions.csproj", "{CEC7DEA9-51FA-4007-932A-339A9D16F84A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -814,6 +816,18 @@ Global
 		{081A7D4E-9B55-4F8F-9DD6-AB57F038AD42}.Release|x64.Build.0 = Release|Any CPU
 		{081A7D4E-9B55-4F8F-9DD6-AB57F038AD42}.Release|x86.ActiveCfg = Release|Any CPU
 		{081A7D4E-9B55-4F8F-9DD6-AB57F038AD42}.Release|x86.Build.0 = Release|Any CPU
+		{CEC7DEA9-51FA-4007-932A-339A9D16F84A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CEC7DEA9-51FA-4007-932A-339A9D16F84A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CEC7DEA9-51FA-4007-932A-339A9D16F84A}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{CEC7DEA9-51FA-4007-932A-339A9D16F84A}.Debug|x64.Build.0 = Debug|Any CPU
+		{CEC7DEA9-51FA-4007-932A-339A9D16F84A}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{CEC7DEA9-51FA-4007-932A-339A9D16F84A}.Debug|x86.Build.0 = Debug|Any CPU
+		{CEC7DEA9-51FA-4007-932A-339A9D16F84A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CEC7DEA9-51FA-4007-932A-339A9D16F84A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CEC7DEA9-51FA-4007-932A-339A9D16F84A}.Release|x64.ActiveCfg = Release|Any CPU
+		{CEC7DEA9-51FA-4007-932A-339A9D16F84A}.Release|x64.Build.0 = Release|Any CPU
+		{CEC7DEA9-51FA-4007-932A-339A9D16F84A}.Release|x86.ActiveCfg = Release|Any CPU
+		{CEC7DEA9-51FA-4007-932A-339A9D16F84A}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -858,4 +872,3 @@ Global
 		SolutionGuid = {E83A7CED-28C5-4597-8180-BDBDD6B27808}
 	EndGlobalSection
 EndGlobal
-

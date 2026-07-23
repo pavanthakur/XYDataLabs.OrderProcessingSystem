@@ -11,6 +11,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $workspaceRoot = Split-Path -Parent $PSScriptRoot
 $composeFile = Join-Path $workspaceRoot 'compose\docker-compose.phase10.yml'
+$envExampleFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local.example'
 $envFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local'
 $logRoot = Join-Path $workspaceRoot 'TestResults\Playwright\phase10-docker-http'
 $dockerConfigRoot = Join-Path $workspaceRoot '.tmp\docker-config'
@@ -208,7 +209,7 @@ finally {
     try {
         if ($dockerAvailable) {
             Write-ProgressLine 'Running cleanup for Phase 10 local container stack...'
-            & docker compose --env-file $envFile -f $composeFile --profile apps down -v 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-down.log') | Out-Null
+            & docker compose --env-file $envExampleFile --env-file $envFile -f $composeFile --profile data --profile identity --profile storage --profile messaging --profile apps --profile functions down -v 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-down.log') | Out-Null
             if ($LASTEXITCODE -ne 0) {
                 throw "Docker compose down failed with exit code $LASTEXITCODE"
             }
