@@ -31,9 +31,42 @@ Changes to the approved tool version matrix should be reviewed alongside CI/CD u
 
 - Aspire is optional and must not replace Docker Compose as the supported local path.
 - Tool versions follow the approved matrix in this guide.
+- Tool matrix changes must be reviewed with CI/CD updates so local, GitHub Actions, and Azure validation stay aligned.
 - Manual Azure resources must be removed or captured in Infrastructure as Code before becoming supported.
 - Emulator images should be pinned after the first validated working stack.
 - Local application logic must remain testable through abstractions even when an emulator is unavailable or incomplete.
+
+## Tool Categories
+
+### Required Tools
+
+| Tool | Purpose |
+|---|---|
+| .NET 8 SDK | repository build and test |
+| PowerShell 7 | repo scripts |
+| Node.js 20 LTS / npm 10.x | frontend and automation |
+| Docker Desktop with Compose v2 | canonical local runtime and emulator host |
+| Azure CLI | Azure authentication, `DefaultAzureCredential`, and deployment support |
+| Bicep CLI | infrastructure validation |
+| Azure Functions Core Tools v4 | local Azure Functions isolated worker debugging and host management |
+| GitHub CLI | workflow and artifact debugging |
+| Visual Studio 2022 or VS Code plus C# Dev Kit | development, debugging, and test execution |
+
+### Recommended Tools
+
+- Azure Storage Explorer
+- SQL Server Management Studio or DBeaver
+- Postman or Bruno
+- Redis Insight
+- VS Code Azure, Docker, Bicep, GitHub Actions, and YAML extensions
+
+### Optional Tools
+
+- Azure Developer CLI (`azd`)
+- Aspire workload/tooling
+- Dev Containers
+- `jq`
+- `yq`
 
 ## Approved Tool Version Matrix
 
@@ -46,11 +79,14 @@ Changes to the approved tool version matrix should be reviewed alongside CI/CD u
 | Docker Desktop | Current supported stable |
 | Azure CLI | Current supported stable |
 | GitHub CLI | Current supported stable |
+| Azure Developer CLI | Optional; current supported stable when used |
 | Azure Functions Core Tools | v4 |
 | Azurite | Docker image, pinned tag |
 | Service Bus emulator | Docker image, pinned tag |
 | SQL Server container | Existing pinned SQL 2022 image |
 | Redis container | Existing pinned Redis 7 image |
+| `jq` | Optional; current supported stable when used |
+| `yq` | Optional; current supported stable when used |
 
 ## Local Azure Service Support Matrix
 
