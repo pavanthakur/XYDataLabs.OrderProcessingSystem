@@ -318,7 +318,7 @@ Port allocations: Local VS API (5010–5011) + UI (5173–5174) · Docker dev (5
 |------|-------|---------------|
 | `TROUBLESHOOTING-INDEX.md` | Root | Quick links for common GitHub App / OIDC / workflow errors |
 | `ARCHITECTURE.md` | Root | Binding tenant, payment identifier, migration, and test standard for future model creation |
-| `ARCHITECTURE-EVOLUTION.md` | Root | 14-phase roadmap: Phase 8.7 ✅ (Provider Webhooks), Phase 9 ✅ (YARP Microservices Architecture), Phase 9.5 ✅ (Keycloak portability); Phase 10 next 📅 (Azure transport + DLQ operations) |
+| `ARCHITECTURE-EVOLUTION.md` | Root | 14-phase roadmap: Phase 8.7 ✅ (Provider Webhooks), Phase 9 ✅ (YARP Microservices Architecture), Phase 9.5 ✅ (Keycloak portability); Phase 10.1 ✅ (local baseline reconciliation), Phase 10.2 next 📅 (Azure transport + DLQ operations) |
 | `docs/internal/AZURE-PROGRESS-EVALUATION.md` | docs/internal | Learning progress weeks 1–10, next-step guides |
 | `docs/AI-OPERATING-MODEL.md` | docs/ | Canonical protocol for shared AI customization and governance |
 | `docs/internal/DEFERRED-WORK-LOG.md` | docs/internal | Shared register for justified deferred work |

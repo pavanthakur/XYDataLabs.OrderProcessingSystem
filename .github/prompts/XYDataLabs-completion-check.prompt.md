@@ -3,14 +3,14 @@ agent: agent
 description: "Quality gate after any feature, task, script, or fix — automatically runs build (warnings-as-errors), all unit tests, and a secret/credential scan; then checks 6 categories: documented, guardrailed, unit tested, integration tested, automated in CI, and AI context current"
 ---
 
-Run this after completing any feature, task, script, fix, or workflow change.
+Run this after completing any feature, task, script, fix, workflow change, or phase checkpoint update.
 
 Use `.github/completion-check-rubric.md` to decide whether a gap is non-negotiable or can be deferred.
 If a gap is deferred, record it in `docs/internal/DEFERRED-WORK-LOG.md` with owner, rationale, risk, review date, and closure trigger before closing the task.
 
 ## Step 0 — Run automated checks first
 
-Run all three blocks in the terminal before evaluating the checklist. Use the results to fill in categories 2, 3, and 4 below. If the task touched the payment automation workspace or workflow surfaces, run the additional automation block as well and use it for category 5. If the task closes or freezes a phase and it touched Docker runtime orchestration, payment automation runtime targets, or closeout workflow surfaces, run the Docker validation bundle block as well and use it for category 5.
+Run all three blocks in the terminal before evaluating the checklist. Use the results to fill in categories 2, 3, and 4 below. If the task touched the payment automation workspace or workflow surfaces, run the additional automation block as well and use it for category 5. If the task closes or freezes a phase or named sub-phase and it touched Docker runtime orchestration, payment automation runtime targets, local setup orchestration, or closeout workflow surfaces, run the Docker validation bundle block as well and use it for category 5.
 
 **Build (warnings as errors):**
 ```powershell
@@ -42,7 +42,7 @@ npm --prefix automation run run:docker:matrix:dry
 npm --prefix automation run run:azure:matrix:dry
 ```
 
-**Docker validation bundle (run when the task closes/freezes a phase and touches Docker runtime orchestration, payment automation runtime targets, or closeout workflow surfaces):**
+**Docker validation bundle (run when the task closes/freezes a phase or named sub-phase and touches Docker runtime orchestration, payment automation runtime targets, local setup orchestration, or closeout workflow surfaces):**
 ```powershell
 cd Q:\GIT\TestAppXY_OrderProcessingSystem
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\generate-docker-validation-bundle.ps1 -Environment dev -Profile http
@@ -58,6 +58,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\generate-docker-validati
 - [ ] If a new prompt was added: does `.github/prompts/README.md` document it, and is it listed in `copilot-instructions.md` §9?
 - [ ] If a new architectural decision was made: is there an ADR in `docs/architecture/decisions/`?
 - [ ] If this task closed or materially advanced a curriculum/architecture phase: are all phase-status surfaces aligned (`ARCHITECTURE-EVOLUTION.md`, `docs/learning/curriculum/1_MASTER_CURRICULUM.md`, `docs/learning/curriculum/README.md`, `docs/internal/AZURE-PROGRESS-EVALUATION.md`, active implementation notes, `.github/instructions/curriculum.instructions.md`, `docs/DEVELOPER-OPERATING-MODEL.md` when focus changed, and `.github/copilot-instructions.md` if it contains a phase snapshot)?
+- [ ] If this task finalized Phase 10.1 or any Phase 10 local-baseline document: are `docs/guides/development/phase10-tool-prerequisites.md`, `docs/internal/phase10-implementation-checklist.md`, and `ARCHITECTURE-EVOLUTION.md` consistent about the current next step?
 
 ## 2. Guardrails *(use secret scan results from Step 0)*
 
@@ -97,7 +98,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\generate-docker-validati
 - [ ] Is `copilot-instructions.md` still accurate? (Run `/XYDataLabs-context-audit` if unsure)
 - [ ] Are relevant `/memories/repo/` files up to date with any new resource names or conventions?
 - [ ] If this task changed current phase or next-phase status: has `/XYDataLabs-context-audit` been run, or has equivalent manual verification confirmed there is no status-surface drift?
-- [ ] If this task closes Phase 9 or a Phase 9 closure lane: are the numbered VS Code task sequences for both `local-http` and `docker-dev-http` documented and aligned with the closeout roadmap before declaring completion?
+- [ ] If this task closes Phase 9, a Phase 9 closure lane, or the Phase 10 local baseline / transport lane: are the numbered VS Code task sequences for both `local-http` and `docker-dev-http` documented and aligned with the closeout roadmap before declaring completion?
 - [ ] If this task touched Azure deployment or container image delivery: did you apply the enterprise default review stance automatically?
   - Azure OIDC for Azure login
   - GitHub App for repo-secret automation

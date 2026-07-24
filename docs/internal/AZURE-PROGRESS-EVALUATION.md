@@ -12,7 +12,8 @@
 ### July 13, 2026 Phase 10 Operator Baseline
 
 - ✅ Phase 10 developer-machine setup now has a canonical source of truth: [Phase 10 Tool Prerequisites](../guides/development/phase10-tool-prerequisites.md). Docker Compose remains the canonical local runtime; Aspire is optional; Azure is used for deployment validation after local readiness is proven.
-- ✅ Phase 10 now has a numbered operator workflow sequence: `01 Phase 10 Azure Deploy Orchestrator`, `02 Phase 10 Azure Runtime Smoke`, `03 Phase 10 Azure Transport Smoke`, and `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` for optional local/CI parity.
+- ✅ Phase 10.1 local baseline reconciliation is complete: the numbered local setup ladder, evidence layout, and prompt/status surfaces now agree on the canonical Phase 10.1 checkpoint.
+- ✅ Phase 10.2 is the next active engineering slice: `01 Phase 10 Azure Deploy Orchestrator`, `02 Phase 10 Azure Runtime Smoke`, `03 Phase 10 Azure Transport Smoke`, and `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` remain the operator workflow sequence for the Azure transport lane and optional local/CI parity.
 - ✅ The Phase 10 wrapper is the single Azure entry point for dry run, build, deploy, and resource-group cleanup; image build and Azure resource deployment remain internal child workflow responsibilities.
 - ✅ The workflow README and Phase 10 runbook now document which workflows to click, which workflows are internal, and which legacy App Service workflows should not be used for the active container-app path.
 - ✅ The local Docker Dev HTTP E2E path now has a named run-hook, `npm --prefix automation run xydatalabs-test-docker-local-e2e-dev`, plus a matching VS Code task, `1 Run: xydatalabs-test-docker-local-e2e-dev (Docker Dev HTTP E2E)`.

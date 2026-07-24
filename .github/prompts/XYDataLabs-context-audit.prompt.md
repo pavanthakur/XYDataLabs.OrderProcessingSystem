@@ -57,6 +57,8 @@ Audit all AI context files against the actual codebase to detect drift. Do NOT a
 ### 10. Architecture Status Surface Consistency
 - Read the active-status surfaces:
 	- `ARCHITECTURE-EVOLUTION.md`
+	- `docs/guides/development/phase10-tool-prerequisites.md`
+	- `docs/internal/phase10-implementation-checklist.md`
 	- `docs/learning/curriculum/1_MASTER_CURRICULUM.md`
 	- `docs/learning/curriculum/README.md`
 	- `docs/internal/AZURE-PROGRESS-EVALUATION.md`
@@ -66,6 +68,7 @@ Audit all AI context files against the actual codebase to detect drift. Do NOT a
 	- `.github/copilot-instructions.md`
 - Compare the current phase complete/next-phase snapshots across those files.
 - Flag: any mismatch in completed phase count, active phase, next phase, or freeze/closeout wording that would mislead humans or Copilot.
+- Specifically verify that Phase 10.1 local baseline reconciliation is marked complete, Phase 10.2 remains the next active slice, and the local-tooling / local-Docker guidance still matches the current repo contract.
 
 ## Output Format
 
