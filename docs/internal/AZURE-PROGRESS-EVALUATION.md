@@ -11,6 +11,7 @@
 
 ### July 13, 2026 Phase 10 Operator Baseline
 
+- ✅ Phase 10 developer-machine setup now has a canonical source of truth: [Phase 10 Tool Prerequisites](../guides/development/phase10-tool-prerequisites.md). Docker Compose remains the canonical local runtime; Aspire is optional; Azure is used for deployment validation after local readiness is proven.
 - ✅ Phase 10 now has a numbered operator workflow sequence: `01 Phase 10 Azure Deploy Orchestrator`, `02 Phase 10 Azure Runtime Smoke`, `03 Phase 10 Azure Transport Smoke`, and `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` for optional local/CI parity.
 - ✅ The Phase 10 wrapper is the single Azure entry point for dry run, build, deploy, and resource-group cleanup; image build and Azure resource deployment remain internal child workflow responsibilities.
 - ✅ The workflow README and Phase 10 runbook now document which workflows to click, which workflows are internal, and which legacy App Service workflows should not be used for the active container-app path.
@@ -139,6 +140,31 @@
 - ✅ Phase 13 remains Aspire deepening only after transport and autonomy are stable.
 - ✅ Phase 14 remains the CQRS read-model maturity lane after service autonomy is proven.
 - ✅ The learning plan now keeps ACA as the likely hosting outcome of Phase 10, but not the sole educational objective; transport and enterprise communication concerns come first.
+- ⚠️ Function App infrastructure exists in Phase 10 Bicep, and the repo now contains the local .NET 8 isolated Functions worker scaffold plus an initial DLQ intake trigger. Treat the portal Function App as a provisioned host until the worker is packaged, deployed, and smoke-tested in Azure.
+
+### Phase 10 Done / Pending Checklist
+
+- Done:
+  - Function App infrastructure module exists: `infra/modules/functions.bicep`
+  - Function identity output is wired into Phase 10 Key Vault access plumbing
+  - Local Azure Functions worker scaffold exists with startup validation and an initial DLQ intake trigger
+  - Service Bus transport smoke proof is documented, but it does not yet prove deployed Azure Functions behavior
+- Pending:
+  - Azure Container Apps deployment path
+  - ACR build/push flow
+  - APIM public gateway
+  - Service Bus transport swap
+  - Blob Storage / Event Grid / Functions code
+  - Azure Functions deployment artifact and Azure smoke proof
+  - DLQ replay / quarantine implementation
+  - Function deployment artifact and smoke proof
+  - Entra ID + JWT cloud auth
+  - Private networking / secrets
+  - Cost governance
+- Not in Phase 10:
+  - Keycloak portability proof stays in Phase 9.5 / deferred
+  - Database-per-service split stays in Phase 11
+  - Aspire deepening / distributed app tests stay in Phase 13
 
 ### Roadmap Label Rules
 

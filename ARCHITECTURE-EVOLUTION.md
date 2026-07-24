@@ -180,6 +180,9 @@ After Phase 9 and 9.5, the architecture sequence is intentionally narrowed so ea
 Primary objective:
 - Move the split architecture onto Azure transport primitives without changing the business semantics already proven in the local and Docker validation lanes.
 
+Tooling prerequisite:
+- Before Phase 10 implementation or validation changes, use [Phase 10 Tool Prerequisites](docs/guides/development/phase10-tool-prerequisites.md) as the canonical developer-machine setup and readiness gate. Docker Compose remains the canonical local runtime, Aspire remains optional, and Azure remains the deployment-validation environment.
+
 Broad checklist:
 - Lock the Service Bus topology: queues, topics, subscriptions, DLQ ownership, replay path, and delivery expectations.
 - Keep Event Grid use explicit and separate from Service Bus work-distribution semantics.
@@ -1319,7 +1322,7 @@ contracts frozen in Phase 8.
 - **Azure Container Registry (ACR)** — build and push container images. Enterprise target: persistent platform/foundation ACR outside the environment app resource group, with a stable pull identity and one-time `AcrPull` assignment owned by platform bootstrap rather than normal app deployment
 - **Azure Service Bus** — replace the in-memory event bus behind `IEventPublisher` with durable topics + subscriptions; handlers and envelopes remain unchanged
 - **Azure Event Grid** — platform/infrastructure event routing (deployment notifications, blob lifecycle); Service Bus remains for domain events. Decision rule: Event Grid = reactive fan-out, Service Bus = reliable delivery with sessions/DLQ
-- **Azure Functions** — central DLQ intake processor (isolated process model) that categorises failures before any replay action; timer-triggered Function for scheduled projection health checks (Phase 14)
+- **Azure Functions** — planned central DLQ intake processor (isolated process model) that categorises failures before any replay action; timer-triggered Function for scheduled projection health checks remains Phase 14. Phase 10 now has Function App infrastructure plus a local .NET 8 isolated worker scaffold and initial DLQ intake trigger; replay/quarantine behavior and Azure deployment proof remain pending.
 - **Azure Blob Storage** — order file attachments (invoices, receipts, proof of delivery); managed identity access, private endpoint. `BlobCreated` events routed via Event Grid to trigger downstream processing (e.g. Document Intelligence extraction in Phase 12)
 - **Azure Cache for Redis** — managed Redis replacing local container; used for distributed cache and session state
 - **Observability** — App Insights + OpenTelemetry distributed tracing across all services; `traceparent`, `CorrelationId`, `CausationId`, `TenantId`, and `MessageId` propagate through every message so dead-lettered events can be traced back to the originating order and tenant
@@ -1334,7 +1337,7 @@ contracts frozen in Phase 8.
 
 | Area | Status | Meaning | Next Step |
 |---|---|---|---|
-| Transport foundation | Next | Service Bus, Event Grid, and Functions are the first implementation lane | Finalize topology and message contracts |
+| Transport foundation | Next | Service Bus and Event Grid are the first implementation lane; Function App infrastructure and local Functions worker scaffold exist, but Azure-deployed Function behavior is still pending | Finalize replay/quarantine behavior, deployment artifact, and Azure Function smoke proof |
 | Cloud hosting outcome | Next | ACA is the hosting target only after transport failure drills pass | Deploy the service graph into ACA |
 | Public gateway | Next | APIM fronts ACA; YARP stays internal | Wire APIM after ingress and routing are stable |
 | Images and registry | Next | ACR is the build/push lane for container workloads; target model is persistent platform ACR plus stable pull identity | Publish the Azure workload images and move ACR/RBAC out of the app RG lifecycle |
@@ -1369,6 +1372,29 @@ Implementation order:
 
 This keeps app environment cleanup simple while preserving image history, avoiding repeated manual RG-level permission grants, and keeping normal deploy identity scope smaller.
 
+### Phase 10 Done / Pending Checklist
+
+- Done:
+  - Function App infrastructure module exists: `infra/modules/functions.bicep`
+  - Function identity output is wired into Phase 10 Key Vault access plumbing
+  - Local Azure Functions worker scaffold exists with startup validation and an initial DLQ intake trigger
+  - Service Bus transport smoke proof is documented, but it does not yet prove deployed Azure Functions behavior
+- Pending:
+  - Azure Container Apps deployment path
+  - ACR build/push flow
+  - APIM public gateway
+  - Service Bus transport swap
+  - Blob Storage / Event Grid / Functions code
+  - DLQ replay / quarantine implementation
+  - Function deployment artifact and smoke proof
+  - Entra ID + JWT cloud auth
+  - Private networking / secrets
+  - Cost governance
+- Not in Phase 10:
+  - Keycloak portability proof stays in Phase 9.5 / deferred
+  - Database-per-service split stays in Phase 11
+  - Aspire deepening / distributed app tests stay in Phase 13
+
 ### Security
 
 - **Identity:** Azure Entra ID (Azure AD) for authentication
@@ -1390,7 +1416,7 @@ This keeps app environment cleanup simple while preserving image history, avoidi
 - **Expiration handling is explicit** — `deadLetteringOnMessageExpiration = true` is set on every queue and subscription
 - **Delivery count is explicit** — `maxDeliveryCount` is parameterised per environment and justified in Bicep comments; no default is accepted silently
 - **Application rejections are inspectable** — every `DeadLetterMessageAsync` call sets both `DeadLetterReason` and `DeadLetterErrorDescription`
-- **Central intake** — Azure Function consumes the forwarded DLQ stream, maps it to `DeliveryFailureCategory`, and decides whether the message is transient, poison, expired, or rejected
+- **Central intake** — Azure Function consumes the forwarded DLQ stream, maps it to `DeliveryFailureCategory`, and decides whether the message is transient, poison, expired, or rejected. The Function App host is provisioned by infrastructure today; the actual isolated worker project and trigger code are still a Phase 10 implementation item.
 - **Poison quarantine** — poison payloads are quarantined for manual review and are never bulk-replayed automatically
 - **Operational alerts** — Azure Monitor alerts fire on central DLQ depth and oldest DLQ message age, not just active queue depth
 - **Failure drill policy** — subscription failure, DLQ routing, alert firing, operator inspection, transient replay, poison quarantine, and business-flow recovery must all be demonstrated before sign-off

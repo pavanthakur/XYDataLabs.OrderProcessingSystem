@@ -2,16 +2,19 @@ param(
     [ValidateSet('up', 'down')]
     [string]$Action = 'up',
 
-    [ValidateSet('apps', 'all')]
+    [ValidateSet('apps', 'infrastructure', 'messaging')]
     [string]$Profile = 'apps',
 
     [ValidateRange(60, 900)]
-    [int]$HealthTimeoutSec = 300
+    [int]$HealthTimeoutSec = 300,
+
+    [switch]$CleanImages
 )
 
 $ErrorActionPreference = 'Stop'
 $workspaceRoot = Split-Path -Parent $PSScriptRoot
 $composeFile = Join-Path $workspaceRoot 'compose\docker-compose.phase10.yml'
+$envExampleFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local.example'
 $envFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local'
 $logRoot = Join-Path $workspaceRoot 'TestResults\Playwright\phase10-docker-http'
 $dockerConfigRoot = Join-Path $workspaceRoot '.tmp\docker-config'
@@ -74,7 +77,7 @@ function Wait-ForUrl {
     $deadline = (Get-Date).AddSeconds($TimeoutSec)
     while ((Get-Date) -lt $deadline) {
         try {
-            $response = Invoke-WebRequest -UseBasicParsing -Uri $Url -TimeoutSec 5
+            $response = Invoke-WebRequest -UseBasicParsing -SkipHttpErrorCheck -Uri $Url -TimeoutSec 5
             if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 500) {
                 return
             }
@@ -138,6 +141,41 @@ function Get-EnvLocalValue {
     }
 
     return $value.Trim()
+}
+
+function Get-ComposeEnvArguments {
+    $arguments = @()
+    if (Test-Path -LiteralPath $envExampleFile) {
+        $arguments += @('--env-file', $envExampleFile)
+    }
+
+    if (Test-Path -LiteralPath $envFile) {
+        $arguments += @('--env-file', $envFile)
+    }
+
+    return $arguments
+}
+
+function Get-ComposeProfileArguments {
+    $profiles = switch ($Profile) {
+        'infrastructure' { @('data', 'identity', 'storage') }
+        'messaging' { @('data', 'identity', 'storage', 'messaging') }
+        default {
+            $selectedProfiles = @('data', 'identity', 'storage', 'apps')
+            if ((Get-EnvLocalValue -Name 'LOCAL_SERVICEBUS_ENABLED') -eq 'true') {
+                $selectedProfiles += 'messaging'
+            }
+
+            $selectedProfiles
+        }
+    }
+
+    $arguments = @()
+    foreach ($selectedProfile in $profiles) {
+        $arguments += @('--profile', $selectedProfile)
+    }
+
+    return $arguments
 }
 
 function Escape-SqlLiteral {
@@ -221,7 +259,9 @@ function Invoke-Phase10SqlCmdInComposeContainer {
 
     $attempt = 1
     while ($attempt -le 30) {
-        $output = & docker compose --env-file $envFile -f $composeFile --profile $Profile exec -T sql-server /bin/sh -lc $shellCommand 2>&1
+        $composeProfileArgs = Get-ComposeProfileArguments
+        $composeEnvArgs = Get-ComposeEnvArguments
+        $output = & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs exec -T sql-server /bin/sh -lc $shellCommand 2>&1
         if ($LASTEXITCODE -eq 0) {
             return @($output | ForEach-Object { $_.ToString() })
         }
@@ -294,7 +334,9 @@ function Invoke-Phase10SqlScriptInComposeContainer {
         [string]$ScriptPath
     )
 
-    $containerId = (& docker compose --env-file $envFile -f $composeFile --profile $Profile ps -q sql-server 2>&1)
+    $composeProfileArgs = Get-ComposeProfileArguments
+    $composeEnvArgs = Get-ComposeEnvArguments
+    $containerId = (& docker compose @composeEnvArgs -f $composeFile @composeProfileArgs ps -q sql-server 2>&1)
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($containerId)) {
         throw "Could not resolve the Phase 10 sql-server container id."
     }
@@ -307,7 +349,9 @@ function Invoke-Phase10SqlScriptInComposeContainer {
 
     $sqlPassword = Get-EnvLocalValue -Name 'LOCAL_SQL_PASSWORD'
     $shellCommand = "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '$sqlPassword' -C -b -I -d '$DatabaseName' -i '$containerScriptPath'"
-    $output = & docker compose --env-file $envFile -f $composeFile --profile $Profile exec -T sql-server /bin/sh -lc $shellCommand 2>&1
+    $composeProfileArgs = Get-ComposeProfileArguments
+    $composeEnvArgs = Get-ComposeEnvArguments
+    $output = & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs exec -T sql-server /bin/sh -lc $shellCommand 2>&1
     if ($LASTEXITCODE -ne 0) {
         $message = ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
         throw "Failed to apply EF migration script to $DatabaseName. $message"
@@ -448,7 +492,9 @@ WHERE t.[Code] = '$($check.TenantCode)'
 
 function Assert-Phase10RedisAzureParity {
     Write-Host 'Validating Phase 10 local Redis parity...' -ForegroundColor Cyan
-    $output = & docker compose --env-file $envFile -f $composeFile --profile $Profile exec -T redis redis-cli ping 2>&1
+    $composeProfileArgs = Get-ComposeProfileArguments
+    $composeEnvArgs = Get-ComposeEnvArguments
+    $output = & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs exec -T redis redis-cli ping 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw "Redis readiness check failed. $([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() })))"
     }
@@ -491,7 +537,9 @@ try {
     if ($Action -eq 'down') {
         Assert-DockerAvailable
         Add-Content -Path $progressLogPath -Value 'Stopping Phase 10 local container stack.'
-        & docker compose --env-file $envFile -f $composeFile --profile $Profile down -v 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-down.log')
+        $composeProfileArgs = Get-ComposeProfileArguments
+        $composeEnvArgs = Get-ComposeEnvArguments
+        & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs down -v 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-down.log')
         if ($LASTEXITCODE -ne 0) {
             throw "Docker compose down failed with exit code $LASTEXITCODE"
         }
@@ -505,10 +553,24 @@ try {
     foreach ($port in @(8081, 1433, 6379, 5022)) {
         Stop-ContainersOnPort -Port $port
     }
-    & docker compose --env-file $envFile -f $composeFile --profile $Profile down -v 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-preflight-down.log') | Out-Null
-    $imageTag = if ([string]::IsNullOrWhiteSpace($env:PHASE10_IMAGE_TAG)) { 'dev' } else { $env:PHASE10_IMAGE_TAG }
-    Remove-Phase10LocalImages -ImageTag $imageTag
-    & docker compose --env-file $envFile -f $composeFile --profile $Profile up -d sql-server redis keycloak-local 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-platform-up.log')
+    $composeProfileArgs = Get-ComposeProfileArguments
+    $composeEnvArgs = Get-ComposeEnvArguments
+    & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs config --quiet 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-config.log') | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Docker compose config validation failed with exit code $LASTEXITCODE"
+    }
+
+    & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs down -v 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-preflight-down.log') | Out-Null
+    if ($CleanImages) {
+        $imageTag = if ([string]::IsNullOrWhiteSpace($env:PHASE10_IMAGE_TAG)) { 'dev' } else { $env:PHASE10_IMAGE_TAG }
+        Remove-Phase10LocalImages -ImageTag $imageTag
+    }
+    $platformServices = @('sql-server', 'redis', 'keycloak-local', 'azurite')
+    if ($Profile -eq 'messaging' -or (Get-EnvLocalValue -Name 'LOCAL_SERVICEBUS_ENABLED') -eq 'true') {
+        $platformServices += @('servicebus-sql', 'servicebus-emulator')
+    }
+
+    & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs up -d @platformServices 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-platform-up.log')
     if ($LASTEXITCODE -ne 0) {
         throw "Docker compose platform dependency startup failed with exit code $LASTEXITCODE"
     }
@@ -522,8 +584,23 @@ try {
     Invoke-Phase10DatabaseBootstrap
     Assert-Phase10DatabaseAzureParity
     Assert-Phase10RedisAzureParity
+    Wait-ForUrl -Url 'http://localhost:8081/' -TimeoutSec $HealthTimeoutSec
+    Wait-ForUrl -Url 'http://localhost:10000/' -TimeoutSec $HealthTimeoutSec
+    Wait-ForUrl -Url 'http://localhost:10001/' -TimeoutSec $HealthTimeoutSec
+    Wait-ForUrl -Url 'http://localhost:10002/' -TimeoutSec $HealthTimeoutSec
 
-    & docker compose --env-file $envFile -f $composeFile --profile $Profile up -d --build orders inventory notifications gateway ui 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-apps-up.log')
+    if ($Profile -eq 'messaging' -or (Get-EnvLocalValue -Name 'LOCAL_SERVICEBUS_ENABLED') -eq 'true') {
+        Wait-ForUrl -Url 'http://localhost:5300/health' -TimeoutSec $HealthTimeoutSec
+    }
+
+    if ($Profile -eq 'infrastructure' -or $Profile -eq 'messaging') {
+        Add-Content -Path $progressLogPath -Value "Phase 10 local container infrastructure profile '$Profile' is ready."
+        Write-Host "Phase 10 local container infrastructure profile '$Profile' is ready."
+        $summary.status = 'passed'
+        return
+    }
+
+    & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs up -d --build orders inventory notifications gateway ui 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-apps-up.log')
     if ($LASTEXITCODE -ne 0) {
         throw "Docker compose app startup failed with exit code $LASTEXITCODE"
     }

@@ -13,6 +13,16 @@ This folder is an execution cockpit, not the canonical documentation source. Can
 | `zoocode/` | Local execution copies of phase packs for manual model runs. |
 | `prompt-runs/` | Optional run records, model outputs, review notes, and validation evidence. |
 
+## Zoo Code Handoff
+
+Use Zoo Code/local models as an operator-assist lane, not as the source of truth for deployment decisions.
+
+Canonical Phase 10 handoff guidance lives in:
+
+- `docs/internal/phase10-zoocode-local-model-handoff.md`
+
+Use that document when asking Zoo Code to draft staging/prod promotion checklists, summarize workflow logs, or identify documentation gaps after the dev baseline has been validated.
+
 ## Recommended Flow
 
 1. Start with the architect profile to review the phase, create or refine the ADR/blueprint, and define the first safe implementation slice.

@@ -3,12 +3,107 @@
 This checklist turns the Phase 10 kickoff into a repo-specific transport plan.
 It intentionally does **not** reopen Phase 1-9 work; any new enterprise refinements must be captured here in Phase 10 or pushed into later phases.
 
+Before starting or changing Phase 10 implementation work, validate the developer machine against the canonical tool setup and Environment Readiness Gate in [Phase 10 Tool Prerequisites](../guides/development/phase10-tool-prerequisites.md). Keep installation commands there instead of duplicating them in this checklist.
+
 Anchor flow for the first slice:
 - `Orders` emits the `OrderCreatedV1` integration event.
 - `Service Bus` carries the durable handoff.
 - `Inventory` and `Notifications` consume the downstream event.
 - `SharedContracts` stays deferred unless the transport slice proves a real duplication need.
 - `infra/modules/servicebus.bicep` owns the transport topology, auth-rule naming, and connection-string lookup, while `infra/main.phase10.bicep` consumes that module output instead of exposing a secret from a child lookup.
+
+## Phase 10 Implementation And Validation Lifecycle
+
+Adopt this as the governing Phase 10 lifecycle. Use a graduated validation model: small local changes get fast checks, platform changes get full Docker and CI parity, and Azure is used only after local evidence is clean. Each stage may begin only after the previous required stage passes, unless an explicit exception is documented.
+
+### Validation Stages
+
+| Stage | Name | Required proof |
+|---:|---|---|
+| 0 | Environment Readiness | Tooling is installed and usable: .NET 8 SDK, PowerShell 7, Node/npm, Docker Compose, Azure CLI, Bicep, Functions Core Tools, GitHub CLI; `global.json` pins the approved .NET 8 SDK; `Resources/Docker/.env.local` exists when Docker profiles require it. |
+| 1 | Repository Validation | Restore, build, and unit tests pass before Docker starts: `dotnet restore XYDataLabs.OrderProcessingSystem.sln`, `dotnet build XYDataLabs.OrderProcessingSystem.sln --no-restore`, and `dotnet test XYDataLabs.OrderProcessingSystem.sln --no-build`. |
+| 2 | Local Infrastructure Validation | Backing services start and pass health checks in Docker: SQL Server, Redis, Keycloak, Azurite, and Service Bus emulator when selected. No application debugging or browser E2E belongs in this stage. |
+| 3 | Local Application Debug | Docker runs backing services while Visual Studio, VS Code, or command-line hosts run the gateway, APIs, UI, workers, and Functions worker for breakpoints and fast defect fixes. |
+| 4 | Local Integration Validation | Integration tests prove SQL, Redis, Blob abstractions, messaging abstractions, startup wiring, idempotency, and tenant/provider behavior before browser E2E. |
+| 5 | Local Docker Compose End-to-End | Full local Docker validation proves profile startup, gateway routing, Playwright/browser smoke, integration suite, payment matrix, logs, and artifacts. Required before Azure for gateway, auth, Docker, messaging, infrastructure, image, or deployment changes. |
+| 6 | CI Pre-Deployment Parity Gate | GitHub-hosted clean-room verification proves the solution succeeds on a fresh runner before Azure deployment. Use `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` as the CI mirror of the Docker Dev HTTP local path for Compose, gateway, service image, workflow, Bicep, transport, or payment-matrix changes. |
+| 7 | Azure Deployment | `00 Azure Platform Foundation` runs only when provider registration, ACR, or pull identity must be created or refreshed. `01 Phase 10 Azure Deploy Orchestrator` deploys the selected environment. Use cleanup mode only when intentionally removing or resetting an environment. Use dry run first for infrastructure changes. |
+| 8 | Azure Infrastructure And Configuration Verification | Provisioned resources are healthy; managed identities are assigned; required environment variables are present; secrets resolve from Key Vault; Container Apps revisions are healthy; Function App host runs; Storage, Service Bus, SQL, and Redis are reachable. |
+| 9 | Azure Runtime Smoke | `02 Phase 10 Azure Runtime Smoke` proves gateway health, routed API JSON, UI route, and UI API proxy/bootstrap. |
+| 10 | Azure Messaging Smoke | `03 Phase 10 Azure Transport Smoke` proves Service Bus publish, fan-out consume, DLQ forwarding, replay receive, and replay publish/consume. |
+| 11 | Azure Business Validation | `04 Phase 10 Azure Payment Matrix` proves all-tenant business/browser/payment flows against live Azure Container Apps URLs after runtime and messaging pass. |
+| 12 | Evidence And Documentation | Capture run summaries, test results, logs, screenshots/traces when applicable, workflow links, deployment outputs, and known issues. Update Phase 10 status docs only after evidence exists. |
+
+### Graduated Gate Policy
+
+| Change type | Required validation |
+|---|---|
+| Business logic only | Stage 1 plus relevant Stage 4 tests |
+| API endpoint | Stage 1 plus Stage 4; use Stage 3 local debug when needed |
+| Database/repository | Stage 1 plus SQL-focused Stage 4 tests |
+| Messaging/Functions | Stage 1 plus Stage 4 plus Stage 5 |
+| Docker/Compose profile | Stage 1 plus Stage 2 plus Stage 5 |
+| Gateway/auth/routing | Stage 1 plus Stage 5 plus Azure Stages 7-10 |
+| Infrastructure/Bicep/workflow | Stage 1 plus Stage 5 plus Stage 6 plus Azure Stages 7-10 |
+| Payment/browser automation | Stage 1 plus Stage 5 plus Stage 6 plus Azure Stage 11 when deployed |
+
+### Stop And Rollback Rules
+
+- Do not start a later stage after a failed required stage.
+- If Stage 5 fails, do not deploy to Azure.
+- If Stage 6 fails, do not deploy to Azure.
+- If Stage 8 fails, do not run Azure runtime smoke.
+- If Stage 9 fails, do not run Azure messaging smoke.
+- If Stage 10 fails, do not run Azure payment matrix.
+- Cleanup is not part of normal promotion; use cleanup mode only for intentional environment reset or removal.
+- For Azure failures, either fix and redeploy or run the documented cleanup path through `01 Phase 10 Azure Deploy Orchestrator` with cleanup enabled.
+
+### Lifecycle Assumptions
+
+- Docker Compose remains the canonical local runtime.
+- Visual Studio and VS Code are both supported debug environments.
+- Aspire remains optional and is not part of the required Phase 10 validation path.
+- Service Bus emulator is conditional; where incomplete, local tests use abstractions and Azure validates the real broker.
+- Azure Functions project and trigger code are Phase 10 implementation work, not machine-tool prerequisites.
+- Legacy App Service workflows are not used for Phase 10 validation.
+- Stage ownership can be added later if multiple contributors need a formal responsibility matrix.
+
+### Concrete Local Setup Execution Plan
+
+Use this as the Phase 10 local-first implementation sequence before Azure deployment work.
+
+| Stage | VS Code / IDE task | Purpose | Exit criteria |
+|---:|---|---|---|
+| 0 | `1 Run: Phase 10 Local Setup 00 Environment Readiness` | Validate required local tools, `global.json`, Docker Compose config, and Docker `.env.local`. | Tool checks pass and the Phase 10 compose app profile validates. |
+| 1 | `1 Run: Phase 10 Local Setup 01 Repository Validation` | Restore, build, and run non-integration unit/regression tests before starting Docker. | Solution build and non-Docker test projects succeed against the pinned .NET 8 SDK. |
+| 2 | `1 Run: Phase 10 Local Setup 02 Infrastructure Up (Data + Identity + Storage)` | Start SQL Server, Redis, Keycloak, and Azurite through Docker Compose. | SQL, Redis, Keycloak, Azurite Blob/Queue/Table endpoints are reachable and compose config validates. |
+| 2.5 | `1 Run: Phase 10 Local Setup 02.5 Messaging Up (Optional Service Bus Emulator)` | Start the Service Bus emulator lane only when the selected transport strategy needs it. | Emulator SQL is separate from app SQL; emulator AMQP and health endpoints respond when selected. |
+| 3 | `1 Run: Phase 10 Local Setup 03 IDE Debug Mode (Backing Services Ready)` | Keep infrastructure in Docker and run gateway, APIs, UI, workers, and Functions worker from Visual Studio or VS Code for breakpoints. | Developer can debug app code locally without replacing Docker Compose as the canonical runtime. |
+| 4 | `1 Run: Phase 10 Local Setup 04 Infrastructure Integration Tests` plus the existing application integration suite | Split infrastructure-contract checks from application integration behavior. | Local setup contract tests pass; application integration tests still prove tenant/provider/idempotency behavior. |
+| 5 | `1 Run: Phase 10 Local Setup 05 Docker Compose E2E Full Validation` | Run the full Docker Compose validation path after code and infrastructure seams are stable. | Profile startup, gateway routing, Playwright smoke, integration suite, matrix, logs, and cleanup all pass. |
+
+Stage 0 and Stage 1 create evidence immediately under `TestResults/Phase10/local-setup/`:
+
+- `latest-environment-readiness.txt` points to the latest Stage 0 run folder.
+- `latest-repository-validation.txt` points to the latest Stage 1 run folder.
+- Each run folder contains `progress.log` and `summary.json`.
+
+Compose profile contract:
+
+- `data` owns SQL Server and Redis.
+- `identity` owns local Keycloak.
+- `storage` owns Azurite.
+- `messaging` owns the Service Bus emulator and its dedicated emulator SQL dependency.
+- `apps` owns the gateway, service APIs, and UI.
+- `functions` owns the Dockerized Functions worker after the local Functions project can run.
+- There is intentionally no `all` profile; scripts must compose the required profiles explicitly.
+
+Local debugging contract:
+
+- Run backing services in Docker.
+- Run application processes from Visual Studio or VS Code when breakpoints are needed.
+- Use `.NET user-secrets` for non-Docker local secrets, layer `Resources/Docker/.env.local.example` plus `Resources/Docker/.env.local` for Docker local defaults/secrets, GitHub secrets for CI, and Key Vault for Azure runtime secrets.
+- Keep Service Bus emulator usage conditional. Application logic must remain testable through transport abstractions if the emulator does not support a required production behavior.
 
 ## Tracker Status
 
@@ -21,7 +116,9 @@ Anchor flow for the first slice:
 | Earlier phase scope | Frozen | Do not back-port new enterprise refinements into Phases 1-9; keep them in Phase 10 or later only. |
 | Azure dev deploy | Verified | GitHub Actions run `29273224237` built the Phase 10 images and deployed the dev Container Apps transport stack successfully. |
 | Phase 10 runtime smoke | Verified | GitHub Actions run `29273711615` proved gateway health, gateway-routed API JSON, UI static route, and UI API proxy bootstrap. |
-| Phase 10 transport / replay smoke | Verified | GitHub Actions run `29273881488` proved Service Bus publish, fan-out consume, controlled DLQ forwarding, DLQ replay receive, and replay publish/consume. |
+| Phase 10 transport / replay smoke | Verified | GitHub Actions run `29273881488` proved Service Bus publish, fan-out consume, controlled DLQ forwarding, DLQ replay receive, and replay publish/consume through the smoke path; it did not prove an implemented Azure Functions worker. |
+| Azure Functions infrastructure | Provisioned host | `infra/modules/functions.bicep` creates the Function App host and identity plumbing. |
+| Azure Functions worker implementation | Local scaffold added | `XYDataLabs.OrderProcessingSystem.Functions` exists with .NET 8 isolated startup validation and an initial DLQ intake trigger; deployment artifact, replay/quarantine behavior, and Azure smoke proof remain pending. |
 | SQL / Redis baseline wiring | Automatic baseline | The wrapper and child deploy workflows include SQL and Redis as part of the default Phase 10 path; no manual parity toggle is required in the normal operator form. |
 | Cleanup policy closeout | Covered for Phase 10 | Historical GHCR retention, ACR stale-tag cleanup, and stale artifact cleanup are scheduled by `phase10-retention-cleanup.yml`, Phase 10 smoke artifacts use `retention-days: 14`, Azure teardown remains manual through `cleanupInfra=true`, and Log Analytics defaults to `30` days in the workspace module. |
 | ACR image cleanup policy | Implemented with ACR cutover | The retention workflow cleans dev/staging/prod ACR tags while preserving images referenced by active Container App revisions. |
@@ -132,7 +229,10 @@ If any one of those items is not true, Phase 10 is still in progress.
 | `infra/modules/containerapps.bicep` (new) | Add the ACA environment and the initial container apps for the gateway, Orders, Inventory, Notifications, and UI. | The first transport slice has a deployable ACA compute layer. |
 | `infra/modules/servicebus.bicep` (new) | Declare the order-created topic/subscription topology, dead-letter forwarding, TTL, `maxDeliveryCount`, queue/topic ownership rules, and a transport auth rule for the first slice. | The first flow can be provisioned end-to-end from Bicep. |
 | `infra/modules/loganalytics.phase10.bicep` (new) | Provision the Log Analytics workspace that backs ACA logging and workspace-based observability for the transport slice. | ACA logs and App Insights share the same observability workspace. |
-| `infra/modules/functions.bicep` (new) | Add the DLQ intake/replay worker and any timer-based reconciliation function required by the first slice. | DLQ classification and replay can run outside request handlers. |
+| `infra/modules/functions.bicep` | Provision the Function App host, identity, settings, and diagnostics for the future worker. | The Azure portal may show a Function App resource, but that only proves the host exists. |
+| `XYDataLabs.OrderProcessingSystem.Functions/XYDataLabs.OrderProcessingSystem.Functions.csproj` (new) | Add the Azure Functions isolated worker project for Phase 10 DLQ intake/replay. | The repo contains deployable Function code instead of only infrastructure. |
+| `XYDataLabs.OrderProcessingSystem.Functions/DlqIntakeFunction.cs` (new) | Consume forwarded Service Bus DLQ messages, classify failure category, and route replayable versus poison payloads. | The real Function trigger performs central DLQ intake and logs correlation metadata. |
+| `XYDataLabs.OrderProcessingSystem.Functions/DlqReplayFunction.cs` (new) | Provide the guarded replay path for approved dead-letter messages. | Replay is explicit, traceable, and cannot blindly bulk-publish poison messages. |
 | `infra/modules/keyvault.phase10.bicep` | Grant the new runtime identities access to the secrets required by ACA and transport code. | Managed identity can resolve secrets without new hardcoded values. |
 | `infra/modules/insights.phase10.bicep` | Extend diagnostics for ACA, Service Bus, Functions, and replay traces. | Correlation and DLQ depth are observable. |
 | `infra/modules/identity.phase10.bicep` | Add the identity wiring needed for ACA deployment/runtime access without introducing long-lived secrets. | Deployment and runtime access work with federated identity or managed identity only. |
@@ -182,6 +282,9 @@ Use this order so the first slice stays transport-first and the repo does not dr
    - `infra/modules/loganalytics.phase10.bicep`
    - `infra/modules/containerapps.bicep`
    - `infra/modules/functions.bicep`
+   - `XYDataLabs.OrderProcessingSystem.Functions/XYDataLabs.OrderProcessingSystem.Functions.csproj`
+   - `XYDataLabs.OrderProcessingSystem.Functions/DlqIntakeFunction.cs`
+   - `XYDataLabs.OrderProcessingSystem.Functions/DlqReplayFunction.cs`
    - `infra/main.phase10.bicep`
    - `infra/parameters/dev.json`
    - `infra/parameters/staging.json`
@@ -244,7 +347,8 @@ Treat these as the smallest useful implementation slice for the first order-crea
 - `infra/modules/containerapps.bicep` now requires explicit image references for the gateway, Orders, Inventory, Notifications, and UI instead of falling back to the hello-world placeholder, and the backend service images are now split per service.
 - `XYDataLabs.OrderProcessingSystem.Gateway/`, `XYDataLabs.OrderProcessingSystem.Orders.API/`, `XYDataLabs.OrderProcessingSystem.Inventory.API/`, and `XYDataLabs.OrderProcessingSystem.Notifications.API/` now each have a minimal ASP.NET Core host so the image refs map to real runnable containers.
 - `infra/modules/loganalytics.phase10.bicep` supplies the workspace used by ACA logs and workspace-based observability.
-- `infra/modules/functions.bicep` supplies the DLQ intake/replay function and any reconciliation helper the first slice needs.
+- `infra/modules/functions.bicep` supplies the Function App host and runtime settings.
+- `XYDataLabs.OrderProcessingSystem.Functions` supplies the local .NET 8 isolated worker scaffold and initial DLQ intake trigger. Replay/quarantine behavior and deployed Azure proof are still pending before the portal Function App should be treated as complete behavior.
 - `infra/main.phase10.bicep` composes the Log Analytics, ACA, Service Bus, Functions, Key Vault, and Insights modules and wires the Service Bus transport connection into the runtime from the Service Bus module output.
 - The Phase 10 deployment parameters must supply real image refs for the Container Apps so the gateway and UI revisions can become healthy, with distinct backend images for Orders, Inventory, and Notifications.
 - `phase10-deploy-orchestrator.yml` calls `build-phase10-images.yml` to publish those host images to ACR so the deployment parameters can point at real service-specific tags.

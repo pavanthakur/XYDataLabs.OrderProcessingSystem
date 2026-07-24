@@ -822,7 +822,172 @@
             "problemMatcher": []
         },
         {
-            "label": "Phase 10: Local Container Stack 00 Build",
+            "label": "1 Run: Phase 10 Local Setup 00 Environment Readiness",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/test-phase10-tool-readiness.ps1"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Phase 10 Local Setup 01 Repository Validation",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "1 Run: Phase 10 Local Setup 00 Environment Readiness"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/run-phase10-repository-validation.ps1"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Phase 10 Local Setup 02 Infrastructure Up (Data + Identity + Storage)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Internal: Stop local dev sessions"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/start-phase10-docker-dev.ps1",
+                "-Action",
+                "up",
+                "-Profile",
+                "infrastructure",
+                "-HealthTimeoutSec",
+                "300"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Phase 10 Local Setup 02.5 Messaging Up (Optional Service Bus Emulator)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Internal: Stop local dev sessions"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/start-phase10-docker-dev.ps1",
+                "-Action",
+                "up",
+                "-Profile",
+                "messaging",
+                "-HealthTimeoutSec",
+                "300"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Phase 10 Local Setup 03 IDE Debug Mode (Backing Services Ready)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "1 Run: Phase 10 Local Setup 02 Infrastructure Up (Data + Identity + Storage)"
+            ],
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "Write-Host 'Backing services are ready. Start Gateway, APIs, Functions worker, workers, and UI from Visual Studio or VS Code for breakpoints.'"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Phase 10 Local Setup 04 Infrastructure Integration Tests",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "1 Run: Phase 10 Local Setup 02 Infrastructure Up (Data + Identity + Storage)"
+            ],
+            "type": "shell",
+            "command": "dotnet",
+            "args": [
+                "test",
+                "${workspaceFolder}/tests/XYDataLabs.OrderProcessingSystem.Integration.Tests/XYDataLabs.OrderProcessingSystem.Integration.Tests.csproj",
+                "--filter",
+                "Category=InfrastructureIntegration",
+                "--logger",
+                "console;verbosity=minimal"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "focus": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "1 Run: Phase 10 Local Setup 05 Docker Compose Build",
             "dependsOrder": "sequence",
             "dependsOn": [
                 "Internal: Build Phase 10 local stack"
@@ -831,10 +996,11 @@
             "problemMatcher": []
         },
         {
-            "label": "Phase 10: Local Container Stack 01 Start",
+            "label": "1 Run: Phase 10 Local Setup 05 Docker Compose E2E Start",
             "dependsOrder": "sequence",
             "dependsOn": [
-                "Phase 10: Local Container Stack 00 Build",
+                "1 Run: Phase 10 Local Setup 01 Repository Validation",
+                "1 Run: Phase 10 Local Setup 05 Docker Compose Build",
                 "Internal: Stop local dev sessions",
                 "Internal: Start Phase 10 local stack"
             ],
@@ -842,7 +1008,7 @@
             "problemMatcher": []
         },
         {
-            "label": "Phase 10: Local Container Stack 01 Start (Reuse Existing)",
+            "label": "1 Run: Phase 10 Local Setup 05 Docker Compose E2E Start (Reuse Existing)",
             "dependsOrder": "sequence",
             "dependsOn": [
                 "Internal: Start Phase 10 local stack (reuse existing)"
@@ -851,10 +1017,10 @@
             "problemMatcher": []
         },
         {
-            "label": "Phase 10: Local Container Stack 02 Smoke",
+            "label": "1 Run: Phase 10 Local Setup 05 Docker Compose E2E Smoke",
             "dependsOrder": "sequence",
             "dependsOn": [
-                "Phase 10: Local Container Stack 01 Start"
+                "1 Run: Phase 10 Local Setup 05 Docker Compose E2E Start"
             ],
             "type": "shell",
             "command": "pwsh",
@@ -879,18 +1045,19 @@
             "problemMatcher": []
         },
         {
-            "label": "Phase 10: Local Container Stack 03 Full Validation",
+            "label": "1 Run: Phase 10 Local Setup 05 Docker Compose E2E Full Validation",
             "dependsOrder": "sequence",
             "dependsOn": [
-                "Phase 10: Local Container Stack 00 Build",
-                "Phase 10: Local Container Stack 01 Start",
-                "Phase 10: Local Container Stack 02 Smoke"
+                "1 Run: Phase 10 Local Setup 01 Repository Validation",
+                "1 Run: Phase 10 Local Setup 05 Docker Compose Build",
+                "1 Run: Phase 10 Local Setup 05 Docker Compose E2E Start",
+                "1 Run: Phase 10 Local Setup 05 Docker Compose E2E Smoke"
             ],
             "group": "none",
             "problemMatcher": []
         },
         {
-            "label": "Phase 10: Local Container Stack Cleanup",
+            "label": "1 Run: Phase 10 Local Setup 06 Cleanup Docker Compose Stack",
             "dependsOrder": "sequence",
             "dependsOn": [
                 "Internal: Stop Phase 10 local stack"
@@ -969,7 +1136,7 @@
             "dependsOrder": "sequence",
             "dependsOn": [
                 "Internal: Stop local dev sessions",
-                "Phase 10: Local Container Stack 00 Build",
+                "1 Run: Phase 10 Local Setup 05 Docker Compose Build",
                 "Internal: Start Phase 10 local stack"
             ],
             "group": "none",
@@ -1915,7 +2082,7 @@
             "problemMatcher": []
         },
         {
-            "label": "Phase 10: Local Container Stack Cleanup",
+            "label": "3 Cleanup: Phase 10 Local Setup Docker Compose Stack",
             "dependsOrder": "sequence",
             "dependsOn": [
                 "3 Cleanup: Phase 10 Local Container Stack 01 Profile"
@@ -2442,7 +2609,7 @@
                 "-ExecutionPolicy",
                 "Bypass",
                 "-Command",
-                "docker compose -f compose/docker-compose.phase10.yml --profile apps up -d --build"
+                "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/start-phase10-docker-dev.ps1 -Action up -Profile apps -HealthTimeoutSec 300"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
@@ -2465,7 +2632,7 @@
                 "-ExecutionPolicy",
                 "Bypass",
                 "-Command",
-                "docker compose -f compose/docker-compose.phase10.yml --profile apps up -d"
+                "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/start-phase10-docker-dev.ps1 -Action up -Profile apps -HealthTimeoutSec 300"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
@@ -2541,7 +2708,7 @@
                 "-ExecutionPolicy",
                 "Bypass",
                 "-Command",
-                "& { docker compose -f compose/docker-compose.phase10.yml --profile apps build }"
+                "& { New-Item -ItemType Directory -Path '.tmp\\docker-config' -Force | Out-Null; $previousDockerConfig = $env:DOCKER_CONFIG; $env:DOCKER_CONFIG = (Resolve-Path '.tmp\\docker-config'); try { docker compose --env-file Resources/Docker/.env.local.example --env-file Resources/Docker/.env.local -f compose/docker-compose.phase10.yml --profile data --profile identity --profile storage --profile apps build } finally { if ([string]::IsNullOrWhiteSpace($previousDockerConfig)) { Remove-Item Env:DOCKER_CONFIG -ErrorAction SilentlyContinue } else { $env:DOCKER_CONFIG = $previousDockerConfig } } }"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
@@ -2564,7 +2731,7 @@
                 "-ExecutionPolicy",
                 "Bypass",
                 "-Command",
-                "docker compose -f compose/docker-compose.phase10.yml --profile apps down -v"
+                "& { New-Item -ItemType Directory -Path '.tmp\\docker-config' -Force | Out-Null; $previousDockerConfig = $env:DOCKER_CONFIG; $env:DOCKER_CONFIG = (Resolve-Path '.tmp\\docker-config'); try { docker compose --env-file Resources/Docker/.env.local.example --env-file Resources/Docker/.env.local -f compose/docker-compose.phase10.yml --profile data --profile identity --profile storage --profile messaging --profile apps --profile functions down -v } finally { if ([string]::IsNullOrWhiteSpace($previousDockerConfig)) { Remove-Item Env:DOCKER_CONFIG -ErrorAction SilentlyContinue } else { $env:DOCKER_CONFIG = $previousDockerConfig } } }"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"

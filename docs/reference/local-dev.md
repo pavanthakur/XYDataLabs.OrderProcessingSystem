@@ -3,6 +3,8 @@
 **Part of:** [quick-command-reference.md](./quick-command-reference.md)  
 **Last Updated:** April 11, 2026
 
+> **Phase 10 tool setup:** Before running or changing Phase 10 local/Docker/Azure validation paths, use [Phase 10 Tool Prerequisites](../guides/development/phase10-tool-prerequisites.md) as the single source of truth for developer-machine tools, runtime modes, and the Environment Readiness Gate. Do not duplicate install commands in this reference.
+
 ---
 
 ## 🔨 Build & Test
