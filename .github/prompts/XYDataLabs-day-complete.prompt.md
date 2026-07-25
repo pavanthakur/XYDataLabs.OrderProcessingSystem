@@ -52,7 +52,7 @@ Then, based on their answer, apply the following routing rules automatically —
      `### ✅ Weeks N-N: <Week Name> (Days X-Y) — Complete`
    - Update the **COMPLETED SO FAR** bullet at the top of the master file if it exists
 
-9. **If the day's work closes or materially advances an architecture phase:**
+9. **If the day's work closes or materially advances an architecture phase or sub-phase:**
     - Update `ARCHITECTURE-EVOLUTION.md` so the strategic roadmap matches repo truth
     - Sync all architecture status and navigation surfaces that summarize the active phase or current milestone, including:
        - `docs/learning/curriculum/1_MASTER_CURRICULUM.md`
@@ -62,13 +62,15 @@ Then, based on their answer, apply the following routing rules automatically —
        - `.github/instructions/curriculum.instructions.md`
        - `docs/DEVELOPER-OPERATING-MODEL.md` when the active phase/current focus changed
        - `.github/copilot-instructions.md` if it contains a current phase snapshot
+       - `docs/guides/development/phase10-tool-prerequisites.md` and `docs/internal/phase10-implementation-checklist.md` when the current work is Phase 10 local baseline, toolchain, or transport setup
     - Update all of the following in `ARCHITECTURE-EVOLUTION.md` when applicable:
        - top-level `Current Status`
        - roadmap table status column
        - the affected phase heading/status block
        - any repeated summary/status snapshot near the end of the file
+    - If the current work is Phase 10.1 local baseline reconciliation, make sure the roadmap says so explicitly and that Phase 10.2 is still the next active engineering slice
     - If the work closes a minor sub-phase or verification lane such as Phase 8.5, 8.7, or 9.5, update the corresponding phase-roadmap and closeout docs so the sub-phase reads as verified/complete instead of pending
-    - If the work closes Phase 9 or any Phase 9 closure lane, verify the numbered VS Code task sequence for both `local-http` and `docker-dev-http` is documented and aligned before considering the phase complete
+    - If the work closes Phase 9, a Phase 9 closure lane, or the Phase 10 local baseline / transport lane, verify the numbered VS Code task sequence for both `local-http` and `docker-dev-http` is documented and aligned before considering the phase complete
     - Treat architecture-status drift across these files as a blocking inconsistency to fix before finishing
     - If the work is a phase freeze/closeout, do not stop at the checklist change; confirm the phase now reads consistently as complete/next across all status surfaces in the same session
 
@@ -118,6 +120,7 @@ Then, based on their answer, apply the following routing rules automatically —
 - If the work is a phase freeze/closeout and it touched the payment automation workspace or workflow surfaces, do not ask "Ready to commit?" until the dry-run automation matrix above passed in the same session or an explicit deferral was recorded
 - If the work is a phase freeze/closeout and it touched Docker runtime orchestration, payment automation runtime targets, or closeout workflow surfaces, do not ask "Ready to commit?" until the Docker validation bundle command above produced a bundle with the expected summary files or an explicit deferral was recorded
 - For a phase freeze/closeout, do not ask "Ready to commit?" until both mandatory checks above are complete in the same session
+- If the work is Phase 10 local baseline reconciliation, or it changed the Phase 10 toolchain / prompt / task surfaces, make sure the day-complete route updated the Phase 10 status line before considering the session closed
 - **Always: Update `/memories/repo/active-work.md`** — overwrite the `## Last Session` block with today's date + bullet list of what was done, and update `## Pending / Next Actions` with the next concrete task. Keep `## Recent Key Facts` current. Also refresh the `## If returning after a long gap` block: update the active phase name, the next action, and any startup gotchas that changed (DB name, port, seed state). This block is read by someone returning after weeks away — write it for that person. This is the file loaded at the start of every new session.
 - Summarise what was updated and where
 - Suggest a commit message in the format: `Day <N>: <what was done>`

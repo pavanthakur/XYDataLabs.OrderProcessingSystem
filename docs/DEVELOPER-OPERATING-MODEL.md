@@ -44,7 +44,7 @@ docs/README.md
 
 - Days 1-43 are complete.
 - Track U Phase U5 is complete: the React web cutover is live and the legacy MVC UI has been retired from the runtime and solution.
-- Backend Phase 8, 8.5, 8.6, 8.7, 9, and 9.5 are verified; backend Phase 10 is now the next active engineering phase.
+- Backend Phase 8, 8.5, 8.6, 8.7, 9, and 9.5 are verified; Phase 10.1 local baseline reconciliation is complete and backend Phase 10.2 is now the next active engineering slice.
 - The roadmap beyond Phase 8.7 remains explicitly extended with Phase 10 (Azure transport + DLQ operations), Phase 11.5 (PostgreSQL portability), and Phase 13 (Aspire deepening), while keeping Entra ID and Azure SQL as the production defaults.
 - Local and Docker UI validation for the React-first runtime are complete on the supported execution paths.
 - The canonical learning source of truth is `docs/learning/curriculum/1_MASTER_CURRICULUM.md`.

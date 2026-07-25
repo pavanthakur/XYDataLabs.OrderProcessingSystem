@@ -1,7 +1,7 @@
 # Architecture Evolution: Monolith to Enterprise Microservices
 
 **Last Updated:** July 1, 2026
-**Current Status:** Phase 8 Closeout Matrix Validation Passed ✅ | Track U U5 Complete ✅ | Phase 8.5 Complete ✅ | Phase 8.6 Complete ✅ | Phase 8.7 Complete ✅ | Phase 9 closeout complete for extraction/tasking ✅ | Phase 9.5 identity portability wiring implemented and runtime verified in local HTTP and Docker Dev HTTP ✅ | Phases 10, 11, 11.5, 12-14 Planned 📅 | Post-14 Horizons captured 📘
+**Current Status:** Phase 8 Closeout Matrix Validation Passed ✅ | Track U U5 Complete ✅ | Phase 8.5 Complete ✅ | Phase 8.6 Complete ✅ | Phase 8.7 Complete ✅ | Phase 9 closeout complete for extraction/tasking ✅ | Phase 9.5 identity portability wiring implemented and runtime verified in local HTTP and Docker Dev HTTP ✅ | Phase 10.1 local baseline reconciliation complete ✅ | Phases 10, 11, 11.5, 12-14 Planned 📅 | Post-14 Horizons captured 📘
 
 ---
 
@@ -1331,12 +1331,26 @@ contracts frozen in Phase 8.
 - **Cost governance** — scale-to-zero on all Container Apps, APIM Consumption tier (pay-per-call), autoscale RU caps on Cosmos DB, Azure Budget alerts per resource group
 - **Bicep-only topology** — Azure infrastructure remains Bicep-authored end to end. Service Bus topology is declared in a dedicated `servicebus.bicep` module with per-environment parameters; no portal drift and no Terraform split.
 
+### Phase 10.1 - Local Baseline Reconciliation ✅ COMPLETE
+
+Phase 10.1 is the local-first proof that the Phase 10 toolchain, Docker topology, and validation workflow are ready for the Azure transport slice.
+
+Completed proof points:
+
+- Canonical developer-machine tooling is documented and gated in [Phase 10 Tool Prerequisites](docs/guides/development/phase10-tool-prerequisites.md).
+- Local setup execution is broken into the explicit `00` to `05` ladder in [Phase 10 Implementation Checklist](docs/internal/phase10-implementation-checklist.md).
+- Repository validation, Docker infrastructure validation, integration coverage, and Docker E2E validation all have explicit evidence hooks.
+- The local runtime contract is pinned to Docker Compose as the canonical baseline, with Aspire left optional.
+- The local identity path is documented as Keycloak for portable debugging, while Azure remains Entra ID for cloud validation.
+- The Phase 10 artifact and log layout is documented so evidence can be traced without relying on ad hoc console history.
+
 ### Phase 10 Status Table
 
 > Scope note: the refinements below are Phase 10 or later only. Earlier phase decisions stay frozen unless a separate review explicitly reopens them.
 
 | Area | Status | Meaning | Next Step |
 |---|---|---|---|
+| Local baseline reconciliation | Complete | Local tooling, execution order, artifact layout, and Docker validation lanes are now explicitly documented | Move to the Azure transport slice |
 | Transport foundation | Next | Service Bus and Event Grid are the first implementation lane; Function App infrastructure and local Functions worker scaffold exist, but Azure-deployed Function behavior is still pending | Finalize replay/quarantine behavior, deployment artifact, and Azure Function smoke proof |
 | Cloud hosting outcome | Next | ACA is the hosting target only after transport failure drills pass | Deploy the service graph into ACA |
 | Public gateway | Next | APIM fronts ACA; YARP stays internal | Wire APIM after ingress and routing are stable |

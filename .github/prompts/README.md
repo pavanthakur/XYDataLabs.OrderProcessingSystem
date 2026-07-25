@@ -39,6 +39,7 @@ Purpose:
 - Ensures progress tracking stays consistent, including architecture phase status surfaces.
 - Makes payment automation validation mandatory during phase closeout when the work touched `automation/` or the payment automation workflow surfaces.
 - Helps prevent missing updates in curriculum, daily progress, and related docs.
+- For Phase 10 local baseline or transport closeout, keep `Phase 10.1` and the next active `Phase 10.2` slice aligned across the roadmap, checklist, and status trackers before declaring completion.
 - For Phase 9 closeout, verify the numbered VS Code task sequence for both `local-http` and `docker-dev-http` is documented and aligned before declaring completion.
 
 Use when:
@@ -104,6 +105,7 @@ Purpose:
 - Runs a structured quality gate after completing any feature, task, script, or workflow.
 - Checks six categories: documentation, guardrails, unit tests, integration/architecture tests, automation/CI-CD, and Copilot context.
 - Fixes gaps immediately where possible; records any justified deferrals in `docs/internal/DEFERRED-WORK-LOG.md`.
+- For phase checkpoints, confirm the roadmap says exactly what the repo now proves: Phase 10.1 complete, Phase 10.2 next.
 - For Phase 9 closeout, also verify the numbered VS Code task sequence for both `local-http` and `docker-dev-http` is documented and aligned with the closeout roadmap.
 
 Use when:
@@ -123,6 +125,7 @@ Purpose:
 - Detects stale AI context by diffing memory files and copilot-instructions.md against the actual codebase.
 - Catches drift in project tables, package references, directory layouts, and memory files.
 - Reports findings with severity levels (HIGH/MEDIUM/LOW) and specific fix instructions.
+- For Phase 10 work, specifically verify that the local baseline checkpoint is reflected as Phase 10.1 complete and Phase 10.2 next across the roadmap and status docs.
 
 Use when:
 - Periodically (every few sessions or after major refactors).
