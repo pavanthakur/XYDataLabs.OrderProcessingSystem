@@ -114,6 +114,10 @@ function New-EnvLocalContent {
         [Parameter(Mandatory = $true)] [string] $RazorpayPrivateKey,
         [string] $RazorpayWebhookSecret = 'local-sandbox-only',
         [string] $OpenPayWebhookSecret = 'local-sandbox-only',
+        [string] $LocalServiceBusEnabled = 'true',
+        [string] $LocalServiceBusReplayEnabled = 'true',
+        [string] $ServiceBusEmulatorAcceptEula = 'Y',
+        [string] $ServiceBusEmulatorSqlPassword = '',
         [string] $SqlServerImage = ''
     )
 
@@ -131,6 +135,13 @@ LOCAL_OPENPAY_WEBHOOK_SECRET=$OpenPayWebhookSecret
 LOCAL_RAZORPAY_MERCHANT_ID=$RazorpayMerchantId
 LOCAL_RAZORPAY_PRIVATE_KEY=$RazorpayPrivateKey
 LOCAL_RAZORPAY_WEBHOOK_SECRET=$RazorpayWebhookSecret
+LOCAL_SERVICEBUS_ENABLED=$LocalServiceBusEnabled
+LOCAL_SERVICEBUS_CONNECTION_STRING=Endpoint=sb://servicebus-emulator;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;
+LOCAL_SERVICEBUS_HOST_CONNECTION_STRING=Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;
+LOCAL_SERVICEBUS_REPLAY_ENABLED=$LocalServiceBusReplayEnabled
+SERVICEBUS_EMULATOR_ACCEPT_EULA=$ServiceBusEmulatorAcceptEula
+SERVICEBUS_EMULATOR_SQL_PASSWORD=$ServiceBusEmulatorSqlPassword
+            SERVICEBUS_EMULATOR_SQL_WAIT_INTERVAL=90
 "@
 
     if (-not [string]::IsNullOrWhiteSpace($SqlServerImage)) {
@@ -154,6 +165,10 @@ function Write-EnvLocal {
         [Parameter(Mandatory = $true)] [string] $RazorpayPrivateKey,
         [string] $RazorpayWebhookSecret = 'local-sandbox-only',
         [string] $OpenPayWebhookSecret = 'local-sandbox-only',
+        [string] $LocalServiceBusEnabled = 'true',
+        [string] $LocalServiceBusReplayEnabled = 'true',
+        [string] $ServiceBusEmulatorAcceptEula = 'Y',
+        [string] $ServiceBusEmulatorSqlPassword = '',
         [string] $SqlServerImage = ''
     )
 
@@ -169,6 +184,10 @@ function Write-EnvLocal {
         -RazorpayPrivateKey $RazorpayPrivateKey `
         -RazorpayWebhookSecret $RazorpayWebhookSecret `
         -OpenPayWebhookSecret $OpenPayWebhookSecret `
+        -LocalServiceBusEnabled $LocalServiceBusEnabled `
+        -LocalServiceBusReplayEnabled $LocalServiceBusReplayEnabled `
+        -ServiceBusEmulatorAcceptEula $ServiceBusEmulatorAcceptEula `
+        -ServiceBusEmulatorSqlPassword $ServiceBusEmulatorSqlPassword `
         -SqlServerImage $SqlServerImage
 
     Set-Content -Path $Path -Value $content -Encoding UTF8
@@ -191,6 +210,8 @@ if ((Test-Path $envLocal) -and -not $Force) {
     $razorpayPrivateKey = $envVars['LOCAL_RAZORPAY_PRIVATE_KEY']
     $razorpayWebhookSecret = $envVars['LOCAL_RAZORPAY_WEBHOOK_SECRET']
     $openpayWebhookSecret  = $envVars['LOCAL_OPENPAY_WEBHOOK_SECRET']
+    $serviceBusEmulatorAcceptEula = $envVars['SERVICEBUS_EMULATOR_ACCEPT_EULA']
+    $serviceBusEmulatorSqlPassword = $envVars['SERVICEBUS_EMULATOR_SQL_PASSWORD']
     $sqlServerImage  = $envVars['ORDERPROCESSING_SQLSERVER_IMAGE']
 
     $normalizedEnvCredentials = Normalize-OpenPayCredentials `
@@ -276,6 +297,18 @@ if ((Test-Path $envLocal) -and -not $Force) {
         $envLocalWasIncomplete = $true
     }
 
+    if ([string]::IsNullOrWhiteSpace($serviceBusEmulatorAcceptEula)) {
+        Write-Host '    [!!] SERVICEBUS_EMULATOR_ACCEPT_EULA is missing from .env.local - defaulting it to Y.' -ForegroundColor Yellow
+        $serviceBusEmulatorAcceptEula = 'Y'
+        $envLocalWasIncomplete = $true
+    }
+
+    if ([string]::IsNullOrWhiteSpace($serviceBusEmulatorSqlPassword)) {
+        Write-Host '    [!!] SERVICEBUS_EMULATOR_SQL_PASSWORD is missing from .env.local - defaulting it to the SQL password.' -ForegroundColor Yellow
+        $serviceBusEmulatorSqlPassword = $sqlPassword
+        $envLocalWasIncomplete = $true
+    }
+
     if ($normalizedEnvCredentials.WasSwapped -or $envLocalWasIncomplete) {
         Write-EnvLocal `
             -Path $envLocal `
@@ -290,6 +323,8 @@ if ((Test-Path $envLocal) -and -not $Force) {
             -RazorpayPrivateKey $razorpayPrivateKey `
             -RazorpayWebhookSecret $razorpayWebhookSecret `
             -OpenPayWebhookSecret $openpayWebhookSecret `
+            -ServiceBusEmulatorAcceptEula $serviceBusEmulatorAcceptEula `
+            -ServiceBusEmulatorSqlPassword $serviceBusEmulatorSqlPassword `
             -SqlServerImage $sqlServerImage
 
         Write-Done 'Repaired .env.local'
@@ -318,6 +353,8 @@ else {
     $razorpayPrivateKey = $null
     $razorpayWebhookSecret = $null
     $openpayWebhookSecret  = $null
+    $serviceBusEmulatorAcceptEula = 'Y'
+    $serviceBusEmulatorSqlPassword = $null
     $sqlServerImage  = if (Test-Path $envLocal) { (Read-EnvLocal $envLocal)['ORDERPROCESSING_SQLSERVER_IMAGE'] } else { '' }
 
     $azAvailable = Get-Command az -ErrorAction SilentlyContinue
@@ -428,6 +465,10 @@ else {
         if ([string]::IsNullOrWhiteSpace($openpayPublicKey)) { $openpayPublicKey = 'local-sandbox-only' }
     }
 
+    if (-not $serviceBusEmulatorSqlPassword) {
+        $serviceBusEmulatorSqlPassword = $sqlPassword
+    }
+
     Write-EnvLocal `
         -Path $envLocal `
         -SqlPassword $sqlPassword `
@@ -441,6 +482,8 @@ else {
         -RazorpayPrivateKey $razorpayPrivateKey `
         -RazorpayWebhookSecret $razorpayWebhookSecret `
         -OpenPayWebhookSecret $openpayWebhookSecret `
+        -ServiceBusEmulatorAcceptEula $serviceBusEmulatorAcceptEula `
+        -ServiceBusEmulatorSqlPassword $serviceBusEmulatorSqlPassword `
         -SqlServerImage $sqlServerImage
 
     Write-Done 'Created .env.local'

@@ -8,7 +8,7 @@ This runbook covers the first live check for the Phase 10 transport slice define
 - App/runtime entry point: `infra/main.phase10.bicep`
 - Parameters: `infra/parameters/phase10-dev.json`, `infra/parameters/phase10-staging.json`, `infra/parameters/phase10-prod.json`
 - Transport path: `Orders -> Service Bus -> Inventory/Notifications`
-- Replay path: `order-events-dlq -> dlq-replay -> order-events`
+- Replay path: `order-events-dlq -> dlq-intake -> replay-requests -> order-events`
 - The Service Bus namespace, transport auth rule, and connection-string lookup are owned by `infra/modules/servicebus.bicep`; `infra/main.phase10.bicep` consumes that module output during deployment.
 - GitHub Actions entrypoint: `phase10-deploy-orchestrator.yml` (which calls `infra-deploy.yml` internally)
 - The persistent ACR registry and the runtime pull identity are owned by `00 Azure Platform Foundation` and live in `rg-orderprocessing-platform`.
@@ -544,7 +544,7 @@ az servicebus topic show --resource-group $resourceGroupName --namespace-name $s
 az servicebus topic subscription show --resource-group $resourceGroupName --namespace-name $serviceBusNamespaceName --topic-name order-events --name inventory-order-created
 az servicebus topic subscription show --resource-group $resourceGroupName --namespace-name $serviceBusNamespaceName --topic-name order-events --name notifications-order-created
 az servicebus topic show --resource-group $resourceGroupName --namespace-name $serviceBusNamespaceName --name order-events-dlq
-az servicebus topic subscription show --resource-group $resourceGroupName --namespace-name $serviceBusNamespaceName --topic-name order-events-dlq --name dlq-replay
+az servicebus topic subscription show --resource-group $resourceGroupName --namespace-name $serviceBusNamespaceName --topic-name order-events-dlq --name dlq-intake
 
 az functionapp config appsettings list --resource-group $resourceGroupName --name $functionAppName
 az containerapp show --resource-group $resourceGroupName --name $ordersContainerAppName --query "properties.template.containers[0].env"
@@ -681,7 +681,7 @@ az servicebus topic show --resource-group $resourceGroupName --namespace-name $s
 az servicebus topic subscription show --resource-group $resourceGroupName --namespace-name $serviceBusNamespaceName --topic-name order-events --name inventory-order-created
 az servicebus topic subscription show --resource-group $resourceGroupName --namespace-name $serviceBusNamespaceName --topic-name order-events --name notifications-order-created
 az servicebus topic show --resource-group $resourceGroupName --namespace-name $serviceBusNamespaceName --name order-events-dlq
-az servicebus topic subscription show --resource-group $resourceGroupName --namespace-name $serviceBusNamespaceName --topic-name order-events-dlq --name dlq-replay
+az servicebus topic subscription show --resource-group $resourceGroupName --namespace-name $serviceBusNamespaceName --topic-name order-events-dlq --name dlq-intake
 ```
 
 Confirm the deployed namespace contains:
@@ -689,7 +689,7 @@ Confirm the deployed namespace contains:
 - `inventory-order-created`
 - `notifications-order-created`
 - `order-events-dlq`
-- `dlq-replay`
+- `dlq-intake`
 
 Confirm the namespace also contains the Phase 10 transport auth rule.
 
@@ -709,7 +709,7 @@ Confirm the deployed runtime settings include:
 - `ServiceBus__ConnectionString`
 - `ServiceBus__TopicName=order-events`
 - `ServiceBus__DeadLetterTopicName=order-events-dlq`
-- `ServiceBus__DeadLetterSubscriptionName=dlq-replay`
+- `ServiceBus__DeadLetterSubscriptionName=dlq-intake`
 - `ServiceBus__ReplayEnabled=true`
 - `KeyVault__Uri`
 - `APPLICATIONINSIGHTS_CONNECTION_STRING`
@@ -790,7 +790,7 @@ The smoke verifies:
 3. `inventory-order-created-<env>` receives and completes its copy.
 4. `notifications-order-created-<env>` receives and completes its copy.
 5. A controlled message can be dead-lettered from the inventory subscription and forwarded to `order-events-dlq`.
-6. `dlq-replay-<env>` receives the dead-lettered message.
+6. `dlq-intake-<env>` receives the dead-lettered message.
 7. A replay message can be republished to `order-events-<env>`.
 8. Inventory and Notifications both receive and complete the replay message.
 
@@ -815,17 +815,17 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-phase10-azure-transpor
 
 The local command requires Azure CLI login and access to the `phase10-transport` Service Bus auth rule.
 
-### 9. Replay Smoke
+### 9. Broker Replay Smoke
 
-The automated transport smoke includes the first replay proof:
+The automated transport smoke proves the broker path through `tools/Phase10.TransportSmoke`:
 
 1. It dead-letters a controlled message from the inventory subscription.
 2. It verifies forwarding to `order-events-dlq`.
-3. It receives the message from `dlq-replay-<env>`.
+3. It receives the message from `dlq-intake-<env>`.
 4. It republishes a replay message to `order-events-<env>`.
 5. It verifies both downstream subscriptions receive the replayed flow.
 
-This proves the operator replay route exists. A later failure-drill can still validate poison-message quarantine and alert behavior.
+This proves topology and controlled receive/republish behavior. It does **not** invoke or prove the deployed `XYDataLabs.OrderProcessingSystem.Functions/DlqReplayFunction.cs`. Phase 10.4 must separately capture the Function package identifier, function discovery, invocation identifier, quarantine/approval state, replay attempt, and downstream business effect before deployed Function behavior is considered complete.
 
 ## Success Criteria
 

@@ -32,6 +32,7 @@ using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
 using XYDataLabs.RazorpayAdapter;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.Multitenancy;
+using XYDataLabs.OrderProcessingSystem.Infrastructure.Payments;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Customers;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OpenPayAdapter;
@@ -200,6 +201,20 @@ builder.AddServiceDefaults(
     CustomerActivitySource.Name,
     PaymentActivitySource.Name);
 
+var redisConnectionString = builder.Configuration.GetConnectionString("Redis");
+if (!string.IsNullOrWhiteSpace(redisConnectionString))
+{
+    builder.Services.AddStackExchangeRedisCache(options =>
+    {
+        options.Configuration = redisConnectionString;
+        options.InstanceName = "OrderProcessing:";
+    });
+}
+else
+{
+    builder.Services.AddDistributedMemoryCache();
+}
+
 builder.Services.AddObservability(
     "OrderProcessingSystem.API",
     builder.Configuration,
@@ -267,6 +282,15 @@ builder.Services.AddOptions<PaymentGatewayRequestDefaults>()
     .ValidateOnStart();
 builder.Services.AddOpenPayAdapter(builder.Configuration);
 builder.Services.AddRazorpayAdapter(builder.Configuration);
+if (builder.Configuration.GetValue("PaymentProviders:UseDeterministicAdapters", false))
+{
+    builder.Services.AddKeyedSingleton<IPaymentProviderGateway>(
+        PaymentProviderTypes.OpenPay,
+        (_, _) => new DeterministicPaymentProviderGateway(PaymentProviderTypes.OpenPay));
+    builder.Services.AddKeyedSingleton<IPaymentProviderGateway>(
+        PaymentProviderTypes.Razorpay,
+        (_, _) => new DeterministicPaymentProviderGateway(PaymentProviderTypes.Razorpay));
+}
 builder.Services.AddProblemDetails();
 
 // Health checks — /health/live (liveness), /health/ready (SQL + Redis), /health (backward compat)

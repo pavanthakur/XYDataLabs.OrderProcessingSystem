@@ -6,4 +6,6 @@ public sealed record OrderCreatedV1(
     int CustomerId,
     DateTime OrderDate,
     decimal TotalPrice,
-    int ProductCount) : IIntegrationEvent;
+    int ProductCount,
+    Guid? OrderReferenceId = null,
+    string CurrencyCode = "MXN") : IIntegrationEvent;

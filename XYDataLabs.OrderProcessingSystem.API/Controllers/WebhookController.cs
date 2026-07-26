@@ -1,4 +1,5 @@
 using Asp.Versioning;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
@@ -15,6 +16,7 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers;
 /// </summary>
 [ApiVersion("1.0")]
 [ApiController]
+[AllowAnonymous]
 [Route("api/v{version:apiVersion}/webhook")]
 public sealed class WebhookController : ControllerBase
 {

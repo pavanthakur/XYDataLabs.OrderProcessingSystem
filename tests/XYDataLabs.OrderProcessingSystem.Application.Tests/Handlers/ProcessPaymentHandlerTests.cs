@@ -128,6 +128,41 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
     }
 
     [Fact]
+    public async Task HandleAsync_ShouldUsePersistedOrderAmountAndCurrencyForProviderAndPaymentRecords()
+    {
+        SetupPaymentDbSets();
+        SetupOpenPayHappyPath();
+        PaymentGatewayCreateChargeRequest? capturedRequest = null;
+        MockPaymentGateway
+            .Setup(gateway => gateway.CreateChargeAsync(
+                It.IsAny<PaymentGatewayCreateChargeRequest>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<PaymentGatewayCreateChargeRequest, CancellationToken>(
+                (request, _) => capturedRequest = request)
+            .ReturnsAsync(new PaymentGatewayChargeResult(
+                "charge-order-owned",
+                "completed",
+                100m,
+                UtcNow,
+                "auth-order-owned",
+                null,
+                null));
+        var handler = CreateProcessPaymentHandler();
+
+        var result = await handler.HandleAsync(BuildProcessPaymentCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        capturedRequest.Should().NotBeNull();
+        capturedRequest!.Amount.Should().Be(100m);
+        capturedRequest.Currency.Should().Be("MXN");
+        result.Value!.Amount.Should().Be(100m);
+        result.Value.Currency.Should().Be("MXN");
+        CapturedCardTransactions.Should().OnlyContain(
+            transaction => transaction.Amount == 100m
+                && transaction.CurrencyCode == "MXN");
+    }
+
+    [Fact]
     public async Task HandleAsync_ShouldGenerateNextDeterministicAttemptOrderIdForExistingCustomerOrder()
     {
         SetupPaymentDbSets(existingPaymentAttempts:
@@ -327,7 +362,7 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
             ExpirationYear: string.Empty,
             ExpirationMonth: string.Empty,
             Cvv2: string.Empty,
-            CustomerOrderId: "ORDER-RZP-001",
+            CustomerOrderId: "ORDER-001",
             ClientCallbackOrigin: null));
 
         result.IsSuccess.Should().BeTrue();

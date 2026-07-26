@@ -75,7 +75,7 @@ Use the output values from the deployment and confirm:
 - Service Bus namespace exists
 - `order-events` topic exists
 - `inventory-order-created` and `notifications-order-created` subscriptions exist
-- `order-events-dlq` and `dlq-replay` exist
+- `order-events-dlq`, `dlq-intake`, and `dlq-replay-requests` exist
 - Function App settings include the transport connection string and replay settings
 - Container App environment variables match the transport slice
 - Log Analytics, Managed Environment, and App Insights are wired

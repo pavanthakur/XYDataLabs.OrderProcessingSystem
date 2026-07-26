@@ -47,6 +47,13 @@ interface RazorpayCheckoutFailureResponse {
 const threeDSecureRedirectDelayMs = 1200;
 let razorpayScriptPromise: Promise<RazorpayConstructor> | null = null;
 
+function buildLocalDeviceSessionId(activeTenantCode: string): string {
+  const safeTenantCode = activeTenantCode.replace(/[^a-z0-9]/gi, "").toLowerCase() || "tenant";
+  const timeToken = Date.now().toString(36);
+  const rawSessionId = `lds-${safeTenantCode}-${timeToken}`;
+  return rawSessionId.slice(0, 32);
+}
+
 export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
   const navigate = useNavigate();
   const params = useParams<{ customerId: string; orderId: string }>();
@@ -184,7 +191,7 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
     }
 
     if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
-      setDeviceSessionId(`local-device-session-${activeTenantCode}-${Date.now()}`);
+      setDeviceSessionId(buildLocalDeviceSessionId(activeTenantCode));
       return;
     }
 
@@ -220,6 +227,7 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
   }, [activeTenantCode, paymentConfiguration, paymentConfigurationState]);
 
   const totalPrice = useMemo(() => order?.totalPrice ?? 0, [order]);
+  const orderCurrencyCode = useMemo(() => order?.currencyCode ?? "MXN", [order]);
 
   useEffect(() => {
     if (!threeDSRedirectState) {
@@ -286,36 +294,6 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
     });
 
     try {
-      if (isLocalhost && paymentConfiguration.activeProviderType?.toLowerCase() === "openpay") {
-        const mockPaymentId = `local-openpay-${clientFlowId}`;
-        persistPendingPaymentContext(mockPaymentId, {
-          customerOrderId: formState.customerOrderId,
-          clientFlowId,
-          customerId: hasValidCustomerContext ? customerId : null,
-          orderId: hasValidOrderContext ? orderId : null
-        });
-
-        setSubmitState("success");
-        void trackPaymentEvent({
-          eventName: "ui_payment_completed",
-          severity: "information",
-          tenantCode: activeTenantCode,
-          clientFlowId,
-          customerOrderId: formState.customerOrderId,
-          paymentId: mockPaymentId,
-          paymentStatus: "completed",
-          statusCategory: "local-mock"
-        });
-
-        navigate(`/payments/callback?${new URLSearchParams({
-          tenantCode: activeTenantCode,
-          id: mockPaymentId,
-          source: "openpay-local-mock",
-          status: "completed"
-        }).toString()}`, { replace: true });
-        return;
-      }
-
       const pendingPaymentContext = {
         customerOrderId: formState.customerOrderId,
         clientFlowId,
@@ -624,6 +602,10 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
                   <dd>{formState.customerOrderId}</dd>
                 </div>
                 <div>
+                  <dt>Order reference</dt>
+                  <dd>{order?.orderReferenceId ?? "Pending"}</dd>
+                </div>
+                <div>
                   <dt>Customer context</dt>
                   <dd>{hasValidCustomerContext ? `Customer #${customerId}` : "Standalone payment"}</dd>
                 </div>
@@ -633,7 +615,7 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
                 </div>
                 <div>
                   <dt>Amount</dt>
-                  <dd>{hasValidOrderContext ? formatCurrency(totalPrice) : "Determined by the payment provider"}</dd>
+                  <dd>{hasValidOrderContext ? formatCurrency(totalPrice, orderCurrencyCode) : "Determined by the payment provider"}</dd>
                 </div>
                 <div>
                   <dt>Verification</dt>
@@ -795,10 +777,10 @@ function normalizeYear(value: string): string {
   return value.replace(/\D/g, "").slice(0, 2);
 }
 
-function formatCurrency(value: number): string {
+function formatCurrency(value: number, currencyCode = "USD"): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "USD"
+    currency: currencyCode
   }).format(value);
 }
 

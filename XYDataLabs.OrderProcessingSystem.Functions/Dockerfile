@@ -7,6 +7,10 @@ COPY ["XYDataLabs.OrderProcessingSystem.SharedKernel/XYDataLabs.OrderProcessingS
 COPY ["XYDataLabs.OrderProcessingSystem.Domain/XYDataLabs.OrderProcessingSystem.Domain.csproj", "XYDataLabs.OrderProcessingSystem.Domain/"]
 COPY ["XYDataLabs.OrderProcessingSystem.Application/XYDataLabs.OrderProcessingSystem.Application.csproj", "XYDataLabs.OrderProcessingSystem.Application/"]
 COPY ["XYDataLabs.OrderProcessingSystem.Infrastructure/XYDataLabs.OrderProcessingSystem.Infrastructure.csproj", "XYDataLabs.OrderProcessingSystem.Infrastructure/"]
+COPY ["XYDataLabs.OrderProcessingSystem.Orders.API/XYDataLabs.OrderProcessingSystem.Orders.API.csproj", "XYDataLabs.OrderProcessingSystem.Orders.API/"]
+COPY ["XYDataLabs.OrderProcessingSystem.Inventory.API/XYDataLabs.OrderProcessingSystem.Inventory.API.csproj", "XYDataLabs.OrderProcessingSystem.Inventory.API/"]
+COPY ["XYDataLabs.OrderProcessingSystem.Notifications.API/XYDataLabs.OrderProcessingSystem.Notifications.API.csproj", "XYDataLabs.OrderProcessingSystem.Notifications.API/"]
+COPY ["XYDataLabs.OrderProcessingSystem.Payments.API/XYDataLabs.OrderProcessingSystem.Payments.API.csproj", "XYDataLabs.OrderProcessingSystem.Payments.API/"]
 COPY ["XYDataLabs.OrderProcessingSystem.Functions/XYDataLabs.OrderProcessingSystem.Functions.csproj", "XYDataLabs.OrderProcessingSystem.Functions/"]
 RUN dotnet restore "XYDataLabs.OrderProcessingSystem.Functions/XYDataLabs.OrderProcessingSystem.Functions.csproj"
 

@@ -37,8 +37,10 @@ namespace XYDataLabs.OrderProcessingSystem.API.Tests.Controllers
             var orderDto = new ModuleOrderDto
             {
                 OrderId = 1,
+                OrderReferenceId = Guid.NewGuid(),
                 CustomerId = 1,
                 TotalPrice = 100,
+                CurrencyCode = "MXN",
                 OrderDate = DateTime.Now,
                 IsFulfilled = false,
                 OrderProductDtos = new List<ModuleOrderProductDto>()
@@ -103,8 +105,10 @@ namespace XYDataLabs.OrderProcessingSystem.API.Tests.Controllers
             var orderDto = new ModuleOrderDto
             {
                 OrderId = orderId,
+                OrderReferenceId = Guid.NewGuid(),
                 CustomerId = 1,
                 TotalPrice = 100,
+                CurrencyCode = "MXN",
                 OrderDate = DateTime.Now,
                 IsFulfilled = false,
                 OrderProductDtos = new List<ModuleOrderProductDto>()

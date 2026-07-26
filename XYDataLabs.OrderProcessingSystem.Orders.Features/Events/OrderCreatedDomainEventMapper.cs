@@ -13,6 +13,8 @@ public sealed class OrderCreatedDomainEventMapper : DomainEventToIntegrationEven
             domainEvent.CustomerId.Value,
             domainEvent.OrderDate,
             domainEvent.TotalPrice,
-            domainEvent.ProductCount);
+            domainEvent.ProductCount,
+            domainEvent.OrderReferenceId,
+            domainEvent.CurrencyCode);
     }
 }

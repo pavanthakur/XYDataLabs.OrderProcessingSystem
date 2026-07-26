@@ -30,9 +30,11 @@ export interface PaymentConfiguration {
 
 export interface OrderSummary {
   orderId: number;
+  orderReferenceId?: string;
   orderDate: string;
   customerId: number;
   totalPrice: number;
+  currencyCode?: string;
   status: string;
   isFulfilled: boolean;
 }
@@ -60,6 +62,7 @@ export interface OrderDetail extends OrderSummary {
 export interface CreateOrderRequest {
   customerId: number;
   productIds: number[];
+  currencyCode?: string;
 }
 
 export interface ProcessPaymentRequest {

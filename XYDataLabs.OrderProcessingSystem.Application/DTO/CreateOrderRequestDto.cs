@@ -20,5 +20,10 @@ namespace XYDataLabs.OrderProcessingSystem.Application.DTO
         /// Gets or sets the list of product IDs.
         /// </summary>
         public List<int> ProductIds { get; set; } = new List<int>();
+
+        /// <summary>
+        /// Gets or sets the ISO currency code owned by the order.
+        /// </summary>
+        public string CurrencyCode { get; set; } = "MXN";
     }
 }

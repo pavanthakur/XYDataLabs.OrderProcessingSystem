@@ -41,7 +41,7 @@ $arguments = @(
     '--inventory-subscription', "inventory-order-created-$envSuffix",
     '--notifications-subscription', "notifications-order-created-$envSuffix",
     '--dead-letter-topic', 'order-events-dlq',
-    '--dead-letter-subscription', "dlq-replay-$envSuffix",
+    '--dead-letter-subscription', "dlq-intake-$envSuffix",
     '--connection-string', $ConnectionString,
     '--run-id', $smokeRunId
 )

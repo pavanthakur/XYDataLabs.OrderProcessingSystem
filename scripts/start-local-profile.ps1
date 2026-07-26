@@ -84,6 +84,10 @@ try
 {
     & pwsh -NoProfile -ExecutionPolicy Bypass -File $statusWriter -EnvironmentKey $sequenceEnvironmentKey -TaskName 'local-http-env-ready' -Status started -Message $Profile
     & pwsh -NoProfile -ExecutionPolicy Bypass -File $keycloakScriptPath
+    if ($LASTEXITCODE -ne 0)
+    {
+        throw "Failed to start Keycloak for local '$Profile' profile."
+    }
     Start-ChildProfileProcess -Name 'API' -ScriptPath $apiScriptPath -ProfileName $Profile | Out-Null
     Start-ChildProfileProcess -Name 'UI' -ScriptPath $frontendScriptPath -ProfileName $Profile | Out-Null
 

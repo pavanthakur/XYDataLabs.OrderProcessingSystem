@@ -8,7 +8,9 @@ param(
     [ValidateRange(60, 900)]
     [int]$HealthTimeoutSec = 300,
 
-    [switch]$CleanImages
+    [switch]$CleanImages,
+
+    [switch]$RemoveVolumes
 )
 
 $ErrorActionPreference = 'Stop'
@@ -90,6 +92,38 @@ function Wait-ForUrl {
     throw "Timed out waiting for $Url after $TimeoutSec seconds."
 }
 
+function Wait-ForTcpPort {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$HostName,
+
+        [Parameter(Mandatory = $true)]
+        [int]$Port,
+
+        [int]$TimeoutSec = 300
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSec)
+    while ((Get-Date) -lt $deadline) {
+        $client = [System.Net.Sockets.TcpClient]::new()
+        try {
+            $connectTask = $client.ConnectAsync($HostName, $Port)
+            if ($connectTask.Wait([TimeSpan]::FromSeconds(5)) -and $client.Connected) {
+                return
+            }
+        }
+        catch {
+        }
+        finally {
+            $client.Dispose()
+        }
+
+        Start-Sleep -Seconds 2
+    }
+
+    throw "Timed out waiting for TCP $HostName`:$Port after $TimeoutSec seconds."
+}
+
 function Stop-ContainersOnPort {
     param(
         [Parameter(Mandatory = $true)]
@@ -111,16 +145,40 @@ function Stop-ContainersOnPort {
         }
 
         $containerId = ($line -split '\s+')[0]
+        $containerName = ($line -split '\s+', 2)[1]
+        $stopLogPath = Join-Path $runDir "docker-stop-$Port.log"
         Add-Content -Path $progressLogPath -Value "Stopping container on port ${Port}: $line"
-        & docker stop $containerId 2>&1 | Tee-Object -FilePath (Join-Path $runDir "docker-stop-$Port.log") | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            throw "Failed to stop Docker container $containerId on port $Port."
+        & docker stop -t 30 $containerId 2>&1 | Tee-Object -FilePath $stopLogPath -Append | Out-Null
+        $stopExitCode = $LASTEXITCODE
+
+        $remainingContainer = & docker ps -a --filter "id=$containerId" --format '{{.ID}}'
+        if ($stopExitCode -ne 0 -or -not [string]::IsNullOrWhiteSpace($remainingContainer)) {
+            Add-Content -Path $progressLogPath -Value "docker stop did not fully clear $containerName on port ${Port}; attempting docker kill."
+            & docker kill $containerId 2>&1 | Tee-Object -FilePath $stopLogPath -Append | Out-Null
+            $killExitCode = $LASTEXITCODE
+            $remainingContainer = & docker ps -a --filter "id=$containerId" --format '{{.ID}}'
+
+            if ($killExitCode -ne 0 -or -not [string]::IsNullOrWhiteSpace($remainingContainer)) {
+                Add-Content -Path $progressLogPath -Value "docker kill did not fully clear $containerName on port ${Port}; attempting docker rm -f."
+                & docker rm -f $containerId 2>&1 | Tee-Object -FilePath $stopLogPath -Append | Out-Null
+                $removeExitCode = $LASTEXITCODE
+                $remainingContainer = & docker ps -a --filter "id=$containerId" --format '{{.ID}}'
+
+                if ($removeExitCode -ne 0 -or -not [string]::IsNullOrWhiteSpace($remainingContainer)) {
+                    throw "Failed to stop Docker container $containerId on port $Port."
+                }
+            }
         }
     }
 }
 
 function Get-EnvLocalValue {
     param([Parameter(Mandatory = $true)][string]$Name)
+
+    $environmentValue = [Environment]::GetEnvironmentVariable($Name)
+    if (-not [string]::IsNullOrWhiteSpace($environmentValue)) {
+        return $environmentValue.Trim()
+    }
 
     if (-not (Test-Path $envFile)) {
         return $null
@@ -197,6 +255,7 @@ function Remove-Phase10LocalImages {
     $imageOwner = if ([string]::IsNullOrWhiteSpace($env:PHASE10_IMAGE_OWNER)) { 'pavanthakur' } else { $env:PHASE10_IMAGE_OWNER }
     $imageNames = @(
         "ghcr.io/$imageOwner/orderprocessing-orders:$ImageTag",
+        "ghcr.io/$imageOwner/orderprocessing-payments:$ImageTag",
         "ghcr.io/$imageOwner/orderprocessing-inventory:$ImageTag",
         "ghcr.io/$imageOwner/orderprocessing-notifications:$ImageTag",
         "ghcr.io/$imageOwner/orderprocessing-gateway:$ImageTag",
@@ -253,7 +312,7 @@ function Invoke-Phase10SqlCmdInComposeContainer {
     $normalizedQuery = ($Query -replace "`r?`n", ' ').Trim()
     $escapedQuery = $normalizedQuery.Replace('"', '\"')
     $shellCommand = [string]::Format(
-        'if [ -x /opt/mssql-tools18/bin/sqlcmd ]; then SQLCMD=/opt/mssql-tools18/bin/sqlcmd; else SQLCMD=/opt/mssql-tools/bin/sqlcmd; fi; "$SQLCMD" -C -S localhost -U sa -P "$SA_PASSWORD" -d "{0}" -h -1 -W -Q "SET NOCOUNT ON; {1}"',
+        'if [ -x /opt/mssql-tools18/bin/sqlcmd ]; then SQLCMD=/opt/mssql-tools18/bin/sqlcmd; else SQLCMD=/opt/mssql-tools/bin/sqlcmd; fi; "$SQLCMD" -l 60 -C -S localhost -U sa -P "$SA_PASSWORD" -d "{0}" -h -1 -W -Q "SET NOCOUNT ON; {1}"',
         $Database,
         $escapedQuery)
 
@@ -348,16 +407,22 @@ function Invoke-Phase10SqlScriptInComposeContainer {
     }
 
     $sqlPassword = Get-EnvLocalValue -Name 'LOCAL_SQL_PASSWORD'
-    $shellCommand = "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '$sqlPassword' -C -b -I -d '$DatabaseName' -i '$containerScriptPath'"
-    $composeProfileArgs = Get-ComposeProfileArguments
-    $composeEnvArgs = Get-ComposeEnvArguments
-    $output = & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs exec -T sql-server /bin/sh -lc $shellCommand 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        $message = ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
-        throw "Failed to apply EF migration script to $DatabaseName. $message"
-    }
+    $shellCommand = "/opt/mssql-tools18/bin/sqlcmd -l 60 -S localhost -U sa -P '$sqlPassword' -C -b -I -d '$DatabaseName' -i '$containerScriptPath'"
+    for ($attempt = 1; $attempt -le 5; $attempt++) {
+        $composeProfileArgs = Get-ComposeProfileArguments
+        $composeEnvArgs = Get-ComposeEnvArguments
+        $output = & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs exec -T sql-server /bin/sh -lc $shellCommand 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            return @($output | ForEach-Object { $_.ToString() })
+        }
 
-    return @($output | ForEach-Object { $_.ToString() })
+        $message = ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
+        if ($attempt -eq 5) {
+            throw "Failed to apply EF migration script to $DatabaseName after $attempt attempt(s). $message"
+        }
+
+        Start-Sleep -Seconds 10
+    }
 }
 
 function Invoke-Phase10EfDatabaseUpdate {
@@ -424,12 +489,16 @@ END
 
 function Invoke-Phase10DatabaseBootstrap {
     Write-Host 'Applying Phase 10 local EF migrations...' -ForegroundColor Cyan
+    Add-Content -Path $progressLogPath -Value 'Starting Phase 10 local EF migration bootstrap.'
     $latestMigrationId = Get-LatestPhase10MigrationId
     foreach ($databaseName in @('OrderProcessingSystem_Dev', 'OrderProcessingSystem_TenantC_Dev')) {
+        Add-Content -Path $progressLogPath -Value "Starting EF migration bootstrap for $databaseName."
         Write-Host "  Migrating $databaseName..." -ForegroundColor Yellow
         $localSqlPassword = Get-EnvLocalValue -Name 'LOCAL_SQL_PASSWORD'
         Invoke-Phase10EfDatabaseUpdate -DatabaseName $databaseName -SqlPassword $localSqlPassword -ExpectedMigrationId $latestMigrationId
+        Add-Content -Path $progressLogPath -Value "Completed EF migration bootstrap for $databaseName."
     }
+    Add-Content -Path $progressLogPath -Value 'Completed Phase 10 local EF migration bootstrap.'
 }
 
 function Assert-Phase10DatabaseAzureParity {
@@ -539,7 +608,11 @@ try {
         Add-Content -Path $progressLogPath -Value 'Stopping Phase 10 local container stack.'
         $composeProfileArgs = Get-ComposeProfileArguments
         $composeEnvArgs = Get-ComposeEnvArguments
-        & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs down -v 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-down.log')
+        $downArguments = @('down')
+        if ($RemoveVolumes) {
+            $downArguments += '--volumes'
+        }
+        & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs @downArguments 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-down.log')
         if ($LASTEXITCODE -ne 0) {
             throw "Docker compose down failed with exit code $LASTEXITCODE"
         }
@@ -560,7 +633,7 @@ try {
         throw "Docker compose config validation failed with exit code $LASTEXITCODE"
     }
 
-    & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs down -v 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-preflight-down.log') | Out-Null
+    & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs down 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-preflight-down.log') | Out-Null
     if ($CleanImages) {
         $imageTag = if ([string]::IsNullOrWhiteSpace($env:PHASE10_IMAGE_TAG)) { 'dev' } else { $env:PHASE10_IMAGE_TAG }
         Remove-Phase10LocalImages -ImageTag $imageTag
@@ -589,10 +662,6 @@ try {
     Wait-ForUrl -Url 'http://localhost:10001/' -TimeoutSec $HealthTimeoutSec
     Wait-ForUrl -Url 'http://localhost:10002/' -TimeoutSec $HealthTimeoutSec
 
-    if ($Profile -eq 'messaging' -or (Get-EnvLocalValue -Name 'LOCAL_SERVICEBUS_ENABLED') -eq 'true') {
-        Wait-ForUrl -Url 'http://localhost:5300/health' -TimeoutSec $HealthTimeoutSec
-    }
-
     if ($Profile -eq 'infrastructure' -or $Profile -eq 'messaging') {
         Add-Content -Path $progressLogPath -Value "Phase 10 local container infrastructure profile '$Profile' is ready."
         Write-Host "Phase 10 local container infrastructure profile '$Profile' is ready."
@@ -600,12 +669,31 @@ try {
         return
     }
 
-    & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs up -d --build orders inventory notifications gateway ui 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-apps-up.log')
+    if ($Profile -eq 'messaging' -or (Get-EnvLocalValue -Name 'LOCAL_SERVICEBUS_ENABLED') -eq 'true') {
+        Wait-ForTcpPort -HostName 'localhost' -Port 5672 -TimeoutSec $HealthTimeoutSec
+        Wait-ForUrl -Url 'http://localhost:5300/health' -TimeoutSec $HealthTimeoutSec
+    }
+
+    Add-Content -Path $progressLogPath -Value 'Starting application service image startup.'
+    & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs up -d --build orders payments inventory notifications gateway ui 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-apps-up.log')
     if ($LASTEXITCODE -ne 0) {
         throw "Docker compose app startup failed with exit code $LASTEXITCODE"
     }
+    if ((Get-EnvLocalValue -Name 'LOCAL_SERVICEBUS_ENABLED') -eq 'true') {
+        Add-Content -Path $progressLogPath -Value 'Starting Functions service image startup.'
+        & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs --profile functions up -d --build functions 2>&1 |
+            Tee-Object -FilePath (Join-Path $runDir 'docker-compose-functions-up.log')
+        if ($LASTEXITCODE -ne 0) {
+            throw "Docker compose Functions startup failed with exit code $LASTEXITCODE"
+        }
+    }
 
+    Add-Content -Path $progressLogPath -Value 'Waiting for application readiness URLs.'
     Wait-ForUrl -Url 'http://localhost:5080/health/alive' -TimeoutSec $HealthTimeoutSec
+    Wait-ForUrl -Url 'http://localhost:5081/health/ready' -TimeoutSec $HealthTimeoutSec
+    Wait-ForUrl -Url 'http://localhost:5082/health/ready' -TimeoutSec $HealthTimeoutSec
+    Wait-ForUrl -Url 'http://localhost:5083/health/ready' -TimeoutSec $HealthTimeoutSec
+    Wait-ForUrl -Url 'http://localhost:5084/health/ready' -TimeoutSec $HealthTimeoutSec
     Wait-ForUrl -Url 'http://localhost:5022/' -TimeoutSec $HealthTimeoutSec
 
     Add-Content -Path $progressLogPath -Value 'Phase 10 local container stack is ready.'
@@ -615,6 +703,7 @@ try {
     Write-Host 'Orders:  http://localhost:5081'
     Write-Host 'Inventory: http://localhost:5082'
     Write-Host 'Notifications: http://localhost:5083'
+    Write-Host 'Payments: http://localhost:5084'
     $summary.status = 'passed'
 }
 catch {

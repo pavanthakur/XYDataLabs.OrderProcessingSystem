@@ -127,6 +127,10 @@ try
         Add-Content -Path $progressLogPath -Value 'Starting Phase 10 local HTTP stack in clean mode.'
         & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'stop-local-dev-sessions.ps1') -Profile $Profile | Out-Null
         & pwsh -NoProfile -ExecutionPolicy Bypass -File $keycloakScriptPath
+        if ($LASTEXITCODE -ne 0)
+        {
+            throw 'Failed to start Keycloak for Phase 10 local HTTP profile.'
+        }
         Start-ChildProfileProcess -Name 'API' -ScriptPath $apiScriptPath -ProfileName $Profile | Out-Null
         Start-ChildProfileProcess -Name 'UI' -ScriptPath $frontendScriptPath -ProfileName $Profile | Out-Null
         Write-Host "Phase 10 local '$Profile' profile bootstrap is running in clean mode."
@@ -140,6 +144,10 @@ try
 
         Add-Content -Path $progressLogPath -Value 'Phase 10 local HTTP stack was not reachable; starting it now in reuse mode.'
         & pwsh -NoProfile -ExecutionPolicy Bypass -File $keycloakScriptPath
+        if ($LASTEXITCODE -ne 0)
+        {
+            throw 'Failed to start Keycloak for Phase 10 local HTTP profile.'
+        }
         Start-ChildProfileProcess -Name 'API' -ScriptPath $apiScriptPath -ProfileName $Profile | Out-Null
         Start-ChildProfileProcess -Name 'UI' -ScriptPath $frontendScriptPath -ProfileName $Profile | Out-Null
         Write-Host "Phase 10 local '$Profile' profile bootstrap is running in reuse mode."

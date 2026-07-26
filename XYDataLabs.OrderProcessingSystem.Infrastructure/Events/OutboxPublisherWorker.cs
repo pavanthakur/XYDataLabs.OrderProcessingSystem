@@ -43,7 +43,7 @@ public class OutboxPublisherWorker : BackgroundService
 
     private async Task ProcessOutboxMessagesAsync(CancellationToken cancellationToken)
     {
-        using var registryScope = _serviceProvider.CreateScope();
+        await using var registryScope = _serviceProvider.CreateAsyncScope();
 
         var tenantRegistryContext = registryScope.ServiceProvider.GetRequiredService<TenantRegistryDbContext>();
         var tenantResolver = registryScope.ServiceProvider.GetRequiredService<ITenantResolver>();
@@ -73,7 +73,7 @@ public class OutboxPublisherWorker : BackgroundService
 
     private async Task ProcessTenantOutboxMessagesAsync(TenantContext tenantContext, CancellationToken cancellationToken)
     {
-        using var tenantScope = _serviceProvider.CreateScope();
+        await using var tenantScope = _serviceProvider.CreateAsyncScope();
         var tenantContextAccessor = tenantScope.ServiceProvider.GetRequiredService<ScopedTenantContextAccessor>();
         tenantContextAccessor.Current = tenantContext;
 

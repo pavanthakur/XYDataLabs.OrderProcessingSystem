@@ -41,6 +41,7 @@ public sealed class Phase10LocalSetupContractTests
             "LOCAL_SERVICEBUS_NOTIFICATIONS_SUBSCRIPTION_NAME",
             "LOCAL_SERVICEBUS_DLQ_TOPIC_NAME",
             "LOCAL_SERVICEBUS_DLQ_SUBSCRIPTION_NAME",
+            "SERVICEBUS_EMULATOR_ACCEPT_EULA",
             "SERVICEBUS_EMULATOR_SQL_PASSWORD"
         };
 
@@ -79,7 +80,16 @@ public sealed class Phase10LocalSetupContractTests
         var dlqSubscriptions = dlqTopic.GetProperty("Subscriptions").EnumerateArray()
             .Select(subscription => subscription.GetProperty("Name").GetString());
 
-        dlqSubscriptions.Should().Contain("dlq-replay");
+        dlqSubscriptions.Should().Contain("dlq-intake");
+
+        var queues = document.RootElement
+            .GetProperty("UserConfig")
+            .GetProperty("Namespaces")[0]
+            .GetProperty("Queues")
+            .EnumerateArray()
+            .Select(queue => queue.GetProperty("Name").GetString());
+
+        queues.Should().Contain("dlq-replay-requests");
     }
 
     [Fact]

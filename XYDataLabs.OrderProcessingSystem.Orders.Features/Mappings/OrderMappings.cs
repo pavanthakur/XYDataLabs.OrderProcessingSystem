@@ -8,9 +8,11 @@ public static class OrderMappings
     public static OrderDto ToDto(this Order order) => new()
     {
         OrderId = order.OrderId,
+        OrderReferenceId = order.OrderReferenceId,
         OrderDate = order.OrderDate,
         CustomerId = order.CustomerId,
         TotalPrice = order.TotalPrice,
+        CurrencyCode = order.CurrencyCode,
         Status = order.Status.ToString(),
         IsFulfilled = order.IsFulfilled,
         OrderProductDtos = order.OrderProducts

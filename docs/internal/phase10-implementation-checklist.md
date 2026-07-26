@@ -27,7 +27,7 @@ Adopt this as the governing Phase 10 lifecycle. Use a graduated validation model
 | 2 | Local Infrastructure Validation | Backing services start and pass health checks in Docker: SQL Server, Redis, Keycloak, Azurite, and Service Bus emulator when selected. No application debugging or browser E2E belongs in this stage. |
 | 3 | Local Application Debug | Docker runs backing services while Visual Studio, VS Code, or command-line hosts run the gateway, APIs, UI, workers, and Functions worker for breakpoints and fast defect fixes. |
 | 4 | Local Integration Validation | Integration tests prove SQL, Redis, Blob abstractions, messaging abstractions, startup wiring, idempotency, and tenant/provider behavior before browser E2E. |
-| 5 | Local Docker Compose End-to-End | Full local Docker validation proves profile startup, gateway routing, Playwright/browser smoke, integration suite, payment matrix, logs, and artifacts. Required before Azure for gateway, auth, Docker, messaging, infrastructure, image, or deployment changes. |
+| 5 | Local Docker Compose End-to-End | Full local Docker validation proves profile startup, gateway routing, Playwright/browser smoke, integration suite, payment matrix, logs, and artifacts. The payment matrix evidence must include the persisted order id, order reference, amount, and currency for each tenant/provider journey. Required before Azure for gateway, auth, Docker, messaging, infrastructure, image, or deployment changes. |
 | 6 | CI Pre-Deployment Parity Gate | GitHub-hosted clean-room verification proves the solution succeeds on a fresh runner before Azure deployment. Use `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` as the CI mirror of the Docker Dev HTTP local path for Compose, gateway, service image, workflow, Bicep, transport, or payment-matrix changes. |
 | 7 | Azure Deployment | `00 Azure Platform Foundation` runs only when provider registration, ACR, or pull identity must be created or refreshed. `01 Phase 10 Azure Deploy Orchestrator` deploys the selected environment. Use cleanup mode only when intentionally removing or resetting an environment. Use dry run first for infrastructure changes. |
 | 8 | Azure Infrastructure And Configuration Verification | Provisioned resources are healthy; managed identities are assigned; required environment variables are present; secrets resolve from Key Vault; Container Apps revisions are healthy; Function App host runs; Storage, Service Bus, SQL, and Redis are reachable. |
@@ -74,6 +74,8 @@ Adopt this as the governing Phase 10 lifecycle. Use a graduated validation model
 
 Use this as the Phase 10 local-first implementation sequence before Azure deployment work.
 
+For a single operator run that executes every pre-Azure local milestone in order, use `2 Run: Phase 10 Pre-Azure Sequence`.
+
 | Stage | VS Code / IDE task | Purpose | Exit criteria |
 |---:|---|---|---|
 | 0 | `1 Run: Phase 10 Local Setup 00 Environment Readiness` | Validate required local tools, `global.json`, Docker Compose config, and Docker `.env.local`. | Tool checks pass and the Phase 10 compose app profile validates. |
@@ -106,21 +108,171 @@ Local debugging contract:
 - Run application processes from Visual Studio or VS Code when breakpoints are needed.
 - Use `.NET user-secrets` for non-Docker local secrets, layer `Resources/Docker/.env.local.example` plus `Resources/Docker/.env.local` for Docker local defaults/secrets, GitHub secrets for CI, and Key Vault for Azure runtime secrets.
 - Keep Service Bus emulator usage conditional. Application logic must remain testable through transport abstractions if the emulator does not support a required production behavior.
+- For local HTTP payment validation, the API uses deterministic local payment-provider adapters so TenantA, TenantB, and TenantC can be exercised without relying on the live provider sandbox; Docker Dev HTTP remains the full parity lane.
+
+## Revised Phase 10 Completion Contract
+
+This section is the authoritative completion contract for the remainder of Phase 10. Existing scaffolds, broker utilities, provisioned hosts, and historical smoke runs are inputs to this work; they are not substitutes for production behavior or current evidence.
+
+### Required Phase 10 Scope
+
+| Capability | Required outcome |
+|---|---|
+| Independently deployable workloads | Orders, Payments, Inventory, Notifications, Gateway, UI, workers, and Functions are runnable, health-checked workloads. Payments must have an executable host. |
+| Real business behavior | Azure and Docker routes execute real handlers and persistence. No workload may return hardcoded tenants, provider assignments, customers, payments, or successful business outcomes. |
+| Dynamic tenancy and providers | The tenant registry remains authoritative for active tenant, shared-versus-dedicated database tier, and payment provider assignment. Automation must discover and verify this data instead of hardcoding `TenantA`, `TenantB`, `TenantC`, OpenPay, or Razorpay behavior. |
+| Durable publication | Committed outbox records are published to Service Bus with the canonical envelope and trace, tenant, correlation, causation, and message identifiers. |
+| Real consumers | Inventory and Notifications consume broker messages through module-owned handlers and persist observable business effects. |
+| Delivery safety | Inbox/idempotency protection is applied before side effects; retries, restart recovery, duplicate delivery, and permanent failure are deterministic. |
+| DLQ operations | Intake, quarantine, approval, replay, replay limits, and poison-message handling have separate ownership and auditable state transitions. |
+| Deployed Functions | Versioned Function code is deployed. Smoke evidence includes the deployed Function identity and invocation evidence, not only equivalent behavior from a test utility. |
+| Azure identity | Workloads use managed identity and RBAC for Service Bus. Azure users authenticate with Entra ID JWTs. Keycloak remains the local OIDC provider. |
+| Secret handling | Runtime secrets are sourced from Key Vault; Service Bus SAS connection strings are removed from Azure workload environment settings after managed-identity proof. |
+| Safe delivery | Images and Function packages are immutable, database changes use expand/contract migrations, previous healthy revisions remain available, and exact rollback evidence is captured. |
+| Acceptance evidence | Local, Docker, CI clean-room, and Azure validation produce machine-readable result packets and operator evidence before Phase 10 is closed. The local payment matrix must capture persisted order id, order reference, amount, and currency in the result packet. |
+
+### Formal Phase 12 Deferrals
+
+These capabilities remain required roadmap outcomes but are deliberately rephased to Phase 12. Their deferral is governed by ADR-025 and the Deferred Work Log; it is not permission to remove them.
+
+| Deferred capability | Phase 10 boundary | Phase 12 target |
+|---|---|---|
+| APIM and private YARP ingress | YARP is the Phase 10 ingress and routing proof. Do not add a temporary APIM Consumption topology that cannot reach the intended private backend. | APIM Standard v2 or a then-approved VNet-capable tier fronts private YARP ingress. |
+| Private networking | Phase 10 validates authenticated public Azure service endpoints in lower environments. | VNet integration, private DNS, and private endpoints are implemented as one tested network topology. |
+| Service Bus Private Link | Phase 10 uses Service Bus Standard with Entra ID/RBAC and transport abstractions. | Move to Service Bus Premium and Private Link when the private network topology is implemented. |
+| Blob attachments and Event Grid | Phase 10 Functions are limited to DLQ intake/replay and transport operations. | Add order attachments, Blob lifecycle, and Event Grid-driven processing before Document Intelligence enrichment. |
+| SQL managed identity | Phase 10 keeps current SQL bootstrap credentials in Key Vault while service extraction and migrations stabilize. | Move runtime SQL access to managed identity with tested migration/bootstrap ownership. |
+| Front Door and WAF | Phase 10 proves the application and transport stack without an unfinished edge tier. | Add Front Door/WAF with APIM and private ingress hardening. |
+
+### Execution Slices
+
+| Slice | Goal | Definition of done | Estimated effort |
+|---|---|---|---:|
+| 10.2 Real Service Migration | Replace service stubs with real module behavior and data access. | Browser/API flows write authoritative SQL state; all active tenants resolve the configured database tier and provider; Payments is independently hosted; Compose, ACR, ACA, and YARP include every workload. | 7-10 days |
+| 10.3 Real Service Bus Processing | Connect outbox publication to real Inventory and Notifications consumers. | One committed order creates one effect in each consumer; duplicate delivery is harmless; restart resumes; permanent failure reaches DLQ; Azure uses RBAC rather than SAS. | 5-7 days |
+| 10.4 DLQ And Functions | Separate intake, quarantine, approval, and replay responsibilities and deploy the Functions package. | Poison messages are not auto-replayed; approved transient failures replay once; loops are bounded; Azure evidence proves the deployed Function invocation. | 5-7 days |
+| 10.5 Identity And Secretless Transport | Use portable OIDC/JWT authorization and managed identity for Azure transport. | Anonymous requests return 401, invalid tenant/audience returns 403, valid Entra tokens pass Azure policies, local Keycloak remains configuration-only, and Azure workloads have no Service Bus SAS setting. | 5-8 days |
+| 10.6 Operations And Non-Functional Proof | Establish measurable delivery, recovery, replay, and latency behavior. | The NFR baseline, failure drills, alerts, dashboards, rollback path, and lower-environment load proof pass. | 3-5 days |
+| 10.7 Acceptance And Closeout | Execute the lifecycle gates and publish auditable evidence. | Current local, Docker, CI, and Azure result/evidence packets pass with no unresolved critical risks or undocumented exceptions. | 3-5 days |
+
+Estimated remaining elapsed engineering effort is **28-42 working days**, excluding external approval, quota, and Azure incident delays.
+
+### Detailed Implementation Guardrails
+
+#### 10.2 Real Service Migration
+
+- Characterize existing stub routes before replacement so contracts remain stable.
+- Route service hosts through module handlers and repositories; do not introduce dual writes.
+- Add a Payments executable host and real Inventory/Notifications behavior.
+- Add service-specific liveness and readiness checks for required dependencies.
+- Publish immutable commit-SHA image tags and add Payments to Compose, ACR, ACA, and YARP.
+- Run migration/seeder jobs before promoting a revision.
+- Keep shared/dedicated database choice and payment-provider choice registry-driven.
+
+#### 10.3 Real Service Bus Processing
+
+- Introduce reusable consumer orchestration while keeping business handlers module-owned.
+- Resolve tenant context from validated envelope metadata before opening the tenant database.
+- Record inbox/idempotency state before business side effects and complete the broker message only after the transaction commits.
+- Classify transient and permanent failures explicitly and apply subscription filters where event ownership requires them.
+- Use a local connection string only for the emulator; use `DefaultAzureCredential` and scoped Service Bus RBAC in Azure.
+
+#### 10.4 DLQ And Functions
+
+- Use separate `dlq-intake` and `dlq-replay-requests` paths. Intake classifies and quarantines; replay consumes only approved requests.
+- Do not attach intake and replay Functions to the same subscription.
+- Set `AutoCompleteMessages = false` wherever completion, abandonment, or dead-lettering is controlled by application code.
+- Preserve message body, content type, application properties, message/correlation/causation/tenant identifiers, trace context, failure reason, and original enqueue metadata.
+- Enforce a replay-attempt ceiling of `5`, a kill switch, and one replay owner per message.
+- Package Functions by commit SHA or workflow run ID, deploy through the orchestrator, and verify host, function discovery, and invocation.
+- Use scale-to-zero-capable Function hosting for the final Phase 10 topology.
+
+#### 10.5 Identity And Secretless Transport
+
+- Configure ASP.NET Core `JwtBearer` variants for local Keycloak and Azure Entra ID.
+- Use Authorization Code with PKCE in the React client.
+- Enforce authorization policies and tenant claim/header consistency at ingress and service boundaries.
+- Keep provider webhooks anonymous only at the authentication layer; require provider signature verification.
+- Assign least-privilege Service Bus data roles to each workload identity.
+- Source provider and SQL bootstrap secrets from Key Vault and remove Azure Service Bus SAS settings after RBAC proof.
+
+### Non-Functional Baseline
+
+The following lower-environment targets are provisional Phase 10 acceptance values. Any change requires an evidence-backed exception in the closeout packet.
+
+| Concern | Phase 10 target |
+|---|---|
+| Delivery guarantee | At-least-once transport with one idempotent business effect |
+| Maximum message size | 256 KB; larger payloads require the deferred Blob claim-check design |
+| Message TTL | 7 days |
+| Maximum broker delivery count | 10 |
+| Maximum replay attempts | 5 |
+| Ordering | No global ordering; decide through ADR-023 whether per-order sessions are required |
+| Restart recovery | No committed outbox message or committed consumer effect is lost |
+| Burst proof | 100-message lower-environment burst with no lost or duplicate business effects |
+| Consumer latency | P95 under 30 seconds in lower environments |
+| Approved replay visibility | Under 60 seconds in lower environments |
+| Recovery point | No committed outbox loss |
+| Operational recovery time | 30 minutes for the documented rollback or recovery path |
+
+Required SLIs include outbox-to-broker latency, broker-to-consumer latency, failure/retry rate, DLQ depth and oldest age, replay latency, Function invocation/rejection/failure, and order/payment outcomes.
+
+### Rollback Contract
+
+- Retain the previous healthy ACA revision and immutable commit-SHA image references.
+- Retain Function packages by commit SHA or workflow run ID.
+- Make transport publication, each consumer, and replay independently disableable.
+- Introduce Service Bus topology additively; drain old entities before deletion.
+- Use forward-only expand/contract database migrations and keep the old route until the real endpoint passes.
+- Never auto-remove the last healthy environment after a failed deployment.
+- Record the exact rollback command, target revision/package, operator, timestamp, and result in the evidence packet.
+
+### Risk Register
+
+| Risk | Priority | Required mitigation |
+|---|---|---|
+| Stub replacement breaks payment behavior | Critical | Characterization tests, one-service cutover, database assertions, and rollback route |
+| Duplicate replay creates duplicate side effects | Critical | Inbox uniqueness, replay-attempt ceiling, approval state, and duplicate-delivery tests |
+| DLQ intake and replay compete for one subscription | Critical | Separate entities and single-purpose Functions |
+| Function host deploys without executable code | High | Versioned package deployment plus function-discovery and invocation proof |
+| Tenant resolves the wrong database | Critical | Registry-driven resolution and shared/dedicated integration tests |
+| Provider routing becomes hardcoded | High | Registry-driven provider assertions in API and browser matrices |
+| Managed-identity RBAC is incomplete | High | Role-assignment verification and SAS-free Azure runtime smoke |
+| Database migration cannot roll back safely | High | Expand/contract sequencing and retained compatible revision |
+| Rephased cloud hardening disappears | Medium | ADR-025, Phase 12 roadmap entries, and Deferred Work Log closure triggers |
+
+### Evidence Contract
+
+Keep the automated result packet separate from the operator evidence packet.
+
+Automated result packet:
+
+- `summary.json`, TRX/JUnit results, stage statuses, and process exit code.
+- Git commit SHA, image digests, Function package identifier, workflow/run ID, environment, and IST timestamps.
+
+Operator evidence packet:
+
+- Function host/function/invocation identifiers.
+- Service Bus message, correlation, subscription, DLQ, and replay identifiers.
+- Application Insights traces and authoritative SQL state.
+- Replay approval, attempt, quarantine, and completion metadata.
+- Azure configuration/RBAC verification.
+- Failure-only browser screenshots/traces plus known issues and approved exceptions.
 
 ## Tracker Status
 
 | Area | Status | Notes |
 |---|---|---|
-| Phase 10 repo transport wiring | Verified in dev | The Service Bus topology, transport adapter layer, startup seam, and DLQ replay path are in the repo and proved by the July 13, 2026 Azure dev transport smoke. |
-| Phase 10 docs and runbooks | Done | The checklist, smoke runbook, DLQ replay guide, and progress tracker are aligned with the transport-first order. |
+| Phase 10 repo transport scaffold | Broker baseline verified in dev | The Service Bus topology, transport adapter layer, startup seam, and utility-driven replay path are in the repo. Real consumers and deployed Function invocation remain open under 10.3 and 10.4. |
+| Phase 10 docs and runbooks | Completion contract aligned | The checklist, smoke runbook, DLQ replay guide, progress tracker, ADRs, and Phase 12 deferrals describe the same required scope. |
 | Phase 10 operator-experience hardening | Verified in dev | Accepted-host echo, deploy-summary traceability, skip-reason logging, cleanup symmetry, local-vs-CI mapping, and per-service build logs are present in the active workflow path. |
 | SharedContracts extraction | Deferred | Keep it out unless transport work proves real duplication across multiple services. |
 | Earlier phase scope | Frozen | Do not back-port new enterprise refinements into Phases 1-9; keep them in Phase 10 or later only. |
 | Azure dev deploy | Verified | GitHub Actions run `29273224237` built the Phase 10 images and deployed the dev Container Apps transport stack successfully. |
 | Phase 10 runtime smoke | Verified | GitHub Actions run `29273711615` proved gateway health, gateway-routed API JSON, UI static route, and UI API proxy bootstrap. |
-| Phase 10 transport / replay smoke | Verified | GitHub Actions run `29273881488` proved Service Bus publish, fan-out consume, controlled DLQ forwarding, DLQ replay receive, and replay publish/consume through the smoke path; it did not prove an implemented Azure Functions worker. |
+| Phase 10 broker transport / replay smoke | Verified | GitHub Actions run `29273881488` proved Service Bus publish, fan-out consume, controlled DLQ forwarding, DLQ replay receive, and utility-driven replay publish/consume; it did not invoke or prove the deployed Azure Functions worker. |
 | Azure Functions infrastructure | Provisioned host | `infra/modules/functions.bicep` creates the Function App host and identity plumbing. |
-| Azure Functions worker implementation | Local scaffold added | `XYDataLabs.OrderProcessingSystem.Functions` exists with .NET 8 isolated startup validation and an initial DLQ intake trigger; deployment artifact, replay/quarantine behavior, and Azure smoke proof remain pending. |
+| Azure Functions worker implementation | Local replay path implemented | `XYDataLabs.OrderProcessingSystem.Functions` now includes the .NET 8 isolated startup validation, DLQ intake trigger, and guarded DLQ replay Function; Azure deployment proof and portal Function App smoke remain pending before the Function App is treated as complete behavior. |
 | SQL / Redis baseline wiring | Automatic baseline | The wrapper and child deploy workflows include SQL and Redis as part of the default Phase 10 path; no manual parity toggle is required in the normal operator form. |
 | Cleanup policy closeout | Covered for Phase 10 | Historical GHCR retention, ACR stale-tag cleanup, and stale artifact cleanup are scheduled by `phase10-retention-cleanup.yml`, Phase 10 smoke artifacts use `retention-days: 14`, Azure teardown remains manual through `cleanupInfra=true`, and Log Analytics defaults to `30` days in the workspace module. |
 | ACR image cleanup policy | Implemented with ACR cutover | The retention workflow cleans dev/staging/prod ACR tags while preserving images referenced by active Container App revisions. |
@@ -139,14 +291,14 @@ Use this table to keep the enterprise plan aligned with the current Phase 10 sco
 | ACR lifecycle cleanup plus artifact retention | Phase 10 now | Required to keep image and log storage under control for the live Phase 10 path. |
 | Azure platform foundation ACR and pull identity | Phase 10 now | Supports the persistent registry/runtime-pull model without manual RG-level IAM. |
 | SQL / Redis parity in Azure | Phase 10 now | Covered by the active Phase 10 baseline and should remain part of the default deploy path. |
-| Managed Identity for SQL runtime access | Phase 11+ hardening | Valuable enterprise hardening, but it is not required for the current Phase 10 transport/operator baseline. |
-| OpenTelemetry trace/span expansion | Phase 11+ observability | Best treated as the next observability layer after runId-based correlation is stable. |
+| Managed Identity for SQL runtime access | Phase 12 / DW-021 | Apply after service migration and database bootstrap/migration ownership stabilize. |
+| OpenTelemetry trace/span expansion | Phase 10.6 | Required for transport, consumer, Function, DLQ, replay, and business-outcome SLIs. |
 | SharedContracts extraction | Deferred unless duplication is proven | Keep module boundaries clean until transport code proves real cross-service duplication. |
 
 Practical rule:
 
 - **Phase 10 now** owns execution shape, operator UX, cleanup hygiene, platform foundation, SQL/Redis parity, and live Azure proof.
-- **Phase 11+** should own security hardening and distributed tracing once the current Phase 10 baseline is stable.
+- **Phase 12** owns the explicitly rephased private-platform and SQL managed-identity hardening under ADR-025.
 - **Deferred** items only move forward when the repo proves the need with real duplication or an explicit hardening gate.
 
 ### Verified Azure Dev Proof
@@ -155,7 +307,7 @@ Practical rule:
 |---|---|---|---|
 | Deploy orchestrator | `29273224237` | PASS | Preflight, per-service image build, and Azure dev resource deployment completed through the wrapper path. |
 | Runtime smoke | `29273711615` | PASS | Gateway health, gateway-routed API runtime configuration, UI route, and UI API proxy returned `200`. |
-| Transport smoke | `29273881488` | PASS | Service Bus topic/subscriptions, fan-out consume, controlled DLQ forwarding, DLQ replay receive, and replay publish/consume passed. |
+| Broker transport smoke | `29273881488` | PASS | Service Bus topic/subscriptions, fan-out consume, controlled DLQ forwarding, DLQ replay receive, and utility-driven replay publish/consume passed; deployed Function invocation was not exercised. |
 | Local/CI container parity | `29268434294` | PASS | Docker Dev HTTP E2E passed smoke, integration, payment matrix, and cleanup on the optional CI parity workflow. |
 
 ### Cleanup Policy Snapshot
@@ -203,16 +355,19 @@ Use the existing envelope and metadata types as the canonical shape:
 
 Phase 10 is ready to call complete only when all of the following are true:
 
-- The first transport slice is anchored on the order-created path and still uses the canonical envelope contract.
-- `SharedContracts` is still deferred unless the transport slice proves real duplication across services.
-- Cleanup policy is explicit: historical GHCR retention is enforced by the scheduled cleanup workflow, artifact retention is handled at upload plus scheduled cleanup, Azure Log Analytics retention is set at the workspace module default, and destructive Azure resource cleanup stays manual through `cleanupInfra=true`.
-- If ACR is included in the Phase 10 closeout, ACR image cleanup is included in the same implementation slice and GHCR cleanup is left only as historical housekeeping.
-- `infra/modules/servicebus.bicep` defines the topic/subscription topology, TTL, dead-letter forwarding, ownership rules, and transport credentials needed by the first flow.
-- `ServiceBusOptions.cs`, `MessageMetadataMapper.cs`, `ServiceBusMessageFactory.cs`, `ServiceBusEventPublisher.cs`, and `DlqReplayWorker.cs` exist and are wired together as the broker-facing adapter layer.
-- `StartupHelper.cs` registers the Service Bus adapter and DLQ worker while preserving the in-memory publisher as the local fallback.
-- The supporting Azure modules, parameter files, and docs all describe the same transport-first order.
-- The regression/architecture tests prove the new transport work does not blur module boundaries, idempotency, or replay behavior.
-- The dev Azure proof remains green across the deploy orchestrator, runtime smoke, and transport smoke workflows listed above.
+- Slices 10.2 through 10.7 satisfy the Revised Phase 10 Completion Contract.
+- Orders, Payments, Inventory, and Notifications are real independently runnable workloads, not compatibility stubs.
+- Tenant database tier and payment-provider routing are registry-driven and proven across shared and dedicated database scenarios.
+- The order-created flow uses the canonical envelope, committed outbox publication, real Service Bus consumers, inbox/idempotency, and observable SQL business effects.
+- DLQ intake, quarantine, approval, and replay have separate ownership, bounded retries, and no competing triggers.
+- The deployed Azure Function package is discovered and invoked in smoke evidence; a broker utility performing equivalent operations is not sufficient.
+- Azure workload transport uses managed identity and scoped RBAC without Service Bus SAS settings.
+- Entra ID protects Azure ingress and APIs; local Keycloak exercises the same JWT/OIDC policy model.
+- Immutable images/packages, expand/contract migrations, retained healthy revisions, and an executed rollback proof are documented.
+- The NFR baseline and required failure drills pass.
+- Current Stage 0-12 result and evidence packets are complete and traceable to the same commit SHA.
+- Phase 12 deferrals are present in ADR-025, `ARCHITECTURE-EVOLUTION.md`, and the Deferred Work Log.
+- `SharedContracts` remains deferred unless real cross-service schema duplication proves the need.
 
 If any one of those items is not true, Phase 10 is still in progress.
 
@@ -350,7 +505,7 @@ Treat these as the smallest useful implementation slice for the first order-crea
 - `XYDataLabs.OrderProcessingSystem.Gateway/`, `XYDataLabs.OrderProcessingSystem.Orders.API/`, `XYDataLabs.OrderProcessingSystem.Inventory.API/`, and `XYDataLabs.OrderProcessingSystem.Notifications.API/` now each have a minimal ASP.NET Core host so the image refs map to real runnable containers.
 - `infra/modules/loganalytics.phase10.bicep` supplies the workspace used by ACA logs and workspace-based observability.
 - `infra/modules/functions.bicep` supplies the Function App host and runtime settings.
-- `XYDataLabs.OrderProcessingSystem.Functions` supplies the local .NET 8 isolated worker scaffold and initial DLQ intake trigger. Replay/quarantine behavior and deployed Azure proof are still pending before the portal Function App should be treated as complete behavior.
+- `XYDataLabs.OrderProcessingSystem.Functions` supplies the local .NET 8 isolated worker scaffold, initial DLQ intake trigger, and guarded DLQ replay Function. Deployed Azure proof is still pending before the portal Function App should be treated as complete behavior.
 - `infra/main.phase10.bicep` composes the Log Analytics, ACA, Service Bus, Functions, Key Vault, and Insights modules and wires the Service Bus transport connection into the runtime from the Service Bus module output.
 - The Phase 10 deployment parameters must supply real image refs for the Container Apps so the gateway and UI revisions can become healthy, with distinct backend images for Orders, Inventory, and Notifications.
 - `phase10-deploy-orchestrator.yml` calls `build-phase10-images.yml` to publish those host images to ACR so the deployment parameters can point at real service-specific tags.

@@ -7,8 +7,8 @@
           {
             "Name": "order-events",
             "Properties": {
-              "DefaultMessageTimeToLive": "P7D",
-              "DuplicateDetectionHistoryTimeWindow": "PT10M",
+              "DefaultMessageTimeToLive": "PT1H",
+              "DuplicateDetectionHistoryTimeWindow": "PT5M",
               "RequiresDuplicateDetection": false
             },
             "Subscriptions": [
@@ -16,7 +16,7 @@
                 "Name": "inventory-order-created",
                 "Properties": {
                   "DeadLetteringOnMessageExpiration": true,
-                  "DefaultMessageTimeToLive": "P7D",
+                  "DefaultMessageTimeToLive": "PT1H",
                   "LockDuration": "PT1M",
                   "MaxDeliveryCount": 10,
                   "ForwardDeadLetteredMessagesTo": "order-events-dlq"
@@ -26,7 +26,7 @@
                 "Name": "notifications-order-created",
                 "Properties": {
                   "DeadLetteringOnMessageExpiration": true,
-                  "DefaultMessageTimeToLive": "P7D",
+                  "DefaultMessageTimeToLive": "PT1H",
                   "LockDuration": "PT1M",
                   "MaxDeliveryCount": 10,
                   "ForwardDeadLetteredMessagesTo": "order-events-dlq"
@@ -37,21 +37,32 @@
           {
             "Name": "order-events-dlq",
             "Properties": {
-              "DefaultMessageTimeToLive": "P7D",
-              "DuplicateDetectionHistoryTimeWindow": "PT10M",
+              "DefaultMessageTimeToLive": "PT1H",
+              "DuplicateDetectionHistoryTimeWindow": "PT5M",
               "RequiresDuplicateDetection": false
             },
             "Subscriptions": [
               {
-                "Name": "dlq-replay",
+                "Name": "dlq-intake",
                 "Properties": {
                   "DeadLetteringOnMessageExpiration": true,
-                  "DefaultMessageTimeToLive": "P7D",
+                  "DefaultMessageTimeToLive": "PT1H",
                   "LockDuration": "PT1M",
                   "MaxDeliveryCount": 10
                 }
               }
             ]
+          }
+        ],
+        "Queues": [
+          {
+            "Name": "dlq-replay-requests",
+            "Properties": {
+              "DeadLetteringOnMessageExpiration": true,
+              "DefaultMessageTimeToLive": "PT1H",
+              "LockDuration": "PT1M",
+              "MaxDeliveryCount": 10
+            }
           }
         ]
       }

@@ -42,7 +42,7 @@ public sealed class StartupHelperTransportRegistrationTests
             [$"{ServiceBusOptions.SectionName}:ConnectionString"] = serviceBusConnectionString,
             [$"{ServiceBusOptions.SectionName}:TopicName"] = "order-events",
             [$"{ServiceBusOptions.SectionName}:DeadLetterTopicName"] = "order-events-dlq",
-            [$"{ServiceBusOptions.SectionName}:DeadLetterSubscriptionName"] = "dlq-replay",
+            [$"{ServiceBusOptions.SectionName}:DeadLetterSubscriptionName"] = "dlq-intake",
             [$"{ServiceBusOptions.SectionName}:ReplayEnabled"] = "true"
         });
 

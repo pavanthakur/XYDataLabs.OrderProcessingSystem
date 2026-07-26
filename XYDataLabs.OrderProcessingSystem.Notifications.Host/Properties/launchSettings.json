@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "XYDataLabs.OrderProcessingSystem.Notifications.Host": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:51277;http://localhost:51282"
+    }
+  }
+}

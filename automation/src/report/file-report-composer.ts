@@ -5,13 +5,13 @@ export class FileReportComposer implements ReportComposer {
     const lines = [
       "# Payment Automation Executive Summary",
       "",
-      "| Run ID | Target | Tenant | Provider | 3DS Setting | Journey | Challenge | Verification | Cleanup | Evidence |",
-      "|---|---|---|---|---|---|---|---|---|---|"
+      "| Run ID | Target | Tenant | Provider | Customer Order | Order ID | Order Ref | Amount | Currency | 3DS Setting | Journey | Challenge | Verification | Cleanup | Evidence |",
+      "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"
     ];
 
     for (const row of rows) {
       lines.push(
-        `| ${row.runId} | ${row.runtimeTarget} | ${row.tenantCode} | ${row.paymentProvider} | ${row.threeDsSetting} | ${row.journeyOutcome} | ${row.challengeOutcome} | ${row.verificationOutcome} | ${row.cleanupOutcome} | ${row.evidenceReference} |`
+        `| ${row.runId} | ${row.runtimeTarget} | ${row.tenantCode} | ${row.paymentProvider} | ${row.customerOrderId} | ${row.orderId} | ${row.orderReferenceId} | ${row.orderAmount} | ${row.orderCurrencyCode} | ${row.threeDsSetting} | ${row.journeyOutcome} | ${row.challengeOutcome} | ${row.verificationOutcome} | ${row.cleanupOutcome} | ${row.evidenceReference} |`
       );
     }
 

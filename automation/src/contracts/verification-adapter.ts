@@ -7,6 +7,7 @@ export interface VerificationRequest {
   environment: EnvironmentName;
   profile: RuntimeProfile;
   runPrefix: string;
+  customerOrderId?: string;
 }
 
 export interface VerificationResult {

@@ -130,6 +130,8 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
             result.IsSuccess.Should().BeTrue();
             result.Value.Should().NotBeNull();
             result.Value!.CustomerId.Should().Be(CustomerId);
+            result.Value.CurrencyCode.Should().Be("MXN");
+            result.Value.OrderReferenceId.Should().NotBeEmpty();
         }
 
         [Fact]
@@ -159,6 +161,8 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
             result.IsSuccess.Should().BeTrue();
             result.Value!.OrderId.Should().Be(orderId);
             result.Value.TotalPrice.Should().Be(100);
+            result.Value.CurrencyCode.Should().Be("MXN");
+            result.Value.OrderReferenceId.Should().NotBeEmpty();
             result.Value.Status.Should().Be(OrderStatus.Created.ToString());
         }
 

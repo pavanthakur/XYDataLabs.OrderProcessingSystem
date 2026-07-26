@@ -30,6 +30,7 @@ interface DockerMatrixOutput {
   startedIst: string;
   finishedIst: string;
   currentStep?: string;
+  status?: "running" | "passed" | "failed";
   targetCount: number;
   targets: string[];
   targetRuns: PaymentAutomationRunOutput[];
@@ -81,6 +82,7 @@ async function main(): Promise<void> {
     finishedUtc: startedAt.toISOString(),
     startedIst: formatIstTimestamp(startedAt),
     finishedIst: formatIstTimestamp(startedAt),
+    status: "running",
     targetCount: 0,
     targets: options.targets,
     targetRuns: []
@@ -158,9 +160,13 @@ async function main(): Promise<void> {
 
   const rows = targetRuns.flatMap((targetRun) => targetRun.rows);
   const markdownSummary = await reportComposer.compose(rows);
+  const hasFailures = targetRuns.some((targetRun) =>
+    targetRun.rows.some((row) => !row.journeyOutcome.startsWith("completed") && row.journeyOutcome !== "dry_run")
+  );
   matrixOutput.finishedUtc = new Date().toISOString();
   matrixOutput.finishedIst = formatIstTimestamp(new Date());
   matrixOutput.currentStep = "completed";
+  matrixOutput.status = hasFailures ? "failed" : "passed";
   matrixOutput.targetCount = targetRuns.length;
   matrixOutput.targetRuns = targetRuns;
 
@@ -191,6 +197,10 @@ async function main(): Promise<void> {
   await writeFile(latestPointerPath, `${reportDirectory}\n`, "utf8");
 
   process.stdout.write(`${JSON.stringify(matrixOutput, null, 2)}\n`);
+
+  if (hasFailures) {
+    throw new Error("Docker payment matrix completed with failed tenant journey(s).");
+  }
 }
 
 async function writeRunMessage(startupLogPath: string, progressLogPath: string, line: string): Promise<void> {

@@ -52,7 +52,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
         public static void InitializeSharedPool(
             OrderProcessingSystemDbContext context,
             IConfiguration? configuration = null,
-            bool applyMigrations = true)
+            bool applyMigrations = true,
+            bool seedOrders = true)
         {
             ArgumentNullException.ThrowIfNull(context);
 
@@ -70,7 +71,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
 
             foreach (var seedTenant in startupSeedTenants)
             {
-                SeedTenantSampleData(context, seedTenant);
+                SeedTenantSampleData(context, seedTenant, seedOrders);
             }
         }
 
@@ -78,12 +79,22 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
             OrderProcessingSystemDbContext mainContext,
             IConfiguration? configuration,
             bool applyMigrations,
-            IIntegrationEventMapperRegistry integrationEventMapperRegistry)
+            IIntegrationEventMapperRegistry? integrationEventMapperRegistry,
+            bool seedOrders = true)
         {
             ArgumentNullException.ThrowIfNull(mainContext);
-            ArgumentNullException.ThrowIfNull(integrationEventMapperRegistry);
 
-            SeedConfiguredDedicatedTenants(mainContext, configuration, applyMigrations, integrationEventMapperRegistry);
+            if (seedOrders)
+            {
+                ArgumentNullException.ThrowIfNull(integrationEventMapperRegistry);
+            }
+
+            SeedConfiguredDedicatedTenants(
+                mainContext,
+                configuration,
+                applyMigrations,
+                integrationEventMapperRegistry,
+                seedOrders);
         }
 
         private static IReadOnlyList<StartupSeedTenant> GetStartupSeedTenants(OrderProcessingSystemDbContext context)
@@ -106,7 +117,10 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
             return tenants;
         }
 
-        private static void SeedTenantSampleData(OrderProcessingSystemDbContext context, StartupSeedTenant seedTenant)
+        private static void SeedTenantSampleData(
+            OrderProcessingSystemDbContext context,
+            StartupSeedTenant seedTenant,
+            bool seedOrders)
         {
             if (!context.Customers.Any(customer => customer.TenantId == seedTenant.TenantId))
             {
@@ -118,7 +132,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                 SeedProducts(context, seedTenant);
             }
 
-            if (!context.Orders.Any(order => order.TenantId == seedTenant.TenantId))
+            if (seedOrders && !context.Orders.Any(order => order.TenantId == seedTenant.TenantId))
             {
                 SeedOrders(context, seedTenant);
             }
@@ -182,9 +196,19 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
 
             foreach (var seedTenant in seedTenants)
             {
-                var existing = context.PaymentProviders.FirstOrDefault(provider =>
-                    provider.TenantId == seedTenant.TenantId &&
-                    provider.Name == "OpenPay");
+                var existingProviders = context.PaymentProviders
+                    .Where(provider =>
+                        provider.TenantId == seedTenant.TenantId &&
+                        provider.ProviderType == PaymentProviderTypes.OpenPay)
+                    .OrderBy(provider => provider.Id)
+                    .ToList();
+
+                var existing = existingProviders.FirstOrDefault();
+
+                if (existingProviders.Count > 1)
+                {
+                    context.PaymentProviders.RemoveRange(existingProviders.Skip(1));
+                }
 
                 if (existing is not null)
                 {
@@ -231,9 +255,19 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
 
             foreach (var seedTenant in seedTenants)
             {
-                var existing = context.PaymentProviders.FirstOrDefault(provider =>
-                    provider.TenantId == seedTenant.TenantId &&
-                    provider.Name == "Razorpay");
+                var existingProviders = context.PaymentProviders
+                    .Where(provider =>
+                        provider.TenantId == seedTenant.TenantId &&
+                        provider.ProviderType == PaymentProviderTypes.Razorpay)
+                    .OrderBy(provider => provider.Id)
+                    .ToList();
+
+                var existing = existingProviders.FirstOrDefault();
+
+                if (existingProviders.Count > 1)
+                {
+                    context.PaymentProviders.RemoveRange(existingProviders.Skip(1));
+                }
 
                 if (existing is not null)
                 {
@@ -281,7 +315,8 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
             OrderProcessingSystemDbContext mainContext,
             IConfiguration? configuration,
             bool applyMigrations,
-            IIntegrationEventMapperRegistry integrationEventMapperRegistry)
+            IIntegrationEventMapperRegistry? integrationEventMapperRegistry,
+            bool seedOrders)
         {
             if (configuration is null)
                 return;
@@ -316,10 +351,15 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                 // (HasTenantContext = false → filter = true → all rows visible).
                 // Without this, dedicatedContext._tenantProvider would be null and EF Core's
                 // expression tree evaluator can NullReference on _tenantProvider.HasTenantContext.
-                using var dedicatedContext = new OrderProcessingSystemDbContext(
-                    dedicatedOptions,
-                    new NullTenantProvider(),
-                    integrationEventMapperRegistry);
+                using var dedicatedContext = seedOrders
+                    ? new OrderProcessingSystemDbContext(
+                        dedicatedOptions,
+                        new NullTenantProvider(),
+                        integrationEventMapperRegistry ?? throw new InvalidOperationException(
+                            "An integration-event mapper registry is required when order seeding is enabled."))
+                    : new OrderProcessingSystemDbContext(
+                        dedicatedOptions,
+                        new NullTenantProvider());
 
                 // For Option B (fresh dedicated DB), apply migrations so the schema exists.
                 // For Option A (same DB), this is idempotent — no-op.
@@ -343,7 +383,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                 SeedOpenpayProviders(dedicatedContext, new[] { seedTenant }, configuration);
                 SeedRazorpayProviders(dedicatedContext, new[] { seedTenant }, configuration);
 
-                SeedTenantSampleData(dedicatedContext, seedTenant);
+                SeedTenantSampleData(dedicatedContext, seedTenant, seedOrders);
             }
         }
 

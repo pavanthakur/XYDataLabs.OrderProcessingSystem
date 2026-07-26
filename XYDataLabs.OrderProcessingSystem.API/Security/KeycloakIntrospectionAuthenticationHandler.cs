@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authentication;
 
 namespace XYDataLabs.OrderProcessingSystem.API.Security;
@@ -83,6 +84,13 @@ internal sealed class KeycloakIntrospectionAuthenticationHandler : Authenticatio
                 return AuthenticateResult.Fail("Token is not active.");
             }
 
+            var expectedAudience = _configuration["IdentityProvider:Audience"]?.Trim();
+            if (!string.IsNullOrWhiteSpace(expectedAudience)
+                && !ContainsAudience(payload.Audience, expectedAudience))
+            {
+                return AuthenticateResult.Fail("Token audience is invalid.");
+            }
+
             var claims = new List<Claim>
             {
                 new(ClaimTypes.NameIdentifier, payload.Subject ?? "keycloak-user"),
@@ -100,6 +108,19 @@ internal sealed class KeycloakIntrospectionAuthenticationHandler : Authenticatio
                 claims.Add(new Claim(ClaimTypes.Email, payload.Email));
             }
 
+            if (!string.IsNullOrWhiteSpace(payload.TenantCode))
+            {
+                claims.Add(new Claim("tenant_code", payload.TenantCode));
+            }
+
+            foreach (var role in payload.RealmAccess?.Roles ?? [])
+            {
+                if (!string.IsNullOrWhiteSpace(role))
+                {
+                    claims.Add(new Claim(ClaimTypes.Role, role));
+                }
+            }
+
             var identity = new ClaimsIdentity(claims, Scheme.Name);
             var principal = new ClaimsPrincipal(identity);
             var ticket = new AuthenticationTicket(principal, Scheme.Name);
@@ -109,5 +130,18 @@ internal sealed class KeycloakIntrospectionAuthenticationHandler : Authenticatio
         {
             return AuthenticateResult.Fail(ex);
         }
+    }
+
+    private static bool ContainsAudience(JsonElement audience, string expectedAudience)
+    {
+        if (audience.ValueKind == JsonValueKind.String)
+        {
+            return string.Equals(audience.GetString(), expectedAudience, StringComparison.Ordinal);
+        }
+
+        return audience.ValueKind == JsonValueKind.Array
+            && audience.EnumerateArray().Any(item =>
+                item.ValueKind == JsonValueKind.String
+                && string.Equals(item.GetString(), expectedAudience, StringComparison.Ordinal));
     }
 }

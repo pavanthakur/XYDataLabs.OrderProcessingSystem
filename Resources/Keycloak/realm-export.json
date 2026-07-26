@@ -14,7 +14,7 @@
       "name": "XY Order Processing Local Web",
       "protocol": "openid-connect",
       "publicClient": true,
-      "directAccessGrantsEnabled": true,
+      "directAccessGrantsEnabled": false,
       "standardFlowEnabled": true,
       "implicitFlowEnabled": false,
       "serviceAccountsEnabled": false,
@@ -33,7 +33,36 @@
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256"
-      }
+      },
+      "protocolMappers": [
+        {
+          "name": "order-processing-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "xy-order-processing",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "tenant-code",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "tenant_code",
+            "claim.name": "tenant_code",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
     },
     {
       "clientId": "xy-order-processing-backend",
@@ -59,6 +88,11 @@
       "email": "tenant-admin@example.local",
       "firstName": "Tenant",
       "lastName": "Admin",
+      "attributes": {
+        "tenant_code": [
+          "TenantA"
+        ]
+      },
       "credentials": [
         {
           "type": "password",
@@ -68,7 +102,80 @@
       ],
       "realmRoles": [
         "offline_access",
-        "tenant-admin"
+        "tenant-admin",
+        "phase10-operator"
+      ]
+    },
+    {
+      "username": "tenant-user",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "tenant-user@example.local",
+      "firstName": "Tenant",
+      "lastName": "User",
+      "attributes": {
+        "tenant_code": [
+          "TenantA"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${KEYCLOAK_TENANT_ADMIN_PASSWORD}",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "offline_access",
+        "tenant-user"
+      ]
+    },
+    {
+      "username": "tenant-b-user",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "tenant-b-user@example.local",
+      "firstName": "Tenant B",
+      "lastName": "User",
+      "attributes": {
+        "tenant_code": [
+          "TenantB"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${KEYCLOAK_TENANT_ADMIN_PASSWORD}",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "offline_access",
+        "tenant-user"
+      ]
+    },
+    {
+      "username": "tenant-c-user",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "tenant-c-user@example.local",
+      "firstName": "Tenant C",
+      "lastName": "User",
+      "attributes": {
+        "tenant_code": [
+          "TenantC"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${KEYCLOAK_TENANT_ADMIN_PASSWORD}",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "offline_access",
+        "tenant-user"
       ]
     }
   ],
@@ -77,6 +184,14 @@
       {
         "name": "tenant-admin",
         "description": "Local tenant administrator role"
+      },
+      {
+        "name": "tenant-user",
+        "description": "Local tenant user without operations privileges"
+      },
+      {
+        "name": "phase10-operator",
+        "description": "Allows explicit approval of quarantined Phase 10 messages"
       }
     ]
   }

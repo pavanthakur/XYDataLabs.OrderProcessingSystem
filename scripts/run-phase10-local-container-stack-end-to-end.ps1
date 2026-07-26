@@ -5,7 +5,13 @@ param(
     [int]$StabilizationDelaySeconds = 120,
 
     [ValidateSet('minimal', 'normal', 'detailed', 'quiet')]
-    [string]$IntegrationConsoleVerbosity = 'minimal'
+    [string]$IntegrationConsoleVerbosity = 'minimal',
+
+    [switch]$CleanupOnExit,
+
+    [switch]$RemoveVolumes,
+
+    [switch]$RemoveImages
 )
 
 $ErrorActionPreference = 'Stop'
@@ -47,8 +53,9 @@ Set-Content -Path (Join-Path $runDir 'end-to-end-run-plan.txt') -Value @(
     '2. Run smoke validation.',
     '3. Run integration suite.',
     '4. Run payment matrix.',
-    '5. Tear down the compose stack and remove the Phase 10 images.',
-    '6. Write summary.json and update latest pointers.'
+    '5. Preserve the stack by default so NFR and rollback proof can run.',
+    '6. Tear down only when CleanupOnExit is explicitly selected.',
+    '7. Write summary.json and update latest pointers.'
 ) -Encoding utf8
 Set-Content -Path $startupLogPath -Value "[$(Get-Date -Format o)] Phase 10 end-to-end wrapper started`n" -Encoding utf8
 Set-Content -Path $progressLogPath -Value "Phase 10 end-to-end progress log initialized.`n" -Encoding utf8
@@ -207,33 +214,56 @@ catch {
 }
 finally {
     try {
-        if ($dockerAvailable) {
+        if ($dockerAvailable -and $CleanupOnExit) {
             Write-ProgressLine 'Running cleanup for Phase 10 local container stack...'
-            & docker compose --env-file $envExampleFile --env-file $envFile -f $composeFile --profile data --profile identity --profile storage --profile messaging --profile apps --profile functions down -v 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-down.log') | Out-Null
+            $downArguments = @(
+                'compose',
+                '--env-file', $envExampleFile,
+                '--env-file', $envFile,
+                '-f', $composeFile,
+                '--profile', 'data',
+                '--profile', 'identity',
+                '--profile', 'storage',
+                '--profile', 'messaging',
+                '--profile', 'apps',
+                '--profile', 'functions',
+                'down',
+                '--remove-orphans'
+            )
+            if ($RemoveVolumes) {
+                $downArguments += '--volumes'
+            }
+            & docker @downArguments 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-down.log') | Out-Null
             if ($LASTEXITCODE -ne 0) {
                 throw "Docker compose down failed with exit code $LASTEXITCODE"
             }
 
-            $imageOwner = if ([string]::IsNullOrWhiteSpace($env:PHASE10_IMAGE_OWNER)) { 'pavanthakur' } else { $env:PHASE10_IMAGE_OWNER }
-            $imageTag = if ([string]::IsNullOrWhiteSpace($env:PHASE10_IMAGE_TAG)) { 'dev' } else { $env:PHASE10_IMAGE_TAG }
-            $images = @(
-                "ghcr.io/$imageOwner/orderprocessing-gateway:$imageTag",
-                "ghcr.io/$imageOwner/orderprocessing-orders:$imageTag",
-                "ghcr.io/$imageOwner/orderprocessing-inventory:$imageTag",
-                "ghcr.io/$imageOwner/orderprocessing-notifications:$imageTag",
-                "ghcr.io/$imageOwner/orderprocessing-ui:$imageTag"
-            )
+            if ($RemoveImages) {
+                $imageOwner = if ([string]::IsNullOrWhiteSpace($env:PHASE10_IMAGE_OWNER)) { 'pavanthakur' } else { $env:PHASE10_IMAGE_OWNER }
+                $imageTag = if ([string]::IsNullOrWhiteSpace($env:PHASE10_IMAGE_TAG)) { 'dev' } else { $env:PHASE10_IMAGE_TAG }
+                $images = @(
+                    "ghcr.io/$imageOwner/orderprocessing-gateway:$imageTag",
+                    "ghcr.io/$imageOwner/orderprocessing-orders:$imageTag",
+                    "ghcr.io/$imageOwner/orderprocessing-payments:$imageTag",
+                    "ghcr.io/$imageOwner/orderprocessing-inventory:$imageTag",
+                    "ghcr.io/$imageOwner/orderprocessing-notifications:$imageTag",
+                    "ghcr.io/$imageOwner/orderprocessing-ui:$imageTag"
+                )
 
-            foreach ($image in $images) {
-                $imageId = docker images -q $image 2>$null
-                if ($imageId) {
-                    docker rmi -f $image | Out-Null
-                    Write-ProgressLine "Removed image $image"
-                }
-                else {
-                    Write-ProgressLine "Image not found: $image"
+                foreach ($image in $images) {
+                    $imageId = docker images -q $image 2>$null
+                    if ($imageId) {
+                        docker rmi -f $image | Out-Null
+                        Write-ProgressLine "Removed image $image"
+                    }
+                    else {
+                        Write-ProgressLine "Image not found: $image"
+                    }
                 }
             }
+        }
+        elseif ($dockerAvailable) {
+            Write-ProgressLine 'Preserving the running stack, volumes, and image tags for NFR/rollback proof.'
         }
         else {
             Write-ProgressLine 'Skipping cleanup because Docker was unavailable.'

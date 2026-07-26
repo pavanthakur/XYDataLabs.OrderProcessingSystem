@@ -40,7 +40,8 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
             var result = await _dispatcher.SendAsync(
                 new CreateOrderCommand(
                     new CustomerId(createOrderRequestDto.CustomerId),
-                    createOrderRequestDto.ProductIds.Select(static productId => new ProductId(productId)).ToArray()),
+                    createOrderRequestDto.ProductIds.Select(static productId => new ProductId(productId)).ToArray(),
+                    createOrderRequestDto.CurrencyCode),
                 cancellationToken);
             return result.ToCreatedResult(nameof(CreateOrder), new { id = result.Value?.OrderId });
         }

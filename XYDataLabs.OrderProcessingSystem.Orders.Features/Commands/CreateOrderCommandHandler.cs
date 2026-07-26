@@ -48,7 +48,10 @@ public sealed class CreateOrderCommandHandler : ICommandHandler<CreateOrderComma
         if (products.Count != command.ProductIds.Count)
             return Error.Create("NotFound", "One or more products not found.");
 
-        var orderResult = Order.Create(command.CustomerId, products);
+        var orderResult = Order.Create(
+            command.CustomerId,
+            products,
+            currencyCode: command.CurrencyCode);
         if (orderResult.IsFailure || orderResult.Value is null)
         {
             return ToApplicationError(orderResult.Error);

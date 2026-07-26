@@ -8,6 +8,11 @@
 **/.toolstarget
 **/.vs
 **/.vscode
+**/.artifacts
+**/.tmp
+**/TestResults
+**/automation/reports
+**/logs
 **/*.*proj.user
 **/*.dbmdl
 **/*.jfm
@@ -19,6 +24,9 @@
 **/node_modules
 **/npm-debug.log
 **/obj
+**/playwright-report
+**/test-results
+**/repomix-output.xml
 **/secrets.dev.yaml
 **/values.dev.yaml
 LICENSE

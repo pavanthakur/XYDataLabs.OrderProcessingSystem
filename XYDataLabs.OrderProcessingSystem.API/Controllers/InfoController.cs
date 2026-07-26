@@ -1,4 +1,5 @@
 using Asp.Versioning;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using System.Globalization;
@@ -13,6 +14,7 @@ namespace XYDataLabs.OrderProcessingSystem.API.Controllers
 {
     [ApiVersion("1.0")]
     [ApiController]
+    [AllowAnonymous]
     [Route("api/v{version:apiVersion}/[controller]")]
     public class InfoController : ControllerBase
     {

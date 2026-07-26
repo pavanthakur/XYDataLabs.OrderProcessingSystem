@@ -2,15 +2,18 @@
   "IsEncrypted": false,
   "Values": {
     "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "ConnectionStrings__OrderProcessingSystemDbConnection": "Server=localhost,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=<set-local-sql-password>;TrustServerCertificate=True;",
     "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
     "ServiceBusConnection": "Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;",
     "Phase10DlqTopicName": "order-events-dlq",
-    "Phase10DlqSubscriptionName": "dlq-replay",
+    "Phase10DlqIntakeSubscriptionName": "dlq-intake",
+    "Phase10ReplayRequestQueueName": "dlq-replay-requests",
     "ServiceBus:Enabled": "false",
     "ServiceBus:ConnectionString": "Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;",
     "ServiceBus:TopicName": "order-events",
     "ServiceBus:DeadLetterTopicName": "order-events-dlq",
-    "ServiceBus:DeadLetterSubscriptionName": "dlq-replay",
-    "ServiceBus:ReplayEnabled": "true"
+    "ServiceBus:DeadLetterSubscriptionName": "dlq-intake",
+    "ServiceBus:ReplayRequestQueueName": "dlq-replay-requests",
+    "ServiceBus:ReplayEnabled": "false"
   }
 }

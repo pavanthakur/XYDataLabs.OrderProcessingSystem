@@ -138,6 +138,17 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
         _capturedPaymentAttempts.Clear();
         _capturedPaymentAttemptHistories.Clear();
 
+        var orderProduct = new Product
+        {
+            ProductId = 1,
+            Name = "Payment test product",
+            Price = 100m
+        };
+        var order = Order.Create(1, [orderProduct]).Value!;
+        order.OrderId = 1;
+        MockDbContext.Setup(db => db.Orders)
+            .Returns(GetMockDbSet(new[] { order }.AsQueryable()).Object);
+
         // PaymentMethods —FindAsync returns a stable PM (needed by UpdatePaymentMethodByBillingCustomerId)
         var stubPm = new Domain.Entities.PaymentMethod { Id = 0, Token = "pm-token", Status = true, PaymentProviderId = 1 };
         var mockPmSet = new Mock<DbSet<Domain.Entities.PaymentMethod>>();

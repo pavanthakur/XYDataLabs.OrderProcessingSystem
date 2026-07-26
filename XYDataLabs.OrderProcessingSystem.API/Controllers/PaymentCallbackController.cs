@@ -1,8 +1,10 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace XYDataLabs.OrderProcessingSystem.API.Controllers;
 
 [ApiController]
+[AllowAnonymous]
 public sealed class PaymentCallbackController : ControllerBase
 {
     private const string PaymentCallbackPath = "/payment/callback";

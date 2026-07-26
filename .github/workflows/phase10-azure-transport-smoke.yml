@@ -82,11 +82,16 @@ jobs:
             echo "| Notifications Subscription | ${NOTIFICATIONS_SUB} |"
             echo "| DLQ Topic | ${DLQ_TOPIC} |"
             echo "| Replay Subscription | ${DLQ_REPLAY_SUB} |"
+            echo '| Replay implementation target | `XYDataLabs.OrderProcessingSystem.Functions/DlqReplayFunction.cs` |'
             echo ""
             echo "### Azure Links"
             echo ""
             echo "- [Resource group](${RESOURCE_GROUP_URL})"
             echo "- [Service Bus namespace](${SERVICE_BUS_URL})"
+            echo ""
+            echo "### Broker Replay Proof"
+            echo ""
+            echo "This workflow validates broker topology and controlled receive/republish behavior through the transport-smoke utility. It does not invoke or prove the deployed DLQ replay Function."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Verify Service Bus topology exists

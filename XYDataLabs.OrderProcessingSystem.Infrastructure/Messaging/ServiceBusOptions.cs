@@ -14,7 +14,9 @@ public sealed class ServiceBusOptions
 
     public string DeadLetterTopicName { get; init; } = "order-events-dlq";
 
-    public string DeadLetterSubscriptionName { get; init; } = "dlq-replay";
+    public string DeadLetterSubscriptionName { get; init; } = "dlq-intake";
+
+    public string ReplayRequestQueueName { get; init; } = "dlq-replay-requests";
 
     public int MaxDeliveryCount { get; init; } = 10;
 
