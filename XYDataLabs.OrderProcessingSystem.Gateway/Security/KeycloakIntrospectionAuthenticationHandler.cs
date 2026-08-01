@@ -7,6 +7,8 @@ namespace XYDataLabs.OrderProcessingSystem.Gateway.Security;
 
 internal sealed class KeycloakIntrospectionAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
 {
+    private const string BearerPrefix = "Bearer ";
+
     public KeycloakIntrospectionAuthenticationHandler(
         Microsoft.Extensions.Options.IOptionsMonitor<AuthenticationSchemeOptions> options,
         Microsoft.Extensions.Logging.ILoggerFactory logger,
@@ -30,13 +32,12 @@ internal sealed class KeycloakIntrospectionAuthenticationHandler : Authenticatio
         }
 
         var rawHeader = authHeader.ToString().Trim();
-        const string bearerPrefix = "Bearer ";
-        if (!rawHeader.StartsWith(bearerPrefix, StringComparison.OrdinalIgnoreCase))
+        if (!rawHeader.StartsWith(BearerPrefix, StringComparison.OrdinalIgnoreCase))
         {
             return Task.FromResult(AuthenticateResult.NoResult());
         }
 
-        var token = rawHeader[bearerPrefix.Length..].Trim();
+        var token = rawHeader[BearerPrefix.Length..].Trim();
         if (string.IsNullOrWhiteSpace(token))
         {
             return Task.FromResult(AuthenticateResult.Fail("Missing bearer token."));
@@ -55,6 +56,22 @@ internal sealed class KeycloakIntrospectionAuthenticationHandler : Authenticatio
         }
 
         return ValidateTokenAsync(authority, clientId, clientSecret, token);
+    }
+
+    protected override Task HandleChallengeAsync(AuthenticationProperties properties)
+    {
+        if (HasBearerToken())
+        {
+            Response.StatusCode = StatusCodes.Status403Forbidden;
+            return Response.WriteAsJsonAsync(new
+            {
+                error = "The supplied bearer token is invalid for this protected resource."
+            });
+        }
+
+        Response.StatusCode = StatusCodes.Status401Unauthorized;
+        Response.Headers.WWWAuthenticate = "Bearer";
+        return Task.CompletedTask;
     }
 
     private async Task<AuthenticateResult> ValidateTokenAsync(string authority, string clientId, string clientSecret, string token)
@@ -143,5 +160,16 @@ internal sealed class KeycloakIntrospectionAuthenticationHandler : Authenticatio
             && audience.EnumerateArray().Any(item =>
                 item.ValueKind == JsonValueKind.String
                 && string.Equals(item.GetString(), expectedAudience, StringComparison.Ordinal));
+    }
+
+    private bool HasBearerToken()
+    {
+        if (!Request.Headers.TryGetValue("Authorization", out var authHeader)
+            || Microsoft.Extensions.Primitives.StringValues.IsNullOrEmpty(authHeader))
+        {
+            return false;
+        }
+
+        return authHeader.ToString().Trim().StartsWith(BearerPrefix, StringComparison.OrdinalIgnoreCase);
     }
 }

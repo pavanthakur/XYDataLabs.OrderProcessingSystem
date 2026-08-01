@@ -1,7 +1,7 @@
 # Architecture Evolution: Monolith to Enterprise Microservices
 
 **Last Updated:** July 1, 2026
-**Current Status:** Phase 8 Closeout Matrix Validation Passed ✅ | Track U U5 Complete ✅ | Phase 8.5 Complete ✅ | Phase 8.6 Complete ✅ | Phase 8.7 Complete ✅ | Phase 9 closeout complete for extraction/tasking ✅ | Phase 9.5 identity portability wiring implemented and runtime verified in local HTTP and Docker Dev HTTP ✅ | Phase 10.1 local baseline reconciliation complete ✅ | Phases 10, 11, 11.5, 12-14 Planned 📅 | Post-14 Horizons captured 📘
+**Current Status:** Phase 8 Closeout Matrix Validation Passed ✅ | Track U U5 Complete ✅ | Phase 8.5 Complete ✅ | Phase 8.6 Complete ✅ | Phase 8.7 Complete ✅ | Phase 9 closeout complete for extraction/tasking ✅ | Phase 9.5 identity portability wiring implemented and runtime verified in local HTTP and Docker Dev HTTP ✅ | Phase 10.1 local baseline reconciliation complete ✅ | Phase 10 local NFR proof passed and Docker parity proof passed ✅ | Phases 10, 11, 11.5, 12-14 Planned 📅 | Post-14 Horizons captured 📘
 
 ---
 
@@ -182,6 +182,7 @@ Primary objective:
 
 Tooling prerequisite:
 - Before Phase 10 implementation or validation changes, use [Phase 10 Tool Prerequisites](docs/guides/development/phase10-tool-prerequisites.md) as the canonical developer-machine setup and readiness gate. Docker Compose remains the canonical local runtime, Aspire remains optional, and Azure remains the deployment-validation environment.
+- The canonical pre-Azure architecture baseline for the remaining Phase 10 work is [docs/internal/phase10-preazure-lld.md](docs/internal/phase10-preazure-lld.md); the Phase 10 checklist remains the execution companion that turns that baseline into stage-by-stage work.
 
 Broad checklist:
 - Replace Orders, Payments, Inventory, and Notifications compatibility stubs with real module behavior and authoritative persistence.

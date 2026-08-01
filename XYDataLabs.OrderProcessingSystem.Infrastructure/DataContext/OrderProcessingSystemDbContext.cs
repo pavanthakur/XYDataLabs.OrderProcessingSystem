@@ -5,7 +5,6 @@ using XYDataLabs.OrderProcessingSystem.Domain.Events;
 using XYDataLabs.OrderProcessingSystem.Domain.Identifiers;
 using XYDataLabs.OrderProcessingSystem.Domain.ValueObjects;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.Migrations;
-using XYDataLabs.OrderProcessingSystem.Infrastructure.Messaging;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
