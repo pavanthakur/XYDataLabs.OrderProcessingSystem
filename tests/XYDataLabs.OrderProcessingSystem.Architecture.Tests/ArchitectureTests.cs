@@ -23,7 +23,7 @@ public class ArchitectureTests
         typeof(Infrastructure.DataContext.OrderProcessingSystemDbContext).Assembly;
 
     private static readonly Assembly ApiAssembly =
-        typeof(API.Controllers.OrderController).Assembly;
+        typeof(Orders.API.Controllers.DlqAdminController).Assembly;
 
     private static readonly Assembly SharedKernelAssembly =
         typeof(SharedKernel.Results.Result<>).Assembly;
@@ -32,7 +32,7 @@ public class ArchitectureTests
     private const string DomainNamespace = "XYDataLabs.OrderProcessingSystem.Domain";
     private const string ApplicationNamespace = "XYDataLabs.OrderProcessingSystem.Application";
     private const string InfrastructureNamespace = "XYDataLabs.OrderProcessingSystem.Infrastructure";
-    private const string ApiNamespace = "XYDataLabs.OrderProcessingSystem.API";
+    private const string ApiNamespace = "XYDataLabs.OrderProcessingSystem.Orders.API";
 
     [Fact]
     public void Domain_Should_Not_Depend_On_Application()
@@ -185,7 +185,7 @@ public class ArchitectureTests
     {
         var result = Types.InAssembly(ApiAssembly)
             .That()
-            .ResideInNamespace("XYDataLabs.OrderProcessingSystem.API.Controllers")
+            .ResideInNamespace("XYDataLabs.OrderProcessingSystem.Orders.API.Controllers")
             .ShouldNot()
             .HaveDependencyOn(InfrastructureNamespace)
             .GetResult();

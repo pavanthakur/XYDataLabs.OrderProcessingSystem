@@ -3,7 +3,7 @@
 **Part of:** [quick-command-reference.md](./quick-command-reference.md)  
 **Last Updated:** April 11, 2026
 
-> **Phase 10 tool setup:** Before running or changing Phase 10 local/Docker/Azure validation paths, use [Phase 10 Tool Prerequisites](../guides/development/phase10-tool-prerequisites.md) as the single source of truth for developer-machine tools, runtime modes, and the Environment Readiness Gate. Do not duplicate install commands in this reference.
+> **Phase 10 tool setup:** Before running or changing Phase 10 local/Docker/Azure validation paths, use [Phase 10 Tool Prerequisites](../guides/development/phase10-tool-prerequisites.md) as the single source of truth for developer-machine tools, runtime modes, and the Environment Readiness Gate. The pre-Azure architecture baseline lives in [Phase 10 Pre-Azure LLD](../internal/phase10-preazure-lld.md), and the execution companion is [Phase 10 Implementation Checklist](../internal/phase10-implementation-checklist.md). Do not duplicate install commands or baseline rules in this reference.
 
 ---
 
@@ -128,9 +128,9 @@ Docker-targeted gateway profiles:
 
 Current VS Code validation paths:
 - The existing 5-task `docker-dev-http` sequence is the canonical full Docker validation lane.
-- Use the Docker lane when you want the full Phase 10 verification path: start profile, wait ready, Playwright smoke, integration suite, payment matrix, and full validation.
+- Use the Docker lane when you want the full pre-Azure Phase 10 verification path: start profile, wait ready, Playwright smoke, integration suite, payment matrix, and full validation.
 - The local Phase 10 lane stays the faster developer loop and focuses on profile start plus smoke.
-- Phase 10 split-service validation has its own local container-app lane because it introduces separate gateway, Orders, Inventory, Notifications, and UI containers.
+- Phase 10 split-service validation has its own local container-app lane because it introduces separate gateway, Orders, Inventory, Notifications, and UI containers under the governed pre-Azure baseline.
 - The new Phase 10-friendly aliases are `Phase 10: Local Container Stack 01 Start`, `Phase 10: Local Container Stack 01 Start (Reuse Existing)`, `Phase 10: Local Container Stack 02 Smoke`, `Phase 10: Local Container Stack 03 Full Validation`, and `Phase 10: Local Container Stack Cleanup`.
 - Use the local Phase 10 aliases when you want the newer split-service local validation path without changing the older task contract.
 
@@ -151,6 +151,7 @@ Preferred Phase 10 Docker E2E references:
 - Terminal run-hook: `npm --prefix automation run xydatalabs-test-docker-local-e2e-dev`
 - VS Code task: `1 Run: xydatalabs-test-docker-local-e2e-dev (Docker Dev HTTP E2E)`
 - Direct script equivalent: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\run-phase10-docker-dev-e2e-hook.ps1 -StabilizationDelaySeconds 60`
+- Docker NFR proof wrapper: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\run-phase10-docker-nfr-proof.ps1`
 - Use this when you want one command that recreates the stack in clean Azure-parity mode, applies EF migrations, verifies SQL/Redis/payment-provider baseline readiness, runs ready/smoke/integration/matrix/full validation, writes the log trail, and cleans up the local stack.
 - Use `-ReuseExistingStack` on the direct script only when you intentionally want a faster debugging pass against the current local containers and database state.
 - Clean Docker run: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\run-phase10-docker-dev-e2e-hook.ps1 -StabilizationDelaySeconds 60`
@@ -176,7 +177,7 @@ Access paths:
 - Notifications service: `http://localhost:5083/health`
 - The local Phase 10 container stack uses service-name routing inside Docker so the gateway can talk to Orders, Inventory, Notifications, and UI as separate containers.
 
-### **Phase 9 closeout run order**
+### **Phase 10 local / Docker run order**
 
 Use this tracked sequence when you want to re-run or verify the local/Docker closeout flow without relying on generated artifacts:
 
@@ -197,9 +198,12 @@ Use this tracked sequence when you want to re-run or verify the local/Docker clo
 10. Docker Dev HTTP: `1 Run: Docker Dev HTTP 04 Payment Matrix`
 11. Docker Dev HTTP: `1 Run: Docker Dev HTTP 05 Full Validation`
 12. Pre-Azure local sequence: `2 Run: Phase 10 Pre-Azure Sequence`
+13. Pre-Azure cleanup, normal teardown: `3 Cleanup: Phase 10 Pre-Azure Local Stack (Preserve Volumes)`
+14. Pre-Azure cleanup, full reset: `3 Cleanup: Phase 10 Pre-Azure Local Stack + Volumes`
 
 Notes:
 - The canonical evidence folders remain `TestResults\Integration`, `TestResults\PaymentMatrix`, and `TestResults\Playwright`.
+- Phase 10 pre-Azure milestone evidence is separate and writes under `TestResults\Phase10\local-preazure`.
 - Runtime-generated folders under `automation/dist/` and `frontend/apps/web/test-results/` stay untracked.
 - Any env or Keycloak seed files should be reviewed before commit because they may contain secret-like material.
 - `Resources/Keycloak/realm-export.json` stays as a checked-in template only; the real values must come from `.NET user-secrets` for local HTTP, `Resources/Docker/.env.local` for Docker dev HTTP, GitHub secrets in CI, and Key Vault in Azure.

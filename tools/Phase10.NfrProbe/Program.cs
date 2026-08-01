@@ -1,4 +1,6 @@
 using System.Data;
+using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json;
 using Azure.Messaging.ServiceBus;
 using Microsoft.Data.SqlClient;
@@ -21,7 +23,7 @@ internal static class Program
         try
         {
             await PublishBurstAsync(options, runId, messageIds).ConfigureAwait(false);
-            var result = await WaitForEffectsAsync(options, runId).ConfigureAwait(false);
+        var result = await WaitForEffectsAsync(options, runId).ConfigureAwait(false);
             result = result with
             {
                 RunId = runId,
@@ -116,10 +118,31 @@ internal static class Program
     {
         var deadline = DateTimeOffset.UtcNow.AddSeconds(options.TimeoutSeconds);
         ProbeResult latest = new() { RunId = runId };
+        var lastLoggedSnapshot = new ProbeResult
+        {
+            InventoryInboxCount = -1,
+            NotificationsInboxCount = -1,
+            InventoryEffectCount = -1,
+            NotificationEffectCount = -1,
+            P95Seconds = -1
+        };
 
         while (DateTimeOffset.UtcNow < deadline)
         {
-            latest = await ReadResultAsync(options.SqlConnectionString, runId).ConfigureAwait(false);
+            latest = await ReadResultAsync(options, runId).ConfigureAwait(false);
+            if (latest.InventoryInboxCount != lastLoggedSnapshot.InventoryInboxCount
+                || latest.NotificationsInboxCount != lastLoggedSnapshot.NotificationsInboxCount
+                || latest.InventoryEffectCount != lastLoggedSnapshot.InventoryEffectCount
+                || latest.NotificationEffectCount != lastLoggedSnapshot.NotificationEffectCount
+                || Math.Abs(latest.P95Seconds - lastLoggedSnapshot.P95Seconds) > double.Epsilon)
+            {
+                await Console.Out.WriteLineAsync(
+                    $"Observed {runId}: inbox={latest.InventoryInboxCount}/{latest.NotificationsInboxCount}, " +
+                    $"effects={latest.InventoryEffectCount}/{latest.NotificationEffectCount}, p95={latest.P95Seconds:0.###}s")
+                    .ConfigureAwait(false);
+                lastLoggedSnapshot = latest;
+            }
+
             if (latest.InventoryInboxCount >= options.MessageCount
                 && latest.NotificationsInboxCount >= options.MessageCount
                 && latest.InventoryEffectCount >= options.MessageCount
@@ -137,24 +160,47 @@ internal static class Program
         };
     }
 
-    private static async Task<ProbeResult> ReadResultAsync(string connectionString, string runId)
+    private static async Task<ProbeResult> ReadResultAsync(ProbeOptions options, string runId)
+        => options.SqlReadMode.Equals("docker-compose", StringComparison.OrdinalIgnoreCase)
+            ? await ReadResultViaDockerComposeAsync(options, runId).ConfigureAwait(false)
+            : await ReadResultViaSqlConnectionAsync(options.SqlConnectionString, runId).ConfigureAwait(false);
+
+    private static async Task<ProbeResult> ReadResultViaSqlConnectionAsync(string connectionString, string runId)
     {
         const string sql = """
+            SET NOCOUNT ON;
+            SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+            SET LOCK_TIMEOUT 5000;
+
             SELECT
-              SUM(CASE WHEN [ConsumerName] = N'Inventory' THEN 1 ELSE 0 END) AS InventoryInboxCount,
-              SUM(CASE WHEN [ConsumerName] = N'Notifications' THEN 1 ELSE 0 END) AS NotificationsInboxCount
-            FROM [operations].[ConsumerInboxMessages]
-            WHERE [CorrelationId] = @runId;
-
-            SELECT TOP (1)
-              PERCENTILE_CONT(0.95) WITHIN GROUP (
-                ORDER BY DATEDIFF_BIG(MILLISECOND, [EnqueuedUtc], [ProcessedUtc])
-              ) OVER () AS P95Milliseconds
-            FROM [operations].[ConsumerInboxMessages]
-            WHERE [CorrelationId] = @runId;
-
-            SELECT COUNT(*) FROM [inventory].[InventoryReservations] WHERE [CorrelationId] = @runId;
-            SELECT COUNT(*) FROM [notifications].[NotificationDeliveries] WHERE [CorrelationId] = @runId;
+              COALESCE((
+                SELECT COUNT(*)
+                FROM [operations].[ConsumerInboxMessages] WITH (READUNCOMMITTED)
+                WHERE [CorrelationId] = @runId AND [ConsumerName] = N'Inventory'
+              ), 0) AS InventoryInboxCount,
+              COALESCE((
+                SELECT COUNT(*)
+                FROM [operations].[ConsumerInboxMessages] WITH (READUNCOMMITTED)
+                WHERE [CorrelationId] = @runId AND [ConsumerName] = N'Notifications'
+              ), 0) AS NotificationsInboxCount,
+              COALESCE((
+                SELECT COUNT(*)
+                FROM [inventory].[InventoryReservations] WITH (READUNCOMMITTED)
+                WHERE [CorrelationId] = @runId
+              ), 0) AS InventoryEffectCount,
+              COALESCE((
+                SELECT COUNT(*)
+                FROM [notifications].[NotificationDeliveries] WITH (READUNCOMMITTED)
+                WHERE [CorrelationId] = @runId
+              ), 0) AS NotificationEffectCount,
+              COALESCE((
+                SELECT TOP (1)
+                  CONVERT(decimal(18,3), PERCENTILE_CONT(0.95) WITHIN GROUP (
+                    ORDER BY DATEDIFF_BIG(MILLISECOND, [EnqueuedUtc], [ProcessedUtc])
+                  ) OVER ())
+                FROM [operations].[ConsumerInboxMessages] WITH (READUNCOMMITTED)
+                WHERE [CorrelationId] = @runId
+              ), 0) AS P95Milliseconds;
             """;
 
         await using var connection = new SqlConnection(connectionString);
@@ -165,6 +211,8 @@ internal static class Program
         await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
         var inventoryInbox = 0;
         var notificationsInbox = 0;
+        var inventoryEffects = 0;
+        var notificationEffects = 0;
         var p95Milliseconds = 0d;
         if (await reader.ReadAsync().ConfigureAwait(false))
         {
@@ -174,24 +222,16 @@ internal static class Program
             notificationsInbox = await reader.IsDBNullAsync(1).ConfigureAwait(false)
                 ? 0
                 : Convert.ToInt32(reader.GetValue(1));
-        }
-
-        await reader.NextResultAsync().ConfigureAwait(false);
-        if (await reader.ReadAsync().ConfigureAwait(false))
-        {
-            p95Milliseconds = await reader.IsDBNullAsync(0).ConfigureAwait(false)
+            inventoryEffects = await reader.IsDBNullAsync(2).ConfigureAwait(false)
+                ? 0
+                : Convert.ToInt32(reader.GetValue(2));
+            notificationEffects = await reader.IsDBNullAsync(3).ConfigureAwait(false)
+                ? 0
+                : Convert.ToInt32(reader.GetValue(3));
+            p95Milliseconds = await reader.IsDBNullAsync(4).ConfigureAwait(false)
                 ? 0d
-                : Convert.ToDouble(reader.GetValue(0));
+                : Convert.ToDouble(reader.GetValue(4), CultureInfo.InvariantCulture);
         }
-
-        await reader.NextResultAsync().ConfigureAwait(false);
-        var inventoryEffects = await reader.ReadAsync().ConfigureAwait(false)
-            ? reader.GetInt32(0)
-            : 0;
-        await reader.NextResultAsync().ConfigureAwait(false);
-        var notificationEffects = await reader.ReadAsync().ConfigureAwait(false)
-            ? reader.GetInt32(0)
-            : 0;
 
         return new ProbeResult
         {
@@ -201,6 +241,142 @@ internal static class Program
             NotificationEffectCount = notificationEffects,
             P95Seconds = p95Milliseconds / 1000d
         };
+    }
+
+    private static async Task<ProbeResult> ReadResultViaDockerComposeAsync(
+        ProbeOptions options,
+        string runId)
+    {
+        var databaseName = new SqlConnectionStringBuilder(options.SqlConnectionString).InitialCatalog;
+        var escapedRunId = runId.Replace("'", "''", StringComparison.Ordinal);
+        var normalizedQuery = $"""
+            SET NOCOUNT ON;
+            SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+            SET LOCK_TIMEOUT 5000;
+            DECLARE @runId nvarchar(128) = N'{escapedRunId}';
+            SELECT
+              COALESCE((
+                SELECT COUNT(*)
+                FROM [operations].[ConsumerInboxMessages] WITH (READUNCOMMITTED)
+                WHERE [CorrelationId] = @runId AND [ConsumerName] = N'Inventory'
+              ), 0) AS InventoryInboxCount,
+              COALESCE((
+                SELECT COUNT(*)
+                FROM [operations].[ConsumerInboxMessages] WITH (READUNCOMMITTED)
+                WHERE [CorrelationId] = @runId AND [ConsumerName] = N'Notifications'
+              ), 0) AS NotificationsInboxCount,
+              COALESCE((
+                SELECT COUNT(*)
+                FROM [inventory].[InventoryReservations] WITH (READUNCOMMITTED)
+                WHERE [CorrelationId] = @runId
+              ), 0) AS InventoryEffectCount,
+              COALESCE((
+                SELECT COUNT(*)
+                FROM [notifications].[NotificationDeliveries] WITH (READUNCOMMITTED)
+                WHERE [CorrelationId] = @runId
+              ), 0) AS NotificationEffectCount,
+              COALESCE((
+                SELECT TOP (1)
+                  CONVERT(decimal(18,3), PERCENTILE_CONT(0.95) WITHIN GROUP (
+                    ORDER BY DATEDIFF_BIG(MILLISECOND, [EnqueuedUtc], [ProcessedUtc])
+                  ) OVER ())
+                FROM [operations].[ConsumerInboxMessages] WITH (READUNCOMMITTED)
+                WHERE [CorrelationId] = @runId
+              ), 0) AS P95Milliseconds;
+            """;
+
+        var shellCommand = $"""
+            if [ -x /opt/mssql-tools18/bin/sqlcmd ]; then SQLCMD=/opt/mssql-tools18/bin/sqlcmd; else SQLCMD=/opt/mssql-tools/bin/sqlcmd; fi; "$SQLCMD" -C -S localhost -U sa -P "$SA_PASSWORD" -d "{databaseName.Replace("\"", "\\\"", StringComparison.Ordinal)}" -h -1 -W -s "|" -Q "SET NOCOUNT ON; {normalizedQuery.Replace("\"", "\\\"", StringComparison.Ordinal)}"
+            """.Trim();
+
+        var output = await RunDockerComposeCommandAsync(shellCommand).ConfigureAwait(false);
+        var lines = output
+            .Select(line => line.Trim())
+            .Where(line => !string.IsNullOrWhiteSpace(line)
+                && !line.StartsWith("(", StringComparison.Ordinal)
+                && !line.Contains("rows affected", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        var row = lines.LastOrDefault(line => line.Contains('|', StringComparison.Ordinal));
+        if (string.IsNullOrWhiteSpace(row))
+        {
+            return new ProbeResult { RunId = runId };
+        }
+
+        var columns = row.Split('|', StringSplitOptions.TrimEntries);
+        if (columns.Length < 5)
+        {
+            throw new InvalidOperationException(
+                $"Unexpected SQL output while reading durable effects for {runId}: {row}");
+        }
+
+        return new ProbeResult
+        {
+            RunId = runId,
+            InventoryInboxCount = int.Parse(columns[0], CultureInfo.InvariantCulture),
+            NotificationsInboxCount = int.Parse(columns[1], CultureInfo.InvariantCulture),
+            InventoryEffectCount = int.Parse(columns[2], CultureInfo.InvariantCulture),
+            NotificationEffectCount = int.Parse(columns[3], CultureInfo.InvariantCulture),
+            P95Seconds = double.Parse(columns[4], CultureInfo.InvariantCulture) / 1000d
+        };
+    }
+
+    private static async Task<IReadOnlyList<string>> RunDockerComposeCommandAsync(string shellCommand)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = "docker",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        psi.ArgumentList.Add("compose");
+        psi.ArgumentList.Add("--env-file");
+        psi.ArgumentList.Add(Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Docker", ".env.local.example"));
+        psi.ArgumentList.Add("--env-file");
+        psi.ArgumentList.Add(Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Docker", ".env.local"));
+        psi.ArgumentList.Add("-f");
+        psi.ArgumentList.Add(Path.Combine(Directory.GetCurrentDirectory(), "compose", "docker-compose.phase10.yml"));
+        psi.ArgumentList.Add("--profile");
+        psi.ArgumentList.Add("data");
+        psi.ArgumentList.Add("--profile");
+        psi.ArgumentList.Add("identity");
+        psi.ArgumentList.Add("--profile");
+        psi.ArgumentList.Add("storage");
+        psi.ArgumentList.Add("--profile");
+        psi.ArgumentList.Add("messaging");
+        psi.ArgumentList.Add("--profile");
+        psi.ArgumentList.Add("apps");
+        psi.ArgumentList.Add("--profile");
+        psi.ArgumentList.Add("functions");
+        psi.ArgumentList.Add("exec");
+        psi.ArgumentList.Add("-T");
+        psi.ArgumentList.Add("sql-server");
+        psi.ArgumentList.Add("/bin/sh");
+        psi.ArgumentList.Add("-lc");
+        psi.ArgumentList.Add(shellCommand);
+
+        using var process = Process.Start(psi)
+            ?? throw new InvalidOperationException("Failed to start docker compose exec for SQL probe.");
+
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync().ConfigureAwait(false);
+        var stdout = await stdoutTask.ConfigureAwait(false);
+        var stderr = await stderrTask.ConfigureAwait(false);
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"docker compose exec sql-server failed with exit code {process.ExitCode}. {stderr}".Trim());
+        }
+
+        return stdout
+            .Split(new[] { "\r\n", "\n" }, StringSplitOptions.None)
+            .Select(line => line.Trim())
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .ToArray();
     }
 
     private static async Task WriteResultAsync(string path, ProbeResult result)
@@ -236,6 +412,7 @@ internal sealed record ProbeResult
 internal sealed record ProbeOptions(
     string ServiceBusConnectionString,
     string SqlConnectionString,
+    string SqlReadMode,
     string TopicName,
     int TenantId,
     string TenantCode,
@@ -249,8 +426,9 @@ internal sealed record ProbeOptions(
     {
         var values = Parse(args);
         return new ProbeOptions(
-            Required(values, "servicebus-connection-string"),
-            Required(values, "sql-connection-string"),
+            Required(values, "servicebus-connection-string", "PHASE10_NFR_SERVICEBUS_CONNECTION_STRING"),
+            Required(values, "sql-connection-string", "PHASE10_NFR_SQL_CONNECTION_STRING"),
+            Get(values, "sql-read-mode", Environment.GetEnvironmentVariable("PHASE10_NFR_SQL_READ_MODE") ?? "docker-compose"),
             Get(values, "topic", "order-events"),
             int.Parse(Get(values, "tenant-id", "1")),
             Get(values, "tenant-code", "TenantA"),
@@ -287,9 +465,15 @@ internal sealed record ProbeOptions(
         return result;
     }
 
-    private static string Required(IReadOnlyDictionary<string, string> values, string key)
+    private static string Required(
+        IReadOnlyDictionary<string, string> values,
+        string key,
+        string? environmentVariable = null)
         => values.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
             ? value
+            : !string.IsNullOrWhiteSpace(environmentVariable)
+                && !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(environmentVariable))
+                    ? Environment.GetEnvironmentVariable(environmentVariable)!
             : throw new ArgumentException($"Missing required argument --{key}.", nameof(values));
 
     private static string Get(IReadOnlyDictionary<string, string> values, string key, string fallback)

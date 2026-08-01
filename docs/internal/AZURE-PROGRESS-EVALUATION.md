@@ -12,6 +12,7 @@
 ### July 25, 2026 Phase 10 Completion Contract
 
 - ✅ The authoritative remaining scope is now recorded in [Phase 10 Implementation Checklist](phase10-implementation-checklist.md): 10.2 real service migration, 10.3 real Service Bus processing, 10.4 DLQ/Functions, 10.5 identity and secretless transport, 10.6 NFR/operations proof, and 10.7 acceptance closeout.
+- ✅ The canonical pre-Azure architecture baseline now lives in [Phase 10 Pre-Azure LLD](phase10-preazure-lld.md); the implementation checklist remains the execution companion.
 - ✅ Historical deploy/runtime/broker-smoke runs remain useful scaffold evidence but do not prove real service persistence, real consumers, deployed Function invocation, managed-identity transport, or the final acceptance packet.
 - ✅ ADR-022 through ADR-025 govern ACA service hosts, at-least-once delivery semantics, DLQ approval/replay ownership, and the Phase 10 network/SKU boundary.
 - ✅ APIM/private YARP ingress, VNet/private endpoints, Service Bus Premium/Private Link, Blob/Event Grid, SQL managed identity, and Front Door/WAF are preserved as formal Phase 12 obligations in ADR-025 and DW-019 through DW-022.
@@ -35,6 +36,22 @@
 - ✅ The Phase 10 transport/operator scaffold baseline is proven in dev across deploy, runtime smoke, broker transport smoke, and optional Docker parity. Phase 10 remains open until the real-service, real-consumer, Function, identity, NFR, rollback, and acceptance contract passes.
 - ✅ SQL Server and Azure Managed Redis are now part of the automatic Phase 10 baseline path, so the wrapper no longer asks for parity toggles in the normal operator form.
 - 🔜 The next implementation branch should keep treating the local Docker SQL/Redis composition as the contract while preserving the automatic Azure baseline; ACR lifecycle tightening belongs in the same change set rather than a separate ad hoc cleanup pass.
+
+### July 29, 2026 Phase 10 NFR Proof and Docker Parity Wrapper
+
+- ✅ The local Phase 10 NFR proof now passes end-to-end with functional, warm canary, 100-message performance burst, and operational checks enabled or skipped as requested.
+- ✅ The NFR probe now reads durable evidence from the live Docker Compose SQL service rather than the host SQL instance, which fixed the `0/0` false-negative observation path.
+- ✅ A dedicated Docker parity NFR wrapper now exists so Docker proof runs use the same proof engine and evidence shape as the local pre-Azure run, but with Docker-specific labeling and artifact roots.
+- ✅ The Docker Dev HTTP end-to-end hook still passes after the NFR proof fix, so the smoke → integration → matrix → validation lane remains healthy.
+
+### August 1, 2026 Pre-Azure Gate Tightening
+
+- ✅ The local pre-Azure runner now has a dedicated architecture conformance gate through `scripts/run-phase10-architecture-conformance.ps1`.
+- ✅ The architecture conformance gate currently proves focused Phase 10 architecture invariants plus the gateway topology contract before `L6` proceeds.
+- ✅ `L6` now plans the final pre-Azure sequence in the stricter order: readiness, repository validation, compose config, architecture conformance, stack startup, identity proof, rollback readiness, Docker end-to-end, NFR proof, cleanup.
+- ✅ The shared local NFR proof now carries an explicit `security` category in addition to `functional`, `performance`, and `operational`.
+- ✅ The security category reuses the portable local identity proof: focused API auth tests plus the Keycloak PKCE/operator browser proof.
+- ⚠️ Fresh live `L5` and `L6` evidence has not yet been regenerated after this gate tightening. The code and dry-run orchestration are aligned, but the final pre-Azure completion claim still depends on new passing runs.
 
 ### June 5, 2026 Verification Freeze — Phase 8.7 Closeout
 

@@ -6,6 +6,7 @@ using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData;
 using XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure;
+using XYDataLabs.OrderProcessingSystem.Orders.Contracts.Events;
 using XYDataLabs.OrderProcessingSystem.Orders.Features.Events;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
@@ -397,3 +398,5 @@ public sealed class DbInitializerSeedProviderTests : IClassFixture<SqlServerFixt
         public bool IsSharedPool => true;
     }
 }
+
+

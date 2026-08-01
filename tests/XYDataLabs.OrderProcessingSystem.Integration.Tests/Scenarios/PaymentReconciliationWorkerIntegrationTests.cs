@@ -2,8 +2,6 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Openpay.Entities.Request;
-using XYDataLabs.OpenPayAdapter;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
@@ -26,7 +24,11 @@ public sealed class PaymentReconciliationWorkerIntegrationTests : IAsyncLifetime
     {
         _factory = new ServiceOverrideIntegrationTestFactory(
             _fixture.ConnectionString,
-            services => services.AddScoped<IOpenPayAdapterService, SuccessfulOpenPayAdapterStub>(),
+            services =>
+            {
+                services.RemoveAll<IPaymentProviderGateway>();
+                services.AddScoped<IPaymentProviderGateway>(_ => new TrackingOpenPayGatewayStub());
+            },
             enableBackgroundWorkers: true,
             dedicatedConnectionString: _fixture.DedicatedDbConnectionString);
         _ = _factory.CreateClient(); // Force host initialization
@@ -45,9 +47,8 @@ public sealed class PaymentReconciliationWorkerIntegrationTests : IAsyncLifetime
         var tenant = await IntegrationTestData.CreateTenantAsync(_factory);
 
         // Seed an active OpenPay provider for the dynamically created tenant so that
-        // TenantPaymentProviderResolver.ResolveCurrentTenantProvider() can resolve it.
-        // Phase 8.6: also update Tenant.PaymentProviderCode so the registry resolves OpenPay.
-        await _factory.ExecuteTenantDbContextAsync(tenant.ToTenantContext(), async dbContext =>
+        // the registry row is the source of truth for the active provider assignment.
+        await _factory.ExecuteDbContextAsync(async dbContext =>
         {
             dbContext.PaymentProviders.Add(new PaymentProvider
             {
@@ -70,6 +71,17 @@ public sealed class PaymentReconciliationWorkerIntegrationTests : IAsyncLifetime
             await dbContext.SaveChangesAsync();
             return true;
         });
+
+        var registryAssignment = await _factory.ExecuteDbContextAsync(async dbContext =>
+        {
+            return await dbContext.Tenants
+                .AsNoTracking()
+                .IgnoreQueryFilters()
+                .Where(t => t.Id == tenant.TenantId)
+                .Select(t => t.PaymentProviderCode)
+                .SingleAsync();
+        });
+        registryAssignment.Should().Be(PaymentProviderTypes.OpenPay);
 
         var paymentAttempt = new PaymentAttempt
         {
@@ -137,7 +149,7 @@ public sealed class PaymentReconciliationWorkerIntegrationTests : IAsyncLifetime
 
         var tenant = await IntegrationTestData.CreateTenantAsync(razorpayFactory);
 
-        await razorpayFactory.ExecuteTenantDbContextAsync(tenant.ToTenantContext(), async dbContext =>
+        await razorpayFactory.ExecuteDbContextAsync(async dbContext =>
         {
             dbContext.PaymentProviders.Add(new PaymentProvider
             {
@@ -161,6 +173,17 @@ public sealed class PaymentReconciliationWorkerIntegrationTests : IAsyncLifetime
             await dbContext.SaveChangesAsync();
             return true;
         });
+
+        var registryAssignment = await razorpayFactory.ExecuteDbContextAsync(async dbContext =>
+        {
+            return await dbContext.Tenants
+                .AsNoTracking()
+                .IgnoreQueryFilters()
+                .Where(t => t.Id == tenant.TenantId)
+                .Select(t => t.PaymentProviderCode)
+                .SingleAsync();
+        });
+        registryAssignment.Should().Be(PaymentProviderTypes.Razorpay);
 
         var paymentAttempt = new PaymentAttempt
         {
@@ -210,33 +233,38 @@ public sealed class PaymentReconciliationWorkerIntegrationTests : IAsyncLifetime
         gateway.GetChargeCallCount.Should().Be(0);
     }
 
-    private sealed class SuccessfulOpenPayAdapterStub : IOpenPayAdapterService
+    private sealed class TrackingOpenPayGatewayStub : IPaymentProviderGateway
     {
         public string ProviderType => PaymentProviderTypes.OpenPay;
 
-        public Task<Openpay.Entities.Customer> CreateCustomerAsync(Openpay.Entities.Customer customer)
+        public int GetChargeCallCount { get; private set; }
+
+        public Task<PaymentGatewayCustomer> CreateCustomerAsync(PaymentGatewayCreateCustomerRequest request, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }
 
-        public Task<Openpay.Entities.Card> CreateCardTokenAsync(Openpay.Entities.Card card)
+        public Task<PaymentGatewayCardToken> CreateCardTokenAsync(PaymentGatewayCreateCardTokenRequest request, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }
 
-        public Task<Openpay.Entities.Charge> CreateChargeAsync(ChargeRequest request)
+        public Task<PaymentGatewayChargeResult> CreateChargeAsync(PaymentGatewayCreateChargeRequest request, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }
 
-        public Task<Openpay.Entities.Charge> GetChargeAsync(string chargeId, string? customerId = null)
+        public Task<PaymentGatewayChargeResult> GetChargeAsync(string chargeId, string? customerId = null, CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(new Openpay.Entities.Charge
-            {
-                Id = chargeId,
-                Status = "completed",
-                Authorization = "reconciled-auth"
-            });
+            GetChargeCallCount += 1;
+            return Task.FromResult(new PaymentGatewayChargeResult(
+                Id: chargeId,
+                Status: "completed",
+                Amount: 100,
+                CreatedAt: DateTime.UtcNow,
+                Authorization: "reconciled-auth",
+                ErrorMessage: null,
+                RedirectUrl: null));
         }
     }
 

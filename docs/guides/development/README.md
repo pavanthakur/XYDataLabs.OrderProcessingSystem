@@ -4,6 +4,7 @@ Canonical guidance for local setup, Docker usage, and everyday engineering workf
 
 Use these documents:
 
+- `../internal/phase10-preazure-lld.md` — canonical pre-Azure Phase 10 architecture baseline for ownership, invariants, gates, and rollout controls
 - `phase10-tool-prerequisites.md` — canonical Phase 10 developer-machine tool setup, runtime modes, and environment readiness gate
 - `project-overview.md` — repository onboarding and run options
 - `docker-comprehensive-guide.md` — full Docker operating guide for local and environment-based execution

@@ -8,10 +8,10 @@ This runbook covers the Phase 10 dead-letter intake, quarantine, approval, and r
 - Dead-letter topic: `order-events-dlq`
 - Current intake subscription: `dlq-intake`
 - Phase 10.4 target approved-request entity: `dlq-replay-requests`
-- Local scaffold: `XYDataLabs.OrderProcessingSystem.Infrastructure/Messaging/DlqReplayWorker.cs`
+- Transitional approval surface: `POST /api/v1/admin/dlq/{quarantineId}/approve`
 - Azure implementation target: `XYDataLabs.OrderProcessingSystem.Functions/DlqReplayFunction.cs`
 
-The current intake subscription and local worker are scaffolding, not the final production ownership model. Phase 10 cannot close until intake and replay use separate entities, one component owns each replay request, and Azure evidence proves the deployed Function package and invocation.
+The current intake subscription and transitional approval surface are scaffolding, not the final production ownership model. Phase 10 cannot close until intake and replay use separate entities, one component owns each replay request, the approval surface lands in its final operations-owned shape, and Azure evidence proves the deployed Function package and invocation.
 
 ## What the worker does
 
@@ -54,4 +54,4 @@ The current intake subscription and local worker are scaffolding, not the final 
 - Do not attach intake and replay Functions to the same subscription.
 - Do not treat `tools/Phase10.TransportSmoke` receive/republish behavior as deployed Function proof.
 - Do not introduce `SharedContracts` for replay alone.
-- Keep the replay worker disabled unless the Service Bus transport slice is enabled.
+- Keep the replay worker disabled unless the Phase 10 transport baseline is enabled.

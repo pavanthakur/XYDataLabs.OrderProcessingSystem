@@ -4,10 +4,10 @@ using XYDataLabs.OrderProcessingSystem.Inventory.API;
 using XYDataLabs.OrderProcessingSystem.Inventory.Features.Module;
 using XYDataLabs.OrderProcessingSystem.Notifications.API;
 using XYDataLabs.OrderProcessingSystem.Notifications.Features.Module;
+using XYDataLabs.OrderProcessingSystem.Orders.Contracts;
 using XYDataLabs.OrderProcessingSystem.Payments.API;
 using XYDataLabs.OrderProcessingSystem.Payments.Features.Module;
 using XYDataLabs.OrderProcessingSystem.Orders.Features.Module;
-using XYDataLabs.OrderProcessingSystem.Orders.API;
 
 namespace XYDataLabs.OrderProcessingSystem.Architecture.Tests;
 

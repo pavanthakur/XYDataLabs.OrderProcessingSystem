@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.Messaging;
 using XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure;
@@ -46,6 +47,36 @@ public sealed class DlqReplayApprovalIntegrationTests(SqlServerFixture fixture)
         second!.AlreadyApproved.Should().BeTrue();
         second.ReplayRequestId.Should().Be(first!.ReplayRequestId);
         (await context.DlqReplayRequests.CountAsync(item => item.QuarantineId == quarantine.Id))
+            .Should()
+            .Be(1);
+    }
+
+    [Fact]
+    [Trait("Category", "InfrastructureIntegration")]
+    public async Task ApproveAsync_When_Concurrent_Approvals_Occur_Persists_Only_One_Replay_Request()
+    {
+        await using var seedContext = CreateContext();
+        var quarantine = await AddQuarantineAsync(seedContext);
+
+        await using var firstContext = CreateContext();
+        await using var secondContext = CreateContext();
+        var firstService = new DlqReplayApprovalService(firstContext, TimeProvider.System);
+        var secondService = new DlqReplayApprovalService(secondContext, TimeProvider.System);
+
+        var results = await Task.WhenAll(
+            firstService.ApproveAsync(quarantine.Id, "operator-1", CancellationToken.None),
+            secondService.ApproveAsync(quarantine.Id, "operator-2", CancellationToken.None));
+
+        results.Should().NotContainNulls();
+        results.Select(result => result!.ReplayRequestId).Distinct().Should().ContainSingle();
+        results.Count(result => result is not null && result.AlreadyApproved).Should().BeGreaterThanOrEqualTo(1);
+
+        await using var verifyContext = CreateContext();
+        var persistedQuarantine = await verifyContext.DlqQuarantineRecords
+            .AsNoTracking()
+            .SingleAsync(item => item.Id == quarantine.Id);
+        persistedQuarantine.State.Should().Be(DlqQuarantineStates.Approved);
+        (await verifyContext.DlqReplayRequests.CountAsync(item => item.QuarantineId == quarantine.Id))
             .Should()
             .Be(1);
     }

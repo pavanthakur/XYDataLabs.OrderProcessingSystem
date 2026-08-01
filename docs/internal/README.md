@@ -7,7 +7,8 @@ Use these documents:
 - `AZURE-PROGRESS-EVALUATION.md` — active Azure learning and architecture progress tracker
 - `azure-bootstrap-improvements-backlog.md` — active internal backlog for bootstrap, IaC, CI/CD, and hosting improvements
 - `phase9-remaining-roadmap.md` — short Phase 9 closeout and Phase 10 pointer
-- `phase10-implementation-checklist.md` — authoritative Phase 10 lifecycle, completion contract, 10.2-10.7 execution slices, risks, NFRs, rollback, and evidence requirements
+- `phase10-preazure-lld.md` — canonical pre-Azure Phase 10 architecture baseline, ownership model, invariants, gates, and rollout controls
+- `phase10-implementation-checklist.md` — Phase 10 execution checklist, completion contract, 10.2-10.7 execution slices, risks, NFRs, rollback, and evidence requirements
 - `phase10-parity-matrix.md` — next SQL/Redis/ACR parity change set, based on local Docker versus Azure
 - `phase10-zoocode-local-model-handoff.md` — bounded Zoo Code/local-model handoff for staging/prod promotion planning after dev validation
 - `docs/runbooks/phase10-azure-smoke.md` — first Azure what-if / deploy / transport smoke runbook for Phase 10

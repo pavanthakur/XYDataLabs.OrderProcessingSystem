@@ -2,7 +2,7 @@ using FluentAssertions;
 using XYDataLabs.OrderProcessingSystem.Infrastructure;
 using XYDataLabs.OrderProcessingSystem.Inventory.API;
 using XYDataLabs.OrderProcessingSystem.Notifications.API;
-using XYDataLabs.OrderProcessingSystem.Orders.API;
+using XYDataLabs.OrderProcessingSystem.Orders.Contracts;
 using XYDataLabs.OrderProcessingSystem.Payments.API;
 
 namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Scenarios;

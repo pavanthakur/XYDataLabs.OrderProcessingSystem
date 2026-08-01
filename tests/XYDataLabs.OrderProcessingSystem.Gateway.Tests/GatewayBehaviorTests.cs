@@ -86,7 +86,7 @@ public sealed class GatewayBehaviorTests : IAsyncLifetime
     public async Task Request_WithAzureContainerAppsHost_AllowsGatewayRequest()
     {
         using var client = _factory.CreateClient();
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/ping");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/Info/ping");
         request.Headers.Host = "orderprocessing-gate-dev.bluebay-335bed8c.centralindia.azurecontainerapps.io";
 
         var response = await client.SendAsync(request);
@@ -99,7 +99,7 @@ public sealed class GatewayBehaviorTests : IAsyncLifetime
     public async Task Request_WithInternalGatewayServiceHost_AllowsUiProxyRequest()
     {
         using var client = _factory.CreateClient();
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/ping");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/app/ping");
         request.Headers.Host = "orderprocessing-gate-local";
 
         var response = await client.SendAsync(request);
@@ -131,7 +131,7 @@ public sealed class GatewayBehaviorTests : IAsyncLifetime
     {
         using var client = _factory.CreateClient();
 
-        var response = await SendWithRetryAsync(client, CreateOrdersRequest);
+        var response = await SendWithRetryAsync(client, CreateOrdersInfoRequest);
         var body = await response.Content.ReadAsStringAsync();
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -139,6 +139,7 @@ public sealed class GatewayBehaviorTests : IAsyncLifetime
         var correlationId = correlationHeaderValues!.Single();
         body.Should().NotBeNullOrWhiteSpace();
         body.Should().Contain(correlationId);
+        body.Should().Contain("/api/v1/Info/ping");
     }
 
     [Fact]
@@ -164,6 +165,18 @@ public sealed class GatewayBehaviorTests : IAsyncLifetime
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         body.Should().Contain("/ping");
         body.Should().Contain("GET");
+    }
+
+    [Fact]
+    public async Task ProductApiRoute_ProxiesToInventoryCluster_NotOrdersFallback()
+    {
+        using var client = _factory.CreateClient();
+
+        var response = await SendWithRetryAsync(client, CreateProductRequest);
+        var body = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        body.Should().Contain("/api/v1/Product/ping");
     }
 
     [Fact]
@@ -233,9 +246,9 @@ public sealed class GatewayBehaviorTests : IAsyncLifetime
         return request;
     }
 
-    private static HttpRequestMessage CreateOrdersRequest()
+    private static HttpRequestMessage CreateOrdersInfoRequest()
     {
-        var request = new HttpRequestMessage(HttpMethod.Get, "/api/ping")
+        var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/Info/ping")
         {
             Version = HttpVersion.Version11
         };
@@ -248,6 +261,18 @@ public sealed class GatewayBehaviorTests : IAsyncLifetime
     private static HttpRequestMessage CreateInventoryRequest()
     {
         var request = new HttpRequestMessage(HttpMethod.Get, "/inventory/ping")
+        {
+            Version = HttpVersion.Version11
+        };
+
+        request.Headers.Host = "inventory.localhost";
+
+        return request;
+    }
+
+    private static HttpRequestMessage CreateProductRequest()
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/Product/ping")
         {
             Version = HttpVersion.Version11
         };

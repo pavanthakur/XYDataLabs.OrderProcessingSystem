@@ -3,10 +3,10 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Moq;
-using XYDataLabs.OrderProcessingSystem.API.Controllers;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Webhooks.Commands;
+using XYDataLabs.OrderProcessingSystem.Payments.API.Controllers;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
 
 namespace XYDataLabs.OrderProcessingSystem.API.Tests.Controllers;

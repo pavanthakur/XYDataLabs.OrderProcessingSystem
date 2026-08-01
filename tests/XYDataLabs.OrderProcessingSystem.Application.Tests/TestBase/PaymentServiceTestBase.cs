@@ -13,6 +13,7 @@ using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
+using XYDataLabs.OrderProcessingSystem.Orders.Contracts;
 using XYDataLabs.OrderProcessingSystem.Payments.Features.Commands;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase;
@@ -38,6 +39,7 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
     protected readonly Mock<ITenantPaymentProviderResolver> MockPaymentProviderResolver = new();
     protected readonly Mock<ITenantPaymentProviderConfigurationResolver> MockPaymentProviderConfigurationResolver = new();
     protected readonly Mock<ITenantProvider> MockTenantProvider = new();
+    protected readonly Mock<IOrderModuleApi> MockOrderModuleApi = new();
     protected readonly Mock<TimeProvider> MockTimeProvider = new();
 
     // --- capture lists filled by SetupPaymentDbSets() ---
@@ -52,6 +54,28 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
         MockTimeProvider.Setup(t => t.GetUtcNow()).Returns(new DateTimeOffset(UtcNow));
         MockTenantProvider.Setup(t => t.TenantCode).Returns("tenant-a");
         MockTenantProvider.Setup(t => t.TenantId).Returns(1);
+        MockOrderModuleApi
+            .Setup(service => service.GetPaymentContextAsync("ORDER-001", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new OrderPaymentContextDto(
+                1,
+                "ORDER-001",
+                Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                100m,
+                "MXN",
+                "Created",
+                Convert.ToBase64String([1, 2, 3, 4])));
+        MockOrderModuleApi
+            .Setup(service => service.GetPaymentContextByOrderReferenceAsync(
+                Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new OrderPaymentContextDto(
+                1,
+                "ORDER-001",
+                Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                100m,
+                "MXN",
+                "Created",
+                Convert.ToBase64String([1, 2, 3, 4])));
         MockOpenPayAdapter.SetupGet(adapter => adapter.ProviderType).Returns(PaymentProviderTypes.OpenPay);
         MockPaymentProviderConfigurationResolver
             .Setup(r => r.ResolveCurrentTenantConfiguration())
@@ -84,6 +108,7 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
             NullPaymentTelemetryTracker.Instance,
             new Mock<ILogger<ProcessPaymentCommandHandler>>().Object,
             MockDbContext.Object,
+            MockOrderModuleApi.Object,
             MockPaymentProviderResolver.Object,
             MockTimeProvider.Object,
             MockTenantProvider.Object);
@@ -305,7 +330,9 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
 
     // ------------------------------------------------------------------ command builders
 
-    protected static ProcessPaymentCommand BuildProcessPaymentCommand(string customerOrderId = "ORDER-001") =>
+    protected static ProcessPaymentCommand BuildProcessPaymentCommand(
+        string customerOrderId = "ORDER-001",
+        Guid? orderReferenceId = null) =>
         new(
             Name: "John Doe",
             Email: "john@example.com",
@@ -315,6 +342,7 @@ public class PaymentServiceTestBase : OrderProcessingSystemTestBase<ProcessPayme
             ExpirationMonth: "12",
             Cvv2: "123",
             CustomerOrderId: customerOrderId,
+            OrderReferenceId: orderReferenceId,
             ClientCallbackOrigin: null);
 
     protected static ConfirmPaymentStatusCommand BuildConfirmPaymentCommand(

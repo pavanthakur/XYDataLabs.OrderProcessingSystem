@@ -37,6 +37,7 @@ public sealed class Phase10LocalSetupContractTests
             "LOCAL_SERVICEBUS_ENABLED",
             "LOCAL_SERVICEBUS_CONNECTION_STRING",
             "LOCAL_SERVICEBUS_TOPIC_NAME",
+            "LOCAL_SERVICEBUS_ORDERS_PAYMENT_STATE_SUBSCRIPTION_NAME",
             "LOCAL_SERVICEBUS_INVENTORY_SUBSCRIPTION_NAME",
             "LOCAL_SERVICEBUS_NOTIFICATIONS_SUBSCRIPTION_NAME",
             "LOCAL_SERVICEBUS_DLQ_TOPIC_NAME",
@@ -72,6 +73,7 @@ public sealed class Phase10LocalSetupContractTests
 
         orderSubscriptions.Should().Contain(new[]
         {
+            "orders-payment-state",
             "inventory-order-created",
             "notifications-order-created"
         });

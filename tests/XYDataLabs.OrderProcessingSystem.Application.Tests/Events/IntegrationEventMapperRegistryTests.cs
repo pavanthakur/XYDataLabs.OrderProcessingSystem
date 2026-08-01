@@ -2,7 +2,7 @@ using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.Events;
-using XYDataLabs.OrderProcessingSystem.Orders.Features.Events;
+using XYDataLabs.OrderProcessingSystem.Orders.Contracts.Events;
 using XYDataLabs.OrderProcessingSystem.Domain.Events;
 using XYDataLabs.OrderProcessingSystem.Domain.Identifiers;
 using XYDataLabs.OrderProcessingSystem.Orders.Features.Module;
@@ -44,3 +44,5 @@ public class IntegrationEventMapperRegistryTests
         payload.ProductCount.Should().Be(2);
     }
 }
+
+

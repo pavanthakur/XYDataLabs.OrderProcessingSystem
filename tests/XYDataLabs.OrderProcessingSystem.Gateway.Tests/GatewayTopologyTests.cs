@@ -12,24 +12,29 @@ public sealed class GatewayTopologyTests
             .AddJsonFile(Path.Combine(AppContext.BaseDirectory, @"..\..\..\..\..\XYDataLabs.OrderProcessingSystem.Gateway\appsettings.json"), optional: false)
             .Build();
 
-        config["ReverseProxy:Routes:orders-api-route:Match:Path"].Should().Be("/api/{**catch-all}");
-        config["ReverseProxy:Routes:orders-api-route:Order"].Should().Be("100");
+        config["ReverseProxy:Routes:orders-order-api-route:Match:Path"].Should().Be("/api/v{version}/Order/{**catch-all}");
+        config["ReverseProxy:Routes:orders-order-api-route:Order"].Should().Be("20");
+        config["ReverseProxy:Routes:orders-customer-api-route:Match:Path"].Should().Be("/api/v{version}/Customer/{**catch-all}");
+        config["ReverseProxy:Routes:orders-audit-api-route:Match:Path"].Should().Be("/api/v{version}/Audit/{**catch-all}");
+        config["ReverseProxy:Routes:orders-info-api-route:Match:Path"].Should().Be("/api/v{version}/Info/{**catch-all}");
         config["ReverseProxy:Routes:payments-api-route:Match:Path"].Should().Be("/api/v{version}/Payments/{**catch-all}");
         config["ReverseProxy:Routes:payments-api-route:Order"].Should().Be("10");
         config["ReverseProxy:Routes:inventory-api-route:Match:Path"].Should().Be("/api/v{version}/Inventory/{**catch-all}");
+        config["ReverseProxy:Routes:product-api-route:Match:Path"].Should().Be("/api/v{version}/Product/{**catch-all}");
         config["ReverseProxy:Routes:notifications-api-route:Match:Path"].Should().Be("/api/v{version}/Notifications/{**catch-all}");
         config["ReverseProxy:Routes:inventory-route:Match:Path"].Should().Be("/inventory/{**catch-all}");
         config["ReverseProxy:Routes:notifications-route:Match:Path"].Should().Be("/notifications/{**catch-all}");
         config["ReverseProxy:Routes:ui-route:Match:Path"].Should().Be("/app/{**catch-all}");
 
-        config["ReverseProxy:Routes:orders-api-route:Match:Hosts:0"].Should().BeNull();
+        config["ReverseProxy:Routes:orders-order-api-route:Match:Hosts:0"].Should().BeNull();
         config["ReverseProxy:Routes:inventory-route:Match:Hosts:0"].Should().BeNull();
         config["ReverseProxy:Routes:notifications-route:Match:Hosts:0"].Should().BeNull();
         config["ReverseProxy:Routes:ui-route:Match:Hosts:0"].Should().BeNull();
-        config["ReverseProxy:Routes:orders-api-route:Transforms:1:RequestHeaderOriginalHost"].Should().BeNull();
+        config["ReverseProxy:Routes:orders-order-api-route:Transforms:1:RequestHeaderOriginalHost"].Should().BeNull();
         config["ReverseProxy:Routes:inventory-route:Transforms:1:RequestHeaderOriginalHost"].Should().BeNull();
         config["ReverseProxy:Routes:notifications-route:Transforms:1:RequestHeaderOriginalHost"].Should().BeNull();
         config["ReverseProxy:Routes:ui-route:Transforms:1:RequestHeaderOriginalHost"].Should().BeNull();
+        config["ReverseProxy:Routes:orders-api-route:Match:Path"].Should().BeNull();
 
         config["Gateway:AllowedHosts:0"].Should().Be("localhost");
         config["Gateway:AllowedHosts:1"].Should().Be("orders.localhost");
