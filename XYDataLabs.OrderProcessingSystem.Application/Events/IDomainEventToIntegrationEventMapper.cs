@@ -1,3 +1,5 @@
+using SharedIntegrationEvent = XYDataLabs.OrderProcessingSystem.Eventing.Abstractions.IIntegrationEvent;
+
 namespace XYDataLabs.OrderProcessingSystem.Application.Events;
 
 public interface IDomainEventToIntegrationEventMapper
@@ -10,7 +12,7 @@ public interface IDomainEventToIntegrationEventMapper
 
 public interface IDomainEventToIntegrationEventMapper<in TDomainEvent, out TIntegrationEvent> : IDomainEventToIntegrationEventMapper
     where TDomainEvent : class
-    where TIntegrationEvent : class, IIntegrationEvent
+    where TIntegrationEvent : class, SharedIntegrationEvent
 {
     TIntegrationEvent Map(TDomainEvent domainEvent);
 }

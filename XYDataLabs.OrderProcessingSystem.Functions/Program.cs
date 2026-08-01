@@ -42,6 +42,7 @@ var host = new HostBuilder()
             }
 
             services.AddSingleton(_ => new ServiceBusClient(serviceBusOptions.ConnectionString));
+            services.AddSingleton<IDlqReplayPublisher, ServiceBusDlqReplayPublisher>();
         }
         services.AddSingleton<Phase10FunctionStartupValidator>();
     })

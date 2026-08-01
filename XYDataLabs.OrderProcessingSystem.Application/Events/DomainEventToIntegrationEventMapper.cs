@@ -1,8 +1,10 @@
+using SharedIntegrationEvent = XYDataLabs.OrderProcessingSystem.Eventing.Abstractions.IIntegrationEvent;
+
 namespace XYDataLabs.OrderProcessingSystem.Application.Events;
 
 public abstract class DomainEventToIntegrationEventMapper<TDomainEvent, TIntegrationEvent> : IDomainEventToIntegrationEventMapper<TDomainEvent, TIntegrationEvent>
     where TDomainEvent : class
-    where TIntegrationEvent : class, IIntegrationEvent
+    where TIntegrationEvent : class, SharedIntegrationEvent
 {
     public Type DomainEventType => typeof(TDomainEvent);
     public Type IntegrationEventType => typeof(TIntegrationEvent);

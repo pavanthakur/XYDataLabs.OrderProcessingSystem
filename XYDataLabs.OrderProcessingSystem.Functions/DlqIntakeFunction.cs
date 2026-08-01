@@ -3,6 +3,7 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
+using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.Messaging;
 
@@ -22,6 +23,21 @@ public sealed class DlqIntakeFunction(
             AutoCompleteMessages = false)]
         ServiceBusReceivedMessage message,
         ServiceBusMessageActions messageActions,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        ArgumentNullException.ThrowIfNull(messageActions);
+
+        await RunCoreAsync(
+                message,
+                new ServiceBusMessageActionsAdapter(message, messageActions),
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    internal async Task RunCoreAsync(
+        ServiceBusReceivedMessage message,
+        IDlqIntakeMessageActions messageActions,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(message);
@@ -78,7 +94,7 @@ public sealed class DlqIntakeFunction(
             }
         }
 
-        await messageActions.CompleteMessageAsync(message, cancellationToken).ConfigureAwait(false);
+        await messageActions.CompleteAsync(cancellationToken).ConfigureAwait(false);
 
         logger.LogWarning(
             "Phase 10 DLQ intake persisted quarantine {QuarantineId} for message {MessageId}, tenant {TenantId}, subject {Subject}, and reason {QuarantineReason}.",
@@ -111,4 +127,9 @@ public sealed class DlqIntakeFunction(
             _ => null
         };
     }
+}
+
+internal interface IDlqIntakeMessageActions
+{
+    Task CompleteAsync(CancellationToken cancellationToken);
 }

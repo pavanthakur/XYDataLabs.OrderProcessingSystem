@@ -27,6 +27,11 @@ public interface IAppDbContext
     DbSet<TransactionStatusHistory> TransactionStatusHistories { get; }
     DbSet<OutboxMessage> OutboxMessages { get; }
     DbSet<InboxMessage> InboxMessages { get; }
+    DbSet<ConsumerInboxMessage> ConsumerInboxMessages { get; }
+    DbSet<DlqQuarantineRecord> DlqQuarantineRecords { get; }
+    DbSet<DlqReplayRequest> DlqReplayRequests { get; }
+    DbSet<InventoryReservation> InventoryReservations { get; }
+    DbSet<NotificationDelivery> NotificationDeliveries { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

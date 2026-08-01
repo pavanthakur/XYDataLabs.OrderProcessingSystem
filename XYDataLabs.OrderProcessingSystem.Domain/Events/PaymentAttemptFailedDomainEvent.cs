@@ -4,6 +4,7 @@ namespace XYDataLabs.OrderProcessingSystem.Domain.Events
         int AttemptId,
         int TenantId,
         string ProviderName,
+        string CustomerOrderId,
         string? ErrorReason,
         DateTime OccurredUtc);
 }

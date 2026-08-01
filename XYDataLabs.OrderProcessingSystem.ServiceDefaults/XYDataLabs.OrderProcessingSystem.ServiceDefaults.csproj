@@ -27,8 +27,4 @@
     <PackageReference Include="OpenTelemetry.Instrumentation.SqlClient" />
     <PackageReference Include="Serilog" />
   </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.SharedKernel\XYDataLabs.OrderProcessingSystem.SharedKernel.csproj" />
-  </ItemGroup>
 </Project>

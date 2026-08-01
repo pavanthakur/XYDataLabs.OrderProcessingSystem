@@ -34,13 +34,13 @@ public class InMemoryEventPublisher : IEventPublisher
         if (handleMethod == null)
             throw new InvalidOperationException($"Method 'HandleAsync' not found on {handlerType.Name}.");
 
-        // Invoke all handlers concurrently
-        var tasks = handlers.Select(handler =>
+        // Handlers share the ambient scoped services for the publish operation.
+        // Execute them sequentially so EF-backed consumers can participate in the
+        // same unit of work without concurrent DbContext access.
+        foreach (var handler in handlers)
         {
             var task = handleMethod.Invoke(handler, new[] { eventEnvelope, eventEnvelope.Payload, cancellationToken }) as Task;
-            return task ?? Task.CompletedTask;
-        });
-
-        await Task.WhenAll(tasks);
+            await (task ?? Task.CompletedTask);
+        }
     }
 }

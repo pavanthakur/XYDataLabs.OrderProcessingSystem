@@ -1,22 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
+using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 
 namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Messaging;
-
-public interface IDlqReplayApprovalService
-{
-    Task<DlqReplayApprovalResult?> ApproveAsync(
-        Guid quarantineId,
-        string approvedBy,
-        CancellationToken cancellationToken);
-}
-
-public sealed record DlqReplayApprovalResult(
-    Guid QuarantineId,
-    Guid ReplayRequestId,
-    string State,
-    DateTime ApprovedUtc,
-    bool AlreadyApproved);
 
 public sealed class DlqReplayApprovalService(
     OrderProcessingSystemDbContext dbContext,

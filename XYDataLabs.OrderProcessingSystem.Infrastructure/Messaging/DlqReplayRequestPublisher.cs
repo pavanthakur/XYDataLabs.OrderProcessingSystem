@@ -25,6 +25,12 @@ public sealed class DlqReplayRequestPublisher(
             return;
         }
 
+        if (!_options.ReplayEnabled)
+        {
+            logger.LogInformation("DLQ replay request publisher is disabled because replay approval publication is turned off.");
+            return;
+        }
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -44,8 +50,13 @@ public sealed class DlqReplayRequestPublisher(
         }
     }
 
-    private async Task PublishPendingAsync(CancellationToken cancellationToken)
+    internal async Task PublishPendingAsync(CancellationToken cancellationToken)
     {
+        if (!_options.Enabled || !_options.ReplayEnabled)
+        {
+            return;
+        }
+
         using var scope = scopeFactory.CreateScope();
         var client = scope.ServiceProvider.GetRequiredService<ServiceBusClient>();
         var dbContext = scope.ServiceProvider.GetRequiredService<OrderProcessingSystemDbContext>();

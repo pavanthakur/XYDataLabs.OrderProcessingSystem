@@ -3,10 +3,13 @@ WORKDIR /src
 
 COPY ["Directory.Build.props", "."]
 COPY ["Directory.Packages.props", "."]
+COPY ["XYDataLabs.OrderProcessingSystem.Eventing.Abstractions/XYDataLabs.OrderProcessingSystem.Eventing.Abstractions.csproj", "XYDataLabs.OrderProcessingSystem.Eventing.Abstractions/"]
 COPY ["XYDataLabs.OrderProcessingSystem.SharedKernel/XYDataLabs.OrderProcessingSystem.SharedKernel.csproj", "XYDataLabs.OrderProcessingSystem.SharedKernel/"]
 COPY ["XYDataLabs.OrderProcessingSystem.Domain/XYDataLabs.OrderProcessingSystem.Domain.csproj", "XYDataLabs.OrderProcessingSystem.Domain/"]
 COPY ["XYDataLabs.OrderProcessingSystem.Application/XYDataLabs.OrderProcessingSystem.Application.csproj", "XYDataLabs.OrderProcessingSystem.Application/"]
 COPY ["XYDataLabs.OrderProcessingSystem.Infrastructure/XYDataLabs.OrderProcessingSystem.Infrastructure.csproj", "XYDataLabs.OrderProcessingSystem.Infrastructure/"]
+COPY ["XYDataLabs.OrderProcessingSystem.Orders.Contracts/XYDataLabs.OrderProcessingSystem.Orders.Contracts.csproj", "XYDataLabs.OrderProcessingSystem.Orders.Contracts/"]
+COPY ["XYDataLabs.OrderProcessingSystem.Payments.Contracts/XYDataLabs.OrderProcessingSystem.Payments.Contracts.csproj", "XYDataLabs.OrderProcessingSystem.Payments.Contracts/"]
 COPY ["XYDataLabs.OrderProcessingSystem.Orders.API/XYDataLabs.OrderProcessingSystem.Orders.API.csproj", "XYDataLabs.OrderProcessingSystem.Orders.API/"]
 COPY ["XYDataLabs.OrderProcessingSystem.Inventory.API/XYDataLabs.OrderProcessingSystem.Inventory.API.csproj", "XYDataLabs.OrderProcessingSystem.Inventory.API/"]
 COPY ["XYDataLabs.OrderProcessingSystem.Notifications.API/XYDataLabs.OrderProcessingSystem.Notifications.API.csproj", "XYDataLabs.OrderProcessingSystem.Notifications.API/"]

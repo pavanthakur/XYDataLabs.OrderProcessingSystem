@@ -1,4 +1,4 @@
-namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Messaging;
+namespace XYDataLabs.OrderProcessingSystem.Domain.Entities;
 
 public sealed class DlqReplayRequest
 {

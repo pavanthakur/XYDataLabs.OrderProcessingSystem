@@ -39,6 +39,7 @@ public static class Phase10ServiceHostExtensions
         builder.Services.AddScoped<ITenantProvider, HeaderTenantProvider>();
         builder.Services.AddScoped<ITenantResolver, EntityFrameworkTenantResolver>();
         builder.Services.AddScoped<ITenantRegistry, TenantRegistryService>();
+        builder.Services.AddScoped<ITenantPaymentProviderResolver, Payments.Phase10TenantPaymentProviderResolver>();
 
         builder.Services.AddDbContext<TenantRegistryDbContext>(options =>
             options.UseSqlServer(
@@ -84,10 +85,10 @@ public static class Phase10ServiceHostExtensions
             builder.Services.AddHostedService<DlqReplayRequestPublisher>();
             if (!string.IsNullOrWhiteSpace(consumerKind))
             {
-                builder.Services.AddSingleton(new OrderCreatedConsumerIdentity(
-                    consumerKind,
-                    options.SubscriptionName));
-                builder.Services.AddHostedService<OrderCreatedServiceBusConsumerWorker>();
+                builder.Services.AddScoped<IIdempotencyGuard, NoOpIdempotencyGuard>();
+                builder.Services.AddSingleton(CreateConsumerSubscription(consumerKind, options));
+                builder.Services.AddSingleton<IServiceBusConsumerMessageProcessor, ServiceBusConsumerMessageProcessor>();
+                builder.Services.AddHostedService<ServiceBusSubscriptionConsumerWorker>();
             }
         }
         else
@@ -107,8 +108,24 @@ public static class Phase10ServiceHostExtensions
             builder.Services.AddHostedService<PaymentReconciliationWorker>();
         }
     }
+
+    private static ServiceBusConsumerSubscription CreateConsumerSubscription(string consumerKind, ServiceBusOptions options)
+    {
+        return consumerKind switch
+        {
+            "Inventory" => ServiceBusConsumerSubscription.ForInventory(options.SubscriptionName),
+            "Notifications" => ServiceBusConsumerSubscription.ForNotifications(options.SubscriptionName),
+            "Orders" => ServiceBusConsumerSubscription.ForOrdersPaymentState(options.PaymentStateSubscriptionName),
+            _ => throw new InvalidOperationException($"Unsupported Phase 10 consumer kind '{consumerKind}'.")
+        };
+    }
 }
 
-public sealed record OrderCreatedConsumerIdentity(
-    string ConsumerKind,
-    string SubscriptionName);
+internal sealed class NoOpIdempotencyGuard : IIdempotencyGuard
+{
+    public Task<bool> HasProcessedAsync(Guid messageId, CancellationToken cancellationToken = default)
+        => Task.FromResult(false);
+
+    public Task MarkProcessedAsync(Guid messageId, CancellationToken cancellationToken = default)
+        => Task.CompletedTask;
+}
