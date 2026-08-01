@@ -364,6 +364,10 @@ export function PaymentCallbackPage({ activeTenantCode, apiClient, onTenantChang
                 <dd>{paymentStatus?.customerOrderId ?? pendingContext?.customerOrderId ?? "Not available"}</dd>
               </div>
               <div>
+                <dt>Order reference</dt>
+                <dd>{pendingContext?.orderReferenceId ?? "Not available"}</dd>
+              </div>
+              <div>
                 <dt>Customer context</dt>
                 <dd>{customerContextValue}</dd>
               </div>

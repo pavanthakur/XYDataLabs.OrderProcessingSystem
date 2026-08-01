@@ -15,6 +15,7 @@ interface PaymentFormState {
   name: string;
   email: string;
   customerOrderId: string;
+  orderReferenceId: string;
   cardNumber: string;
   expirationMonth: string;
   expirationYear: string;
@@ -75,6 +76,7 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
     name: "",
     email: "",
     customerOrderId: buildCustomerOrderId(orderId, hasOrderRouteContext),
+    orderReferenceId: "",
     cardNumber: "",
     expirationMonth: "",
     expirationYear: "",
@@ -96,6 +98,17 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
       customerOrderId: buildCustomerOrderId(orderId, hasOrderRouteContext)
     }));
   }, [hasOrderRouteContext, orderId]);
+
+  useEffect(() => {
+    if (!order?.orderReferenceId) {
+      return;
+    }
+
+    setFormState((current) => ({
+      ...current,
+      orderReferenceId: order.orderReferenceId ?? ""
+    }));
+  }, [order?.orderReferenceId]);
 
   useEffect(() => {
     if (!activeTenantCode) {
@@ -296,6 +309,7 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
     try {
       const pendingPaymentContext = {
         customerOrderId: formState.customerOrderId,
+        orderReferenceId: formState.orderReferenceId || null,
         clientFlowId,
         customerId: hasValidCustomerContext ? customerId : null,
         orderId: hasValidOrderContext ? orderId : null
@@ -310,10 +324,17 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
         expirationMonth: usesProviderCheckout ? "" : formState.expirationMonth,
         cvv2: usesProviderCheckout ? "" : formState.cvv2,
         customerOrderId: formState.customerOrderId,
+        orderReferenceId: formState.orderReferenceId || null,
         clientCallbackOrigin: window.location.origin
       });
 
-      persistPendingPaymentContext(payment.id, pendingPaymentContext);
+      const persistedPendingPaymentContext = {
+        ...pendingPaymentContext,
+        customerOrderId: payment.customerOrderId,
+        orderReferenceId: payment.orderReferenceId ?? pendingPaymentContext.orderReferenceId
+      };
+
+      persistPendingPaymentContext(payment.id, persistedPendingPaymentContext);
 
       if (isLocalhost && paymentConfiguration.activeProviderType?.toLowerCase() === "razorpay") {
         setSubmitState("success");
@@ -346,7 +367,7 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
           navigate,
           payment,
           paymentConfiguration,
-          pendingPaymentContext,
+          pendingPaymentContext: persistedPendingPaymentContext,
           payerEmail: formState.email,
           payerName: formState.name,
           setErrorMessage,
@@ -603,7 +624,7 @@ export function PaymentPage({ activeTenantCode, apiClient }: PaymentPageProps) {
                 </div>
                 <div>
                   <dt>Order reference</dt>
-                  <dd>{order?.orderReferenceId ?? "Pending"}</dd>
+                  <dd>{formState.orderReferenceId || order?.orderReferenceId || "Pending"}</dd>
                 </div>
                 <div>
                   <dt>Customer context</dt>
@@ -802,6 +823,7 @@ async function openProviderCheckout(options: {
   paymentConfiguration: PaymentConfiguration;
   pendingPaymentContext: {
     customerOrderId: string;
+    orderReferenceId: string | null;
     clientFlowId: string;
     customerId: number | null;
     orderId: number | null;

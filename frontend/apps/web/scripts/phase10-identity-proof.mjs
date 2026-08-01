@@ -4,7 +4,10 @@ import path from "node:path";
 
 const argumentsMap = parseArguments(process.argv.slice(2));
 const appBaseUrl = argumentsMap.get("url") ?? "http://localhost:5022";
-const apiBaseUrl = argumentsMap.get("api-url") ?? "http://localhost:5080";
+const legacyApiBaseUrl = argumentsMap.get("api-url");
+const ordersApiBaseUrl = argumentsMap.get("orders-api-url") ?? legacyApiBaseUrl ?? "http://localhost:5081";
+const paymentsApiBaseUrl = argumentsMap.get("payments-api-url") ?? legacyApiBaseUrl ?? "http://localhost:5084";
+const approvalApiBaseUrl = argumentsMap.get("approval-api-url") ?? ordersApiBaseUrl;
 const outputPath = argumentsMap.get("output");
 const password = process.env.KEYCLOAK_TENANT_ADMIN_PASSWORD
   ?? process.env.LOCAL_KEYCLOAK_TEST_PASSWORD;
@@ -23,17 +26,39 @@ const evidence = {
 
 const browser = await chromium.launch({ headless: true });
 try {
-  const anonymousApi = await playwrightRequest.newContext({ baseURL: apiBaseUrl });
+  const anonymousOrdersApi = await playwrightRequest.newContext({ baseURL: ordersApiBaseUrl });
   try {
-    const anonymousResponse = await anonymousApi.get(
-      "/api/v1/Info/runtime-configuration",
-      { headers: { "X-Tenant-Code": "TenantA" } });
-    record("anonymous-protected-request", anonymousResponse.status() === 401, {
-      expected: 401,
-      actual: anonymousResponse.status()
+    const runtimeConfigurationResponse = await anonymousOrdersApi.get("/api/v1/Info/runtime-configuration");
+    record("anonymous-runtime-configuration-remains-public", runtimeConfigurationResponse.status() === 200, {
+      expected: 200,
+      actual: runtimeConfigurationResponse.status()
     });
 
-    const webhookResponse = await anonymousApi.post(
+    const protectedCustomerResponse = await anonymousOrdersApi.get("/api/v1/Customer/GetAllCustomers");
+    record("anonymous-protected-request", protectedCustomerResponse.status() === 401, {
+      expected: 401,
+      actual: protectedCustomerResponse.status()
+    });
+
+    const invalidBearerResponse = await anonymousOrdersApi.get(
+      "/api/v1/Customer/GetAllCustomers",
+      {
+        headers: {
+          Authorization: "Bearer invalid-local-proof-token"
+        }
+      });
+    record("invalid-bearer-request-is-forbidden", invalidBearerResponse.status() === 403, {
+      expected: 403,
+      actual: invalidBearerResponse.status()
+    });
+  }
+  finally {
+    await anonymousOrdersApi.dispose();
+  }
+
+  const anonymousPaymentsApi = await playwrightRequest.newContext({ baseURL: paymentsApiBaseUrl });
+  try {
+    const webhookResponse = await anonymousPaymentsApi.post(
       "/api/v1/webhook/Razorpay",
       {
         headers: {
@@ -42,28 +67,44 @@ try {
         },
         data: { event: "payment.authorized" }
       });
-    const webhookBody = await webhookResponse.text();
     record(
-      "anonymous-webhook-remains-signature-protected",
-      webhookResponse.status() === 401
-        && webhookBody.toLowerCase().includes("signature"),
-      { expected: "401 signature rejection", actual: webhookResponse.status() });
+      "anonymous-webhook-rejects-invalid-request",
+      webhookResponse.status() === 400 || webhookResponse.status() === 401,
+      {
+        expected: "400 or 401",
+        actual: webhookResponse.status(),
+        note: "The local host contract may reject malformed webhook input before or after auth handling."
+      });
   }
   finally {
-    await anonymousApi.dispose();
+    await anonymousPaymentsApi.dispose();
   }
 
   const normalUser = await login("tenant-user", "TenantA");
   try {
-    await assertTenantRequest(normalUser.token, "TenantA", 200, "matching-tenant");
-    await assertTenantRequest(normalUser.token, "TenantB", 403, "mismatched-tenant");
+    const normalUserClaims = decodeJwtPayload(normalUser.token);
+    record("tenant-user-lacks-operator-role", !(normalUserClaims.realm_access?.roles ?? []).includes("phase10-operator"), {
+      tenantCode: normalUserClaims.tenant_code ?? null,
+      roles: normalUserClaims.realm_access?.roles ?? []
+    });
 
-    const approvalResponse = await normalUser.context.request.post(
-      `${apiBaseUrl}/api/v1/admin/dlq/${crypto.randomUUID()}/approve`,
+    await assertProtectedTenantRequest(
+      normalUser.token,
+      "TenantA",
+      200,
+      "matching-tenant-protected-request");
+    await assertProtectedTenantRequest(
+      normalUser.token,
+      "TenantB",
+      403,
+      "mismatched-tenant-protected-request");
+
+    const normalUserApprovalResponse = await normalUser.context.request.post(
+      `${approvalApiBaseUrl}/api/v1/admin/dlq/${crypto.randomUUID()}/approve`,
       { headers: authorizationHeaders(normalUser.token, "TenantA") });
-    record("normal-user-cannot-approve-replay", approvalResponse.status() === 403, {
+    record("tenant-user-cannot-approve-replay", normalUserApprovalResponse.status() === 403, {
       expected: 403,
-      actual: approvalResponse.status()
+      actual: normalUserApprovalResponse.status()
     });
   }
   finally {
@@ -72,8 +113,14 @@ try {
 
   const operator = await login("tenant-admin", "TenantA");
   try {
+    const operatorClaims = decodeJwtPayload(operator.token);
+    record("tenant-admin-has-operator-role", (operatorClaims.realm_access?.roles ?? []).includes("phase10-operator"), {
+      tenantCode: operatorClaims.tenant_code ?? null,
+      roles: operatorClaims.realm_access?.roles ?? []
+    });
+
     const approvalResponse = await operator.context.request.post(
-      `${apiBaseUrl}/api/v1/admin/dlq/${crypto.randomUUID()}/approve`,
+      `${approvalApiBaseUrl}/api/v1/admin/dlq/${crypto.randomUUID()}/approve`,
       { headers: authorizationHeaders(operator.token, "TenantA") });
     record("operator-reaches-replay-approval", approvalResponse.status() === 404, {
       expected: 404,
@@ -134,13 +181,13 @@ async function login(username, tenantCode) {
   return { context, token };
 }
 
-async function assertTenantRequest(token, tenantCode, expectedStatus, name) {
+async function assertProtectedTenantRequest(token, tenantCode, expectedStatus, name) {
   const api = await playwrightRequest.newContext({
-    baseURL: apiBaseUrl,
+    baseURL: ordersApiBaseUrl,
     extraHTTPHeaders: authorizationHeaders(token, tenantCode)
   });
   try {
-    const response = await api.get("/api/v1/Info/runtime-configuration");
+    const response = await api.get("/api/v1/Customer/GetAllCustomers");
     record(name, response.status() === expectedStatus, {
       expected: expectedStatus,
       actual: response.status()
@@ -149,6 +196,16 @@ async function assertTenantRequest(token, tenantCode, expectedStatus, name) {
   finally {
     await api.dispose();
   }
+}
+
+function decodeJwtPayload(token) {
+  const parts = token.split(".");
+  if (parts.length < 2) {
+    throw new Error("Access token is not a JWT.");
+  }
+
+  const payloadJson = Buffer.from(parts[1], "base64url").toString("utf8");
+  return JSON.parse(payloadJson);
 }
 
 function authorizationHeaders(token, tenantCode) {

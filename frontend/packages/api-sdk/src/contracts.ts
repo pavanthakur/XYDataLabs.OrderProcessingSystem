@@ -74,6 +74,7 @@ export interface ProcessPaymentRequest {
   expirationMonth: string;
   cvv2: string;
   customerOrderId: string;
+  orderReferenceId?: string | null;
   clientCallbackOrigin?: string | null;
 }
 
@@ -87,6 +88,7 @@ export interface PaymentStatusLookupRequest {
 export interface PaymentResult {
   id: string;
   customerOrderId: string;
+  orderReferenceId?: string | null;
   customerId: string;
   amount: number;
   currency: string;
