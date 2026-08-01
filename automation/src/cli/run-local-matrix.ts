@@ -42,6 +42,7 @@ const automationRoot = path.resolve(currentDirectory, "../..");
 const workspaceRoot = path.resolve(automationRoot, "..");
 const statusWriterPath = path.join(workspaceRoot, "scripts", "write-playwright-run-status.ps1");
 const defaultEnvironmentKey = "local-http";
+const phase10RunRoot = process.env.PHASE10_RUN_ROOT?.trim();
 
 function formatIstTimestamp(date: Date): string {
   return new Intl.DateTimeFormat("sv-SE", {
@@ -65,12 +66,14 @@ async function main(): Promise<void> {
   const options = parseCliOptions(process.argv.slice(2));
   const startedAt = new Date();
   const matrixRunId = `payment-automation-local-matrix-${formatIstStamp(startedAt)}_matrix`;
-  const playrightRoot = path.join(workspaceRoot, "TestResults", "Playwright");
   const runtimeTargetCatalog = new JsonRuntimeTargetCatalog();
   const environmentKey = options.targets.length === 1
     ? resolveEnvironmentKey(await runtimeTargetCatalog.resolve(options.targets[0]))
     : defaultEnvironmentKey;
-  const environmentRoot = path.join(playrightRoot, environmentKey);
+  const playrightRoot = path.join(workspaceRoot, "TestResults", "Playwright");
+  const environmentRoot = phase10RunRoot
+    ? path.join(phase10RunRoot, "matrix")
+    : path.join(playrightRoot, environmentKey);
   const reportDirectory = path.join(environmentRoot, matrixRunId);
   const latestPointerPath = path.join(environmentRoot, "latest-playwright-matrix.txt");
   const rootMarkerPath = path.join(playrightRoot, "latest-playwright-run.txt");

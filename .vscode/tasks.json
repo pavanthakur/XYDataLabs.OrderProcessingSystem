@@ -2970,7 +2970,7 @@
             "problemMatcher": []
         },
         {
-            "label": "3 Cleanup: Phase 10 Pre-Azure Local Stack",
+            "label": "3 Cleanup: Phase 10 Pre-Azure Local Stack (Preserve Volumes)",
             "type": "shell",
             "command": "pwsh",
             "args": [
@@ -2979,6 +2979,29 @@
                 "Bypass",
                 "-File",
                 "scripts/cleanup-phase10-preazure-local.ps1"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "3 Cleanup: Phase 10 Pre-Azure Local Stack + Volumes",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/cleanup-phase10-preazure-local.ps1",
+                "-RemoveVolumes"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"

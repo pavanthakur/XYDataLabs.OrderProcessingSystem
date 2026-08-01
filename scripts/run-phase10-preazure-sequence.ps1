@@ -52,7 +52,7 @@ $milestones = @(
     @{ Name = 'L2'; Title = 'Messaging' },
     @{ Name = 'L3'; Title = 'DLQ and Functions' },
     @{ Name = 'L4'; Title = 'Identity' },
-    @{ Name = 'L5'; Title = 'Functional, Performance, and Operational Proof' },
+    @{ Name = 'L5'; Title = 'Operational Readiness Proof' },
     @{ Name = 'L6'; Title = 'Pre-Azure Full Validation' }
 )
 

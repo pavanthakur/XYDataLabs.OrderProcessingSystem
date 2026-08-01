@@ -14,6 +14,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $workspaceRoot = Split-Path -Parent $PSScriptRoot
+$frontendRoot = Join-Path $workspaceRoot 'frontend'
 $artifactRoot = Join-Path $workspaceRoot 'TestResults\Phase10\local-preazure'
 $composeFile = Join-Path $workspaceRoot 'compose\docker-compose.phase10.yml'
 $envExampleFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local.example'
@@ -45,8 +46,8 @@ $milestones = @{
     }
     L5 = @{
         Slug = 'nfr'
-        Title = 'Functional, Performance, and Operational Proof'
-        Purpose = 'Produce separate functional, performance, operational, and rollback evidence without hiding category failures.'
+        Title = 'Operational Readiness Proof'
+        Purpose = 'Produce separate functional, performance, tenant, payments, operational, recovery, and security evidence without hiding category failures.'
     }
     L6 = @{
         Slug = 'full-validation'
@@ -134,6 +135,7 @@ function Invoke-BoundedStep {
         [Parameter(Mandatory = $true)][string]$Name,
         [Parameter(Mandatory = $true)][string]$Command,
         [Parameter(Mandatory = $true)][string[]]$Arguments,
+        [string]$WorkingDirectory = $workspaceRoot,
         [int]$TimeoutSeconds = $CommandTimeoutSeconds
     )
 
@@ -163,7 +165,7 @@ function Invoke-BoundedStep {
     $process = Start-Process `
         -FilePath $Command `
         -ArgumentList $Arguments `
-        -WorkingDirectory $workspaceRoot `
+        -WorkingDirectory $WorkingDirectory `
         -NoNewWindow `
         -PassThru `
         -RedirectStandardOutput $stdoutPath `
@@ -236,6 +238,151 @@ function Add-ComposeConfigStep {
         )
 }
 
+function Test-LocalTcpPortOpen {
+    param(
+        [Parameter(Mandatory = $true)][string]$HostName,
+        [Parameter(Mandatory = $true)][int]$Port
+    )
+
+    $client = [System.Net.Sockets.TcpClient]::new()
+    try {
+        $connectTask = $client.ConnectAsync($HostName, $Port)
+        return $connectTask.Wait([TimeSpan]::FromSeconds(3)) -and $client.Connected
+    }
+    catch {
+        return $false
+    }
+    finally {
+        $client.Dispose()
+    }
+}
+
+function Test-Phase10ProtectedTopologyReady {
+    return (Test-LocalTcpPortOpen -HostName 'localhost' -Port 8081) `
+        -and (Test-LocalTcpPortOpen -HostName 'localhost' -Port 5022) `
+        -and (Test-LocalTcpPortOpen -HostName 'localhost' -Port 5080)
+}
+
+function Test-Phase10MessagingTopologyReady {
+    return (Test-LocalTcpPortOpen -HostName 'localhost' -Port 5672) `
+        -and (Test-LocalTcpPortOpen -HostName 'localhost' -Port 5300)
+}
+
+function Test-Phase10FullTopologyReady {
+    $servicesReady = (Test-LocalTcpPortOpen -HostName 'localhost' -Port 5081) `
+        -and (Test-LocalTcpPortOpen -HostName 'localhost' -Port 5082) `
+        -and (Test-LocalTcpPortOpen -HostName 'localhost' -Port 5083) `
+        -and (Test-LocalTcpPortOpen -HostName 'localhost' -Port 5084)
+
+    if (-not $servicesReady) {
+        return $false
+    }
+
+    if ((Get-LocalEnvValue -Name 'LOCAL_SERVICEBUS_ENABLED') -eq 'true') {
+        return (Test-Phase10ProtectedTopologyReady) -and (Test-Phase10MessagingTopologyReady)
+    }
+
+    return Test-Phase10ProtectedTopologyReady
+}
+
+function Test-Phase10FunctionsContainerReady {
+    if ($DryRun) {
+        return $true
+    }
+
+    $composeEnvArgs = @('--env-file', $envExampleFile, '--env-file', $envFile)
+    $containerIdOutput = & docker compose @composeEnvArgs -f $composeFile --profile data --profile storage --profile messaging --profile functions ps -q functions 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        return $false
+    }
+
+    $containerId = ([string]::Join('', @($containerIdOutput))).Trim()
+    return -not [string]::IsNullOrWhiteSpace($containerId)
+}
+
+function Test-Phase10DlqFunctionsTopologyReady {
+    if (-not (Test-Phase10FullTopologyReady)) {
+        return $false
+    }
+
+    if ((Get-LocalEnvValue -Name 'LOCAL_SERVICEBUS_ENABLED') -ne 'true') {
+        return $false
+    }
+
+    return Test-Phase10FunctionsContainerReady
+}
+
+function Add-ReusedStackStep {
+    param(
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][string[]]$Details
+    )
+
+    $started = Get-IstNow
+    $logName = (($Name -replace '[^a-zA-Z0-9]+', '-').Trim('-').ToLowerInvariant()) + '.log'
+    $logPath = Join-Path $runDir $logName
+    Set-Content -LiteralPath $currentStepPath -Value $Name -Encoding utf8
+    Write-ProgressLog "START $Name"
+    Set-Content -LiteralPath $logPath -Value $Details -Encoding utf8
+    $steps.Add([ordered]@{
+        name = $Name
+        status = 'passed'
+        startedAtIst = $started.ToString('o')
+        completedAtIst = (Get-IstNow).ToString('o')
+        exitCode = 0
+        log = $logName
+        reusedExistingStack = $true
+    })
+    Write-Summary
+    Write-ProgressLog "PASS $Name (reused existing stack)"
+}
+
+function Invoke-Phase10IdentityProof {
+    Invoke-BoundedStep `
+        -Name 'Identity and authorization tests' `
+        -Command 'dotnet' `
+        -Arguments @(
+            'test',
+            'tests/XYDataLabs.OrderProcessingSystem.API.Tests/XYDataLabs.OrderProcessingSystem.API.Tests.csproj',
+            '--filter', 'FullyQualifiedName~Identity|FullyQualifiedName~Authorization|FullyQualifiedName~Tenant',
+            '--logger', "trx;LogFileName=$runDir\identity-tests.trx"
+        )
+
+    if (-not $DryRun) {
+        $env:KEYCLOAK_TENANT_ADMIN_PASSWORD =
+            Get-LocalEnvValue -Name 'KEYCLOAK_TENANT_ADMIN_PASSWORD'
+    }
+    Invoke-BoundedStep `
+        -Name 'Keycloak PKCE and authorization browser proof' `
+        -Command 'npm' `
+        -WorkingDirectory $frontendRoot `
+        -Arguments @(
+            'run',
+            'proof:phase10:identity',
+            '--workspace', '@xydatalabs/orderprocessing-web',
+            '--',
+            '--url', 'http://localhost:5022',
+            '--orders-api-url', 'http://localhost:5081',
+            '--payments-api-url', 'http://localhost:5084',
+            '--approval-api-url', 'http://localhost:5081',
+            '--output', "$runDir\identity-browser-evidence.json"
+        ) `
+        -TimeoutSeconds 300
+}
+
+function Invoke-Phase10ArchitectureConformance {
+    Invoke-BoundedStep `
+        -Name 'Architecture conformance' `
+        -Command 'pwsh' `
+        -Arguments @(
+            '-NoProfile',
+            '-ExecutionPolicy', 'Bypass',
+            '-File', 'scripts/run-phase10-architecture-conformance.ps1',
+            '-ArtifactRoot', 'TestResults/Phase10/local-preazure'
+        ) `
+        -TimeoutSeconds 1800
+}
+
 $planLines = @(
     "Phase 10 Pre-Azure $Milestone - $($definition.Title)",
     "Started (IST): $($startedAt.ToString('o'))",
@@ -249,7 +396,9 @@ Write-Summary
 Write-ProgressLog "$Milestone initialized. reportDirectory=$runDir"
 
 $previousDockerConfig = $env:DOCKER_CONFIG
+$previousPhase10RunRoot = $env:PHASE10_RUN_ROOT
 $env:DOCKER_CONFIG = $dockerConfigRoot
+$env:PHASE10_RUN_ROOT = $runDir
 
 Push-Location $workspaceRoot
 try {
@@ -329,17 +478,29 @@ try {
                 $env:LOCAL_SERVICEBUS_REPLAY_ENABLED = 'true'
             }
             Add-ComposeConfigStep
-            Invoke-BoundedStep `
-                -Name 'Start apps, broker, and Functions topology' `
-                -Command 'pwsh' `
-                -Arguments @(
-                    '-NoProfile',
-                    '-ExecutionPolicy', 'Bypass',
-                    '-File', 'scripts/start-phase10-docker-dev.ps1',
-                    '-Action', 'up',
-                    '-Profile', 'apps'
-                ) `
-                -TimeoutSeconds 3600
+            if (Test-Phase10DlqFunctionsTopologyReady) {
+                Add-ReusedStackStep `
+                    -Name 'Start apps, broker, and Functions topology' `
+                    -Details @(
+                        'Existing full Phase 10 messaging + applications + Functions topology detected.',
+                        'Reusing already running local Docker services because the required ports and Functions container are already live.',
+                        'Ports checked: 8081, 5022, 5080, 5081, 5082, 5083, 5084, 5672, 5300.',
+                        'Functions container check: docker compose ps -q functions returned a running container id.'
+                    )
+            }
+            else {
+                Invoke-BoundedStep `
+                    -Name 'Start apps, broker, and Functions topology' `
+                    -Command 'pwsh' `
+                    -Arguments @(
+                        '-NoProfile',
+                        '-ExecutionPolicy', 'Bypass',
+                        '-File', 'scripts/start-phase10-docker-dev.ps1',
+                        '-Action', 'up',
+                        '-Profile', 'apps'
+                    ) `
+                    -TimeoutSeconds 3600
+            }
             Invoke-BoundedStep `
                 -Name 'Functions build' `
                 -Command 'dotnet' `
@@ -369,46 +530,63 @@ try {
         }
         'L4' {
             Add-ComposeConfigStep
+            if (Test-Phase10ProtectedTopologyReady) {
+                Add-ReusedStackStep `
+                    -Name 'Start Keycloak and protected application topology' `
+                    -Details @(
+                    'Existing protected application topology detected.',
+                    'Reusing already running local Docker services because the required ports are live.',
+                    'Ports checked: 8081, 5022, 5080.'
+                )
+            }
+            else {
+                Invoke-BoundedStep `
+                    -Name 'Start Keycloak and protected application topology' `
+                    -Command 'pwsh' `
+                    -Arguments @(
+                        '-NoProfile',
+                        '-ExecutionPolicy', 'Bypass',
+                        '-File', 'scripts/start-phase10-docker-dev.ps1',
+                        '-Action', 'up',
+                    '-Profile', 'apps'
+                ) `
+                -TimeoutSeconds 3600
+            }
+            Invoke-Phase10IdentityProof
+        }
+        'L5' {
+            Assert-MessagingEnabled
+            if (Test-Phase10FullTopologyReady) {
+                Add-ReusedStackStep `
+                    -Name 'Start complete local stack' `
+                    -Details @(
+                    'Existing full Phase 10 topology detected.',
+                    'Reusing already running local Docker services because the required ports are live.',
+                    'Ports checked: 8081, 5022, 5080, 5081, 5082, 5083, 5084, 5300, 5672.'
+                )
+            }
+            else {
+                Invoke-BoundedStep `
+                    -Name 'Start complete local stack' `
+                    -Command 'pwsh' `
+                    -Arguments @(
+                        '-NoProfile',
+                        '-ExecutionPolicy', 'Bypass',
+                        '-File', 'scripts/start-phase10-docker-dev.ps1',
+                        '-Action', 'up',
+                        '-Profile', 'apps'
+                    ) `
+                    -TimeoutSeconds 3600
+            }
             Invoke-BoundedStep `
-                -Name 'Start Keycloak and protected application topology' `
+                -Name 'Rollback readiness' `
                 -Command 'pwsh' `
                 -Arguments @(
                     '-NoProfile',
                     '-ExecutionPolicy', 'Bypass',
-                    '-File', 'scripts/start-phase10-docker-dev.ps1',
-                    '-Action', 'up',
-                    '-Profile', 'apps'
-                ) `
-                -TimeoutSeconds 3600
-            Invoke-BoundedStep `
-                -Name 'Identity and authorization tests' `
-                -Command 'dotnet' `
-                -Arguments @(
-                    'test',
-                    'tests/XYDataLabs.OrderProcessingSystem.API.Tests/XYDataLabs.OrderProcessingSystem.API.Tests.csproj',
-                    '--filter', 'FullyQualifiedName~Identity|FullyQualifiedName~Authorization|FullyQualifiedName~Tenant',
-                    '--logger', "trx;LogFileName=$runDir\identity-tests.trx"
+                    '-File', 'scripts/test-phase10-rollback-readiness.ps1',
+                    '-ArtifactRoot', $runDir
                 )
-            if (-not $DryRun) {
-                $env:KEYCLOAK_TENANT_ADMIN_PASSWORD =
-                    Get-LocalEnvValue -Name 'KEYCLOAK_TENANT_ADMIN_PASSWORD'
-            }
-            Invoke-BoundedStep `
-                -Name 'Keycloak PKCE and authorization browser proof' `
-                -Command 'npm' `
-                -Arguments @(
-                    'run',
-                    'proof:phase10:identity',
-                    '--workspace', '@xydatalabs/orderprocessing-web',
-                    '--',
-                    '--url', 'http://localhost:5022',
-                    '--api-url', 'http://localhost:5080',
-                    '--output', "$runDir\identity-browser-evidence.json"
-                ) `
-                -TimeoutSeconds 300
-        }
-        'L5' {
-            Assert-MessagingEnabled
             Invoke-BoundedStep `
                 -Name 'Phase 10 NFR proof' `
                 -Command 'pwsh' `
@@ -440,17 +618,39 @@ try {
                 ) `
                 -TimeoutSeconds 1800
             Add-ComposeConfigStep
+            Invoke-Phase10ArchitectureConformance
+            if (Test-Phase10FullTopologyReady) {
+                Add-ReusedStackStep `
+                    -Name 'Start complete local stack' `
+                    -Details @(
+                    'Existing full Phase 10 topology detected.',
+                    'Reusing already running local Docker services because the required ports are live.',
+                    'Ports checked: 8081, 5022, 5080, 5081, 5082, 5083, 5084, 5300, 5672.'
+                )
+            }
+            else {
+                Invoke-BoundedStep `
+                    -Name 'Start complete local stack' `
+                    -Command 'pwsh' `
+                    -Arguments @(
+                        '-NoProfile',
+                        '-ExecutionPolicy', 'Bypass',
+                        '-File', 'scripts/start-phase10-docker-dev.ps1',
+                        '-Action', 'up',
+                        '-Profile', 'apps'
+                    ) `
+                    -TimeoutSeconds 3600
+            }
+            Invoke-Phase10IdentityProof
             Invoke-BoundedStep `
-                -Name 'Start complete local stack' `
+                -Name 'Rollback readiness' `
                 -Command 'pwsh' `
                 -Arguments @(
                     '-NoProfile',
                     '-ExecutionPolicy', 'Bypass',
-                    '-File', 'scripts/start-phase10-docker-dev.ps1',
-                    '-Action', 'up',
-                    '-Profile', 'apps'
-                ) `
-                -TimeoutSeconds 3600
+                    '-File', 'scripts/test-phase10-rollback-readiness.ps1',
+                    '-ArtifactRoot', $runDir
+                )
             Invoke-BoundedStep `
                 -Name 'Docker Compose end-to-end' `
                 -Command 'pwsh' `
@@ -471,7 +671,7 @@ try {
                 ) `
                 -TimeoutSeconds 1800
             Invoke-BoundedStep `
-                -Name 'Preserving cleanup' `
+                -Name 'Stop local stack (preserve volumes)' `
                 -Command 'pwsh' `
                 -Arguments @(
                     '-NoProfile',
@@ -499,6 +699,13 @@ catch {
     throw
 }
 finally {
+    if ([string]::IsNullOrWhiteSpace($previousPhase10RunRoot)) {
+        Remove-Item Env:PHASE10_RUN_ROOT -ErrorAction SilentlyContinue
+    }
+    else {
+        $env:PHASE10_RUN_ROOT = $previousPhase10RunRoot
+    }
+
     if ([string]::IsNullOrWhiteSpace($previousDockerConfig)) {
         Remove-Item Env:DOCKER_CONFIG -ErrorAction SilentlyContinue
     }

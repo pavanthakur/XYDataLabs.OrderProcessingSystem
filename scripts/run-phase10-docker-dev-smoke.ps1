@@ -12,7 +12,12 @@ $logRoot = Join-Path $workspaceRoot 'TestResults\Playwright\phase10-docker-http'
 $latestPointerPath = Join-Path $logRoot 'latest-playwright-smoke.txt'
 $rootMarkerPath = Join-Path $workspaceRoot 'TestResults\Playwright\latest-playwright-run.txt'
 $runStamp = "$(Get-Date -Format 'yyyyMMdd-HHmmss')_smoke"
-$runDir = Join-Path $logRoot $runStamp
+$runDir = if ([string]::IsNullOrWhiteSpace($env:PHASE10_RUN_ROOT)) {
+    Join-Path $logRoot $runStamp
+}
+else {
+    Join-Path $env:PHASE10_RUN_ROOT 'smoke'
+}
 $startupLogPath = Join-Path $runDir '02-smoke.log'
 $progressLogPath = Join-Path $runDir '02-smoke.log'
 $summaryPath = Join-Path $runDir 'summary.json'
@@ -72,7 +77,9 @@ $summary = [ordered]@{
 
 try {
     Add-Content -Path $progressLogPath -Value 'Starting browser smoke execution.'
-    & pwsh -NoProfile -ExecutionPolicy Bypass -File $bootstrapScript -Target phase10-docker-http
+    & pwsh -NoProfile -ExecutionPolicy Bypass -File $bootstrapScript `
+        -Target phase10-docker-http `
+        -Url 'http://localhost:5022/customers'
     if ($LASTEXITCODE -ne 0) {
         throw "Phase 10 smoke failed with exit code $LASTEXITCODE"
     }

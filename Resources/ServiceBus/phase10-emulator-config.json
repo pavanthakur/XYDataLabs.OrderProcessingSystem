@@ -13,6 +13,16 @@
             },
             "Subscriptions": [
               {
+                "Name": "orders-payment-state",
+                "Properties": {
+                  "DeadLetteringOnMessageExpiration": true,
+                  "DefaultMessageTimeToLive": "PT1H",
+                  "LockDuration": "PT1M",
+                  "MaxDeliveryCount": 10,
+                  "ForwardDeadLetteredMessagesTo": "order-events-dlq"
+                }
+              },
+              {
                 "Name": "inventory-order-created",
                 "Properties": {
                   "DeadLetteringOnMessageExpiration": true,

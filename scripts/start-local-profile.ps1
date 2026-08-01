@@ -10,6 +10,7 @@ $workspaceRoot = Split-Path -Parent $PSScriptRoot
 $apiScriptPath = Join-Path $PSScriptRoot 'start-local-api-profile.ps1'
 $frontendScriptPath = Join-Path $PSScriptRoot 'start-local-frontend-profile.ps1'
 $keycloakScriptPath = Join-Path $PSScriptRoot 'start-local-keycloak.ps1'
+$bootstrapScriptPath = Join-Path $PSScriptRoot 'verify-local-db-ready.ps1'
 $statusWriter = Join-Path $PSScriptRoot 'write-playwright-run-status.ps1'
 $logRoot = Join-Path $workspaceRoot 'TestResults\Playwright\local-http'
 $sequenceEnvironmentKey = 'local-http'
@@ -51,7 +52,9 @@ function Start-ChildProfileProcess {
         [string]$ScriptPath,
 
         [Parameter(Mandatory = $true)]
-        [string]$ProfileName
+        [string]$ProfileName,
+
+        [switch]$DisableStartupDdl
     )
 
     Write-Host "Starting $Name for '$ProfileName' profile..."
@@ -59,17 +62,24 @@ function Start-ChildProfileProcess {
     $stdoutPath = Join-Path $logRoot ("start-local-profile-{0}-{1}-stdout.log" -f $ProfileName, $Name.ToLowerInvariant())
     $stderrPath = Join-Path $logRoot ("start-local-profile-{0}-{1}-stderr.log" -f $ProfileName, $Name.ToLowerInvariant())
 
+    $argumentList = @(
+        '-NoProfile'
+        '-ExecutionPolicy'
+        'Bypass'
+        '-File'
+        $ScriptPath
+        "-Profile"
+        $ProfileName
+    )
+
+    if ($DisableStartupDdl)
+    {
+        $argumentList += '-DisableStartupDdl'
+    }
+
     return Start-Process `
         -FilePath 'pwsh' `
-        -ArgumentList @(
-            '-NoProfile'
-            '-ExecutionPolicy'
-            'Bypass'
-            '-File'
-            $ScriptPath
-            "-Profile"
-            $ProfileName
-        ) `
+        -ArgumentList $argumentList `
         -WorkingDirectory $workspaceRoot `
         -RedirectStandardOutput $stdoutPath `
         -RedirectStandardError $stderrPath `
@@ -83,12 +93,17 @@ $startupDeadline = (Get-Date).AddSeconds(120)
 try
 {
     & pwsh -NoProfile -ExecutionPolicy Bypass -File $statusWriter -EnvironmentKey $sequenceEnvironmentKey -TaskName 'local-http-env-ready' -Status started -Message $Profile
+    & pwsh -NoProfile -ExecutionPolicy Bypass -File $bootstrapScriptPath
+    if ($LASTEXITCODE -ne 0)
+    {
+        throw "Failed to bootstrap the local database for '$Profile' profile."
+    }
     & pwsh -NoProfile -ExecutionPolicy Bypass -File $keycloakScriptPath
     if ($LASTEXITCODE -ne 0)
     {
         throw "Failed to start Keycloak for local '$Profile' profile."
     }
-    Start-ChildProfileProcess -Name 'API' -ScriptPath $apiScriptPath -ProfileName $Profile | Out-Null
+    Start-ChildProfileProcess -Name 'API' -ScriptPath $apiScriptPath -ProfileName $Profile -DisableStartupDdl | Out-Null
     Start-ChildProfileProcess -Name 'UI' -ScriptPath $frontendScriptPath -ProfileName $Profile | Out-Null
 
     Write-Host "Local '$Profile' profile bootstrap is running."

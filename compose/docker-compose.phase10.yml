@@ -11,6 +11,16 @@ services:
     networks:
       - xy-phase10-network
     profiles: ["data"]
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$SA_PASSWORD\" -Q \"SET NOCOUNT ON; SELECT 1\" >/dev/null 2>&1 || exit 1",
+        ]
+      interval: 20s
+      timeout: 20s
+      retries: 30
+      start_period: 120s
 
   redis:
     image: redis:7-alpine
@@ -150,6 +160,9 @@ services:
       PaymentProviders__TenantC__Razorpay__PrivateKey: ${LOCAL_RAZORPAY_PRIVATE_KEY}
     volumes:
       - ../logs:/logs
+    depends_on:
+      sql-server:
+        condition: service_healthy
     networks:
       xy-phase10-network:
         aliases:
@@ -174,6 +187,7 @@ services:
       ServiceBus__Enabled: ${LOCAL_SERVICEBUS_ENABLED:-false}
       ServiceBus__ConnectionString: ${LOCAL_SERVICEBUS_CONNECTION_STRING}
       ServiceBus__TopicName: ${LOCAL_SERVICEBUS_TOPIC_NAME:-order-events}
+      ServiceBus__PaymentStateSubscriptionName: ${LOCAL_SERVICEBUS_ORDERS_PAYMENT_STATE_SUBSCRIPTION_NAME:-orders-payment-state}
       ServiceBus__DeadLetterTopicName: ${LOCAL_SERVICEBUS_DLQ_TOPIC_NAME:-order-events-dlq}
       ServiceBus__DeadLetterSubscriptionName: ${LOCAL_SERVICEBUS_DLQ_SUBSCRIPTION_NAME:-dlq-intake}
       ServiceBus__ReplayRequestQueueName: ${LOCAL_SERVICEBUS_REPLAY_REQUEST_QUEUE_NAME:-dlq-replay-requests}
@@ -204,6 +218,9 @@ services:
       PaymentProviders__TenantC__Razorpay__PrivateKey: ${LOCAL_RAZORPAY_PRIVATE_KEY}
     volumes:
       - ../logs:/logs
+    depends_on:
+      sql-server:
+        condition: service_healthy
     networks:
       xy-phase10-network:
         aliases:
@@ -257,6 +274,9 @@ services:
       PaymentProviders__TenantC__Razorpay__PrivateKey: ${LOCAL_RAZORPAY_PRIVATE_KEY}
     volumes:
       - ../logs:/logs
+    depends_on:
+      sql-server:
+        condition: service_healthy
     networks:
       xy-phase10-network:
         aliases:
@@ -310,6 +330,9 @@ services:
       PaymentProviders__TenantC__Razorpay__PrivateKey: ${LOCAL_RAZORPAY_PRIVATE_KEY}
     volumes:
       - ../logs:/logs
+    depends_on:
+      sql-server:
+        condition: service_healthy
     networks:
       xy-phase10-network:
         aliases:

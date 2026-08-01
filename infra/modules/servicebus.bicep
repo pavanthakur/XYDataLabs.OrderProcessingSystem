@@ -15,6 +15,9 @@ param orderEventsTopicName string = 'order-events'
 @description('Name of the inventory subscription')
 param inventorySubscriptionName string = 'inventory-order-created'
 
+@description('Name of the orders payment-state subscription')
+param ordersPaymentStateSubscriptionName string = 'orders-payment-state'
+
 @description('Name of the notifications subscription')
 param notificationsSubscriptionName string = 'notifications-order-created'
 
@@ -74,6 +77,17 @@ resource inventorySubscription 'Microsoft.ServiceBus/namespaces/topics/subscript
   }
 }
 
+resource ordersPaymentStateSubscription 'Microsoft.ServiceBus/namespaces/topics/subscriptions@2022-10-01-preview' = {
+  parent: orderTopic
+  name: ordersPaymentStateSubscriptionName
+  properties: {
+    maxDeliveryCount: maxDeliveryCount
+    defaultMessageTimeToLive: messageTtl
+    deadLetteringOnMessageExpiration: true
+    forwardDeadLetteredMessagesTo: dlqTopicName
+  }
+}
+
 resource notificationsSubscription 'Microsoft.ServiceBus/namespaces/topics/subscriptions@2022-10-01-preview' = {
   parent: orderTopic
   name: notificationsSubscriptionName
@@ -107,6 +121,7 @@ resource dlqReplaySubscription 'Microsoft.ServiceBus/namespaces/topics/subscript
 
 output serviceBusNamespaceName string = sbNamespace.name
 output orderEventsTopic string = orderTopic.name
+output ordersPaymentStateSubscription string = ordersPaymentStateSubscription.name
 output inventorySubscription string = inventorySubscription.name
 output notificationsSubscription string = notificationsSubscription.name
 output deadLetterTopic string = dlqTopic.name

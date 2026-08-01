@@ -39,6 +39,7 @@ interface DockerMatrixOutput {
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 const automationRoot = path.resolve(currentDirectory, "../..");
 const workspaceRoot = path.resolve(automationRoot, "..");
+const phase10RunRoot = process.env.PHASE10_RUN_ROOT?.trim();
 function formatIstTimestamp(date: Date): string {
   return new Intl.DateTimeFormat("sv-SE", {
     timeZone: "Asia/Kolkata",
@@ -61,13 +62,15 @@ async function main(): Promise<void> {
   const options = parseCliOptions(process.argv.slice(2));
   const startedAt = new Date();
   const matrixRunId = `payment-automation-docker-matrix-${formatIstStamp(startedAt)}_matrix`;
-  const playrightRoot = path.join(workspaceRoot, "TestResults", "Playwright");
   const reportComposer = new FileReportComposer();
   const runtimeTargetCatalog = new JsonRuntimeTargetCatalog();
   const environmentKey = options.targets.length === 1
     ? options.targets[0]
     : "docker-matrix";
-  const environmentRoot = path.join(playrightRoot, environmentKey);
+  const playrightRoot = path.join(workspaceRoot, "TestResults", "Playwright");
+  const environmentRoot = phase10RunRoot
+    ? path.join(phase10RunRoot, "matrix")
+    : path.join(playrightRoot, environmentKey);
   const reportDirectory = path.join(environmentRoot, matrixRunId);
   const latestPointerPath = path.join(environmentRoot, "latest-playwright-matrix.txt");
   const runPlanPath = path.join(reportDirectory, "run-plan.txt");
