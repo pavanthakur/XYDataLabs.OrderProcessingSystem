@@ -1,5 +1,5 @@
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
-using XYDataLabs.OrderProcessingSystem.Orders.API;
+using XYDataLabs.OrderProcessingSystem.Orders.Contracts;
 
 namespace XYDataLabs.OrderProcessingSystem.Orders.Features.Mappings;
 

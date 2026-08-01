@@ -13,4 +13,5 @@ public sealed record ProcessPaymentCommand(
     string ExpirationMonth,
     string Cvv2,
     string CustomerOrderId,
+    Guid? OrderReferenceId,
     string? ClientCallbackOrigin) : ICommand<Result<PaymentDto>>;

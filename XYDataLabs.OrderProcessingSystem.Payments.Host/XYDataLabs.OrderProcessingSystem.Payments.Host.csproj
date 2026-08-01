@@ -5,7 +5,22 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.API\XYDataLabs.OrderProcessingSystem.API.csproj" />
+    <PackageReference Include="Asp.Versioning.Mvc" />
+    <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" />
+    <PackageReference Include="AspNetCore.HealthChecks.SqlServer" />
+    <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\XYDataLabs.OpenPayAdapter\XYDataLabs.OpenPayAdapter.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Application\XYDataLabs.OrderProcessingSystem.Application.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Infrastructure\XYDataLabs.OrderProcessingSystem.Infrastructure.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Orders.Features\XYDataLabs.OrderProcessingSystem.Orders.Features.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Payments.API\XYDataLabs.OrderProcessingSystem.Payments.API.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Payments.Features\XYDataLabs.OrderProcessingSystem.Payments.Features.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.ServiceDefaults\XYDataLabs.OrderProcessingSystem.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.SharedKernel\XYDataLabs.OrderProcessingSystem.SharedKernel.csproj" />
+    <ProjectReference Include="..\XYDataLabs.RazorpayAdapter\XYDataLabs.RazorpayAdapter.csproj" />
   </ItemGroup>
 
   <ItemGroup>

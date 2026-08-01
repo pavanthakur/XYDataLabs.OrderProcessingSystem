@@ -28,6 +28,7 @@ public sealed class TenantPaymentProviderResolver : ITenantPaymentProviderResolv
 
     public PaymentProvider ResolveCurrentTenantProvider()
     {
+        _appMasterData.RefreshData();
         var entry = _tenantRegistry.FindByCode(_tenantProvider.TenantCode)
             ?? throw new InvalidOperationException(
                 $"Tenant '{_tenantProvider.TenantCode}' was not found in the Tenant Registry.");
@@ -48,6 +49,7 @@ public sealed class TenantPaymentProviderResolver : ITenantPaymentProviderResolv
             throw new ArgumentException("Provider type is required.", nameof(providerType));
         }
 
+        _appMasterData.RefreshData();
         return _appMasterData.GetProviderByTypeForTenant(providerType, _tenantProvider.TenantId)
             ?? throw new InvalidOperationException(
                 $"Payment provider type '{providerType}' is not configured for tenant {_tenantProvider.TenantId}.");

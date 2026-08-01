@@ -5,7 +5,19 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.API\XYDataLabs.OrderProcessingSystem.API.csproj" />
+    <PackageReference Include="Asp.Versioning.Mvc" />
+    <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" />
+    <PackageReference Include="AspNetCore.HealthChecks.SqlServer" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Application\XYDataLabs.OrderProcessingSystem.Application.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Infrastructure\XYDataLabs.OrderProcessingSystem.Infrastructure.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Notifications.API\XYDataLabs.OrderProcessingSystem.Notifications.API.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Notifications.Features\XYDataLabs.OrderProcessingSystem.Notifications.Features.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Notifications.Infrastructure\XYDataLabs.OrderProcessingSystem.Notifications.Infrastructure.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.ServiceDefaults\XYDataLabs.OrderProcessingSystem.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.SharedKernel\XYDataLabs.OrderProcessingSystem.SharedKernel.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -5,7 +5,20 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.API\XYDataLabs.OrderProcessingSystem.API.csproj" />
+    <PackageReference Include="Asp.Versioning.Mvc" />
+    <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" />
+    <PackageReference Include="AspNetCore.HealthChecks.SqlServer" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Application\XYDataLabs.OrderProcessingSystem.Application.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Infrastructure\XYDataLabs.OrderProcessingSystem.Infrastructure.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Inventory.API\XYDataLabs.OrderProcessingSystem.Inventory.API.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Inventory.Features\XYDataLabs.OrderProcessingSystem.Inventory.Features.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Orders.API\XYDataLabs.OrderProcessingSystem.Orders.API.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Orders.Features\XYDataLabs.OrderProcessingSystem.Orders.Features.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.ServiceDefaults\XYDataLabs.OrderProcessingSystem.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.SharedKernel\XYDataLabs.OrderProcessingSystem.SharedKernel.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -13,5 +26,11 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>XYDataLabs.OrderProcessingSystem.API.Tests</_Parameter1>
+    </AssemblyAttribute>
   </ItemGroup>
 </Project>

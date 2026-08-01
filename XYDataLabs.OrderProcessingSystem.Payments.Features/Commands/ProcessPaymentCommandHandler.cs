@@ -13,6 +13,7 @@ using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
+using XYDataLabs.OrderProcessingSystem.Orders.Contracts;
 using static XYDataLabs.OrderProcessingSystem.Application.Utilities.AppMasterConstant;
 using PaymentAttempt = global::XYDataLabs.OrderProcessingSystem.Domain.Entities.PaymentAttempt;
 using PaymentAttemptStatus = global::XYDataLabs.OrderProcessingSystem.Domain.Entities.PaymentAttemptStatus;
@@ -38,6 +39,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
     private readonly PaymentProvider _paymentProvider;
     private readonly TimeProvider _timeProvider;
     private readonly ITenantProvider _tenantProvider;
+    private readonly IOrderModuleApi _orderModuleApi;
     private bool UsesProviderHostedCheckout =>
         string.Equals(_paymentProvider.ProviderType, PaymentProviderTypes.Razorpay, StringComparison.OrdinalIgnoreCase);
 
@@ -47,6 +49,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         IPaymentTelemetryTracker paymentTelemetryTracker,
         ILogger<ProcessPaymentCommandHandler> logger,
         IAppDbContext context,
+        IOrderModuleApi orderModuleApi,
         ITenantPaymentProviderResolver paymentProviderResolver,
         TimeProvider timeProvider,
         ITenantProvider tenantProvider)
@@ -56,6 +59,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         ArgumentNullException.ThrowIfNull(paymentTelemetryTracker);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(orderModuleApi);
         ArgumentNullException.ThrowIfNull(paymentProviderResolver);
         ArgumentNullException.ThrowIfNull(timeProvider);
         ArgumentNullException.ThrowIfNull(tenantProvider);
@@ -67,6 +71,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         _redirectUrl = requestDefaults.RedirectUrl;
         _defaultDeviceSessionId = requestDefaults.DeviceSessionId;
         _context = context;
+        _orderModuleApi = orderModuleApi;
         _timeProvider = timeProvider;
 
         _tenantProvider = tenantProvider;
@@ -92,10 +97,12 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         {
             _logger.LogInformation("Starting combined customer, card, and payment process");
 
-            var customerOrderId = ResolveCustomerOrderId(command.CustomerOrderId);
+            var requestedCustomerOrderId = ResolveCustomerOrderId(command.CustomerOrderId);
             var paymentTerms = await ResolveOrderPaymentTermsAsync(
-                customerOrderId,
+                requestedCustomerOrderId,
+                command.OrderReferenceId,
                 cancellationToken);
+            var customerOrderId = paymentTerms.CustomerOrderId;
             var paymentTraceId = GeneratePaymentTraceId();
             var attemptNumber = await GetNextAttemptNumberAsync(customerOrderId, cancellationToken);
             var attemptOrderId = GenerateAttemptOrderId(customerOrderId, attemptNumber);
@@ -201,6 +208,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             {
                 Id = charge.Id,
                 CustomerOrderId = customerOrderId,
+                OrderReferenceId = paymentTerms.OrderReferenceId,
                 CustomerId = paymentGatewayCustomer.Id,
                 Amount = paymentTerms.Amount,
                 Currency = paymentTerms.CurrencyCode,
@@ -265,42 +273,40 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
 
     private async Task<OrderPaymentTerms> ResolveOrderPaymentTermsAsync(
         string customerOrderId,
+        Guid? orderReferenceId,
         CancellationToken cancellationToken)
     {
-        const string orderPrefix = "ORDER-";
-        if (!customerOrderId.StartsWith(orderPrefix, StringComparison.OrdinalIgnoreCase)
-            || !int.TryParse(
-                customerOrderId[orderPrefix.Length..],
-                NumberStyles.None,
-                CultureInfo.InvariantCulture,
-                out var orderId)
-            || orderId <= 0)
+        var linkedOrderReferenceId = orderReferenceId.GetValueOrDefault();
+        var hasLinkedOrderReferenceId = linkedOrderReferenceId != Guid.Empty;
+        OrderPaymentContextDto? paymentContext = null;
+        if (hasLinkedOrderReferenceId)
         {
-            throw new InvalidOperationException(
-                "Payments must reference a persisted order using ORDER-{id}.");
+            paymentContext = await _orderModuleApi.GetPaymentContextByOrderReferenceAsync(linkedOrderReferenceId, cancellationToken);
         }
 
-        var order = await _context.Orders
-            .AsNoTracking()
-            .SingleOrDefaultAsync(
-                item => item.OrderId == orderId,
-                cancellationToken);
-        if (order is null)
+        paymentContext ??= await _orderModuleApi.GetPaymentContextAsync(customerOrderId, cancellationToken);
+        if (paymentContext is null)
         {
             throw new InvalidOperationException(
-                $"Persisted order '{customerOrderId}' was not found for the active tenant.");
+                hasLinkedOrderReferenceId
+                    ? $"Persisted order reference '{linkedOrderReferenceId}' was not found for the active tenant."
+                    : $"Persisted order '{customerOrderId}' was not found for the active tenant.");
         }
 
-        if (order.TotalPrice.Value <= 0m
-            || string.IsNullOrWhiteSpace(order.CurrencyCode))
+        if (paymentContext.Amount <= 0m
+            || string.IsNullOrWhiteSpace(paymentContext.CurrencyCode))
         {
             throw new InvalidOperationException(
                 $"Persisted order '{customerOrderId}' has invalid payment terms.");
         }
 
         return new OrderPaymentTerms(
-            order.TotalPrice.Value,
-            order.CurrencyCode.Trim().ToUpperInvariant());
+            paymentContext.CustomerOrderId,
+            paymentContext.Amount,
+            paymentContext.CurrencyCode.Trim().ToUpperInvariant(),
+            paymentContext.OrderReferenceId,
+            paymentContext.Status,
+            paymentContext.ConcurrencyToken);
     }
 
     private async Task<int> GetNextAttemptNumberAsync(string customerOrderId, CancellationToken cancellationToken)
@@ -881,5 +887,11 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             : DateTime.SpecifyKind(dateTime.Value, DateTimeKind.Local).ToUniversalTime();
     }
 
-    private sealed record OrderPaymentTerms(decimal Amount, string CurrencyCode);
+    private sealed record OrderPaymentTerms(
+        string CustomerOrderId,
+        decimal Amount,
+        string CurrencyCode,
+        Guid OrderReferenceId,
+        string OrderStatus,
+        string ConcurrencyToken);
 }

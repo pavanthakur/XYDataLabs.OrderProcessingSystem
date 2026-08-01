@@ -1,10 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using XYDataLabs.OrderProcessingSystem.Domain.Identifiers;
+using XYDataLabs.OrderProcessingSystem.Orders.Contracts;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.CQRS;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Abstractions;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
 using XYDataLabs.OrderProcessingSystem.Orders.Features.Mappings;
-using XYDataLabs.OrderProcessingSystem.Orders.API;
 
 namespace XYDataLabs.OrderProcessingSystem.Orders.Features.Queries;
 

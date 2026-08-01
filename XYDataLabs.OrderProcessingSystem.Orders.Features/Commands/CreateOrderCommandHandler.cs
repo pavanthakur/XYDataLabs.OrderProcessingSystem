@@ -5,7 +5,8 @@ using XYDataLabs.OrderProcessingSystem.Domain.Results;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.CQRS;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Abstractions;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
-using XYDataLabs.OrderProcessingSystem.Orders.API;
+using XYDataLabs.OrderProcessingSystem.Inventory.API;
+using XYDataLabs.OrderProcessingSystem.Orders.Contracts;
 using XYDataLabs.OrderProcessingSystem.Orders.Features.Mappings;
 using XYDataLabs.OrderProcessingSystem.Orders.Features.Specifications;
 using XYDataLabs.OrderProcessingSystem.Orders.Features;
@@ -15,10 +16,17 @@ namespace XYDataLabs.OrderProcessingSystem.Orders.Features.Commands;
 public sealed class CreateOrderCommandHandler : ICommandHandler<CreateOrderCommand, Result<OrderDto>>
 {
     private readonly IAppDbContext _context;
+    private readonly IInventoryModuleApi _inventoryModuleApi;
 
-    public CreateOrderCommandHandler(IAppDbContext context)
+    public CreateOrderCommandHandler(
+        IAppDbContext context,
+        IInventoryModuleApi inventoryModuleApi)
     {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(inventoryModuleApi);
+
         _context = context;
+        _inventoryModuleApi = inventoryModuleApi;
     }
 
     public async Task<Result<OrderDto>> HandleAsync(CreateOrderCommand command, CancellationToken cancellationToken = default)
@@ -39,14 +47,48 @@ public sealed class CreateOrderCommandHandler : ICommandHandler<CreateOrderComma
         if (customer.Orders is not null && openOrderSpecification.Criteria.Compile().Invoke(customer))
             return Error.Create("Validation", "Customer cannot place a new order until their previous order is fulfilled.");
 
-        var productsByIdsSpecification = new ProductsByIdsSpecification(command.ProductIds.Select(id => id.Value).ToList());
+        var requestedProductIds = command.ProductIds
+            .Select(static id => id.Value)
+            .ToArray();
 
-        var products = await _context.Products
-            .Where(productsByIdsSpecification.Criteria)
-            .ToListAsync(cancellationToken);
+        var productSnapshots = await _inventoryModuleApi
+            .GetProductsByIdsAsync(requestedProductIds, cancellationToken)
+            .ConfigureAwait(false);
 
-        if (products.Count != command.ProductIds.Count)
+        if (productSnapshots.Count != requestedProductIds.Length)
             return Error.Create("NotFound", "One or more products not found.");
+
+        var products = productSnapshots
+            .Select(snapshot =>
+            {
+                if (_context is not DbContext dbContext)
+                {
+                    return new Product
+                    {
+                        ProductId = snapshot.ProductId,
+                        Name = snapshot.Name,
+                        Description = snapshot.Description ?? string.Empty,
+                        Price = snapshot.Price
+                    };
+                }
+
+                var trackedProduct = dbContext.Set<Product>().Local
+                    .FirstOrDefault(product => product.ProductId.Value == snapshot.ProductId);
+
+                if (trackedProduct is not null)
+                {
+                    return trackedProduct;
+                }
+
+                return dbContext.Set<Product>().Attach(new Product
+                {
+                    ProductId = snapshot.ProductId,
+                    Name = snapshot.Name,
+                    Description = snapshot.Description ?? string.Empty,
+                    Price = snapshot.Price
+                }).Entity;
+            })
+            .ToList();
 
         var orderResult = Order.Create(
             command.CustomerId,

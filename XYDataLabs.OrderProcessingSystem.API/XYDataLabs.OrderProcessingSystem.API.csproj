@@ -38,8 +38,12 @@
   <ItemGroup>
     <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Application\XYDataLabs.OrderProcessingSystem.Application.csproj" />
     <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Infrastructure\XYDataLabs.OrderProcessingSystem.Infrastructure.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Inventory.API\XYDataLabs.OrderProcessingSystem.Inventory.API.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Notifications.API\XYDataLabs.OrderProcessingSystem.Notifications.API.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Orders.API\XYDataLabs.OrderProcessingSystem.Orders.API.csproj" />
     <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Orders.Features\XYDataLabs.OrderProcessingSystem.Orders.Features.csproj" />
     <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Orders.Infrastructure\XYDataLabs.OrderProcessingSystem.Orders.Infrastructure.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Payments.API\XYDataLabs.OrderProcessingSystem.Payments.API.csproj" />
     <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Inventory.Infrastructure\XYDataLabs.OrderProcessingSystem.Inventory.Infrastructure.csproj" />
     <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Notifications.Infrastructure\XYDataLabs.OrderProcessingSystem.Notifications.Infrastructure.csproj" />
     <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Payments.Features\XYDataLabs.OrderProcessingSystem.Payments.Features.csproj" />
@@ -63,6 +67,12 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>XYDataLabs.OrderProcessingSystem.API.Tests</_Parameter1>
+    </AssemblyAttribute>
   </ItemGroup>
 
 </Project>
