@@ -68,6 +68,13 @@ on:
         required: false
         type: string
         default: 'centralindia'
+    secrets:
+      AZUREAPPSERVICE_CLIENTID:
+        required: false
+      AZUREAPPSERVICE_TENANTID:
+        required: false
+      AZUREAPPSERVICE_SUBSCRIPTIONID:
+        required: false
 permissions:
   id-token: write
   contents: read
@@ -82,7 +89,24 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Check Azure credentials
+        id: check-credentials
+        shell: pwsh
+        run: |
+          $clientId = "${{ secrets.AZUREAPPSERVICE_CLIENTID }}"
+          $tenantId = "${{ secrets.AZUREAPPSERVICE_TENANTID }}"
+          $subscriptionId = "${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}"
+
+          if ([string]::IsNullOrWhiteSpace($clientId) -or [string]::IsNullOrWhiteSpace($tenantId) -or [string]::IsNullOrWhiteSpace($subscriptionId)) {
+            Write-Host "Azure OIDC credentials are not available for this run. Azure-specific validation will be skipped." -ForegroundColor Yellow
+            "configured=false" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Host "Azure OIDC credentials detected." -ForegroundColor Green
+            "configured=true" >> $env:GITHUB_OUTPUT
+          }
+
       - name: Azure Login (OIDC)
+        if: steps.check-credentials.outputs.configured == 'true'
         uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
@@ -90,7 +114,7 @@ jobs:
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
 
       - name: Bicep What-If Analysis
-        if: inputs.run-whatif
+        if: inputs.run-whatif && steps.check-credentials.outputs.configured == 'true'
         shell: pwsh
         run: |
           Write-Host "Running what-if for ${{ inputs.environment }}" -ForegroundColor Cyan
@@ -111,7 +135,7 @@ jobs:
         continue-on-error: false
 
       - name: Verify OIDC Credentials
-        if: inputs.verify-oidc
+        if: inputs.verify-oidc && steps.check-credentials.outputs.configured == 'true'
         shell: pwsh
         run: |
           $appName = "${{ inputs.oidc-app-name || 'GitHub-Actions-OIDC' }}"
@@ -131,6 +155,12 @@ jobs:
         run: |
           ./Resources/Azure-Deployment/validate-sharedsettings-diff.ps1
         continue-on-error: false
+
+      - name: Report skipped Azure validation
+        if: steps.check-credentials.outputs.configured != 'true'
+        shell: pwsh
+        run: |
+          Write-Host "Azure-specific checks were skipped because GitHub Azure OIDC secrets are not available in this context." -ForegroundColor Yellow
 
       - name: Upload Validation Report
         if: always()
