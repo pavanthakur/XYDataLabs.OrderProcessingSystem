@@ -80,6 +80,10 @@ TestResults/Playwright/*
 !TestResults/Playwright/.gitkeep
 TestResults/GitHubActions/
 
+# Nested test-project result folders are always generated artifacts.
+tests/**/TestResults/
+tests/**/TestResults/**
+
 # Generated automation and frontend runtime artifacts.
 automation/dist/
 frontend/apps/web/--latest-pointer-path/
