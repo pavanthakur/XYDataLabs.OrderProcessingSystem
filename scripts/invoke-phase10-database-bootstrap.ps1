@@ -373,6 +373,7 @@ function Invoke-Phase10SampleDataSeed {
 
     $previousValues = @{
         'ASPNETCORE_ENVIRONMENT' = [Environment]::GetEnvironmentVariable('ASPNETCORE_ENVIRONMENT')
+        'USE_HTTPS' = [Environment]::GetEnvironmentVariable('USE_HTTPS')
         'Phase10__BootstrapSeedOnly' = [Environment]::GetEnvironmentVariable('Phase10__BootstrapSeedOnly')
         'Phase10__DisableStartupDdl' = [Environment]::GetEnvironmentVariable('Phase10__DisableStartupDdl')
         'ConnectionStrings__OrderProcessingSystemDbConnection' = [Environment]::GetEnvironmentVariable('ConnectionStrings__OrderProcessingSystemDbConnection')
@@ -382,6 +383,7 @@ function Invoke-Phase10SampleDataSeed {
 
     try {
         [Environment]::SetEnvironmentVariable('ASPNETCORE_ENVIRONMENT', 'Development')
+        [Environment]::SetEnvironmentVariable('USE_HTTPS', 'false')
         [Environment]::SetEnvironmentVariable('Phase10__BootstrapSeedOnly', 'true')
         [Environment]::SetEnvironmentVariable('Phase10__DisableStartupDdl', 'true')
         [Environment]::SetEnvironmentVariable('ConnectionStrings__OrderProcessingSystemDbConnection', $defaultConnectionString)
