@@ -190,6 +190,28 @@ jobs:
             }
           }
 
+      - name: Capture Docker container diagnostics
+        if: failure()
+        shell: pwsh
+        run: |
+          $runRoot = '${{ steps.run_packet.outputs.run_root }}'
+          if ([string]::IsNullOrWhiteSpace($runRoot) -or -not (Test-Path -LiteralPath $runRoot)) {
+            throw "Run root was not created; cannot capture Docker diagnostics."
+          }
+
+          $composeArgs = @(
+            'compose',
+            '-f', 'compose/docker-compose.phase10.yml',
+            '--env-file', 'Resources/Docker/.env.local'
+          )
+
+          $psLog = Join-Path $runRoot 'docker-compose-ps.log'
+          $serviceLogs = Join-Path $runRoot 'docker-compose-service-logs.log'
+
+          & docker @composeArgs ps | Tee-Object -FilePath $psLog
+          & docker @composeArgs logs orders gateway payments inventory notifications keycloak-local servicebus-emulator `
+            | Tee-Object -FilePath $serviceLogs
+
       - name: Upload Phase 10 logs
         if: always()
         uses: actions/upload-artifact@v6

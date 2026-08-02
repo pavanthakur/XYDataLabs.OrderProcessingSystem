@@ -14,8 +14,36 @@ public sealed class ServiceBusSubscriptionConsumerWorker(
 {
     private readonly ServiceBusOptions _options = options.Value;
     private readonly SemaphoreSlim _receiverSettlementGate = new(1, 1);
+    private static readonly TimeSpan ReceiverReconnectDelay = TimeSpan.FromSeconds(5);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                await RunReceiverLoopAsync(stoppingToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(
+                    ex,
+                    "{ConsumerKind} consumer loop failed for {TopicName}/{SubscriptionName}. Retrying in {DelaySeconds} seconds.",
+                    consumerSubscription.ConsumerKind,
+                    _options.TopicName,
+                    consumerSubscription.SubscriptionName,
+                    ReceiverReconnectDelay.TotalSeconds);
+
+                await Task.Delay(ReceiverReconnectDelay, stoppingToken).ConfigureAwait(false);
+            }
+        }
+    }
+
+    private async Task RunReceiverLoopAsync(CancellationToken stoppingToken)
     {
         await using var receiver = client.CreateReceiver(
             _options.TopicName,
@@ -49,19 +77,14 @@ public sealed class ServiceBusSubscriptionConsumerWorker(
 
             if (message is null)
             {
-                if (activeProcessingTasks.Count > 0)
-                {
-                    var completedTask = await Task.WhenAny(activeProcessingTasks).ConfigureAwait(false);
-                    activeProcessingTasks.Remove(completedTask);
-                }
+                await RemoveCompletedTaskAsync(activeProcessingTasks).ConfigureAwait(false);
                 continue;
             }
 
             activeProcessingTasks.Add(ProcessAsync(receiver, message, stoppingToken));
             if (activeProcessingTasks.Count >= Math.Max(1, _options.MaxConcurrentMessages))
             {
-                var completedTask = await Task.WhenAny(activeProcessingTasks).ConfigureAwait(false);
-                activeProcessingTasks.Remove(completedTask);
+                await RemoveCompletedTaskAsync(activeProcessingTasks).ConfigureAwait(false);
             }
         }
 
@@ -76,70 +99,112 @@ public sealed class ServiceBusSubscriptionConsumerWorker(
         ServiceBusReceivedMessage message,
         CancellationToken cancellationToken)
     {
-        var result = await messageProcessor.ProcessAsync(message, cancellationToken).ConfigureAwait(false);
-
-        switch (result.Disposition)
+        try
         {
-            case ServiceBusConsumerMessageDisposition.Complete:
-                await SettleMessageAsync(
-                    () => receiver.CompleteMessageAsync(message, cancellationToken),
-                    cancellationToken).ConfigureAwait(false);
+            var result = await messageProcessor.ProcessAsync(message, cancellationToken).ConfigureAwait(false);
 
-                if (result.EventType is not null
-                    && !consumerSubscription.EventPayloadTypes.ContainsKey(result.EventType))
-                {
-                    logger.LogInformation(
-                        "{ConsumerKind} ignored unrelated event type {EventType} for message {MessageId}.",
-                        result.ConsumerKind,
-                        result.EventType,
-                        result.EnvelopeMessageId);
-                    return;
-                }
+            switch (result.Disposition)
+            {
+                case ServiceBusConsumerMessageDisposition.Complete:
+                    await SettleMessageAsync(
+                        () => receiver.CompleteMessageAsync(message, cancellationToken),
+                        cancellationToken).ConfigureAwait(false);
 
-                if (result.Duplicate)
-                {
+                    if (result.EventType is not null
+                        && !consumerSubscription.EventPayloadTypes.ContainsKey(result.EventType))
+                    {
+                        logger.LogInformation(
+                            "{ConsumerKind} ignored unrelated event type {EventType} for message {MessageId}.",
+                            result.ConsumerKind,
+                            result.EventType,
+                            result.EnvelopeMessageId);
+                        return;
+                    }
+
+                    if (result.Duplicate)
+                    {
+                        logger.LogInformation(
+                            "{ConsumerKind} ignored duplicate message {MessageId} for tenant {TenantId}.",
+                            result.ConsumerKind,
+                            result.EnvelopeMessageId,
+                            result.TenantId);
+                        return;
+                    }
+
                     logger.LogInformation(
-                        "{ConsumerKind} ignored duplicate message {MessageId} for tenant {TenantId}.",
+                        "{ConsumerKind} committed message {MessageId}, event {EventType}, tenant {TenantId}, correlation {CorrelationId}.",
                         result.ConsumerKind,
                         result.EnvelopeMessageId,
-                        result.TenantId);
+                        result.EventType,
+                        result.TenantId,
+                        result.CorrelationId);
                     return;
-                }
 
-                logger.LogInformation(
-                    "{ConsumerKind} committed message {MessageId}, event {EventType}, tenant {TenantId}, correlation {CorrelationId}.",
-                    result.ConsumerKind,
-                    result.EnvelopeMessageId,
-                    result.EventType,
-                    result.TenantId,
-                    result.CorrelationId);
-                return;
+                case ServiceBusConsumerMessageDisposition.DeadLetter:
+                    await SettleMessageAsync(
+                        () => receiver.DeadLetterMessageAsync(
+                            message,
+                            result.DeadLetterReason,
+                            result.DeadLetterDescription,
+                            cancellationToken),
+                        cancellationToken).ConfigureAwait(false);
+                    logger.LogWarning(
+                        "{ConsumerKind} dead-lettered message {MessageId} with reason {Reason}.",
+                        result.ConsumerKind,
+                        result.BrokerMessageId,
+                        result.DeadLetterReason);
+                    return;
 
-            case ServiceBusConsumerMessageDisposition.DeadLetter:
-                await SettleMessageAsync(
-                    () => receiver.DeadLetterMessageAsync(
-                        message,
-                        result.DeadLetterReason,
-                        result.DeadLetterDescription,
-                        cancellationToken),
-                    cancellationToken).ConfigureAwait(false);
-                logger.LogWarning(
-                    "{ConsumerKind} dead-lettered message {MessageId} with reason {Reason}.",
-                    result.ConsumerKind,
-                    result.BrokerMessageId,
-                    result.DeadLetterReason);
-                return;
+                default:
+                    await SettleMessageAsync(
+                        () => receiver.AbandonMessageAsync(message, cancellationToken: cancellationToken),
+                        cancellationToken).ConfigureAwait(false);
+                    logger.LogError(
+                        "{ConsumerKind} abandoned message {MessageId} for transient retry.",
+                        result.ConsumerKind,
+                        result.BrokerMessageId);
+                    return;
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "{ConsumerKind} failed while processing broker message {BrokerMessageId}. Abandoning for retry.",
+                consumerSubscription.ConsumerKind,
+                message.MessageId);
 
-            default:
+            try
+            {
                 await SettleMessageAsync(
                     () => receiver.AbandonMessageAsync(message, cancellationToken: cancellationToken),
                     cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception settlementException) when (!cancellationToken.IsCancellationRequested)
+            {
                 logger.LogError(
-                    "{ConsumerKind} abandoned message {MessageId} for transient retry.",
-                    result.ConsumerKind,
-                    result.BrokerMessageId);
-                return;
+                    settlementException,
+                    "{ConsumerKind} failed to abandon broker message {BrokerMessageId} after an unhandled processing exception.",
+                    consumerSubscription.ConsumerKind,
+                    message.MessageId);
+            }
         }
+    }
+
+    private static async Task RemoveCompletedTaskAsync(List<Task> activeProcessingTasks)
+    {
+        if (activeProcessingTasks.Count == 0)
+        {
+            return;
+        }
+
+        var completedTask = await Task.WhenAny(activeProcessingTasks).ConfigureAwait(false);
+        activeProcessingTasks.Remove(completedTask);
+        await completedTask.ConfigureAwait(false);
     }
 
     private async Task SettleMessageAsync(
