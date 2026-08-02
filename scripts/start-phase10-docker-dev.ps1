@@ -92,6 +92,35 @@ function Wait-ForUrl {
     throw "Timed out waiting for $Url after $TimeoutSec seconds."
 }
 
+function Wait-ForSuccessfulUrl {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Url,
+
+        [int]$TimeoutSec = 300,
+
+        [string]$ContainsText
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSec)
+    while ((Get-Date) -lt $deadline) {
+        try {
+            $response = Invoke-WebRequest -UseBasicParsing -SkipHttpErrorCheck -Uri $Url -TimeoutSec 5
+            $content = [string]$response.Content
+            $containsExpectedText = [string]::IsNullOrWhiteSpace($ContainsText) -or $content.Contains($ContainsText, [StringComparison]::OrdinalIgnoreCase)
+            if ($response.StatusCode -eq 200 -and $containsExpectedText) {
+                return
+            }
+        }
+        catch {
+        }
+
+        Start-Sleep -Seconds 2
+    }
+
+    throw "Timed out waiting for successful response from $Url after $TimeoutSec seconds."
+}
+
 function Wait-ForTcpPort {
     param(
         [Parameter(Mandatory = $true)]
@@ -458,6 +487,8 @@ try {
     Wait-ForUrl -Url 'http://localhost:5083/health/ready' -TimeoutSec $HealthTimeoutSec
     Wait-ForUrl -Url 'http://localhost:5084/health/ready' -TimeoutSec $HealthTimeoutSec
     Wait-ForUrl -Url 'http://localhost:5022/' -TimeoutSec $HealthTimeoutSec
+    Wait-ForSuccessfulUrl -Url 'http://localhost:5081/api/v1/Info/runtime-configuration' -TimeoutSec $HealthTimeoutSec -ContainsText 'activeTenantCode'
+    Wait-ForSuccessfulUrl -Url 'http://localhost:5080/api/v1/Info/runtime-configuration' -TimeoutSec $HealthTimeoutSec -ContainsText 'activeTenantCode'
 
     Add-Content -Path $progressLogPath -Value 'Phase 10 local container stack is ready.'
     Write-Host 'Phase 10 local container stack is ready.'

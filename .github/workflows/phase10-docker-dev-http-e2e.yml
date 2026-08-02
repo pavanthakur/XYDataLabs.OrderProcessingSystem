@@ -61,6 +61,7 @@ jobs:
             'LOCAL_RAZORPAY_PRIVATE_KEY=local-sandbox-only'
             'LOCAL_RAZORPAY_WEBHOOK_SECRET=local-sandbox-only'
             'KEYCLOAK_TENANT_ADMIN_PASSWORD=Phase10_CI_Keycloak_2026!'
+            'LOCAL_KEYCLOAK_BACKEND_CLIENT_SECRET=Phase10_CI_Keycloak_Backend_2026!'
             'ORDERPROCESSING_SQLSERVER_IMAGE=mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04'
           )
           Set-Content -LiteralPath $envPath -Value $content -Encoding utf8

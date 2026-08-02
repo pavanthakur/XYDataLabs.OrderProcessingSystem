@@ -61,8 +61,38 @@ function Wait-ForUrl {
     throw "Timed out waiting for $Url"
 }
 
+function Wait-ForSuccessfulUrl {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Url,
+
+        [int]$TimeoutSec = 300,
+
+        [string]$ContainsText
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSec)
+    while ((Get-Date) -lt $deadline) {
+        try {
+            $response = Invoke-WebRequest -UseBasicParsing -SkipHttpErrorCheck -Uri $Url -TimeoutSec 5
+            $content = [string]$response.Content
+            $containsExpectedText = [string]::IsNullOrWhiteSpace($ContainsText) -or $content.Contains($ContainsText, [StringComparison]::OrdinalIgnoreCase)
+            if ($response.StatusCode -eq 200 -and $containsExpectedText) {
+                return
+            }
+        } catch {
+        }
+
+        Start-Sleep -Seconds 2
+    }
+
+    throw "Timed out waiting for successful response from $Url"
+}
+
 Wait-ForUrl -Url 'http://localhost:5080/health/alive' -TimeoutSec 300
 Wait-ForUrl -Url 'http://localhost:5022/' -TimeoutSec 300
+Wait-ForSuccessfulUrl -Url 'http://localhost:5081/api/v1/Info/runtime-configuration' -TimeoutSec 300 -ContainsText 'activeTenantCode'
+Wait-ForSuccessfulUrl -Url 'http://localhost:5080/api/v1/Info/runtime-configuration' -TimeoutSec 300 -ContainsText 'activeTenantCode'
 
 Start-Sleep -Seconds $StabilizationDelaySeconds
 
@@ -78,8 +108,7 @@ $summary = [ordered]@{
 try {
     Add-Content -Path $progressLogPath -Value 'Starting browser smoke execution.'
     & pwsh -NoProfile -ExecutionPolicy Bypass -File $bootstrapScript `
-        -Target phase10-docker-http `
-        -Url 'http://localhost:5022/customers'
+        -Target phase10-docker-http
     if ($LASTEXITCODE -ne 0) {
         throw "Phase 10 smoke failed with exit code $LASTEXITCODE"
     }
