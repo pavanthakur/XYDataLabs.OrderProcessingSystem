@@ -4,6 +4,7 @@
   "parameters": {
     "location": { "value": "centralindia" },
     "environment": { "value": "prod" },
+    "resourceSuffix": { "value": "prod" },
     "baseName": { "value": "orderprocessing" },
     "githubOwner": { "value": "pavanthakur" },
     "orderEventsTopicName": { "value": "order-events-prod" },

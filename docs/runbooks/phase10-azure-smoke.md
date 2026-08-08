@@ -172,7 +172,7 @@ Use the same Phase 10 sequence in each environment, changing only the target env
 | Environment | Platform foundation | Azure deploy or cleanup | Runtime smoke | Transport smoke | Cleanup note |
 |---|---|---|---|---|---|
 | `dev` | Run `00` once, then only when platform ACR or pull identity must be recreated | Run `01` with `cleanupInfra=false` for deploys and `cleanupInfra=true` for teardown | Run `02` after a successful deploy | Run `03` after `02` passes; run `04` for all-tenant payment E2E | Deletes `rg-orderprocessing-dev` only; platform foundation stays persistent |
-| `staging` | Run `00` once, then only when platform ACR or pull identity must be recreated | Run `01` with `cleanupInfra=false` for deploys and `cleanupInfra=true` for teardown | Run `02` after a successful deploy | Run `03` after `02` passes; run `04` for all-tenant payment E2E | Deletes `rg-orderprocessing-staging` only; platform foundation stays persistent |
+| `staging` | Run `00` once, then only when platform ACR or pull identity must be recreated | Run `01` with `cleanupInfra=false` for deploys and `cleanupInfra=true` for teardown | Run `02` after a successful deploy | Run `03` after `02` passes; run `04` for all-tenant payment E2E | Deletes `rg-orderprocessing-stg` only; platform foundation stays persistent |
 | `prod` | Run `00` once, then only when platform ACR or pull identity must be recreated | Run `01` with `cleanupInfra=false` for deploys and `cleanupInfra=true` only during approved teardown | Run `02` after a successful deploy | Run `03` after `02` passes; run `04` only during approved production validation | Deletes `rg-orderprocessing-prod` only; platform foundation stays persistent |
 
 Default selection guidance:
@@ -733,7 +733,7 @@ Use the individual tasks when:
 - If the browser or smoke step times out, verify that the local ports for the gateway and UI are not already in use.
 - If the gateway revision keeps activating or restarting, open the Container Apps logs and inspect the startup-probe failure details.
 - If you need persistent logs for investigation, run the individual stack tasks instead of the single-command hook so cleanup does not happen until you ask for it.
-- If Azure deployment fails before Bicep because a provider is not registered, run `00 Azure Platform Foundation` first. Provider registration is subscription-scoped, so deleting `rg-orderprocessing-dev`, `rg-orderprocessing-staging`, or `rg-orderprocessing-prod` does not unregister providers.
+- If Azure deployment fails before Bicep because a provider is not registered, run `00 Azure Platform Foundation` first. Provider registration is subscription-scoped, so deleting `rg-orderprocessing-dev`, `rg-orderprocessing-stg`, or `rg-orderprocessing-prod` does not unregister providers.
 
 ## Quick Command Checklist
 

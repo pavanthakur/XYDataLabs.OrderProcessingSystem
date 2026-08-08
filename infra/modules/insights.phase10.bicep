@@ -6,13 +6,17 @@ param location string
 @description('Environment code')
 param environment string
 
+@description('Azure resource suffix override used for Application Insights naming')
+param resourceSuffix string = ''
+
 @description('Base application name')
 param baseName string = 'orderprocessing'
 
 @description('Optional Log Analytics workspace resource id')
 param workspaceResourceId string = ''
 
-var aiName = 'ai-${baseName}-${environment}'
+var effectiveResourceSuffix = empty(resourceSuffix) ? environment : resourceSuffix
+var aiName = 'ai-${baseName}-${effectiveResourceSuffix}'
 
 resource insights 'Microsoft.Insights/components@2020-02-02' = {
   name: aiName

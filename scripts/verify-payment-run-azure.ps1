@@ -12,7 +12,7 @@
     /XYDataLabs-verify-db-logs prompt flow.
 
 .PARAMETER Environment
-    Target environment. Supported values: dev, stg, prod.
+    Target environment. Supported values: dev, staging, stg, prod.
 
 .PARAMETER RunPrefix
     Optional logical run prefix such as OR-1-2ndApr. If omitted and exactly one
@@ -36,7 +36,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $false)]
-    [ValidateSet('dev', 'stg', 'prod')]
+    [ValidateSet('dev', 'staging', 'stg', 'prod')]
     [string] $Environment = 'dev',
 
     [Parameter(Mandatory = $false)]
@@ -56,20 +56,29 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$envSuffix = $Environment
+$resourceEnvironment = switch ($Environment) {
+    'staging' { 'stg' }
+    default { $Environment }
+}
+$logicalEnvironment = switch ($Environment) {
+    'stg' { 'staging' }
+    default { $Environment }
+}
+
+$envSuffix = $resourceEnvironment
 $resourceGroup = "rg-orderprocessing-$envSuffix"
 $appInsightsName = "ai-orderprocessing-$envSuffix"
 $keyVaultName = "kv-orderprocessing-$envSuffix"
 $sqlServerName = "orderprocessing-sql-$envSuffix"
 $sqlServerFqdn = "$sqlServerName.database.windows.net"
-$sharedDbName = switch ($Environment) {
+$sharedDbName = switch ($logicalEnvironment) {
     'dev' { 'OrderProcessingSystem_Dev' }
-    'stg' { 'OrderProcessingSystem_Staging' }
+    'staging' { 'OrderProcessingSystem_Staging' }
     'prod' { 'OrderProcessingSystem_Prod' }
 }
-$tenantCDbName = switch ($Environment) {
+$tenantCDbName = switch ($logicalEnvironment) {
     'dev' { 'OrderProcessingSystem_TenantC_Dev' }
-    'stg' { 'OrderProcessingSystem_TenantC_Staging' }
+    'staging' { 'OrderProcessingSystem_TenantC_Staging' }
     'prod' { 'OrderProcessingSystem_TenantC_Prod' }
 }
 
@@ -82,13 +91,13 @@ function Assert-AzureRuntimeDbContract {
 
     $expectedShared = switch ($Environment) {
         'dev' { 'OrderProcessingSystem_Dev' }
-        'stg' { 'OrderProcessingSystem_Staging' }
+        'staging' { 'OrderProcessingSystem_Staging' }
         'prod' { 'OrderProcessingSystem_Prod' }
     }
 
     $expectedTenantC = switch ($Environment) {
         'dev' { 'OrderProcessingSystem_TenantC_Dev' }
-        'stg' { 'OrderProcessingSystem_TenantC_Staging' }
+        'staging' { 'OrderProcessingSystem_TenantC_Staging' }
         'prod' { 'OrderProcessingSystem_TenantC_Prod' }
     }
 
@@ -97,7 +106,7 @@ function Assert-AzureRuntimeDbContract {
     }
 }
 
-Assert-AzureRuntimeDbContract -Environment $Environment -SharedDbName $sharedDbName -TenantCDbName $tenantCDbName
+Assert-AzureRuntimeDbContract -Environment $logicalEnvironment -SharedDbName $sharedDbName -TenantCDbName $tenantCDbName
 
 function Write-Step {
     param([string] $Message)

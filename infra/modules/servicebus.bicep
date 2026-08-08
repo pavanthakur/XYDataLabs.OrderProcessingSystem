@@ -6,6 +6,9 @@ param location string
 @description('Environment code')
 param environment string
 
+@description('Azure resource suffix override used for namespace naming')
+param resourceSuffix string = ''
+
 @description('Base application name')
 param baseName string = 'orderprocessing'
 
@@ -30,7 +33,8 @@ param maxDeliveryCount int = 10
 @description('Message TTL in ISO 8601 duration format')
 param messageTtl string = 'P7D'
 
-var sbNamespaceName = 'sb-${baseName}-${environment}'
+var effectiveResourceSuffix = empty(resourceSuffix) ? environment : resourceSuffix
+var sbNamespaceName = 'sb-${baseName}-${effectiveResourceSuffix}'
 var dlqTopicName = 'order-events-dlq'
 var transportAuthRuleName = 'phase10-transport'
 

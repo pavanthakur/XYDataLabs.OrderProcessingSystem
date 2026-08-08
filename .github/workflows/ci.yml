@@ -7,8 +7,11 @@ on:
       - staging
       - main
     paths:
+      - '.github/workflows/**'
       - '.github/workflows/ci.yml'
       - '.gitignore'
+      - 'infra/**'
+      - 'Resources/Azure-Deployment/**'
       - 'XYDataLabs.OrderProcessingSystem.API/**'
       - 'XYDataLabs.OrderProcessingSystem.Application/**'
       - 'XYDataLabs.OrderProcessingSystem.Domain/**'
@@ -18,6 +21,7 @@ on:
       - 'XYDataLabs.OpenPayAdapter/**'
       - 'frontend/**'
       - 'frontend/.gitignore'
+      - 'scripts/**'
       - 'scripts/validate-tracked-generated-artifacts.ps1'
       - 'tests/**'
       - 'Resources/Configuration/**'
@@ -45,6 +49,10 @@ jobs:
       - name: Validate tracked generated artifacts
         shell: pwsh
         run: scripts/validate-tracked-generated-artifacts.ps1
+
+      - name: Validate Phase 10 environment contract
+        shell: pwsh
+        run: Resources/Azure-Deployment/validate-phase10-environment-contract.ps1
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v5

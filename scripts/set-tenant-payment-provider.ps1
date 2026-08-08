@@ -5,7 +5,7 @@ param(
     [string]$Runtime,
 
     [Parameter(Mandatory = $true)]
-    [ValidateSet('dev', 'stg', 'prod')]
+    [ValidateSet('dev', 'staging', 'stg', 'prod')]
     [string]$Environment,
 
     [Parameter(Mandatory = $true)]
