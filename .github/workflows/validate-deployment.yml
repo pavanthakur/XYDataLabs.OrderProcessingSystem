@@ -89,19 +89,43 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Initialize validation artifacts
+        id: artifacts
+        shell: pwsh
+        run: |
+          $artifactRoot = Join-Path $env:RUNNER_TEMP "validate-deployment-${{ inputs.environment }}-${{ github.run_id }}-${{ github.run_attempt }}"
+          New-Item -ItemType Directory -Path $artifactRoot -Force | Out-Null
+
+          $metadata = [ordered]@{
+            environment = '${{ inputs.environment }}'
+            workflow = '${{ github.workflow }}'
+            runId = '${{ github.run_id }}'
+            runAttempt = '${{ github.run_attempt }}'
+            startedAtUtc = (Get-Date).ToUniversalTime().ToString('o')
+            artifactRoot = $artifactRoot
+          }
+
+          Set-Content -Path (Join-Path $artifactRoot 'validation-metadata.json') -Value ($metadata | ConvertTo-Json -Depth 5) -Encoding utf8
+          Set-Content -Path (Join-Path $artifactRoot 'validation-summary.log') -Value "Validation artifact root initialized: $artifactRoot`n" -Encoding utf8
+
+          "root=$artifactRoot" >> $env:GITHUB_OUTPUT
+
       - name: Check Azure credentials
         id: check-credentials
         shell: pwsh
         run: |
+          $summaryLog = Join-Path '${{ steps.artifacts.outputs.root }}' 'validation-summary.log'
           $clientId = "${{ secrets.AZUREAPPSERVICE_CLIENTID }}"
           $tenantId = "${{ secrets.AZUREAPPSERVICE_TENANTID }}"
           $subscriptionId = "${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}"
 
           if ([string]::IsNullOrWhiteSpace($clientId) -or [string]::IsNullOrWhiteSpace($tenantId) -or [string]::IsNullOrWhiteSpace($subscriptionId)) {
             Write-Host "Azure OIDC credentials are not available for this run. Azure-specific validation will be skipped." -ForegroundColor Yellow
+            Add-Content -Path $summaryLog -Value 'Azure OIDC credentials unavailable. Azure-specific validation will be skipped.'
             "configured=false" >> $env:GITHUB_OUTPUT
           } else {
             Write-Host "Azure OIDC credentials detected." -ForegroundColor Green
+            Add-Content -Path $summaryLog -Value 'Azure OIDC credentials detected.'
             "configured=true" >> $env:GITHUB_OUTPUT
           }
 
@@ -117,6 +141,7 @@ jobs:
         if: inputs.run-whatif && steps.check-credentials.outputs.configured == 'true'
         shell: pwsh
         run: |
+          $logPath = Join-Path '${{ steps.artifacts.outputs.root }}' 'bicep-whatif.log'
           Write-Host "Running what-if for ${{ inputs.environment }}" -ForegroundColor Cyan
           $templateFile = "${{ inputs.template-file }}"
           $parameterFile = "${{ inputs.parameter-file }}"
@@ -131,21 +156,23 @@ jobs:
             --template-file "$templateFile" `
             --parameters "@$parameterFile" `
             --only-show-errors `
-            --no-pretty-print
+            --no-pretty-print 2>&1 | Tee-Object -FilePath $logPath
         continue-on-error: false
 
       - name: Verify OIDC Credentials
         if: inputs.verify-oidc && steps.check-credentials.outputs.configured == 'true'
         shell: pwsh
         run: |
+          $logPath = Join-Path '${{ steps.artifacts.outputs.root }}' 'oidc-verification.log'
           $appName = "${{ inputs.oidc-app-name || 'GitHub-Actions-OIDC' }}"
           Write-Host "Looking for Azure AD app: $appName" -ForegroundColor Yellow
           $appId = az ad app list --display-name "$appName" --query "[0].id" -o tsv
           if ($appId) {
             Write-Host "Found app: $appName ($appId)" -ForegroundColor Green
-            ./Resources/Azure-Deployment/verify-oidc-credentials.ps1 -AppObjectId $appId
+            ./Resources/Azure-Deployment/verify-oidc-credentials.ps1 -AppObjectId $appId 2>&1 | Tee-Object -FilePath $logPath
           } else {
             Write-Warning "$appName app not found; skipping OIDC verification"
+            Set-Content -Path $logPath -Value "$appName app not found; skipping OIDC verification" -Encoding utf8
           }
         continue-on-error: true
 
@@ -153,20 +180,44 @@ jobs:
         if: inputs.check-config
         shell: pwsh
         run: |
-          ./Resources/Azure-Deployment/validate-sharedsettings-diff.ps1
+          $logPath = Join-Path '${{ steps.artifacts.outputs.root }}' 'sharedsettings-consistency.log'
+          ./Resources/Azure-Deployment/validate-sharedsettings-diff.ps1 2>&1 | Tee-Object -FilePath $logPath
         continue-on-error: false
 
       - name: Report skipped Azure validation
         if: steps.check-credentials.outputs.configured != 'true'
         shell: pwsh
         run: |
+          $logPath = Join-Path '${{ steps.artifacts.outputs.root }}' 'azure-validation-skipped.log'
           Write-Host "Azure-specific checks were skipped because GitHub Azure OIDC secrets are not available in this context." -ForegroundColor Yellow
+          Set-Content -Path $logPath -Value 'Azure-specific checks were skipped because GitHub Azure OIDC secrets are not available in this context.' -Encoding utf8
+
+      - name: Finalize validation artifact summary
+        if: always()
+        shell: pwsh
+        run: |
+          $artifactRoot = '${{ steps.artifacts.outputs.root }}'
+          $summaryPath = Join-Path $artifactRoot 'validation-artifact-summary.json'
+          $logFiles = Get-ChildItem -Path $artifactRoot -Filter '*.log' -File | Select-Object -ExpandProperty Name
+
+          $summary = [ordered]@{
+            environment = '${{ inputs.environment }}'
+            configuredAzureCredentials = '${{ steps.check-credentials.outputs.configured }}'
+            runWhatIf = '${{ inputs.run-whatif }}'
+            verifyOidc = '${{ inputs.verify-oidc }}'
+            checkConfig = '${{ inputs.check-config }}'
+            logFiles = @($logFiles)
+            completedAtUtc = (Get-Date).ToUniversalTime().ToString('o')
+          }
+
+          Set-Content -Path $summaryPath -Value ($summary | ConvertTo-Json -Depth 5) -Encoding utf8
+          Add-Content -Path (Join-Path $artifactRoot 'validation-summary.log') -Value "Validation artifact summary written: $summaryPath"
 
       - name: Upload Validation Report
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: validation-report-${{ inputs.environment }}
-          path: |
-            **/*.log
+          path: ${{ steps.artifacts.outputs.root }}
           retention-days: 7
+          if-no-files-found: ignore
