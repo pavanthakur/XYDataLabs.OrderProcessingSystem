@@ -433,9 +433,15 @@ WHERE [Code] = N'TenantA';
 IF @tenantId IS NOT NULL
 BEGIN
     UPDATE [dbo].[Tenants]
-    SET [PaymentProviderCode] = N'Razorpay'
+    SET [Status] = N'Active',
+        [TenantTier] = N'SharedPool',
+        [PaymentProviderCode] = N'Razorpay'
     WHERE [Id] = @tenantId
-      AND ISNULL([PaymentProviderCode], N'') <> N'Razorpay';
+      AND (
+        ISNULL([Status], N'') <> N'Active'
+        OR ISNULL([TenantTier], N'') <> N'SharedPool'
+        OR ISNULL([PaymentProviderCode], N'') <> N'Razorpay'
+      );
 
     IF NOT EXISTS (SELECT 1 FROM [orders].[Customers] WHERE [TenantId] = @tenantId)
     BEGIN
@@ -464,9 +470,15 @@ WHERE [Code] = N'TenantB';
 IF @tenantId IS NOT NULL
 BEGIN
     UPDATE [dbo].[Tenants]
-    SET [PaymentProviderCode] = N'Razorpay'
+    SET [Status] = N'Active',
+        [TenantTier] = N'SharedPool',
+        [PaymentProviderCode] = N'Razorpay'
     WHERE [Id] = @tenantId
-      AND ISNULL([PaymentProviderCode], N'') <> N'Razorpay';
+      AND (
+        ISNULL([Status], N'') <> N'Active'
+        OR ISNULL([TenantTier], N'') <> N'SharedPool'
+        OR ISNULL([PaymentProviderCode], N'') <> N'Razorpay'
+      );
 
     IF NOT EXISTS (SELECT 1 FROM [orders].[Customers] WHERE [TenantId] = @tenantId)
     BEGIN
@@ -498,9 +510,15 @@ WHERE [Code] = N'TenantC';
 IF @tenantId IS NOT NULL
 BEGIN
     UPDATE [dbo].[Tenants]
-    SET [PaymentProviderCode] = N'OpenPay'
+    SET [Status] = N'Active',
+        [TenantTier] = N'Dedicated',
+        [PaymentProviderCode] = N'OpenPay'
     WHERE [Id] = @tenantId
-      AND ISNULL([PaymentProviderCode], N'') <> N'OpenPay';
+      AND (
+        ISNULL([Status], N'') <> N'Active'
+        OR ISNULL([TenantTier], N'') <> N'Dedicated'
+        OR ISNULL([PaymentProviderCode], N'') <> N'OpenPay'
+      );
 
     IF NOT EXISTS (SELECT 1 FROM [orders].[Customers] WHERE [TenantId] = @tenantId)
     BEGIN
@@ -569,16 +587,47 @@ WHERE t.[Code] = '$($check.TenantCode)'
     }
 
     $tenantRoutingChecks = @(
-        [pscustomobject]@{ Database = 'OrderProcessingSystem_Dev'; TenantCode = 'TenantA'; ExpectedProvider = 'Razorpay' },
-        [pscustomobject]@{ Database = 'OrderProcessingSystem_Dev'; TenantCode = 'TenantB'; ExpectedProvider = 'Razorpay' },
-        [pscustomobject]@{ Database = 'OrderProcessingSystem_TenantC_Dev'; TenantCode = 'TenantC'; ExpectedProvider = 'OpenPay' }
+        [pscustomobject]@{ Database = 'OrderProcessingSystem_Dev'; TenantCode = 'TenantA'; ExpectedProvider = 'Razorpay'; ExpectedStatus = 'Active'; ExpectedTier = 'SharedPool' },
+        [pscustomobject]@{ Database = 'OrderProcessingSystem_Dev'; TenantCode = 'TenantB'; ExpectedProvider = 'Razorpay'; ExpectedStatus = 'Active'; ExpectedTier = 'SharedPool' },
+        [pscustomobject]@{ Database = 'OrderProcessingSystem_TenantC_Dev'; TenantCode = 'TenantC'; ExpectedProvider = 'OpenPay'; ExpectedStatus = 'Active'; ExpectedTier = 'Dedicated' }
     )
 
     foreach ($check in $tenantRoutingChecks) {
-        $query = "SELECT TOP (1) ISNULL([PaymentProviderCode], '') FROM [dbo].[Tenants] WHERE [Code] = '$($check.TenantCode)';"
-        $actualProvider = Get-Phase10SqlScalar -Database $check.Database -Query $query
+        $query = @"
+SELECT TOP (1)
+    ISNULL([PaymentProviderCode], ''),
+    ISNULL([Status], ''),
+    ISNULL([TenantTier], '')
+FROM [dbo].[Tenants]
+WHERE [Code] = '$($check.TenantCode)';
+"@
+        $tenantRow = @(Invoke-Phase10SqlCmdInComposeContainer -Database $check.Database -Query $query) |
+            ForEach-Object { $_.ToString().Trim() } |
+            Where-Object {
+                -not [string]::IsNullOrWhiteSpace($_) -and
+                $_ -notmatch '^\(\d+ rows? affected\)$'
+            } |
+            Select-Object -Last 1
+
+        if ([string]::IsNullOrWhiteSpace($tenantRow)) {
+            throw "Tenant baseline row is missing in $($check.Database): tenant=$($check.TenantCode)."
+        }
+
+        $parts = $tenantRow -split '\s+', 3
+        $actualProvider = if ($parts.Count -ge 1) { $parts[0] } else { '' }
+        $actualStatus = if ($parts.Count -ge 2) { $parts[1] } else { '' }
+        $actualTier = if ($parts.Count -ge 3) { $parts[2] } else { '' }
+
         if ($actualProvider -ne $check.ExpectedProvider) {
             throw "Tenant payment routing mismatch in $($check.Database): tenant=$($check.TenantCode), expected=$($check.ExpectedProvider), actual=$actualProvider."
+        }
+
+        if ($actualStatus -ne $check.ExpectedStatus) {
+            throw "Tenant status baseline mismatch in $($check.Database): tenant=$($check.TenantCode), expected=$($check.ExpectedStatus), actual=$actualStatus."
+        }
+
+        if ($actualTier -ne $check.ExpectedTier) {
+            throw "Tenant tier baseline mismatch in $($check.Database): tenant=$($check.TenantCode), expected=$($check.ExpectedTier), actual=$actualTier."
         }
 
         Write-ProgressMessage "Verified tenant payment route: $($check.Database) / $($check.TenantCode) -> $actualProvider"
