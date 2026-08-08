@@ -432,6 +432,11 @@ WHERE [Code] = N'TenantA';
 
 IF @tenantId IS NOT NULL
 BEGIN
+    UPDATE [dbo].[Tenants]
+    SET [PaymentProviderCode] = N'Razorpay'
+    WHERE [Id] = @tenantId
+      AND ISNULL([PaymentProviderCode], N'') <> N'Razorpay';
+
     IF NOT EXISTS (SELECT 1 FROM [orders].[Customers] WHERE [TenantId] = @tenantId)
     BEGIN
         INSERT INTO [orders].[Customers] ([Name], [Email], [TenantId], [CreatedBy], [CreatedDate])
@@ -458,6 +463,11 @@ WHERE [Code] = N'TenantB';
 
 IF @tenantId IS NOT NULL
 BEGIN
+    UPDATE [dbo].[Tenants]
+    SET [PaymentProviderCode] = N'Razorpay'
+    WHERE [Id] = @tenantId
+      AND ISNULL([PaymentProviderCode], N'') <> N'Razorpay';
+
     IF NOT EXISTS (SELECT 1 FROM [orders].[Customers] WHERE [TenantId] = @tenantId)
     BEGIN
         INSERT INTO [orders].[Customers] ([Name], [Email], [TenantId], [CreatedBy], [CreatedDate])
@@ -487,6 +497,11 @@ WHERE [Code] = N'TenantC';
 
 IF @tenantId IS NOT NULL
 BEGIN
+    UPDATE [dbo].[Tenants]
+    SET [PaymentProviderCode] = N'OpenPay'
+    WHERE [Id] = @tenantId
+      AND ISNULL([PaymentProviderCode], N'') <> N'OpenPay';
+
     IF NOT EXISTS (SELECT 1 FROM [orders].[Customers] WHERE [TenantId] = @tenantId)
     BEGIN
         INSERT INTO [orders].[Customers] ([Name], [Email], [TenantId], [CreatedBy], [CreatedDate])
