@@ -232,7 +232,7 @@ jobs:
               & docker @composeArgs logs $serviceName 2>&1 | Tee-Object -FilePath $serviceLogs -Append | Out-Null
             }
             catch {
-              "Skipping docker logs for $serviceName: $($_.Exception.Message)" | Tee-Object -FilePath $serviceLogs -Append | Out-Null
+              "Skipping docker logs for ${serviceName}: $($_.Exception.Message)" | Tee-Object -FilePath $serviceLogs -Append | Out-Null
             }
           }
 

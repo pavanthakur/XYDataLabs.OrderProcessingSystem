@@ -19,6 +19,7 @@ $workspaceRoot = Split-Path -Parent $PSScriptRoot
 $composeFile = Join-Path $workspaceRoot 'compose\docker-compose.phase10.yml'
 $envExampleFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local.example'
 $envFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local'
+$databaseBootstrapScript = Join-Path $workspaceRoot 'scripts\invoke-phase10-database-bootstrap.ps1'
 $logRoot = Join-Path $workspaceRoot 'TestResults\Playwright\phase10-docker-http'
 $dockerConfigRoot = Join-Path $workspaceRoot '.tmp\docker-config'
 $runDir = if ([string]::IsNullOrWhiteSpace($env:PHASE10_RUN_ROOT)) {
@@ -52,10 +53,11 @@ Set-Content -Path (Join-Path $runDir 'end-to-end-run-plan.txt') -Value @(
     '1. Confirm gateway and UI readiness.',
     '2. Run smoke validation.',
     '3. Run integration suite.',
-    '4. Run payment matrix for canonical baseline tenants TenantA/TenantB/TenantC across Razorpay and OpenPay.',
-    '5. Preserve the stack by default so NFR and rollback proof can run.',
-    '6. Tear down only when CleanupOnExit is explicitly selected.',
-    '7. Write summary.json and update latest pointers.'
+    '4. Re-apply the canonical Phase 10 database baseline after integration tests.',
+    '5. Run payment matrix for canonical baseline tenants TenantA/TenantB/TenantC across Razorpay and OpenPay.',
+    '6. Preserve the stack by default so NFR and rollback proof can run.',
+    '7. Tear down only when CleanupOnExit is explicitly selected.',
+    '8. Write summary.json and update latest pointers.'
 ) -Encoding utf8
 Set-Content -Path $startupLogPath -Value "[$(Get-Date -Format o)] Phase 10 end-to-end wrapper started`n" -Encoding utf8
 Set-Content -Path $progressLogPath -Value "Phase 10 end-to-end progress log initialized.`n" -Encoding utf8
@@ -187,6 +189,17 @@ try {
         startedUtc = (Get-Date).ToUniversalTime().ToString('o')
         finishedUtc = (Get-Date).ToUniversalTime().ToString('o')
         log = 'integration.log'
+    }
+
+    Invoke-LoggedCommand -Name 'baseline-restore' -Script {
+        & pwsh -NoProfile -ExecutionPolicy Bypass -File $databaseBootstrapScript -Profile apps -RunDir $runDir -ProgressLogPath $progressLogPath
+    } | Out-Null
+    $summary.steps += [ordered]@{
+        name = 'baseline-restore'
+        status = 'passed'
+        startedUtc = (Get-Date).ToUniversalTime().ToString('o')
+        finishedUtc = (Get-Date).ToUniversalTime().ToString('o')
+        log = 'baseline-restore.log'
     }
 
     Invoke-LoggedCommand -Name 'matrix' -Script {
