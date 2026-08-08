@@ -182,17 +182,17 @@ function Test-GatewayBackendRoutes {
             }
         }
 
-        if ($matchingRoute -notmatch '\.azurecontainerapps\.io') {
+        if ($matchingRoute -notmatch '-> https://.*\.azurecontainerapps\.io') {
             return [pscustomobject]@{
                 Success = $false
-                Detail = "Gateway backend route contract failed: route '$matchingRoute' is not using an ACA FQDN target."
+                Detail = "Gateway backend route contract failed: route '$matchingRoute' is not using an ACA HTTPS FQDN target."
             }
         }
     }
 
     return [pscustomobject]@{
         Success = $true
-        Detail = 'Gateway backend route contract passed with ACA FQDN targets.'
+        Detail = 'Gateway backend route contract passed with ACA HTTPS FQDN targets.'
     }
 }
 
