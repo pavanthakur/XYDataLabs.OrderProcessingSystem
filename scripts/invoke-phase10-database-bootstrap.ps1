@@ -253,6 +253,11 @@ function Invoke-Phase10EfDatabaseUpdate {
     $logRoot = if ([string]::IsNullOrWhiteSpace($RunDir)) { Join-Path $workspaceRoot '.tmp\phase10-bootstrap' } else { $RunDir }
     New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
 
+    if (Test-Phase10MigrationApplied -DatabaseName $DatabaseName -ExpectedMigrationId $ExpectedMigrationId) {
+        Write-ProgressMessage "EF migration already current for ${DatabaseName}: $ExpectedMigrationId"
+        return
+    }
+
     $arguments = @(
         'ef', 'migrations', 'script',
         '--idempotent',
