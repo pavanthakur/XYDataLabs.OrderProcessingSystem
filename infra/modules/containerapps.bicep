@@ -359,10 +359,10 @@ resource uiApp 'Microsoft.App/containerApps@2024-03-01' = {
   }
 }
 
-var ordersInternalAddress = 'http://${ordersApp.properties.configuration.ingress.fqdn}'
-var inventoryInternalAddress = 'http://${inventoryApp.properties.configuration.ingress.fqdn}'
-var notificationsInternalAddress = 'http://${notificationsApp.properties.configuration.ingress.fqdn}'
-var uiInternalAddress = 'http://${uiApp.properties.configuration.ingress.fqdn}'
+var ordersInternalAddress = 'https://${ordersApp.properties.configuration.ingress.fqdn}'
+var inventoryInternalAddress = 'https://${inventoryApp.properties.configuration.ingress.fqdn}'
+var notificationsInternalAddress = 'https://${notificationsApp.properties.configuration.ingress.fqdn}'
+var uiInternalAddress = 'https://${uiApp.properties.configuration.ingress.fqdn}'
 
 resource gatewayApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: gatewayName

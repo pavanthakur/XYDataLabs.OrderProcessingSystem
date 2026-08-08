@@ -167,8 +167,8 @@ Rule of thumb:
 
 Runtime smoke backend-route guardrail:
 
-- `02 Phase 10 Azure Runtime Smoke` now verifies that the gateway health payload reports ACA FQDN backend targets for `orders`, `inventory`, `notifications`, and `ui`.
-- Treat any `localhost` backend or bare short-name backend such as `http://orderprocessing-ord-stg` as a deployment regression and stop before transport or payment validation.
+- `02 Phase 10 Azure Runtime Smoke` now verifies that the gateway health payload reports ACA `https://...azurecontainerapps.io` backend targets for `orders`, `inventory`, `notifications`, and `ui`.
+- Treat any `localhost` backend, bare short-name backend such as `http://orderprocessing-ord-stg`, or non-HTTPS ACA backend target as a deployment regression and stop before transport or payment validation.
 
 ### Environment Operating Matrix
 
