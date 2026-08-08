@@ -147,7 +147,7 @@ services:
       Webhooks__OpenPay__Secret: ${LOCAL_OPENPAY_WEBHOOK_SECRET}
       IdentityProvider__Enabled: "true"
       IdentityProvider__Mode: KeycloakLocal
-      IdentityProvider__Authority: http://host.docker.internal:8081/realms/xy-phase9
+      IdentityProvider__Authority: http://keycloak-local:8080/realms/xy-phase9
       IdentityProvider__Audience: xy-order-processing
       IdentityProvider__Scheme: Bearer
       IdentityProvider__ClientId: xy-order-processing-backend
@@ -205,7 +205,7 @@ services:
       PaymentProviders__UseDeterministicAdapters: ${LOCAL_DETERMINISTIC_PAYMENT_ADAPTERS:-true}
       IdentityProvider__Enabled: "true"
       IdentityProvider__Mode: KeycloakLocal
-      IdentityProvider__Authority: http://host.docker.internal:8081/realms/xy-phase9
+      IdentityProvider__Authority: http://keycloak-local:8080/realms/xy-phase9
       IdentityProvider__Audience: xy-order-processing
       IdentityProvider__Scheme: Bearer
       IdentityProvider__ClientId: xy-order-processing-backend
@@ -261,7 +261,7 @@ services:
       Webhooks__OpenPay__Secret: ${LOCAL_OPENPAY_WEBHOOK_SECRET}
       IdentityProvider__Enabled: "true"
       IdentityProvider__Mode: KeycloakLocal
-      IdentityProvider__Authority: http://host.docker.internal:8081/realms/xy-phase9
+      IdentityProvider__Authority: http://keycloak-local:8080/realms/xy-phase9
       IdentityProvider__Audience: xy-order-processing
       IdentityProvider__Scheme: Bearer
       IdentityProvider__ClientId: xy-order-processing-backend
@@ -317,7 +317,7 @@ services:
       Webhooks__OpenPay__Secret: ${LOCAL_OPENPAY_WEBHOOK_SECRET}
       IdentityProvider__Enabled: "true"
       IdentityProvider__Mode: KeycloakLocal
-      IdentityProvider__Authority: http://host.docker.internal:8081/realms/xy-phase9
+      IdentityProvider__Authority: http://keycloak-local:8080/realms/xy-phase9
       IdentityProvider__Audience: xy-order-processing
       IdentityProvider__Scheme: Bearer
       IdentityProvider__ClientId: xy-order-processing-backend
@@ -364,7 +364,7 @@ services:
       ReverseProxy__Clusters__ui-cluster__Destinations__ui-primary__Address: http://orderprocessing-ui-${PHASE10_ENV_SUFFIX:-local}:5022
       IdentityProvider__Enabled: "true"
       IdentityProvider__Mode: KeycloakLocal
-      IdentityProvider__Authority: http://host.docker.internal:8081/realms/xy-phase9
+      IdentityProvider__Authority: http://keycloak-local:8080/realms/xy-phase9
       IdentityProvider__Audience: xy-order-processing
       IdentityProvider__Scheme: Bearer
       IdentityProvider__ClientId: xy-order-processing-backend

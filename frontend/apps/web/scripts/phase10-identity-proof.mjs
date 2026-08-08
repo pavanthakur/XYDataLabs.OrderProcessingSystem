@@ -5,6 +5,7 @@ import path from "node:path";
 const argumentsMap = parseArguments(process.argv.slice(2));
 const appBaseUrl = argumentsMap.get("url") ?? "http://localhost:5022";
 const legacyApiBaseUrl = argumentsMap.get("api-url");
+const gatewayApiBaseUrl = argumentsMap.get("gateway-api-url") ?? legacyApiBaseUrl ?? "http://localhost:5080";
 const ordersApiBaseUrl = argumentsMap.get("orders-api-url") ?? legacyApiBaseUrl ?? "http://localhost:5081";
 const paymentsApiBaseUrl = argumentsMap.get("payments-api-url") ?? legacyApiBaseUrl ?? "http://localhost:5084";
 const approvalApiBaseUrl = argumentsMap.get("approval-api-url") ?? ordersApiBaseUrl;
@@ -93,6 +94,11 @@ try {
       "TenantA",
       200,
       "matching-tenant-protected-request");
+    await assertProtectedProductRequest(
+      normalUser.token,
+      "TenantA",
+      200,
+      "matching-tenant-gateway-product-request");
     await assertProtectedTenantRequest(
       normalUser.token,
       "TenantB",
@@ -188,6 +194,23 @@ async function assertProtectedTenantRequest(token, tenantCode, expectedStatus, n
   });
   try {
     const response = await api.get("/api/v1/Customer/GetAllCustomers");
+    record(name, response.status() === expectedStatus, {
+      expected: expectedStatus,
+      actual: response.status()
+    });
+  }
+  finally {
+    await api.dispose();
+  }
+}
+
+async function assertProtectedProductRequest(token, tenantCode, expectedStatus, name) {
+  const api = await playwrightRequest.newContext({
+    baseURL: gatewayApiBaseUrl,
+    extraHTTPHeaders: authorizationHeaders(token, tenantCode)
+  });
+  try {
+    const response = await api.get("/api/v1/Product/GetAllProducts");
     record(name, response.status() === expectedStatus, {
       expected: expectedStatus,
       actual: response.status()

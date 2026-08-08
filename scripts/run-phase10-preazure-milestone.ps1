@@ -362,6 +362,7 @@ function Invoke-Phase10IdentityProof {
             '--workspace', '@xydatalabs/orderprocessing-web',
             '--',
             '--url', 'http://localhost:5022',
+            '--gateway-api-url', 'http://localhost:5080',
             '--orders-api-url', 'http://localhost:5081',
             '--payments-api-url', 'http://localhost:5084',
             '--approval-api-url', 'http://localhost:5081',
