@@ -223,61 +223,6 @@ resource acaEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' = {
   }
 }
 
-resource gatewayApp 'Microsoft.App/containerApps@2024-03-01' = {
-  name: gatewayName
-  location: location
-  identity: appIdentity
-  properties: {
-    managedEnvironmentId: acaEnvironment.id
-    configuration: {
-      secrets: registrySecrets
-      registries: registryConfigs
-      ingress: {
-        external: true
-        targetPort: 8080
-      }
-    }
-    template: {
-      containers: [
-        {
-          name: 'gateway'
-          image: gatewayImage
-          env: concat(runtimeCommonEnv, [
-            {
-              name: 'Gateway__AllowedHosts__5'
-              value: gatewayName
-            }
-            {
-              name: 'ReverseProxy__Clusters__orders-cluster__Destinations__orders-primary__Address'
-              value: 'http://${ordersName}'
-            }
-            {
-              name: 'ReverseProxy__Clusters__inventory-cluster__Destinations__inventory-primary__Address'
-              value: 'http://${inventoryName}'
-            }
-            {
-              name: 'ReverseProxy__Clusters__notifications-cluster__Destinations__notifications-primary__Address'
-              value: 'http://${notificationsName}'
-            }
-            {
-              name: 'ReverseProxy__Clusters__ui-cluster__Destinations__ui-primary__Address'
-              value: 'http://${uiName}'
-            }
-          ])
-          resources: {
-            cpu: json(cpuCores)
-            memory: '0.5Gi'
-          }
-        }
-      ]
-      scale: {
-        minReplicas: 1
-        maxReplicas: 10
-      }
-    }
-  }
-}
-
 resource ordersApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: ordersName
   location: location
@@ -294,13 +239,13 @@ resource ordersApp 'Microsoft.App/containerApps@2024-03-01' = {
     }
     template: {
         containers: [
-          {
+        {
             name: 'orders'
             image: ordersImage
             env: concat(runtimeCommonEnv, ordersEnv)
-            resources: {
-              cpu: json(cpuCores)
-              memory: '0.5Gi'
+          resources: {
+            cpu: json(cpuCores)
+            memory: '0.5Gi'
           }
         }
       ]
@@ -400,6 +345,66 @@ resource uiApp 'Microsoft.App/containerApps@2024-03-01' = {
           name: 'ui'
           image: uiImage
           env: uiEnv
+          resources: {
+            cpu: json(cpuCores)
+            memory: '0.5Gi'
+          }
+        }
+      ]
+      scale: {
+        minReplicas: 1
+        maxReplicas: 10
+      }
+    }
+  }
+}
+
+var ordersInternalAddress = 'http://${ordersApp.properties.configuration.ingress.fqdn}'
+var inventoryInternalAddress = 'http://${inventoryApp.properties.configuration.ingress.fqdn}'
+var notificationsInternalAddress = 'http://${notificationsApp.properties.configuration.ingress.fqdn}'
+var uiInternalAddress = 'http://${uiApp.properties.configuration.ingress.fqdn}'
+
+resource gatewayApp 'Microsoft.App/containerApps@2024-03-01' = {
+  name: gatewayName
+  location: location
+  identity: appIdentity
+  properties: {
+    managedEnvironmentId: acaEnvironment.id
+    configuration: {
+      secrets: registrySecrets
+      registries: registryConfigs
+      ingress: {
+        external: true
+        targetPort: 8080
+      }
+    }
+    template: {
+      containers: [
+        {
+          name: 'gateway'
+          image: gatewayImage
+          env: concat(runtimeCommonEnv, [
+            {
+              name: 'Gateway__AllowedHosts__5'
+              value: gatewayName
+            }
+            {
+              name: 'ReverseProxy__Clusters__orders-cluster__Destinations__orders-primary__Address'
+              value: ordersInternalAddress
+            }
+            {
+              name: 'ReverseProxy__Clusters__inventory-cluster__Destinations__inventory-primary__Address'
+              value: inventoryInternalAddress
+            }
+            {
+              name: 'ReverseProxy__Clusters__notifications-cluster__Destinations__notifications-primary__Address'
+              value: notificationsInternalAddress
+            }
+            {
+              name: 'ReverseProxy__Clusters__ui-cluster__Destinations__ui-primary__Address'
+              value: uiInternalAddress
+            }
+          ])
           resources: {
             cpu: json(cpuCores)
             memory: '0.5Gi'

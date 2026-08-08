@@ -165,6 +165,11 @@ Rule of thumb:
 - Run `04` after `03` passes when you want the Azure equivalent of the local all-tenant Docker payment matrix.
 - Workflow `99` always starts its own Docker stack on GitHub-hosted runners. Reusing an already running stack is a local script-only option via `scripts/run-phase10-docker-dev-e2e-hook.ps1 -SkipStartIfNeeded`.
 
+Runtime smoke backend-route guardrail:
+
+- `02 Phase 10 Azure Runtime Smoke` now verifies that the gateway health payload reports ACA FQDN backend targets for `orders`, `inventory`, `notifications`, and `ui`.
+- Treat any `localhost` backend or bare short-name backend such as `http://orderprocessing-ord-stg` as a deployment regression and stop before transport or payment validation.
+
 ### Environment Operating Matrix
 
 Use the same Phase 10 sequence in each environment, changing only the target environment value.

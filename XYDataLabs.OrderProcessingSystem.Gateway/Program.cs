@@ -18,6 +18,16 @@ var allowedOrigins = builder.Configuration
     .GetSection("Gateway:AllowedOrigins")
     .Get<string[]>() ?? ["http://localhost:5022", "http://localhost:5173"];
 var maxRequestBodySizeBytes = builder.Configuration.GetValue<long>("Gateway:MaxRequestBodySizeBytes", 1048576L);
+var configuredRouteSummaries = builder.Configuration
+    .GetSection("ReverseProxy:Clusters")
+    .GetChildren()
+    .SelectMany(clusterSection =>
+    {
+        var destinationSections = clusterSection.GetSection("Destinations").GetChildren();
+        return destinationSections.Select(destinationSection =>
+            $"{clusterSection.Key}/{destinationSection.Key} -> {destinationSection["Address"] ?? "(missing)"}");
+    })
+    .ToArray();
 
 builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks();
@@ -161,27 +171,7 @@ app.MapGet("/", (HttpContext context) => Results.Ok(new
     status = "healthy",
     acceptedHost = context.Request.Host.Host,
     summary = $"Accepted host: {context.Request.Host.Host}",
-    routes = new[]
-    {
-        "orders.localhost:5080 -> http://localhost:5010",
-        "payments.localhost:5080 -> http://localhost:5084",
-        "inventory.localhost:5080 -> http://localhost:5011",
-        "notifications.localhost:5080 -> http://localhost:5012",
-        "ui.localhost:5080 -> http://localhost:5173",
-        "localhost:5080/api/v1/Info/{**catch-all} -> http://localhost:5010",
-        "localhost:5080/api/v1/Customer/{**catch-all} -> http://localhost:5010",
-        "localhost:5080/api/v1/Order/{**catch-all} -> http://localhost:5010",
-        "localhost:5080/api/v1/Audit/{**catch-all} -> http://localhost:5010",
-        "localhost:5080/payment/{**catch-all} -> http://localhost:5084",
-        "localhost:5080/payments/{**catch-all} -> http://localhost:5084",
-        "localhost:5080/api/v1/Payments/{**catch-all} -> http://localhost:5084",
-        "localhost:5080/api/v1/Product/{**catch-all} -> http://localhost:5011",
-        "localhost:5080/api/v1/Inventory/{**catch-all} -> http://localhost:5011",
-        "localhost:5080/api/v1/Notifications/{**catch-all} -> http://localhost:5012",
-        "localhost:5080/inventory/{**catch-all} -> http://localhost:5011",
-        "localhost:5080/notifications/{**catch-all} -> http://localhost:5012",
-        "localhost:5080/app/{**catch-all} -> http://localhost:5173"
-    }
+    routes = configuredRouteSummaries
 }));
 app.MapReverseProxy(proxyPipeline =>
 {
