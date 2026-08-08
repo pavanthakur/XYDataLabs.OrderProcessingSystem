@@ -74,7 +74,7 @@ order-events topic
 
 Consumer failure
      |
-order-events-dlq / dlq-intake
+order-events-dlq / dlq-replay-<env>
      |
 DLQ Intake Function
      |
@@ -513,7 +513,7 @@ Effort: 3-4 days.
 #### Entities
 
 ```text
-order-events-dlq / dlq-intake
+order-events-dlq / dlq-replay-<env>
 dlq-replay-requests queue
 ```
 

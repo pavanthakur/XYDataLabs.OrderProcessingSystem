@@ -6,7 +6,7 @@ This runbook covers the Phase 10 dead-letter intake, quarantine, approval, and r
 
 - Source topic: `order-events`
 - Dead-letter topic: `order-events-dlq`
-- Current intake subscription: `dlq-intake`
+- Current intake subscription: `dlq-replay-<environment>`
 - Phase 10.4 target approved-request entity: `dlq-replay-requests`
 - Transitional approval surface: `POST /api/v1/admin/dlq/{quarantineId}/approve`
 - Azure implementation target: `XYDataLabs.OrderProcessingSystem.Functions/DlqReplayFunction.cs`

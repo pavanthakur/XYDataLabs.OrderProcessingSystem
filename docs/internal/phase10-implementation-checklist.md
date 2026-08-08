@@ -60,6 +60,23 @@ Environment note:
 - Expect some Azure resource names to shorten `staging` to `stg` in resource-group and app names.
 - Use the environment-specific checklist in [phase10-azure-smoke.md](../runbooks/phase10-azure-smoke.md) for the exact operator inputs and capture rules for `dev`, `staging`, and `prod`.
 
+### August 8, 2026 Dev Azure Evidence Snapshot
+
+The current `dev` candidate has completed the full Azure execution lane successfully:
+
+| Workflow | Run | Result |
+|---|---:|---|
+| `00 Azure Platform Foundation` | `31264306311` | Passed |
+| `01 Phase 10 Azure Deploy Orchestrator` (real deploy) | `31264680030` | Passed |
+| `02 Phase 10 Azure Runtime Smoke` | `31266011709` | Passed |
+| `03 Phase 10 Azure Transport Smoke` | `31266391019` | Passed |
+| `04 Phase 10 Azure Payment Matrix` | `31266516115` | Passed |
+
+Notes:
+
+- The August 8, 2026 transport-smoke rerun succeeded after the stale replay-subscription name was corrected from `dlq-intake-<environment>` to `dlq-replay-<environment>`.
+- This evidence clears the `dev` lane. Staging remains the next promotion gate; do not treat `prod` as in scope until staging is clean.
+
 ### Graduated Gate Policy
 
 | Change type | Required validation |
@@ -212,7 +229,7 @@ Estimated remaining elapsed engineering effort is **28-42 working days**, exclud
 
 #### 10.4 DLQ And Functions
 
-- Use separate `dlq-intake` and `dlq-replay-requests` paths. Intake classifies and quarantines; replay consumes only approved requests.
+- Use separate `dlq-replay-<environment>` subscription intake and `dlq-replay-requests` approval paths. Intake classifies and quarantines; replay consumes only approved requests.
 - Do not attach intake and replay Functions to the same subscription.
 - Set `AutoCompleteMessages = false` wherever completion, abandonment, or dead-lettering is controlled by application code.
 - Preserve message body, content type, application properties, message/correlation/causation/tenant identifiers, trace context, failure reason, and original enqueue metadata.

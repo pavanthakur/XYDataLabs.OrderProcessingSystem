@@ -7,7 +7,18 @@
 
 ---
 
-## 🟢 Current State (July 2026) — Phase 10 Planning Aligned
+## 🟢 Current State (August 2026) — Phase 10 Dev Validation Green
+
+### August 8, 2026 Phase 10 Azure Dev Validation Complete
+
+- ✅ `00 Azure Platform Foundation` passed in run `31264306311`.
+- ✅ `01 Phase 10 Azure Deploy Orchestrator` dry run and real deploy passed; the real deploy passed in run `31264680030`.
+- ✅ `02 Phase 10 Azure Runtime Smoke` passed in run `31266011709`.
+- ✅ `03 Phase 10 Azure Transport Smoke` passed in run `31266391019`.
+- ✅ `04 Phase 10 Azure Payment Matrix` passed in run `31266516115`.
+- ✅ The Azure `dev` validation lane is now green across foundation, deploy, runtime, messaging, and business/browser payment proof.
+- ✅ The stale replay-subscription naming drift has been corrected: operational docs and smoke automation now use `dlq-replay-<environment>` instead of the old `dlq-intake-<environment>` label.
+- 🔜 Next promotion gate: run the same `01 -> 04` sequence in `staging`, then review the combined evidence packet before any `prod` decision.
 
 ### July 25, 2026 Phase 10 Completion Contract
 
@@ -173,14 +184,16 @@
   - Function App infrastructure module exists: `infra/modules/functions.bicep`
   - Function identity output is wired into Phase 10 Key Vault access plumbing
   - Local Azure Functions worker exists with startup validation plus DLQ intake and replay entrypoints
-  - Service Bus transport smoke proof is documented, but it does not yet prove deployed Azure Functions behavior
+  - `00 Azure Platform Foundation` passed in run `31264306311`
+  - `01 Phase 10 Azure Deploy Orchestrator` real deploy passed in run `31264680030`
+  - `02 Phase 10 Azure Runtime Smoke` passed in run `31266011709`
+  - `03 Phase 10 Azure Transport Smoke` passed in run `31266391019`
+  - `04 Phase 10 Azure Payment Matrix` passed in run `31266516115`
+  - The active Azure `dev` validation lane is green end to end
 - Pending:
-  - 10.2 real service migration, including an executable Payments host and authoritative tenant/provider behavior
-  - 10.3 committed outbox publication, real consumers, inbox/idempotency, restart, duplicate, and permanent-failure proof
-  - 10.4 separate DLQ intake/quarantine/approval/replay, deployed Function package, and invocation proof
-  - 10.5 Entra ID JWT, Service Bus managed identity/RBAC, and Key Vault-backed secrets
-  - 10.6 NFR, failure-drill, observability, and rollback proof
-  - 10.7 local/Docker/CI/Azure acceptance evidence
+  - Staging promotion through the same `01 -> 04` Azure lane
+  - Final Phase 10 closeout packet and operator notes across local, Docker, CI, and Azure evidence
+  - `prod` remains gated behind a clean `staging` run and explicit promotion review
 - Not in Phase 10:
   - APIM/private YARP ingress, VNet/private endpoints, Service Bus Premium/Private Link, Blob/Event Grid, SQL managed identity, and Front Door/WAF are formal Phase 12 deferrals under ADR-025
   - Keycloak portability proof stays in Phase 9.5 / deferred

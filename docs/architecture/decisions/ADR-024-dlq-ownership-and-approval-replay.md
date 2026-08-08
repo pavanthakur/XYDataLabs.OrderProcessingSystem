@@ -13,7 +13,7 @@ Using the same subscription for intake and replay creates competing consumers. A
 
 DLQ intake, quarantine, approval, and replay are separate governed stages.
 
-- `dlq-intake` receives forwarded dead letters, validates the envelope, classifies failure, and persists quarantine metadata.
+- The environment replay subscription (`dlq-replay-<environment>`) receives forwarded dead letters, validates the envelope, classifies failure, and persists quarantine metadata.
 - `dlq-replay-requests` contains only explicitly approved replay requests.
 - Intake and replay Functions never listen to the same subscription.
 - Application-controlled settlement uses `AutoCompleteMessages = false`.
@@ -62,4 +62,3 @@ Trade-offs:
 - ADR-023: Service Bus Delivery Semantics
 - [Phase 10 Azure Smoke Runbook](../../runbooks/phase10-azure-smoke.md)
 - [Service Bus DLQ Replay Runbook](../../runbooks/servicebus-dlq-replay.md)
-

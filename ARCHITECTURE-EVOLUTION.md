@@ -1,7 +1,7 @@
 # Architecture Evolution: Monolith to Enterprise Microservices
 
-**Last Updated:** July 1, 2026
-**Current Status:** Phase 8 Closeout Matrix Validation Passed ✅ | Track U U5 Complete ✅ | Phase 8.5 Complete ✅ | Phase 8.6 Complete ✅ | Phase 8.7 Complete ✅ | Phase 9 closeout complete for extraction/tasking ✅ | Phase 9.5 identity portability wiring implemented and runtime verified in local HTTP and Docker Dev HTTP ✅ | Phase 10.1 local baseline reconciliation complete ✅ | Phase 10 local NFR proof passed and Docker parity proof passed ✅ | Phases 10, 11, 11.5, 12-14 Planned 📅 | Post-14 Horizons captured 📘
+**Last Updated:** August 8, 2026
+**Current Status:** Phase 8 Closeout Matrix Validation Passed ✅ | Track U U5 Complete ✅ | Phase 8.5 Complete ✅ | Phase 8.6 Complete ✅ | Phase 8.7 Complete ✅ | Phase 9 closeout complete for extraction/tasking ✅ | Phase 9.5 identity portability wiring implemented and runtime verified in local HTTP and Docker Dev HTTP ✅ | Phase 10.1 local baseline reconciliation complete ✅ | Phase 10 local NFR proof passed and Docker parity proof passed ✅ | Phase 10 Azure dev validation lane complete ✅ | Staging promotion and final closeout pending ⏳ | Phases 11, 11.5, 12-14 Planned 📅 | Post-14 Horizons captured 📘
 
 ---
 
@@ -1343,6 +1343,20 @@ Completed proof points:
 - The local payment matrix now has a deterministic local-provider path for TenantC/OpenPay so local HTTP validation does not depend on the live OpenPay sandbox.
 - The Phase 10 artifact and log layout is documented so evidence can be traced without relying on ad hoc console history.
 
+### Phase 10 Azure Dev Validation Candidate ✅
+
+The active `dev` Azure validation lane completed successfully on August 8, 2026:
+
+| Workflow | Run | Result |
+|---|---:|---|
+| `00 Azure Platform Foundation` | `31264306311` | Passed |
+| `01 Phase 10 Azure Deploy Orchestrator` (real deploy) | `31264680030` | Passed |
+| `02 Phase 10 Azure Runtime Smoke` | `31266011709` | Passed |
+| `03 Phase 10 Azure Transport Smoke` | `31266391019` | Passed |
+| `04 Phase 10 Azure Payment Matrix` | `31266516115` | Passed |
+
+The only Azure validation defect uncovered in this lane was stale smoke naming for the replay subscription. The validated topology and runbooks now use `dlq-replay-<environment>` rather than the old `dlq-intake-<environment>` label.
+
 ### Phase 10 Status Table
 
 > Scope note: the refinements below are Phase 10 or later only. Earlier phase decisions stay frozen unless a separate review explicitly reopens them.
@@ -1350,15 +1364,16 @@ Completed proof points:
 | Area | Status | Meaning | Next Step |
 |---|---|---|---|
 | Local baseline reconciliation | Complete | Local tooling, execution order, artifact layout, and Docker validation lanes are explicitly documented | Keep the Stage 0-6 gates green during implementation |
-| Real service migration | Required / in progress | Existing Phase 10 service hosts include compatibility stubs and Payments is not yet a complete independently hosted workload | Complete slice 10.2 and prove authoritative SQL behavior |
-| Durable transport and consumers | Required / in progress | Service Bus topology and adapters exist; real module consumers and end-to-end committed effects remain required | Complete slice 10.3 |
-| DLQ and deployed Functions | Required / in progress | Function host/scaffolds exist; separate intake/replay ownership, package deployment, and invocation proof remain required | Complete slice 10.4 |
-| Cloud hosting outcome | Required / in progress | ACA/ACR is the Phase 10 hosting target | Deploy all real workloads with immutable artifacts and rollback proof |
-| Phase 10 ingress | Required / in progress | YARP is the supported ingress for the Phase 10 proof | Enforce Entra JWT and tenant policies through YARP |
-| Identity and transport auth | Required / in progress | Entra ID + JWT and Service Bus managed identity/RBAC are the Azure lanes; Keycloak remains local | Complete slice 10.5 and remove Azure Service Bus SAS settings |
-| Secrets | Required / in progress | Key Vault owns provider and bootstrap secrets | Verify secret resolution without committed/runtime plaintext |
-| Non-functional proof | Required / pending | Failure drills, lower-environment performance, SLI evidence, and rollback remain unproven | Complete slice 10.6 |
-| Acceptance evidence | Required / pending | Historical scaffolding/smoke evidence is not the final completion packet | Complete slice 10.7 against one immutable commit |
+| Azure dev validation lane | Complete on `dev` | Foundation, deploy, runtime smoke, transport smoke, and payment matrix are green on the active dev candidate | Promote the same sequence to `staging` and publish the candidate evidence packet |
+| Real service migration | Validated on `dev` / promote next | The current candidate passed runtime and payment validation against live Azure URLs | Reconfirm in `staging`, then carry the evidence into closeout |
+| Durable transport and consumers | Validated on `dev` / promote next | Transport smoke passed on the live Service Bus topology after replay-subscription naming was corrected | Reconfirm in `staging` and keep the operator packet with the rerun |
+| DLQ and deployed Functions | Validated on `dev` / promote next | The current Azure lane validates the deployed replay path and the operator topology contract | Reconfirm in `staging`; keep deeper hardening and future expansion in later phases |
+| Cloud hosting outcome | Validated on `dev` / promote next | ACA/ACR/YARP path is active and green in dev | Promote the same image/deploy/smoke path to `staging` |
+| Phase 10 ingress | Validated on `dev` / promote next | YARP is the supported ingress and the runtime smoke passed through the deployed URLs | Reconfirm in `staging` and preserve the ingress evidence in closeout |
+| Identity and transport auth | Validated on `dev` / promote next | The Azure lane is green with the current Entra/Key Vault/transport shape | Reconfirm in `staging` before any `prod` decision |
+| Secrets | Validated on `dev` / promote next | Key Vault-backed runtime configuration is green in the active dev lane | Reconfirm in `staging` and keep the deploy summary in the evidence packet |
+| Non-functional proof | Complete locally; Azure promotion pending | Local NFR proof and Docker parity passed; Azure dev lane is green | Keep `staging` as the next promotion and closeout gate |
+| Acceptance evidence | In progress / candidate captured | The dev candidate now has successful `00/01/02/03/04` evidence | Publish the closeout packet and repeat the same lane in `staging` |
 | APIM/private networking/Blob/Event Grid/SQL MI/Front Door | Deferred to Phase 12 | These remain required roadmap outcomes, not Phase 10 exit criteria | Track through ADR-025 and DW-019 through DW-022 |
 | SharedContracts | Deferred / candidate for Phase 10 | Introduce only if Phase 10 transport wiring proves a shared schema package is needed across services | Keep service-local contracts until a real duplication problem appears |
 | Phase 9.5 portability proof | Deferred / not Phase 10 | Keep Keycloak local-only in Phase 9.5 | No Azure-side Keycloak parity in this phase |
@@ -1394,15 +1409,17 @@ This keeps app environment cleanup simple while preserving image history, avoidi
   - Phase 10.1 local baseline reconciliation
   - Function App infrastructure module exists: `infra/modules/functions.bicep`
   - Function identity output is wired into Phase 10 Key Vault access plumbing
-  - Local Azure Functions worker scaffold exists with startup validation and an initial DLQ intake trigger
-  - Service Bus transport smoke proof is documented, but it does not yet prove deployed Azure Functions behavior
+  - Local Azure Functions worker scaffold exists with startup validation and replay/intake entrypoints
+  - `00 Azure Platform Foundation` passed in run `31264306311`
+  - `01 Phase 10 Azure Deploy Orchestrator` real deploy passed in run `31264680030`
+  - `02 Phase 10 Azure Runtime Smoke` passed in run `31266011709`
+  - `03 Phase 10 Azure Transport Smoke` passed in run `31266391019`
+  - `04 Phase 10 Azure Payment Matrix` passed in run `31266516115`
+  - The Azure `dev` validation lane is green end to end
 - Pending:
-  - 10.2 real Orders, Payments, Inventory, and Notifications service migration
-  - 10.3 outbox-to-Service-Bus publication, real consumers, inbox/idempotency, and restart/duplicate proof
-  - 10.4 separated DLQ intake/quarantine/approval/replay, Function deployment artifact, and invocation smoke
-  - 10.5 Entra ID JWT authorization, Service Bus managed identity/RBAC, and Key Vault secret resolution
-  - 10.6 NFR, observability, failure-drill, and rollback proof
-  - 10.7 local/Docker/CI/Azure acceptance and evidence closeout
+  - Promote the same `01 -> 04` Azure lane to `staging`
+  - Assemble the final Phase 10 closeout packet and operator notes
+  - Keep `prod` gated behind a clean `staging` run and explicit promotion review
 - Not in Phase 10:
   - APIM/private YARP ingress, VNet/private endpoints, Service Bus Premium/Private Link, Blob/Event Grid, SQL managed identity, and Front Door/WAF move to Phase 12 under ADR-025
   - Keycloak portability proof stays in Phase 9.5 / deferred

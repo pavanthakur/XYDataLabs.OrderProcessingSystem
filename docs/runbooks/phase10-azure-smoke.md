@@ -8,7 +8,7 @@ This runbook covers the first live check for the Phase 10 pre-Azure baseline def
 - App/runtime entry point: `infra/main.phase10.bicep`
 - Parameters: `infra/parameters/phase10-dev.json`, `infra/parameters/phase10-staging.json`, `infra/parameters/phase10-prod.json`
 - Transport path: `Orders -> Service Bus -> Inventory/Notifications`
-- Replay path: `order-events-dlq -> dlq-intake -> replay-requests -> order-events`
+- Current validated replay smoke path: `order-events-dlq -> dlq-replay-<environment> -> order-events-<environment>`
 - The Service Bus namespace, transport auth rule, and connection-string lookup are owned by `infra/modules/servicebus.bicep`; `infra/main.phase10.bicep` consumes that module output during deployment.
 - GitHub Actions entrypoint: `phase10-deploy-orchestrator.yml` (which calls `infra-deploy.yml` internally)
 - The persistent ACR registry and the runtime pull identity are owned by `00 Azure Platform Foundation` and live in `rg-orderprocessing-platform`.
@@ -138,6 +138,22 @@ These are the numbered Phase 10 workflows and their responsibilities:
 | `02` | `02 Phase 10 Azure Runtime Smoke` | Runtime proof for gateway, API routing, and UI after deploy |
 | `03` | `03 Phase 10 Azure Transport Smoke` | Transport proof for Service Bus publish, consume, DLQ, and replay |
 | `04` | `04 Phase 10 Azure Payment Matrix` | All-tenant browser/payment E2E proof against the live Azure Container Apps URLs |
+
+### Latest Dev Evidence Snapshot
+
+As of August 8, 2026, the active `dev` Azure validation lane is green with the following workflow evidence:
+
+| Workflow | Run | Result |
+|---|---:|---|
+| `00 Azure Platform Foundation` | `31264306311` | Passed |
+| `01 Phase 10 Azure Deploy Orchestrator` (real deploy) | `31264680030` | Passed |
+| `02 Phase 10 Azure Runtime Smoke` | `31266011709` | Passed |
+| `03 Phase 10 Azure Transport Smoke` | `31266391019` | Passed |
+| `04 Phase 10 Azure Payment Matrix` | `31266516115` | Passed |
+
+Operator note:
+
+- The original `03` failure on August 8, 2026 was caused by stale smoke validation naming (`dlq-intake-<environment>`). The validated topology and smoke path now use `dlq-replay-<environment>`.
 | `99` | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | CI pre-deployment clean-room parity for the current container graph when the change affects Compose, gateway, images, workflows, Bicep, transport, or payment automation |
 
 Rule of thumb:
@@ -759,7 +775,7 @@ az servicebus topic show --resource-group $resourceGroupName --namespace-name $s
 az servicebus topic subscription show --resource-group $resourceGroupName --namespace-name $serviceBusNamespaceName --topic-name order-events --name inventory-order-created
 az servicebus topic subscription show --resource-group $resourceGroupName --namespace-name $serviceBusNamespaceName --topic-name order-events --name notifications-order-created
 az servicebus topic show --resource-group $resourceGroupName --namespace-name $serviceBusNamespaceName --name order-events-dlq
-az servicebus topic subscription show --resource-group $resourceGroupName --namespace-name $serviceBusNamespaceName --topic-name order-events-dlq --name dlq-intake
+az servicebus topic subscription show --resource-group $resourceGroupName --namespace-name $serviceBusNamespaceName --topic-name order-events-dlq --name dlq-replay-$environmentName
 
 az functionapp config appsettings list --resource-group $resourceGroupName --name $functionAppName
 az containerapp show --resource-group $resourceGroupName --name $ordersContainerAppName --query "properties.template.containers[0].env"
@@ -896,7 +912,7 @@ az servicebus topic show --resource-group $resourceGroupName --namespace-name $s
 az servicebus topic subscription show --resource-group $resourceGroupName --namespace-name $serviceBusNamespaceName --topic-name order-events --name inventory-order-created
 az servicebus topic subscription show --resource-group $resourceGroupName --namespace-name $serviceBusNamespaceName --topic-name order-events --name notifications-order-created
 az servicebus topic show --resource-group $resourceGroupName --namespace-name $serviceBusNamespaceName --name order-events-dlq
-az servicebus topic subscription show --resource-group $resourceGroupName --namespace-name $serviceBusNamespaceName --topic-name order-events-dlq --name dlq-intake
+az servicebus topic subscription show --resource-group $resourceGroupName --namespace-name $serviceBusNamespaceName --topic-name order-events-dlq --name dlq-replay-$environmentName
 ```
 
 Confirm the deployed namespace contains:
@@ -904,7 +920,7 @@ Confirm the deployed namespace contains:
 - `inventory-order-created`
 - `notifications-order-created`
 - `order-events-dlq`
-- `dlq-intake`
+- `dlq-replay-<environment>`
 
 Confirm the namespace also contains the Phase 10 transport auth rule.
 
@@ -924,7 +940,7 @@ Confirm the deployed runtime settings include:
 - `ServiceBus__ConnectionString`
 - `ServiceBus__TopicName=order-events`
 - `ServiceBus__DeadLetterTopicName=order-events-dlq`
-- `ServiceBus__DeadLetterSubscriptionName=dlq-intake`
+- `ServiceBus__DeadLetterSubscriptionName=dlq-replay-<environment>`
 - `ServiceBus__ReplayEnabled=true`
 - `KeyVault__Uri`
 - `APPLICATIONINSIGHTS_CONNECTION_STRING`
@@ -1005,7 +1021,7 @@ The smoke verifies:
 3. `inventory-order-created-<env>` receives and completes its copy.
 4. `notifications-order-created-<env>` receives and completes its copy.
 5. A controlled message can be dead-lettered from the inventory subscription and forwarded to `order-events-dlq`.
-6. `dlq-intake-<env>` receives the dead-lettered message.
+6. `dlq-replay-<env>` receives the dead-lettered message.
 7. A replay message can be republished to `order-events-<env>`.
 8. Inventory and Notifications both receive and complete the replay message.
 
@@ -1036,7 +1052,7 @@ The automated transport smoke proves the broker path through `tools/Phase10.Tran
 
 1. It dead-letters a controlled message from the inventory subscription.
 2. It verifies forwarding to `order-events-dlq`.
-3. It receives the message from `dlq-intake-<env>`.
+3. It receives the message from `dlq-replay-<env>`.
 4. It republishes a replay message to `order-events-<env>`.
 5. It verifies both downstream subscriptions receive the replayed flow.
 
