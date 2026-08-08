@@ -6,6 +6,9 @@ param location string
 @description('Environment code')
 param environment string
 
+@description('Azure resource suffix override used for Key Vault naming')
+param resourceSuffix string = ''
+
 @description('Base application name')
 param baseName string = 'orderprocessing'
 
@@ -31,8 +34,9 @@ param deploymentPrincipalObjectId string = ''
 @secure()
 param sqlAdminPassword string = ''
 
+var effectiveResourceSuffix = empty(resourceSuffix) ? environment : resourceSuffix
 var shortBaseName = take(baseName, 15)
-var keyVaultName = 'kv-${shortBaseName}-${environment}'
+var keyVaultName = 'kv-${shortBaseName}-${effectiveResourceSuffix}'
 
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: keyVaultName

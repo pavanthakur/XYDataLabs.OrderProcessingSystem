@@ -4,6 +4,9 @@ param location string
 @description('Environment code (dev, staging, prod)')
 param environment string
 
+@description('Azure resource suffix override used for Redis naming')
+param resourceSuffix string = ''
+
 @description('Base application name')
 param baseName string = 'orderprocessing'
 
@@ -16,7 +19,8 @@ param clusteringPolicy string = 'EnterpriseCluster'
 @description('Enable high availability. Keep Disabled for dev/test cost control; use Enabled for production readiness.')
 param highAvailability string = 'Disabled'
 
-var redisName = '${baseName}-redis-${environment}'
+var effectiveResourceSuffix = empty(resourceSuffix) ? environment : resourceSuffix
+var redisName = '${baseName}-redis-${effectiveResourceSuffix}'
 
 resource redis 'Microsoft.Cache/redisEnterprise@2025-04-01' = {
   name: redisName

@@ -4,6 +4,9 @@ param location string
 @description('Environment code')
 param environment string
 
+@description('Azure resource suffix override used for SQL Server naming')
+param resourceSuffix string = ''
+
 @description('Base application name')
 param baseName string
 
@@ -31,7 +34,8 @@ param aadAdminObjectId string = ''
 @description('Azure AD admin login — UPN for users (e.g. user@tenant.onmicrosoft.com) or display name for service principals. Get via: az ad signed-in-user show --query userPrincipalName -o tsv')
 param aadAdminLogin string = ''
 
-var sqlServerName = '${baseName}-sql-${environment}'
+var effectiveResourceSuffix = empty(resourceSuffix) ? environment : resourceSuffix
+var sqlServerName = '${baseName}-sql-${effectiveResourceSuffix}'
 var databaseName = 'OrderProcessingSystem_${toUpper(substring(environment, 0, 1))}${substring(environment, 1)}'
 var tenantCDatabaseName = 'OrderProcessingSystem_TenantC_${toUpper(substring(environment, 0, 1))}${substring(environment, 1)}'
 

@@ -6,13 +6,17 @@ param location string
 @description('Environment code')
 param environment string
 
+@description('Azure resource suffix override used for Log Analytics workspace naming')
+param resourceSuffix string = ''
+
 @description('Base application name')
 param baseName string = 'orderprocessing'
 
 @description('Log Analytics retention in days')
 param retentionInDays int = 30
 
-var logAnalyticsName = 'law-${take(baseName, 15)}-${environment}'
+var effectiveResourceSuffix = empty(resourceSuffix) ? environment : resourceSuffix
+var logAnalyticsName = 'law-${take(baseName, 15)}-${effectiveResourceSuffix}'
 
 resource workspace 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
   name: logAnalyticsName

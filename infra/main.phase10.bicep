@@ -6,6 +6,9 @@ param location string = 'centralindia'
 @description('Environment code (dev, staging, prod)')
 param environment string
 
+@description('Azure resource suffix override used for environment-scoped resource names')
+param resourceSuffix string = ''
+
 @description('Base application name')
 param baseName string = 'orderprocessing'
 
@@ -92,8 +95,9 @@ param acrRegistryPassword string = ''
 @description('Deployment workflow service principal object ID allowed to read Key Vault secrets for Azure verification scripts')
 param deploymentPrincipalObjectId string = ''
 
-var rgName = 'rg-${baseName}-${environment}'
-var keyVaultName = 'kv-${take(baseName, 15)}-${environment}'
+var effectiveResourceSuffix = empty(resourceSuffix) ? environment : resourceSuffix
+var rgName = 'rg-${baseName}-${effectiveResourceSuffix}'
+var keyVaultName = 'kv-${take(baseName, 15)}-${effectiveResourceSuffix}'
 var keyVaultUri = 'https://${keyVaultName}${az.environment().suffixes.keyvaultDns}/'
 
 resource appRg 'Microsoft.Resources/resourceGroups@2022-09-01' = {
@@ -111,6 +115,7 @@ module serviceBus 'modules/servicebus.bicep' = {
   params: {
     location: location
     environment: environment
+    resourceSuffix: effectiveResourceSuffix
     baseName: baseName
     orderEventsTopicName: orderEventsTopicName
     inventorySubscriptionName: inventorySubscriptionName
@@ -130,6 +135,7 @@ module sql 'modules/sql.bicep' = if (deploySql) {
   params: {
     location: location
     environment: environment
+    resourceSuffix: effectiveResourceSuffix
     baseName: baseName
     sqlAdminUsername: sqlAdminUsername
     sqlAdminPassword: sqlAdminPassword
@@ -143,6 +149,7 @@ module redis 'modules/redis.phase10.bicep' = if (deployRedis) {
   params: {
     location: location
     environment: environment
+    resourceSuffix: effectiveResourceSuffix
     baseName: baseName
     skuName: redisSkuName
     clusteringPolicy: redisClusteringPolicy
@@ -161,6 +168,7 @@ module logAnalytics 'modules/loganalytics.phase10.bicep' = {
   params: {
     location: location
     environment: environment
+    resourceSuffix: effectiveResourceSuffix
     baseName: baseName
   }
 }
@@ -171,6 +179,7 @@ module insights 'modules/insights.phase10.bicep' = {
   params: {
     location: location
     environment: environment
+    resourceSuffix: effectiveResourceSuffix
     baseName: baseName
     workspaceResourceId: logAnalytics.outputs.logAnalyticsWorkspaceId
   }
@@ -192,6 +201,7 @@ module containerApps 'modules/containerapps.bicep' = {
   params: {
     location: location
     environment: environment
+    resourceSuffix: effectiveResourceSuffix
     baseName: baseName
     appInsightsConnectionString: insights.outputs.appInsightsConnectionString
     appInsightsInstrumentationKey: insights.outputs.appInsightsInstrumentationKey
@@ -226,6 +236,7 @@ module functions 'modules/functions.bicep' = {
   params: {
     location: location
     environment: environment
+    resourceSuffix: effectiveResourceSuffix
     baseName: baseName
     sku: 'B1'
     appInsightsConnectionString: insights.outputs.appInsightsConnectionString
@@ -246,6 +257,7 @@ module keyVault 'modules/keyvault.phase10.bicep' = {
   params: {
     location: location
     environment: environment
+    resourceSuffix: effectiveResourceSuffix
     baseName: baseName
     gatewayPrincipalId: containerApps.outputs.gatewayPrincipalId
     ordersPrincipalId: containerApps.outputs.ordersPrincipalId

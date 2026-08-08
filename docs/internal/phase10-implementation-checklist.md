@@ -58,6 +58,8 @@ Environment note:
 
 - Use workflow inputs `dev`, `staging`, and `prod`.
 - Expect some Azure resource names to shorten `staging` to `stg` in resource-group and app names.
+- Treat `Resources/Azure-Deployment/branch-policy.json` as the single source of truth for branch, GitHub environment, resource suffix, and Azure SQL suffix mapping.
+- Run `Resources/Azure-Deployment/validate-phase10-environment-contract.ps1` whenever Azure workflow, parameter, or naming changes are introduced. CI PR validation now runs this contract automatically.
 - Use the environment-specific checklist in [phase10-azure-smoke.md](../runbooks/phase10-azure-smoke.md) for the exact operator inputs and capture rules for `dev`, `staging`, and `prod`.
 
 ### August 8, 2026 Dev Azure Evidence Snapshot

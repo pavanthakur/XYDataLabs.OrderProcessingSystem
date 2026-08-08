@@ -6,6 +6,9 @@ param location string
 @description('Environment code (dev, staging, prod)')
 param environment string
 
+@description('Azure resource suffix override used for environment-scoped resource names')
+param resourceSuffix string = ''
+
 @description('Base application name')
 param baseName string = 'orderprocessing'
 
@@ -85,12 +88,13 @@ param acrRegistryUsername string = ''
 @description('ACR pull token password used when role-assignment-free registry auth is selected')
 param acrRegistryPassword string = ''
 
-var environmentName = 'aca-${baseName}-${environment}'
-var gatewayName = '${baseName}-gate-${environment}'
-var ordersName = '${baseName}-ord-${environment}'
-var inventoryName = '${baseName}-inv-${environment}'
-var notificationsName = '${baseName}-notif-${environment}'
-var uiName = '${baseName}-ui-${environment}'
+var effectiveResourceSuffix = empty(resourceSuffix) ? environment : resourceSuffix
+var environmentName = 'aca-${baseName}-${effectiveResourceSuffix}'
+var gatewayName = '${baseName}-gate-${effectiveResourceSuffix}'
+var ordersName = '${baseName}-ord-${effectiveResourceSuffix}'
+var inventoryName = '${baseName}-inv-${effectiveResourceSuffix}'
+var notificationsName = '${baseName}-notif-${effectiveResourceSuffix}'
+var uiName = '${baseName}-ui-${effectiveResourceSuffix}'
 var commonEnv = [
   {
     name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'

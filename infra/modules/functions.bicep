@@ -6,6 +6,9 @@ param location string
 @description('Environment code (dev, staging, prod)')
 param environment string
 
+@description('Azure resource suffix override used for environment-scoped resource names')
+param resourceSuffix string = ''
+
 @description('Base application name')
 param baseName string = 'orderprocessing'
 
@@ -39,10 +42,11 @@ param maxDeliveryCount int = 10
 @description('Message TTL in ISO 8601 duration format')
 param messageTtl string = 'P7D'
 
-var functionAppName = '${baseName}-functions-${environment}'
+var effectiveResourceSuffix = empty(resourceSuffix) ? environment : resourceSuffix
+var functionAppName = '${baseName}-functions-${effectiveResourceSuffix}'
 
 resource plan 'Microsoft.Web/serverfarms@2023-12-01' = {
-  name: 'asp-${baseName}-${environment}'
+  name: 'asp-${baseName}-${effectiveResourceSuffix}'
   location: location
   sku: {
     name: sku
