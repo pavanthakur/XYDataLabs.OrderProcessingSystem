@@ -1,5 +1,6 @@
 using XYDataLabs.OrderProcessingSystem.Application.Events;
 using XYDataLabs.OrderProcessingSystem.Domain.Events;
+using XYDataLabs.OrderProcessingSystem.Orders.Contracts.Events;
 
 namespace XYDataLabs.OrderProcessingSystem.Orders.Features.Events;
 
@@ -13,6 +14,8 @@ public sealed class OrderCreatedDomainEventMapper : DomainEventToIntegrationEven
             domainEvent.CustomerId.Value,
             domainEvent.OrderDate,
             domainEvent.TotalPrice,
-            domainEvent.ProductCount);
+            domainEvent.ProductCount,
+            domainEvent.OrderReferenceId,
+            domainEvent.CurrencyCode);
     }
 }

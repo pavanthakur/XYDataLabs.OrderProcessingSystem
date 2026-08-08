@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using XYDataLabs.OrderProcessingSystem.API.Controllers;
+using XYDataLabs.OrderProcessingSystem.API;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Application.Events;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
@@ -16,7 +16,7 @@ using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 
 namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure
 {
-    public class IntegrationTestWebAppFactory : WebApplicationFactory<CustomerController>
+    public class IntegrationTestWebAppFactory : WebApplicationFactory<AssemblyReference>
     {
         public const string TenantHeaderName = "X-Tenant-Code";
         private readonly string _connectionString;

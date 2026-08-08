@@ -5,7 +5,13 @@ param(
     [int]$StabilizationDelaySeconds = 120,
 
     [ValidateSet('minimal', 'normal', 'detailed', 'quiet')]
-    [string]$IntegrationConsoleVerbosity = 'minimal'
+    [string]$IntegrationConsoleVerbosity = 'minimal',
+
+    [switch]$CleanupOnExit,
+
+    [switch]$RemoveVolumes,
+
+    [switch]$RemoveImages
 )
 
 $ErrorActionPreference = 'Stop'
@@ -13,6 +19,7 @@ $workspaceRoot = Split-Path -Parent $PSScriptRoot
 $composeFile = Join-Path $workspaceRoot 'compose\docker-compose.phase10.yml'
 $envExampleFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local.example'
 $envFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local'
+$databaseBootstrapScript = Join-Path $workspaceRoot 'scripts\invoke-phase10-database-bootstrap.ps1'
 $logRoot = Join-Path $workspaceRoot 'TestResults\Playwright\phase10-docker-http'
 $dockerConfigRoot = Join-Path $workspaceRoot '.tmp\docker-config'
 $runDir = if ([string]::IsNullOrWhiteSpace($env:PHASE10_RUN_ROOT)) {
@@ -46,9 +53,11 @@ Set-Content -Path (Join-Path $runDir 'end-to-end-run-plan.txt') -Value @(
     '1. Confirm gateway and UI readiness.',
     '2. Run smoke validation.',
     '3. Run integration suite.',
-    '4. Run payment matrix.',
-    '5. Tear down the compose stack and remove the Phase 10 images.',
-    '6. Write summary.json and update latest pointers.'
+    '4. Re-apply the canonical Phase 10 database baseline after integration tests.',
+    '5. Run payment matrix for canonical baseline tenants TenantA/TenantB/TenantC across Razorpay and OpenPay.',
+    '6. Preserve the stack by default so NFR and rollback proof can run.',
+    '7. Tear down only when CleanupOnExit is explicitly selected.',
+    '8. Write summary.json and update latest pointers.'
 ) -Encoding utf8
 Set-Content -Path $startupLogPath -Value "[$(Get-Date -Format o)] Phase 10 end-to-end wrapper started`n" -Encoding utf8
 Set-Content -Path $progressLogPath -Value "Phase 10 end-to-end progress log initialized.`n" -Encoding utf8
@@ -182,8 +191,24 @@ try {
         log = 'integration.log'
     }
 
+    Invoke-LoggedCommand -Name 'baseline-restore' -Script {
+        & pwsh -NoProfile -ExecutionPolicy Bypass -File $databaseBootstrapScript -Profile apps -RunDir $runDir -ProgressLogPath $progressLogPath
+    } | Out-Null
+    $summary.steps += [ordered]@{
+        name = 'baseline-restore'
+        status = 'passed'
+        startedUtc = (Get-Date).ToUniversalTime().ToString('o')
+        finishedUtc = (Get-Date).ToUniversalTime().ToString('o')
+        log = 'baseline-restore.log'
+    }
+
     Invoke-LoggedCommand -Name 'matrix' -Script {
-        npm --prefix (Join-Path $workspaceRoot 'automation') run run:docker:dev:http:playwright-matrix
+        npm --prefix (Join-Path $workspaceRoot 'automation') run run:docker:dev:http:playwright-matrix -- `
+            --tenant TenantA `
+            --tenant TenantB `
+            --tenant TenantC `
+            --provider Razorpay `
+            --provider OpenPay
     } | Out-Null
     $summary.steps += [ordered]@{
         name = 'matrix'
@@ -207,33 +232,56 @@ catch {
 }
 finally {
     try {
-        if ($dockerAvailable) {
+        if ($dockerAvailable -and $CleanupOnExit) {
             Write-ProgressLine 'Running cleanup for Phase 10 local container stack...'
-            & docker compose --env-file $envExampleFile --env-file $envFile -f $composeFile --profile data --profile identity --profile storage --profile messaging --profile apps --profile functions down -v 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-down.log') | Out-Null
+            $downArguments = @(
+                'compose',
+                '--env-file', $envExampleFile,
+                '--env-file', $envFile,
+                '-f', $composeFile,
+                '--profile', 'data',
+                '--profile', 'identity',
+                '--profile', 'storage',
+                '--profile', 'messaging',
+                '--profile', 'apps',
+                '--profile', 'functions',
+                'down',
+                '--remove-orphans'
+            )
+            if ($RemoveVolumes) {
+                $downArguments += '--volumes'
+            }
+            & docker @downArguments 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-down.log') | Out-Null
             if ($LASTEXITCODE -ne 0) {
                 throw "Docker compose down failed with exit code $LASTEXITCODE"
             }
 
-            $imageOwner = if ([string]::IsNullOrWhiteSpace($env:PHASE10_IMAGE_OWNER)) { 'pavanthakur' } else { $env:PHASE10_IMAGE_OWNER }
-            $imageTag = if ([string]::IsNullOrWhiteSpace($env:PHASE10_IMAGE_TAG)) { 'dev' } else { $env:PHASE10_IMAGE_TAG }
-            $images = @(
-                "ghcr.io/$imageOwner/orderprocessing-gateway:$imageTag",
-                "ghcr.io/$imageOwner/orderprocessing-orders:$imageTag",
-                "ghcr.io/$imageOwner/orderprocessing-inventory:$imageTag",
-                "ghcr.io/$imageOwner/orderprocessing-notifications:$imageTag",
-                "ghcr.io/$imageOwner/orderprocessing-ui:$imageTag"
-            )
+            if ($RemoveImages) {
+                $imageOwner = if ([string]::IsNullOrWhiteSpace($env:PHASE10_IMAGE_OWNER)) { 'pavanthakur' } else { $env:PHASE10_IMAGE_OWNER }
+                $imageTag = if ([string]::IsNullOrWhiteSpace($env:PHASE10_IMAGE_TAG)) { 'dev' } else { $env:PHASE10_IMAGE_TAG }
+                $images = @(
+                    "ghcr.io/$imageOwner/orderprocessing-gateway:$imageTag",
+                    "ghcr.io/$imageOwner/orderprocessing-orders:$imageTag",
+                    "ghcr.io/$imageOwner/orderprocessing-payments:$imageTag",
+                    "ghcr.io/$imageOwner/orderprocessing-inventory:$imageTag",
+                    "ghcr.io/$imageOwner/orderprocessing-notifications:$imageTag",
+                    "ghcr.io/$imageOwner/orderprocessing-ui:$imageTag"
+                )
 
-            foreach ($image in $images) {
-                $imageId = docker images -q $image 2>$null
-                if ($imageId) {
-                    docker rmi -f $image | Out-Null
-                    Write-ProgressLine "Removed image $image"
-                }
-                else {
-                    Write-ProgressLine "Image not found: $image"
+                foreach ($image in $images) {
+                    $imageId = docker images -q $image 2>$null
+                    if ($imageId) {
+                        docker rmi -f $image | Out-Null
+                        Write-ProgressLine "Removed image $image"
+                    }
+                    else {
+                        Write-ProgressLine "Image not found: $image"
+                    }
                 }
             }
+        }
+        elseif ($dockerAvailable) {
+            Write-ProgressLine 'Preserving the running stack, volumes, and image tags for NFR/rollback proof.'
         }
         else {
             Write-ProgressLine 'Skipping cleanup because Docker was unavailable.'

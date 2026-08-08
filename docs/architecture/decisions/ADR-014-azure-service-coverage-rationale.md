@@ -74,10 +74,12 @@ update this ADR with the new rationale.
 **Future obligations:**
 - Keep `docs/learning/curriculum/1_MASTER_CURRICULUM.md` aligned with this coverage model.
 - If service coverage changes materially, update this ADR and the curriculum in the same session.
+- Preserve APIM, Blob/Event Grid, and private-platform coverage in Phase 12 under ADR-025; their removal from the Phase 10 exit gate is a formal rephase, not removal from the roadmap.
 
 ## Related
 
 - ADR-004: EF Core 8 + Azure SQL
+- ADR-025: Phase 10 Network And SKU Boundary
 - `ARCHITECTURE-EVOLUTION.md`
 - `docs/learning/curriculum/1_MASTER_CURRICULUM.md`
 - `docs/internal/AZURE-PROGRESS-EVALUATION.md`

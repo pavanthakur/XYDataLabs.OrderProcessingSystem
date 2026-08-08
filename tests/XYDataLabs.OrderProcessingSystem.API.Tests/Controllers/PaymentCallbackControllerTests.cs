@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
-using XYDataLabs.OrderProcessingSystem.API.Controllers;
+using XYDataLabs.OrderProcessingSystem.Payments.API.Controllers;
 
 namespace XYDataLabs.OrderProcessingSystem.API.Tests.Controllers;
 

@@ -1,6 +1,6 @@
 # Phase 10 Azure Smoke Runbook
 
-This runbook covers the first live check for the Phase 10 transport slice defined in [docs/internal/phase10-implementation-checklist.md](../internal/phase10-implementation-checklist.md).
+This runbook covers the first live check for the Phase 10 pre-Azure baseline defined in [docs/internal/phase10-preazure-lld.md](../internal/phase10-preazure-lld.md), with the execution slices expanded in [docs/internal/phase10-implementation-checklist.md](../internal/phase10-implementation-checklist.md).
 
 ## Scope
 
@@ -8,7 +8,7 @@ This runbook covers the first live check for the Phase 10 transport slice define
 - App/runtime entry point: `infra/main.phase10.bicep`
 - Parameters: `infra/parameters/phase10-dev.json`, `infra/parameters/phase10-staging.json`, `infra/parameters/phase10-prod.json`
 - Transport path: `Orders -> Service Bus -> Inventory/Notifications`
-- Replay path: `order-events-dlq -> dlq-replay -> order-events`
+- Replay path: `order-events-dlq -> dlq-intake -> replay-requests -> order-events`
 - The Service Bus namespace, transport auth rule, and connection-string lookup are owned by `infra/modules/servicebus.bicep`; `infra/main.phase10.bicep` consumes that module output during deployment.
 - GitHub Actions entrypoint: `phase10-deploy-orchestrator.yml` (which calls `infra-deploy.yml` internally)
 - The persistent ACR registry and the runtime pull identity are owned by `00 Azure Platform Foundation` and live in `rg-orderprocessing-platform`.
@@ -35,18 +35,19 @@ These are the Phase 10 experience improvements that are worth carrying in the ac
 Keep these out of the active Phase 10 transport baseline unless a later review proves they are needed:
 
 - Broad shared-contract extraction without real duplication
-- Extra platform layers that do not strengthen the current Azure transport slice
+- Extra platform layers that do not strengthen the current Azure Phase 10 baseline
 
 ### Enterprise Standard Placement
 
 The operator-facing rule is simple:
 
-- **Phase 10 now** owns the execution shape, operator UX, cleanup hygiene, platform foundation, SQL/Redis parity, and live Azure proof.
+- **Phase 10 now** owns the execution shape, operator UX, cleanup hygiene, platform foundation, SQL/Redis parity, and live Azure proof, all on top of the governed pre-Azure baseline.
 - **Phase 11+** should carry the next hardening layer, especially Managed Identity for SQL and broader OpenTelemetry-based tracing.
-- **Deferred** items stay out of the active transport slice until the repo proves the need with real duplication or an explicit hardening gate.
+- **Deferred** items stay out of the active Phase 10 deployment slice until the repo proves the need with real duplication or an explicit hardening gate.
 
-For the detailed placement map, use the internal checklist:
+For the detailed placement map, use the pre-Azure baseline and the internal checklist:
 
+- [docs/internal/phase10-preazure-lld.md](../internal/phase10-preazure-lld.md)
 - [docs/internal/phase10-implementation-checklist.md](../internal/phase10-implementation-checklist.md)
 
 ### ACR Foundation And Cleanup Plan
@@ -106,9 +107,29 @@ ACR retention rules stay separate from app deployment:
 | Protected tags | Keep release tags such as `phase10`, `latest`, or future signed release labels when marked protected |
 | Environment-aware tags | Prefer `dev-<sha>`, `staging-<sha>`, and `prod-<sha>` if the tagging model becomes environment-specific |
 
-### Workflow Order
+### Promotion Order After Local Pre-Azure Completion
 
-Use the numbered Phase 10 workflows in this order:
+After local pre-Azure validation reaches L6 on the target commit SHA, use this promotion order:
+
+| Sequence | Workflow | Required usage |
+|---|---|---|
+| 1 | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | Required clean-room CI parity gate before Azure when the change affects Compose, gateway, service images, workflow, Bicep, transport, or payment automation. |
+| 2 | `00 Azure Platform Foundation` | Run only when provider registration, persistent ACR, or pull identity must be created or refreshed. Skip it for routine deploys when the platform foundation already exists. |
+| 3 | `01 Phase 10 Azure Deploy Orchestrator` | Required Azure deploy entrypoint for dry run, deploy, or intentional cleanup. |
+| 4 | `02 Phase 10 Azure Runtime Smoke` | Required immediately after a successful deploy. |
+| 5 | `03 Phase 10 Azure Transport Smoke` | Required after runtime smoke passes. |
+| 6 | `04 Phase 10 Azure Payment Matrix` | Final Azure business/browser/payment gate after runtime and transport pass. |
+
+Promotion rules:
+
+- Do not start Azure deployment work until local L6 and workflow `99` are both green for the same commit SHA.
+- Treat `00` as a conditional platform-maintenance step, not part of every routine deployment.
+- Use `01` in `dryRun=true` mode first for infrastructure-affecting changes.
+- Use `01` with `cleanupInfra=true` only when intentionally removing or resetting an environment.
+
+### Workflow Catalog
+
+These are the numbered Phase 10 workflows and their responsibilities:
 
 | Order | Workflow | Use it for |
 |---|---|---|
@@ -120,12 +141,12 @@ Use the numbered Phase 10 workflows in this order:
 | `99` | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | CI pre-deployment clean-room parity for the current container graph when the change affects Compose, gateway, images, workflows, Bicep, transport, or payment automation |
 
 Rule of thumb:
+- Run `99` first as the clean-room pre-deployment parity gate before Azure when a change affects Compose, gateway, service images, workflow, Bicep, transport, or payment-matrix behavior.
 - Run `00` once before the first app deploy, and again only if you intentionally recreate the platform foundation or need to refresh subscription-level provider registration.
 - Run `01` when you want to deploy Azure resources. Use the same workflow in cleanup mode only when intentionally removing or resetting an environment.
 - Run `02` right after `01` finishes successfully.
 - Run `03` after `02` passes.
 - Run `04` after `03` passes when you want the Azure equivalent of the local all-tenant Docker payment matrix.
-- Run `99` as the clean-room pre-deployment parity gate before Azure when a change affects Compose, gateway, service images, workflow, Bicep, transport, or payment-matrix behavior.
 - Workflow `99` always starts its own Docker stack on GitHub-hosted runners. Reusing an already running stack is a local script-only option via `scripts/run-phase10-docker-dev-e2e-hook.ps1 -SkipStartIfNeeded`.
 
 ### Environment Operating Matrix
@@ -144,6 +165,200 @@ Default selection guidance:
 - Use `Assign AcrPull=true` only for a privileged platform-admin run that already has `roleAssignments/write`.
 - In `00`, use `Dry Run=false` when you want provider registration and platform resources actually created or refreshed. `Dry Run=true` is non-mutating and skips provider registration.
 - Use `99` only for optional local or CI parity checks, not for the main Azure environment lifecycle.
+
+### Environment-Specific GitHub Actions Checklists
+
+Use the same gate order in all environments:
+
+1. `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)`
+2. `00 Azure Platform Foundation` only when needed
+3. `01 Phase 10 Azure Deploy Orchestrator` in dry-run mode first
+4. `01 Phase 10 Azure Deploy Orchestrator` real deploy
+5. `02 Phase 10 Azure Runtime Smoke`
+6. `03 Phase 10 Azure Transport Smoke`
+7. `04 Phase 10 Azure Payment Matrix`
+
+Resource-name note:
+
+- Workflow input values are `dev`, `staging`, and `prod`.
+- Azure resource names use `dev`, `stg`, and `prod` suffixes in some places.
+- In particular, the wrapper resolves `staging -> stg` for names such as the resource group and Container Apps.
+- The parameter files still use environment-specific values such as `order-events-staging` and `inventory-order-created-staging`.
+
+#### Dev Checklist
+
+Run this after local pre-Azure L6 is green on the target commit SHA.
+
+1. Run `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)`.
+   - Input:
+     - `stabilizationDelaySeconds = 120`
+   - Wait for:
+     - smoke
+     - integration
+     - payment matrix
+     - full validation
+   - Stop if it fails.
+2. Decide whether `00 Azure Platform Foundation` is needed.
+   - Run it only if:
+     - this is the first Phase 10 Azure run in the subscription
+     - provider registration may be missing
+     - persistent ACR was deleted or changed
+     - pull identity was deleted or changed
+   - Inputs when needed:
+     - `environment = dev`
+     - `location = centralindia`
+     - `dryRun = false`
+     - `assignAcrPullRole = false`
+3. Run `01 Phase 10 Azure Deploy Orchestrator` dry run.
+   - Inputs:
+     - `environment = dev`
+     - `location = centralindia`
+     - `publicDomain =`
+     - `bindAliases = false`
+     - `aliasMode = direct`
+     - `dryRun = true`
+     - `cleanupInfra = false`
+   - Stop if the what-if summary shows unexpected deletes or wrong scope.
+4. Run `01 Phase 10 Azure Deploy Orchestrator` real deploy.
+   - Same inputs, except:
+     - `dryRun = false`
+   - Capture:
+     - resource group
+     - gateway URL
+     - UI URL
+     - Service Bus
+     - SQL
+     - Redis
+     - Function App
+     - Key Vault
+     - App Insights
+5. Run `02 Phase 10 Azure Runtime Smoke`.
+   - Input:
+     - `environment = dev`
+   - Expected:
+     - gateway health pass
+     - routed API pass
+     - UI route pass
+     - UI API proxy pass
+6. Run `03 Phase 10 Azure Transport Smoke`.
+   - Input:
+     - `environment = dev`
+   - Expected:
+     - publish pass
+     - inventory consume pass
+     - notifications consume pass
+     - DLQ forward pass
+     - replay pass
+7. Run `04 Phase 10 Azure Payment Matrix`.
+   - Inputs:
+     - `environment = dev`
+     - `tenantTimeoutMs = 180000`
+     - `skipVerification = false`
+   - Expected:
+     - all discovered tenants covered
+     - provider flows covered per current config
+     - SQL and verification checks included
+
+#### Staging Checklist
+
+Use this after `dev` is green and you want the same release candidate validated in staging.
+
+1. Run `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` on the same target commit SHA.
+   - Input:
+     - `stabilizationDelaySeconds = 120`
+   - Stop if it fails.
+2. Decide whether `00 Azure Platform Foundation` is needed.
+   - In normal staging promotion it is usually skipped because the platform foundation is already shared and persistent.
+   - Inputs when needed:
+     - `environment = staging`
+     - `location = centralindia`
+     - `dryRun = false`
+     - `assignAcrPullRole = false`
+3. Run `01 Phase 10 Azure Deploy Orchestrator` dry run.
+   - Inputs:
+     - `environment = staging`
+     - `location = centralindia`
+     - `publicDomain =`
+     - `bindAliases = false`
+     - `aliasMode = direct`
+     - `dryRun = true`
+     - `cleanupInfra = false`
+4. Run `01 Phase 10 Azure Deploy Orchestrator` real deploy.
+   - Same inputs, except:
+     - `dryRun = false`
+   - Capture the same summary fields as `dev`.
+   - Expect resource names that use the `stg` suffix, for example:
+     - `rg-orderprocessing-stg`
+     - `orderprocessing-gate-stg`
+     - `orderprocessing-ui-stg`
+5. Run `02 Phase 10 Azure Runtime Smoke`.
+   - Input:
+     - `environment = staging`
+6. Run `03 Phase 10 Azure Transport Smoke`.
+   - Input:
+     - `environment = staging`
+7. Run `04 Phase 10 Azure Payment Matrix`.
+   - Inputs:
+     - `environment = staging`
+     - `tenantTimeoutMs = 180000`
+     - `skipVerification = false`
+
+#### Prod Checklist
+
+Use this only after `staging` is green and the production change is approved.
+
+1. Run `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` on the same target commit SHA.
+   - Input:
+     - `stabilizationDelaySeconds = 120`
+   - Stop if it fails.
+2. Decide whether `00 Azure Platform Foundation` is needed.
+   - This should normally be skipped for production promotion unless the shared platform foundation actually needs refresh.
+   - Inputs when needed:
+     - `environment = prod`
+     - `location = centralindia`
+     - `dryRun = false`
+     - `assignAcrPullRole = false`
+3. Run `01 Phase 10 Azure Deploy Orchestrator` dry run.
+   - Inputs:
+     - `environment = prod`
+     - `location = centralindia`
+     - `publicDomain =`
+     - `bindAliases = false`
+     - `aliasMode = direct`
+     - `dryRun = true`
+     - `cleanupInfra = false`
+4. Run `01 Phase 10 Azure Deploy Orchestrator` real deploy.
+   - Same inputs, except:
+     - `dryRun = false`
+   - Capture the same summary fields as `dev`.
+5. Run `02 Phase 10 Azure Runtime Smoke`.
+   - Input:
+     - `environment = prod`
+6. Run `03 Phase 10 Azure Transport Smoke`.
+   - Input:
+     - `environment = prod`
+7. Run `04 Phase 10 Azure Payment Matrix`.
+   - Inputs:
+     - `environment = prod`
+     - `tenantTimeoutMs = 180000`
+     - `skipVerification = false`
+   - Run this only during approved production validation.
+
+Stop rules for all environments:
+
+- If `99` fails, do not run Azure.
+- If `01` dry run looks wrong, do not run real deploy.
+- If `02` fails, do not run `03`.
+- If `03` fails, do not run `04`.
+
+Capture for every environment:
+
+- workflow run IDs
+- deploy summary
+- runtime smoke summary
+- transport smoke summary
+- payment matrix artifact bundle
+- final gateway and UI URLs
 
 ### Latest Verified Dev Proof
 
@@ -544,7 +759,7 @@ az servicebus topic show --resource-group $resourceGroupName --namespace-name $s
 az servicebus topic subscription show --resource-group $resourceGroupName --namespace-name $serviceBusNamespaceName --topic-name order-events --name inventory-order-created
 az servicebus topic subscription show --resource-group $resourceGroupName --namespace-name $serviceBusNamespaceName --topic-name order-events --name notifications-order-created
 az servicebus topic show --resource-group $resourceGroupName --namespace-name $serviceBusNamespaceName --name order-events-dlq
-az servicebus topic subscription show --resource-group $resourceGroupName --namespace-name $serviceBusNamespaceName --topic-name order-events-dlq --name dlq-replay
+az servicebus topic subscription show --resource-group $resourceGroupName --namespace-name $serviceBusNamespaceName --topic-name order-events-dlq --name dlq-intake
 
 az functionapp config appsettings list --resource-group $resourceGroupName --name $functionAppName
 az containerapp show --resource-group $resourceGroupName --name $ordersContainerAppName --query "properties.template.containers[0].env"
@@ -562,7 +777,7 @@ Expected:
 - the outputs resolve without manual guessing
 - the Service Bus namespace, topic, subscriptions, and DLQ path exist
 - the runtime settings include the Service Bus connection string and replay values
-- the ACA environment and App Insights are wired to the same transport slice
+- the ACA environment and App Insights are wired to the same Phase 10 baseline
 - the gateway and UI ingress URLs resolve from the deployment outputs
 
 ## Operator Notes
@@ -667,7 +882,7 @@ az resource show --resource-group $resourceGroupName --resource-type Microsoft.I
 Expected:
 - the Service Bus namespace exists and is reachable
 - the runtime settings contain the transport connection string and replay values
-- the ACA environment and App Insights share the same transport slice
+- the ACA environment and App Insights share the same Phase 10 baseline
 - the environment is ready for the publish / consume / replay smoke
 - the gateway and UI ingress URLs are recorded from the same deployment output set
 
@@ -681,7 +896,7 @@ az servicebus topic show --resource-group $resourceGroupName --namespace-name $s
 az servicebus topic subscription show --resource-group $resourceGroupName --namespace-name $serviceBusNamespaceName --topic-name order-events --name inventory-order-created
 az servicebus topic subscription show --resource-group $resourceGroupName --namespace-name $serviceBusNamespaceName --topic-name order-events --name notifications-order-created
 az servicebus topic show --resource-group $resourceGroupName --namespace-name $serviceBusNamespaceName --name order-events-dlq
-az servicebus topic subscription show --resource-group $resourceGroupName --namespace-name $serviceBusNamespaceName --topic-name order-events-dlq --name dlq-replay
+az servicebus topic subscription show --resource-group $resourceGroupName --namespace-name $serviceBusNamespaceName --topic-name order-events-dlq --name dlq-intake
 ```
 
 Confirm the deployed namespace contains:
@@ -689,7 +904,7 @@ Confirm the deployed namespace contains:
 - `inventory-order-created`
 - `notifications-order-created`
 - `order-events-dlq`
-- `dlq-replay`
+- `dlq-intake`
 
 Confirm the namespace also contains the Phase 10 transport auth rule.
 
@@ -709,7 +924,7 @@ Confirm the deployed runtime settings include:
 - `ServiceBus__ConnectionString`
 - `ServiceBus__TopicName=order-events`
 - `ServiceBus__DeadLetterTopicName=order-events-dlq`
-- `ServiceBus__DeadLetterSubscriptionName=dlq-replay`
+- `ServiceBus__DeadLetterSubscriptionName=dlq-intake`
 - `ServiceBus__ReplayEnabled=true`
 - `KeyVault__Uri`
 - `APPLICATIONINSIGHTS_CONNECTION_STRING`
@@ -728,7 +943,7 @@ az resource show --resource-group $resourceGroupName --resource-type Microsoft.I
 
 Confirm:
 - the Log Analytics workspace exists and is linked to the ACA environment
-- App Insights exists and is emitting to the same transport slice
+- App Insights exists and is emitting to the same Phase 10 baseline
 - ACA container app logs are enabled through the workspace-backed environment
 - the Orders, Inventory, and Notifications apps have the transport-first Service Bus settings in their environment payloads
 - the Gateway and UI container apps exist in the same ACA environment
@@ -790,7 +1005,7 @@ The smoke verifies:
 3. `inventory-order-created-<env>` receives and completes its copy.
 4. `notifications-order-created-<env>` receives and completes its copy.
 5. A controlled message can be dead-lettered from the inventory subscription and forwarded to `order-events-dlq`.
-6. `dlq-replay-<env>` receives the dead-lettered message.
+6. `dlq-intake-<env>` receives the dead-lettered message.
 7. A replay message can be republished to `order-events-<env>`.
 8. Inventory and Notifications both receive and complete the replay message.
 
@@ -815,17 +1030,17 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-phase10-azure-transpor
 
 The local command requires Azure CLI login and access to the `phase10-transport` Service Bus auth rule.
 
-### 9. Replay Smoke
+### 9. Broker Replay Smoke
 
-The automated transport smoke includes the first replay proof:
+The automated transport smoke proves the broker path through `tools/Phase10.TransportSmoke`:
 
 1. It dead-letters a controlled message from the inventory subscription.
 2. It verifies forwarding to `order-events-dlq`.
-3. It receives the message from `dlq-replay-<env>`.
+3. It receives the message from `dlq-intake-<env>`.
 4. It republishes a replay message to `order-events-<env>`.
 5. It verifies both downstream subscriptions receive the replayed flow.
 
-This proves the operator replay route exists. A later failure-drill can still validate poison-message quarantine and alert behavior.
+This proves topology and controlled receive/republish behavior. It does **not** invoke or prove the deployed `XYDataLabs.OrderProcessingSystem.Functions/DlqReplayFunction.cs`. Phase 10.4 must separately capture the Function package identifier, function discovery, invocation identifier, quarantine/approval state, replay attempt, and downstream business effect before deployed Function behavior is considered complete.
 
 ## Success Criteria
 
@@ -833,7 +1048,7 @@ This proves the operator replay route exists. A later failure-drill can still va
 - The runtime uses Service Bus instead of the in-memory publisher.
 - The first order-created flow is observable end to end.
 - Replay and quarantine behavior are both visible in Azure.
-- The Phase 10 transport slice remains separate from the hosting cutover.
+- The Phase 10 deployment slice remains separate from the hosting cutover.
 - The deployment summary exposes the correct env-suffixed ingress URLs and friendly aliases when enabled.
 
 ## If Smoke Fails

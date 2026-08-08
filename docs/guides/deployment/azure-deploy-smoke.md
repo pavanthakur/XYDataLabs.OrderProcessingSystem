@@ -10,7 +10,7 @@ This guide explains the current Azure path in plain terms: Bicep defines the inf
 
 For Phase 10, the repo uses:
 
-- `infra/main.phase10.bicep` for the transport slice infrastructure
+- `infra/main.phase10.bicep` for the Phase 10 baseline infrastructure
 - `infra/parameters/phase10-dev.json`, `infra/parameters/phase10-staging.json`, and `infra/parameters/phase10-prod.json`
 - `docs/runbooks/phase10-azure-smoke.md` for the exact deploy, verify, and smoke sequence
 
@@ -75,9 +75,9 @@ Use the output values from the deployment and confirm:
 - Service Bus namespace exists
 - `order-events` topic exists
 - `inventory-order-created` and `notifications-order-created` subscriptions exist
-- `order-events-dlq` and `dlq-replay` exist
+- `order-events-dlq`, `dlq-intake`, and `dlq-replay-requests` exist
 - Function App settings include the transport connection string and replay settings
-- Container App environment variables match the transport slice
+- Container App environment variables match the Phase 10 baseline
 - Log Analytics, Managed Environment, and App Insights are wired
 
 ### 4. Smoke Test

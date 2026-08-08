@@ -26,5 +26,24 @@ public sealed class Phase10FunctionStartupValidator(
         {
             throw new InvalidOperationException("ServiceBusConnection must be configured when Service Bus triggers are enabled.");
         }
+
+        if (options.Enabled
+            && string.IsNullOrWhiteSpace(configuration.GetConnectionString("OrderProcessingSystemDbConnection")))
+        {
+            throw new InvalidOperationException(
+                "ConnectionStrings:OrderProcessingSystemDbConnection must be configured for durable DLQ quarantine state.");
+        }
+
+        if (options.Enabled
+            && string.IsNullOrWhiteSpace(configuration["Phase10DlqIntakeSubscriptionName"]))
+        {
+            throw new InvalidOperationException("Phase10DlqIntakeSubscriptionName must be configured.");
+        }
+
+        if (options.Enabled
+            && string.IsNullOrWhiteSpace(configuration["Phase10ReplayRequestQueueName"]))
+        {
+            throw new InvalidOperationException("Phase10ReplayRequestQueueName must be configured.");
+        }
     }
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BrowserRouter, Navigate, NavLink, Route, Routes } from "react-router-dom";
 import {
   createOrderProcessingApiClient,
@@ -18,8 +18,7 @@ const configuredApiBaseUrl = (import.meta.env.VITE_ORDERPROCESSING_API_BASE_URL 
 const configuredKeycloakAuthority = (import.meta.env.VITE_KEYCLOAK_AUTHORITY ?? "").trim().replace(/\/$/, "");
 const configuredKeycloakRealm = (import.meta.env.VITE_KEYCLOAK_REALM ?? "").trim();
 const configuredKeycloakClientId = (import.meta.env.VITE_KEYCLOAK_CLIENT_ID ?? "").trim();
-const configuredKeycloakUsername = (import.meta.env.VITE_KEYCLOAK_USERNAME ?? "").trim();
-const configuredKeycloakPassword = (import.meta.env.VITE_KEYCLOAK_PASSWORD ?? "").trim();
+const oidcStoragePrefix = "orderprocessing.oidc";
 const apiClient = createOrderProcessingApiClient({
   baseUrl: configuredApiBaseUrl.length > 0 ? configuredApiBaseUrl.replace(/\/$/, "") : "",
   getTenantCode: () => tenantSession.getActiveTenantCode(),
@@ -28,18 +27,28 @@ const apiClient = createOrderProcessingApiClient({
 });
 
 type LoadState = "idle" | "loading" | "ready" | "error";
+type BootstrapTokenResult = {
+  accessToken: string | null;
+  authRedirectInitiated: boolean;
+};
 
 export default function App() {
   const [runtimeConfiguration, setRuntimeConfiguration] = useState<RuntimeConfiguration | null>(null);
   const [activeTenantCode, setActiveTenantCode] = useState("");
   const [bootstrapState, setBootstrapState] = useState<LoadState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const bootstrapStartedRef = useRef(false);
   const requestedBootstrapTenantCode = useMemo(
     () => resolveRequestedBootstrapTenantCode(window.location.pathname, window.location.search),
     []
   );
 
   useEffect(() => {
+    if (bootstrapStartedRef.current) {
+      return;
+    }
+
+    bootstrapStartedRef.current = true;
     let isCancelled = false;
 
     async function bootstrapShell() {
@@ -47,18 +56,22 @@ export default function App() {
       setErrorMessage(null);
 
       try {
-        const bootstrap = await apiClient.getRuntimeConfiguration(requestedBootstrapTenantCode ?? undefined);
-        const sessionState = tenantSession.initialize(bootstrap, requestedBootstrapTenantCode);
-        const accessToken = await bootstrapLocalAccessToken();
+        const bootstrapTokenResult = await bootstrapLocalAccessToken();
 
         if (isCancelled) {
           return;
         }
 
-        setAccessToken(accessToken);
-        if (accessToken) {
-          localStorage.setItem("orderprocessing.accessToken", accessToken);
+        if (bootstrapTokenResult.authRedirectInitiated) {
+          return;
         }
+
+        setAccessToken(bootstrapTokenResult.accessToken);
+        if (bootstrapTokenResult.accessToken) {
+          localStorage.setItem("orderprocessing.accessToken", bootstrapTokenResult.accessToken);
+        }
+        const bootstrap = await apiClient.getRuntimeConfiguration(requestedBootstrapTenantCode ?? undefined);
+        const sessionState = tenantSession.initialize(bootstrap, requestedBootstrapTenantCode);
         setRuntimeConfiguration(bootstrap);
         setActiveTenantCode(sessionState.activeTenantCode);
         setBootstrapState("ready");
@@ -197,50 +210,137 @@ export default function App() {
 }
 
 function resolveRequestedBootstrapTenantCode(pathname: string, search: string): string | null {
+  const callbackSearch = new URLSearchParams(search);
+  if (callbackSearch.has("code")) {
+    const returnUrl = sessionStorage.getItem(`${oidcStoragePrefix}.returnUrl`);
+    if (returnUrl) {
+      const savedUrl = new URL(returnUrl);
+      return resolveRequestedBootstrapTenantCode(savedUrl.pathname, savedUrl.search);
+    }
+  }
+
   const trimmedPath = pathname.trim();
   if (!trimmedPath.startsWith("/payments/") && !trimmedPath.startsWith("/payment/")) {
     return null;
   }
 
-  const searchParams = new URLSearchParams(search);
-  const tenantCode = searchParams.get("tenantCode")?.trim();
+  const tenantCode = callbackSearch.get("tenantCode")?.trim();
   return tenantCode || null;
 }
 
-async function bootstrapLocalAccessToken(): Promise<string | null> {
+async function bootstrapLocalAccessToken(): Promise<BootstrapTokenResult> {
   if (!configuredKeycloakAuthority || !configuredKeycloakRealm || !configuredKeycloakClientId) {
-    return null;
+    return { accessToken: null, authRedirectInitiated: false };
   }
 
-  if (!configuredKeycloakUsername || !configuredKeycloakPassword) {
-    return null;
+  const currentToken = localStorage.getItem("orderprocessing.accessToken");
+  const expiresAt = Number(localStorage.getItem(`${oidcStoragePrefix}.expiresAt`) ?? "0");
+  if (currentToken && expiresAt > Date.now() + 30_000) {
+    return { accessToken: currentToken, authRedirectInitiated: false };
   }
 
+  const currentUrl = new URL(window.location.href);
+  const authorizationCode = currentUrl.searchParams.get("code");
+  const returnedState = currentUrl.searchParams.get("state");
+  if (authorizationCode) {
+    const expectedState = sessionStorage.getItem(`${oidcStoragePrefix}.state`);
+    const verifier = sessionStorage.getItem(`${oidcStoragePrefix}.verifier`);
+    const redirectUri = sessionStorage.getItem(`${oidcStoragePrefix}.redirectUri`);
+    if (!expectedState || expectedState !== returnedState || !verifier || !redirectUri) {
+      throw new Error("The local OIDC callback state is invalid.");
+    }
+
+    const token = await exchangeAuthorizationCode(authorizationCode, verifier, redirectUri);
+    sessionStorage.removeItem(`${oidcStoragePrefix}.state`);
+    sessionStorage.removeItem(`${oidcStoragePrefix}.verifier`);
+    sessionStorage.removeItem(`${oidcStoragePrefix}.redirectUri`);
+    const returnUrl = sessionStorage.getItem(`${oidcStoragePrefix}.returnUrl`) ?? `${window.location.origin}/`;
+    sessionStorage.removeItem(`${oidcStoragePrefix}.returnUrl`);
+    window.history.replaceState({}, document.title, returnUrl);
+    return { accessToken: token, authRedirectInitiated: false };
+  }
+
+  const verifier = createRandomUrlSafeValue(64);
+  const state = createRandomUrlSafeValue(32);
+  const challenge = await createCodeChallenge(verifier);
+  const redirectUri = `${window.location.origin}${window.location.pathname}`;
+  sessionStorage.setItem(`${oidcStoragePrefix}.state`, state);
+  sessionStorage.setItem(`${oidcStoragePrefix}.verifier`, verifier);
+  sessionStorage.setItem(`${oidcStoragePrefix}.redirectUri`, redirectUri);
+  sessionStorage.setItem(`${oidcStoragePrefix}.returnUrl`, window.location.href);
+
+  const authorizationUrl = new URL(
+    `${configuredKeycloakAuthority}/realms/${configuredKeycloakRealm}/protocol/openid-connect/auth`
+  );
+  authorizationUrl.search = new URLSearchParams({
+    client_id: configuredKeycloakClientId,
+    response_type: "code",
+    scope: "openid profile email",
+    redirect_uri: redirectUri,
+    code_challenge: challenge,
+    code_challenge_method: "S256",
+    state
+  }).toString();
+  window.location.assign(authorizationUrl);
+  return { accessToken: null, authRedirectInitiated: true };
+}
+
+async function exchangeAuthorizationCode(
+  authorizationCode: string,
+  verifier: string,
+  redirectUri: string
+): Promise<string> {
   const tokenUrl = `${configuredKeycloakAuthority}/realms/${configuredKeycloakRealm}/protocol/openid-connect/token`;
   const body = new URLSearchParams({
-    grant_type: "password",
+    grant_type: "authorization_code",
     client_id: configuredKeycloakClientId,
-    username: configuredKeycloakUsername,
-    password: configuredKeycloakPassword
+    code: authorizationCode,
+    code_verifier: verifier,
+    redirect_uri: redirectUri
   });
 
-  let response: Response;
-  try {
-    response = await fetch(tokenUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded"
-      },
-      body: body.toString()
-    });
-  } catch {
-    return null;
-  }
+  const response = await fetch(tokenUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: body.toString()
+  });
 
   if (!response.ok) {
-    return null;
+    throw new Error(`Local OIDC token exchange failed with HTTP ${response.status}.`);
   }
 
-  const payload = await response.json().catch(() => null) as { access_token?: string } | null;
-  return payload?.access_token ?? null;
+  const payload = await response.json() as { access_token?: string; expires_in?: number };
+  if (!payload.access_token) {
+    throw new Error("Local OIDC token exchange returned no access token.");
+  }
+
+  const expiresInSeconds = Math.max(payload.expires_in ?? 300, 30);
+  localStorage.setItem(
+    `${oidcStoragePrefix}.expiresAt`,
+    String(Date.now() + expiresInSeconds * 1000)
+  );
+  return payload.access_token;
+}
+
+function createRandomUrlSafeValue(byteLength: number): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(byteLength));
+  return toBase64Url(bytes);
+}
+
+async function createCodeChallenge(verifier: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
+  return toBase64Url(new Uint8Array(digest));
+}
+
+function toBase64Url(bytes: Uint8Array): string {
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
 }

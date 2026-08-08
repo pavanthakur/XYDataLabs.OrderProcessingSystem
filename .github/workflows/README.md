@@ -163,7 +163,7 @@ This repo uses a small set of primary operational workflows, with additional sup
 | `configure-github-secrets.yml` | Called by initial-setup | Secret configuration | **[See README-CONFIGURE-GITHUB-SECRETS.md](./README-CONFIGURE-GITHUB-SECRETS.md)** - GitHub App setup and secret management (can run independently) |
 | `phase10-deploy-orchestrator.yml` | Manual | dev/staging/prod | **[See README-INFRA-DEPLOY.md](./README-INFRA-DEPLOY.md)** - Wrapper that drives the Phase 10 image build plus infra deploy/cleanup flows |
 | `phase10-azure-runtime-smoke.yml` | Manual after deploy | dev/staging/prod | Runs the Phase 10 Gateway/API/UI runtime smoke and writes a pass/fail operator summary |
-| `phase10-azure-transport-smoke.yml` | Manual after deploy | dev/staging/prod | Runs the Phase 10 Service Bus publish, consume, DLQ forwarding, and replay smoke and writes a pass/fail operator summary |
+| `phase10-azure-transport-smoke.yml` | Manual after deploy | dev/staging/prod | Runs broker-level Service Bus publish, consume, DLQ forwarding, and controlled replay checks; deployed Function invocation requires separate Phase 10.4 proof |
 | `phase10-platform-foundation.yml` | Manual platform bootstrap | shared foundation | Persistent ACR and pull identity setup for the active Phase 10 path |
 | `infra-deploy.yml` | Reusable internal workflow | dev/staging/prod | Internal Phase 10 Bicep deployment and cleanup workflow with alias planning and guarded alias binding |
 | `build-phase10-images.yml` | Wrapper-called internal workflow | ACR | Builds and pushes the Phase 10 container images for gateway, orders, inventory, notifications, and UI |
@@ -217,7 +217,7 @@ For the local HTTP launcher, the same operator idea applies:
 | `build-phase10-images.yml` | Phase 10 container image build/push internal reusable workflow for ACR |
 | `phase10-deploy-orchestrator.yml` | Phase 10 manual wrapper that drives build + deploy or cleanup |
 | `phase10-azure-runtime-smoke.yml` | Phase 10 post-deploy Gateway/API/UI runtime validation |
-| `phase10-azure-transport-smoke.yml` | Phase 10 post-deploy Service Bus publish/consume/DLQ/replay validation |
+| `phase10-azure-transport-smoke.yml` | Phase 10 post-deploy broker publish/consume/DLQ/controlled-replay validation; not deployed Function proof |
 | `phase10-docker-dev-http-e2e.yml` | Phase 10 Docker Dev HTTP merge gate and artifact-producing validation path |
 | `deploy-api-to-azure.yml` | Legacy API deployment path retained for the App Service stack |
 | `deploy-ui-to-azure.yml` | Legacy React frontend deployment path retained for the App Service stack |
@@ -262,7 +262,7 @@ In plain terms:
 |---|---|
 | `01` | Azure delivery entrypoint. Use it for deploy, dry run, or cleanup. |
 | `02` | Runtime proof. Use it after Azure deploy to verify gateway/API/UI behavior. |
-| `03` | Transport proof. Use it after runtime smoke to verify Service Bus fan-out, DLQ, and replay. |
+| `03` | Broker transport proof. Use it after runtime smoke to verify Service Bus fan-out, DLQ, and controlled replay; verify deployed Function invocation separately in Phase 10.4. |
 | `99` | Optional local parity check. Use it when you want the Docker container graph to behave like the current Phase 10 Azure shape on a runner. |
 
 The runtime and transport smoke workflows resolve their resource group, gateway, UI, and Service Bus targets from the selected environment. They do not ask for a region input.

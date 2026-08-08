@@ -18,6 +18,8 @@ export class PowerShellVerificationAdapter implements VerificationAdapter {
 
   private async executePhysical(request: VerificationRequest): Promise<VerificationResult> {
     const scriptPath = path.join(repoRoot, "scripts", "verify-payment-run-physical.ps1");
+    const runAnchor = request.customerOrderId ?? request.runPrefix;
+
     const stdout = await this.invokePowerShell([
       "-NoProfile",
       "-File",
@@ -29,7 +31,7 @@ export class PowerShellVerificationAdapter implements VerificationAdapter {
       "-Profile",
       request.profile,
       "-RunPrefix",
-      request.runPrefix,
+      runAnchor,
       "-OutputFormat",
       "Json"
     ]);
@@ -40,7 +42,7 @@ export class PowerShellVerificationAdapter implements VerificationAdapter {
 
     return {
       outcome: hasFailure ? "failed" : "passed",
-      summary: `Physical verification completed for ${request.runPrefix}.`,
+      summary: `Physical verification completed for ${runAnchor}.`,
       threeDsByTenant: extractThreeDsByTenant(rawReport),
       rawReport
     };

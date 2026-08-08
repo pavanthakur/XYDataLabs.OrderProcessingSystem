@@ -6,6 +6,7 @@ using XYDataLabs.OrderProcessingSystem.Application.Events;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 using XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure;
+using XYDataLabs.OrderProcessingSystem.Orders.Contracts.Events;
 using XYDataLabs.OrderProcessingSystem.Orders.Features.Events;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 
@@ -393,3 +394,5 @@ public sealed class DomainEventOutboxSqlServerTests : IClassFixture<SqlServerFix
         public bool IsSharedPool => true;
     }
 }
+
+

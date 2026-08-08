@@ -1,5 +1,6 @@
 using XYDataLabs.OrderProcessingSystem.Application.Events;
 using XYDataLabs.OrderProcessingSystem.Domain.Events;
+using XYDataLabs.OrderProcessingSystem.Payments.Contracts.Events;
 
 namespace XYDataLabs.OrderProcessingSystem.Payments.Features.Events;
 
@@ -14,6 +15,7 @@ public sealed class PaymentAttemptFailedDomainEventMapper
             domainEvent.AttemptId,
             domainEvent.TenantId,
             domainEvent.ProviderName,
+            domainEvent.CustomerOrderId,
             domainEvent.ErrorReason,
             domainEvent.OccurredUtc);
     }

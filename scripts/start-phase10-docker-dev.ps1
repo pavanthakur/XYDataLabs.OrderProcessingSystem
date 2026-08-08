@@ -8,7 +8,9 @@ param(
     [ValidateRange(60, 900)]
     [int]$HealthTimeoutSec = 300,
 
-    [switch]$CleanImages
+    [switch]$CleanImages,
+
+    [switch]$RemoveVolumes
 )
 
 $ErrorActionPreference = 'Stop'
@@ -90,6 +92,67 @@ function Wait-ForUrl {
     throw "Timed out waiting for $Url after $TimeoutSec seconds."
 }
 
+function Wait-ForSuccessfulUrl {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Url,
+
+        [int]$TimeoutSec = 300,
+
+        [string]$ContainsText
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSec)
+    while ((Get-Date) -lt $deadline) {
+        try {
+            $response = Invoke-WebRequest -UseBasicParsing -SkipHttpErrorCheck -Uri $Url -TimeoutSec 5
+            $content = [string]$response.Content
+            $containsExpectedText = [string]::IsNullOrWhiteSpace($ContainsText) -or $content.Contains($ContainsText, [StringComparison]::OrdinalIgnoreCase)
+            if ($response.StatusCode -eq 200 -and $containsExpectedText) {
+                return
+            }
+        }
+        catch {
+        }
+
+        Start-Sleep -Seconds 2
+    }
+
+    throw "Timed out waiting for successful response from $Url after $TimeoutSec seconds."
+}
+
+function Wait-ForTcpPort {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$HostName,
+
+        [Parameter(Mandatory = $true)]
+        [int]$Port,
+
+        [int]$TimeoutSec = 300
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSec)
+    while ((Get-Date) -lt $deadline) {
+        $client = [System.Net.Sockets.TcpClient]::new()
+        try {
+            $connectTask = $client.ConnectAsync($HostName, $Port)
+            if ($connectTask.Wait([TimeSpan]::FromSeconds(5)) -and $client.Connected) {
+                return
+            }
+        }
+        catch {
+        }
+        finally {
+            $client.Dispose()
+        }
+
+        Start-Sleep -Seconds 2
+    }
+
+    throw "Timed out waiting for TCP $HostName`:$Port after $TimeoutSec seconds."
+}
+
 function Stop-ContainersOnPort {
     param(
         [Parameter(Mandatory = $true)]
@@ -111,16 +174,40 @@ function Stop-ContainersOnPort {
         }
 
         $containerId = ($line -split '\s+')[0]
+        $containerName = ($line -split '\s+', 2)[1]
+        $stopLogPath = Join-Path $runDir "docker-stop-$Port.log"
         Add-Content -Path $progressLogPath -Value "Stopping container on port ${Port}: $line"
-        & docker stop $containerId 2>&1 | Tee-Object -FilePath (Join-Path $runDir "docker-stop-$Port.log") | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            throw "Failed to stop Docker container $containerId on port $Port."
+        & docker stop -t 30 $containerId 2>&1 | Tee-Object -FilePath $stopLogPath -Append | Out-Null
+        $stopExitCode = $LASTEXITCODE
+
+        $remainingContainer = & docker ps -a --filter "id=$containerId" --format '{{.ID}}'
+        if ($stopExitCode -ne 0 -or -not [string]::IsNullOrWhiteSpace($remainingContainer)) {
+            Add-Content -Path $progressLogPath -Value "docker stop did not fully clear $containerName on port ${Port}; attempting docker kill."
+            & docker kill $containerId 2>&1 | Tee-Object -FilePath $stopLogPath -Append | Out-Null
+            $killExitCode = $LASTEXITCODE
+            $remainingContainer = & docker ps -a --filter "id=$containerId" --format '{{.ID}}'
+
+            if ($killExitCode -ne 0 -or -not [string]::IsNullOrWhiteSpace($remainingContainer)) {
+                Add-Content -Path $progressLogPath -Value "docker kill did not fully clear $containerName on port ${Port}; attempting docker rm -f."
+                & docker rm -f $containerId 2>&1 | Tee-Object -FilePath $stopLogPath -Append | Out-Null
+                $removeExitCode = $LASTEXITCODE
+                $remainingContainer = & docker ps -a --filter "id=$containerId" --format '{{.ID}}'
+
+                if ($removeExitCode -ne 0 -or -not [string]::IsNullOrWhiteSpace($remainingContainer)) {
+                    throw "Failed to stop Docker container $containerId on port $Port."
+                }
+            }
         }
     }
 }
 
 function Get-EnvLocalValue {
     param([Parameter(Mandatory = $true)][string]$Name)
+
+    $environmentValue = [Environment]::GetEnvironmentVariable($Name)
+    if (-not [string]::IsNullOrWhiteSpace($environmentValue)) {
+        return $environmentValue.Trim()
+    }
 
     if (-not (Test-Path $envFile)) {
         return $null
@@ -178,6 +265,16 @@ function Get-ComposeProfileArguments {
     return $arguments
 }
 
+function Test-LocalDockerImageExists {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ImageName
+    )
+
+    & docker image inspect $ImageName *> $null
+    return ($LASTEXITCODE -eq 0)
+}
+
 function Escape-SqlLiteral {
     param([Parameter(Mandatory = $false)][string]$Value)
 
@@ -197,6 +294,7 @@ function Remove-Phase10LocalImages {
     $imageOwner = if ([string]::IsNullOrWhiteSpace($env:PHASE10_IMAGE_OWNER)) { 'pavanthakur' } else { $env:PHASE10_IMAGE_OWNER }
     $imageNames = @(
         "ghcr.io/$imageOwner/orderprocessing-orders:$ImageTag",
+        "ghcr.io/$imageOwner/orderprocessing-payments:$ImageTag",
         "ghcr.io/$imageOwner/orderprocessing-inventory:$ImageTag",
         "ghcr.io/$imageOwner/orderprocessing-notifications:$ImageTag",
         "ghcr.io/$imageOwner/orderprocessing-gateway:$ImageTag",
@@ -212,281 +310,6 @@ function Remove-Phase10LocalImages {
                 throw "Failed to remove stale local image $imageName."
             }
         }
-    }
-}
-
-function Get-Phase10Databases {
-    @(
-        'OrderProcessingSystem_Dev',
-        'OrderProcessingSystem_TenantC_Dev'
-    )
-}
-
-function Get-LatestPhase10MigrationId {
-    $migrationsPath = Join-Path $workspaceRoot 'XYDataLabs.OrderProcessingSystem.Infrastructure\Migrations'
-    $migrationFiles = @(
-        Get-ChildItem -LiteralPath $migrationsPath -Filter '*.cs' -File |
-            Where-Object {
-                $_.Name -notlike '*.Designer.cs' -and
-                $_.Name -ne 'OrderProcessingSystemDbContextModelSnapshot.cs' -and
-                $_.BaseName -match '^\d+_'
-            } |
-            Sort-Object Name
-    )
-
-    if ($migrationFiles.Count -eq 0) {
-        throw "No EF migration files were found under $migrationsPath."
-    }
-
-    return $migrationFiles[-1].BaseName
-}
-
-function Invoke-Phase10SqlCmdInComposeContainer {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Database,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Query
-    )
-
-    $normalizedQuery = ($Query -replace "`r?`n", ' ').Trim()
-    $escapedQuery = $normalizedQuery.Replace('"', '\"')
-    $shellCommand = [string]::Format(
-        'if [ -x /opt/mssql-tools18/bin/sqlcmd ]; then SQLCMD=/opt/mssql-tools18/bin/sqlcmd; else SQLCMD=/opt/mssql-tools/bin/sqlcmd; fi; "$SQLCMD" -C -S localhost -U sa -P "$SA_PASSWORD" -d "{0}" -h -1 -W -Q "SET NOCOUNT ON; {1}"',
-        $Database,
-        $escapedQuery)
-
-    $attempt = 1
-    while ($attempt -le 30) {
-        $composeProfileArgs = Get-ComposeProfileArguments
-        $composeEnvArgs = Get-ComposeEnvArguments
-        $output = & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs exec -T sql-server /bin/sh -lc $shellCommand 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            return @($output | ForEach-Object { $_.ToString() })
-        }
-
-        if ($attempt -eq 30) {
-            throw ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
-        }
-
-        Start-Sleep -Seconds 5
-        $attempt++
-    }
-}
-
-function Get-Phase10SqlScalar {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Database,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Query
-    )
-
-    $output = @(Invoke-Phase10SqlCmdInComposeContainer -Database $Database -Query $Query)
-    $lines = @(
-        $output |
-            ForEach-Object { $_.ToString().Trim() } |
-            Where-Object {
-                -not [string]::IsNullOrWhiteSpace($_) -and
-                $_ -notmatch '^\(\d+ rows? affected\)$'
-            }
-    )
-
-    if ($lines.Count -eq 0) {
-        return ''
-    }
-
-    return $lines[-1]
-}
-
-function Test-Phase10MigrationApplied {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$DatabaseName,
-
-        [Parameter(Mandatory = $true)]
-        [string]$ExpectedMigrationId
-    )
-
-    $query = @"
-IF OBJECT_ID(N'dbo.__EFMigrationsHistory', N'U') IS NULL
-BEGIN
-    SELECT N'__EFMigrationsHistory missing';
-END
-ELSE
-BEGIN
-    SELECT TOP (1) [MigrationId] FROM [__EFMigrationsHistory] ORDER BY [MigrationId] DESC;
-END
-"@
-
-    $appliedMigration = Get-Phase10SqlScalar -Database $DatabaseName -Query $query
-    return ($appliedMigration -eq $ExpectedMigrationId)
-}
-
-function Invoke-Phase10SqlScriptInComposeContainer {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$DatabaseName,
-
-        [Parameter(Mandatory = $true)]
-        [string]$ScriptPath
-    )
-
-    $composeProfileArgs = Get-ComposeProfileArguments
-    $composeEnvArgs = Get-ComposeEnvArguments
-    $containerId = (& docker compose @composeEnvArgs -f $composeFile @composeProfileArgs ps -q sql-server 2>&1)
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($containerId)) {
-        throw "Could not resolve the Phase 10 sql-server container id."
-    }
-
-    $containerScriptPath = "/tmp/phase10-$DatabaseName-migrations.sql"
-    & docker cp $ScriptPath "${containerId}:$containerScriptPath" 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        throw "Failed to copy migration script into the sql-server container: $ScriptPath"
-    }
-
-    $sqlPassword = Get-EnvLocalValue -Name 'LOCAL_SQL_PASSWORD'
-    $shellCommand = "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '$sqlPassword' -C -b -I -d '$DatabaseName' -i '$containerScriptPath'"
-    $composeProfileArgs = Get-ComposeProfileArguments
-    $composeEnvArgs = Get-ComposeEnvArguments
-    $output = & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs exec -T sql-server /bin/sh -lc $shellCommand 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        $message = ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
-        throw "Failed to apply EF migration script to $DatabaseName. $message"
-    }
-
-    return @($output | ForEach-Object { $_.ToString() })
-}
-
-function Invoke-Phase10EfDatabaseUpdate {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$DatabaseName,
-
-        [Parameter(Mandatory = $true)]
-        [string]$SqlPassword,
-
-        [Parameter(Mandatory = $true)]
-        [string]$ExpectedMigrationId
-    )
-
-    $arguments = @(
-        'ef', 'migrations', 'script',
-        '--idempotent',
-        '--project', 'XYDataLabs.OrderProcessingSystem.Infrastructure',
-        '--startup-project', 'XYDataLabs.OrderProcessingSystem.API',
-        '--context', 'OrderProcessingSystemDbContext',
-        '--verbose'
-    )
-
-    for ($attempt = 1; $attempt -le 5; $attempt++) {
-        $attemptLogPath = Join-Path $runDir "ef-script-$DatabaseName-attempt-$attempt.log"
-        $scriptPath = Join-Path $runDir "ef-script-$DatabaseName-attempt-$attempt.sql"
-        $scriptArguments = @($arguments + @('--output', $scriptPath))
-        Add-Content -Path $progressLogPath -Value "Starting EF migration script attempt $attempt for $DatabaseName. Log: $attemptLogPath Script: $scriptPath"
-
-        $output = & dotnet @scriptArguments 2>&1
-        $exitCode = $LASTEXITCODE
-        $message = ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
-        Set-Content -Path $attemptLogPath -Value $message -Encoding utf8
-
-        if ($exitCode -eq 0 -and (Test-Path $scriptPath)) {
-            $applyOutput = Invoke-Phase10SqlScriptInComposeContainer -DatabaseName $DatabaseName -ScriptPath $scriptPath
-            Set-Content -Path (Join-Path $runDir "ef-apply-$DatabaseName-attempt-$attempt.log") -Value $applyOutput -Encoding utf8
-        }
-
-        if ($exitCode -eq 0 -and (Test-Phase10MigrationApplied -DatabaseName $DatabaseName -ExpectedMigrationId $ExpectedMigrationId)) {
-            Add-Content -Path $progressLogPath -Value "EF migration verified for ${DatabaseName}: $ExpectedMigrationId"
-            return
-        }
-
-        $appliedMigration = Get-Phase10SqlScalar -Database $DatabaseName -Query @"
-IF OBJECT_ID(N'dbo.__EFMigrationsHistory', N'U') IS NULL
-BEGIN
-    SELECT N'__EFMigrationsHistory missing';
-END
-ELSE
-BEGIN
-    SELECT TOP (1) [MigrationId] FROM [__EFMigrationsHistory] ORDER BY [MigrationId] DESC;
-END
-"@
-
-        Add-Content -Path $progressLogPath -Value "EF migration script attempt $attempt did not verify for $DatabaseName. ExitCode=$exitCode Expected=$ExpectedMigrationId Actual=$appliedMigration Log=$attemptLogPath Script=$scriptPath"
-        if ($attempt -eq 5) {
-            throw "EF migration failed to verify for $DatabaseName after $attempt attempt(s). Expected '$ExpectedMigrationId', actual '$appliedMigration'. See $attemptLogPath."
-        }
-
-        Start-Sleep -Seconds 10
-    }
-}
-
-function Invoke-Phase10DatabaseBootstrap {
-    Write-Host 'Applying Phase 10 local EF migrations...' -ForegroundColor Cyan
-    $latestMigrationId = Get-LatestPhase10MigrationId
-    foreach ($databaseName in @('OrderProcessingSystem_Dev', 'OrderProcessingSystem_TenantC_Dev')) {
-        Write-Host "  Migrating $databaseName..." -ForegroundColor Yellow
-        $localSqlPassword = Get-EnvLocalValue -Name 'LOCAL_SQL_PASSWORD'
-        Invoke-Phase10EfDatabaseUpdate -DatabaseName $databaseName -SqlPassword $localSqlPassword -ExpectedMigrationId $latestMigrationId
-    }
-}
-
-function Assert-Phase10DatabaseAzureParity {
-    Write-Host 'Validating Phase 10 local database parity with clean Azure deployment...' -ForegroundColor Cyan
-
-    $latestMigrationId = Get-LatestPhase10MigrationId
-    foreach ($databaseName in (Get-Phase10Databases)) {
-        $appliedMigration = Get-Phase10SqlScalar -Database $databaseName -Query 'SELECT TOP (1) [MigrationId] FROM [__EFMigrationsHistory] ORDER BY [MigrationId] DESC;'
-        if ($appliedMigration -ne $latestMigrationId) {
-            throw "Database $databaseName is not on the latest EF migration. Expected '$latestMigrationId', found '$appliedMigration'."
-        }
-
-        Add-Content -Path $progressLogPath -Value "Verified latest migration for ${databaseName}: $appliedMigration"
-    }
-
-    $providerChecks = @(
-        [pscustomobject]@{ Database = 'OrderProcessingSystem_Dev'; TenantCode = 'TenantA'; ProviderType = 'Razorpay' },
-        [pscustomobject]@{ Database = 'OrderProcessingSystem_Dev'; TenantCode = 'TenantA'; ProviderType = 'OpenPay' },
-        [pscustomobject]@{ Database = 'OrderProcessingSystem_Dev'; TenantCode = 'TenantB'; ProviderType = 'Razorpay' },
-        [pscustomobject]@{ Database = 'OrderProcessingSystem_Dev'; TenantCode = 'TenantB'; ProviderType = 'OpenPay' },
-        [pscustomobject]@{ Database = 'OrderProcessingSystem_TenantC_Dev'; TenantCode = 'TenantC'; ProviderType = 'Razorpay' },
-        [pscustomobject]@{ Database = 'OrderProcessingSystem_TenantC_Dev'; TenantCode = 'TenantC'; ProviderType = 'OpenPay' }
-    )
-
-    foreach ($check in $providerChecks) {
-        $query = @"
-SELECT COUNT_BIG(*)
-FROM [payments].[PaymentProviders] pp
-INNER JOIN [dbo].[Tenants] t ON t.[Id] = pp.[TenantId]
-WHERE t.[Code] = '$($check.TenantCode)'
-  AND pp.[ProviderType] = '$($check.ProviderType)'
-  AND pp.[PrivateKeyConfigurationKey] = 'PaymentProviders:$($check.TenantCode):$($check.ProviderType):PrivateKey';
-"@
-        $countText = Get-Phase10SqlScalar -Database $check.Database -Query $query
-        [long]$count = 0
-        [void][long]::TryParse($countText, [ref]$count)
-        if ($count -lt 1) {
-            throw "Payment-provider baseline is missing in $($check.Database): tenant=$($check.TenantCode), provider=$($check.ProviderType). This would fail a clean Azure payment matrix run."
-        }
-
-        Add-Content -Path $progressLogPath -Value "Verified provider baseline: $($check.Database) / $($check.TenantCode) / $($check.ProviderType)"
-    }
-
-    $tenantRoutingChecks = @(
-        [pscustomobject]@{ Database = 'OrderProcessingSystem_Dev'; TenantCode = 'TenantA'; ExpectedProvider = 'Razorpay' },
-        [pscustomobject]@{ Database = 'OrderProcessingSystem_Dev'; TenantCode = 'TenantB'; ExpectedProvider = 'Razorpay' },
-        [pscustomobject]@{ Database = 'OrderProcessingSystem_TenantC_Dev'; TenantCode = 'TenantC'; ExpectedProvider = 'OpenPay' }
-    )
-
-    foreach ($check in $tenantRoutingChecks) {
-        $query = "SELECT TOP (1) ISNULL([PaymentProviderCode], '') FROM [dbo].[Tenants] WHERE [Code] = '$($check.TenantCode)';"
-        $actualProvider = Get-Phase10SqlScalar -Database $check.Database -Query $query
-        if ($actualProvider -ne $check.ExpectedProvider) {
-            throw "Tenant payment routing mismatch in $($check.Database): tenant=$($check.TenantCode), expected=$($check.ExpectedProvider), actual=$actualProvider."
-        }
-
-        Add-Content -Path $progressLogPath -Value "Verified tenant payment route: $($check.Database) / $($check.TenantCode) -> $actualProvider"
     }
 }
 
@@ -539,7 +362,11 @@ try {
         Add-Content -Path $progressLogPath -Value 'Stopping Phase 10 local container stack.'
         $composeProfileArgs = Get-ComposeProfileArguments
         $composeEnvArgs = Get-ComposeEnvArguments
-        & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs down -v 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-down.log')
+        $downArguments = @('down')
+        if ($RemoveVolumes) {
+            $downArguments += '--volumes'
+        }
+        & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs @downArguments 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-down.log')
         if ($LASTEXITCODE -ne 0) {
             throw "Docker compose down failed with exit code $LASTEXITCODE"
         }
@@ -560,7 +387,7 @@ try {
         throw "Docker compose config validation failed with exit code $LASTEXITCODE"
     }
 
-    & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs down -v 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-preflight-down.log') | Out-Null
+    & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs down 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-preflight-down.log') | Out-Null
     if ($CleanImages) {
         $imageTag = if ([string]::IsNullOrWhiteSpace($env:PHASE10_IMAGE_TAG)) { 'dev' } else { $env:PHASE10_IMAGE_TAG }
         Remove-Phase10LocalImages -ImageTag $imageTag
@@ -575,23 +402,19 @@ try {
         throw "Docker compose platform dependency startup failed with exit code $LASTEXITCODE"
     }
 
-    Ensure-Phase10Databases
-    $localSqlPassword = Get-EnvLocalValue -Name 'LOCAL_SQL_PASSWORD'
-    if ([string]::IsNullOrWhiteSpace($localSqlPassword)) {
-        throw "LOCAL_SQL_PASSWORD was not found in $envFile."
+    & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'invoke-phase10-database-bootstrap.ps1') `
+        -Profile $Profile `
+        -RunDir $runDir `
+        -ProgressLogPath $progressLogPath 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'phase10-database-bootstrap.log') | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Phase 10 database bootstrap failed with exit code $LASTEXITCODE."
     }
 
-    Invoke-Phase10DatabaseBootstrap
-    Assert-Phase10DatabaseAzureParity
     Assert-Phase10RedisAzureParity
     Wait-ForUrl -Url 'http://localhost:8081/' -TimeoutSec $HealthTimeoutSec
     Wait-ForUrl -Url 'http://localhost:10000/' -TimeoutSec $HealthTimeoutSec
     Wait-ForUrl -Url 'http://localhost:10001/' -TimeoutSec $HealthTimeoutSec
     Wait-ForUrl -Url 'http://localhost:10002/' -TimeoutSec $HealthTimeoutSec
-
-    if ($Profile -eq 'messaging' -or (Get-EnvLocalValue -Name 'LOCAL_SERVICEBUS_ENABLED') -eq 'true') {
-        Wait-ForUrl -Url 'http://localhost:5300/health' -TimeoutSec $HealthTimeoutSec
-    }
 
     if ($Profile -eq 'infrastructure' -or $Profile -eq 'messaging') {
         Add-Content -Path $progressLogPath -Value "Phase 10 local container infrastructure profile '$Profile' is ready."
@@ -600,13 +423,72 @@ try {
         return
     }
 
-    & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs up -d --build orders inventory notifications gateway ui 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-apps-up.log')
+    if ($Profile -eq 'messaging' -or (Get-EnvLocalValue -Name 'LOCAL_SERVICEBUS_ENABLED') -eq 'true') {
+        Wait-ForTcpPort -HostName 'localhost' -Port 5672 -TimeoutSec $HealthTimeoutSec
+        Wait-ForUrl -Url 'http://localhost:5300/health' -TimeoutSec $HealthTimeoutSec
+    }
+
+    Add-Content -Path $progressLogPath -Value 'Starting application service image startup.'
+    & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs up -d --build orders payments inventory notifications gateway ui 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-apps-up.log')
     if ($LASTEXITCODE -ne 0) {
         throw "Docker compose app startup failed with exit code $LASTEXITCODE"
     }
+    if ((Get-EnvLocalValue -Name 'LOCAL_SERVICEBUS_ENABLED') -eq 'true') {
+        Add-Content -Path $progressLogPath -Value 'Starting Functions service image startup.'
+        $functionsLogPath = Join-Path $runDir 'docker-compose-functions-up.log'
+        & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs --profile functions up -d --build functions 2>&1 |
+            Tee-Object -FilePath $functionsLogPath
+        if ($LASTEXITCODE -ne 0) {
+            $functionsLog = if (Test-Path -LiteralPath $functionsLogPath) {
+                Get-Content -LiteralPath $functionsLogPath -Raw
+            }
+            else {
+                ''
+            }
 
+            $imageOwner = Get-EnvLocalValue -Name 'PHASE10_IMAGE_OWNER'
+            if ([string]::IsNullOrWhiteSpace($imageOwner)) {
+                $imageOwner = 'pavanthakur'
+            }
+
+            $imageTag = Get-EnvLocalValue -Name 'PHASE10_IMAGE_TAG'
+            if ([string]::IsNullOrWhiteSpace($imageTag)) {
+                $imageTag = 'dev'
+            }
+
+            $functionsImageName = "ghcr.io/$imageOwner/orderprocessing-functions:$imageTag"
+            $isTransientFunctionsBaseResolveFailure =
+                $functionsLog -match 'mcr\.microsoft\.com/azure-functions/dotnet-isolated:4-dotnet-isolated8\.0' -and
+                $functionsLog -match '(failed to resolve source metadata|failed to do request|EOF)'
+
+            if ($isTransientFunctionsBaseResolveFailure -and (Test-LocalDockerImageExists -ImageName $functionsImageName)) {
+                Add-Content -Path $progressLogPath -Value "Functions image build hit a transient base-image metadata fetch failure. Falling back to cached local image: $functionsImageName"
+                Add-Content -Path $functionsLogPath -Value ([Environment]::NewLine + "FALLBACK: using cached local Functions image $functionsImageName after transient base-image metadata resolution failure.")
+
+                & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs --profile functions up -d functions 2>&1 |
+                    Tee-Object -FilePath $functionsLogPath -Append
+                if ($LASTEXITCODE -eq 0) {
+                    Add-Content -Path $progressLogPath -Value 'Functions fallback startup with cached local image succeeded.'
+                }
+                else {
+                    throw "Docker compose Functions fallback startup failed with exit code $LASTEXITCODE"
+                }
+            }
+            else {
+                throw "Docker compose Functions startup failed with exit code $LASTEXITCODE"
+            }
+        }
+    }
+
+    Add-Content -Path $progressLogPath -Value 'Waiting for application readiness URLs.'
     Wait-ForUrl -Url 'http://localhost:5080/health/alive' -TimeoutSec $HealthTimeoutSec
+    Wait-ForUrl -Url 'http://localhost:5081/health/ready' -TimeoutSec $HealthTimeoutSec
+    Wait-ForUrl -Url 'http://localhost:5082/health/ready' -TimeoutSec $HealthTimeoutSec
+    Wait-ForUrl -Url 'http://localhost:5083/health/ready' -TimeoutSec $HealthTimeoutSec
+    Wait-ForUrl -Url 'http://localhost:5084/health/ready' -TimeoutSec $HealthTimeoutSec
     Wait-ForUrl -Url 'http://localhost:5022/' -TimeoutSec $HealthTimeoutSec
+    Wait-ForSuccessfulUrl -Url 'http://localhost:5081/api/v1/Info/runtime-configuration' -TimeoutSec $HealthTimeoutSec -ContainsText 'activeTenantCode'
+    Wait-ForSuccessfulUrl -Url 'http://localhost:5080/api/v1/Info/runtime-configuration' -TimeoutSec $HealthTimeoutSec -ContainsText 'activeTenantCode'
 
     Add-Content -Path $progressLogPath -Value 'Phase 10 local container stack is ready.'
     Write-Host 'Phase 10 local container stack is ready.'
@@ -615,6 +497,7 @@ try {
     Write-Host 'Orders:  http://localhost:5081'
     Write-Host 'Inventory: http://localhost:5082'
     Write-Host 'Notifications: http://localhost:5083'
+    Write-Host 'Payments: http://localhost:5084'
     $summary.status = 'passed'
 }
 catch {

@@ -30,6 +30,7 @@ interface DockerMatrixOutput {
   startedIst: string;
   finishedIst: string;
   currentStep?: string;
+  status?: "running" | "passed" | "failed";
   targetCount: number;
   targets: string[];
   targetRuns: PaymentAutomationRunOutput[];
@@ -38,6 +39,7 @@ interface DockerMatrixOutput {
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 const automationRoot = path.resolve(currentDirectory, "../..");
 const workspaceRoot = path.resolve(automationRoot, "..");
+const phase10RunRoot = process.env.PHASE10_RUN_ROOT?.trim();
 function formatIstTimestamp(date: Date): string {
   return new Intl.DateTimeFormat("sv-SE", {
     timeZone: "Asia/Kolkata",
@@ -60,13 +62,15 @@ async function main(): Promise<void> {
   const options = parseCliOptions(process.argv.slice(2));
   const startedAt = new Date();
   const matrixRunId = `payment-automation-docker-matrix-${formatIstStamp(startedAt)}_matrix`;
-  const playrightRoot = path.join(workspaceRoot, "TestResults", "Playwright");
   const reportComposer = new FileReportComposer();
   const runtimeTargetCatalog = new JsonRuntimeTargetCatalog();
   const environmentKey = options.targets.length === 1
     ? options.targets[0]
     : "docker-matrix";
-  const environmentRoot = path.join(playrightRoot, environmentKey);
+  const playrightRoot = path.join(workspaceRoot, "TestResults", "Playwright");
+  const environmentRoot = phase10RunRoot
+    ? path.join(phase10RunRoot, "matrix")
+    : path.join(playrightRoot, environmentKey);
   const reportDirectory = path.join(environmentRoot, matrixRunId);
   const latestPointerPath = path.join(environmentRoot, "latest-playwright-matrix.txt");
   const runPlanPath = path.join(reportDirectory, "run-plan.txt");
@@ -81,6 +85,7 @@ async function main(): Promise<void> {
     finishedUtc: startedAt.toISOString(),
     startedIst: formatIstTimestamp(startedAt),
     finishedIst: formatIstTimestamp(startedAt),
+    status: "running",
     targetCount: 0,
     targets: options.targets,
     targetRuns: []
@@ -158,9 +163,13 @@ async function main(): Promise<void> {
 
   const rows = targetRuns.flatMap((targetRun) => targetRun.rows);
   const markdownSummary = await reportComposer.compose(rows);
+  const hasFailures = targetRuns.some((targetRun) =>
+    targetRun.rows.some((row) => !row.journeyOutcome.startsWith("completed") && row.journeyOutcome !== "dry_run")
+  );
   matrixOutput.finishedUtc = new Date().toISOString();
   matrixOutput.finishedIst = formatIstTimestamp(new Date());
   matrixOutput.currentStep = "completed";
+  matrixOutput.status = hasFailures ? "failed" : "passed";
   matrixOutput.targetCount = targetRuns.length;
   matrixOutput.targetRuns = targetRuns;
 
@@ -191,6 +200,10 @@ async function main(): Promise<void> {
   await writeFile(latestPointerPath, `${reportDirectory}\n`, "utf8");
 
   process.stdout.write(`${JSON.stringify(matrixOutput, null, 2)}\n`);
+
+  if (hasFailures) {
+    throw new Error("Docker payment matrix completed with failed tenant journey(s).");
+  }
 }
 
 async function writeRunMessage(startupLogPath: string, progressLogPath: string, line: string): Promise<void> {

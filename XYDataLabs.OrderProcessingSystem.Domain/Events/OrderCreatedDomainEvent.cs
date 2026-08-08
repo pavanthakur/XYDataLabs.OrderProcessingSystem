@@ -7,5 +7,7 @@ namespace XYDataLabs.OrderProcessingSystem.Domain.Events
         DateTime OrderDate,
         decimal TotalPrice,
         int ProductCount,
-        DateTime OccurredUtc);
+        DateTime OccurredUtc,
+        Guid? OrderReferenceId = null,
+        string CurrencyCode = "MXN");
 }

@@ -5,10 +5,11 @@ Generated: 2025-11-20
 ## Objective
 Move the Order Processing System from Azure App Service (Web Apps) to Azure Container Apps (ACA) using a phased, low-risk approach that preserves CI/CD, hardens identity and observability first, then gradually introduces containers and ACA.
 
-Note: the repository-wide Phase 10 now refers to the transport and messaging slice tracked in
+Note: the repository-wide Phase 10 baseline now refers to the pre-Azure architecture LLD in
+[docs/internal/phase10-preazure-lld.md](../../internal/phase10-preazure-lld.md), with the execution companion in
 [docs/internal/phase10-implementation-checklist.md](../../internal/phase10-implementation-checklist.md).
-This guide keeps the ACA hosting phases that follow that transport slice, so the first hosting cutover
-step is numbered after Phase 10.
+This guide keeps the ACA hosting phases that follow that governed Phase 10 baseline, so the first hosting cutover
+step is numbered after the pre-Azure LLD and checklist work.
 
 ## Scope & Assumptions
 - Subscription: 19f22d2f-1557-479b-a9b7-6dc6af67980c (Pay-As-You-Go)
@@ -19,7 +20,7 @@ step is numbered after Phase 10.
 
 ## Current Baseline (Today)
 - Compute: App Service plan + 2 Web Apps (API/UI)
-- Infra as Code: Bicep (subscription-scope `infra/main.bicep` for legacy hosting, `infra/main.phase10.bicep` for the transport slice, modules for hosting, insights, identity)
+- Infra as Code: Bicep (subscription-scope `infra/main.bicep` for legacy hosting, `infra/main.phase10.bicep` for the Phase 10 baseline, modules for hosting, insights, identity)
 - Identity: GitHub Actions OIDC → Azure; identity.bicep uses deploymentScripts (to harden)
 - Observability: Application Insights; Log Analytics & diag settings pending
 
@@ -438,17 +439,17 @@ Rollback:
 
 ---
 
-## Phase 10 — Transport & Messaging Operations
-- Implement the order-created transport slice from the internal Phase 10 checklist.
-- Keep Service Bus, DLQ handling, replay, and metadata mapping separate from the hosting cutover.
-- Verify the transport path is observable, including workspace-backed ACA logging and App Insights, while the in-memory fallback remains available for local development.
-- Deploy the transport slice with `infra/main.phase10.bicep` and `infra/parameters/phase10-*.json`; keep `infra/main.bicep` reserved for the later hosting path.
+## Phase 10 — Pre-Azure Architecture Baseline
+- Implement the governed pre-Azure baseline from `docs/internal/phase10-preazure-lld.md`.
+- Keep service ownership, route ownership, schema ownership, tenant/provider authority, messaging, DLQ, replay, identity, observability, and rollback controls explicit before the ACA hosting cutover.
+- Treat `docs/internal/phase10-implementation-checklist.md` as the execution companion that breaks the baseline into L0-L6 evidence-bearing slices.
+- Use the deployment guide after the pre-Azure baseline is in place to carry the ACA hosting, cutover, and decommissioning sequence.
 
 Acceptance:
-- Transport-first Phase 10 work is ready to move ahead of the ACA blue/green cutover.
+- The pre-Azure Phase 10 baseline is established, and the ACA hosting phases can proceed on top of it without reintroducing architectural ambiguity.
 
 Rollback:
-- Leave the hosting migration phases unchanged; revert only the transport slice changes if needed.
+- Leave the hosting migration phases unchanged; revert only the baseline changes if needed.
 
 ---
 

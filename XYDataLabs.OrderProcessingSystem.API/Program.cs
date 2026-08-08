@@ -32,6 +32,7 @@ using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
 using XYDataLabs.RazorpayAdapter;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.Multitenancy;
+using XYDataLabs.OrderProcessingSystem.Infrastructure.Payments;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Customers;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OpenPayAdapter;
@@ -49,6 +50,10 @@ using XYDataLabs.OrderProcessingSystem.Payments.Features.Module;
 using Microsoft.AspNetCore.Authentication;
 using XYDataLabs.OrderProcessingSystem.API.Security;
 using XYDataLabs.OrderProcessingSystem.API.Responses;
+using InventoryApiAssemblyReference = XYDataLabs.OrderProcessingSystem.Inventory.API.AssemblyReference;
+using NotificationsApiAssemblyReference = XYDataLabs.OrderProcessingSystem.Notifications.API.AssemblyReference;
+using OrdersApiAssemblyReference = XYDataLabs.OrderProcessingSystem.Orders.API.AssemblyReference;
+using PaymentsApiAssemblyReference = XYDataLabs.OrderProcessingSystem.Payments.API.AssemblyReference;
 
 // Bootstrap Serilog as early as possible so Log.* writes go to console immediately
 // Azure App Service Deployment - Fix for Application Not Starting
@@ -200,6 +205,20 @@ builder.AddServiceDefaults(
     CustomerActivitySource.Name,
     PaymentActivitySource.Name);
 
+var redisConnectionString = builder.Configuration.GetConnectionString("Redis");
+if (!string.IsNullOrWhiteSpace(redisConnectionString))
+{
+    builder.Services.AddStackExchangeRedisCache(options =>
+    {
+        options.Configuration = redisConnectionString;
+        options.InstanceName = "OrderProcessing:";
+    });
+}
+else
+{
+    builder.Services.AddDistributedMemoryCache();
+}
+
 builder.Services.AddObservability(
     "OrderProcessingSystem.API",
     builder.Configuration,
@@ -243,8 +262,10 @@ builder.Services.AddCqrs(typeof(OrdersModuleRegistration).Assembly);
 builder.Services.AddOrdersModule();
 builder.Services.AddCqrs(typeof(InventoryModuleRegistration).Assembly);
 builder.Services.AddInventoryModule();
+builder.Services.AddInventoryInfrastructure();
 builder.Services.AddCqrs(typeof(NotificationsModuleRegistration).Assembly);
 builder.Services.AddNotificationsModule();
+builder.Services.AddNotificationsInfrastructure();
 builder.Services.AddCqrs(typeof(PaymentsModuleRegistration).Assembly);
 builder.Services.AddScoped<ITenantPaymentProviderResolver, TenantPaymentProviderResolver>();
 builder.Services.AddScoped<IPaymentProviderGateway>(sp =>
@@ -267,6 +288,15 @@ builder.Services.AddOptions<PaymentGatewayRequestDefaults>()
     .ValidateOnStart();
 builder.Services.AddOpenPayAdapter(builder.Configuration);
 builder.Services.AddRazorpayAdapter(builder.Configuration);
+if (builder.Configuration.GetValue("PaymentProviders:UseDeterministicAdapters", false))
+{
+    builder.Services.AddKeyedSingleton<IPaymentProviderGateway>(
+        PaymentProviderTypes.OpenPay,
+        (_, _) => new DeterministicPaymentProviderGateway(PaymentProviderTypes.OpenPay));
+    builder.Services.AddKeyedSingleton<IPaymentProviderGateway>(
+        PaymentProviderTypes.Razorpay,
+        (_, _) => new DeterministicPaymentProviderGateway(PaymentProviderTypes.Razorpay));
+}
 builder.Services.AddProblemDetails();
 
 // Health checks — /health/live (liveness), /health/ready (SQL + Redis), /health (backward compat)
@@ -311,7 +341,12 @@ builder.Services.AddRateLimiter(options =>
     });
 });
 
-builder.Services.AddControllers();
+builder.Services
+    .AddControllers()
+    .AddApplicationPart(OrdersApiAssemblyReference.Assembly)
+    .AddApplicationPart(InventoryApiAssemblyReference.Assembly)
+    .AddApplicationPart(NotificationsApiAssemblyReference.Assembly)
+    .AddApplicationPart(PaymentsApiAssemblyReference.Assembly);
 
 var tenantConfigurationOptions = builder.Configuration
     .GetSection(TenantConfigurationOptions.SectionName)
@@ -452,10 +487,52 @@ else
 }
 
 var app = builder.Build();
+var disableStartupDdl = app.Configuration.GetValue("Phase10:DisableStartupDdl", true);
+var bootstrapSeedOnly = args.Any(argument =>
+    string.Equals(argument, "--phase10-bootstrap-seed-only", StringComparison.OrdinalIgnoreCase))
+    || app.Configuration.GetValue("Phase10:BootstrapSeedOnly", false);
 
-// Initialize database and AppMasterData during startup
-using (var scope = app.Services.CreateScope())
+if (bootstrapSeedOnly)
 {
+    using var bootstrapScope = app.Services.CreateScope();
+    try
+    {
+        var dbContext = bootstrapScope.ServiceProvider.GetRequiredService<OrderProcessingSystemDbContext>();
+        DbInitializer.InitializeSharedPool(
+            dbContext,
+            app.Configuration,
+            applyMigrations: false,
+            seedOrders: false);
+        DbInitializer.InitializeDedicatedTenants(
+            dbContext,
+            app.Configuration,
+            applyMigrations: false,
+            integrationEventMapperRegistry: null,
+            seedOrders: false);
+
+        Log.Information("Phase 10 bootstrap seed completed successfully.");
+        await Log.CloseAndFlushAsync();
+        return;
+    }
+    catch (Exception ex)
+    {
+        Log.Fatal(ex, "Phase 10 bootstrap seed failed.");
+        await Log.CloseAndFlushAsync();
+        throw new InvalidOperationException("Phase 10 bootstrap seed failed.", ex);
+    }
+}
+
+// Phase 10 local and Docker startup bootstrap the database before the app runs.
+if (disableStartupDdl)
+{
+    Log.Information("Skipping startup database initialization because Phase10:DisableStartupDdl=true.");
+}
+else
+{
+    // Temporary escape hatch for callers that have not yet been cut over to the
+    // dedicated bootstrap/migrator flow. Phase 10 completion requires this path
+    // to remain disabled in the supported startup contracts.
+    using var scope = app.Services.CreateScope();
     try
     {
         // Apply migrations locally/Docker; skip on Azure (managed via pipelines)

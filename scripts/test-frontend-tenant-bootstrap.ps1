@@ -4,6 +4,10 @@ param(
 
     [string]$Url,
 
+    [string]$ArtifactRoot,
+
+    [string]$LatestPointerPath,
+
     [switch]$InstallBrowser,
 
     [switch]$ListTargets,
@@ -195,11 +199,24 @@ foreach ($targetUrl in $targetUrls)
 
     $playwrightRootPath = Resolve-PathForWorkspace -BasePath $workspaceRoot -PathValue 'TestResults\Playwright'
     $artifactRootName = Resolve-PlaywrightArtifactRootName -TargetName $targetUrl.Name
-    $artifactRootPath = Resolve-PathForWorkspace -BasePath $workspaceRoot -PathValue ("TestResults\Playwright\{0}" -f $artifactRootName)
-    $latestPointerPath = Resolve-PathForWorkspace -BasePath $workspaceRoot -PathValue ("TestResults\Playwright\{0}\latest-playwright-smoke.txt" -f $artifactRootName)
+    $resolvedArtifactRootPath = if (-not [string]::IsNullOrWhiteSpace($ArtifactRoot)) {
+        Resolve-PathForWorkspace -BasePath $workspaceRoot -PathValue $ArtifactRoot
+    }
+    elseif (-not [string]::IsNullOrWhiteSpace($env:PHASE10_RUN_ROOT)) {
+        Join-Path $env:PHASE10_RUN_ROOT 'smoke'
+    }
+    else {
+        Resolve-PathForWorkspace -BasePath $workspaceRoot -PathValue ("TestResults\Playwright\{0}" -f $artifactRootName)
+    }
+    $resolvedLatestPointerPath = if (-not [string]::IsNullOrWhiteSpace($LatestPointerPath)) {
+        Resolve-PathForWorkspace -BasePath $workspaceRoot -PathValue $LatestPointerPath
+    }
+    else {
+        Resolve-PathForWorkspace -BasePath $workspaceRoot -PathValue ("TestResults\Playwright\{0}\latest-playwright-smoke.txt" -f $artifactRootName)
+    }
     $rootPointerPath = Resolve-PathForWorkspace -BasePath $workspaceRoot -PathValue 'TestResults\Playwright\latest-playwright-run.txt'
     New-Item -ItemType Directory -Path $playwrightRootPath -Force | Out-Null
-    Set-Content -Path $rootPointerPath -Value $artifactRootPath -Encoding utf8
+    Set-Content -Path $rootPointerPath -Value $resolvedArtifactRootPath -Encoding utf8
 
     $arguments = @(
         '--prefix'
@@ -212,9 +229,9 @@ foreach ($targetUrl in $targetUrls)
         '--timeout-ms'
         $TimeoutMs.ToString()
         '--artifact-root'
-        $artifactRootPath
+        $resolvedArtifactRootPath
         '--latest-pointer-path'
-        $latestPointerPath
+        $resolvedLatestPointerPath
     )
 
     if (-not [string]::IsNullOrWhiteSpace($ExpectedTenant))

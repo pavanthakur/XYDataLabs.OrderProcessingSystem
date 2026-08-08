@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.Events;
 using XYDataLabs.OrderProcessingSystem.Domain.Events;
+using XYDataLabs.OrderProcessingSystem.Payments.Contracts.Events;
 using XYDataLabs.OrderProcessingSystem.Payments.Features.Events;
 using XYDataLabs.OrderProcessingSystem.Payments.Features.Module;
 
@@ -58,6 +59,7 @@ public class PaymentAttemptEventMapperTests
             AttemptId: 7,
             TenantId: 3,
             ProviderName: "OpenPay",
+            CustomerOrderId: "OR-test-007",
             ErrorReason: "Insufficient funds",
             OccurredUtc: _occurredUtc);
 
@@ -75,6 +77,7 @@ public class PaymentAttemptEventMapperTests
         payload.AttemptId.Should().Be(7);
         payload.TenantId.Should().Be(3);
         payload.ProviderName.Should().Be("OpenPay");
+        payload.CustomerOrderId.Should().Be("OR-test-007");
         payload.ErrorReason.Should().Be("Insufficient funds");
         payload.OccurredUtc.Should().Be(_occurredUtc);
     }

@@ -13,6 +13,7 @@ using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
+using XYDataLabs.OrderProcessingSystem.Orders.Contracts;
 using static XYDataLabs.OrderProcessingSystem.Application.Utilities.AppMasterConstant;
 using PaymentAttempt = global::XYDataLabs.OrderProcessingSystem.Domain.Entities.PaymentAttempt;
 using PaymentAttemptStatus = global::XYDataLabs.OrderProcessingSystem.Domain.Entities.PaymentAttemptStatus;
@@ -38,6 +39,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
     private readonly PaymentProvider _paymentProvider;
     private readonly TimeProvider _timeProvider;
     private readonly ITenantProvider _tenantProvider;
+    private readonly IOrderModuleApi _orderModuleApi;
     private bool UsesProviderHostedCheckout =>
         string.Equals(_paymentProvider.ProviderType, PaymentProviderTypes.Razorpay, StringComparison.OrdinalIgnoreCase);
 
@@ -47,6 +49,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         IPaymentTelemetryTracker paymentTelemetryTracker,
         ILogger<ProcessPaymentCommandHandler> logger,
         IAppDbContext context,
+        IOrderModuleApi orderModuleApi,
         ITenantPaymentProviderResolver paymentProviderResolver,
         TimeProvider timeProvider,
         ITenantProvider tenantProvider)
@@ -56,6 +59,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         ArgumentNullException.ThrowIfNull(paymentTelemetryTracker);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(orderModuleApi);
         ArgumentNullException.ThrowIfNull(paymentProviderResolver);
         ArgumentNullException.ThrowIfNull(timeProvider);
         ArgumentNullException.ThrowIfNull(tenantProvider);
@@ -67,6 +71,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         _redirectUrl = requestDefaults.RedirectUrl;
         _defaultDeviceSessionId = requestDefaults.DeviceSessionId;
         _context = context;
+        _orderModuleApi = orderModuleApi;
         _timeProvider = timeProvider;
 
         _tenantProvider = tenantProvider;
@@ -92,7 +97,12 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         {
             _logger.LogInformation("Starting combined customer, card, and payment process");
 
-            var customerOrderId = ResolveCustomerOrderId(command.CustomerOrderId);
+            var requestedCustomerOrderId = ResolveCustomerOrderId(command.CustomerOrderId);
+            var paymentTerms = await ResolveOrderPaymentTermsAsync(
+                requestedCustomerOrderId,
+                command.OrderReferenceId,
+                cancellationToken);
+            var customerOrderId = paymentTerms.CustomerOrderId;
             var paymentTraceId = GeneratePaymentTraceId();
             var attemptNumber = await GetNextAttemptNumberAsync(customerOrderId, cancellationToken);
             var attemptOrderId = GenerateAttemptOrderId(customerOrderId, attemptNumber);
@@ -144,8 +154,28 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
 
             var (paymentGatewayCustomer, billingCustomerId) = await CreateCustomerAsync(request, paymentMethod, cancellationToken);
             await UpdatePaymentMethodByBillingCustomerIdAsync(paymentMethod.Id, billingCustomerId, cancellationToken);
-            var createdCard = await CreateCardTokenAsync(request, paymentGatewayCustomer, billingCustomerId, customerOrderId, attemptOrderId, paymentTraceId, cancellationToken);
-            var charge = await CreateChargeAsync(request, paymentGatewayCustomer, createdCard.Id, paymentMethod, billingCustomerId, customerOrderId, attemptOrderId, paymentTraceId, isThreeDSecureEnabled, redirectUrl, cancellationToken);
+            var createdCard = await CreateCardTokenAsync(
+                request,
+                paymentGatewayCustomer,
+                billingCustomerId,
+                customerOrderId,
+                attemptOrderId,
+                paymentTraceId,
+                paymentTerms,
+                cancellationToken);
+            var charge = await CreateChargeAsync(
+                request,
+                paymentGatewayCustomer,
+                createdCard.Id,
+                paymentMethod,
+                billingCustomerId,
+                customerOrderId,
+                attemptOrderId,
+                paymentTraceId,
+                paymentTerms,
+                isThreeDSecureEnabled,
+                redirectUrl,
+                cancellationToken);
             var normalizedChargeStatus = EnumHelper.NormalizeOpenPayStatus(charge.Status)
                 ?? EnumHelper.GetEnumDescription(PaymentStatus.Unknown);
             var threeDSecureStage = ResolveChargeThreeDSecureStage(normalizedChargeStatus, isThreeDSecureEnabled, charge.RedirectUrl);
@@ -178,9 +208,10 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             {
                 Id = charge.Id,
                 CustomerOrderId = customerOrderId,
+                OrderReferenceId = paymentTerms.OrderReferenceId,
                 CustomerId = paymentGatewayCustomer.Id,
-                Amount = new decimal(100.00),
-                Currency = AppMasterConstant.DefaultCurrencyCode,
+                Amount = paymentTerms.Amount,
+                Currency = paymentTerms.CurrencyCode,
                 Status = normalizedChargeStatus,
                 CreatedAt = charge.CreatedAt ?? _timeProvider.GetUtcNow().UtcDateTime,
                 TransactionId = charge.Authorization,
@@ -238,6 +269,44 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             }
             throw new InvalidOperationException("Payment processing failed during customer, card, or charge creation.", ex);
         }
+    }
+
+    private async Task<OrderPaymentTerms> ResolveOrderPaymentTermsAsync(
+        string customerOrderId,
+        Guid? orderReferenceId,
+        CancellationToken cancellationToken)
+    {
+        var linkedOrderReferenceId = orderReferenceId.GetValueOrDefault();
+        var hasLinkedOrderReferenceId = linkedOrderReferenceId != Guid.Empty;
+        OrderPaymentContextDto? paymentContext = null;
+        if (hasLinkedOrderReferenceId)
+        {
+            paymentContext = await _orderModuleApi.GetPaymentContextByOrderReferenceAsync(linkedOrderReferenceId, cancellationToken);
+        }
+
+        paymentContext ??= await _orderModuleApi.GetPaymentContextAsync(customerOrderId, cancellationToken);
+        if (paymentContext is null)
+        {
+            throw new InvalidOperationException(
+                hasLinkedOrderReferenceId
+                    ? $"Persisted order reference '{linkedOrderReferenceId}' was not found for the active tenant."
+                    : $"Persisted order '{customerOrderId}' was not found for the active tenant.");
+        }
+
+        if (paymentContext.Amount <= 0m
+            || string.IsNullOrWhiteSpace(paymentContext.CurrencyCode))
+        {
+            throw new InvalidOperationException(
+                $"Persisted order '{customerOrderId}' has invalid payment terms.");
+        }
+
+        return new OrderPaymentTerms(
+            paymentContext.CustomerOrderId,
+            paymentContext.Amount,
+            paymentContext.CurrencyCode.Trim().ToUpperInvariant(),
+            paymentContext.OrderReferenceId,
+            paymentContext.Status,
+            paymentContext.ConcurrencyToken);
     }
 
     private async Task<int> GetNextAttemptNumberAsync(string customerOrderId, CancellationToken cancellationToken)
@@ -504,6 +573,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         string customerOrderId,
         string attemptOrderId,
         string paymentTraceId,
+        OrderPaymentTerms paymentTerms,
         CancellationToken cancellationToken)
     {
         _logger.LogInformation("Creating card token in {PaymentProvider}...", _paymentProvider.Name);
@@ -531,8 +601,8 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             AttemptOrderId = attemptOrderId,
             TransactionStatus = EnumHelper.GetEnumDescription(OpenPayTransactionStatus.Completed),
             TransactionDate = NormalizeToUtc(createdCard.CreatedAt),
-            CurrencyCode = AppMasterConstant.DefaultCurrencyCode,
-            Amount = new decimal(100.00),
+            CurrencyCode = paymentTerms.CurrencyCode,
+            Amount = paymentTerms.Amount,
             CreditCardOwnerName = request.Name,
             CreditCardExpireYear = ResolveCardExpiryComponent(request.ExpirationYear),
             CreditCardExpireMonth = ResolveCardExpiryComponent(request.ExpirationMonth),
@@ -576,6 +646,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
         string customerOrderId,
         string attemptOrderId,
         string paymentTraceId,
+        OrderPaymentTerms paymentTerms,
         bool isThreeDSecureEnabled,
         string redirectUrl,
         CancellationToken cancellationToken)
@@ -588,14 +659,10 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             attemptOrderId,
             isThreeDSecureEnabled);
 
-        string currencyCode = _paymentProvider.ProviderType == PaymentProviderTypes.Razorpay
-            ? "INR"
-            : AppMasterConstant.DefaultCurrencyCode;
-
         var chargeRequest = new PaymentGatewayCreateChargeRequest(
             sourceId,
-            new decimal(100.00),
-            currencyCode,
+            paymentTerms.Amount,
+            paymentTerms.CurrencyCode,
             $"CustomerOrder: {customerOrderId}; AttemptOrder: {attemptOrderId}",
             request.DeviceSessionId,
             attemptOrderId,
@@ -628,7 +695,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             AmountFromAPI = charge.Amount,
             CardOwnerName = request.Name,
             LastFourCardNbr = ResolveLastFourCardDigits(request.CardNumber),
-            Currency = AppMasterConstant.DefaultCurrencyCode,
+            Currency = chargeRequest.Currency,
             IsThreeDSecureEnabled = isThreeDSecureEnabled,
             ThreeDSecureStage = threeDSecureStage,
             Result = EnumHelper.GetEnumIdFromDescription<PaymentStatus>(normalizedChargeStatus) ?? (int)PaymentStatus.Unknown,
@@ -667,7 +734,7 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             TransactionStatus = normalizedChargeStatus,
             TransactionDate = NormalizeToUtc(charge.CreatedAt),
             Amount = charge.Amount,
-            CurrencyCode = AppMasterConstant.DefaultCurrencyCode,
+            CurrencyCode = chargeRequest.Currency,
             IsTransactionSuccess = EnumHelper.IsSuccessStatus(normalizedChargeStatus),
             IsThreeDSecureEnabled = isThreeDSecureEnabled,
             ThreeDSecureStage = threeDSecureStage,
@@ -819,4 +886,12 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
             ? dateTime.Value
             : DateTime.SpecifyKind(dateTime.Value, DateTimeKind.Local).ToUniversalTime();
     }
+
+    private sealed record OrderPaymentTerms(
+        string CustomerOrderId,
+        decimal Amount,
+        string CurrencyCode,
+        Guid OrderReferenceId,
+        string OrderStatus,
+        string ConcurrencyToken);
 }

@@ -1,5 +1,6 @@
 namespace XYDataLabs.OrderProcessingSystem.Application.Events;
 
-public interface IIntegrationEvent
+// Backward-compatible bridge while event contracts move to a lightweight eventing seam.
+public interface IIntegrationEvent : XYDataLabs.OrderProcessingSystem.Eventing.Abstractions.IIntegrationEvent
 {
 }

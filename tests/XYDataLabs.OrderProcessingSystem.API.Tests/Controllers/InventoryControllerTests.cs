@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Moq;
-using XYDataLabs.OrderProcessingSystem.API.Controllers;
 using XYDataLabs.OrderProcessingSystem.Inventory.API;
+using XYDataLabs.OrderProcessingSystem.Inventory.API.Controllers;
 
 namespace XYDataLabs.OrderProcessingSystem.API.Tests.Controllers;
 

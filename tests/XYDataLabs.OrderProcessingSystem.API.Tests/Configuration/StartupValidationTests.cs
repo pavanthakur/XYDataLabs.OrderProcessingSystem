@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
 using XYDataLabs.OrderProcessingSystem.SharedKernel;
@@ -24,6 +25,7 @@ public sealed class StartupValidationTests
             Directory.SetCurrentDirectory(tempRoot);
 
             var builder = Host.CreateApplicationBuilder();
+            builder.Logging.ClearProviders();
 
             SharedSettingsLoader.AddAndBindSettings(
                 builder.Services,

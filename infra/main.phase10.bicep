@@ -18,6 +18,9 @@ param orderEventsTopicName string = 'order-events'
 @description('Inventory subscription name')
 param inventorySubscriptionName string = 'inventory-order-created'
 
+@description('Orders payment-state subscription name')
+param ordersPaymentStateSubscriptionName string = 'orders-payment-state'
+
 @description('Notifications subscription name')
 param notificationsSubscriptionName string = 'notifications-order-created'
 
@@ -111,6 +114,7 @@ module serviceBus 'modules/servicebus.bicep' = {
     baseName: baseName
     orderEventsTopicName: orderEventsTopicName
     inventorySubscriptionName: inventorySubscriptionName
+    ordersPaymentStateSubscriptionName: ordersPaymentStateSubscriptionName
     notificationsSubscriptionName: notificationsSubscriptionName
     deadLetterSubscriptionName: deadLetterSubscriptionName
     maxDeliveryCount: maxDeliveryCount
@@ -206,6 +210,7 @@ module containerApps 'modules/containerapps.bicep' = {
     acrRegistryPassword: acrRegistryPassword
     serviceBusTopicName: serviceBus.outputs.orderEventsTopic
     serviceBusConnectionString: serviceBusConnectionString
+    ordersPaymentStateSubscriptionName: serviceBus.outputs.ordersPaymentStateSubscription
     inventorySubscriptionName: serviceBus.outputs.inventorySubscription
     notificationsSubscriptionName: serviceBus.outputs.notificationsSubscription
     deadLetterTopicName: serviceBus.outputs.deadLetterTopic

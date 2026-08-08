@@ -1,5 +1,7 @@
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
+using XYDataLabs.OrderProcessingSystem.Inventory.API;
 using XYDataLabs.OrderProcessingSystem.Orders.Features.Commands;
+using Moq;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase
 {
@@ -9,12 +11,14 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase
         protected readonly IReadOnlyList<int> ProductIds;
         protected readonly Customer Customer;
         protected readonly IReadOnlyList<Product> Products;
+        protected readonly Mock<IInventoryModuleApi> MockInventoryModuleApi;
 
         protected OrderServiceTestBase()
         {
             Customer = GenerateCustomer();
             Products = GenerateProducts(3);
             ProductIds = Products.Select(p => p.ProductId.Value).ToList();
+            MockInventoryModuleApi = new Mock<IInventoryModuleApi>();
         }
 
         protected Customer GenerateCustomer()
@@ -44,6 +48,19 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase
             }
 
             return products;
+        }
+
+        protected static IReadOnlyList<InventoryProductSnapshot> ToInventorySnapshots(IEnumerable<Product> products)
+        {
+            ArgumentNullException.ThrowIfNull(products);
+
+            return products
+                .Select(static product => new InventoryProductSnapshot(
+                    product.ProductId.Value,
+                    product.Name,
+                    product.Description,
+                    product.Price.Value))
+                .ToList();
         }
 
         protected IReadOnlyList<Order> GenerateOrders(int customerId, int count)

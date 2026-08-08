@@ -1,5 +1,5 @@
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
-using XYDataLabs.OrderProcessingSystem.Orders.API;
+using XYDataLabs.OrderProcessingSystem.Orders.Contracts;
 
 namespace XYDataLabs.OrderProcessingSystem.Orders.Features.Mappings;
 
@@ -8,9 +8,11 @@ public static class OrderMappings
     public static OrderDto ToDto(this Order order) => new()
     {
         OrderId = order.OrderId,
+        OrderReferenceId = order.OrderReferenceId,
         OrderDate = order.OrderDate,
         CustomerId = order.CustomerId,
         TotalPrice = order.TotalPrice,
+        CurrencyCode = order.CurrencyCode,
         Status = order.Status.ToString(),
         IsFulfilled = order.IsFulfilled,
         OrderProductDtos = order.OrderProducts

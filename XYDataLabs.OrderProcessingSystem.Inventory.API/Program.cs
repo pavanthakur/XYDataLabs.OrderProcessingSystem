@@ -14,7 +14,6 @@ app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthC
 {
     Predicate = _ => false
 });
-
 await app.RunAsync();
 
 public partial class Program;

@@ -1,10 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
 using Moq;
 using Xunit;
-using XYDataLabs.OrderProcessingSystem.API.Controllers;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Products.Queries;
+using XYDataLabs.OrderProcessingSystem.Inventory.API.Controllers;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
 
 namespace XYDataLabs.OrderProcessingSystem.API.Tests.Controllers

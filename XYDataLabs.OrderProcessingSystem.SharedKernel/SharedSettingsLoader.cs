@@ -299,7 +299,22 @@ namespace XYDataLabs.OrderProcessingSystem.SharedKernel
             var dir = new DirectoryInfo(startPath);
             while (dir != null)
             {
-                if (dir.GetFiles("*.sln").Length > 0) return dir.FullName;
+                try
+                {
+                    if (dir.GetFiles("*.sln").Length > 0)
+                    {
+                        return dir.FullName;
+                    }
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    // Some user-profile roots are not traversable in local test runs. Skip them and keep walking upward.
+                }
+                catch (System.IO.IOException)
+                {
+                    // Treat inaccessible directories as non-matches and keep walking.
+                }
+
                 dir = dir.Parent;
             }
             return null;

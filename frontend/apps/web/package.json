@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "proof:phase10:identity": "node ./scripts/phase10-identity-proof.mjs",
     "smoke:tenant": "node ./scripts/smoke-tenant-bootstrap.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run"

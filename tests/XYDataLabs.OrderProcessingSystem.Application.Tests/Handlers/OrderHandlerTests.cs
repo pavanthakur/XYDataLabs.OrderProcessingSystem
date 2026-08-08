@@ -24,8 +24,11 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
             var customers = GenerateCustomersWithOrders(1, 1).AsQueryable();
             var mockDbSet = GetMockDbSet(customers);
             MockDbContext.Setup(db => db.Customers).Returns(mockDbSet.Object);
+            MockInventoryModuleApi
+                .Setup(api => api.GetProductsByIdsAsync(It.IsAny<IReadOnlyCollection<int>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync([]);
 
-            var handler = new CreateOrderCommandHandler(MockDbContext.Object);
+            var handler = new CreateOrderCommandHandler(MockDbContext.Object, MockInventoryModuleApi.Object);
 
             // Act
             var result = await handler.HandleAsync(new CreateOrderCommand(2, new List<ProductId> { 1, 2 }));
@@ -42,8 +45,11 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
             var customers = GenerateCustomersWithOrders(1, 1).AsQueryable();
             var mockDbSet = GetMockDbSet(customers);
             MockDbContext.Setup(db => db.Customers).Returns(mockDbSet.Object);
+            MockInventoryModuleApi
+                .Setup(api => api.GetProductsByIdsAsync(It.IsAny<IReadOnlyCollection<int>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync([]);
 
-            var handler = new CreateOrderCommandHandler(MockDbContext.Object);
+            var handler = new CreateOrderCommandHandler(MockDbContext.Object, MockInventoryModuleApi.Object);
 
             // Act
             var result = await handler.HandleAsync(new CreateOrderCommand(1, new List<ProductId> { 1, 2 }));
@@ -70,10 +76,11 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
                     Price = 0m
                 }
             }.AsQueryable();
-            var mockDbSetProducts = GetMockDbSet(products);
-            MockDbContext.Setup(db => db.Products).Returns(mockDbSetProducts.Object);
+            MockInventoryModuleApi
+                .Setup(api => api.GetProductsByIdsAsync(It.IsAny<IReadOnlyCollection<int>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(ToInventorySnapshots(products));
 
-            var handler = new CreateOrderCommandHandler(MockDbContext.Object);
+            var handler = new CreateOrderCommandHandler(MockDbContext.Object, MockInventoryModuleApi.Object);
 
             var result = await handler.HandleAsync(new CreateOrderCommand(1, new List<ProductId> { 1 }));
 
@@ -90,10 +97,11 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
             MockDbContext.Setup(db => db.Customers).Returns(mockDbSetCustomers.Object);
 
             var products = GenerateProducts(1).AsQueryable();
-            var mockDbSetProducts = GetMockDbSet(products);
-            MockDbContext.Setup(db => db.Products).Returns(mockDbSetProducts.Object);
+            MockInventoryModuleApi
+                .Setup(api => api.GetProductsByIdsAsync(It.IsAny<IReadOnlyCollection<int>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(ToInventorySnapshots(products));
 
-            var handler = new CreateOrderCommandHandler(MockDbContext.Object);
+            var handler = new CreateOrderCommandHandler(MockDbContext.Object, MockInventoryModuleApi.Object);
 
             // Act
             var result = await handler.HandleAsync(new CreateOrderCommand(1, new List<ProductId> { 1, 2 }));
@@ -112,8 +120,9 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
             MockDbContext.Setup(db => db.Customers).Returns(mockDbSetCustomers.Object);
 
             var products = GenerateProducts(1).AsQueryable();
-            var mockDbSetProducts = GetMockDbSet(products);
-            MockDbContext.Setup(db => db.Products).Returns(mockDbSetProducts.Object);
+            MockInventoryModuleApi
+                .Setup(api => api.GetProductsByIdsAsync(It.IsAny<IReadOnlyCollection<int>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(ToInventorySnapshots(products));
 
             var orders = GenerateOrders(1, 1).AsQueryable();
             var mockDbSetOrders = GetMockDbSet(orders);
@@ -121,7 +130,7 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
 
             MockDbContext.Setup(db => db.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
 
-            var handler = new CreateOrderCommandHandler(MockDbContext.Object);
+            var handler = new CreateOrderCommandHandler(MockDbContext.Object, MockInventoryModuleApi.Object);
 
             // Act
             var result = await handler.HandleAsync(new CreateOrderCommand(1, new List<ProductId> { 1 }));
@@ -130,6 +139,8 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
             result.IsSuccess.Should().BeTrue();
             result.Value.Should().NotBeNull();
             result.Value!.CustomerId.Should().Be(CustomerId);
+            result.Value.CurrencyCode.Should().Be("MXN");
+            result.Value.OrderReferenceId.Should().NotBeEmpty();
         }
 
         [Fact]
@@ -159,6 +170,8 @@ namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers
             result.IsSuccess.Should().BeTrue();
             result.Value!.OrderId.Should().Be(orderId);
             result.Value.TotalPrice.Should().Be(100);
+            result.Value.CurrencyCode.Should().Be("MXN");
+            result.Value.OrderReferenceId.Should().NotBeEmpty();
             result.Value.Status.Should().Be(OrderStatus.Created.ToString());
         }
 
