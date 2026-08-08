@@ -1,3 +1,6 @@
+import path from "node:path";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { chromium, request as playwrightRequest } from "playwright";
 import type { ChallengeOutcome } from "../contracts/provider-challenge-handler.js";
 import type { ThreeDsSetting } from "../contracts/report-composer.js";
@@ -13,6 +16,16 @@ const razorpayAutomationPhone = "9111191111";
 const razorpayAutomationCardNumber = "4100280000001007";
 const razorpayAutomationCardExpiry = "1244";
 const razorpayAutomationCardCvv = "111";
+const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
+const automationRoot = path.resolve(currentDirectory, "../..");
+const workspaceRoot = path.resolve(automationRoot, "..");
+
+async function readEnvelopeArray<T>(
+  response: import("playwright").APIResponse
+): Promise<T[]> {
+  const payload = await response.json() as { data?: T[] };
+  return Array.isArray(payload.data) ? payload.data : [];
+}
 
 interface PaymentConfigurationResponse {
   activeProviderType: string;
@@ -39,6 +52,11 @@ export interface PaymentJourneyResult {
   challengeOutcome: ChallengeOutcome;
   threeDsSetting: ThreeDsSetting;
   paymentProvider: string;
+  customerOrderId: string;
+  orderId: number;
+  orderReferenceId: string;
+  orderAmount: number;
+  orderCurrencyCode: string;
   finalUrl: string;
   statusMessage: string;
 }
@@ -49,7 +67,6 @@ export class PaymentJourneyRunner {
   public async execute(request: PaymentJourneyRequest): Promise<PaymentJourneyResult> {
     const log = request.logger ?? (() => undefined);
     log(`Launching browser for ${request.tenantCode} on ${request.target.key}.`);
-    const paymentConfiguration = await this.resolvePaymentConfiguration(request, log);
     const browser = await chromium.launch({ headless: request.headless });
 
     try {
@@ -89,18 +106,51 @@ export class PaymentJourneyRunner {
 
       log(`Navigating to ${targetUrl}.`);
       await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
+      await this.completeLocalKeycloakLogin(page, request, log);
+      const accessToken = await this.waitForLocalAccessToken(page, request, log);
       await page.getByRole("heading", { name: /Take a card payment|Collect payment/i }).waitFor({ timeout: 30000 });
       log("Payment page is ready.");
+      const paymentConfiguration = await this.resolvePaymentConfiguration(
+        request,
+        log,
+        accessToken);
+      const authoritativeOrder = await this.createAuthoritativeOrder(
+        request,
+        accessToken,
+        paymentConfiguration.activeProviderType,
+        log);
+      const customerOrderId = `ORDER-${authoritativeOrder.orderId}`;
+      const orderPaymentUrl =
+        `${request.target.baseUrl}/customers/${authoritativeOrder.customerId}` +
+        `/orders/${authoritativeOrder.orderId}/payment` +
+        `?tenantCode=${encodeURIComponent(request.tenantCode)}`;
+      log(
+        `Opening persisted order ${authoritativeOrder.orderId} (${authoritativeOrder.orderReferenceId}) with authoritative amount ` +
+        `${authoritativeOrder.totalPrice} ${authoritativeOrder.currencyCode}.`);
+      await page.goto(orderPaymentUrl, { waitUntil: "domcontentloaded" });
+      const orderHeading = page.getByRole("heading", { name: /Collect payment|Take a card payment/i });
+      const orderErrorBanner = page.locator("p.error-banner").first();
+      await Promise.any([
+        orderHeading.waitFor({ timeout: 30000 }),
+        orderErrorBanner.waitFor({ timeout: 30000 })
+      ]).catch(async () => {
+        log(`Order payment page did not settle after reopening persisted order. Current URL: ${page.url()}`);
+        throw new Error("Order payment page did not become ready within the expected timeout.");
+      });
+      if (await orderErrorBanner.isVisible().catch(() => false)) {
+        const statusMessage = (await orderErrorBanner.textContent().catch(() => null))?.trim() || "Order payment page reported an error.";
+        throw new Error(statusMessage);
+      }
 
       const tenantPicker = page.getByLabel("Tenant");
       if (await tenantPicker.count() > 0) {
         await tenantPicker.selectOption(request.tenantCode).catch(() => undefined);
       }
 
-      log(`Filling payment form for ${request.customerOrderId}.`);
+      log(`Filling payment form for ${customerOrderId}.`);
       await page.getByLabel("Cardholder name").fill(automationPayerName);
       await page.getByLabel("Email").fill(automationPayerEmail);
-      await page.getByLabel("Customer order id").fill(request.customerOrderId);
+      await page.getByLabel("Customer order id").fill(customerOrderId);
 
       if (paymentConfiguration.collectionMode !== "provider_checkout") {
         await page.getByLabel("Card number").fill("4111111111111111");
@@ -128,7 +178,7 @@ export class PaymentJourneyRunner {
         if (this.usesLocalRazorpayMock(request.target.baseUrl)) {
           log("Using local Razorpay mock callback path.");
           log("Expected local telemetry noise: /payment/client-event may abort while the callback settles.");
-          const mockPaymentId = `local-razorpay-${request.customerOrderId}`;
+          const mockPaymentId = `local-razorpay-${customerOrderId}`;
           const callbackUrl = new URL("/payments/callback", request.target.baseUrl);
           callbackUrl.searchParams.set("tenantCode", request.tenantCode);
           callbackUrl.searchParams.set("source", "razorpay-local-mock");
@@ -198,6 +248,11 @@ export class PaymentJourneyRunner {
         challengeOutcome,
         threeDsSetting,
         paymentProvider: paymentConfiguration.activeProviderType,
+        customerOrderId,
+        orderId: authoritativeOrder.orderId,
+        orderReferenceId: authoritativeOrder.orderReferenceId,
+        orderAmount: authoritativeOrder.totalPrice,
+        orderCurrencyCode: authoritativeOrder.currencyCode,
         finalUrl: page.url(),
         statusMessage
       };
@@ -209,7 +264,8 @@ export class PaymentJourneyRunner {
 
   private async resolvePaymentConfiguration(
     request: PaymentJourneyRequest,
-    log: (message: string) => void
+    log: (message: string) => void,
+    accessToken: string | null
   ): Promise<PaymentConfigurationResponse> {
     log(`Resolving payment configuration for ${request.tenantCode}.`);
     const apiBaseUrl = request.target.apiBaseUrl ?? request.target.baseUrl;
@@ -217,7 +273,8 @@ export class PaymentJourneyRunner {
       baseURL: apiBaseUrl,
       ignoreHTTPSErrors: request.target.ignoreHttpsErrors,
       extraHTTPHeaders: {
-        "X-Tenant-Code": request.tenantCode
+        "X-Tenant-Code": request.tenantCode,
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {})
       }
     });
 
@@ -240,6 +297,190 @@ export class PaymentJourneyRunner {
     }
     finally {
       await apiContext.dispose();
+    }
+  }
+
+  private async waitForLocalAccessToken(
+    page: import("playwright").Page,
+    request: PaymentJourneyRequest,
+    log: (message: string) => void
+  ): Promise<string | null> {
+    if (request.target.runtime === "azure") {
+      return null;
+    }
+
+    const accessToken = await page.waitForFunction(() => {
+      const token = window.localStorage.getItem("orderprocessing.accessToken");
+      return typeof token === "string" && token.trim().length > 0 ? token : null;
+    }, undefined, { timeout: 30000 })
+      .then((result) => result.jsonValue() as Promise<string | null>)
+      .catch(() => null);
+
+    if (!accessToken) {
+      log(`Local access token was not available after login for ${request.tenantCode}; proceeding without bearer auth.`);
+      return null;
+    }
+
+    log(`Local access token is ready for ${request.tenantCode}.`);
+    return accessToken;
+  }
+
+  private async completeLocalKeycloakLogin(
+    page: import("playwright").Page,
+    request: PaymentJourneyRequest,
+    log: (message: string) => void
+  ): Promise<void> {
+    if (request.target.runtime === "azure") {
+      return;
+    }
+
+    let password = process.env.KEYCLOAK_TENANT_ADMIN_PASSWORD
+      ?? process.env.LOCAL_KEYCLOAK_TEST_PASSWORD
+      ?? process.env.LOCAL_KEYCLOAK_ADMIN_PASSWORD;
+    if (!password) {
+      const envLocalPath = path.join(workspaceRoot, "Resources", "Docker", ".env.local");
+      const envLocalText = await readFile(envLocalPath, "utf8").catch(() => "");
+      const passwordLine = envLocalText
+        .split(/\r?\n/)
+        .find((line) => {
+          const trimmed = line.trim();
+          return trimmed.startsWith("KEYCLOAK_TENANT_ADMIN_PASSWORD=")
+            || trimmed.startsWith("LOCAL_KEYCLOAK_ADMIN_PASSWORD=");
+        });
+
+      if (!passwordLine) {
+        throw new Error(
+          "KEYCLOAK_TENANT_ADMIN_PASSWORD, LOCAL_KEYCLOAK_TEST_PASSWORD, or LOCAL_KEYCLOAK_ADMIN_PASSWORD is required for the local PKCE browser matrix.");
+      }
+
+      password = passwordLine.split("=", 2)[1].trim().replace(/^["']|["']$/g, "");
+    }
+
+    const normalizedTenant = request.tenantCode.trim().toLowerCase();
+    const username = normalizedTenant === "tenantb"
+      ? "tenant-b-user"
+      : normalizedTenant === "tenantc"
+        ? "tenant-c-user"
+        : "tenant-admin";
+
+    const entryState = await Promise.race([
+      page.waitForURL((url) => url.toString().includes("/realms/xy-phase9/"), { timeout: 15000 }).then(() => "auth" as const),
+      page.getByRole("heading", { name: /Take a card payment|Collect payment/i }).waitFor({ timeout: 15000 }).then(() => "app" as const)
+    ]).catch(() => "unknown" as const);
+
+    if (entryState === "app") {
+      log(`Local payment page is already ready for ${request.tenantCode}; Keycloak login is not required.`);
+      return;
+    }
+
+    if (entryState === "unknown" && !page.url().includes("/realms/xy-phase9/")) {
+      await page.waitForURL((url) => url.toString().includes("/realms/xy-phase9/"), { timeout: 10000 }).catch(() => undefined);
+    }
+
+    if (!page.url().includes("/realms/xy-phase9/")) {
+      return;
+    }
+
+    log(`Authenticating ${request.tenantCode} through Keycloak Authorization Code + PKCE as ${username}.`);
+    const usernameField = page.locator("#username");
+    const passwordField = page.locator("#password");
+    await usernameField.waitFor({ timeout: 15000 });
+    await passwordField.waitFor({ timeout: 15000 });
+    await usernameField.fill(username);
+    await passwordField.fill(password);
+    await page.getByRole("button", { name: /sign in/i }).click();
+    await page.waitForURL(
+      (url) => url.toString().startsWith(request.target.baseUrl),
+      { timeout: 60000 });
+    log(`Keycloak PKCE authentication completed for ${request.tenantCode}.`);
+  }
+
+  private async createAuthoritativeOrder(
+    request: PaymentJourneyRequest,
+    accessToken: string | null,
+    providerType: string,
+    log: (message: string) => void
+  ): Promise<{ customerId: number; orderId: number; orderReferenceId: string; totalPrice: number; currencyCode: string }> {
+    const apiBaseUrl = request.target.apiBaseUrl ?? request.target.baseUrl;
+    const api = await playwrightRequest.newContext({
+      baseURL: apiBaseUrl,
+      ignoreHTTPSErrors: request.target.ignoreHttpsErrors,
+      extraHTTPHeaders: {
+        "X-Tenant-Code": request.tenantCode,
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {})
+      }
+    });
+
+    try {
+      const productsResponse = await api.get("/api/v1/Product/GetAllProducts");
+      if (!productsResponse.ok()) {
+        throw new Error(
+          `Unable to resolve seeded order products. status=${productsResponse.status()}.`);
+      }
+
+      const products = await readEnvelopeArray<{ productId: number }>(
+        productsResponse);
+      const product = products[0];
+      if (!product) {
+        throw new Error(
+          `Tenant ${request.tenantCode} has no seeded product for the payment proof.`);
+      }
+
+      const uniqueSuffix = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+      const customerResponse = await api.post("/api/v1/Customer", {
+        headers: { "Content-Type": "application/json" },
+        data: {
+          name: `${automationPayerName} ${request.tenantCode}`,
+          email: `phase10-${request.tenantCode}-${uniqueSuffix}@example.local`
+        }
+      });
+      if (!customerResponse.ok()) {
+        throw new Error(
+          `Authoritative customer creation failed with status ${customerResponse.status()}.`);
+      }
+      const customerPayload = await customerResponse.json() as { data?: number };
+      if (!customerPayload.data) {
+        throw new Error("Authoritative customer response did not include a customer id.");
+      }
+
+      const createResponse = await api.post("/api/v1/Order", {
+        headers: { "Content-Type": "application/json" },
+        data: {
+          customerId: customerPayload.data,
+          productIds: [product.productId],
+          currencyCode: this.providersMatch(providerType, "Razorpay")
+            ? "INR"
+            : "MXN"
+        }
+      });
+      if (!createResponse.ok()) {
+        throw new Error(
+          `Authoritative order creation failed with status ${createResponse.status()}.`);
+      }
+
+      const payload = await createResponse.json() as {
+        data?: { orderId?: number; orderReferenceId?: string; totalPrice?: number; currencyCode?: string };
+      };
+      if (!payload.data?.orderId || !payload.data.totalPrice) {
+        throw new Error("Authoritative order response did not include order id and amount.");
+      }
+
+      const orderReferenceId = payload.data.orderReferenceId?.trim() || `ORDER-${payload.data.orderId}`;
+      const currencyCode = payload.data.currencyCode?.trim().toUpperCase() || (this.providersMatch(providerType, "Razorpay") ? "INR" : "MXN");
+
+      log(
+        `Persisted order ${payload.data.orderId} for customer ${customerPayload.data} ` +
+        `with amount ${payload.data.totalPrice} ${currencyCode} and reference ${orderReferenceId}.`);
+      return {
+        customerId: customerPayload.data,
+        orderId: payload.data.orderId,
+        orderReferenceId,
+        totalPrice: payload.data.totalPrice,
+        currencyCode
+      };
+    }
+    finally {
+      await api.dispose();
     }
   }
 

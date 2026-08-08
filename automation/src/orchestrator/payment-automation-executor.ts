@@ -110,13 +110,18 @@ export async function executePaymentAutomationRun(
   for (const executionItem of executionItems) {
     const tenantStartedAt = new Date();
     log(`Starting tenant ${executionItem.tenantCode} (${executionItem.tenantTier}${executionItem.paymentProviderCode ? `, provider ${executionItem.paymentProviderCode}` : ""}).`);
-    const customerOrderId = buildCustomerOrderId(
+    const syntheticCustomerOrderId = buildCustomerOrderId(
       executionItem.executionRunPrefix,
       executionItem.tenantCode,
       target.profile,
       target.runtime,
       executionItem.paymentProviderCode ?? undefined
     );
+    let customerOrderId = syntheticCustomerOrderId;
+    let orderId = 0;
+    let orderReferenceId = "not-available";
+    let orderAmount = 0;
+    let orderCurrencyCode = "unknown";
     const tenantDiagnosticsDirectory = path.join(
       reportDirectory,
       executionItem.tenantCode,
@@ -128,7 +133,7 @@ export async function executePaymentAutomationRun(
     let paymentProvider = executionItem.paymentProviderCode ?? "unresolved";
     let verificationOutcome = options.verify && !options.dryRun ? "pending" : "skipped";
     let cleanupOutcome = resolveCleanupOutcome();
-    let evidenceReference = `customerOrderId:${customerOrderId} | runPrefix:${executionItem.executionRunPrefix}`;
+    let evidenceReference = `customerOrderId:${syntheticCustomerOrderId} | runPrefix:${executionItem.executionRunPrefix}`;
     let fixtureIds: string[] = [];
     let provisioner: PaymentFixtureProvisioner | undefined;
     let stopAfterCurrentItem = false;
@@ -173,7 +178,12 @@ export async function executePaymentAutomationRun(
         challengeOutcome = journeyResult.challengeOutcome;
         threeDsSetting = journeyResult.threeDsSetting;
         paymentProvider = journeyResult.paymentProvider;
-        evidenceReference = `${customerOrderId} -> ${journeyResult.finalUrl}`;
+        customerOrderId = journeyResult.customerOrderId;
+        orderId = journeyResult.orderId;
+        orderReferenceId = journeyResult.orderReferenceId;
+        orderAmount = journeyResult.orderAmount;
+        orderCurrencyCode = journeyResult.orderCurrencyCode;
+        evidenceReference = `customerOrderId:${customerOrderId} | orderId:${orderId} | orderRef:${orderReferenceId} | amount:${orderAmount} ${orderCurrencyCode} -> ${journeyResult.finalUrl}`;
 
         if (options.verify) {
           try {
@@ -186,7 +196,8 @@ export async function executePaymentAutomationRun(
               runtime: target.runtime,
               environment: target.environment,
               profile: target.profile,
-              runPrefix: executionItem.executionRunPrefix
+              runPrefix: executionItem.executionRunPrefix,
+              customerOrderId
             });
 
             verificationOutcome = verificationResult.outcome;
@@ -243,6 +254,11 @@ export async function executePaymentAutomationRun(
         journeyOutcome,
         verificationOutcome,
         cleanupOutcome,
+        customerOrderId,
+        orderId,
+        orderReferenceId,
+        orderAmount,
+        orderCurrencyCode,
         startedUtc: tenantStartedAt.toISOString(),
         finishedUtc: new Date().toISOString(),
         evidenceReference,
@@ -469,32 +485,18 @@ export async function startLocalProfile(profile: "http" | "https", log: (message
       "-File",
       scriptPath,
       "-Profile",
-      profile
+      profile,
+      "-ReturnWhenReady"
     ], {
       cwd: path.resolve(automationRoot, ".."),
       stdio: ["ignore", "pipe", "pipe"]
     });
 
-    let settled = false;
     let stdout = "";
     let stderr = "";
 
-    const finalizeReady = () => {
-      if (settled) {
-        return;
-      }
-
-      settled = true;
-      resolve();
-    };
-
     child.stdout.on("data", (chunk: Buffer | string) => {
-      const text = chunk.toString();
-      stdout += text;
-
-      if (text.includes("Local '") || text.includes("profile is running.")) {
-        finalizeReady();
-      }
+      stdout += chunk.toString();
     });
 
     child.stderr.on("data", (chunk: Buffer | string) => {
@@ -502,25 +504,18 @@ export async function startLocalProfile(profile: "http" | "https", log: (message
     });
 
     child.on("error", (error) => {
-      if (!settled) {
-        settled = true;
-        reject(error);
-      }
+      reject(error);
     });
 
     child.on("exit", (exitCode) => {
-      if (settled) {
+      if (exitCode === 0) {
+        resolve();
         return;
       }
 
-      settled = true;
       const combinedOutput = [stdout.trim(), stderr.trim()].filter(Boolean).join("\n");
       reject(new Error(combinedOutput || `Local ${profile} profile exited unexpectedly with code ${exitCode}.`));
     });
-
-    setTimeout(() => {
-      finalizeReady();
-    }, 3000);
   });
 }
 

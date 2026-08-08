@@ -320,7 +320,10 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
             transaction.AttemptOrderId,
             resolvedStatus,
             resolvedThreeDSecureStage);
-        var attemptOrderId = FirstNonEmpty(payinLog?.AttemptOrderId, command.AttemptOrderId, transaction.AttemptOrderId);
+        var attemptOrderId = FirstNonEmpty(
+            payinLog?.AttemptOrderId,
+            transaction.AttemptOrderId,
+            command.AttemptOrderId);
         var paymentAttempt = !string.IsNullOrWhiteSpace(attemptOrderId)
             ? await _context.PaymentAttempts
                 .FirstOrDefaultAsync(item => item.AttemptOrderId == attemptOrderId, cancellationToken)
@@ -391,7 +394,19 @@ public sealed class ConfirmPaymentStatusCommandHandler : ICommandHandler<Confirm
 
         if (paymentAttempt is not null)
         {
-            paymentAttempt.Status = resolvedAttemptStatus;
+            if (EnumHelper.IsSuccessStatus(resolvedStatus))
+            {
+                paymentAttempt.MarkAsSucceeded(_paymentProvider.Name);
+            }
+            else if (EnumHelper.IsFailureStatus(resolvedStatus) || EnumHelper.IsCancelledStatus(resolvedStatus))
+            {
+                paymentAttempt.MarkAsFailed(_paymentProvider.Name, resolvedErrorMessage);
+            }
+            else
+            {
+                paymentAttempt.Status = resolvedAttemptStatus;
+            }
+
             paymentAttempt.ProviderStatus = resolvedStatus;
             paymentAttempt.ProviderChargeId = FirstNonEmpty(remoteCharge?.Id, paymentAttempt.ProviderChargeId, command.PaymentId);
             paymentAttempt.ProviderReferenceId = FirstNonEmpty(remoteCharge?.Authorization, paymentAttempt.ProviderReferenceId);

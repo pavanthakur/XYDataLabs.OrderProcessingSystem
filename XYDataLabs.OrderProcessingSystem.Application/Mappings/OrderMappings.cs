@@ -16,7 +16,7 @@ public static class OrderMappings
         Status = order.Status.ToString(),
         IsFulfilled = order.IsFulfilled,
         OrderProductDtos = order.OrderProducts
-            .Select(op => (XYDataLabs.OrderProcessingSystem.Orders.API.OrderProductDto)op.ToDto())
+            .Select(op => (XYDataLabs.OrderProcessingSystem.Orders.Contracts.OrderProductDto)op.ToDto())
             .ToList()
     };
 

@@ -72,6 +72,7 @@ public class PaymentAttemptEntityTests
         evt.AttemptId.Should().Be(42);
         evt.TenantId.Should().Be(1);
         evt.ProviderName.Should().Be("OpenPay");
+        evt.CustomerOrderId.Should().Be("OR-test-001");
         evt.ErrorReason.Should().Be("Insufficient funds");
         evt.OccurredUtc.Should().BeCloseTo(DateTime.UtcNow, precision: TimeSpan.FromSeconds(5));
     }

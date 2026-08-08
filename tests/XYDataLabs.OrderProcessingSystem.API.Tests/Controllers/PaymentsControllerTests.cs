@@ -2,9 +2,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
-using XYDataLabs.OrderProcessingSystem.API.Controllers;
-using XYDataLabs.OrderProcessingSystem.API.Models;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
+using XYDataLabs.OrderProcessingSystem.Payments.API.Controllers;
+using XYDataLabs.OrderProcessingSystem.Payments.API.Models;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Observability;
 

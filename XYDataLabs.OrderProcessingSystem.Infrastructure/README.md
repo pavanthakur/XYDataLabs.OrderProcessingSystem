@@ -8,8 +8,8 @@ EF Core, SQL Server, multi-tenancy, seed data, and payment provider resolution. 
 |---------------|---------|
 | `DataContext/OrderProcessingSystemDbContext` | Main EF Core context — all domain entities |
 | `DataContext/TenantRegistryDbContext` | Tenant registry — `Tenant` and `PaymentProvider` tables |
-| `Migrations/` | EF Core migrations — run via `dotnet ef` or `run-database-migrations.ps1` |
-| `SeedData/DbInitializer` | Seeds shared-pool tenants (TenantA, TenantB) and dedicated tenant (TenantC) on startup |
+| `Migrations/` | EF Core migrations — run via `dotnet ef`, the Azure migration wrapper, or the explicit local/bootstrap tooling |
+| `SeedData/DbInitializer` | Applies idempotent shared and dedicated tenant seed data during explicit bootstrap or migration flows |
 | `Multitenancy/TenantRegistryService` | Implements `ITenantRegistry` — `FindByCode(string)` is the sync resolver at payment dispatch |
 | `Multitenancy/EntityFrameworkTenantResolver` | Resolves tenant context for EF query filtering |
 | `Payments/TenantPaymentProviderConfigurationResolver` | Reads `PaymentProvider` rows from DB; resolves per-tenant provider config at runtime |
@@ -23,6 +23,8 @@ EF Core, SQL Server, multi-tenancy, seed data, and payment provider resolution. 
 - Retry: `EnableRetryOnFailure()` is required on all contexts
 
 ## Seed data rules (DbInitializer)
+
+`DbInitializer` is part of the explicit bootstrap path. Phase 10 local and Docker bootstrap flows are moving migration/seed ownership out of API runtime startup and into dedicated operational steps.
 
 - `StartupSeedTenantCodes = { "TenantA", "TenantB" }` — shared pool
 - TenantC only seeds when `DedicatedTenantConnectionStrings:TenantC` is configured

@@ -34,6 +34,9 @@
     "PrivateKey": "__RAZORPAY_PRIVATE_KEY__",
     "IsProduction": false
   },
+  "PaymentProviders": {
+    "UseDeterministicAdapters": true
+  },
   "Observability": {
     "EnableEfSensitiveDataLogging": true
   },

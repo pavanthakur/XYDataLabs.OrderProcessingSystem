@@ -1,22 +1,23 @@
 # API
 
-Thin ASP.NET Core Web API — controllers, composition root, Swagger, middleware wiring. No business logic.
+Thin transitional ASP.NET Core host for Phase 10 cutover. It keeps shared middleware and composition in one place while importing module-owned controllers from the standalone API projects. No business logic belongs here.
 
 ## Controllers
 
 | Controller | Routes | Purpose |
 |------------|--------|---------|
-| `OrderController` | `POST /api/orders`, `GET /api/orders/{id}` | Order creation and retrieval |
-| `CustomersController` | `/api/customers` | Customer management |
-| `ProductController` | `/api/products` | Product catalogue |
-| `PaymentsController` | `POST /api/payments` | Initiate payment (dispatches `ProcessPaymentCommand`) |
-| `PaymentCallbackController` | `POST /api/payments/callback` | Provider webhook/callback receiver (dispatches `ConfirmPaymentStatusCommand`) |
-| `AuditController` | `/api/audit` | Audit log queries |
-| `InfoController` | `/api/info` | Health, environment info |
+| `DlqAdminController` | `POST /api/v1/admin/dlq/{quarantineId}/approve` | Transitional HTTP surface for replay approval until the dedicated operations Function surface fully owns the path |
+
+Module-owned controllers are imported from:
+
+- `XYDataLabs.OrderProcessingSystem.Orders.API`
+- `XYDataLabs.OrderProcessingSystem.Inventory.API`
+- `XYDataLabs.OrderProcessingSystem.Notifications.API`
+- `XYDataLabs.OrderProcessingSystem.Payments.API`
 
 ## Composition root
 
-`Program.cs` wires: Serilog, EF Core, `IDispatcher`, `IPaymentProviderGateway` (keyed DI by `PaymentProviderTypes`), tenant middleware, `DbInitializer`, health checks (`/health`, `/health/ready`).
+`Program.cs` wires: Serilog, EF Core, `IDispatcher`, tenant resolution, payment provider wiring, module migrators, imported module controller assemblies, and health checks.
 
 ## Health checks
 
@@ -31,5 +32,6 @@ Thin ASP.NET Core Web API — controllers, composition root, Swagger, middleware
 ## Rules
 
 - Controllers dispatch via `IDispatcher` only — no direct service calls or EF access.
-- Tenant context is resolved by `TenantMiddleware` before handlers run — `X-Tenant-Id` header.
+- Tenant context is resolved before handlers run from the tenant header contract used by the active runtime profile.
+- Standalone module API projects own their routes; this host imports them during the Phase 10 transition and must not regain duplicate controller implementations.
 - Swagger enabled in all environments (learning project convention).

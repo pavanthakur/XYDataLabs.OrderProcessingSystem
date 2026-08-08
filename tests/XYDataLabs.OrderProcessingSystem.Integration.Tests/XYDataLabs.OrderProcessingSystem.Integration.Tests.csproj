@@ -25,8 +25,11 @@
     <ProjectReference Include="..\..\XYDataLabs.OrderProcessingSystem.API\XYDataLabs.OrderProcessingSystem.API.csproj" />
     <ProjectReference Include="..\..\XYDataLabs.OrderProcessingSystem.Application\XYDataLabs.OrderProcessingSystem.Application.csproj" />
     <ProjectReference Include="..\..\XYDataLabs.OrderProcessingSystem.Domain\XYDataLabs.OrderProcessingSystem.Domain.csproj" />
+    <ProjectReference Include="..\..\XYDataLabs.OrderProcessingSystem.Eventing.Abstractions\XYDataLabs.OrderProcessingSystem.Eventing.Abstractions.csproj" />
     <ProjectReference Include="..\..\XYDataLabs.OrderProcessingSystem.Functions\XYDataLabs.OrderProcessingSystem.Functions.csproj" />
     <ProjectReference Include="..\..\XYDataLabs.OrderProcessingSystem.Infrastructure\XYDataLabs.OrderProcessingSystem.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\XYDataLabs.OrderProcessingSystem.Orders.Contracts\XYDataLabs.OrderProcessingSystem.Orders.Contracts.csproj" />
+    <ProjectReference Include="..\..\XYDataLabs.OrderProcessingSystem.Payments.Contracts\XYDataLabs.OrderProcessingSystem.Payments.Contracts.csproj" />
     <ProjectReference Include="..\..\XYDataLabs.OrderProcessingSystem.SharedKernel\XYDataLabs.OrderProcessingSystem.SharedKernel.csproj" />
   </ItemGroup>
 

@@ -102,7 +102,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure
             // Phase 10 Transport Layer (Service Bus is opt-in; in-memory remains the local fallback)
             builder.Services.Configure<ServiceBusOptions>(builder.Configuration.GetSection(ServiceBusOptions.SectionName));
             builder.Services.AddSingleton<ServiceBusMessageFactory>();
-            builder.Services.AddHostedService<Messaging.DlqReplayWorker>();
+            builder.Services.AddScoped<IDlqReplayApprovalService, DlqReplayApprovalService>();
 
             var serviceBusEnabled = builder.Configuration.GetSection(ServiceBusOptions.SectionName).GetValue("Enabled", false);
             if (serviceBusEnabled)
@@ -114,6 +114,7 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure
                 {
                     builder.Services.AddSingleton(_ => new ServiceBusClient(connectionString));
                     builder.Services.AddScoped<Application.Events.IEventPublisher, ServiceBusEventPublisher>();
+                    builder.Services.AddHostedService<DlqReplayRequestPublisher>();
                 }
                 else
                 {

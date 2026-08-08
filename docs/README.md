@@ -13,7 +13,7 @@ Choose the path that matches your intent:
 5. `guides/configuration/README.md` — secrets, identity, and environment guidance
 6. `reference/quick-command-reference.md` — daily commands and validation
 7. `architecture/decisions/` — architecture constraints and ADRs
-8. `internal/README.md` — active internal trackers and backlog
+8. `internal/README.md` — active internal trackers and backlog, including the Phase 10 pre-Azure architecture baseline and execution checklist
 
 ## Areas
 

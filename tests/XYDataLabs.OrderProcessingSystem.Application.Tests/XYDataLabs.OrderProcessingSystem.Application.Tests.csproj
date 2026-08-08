@@ -27,6 +27,7 @@
     <ProjectReference Include="..\..\XYDataLabs.OrderProcessingSystem.Application\XYDataLabs.OrderProcessingSystem.Application.csproj" />
     <ProjectReference Include="..\..\XYDataLabs.OrderProcessingSystem.Domain\XYDataLabs.OrderProcessingSystem.Domain.csproj" />
     <ProjectReference Include="..\..\XYDataLabs.OrderProcessingSystem.Inventory.Features\XYDataLabs.OrderProcessingSystem.Inventory.Features.csproj" />
+    <ProjectReference Include="..\..\XYDataLabs.OrderProcessingSystem.Orders.Contracts\XYDataLabs.OrderProcessingSystem.Orders.Contracts.csproj" />
     <ProjectReference Include="..\..\XYDataLabs.OrderProcessingSystem.Orders.Features\XYDataLabs.OrderProcessingSystem.Orders.Features.csproj" />
     <ProjectReference Include="..\..\XYDataLabs.OrderProcessingSystem.Notifications.Features\XYDataLabs.OrderProcessingSystem.Notifications.Features.csproj" />
     <ProjectReference Include="..\..\XYDataLabs.OrderProcessingSystem.Payments.Features\XYDataLabs.OrderProcessingSystem.Payments.Features.csproj" />

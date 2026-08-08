@@ -2,7 +2,7 @@ using XYDataLabs.OrderProcessingSystem.Application.CQRS;
 using XYDataLabs.OrderProcessingSystem.Application.DTO;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Customers.Commands;
 using XYDataLabs.OrderProcessingSystem.Application.Features.Customers.Queries;
-using XYDataLabs.OrderProcessingSystem.API.Controllers;
+using XYDataLabs.OrderProcessingSystem.Orders.API.Controllers;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Results;
 using Microsoft.AspNetCore.Mvc;
 using Moq;

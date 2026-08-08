@@ -11,6 +11,16 @@ services:
     networks:
       - xy-phase10-network
     profiles: ["data"]
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$SA_PASSWORD\" -Q \"SET NOCOUNT ON; SELECT 1\" >/dev/null 2>&1 || exit 1",
+        ]
+      interval: 20s
+      timeout: 20s
+      retries: 30
+      start_period: 120s
 
   redis:
     image: redis:7-alpine
@@ -48,6 +58,16 @@ services:
     networks:
       - xy-phase10-network
     profiles: ["messaging"]
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$SA_PASSWORD\" -Q \"SET NOCOUNT ON; SELECT 1\" >/dev/null 2>&1 || exit 1",
+        ]
+      interval: 20s
+      timeout: 20s
+      retries: 30
+      start_period: 600s
 
   servicebus-emulator:
     image: ${SERVICEBUS_EMULATOR_IMAGE:-mcr.microsoft.com/azure-messaging/servicebus-emulator:1.1.2}
@@ -58,13 +78,13 @@ services:
       ACCEPT_EULA: ${SERVICEBUS_EMULATOR_ACCEPT_EULA:-N}
       SQL_SERVER: servicebus-sql
       MSSQL_SA_PASSWORD: ${SERVICEBUS_EMULATOR_SQL_PASSWORD}
-      SQL_WAIT_INTERVAL: ${SERVICEBUS_EMULATOR_SQL_WAIT_INTERVAL:-15}
+      SQL_WAIT_INTERVAL: ${SERVICEBUS_EMULATOR_SQL_WAIT_INTERVAL:-90}
       EMULATOR_HTTP_PORT: 5300
     volumes:
       - ../Resources/ServiceBus/phase10-emulator-config.json:/ServiceBus_Emulator/ConfigFiles/Config.json:ro
     depends_on:
       servicebus-sql:
-        condition: service_started
+        condition: service_healthy
     networks:
       - xy-phase10-network
     profiles: ["messaging"]
@@ -77,6 +97,10 @@ services:
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_TENANT_ADMIN_PASSWORD}
+      KEYCLOAK_TENANT_ADMIN_PASSWORD: ${KEYCLOAK_TENANT_ADMIN_PASSWORD}
+      KEYCLOAK_BACKEND_CLIENT_SECRET: ${LOCAL_KEYCLOAK_BACKEND_CLIENT_SECRET}
+      KC_HOSTNAME: http://localhost:8081
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
       KC_HTTP_ENABLED: "true"
       KC_HTTP_PORT: "8080"
       KC_HEALTH_ENABLED: "true"
@@ -94,7 +118,7 @@ services:
     image: ghcr.io/${PHASE10_IMAGE_OWNER:-pavanthakur}/orderprocessing-orders:${PHASE10_IMAGE_TAG:-dev}
     build:
       context: ..
-      dockerfile: XYDataLabs.OrderProcessingSystem.Orders.API/Dockerfile
+      dockerfile: XYDataLabs.OrderProcessingSystem.Orders.Host/Dockerfile
       target: final
     ports:
       - "5081:8080"
@@ -108,10 +132,11 @@ services:
       ServiceBus__Enabled: ${LOCAL_SERVICEBUS_ENABLED:-false}
       ServiceBus__ConnectionString: ${LOCAL_SERVICEBUS_CONNECTION_STRING}
       ServiceBus__TopicName: ${LOCAL_SERVICEBUS_TOPIC_NAME:-order-events}
-      ServiceBus__SubscriptionName: ${LOCAL_SERVICEBUS_TOPIC_NAME:-order-events}
       ServiceBus__DeadLetterTopicName: ${LOCAL_SERVICEBUS_DLQ_TOPIC_NAME:-order-events-dlq}
-      ServiceBus__DeadLetterSubscriptionName: ${LOCAL_SERVICEBUS_DLQ_SUBSCRIPTION_NAME:-dlq-replay}
-      ServiceBus__ReplayEnabled: ${LOCAL_SERVICEBUS_REPLAY_ENABLED:-true}
+      ServiceBus__DeadLetterSubscriptionName: ${LOCAL_SERVICEBUS_DLQ_SUBSCRIPTION_NAME:-dlq-intake}
+      ServiceBus__ReplayRequestQueueName: ${LOCAL_SERVICEBUS_REPLAY_REQUEST_QUEUE_NAME:-dlq-replay-requests}
+      ServiceBus__MessageTtl: 01:00:00
+      ServiceBus__ReplayEnabled: "false"
       OpenPay__MerchantId: ${LOCAL_OPENPAY_MERCHANT_ID}
       OpenPay__PublicKey: ${LOCAL_OPENPAY_PUBLIC_KEY}
       OpenPay__PrivateKey: ${LOCAL_OPENPAY_PRIVATE_KEY}
@@ -126,7 +151,7 @@ services:
       IdentityProvider__Audience: xy-order-processing
       IdentityProvider__Scheme: Bearer
       IdentityProvider__ClientId: xy-order-processing-backend
-      IdentityProvider__ClientSecret: local-backend-client-secret
+      IdentityProvider__ClientSecret: ${LOCAL_KEYCLOAK_BACKEND_CLIENT_SECRET}
       PaymentProviders__TenantA__OpenPay__PrivateKey: ${LOCAL_OPENPAY_PRIVATE_KEY}
       PaymentProviders__TenantB__OpenPay__PrivateKey: ${LOCAL_OPENPAY_PRIVATE_KEY}
       PaymentProviders__TenantC__OpenPay__PrivateKey: ${LOCAL_OPENPAY_PRIVATE_KEY}
@@ -135,17 +160,78 @@ services:
       PaymentProviders__TenantC__Razorpay__PrivateKey: ${LOCAL_RAZORPAY_PRIVATE_KEY}
     volumes:
       - ../logs:/logs
+    depends_on:
+      sql-server:
+        condition: service_healthy
     networks:
       xy-phase10-network:
         aliases:
           - orderprocessing-ord-${PHASE10_ENV_SUFFIX:-local}
     profiles: ["apps"]
 
+  payments:
+    image: ghcr.io/${PHASE10_IMAGE_OWNER:-pavanthakur}/orderprocessing-payments:${PHASE10_IMAGE_TAG:-dev}
+    build:
+      context: ..
+      dockerfile: XYDataLabs.OrderProcessingSystem.Payments.Host/Dockerfile
+      target: final
+    ports:
+      - "5084:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__OrderProcessingSystemDbConnection: Server=sql-server,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
+      DedicatedTenantConnectionStrings__TenantC: Server=sql-server,1433;Database=OrderProcessingSystem_TenantC_Dev;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
+      ConnectionStrings__Redis: redis:6379
+      AzureWebJobsStorage: ${LOCAL_AZURITE_CONNECTION_STRING}
+      ServiceBus__Enabled: ${LOCAL_SERVICEBUS_ENABLED:-false}
+      ServiceBus__ConnectionString: ${LOCAL_SERVICEBUS_CONNECTION_STRING}
+      ServiceBus__TopicName: ${LOCAL_SERVICEBUS_TOPIC_NAME:-order-events}
+      ServiceBus__PaymentStateSubscriptionName: ${LOCAL_SERVICEBUS_ORDERS_PAYMENT_STATE_SUBSCRIPTION_NAME:-orders-payment-state}
+      ServiceBus__DeadLetterTopicName: ${LOCAL_SERVICEBUS_DLQ_TOPIC_NAME:-order-events-dlq}
+      ServiceBus__DeadLetterSubscriptionName: ${LOCAL_SERVICEBUS_DLQ_SUBSCRIPTION_NAME:-dlq-intake}
+      ServiceBus__ReplayRequestQueueName: ${LOCAL_SERVICEBUS_REPLAY_REQUEST_QUEUE_NAME:-dlq-replay-requests}
+      ServiceBus__MessageTtl: 01:00:00
+      ServiceBus__ReplayEnabled: "false"
+      OpenPay__MerchantId: ${LOCAL_OPENPAY_MERCHANT_ID}
+      OpenPay__PublicKey: ${LOCAL_OPENPAY_PUBLIC_KEY}
+      OpenPay__PrivateKey: ${LOCAL_OPENPAY_PRIVATE_KEY}
+      OpenPay__DeviceSessionId: ${LOCAL_OPENPAY_DEVICE_SESSION_ID}
+      OpenPay__RedirectUrl: http://localhost:5080/payment/callback
+      Razorpay__MerchantId: ${LOCAL_RAZORPAY_MERCHANT_ID}
+      Razorpay__PrivateKey: ${LOCAL_RAZORPAY_PRIVATE_KEY}
+      Webhooks__Razorpay__Secret: ${LOCAL_RAZORPAY_WEBHOOK_SECRET}
+      Webhooks__OpenPay__Secret: ${LOCAL_OPENPAY_WEBHOOK_SECRET}
+      PaymentProviders__UseDeterministicAdapters: ${LOCAL_DETERMINISTIC_PAYMENT_ADAPTERS:-true}
+      IdentityProvider__Enabled: "true"
+      IdentityProvider__Mode: KeycloakLocal
+      IdentityProvider__Authority: http://keycloak-local:8080/realms/xy-phase9
+      IdentityProvider__Audience: xy-order-processing
+      IdentityProvider__Scheme: Bearer
+      IdentityProvider__ClientId: xy-order-processing-backend
+      IdentityProvider__ClientSecret: ${LOCAL_KEYCLOAK_BACKEND_CLIENT_SECRET}
+      PaymentProviders__TenantA__OpenPay__PrivateKey: ${LOCAL_OPENPAY_PRIVATE_KEY}
+      PaymentProviders__TenantB__OpenPay__PrivateKey: ${LOCAL_OPENPAY_PRIVATE_KEY}
+      PaymentProviders__TenantC__OpenPay__PrivateKey: ${LOCAL_OPENPAY_PRIVATE_KEY}
+      PaymentProviders__TenantA__Razorpay__PrivateKey: ${LOCAL_RAZORPAY_PRIVATE_KEY}
+      PaymentProviders__TenantB__Razorpay__PrivateKey: ${LOCAL_RAZORPAY_PRIVATE_KEY}
+      PaymentProviders__TenantC__Razorpay__PrivateKey: ${LOCAL_RAZORPAY_PRIVATE_KEY}
+    volumes:
+      - ../logs:/logs
+    depends_on:
+      sql-server:
+        condition: service_healthy
+    networks:
+      xy-phase10-network:
+        aliases:
+          - orderprocessing-pay-${PHASE10_ENV_SUFFIX:-local}
+    profiles: ["apps"]
+
   inventory:
     image: ghcr.io/${PHASE10_IMAGE_OWNER:-pavanthakur}/orderprocessing-inventory:${PHASE10_IMAGE_TAG:-dev}
     build:
       context: ..
-      dockerfile: XYDataLabs.OrderProcessingSystem.Inventory.API/Dockerfile
+      dockerfile: XYDataLabs.OrderProcessingSystem.Inventory.Host/Dockerfile
       target: final
     ports:
       - "5082:8080"
@@ -161,8 +247,10 @@ services:
       ServiceBus__TopicName: ${LOCAL_SERVICEBUS_TOPIC_NAME:-order-events}
       ServiceBus__SubscriptionName: ${LOCAL_SERVICEBUS_INVENTORY_SUBSCRIPTION_NAME:-inventory-order-created}
       ServiceBus__DeadLetterTopicName: ${LOCAL_SERVICEBUS_DLQ_TOPIC_NAME:-order-events-dlq}
-      ServiceBus__DeadLetterSubscriptionName: ${LOCAL_SERVICEBUS_DLQ_SUBSCRIPTION_NAME:-dlq-replay}
-      ServiceBus__ReplayEnabled: ${LOCAL_SERVICEBUS_REPLAY_ENABLED:-true}
+      ServiceBus__DeadLetterSubscriptionName: ${LOCAL_SERVICEBUS_DLQ_SUBSCRIPTION_NAME:-dlq-intake}
+      ServiceBus__ReplayRequestQueueName: ${LOCAL_SERVICEBUS_REPLAY_REQUEST_QUEUE_NAME:-dlq-replay-requests}
+      ServiceBus__MessageTtl: 01:00:00
+      ServiceBus__ReplayEnabled: "false"
       OpenPay__MerchantId: ${LOCAL_OPENPAY_MERCHANT_ID}
       OpenPay__PublicKey: ${LOCAL_OPENPAY_PUBLIC_KEY}
       OpenPay__PrivateKey: ${LOCAL_OPENPAY_PRIVATE_KEY}
@@ -177,7 +265,7 @@ services:
       IdentityProvider__Audience: xy-order-processing
       IdentityProvider__Scheme: Bearer
       IdentityProvider__ClientId: xy-order-processing-backend
-      IdentityProvider__ClientSecret: local-backend-client-secret
+      IdentityProvider__ClientSecret: ${LOCAL_KEYCLOAK_BACKEND_CLIENT_SECRET}
       PaymentProviders__TenantA__OpenPay__PrivateKey: ${LOCAL_OPENPAY_PRIVATE_KEY}
       PaymentProviders__TenantB__OpenPay__PrivateKey: ${LOCAL_OPENPAY_PRIVATE_KEY}
       PaymentProviders__TenantC__OpenPay__PrivateKey: ${LOCAL_OPENPAY_PRIVATE_KEY}
@@ -186,6 +274,9 @@ services:
       PaymentProviders__TenantC__Razorpay__PrivateKey: ${LOCAL_RAZORPAY_PRIVATE_KEY}
     volumes:
       - ../logs:/logs
+    depends_on:
+      sql-server:
+        condition: service_healthy
     networks:
       xy-phase10-network:
         aliases:
@@ -196,7 +287,7 @@ services:
     image: ghcr.io/${PHASE10_IMAGE_OWNER:-pavanthakur}/orderprocessing-notifications:${PHASE10_IMAGE_TAG:-dev}
     build:
       context: ..
-      dockerfile: XYDataLabs.OrderProcessingSystem.Notifications.API/Dockerfile
+      dockerfile: XYDataLabs.OrderProcessingSystem.Notifications.Host/Dockerfile
       target: final
     ports:
       - "5083:8080"
@@ -212,8 +303,10 @@ services:
       ServiceBus__TopicName: ${LOCAL_SERVICEBUS_TOPIC_NAME:-order-events}
       ServiceBus__SubscriptionName: ${LOCAL_SERVICEBUS_NOTIFICATIONS_SUBSCRIPTION_NAME:-notifications-order-created}
       ServiceBus__DeadLetterTopicName: ${LOCAL_SERVICEBUS_DLQ_TOPIC_NAME:-order-events-dlq}
-      ServiceBus__DeadLetterSubscriptionName: ${LOCAL_SERVICEBUS_DLQ_SUBSCRIPTION_NAME:-dlq-replay}
-      ServiceBus__ReplayEnabled: ${LOCAL_SERVICEBUS_REPLAY_ENABLED:-true}
+      ServiceBus__DeadLetterSubscriptionName: ${LOCAL_SERVICEBUS_DLQ_SUBSCRIPTION_NAME:-dlq-intake}
+      ServiceBus__ReplayRequestQueueName: ${LOCAL_SERVICEBUS_REPLAY_REQUEST_QUEUE_NAME:-dlq-replay-requests}
+      ServiceBus__MessageTtl: 01:00:00
+      ServiceBus__ReplayEnabled: "false"
       OpenPay__MerchantId: ${LOCAL_OPENPAY_MERCHANT_ID}
       OpenPay__PublicKey: ${LOCAL_OPENPAY_PUBLIC_KEY}
       OpenPay__PrivateKey: ${LOCAL_OPENPAY_PRIVATE_KEY}
@@ -228,7 +321,7 @@ services:
       IdentityProvider__Audience: xy-order-processing
       IdentityProvider__Scheme: Bearer
       IdentityProvider__ClientId: xy-order-processing-backend
-      IdentityProvider__ClientSecret: local-backend-client-secret
+      IdentityProvider__ClientSecret: ${LOCAL_KEYCLOAK_BACKEND_CLIENT_SECRET}
       PaymentProviders__TenantA__OpenPay__PrivateKey: ${LOCAL_OPENPAY_PRIVATE_KEY}
       PaymentProviders__TenantB__OpenPay__PrivateKey: ${LOCAL_OPENPAY_PRIVATE_KEY}
       PaymentProviders__TenantC__OpenPay__PrivateKey: ${LOCAL_OPENPAY_PRIVATE_KEY}
@@ -237,6 +330,9 @@ services:
       PaymentProviders__TenantC__Razorpay__PrivateKey: ${LOCAL_RAZORPAY_PRIVATE_KEY}
     volumes:
       - ../logs:/logs
+    depends_on:
+      sql-server:
+        condition: service_healthy
     networks:
       xy-phase10-network:
         aliases:
@@ -258,9 +354,11 @@ services:
       Gateway__AllowedHosts__1: orders.localhost
       Gateway__AllowedHosts__2: inventory.localhost
       Gateway__AllowedHosts__3: notifications.localhost
-      Gateway__AllowedHosts__4: ui.localhost
-      Gateway__AllowedHosts__5: orderprocessing-gate-${PHASE10_ENV_SUFFIX:-local}
+      Gateway__AllowedHosts__4: payments.localhost
+      Gateway__AllowedHosts__5: ui.localhost
+      Gateway__AllowedHosts__6: orderprocessing-gate-${PHASE10_ENV_SUFFIX:-local}
       ReverseProxy__Clusters__orders-cluster__Destinations__orders-primary__Address: http://orderprocessing-ord-${PHASE10_ENV_SUFFIX:-local}:8080
+      ReverseProxy__Clusters__payments-cluster__Destinations__payments-primary__Address: http://orderprocessing-pay-${PHASE10_ENV_SUFFIX:-local}:8080
       ReverseProxy__Clusters__inventory-cluster__Destinations__inventory-primary__Address: http://orderprocessing-inv-${PHASE10_ENV_SUFFIX:-local}:8080
       ReverseProxy__Clusters__notifications-cluster__Destinations__notifications-primary__Address: http://orderprocessing-notif-${PHASE10_ENV_SUFFIX:-local}:8080
       ReverseProxy__Clusters__ui-cluster__Destinations__ui-primary__Address: http://orderprocessing-ui-${PHASE10_ENV_SUFFIX:-local}:5022
@@ -270,11 +368,13 @@ services:
       IdentityProvider__Audience: xy-order-processing
       IdentityProvider__Scheme: Bearer
       IdentityProvider__ClientId: xy-order-processing-backend
-      IdentityProvider__ClientSecret: local-backend-client-secret
+      IdentityProvider__ClientSecret: ${LOCAL_KEYCLOAK_BACKEND_CLIENT_SECRET}
     volumes:
       - ../logs:/logs
     depends_on:
       orders:
+        condition: service_started
+      payments:
         condition: service_started
       inventory:
         condition: service_started
@@ -299,8 +399,6 @@ services:
         VITE_KEYCLOAK_AUTHORITY: http://localhost:8081
         VITE_KEYCLOAK_REALM: xy-phase9
         VITE_KEYCLOAK_CLIENT_ID: xy-order-processing-local-web
-        VITE_KEYCLOAK_USERNAME: tenant-admin
-        VITE_KEYCLOAK_PASSWORD: ${KEYCLOAK_TENANT_ADMIN_PASSWORD}
     ports:
       - "5022:5022"
     environment:
@@ -326,9 +424,10 @@ services:
       dockerfile: XYDataLabs.OrderProcessingSystem.Functions/Dockerfile
       target: final
     ports:
-      - "7071:80"
+      - "5085:80"
     environment:
       AzureWebJobsStorage: ${LOCAL_AZURITE_CONNECTION_STRING}
+      ConnectionStrings__OrderProcessingSystemDbConnection: Server=sql-server,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
       FUNCTIONS_WORKER_RUNTIME: dotnet-isolated
       ASPNETCORE_ENVIRONMENT: Development
       ServiceBusConnection: ${LOCAL_SERVICEBUS_CONNECTION_STRING}
@@ -336,12 +435,15 @@ services:
       ServiceBus__ConnectionString: ${LOCAL_SERVICEBUS_CONNECTION_STRING}
       ServiceBus__TopicName: ${LOCAL_SERVICEBUS_TOPIC_NAME:-order-events}
       ServiceBus__DeadLetterTopicName: ${LOCAL_SERVICEBUS_DLQ_TOPIC_NAME:-order-events-dlq}
-      ServiceBus__DeadLetterSubscriptionName: ${LOCAL_SERVICEBUS_DLQ_SUBSCRIPTION_NAME:-dlq-replay}
+      ServiceBus__DeadLetterSubscriptionName: ${LOCAL_SERVICEBUS_DLQ_SUBSCRIPTION_NAME:-dlq-intake}
+      ServiceBus__ReplayRequestQueueName: ${LOCAL_SERVICEBUS_REPLAY_REQUEST_QUEUE_NAME:-dlq-replay-requests}
       ServiceBus__MaxDeliveryCount: 10
-      ServiceBus__MessageTtl: P7D
-      ServiceBus__ReplayEnabled: ${LOCAL_SERVICEBUS_REPLAY_ENABLED:-true}
+      ServiceBus__MessageTtl: 01:00:00
+      ServiceBus__ReplayEnabled: ${LOCAL_SERVICEBUS_REPLAY_ENABLED:-false}
       Phase10DlqTopicName: ${LOCAL_SERVICEBUS_DLQ_TOPIC_NAME:-order-events-dlq}
-      Phase10DlqSubscriptionName: ${LOCAL_SERVICEBUS_DLQ_SUBSCRIPTION_NAME:-dlq-replay}
+      Phase10DlqIntakeSubscriptionName: ${LOCAL_SERVICEBUS_DLQ_SUBSCRIPTION_NAME:-dlq-intake}
+      Phase10ReplayRequestQueueName: ${LOCAL_SERVICEBUS_REPLAY_REQUEST_QUEUE_NAME:-dlq-replay-requests}
+      WEBSITES_INCLUDE_CLOUD_CERTS: "true"
     networks:
       - xy-phase10-network
     profiles: ["functions"]

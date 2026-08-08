@@ -106,6 +106,11 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
         public virtual DbSet<TransactionStatusHistory> TransactionStatusHistories { get; set; }
         public virtual DbSet<OutboxMessage> OutboxMessages { get; set; }
         public virtual DbSet<InboxMessage> InboxMessages { get; set; }
+        public virtual DbSet<DlqQuarantineRecord> DlqQuarantineRecords { get; set; }
+        public virtual DbSet<DlqReplayRequest> DlqReplayRequests { get; set; }
+        public virtual DbSet<ConsumerInboxMessage> ConsumerInboxMessages { get; set; }
+        public virtual DbSet<InventoryReservation> InventoryReservations { get; set; }
+        public virtual DbSet<NotificationDelivery> NotificationDeliveries { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
@@ -153,6 +158,11 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
             modelBuilder.Entity<PaymentAttempt>().ToTable(nameof(PaymentAttempts), ModuleSchemaNames.Payments);
             modelBuilder.Entity<PaymentAttemptHistory>().ToTable(nameof(PaymentAttemptHistories), ModuleSchemaNames.Payments);
             modelBuilder.Entity<TransactionStatusHistory>().ToTable(nameof(TransactionStatusHistories), ModuleSchemaNames.Payments);
+            modelBuilder.Entity<DlqQuarantineRecord>().ToTable(nameof(DlqQuarantineRecords), ModuleSchemaNames.Operations);
+            modelBuilder.Entity<DlqReplayRequest>().ToTable(nameof(DlqReplayRequests), ModuleSchemaNames.Operations);
+            modelBuilder.Entity<ConsumerInboxMessage>().ToTable(nameof(ConsumerInboxMessages), ModuleSchemaNames.Operations);
+            modelBuilder.Entity<InventoryReservation>().ToTable(nameof(InventoryReservations), ModuleSchemaNames.Inventory);
+            modelBuilder.Entity<NotificationDelivery>().ToTable(nameof(NotificationDeliveries), ModuleSchemaNames.Notifications);
 
             // Configure many-to-many relationship
             modelBuilder.Entity<OrderProduct>()
@@ -330,6 +340,117 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext
             modelBuilder.Entity<InboxMessage>()
                 .HasIndex(message => new { message.TenantId, message.MessageId })
                 .IsUnique();
+
+            modelBuilder.Entity<DlqQuarantineRecord>()
+                .HasIndex(record => record.SourceMessageId)
+                .IsUnique();
+
+            modelBuilder.Entity<DlqReplayRequest>()
+                .HasIndex(request => request.QuarantineId)
+                .IsUnique();
+
+            modelBuilder.Entity<ConsumerInboxMessage>()
+                .HasIndex(message => new { message.TenantId, message.ConsumerName, message.MessageId })
+                .IsUnique();
+
+            modelBuilder.Entity<InventoryReservation>()
+                .HasIndex(reservation => new { reservation.TenantId, reservation.OrderReferenceId })
+                .IsUnique();
+
+            modelBuilder.Entity<NotificationDelivery>()
+                .HasIndex(delivery => new
+                {
+                    delivery.TenantId,
+                    delivery.OrderReferenceId,
+                    delivery.NotificationType
+                })
+                .IsUnique();
+
+            modelBuilder.Entity<Order>()
+                .HasIndex(order => new { order.TenantId, order.OrderReferenceId })
+                .IsUnique();
+
+            modelBuilder.Entity<Order>()
+                .Property(order => order.OrderReferenceId)
+                .HasDefaultValueSql("NEWSEQUENTIALID()");
+
+            modelBuilder.Entity<DlqReplayRequest>()
+                .HasOne(request => request.Quarantine)
+                .WithMany()
+                .HasForeignKey(request => request.QuarantineId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<DlqQuarantineRecord>()
+                .Property(record => record.SourceMessageId)
+                .HasMaxLength(128);
+
+            modelBuilder.Entity<DlqQuarantineRecord>()
+                .Property(record => record.EventType)
+                .HasMaxLength(256);
+
+            modelBuilder.Entity<DlqQuarantineRecord>()
+                .Property(record => record.ContentType)
+                .HasMaxLength(128);
+
+            modelBuilder.Entity<DlqQuarantineRecord>()
+                .Property(record => record.CorrelationId)
+                .HasMaxLength(128);
+
+            modelBuilder.Entity<DlqQuarantineRecord>()
+                .Property(record => record.Subject)
+                .HasMaxLength(256);
+
+            modelBuilder.Entity<DlqQuarantineRecord>()
+                .Property(record => record.FailureReason)
+                .HasMaxLength(256);
+
+            modelBuilder.Entity<DlqQuarantineRecord>()
+                .Property(record => record.FailureDescription)
+                .HasMaxLength(2048);
+
+            modelBuilder.Entity<DlqQuarantineRecord>()
+                .Property(record => record.State)
+                .HasMaxLength(32);
+
+            modelBuilder.Entity<DlqQuarantineRecord>()
+                .Property(record => record.ApprovedBy)
+                .HasMaxLength(256);
+
+            modelBuilder.Entity<DlqReplayRequest>()
+                .Property(request => request.ApprovedBy)
+                .HasMaxLength(256);
+
+            modelBuilder.Entity<DlqReplayRequest>()
+                .Property(request => request.LastError)
+                .HasMaxLength(2048);
+
+            modelBuilder.Entity<ConsumerInboxMessage>()
+                .Property(message => message.ConsumerName)
+                .HasMaxLength(128);
+
+            modelBuilder.Entity<ConsumerInboxMessage>()
+                .Property(message => message.EventType)
+                .HasMaxLength(256);
+
+            modelBuilder.Entity<ConsumerInboxMessage>()
+                .Property(message => message.CorrelationId)
+                .HasMaxLength(128);
+
+            modelBuilder.Entity<InventoryReservation>()
+                .Property(reservation => reservation.CorrelationId)
+                .HasMaxLength(128);
+
+            modelBuilder.Entity<NotificationDelivery>()
+                .Property(delivery => delivery.NotificationType)
+                .HasMaxLength(128);
+
+            modelBuilder.Entity<NotificationDelivery>()
+                .Property(delivery => delivery.Sink)
+                .HasMaxLength(128);
+
+            modelBuilder.Entity<NotificationDelivery>()
+                .Property(delivery => delivery.CorrelationId)
+                .HasMaxLength(128);
 
             // DB-level dedup guard: one InboxMessage per (TenantId, ProviderEventId).
             // Filtered on non-empty ProviderEventId to exclude legacy rows or outbox-sourced messages.

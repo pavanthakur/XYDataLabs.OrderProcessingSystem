@@ -1,5 +1,6 @@
 using XYDataLabs.OrderProcessingSystem.Application.Events;
 using XYDataLabs.OrderProcessingSystem.Domain.Events;
+using XYDataLabs.OrderProcessingSystem.Payments.Contracts.Events;
 
 namespace XYDataLabs.OrderProcessingSystem.Payments.Features.Events;
 

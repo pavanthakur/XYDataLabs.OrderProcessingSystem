@@ -1,10 +1,10 @@
 using Microsoft.Extensions.Logging;
-using XYDataLabs.OrderProcessingSystem.Application.Events;
+using SharedIntegrationEvent = XYDataLabs.OrderProcessingSystem.Eventing.Abstractions.IIntegrationEvent;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.Events;
 
 public class IdempotentEventHandlerDecorator<TEvent> : IEventHandler<TEvent>
-    where TEvent : class, IIntegrationEvent
+    where TEvent : class, SharedIntegrationEvent
 {
     private readonly IEventHandler<TEvent> _innerHandler;
     private readonly IIdempotencyGuard _idempotencyGuard;

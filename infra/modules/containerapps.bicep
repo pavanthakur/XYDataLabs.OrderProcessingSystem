@@ -33,6 +33,9 @@ param cpuCores string = '0.25'
 @description('Inventory subscription name')
 param inventorySubscriptionName string = 'inventory-order-created'
 
+@description('Orders payment-state subscription name')
+param ordersPaymentStateSubscriptionName string = 'orders-payment-state'
+
 @description('Notifications subscription name')
 param notificationsSubscriptionName string = 'notifications-order-created'
 
@@ -149,6 +152,12 @@ var publisherEnv = [
   }
 ]
 var runtimeCommonEnv = concat(commonEnv, sqlEnv, redisEnv)
+var ordersEnv = concat(publisherEnv, [
+  {
+    name: 'ServiceBus__PaymentStateSubscriptionName'
+    value: ordersPaymentStateSubscriptionName
+  }
+])
 var inventoryEnv = concat(publisherEnv, [
   {
     name: 'ServiceBus__SubscriptionName'
@@ -280,14 +289,14 @@ resource ordersApp 'Microsoft.App/containerApps@2024-03-01' = {
       }
     }
     template: {
-      containers: [
-        {
-          name: 'orders'
-          image: ordersImage
-          env: concat(runtimeCommonEnv, publisherEnv)
-          resources: {
-            cpu: json(cpuCores)
-            memory: '0.5Gi'
+        containers: [
+          {
+            name: 'orders'
+            image: ordersImage
+            env: concat(runtimeCommonEnv, ordersEnv)
+            resources: {
+              cpu: json(cpuCores)
+              memory: '0.5Gi'
           }
         }
       ]

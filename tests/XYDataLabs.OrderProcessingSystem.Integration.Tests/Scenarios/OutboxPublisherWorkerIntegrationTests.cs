@@ -4,7 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
 using XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure;
 using XYDataLabs.OrderProcessingSystem.Application.Events;
-using XYDataLabs.OrderProcessingSystem.Orders.Features.Events;
+using XYDataLabs.OrderProcessingSystem.Orders.Contracts.Events;
 using System.Text.Json;
 
 namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Scenarios;
@@ -26,7 +26,7 @@ public sealed class OutboxPublisherWorkerIntegrationTests : IAsyncLifetime
         _factory = new IntegrationTestWebAppFactory(
             _fixture.ConnectionString,
             _fixture.DedicatedDbConnectionString,
-            enableBackgroundWorkers: true);
+            enableBackgroundWorkers: false);
         _ = _factory.CreateClient(); // Force host initialization
         return Task.CompletedTask;
     }
@@ -41,12 +41,15 @@ public sealed class OutboxPublisherWorkerIntegrationTests : IAsyncLifetime
     {
         // Arrange
         var tenant = await IntegrationTestData.CreateTenantAsync(_factory);
+        var orderReferenceId = Guid.NewGuid();
 
         var payload = JsonSerializer.Serialize(new OrderCreatedV1(
             1,
             DateTime.UtcNow,
             100m,
-            2));
+            2,
+            orderReferenceId,
+            "MXN"));
 
         var messageId = Guid.NewGuid();
 
@@ -65,34 +68,27 @@ public sealed class OutboxPublisherWorkerIntegrationTests : IAsyncLifetime
                 TenantId = tenant.TenantId
             });
             await dbContext.SaveChangesAsync();
-            return true;
+                return true;
         });
 
-        // Act & Assert
-        // We wait for the Background Service to pick up the message (polls every 5s)
-        var maxWaitDelay = TimeSpan.FromSeconds(15);
-        var pollInterval = TimeSpan.FromMilliseconds(500);
-        var elapsed = TimeSpan.Zero;
-        bool processed = false;
+        // Act
+        // Background polling is intentionally exercised by the restart/replay test below.
+        // This assertion is made deterministic by invoking one explicit worker pass here,
+        // so suite-level scheduling jitter does not create a flaky proof gate.
+        await InvokeOutboxWorkerAsync(_factory.Services);
 
-        while (elapsed < maxWaitDelay)
+        // Assert
+        var processedMessage = await _factory.ExecuteTenantDbContextAsync(tenant.ToTenantContext(), async dbContext =>
         {
-            var isProcessed = await _factory.ExecuteTenantDbContextAsync(tenant.ToTenantContext(), async dbContext => {
-                var msg = await dbContext.OutboxMessages.FirstOrDefaultAsync(m => m.MessageId == messageId);
-                return msg != null && msg.ProcessedAt != null;
-            });
+            return await dbContext.OutboxMessages.FirstOrDefaultAsync(m => m.MessageId == messageId);
+        });
 
-            if (isProcessed)
-            {
-                processed = true;
-                break;
-            }
-
-            await Task.Delay(pollInterval);
-            elapsed += pollInterval;
-        }
-
-        processed.Should().BeTrue("the outbox worker should pick up the tenant-scoped message and set ProcessedAt");
+        processedMessage.Should().NotBeNull();
+        processedMessage!.ProcessedAt.Should().NotBeNull(
+            "the outbox worker should pick up the tenant-scoped message and set ProcessedAt. " +
+            "PublishAttempts={0}, LastError={1}",
+            processedMessage.PublishAttempts,
+            processedMessage.LastError ?? "<null>");
     }
 
     [Fact]
@@ -109,6 +105,7 @@ public sealed class OutboxPublisherWorkerIntegrationTests : IAsyncLifetime
         {
             var tenant = await IntegrationTestData.CreateTenantAsync(firstFactory);
             var messageId = Guid.NewGuid();
+            var orderReferenceId = Guid.NewGuid();
 
             await firstFactory.ExecuteTenantDbContextAsync(tenant.ToTenantContext(), async dbContext =>
             {
@@ -118,7 +115,13 @@ public sealed class OutboxPublisherWorkerIntegrationTests : IAsyncLifetime
                     EventType = nameof(OrderCreatedV1),
                     SchemaVersion = 1,
                     OccurredUtc = DateTime.UtcNow,
-                    Payload = JsonSerializer.Serialize(new OrderCreatedV1(1, DateTime.UtcNow, 10m, 1)),
+                    Payload = JsonSerializer.Serialize(new OrderCreatedV1(
+                        1,
+                        DateTime.UtcNow,
+                        10m,
+                        1,
+                        orderReferenceId,
+                        "MXN")),
                     PublishAttempts = 0,
                     TenantId = tenant.TenantId
                 });
@@ -161,12 +164,14 @@ public sealed class OutboxPublisherWorkerIntegrationTests : IAsyncLifetime
         XYDataLabs.OrderProcessingSystem.SharedKernel.Multitenancy.TenantContext tenantContext,
         Guid messageId)
     {
+        OutboxMessage? lastObservedMessage = null;
         var timeoutAt = DateTime.UtcNow.AddSeconds(15);
 
         while (DateTime.UtcNow < timeoutAt)
         {
             var message = await factory.ExecuteTenantDbContextAsync(tenantContext, dbContext =>
                 dbContext.OutboxMessages.SingleAsync(item => item.MessageId == messageId));
+            lastObservedMessage = message;
 
             if (message.ProcessedAt is not null)
             {
@@ -176,7 +181,10 @@ public sealed class OutboxPublisherWorkerIntegrationTests : IAsyncLifetime
             await Task.Delay(TimeSpan.FromMilliseconds(500));
         }
 
-        throw new TimeoutException("The restarted outbox worker did not replay the pending message within the expected window.");
+        throw new TimeoutException(
+            $"The restarted outbox worker did not replay the pending message within the expected window. " +
+            $"Last observed PublishAttempts={lastObservedMessage?.PublishAttempts}, " +
+            $"LastError={lastObservedMessage?.LastError ?? "<null>"}.");
     }
 
     private static async Task InvokeOutboxWorkerAsync(IServiceProvider services)
@@ -206,3 +214,5 @@ public sealed class OutboxPublisherWorkerIntegrationTests : IAsyncLifetime
         }
     }
 }
+
+

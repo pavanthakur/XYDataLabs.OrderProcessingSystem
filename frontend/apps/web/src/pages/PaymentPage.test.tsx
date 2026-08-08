@@ -327,4 +327,113 @@ describe("PaymentPage", () => {
 
     expect(await screen.findByText("Provider confirmation (Razorpay)")).toBeInTheDocument();
   });
+
+  it("uses the order reference for an order-linked request and persists the authoritative callback context", async () => {
+    useNonLocalHostname();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+
+    (window as Window & { OpenPay?: unknown }).OpenPay = {
+      setId: vi.fn(),
+      setApiKey: vi.fn(),
+      setSandboxMode: vi.fn(),
+      deviceData: {
+        setup: vi.fn().mockReturnValue("device-session-123")
+      }
+    };
+
+    const orderReferenceId = "11111111-1111-1111-1111-111111111111";
+    const processPayment = vi.fn().mockResolvedValue({
+      id: "pay-order-123",
+      customerOrderId: "OR-1782545214-29Jul-tA-http-local-op",
+      orderReferenceId,
+      customerId: "cust-123",
+      amount: 100,
+      currency: "MXN",
+      status: "completed",
+      createdAt: "2026-07-29T12:00:00Z",
+      transactionId: "auth-ref-001",
+      isThreeDSecureEnabled: false,
+      threeDSecureStage: "not_applicable",
+      threeDSecureUrl: null
+    } satisfies PaymentResult);
+
+    const confirmPaymentStatus = vi.fn().mockResolvedValue({
+      paymentId: "pay-order-123",
+      customerOrderId: "OR-1782545214-29Jul-tA-http-local-op",
+      status: "completed",
+      statusCategory: "success",
+      statusMessage: "Payment completed successfully.",
+      isSuccess: true,
+      isPending: false,
+      isFailure: false,
+      isFinal: true,
+      callbackRecorded: false,
+      remoteStatusConfirmed: true,
+      statusSource: "openpay",
+      transactionReferenceId: "auth-ref-001",
+      isThreeDSecureEnabled: false,
+      threeDSecureStage: "not_applicable"
+    } satisfies PaymentStatusDetails);
+
+    const apiClient = {
+      getPaymentConfiguration: vi.fn().mockResolvedValue(openPayConfiguration),
+      processPayment,
+      confirmPaymentStatus,
+      getOrderById: vi.fn().mockResolvedValue({
+        orderId: 42,
+        orderReferenceId,
+        orderDate: "2026-07-29T11:00:00Z",
+        customerId: 7,
+        totalPrice: 100,
+        currencyCode: "MXN",
+        status: "Created",
+        isFulfilled: false,
+        orderProductDtos: []
+      })
+    } as unknown as OrderProcessingApiClient;
+
+    render(
+      <MemoryRouter initialEntries={["/customers/7/orders/42/payments/new"]}>
+        <Routes>
+          <Route
+            path="/customers/:customerId/orders/:orderId/payments/new"
+            element={<PaymentPage activeTenantCode="TenantA" apiClient={apiClient} />}
+          />
+          <Route
+            path="/payments/callback"
+            element={<PaymentCallbackPage activeTenantCode="TenantA" apiClient={apiClient} onTenantChange={vi.fn()} />}
+          />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const user = userEvent.setup();
+
+    await screen.findByText("Collect payment for order #42");
+    await user.type(screen.getByLabelText("Cardholder name"), "Alice Smith");
+    await user.type(screen.getByLabelText("Email"), "alice@example.com");
+    await user.type(screen.getByLabelText("Card number"), "4111111111111111");
+    await user.type(screen.getByLabelText("Expiry month"), "12");
+    await user.type(screen.getByLabelText("Expiry year"), "26");
+    await user.type(screen.getByLabelText("CVV"), "123");
+    await user.click(screen.getByRole("button", { name: "Process payment" }));
+
+    await waitFor(() => expect(processPayment).toHaveBeenCalledTimes(1));
+    expect(processPayment).toHaveBeenCalledWith(expect.objectContaining({
+      customerOrderId: "ORDER-42",
+      orderReferenceId
+    }));
+
+    await waitFor(() => expect(confirmPaymentStatus).toHaveBeenCalledWith(
+      "pay-order-123",
+      expect.objectContaining({
+        callbackStatus: "completed"
+      }),
+      "TenantA"
+    ));
+
+    expect(await screen.findByText("Payment completed successfully.")).toBeInTheDocument();
+    expect(screen.getByText("OR-1782545214-29Jul-tA-http-local-op")).toBeInTheDocument();
+    expect(screen.getByText(orderReferenceId)).toBeInTheDocument();
+  });
 });

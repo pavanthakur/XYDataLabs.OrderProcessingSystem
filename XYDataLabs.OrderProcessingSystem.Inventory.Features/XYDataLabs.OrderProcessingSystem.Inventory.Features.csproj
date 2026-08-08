@@ -6,6 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Application\XYDataLabs.OrderProcessingSystem.Application.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Eventing.Abstractions\XYDataLabs.OrderProcessingSystem.Eventing.Abstractions.csproj" />
     <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Inventory.Domain\XYDataLabs.OrderProcessingSystem.Inventory.Domain.csproj" />
     <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Inventory.API\XYDataLabs.OrderProcessingSystem.Inventory.API.csproj" />
     <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Notifications.Features\XYDataLabs.OrderProcessingSystem.Notifications.Features.csproj" />

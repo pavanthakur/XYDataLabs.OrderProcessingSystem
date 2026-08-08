@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Moq;
-using XYDataLabs.OrderProcessingSystem.API.Controllers;
+using XYDataLabs.OrderProcessingSystem.Notifications.API.Controllers;
 using XYDataLabs.OrderProcessingSystem.Notifications.API;
 
 namespace XYDataLabs.OrderProcessingSystem.API.Tests.Controllers;

@@ -199,6 +199,10 @@ function Get-RunPrefixFromCustomerOrder {
         return [string] $Matches[1]
     }
 
+    if ($CustomerOrderId -match '^(ORDER-\d+)') {
+        return [string] $Matches[1]
+    }
+
     if ($CustomerOrderId -match 'local-(?:razorpay|openpay)-(?<runPrefix>OR-\d+-[^-]+)') {
         return [string] $Matches.runPrefix
     }
@@ -318,6 +322,131 @@ function Get-DockerSqlConnectionString {
 
     $password = Get-SqlPasswordFromEnvLocal
     return "Server=localhost,1433;Database=$Database;User Id=sa;Password=$password;Encrypt=False;TrustServerCertificate=True;MultipleActiveResultSets=true;"
+}
+
+function Convert-DockerComposeLogLine {
+    param([Parameter(Mandatory = $true)] [string] $Line)
+
+    if ($Line -notmatch '^(?<service>[^\|]+?)\s*\|\s+(?<timestamp>\S+)\s+(?<message>.*)$') {
+        return $null
+    }
+
+    try {
+        $timestamp = [datetimeoffset]::Parse($Matches.timestamp)
+    }
+    catch {
+        return $null
+    }
+
+    $serviceName = $Matches.service.Trim()
+    $serviceName = $serviceName -replace '-\d+$', ''
+
+    return '{0} [{1}] {2}' -f $timestamp.ToString('yyyy-MM-dd HH:mm:ss.fff zzz'), $serviceName, $Matches.message.TrimEnd()
+}
+
+function Get-PhysicalApiEvidence {
+    param(
+        [Parameter(Mandatory = $true)] [string] $Runtime,
+        [Parameter(Mandatory = $true)] [string] $Environment,
+        [Parameter(Mandatory = $true)] [string] $Profile,
+        [Parameter(Mandatory = $true)] [string] $LogDirectory,
+        [Parameter(Mandatory = $true)] [string[]] $ApiLogPatterns,
+        [Parameter(Mandatory = $true)] [string] $RepoRoot,
+        [Parameter(Mandatory = $false)] [string] $EnvLocalPath = ''
+    )
+
+    $evidencePattern = 'Generated payment|created charge|charge created|callback reconciliation completed|confirm-status responded|Response: 200.*OR-|Response: 404.*OR-|ui_payment_submit_started|ui_payment_callback_failed|ui_payment_callback_received'
+
+    if ($Runtime -eq 'docker') {
+        $composeFile = Join-Path $RepoRoot 'compose\docker-compose.phase10.yml'
+        if (-not (Test-Path -LiteralPath $composeFile)) {
+            throw "Docker compose file not found: $composeFile"
+        }
+
+        $services = @('gateway', 'orders', 'payments', 'inventory', 'notifications')
+        $composeArguments = @('compose')
+        if (-not [string]::IsNullOrWhiteSpace($EnvLocalPath) -and (Test-Path -LiteralPath $EnvLocalPath)) {
+            $composeArguments += @('--env-file', $EnvLocalPath)
+        }
+
+        $composeArguments += @(
+            '-f', $composeFile,
+            '--profile', 'data',
+            '--profile', 'storage',
+            '--profile', 'messaging',
+            '--profile', 'identity',
+            '--profile', 'apps',
+            '--profile', 'functions',
+            'logs',
+            '--no-color',
+            '--timestamps'
+        )
+        $composeArguments += $services
+        $rawLines = & docker @composeArguments 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw "docker compose logs failed with exit code $LASTEXITCODE while reading physical evidence for $Environment/$Profile."
+        }
+
+        $normalizedLines = @(
+            foreach ($rawLine in @($rawLines)) {
+                $normalized = Convert-DockerComposeLogLine -Line ([string] $rawLine)
+                if (-not [string]::IsNullOrWhiteSpace($normalized)) {
+                    $normalized
+                }
+            }
+        )
+
+        $filteredLines = @(
+            $normalizedLines |
+                Select-String -Pattern $evidencePattern |
+                ForEach-Object { $_.Line.Trim() }
+        )
+
+        return [PSCustomObject] @{
+            Label = "docker compose logs from $composeFile (services: $($services -join ', '))"
+            Lines = @($filteredLines)
+            Source = 'docker'
+        }
+    }
+
+    if (-not (Test-Path $LogDirectory)) {
+        throw "API log directory not found: $LogDirectory"
+    }
+
+    $apiLogFiles = @()
+    foreach ($pattern in $ApiLogPatterns) {
+        $apiLogFiles += Get-ChildItem -Path $LogDirectory -Filter $pattern -File -ErrorAction SilentlyContinue
+    }
+
+    if ($null -ne $apiLogFiles) {
+        $apiLogFiles = @($apiLogFiles | Sort-Object Name -Unique)
+    }
+    else {
+        $apiLogFiles = @()
+    }
+
+    if ($apiLogFiles.Count -eq 0) {
+        return [PSCustomObject] @{
+            Label = ''
+            Lines = @()
+            Source = 'files'
+        }
+    }
+
+    $apiLogPaths = @($apiLogFiles | Select-Object -ExpandProperty FullName)
+    $apiLogLabel = $apiLogPaths -join ', '
+    $apiLogLines = @(
+        $apiLogFiles |
+            Get-Content |
+            Select-String -Pattern $evidencePattern |
+            ForEach-Object { $_.Line.Trim() }
+    )
+
+    return [PSCustomObject] @{
+        Label = $apiLogLabel
+        Lines = @($apiLogLines)
+        Source = 'files'
+    }
 }
 
 function Invoke-PhysicalSqlQuery {
@@ -644,36 +773,19 @@ function Convert-UiLogLinesToEvents {
     return @($events | Sort-Object Timestamp)
 }
 
-if (-not (Test-Path $logDirectory)) {
-    throw "API log directory not found: $logDirectory"
-}
+$physicalApiEvidence = Get-PhysicalApiEvidence -Runtime $Runtime -Environment $Environment -Profile $Profile -LogDirectory $logDirectory -ApiLogPatterns $apiLogPatterns -RepoRoot $repoRoot -EnvLocalPath $envLocalPath
+$apiLogLabel = $physicalApiEvidence.Label
+$apiLogLines = @($physicalApiEvidence.Lines)
 
-$apiLogFiles = @()
-foreach ($pattern in $apiLogPatterns) {
-    $apiLogFiles += Get-ChildItem -Path $logDirectory -Filter $pattern -File -ErrorAction SilentlyContinue
-}
-if ($null -ne $apiLogFiles) {
-    $apiLogFiles = @($apiLogFiles | Sort-Object Name -Unique)
-} else {
-    $apiLogFiles = @()
-}
-
-if ($apiLogFiles.Count -eq 0) {
+if ([string]::IsNullOrWhiteSpace($apiLogLabel)) {
     $patternList = $apiLogPatterns -join "', '"
     throw "API or gateway log files not found for patterns '$patternList' in $logDirectory"
 }
 
-$apiLogPaths = @($apiLogFiles | Select-Object -ExpandProperty FullName)
-$apiLogLabel = $apiLogPaths -join ', '
-
 Write-Step "Reading API logs from $apiLogLabel"
-$apiLogLines = $apiLogFiles |
-    Get-Content |
-    Select-String -Pattern 'Generated payment|created charge|charge created|callback reconciliation completed|confirm-status responded|Response: 200.*OR-|Response: 404.*OR-|ui_payment_submit_started|ui_payment_callback_failed|ui_payment_callback_received' |
-    ForEach-Object { $_.Line.Trim() }
 
-if (@($apiLogLines).Count -eq 0) {
-    throw "No API log lines matched the physical verifier filter. Log files searched: $apiLogLabel. If this run was only a webhook matrix smoke, use -RunPrefix to anchor the verification or expand the log filter."
+if ($apiLogLines.Count -eq 0) {
+    throw "No API log lines matched the physical verifier filter. Evidence source: $apiLogLabel. If this run was only a webhook matrix smoke, use -RunPrefix to anchor the verification or expand the log filter."
 }
 
 $apiEvents = Convert-ApiLogLinesToEvents -Lines @($apiLogLines)
@@ -704,10 +816,9 @@ if ($availableRunPrefixes.Count -gt 0 -and $availableRunPrefixes -notcontains $s
     while ($attempt -le 6 -and $availableRunPrefixes -notcontains $selectedRunPrefix) {
         Start-Sleep -Seconds 5
 
-        $apiLogLines = $apiLogFiles |
-            Get-Content |
-            Select-String -Pattern 'Generated payment|created charge|charge created|callback reconciliation completed|confirm-status responded|Response: 200.*OR-|Response: 404.*OR-|ui_payment_submit_started|ui_payment_callback_failed|ui_payment_callback_received' |
-            ForEach-Object { $_.Line.Trim() }
+        $physicalApiEvidence = Get-PhysicalApiEvidence -Runtime $Runtime -Environment $Environment -Profile $Profile -LogDirectory $logDirectory -ApiLogPatterns $apiLogPatterns -RepoRoot $repoRoot -EnvLocalPath $envLocalPath
+        $apiLogLabel = $physicalApiEvidence.Label
+        $apiLogLines = @($physicalApiEvidence.Lines)
 
         $apiEvents = Convert-ApiLogLinesToEvents -Lines @($apiLogLines)
         $availableRunPrefixes = @($apiEvents | Where-Object { -not [string]::IsNullOrWhiteSpace($_.ResolvedRunPrefix) } | Select-Object -ExpandProperty ResolvedRunPrefix -Unique)
@@ -746,8 +857,7 @@ $uiEvents = @()
 $selectedUiEvents = @()
 
 Write-Step "Reading browser UI telemetry from $apiLogLabel"
-$uiEvidenceLines = $apiLogFiles |
-    Get-Content |
+$uiEvidenceLines = $apiLogLines |
     Select-String -Pattern $selectedRunPrefix |
     ForEach-Object { $_.Line.Trim() } |
     Where-Object {
@@ -856,7 +966,7 @@ if ($null -ne $tenantCRow) {
 }
 
 $expectedOrdersByTenant = @{}
-foreach ($tenantGroup in ($selectedApiEvents | Where-Object { -not [string]::IsNullOrWhiteSpace($_.ResolvedCustomerOrderId) } | Group-Object Tenant)) {
+foreach ($tenantGroup in ($selectedApiEvents | Where-Object { -not [string]::IsNullOrWhiteSpace($_.ResolvedCustomerOrderId) -and -not [string]::IsNullOrWhiteSpace($_.Tenant) } | Group-Object Tenant)) {
     $expectedOrdersByTenant[$tenantGroup.Name] = @($tenantGroup.Group | Select-Object -ExpandProperty ResolvedCustomerOrderId -Unique)
 }
 

@@ -13,7 +13,7 @@ public static class CustomerMappings
         Name = customer.Name,
         Email = customer.Email,
         OrderDtos = (customer.Orders ?? Enumerable.Empty<Order>())
-            .Select(o => (XYDataLabs.OrderProcessingSystem.Orders.API.OrderDto)o.ToCustomerOrderDto())
+            .Select(o => (XYDataLabs.OrderProcessingSystem.Orders.Contracts.OrderDto)o.ToCustomerOrderDto())
             .ToList()
     };
 

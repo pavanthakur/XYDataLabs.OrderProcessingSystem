@@ -3,7 +3,10 @@ param(
     [int]$TimeoutSeconds = 180,
 
     [ValidateRange(1, 10)]
-    [int]$PollIntervalSeconds = 2
+    [int]$PollIntervalSeconds = 2,
+
+    [ValidateRange(30, 1800)]
+    [int]$BootstrapTimeoutSeconds = 600
 )
 
 $ErrorActionPreference = 'Stop'
@@ -65,19 +68,64 @@ function Test-SqlConnection {
     }
 }
 
+function Invoke-LocalDatabaseBootstrap {
+    param(
+        [Parameter(Mandatory = $true)]
+        [int]$TimeoutSeconds
+    )
+
+    $toolProjectPath = Join-Path $workspaceRoot 'tools\Phase10.DatabaseBootstrap\Phase10.DatabaseBootstrap.csproj'
+    if (-not (Test-Path -LiteralPath $toolProjectPath)) {
+        throw "Database bootstrap tool project not found: $toolProjectPath"
+    }
+
+    Write-Host "Running explicit local database bootstrap..." -ForegroundColor Cyan
+    $arguments = @(
+        'run'
+        '--project'
+        $toolProjectPath
+        '--configuration'
+        'Debug'
+    )
+
+    $process = Start-Process `
+        -FilePath 'dotnet' `
+        -ArgumentList $arguments `
+        -WorkingDirectory $workspaceRoot `
+        -NoNewWindow `
+        -PassThru
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while (-not $process.HasExited) {
+        if ((Get-Date) -ge $deadline) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            throw "Local database bootstrap timed out after $TimeoutSeconds seconds."
+        }
+
+        Start-Sleep -Seconds 2
+        $process.Refresh()
+    }
+
+    if ($process.ExitCode -ne 0) {
+        throw "Local database bootstrap failed with exit code $($process.ExitCode)."
+    }
+}
+
 Write-Host "Verifying local DB readiness for API launch..." -ForegroundColor Cyan
 Write-Host "Shared settings: $resolvedSharedSettingsPath" -ForegroundColor DarkGray
 Write-Host "Connection string: $(Format-ConnectionStringForLog $connectionString)" -ForegroundColor DarkGray
 
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
 $attempt = 0
+$sqlReady = $false
 
 while ((Get-Date) -lt $deadline) {
     $attempt++
     try {
         if (Test-SqlConnection -ConnectionString $connectionString) {
+            $sqlReady = $true
             Write-Host "Local DB is reachable and compatible." -ForegroundColor Green
-            exit 0
+            break
         }
     }
     catch {
@@ -96,4 +144,9 @@ while ((Get-Date) -lt $deadline) {
     Start-Sleep -Seconds $PollIntervalSeconds
 }
 
-throw "Timed out waiting for local DB readiness after $TimeoutSeconds seconds."
+if (-not $sqlReady) {
+    throw "Timed out waiting for local DB readiness after $TimeoutSeconds seconds."
+}
+
+Invoke-LocalDatabaseBootstrap -TimeoutSeconds $BootstrapTimeoutSeconds
+Write-Host "Local DB bootstrap completed successfully." -ForegroundColor Green

@@ -61,6 +61,7 @@ jobs:
             'LOCAL_RAZORPAY_PRIVATE_KEY=local-sandbox-only'
             'LOCAL_RAZORPAY_WEBHOOK_SECRET=local-sandbox-only'
             'KEYCLOAK_TENANT_ADMIN_PASSWORD=Phase10_CI_Keycloak_2026!'
+            'LOCAL_KEYCLOAK_BACKEND_CLIENT_SECRET=Phase10_CI_Keycloak_Backend_2026!'
             'ORDERPROCESSING_SQLSERVER_IMAGE=mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04'
           )
           Set-Content -LiteralPath $envPath -Value $content -Encoding utf8
@@ -186,6 +187,52 @@ jobs:
               Write-Host ""
               Write-Host "--- $($log.Name) tail ---" -ForegroundColor Yellow
               Get-Content -LiteralPath $log.FullName -Tail 80
+            }
+          }
+
+      - name: Capture Docker container diagnostics
+        if: failure()
+        shell: pwsh
+        run: |
+          $runRoot = '${{ steps.run_packet.outputs.run_root }}'
+          if ([string]::IsNullOrWhiteSpace($runRoot) -or -not (Test-Path -LiteralPath $runRoot)) {
+            throw "Run root was not created; cannot capture Docker diagnostics."
+          }
+
+          $composeArgs = @('compose')
+          if (Test-Path -LiteralPath 'Resources/Docker/.env.local.example') {
+            $composeArgs += @('--env-file', 'Resources/Docker/.env.local.example')
+          }
+          $composeArgs += @('--env-file', 'Resources/Docker/.env.local', '-f', 'compose/docker-compose.phase10.yml')
+          $psLog = Join-Path $runRoot 'docker-compose-ps.log'
+          $serviceListLog = Join-Path $runRoot 'docker-compose-services.log'
+          $serviceLogs = Join-Path $runRoot 'docker-compose-service-logs.log'
+          $serviceNames = @(
+            'sql-server',
+            'redis',
+            'azurite',
+            'servicebus-sql',
+            'servicebus-emulator',
+            'keycloak-local',
+            'orders',
+            'payments',
+            'inventory',
+            'notifications',
+            'gateway',
+            'ui',
+            'functions'
+          )
+
+          & docker @composeArgs ps | Tee-Object -FilePath $psLog
+          & docker @composeArgs config --services | Tee-Object -FilePath $serviceListLog
+
+          foreach ($serviceName in $serviceNames) {
+            try {
+              "===== $serviceName =====" | Tee-Object -FilePath $serviceLogs -Append | Out-Null
+              & docker @composeArgs logs $serviceName 2>&1 | Tee-Object -FilePath $serviceLogs -Append | Out-Null
+            }
+            catch {
+              "Skipping docker logs for ${serviceName}: $($_.Exception.Message)" | Tee-Object -FilePath $serviceLogs -Append | Out-Null
             }
           }
 

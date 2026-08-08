@@ -11,10 +11,11 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$envSuffix = if ($Environment -eq 'staging') { 'stg' } else { $Environment }
-$resourceGroup = if ([string]::IsNullOrWhiteSpace($ResourceGroupName)) { "rg-orderprocessing-$envSuffix" } else { $ResourceGroupName }
-$namespace = if ([string]::IsNullOrWhiteSpace($ServiceBusNamespaceName)) { "sb-orderprocessing-$envSuffix" } else { $ServiceBusNamespaceName }
-$smokeRunId = if ([string]::IsNullOrWhiteSpace($RunId)) { "phase10-transport-$envSuffix-$(Get-Date -Format 'yyyyMMddHHmmss')" } else { $RunId }
+$resourceSuffix = if ($Environment -eq 'staging') { 'stg' } else { $Environment }
+$brokerSuffix = $Environment
+$resourceGroup = if ([string]::IsNullOrWhiteSpace($ResourceGroupName)) { "rg-orderprocessing-$resourceSuffix" } else { $ResourceGroupName }
+$namespace = if ([string]::IsNullOrWhiteSpace($ServiceBusNamespaceName)) { "sb-orderprocessing-$resourceSuffix" } else { $ServiceBusNamespaceName }
+$smokeRunId = if ([string]::IsNullOrWhiteSpace($RunId)) { "phase10-transport-$brokerSuffix-$(Get-Date -Format 'yyyyMMddHHmmss')" } else { $RunId }
 
 if ([string]::IsNullOrWhiteSpace($ConnectionString)) {
     Write-Host "Retrieving Service Bus connection string from auth rule 'phase10-transport'..."
@@ -37,11 +38,11 @@ $arguments = @(
     '--',
     '--environment', $Environment,
     '--namespace', $namespace,
-    '--topic', "order-events-$envSuffix",
-    '--inventory-subscription', "inventory-order-created-$envSuffix",
-    '--notifications-subscription', "notifications-order-created-$envSuffix",
+    '--topic', "order-events-$brokerSuffix",
+    '--inventory-subscription', "inventory-order-created-$brokerSuffix",
+    '--notifications-subscription', "notifications-order-created-$brokerSuffix",
     '--dead-letter-topic', 'order-events-dlq',
-    '--dead-letter-subscription', "dlq-replay-$envSuffix",
+    '--dead-letter-subscription', "dlq-replay-$brokerSuffix",
     '--connection-string', $ConnectionString,
     '--run-id', $smokeRunId
 )

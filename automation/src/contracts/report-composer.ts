@@ -8,6 +8,11 @@ export interface ExecutiveSummaryRow {
   runtimeTarget: string;
   tenantCode: string;
   paymentProvider: string;
+  customerOrderId: string;
+  orderId: number;
+  orderReferenceId: string;
+  orderAmount: number;
+  orderCurrencyCode: string;
   threeDsSetting: ThreeDsSetting;
   journeyOutcome: string;
   challengeOutcome: ChallengeOutcome;

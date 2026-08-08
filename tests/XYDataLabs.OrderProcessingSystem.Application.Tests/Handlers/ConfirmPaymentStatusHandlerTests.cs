@@ -3,6 +3,7 @@ using Moq;
 using Openpay.Entities;
 using XYDataLabs.OrderProcessingSystem.Application.Tests.TestBase;
 using XYDataLabs.OrderProcessingSystem.Domain.Entities;
+using XYDataLabs.OrderProcessingSystem.Domain.Events;
 using XYDataLabs.OrderProcessingSystem.SharedKernel.Payments;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.Tests.Handlers;
@@ -116,6 +117,8 @@ public class ConfirmPaymentStatusHandlerTests : PaymentServiceTestBase
         result.Value.StatusMessage.Should().NotContain("OpenPay");
         paymentAttempt.Status.Should().Be(PaymentAttemptStatus.Succeeded);
         paymentAttempt.ProviderChargeId.Should().Be("pay_rzp_123");
+        paymentAttempt.DomainEvents.Should().ContainSingle()
+            .Which.Should().BeOfType<PaymentAttemptSucceededDomainEvent>();
     }
 
     [Fact]
@@ -477,8 +480,63 @@ public class ConfirmPaymentStatusHandlerTests : PaymentServiceTestBase
         paymentAttempt.Status.Should().Be(PaymentAttemptStatus.Succeeded);
         paymentAttempt.ProviderStatus.Should().Be("completed");
         paymentAttempt.ProviderReferenceId.Should().Be("auth-ref-001");
+        paymentAttempt.DomainEvents.Should().ContainSingle()
+            .Which.Should().BeOfType<PaymentAttemptSucceededDomainEvent>();
         CapturedPaymentAttemptHistories.Should().ContainSingle();
         CapturedPaymentAttemptHistories.Single().Status.Should().Be(PaymentAttemptStatus.Succeeded);
+    }
+
+    [Fact]
+    public async Task HandleAsync_FailedReconciliation_ShouldRaisePaymentAttemptFailedDomainEvent()
+    {
+        var transaction = BuildStubCardTransaction(billingCustomerId: 42, isThreeDSecureEnabled: false);
+        transaction.TransactionId = "order_rzp_declined_003";
+        transaction.TransactionCustomerId = "razorpay-cust-jane";
+        transaction.AttemptOrderId = "attempt-rzp-declined-003";
+        transaction.TransactionStatus = "charge_pending";
+        transaction.ThreeDSecureStage = "pending_confirmation";
+
+        var paymentAttempt = new PaymentAttempt
+        {
+            Id = 10,
+            TenantId = 1,
+            CustomerOrderId = transaction.CustomerOrderId,
+            AttemptOrderId = transaction.AttemptOrderId!,
+            AttemptNumber = 1,
+            PaymentTraceId = transaction.PaymentTraceId!,
+            PaymentProviderName = PaymentProviderTypes.Razorpay,
+            ProviderChargeId = transaction.TransactionId,
+            Status = PaymentAttemptStatus.ProviderAccepted,
+        };
+
+        SetupConfirmPaymentDbSets(existingTransaction: transaction, existingPaymentAttempt: paymentAttempt);
+
+        MockPaymentGateway
+            .Setup(g => g.GetChargeAsync("pay_rzp_declined_003", transaction.TransactionCustomerId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Razorpay lookup unavailable for failed-domain-event test."));
+
+        var handler = CreateConfirmPaymentHandler(providerType: PaymentProviderTypes.Razorpay);
+
+        var result = await handler.HandleAsync(BuildConfirmPaymentCommand(
+            paymentId: "pay_rzp_declined_003",
+            attemptOrderId: "order_rzp_declined_003",
+            errorMessage: "Issuing bank declined the charge.",
+            callbackParameters: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["tenantCode"] = "TenantA",
+                ["razorpay_order_id"] = "order_rzp_declined_003",
+                ["razorpay_payment_id"] = "pay_rzp_declined_003",
+                ["error_message"] = "Issuing bank declined the charge."
+            }));
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value!.Status.Should().Be("failed");
+        paymentAttempt.Status.Should().Be(PaymentAttemptStatus.Failed);
+        paymentAttempt.DomainEvents.Should().ContainSingle()
+            .Which.Should().BeOfType<PaymentAttemptFailedDomainEvent>()
+            .Which.ErrorReason.Should().Be("Issuing bank declined the charge.");
+        CapturedPaymentAttemptHistories.Should().ContainSingle();
+        CapturedPaymentAttemptHistories.Single().Status.Should().Be(PaymentAttemptStatus.Failed);
     }
 
     [Fact]

@@ -16,12 +16,18 @@ namespace XYDataLabs.OrderProcessingSystem.Domain.Entities
         {
         }
 
-        private Order(CustomerId customerId, List<OrderProduct> orderProducts, DateTime orderDate)
+        private Order(
+            CustomerId customerId,
+            List<OrderProduct> orderProducts,
+            DateTime orderDate,
+            string currencyCode)
         {
+            OrderReferenceId = Guid.NewGuid();
             CustomerId = customerId;
             OrderDate = orderDate;
             OrderProducts = orderProducts;
             TotalPrice = orderProducts.Aggregate(Money.Zero, static (total, item) => total + item.Price);
+            CurrencyCode = currencyCode;
             Status = OrderStatus.Created;
 
             RaiseDomainEvent(new OrderCreatedDomainEvent(
@@ -29,16 +35,21 @@ namespace XYDataLabs.OrderProcessingSystem.Domain.Entities
                 orderDate,
                 TotalPrice.Value,
                 orderProducts.Count,
-                orderDate));
+                orderDate,
+                OrderReferenceId,
+                CurrencyCode));
         }
 
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public OrderId OrderId { get; set; }
+        public Guid OrderReferenceId { get; private set; }
         public DateTime OrderDate { get; private set; }
         public CustomerId CustomerId { get; private set; }
 
         [Column(TypeName = "decimal(18,2)")]
         public Money TotalPrice { get; private set; }
+        [MaxLength(3)]
+        public string CurrencyCode { get; private set; } = "MXN";
         public Customer? Customer { get; private set; }
         public List<OrderProduct> OrderProducts { get; private set; } = new List<OrderProduct>();
         public OrderStatus Status { get; private set; } = OrderStatus.Created;
@@ -52,10 +63,18 @@ namespace XYDataLabs.OrderProcessingSystem.Domain.Entities
         [Timestamp]
         public byte[] RowVersion { get; private set; } = Array.Empty<byte>();
 
-        public static DomainResult<Order> Create(int customerId, IEnumerable<Product> products, DateTime? orderDate = null) =>
-            Create(new CustomerId(customerId), products, orderDate);
+        public static DomainResult<Order> Create(
+            int customerId,
+            IEnumerable<Product> products,
+            DateTime? orderDate = null,
+            string currencyCode = "MXN") =>
+            Create(new CustomerId(customerId), products, orderDate, currencyCode);
 
-        public static DomainResult<Order> Create(CustomerId customerId, IEnumerable<Product> products, DateTime? orderDate = null)
+        public static DomainResult<Order> Create(
+            CustomerId customerId,
+            IEnumerable<Product> products,
+            DateTime? orderDate = null,
+            string currencyCode = "MXN")
         {
             if (customerId.Value <= 0)
             {
@@ -83,7 +102,19 @@ namespace XYDataLabs.OrderProcessingSystem.Domain.Entities
                 return DomainError.Create("Validation", "The total price must be greater than zero.");
             }
 
-            return new Order(customerId, orderProducts, orderDate ?? DateTime.UtcNow);
+            var normalizedCurrency = currencyCode?.Trim().ToUpperInvariant();
+            if (normalizedCurrency?.Length != 3)
+            {
+                return DomainError.Create(
+                    "Validation",
+                    "CurrencyCode must be a three-letter ISO currency code.");
+            }
+
+            return new Order(
+                customerId,
+                orderProducts,
+                orderDate ?? DateTime.UtcNow,
+                normalizedCurrency);
         }
 
         public DomainResult Pay() => TransitionTo(

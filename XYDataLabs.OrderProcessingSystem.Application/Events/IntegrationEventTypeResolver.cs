@@ -1,4 +1,5 @@
 using System.Reflection;
+using SharedIntegrationEvent = XYDataLabs.OrderProcessingSystem.Eventing.Abstractions.IIntegrationEvent;
 
 namespace XYDataLabs.OrderProcessingSystem.Application.Events;
 
@@ -26,7 +27,7 @@ public class IntegrationEventTypeResolver : IIntegrationEventTypeResolver
                     return ex.Types.Where(type => type is not null).Cast<Type>();
                 }
             })
-            .Where(t => !t.IsAbstract && !t.IsInterface && typeof(IIntegrationEvent).IsAssignableFrom(t))
+            .Where(t => !t.IsAbstract && !t.IsInterface && typeof(SharedIntegrationEvent).IsAssignableFrom(t))
             .ToDictionary(
                 t => t.Name, // Example: "OrderCreatedV1"
                 t => t);

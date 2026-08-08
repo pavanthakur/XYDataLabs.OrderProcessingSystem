@@ -1,7 +1,7 @@
 # Architecture Evolution: Monolith to Enterprise Microservices
 
-**Last Updated:** July 1, 2026
-**Current Status:** Phase 8 Closeout Matrix Validation Passed ✅ | Track U U5 Complete ✅ | Phase 8.5 Complete ✅ | Phase 8.6 Complete ✅ | Phase 8.7 Complete ✅ | Phase 9 closeout complete for extraction/tasking ✅ | Phase 9.5 identity portability wiring implemented and runtime verified in local HTTP and Docker Dev HTTP ✅ | Phase 10.1 local baseline reconciliation complete ✅ | Phases 10, 11, 11.5, 12-14 Planned 📅 | Post-14 Horizons captured 📘
+**Last Updated:** August 8, 2026
+**Current Status:** Phase 8 Closeout Matrix Validation Passed ✅ | Track U U5 Complete ✅ | Phase 8.5 Complete ✅ | Phase 8.6 Complete ✅ | Phase 8.7 Complete ✅ | Phase 9 closeout complete for extraction/tasking ✅ | Phase 9.5 identity portability wiring implemented and runtime verified in local HTTP and Docker Dev HTTP ✅ | Phase 10.1 local baseline reconciliation complete ✅ | Phase 10 local NFR proof passed and Docker parity proof passed ✅ | Phase 10 Azure dev validation lane complete ✅ | Staging promotion and final closeout pending ⏳ | Phases 11, 11.5, 12-14 Planned 📅 | Post-14 Horizons captured 📘
 
 ---
 
@@ -162,10 +162,10 @@ XYDataLabs.OrderProcessingSystem.sln
 | **8.7** | Provider Webhook Receiver & Async Payment Lifecycle | Signed webhooks, inbox idempotency, Outbox bridge, `payment.captured`/`payment.failed` handlers, tenant-aware async payment convergence | ✅ **COMPLETE** |
 | **9** | YARP Microservices (Local) | Gateway, Orders/Inventory/Notifications APIs, Docker Compose, event-based communication | 📅 Planned |
 | **9.5** | Cloud-Portable Identity Showcase | Local Keycloak portability proof for the JWT/OIDC pipeline without changing the Azure production identity model | ✅ Wiring implemented and runtime verified |
-| **10** | Azure Container Apps | ACA deployment, ACR, Service Bus, Entra ID + JWT, private networking | 📅 Planned |
+| **10** | Azure Container Apps | Real service hosts, ACA/ACR, Service Bus, DLQ Functions, Entra ID + JWT, managed transport identity, rollback/evidence | 🚧 In progress |
 | **11** | Data Ownership & Autonomy | Database per service, remove shared DbContext, eventual consistency | 📅 Planned |
 | **11.5** | Polyglot Persistence Showcase | Notifications module PostgreSQL pilot proving provider portability while Orders/Payments stay on Azure SQL | 📅 Planned |
-| **12** | Platform Engineering & Operability | .NET 10 upgrade assessment window, Azure App Configuration, API consumer discipline, troubleshooting/performance/cost runbooks, per-service CI/CD, observability dashboards | 📅 Planned |
+| **12** | Platform Engineering & Operability | Private cloud edge/network, Blob/Event Grid, SQL managed identity, App Configuration, .NET 10 assessment, CI/CD, observability and resilience | 📅 Planned |
 | **13** | Aspire & Final Maturity | Aspire AppHost deepening, distributed app testing, service discovery, manifest / `azd` evaluation, blue-green/canary deployment strategy | 📅 Planned |
 | **14** | CQRS Read Model (MongoDB) | Separate read/write models, projection handlers, Hangfire, tenant-scoped documents | 📅 Planned |
 
@@ -182,28 +182,27 @@ Primary objective:
 
 Tooling prerequisite:
 - Before Phase 10 implementation or validation changes, use [Phase 10 Tool Prerequisites](docs/guides/development/phase10-tool-prerequisites.md) as the canonical developer-machine setup and readiness gate. Docker Compose remains the canonical local runtime, Aspire remains optional, and Azure remains the deployment-validation environment.
+- The canonical pre-Azure architecture baseline for the remaining Phase 10 work is [docs/internal/phase10-preazure-lld.md](docs/internal/phase10-preazure-lld.md); the Phase 10 checklist remains the execution companion that turns that baseline into stage-by-stage work.
 
 Broad checklist:
-- Lock the Service Bus topology: queues, topics, subscriptions, DLQ ownership, replay path, and delivery expectations.
-- Keep Event Grid use explicit and separate from Service Bus work-distribution semantics.
-- Define the microservice communication matrix explicitly: sync read path, async command path, event broadcast path, timeout ownership, and compensation trigger points.
-- Introduce Azure Functions only where they add operational value: queue-trigger processing, DLQ intake or replay support, timer-based health or reconciliation checks, and blob-event handling.
-- Provision transport resources through Bicep modules and environment parameters only.
-- Keep database migrations and demo seeding out of API startup; use a dedicated migrator or deployment-time startup step instead.
-- Standardize retry, timeout, poison-message, and DLQ operating policy before adding more features.
-- Add idempotency rules for external command entry points and replay-sensitive handlers.
-- Apply least-privilege RBAC for services, functions, and operators.
-- Prove correlation continuity through gateway calls, brokered messages, and Azure-triggered processing.
-- Add a first-class error-handling contract across gateway, APIs, workers, and functions so operational failures are diagnosable and client-facing responses remain consistent.
-- Add operator-facing runbooks for DLQ triage, replay, and stuck-message diagnosis.
-- Treat ACA as the likely hosting outcome of this phase, not the educational goal by itself; transport correctness comes before hosting polish.
+- Replace Orders, Payments, Inventory, and Notifications compatibility stubs with real module behavior and authoritative persistence.
+- Lock Service Bus topology, delivery semantics, DLQ ownership, replay limits, and observable failure categories.
+- Connect committed outbox publication to real Inventory and Notifications consumers protected by inbox/idempotency.
+- Deploy separate DLQ intake and approval/replay Functions and prove their actual Azure invocation.
+- Keep database migrations and demo seeding out of API startup; use a dedicated migrator or deployment-time startup step.
+- Apply Entra JWT authorization, tenant claim/header consistency, Service Bus managed identity/RBAC, and Key Vault secret resolution.
+- Prove correlation continuity through gateway calls, brokered messages, Functions, and business persistence.
+- Use immutable artifacts, retained healthy revisions, expand/contract migrations, and an executed rollback path.
+- Close through the graduated local, Docker, CI, and Azure lifecycle with machine-readable and operator evidence.
+- Keep APIM/private ingress, private networking, Service Bus Premium/Private Link, Blob/Event Grid, SQL managed identity, and Front Door/WAF in Phase 12 under ADR-025.
 
 Execution lanes:
-- Lane 1: Service Bus topology, subscriptions, DLQ ownership, and replay discipline.
-- Lane 2: Event Grid boundaries, blob-event handling, and platform-trigger separation.
-- Lane 3: Azure Functions responsibilities, queue triggers, timer triggers, and reconciliation helpers.
-- Lane 4: Migrator and seeder flow, so schema changes and demo data never depend on API startup.
-- Lane 5: ACA deployment, ingress, and networking only after transport failure drills pass.
+- 10.2: real service migration.
+- 10.3: real Service Bus processing.
+- 10.4: DLQ and deployed Functions.
+- 10.5: identity and secretless transport.
+- 10.6: operations and non-functional proof.
+- 10.7: acceptance and closeout.
 
 Exit intent:
 - The system can run on Azure transport with observable, replayable, idempotent message handling.
@@ -1247,10 +1246,11 @@ Identity-provider portability is now wired into the repo with a runnable local d
 
 ## Phase 10 — Azure Container Apps Migration 📅
 
-**Focus:** Introduce durable Azure transport and DLQ operations without changing the
-contracts frozen in Phase 8.
+**Focus:** Complete real independently deployable services, durable Azure transport, governed DLQ operations, portable OIDC authorization, and evidence-backed ACA delivery without changing the contracts frozen in Phase 8.
 
-**Why this phase is separate:** Phase 10 is the cloud transport and hardening phase. It exists only after the local module and identity proofs are stable, because Azure resources, failure drills, and security wiring are prerequisites for Service Bus, APIM, Functions, Blob, and Key Vault.
+**Why this phase is separate:** Phase 10 is the service-migration, cloud-transport, and delivery-safety phase. It exists only after the local module and identity proofs are stable, because real workload extraction, Azure resources, failure drills, and security wiring must be proven together.
+
+> The diagram below is the broader Azure target spanning Phases 10 and 12. The Phase 10 completion boundary is ACA/ACR, YARP, Service Bus Standard with Entra/RBAC, real service consumers, DLQ Functions, Key Vault, SQL/Redis, and observability. APIM/private ingress, VNet/private endpoints, Service Bus Premium/Private Link, Blob/Event Grid, SQL managed identity, and Front Door/WAF are formal Phase 12 deferrals governed by ADR-025.
 
 ### Architecture Diagram
 
@@ -1316,20 +1316,18 @@ contracts frozen in Phase 8.
 
 ### Key Deliverables
 
-- Deploy to **Azure Container Apps** (managed environment, auto-scaling, scale-to-zero)
+- Deploy real Orders, Payments, Inventory, Notifications, Gateway, UI, worker, and Functions workloads to **Azure Container Apps / Azure Functions** using immutable artifacts
 - **Gateway deployment path** — YARP is packaged and deployed as a first-class workload with its own container image, health probes, configuration surface, and deployment step; it is not piggybacked onto the Orders API or UI artifact
-- **Azure API Management (APIM)** — Consumption tier as public-facing gateway; subscription keys, external rate limiting, developer portal, API analytics. YARP becomes the internal east-west proxy behind APIM: `Internet → APIM → ACA Ingress → YARP → Services`. This rollout starts only after transport failure drills pass.
 - **Azure Container Registry (ACR)** — build and push container images. Enterprise target: persistent platform/foundation ACR outside the environment app resource group, with a stable pull identity and one-time `AcrPull` assignment owned by platform bootstrap rather than normal app deployment
-- **Azure Service Bus** — replace the in-memory event bus behind `IEventPublisher` with durable topics + subscriptions; handlers and envelopes remain unchanged
-- **Azure Event Grid** — platform/infrastructure event routing (deployment notifications, blob lifecycle); Service Bus remains for domain events. Decision rule: Event Grid = reactive fan-out, Service Bus = reliable delivery with sessions/DLQ
-- **Azure Functions** — planned central DLQ intake processor (isolated process model) that categorises failures before any replay action; timer-triggered Function for scheduled projection health checks remains Phase 14. Phase 10 now has Function App infrastructure plus a local .NET 8 isolated worker scaffold and initial DLQ intake trigger; replay/quarantine behavior and Azure deployment proof remain pending.
-- **Azure Blob Storage** — order file attachments (invoices, receipts, proof of delivery); managed identity access, private endpoint. `BlobCreated` events routed via Event Grid to trigger downstream processing (e.g. Document Intelligence extraction in Phase 12)
+- **Azure Service Bus** — replace the in-memory event bus behind `IEventPublisher` with committed outbox publication, durable topics/subscriptions, real Inventory/Notifications consumers, and inbox/idempotency; handlers and envelopes remain unchanged
+- **Azure Functions** — deploy separate central DLQ intake and guarded approval/replay paths using the isolated worker model; broker-level smoke utilities do not count as deployed Function proof
 - **Azure Cache for Redis** — managed Redis replacing local container; used for distributed cache and session state
 - **Observability** — App Insights + OpenTelemetry distributed tracing across all services; `traceparent`, `CorrelationId`, `CausationId`, `TenantId`, and `MessageId` propagate through every message so dead-lettered events can be traced back to the originating order and tenant
-- **Secrets** — Azure Key Vault with managed identity (no credentials in config)
-- **Private networking** — VNet integration, private endpoints for SQL, Key Vault, Redis, and Blob Storage
-- **Cost governance** — scale-to-zero on all Container Apps, APIM Consumption tier (pay-per-call), autoscale RU caps on Cosmos DB, Azure Budget alerts per resource group
+- **Identity and secrets** — Entra ID JWT authorization, managed identity/RBAC for Service Bus, and Key Vault for provider and bootstrap secrets
+- **Delivery safety** — immutable commit-SHA images and Function packages, expand/contract migrations, retained healthy revisions, and an evidence-backed rollback path
+- **Cost governance** — workload-appropriate minimum replicas and scaling, retention controls, and Azure Budget alerts per resource group
 - **Bicep-only topology** — Azure infrastructure remains Bicep-authored end to end. Service Bus topology is declared in a dedicated `servicebus.bicep` module with per-environment parameters; no portal drift and no Terraform split.
+- **Formal Phase 12 deferrals** — APIM/private YARP ingress, VNet/private endpoints, Service Bus Premium/Private Link, Blob attachments/Event Grid, SQL managed identity, and Front Door/WAF remain roadmap requirements but are not Phase 10 exit criteria
 
 ### Phase 10.1 - Local Baseline Reconciliation ✅ COMPLETE
 
@@ -1342,7 +1340,22 @@ Completed proof points:
 - Repository validation, Docker infrastructure validation, integration coverage, and Docker E2E validation all have explicit evidence hooks.
 - The local runtime contract is pinned to Docker Compose as the canonical baseline, with Aspire left optional.
 - The local identity path is documented as Keycloak for portable debugging, while Azure remains Entra ID for cloud validation.
+- The local payment matrix now has a deterministic local-provider path for TenantC/OpenPay so local HTTP validation does not depend on the live OpenPay sandbox.
 - The Phase 10 artifact and log layout is documented so evidence can be traced without relying on ad hoc console history.
+
+### Phase 10 Azure Dev Validation Candidate ✅
+
+The active `dev` Azure validation lane completed successfully on August 8, 2026:
+
+| Workflow | Run | Result |
+|---|---:|---|
+| `00 Azure Platform Foundation` | `31264306311` | Passed |
+| `01 Phase 10 Azure Deploy Orchestrator` (real deploy) | `31264680030` | Passed |
+| `02 Phase 10 Azure Runtime Smoke` | `31266011709` | Passed |
+| `03 Phase 10 Azure Transport Smoke` | `31266391019` | Passed |
+| `04 Phase 10 Azure Payment Matrix` | `31266516115` | Passed |
+
+The only Azure validation defect uncovered in this lane was stale smoke naming for the replay subscription. The validated topology and runbooks now use `dlq-replay-<environment>` rather than the old `dlq-intake-<environment>` label.
 
 ### Phase 10 Status Table
 
@@ -1350,14 +1363,18 @@ Completed proof points:
 
 | Area | Status | Meaning | Next Step |
 |---|---|---|---|
-| Local baseline reconciliation | Complete | Local tooling, execution order, artifact layout, and Docker validation lanes are now explicitly documented | Move to the Azure transport slice |
-| Transport foundation | Next | Service Bus and Event Grid are the first implementation lane; Function App infrastructure and local Functions worker scaffold exist, but Azure-deployed Function behavior is still pending | Finalize replay/quarantine behavior, deployment artifact, and Azure Function smoke proof |
-| Cloud hosting outcome | Next | ACA is the hosting target only after transport failure drills pass | Deploy the service graph into ACA |
-| Public gateway | Next | APIM fronts ACA; YARP stays internal | Wire APIM after ingress and routing are stable |
-| Images and registry | Next | ACR is the build/push lane for container workloads; target model is persistent platform ACR plus stable pull identity | Publish the Azure workload images and move ACR/RBAC out of the app RG lifecycle |
-| Identity and auth | Next | Entra ID + JWT is the Azure identity lane; Keycloak remains out of Phase 10 | Validate cloud identity in Azure |
-| Secrets and networking | Next | Private endpoints, managed identity, and Key Vault are the security baseline | Apply private networking and secret wiring |
-| Cost controls | Next | Scale-to-zero and budget controls are operational gates, not afterthoughts | Configure cost governance and alerts |
+| Local baseline reconciliation | Complete | Local tooling, execution order, artifact layout, and Docker validation lanes are explicitly documented | Keep the Stage 0-6 gates green during implementation |
+| Azure dev validation lane | Complete on `dev` | Foundation, deploy, runtime smoke, transport smoke, and payment matrix are green on the active dev candidate | Promote the same sequence to `staging` and publish the candidate evidence packet |
+| Real service migration | Validated on `dev` / promote next | The current candidate passed runtime and payment validation against live Azure URLs | Reconfirm in `staging`, then carry the evidence into closeout |
+| Durable transport and consumers | Validated on `dev` / promote next | Transport smoke passed on the live Service Bus topology after replay-subscription naming was corrected | Reconfirm in `staging` and keep the operator packet with the rerun |
+| DLQ and deployed Functions | Validated on `dev` / promote next | The current Azure lane validates the deployed replay path and the operator topology contract | Reconfirm in `staging`; keep deeper hardening and future expansion in later phases |
+| Cloud hosting outcome | Validated on `dev` / promote next | ACA/ACR/YARP path is active and green in dev | Promote the same image/deploy/smoke path to `staging` |
+| Phase 10 ingress | Validated on `dev` / promote next | YARP is the supported ingress and the runtime smoke passed through the deployed URLs | Reconfirm in `staging` and preserve the ingress evidence in closeout |
+| Identity and transport auth | Validated on `dev` / promote next | The Azure lane is green with the current Entra/Key Vault/transport shape | Reconfirm in `staging` before any `prod` decision |
+| Secrets | Validated on `dev` / promote next | Key Vault-backed runtime configuration is green in the active dev lane | Reconfirm in `staging` and keep the deploy summary in the evidence packet |
+| Non-functional proof | Complete locally; Azure promotion pending | Local NFR proof and Docker parity passed; Azure dev lane is green | Keep `staging` as the next promotion and closeout gate |
+| Acceptance evidence | In progress / candidate captured | The dev candidate now has successful `00/01/02/03/04` evidence | Publish the closeout packet and repeat the same lane in `staging` |
+| APIM/private networking/Blob/Event Grid/SQL MI/Front Door | Deferred to Phase 12 | These remain required roadmap outcomes, not Phase 10 exit criteria | Track through ADR-025 and DW-019 through DW-022 |
 | SharedContracts | Deferred / candidate for Phase 10 | Introduce only if Phase 10 transport wiring proves a shared schema package is needed across services | Keep service-local contracts until a real duplication problem appears |
 | Phase 9.5 portability proof | Deferred / not Phase 10 | Keep Keycloak local-only in Phase 9.5 | No Azure-side Keycloak parity in this phase |
 | Database-per-service split | Not Phase 10 | Database-per-service belongs to Phase 11 | Move this to Phase 11 |
@@ -1389,22 +1406,22 @@ This keeps app environment cleanup simple while preserving image history, avoidi
 ### Phase 10 Done / Pending Checklist
 
 - Done:
+  - Phase 10.1 local baseline reconciliation
   - Function App infrastructure module exists: `infra/modules/functions.bicep`
   - Function identity output is wired into Phase 10 Key Vault access plumbing
-  - Local Azure Functions worker scaffold exists with startup validation and an initial DLQ intake trigger
-  - Service Bus transport smoke proof is documented, but it does not yet prove deployed Azure Functions behavior
+  - Local Azure Functions worker scaffold exists with startup validation and replay/intake entrypoints
+  - `00 Azure Platform Foundation` passed in run `31264306311`
+  - `01 Phase 10 Azure Deploy Orchestrator` real deploy passed in run `31264680030`
+  - `02 Phase 10 Azure Runtime Smoke` passed in run `31266011709`
+  - `03 Phase 10 Azure Transport Smoke` passed in run `31266391019`
+  - `04 Phase 10 Azure Payment Matrix` passed in run `31266516115`
+  - The Azure `dev` validation lane is green end to end
 - Pending:
-  - Azure Container Apps deployment path
-  - ACR build/push flow
-  - APIM public gateway
-  - Service Bus transport swap
-  - Blob Storage / Event Grid / Functions code
-  - DLQ replay / quarantine implementation
-  - Function deployment artifact and smoke proof
-  - Entra ID + JWT cloud auth
-  - Private networking / secrets
-  - Cost governance
+  - Promote the same `01 -> 04` Azure lane to `staging`
+  - Assemble the final Phase 10 closeout packet and operator notes
+  - Keep `prod` gated behind a clean `staging` run and explicit promotion review
 - Not in Phase 10:
+  - APIM/private YARP ingress, VNet/private endpoints, Service Bus Premium/Private Link, Blob/Event Grid, SQL managed identity, and Front Door/WAF move to Phase 12 under ADR-025
   - Keycloak portability proof stays in Phase 9.5 / deferred
   - Database-per-service split stays in Phase 11
   - Aspire deepening / distributed app tests stay in Phase 13
@@ -1412,10 +1429,10 @@ This keeps app environment cleanup simple while preserving image history, avoidi
 ### Security
 
 - **Identity:** Azure Entra ID (Azure AD) for authentication
-- **JWT auth** — token validation at APIM (policy-based) and YARP gateway, token propagation to downstream services. Security rollout begins only after transport failure drills pass in lower environments.
-- **Managed Identity** — services access Key Vault and SQL without stored credentials
+- **JWT auth** — Phase 10 validates Entra ID tokens at YARP and service policies and propagates identity downstream. APIM policy validation is added with the Phase 12 private edge.
+- **Managed Identity** — Phase 10 uses managed identity for Service Bus and Key Vault; SQL runtime managed identity is Phase 12 work under DW-021.
 - **OIDC** — GitHub Actions deploys via federated credentials (existing pattern)
-- **WAF / Network Security** — Azure Front Door or WAF policy in front of APIM; NSG rules for ACA VNet; private DNS zones for internal service resolution
+- **WAF / Network Security** — Azure Front Door/WAF, APIM private ingress, ACA VNet integration, private endpoints, and private DNS are Phase 12 work under ADR-025.
 
 ### Messaging Backbone
 
@@ -1621,6 +1638,11 @@ Provider-portability proven with one module running PostgreSQL end-to-end (local
 
 ### Key Deliverables
 
+- **Private cloud edge** — APIM Standard v2 or a then-approved VNet-capable tier fronts private YARP ingress; Azure Front Door/WAF provides the external edge when justified by the production threat model
+- **Private networking** — VNet integration, private DNS, and private endpoints for SQL, Key Vault, Redis, Blob Storage, and other supported data services
+- **Private messaging** — move Service Bus from the Phase 10 Standard/RBAC baseline to Premium with Private Link as part of the tested private-network topology
+- **Order attachments and event routing** — Blob Storage attachment lifecycle and Event Grid triggers land before Document Intelligence enrichment
+- **SQL managed identity** — replace Phase 10 Key Vault bootstrap/runtime database credentials with workload managed identity after migration ownership and service boundaries stabilize
 - **Central configuration** — Azure App Configuration for feature flags and shared settings
 - **Secrets management** — Azure Key Vault with RBAC (migrate from access policies)
 - **Observability dashboards** — Azure Monitor workbooks with per-service metrics, SLIs/SLOs

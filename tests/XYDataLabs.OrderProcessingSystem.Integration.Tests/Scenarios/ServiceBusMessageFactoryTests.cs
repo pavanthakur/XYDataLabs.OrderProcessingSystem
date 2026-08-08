@@ -1,7 +1,7 @@
 using FluentAssertions;
 using XYDataLabs.OrderProcessingSystem.Application.Events;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.Messaging;
-using XYDataLabs.OrderProcessingSystem.Orders.Features.Events;
+using XYDataLabs.OrderProcessingSystem.Orders.Contracts.Events;
 
 namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Scenarios;
 
@@ -55,3 +55,5 @@ public sealed class ServiceBusMessageFactoryTests
         message.Body.ToString().Should().Contain("\"productCount\":2");
     }
 }
+
+

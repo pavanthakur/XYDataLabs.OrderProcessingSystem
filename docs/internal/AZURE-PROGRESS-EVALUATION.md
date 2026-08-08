@@ -7,13 +7,32 @@
 
 ---
 
-## 🟢 Current State (July 2026) — Phase 10 Planning Aligned
+## 🟢 Current State (August 2026) — Phase 10 Dev Validation Green
+
+### August 8, 2026 Phase 10 Azure Dev Validation Complete
+
+- ✅ `00 Azure Platform Foundation` passed in run `31264306311`.
+- ✅ `01 Phase 10 Azure Deploy Orchestrator` dry run and real deploy passed; the real deploy passed in run `31264680030`.
+- ✅ `02 Phase 10 Azure Runtime Smoke` passed in run `31266011709`.
+- ✅ `03 Phase 10 Azure Transport Smoke` passed in run `31266391019`.
+- ✅ `04 Phase 10 Azure Payment Matrix` passed in run `31266516115`.
+- ✅ The Azure `dev` validation lane is now green across foundation, deploy, runtime, messaging, and business/browser payment proof.
+- ✅ The stale replay-subscription naming drift has been corrected: operational docs and smoke automation now use `dlq-replay-<environment>` instead of the old `dlq-intake-<environment>` label.
+- 🔜 Next promotion gate: run the same `01 -> 04` sequence in `staging`, then review the combined evidence packet before any `prod` decision.
+
+### July 25, 2026 Phase 10 Completion Contract
+
+- ✅ The authoritative remaining scope is now recorded in [Phase 10 Implementation Checklist](phase10-implementation-checklist.md): 10.2 real service migration, 10.3 real Service Bus processing, 10.4 DLQ/Functions, 10.5 identity and secretless transport, 10.6 NFR/operations proof, and 10.7 acceptance closeout.
+- ✅ The canonical pre-Azure architecture baseline now lives in [Phase 10 Pre-Azure LLD](phase10-preazure-lld.md); the implementation checklist remains the execution companion.
+- ✅ Historical deploy/runtime/broker-smoke runs remain useful scaffold evidence but do not prove real service persistence, real consumers, deployed Function invocation, managed-identity transport, or the final acceptance packet.
+- ✅ ADR-022 through ADR-025 govern ACA service hosts, at-least-once delivery semantics, DLQ approval/replay ownership, and the Phase 10 network/SKU boundary.
+- ✅ APIM/private YARP ingress, VNet/private endpoints, Service Bus Premium/Private Link, Blob/Event Grid, SQL managed identity, and Front Door/WAF are preserved as formal Phase 12 obligations in ADR-025 and DW-019 through DW-022.
 
 ### July 13, 2026 Phase 10 Operator Baseline
 
 - ✅ Phase 10 developer-machine setup now has a canonical source of truth: [Phase 10 Tool Prerequisites](../guides/development/phase10-tool-prerequisites.md). Docker Compose remains the canonical local runtime; Aspire is optional; Azure is used for deployment validation after local readiness is proven.
 - ✅ Phase 10.1 local baseline reconciliation is complete: the numbered local setup ladder, evidence layout, and prompt/status surfaces now agree on the canonical Phase 10.1 checkpoint.
-- ✅ Phase 10.2 is the next active engineering slice: `01 Phase 10 Azure Deploy Orchestrator`, `02 Phase 10 Azure Runtime Smoke`, `03 Phase 10 Azure Transport Smoke`, and `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` remain the operator workflow sequence for the Azure transport lane and optional local/CI parity.
+- ✅ Phase 10.2 is the next active engineering slice: replace compatibility stubs with real Orders, Payments, Inventory, and Notifications workloads while retaining the operator workflow sequence for local/CI/Azure proof.
 - ✅ The Phase 10 wrapper is the single Azure entry point for dry run, build, deploy, and resource-group cleanup; image build and Azure resource deployment remain internal child workflow responsibilities.
 - ✅ The workflow README and Phase 10 runbook now document which workflows to click, which workflows are internal, and which legacy App Service workflows should not be used for the active container-app path.
 - ✅ The local Docker Dev HTTP E2E path now has a named run-hook, `npm --prefix automation run xydatalabs-test-docker-local-e2e-dev`, plus a matching VS Code task, `1 Run: xydatalabs-test-docker-local-e2e-dev (Docker Dev HTTP E2E)`.
@@ -21,14 +40,29 @@
 - ✅ The optional GitHub workflow `99` now always starts a fresh Docker stack on the hosted runner; the local-only `-SkipStartIfNeeded` reuse switch is intentionally not exposed in the GitHub UI.
 - ✅ The Phase 10 Azure dev deploy proof passed in GitHub Actions run `29273224237`: preflight, service image build, and Container Apps deployment completed through the wrapper path.
 - ✅ The Phase 10 Azure runtime smoke passed in GitHub Actions run `29273711615`: gateway health, gateway-routed API JSON, UI static route, and UI API proxy returned `200`.
-- ✅ The Phase 10 Azure transport smoke passed in GitHub Actions run `29273881488`: Service Bus publish, fan-out consume, controlled DLQ forwarding, DLQ replay receive, and replay publish/consume all passed.
+- ✅ The Phase 10 Azure broker transport smoke passed in GitHub Actions run `29273881488`: Service Bus publish, fan-out consume, controlled DLQ forwarding, DLQ replay receive, and utility-driven replay publish/consume passed. This does not prove deployed Function invocation.
 - ✅ Gateway Azure diagnostics now echo the accepted host so ACA host-header mismatches can be diagnosed from the health response and smoke summaries.
 - ✅ Runtime smoke and transport smoke are separate post-deploy checks: runtime proves gateway/API/UI reachability, while transport proves Service Bus publish, consume, DLQ, and replay behavior.
 - ✅ Phase 10 retention cleanup is documented as housekeeping for historical GHCR cleanup-only package versions and GitHub artifacts; Azure teardown remains owned by the Phase 10 wrapper `cleanupInfra=true` path.
-- ✅ Phase 10 transport/operator baseline is now proven in dev across deploy, runtime smoke, transport smoke, and optional Docker parity.
-- 🔜 ACR remains the preferred enterprise registry direction, but it is a follow-up implementation, not a blocker for the current ACR-backed Phase 10 transport/operator baseline.
+- ✅ The Phase 10 transport/operator scaffold baseline is proven in dev across deploy, runtime smoke, broker transport smoke, and optional Docker parity. Phase 10 remains open until the real-service, real-consumer, Function, identity, NFR, rollback, and acceptance contract passes.
 - ✅ SQL Server and Azure Managed Redis are now part of the automatic Phase 10 baseline path, so the wrapper no longer asks for parity toggles in the normal operator form.
 - 🔜 The next implementation branch should keep treating the local Docker SQL/Redis composition as the contract while preserving the automatic Azure baseline; ACR lifecycle tightening belongs in the same change set rather than a separate ad hoc cleanup pass.
+
+### July 29, 2026 Phase 10 NFR Proof and Docker Parity Wrapper
+
+- ✅ The local Phase 10 NFR proof now passes end-to-end with functional, warm canary, 100-message performance burst, and operational checks enabled or skipped as requested.
+- ✅ The NFR probe now reads durable evidence from the live Docker Compose SQL service rather than the host SQL instance, which fixed the `0/0` false-negative observation path.
+- ✅ A dedicated Docker parity NFR wrapper now exists so Docker proof runs use the same proof engine and evidence shape as the local pre-Azure run, but with Docker-specific labeling and artifact roots.
+- ✅ The Docker Dev HTTP end-to-end hook still passes after the NFR proof fix, so the smoke → integration → matrix → validation lane remains healthy.
+
+### August 1, 2026 Pre-Azure Gate Tightening
+
+- ✅ The local pre-Azure runner now has a dedicated architecture conformance gate through `scripts/run-phase10-architecture-conformance.ps1`.
+- ✅ The architecture conformance gate currently proves focused Phase 10 architecture invariants plus the gateway topology contract before `L6` proceeds.
+- ✅ `L6` now plans the final pre-Azure sequence in the stricter order: readiness, repository validation, compose config, architecture conformance, stack startup, identity proof, rollback readiness, Docker end-to-end, NFR proof, cleanup.
+- ✅ The shared local NFR proof now carries an explicit `security` category in addition to `functional`, `performance`, and `operational`.
+- ✅ The security category reuses the portable local identity proof: focused API auth tests plus the Keycloak PKCE/operator browser proof.
+- ⚠️ Fresh live `L5` and `L6` evidence has not yet been regenerated after this gate tightening. The code and dry-run orchestration are aligned, but the final pre-Azure completion claim still depends on new passing runs.
 
 ### June 5, 2026 Verification Freeze — Phase 8.7 Closeout
 
@@ -128,7 +162,7 @@
 ### July 1, 2026 Post-Phase-9 Planning Alignment
 
 - ✅ The post-Phase-9 plan is now clarified in the owning roadmap surfaces instead of a new side document.
-- ✅ Phase 10 is explicitly framed as Azure transport and messaging operations: Service Bus topology, Event Grid boundaries, microservice communication rules, Azure Functions responsibilities, DLQ discipline, replay, RBAC, and trace continuity.
+- ✅ Phase 10 is explicitly framed as real service migration plus Azure transport and messaging operations: Service Bus topology, microservice communication rules, Azure Functions responsibilities, DLQ discipline, replay, RBAC, and trace continuity. Blob/Event Grid moves to Phase 12 under ADR-025.
 - ✅ The Phase 10 file-by-file implementation checklist is now published at `docs/internal/phase10-implementation-checklist.md` and anchors the first order-created transport slice.
 - ✅ The first Phase 10 transport implementation pass is underway: Service Bus metadata mapping, replay-safe broker identity, DLQ replay worker behavior, a DLQ replay subscription, and the actual Service Bus connection path are being wired to the same transport-first contract.
 - ✅ The Service Bus module now stays focused on topology plus the transport auth rule and connection-string lookup, while `infra/main.phase10.bicep` consumes that module output for runtime wiring.
@@ -141,28 +175,27 @@
 - ✅ Phase 13 remains Aspire deepening only after transport and autonomy are stable.
 - ✅ Phase 14 remains the CQRS read-model maturity lane after service autonomy is proven.
 - ✅ The learning plan now keeps ACA as the likely hosting outcome of Phase 10, but not the sole educational objective; transport and enterprise communication concerns come first.
-- ⚠️ Function App infrastructure exists in Phase 10 Bicep, and the repo now contains the local .NET 8 isolated Functions worker scaffold plus an initial DLQ intake trigger. Treat the portal Function App as a provisioned host until the worker is packaged, deployed, and smoke-tested in Azure.
+- ⚠️ Function App infrastructure exists in Phase 10 Bicep, and the repo now contains the local .NET 8 isolated Functions worker with DLQ intake and replay entrypoints. Treat the portal Function App as a provisioned host until the worker is packaged, deployed, and smoke-tested in Azure.
 
 ### Phase 10 Done / Pending Checklist
 
 - Done:
+  - Phase 10.1 local baseline reconciliation
   - Function App infrastructure module exists: `infra/modules/functions.bicep`
   - Function identity output is wired into Phase 10 Key Vault access plumbing
-  - Local Azure Functions worker scaffold exists with startup validation and an initial DLQ intake trigger
-  - Service Bus transport smoke proof is documented, but it does not yet prove deployed Azure Functions behavior
+  - Local Azure Functions worker exists with startup validation plus DLQ intake and replay entrypoints
+  - `00 Azure Platform Foundation` passed in run `31264306311`
+  - `01 Phase 10 Azure Deploy Orchestrator` real deploy passed in run `31264680030`
+  - `02 Phase 10 Azure Runtime Smoke` passed in run `31266011709`
+  - `03 Phase 10 Azure Transport Smoke` passed in run `31266391019`
+  - `04 Phase 10 Azure Payment Matrix` passed in run `31266516115`
+  - The active Azure `dev` validation lane is green end to end
 - Pending:
-  - Azure Container Apps deployment path
-  - ACR build/push flow
-  - APIM public gateway
-  - Service Bus transport swap
-  - Blob Storage / Event Grid / Functions code
-  - Azure Functions deployment artifact and Azure smoke proof
-  - DLQ replay / quarantine implementation
-  - Function deployment artifact and smoke proof
-  - Entra ID + JWT cloud auth
-  - Private networking / secrets
-  - Cost governance
+  - Staging promotion through the same `01 -> 04` Azure lane
+  - Final Phase 10 closeout packet and operator notes across local, Docker, CI, and Azure evidence
+  - `prod` remains gated behind a clean `staging` run and explicit promotion review
 - Not in Phase 10:
+  - APIM/private YARP ingress, VNet/private endpoints, Service Bus Premium/Private Link, Blob/Event Grid, SQL managed identity, and Front Door/WAF are formal Phase 12 deferrals under ADR-025
   - Keycloak portability proof stays in Phase 9.5 / deferred
   - Database-per-service split stays in Phase 11
   - Aspire deepening / distributed app tests stay in Phase 13
@@ -196,7 +229,7 @@
 - Key Vault: `kv-orderprocessing-dev` (Managed Identity access, no stored credentials)
 - App Insights: `ai-orderprocessing-dev` — active, confirmed traces + metrics
 
-### Architecture Decisions Recorded (ADR-000 → ADR-021)
+### Architecture Decisions Recorded (ADR-000 → ADR-025)
 - ADR-001: Clean Architecture, ADR-002: OIDC, ADR-003: Subscription-scope Bicep
 - ADR-004: EF Core + Azure SQL, ADR-005: Serilog, ADR-006: Passwordless SQL
 - ADR-007: Hybrid multi-tenancy, ADR-008: Architecture test guardrails
@@ -205,6 +238,8 @@
 - ADR-014: Azure service coverage rationale, ADR-015: deployment readiness probes use `/health/ready`
 - ADR-016: client-rendered React SPA, ADR-017: phase plan portability extensions, ADR-018: blueprint packaging and snapshot strategy
 - ADR-019: central tenant registry, ADR-020: webhook inbox idempotency, ADR-021: Phase 9 module isolation before service extraction
+- ADR-022: ACA service-host model, ADR-023: Service Bus delivery semantics
+- ADR-024: DLQ ownership and approval replay, ADR-025: Phase 10 network/SKU boundary
 
 ### Phase 7 — Completed Deliverables
 - ✅ `TenantValidationBehavior<TRequest, TResult>` — CQRS pipeline tenant enforcement

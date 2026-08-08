@@ -853,6 +853,80 @@ Troubleshooting:
 - If the UI or gateway container keeps restarting, inspect the container logs in Docker Desktop or run the individual stack step scripts to isolate the failing phase.
 - If the hook reaches cleanup before you can inspect logs, rerun with the lower-level step tasks instead of the single-command hook.
 
+### Phase 10 Docker Dev HTTP NFR Proof
+
+Use this wrapper when you want the same NFR proof engine, but with Docker parity labeling and Docker-specific evidence:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-phase10-docker-nfr-proof.ps1
+```
+
+What it does:
+
+1. Reuses the live Docker Dev HTTP stack when it is already reachable.
+2. Starts the Docker Dev HTTP stack if needed, unless you explicitly opt out with `-SkipStartIfNeeded`.
+3. Runs the shared NFR proof engine with a Docker proof label.
+4. Writes Docker parity artifacts under `TestResults\Phase10\docker-preazure\phase10-docker-nfr-<timestamp>\nfr`.
+
+Useful switches:
+
+- `-UseCleanReset` resets the service-bus path before the performance canary.
+- `-SkipOperationalChecks` skips the rollback/diagnostics section when you only need functional and performance proof.
+- `-SkipStartIfNeeded` fails fast if the Docker Dev HTTP stack is not already up.
+
+### Phase 10 Pre-Azure Milestones
+
+Use the pre-Azure milestone runner when you want one evidence-bearing local step instead of the full ladder:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-phase10-preazure-milestone.ps1 -Milestone L5
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-phase10-preazure-milestone.ps1 -Milestone L6
+```
+
+What it does:
+
+1. Creates the run folder immediately under `TestResults\Phase10\local-preazure`.
+2. Writes `run-plan.txt`, `progress.log`, `current-step.txt`, and `summary.json` before bounded work starts.
+3. Exports `PHASE10_RUN_ROOT` so smoke, matrix, and NFR child evidence stay inside the same milestone packet.
+4. Runs the milestone-specific bounded gates, including the dedicated identity proof for `L4` and the architecture conformance gate for `L6`.
+5. Uses normal cleanup to stop the stack while preserving volumes unless you explicitly choose the volume-removal cleanup task.
+
+Current L5/L6 gate shape:
+
+- `L5` uses the shared NFR proof and now reports four independent evidence categories:
+  - `functional`
+  - `performance`
+  - `operational`
+  - `security`
+- `L6` now includes:
+  - environment readiness
+  - repository validation
+  - full-profile compose config
+  - architecture conformance
+  - stack startup
+  - identity proof
+  - rollback readiness
+  - Docker end-to-end
+  - NFR proof
+  - cleanup
+
+Useful tasks:
+
+- `2 Run: Phase 10 Pre-Azure Sequence` runs L1-L6 in order and stops on the first failed milestone.
+- `3 Cleanup: Phase 10 Pre-Azure Local Stack (Preserve Volumes)` is the normal teardown path after evidence review.
+- `3 Cleanup: Phase 10 Pre-Azure Local Stack + Volumes` is the destructive reset path when you want a clean local rerun.
+
+Rollback prerequisite for L5/L6:
+
+- The Phase 10 NFR proof executes a real inventory rollback and restore.
+- Set `PHASE10_PREVIOUS_IMAGE_TAG` in `Resources/Docker/.env.local`, or retain a local inventory image tagged with `phase10-prev-*`.
+- The proof now checks this prerequisite before running the expensive functional/performance sections.
+- You can run the dedicated gate directly with:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/test-phase10-rollback-readiness.ps1 -ArtifactRoot TestResults/Phase10/local-preazure
+```
+
 ### Azure Initial Setup Workflow Flow
 ```
 azure-initial-setup.yml (Phase 0/1a/1b)

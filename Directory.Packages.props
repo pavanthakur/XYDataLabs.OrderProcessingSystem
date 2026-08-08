@@ -53,6 +53,7 @@
     <PackageVersion Include="Openpay" Version="1.0.25" />
     <PackageVersion Include="Razorpay" Version="3.3.2" />
     <PackageVersion Include="Azure.Messaging.ServiceBus" Version="7.18.4" />
+    <PackageVersion Include="Microsoft.Data.SqlClient" Version="5.1.6" />
     <PackageVersion Include="Serilog" Version="4.2.0" />
     <PackageVersion Include="Serilog.AspNetCore" Version="8.0.3" />
     <PackageVersion Include="Serilog.Sinks.ApplicationInsights" Version="4.0.0" />

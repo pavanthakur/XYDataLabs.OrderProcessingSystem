@@ -1,9 +1,9 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using XYDataLabs.OrderProcessingSystem.Application.Events;
-using XYDataLabs.OrderProcessingSystem.Orders.Features.Events;
-using XYDataLabs.OrderProcessingSystem.Domain.Entities;
+using XYDataLabs.OrderProcessingSystem.Orders.Contracts.Events;
 using XYDataLabs.OrderProcessingSystem.Integration.Tests.Infrastructure;
 
 namespace XYDataLabs.OrderProcessingSystem.Integration.Tests.Events;
@@ -39,14 +39,15 @@ public sealed class InboxDeduplicationTests : IAsyncLifetime
         // Arrange
         var tenant = await IntegrationTestData.CreateTenantAsync(_factory);
 
-        var eventId = Guid.NewGuid();
         var messageId = Guid.NewGuid();
         
         var @event = new OrderCreatedV1(
             CustomerId: 1,
             OrderDate: DateTime.UtcNow,
             TotalPrice: 19.99m,
-            ProductCount: 1);
+            ProductCount: 1,
+            OrderReferenceId: Guid.NewGuid(),
+            CurrencyCode: "MXN");
 
         var envelope = new EventEnvelope(
             MessageId: messageId,
@@ -57,26 +58,29 @@ public sealed class InboxDeduplicationTests : IAsyncLifetime
             TenantId: tenant.TenantId
         );
 
-        // We dispatch the message twice back-to-back using the API's DI container scope.
-        // It should seamlessly handle the first execution (writing to InboxMessages) and ignore the second execution.
-        
+        // Exercise the SQL-backed idempotency decorator directly so the proof stays valid
+        // even as the Phase 10 runtime fans the same event out to multiple module consumers.
         using var scope = _factory.Services.CreateScope();
-        
-        // Ensure tenant context is set since Inbox is tenant-bound
+
         var httpContextAccessor = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Http.IHttpContextAccessor>();
         var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
         httpContext.Items["TenantContext"] = tenant.ToTenantContext();
         httpContextAccessor.HttpContext = httpContext;
-        
-        var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
+
+        var idempotencyGuard = scope.ServiceProvider.GetRequiredService<IIdempotencyGuard>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<IdempotentEventHandlerDecorator<OrderCreatedV1>>>();
+        var probeHandler = new CountingOrderCreatedHandler();
+        var decorator = new IdempotentEventHandlerDecorator<OrderCreatedV1>(probeHandler, idempotencyGuard, logger);
 
         // Act - First Execution (Should succeed)
-        await publisher.PublishAsync(envelope);
+        await decorator.HandleAsync(envelope, @event);
 
         // Act - Second Execution (Duplicate - should be skipped silently via IdempotencyGuard)
-        await publisher.PublishAsync(envelope);
+        await decorator.HandleAsync(envelope, @event);
 
         // Assert
+        probeHandler.InvocationCount.Should().Be(1);
+
         var inboxMessages = await _factory.ExecuteTenantDbContextAsync(
             tenant.ToTenantContext(),
             dbContext => dbContext.InboxMessages
@@ -88,4 +92,20 @@ public sealed class InboxDeduplicationTests : IAsyncLifetime
         inboxMessages[0].EventType.Should().Be("Processed");
         inboxMessages[0].TenantId.Should().Be(tenant.TenantId);
     }
+
+    private sealed class CountingOrderCreatedHandler : IEventHandler<OrderCreatedV1>
+    {
+        public int InvocationCount { get; private set; }
+
+        public Task HandleAsync(
+            EventEnvelope envelope,
+            OrderCreatedV1 integrationEvent,
+            CancellationToken cancellationToken = default)
+        {
+            InvocationCount++;
+            return Task.CompletedTask;
+        }
+    }
 }
+
+

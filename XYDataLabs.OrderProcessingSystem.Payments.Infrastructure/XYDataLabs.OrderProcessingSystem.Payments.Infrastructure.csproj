@@ -8,7 +8,6 @@
     <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Application\XYDataLabs.OrderProcessingSystem.Application.csproj" />
     <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Infrastructure\XYDataLabs.OrderProcessingSystem.Infrastructure.csproj" />
     <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Payments.Domain\XYDataLabs.OrderProcessingSystem.Payments.Domain.csproj" />
-    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Payments.API\XYDataLabs.OrderProcessingSystem.Payments.API.csproj" />
     <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.SharedKernel\XYDataLabs.OrderProcessingSystem.SharedKernel.csproj" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
   </ItemGroup>

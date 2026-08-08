@@ -178,11 +178,15 @@ try {
     if ($IncludeMessaging) {
         Write-ProgressLine 'Waiting for Service Bus emulator readiness...'
         Wait-ForTcpPort -HostName 'localhost' -Port 5672 -TimeoutSec 300
-        Wait-ForUrl -Url 'http://localhost:5300/health' -TimeoutSec 300
+        Wait-ForTcpPort -HostName 'localhost' -Port 5300 -TimeoutSec 300
     }
 
     if (-not $InfrastructureOnly) {
-        Write-ProgressLine 'Waiting for gateway and UI readiness...'
+        Write-ProgressLine 'Waiting for service, gateway, and UI readiness...'
+        Wait-ForUrl -Url 'http://localhost:5081/health/ready' -TimeoutSec 300
+        Wait-ForUrl -Url 'http://localhost:5082/health/ready' -TimeoutSec 300
+        Wait-ForUrl -Url 'http://localhost:5083/health/ready' -TimeoutSec 300
+        Wait-ForUrl -Url 'http://localhost:5084/health/ready' -TimeoutSec 300
         Wait-ForUrl -Url 'http://localhost:5080/health/alive' -TimeoutSec 300
         Wait-ForUrl -Url 'http://localhost:5022/' -TimeoutSec 300
     }

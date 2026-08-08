@@ -9,6 +9,7 @@
         "USE_HTTPS": "false",
         "Frontend__WebBaseUrl": "http://localhost:5173",
         "CORS_ALLOWED_ORIGINS": "http://localhost:5173",
+        "Phase10__DisableStartupDdl": "true",
         "SHAREDSETTINGS_PATH": "..\\Resources\\Configuration\\sharedsettings.local.json"
       },
       "dotnetRunMessages": true,
@@ -23,6 +24,7 @@
         "USE_HTTPS": "true",
         "Frontend__WebBaseUrl": "https://localhost:5174",
         "CORS_ALLOWED_ORIGINS": "https://localhost:5174",
+        "Phase10__DisableStartupDdl": "true",
         "SHAREDSETTINGS_PATH": "..\\Resources\\Configuration\\sharedsettings.local.json"
       },
       "dotnetRunMessages": true,

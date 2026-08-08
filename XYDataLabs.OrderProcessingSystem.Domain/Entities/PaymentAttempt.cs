@@ -75,7 +75,13 @@ namespace XYDataLabs.OrderProcessingSystem.Domain.Entities
             Status = PaymentAttemptStatus.Failed;
             ProviderStatus = "failed";
             LastErrorMessage = errorReason;
-            RaiseDomainEvent(new PaymentAttemptFailedDomainEvent(Id, TenantId, providerName, errorReason, DateTime.UtcNow));
+            RaiseDomainEvent(new PaymentAttemptFailedDomainEvent(
+                Id,
+                TenantId,
+                providerName,
+                CustomerOrderId,
+                errorReason,
+                DateTime.UtcNow));
         }
     }
 }

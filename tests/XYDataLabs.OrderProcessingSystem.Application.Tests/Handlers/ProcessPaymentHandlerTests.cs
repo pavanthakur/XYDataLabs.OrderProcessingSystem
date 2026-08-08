@@ -128,6 +128,82 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
     }
 
     [Fact]
+    public async Task HandleAsync_ShouldUsePersistedOrderAmountAndCurrencyForProviderAndPaymentRecords()
+    {
+        SetupPaymentDbSets();
+        SetupOpenPayHappyPath();
+        PaymentGatewayCreateChargeRequest? capturedRequest = null;
+        MockPaymentGateway
+            .Setup(gateway => gateway.CreateChargeAsync(
+                It.IsAny<PaymentGatewayCreateChargeRequest>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<PaymentGatewayCreateChargeRequest, CancellationToken>(
+                (request, _) => capturedRequest = request)
+            .ReturnsAsync(new PaymentGatewayChargeResult(
+                "charge-order-owned",
+                "completed",
+                100m,
+                UtcNow,
+                "auth-order-owned",
+                null,
+                null));
+        var handler = CreateProcessPaymentHandler();
+
+        var result = await handler.HandleAsync(BuildProcessPaymentCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        capturedRequest.Should().NotBeNull();
+        capturedRequest!.Amount.Should().Be(100m);
+        capturedRequest.Currency.Should().Be("MXN");
+        result.Value!.Amount.Should().Be(100m);
+        result.Value.Currency.Should().Be("MXN");
+        CapturedCardTransactions.Should().OnlyContain(
+            transaction => transaction.Amount == 100m
+                && transaction.CurrencyCode == "MXN");
+    }
+
+    [Fact]
+    public async Task HandleAsync_Should_Resolve_OrderPaymentContext_Through_OrdersModule_Instead_Of_Querying_Orders_DbSet()
+    {
+        SetupPaymentDbSets();
+        SetupOpenPayHappyPath();
+        MockDbContext.SetupGet(db => db.Orders)
+            .Throws(new InvalidOperationException("Orders DbSet should not be queried directly by Payments."));
+
+        var handler = CreateProcessPaymentHandler();
+
+        var result = await handler.HandleAsync(BuildProcessPaymentCommand());
+
+        result.IsSuccess.Should().BeTrue();
+        MockOrderModuleApi.Verify(
+            service => service.GetPaymentContextAsync("ORDER-001", It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_Should_Prefer_OrderReferenceId_When_It_Is_Available()
+    {
+        SetupPaymentDbSets();
+        SetupOpenPayHappyPath();
+        MockOrderModuleApi
+            .Setup(service => service.GetPaymentContextAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Throws(new InvalidOperationException("CustomerOrderId fallback should not be used when OrderReferenceId is available."));
+
+        var orderReferenceId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var handler = CreateProcessPaymentHandler();
+
+        var result = await handler.HandleAsync(BuildProcessPaymentCommand(
+            customerOrderId: "ORDER-001",
+            orderReferenceId: orderReferenceId));
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value!.OrderReferenceId.Should().Be(orderReferenceId);
+        MockOrderModuleApi.Verify(
+            service => service.GetPaymentContextByOrderReferenceAsync(orderReferenceId, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
     public async Task HandleAsync_ShouldGenerateNextDeterministicAttemptOrderIdForExistingCustomerOrder()
     {
         SetupPaymentDbSets(existingPaymentAttempts:
@@ -327,7 +403,8 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
             ExpirationYear: string.Empty,
             ExpirationMonth: string.Empty,
             Cvv2: string.Empty,
-            CustomerOrderId: "ORDER-RZP-001",
+            CustomerOrderId: "ORDER-001",
+            OrderReferenceId: Guid.Parse("11111111-1111-1111-1111-111111111111"),
             ClientCallbackOrigin: null));
 
         result.IsSuccess.Should().BeTrue();

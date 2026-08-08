@@ -10,6 +10,9 @@
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
       <_Parameter1>XYDataLabs.OrderProcessingSystem.API.Tests</_Parameter1>
     </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>XYDataLabs.OrderProcessingSystem.Integration.Tests</_Parameter1>
+    </AssemblyAttribute>
   </ItemGroup>
 
   <ItemGroup>
@@ -35,6 +38,8 @@
   <ItemGroup>
     <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Application\XYDataLabs.OrderProcessingSystem.Application.csproj" />
     <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Domain\XYDataLabs.OrderProcessingSystem.Domain.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Orders.Contracts\XYDataLabs.OrderProcessingSystem.Orders.Contracts.csproj" />
+    <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.Payments.Contracts\XYDataLabs.OrderProcessingSystem.Payments.Contracts.csproj" />
     <ProjectReference Include="..\XYDataLabs.OrderProcessingSystem.SharedKernel\XYDataLabs.OrderProcessingSystem.SharedKernel.csproj" />
   </ItemGroup>
 

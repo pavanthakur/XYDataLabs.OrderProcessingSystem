@@ -1,5 +1,6 @@
 export interface PendingPaymentContext {
   customerOrderId?: string | null;
+  orderReferenceId?: string | null;
   clientFlowId?: string | null;
   customerId?: number | null;
   orderId?: number | null;

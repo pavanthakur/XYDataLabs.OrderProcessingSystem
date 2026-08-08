@@ -59,6 +59,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Check Azure credentials
+        id: check-credentials
+        shell: pwsh
+        run: |
+          $clientId = "${{ secrets.AZUREAPPSERVICE_CLIENTID }}"
+          $tenantId = "${{ secrets.AZUREAPPSERVICE_TENANTID }}"
+          $subscriptionId = "${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}"
+
+          if ([string]::IsNullOrWhiteSpace($clientId) -or [string]::IsNullOrWhiteSpace($tenantId) -or [string]::IsNullOrWhiteSpace($subscriptionId)) {
+            Write-Host "Azure OIDC credentials are not available for this run. Azure-dependent validation will be skipped." -ForegroundColor Yellow
+            "configured=false" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Host "Azure OIDC credentials detected." -ForegroundColor Green
+            "configured=true" >> $env:GITHUB_OUTPUT
+          }
+
       - name: Test Summary Setup
         id: setup
         run: |
@@ -72,9 +88,11 @@ jobs:
           echo "- OIDC Verification: ${{ inputs.verify-oidc || 'true' }}" >> $GITHUB_STEP_SUMMARY
           echo "- Config Validation: ${{ inputs.check-config || 'true' }}" >> $GITHUB_STEP_SUMMARY
           echo "- Test All Environments: ${{ inputs.test-all-environments || 'false' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Azure Credentials Available: ${{ steps.check-credentials.outputs.configured || 'false' }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
       - name: Azure Login (OIDC)
+        if: steps.check-credentials.outputs.configured == 'true'
         uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
@@ -82,6 +100,7 @@ jobs:
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
 
       - name: Verify Azure Authentication
+        if: steps.check-credentials.outputs.configured == 'true'
         shell: pwsh
         run: |
           Write-Host "Verifying Azure authentication..." -ForegroundColor Cyan
@@ -91,7 +110,7 @@ jobs:
           Write-Host "   Tenant ID: $($account.tenantId)" -ForegroundColor White
 
       - name: Test Bicep What-If Analysis
-        if: inputs.run-whatif != false
+        if: inputs.run-whatif != false && steps.check-credentials.outputs.configured == 'true'
         shell: pwsh
         continue-on-error: true
         run: |
@@ -124,7 +143,7 @@ jobs:
           }
 
       - name: Test OIDC Credentials Verification
-        if: inputs.verify-oidc != false
+        if: inputs.verify-oidc != false && steps.check-credentials.outputs.configured == 'true'
         shell: pwsh
         continue-on-error: true
         run: |
@@ -166,6 +185,14 @@ jobs:
             Write-Host "⚠️ Config validation found drift" -ForegroundColor Yellow
             echo "### ⚠️ Config Validation: DRIFT DETECTED" >> $env:GITHUB_STEP_SUMMARY
           }
+
+      - name: Report skipped Azure-dependent validation
+        if: steps.check-credentials.outputs.configured != 'true'
+        shell: pwsh
+        run: |
+          echo "### ℹ️ Azure-dependent validation skipped" >> $env:GITHUB_STEP_SUMMARY
+          echo "" >> $env:GITHUB_STEP_SUMMARY
+          echo "Azure OIDC secrets are not available in this workflow context, so login, what-if, and OIDC verification were skipped." >> $env:GITHUB_STEP_SUMMARY
 
       - name: Verify Validation Scripts Exist
         shell: pwsh
@@ -226,6 +253,7 @@ jobs:
     name: Test Reusable Validation Workflow
     if: inputs.test-all-environments != true
     uses: ./.github/workflows/validate-deployment.yml
+    secrets: inherit
     with:
       environment: ${{ inputs.environment || 'dev' }}
       run-whatif: ${{ inputs.run-whatif != false }}

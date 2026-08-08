@@ -31,6 +31,7 @@ interface LocalMatrixOutput {
   startedIst: string;
   finishedIst: string;
   currentStep?: string;
+  status?: "running" | "passed" | "failed";
   targetCount: number;
   targets: string[];
   targetRuns: PaymentAutomationRunOutput[];
@@ -41,6 +42,7 @@ const automationRoot = path.resolve(currentDirectory, "../..");
 const workspaceRoot = path.resolve(automationRoot, "..");
 const statusWriterPath = path.join(workspaceRoot, "scripts", "write-playwright-run-status.ps1");
 const defaultEnvironmentKey = "local-http";
+const phase10RunRoot = process.env.PHASE10_RUN_ROOT?.trim();
 
 function formatIstTimestamp(date: Date): string {
   return new Intl.DateTimeFormat("sv-SE", {
@@ -64,12 +66,14 @@ async function main(): Promise<void> {
   const options = parseCliOptions(process.argv.slice(2));
   const startedAt = new Date();
   const matrixRunId = `payment-automation-local-matrix-${formatIstStamp(startedAt)}_matrix`;
-  const playrightRoot = path.join(workspaceRoot, "TestResults", "Playwright");
   const runtimeTargetCatalog = new JsonRuntimeTargetCatalog();
   const environmentKey = options.targets.length === 1
     ? resolveEnvironmentKey(await runtimeTargetCatalog.resolve(options.targets[0]))
     : defaultEnvironmentKey;
-  const environmentRoot = path.join(playrightRoot, environmentKey);
+  const playrightRoot = path.join(workspaceRoot, "TestResults", "Playwright");
+  const environmentRoot = phase10RunRoot
+    ? path.join(phase10RunRoot, "matrix")
+    : path.join(playrightRoot, environmentKey);
   const reportDirectory = path.join(environmentRoot, matrixRunId);
   const latestPointerPath = path.join(environmentRoot, "latest-playwright-matrix.txt");
   const rootMarkerPath = path.join(playrightRoot, "latest-playwright-run.txt");
@@ -86,6 +90,7 @@ async function main(): Promise<void> {
     finishedUtc: startedAt.toISOString(),
     startedIst: formatIstTimestamp(startedAt),
     finishedIst: formatIstTimestamp(startedAt),
+    status: "running",
     targetCount: 0,
     targets: options.targets,
     targetRuns: []
@@ -184,9 +189,13 @@ async function main(): Promise<void> {
 
   const rows = targetRuns.flatMap((targetRun) => targetRun.rows);
   const markdownSummary = await reportComposer.compose(rows);
+  const hasFailures = targetRuns.some((targetRun) =>
+    targetRun.rows.some((row) => !row.journeyOutcome.startsWith("completed") && row.journeyOutcome !== "dry_run")
+  );
   matrixOutput.finishedUtc = new Date().toISOString();
   matrixOutput.finishedIst = formatIstTimestamp(new Date());
   matrixOutput.currentStep = "completed";
+  matrixOutput.status = hasFailures ? "failed" : "passed";
   matrixOutput.targetCount = targetRuns.length;
   matrixOutput.targetRuns = targetRuns;
 
@@ -218,7 +227,11 @@ async function main(): Promise<void> {
   await writeRunMessage(startupLogPath, progressLogPath, `[${formatIstTimestamp(new Date())}] state=completed-matrix`);
 
   await writeRunMessage(startupLogPath, progressLogPath, JSON.stringify(matrixOutput, null, 2));
-  await appendStatus(environmentKey, "local-http-matrix", "passed", `reportDirectory=${reportDirectory}`);
+  await appendStatus(environmentKey, "local-http-matrix", hasFailures ? "failed" : "passed", `reportDirectory=${reportDirectory}`);
+
+  if (hasFailures) {
+    throw new Error("Local payment matrix completed with failed tenant journey(s).");
+  }
   }
   catch (error) {
     await appendStatus(environmentKey, "local-http-matrix", "failed", error instanceof Error ? error.message : "Local matrix failed");

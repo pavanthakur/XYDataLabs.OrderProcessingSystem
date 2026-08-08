@@ -8,6 +8,11 @@ const defaultAttemptCount = 3;
 const defaultTimeoutMs = 60000;
 const localStorageKey = "orderprocessing.activeTenantCode";
 const runtimeConfigurationPathFragment = "/api/v1/Info/runtime-configuration";
+const keycloakAuthPathFragment = "/protocol/openid-connect/auth";
+const keycloakLoginSelector = "#kc-login";
+const keycloakUsernameSelector = "#username";
+const keycloakPasswordSelector = "#password";
+const keycloakLocalUsername = "tenant-admin";
 const tenantLabel = "Tenant";
 const defaultArtifactDirectoryName = "playwright-smoke";
 const defaultLatestPointerFileName = "latest-playwright-smoke.txt";
@@ -218,10 +223,20 @@ async function discoverRuntimeConfiguration(browser, url, timeoutMs) {
     try {
       const page = await context.newPage();
       const diagnostics = attachPageDiagnostics(page);
+      const runtimeConfigurationResponsePromise = page.waitForResponse(
+        candidate => candidate.url().includes(runtimeConfigurationPathFragment),
+        { timeout: timeoutMs }
+      );
 
       await page.goto(url, { timeout: timeoutMs, waitUntil: "domcontentloaded" });
-
-      const runtimeConfigurationResponse = await waitForRuntimeConfigurationResponse(page, timeoutMs, diagnostics, attempt);
+      await completeLocalKeycloakLoginIfNeeded(page, timeoutMs, diagnostics, attempt, url);
+      const runtimeConfigurationResponse = await waitForRuntimeConfigurationResponse(
+        runtimeConfigurationResponsePromise,
+        page,
+        timeoutMs,
+        diagnostics,
+        attempt
+      );
       const runtimeConfiguration = await runtimeConfigurationResponse.json();
 
       validateRuntimeConfiguration(runtimeConfiguration);
@@ -270,6 +285,10 @@ async function verifyTenantBootstrap(browser, options) {
     try {
       const page = await context.newPage();
       const diagnostics = attachPageDiagnostics(page);
+      const runtimeConfigurationResponsePromise = page.waitForResponse(
+        candidate => candidate.url().includes(runtimeConfigurationPathFragment),
+        { timeout: options.timeoutMs }
+      );
 
       await page.addInitScript(({ nextTenantCode, storageKey }) => {
         window.localStorage.setItem(storageKey, nextTenantCode);
@@ -279,8 +298,14 @@ async function verifyTenantBootstrap(browser, options) {
       });
 
       await page.goto(options.url, { timeout: options.timeoutMs, waitUntil: "domcontentloaded" });
-
-      const runtimeConfigurationResponse = await waitForRuntimeConfigurationResponse(page, options.timeoutMs, diagnostics, attempt);
+      await completeLocalKeycloakLoginIfNeeded(page, options.timeoutMs, diagnostics, attempt, options.url);
+      const runtimeConfigurationResponse = await waitForRuntimeConfigurationResponse(
+        runtimeConfigurationResponsePromise,
+        page,
+        options.timeoutMs,
+        diagnostics,
+        attempt
+      );
       const runtimeConfiguration = await runtimeConfigurationResponse.json();
 
       validateRuntimeConfiguration(runtimeConfiguration);
@@ -299,12 +324,19 @@ async function verifyTenantBootstrap(browser, options) {
         throw new Error(`Persisted tenant '${persistedTenantCode}' does not match expected tenant '${options.expectedTenantCode}'.`);
       }
 
-      await page.locator(".customer-list .customer-link").first().waitFor({ state: "visible", timeout: options.timeoutMs });
+      const customerLink = page.locator(".customer-list .customer-link").first();
+      const emptyState = page.locator(".empty-state").first();
+
+      const customerDirectoryState = await Promise.any([
+        customerLink.waitFor({ state: "visible", timeout: options.timeoutMs }).then(() => "list"),
+        emptyState.waitFor({ state: "visible", timeout: options.timeoutMs }).then(() => "empty")
+      ]);
 
       return {
         activeTenantCode,
         customerRequestTenantCode: runtimeConfiguration.tenantHeaderName,
-        tenantHeaderName: runtimeConfiguration.tenantHeaderName
+        tenantHeaderName: runtimeConfiguration.tenantHeaderName,
+        customerDirectoryState
       };
     } catch (error) {
       await captureFailureArtifacts(context, options.artifactRoot, `tenant-bootstrap-attempt-${attempt}`, error);
@@ -365,11 +397,8 @@ async function captureFailureArtifacts(context, artifactRoot, name, error) {
   }
 }
 
-async function waitForRuntimeConfigurationResponse(page, timeoutMs, diagnostics, attempt) {
-  const response = await page.waitForResponse(
-    candidate => candidate.url().includes(runtimeConfigurationPathFragment),
-    { timeout: timeoutMs }
-  ).catch(async error => {
+async function waitForRuntimeConfigurationResponse(responsePromise, page, timeoutMs, diagnostics, attempt) {
+  const response = await responsePromise.catch(async error => {
     throw new Error(await buildRuntimeConfigurationDiagnostics(page, diagnostics, attempt, error));
   });
 
@@ -381,6 +410,38 @@ async function waitForRuntimeConfigurationResponse(page, timeoutMs, diagnostics,
   }
 
   return response;
+}
+
+async function completeLocalKeycloakLoginIfNeeded(page, timeoutMs, diagnostics, attempt, appUrl) {
+  await page.waitForURL(
+    currentUrl => currentUrl.toString().includes(keycloakAuthPathFragment),
+    { timeout: Math.min(timeoutMs, 10000) }
+  ).catch(() => {});
+
+  const needsLogin = page.url().includes(keycloakAuthPathFragment)
+    || await page.locator(keycloakLoginSelector).isVisible({ timeout: 2000 }).catch(() => false);
+
+  if (!needsLogin) {
+    return;
+  }
+
+  const password = await resolveLocalKeycloakPassword();
+  console.log("Detected local Keycloak sign-in; completing the login flow.");
+
+  await page.locator(keycloakUsernameSelector).fill(keycloakLocalUsername);
+  await page.locator(keycloakPasswordSelector).fill(password);
+  await page.locator(keycloakLoginSelector).click();
+
+  await page.waitForURL(
+    currentUrl => currentUrl.toString().startsWith(new URL(appUrl).origin) && !currentUrl.toString().includes(keycloakAuthPathFragment),
+    { timeout: timeoutMs }
+  ).catch(async error => {
+    throw new Error(await buildRuntimeConfigurationDiagnostics(page, diagnostics, attempt, error));
+  });
+
+  await page.getByRole("heading", { name: /Customers, orders, and card payments/i })
+    .waitFor({ timeout: timeoutMs })
+    .catch(() => {});
 }
 
 function attachPageDiagnostics(page) {
@@ -512,6 +573,28 @@ function equalsIgnoreCase(left, right) {
   }
 
   return left.trim().toLowerCase() === right.trim().toLowerCase();
+}
+
+async function resolveLocalKeycloakPassword() {
+  const environmentPassword = process.env.KEYCLOAK_TENANT_ADMIN_PASSWORD
+    ?? process.env.LOCAL_KEYCLOAK_TEST_PASSWORD;
+
+  if (environmentPassword && environmentPassword.trim().length > 0) {
+    return environmentPassword.trim();
+  }
+
+  const repoRoot = path.resolve(process.cwd(), "..", "..", "..");
+  const envLocalPath = path.join(repoRoot, "Resources", "Docker", ".env.local");
+  const envLocalText = await fs.readFile(envLocalPath, "utf8").catch(() => "");
+  const passwordLine = envLocalText
+    .split(/\r?\n/)
+    .find(line => line.trim().startsWith("KEYCLOAK_TENANT_ADMIN_PASSWORD="));
+
+  if (!passwordLine) {
+    throw new Error("KEYCLOAK_TENANT_ADMIN_PASSWORD is required for the local Keycloak smoke login.");
+  }
+
+  return passwordLine.split("=", 2)[1].trim().replace(/^["']|["']$/g, "");
 }
 
 main().catch(error => {

@@ -9,4 +9,5 @@ public static class ModuleSchemaNames
     public const string Inventory = "inventory";
     public const string Notifications = "notifications";
     public const string Payments = "payments";
+    public const string Operations = "operations";
 }
