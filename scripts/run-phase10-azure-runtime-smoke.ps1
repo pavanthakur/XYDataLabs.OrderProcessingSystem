@@ -123,6 +123,79 @@ function Test-JsonField {
     }
 }
 
+function Test-GatewayBackendRoutes {
+    param(
+        [string]$Body,
+        [string]$CurrentEnvironmentSuffix
+    )
+
+    try {
+        $json = $Body | ConvertFrom-Json -ErrorAction Stop
+    }
+    catch {
+        return [pscustomobject]@{
+            Success = $false
+            Detail = "Response was not valid JSON: $($_.Exception.Message)"
+        }
+    }
+
+    $routes = @($json.routes)
+    if ($routes.Count -eq 0) {
+        return [pscustomobject]@{
+            Success = $false
+            Detail = 'Gateway health payload did not include any route summaries.'
+        }
+    }
+
+    $localhostRoute = $routes | Where-Object { $_ -match 'localhost' } | Select-Object -First 1
+    if ($null -ne $localhostRoute) {
+        return [pscustomobject]@{
+            Success = $false
+            Detail = "Gateway backend route contract failed: route '$localhostRoute' still points at localhost."
+        }
+    }
+
+    $shortNameRoute = $routes | Where-Object {
+        $_ -match "-> http://orderprocessing-(ord|inv|notif|ui)-$CurrentEnvironmentSuffix$"
+    } | Select-Object -First 1
+
+    if ($null -ne $shortNameRoute) {
+        return [pscustomobject]@{
+            Success = $false
+            Detail = "Gateway backend route contract failed: route '$shortNameRoute' still uses a bare short name."
+        }
+    }
+
+    $requiredClusters = @(
+        'orders-cluster/orders-primary',
+        'inventory-cluster/inventory-primary',
+        'notifications-cluster/notifications-primary',
+        'ui-cluster/ui-primary'
+    )
+
+    foreach ($requiredCluster in $requiredClusters) {
+        $matchingRoute = $routes | Where-Object { $_ -like "$requiredCluster*" } | Select-Object -First 1
+        if ($null -eq $matchingRoute) {
+            return [pscustomobject]@{
+                Success = $false
+                Detail = "Gateway backend route contract failed: missing route summary for '$requiredCluster'."
+            }
+        }
+
+        if ($matchingRoute -notmatch '\.azurecontainerapps\.io') {
+            return [pscustomobject]@{
+                Success = $false
+                Detail = "Gateway backend route contract failed: route '$matchingRoute' is not using an ACA FQDN target."
+            }
+        }
+    }
+
+    return [pscustomobject]@{
+        Success = $true
+        Detail = 'Gateway backend route contract passed with ACA FQDN targets.'
+    }
+}
+
 if ([string]::IsNullOrWhiteSpace($GatewayFqdn)) {
     $GatewayFqdn = Resolve-ContainerAppFqdn -Name $gatewayApp
 }
@@ -152,6 +225,11 @@ $checks += Invoke-SmokeHttp -Name 'Gateway health' -Url $gatewayHealthUrl -Valid
         return [pscustomobject]@{ Success = $false; Detail = "Gateway response did not report healthy status." }
     }
     [pscustomobject]@{ Success = $true; Detail = "Gateway accepted the Azure host and reported healthy." }
+}
+
+$checks += Invoke-SmokeHttp -Name 'Gateway backend route contract' -Url $gatewayHealthUrl -Validate {
+    param($response, $body)
+    Test-GatewayBackendRoutes -Body $body -CurrentEnvironmentSuffix $envSuffix
 }
 
 $checks += Invoke-SmokeHttp -Name 'Gateway routed API runtime configuration' -Url $gatewayApiUrl -Validate {

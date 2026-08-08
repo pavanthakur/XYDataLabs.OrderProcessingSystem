@@ -117,6 +117,14 @@ Assert-ParameterValue -RelativePath 'infra/parameters/phase10-staging.json' -Par
 
 Assert-FileContains -RelativePath 'infra/main.phase10.bicep' -RegexPattern "param resourceSuffix string = ''" -Description 'top-level resourceSuffix parameter'
 Assert-FileContains -RelativePath 'infra/main.phase10.bicep' -RegexPattern "var effectiveResourceSuffix = empty\(resourceSuffix\) \? environment : resourceSuffix" -Description 'effectiveResourceSuffix normalization'
+Assert-FileContains -RelativePath 'infra/modules/containerapps.bicep' -RegexPattern "var ordersInternalAddress = 'http://\$\{ordersApp\.properties\.configuration\.ingress\.fqdn\}'" -Description 'orders backend uses ACA ingress FQDN'
+Assert-FileContains -RelativePath 'infra/modules/containerapps.bicep' -RegexPattern "var inventoryInternalAddress = 'http://\$\{inventoryApp\.properties\.configuration\.ingress\.fqdn\}'" -Description 'inventory backend uses ACA ingress FQDN'
+Assert-FileContains -RelativePath 'infra/modules/containerapps.bicep' -RegexPattern "var notificationsInternalAddress = 'http://\$\{notificationsApp\.properties\.configuration\.ingress\.fqdn\}'" -Description 'notifications backend uses ACA ingress FQDN'
+Assert-FileContains -RelativePath 'infra/modules/containerapps.bicep' -RegexPattern "var uiInternalAddress = 'http://\$\{uiApp\.properties\.configuration\.ingress\.fqdn\}'" -Description 'ui backend uses ACA ingress FQDN'
+Assert-FileContains -RelativePath 'infra/modules/containerapps.bicep' -RegexPattern "ReverseProxy__Clusters__orders-cluster__Destinations__orders-primary__Address'[\s\S]*value: ordersInternalAddress" -Description 'gateway orders cluster consumes ACA FQDN address'
+Assert-FileContains -RelativePath 'infra/modules/containerapps.bicep' -RegexPattern "ReverseProxy__Clusters__inventory-cluster__Destinations__inventory-primary__Address'[\s\S]*value: inventoryInternalAddress" -Description 'gateway inventory cluster consumes ACA FQDN address'
+Assert-FileContains -RelativePath 'infra/modules/containerapps.bicep' -RegexPattern "ReverseProxy__Clusters__notifications-cluster__Destinations__notifications-primary__Address'[\s\S]*value: notificationsInternalAddress" -Description 'gateway notifications cluster consumes ACA FQDN address'
+Assert-FileContains -RelativePath 'infra/modules/containerapps.bicep' -RegexPattern "ReverseProxy__Clusters__ui-cluster__Destinations__ui-primary__Address'[\s\S]*value: uiInternalAddress" -Description 'gateway ui cluster consumes ACA FQDN address'
 
 $resourceScopedModules = @(
     'infra/modules/servicebus.bicep',
@@ -142,6 +150,8 @@ Assert-FileContains -RelativePath '.github/workflows/phase10-azure-transport-smo
 Assert-FileContains -RelativePath '.github/workflows/phase10-azure-payment-matrix.yml' -RegexPattern '(?s)\$\{\{\s*inputs\.environment\s*\}\}.*staging.*ENV_SUFFIX="stg"' -Description 'staging to stg normalization in payment matrix workflow'
 
 Assert-FileContains -RelativePath 'scripts/run-phase10-azure-runtime-smoke.ps1' -RegexPattern '\$envSuffix = if \(\$Environment -eq ''staging''\) \{ ''stg'' \} else \{ \$Environment \}' -Description 'runtime smoke script staging normalization'
+Assert-FileContains -RelativePath 'scripts/run-phase10-azure-runtime-smoke.ps1' -RegexPattern 'Gateway backend route contract' -Description 'runtime smoke includes gateway backend route validation'
+Assert-FileContains -RelativePath 'scripts/run-phase10-azure-runtime-smoke.ps1' -RegexPattern 'ACA FQDN target' -Description 'runtime smoke validates ACA FQDN-style backend routes'
 Assert-FileContains -RelativePath 'scripts/run-phase10-azure-transport-smoke.ps1' -RegexPattern '\$resourceSuffix = if \(\$Environment -eq ''staging''\) \{ ''stg'' \} else \{ \$Environment \}' -Description 'transport smoke script staging normalization'
 Assert-FileContains -RelativePath 'scripts/verify-payment-run-azure.ps1' -RegexPattern '\[ValidateSet\(''dev'', ''staging'', ''stg'', ''prod''\)\]' -Description 'Azure payment verifier accepts staging and stg aliases'
 Assert-FileContains -RelativePath 'scripts/set-tenant-payment-provider.ps1' -RegexPattern '\[ValidateSet\(''dev'', ''staging'', ''stg'', ''prod''\)\]' -Description 'tenant provider setter accepts staging and stg aliases'
