@@ -118,6 +118,10 @@ var commonEnv = [
     value: keyVaultUri
   }
   {
+    name: 'ORDERPROCESSING_EXPECTED_ENVIRONMENT'
+    value: environment
+  }
+  {
     name: 'ASPNETCORE_ENVIRONMENT'
     value: aspNetCoreEnvironment
   }
