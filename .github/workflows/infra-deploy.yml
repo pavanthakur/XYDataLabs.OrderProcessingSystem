@@ -80,6 +80,11 @@ on:
         required: false
         default: ''
         type: string
+      paymentsImage:
+        description: 'Payments image override'
+        required: false
+        default: ''
+        type: string
       inventoryImage:
         description: 'Inventory image override'
         required: false
@@ -270,6 +275,10 @@ jobs:
           if [ -z "$ORDERS_IMAGE" ]; then
             ORDERS_IMAGE="${ACR_LOGIN_SERVER}/orderprocessing-orders:phase10"
           fi
+          PAYMENTS_IMAGE="${{ inputs.paymentsImage }}"
+          if [ -z "$PAYMENTS_IMAGE" ]; then
+            PAYMENTS_IMAGE="${ACR_LOGIN_SERVER}/orderprocessing-payments:phase10"
+          fi
           INVENTORY_IMAGE="${{ inputs.inventoryImage }}"
           if [ -z "$INVENTORY_IMAGE" ]; then
             INVENTORY_IMAGE="${ACR_LOGIN_SERVER}/orderprocessing-inventory:phase10"
@@ -287,6 +296,7 @@ jobs:
           echo "acrPullIdentityId=${ACR_PULL_IDENTITY_ID}" >> $GITHUB_OUTPUT
           echo "gatewayImage=${GATEWAY_IMAGE}" >> $GITHUB_OUTPUT
           echo "ordersImage=${ORDERS_IMAGE}" >> $GITHUB_OUTPUT
+          echo "paymentsImage=${PAYMENTS_IMAGE}" >> $GITHUB_OUTPUT
           echo "inventoryImage=${INVENTORY_IMAGE}" >> $GITHUB_OUTPUT
           echo "notificationsImage=${NOTIFICATIONS_IMAGE}" >> $GITHUB_OUTPUT
           echo "uiImage=${UI_IMAGE}" >> $GITHUB_OUTPUT
@@ -409,6 +419,7 @@ jobs:
             --parameters platformAcrPullIdentityId="${{ steps.params.outputs.acrPullIdentityId }}" \
             --parameters gatewayImage="${{ steps.params.outputs.gatewayImage }}" \
             --parameters ordersImage="${{ steps.params.outputs.ordersImage }}" \
+            --parameters paymentsImage="${{ steps.params.outputs.paymentsImage }}" \
             --parameters inventoryImage="${{ steps.params.outputs.inventoryImage }}" \
             --parameters notificationsImage="${{ steps.params.outputs.notificationsImage }}" \
             --parameters uiImage="${{ steps.params.outputs.uiImage }}"
@@ -502,6 +513,10 @@ jobs:
           if [ -z "$ORDERS_IMAGE" ]; then
             ORDERS_IMAGE="${ACR_LOGIN_SERVER}/orderprocessing-orders:phase10"
           fi
+          PAYMENTS_IMAGE="${{ inputs.paymentsImage }}"
+          if [ -z "$PAYMENTS_IMAGE" ]; then
+            PAYMENTS_IMAGE="${ACR_LOGIN_SERVER}/orderprocessing-payments:phase10"
+          fi
           INVENTORY_IMAGE="${{ inputs.inventoryImage }}"
           if [ -z "$INVENTORY_IMAGE" ]; then
             INVENTORY_IMAGE="${ACR_LOGIN_SERVER}/orderprocessing-inventory:phase10"
@@ -519,6 +534,7 @@ jobs:
           echo "acrPullIdentityId=${ACR_PULL_IDENTITY_ID}" >> $GITHUB_OUTPUT
           echo "gatewayImage=${GATEWAY_IMAGE}" >> $GITHUB_OUTPUT
           echo "ordersImage=${ORDERS_IMAGE}" >> $GITHUB_OUTPUT
+          echo "paymentsImage=${PAYMENTS_IMAGE}" >> $GITHUB_OUTPUT
           echo "inventoryImage=${INVENTORY_IMAGE}" >> $GITHUB_OUTPUT
           echo "notificationsImage=${NOTIFICATIONS_IMAGE}" >> $GITHUB_OUTPUT
           echo "uiImage=${UI_IMAGE}" >> $GITHUB_OUTPUT
@@ -636,6 +652,7 @@ jobs:
               --name "$SCOPE_MAP_NAME" \
               --add-repository orderprocessing-gateway content/read \
               --add-repository orderprocessing-orders content/read \
+              --add-repository orderprocessing-payments content/read \
               --add-repository orderprocessing-inventory content/read \
               --add-repository orderprocessing-notifications content/read \
               --add-repository orderprocessing-ui content/read \
@@ -646,6 +663,7 @@ jobs:
               --name "$SCOPE_MAP_NAME" \
               --repository orderprocessing-gateway content/read \
               --repository orderprocessing-orders content/read \
+              --repository orderprocessing-payments content/read \
               --repository orderprocessing-inventory content/read \
               --repository orderprocessing-notifications content/read \
               --repository orderprocessing-ui content/read \
@@ -763,6 +781,7 @@ jobs:
             --parameters acrRegistryPassword="${{ steps.acr_pull_token.outputs.password }}" \
             --parameters gatewayImage="${{ steps.params.outputs.gatewayImage }}" \
             --parameters ordersImage="${{ steps.params.outputs.ordersImage }}" \
+            --parameters paymentsImage="${{ steps.params.outputs.paymentsImage }}" \
             --parameters inventoryImage="${{ steps.params.outputs.inventoryImage }}" \
             --parameters notificationsImage="${{ steps.params.outputs.notificationsImage }}" \
             --parameters uiImage="${{ steps.params.outputs.uiImage }}"

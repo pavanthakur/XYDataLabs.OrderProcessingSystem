@@ -167,7 +167,7 @@ Rule of thumb:
 
 Runtime smoke backend-route guardrail:
 
-- `02 Phase 10 Azure Runtime Smoke` now verifies that the gateway health payload reports ACA `https://...azurecontainerapps.io` backend targets for `orders`, `inventory`, `notifications`, and `ui`.
+- `02 Phase 10 Azure Runtime Smoke` now verifies that the gateway health payload reports ACA `https://...azurecontainerapps.io` backend targets for `orders`, `payments`, `inventory`, `notifications`, and `ui`.
 - Treat any `localhost` backend, bare short-name backend such as `http://orderprocessing-ord-stg`, or non-HTTPS ACA backend target as a deployment regression and stop before transport or payment validation.
 
 ### Environment Operating Matrix
@@ -596,8 +596,8 @@ Default retention policy:
 Local-vs-CI guidance:
 - Use the local hook or VS Code tasks when you need to debug the Docker stack interactively.
 - Use the GitHub Actions workflow as the pre-merge gate to confirm the same sequence still passes on a runner and still writes the expected log pointers and artifacts.
-- In the GitHub Actions run view, the five Phase 10 image builds are expected to appear as one grouped `Build Phase 10 Images` stage with one individual log block per service (`gateway`, `orders`, `inventory`, `notifications`, `ui`).
-- If you export the run log, those five service logs may be consolidated into a single file even though the Actions UI still shows them individually.
+- In the GitHub Actions run view, the six Phase 10 image builds are expected to appear as one grouped `Build Phase 10 Images` stage with one individual log block per service (`gateway`, `orders`, `payments`, `inventory`, `notifications`, `ui`).
+- If you export the run log, those six service logs may be consolidated into a single file even though the Actions UI still shows them individually.
 
 ## Runtime Verification Checklist
 
@@ -605,7 +605,7 @@ Use this checklist to prove the shared contract is behaving the same way across 
 
 1. Local Phase 10 stack
    - Start the local Phase 10 container stack.
-   - Confirm the gateway, Orders, Inventory, Notifications, and UI containers all start with the `orderprocessing-*` image family.
+   - Confirm the gateway, Orders, Payments, Inventory, Notifications, and UI containers all start with the `orderprocessing-*` image family.
    - Run the local smoke path and confirm the gateway and UI respond on their local ports.
 2. Azure infra deploy
    - Run `phase10-deploy-orchestrator.yml` with the target environment and confirm the deployment summary reports the expected gateway and UI ingress outputs.

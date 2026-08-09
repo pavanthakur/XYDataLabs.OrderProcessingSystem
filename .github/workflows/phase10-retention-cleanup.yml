@@ -97,6 +97,7 @@ jobs:
             const packageNames = [
               'orderprocessing-gateway',
               'orderprocessing-orders',
+              'orderprocessing-payments',
               'orderprocessing-inventory',
               'orderprocessing-notifications',
               'orderprocessing-ui'

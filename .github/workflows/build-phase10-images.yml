@@ -43,6 +43,10 @@ jobs:
             repository: orderprocessing-orders
             dockerfile: XYDataLabs.OrderProcessingSystem.Orders.API/Dockerfile
             context: .
+          - name: payments
+            repository: orderprocessing-payments
+            dockerfile: XYDataLabs.OrderProcessingSystem.Payments.Host/Dockerfile
+            context: .
           - name: inventory
             repository: orderprocessing-inventory
             dockerfile: XYDataLabs.OrderProcessingSystem.Inventory.API/Dockerfile
