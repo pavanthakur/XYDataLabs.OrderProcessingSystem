@@ -37,6 +37,10 @@ param deploymentPrincipalObjectId string = ''
 @secure()
 param sqlAdminPassword string = ''
 
+@description('Dedicated tenant connection strings keyed by tenant code. Values are written as Key Vault secrets; tenant topology is still discovered from the registry at runtime.')
+@secure()
+param dedicatedTenantConnectionStrings object = {}
+
 var effectiveResourceSuffix = empty(resourceSuffix) ? environment : resourceSuffix
 var shortBaseName = take(baseName, 15)
 var keyVaultName = 'kv-${shortBaseName}-${effectiveResourceSuffix}'
@@ -160,6 +164,14 @@ resource sqlAdminPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' =
     value: sqlAdminPassword
   }
 }
+
+resource dedicatedTenantConnectionStringSecrets 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = [for dedicatedTenant in items(dedicatedTenantConnectionStrings): {
+  parent: keyVault
+  name: 'DedicatedTenantConnectionStrings--${dedicatedTenant.key}'
+  properties: {
+    value: string(dedicatedTenant.value)
+  }
+}]
 
 output keyVaultName string = keyVault.name
 output keyVaultUri string = keyVault.properties.vaultUri

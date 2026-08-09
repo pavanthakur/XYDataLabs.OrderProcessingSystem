@@ -912,6 +912,7 @@ jobs:
           "✅ Phase 10 Azure SQL migrations completed." | Add-Content -Path $env:GITHUB_STEP_SUMMARY
 
       - name: Grant Phase 10 Runtime SQL Managed Identity Access
+        id: phase10-sql-identities
         if: ${{ steps.params.outputs.deploySql == 'true' }}
         shell: pwsh
         run: |
@@ -929,6 +930,65 @@ jobs:
           }
 
           "✅ Phase 10 runtime SQL identities granted access to the shared registry database and every active dedicated tenant database resolved from tenant topology." | Add-Content -Path $env:GITHUB_STEP_SUMMARY
+
+      - name: Diagnose Phase 10 SQL Identity Setup Failure
+        if: ${{ always() && steps.params.outputs.deploySql == 'true' && steps['phase10-sql-identities'].outcome == 'failure' }}
+        shell: pwsh
+        run: |
+          $resourceGroup = "${{ steps.outputs.outputs.rg }}"
+          $keyVaultName = "${{ steps.outputs.outputs.keyvault }}"
+          $sqlServerName = "${{ steps.outputs.outputs.sqlServer }}"
+
+          function Write-DiagnosticSection {
+              param(
+                  [Parameter(Mandatory = $true)][string]$Title,
+                  [Parameter(Mandatory = $true)][scriptblock]$Command
+              )
+
+              Write-Host "`n--- $Title ---" -ForegroundColor Cyan
+              try {
+                  $result = & $Command 2>&1
+                  if ($LASTEXITCODE -ne 0) {
+                      Write-Host "Diagnostic command failed with exit code $LASTEXITCODE." -ForegroundColor Yellow
+                  }
+                  $result | ForEach-Object { Write-Host $_ }
+              }
+              catch {
+                  Write-Host "Diagnostic collection failed: $($_.Exception.Message)" -ForegroundColor Yellow
+              }
+          }
+
+          Write-Host 'Collecting non-secret Azure diagnostics for the failed SQL identity setup.' -ForegroundColor Yellow
+          Write-Host "Resource group : $resourceGroup"
+          Write-Host "Key Vault      : $keyVaultName"
+          Write-Host "SQL server     : $sqlServerName"
+
+          Write-DiagnosticSection -Title 'Azure caller context' -Command {
+              az account show --query '{subscription:id, tenant:tenantId, caller:user.name, callerType:user.type}' -o json
+          }
+          Write-DiagnosticSection -Title 'Dedicated tenant secret identifiers (values are never read)' -Command {
+              az keyvault secret list --vault-name $keyVaultName --query "[?starts_with(name, 'DedicatedTenantConnectionStrings--')].name" -o tsv
+          }
+          Write-DiagnosticSection -Title 'Azure SQL databases' -Command {
+              az sql db list --resource-group $resourceGroup --server $sqlServerName --query '[].name' -o tsv
+          }
+          Write-DiagnosticSection -Title 'Container App runtime identities' -Command {
+              az containerapp list --resource-group $resourceGroup --query '[].{name:name, principalId:identity.principalId}' -o table
+          }
+          Write-DiagnosticSection -Title 'Function App runtime identity' -Command {
+              az functionapp identity show --resource-group $resourceGroup --name "${{ steps.outputs.outputs.function }}" --query '{principalId:principalId, tenantId:tenantId}' -o json
+          }
+
+          @"
+          ### SQL identity failure diagnostic packet
+
+          - Environment: ${{ steps.params.outputs.env }}
+          - Resource group: $resourceGroup
+          - Key Vault: $keyVaultName
+          - SQL server: $sqlServerName
+          - The job log contains caller identity, dedicated-secret identifiers, database names, and runtime identity presence.
+          - Secret values, connection strings, and credentials are intentionally excluded.
+          "@ | Add-Content -Path $env:GITHUB_STEP_SUMMARY
 
       - name: Refresh Runtime Hosts After SQL Setup
         if: ${{ steps.params.outputs.deploySql == 'true' }}
