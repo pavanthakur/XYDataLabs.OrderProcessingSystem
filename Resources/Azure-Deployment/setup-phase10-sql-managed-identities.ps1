@@ -286,23 +286,6 @@ function Resolve-DedicatedDatabaseNameFromConnectionString {
     return $match.Groups[1].Value.Trim()
 }
 
-function Get-SqlExecutionModeSplat {
-    param(
-        [switch]$UseAzureAdToken,
-        [switch]$UseSqlAuth
-    )
-
-    $mode = @{}
-    if ($UseSqlAuth.IsPresent) {
-        $mode.UseSqlAuth = $true
-    }
-    elseif ($UseAzureAdToken.IsPresent) {
-        $mode.UseAzureAdToken = $true
-    }
-
-    return $mode
-}
-
 function Get-ActiveDedicatedTenantDatabases {
     param(
         [Parameter(Mandatory = $true)][string]$SqlServerFqdn,
@@ -326,23 +309,35 @@ WHERE [Status] = N'Active'
 ORDER BY [Code];
 "@
 
-    $authMode = if ($UseSqlAuth.IsPresent) {
-        Get-SqlExecutionModeSplat -UseSqlAuth
+    if ($UseSqlAuth) {
+        $tenants = @(Invoke-SqlQueryRows `
+            -SqlServerFqdn $SqlServerFqdn `
+            -DatabaseName $SharedDatabaseName `
+            -SqlQuery $query `
+            -AccessToken $AccessToken `
+            -Username $SqlUsername `
+            -Password $SqlPassword `
+            -UseSqlAuth)
     }
-    elseif ($UseAzureAdToken.IsPresent) {
-        Get-SqlExecutionModeSplat -UseAzureAdToken
+    elseif ($UseAzureAdToken) {
+        $tenants = @(Invoke-SqlQueryRows `
+            -SqlServerFqdn $SqlServerFqdn `
+            -DatabaseName $SharedDatabaseName `
+            -SqlQuery $query `
+            -AccessToken $AccessToken `
+            -Username $SqlUsername `
+            -Password $SqlPassword `
+            -UseAzureAdToken)
     }
     else {
-        @{}
+        $tenants = @(Invoke-SqlQueryRows `
+            -SqlServerFqdn $SqlServerFqdn `
+            -DatabaseName $SharedDatabaseName `
+            -SqlQuery $query `
+            -AccessToken $AccessToken `
+            -Username $SqlUsername `
+            -Password $SqlPassword)
     }
-    $tenants = @(Invoke-SqlQueryRows `
-        -SqlServerFqdn $SqlServerFqdn `
-        -DatabaseName $SharedDatabaseName `
-        -SqlQuery $query `
-        -AccessToken $AccessToken `
-        -Username $SqlUsername `
-        -Password $SqlPassword `
-        @authMode)
 
     $results = New-Object 'System.Collections.Generic.List[object]'
     foreach ($tenant in $tenants) {
@@ -528,21 +523,27 @@ else {
 
 $resolvedSqlUsername = if ($null -ne $sqlAdmin) { [string]$sqlAdmin.Username } else { '' }
 $resolvedSqlPassword = if ($null -ne $sqlAdmin) { [string]$sqlAdmin.Password } else { '' }
-$topologyAuthMode = if ($UseSqlAuthentication) {
-    Get-SqlExecutionModeSplat -UseSqlAuth
+
+if ($UseSqlAuthentication) {
+    $dedicatedTenantDatabases = @(Get-ActiveDedicatedTenantDatabases `
+        -SqlServerFqdn $sqlFqdn `
+        -SharedDatabaseName $sharedDatabaseName `
+        -KeyVaultName $keyVaultName `
+        -AccessToken $token `
+        -SqlUsername $resolvedSqlUsername `
+        -SqlPassword $resolvedSqlPassword `
+        -UseSqlAuth)
 }
 else {
-    Get-SqlExecutionModeSplat -UseAzureAdToken
+    $dedicatedTenantDatabases = @(Get-ActiveDedicatedTenantDatabases `
+        -SqlServerFqdn $sqlFqdn `
+        -SharedDatabaseName $sharedDatabaseName `
+        -KeyVaultName $keyVaultName `
+        -AccessToken $token `
+        -SqlUsername $resolvedSqlUsername `
+        -SqlPassword $resolvedSqlPassword `
+        -UseAzureAdToken)
 }
-
-$dedicatedTenantDatabases = @(Get-ActiveDedicatedTenantDatabases `
-    -SqlServerFqdn $sqlFqdn `
-    -SharedDatabaseName $sharedDatabaseName `
-    -KeyVaultName $keyVaultName `
-    -AccessToken $token `
-    -SqlUsername $resolvedSqlUsername `
-    -SqlPassword $resolvedSqlPassword `
-    @topologyAuthMode)
 
 if ($dedicatedTenantDatabases.Count -eq 0) {
     Write-Host 'Dedicated Databases: none active in tenant registry' -ForegroundColor Yellow
@@ -575,26 +576,52 @@ foreach ($identity in $runtimeIdentities) {
     Write-Host "  Principal ID : $principalId" -ForegroundColor Gray
     Write-Host "  App ID       : $appId" -ForegroundColor Gray
 
-    Grant-IdentityAccessToDatabase `
-        -DisplayName $resourceName `
-        -ManagedIdentityAppId $appId `
-        -SqlServerFqdn $sqlFqdn `
-        -DatabaseName $sharedDatabaseName `
-        -AccessToken $token `
-        -SqlUsername $resolvedSqlUsername `
-        -SqlPassword $resolvedSqlPassword `
-        @topologyAuthMode
-
-    foreach ($dedicatedDatabase in $dedicatedTenantDatabases) {
+    if ($UseSqlAuthentication) {
         Grant-IdentityAccessToDatabase `
             -DisplayName $resourceName `
             -ManagedIdentityAppId $appId `
             -SqlServerFqdn $sqlFqdn `
-            -DatabaseName $dedicatedDatabase.DatabaseName `
+            -DatabaseName $sharedDatabaseName `
             -AccessToken $token `
             -SqlUsername $resolvedSqlUsername `
             -SqlPassword $resolvedSqlPassword `
-            @topologyAuthMode
+            -UseSqlAuth
+    }
+    else {
+        Grant-IdentityAccessToDatabase `
+            -DisplayName $resourceName `
+            -ManagedIdentityAppId $appId `
+            -SqlServerFqdn $sqlFqdn `
+            -DatabaseName $sharedDatabaseName `
+            -AccessToken $token `
+            -SqlUsername $resolvedSqlUsername `
+            -SqlPassword $resolvedSqlPassword `
+            -UseAzureAdToken
+    }
+
+    foreach ($dedicatedDatabase in $dedicatedTenantDatabases) {
+        if ($UseSqlAuthentication) {
+            Grant-IdentityAccessToDatabase `
+                -DisplayName $resourceName `
+                -ManagedIdentityAppId $appId `
+                -SqlServerFqdn $sqlFqdn `
+                -DatabaseName $dedicatedDatabase.DatabaseName `
+                -AccessToken $token `
+                -SqlUsername $resolvedSqlUsername `
+                -SqlPassword $resolvedSqlPassword `
+                -UseSqlAuth
+        }
+        else {
+            Grant-IdentityAccessToDatabase `
+                -DisplayName $resourceName `
+                -ManagedIdentityAppId $appId `
+                -SqlServerFqdn $sqlFqdn `
+                -DatabaseName $dedicatedDatabase.DatabaseName `
+                -AccessToken $token `
+                -SqlUsername $resolvedSqlUsername `
+                -SqlPassword $resolvedSqlPassword `
+                -UseAzureAdToken
+        }
     }
 
     if ($dedicatedTenantDatabases.Count -eq 0) {
