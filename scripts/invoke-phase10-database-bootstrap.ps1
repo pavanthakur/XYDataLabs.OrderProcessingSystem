@@ -163,6 +163,41 @@ function Get-Phase10DedicatedTenantEnvironmentState {
     return $state
 }
 
+function Get-Phase10BaselineSampleTenantContracts {
+    $dedicatedByTenant = @{}
+    foreach ($dedicatedTenant in (Get-Phase10DedicatedTenantDatabaseMap)) {
+        $dedicatedByTenant[$dedicatedTenant.TenantCode] = $dedicatedTenant
+    }
+
+    if (-not $dedicatedByTenant.ContainsKey('TenantC')) {
+        throw "Phase 10 local baseline requires a dedicated database mapping for TenantC."
+    }
+
+    return @(
+        [pscustomobject]@{
+            TenantCode = 'TenantA'
+            Status = 'Active'
+            TenantTier = 'SharedPool'
+            PaymentProviderCode = 'Razorpay'
+            Database = 'OrderProcessingSystem_Dev'
+        }
+        [pscustomobject]@{
+            TenantCode = 'TenantB'
+            Status = 'Active'
+            TenantTier = 'SharedPool'
+            PaymentProviderCode = 'Razorpay'
+            Database = 'OrderProcessingSystem_Dev'
+        }
+        [pscustomobject]@{
+            TenantCode = 'TenantC'
+            Status = 'Active'
+            TenantTier = 'Dedicated'
+            PaymentProviderCode = 'OpenPay'
+            Database = $dedicatedByTenant['TenantC'].DatabaseName
+        }
+    )
+}
+
 function Set-Phase10DedicatedTenantEnvironmentState {
     foreach ($dedicatedTenant in (Get-Phase10DedicatedTenantDatabaseMap)) {
         $variableName = "DedicatedTenantConnectionStrings__{0}" -f $dedicatedTenant.TenantCode
@@ -583,6 +618,41 @@ function Invoke-Phase10SampleDataSeed {
 function Ensure-Phase10SqlSampleDataBaseline {
     Write-Host 'Ensuring Phase 10 SQL sample data baseline...' -ForegroundColor Cyan
     Write-ProgressMessage 'Ensuring Phase 10 SQL sample data baseline.'
+
+    $baselineContracts = @(Get-Phase10BaselineSampleTenantContracts)
+    $baselineTenantCodesSql = (($baselineContracts | ForEach-Object {
+        "N'$((Escape-SqlLiteral -Value $_.TenantCode))'"
+    }) -join ', ')
+
+    $registryResetQuery = @"
+UPDATE [dbo].[Tenants]
+SET [Status] = N'Decommissioned'
+WHERE [Code] NOT IN ($baselineTenantCodesSql)
+  AND ISNULL([Status], N'') = N'Active';
+"@
+    Invoke-Phase10SqlCmdInComposeContainer -Database 'OrderProcessingSystem_Dev' -Query $registryResetQuery | Out-Null
+    Write-ProgressMessage 'Reset shared registry active tenant set to the Phase 10 local sample baseline.'
+
+    foreach ($baselineTenant in $baselineContracts) {
+        $tenantCodeSql = Escape-SqlLiteral -Value $baselineTenant.TenantCode
+        $providerCodeSql = Escape-SqlLiteral -Value $baselineTenant.PaymentProviderCode
+        $tenantTierSql = Escape-SqlLiteral -Value $baselineTenant.TenantTier
+        $statusSql = Escape-SqlLiteral -Value $baselineTenant.Status
+        $registryQuery = @"
+UPDATE [dbo].[Tenants]
+SET [Status] = N'$statusSql',
+    [TenantTier] = N'$tenantTierSql',
+    [PaymentProviderCode] = N'$providerCodeSql'
+WHERE [Code] = N'$tenantCodeSql';
+
+IF @@ROWCOUNT = 0
+BEGIN
+    THROW 51000, N'Baseline tenant row missing for $tenantCodeSql in OrderProcessingSystem_Dev.', 1;
+END;
+"@
+        Invoke-Phase10SqlCmdInComposeContainer -Database 'OrderProcessingSystem_Dev' -Query $registryQuery | Out-Null
+        Write-ProgressMessage "Reset registry baseline for $($baselineTenant.TenantCode) -> $($baselineTenant.PaymentProviderCode) ($($baselineTenant.TenantTier))"
+    }
 
     foreach ($tenant in (Get-Phase10ActiveTenantTopology)) {
         $tenantCodeSql = Escape-SqlLiteral -Value $tenant.TenantCode

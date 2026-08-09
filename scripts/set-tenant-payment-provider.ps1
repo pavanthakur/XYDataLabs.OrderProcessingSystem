@@ -280,7 +280,18 @@ function Invoke-DockerSqlTextQuery {
         $Database,
         $escapedQuery)
 
-    $output = docker compose --env-file (Join-Path $PSScriptRoot '..\Resources\Docker\.env.local') -f (Join-Path $PSScriptRoot '..\compose\docker-compose.phase10.yml') --profile apps exec -T sql-server /bin/sh -lc $shellCommand 2>&1
+    $sqlContainerOutput = @(docker ps --filter "label=com.docker.compose.service=sql-server" --format "{{.Names}}" 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw ([string]::Join([Environment]::NewLine, @($sqlContainerOutput | ForEach-Object { $_.ToString() }))).Trim()
+    }
+
+    $sqlContainerName = @($sqlContainerOutput | ForEach-Object { $_.ToString().Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) |
+        Select-Object -First 1
+    if ([string]::IsNullOrWhiteSpace($sqlContainerName)) {
+        throw 'Could not resolve the running Docker SQL Server container for Phase 10 local execution.'
+    }
+
+    $output = docker exec $sqlContainerName /bin/sh -lc $shellCommand 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
     }
@@ -346,7 +357,7 @@ function Invoke-SqlTextQuery {
     }
 
     if ($Runtime -eq 'docker') {
-        return Invoke-LocalSqlTextQuery -Database $Database -Query $Query
+        return Invoke-DockerSqlTextQuery -Database $Database -Query $Query
     }
 
     return Invoke-LocalSqlTextQuery -Database $Database -Query $Query

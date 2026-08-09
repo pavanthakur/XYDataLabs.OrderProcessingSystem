@@ -275,6 +275,34 @@ function Test-LocalDockerImageExists {
     return ($LASTEXITCODE -eq 0)
 }
 
+function Ensure-DockerImageAvailable {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ImageName,
+
+        [int]$MaxAttempts = 3,
+
+        [int]$DelaySeconds = 5
+    )
+
+    $pullLogPath = Join-Path $runDir 'docker-image-pull.log'
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        Add-Content -Path $progressLogPath -Value "Pulling Docker image '$ImageName' (attempt $attempt/$MaxAttempts)."
+        & docker pull $ImageName 2>&1 | Tee-Object -FilePath $pullLogPath -Append | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            Add-Content -Path $progressLogPath -Value "Docker image '$ImageName' is available locally."
+            return $true
+        }
+
+        if ($attempt -lt $MaxAttempts) {
+            Start-Sleep -Seconds $DelaySeconds
+        }
+    }
+
+    Add-Content -Path $progressLogPath -Value "Failed to pull Docker image '$ImageName' after $MaxAttempts attempts."
+    return $false
+}
+
 function Escape-SqlLiteral {
     param([Parameter(Mandatory = $false)][string]$Value)
 
@@ -366,6 +394,7 @@ try {
         if ($RemoveVolumes) {
             $downArguments += '--volumes'
         }
+        $downArguments += '--remove-orphans'
         & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs @downArguments 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-down.log')
         if ($LASTEXITCODE -ne 0) {
             throw "Docker compose down failed with exit code $LASTEXITCODE"
@@ -387,7 +416,7 @@ try {
         throw "Docker compose config validation failed with exit code $LASTEXITCODE"
     }
 
-    & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs down 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-preflight-down.log') | Out-Null
+    & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs down --remove-orphans 2>&1 | Tee-Object -FilePath (Join-Path $runDir 'docker-compose-preflight-down.log') | Out-Null
     if ($CleanImages) {
         $imageTag = if ([string]::IsNullOrWhiteSpace($env:PHASE10_IMAGE_TAG)) { 'dev' } else { $env:PHASE10_IMAGE_TAG }
         Remove-Phase10LocalImages -ImageTag $imageTag
@@ -436,6 +465,7 @@ try {
     if ((Get-EnvLocalValue -Name 'LOCAL_SERVICEBUS_ENABLED') -eq 'true') {
         Add-Content -Path $progressLogPath -Value 'Starting Functions service image startup.'
         $functionsLogPath = Join-Path $runDir 'docker-compose-functions-up.log'
+        $functionsBaseImage = 'mcr.microsoft.com/azure-functions/dotnet-isolated:4-dotnet-isolated8.0'
         & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs --profile functions up -d --build functions 2>&1 |
             Tee-Object -FilePath $functionsLogPath
         if ($LASTEXITCODE -ne 0) {
@@ -461,17 +491,43 @@ try {
                 $functionsLog -match 'mcr\.microsoft\.com/azure-functions/dotnet-isolated:4-dotnet-isolated8\.0' -and
                 $functionsLog -match '(failed to resolve source metadata|failed to do request|EOF)'
 
-            if ($isTransientFunctionsBaseResolveFailure -and (Test-LocalDockerImageExists -ImageName $functionsImageName)) {
-                Add-Content -Path $progressLogPath -Value "Functions image build hit a transient base-image metadata fetch failure. Falling back to cached local image: $functionsImageName"
-                Add-Content -Path $functionsLogPath -Value ([Environment]::NewLine + "FALLBACK: using cached local Functions image $functionsImageName after transient base-image metadata resolution failure.")
+            if ($isTransientFunctionsBaseResolveFailure) {
+                Add-Content -Path $progressLogPath -Value "Functions image build hit a transient base-image metadata fetch failure for $functionsBaseImage."
 
-                & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs --profile functions up -d functions 2>&1 |
-                    Tee-Object -FilePath $functionsLogPath -Append
-                if ($LASTEXITCODE -eq 0) {
-                    Add-Content -Path $progressLogPath -Value 'Functions fallback startup with cached local image succeeded.'
+                if (Ensure-DockerImageAvailable -ImageName $functionsBaseImage -MaxAttempts 3 -DelaySeconds 5) {
+                    Add-Content -Path $functionsLogPath -Value ([Environment]::NewLine + "RETRY: retrying Functions build after pre-pulling $functionsBaseImage.")
+                    & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs --profile functions up -d --build functions 2>&1 |
+                        Tee-Object -FilePath $functionsLogPath -Append
+                    if ($LASTEXITCODE -eq 0) {
+                        Add-Content -Path $progressLogPath -Value 'Functions build succeeded after base-image pre-pull retry.'
+                    }
+                    else {
+                        $functionsLog = if (Test-Path -LiteralPath $functionsLogPath) {
+                            Get-Content -LiteralPath $functionsLogPath -Raw
+                        }
+                        else {
+                            ''
+                        }
+                    }
                 }
-                else {
-                    throw "Docker compose Functions fallback startup failed with exit code $LASTEXITCODE"
+
+                if ($LASTEXITCODE -ne 0 -and (Test-LocalDockerImageExists -ImageName $functionsImageName)) {
+                    Add-Content -Path $progressLogPath -Value "Falling back to cached local Functions image: $functionsImageName"
+                    Add-Content -Path $functionsLogPath -Value ([Environment]::NewLine + "FALLBACK: using cached local Functions image $functionsImageName after transient base-image metadata resolution failure.")
+
+                    & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs --profile functions rm -f -s functions 2>&1 |
+                        Tee-Object -FilePath $functionsLogPath -Append | Out-Null
+                    & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs --profile functions up -d --no-build --force-recreate functions 2>&1 |
+                        Tee-Object -FilePath $functionsLogPath -Append
+                    if ($LASTEXITCODE -eq 0) {
+                        Add-Content -Path $progressLogPath -Value 'Functions fallback startup with cached local image succeeded.'
+                    }
+                    else {
+                        throw "Docker compose Functions fallback startup failed with exit code $LASTEXITCODE"
+                    }
+                }
+                elseif ($LASTEXITCODE -ne 0) {
+                    throw "Docker compose Functions startup failed after transient base-image retry handling with exit code $LASTEXITCODE"
                 }
             }
             else {
