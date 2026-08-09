@@ -696,7 +696,7 @@ Direct script form:
 pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-phase10-docker-dev-e2e-hook.ps1 -StabilizationDelaySeconds 60
 ```
 
-By default, the hook runs in clean Azure-parity mode. It tears down and recreates the Phase 10 local stack, applies EF migrations to the shared and TenantC databases, verifies the payment-provider baseline rows, checks tenant payment routing, verifies Redis, and then runs smoke, integration, and payment matrix validation. This is the preferred local gate before rerunning Azure `01`.
+By default, the hook runs in clean Azure-parity mode. It tears down and recreates the Phase 10 local stack, applies EF migrations to the shared database plus every dedicated tenant database defined by the current local topology contract, verifies the payment-provider baseline rows, checks tenant payment routing, verifies Redis, and then runs smoke, integration, and payment matrix validation. This is the preferred local gate before rerunning Azure `01`.
 
 Use `-ReuseExistingStack` only for a faster inner-loop diagnosis when you intentionally want to keep the current local containers and database state:
 

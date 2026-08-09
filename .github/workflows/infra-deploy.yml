@@ -452,6 +452,7 @@ jobs:
       sqlServerFqdn: ${{ steps.outputs.outputs.sqlServerFqdn }}
       sqlDatabaseName: ${{ steps.outputs.outputs.sqlDatabaseName }}
       tenantCDatabaseName: ${{ steps.outputs.outputs.tenantCDatabaseName }}
+      dedicatedDatabaseNames: ${{ steps.outputs.outputs.dedicatedDatabaseNames }}
       redisHostName: ${{ steps.outputs.outputs.redisHost }}
       redisSslPort: ${{ steps.outputs.outputs.redisSslPort }}
       deploymentName: ${{ steps.params.outputs.deploymentName }}
@@ -870,6 +871,7 @@ jobs:
           echo "sqlDatabase=${SQL_DB_NAME}" >> $GITHUB_OUTPUT
           echo "sqlDatabaseName=${SQL_DB_NAME}" >> $GITHUB_OUTPUT
           echo "tenantCDatabaseName=${TENANT_C_DB_NAME}" >> $GITHUB_OUTPUT
+          echo "dedicatedDatabaseNames=${TENANT_C_DB_NAME}" >> $GITHUB_OUTPUT
           echo "redis=${REDIS_NAME}" >> $GITHUB_OUTPUT
           echo "redisHost=${REDIS_HOST}" >> $GITHUB_OUTPUT
           echo "redisSslPort=${REDIS_SSL_PORT}" >> $GITHUB_OUTPUT
@@ -910,7 +912,7 @@ jobs:
               throw "Phase 10 runtime SQL identity setup failed with exit code $LASTEXITCODE."
           }
 
-          "✅ Phase 10 runtime SQL identities granted access to shared and TenantC databases." | Add-Content -Path $env:GITHUB_STEP_SUMMARY
+          "✅ Phase 10 runtime SQL identities granted access to the shared registry database and every active dedicated tenant database resolved from tenant topology." | Add-Content -Path $env:GITHUB_STEP_SUMMARY
 
       - name: Refresh Runtime Hosts After SQL Setup
         if: ${{ steps.params.outputs.deploySql == 'true' }}
@@ -1048,6 +1050,25 @@ jobs:
             throw "Phase 10 Azure runtime host verification failed with exit code $verifyExitCode."
           }
 
+      - name: Verify Active Tenant Topology Contract
+        shell: pwsh
+        run: |
+          $summaryPath = Join-Path $env:RUNNER_TEMP 'phase10-azure-tenant-topology-deploy.md'
+
+          & pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-phase10-azure-tenant-topology.ps1 `
+            -Environment '${{ steps.params.outputs.env }}' `
+            -ResourceGroupName '${{ steps.outputs.outputs.rg }}' `
+            -SummaryPath $summaryPath
+
+          $verifyExitCode = $LASTEXITCODE
+          if (Test-Path -LiteralPath $summaryPath) {
+            Get-Content -LiteralPath $summaryPath | Add-Content -Path $env:GITHUB_STEP_SUMMARY
+          }
+
+          if ($verifyExitCode -ne 0) {
+            throw "Phase 10 Azure tenant topology verification failed with exit code $verifyExitCode."
+          }
+
       - name: Post-Deployment Endpoint Smoke
         shell: bash
         run: |
@@ -1145,7 +1166,7 @@ jobs:
           if [ -n "${{ steps.outputs.outputs.sqlServerFqdn }}" ]; then
             echo "- **SQL Server FQDN:** ${{ steps.outputs.outputs.sqlServerFqdn }}" >> $GITHUB_STEP_SUMMARY
             echo "- **SQL Shared Database:** ${{ steps.outputs.outputs.sqlDatabaseName }}" >> $GITHUB_STEP_SUMMARY
-            echo "- **SQL TenantC Dedicated Database:** ${{ steps.outputs.outputs.tenantCDatabaseName }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Dedicated Tenant Databases:** ${{ steps.outputs.outputs.dedicatedDatabaseNames }}" >> $GITHUB_STEP_SUMMARY
           else
             echo "- **SQL Server FQDN:** (not deployed)" >> $GITHUB_STEP_SUMMARY
           fi

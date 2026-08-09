@@ -302,13 +302,12 @@ jobs:
           $owner = "${{ github.repository_owner }}"
           
           # MULTITENANT NOTE — shared and dedicated databases:
-          # run-database-migrations.ps1 applies EF migrations to the shared-pool DB and separately to
-          # TenantC's dedicated DB. Azure startup does not own schema migration because Program.cs runs
-          # DbInitializer.Initialize(..., applyMigrations: !isAzure).
-          # Runtime startup still depends on DedicatedTenantConnectionStrings--TenantC being present in Key Vault
-          # so TenantC can resolve to its dedicated database instead of failing closed at request time.
-          # The dedicated-database validation step below treats TenantC as its own deployment unit and fails
-          # the workflow if the shared registry or dedicated DB contract is not satisfied.
+          # run-database-migrations.ps1 applies EF migrations to the shared registry DB and to the
+          # dedicated tenant DBs required by the current seeded topology. Azure startup does not own
+          # schema migration because Program.cs runs DbInitializer.Initialize(..., applyMigrations: !isAzure).
+          # Runtime startup still depends on DedicatedTenantConnectionStrings--{TenantCode} being
+          # present for every dedicated tenant. The validation step below therefore checks the
+          # registry-defined active topology rather than assuming a fixed dedicated tenant.
           try {
             ./Resources/Azure-Deployment/run-database-migrations.ps1 -Environment $env -BaseName orderprocessing -Owner $owner
             
@@ -341,12 +340,12 @@ jobs:
             throw
           }
 
-      - name: Validate TenantC Dedicated Database Contract
+      - name: Validate Active Tenant Topology Contract (Legacy App Service)
         if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'
         shell: pwsh
         run: |
           Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-          Write-Host "║      VALIDATE TENANTC DEDICATED DATABASE CONTRACT            ║" -ForegroundColor Cyan
+          Write-Host "║   VALIDATE ACTIVE TENANT TOPOLOGY CONTRACT (LEGACY PATH)    ║" -ForegroundColor Cyan
           Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
           Write-Host ""
 
@@ -375,6 +374,51 @@ jobs:
             }
           }
 
+          function Invoke-SqlRows {
+            param(
+              [Parameter(Mandatory = $true)] [string] $ConnectionString,
+              [Parameter(Mandatory = $true)] [string] $Query
+            )
+
+            $connection = [System.Data.SqlClient.SqlConnection]::new($ConnectionString)
+            try {
+              $connection.Open()
+              $command = $connection.CreateCommand()
+              $command.CommandText = $Query
+              $command.CommandTimeout = 60
+              $reader = $command.ExecuteReader()
+              $table = [System.Data.DataTable]::new()
+              $table.Load($reader)
+
+              foreach ($dataRow in $table.Rows) {
+                $row = [ordered] @{}
+                foreach ($column in $table.Columns) {
+                  $row[$column.ColumnName] = $dataRow[$column.ColumnName]
+                }
+
+                [PSCustomObject] $row
+              }
+            }
+            finally {
+              if ($connection.State -ne [System.Data.ConnectionState]::Closed) {
+                $connection.Close()
+              }
+
+              $connection.Dispose()
+            }
+          }
+
+          function Resolve-DatabaseNameFromConnectionString {
+            param([Parameter(Mandatory = $true)] [string] $ConnectionString)
+
+            $match = [regex]::Match($ConnectionString, '(?i)(?:Initial\s+Catalog|Database)\s*=\s*([^;]+)')
+            if (-not $match.Success) {
+              throw "Connection string does not contain an Initial Catalog/Database segment."
+            }
+
+            return $match.Groups[1].Value.Trim()
+          }
+
           $targetEnv = "${{ steps.check-target.outputs.targetEnvironment }}"
           $policy = Get-GitHubBranchPolicy
           $environmentDescriptor = Get-GitHubEnvironmentDescriptor -Policy $policy -EnvironmentKey $targetEnv
@@ -382,69 +426,100 @@ jobs:
           $dbSuffix = $environmentDescriptor.AzureSqlDatabaseSuffix
           $kvName = "kv-orderprocessing-$envSuffix"
           $sqlServerName = "orderprocessing-sql-$envSuffix"
+          $resourceGroupName = "rg-orderprocessing-$envSuffix"
           $fullyQualifiedDomain = "$sqlServerName.database.windows.net"
           $sharedDbName = "OrderProcessingSystem_$dbSuffix"
-          $tenantCDbName = "OrderProcessingSystem_TenantC_$dbSuffix"
 
           Write-Host "Target environment: $targetEnv" -ForegroundColor Cyan
           Write-Host "Shared registry DB : $sharedDbName" -ForegroundColor White
-          Write-Host "TenantC DB         : $tenantCDbName" -ForegroundColor White
           Write-Host ""
 
           $sqlAdminPassword = az keyvault secret show --vault-name $kvName --name sql-admin-password --query value -o tsv 2>$null
           if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($sqlAdminPassword)) {
-            throw "Could not retrieve sql-admin-password from Key Vault '$kvName' for TenantC dedicated-database validation."
+            throw "Could not retrieve sql-admin-password from Key Vault '$kvName' for active tenant topology validation."
           }
 
           Write-Output "::add-mask::$sqlAdminPassword"
 
-          $tenantCDbExists = az sql db show --server $sqlServerName --resource-group "rg-orderprocessing-$envSuffix" --name $tenantCDbName --query name -o tsv 2>$null
-          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($tenantCDbExists)) {
-            throw "TenantC dedicated database '$tenantCDbName' does not exist on server '$sqlServerName'."
-          }
-
           $sharedConnectionString = "Server=tcp:$fullyQualifiedDomain,1433;Initial Catalog=$sharedDbName;User ID=sqladmin;Password=$sqlAdminPassword;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
-          $tenantCConnectionString = "Server=tcp:$fullyQualifiedDomain,1433;Initial Catalog=$tenantCDbName;User ID=sqladmin;Password=$sqlAdminPassword;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+          $registryRows = @(Invoke-SqlRows -ConnectionString $sharedConnectionString -Query @"
+SET NOCOUNT ON;
+SELECT [Code], [Status], [TenantTier], [PaymentProviderCode]
+FROM dbo.Tenants
+WHERE [Status] = 'Active'
+ORDER BY [Code];
+"@)
 
-          $sharedTenantTier = [string] (Invoke-SqlScalar -ConnectionString $sharedConnectionString -Query "SET NOCOUNT ON; SELECT TOP (1) TenantTier FROM dbo.Tenants WHERE Code = 'TenantC';")
-          if ([string]::IsNullOrWhiteSpace($sharedTenantTier)) {
-            throw "Shared tenant registry database '$sharedDbName' does not contain a TenantC row."
+          if ($registryRows.Count -eq 0) {
+            throw "Shared tenant registry database '$sharedDbName' returned no active tenants."
           }
 
-          if ($sharedTenantTier -ne 'Dedicated') {
-            throw "Shared tenant registry classifies TenantC as '$sharedTenantTier' instead of 'Dedicated'."
+          $summaryLines = New-Object 'System.Collections.Generic.List[string]'
+          $summaryLines.Add("## Legacy App Service Active Tenant Topology Validation")
+          $summaryLines.Add("- Shared registry database: $sharedDbName")
+
+          foreach ($tenant in $registryRows) {
+            $tenantCode = [string] $tenant.Code
+            $tenantTier = [string] $tenant.TenantTier
+            $providerCode = [string] $tenant.PaymentProviderCode
+
+            if ([string]::IsNullOrWhiteSpace($tenantCode)) {
+              throw "Active tenant topology validation failed: an active tenant row is missing Code."
+            }
+
+            if ($tenantTier -notin @('SharedPool', 'Dedicated')) {
+              throw "Active tenant topology validation failed: tenant '$tenantCode' has unsupported tier '$tenantTier'."
+            }
+
+            if ([string]::IsNullOrWhiteSpace($providerCode)) {
+              throw "Active tenant topology validation failed: tenant '$tenantCode' has missing PaymentProviderCode."
+            }
+
+            $providerSecretName = "PaymentProviders--$tenantCode--$providerCode--PrivateKey"
+            $providerSecret = az keyvault secret show --vault-name $kvName --name $providerSecretName --query value -o tsv 2>$null
+            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($providerSecret)) {
+              throw "Active tenant topology validation failed: missing Key Vault secret '$providerSecretName'."
+            }
+
+            if ($tenantTier -eq 'Dedicated') {
+              $dedicatedSecretName = "DedicatedTenantConnectionStrings--$tenantCode"
+              $dedicatedConnectionString = az keyvault secret show --vault-name $kvName --name $dedicatedSecretName --query value -o tsv 2>$null
+              if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($dedicatedConnectionString)) {
+                throw "Active tenant topology validation failed: missing Key Vault secret '$dedicatedSecretName'."
+              }
+
+              $dedicatedDbName = Resolve-DatabaseNameFromConnectionString -ConnectionString $dedicatedConnectionString
+              $dedicatedDbExists = az sql db show --server $sqlServerName --resource-group $resourceGroupName --name $dedicatedDbName --query name -o tsv 2>$null
+              if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($dedicatedDbExists)) {
+                throw "Active tenant topology validation failed: dedicated database '$dedicatedDbName' for tenant '$tenantCode' does not exist on server '$sqlServerName'."
+              }
+
+              $dedicatedConnection = "Server=tcp:$fullyQualifiedDomain,1433;Initial Catalog=$dedicatedDbName;User ID=sqladmin;Password=$sqlAdminPassword;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+              $dedicatedTenantTier = [string] (Invoke-SqlScalar -ConnectionString $dedicatedConnection -Query "SET NOCOUNT ON; SELECT TOP (1) TenantTier FROM dbo.Tenants WHERE Code = '$tenantCode';")
+              if ([string]::IsNullOrWhiteSpace($dedicatedTenantTier)) {
+                throw "Active tenant topology validation failed: dedicated database '$dedicatedDbName' is reachable but does not contain tenant '$tenantCode'."
+              }
+
+              $dedicatedMigrationCount = [int] (Invoke-SqlScalar -ConnectionString $dedicatedConnection -Query "SET NOCOUNT ON; SELECT COUNT(1) FROM dbo.__EFMigrationsHistory;")
+              if ($dedicatedMigrationCount -lt 1) {
+                throw "Active tenant topology validation failed: dedicated database '$dedicatedDbName' for tenant '$tenantCode' has no migration history rows."
+              }
+
+              $dedicatedProviderCode = [string] (Invoke-SqlScalar -ConnectionString $dedicatedConnection -Query "SET NOCOUNT ON; SELECT TOP (1) PaymentProviderCode FROM dbo.Tenants WHERE Code = '$tenantCode';")
+              if ([string]::IsNullOrWhiteSpace($dedicatedProviderCode)) {
+                throw "Active tenant topology validation failed: dedicated database '$dedicatedDbName' has NULL PaymentProviderCode for tenant '$tenantCode'."
+              }
+
+              Write-Host "✅ Dedicated tenant '$tenantCode' -> DB '$dedicatedDbName' validated with provider '$providerCode'" -ForegroundColor Green
+              $summaryLines.Add("- Dedicated tenant '$tenantCode': DB '$dedicatedDbName' validated; provider '$providerCode'; migrations $dedicatedMigrationCount")
+            }
+            else {
+              Write-Host "✅ Shared tenant '$tenantCode' validated with provider '$providerCode'" -ForegroundColor Green
+              $summaryLines.Add("- Shared tenant '$tenantCode': provider '$providerCode'")
+            }
           }
 
-          $dedicatedTenantTier = [string] (Invoke-SqlScalar -ConnectionString $tenantCConnectionString -Query "SET NOCOUNT ON; SELECT TOP (1) TenantTier FROM dbo.Tenants WHERE Code = 'TenantC';")
-          if ([string]::IsNullOrWhiteSpace($dedicatedTenantTier)) {
-            throw "TenantC dedicated database '$tenantCDbName' is reachable but does not contain a TenantC row in dbo.Tenants."
-          }
-
-          $tenantCMigrationCount = [int] (Invoke-SqlScalar -ConnectionString $tenantCConnectionString -Query "SET NOCOUNT ON; SELECT COUNT(1) FROM dbo.__EFMigrationsHistory;")
-          if ($tenantCMigrationCount -lt 1) {
-            throw "TenantC dedicated database '$tenantCDbName' is reachable but has no migration history rows."
-          }
-
-          # Assert PaymentProviderCode is set in the shared registry DB (seeded by AddTenantPaymentProviderCode migration).
-          # This catches the rare case where migrations ran against the wrong DB or the seed UPDATE was skipped.
-          $registryPaymentProviderCode = [string] (Invoke-SqlScalar -ConnectionString $sharedConnectionString -Query "SET NOCOUNT ON; SELECT TOP (1) PaymentProviderCode FROM dbo.Tenants WHERE Code = 'TenantC';")
-          if ([string]::IsNullOrWhiteSpace($registryPaymentProviderCode)) {
-            throw "TenantC PaymentProviderCode is NULL in shared registry database '$sharedDbName'. The AddTenantPaymentProviderCode migration seed did not run or targeted the wrong database."
-          }
-
-          # Assert PaymentProviderCode is also set in the dedicated DB (same migration runs there too).
-          $dedicatedPaymentProviderCode = [string] (Invoke-SqlScalar -ConnectionString $tenantCConnectionString -Query "SET NOCOUNT ON; SELECT TOP (1) PaymentProviderCode FROM dbo.Tenants WHERE Code = 'TenantC';")
-          if ([string]::IsNullOrWhiteSpace($dedicatedPaymentProviderCode)) {
-            throw "TenantC PaymentProviderCode is NULL in dedicated database '$tenantCDbName'. The AddTenantPaymentProviderCode migration seed did not run against the dedicated database."
-          }
-
-          Write-Host "✅ Shared tenant registry confirms TenantC is a Dedicated-tier tenant" -ForegroundColor Green
-          Write-Host "✅ TenantC dedicated database is reachable as a separate database" -ForegroundColor Green
-          Write-Host "✅ TenantC dedicated database contains migration history and tenant metadata" -ForegroundColor Green
-          Write-Host "✅ TenantC PaymentProviderCode = '$registryPaymentProviderCode' in shared registry DB" -ForegroundColor Green
-          Write-Host "✅ TenantC PaymentProviderCode = '$dedicatedPaymentProviderCode' in dedicated DB" -ForegroundColor Green
-
-          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## TenantC Dedicated Database Validation`n- Shared registry database: $sharedDbName`n- Dedicated database: $tenantCDbName`n- Tenant tier in shared registry: Dedicated`n- Dedicated database reachable: Yes`n- Dedicated migration history rows: $tenantCMigrationCount`n- Registry PaymentProviderCode: $registryPaymentProviderCode`n- Dedicated PaymentProviderCode: $dedicatedPaymentProviderCode`n"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ($summaryLines -join "`n")
 
       - name: Configure SQL Managed Identity Database User
         if: steps.check-credentials.outputs.credentialsConfigured == 'true' && steps.check-target.outputs.infraReady == 'true'

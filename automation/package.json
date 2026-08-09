@@ -15,8 +15,8 @@
     "run:docker:dev:http:e2e-hook": "pwsh -NoProfile -ExecutionPolicy Bypass -File ../scripts/run-phase10-docker-dev-e2e-hook.ps1",
     "xydatalabs-test-docker-local-e2e-dev": "pwsh -NoProfile -ExecutionPolicy Bypass -File ../scripts/run-phase10-docker-dev-e2e-hook.ps1 -StabilizationDelaySeconds 60",
     "run:local:matrix": "tsx ./src/cli/run-local-matrix.ts",
-    "run:local:http:playwright-matrix": "tsx ./src/cli/run-local-matrix.ts --target local-http --skip-verification --tenant TenantA --tenant TenantB --tenant TenantC",
-    "run:local:https:playwright-matrix": "tsx ./src/cli/run-local-matrix.ts --target local-https --skip-verification --tenant TenantA --tenant TenantB --tenant TenantC",
+    "run:local:http:playwright-matrix": "tsx ./src/cli/run-local-matrix.ts --target local-http --skip-verification",
+    "run:local:https:playwright-matrix": "tsx ./src/cli/run-local-matrix.ts --target local-https --skip-verification",
     "run:local:http:playwright-sanity": "tsx ./src/cli/run-local-matrix.ts --target local-http --skip-verification --tenant-limit 1",
     "run:local:https:playwright-sanity": "tsx ./src/cli/run-local-matrix.ts --target local-https --skip-verification --tenant-limit 1",
     "run:local:matrix:dry": "tsx ./src/cli/run-local-matrix.ts --target local-http --dry-run",
@@ -35,7 +35,7 @@
     "run:docker:prod:https:playwright-sanity": "tsx ./src/cli/run-docker-matrix.ts --target docker-prod-https --skip-verification --tenant-limit 1",
     "run:docker:matrix:dry": "tsx ./src/cli/run-docker-matrix.ts --dry-run",
     "run:azure:matrix": "tsx ./src/cli/run-azure-matrix.ts",
-    "xydatalabs-test-azure-e2e-dev": "tsx ./src/cli/run-azure-matrix.ts --target azure-dev --tenant TenantA --tenant TenantB --tenant TenantC",
+    "xydatalabs-test-azure-e2e-dev": "tsx ./src/cli/run-azure-matrix.ts --target azure-dev",
     "run:azure:matrix:dry": "tsx ./src/cli/run-azure-matrix.ts --dry-run"
   },
   "devDependencies": {

@@ -9,7 +9,6 @@ param(
     [string]$Environment,
 
     [Parameter(Mandatory = $true)]
-    [ValidateSet('TenantA', 'TenantB', 'TenantC')]
     [string]$TenantCode,
 
     [Parameter(Mandatory = $true)]
@@ -33,11 +32,11 @@ function Get-DatabaseName {
         [Parameter(Mandatory = $true)] [string] $CurrentEnvironment
     )
 
-    # PaymentProviderCode is a Tenant Registry field. TenantRegistryDbContext always reads it from
+    # PaymentProviderCode is a tenant-registry field. TenantRegistryDbContext always reads it from
     # the central/shared registry database (OrderProcessingSystem_Dev/_Stg/_Prod), regardless of
-    # whether the tenant is SharedPool or Dedicated tier. TenantC's dedicated database
-    # (OrderProcessingSystem_TenantC_*) is scoped to business operations only — updating it here
-    # would not affect what TenantPaymentProviderResolver sees. Always target the registry DB.
+    # whether the tenant is SharedPool or Dedicated tier. Dedicated tenant databases are scoped to
+    # business operations only, so updating them would not affect what TenantPaymentProviderResolver
+    # sees. Always target the registry DB.
     if ($CurrentRuntime -eq 'local') {
         return 'OrderProcessingSystem_Local'
     }
@@ -376,6 +375,25 @@ WHERE t.Code = '$escapedTenantCode';
     return [string] $rows[0]
 }
 
+function Assert-TenantExists {
+    param(
+        [Parameter(Mandatory = $true)] [string] $Database,
+        [Parameter(Mandatory = $true)] [string] $CurrentTenantCode
+    )
+
+    $escapedTenantCode = Escape-SqlLiteral -Value $CurrentTenantCode
+    $query = @"
+SELECT TOP 1 [Code]
+FROM [dbo].[Tenants]
+WHERE [Code] = '$escapedTenantCode';
+"@
+
+    $rows = @(Invoke-SqlTextQuery -Database $Database -Query $query)
+    if ($rows.Count -eq 0 -or [string]::IsNullOrWhiteSpace($rows[0])) {
+        throw "Tenant '$CurrentTenantCode' was not found in tenant registry database '$Database'. Use the registry-defined tenant code rather than a hardcoded baseline assumption."
+    }
+}
+
 function Set-ActiveProvider {
     param(
         [Parameter(Mandatory = $true)] [string] $Database,
@@ -397,6 +415,7 @@ WHERE Code = '$escapedTenantCode';
 }
 
 $database = Get-DatabaseName -CurrentRuntime $Runtime -CurrentEnvironment $Environment
+Assert-TenantExists -Database $database -CurrentTenantCode $TenantCode
 $previousProviderType = Get-ActiveProvider -Database $database -CurrentTenantCode $TenantCode
 
 if ([string]::IsNullOrWhiteSpace($previousProviderType)) {

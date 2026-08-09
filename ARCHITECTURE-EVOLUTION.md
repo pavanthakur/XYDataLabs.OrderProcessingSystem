@@ -194,6 +194,9 @@ Broad checklist:
 - Prove correlation continuity through gateway calls, brokered messages, Functions, and business persistence.
 - Use immutable artifacts, retained healthy revisions, expand/contract migrations, and an executed rollback path.
 - Close through the graduated local, Docker, CI, and Azure lifecycle with machine-readable and operator evidence.
+- Require a topology artifact and promotion-safe topology contract proof in every environment where Phase 10 smoke or payment-matrix execution actually runs.
+- Require `staging` and `prod` promotion evidence to capture topology contract proof even when the full payment matrix is not part of the normal promotion path.
+- Keep self-service tenant administration, quota/noisy-neighbor policy, deep observability, DR, secret-rotation framework, and database-per-service autonomy out of the Phase 10 exit gate.
 - Keep APIM/private ingress, private networking, Service Bus Premium/Private Link, Blob/Event Grid, SQL managed identity, and Front Door/WAF in Phase 12 under ADR-025.
 
 Execution lanes:
@@ -1512,6 +1515,10 @@ Secure, scalable cloud-native microservices with durable Azure transport, contro
 - Shared projects (`Application`, `Domain`, `Infrastructure`) split into per-service libraries
 - **Eventual consistency** — no cross-service joins; data synchronization via events only
 - Each service maintains its own read-optimized projections of data it needs from other services
+- **Tenant topology operations** — onboarding, activation/deactivation, shared-to-dedicated moves, dedicated-to-shared moves, provider reassignment, and rollback become explicit operator workflows instead of implicit script knowledge
+- **Discovery vs validation kept explicit** — registry data remains the only discovery source; infrastructure, secret, database, and runtime contracts remain validation concerns
+- **Topology change evidence** — every tenant-topology change produces an auditable operator packet before traffic promotion
+- **Reconciliation and drift repair** — registry, secret contracts, DB topology, and runtime execution are checked for mismatch and repaired through governed workflows
 - **`XYDataLabs.OrderProcessingSystem.DurableFunctions`** — separate Azure Functions project (isolated process model) hosting Durable Function orchestrations for cross-service workflows that require compensating actions (see Distributed Workflow Strategy below)
 
 ### Phase 11 Status Table
@@ -1521,6 +1528,9 @@ Secure, scalable cloud-native microservices with durable Azure transport, contro
 | Database per service | Planned | Split Orders, Inventory, and Notifications into independent stores | Phase 11 |
 | Shared DbContext removal | Planned | Remove shared persistence coupling between services | Phase 11 |
 | Per-service migrations | Planned | Give each service its own EF Core migration pipeline | Phase 11 |
+| Tenant lifecycle operations | Planned | Add governed onboarding, activation, tier-move, provider-change, and rollback workflows | Phase 11 |
+| Discovery / validation operational workflow | Planned | Keep registry discovery separate from infra/secret/runtime validation in operator flows | Phase 11 |
+| Topology drift detection and repair | Planned | Add mismatch detection between registry, secrets, DB topology, and runtime execution | Phase 11 |
 | Eventual consistency | Planned | Use events and local projections instead of cross-service joins | Phase 11 |
 | Durable Functions workflow support | Planned | Add orchestration for compensating workflows that need it | Phase 11 |
 | Notifications PostgreSQL pilot | Not Phase 11 core | Move the portability showcase into Phase 11.5 | Phase 11.5 |
@@ -1532,6 +1542,8 @@ Secure, scalable cloud-native microservices with durable Azure transport, contro
 - No direct database queries across service boundaries
 - If Orders needs inventory status, it subscribes to `InventoryUpdated` events and maintains a local projection
 - Cross-service reads use lightweight HTTP queries (via gateway) for real-time needs
+- Tenant topology discovery always comes from the authoritative registry; secrets, dedicated databases, and runtime state only validate the discovered topology
+- No tenant or provider change may rely on ad hoc script edits; shared/dedicated moves and provider reassignment must be workflow-driven and auditable
 
 ### Distributed Workflow Strategy
 
@@ -1645,14 +1657,17 @@ Provider-portability proven with one module running PostgreSQL end-to-end (local
 - **SQL managed identity** — replace Phase 10 Key Vault bootstrap/runtime database credentials with workload managed identity after migration ownership and service boundaries stabilize
 - **Central configuration** — Azure App Configuration for feature flags and shared settings
 - **Secrets management** — Azure Key Vault with RBAC (migrate from access policies)
-- **Observability dashboards** — Azure Monitor workbooks with per-service metrics, SLIs/SLOs
+- **Observability dashboards** — Azure Monitor workbooks with per-service metrics, SLIs/SLOs, tenant topology failures, provider failures, DLQ health, replay status, and contract-failure views
 - **Distributed tracing** — full correlation across Service Bus messages and HTTP requests
 - **Per-service CI/CD pipelines** — independent build/test/deploy per service
 - **Health check gates** — deployment blocked if `/health/ready` fails post-deploy
 - **Advanced Polly** — bulkhead isolation + fallback policies (retry + circuit breaker already in Phase 9)
+- **Secret and provider rotation** — controlled rotation for payment keys, webhook secrets, and dedicated-DB connection secrets with overlap windows, verification, and rollback guidance
+- **Tenant protection policy** — tenant-aware quotas, retry budgets, rate limits, and noisy-neighbor thresholds become explicit platform policy
 - **Azure AI Document Intelligence** — extract structured data from uploaded invoices/receipts in Blob Storage; Event Grid triggers Function → Document Intelligence API → enriches order metadata. Demonstrates Azure Cognitive Services integration without over-engineering.
-- **DR / Business Continuity** — documented RTO/RPO targets per service; Azure SQL geo-replication strategy; Cosmos DB multi-region (mention only); backup/restore runbook
+- **DR / Business Continuity** — documented RTO/RPO targets per service; Azure SQL geo-replication strategy; Cosmos DB multi-region (mention only); executed backup/restore runbooks for shared and dedicated tenant modes
 - **Performance / Load Testing** — Azure Load Testing or k6 for baseline performance; SLO validation under realistic load before production
+- **Security hardening closure** — least-privilege review, operator approval boundaries, auditability of topology changes, and production payment/webhook security checklist
 - **.NET 10 upgrade** — treat the move from .NET 8 LTS to .NET 10 LTS as a later runtime upgrade window, not a Phase 10 deliverable. When the window opens, the steps are: update `global.json` TFM, bump package versions in `Directory.Packages.props`, verify Testcontainers + NetArchTest compatibility, update Dockerfiles and CI pipeline `dotnet-version`. No architecture changes are required — this is a runtime upgrade only. .NET 9 (STS, EOL May 2026) is skipped; .NET 8 LTS support runs to November 2026, so the repo can keep shipping on .NET 8 until the later platform window is intentionally opened.
 
 ### Outcome

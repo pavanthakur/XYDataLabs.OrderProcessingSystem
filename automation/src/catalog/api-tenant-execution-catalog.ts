@@ -24,6 +24,9 @@ interface TenantRegistryResponseItem {
   paymentProviderCode: string | null;
 }
 
+const supportedTenantTiers = new Set(["sharedpool", "dedicated"]);
+const supportedProviders = new Set(["openpay", "razorpay"]);
+
 export class ApiTenantExecutionCatalog implements TenantExecutionCatalog {
   public constructor(private readonly target: RuntimeTargetDefinition) {}
 
@@ -48,8 +51,7 @@ export class ApiTenantExecutionCatalog implements TenantExecutionCatalog {
     catch (error) {
       const message = error instanceof Error ? error.message : "Unknown tenant registry API failure.";
       if (this.target.runtime === "azure") {
-        logger?.(`Tenant registry API lookup failed (${message}); deriving Azure tenant plan from runtime configuration.`);
-        return buildTenantRegistryFromRuntimeConfiguration(runtimeConfiguration);
+        throw new Error(`Tenant registry API lookup failed for Azure runtime (${message}). Azure execution must fail closed when runtime topology cannot be resolved.`);
       }
       else if (message.includes("status 404")) {
         logger?.(`Tenant registry API returned 404 on the ${this.target.runtime} parity path; using local SQL fallback.`);
@@ -75,7 +77,8 @@ export class ApiTenantExecutionCatalog implements TenantExecutionCatalog {
       runtimeConfiguration,
       logger
     );
-    logger?.(`Tenant registry returned ${registry.length} record(s).`);
+    const validatedRegistry = validateTenantRegistry(registry);
+    logger?.(`Tenant registry returned ${validatedRegistry.length} active record(s).`);
     const requestedTenants = tenantCodes.length > 0
       ? new Set(tenantCodes.map((tenantCode) => tenantCode.trim()).filter(Boolean))
       : null;
@@ -87,7 +90,15 @@ export class ApiTenantExecutionCatalog implements TenantExecutionCatalog {
       ? new Set(runtimeConfiguration.availableTenants.map((available) => available.tenantCode))
       : null;
 
-    const orderedRegistry = registry
+    const unexpectedRuntimeTenants = availableTenantCodes
+      ? validatedRegistry.filter((item) => !availableTenantCodes.has(item.tenantCode)).map((item) => item.tenantCode)
+      : [];
+
+    if (unexpectedRuntimeTenants.length > 0) {
+      throw new Error(`Runtime topology contract failure: tenant-registry returned active tenants that are not present in runtime configuration: ${unexpectedRuntimeTenants.join(", ")}.`);
+    }
+
+    const orderedRegistry = validatedRegistry
       .filter((item) => (!availableTenantCodes || availableTenantCodes.has(item.tenantCode)) && (!requestedTenants || requestedTenants.has(item.tenantCode)))
       .sort((left, right) => compareTenantPriority(left, right, runtimeConfiguration.activeTenantCode));
 
@@ -395,18 +406,6 @@ async function resolveDockerSqlConnectionString(connectionString: string): Promi
   return connectionString.replace("__LOCAL_SQL_PASSWORD__", password);
 }
 
-function buildTenantRegistryFromRuntimeConfiguration(
-  runtimeConfiguration: RuntimeConfigurationResponse
-): TenantRegistryResponseItem[] {
-  return runtimeConfiguration.availableTenants.map((tenant) => ({
-    tenantId: tenant.tenantId,
-    tenantCode: tenant.tenantCode,
-    tenantName: tenant.tenantName,
-    tenantTier: tenant.tenantCode === "TenantC" ? "Dedicated" : "SharedPool",
-    paymentProviderCode: tenant.tenantCode === "TenantC" ? "OpenPay" : "Razorpay"
-  }));
-}
-
 function compareTenantPriority(
   left: TenantRegistryResponseItem,
   right: TenantRegistryResponseItem,
@@ -443,4 +442,59 @@ function getTenantTierRank(tenantTier: string): number {
   }
 
   return 2;
+}
+
+function validateTenantRegistry(registry: TenantRegistryResponseItem[]): TenantRegistryResponseItem[] {
+  const recordsByTenant = new Map<string, TenantRegistryResponseItem>();
+
+  for (const record of registry) {
+    const tenantCode = record.tenantCode?.trim();
+    const tenantTier = record.tenantTier?.trim();
+    const providerCode = record.paymentProviderCode?.trim() ?? "";
+
+    if (!tenantCode) {
+      throw new Error("Tenant registry contract failure: an active tenant record is missing tenantCode.");
+    }
+
+    if (!tenantTier) {
+      throw new Error(`Tenant registry contract failure: active tenant '${tenantCode}' is missing tenantTier.`);
+    }
+
+    if (!supportedTenantTiers.has(tenantTier.toLowerCase())) {
+      throw new Error(`Tenant registry contract failure: active tenant '${tenantCode}' uses unsupported tenantTier '${tenantTier}'.`);
+    }
+
+    if (!providerCode) {
+      throw new Error(`Tenant registry contract failure: active tenant '${tenantCode}' has missing paymentProviderCode.`);
+    }
+
+    if (!supportedProviders.has(providerCode.toLowerCase())) {
+      throw new Error(`Tenant registry contract failure: active tenant '${tenantCode}' uses unsupported paymentProviderCode '${providerCode}'.`);
+    }
+
+    const existing = recordsByTenant.get(tenantCode.toLowerCase());
+    if (existing) {
+      const existingProvider = existing.paymentProviderCode?.trim() ?? "";
+      if (
+        existing.tenantId !== record.tenantId ||
+        existing.tenantName !== record.tenantName ||
+        existing.tenantTier.trim().toLowerCase() !== tenantTier.toLowerCase() ||
+        existingProvider.toLowerCase() !== providerCode.toLowerCase()
+      ) {
+        throw new Error(`Tenant registry contract failure: conflicting authoritative records were returned for tenant '${tenantCode}'.`);
+      }
+
+      throw new Error(`Tenant registry contract failure: duplicate authoritative records were returned for tenant '${tenantCode}'.`);
+    }
+
+    recordsByTenant.set(tenantCode.toLowerCase(), {
+      tenantId: record.tenantId,
+      tenantCode,
+      tenantName: record.tenantName?.trim() || tenantCode,
+      tenantTier,
+      paymentProviderCode: providerCode
+    });
+  }
+
+  return Array.from(recordsByTenant.values());
 }

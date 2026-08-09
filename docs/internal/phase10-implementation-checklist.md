@@ -353,6 +353,20 @@ Practical rule:
 - **Phase 12** owns the explicitly rephased private-platform and SQL managed-identity hardening under ADR-025.
 - **Deferred** items only move forward when the repo proves the need with real duplication or an explicit hardening gate.
 
+### Post-Phase-10 Multitenant Hardening Placement
+
+Use this placement rule so the current Phase 10 closure remains narrow and future multitenant hardening does not disappear into general backlog noise.
+
+| Topic | Phase | Why |
+|---|---|---|
+| Topology artifact and promotion-safe topology proof | Phase 10 | Protects the current runtime and promotion model without expanding into general hardening |
+| Topology evidence in each environment where Phase 10 smoke or payment-matrix execution runs | Phase 10 | Evidence is part of the current validation contract, not a future platform enhancement |
+| `staging` / `prod` promotion-safe topology proof even when full payment matrix is not executed | Phase 10 | Promotion safety must be explicit before final closeout |
+| Tenant lifecycle operations: onboarding, activation, shared/dedicated moves, provider reassignment, rollback | Phase 11 | These are operational topology workflows that belong with service autonomy and data ownership |
+| Discovery = registry truth; validation = infra/secret/runtime contract | Phase 11 | This becomes a governed operator workflow once transport closeout is done |
+| Drift detection and repair between registry, secrets, DB topology, and runtime execution | Phase 11 | Reconciliation belongs with service autonomy and topology operations |
+| Observability dashboards, alerting, provider rotation, DR, quotas, noisy-neighbor policy, security hardening closure | Phase 12 | These are platform-operability concerns, not Phase 10 transport/runtime exit criteria |
+
 ### Verified Azure Dev Proof
 
 | Proof | Run | Result | What it proves |
@@ -418,6 +432,8 @@ Phase 10 is ready to call complete only when all of the following are true:
 - Immutable images/packages, expand/contract migrations, retained healthy revisions, and an executed rollback proof are documented.
 - The NFR baseline and required failure drills pass.
 - Current Stage 0-12 result and evidence packets are complete and traceable to the same commit SHA.
+- A topology artifact exists for every environment where the Phase 10 smoke or payment-matrix path executes.
+- `staging` and `prod` promotion evidence includes topology contract proof even when the full payment matrix is not part of the normal promotion path.
 - Phase 12 deferrals are present in ADR-025, `ARCHITECTURE-EVOLUTION.md`, and the Deferred Work Log.
 - `SharedContracts` remains deferred unless real cross-service schema duplication proves the need.
 

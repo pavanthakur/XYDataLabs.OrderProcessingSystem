@@ -329,23 +329,44 @@ function Wait-ForContainerSnapshotPassed {
     return $snapshot
 }
 
+function Get-DockerComposeFilePath {
+    param([string] $TargetEnvironment)
+
+    return Join-Path $dockerRoot ("docker-compose.{0}.yml" -f $TargetEnvironment)
+}
+
 function Get-ExpectedDatabaseNames {
     param([string] $TargetEnvironment)
 
-    switch ($TargetEnvironment) {
-        'dev' {
-            return @('OrderProcessingSystem_Dev', 'OrderProcessingSystem_TenantC_Dev')
-        }
-        'stg' {
-            return @('OrderProcessingSystem_Stg', 'OrderProcessingSystem_TenantC_Stg')
-        }
-        'prod' {
-            return @('OrderProcessingSystem_Prod', 'OrderProcessingSystem_TenantC_Prod')
-        }
-        default {
-            throw "Unsupported Docker validation environment '$TargetEnvironment'."
+    $composePath = Get-DockerComposeFilePath -TargetEnvironment $TargetEnvironment
+    if (-not (Test-Path -LiteralPath $composePath)) {
+        throw "Unsupported Docker validation environment '$TargetEnvironment'. Compose file not found: $composePath"
+    }
+
+    $content = Get-Content -LiteralPath $composePath -Raw
+    $databaseNames = New-Object 'System.Collections.Generic.List[string]'
+
+    $sharedMatches = [regex]::Matches($content, 'ConnectionStrings__OrderProcessingSystemDbConnection=.+?Database=(?<database>[^;]+);')
+    foreach ($match in $sharedMatches) {
+        $databaseName = $match.Groups['database'].Value.Trim()
+        if (-not [string]::IsNullOrWhiteSpace($databaseName) -and -not $databaseNames.Contains($databaseName)) {
+            $databaseNames.Add($databaseName)
         }
     }
+
+    $dedicatedMatches = [regex]::Matches($content, 'DedicatedTenantConnectionStrings__[^=]+=.+?Database=(?<database>[^;]+);')
+    foreach ($match in $dedicatedMatches) {
+        $databaseName = $match.Groups['database'].Value.Trim()
+        if (-not [string]::IsNullOrWhiteSpace($databaseName) -and -not $databaseNames.Contains($databaseName)) {
+            $databaseNames.Add($databaseName)
+        }
+    }
+
+    if ($databaseNames.Count -eq 0) {
+        throw "Could not resolve expected database names from $composePath."
+    }
+
+    return @($databaseNames)
 }
 
 function Get-LatestMigrationId {

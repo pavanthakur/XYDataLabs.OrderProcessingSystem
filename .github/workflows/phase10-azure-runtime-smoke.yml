@@ -120,6 +120,25 @@ jobs:
             throw "Phase 10 Azure runtime host verification failed with exit code $verifyExitCode."
           }
 
+      - name: Verify active tenant topology contract
+        shell: pwsh
+        run: |
+          $summaryPath = Join-Path $env:RUNNER_TEMP 'phase10-azure-tenant-topology.md'
+
+          & pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-phase10-azure-tenant-topology.ps1 `
+            -Environment '${{ inputs.environment }}' `
+            -ResourceGroupName '${{ steps.topology.outputs.resourceGroup }}' `
+            -SummaryPath $summaryPath
+
+          $verifyExitCode = $LASTEXITCODE
+          if (Test-Path -LiteralPath $summaryPath) {
+            Get-Content -LiteralPath $summaryPath | Add-Content -Path $env:GITHUB_STEP_SUMMARY
+          }
+
+          if ($verifyExitCode -ne 0) {
+            throw "Phase 10 Azure tenant topology verification failed with exit code $verifyExitCode."
+          }
+
       - name: Run runtime API UI smoke
         shell: pwsh
         run: |
@@ -148,6 +167,8 @@ jobs:
           name: phase10-azure-runtime-smoke-${{ inputs.environment }}
           path: |
             ${{ runner.temp }}/phase10-azure-runtime-hosts.md
+            ${{ runner.temp }}/phase10-azure-tenant-topology.md
+            ${{ runner.temp }}/phase10-azure-tenant-topology.json
             ${{ runner.temp }}/phase10-azure-runtime-smoke.md
           if-no-files-found: ignore
           retention-days: 14

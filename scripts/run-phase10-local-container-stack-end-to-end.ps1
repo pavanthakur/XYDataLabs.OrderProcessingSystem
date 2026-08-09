@@ -53,8 +53,8 @@ Set-Content -Path (Join-Path $runDir 'end-to-end-run-plan.txt') -Value @(
     '1. Confirm gateway and UI readiness.',
     '2. Run smoke validation.',
     '3. Run integration suite.',
-    '4. Re-apply the canonical Phase 10 database baseline after integration tests.',
-    '5. Run payment matrix for canonical baseline tenants TenantA/TenantB/TenantC across Razorpay and OpenPay.',
+    '4. Re-apply the Phase 10 database baseline after integration tests.',
+    '5. Discover active tenant topology from runtime/registry data and run the provider matrix across the resolved tenants.',
     '6. Preserve the stack by default so NFR and rollback proof can run.',
     '7. Tear down only when CleanupOnExit is explicitly selected.',
     '8. Write summary.json and update latest pointers.'
@@ -204,9 +204,6 @@ try {
 
     Invoke-LoggedCommand -Name 'matrix' -Script {
         npm --prefix (Join-Path $workspaceRoot 'automation') run run:docker:dev:http:playwright-matrix -- `
-            --tenant TenantA `
-            --tenant TenantB `
-            --tenant TenantC `
             --provider Razorpay `
             --provider OpenPay
     } | Out-Null
