@@ -166,7 +166,7 @@ public sealed class DlqReplayFunction(
             Subject = message.Subject ?? envelope.EventType,
             ContentType = message.ContentType ?? "application/json",
             CorrelationId = message.CorrelationId ?? envelope.CorrelationId,
-            TimeToLive = options.MessageTtl
+            TimeToLive = options.MessageTtlTimeSpan
         };
         foreach (var property in message.ApplicationProperties)
         {
@@ -183,7 +183,7 @@ public sealed class DlqReplayFunction(
         replayedMessage.ApplicationProperties["ReplaySourceDeadLetterDescription"] = deadLetterDescription;
         replayedMessage.ApplicationProperties["ReplayAttempt"] = attemptCount + 1;
         replayedMessage.ApplicationProperties["QuarantineId"] = quarantineId;
-        replayedMessage.TimeToLive = options.MessageTtl;
+        replayedMessage.TimeToLive = options.MessageTtlTimeSpan;
 
         await publisher.PublishAsync(replayedMessage, cancellationToken).ConfigureAwait(false);
         await MarkReplayProcessedAsync(replayState, cancellationToken).ConfigureAwait(false);

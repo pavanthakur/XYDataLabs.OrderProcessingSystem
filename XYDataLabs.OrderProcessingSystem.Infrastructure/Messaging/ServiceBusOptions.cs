@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Xml;
+
 namespace XYDataLabs.OrderProcessingSystem.Infrastructure.Messaging;
 
 public sealed class ServiceBusOptions
@@ -28,9 +31,35 @@ public sealed class ServiceBusOptions
 
     public int MaxConcurrentMessages { get; init; } = 20;
 
-    public TimeSpan MessageTtl { get; init; } = TimeSpan.FromDays(7);
+    public string MessageTtl { get; init; } = "P7D";
+
+    public TimeSpan MessageTtlTimeSpan => ParseMessageTtl(MessageTtl);
 
     public bool ForwardDeadLetteredMessagesToDlqTopic { get; init; } = true;
 
     public bool ReplayEnabled { get; init; }
+
+    private static TimeSpan ParseMessageTtl(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return TimeSpan.FromDays(7);
+        }
+
+        if (TimeSpan.TryParse(value, CultureInfo.InvariantCulture, out var timeSpan))
+        {
+            return timeSpan;
+        }
+
+        try
+        {
+            return XmlConvert.ToTimeSpan(value);
+        }
+        catch (FormatException ex)
+        {
+            throw new InvalidOperationException(
+                $"Failed to parse ServiceBus:MessageTtl value '{value}'. Expected a .NET TimeSpan or ISO-8601 duration such as 'P7D'.",
+                ex);
+        }
+    }
 }

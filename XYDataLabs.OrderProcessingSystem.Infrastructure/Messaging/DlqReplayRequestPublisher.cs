@@ -85,7 +85,7 @@ public sealed class DlqReplayRequestPublisher(
                     Subject = quarantine.Subject ?? quarantine.EventType,
                     ContentType = quarantine.ContentType ?? "application/json",
                     CorrelationId = quarantine.CorrelationId,
-                    TimeToLive = _options.MessageTtl
+                    TimeToLive = _options.MessageTtlTimeSpan
                 };
 
                 foreach (var property in DeserializeProperties(quarantine.ApplicationPropertiesJson))

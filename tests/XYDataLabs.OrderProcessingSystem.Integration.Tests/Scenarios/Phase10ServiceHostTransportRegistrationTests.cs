@@ -2,6 +2,7 @@ using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.Messaging;
 using XYDataLabs.OrderProcessingSystem.Payments.Contracts.Events;
 
@@ -45,6 +46,17 @@ public sealed class Phase10ServiceHostTransportRegistrationTests
         processor.Should().BeOfType<ServiceBusConsumerMessageProcessor>();
     }
 
+    [Fact]
+    public void Phase10HostInfrastructure_Should_Parse_Iso8601_MessageTtl_From_Configuration()
+    {
+        using var provider = BuildServiceProvider("Orders");
+
+        var options = provider.GetRequiredService<IOptions<ServiceBusOptions>>().Value;
+
+        options.MessageTtl.Should().Be("P7D");
+        options.MessageTtlTimeSpan.Should().Be(TimeSpan.FromDays(7));
+    }
+
     private static ServiceProvider BuildServiceProvider(string consumerKind)
     {
         var builder = Host.CreateApplicationBuilder();
@@ -59,7 +71,8 @@ public sealed class Phase10ServiceHostTransportRegistrationTests
             [$"{ServiceBusOptions.SectionName}:SubscriptionName"] = "order-created",
             [$"{ServiceBusOptions.SectionName}:PaymentStateSubscriptionName"] = "orders-payment-state",
             [$"{ServiceBusOptions.SectionName}:DeadLetterTopicName"] = "order-events-dlq",
-            [$"{ServiceBusOptions.SectionName}:DeadLetterSubscriptionName"] = "dlq-intake"
+            [$"{ServiceBusOptions.SectionName}:DeadLetterSubscriptionName"] = "dlq-intake",
+            [$"{ServiceBusOptions.SectionName}:MessageTtl"] = "P7D"
         });
 
         builder.AddPhase10ServiceHostInfrastructure(consumerKind: consumerKind);

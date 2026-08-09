@@ -92,6 +92,11 @@ param acrRegistryUsername string = ''
 param acrRegistryPassword string = ''
 
 var effectiveResourceSuffix = empty(resourceSuffix) ? environment : resourceSuffix
+var aspNetCoreEnvironment = environment == 'prod'
+  ? 'Production'
+  : environment == 'staging'
+    ? 'Staging'
+    : 'Development'
 var environmentName = 'aca-${baseName}-${effectiveResourceSuffix}'
 var gatewayName = '${baseName}-gate-${effectiveResourceSuffix}'
 var ordersName = '${baseName}-ord-${effectiveResourceSuffix}'
@@ -111,6 +116,14 @@ var commonEnv = [
   {
     name: 'KeyVault__Uri'
     value: keyVaultUri
+  }
+  {
+    name: 'ASPNETCORE_ENVIRONMENT'
+    value: aspNetCoreEnvironment
+  }
+  {
+    name: 'DOTNET_ENVIRONMENT'
+    value: aspNetCoreEnvironment
   }
 ]
 var sqlEnv = !empty(sqlConnectionString) ? [
