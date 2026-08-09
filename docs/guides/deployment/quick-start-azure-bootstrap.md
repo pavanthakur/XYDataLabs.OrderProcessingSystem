@@ -130,8 +130,7 @@ The `azure/login@v3` action with the same three credentials (`AZUREAPPSERVICE_CL
 | `bootstrap-dev` | ✅ Yes | Phase 1a outputs or existing secrets |
 | `bootstrap-staging` | ✅ Yes | Phase 1a outputs or existing secrets |
 | `bootstrap-prod` | ✅ Yes | Phase 1a outputs or existing secrets |
-| `deploy-api-to-azure` | ✅ Yes | Existing `AZUREAPPSERVICE_*` secrets |
-| `deploy-ui-to-azure` | ✅ Yes | Existing `AZUREAPPSERVICE_*` secrets |
+| Retired legacy deploy toggles (`deployApi` / `deployUi`) | Archived no-op only | Existing `AZUREAPPSERVICE_*` secrets |
 | `cleanup-dev/staging/prod` | ✅ Yes | Phase 1a outputs or existing secrets |
 | `configure-github-secrets` (Phase 1b) | ❌ No | GitHub App token only |
 
@@ -184,10 +183,10 @@ The three steps are repeated per-environment job (dev, staging, prod) because ea
 
 Each cleanup job (dev, staging, prod) uses the same **3-step Azure login sequence** as bootstrap, then proceeds to delete resources.
 
-#### Login Pattern in Deploy Workflows
+#### Login Pattern in Retired Deploy Workflows
 
-The deploy workflows (`deploy-api-to-azure.yml`, `deploy-ui-to-azure.yml`) use a **2-step pattern** with conditional gating.
-`deploy-ui-to-azure.yml` builds and deploys the React web app to the Azure UI App Service:
+Before the App Service child deploy workflows were retired, they used a **2-step pattern** with conditional gating.
+The former UI workflow built and deployed the React web app to the Azure UI App Service:
 
 ```
 Step 1: Check Azure Credentials
@@ -247,7 +246,7 @@ Deploy:   ──── Azure OIDC (2-step pattern + conditional gating) ──�
           AZUREAPPSERVICE_CLIENTID/TENANTID/SUBSCRIPTIONID
              Step 1: Check credentials → set credentialsConfigured=true/false
              Step 2: azure/login@v3 (only if credentialsConfigured == 'true')
-             → Deploy API and UI to Azure App Service
+             → Deploy API and UI to Azure App Service (historical path)
            ❌ Does NOT use GitHub App token at all.
 ```
 
@@ -261,7 +260,7 @@ Deploy:   ──── Azure OIDC (2-step pattern + conditional gating) ──�
 | **Phase 1b** | ✅ Yes — writes GitHub secrets | ❌ **No Azure login at all** | GitHub App token only | Store `AZUREAPPSERVICE_*` secrets in GitHub |
 | Phase 2 (bootstrap) | ❌ No | ✅ `azure/login@v3` | 3-step: Validate → Login → Verify | Provision Azure infrastructure |
 | **Phase X (cleanup)** | ❌ No | ✅ `azure/login@v3` | 3-step: Validate → Login → Verify | ⚠️ Delete all Azure resources |
-| Deploy (API/UI) | ❌ No | ✅ `azure/login@v3` | 2-step + conditional gate | Deploy applications to Azure |
+| Retired deploy path (API/UI) | ❌ No | ✅ `azure/login@v3` | 2-step + conditional gate | Historical App Service deployment path only |
 
 ---
 
@@ -365,7 +364,7 @@ Navigate to: **GitHub → Actions → Azure Bootstrap & Deploy → Run workflow*
 | **Type** | Boolean (default: `false`) |
 | **Phase** | 🔄 Phase 2 — day-to-day |
 | **When to enable** | After infrastructure is bootstrapped. Enable to deploy the latest API code. |
-| **What it does** | Triggers the `deploy-api-to-azure.yml` workflow for the selected environment after bootstrap completes. |
+| **What it does** | Archived no-op toggle only. The child API workflow was retired from Actions. |
 
 ### `deployUi` — Deploy React Frontend
 | | |
@@ -373,7 +372,7 @@ Navigate to: **GitHub → Actions → Azure Bootstrap & Deploy → Run workflow*
 | **Type** | Boolean (default: `false`) |
 | **Phase** | 🔄 Phase 2 — day-to-day |
 | **When to enable** | After infrastructure is bootstrapped. Enable to deploy React web changes in `frontend/`. |
-| **What it does** | Triggers the `deploy-ui-to-azure.yml` workflow for the selected environment after bootstrap completes. The workflow builds the SPA with the environment-specific API base URL and deploys it to the Azure UI App Service. |
+| **What it does** | Archived no-op toggle only. The child UI workflow was retired from Actions. |
 
 ---
 
@@ -548,9 +547,8 @@ Add `APP_ID` and `APP_PRIVATE_KEY` to repository secrets before proceeding.
 ### Phase 2 — Deploying Application Code
 
 After infrastructure is ready, deploy application code:
-- **Via Azure Bootstrap & Deploy**: Run workflow with `deployApi = true` and/or `deployUi = true`
-- **Via push**: Push to the `dev` branch — deployment workflows trigger automatically
-- **Via manual dispatch**: Run `deploy-api-to-azure.yml` or `deploy-ui-to-azure.yml` directly. The UI workflow deploys the React frontend.
+- **Via Azure Bootstrap & Deploy**: Use `bootstrapInfra` only for the archived App Service bootstrap/cleanup surface
+- **For supported Azure deployment**: Use the Phase 10 container-app workflows instead of the retired App Service child deploy workflows
 
 ---
 
@@ -560,8 +558,8 @@ After infrastructure is ready, deploy application code:
 |------|----------|---------|
 | First-time full setup (Phase 1 + 2) | **Azure Initial Setup** then **Azure Bootstrap & Deploy** | `setupOidc` + `configureSecrets` → then `bootstrapInfra` |
 | Phase 1 only (OIDC + secrets) | **Azure Initial Setup** | `setupOidc` + `configureSecrets` |
-| Phase 2 only (infra + deploy) | **Azure Bootstrap & Deploy** | `bootstrapInfra` + optional `deployApi` / `deployUi` |
-| Redeploy code only | **Azure Bootstrap & Deploy** | `deployApi` + `deployUi` |
+| Phase 2 only (legacy infra bootstrap/cleanup) | **Azure Bootstrap & Deploy** | `bootstrapInfra` with retired deploy toggles left unchecked |
+| Redeploy supported Azure code path | **01 Phase 10 Azure Deploy Orchestrator** | `dryRun=false`, `cleanupInfra=false` |
 | Rotate credentials | **Azure Initial Setup** | `setupOidc` + `configureSecrets` |
 | Tear down environment | **Azure Bootstrap & Deploy** | `cleanupInfra` |
 
@@ -729,7 +727,7 @@ echo "# bootstrap test" >> README.md
 git add README.md && git commit -m "test: verify bootstrap end-to-end"
 git push origin dev
 ```
-Watch Actions → the `deploy-api-to-azure.yml` workflow should trigger and succeed.
+Watch Actions → use the active Phase 10 deploy and smoke workflows instead of the retired App Service child deploy workflows.
 
 ---
 

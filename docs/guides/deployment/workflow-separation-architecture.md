@@ -429,4 +429,4 @@ Each environment (`dev`, `staging`, `prod`) holds its own isolated set:
 ```yaml
 environment: ${{ github.ref == 'refs/heads/main' && 'prod' || github.ref == 'refs/heads/staging' && 'staging' || 'dev' }}
 ```
-This pattern is used in `deploy-api-to-azure.yml` and `deploy-ui-to-azure.yml` to automatically select the correct environment based on branch.
+This pattern was used in the retired App Service child deploy workflows to automatically select the correct environment based on branch.

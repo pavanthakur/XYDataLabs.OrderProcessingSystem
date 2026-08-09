@@ -115,7 +115,7 @@
 
 ### CICD-01: Implement deployment slots (blue-green)
 - [ ] Add `Microsoft.Web/sites/slots` resource to `infra/modules/hosting.bicep` (staging slot for prod)
-- [ ] Update `deploy-api-to-azure.yml` to deploy to staging slot first
+- [ ] If the archived App Service path is ever revived, add staging-slot deployment to the legacy API deploy workflow first
 - [ ] Add health check validation on staging slot before swap
 - [ ] Add `az webapp deployment slot swap` step
 - [ ] Auto-rollback: if health check fails after swap, swap back
@@ -125,7 +125,7 @@
 ### CICD-02: Add production approval gates
 - [ ] Configure GitHub Environment `production` with required reviewers
 - [ ] Configure `staging` environment with deployment branch rules
-- [ ] Update `deploy-api-to-azure.yml` and `deploy-ui-to-azure.yml` to reference environments
+- [ ] If the archived App Service path is ever revived, make its child deploy path environment-aware
 - **Risk mitigated**: Prevents accidental production deployments from unauthorized pushes
 
 ### CICD-03: Add CodeQL / SAST security scanning
@@ -138,7 +138,7 @@
 ### CICD-04: Add post-deployment smoke tests
 - [ ] After each deployment, verify: health endpoint, Swagger reachable, basic API GET returns 200
 - [ ] Add response time baseline check (fail if > 2s)
-- [ ] Add to both `deploy-api-to-azure.yml` and `deploy-ui-to-azure.yml`
+- [ ] If the archived App Service path is ever revived, add the same change to both legacy child deploy workflows
 - **Files**: New step in deploy workflows
 
 ### INFRA-01: Migrate App Insights to workspace-based (Log Analytics)

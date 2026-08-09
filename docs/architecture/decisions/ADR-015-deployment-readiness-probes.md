@@ -60,5 +60,5 @@ readiness contract.
 
 - ADR-010: Runtime Environment Detection
 - `XYDataLabs.OrderProcessingSystem.API/Program.cs`
-- `.github/workflows/deploy-api-to-azure.yml`
+- Retired legacy App Service API deployment workflow
 - `tests/XYDataLabs.OrderProcessingSystem.Integration.Tests/Scenarios/TenantMiddlewareTests.cs`

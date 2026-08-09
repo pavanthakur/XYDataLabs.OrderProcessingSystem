@@ -286,6 +286,23 @@ function Resolve-DedicatedDatabaseNameFromConnectionString {
     return $match.Groups[1].Value.Trim()
 }
 
+function Get-SqlExecutionModeSplat {
+    param(
+        [switch]$UseAzureAdToken,
+        [switch]$UseSqlAuth
+    )
+
+    $mode = @{}
+    if ($UseSqlAuth.IsPresent) {
+        $mode.UseSqlAuth = $true
+    }
+    elseif ($UseAzureAdToken.IsPresent) {
+        $mode.UseAzureAdToken = $true
+    }
+
+    return $mode
+}
+
 function Get-ActiveDedicatedTenantDatabases {
     param(
         [Parameter(Mandatory = $true)][string]$SqlServerFqdn,
@@ -309,6 +326,7 @@ WHERE [Status] = N'Active'
 ORDER BY [Code];
 "@
 
+    $authMode = Get-SqlExecutionModeSplat -UseAzureAdToken:$UseAzureAdToken -UseSqlAuth:$UseSqlAuth
     $tenants = @(Invoke-SqlQueryRows `
         -SqlServerFqdn $SqlServerFqdn `
         -DatabaseName $SharedDatabaseName `
@@ -316,8 +334,7 @@ ORDER BY [Code];
         -AccessToken $AccessToken `
         -Username $SqlUsername `
         -Password $SqlPassword `
-        -UseAzureAdToken:$UseAzureAdToken `
-        -UseSqlAuth:$UseSqlAuth)
+        @authMode)
 
     $results = New-Object 'System.Collections.Generic.List[object]'
     foreach ($tenant in $tenants) {
@@ -503,6 +520,12 @@ else {
 
 $resolvedSqlUsername = if ($null -ne $sqlAdmin) { [string]$sqlAdmin.Username } else { '' }
 $resolvedSqlPassword = if ($null -ne $sqlAdmin) { [string]$sqlAdmin.Password } else { '' }
+$topologyAuthMode = if ($UseSqlAuthentication) {
+    Get-SqlExecutionModeSplat -UseSqlAuth
+}
+else {
+    Get-SqlExecutionModeSplat -UseAzureAdToken
+}
 
 $dedicatedTenantDatabases = @(Get-ActiveDedicatedTenantDatabases `
     -SqlServerFqdn $sqlFqdn `
@@ -511,8 +534,7 @@ $dedicatedTenantDatabases = @(Get-ActiveDedicatedTenantDatabases `
     -AccessToken $token `
     -SqlUsername $resolvedSqlUsername `
     -SqlPassword $resolvedSqlPassword `
-    -UseAzureAdToken:(!$UseSqlAuthentication) `
-    -UseSqlAuth:$UseSqlAuthentication)
+    @topologyAuthMode)
 
 if ($dedicatedTenantDatabases.Count -eq 0) {
     Write-Host 'Dedicated Databases: none active in tenant registry' -ForegroundColor Yellow
@@ -553,8 +575,7 @@ foreach ($identity in $runtimeIdentities) {
         -AccessToken $token `
         -SqlUsername $resolvedSqlUsername `
         -SqlPassword $resolvedSqlPassword `
-        -UseAzureAdToken:(!$UseSqlAuthentication) `
-        -UseSqlAuth:$UseSqlAuthentication
+        @topologyAuthMode
 
     foreach ($dedicatedDatabase in $dedicatedTenantDatabases) {
         Grant-IdentityAccessToDatabase `
@@ -565,8 +586,7 @@ foreach ($identity in $runtimeIdentities) {
             -AccessToken $token `
             -SqlUsername $resolvedSqlUsername `
             -SqlPassword $resolvedSqlPassword `
-            -UseAzureAdToken:(!$UseSqlAuthentication) `
-            -UseSqlAuth:$UseSqlAuthentication
+            @topologyAuthMode
     }
 
     if ($dedicatedTenantDatabases.Count -eq 0) {

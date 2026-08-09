@@ -229,7 +229,7 @@ public async Task<ActionResult> GetOrderDetailsById(OrderId id, CancellationToke
 - That meant swapping the workflow URL from Swagger to `/health/ready` without changing the endpoint mapping could have created false confidence: the workflow would report success even when dependencies were degraded.
 - The fix was applied at both layers:
   - `Program.cs` now maps both degraded and unhealthy readiness results to HTTP 503.
-  - `deploy-api-to-azure.yml` now probes `/health/ready` instead of `/swagger`, preserving the existing cold-start wait, retry count, retry delay, and timeout behavior.
+  - The now-retired legacy App Service API workflow was updated to probe `/health/ready` instead of `/swagger`, preserving the existing cold-start wait, retry count, retry delay, and timeout behavior.
 
 Representative readiness mapping:
 

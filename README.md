@@ -3,12 +3,12 @@
 > A production-grade, multi-tenant order and payment processing platform built with Clean Architecture, .NET 8, and Azure.
 
 [![CI](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/ci.yml/badge.svg)](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/ci.yml)
-[![Deploy API to Azure](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/deploy-api-to-azure.yml/badge.svg?branch=dev)](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/deploy-api-to-azure.yml)
-[![Deploy UI to Azure](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/deploy-ui-to-azure.yml/badge.svg?branch=dev)](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/deploy-ui-to-azure.yml)
+[![Phase 10 Azure Deploy](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/phase10-deploy-orchestrator.yml/badge.svg)](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/phase10-deploy-orchestrator.yml)
+[![Phase 10 Azure Runtime Smoke](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/phase10-azure-runtime-smoke.yml/badge.svg)](https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/phase10-azure-runtime-smoke.yml)
 
-**Live dev environment:**
-- API (Swagger): https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net/swagger
-- UI: https://pavanthakur-orderprocessing-ui-xyapp-dev.azurewebsites.net
+**Active Azure environment note:**
+- The supported Azure runtime is Phase 10 Container Apps.
+- Current runtime URLs are emitted by `01 Phase 10 Azure Deploy Orchestrator` and the smoke workflows, not by legacy `azurewebsites.net` App Service endpoints.
 
 ---
 
@@ -392,10 +392,10 @@ Architecture tests will fail if:
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
 | `azure-initial-setup.yml` | Manual (once) | OIDC App Registration + GitHub secrets |
-| `azure-bootstrap.yml` | Manual | Provision Azure resources (App Service, SQL, Key Vault) |
-| `deploy-api-to-azure.yml` | Push to dev/staging/main | Build -> test -> deploy API |
-| `deploy-ui-to-azure.yml` | Push to dev/staging/main | Build -> test -> deploy UI |
-| `infra-deploy.yml` | Manual | Bicep what-if + deploy |
+| `azure-bootstrap.yml` | Manual | Archived App Service compatibility bootstrap/cleanup; deploy toggles are retired no-ops |
+| `phase10-deploy-orchestrator.yml` | Manual | Phase 10 image build + Azure deploy/cleanup |
+| `phase10-azure-runtime-smoke.yml` | Manual | Gateway/API/UI runtime verification after deploy |
+| `infra-deploy.yml` | Reusable internal | Bicep what-if + deploy |
 | `validate-deployment.yml` | Reusable | Bicep what-if, OIDC verification |
 
 **Branch to environment mapping:**

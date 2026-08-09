@@ -31,8 +31,7 @@ Key scripts referenced by the guide:
 - `test-enterprise-deployment.ps1` → Orchestrates an end-to-end from-scratch test
 
 Legacy App Service helpers are still available for historical reference, but Phase 10 is the active path:
-- `deploy-api-to-azure.yml`
-- `deploy-ui-to-azure.yml`
+- the legacy App Service child deploy workflows were retired from Actions
 - `Resources/Azure-Deployment/wait-appservice-ready.ps1`
 - `Resources/Azure-Deployment/verify-deployment-endpoints.ps1`
 - `Resources/Azure-Deployment/configure-app-environment.ps1`

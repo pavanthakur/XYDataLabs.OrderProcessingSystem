@@ -81,7 +81,7 @@
 - ✅ `DbInitializer` cleared of all provider assignment knowledge; all `PaymentProviders.IsActive = false`.
 - ✅ `AddTenantPaymentProviderCode` migration live on both Azure dev and Azure staging.
 - ✅ E2E provider matrix verified on all three environments (Docker dev, Azure dev, Azure staging) — 4/6 pass; 2 expected external failures (Razorpay S2S not enabled on test account).
-- ✅ `deploy-api-to-azure.yml` tightened — `Validate TenantC Dedicated Database Contract` now asserts `PaymentProviderCode IS NOT NULL` in both registry DB and dedicated DB.
+- ✅ The retired legacy App Service API workflow was tightened so `Validate TenantC Dedicated Database Contract` asserted `PaymentProviderCode IS NOT NULL` in both registry DB and dedicated DB before the workflow retirement.
 - ✅ Build: 0 errors, 0 warnings. Tests: Domain 14/14, Application 53/53, API 88/88, Architecture 42/42. Secret scan: clean.
 - ✅ Next: Phase 8.7 — Provider Webhook Receiver (HMAC signature validation, inbox idempotency, tenant resolution from metadata, DW-002 optimistic concurrency on `PaymentAttempt`).
 
@@ -127,7 +127,7 @@
 - ✅ Payment callback, runtime configuration, and client telemetry now remain under API ownership for the React-first flow
 - ✅ Legacy MVC payment entry, callback handling, Razor views, layouts, and browser assets were removed with the retired UI host
 - ✅ PR validation now includes React workspace typecheck/build via `frontend/` in `ci.yml`
-- ✅ `deploy-ui-to-azure.yml` now builds and deploys the React frontend to the Azure UI App Service
+- ✅ The retired legacy App Service UI workflow had been updated to build and deploy the React frontend to the Azure UI App Service before the workflow retirement.
 - ✅ Azure provisioning no longer treats the UI App Service as a required .NET 8 presentation host for new environments
 - ✅ Local HTTP/HTTPS and Docker HTTP/HTTPS UI launch paths now target the React frontend workspace
 - ✅ `XYDataLabs.OrderProcessingSystem.UI` and `XYDataLabs.OrderProcessingSystem.UI.Tests` were removed physically and from the solution/runtime path

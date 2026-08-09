@@ -19,15 +19,15 @@ on:
         type: boolean
         default: true
       deployApi:
-        description: '🔄 Phase A — Deploy API [Optional] | Deploys API code after infrastructure is ready'
+        description: '📦 Legacy App Service API deploy toggle [Retired / no-op] | Retained only for archived compatibility references'
         required: true
         type: boolean
-        default: true
+        default: false
       deployUi:
-        description: '🔄 Phase A — Deploy UI [Optional] | Deploys UI code after infrastructure is ready'
+        description: '📦 Legacy App Service UI deploy toggle [Retired / no-op] | Retained only for archived compatibility references'
         required: true
         type: boolean
-        default: true
+        default: false
       cleanupInfra:
         description: '🗑️ Phase X (DESTRUCTIVE) — Cleanup Infrastructure | Deletes the environment-matched app stack, then the entire Resource Group. ⚠️ IRREVERSIBLE — use only for teardown/reset. Do NOT combine with Bootstrap.'
         required: true
@@ -84,8 +84,8 @@ jobs:
           Write-Host "  bootstrapInfra       = ${{ inputs.bootstrapInfra }}  $(if ('${{ inputs.bootstrapInfra }}' -eq 'true') { '[✅ checked]   — Phase A: Bootstrap Infrastructure' } else { '[☐  unchecked] — Phase A: Bootstrap Infrastructure' })" -ForegroundColor $(if ('${{ inputs.bootstrapInfra }}' -eq 'true') { 'Green' } else { 'DarkGray' })
           Write-Host "" -ForegroundColor Gray
           Write-Host "  DEPLOYMENT:" -ForegroundColor Cyan
-          Write-Host "  deployApi            = ${{ inputs.deployApi }}  $(if ('${{ inputs.deployApi }}' -eq 'true') { '[✅ checked]   — Phase A: Deploy API' } else { '[☐  unchecked] — Phase A: Deploy API' })" -ForegroundColor $(if ('${{ inputs.deployApi }}' -eq 'true') { 'Green' } else { 'DarkGray' })
-          Write-Host "  deployUi             = ${{ inputs.deployUi }}  $(if ('${{ inputs.deployUi }}' -eq 'true') { '[✅ checked]   — Phase A: Deploy UI' } else { '[☐  unchecked] — Phase A: Deploy UI' })" -ForegroundColor $(if ('${{ inputs.deployUi }}' -eq 'true') { 'Green' } else { 'DarkGray' })
+          Write-Host "  deployApi            = ${{ inputs.deployApi }}  $(if ('${{ inputs.deployApi }}' -eq 'true') { '[⚠️ checked]   — Legacy App Service API deploy toggle (retired / no-op)' } else { '[☐  unchecked] — Legacy App Service API deploy toggle (retired / no-op)' })" -ForegroundColor $(if ('${{ inputs.deployApi }}' -eq 'true') { 'Yellow' } else { 'DarkGray' })
+          Write-Host "  deployUi             = ${{ inputs.deployUi }}  $(if ('${{ inputs.deployUi }}' -eq 'true') { '[⚠️ checked]   — Legacy App Service UI deploy toggle (retired / no-op)' } else { '[☐  unchecked] — Legacy App Service UI deploy toggle (retired / no-op)' })" -ForegroundColor $(if ('${{ inputs.deployUi }}' -eq 'true') { 'Yellow' } else { 'DarkGray' })
           Write-Host "" -ForegroundColor Gray
           Write-Host "  CLEANUP:" -ForegroundColor $(if ('${{ inputs.cleanupInfra }}' -eq 'true') { 'Red' } else { 'DarkGray' })
           Write-Host "  cleanupInfra         = ${{ inputs.cleanupInfra }}  $(if ('${{ inputs.cleanupInfra }}' -eq 'true') { '[✅ checked]   — Phase X: ⚠️  DESTRUCTIVE Cleanup' } else { '[☐  unchecked] — Phase X: Cleanup Infrastructure' })" -ForegroundColor $(if ('${{ inputs.cleanupInfra }}' -eq 'true') { 'Red' } else { 'DarkGray' })
@@ -108,8 +108,8 @@ jobs:
           Write-Host "`n📋 Workflow Inputs:" -ForegroundColor Cyan
           Write-Host "  Environment: $env" -ForegroundColor Yellow
           Write-Host "  Bootstrap infra: $bootstrap" -ForegroundColor Yellow
-          Write-Host "  Deploy API: $deployApi" -ForegroundColor Yellow
-          Write-Host "  Deploy UI: $deployUi" -ForegroundColor Yellow
+          Write-Host "  Deploy API (retired / no-op): $deployApi" -ForegroundColor Yellow
+          Write-Host "  Deploy UI (retired / no-op): $deployUi" -ForegroundColor Yellow
           Write-Host "  Cleanup infra: $cleanup" -ForegroundColor Yellow
 
           # Display branch-to-environment mapping
@@ -200,12 +200,12 @@ jobs:
 
           # Standalone deploy phases (only shown when bootstrap is not selected)
           if ($doDeployApi -and -not $doBootstrap) {
-            Write-Host "  Deploy API                          : 🔵 WILL RUN" -ForegroundColor Cyan
-            Write-Host "             └─ Azure auth: environment secrets → azure/login@v3 (OIDC) ✅" -ForegroundColor Green
+            Write-Host "  Deploy API                          : ⚠️ RETIRED / NO-OP" -ForegroundColor Yellow
+            Write-Host "             └─ Legacy App Service child workflow was removed from Actions." -ForegroundColor Yellow
           }
           if ($doDeployUi -and -not $doBootstrap) {
-            Write-Host "  Deploy UI                           : 🔵 WILL RUN" -ForegroundColor Cyan
-            Write-Host "             └─ Azure auth: environment secrets → azure/login@v3 (OIDC) ✅" -ForegroundColor Green
+            Write-Host "  Deploy UI                           : ⚠️ RETIRED / NO-OP" -ForegroundColor Yellow
+            Write-Host "             └─ Legacy App Service child workflow was removed from Actions." -ForegroundColor Yellow
           }
 
           # Phase X: Cleanup Infrastructure — DESTRUCTIVE
@@ -2915,8 +2915,8 @@ jobs:
           "|-----------|-------|" >> $env:GITHUB_STEP_SUMMARY
           "| 🎯 Environment | ``${{ inputs.environment }}`` |" >> $env:GITHUB_STEP_SUMMARY
           "| 🏗️ Bootstrap Infrastructure | ``${{ inputs.bootstrapInfra }}`` |" >> $env:GITHUB_STEP_SUMMARY
-          "| 🔄 Deploy API | ``${{ inputs.deployApi }}`` |" >> $env:GITHUB_STEP_SUMMARY
-          "| 🔄 Deploy UI | ``${{ inputs.deployUi }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| 🔄 Deploy API (retired / no-op) | ``${{ inputs.deployApi }}`` |" >> $env:GITHUB_STEP_SUMMARY
+          "| 🔄 Deploy UI (retired / no-op) | ``${{ inputs.deployUi }}`` |" >> $env:GITHUB_STEP_SUMMARY
           "| ⚠️ [Phase X] Cleanup Infrastructure | ``${{ inputs.cleanupInfra }}`` | Matching teardown for the selected environment |" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
           
@@ -2981,56 +2981,29 @@ jobs:
           $deployUi  = '${{ inputs.deployUi }}'  -eq 'true'
 
           if ($deployApi -or $deployUi) {
-            # Deployment detail section — shown whenever deploy inputs were selected
+            # Legacy deployment detail section — shown whenever archived deploy inputs were selected
             "" >> $env:GITHUB_STEP_SUMMARY
-            "### 🚀 Deployment Detail" >> $env:GITHUB_STEP_SUMMARY
+            "### 🚀 Legacy Deployment Toggle Detail" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
             "| Service | Selected | Run | Status |" >> $env:GITHUB_STEP_SUMMARY
             "|---------|----------|-----|--------|" >> $env:GITHUB_STEP_SUMMARY
 
             if ($deployApi) {
-              $apiRunNum = $env:API_RUN_NUMBER
-              $apiRunUrl = $env:API_RUN_URL
-              $apiStatus = if ($apiRunNum) { "✅ success" } elseif ($triggerDeployments -eq "skipped") { "⏭️ skipped" } else { "❌ failed" }
-              $apiRun    = if ($apiRunUrl) { "[#$apiRunNum]($apiRunUrl)" } else { "—" }
-              "| API | ✅ yes | $apiRun | $apiStatus |" >> $env:GITHUB_STEP_SUMMARY
+              "| API | ✅ yes | — | ⚠️ retired / no-op |" >> $env:GITHUB_STEP_SUMMARY
             } else {
               "| API | ➖ no | — | — |" >> $env:GITHUB_STEP_SUMMARY
             }
 
             if ($deployUi) {
-              $uiRunNum = $env:UI_RUN_NUMBER
-              $uiRunUrl = $env:UI_RUN_URL
-              $uiStatus = if ($uiRunNum) { "✅ success" } elseif ($triggerDeployments -eq "skipped") { "⏭️ skipped" } else { "❌ failed" }
-              $uiRun    = if ($uiRunUrl) { "[#$uiRunNum]($uiRunUrl)" } else { "—" }
-              "| UI  | ✅ yes | $uiRun | $uiStatus |" >> $env:GITHUB_STEP_SUMMARY
+              "| UI  | ✅ yes | — | ⚠️ retired / no-op |" >> $env:GITHUB_STEP_SUMMARY
             } else {
               "| UI  | ➖ no | — | — |" >> $env:GITHUB_STEP_SUMMARY
             }
 
             "" >> $env:GITHUB_STEP_SUMMARY
 
-            # Endpoint URLs — only when at least one deploy succeeded
-            $apiUrl = $env:API_URL
-            $uiUrl  = $env:UI_URL
-            if ($apiUrl -or $uiUrl) {
-              "#### 🔗 Deployed Endpoints" >> $env:GITHUB_STEP_SUMMARY
-              "" >> $env:GITHUB_STEP_SUMMARY
-              "| Service | URL |" >> $env:GITHUB_STEP_SUMMARY
-              "|---------|-----|" >> $env:GITHUB_STEP_SUMMARY
-              if ($apiUrl) { "| API (Swagger) | [$apiUrl]($apiUrl) |" >> $env:GITHUB_STEP_SUMMARY }
-              if ($uiUrl)  { "| UI            | [$uiUrl]($uiUrl)   |" >> $env:GITHUB_STEP_SUMMARY }
-              "" >> $env:GITHUB_STEP_SUMMARY
-            }
-
-            # Error detail — surfaces the dispatch error message inline
-            $deployErrors = $env:DEPLOY_ERRORS
-            if ($deployErrors) {
-              "> [!CAUTION]" >> $env:GITHUB_STEP_SUMMARY
-              "> **Deployment errors:**" >> $env:GITHUB_STEP_SUMMARY
-              $deployErrors -split "`n" | ForEach-Object { "> $_" >> $env:GITHUB_STEP_SUMMARY }
-              "" >> $env:GITHUB_STEP_SUMMARY
-            }
+            "" >> $env:GITHUB_STEP_SUMMARY
+            "> These toggles are retained only for archived compatibility. Use `01 Phase 10 Azure Deploy Orchestrator` for all supported Azure deployment activity." >> $env:GITHUB_STEP_SUMMARY
 
             "### 🧭 Manual Follow-Up" >> $env:GITHUB_STEP_SUMMARY
             "" >> $env:GITHUB_STEP_SUMMARY
@@ -3150,13 +3123,11 @@ jobs:
             "" >> $env:GITHUB_STEP_SUMMARY
           }
 
-  # Trigger deployment workflows — ONLY after bootstrap succeeds for the target environment.
-  # When bootstrapInfra is selected, the relevant bootstrap job(s) must succeed before
-  # API/UI deployments are dispatched. This prevents deploying to environments where
-  # OIDC setup was never completed. When bootstrapInfra is NOT selected
-  # (deploy-only run), deployments proceed without bootstrap checks.
+  # Historical App Service deployment toggles.
+  # The legacy child workflows were removed from Actions, but the input shape is retained
+  # so archived operator instructions and manual runs fail closed with a clear no-op notice.
   trigger-deployments:
-    name: Trigger Deployments
+    name: Legacy Deployment Toggles Retired
     runs-on: ubuntu-latest
     needs: [bootstrap-dev, bootstrap-staging, bootstrap-prod]
     outputs:
@@ -3169,143 +3140,21 @@ jobs:
       errors:         ${{ steps.dispatch.outputs.errors }}
     if: |
       !cancelled() &&
-      (inputs.deployApi || inputs.deployUi) &&
-      (
-        inputs.bootstrapInfra != true ||
-        (inputs.environment == 'dev' && needs.bootstrap-dev.result == 'success') ||
-        (inputs.environment == 'staging' && needs.bootstrap-staging.result == 'success') ||
-        (inputs.environment == 'prod' && needs.bootstrap-prod.result == 'success') ||
-        (
-          inputs.environment == 'all' &&
-          needs.bootstrap-dev.result == 'success' &&
-          needs.bootstrap-staging.result == 'success' &&
-          needs.bootstrap-prod.result == 'success'
-        )
-      )
+      (inputs.deployApi || inputs.deployUi)
     steps:
-      - name: Dispatch and Await Deployments
+      - name: Legacy deploy toggles are retired
         id: dispatch
-        if: inputs.environment != 'all'
-        uses: actions/github-script@v8
-        env:
-          DEPLOY_API: ${{ inputs.deployApi }}
-          DEPLOY_UI:  ${{ inputs.deployUi }}
-          TARGET_ENV: ${{ inputs.environment }}
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const deployApi = process.env.DEPLOY_API === 'true';
-            const deployUi  = process.env.DEPLOY_UI  === 'true';
-            const targetEnv = process.env.TARGET_ENV;
-            const ref       = context.ref;
-            const branch    = ref.replace('refs/heads/', '');
-
-            // Dispatch a workflow and poll until it reaches 'completed' status.
-            // Returns the final run object. Throws on timeout or non-success conclusion.
-            // Use baseline run IDs instead of created_at timestamps because GitHub's
-            // API timestamps are not guaranteed to be strictly newer than the local
-            // runner clock at dispatch time.
-            async function dispatchAndAwait(workflowId) {
-              const baseline = await github.rest.actions.listWorkflowRuns({
-                owner:       context.repo.owner,
-                repo:        context.repo.repo,
-                workflow_id: workflowId,
-                branch:      branch,
-                event:       'workflow_dispatch',
-                per_page:    20
-              });
-              const existingRunIds = new Set(baseline.data.workflow_runs.map(r => r.id));
-
-              core.info(`🚀 Dispatching ${workflowId} on branch '${branch}'...`);
-              await github.rest.actions.createWorkflowDispatch({
-                owner: context.repo.owner,
-                repo:  context.repo.repo,
-                workflow_id: workflowId,
-                ref:   branch
-              });
-
-              // Poll until the newly-created run appears (up to 3 min, every 5 s).
-              // GitHub can take >90 s to surface a new run in the list API.
-              let run = null;
-              for (let i = 0; i < 36; i++) {
-                await new Promise(r => setTimeout(r, 5000));
-                const res = await github.rest.actions.listWorkflowRuns({
-                  owner:       context.repo.owner,
-                  repo:        context.repo.repo,
-                  workflow_id: workflowId,
-                  branch:      branch,
-                  event:       'workflow_dispatch',
-                  per_page:    20
-                });
-                run = res.data.workflow_runs.find(r => !existingRunIds.has(r.id));
-                if (run) { core.info(`  [${workflowId}] Found run #${run.run_number}: ${run.html_url}`); break; }
-              }
-              if (!run) throw new Error(`[${workflowId}] Run not found within 3 minutes of dispatch`);
-
-              // Poll until complete (every 15 s, max 25 min = 100 attempts)
-              for (let i = 0; i < 100 && run.status !== 'completed'; i++) {
-                core.info(`  [${workflowId}] status=${run.status} (${i * 15} s elapsed)...`);
-                await new Promise(r => setTimeout(r, 15000));
-                const updated = await github.rest.actions.getWorkflowRun({
-                  owner:  context.repo.owner,
-                  repo:   context.repo.repo,
-                  run_id: run.id
-                });
-                run = updated.data;
-              }
-
-              if (run.status !== 'completed') {
-                throw new Error(`[${workflowId}] Timed out after 25 minutes. Run: ${run.html_url}`);
-              }
-              if (run.conclusion !== 'success') {
-                throw new Error(`[${workflowId}] Completed with conclusion '${run.conclusion}'. Run: ${run.html_url}`);
-              }
-
-              core.notice(`✅ ${workflowId} succeeded: ${run.html_url}`);
-              return run;
-            }
-
-            // Dispatch API and UI in parallel; wait for both before reporting results
-            const tasks = [];
-            if (deployApi) tasks.push({ label: 'API', id: 'deploy-api-to-azure.yml' });
-            if (deployUi)  tasks.push({ label: 'UI',  id: 'deploy-ui-to-azure.yml'  });
-
-            const settled = await Promise.allSettled(tasks.map(t => dispatchAndAwait(t.id)));
-
-            let apiRun = null, uiRun = null;
-            const errors = [];
-            settled.forEach((result, i) => {
-              const label = tasks[i].label;
-              if (result.status === 'fulfilled') {
-                if (label === 'API') apiRun = result.value;
-                else                 uiRun  = result.value;
-              } else {
-                errors.push(result.reason.message);
-                core.error(`❌ ${label} deployment failed: ${result.reason.message}`);
-              }
-            });
-
-            core.notice(`Phase 10 endpoints are published from the infra deployment summary.`);
-
-            // Expose outputs so the Bootstrap Summary job can embed run links and URLs
-            if (deployApi) {
-              core.setOutput('api_run_url',    apiRun ? apiRun.html_url    : '');
-              core.setOutput('api_run_number', apiRun ? String(apiRun.run_number) : '');
-            }
-            if (deployUi) {
-              core.setOutput('ui_run_url',     uiRun ? uiRun.html_url     : '');
-              core.setOutput('ui_run_number',  uiRun ? String(uiRun.run_number)  : '');
-            }
-            core.setOutput('api_url', '');
-            core.setOutput('ui_url',  '');
-            core.setOutput('errors',  errors.join('\n'));
-
-            if (errors.length > 0) {
-              core.setFailed(`One or more deployments failed:\n${errors.join('\n')}`);
-            }
-
-      - name: environment=all notice
-        if: inputs.environment == 'all'
         run: |
-          echo "ℹ️ environment=all is infrastructure-only. Deploy each environment separately from its own branch." >> $GITHUB_STEP_SUMMARY
+          echo "ℹ️ The legacy App Service child workflows were removed from Actions." >> $GITHUB_STEP_SUMMARY
+          echo "ℹ️ The deployApi/deployUi inputs are retained only as archived compatibility toggles and now behave as no-ops." >> $GITHUB_STEP_SUMMARY
+          echo "ℹ️ Use '01 Phase 10 Azure Deploy Orchestrator' for all supported Azure deployment activity." >> $GITHUB_STEP_SUMMARY
+          {
+            echo "api_run_url="
+            echo "api_run_number="
+            echo "ui_run_url="
+            echo "ui_run_number="
+            echo "api_url="
+            echo "ui_url="
+            echo "errors="
+          } >> $GITHUB_OUTPUT
 
