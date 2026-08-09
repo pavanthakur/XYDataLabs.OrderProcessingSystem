@@ -213,6 +213,10 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Guardrail Azure PowerShell switch forwarding
+        shell: pwsh
+        run: ./scripts/assert-powershell-switch-forwarding-guardrail.ps1
       
       - name: Determine parameters
         id: params
@@ -460,6 +464,10 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Guardrail Azure PowerShell switch forwarding
+        shell: pwsh
+        run: ./scripts/assert-powershell-switch-forwarding-guardrail.ps1
 
       - name: Confirm routed validation finished
         if: ${{ needs['pre-validate'].result != 'success' }}
