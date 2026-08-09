@@ -829,6 +829,7 @@ jobs:
           ME_ID=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.managedEnvironmentId.value" -o tsv)
           GW_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.gatewayContainerAppName.value" -o tsv)
           ORDERS_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.ordersContainerAppName.value" -o tsv)
+          PAYMENTS_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.paymentsContainerAppName.value" -o tsv)
           INVENTORY_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.inventoryContainerAppName.value" -o tsv)
           NOTIFICATIONS_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.notificationsContainerAppName.value" -o tsv)
           UI_NAME=$(az deployment sub show --name ${DEPLOYMENT_NAME} --query "properties.outputs.uiContainerAppName.value" -o tsv)
@@ -853,6 +854,7 @@ jobs:
           echo "me=${ME_ID}" >> $GITHUB_OUTPUT
           echo "gateway=${GW_NAME}" >> $GITHUB_OUTPUT
           echo "orders=${ORDERS_NAME}" >> $GITHUB_OUTPUT
+          echo "payments=${PAYMENTS_NAME}" >> $GITHUB_OUTPUT
           echo "inventory=${INVENTORY_NAME}" >> $GITHUB_OUTPUT
           echo "notifications=${NOTIFICATIONS_NAME}" >> $GITHUB_OUTPUT
           echo "ui=${UI_NAME}" >> $GITHUB_OUTPUT
@@ -891,7 +893,26 @@ jobs:
 
           "✅ Phase 10 Azure SQL migrations completed." | Add-Content -Path $env:GITHUB_STEP_SUMMARY
 
-      - name: Refresh Backend Apps After SQL Migration
+      - name: Grant Phase 10 Runtime SQL Managed Identity Access
+        if: ${{ steps.params.outputs.deploySql == 'true' }}
+        shell: pwsh
+        run: |
+          Write-Host "Granting Azure SQL access to Phase 10 runtime identities for ${{ steps.params.outputs.env }}..."
+
+          ./Resources/Azure-Deployment/setup-phase10-sql-managed-identities.ps1 `
+            -Environment "${{ steps.params.outputs.env }}" `
+            -BaseName "orderprocessing" `
+            -UseSqlAuthentication `
+            -SqlAdminUsername "${{ steps.params.outputs.sqlAdminUsername }}" `
+            -SqlAdminPassword "${{ steps.params.outputs.sqlAdminPassword }}"
+
+          if ($LASTEXITCODE -ne 0) {
+              throw "Phase 10 runtime SQL identity setup failed with exit code $LASTEXITCODE."
+          }
+
+          "✅ Phase 10 runtime SQL identities granted access to shared and TenantC databases." | Add-Content -Path $env:GITHUB_STEP_SUMMARY
+
+      - name: Refresh Runtime Hosts After SQL Setup
         if: ${{ steps.params.outputs.deploySql == 'true' }}
         shell: bash
         run: |
@@ -900,6 +921,7 @@ jobs:
           BACKEND_APPS=(
             "${{ steps.outputs.outputs.gateway }}"
             "${{ steps.outputs.outputs.orders }}"
+            "${{ steps.outputs.outputs.payments }}"
             "${{ steps.outputs.outputs.inventory }}"
             "${{ steps.outputs.outputs.notifications }}"
           )
@@ -914,11 +936,20 @@ jobs:
             az containerapp update \
               --resource-group "$RG_NAME" \
               --name "$APP_NAME" \
-              --set-env-vars "Phase10__SchemaMigrationRun=${REVISION_MARKER}" \
+              --set-env-vars "Phase10__SchemaMigrationRun=${REVISION_MARKER}" "Phase10__SqlIdentityGrantRun=${REVISION_MARKER}" \
               --only-show-errors 1>/dev/null
           done
 
-          echo "✅ Phase 10 backend Container Apps refreshed after SQL migrations." >> "$GITHUB_STEP_SUMMARY"
+          FUNCTION_APP="${{ steps.outputs.outputs.function }}"
+          if [ -n "$FUNCTION_APP" ]; then
+            echo "Restarting Function App ${FUNCTION_APP}..."
+            az functionapp restart \
+              --resource-group "$RG_NAME" \
+              --name "$FUNCTION_APP" \
+              --only-show-errors 1>/dev/null
+          fi
+
+          echo "✅ Phase 10 runtime hosts refreshed after SQL migrations and identity grants." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Resolve Friendly Aliases
         id: aliases
@@ -997,6 +1028,25 @@ jobs:
               echo "Alias binding is disabled for this run, so only the mapping summary is recorded." >> $GITHUB_STEP_SUMMARY
             fi
           fi
+
+      - name: Verify Runtime Hosts From Azure Control Plane
+        shell: pwsh
+        run: |
+          $summaryPath = Join-Path $env:RUNNER_TEMP 'phase10-azure-runtime-hosts-deploy.md'
+
+          & pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-phase10-azure-runtime-hosts.ps1 `
+            -Environment '${{ steps.params.outputs.env }}' `
+            -ResourceGroupName '${{ steps.outputs.outputs.rg }}' `
+            -SummaryPath $summaryPath
+
+          $verifyExitCode = $LASTEXITCODE
+          if (Test-Path -LiteralPath $summaryPath) {
+            Get-Content -LiteralPath $summaryPath | Add-Content -Path $env:GITHUB_STEP_SUMMARY
+          }
+
+          if ($verifyExitCode -ne 0) {
+            throw "Phase 10 Azure runtime host verification failed with exit code $verifyExitCode."
+          }
 
       - name: Post-Deployment Endpoint Smoke
         shell: bash
@@ -1077,6 +1127,7 @@ jobs:
           echo "- **Managed Environment:** ${{ steps.outputs.outputs.me }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Gateway Container App:** ${{ steps.outputs.outputs.gateway }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Orders Container App:** ${{ steps.outputs.outputs.orders }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Payments Container App:** ${{ steps.outputs.outputs.payments }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Inventory Container App:** ${{ steps.outputs.outputs.inventory }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Notifications Container App:** ${{ steps.outputs.outputs.notifications }}" >> $GITHUB_STEP_SUMMARY
           echo "- **UI Container App:** ${{ steps.outputs.outputs.ui }}" >> $GITHUB_STEP_SUMMARY

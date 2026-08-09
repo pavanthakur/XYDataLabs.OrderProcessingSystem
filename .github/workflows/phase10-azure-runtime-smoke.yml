@@ -47,16 +47,31 @@ jobs:
 
           RG_NAME="rg-orderprocessing-${ENV_SUFFIX}"
           GATEWAY_APP="orderprocessing-gate-${ENV_SUFFIX}"
+          ORDERS_APP="orderprocessing-ord-${ENV_SUFFIX}"
+          PAYMENTS_APP="orderprocessing-pay-${ENV_SUFFIX}"
+          INVENTORY_APP="orderprocessing-inv-${ENV_SUFFIX}"
+          NOTIFICATIONS_APP="orderprocessing-notif-${ENV_SUFFIX}"
           UI_APP="orderprocessing-ui-${ENV_SUFFIX}"
+          FUNCTION_APP="orderprocessing-functions-${ENV_SUFFIX}"
           SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
           RESOURCE_GROUP_URL="https://portal.azure.com/#/resource/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/overview"
           GATEWAY_URL="https://portal.azure.com/#/resource/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/providers/Microsoft.App/containerApps/${GATEWAY_APP}/overview"
+          ORDERS_URL="https://portal.azure.com/#/resource/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/providers/Microsoft.App/containerApps/${ORDERS_APP}/overview"
+          PAYMENTS_URL="https://portal.azure.com/#/resource/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/providers/Microsoft.App/containerApps/${PAYMENTS_APP}/overview"
+          INVENTORY_URL="https://portal.azure.com/#/resource/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/providers/Microsoft.App/containerApps/${INVENTORY_APP}/overview"
+          NOTIFICATIONS_URL="https://portal.azure.com/#/resource/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/providers/Microsoft.App/containerApps/${NOTIFICATIONS_APP}/overview"
           UI_URL="https://portal.azure.com/#/resource/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/providers/Microsoft.App/containerApps/${UI_APP}/overview"
+          FUNCTION_URL="https://portal.azure.com/#/resource/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/providers/Microsoft.Web/sites/${FUNCTION_APP}/overview"
 
           echo "envSuffix=${ENV_SUFFIX}" >> "$GITHUB_OUTPUT"
           echo "resourceGroup=${RG_NAME}" >> "$GITHUB_OUTPUT"
           echo "gatewayApp=${GATEWAY_APP}" >> "$GITHUB_OUTPUT"
+          echo "ordersApp=${ORDERS_APP}" >> "$GITHUB_OUTPUT"
+          echo "paymentsApp=${PAYMENTS_APP}" >> "$GITHUB_OUTPUT"
+          echo "inventoryApp=${INVENTORY_APP}" >> "$GITHUB_OUTPUT"
+          echo "notificationsApp=${NOTIFICATIONS_APP}" >> "$GITHUB_OUTPUT"
           echo "uiApp=${UI_APP}" >> "$GITHUB_OUTPUT"
+          echo "functionApp=${FUNCTION_APP}" >> "$GITHUB_OUTPUT"
 
           {
             echo "## 02 Phase 10 Azure Runtime Smoke Context"
@@ -67,29 +82,43 @@ jobs:
             echo "| Azure Resource Suffix | ${ENV_SUFFIX} |"
             echo "| Resource Group | ${RG_NAME} |"
             echo "| Gateway Container App | ${GATEWAY_APP} |"
+            echo "| Orders Container App | ${ORDERS_APP} |"
+            echo "| Payments Container App | ${PAYMENTS_APP} |"
+            echo "| Inventory Container App | ${INVENTORY_APP} |"
+            echo "| Notifications Container App | ${NOTIFICATIONS_APP} |"
             echo "| UI Container App | ${UI_APP} |"
+            echo "| Function App | ${FUNCTION_APP} |"
             echo ""
             echo "### Azure Links"
             echo ""
             echo "- [Resource group](${RESOURCE_GROUP_URL})"
             echo "- [Gateway Container App](${GATEWAY_URL})"
+            echo "- [Orders Container App](${ORDERS_URL})"
+            echo "- [Payments Container App](${PAYMENTS_URL})"
+            echo "- [Inventory Container App](${INVENTORY_URL})"
+            echo "- [Notifications Container App](${NOTIFICATIONS_URL})"
             echo "- [UI Container App](${UI_URL})"
+            echo "- [Function App](${FUNCTION_URL})"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Verify Container Apps exist
-        shell: bash
+      - name: Verify runtime hosts from Azure control plane
+        shell: pwsh
         run: |
-          az containerapp show \
-            --resource-group "${{ steps.topology.outputs.resourceGroup }}" \
-            --name "${{ steps.topology.outputs.gatewayApp }}" \
-            --only-show-errors 1>/dev/null
+          $summaryPath = Join-Path $env:RUNNER_TEMP 'phase10-azure-runtime-hosts.md'
 
-          az containerapp show \
-            --resource-group "${{ steps.topology.outputs.resourceGroup }}" \
-            --name "${{ steps.topology.outputs.uiApp }}" \
-            --only-show-errors 1>/dev/null
+          & pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-phase10-azure-runtime-hosts.ps1 `
+            -Environment '${{ inputs.environment }}' `
+            -ResourceGroupName '${{ steps.topology.outputs.resourceGroup }}' `
+            -SummaryPath $summaryPath
 
-          echo "✅ Phase 10 Gateway and UI Container Apps exist." >> "$GITHUB_STEP_SUMMARY"
+          $verifyExitCode = $LASTEXITCODE
+          if (Test-Path -LiteralPath $summaryPath) {
+            Get-Content -LiteralPath $summaryPath | Add-Content -Path $env:GITHUB_STEP_SUMMARY
+          }
+
+          if ($verifyExitCode -ne 0) {
+            throw "Phase 10 Azure runtime host verification failed with exit code $verifyExitCode."
+          }
 
       - name: Run runtime API UI smoke
         shell: pwsh
@@ -117,6 +146,8 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: phase10-azure-runtime-smoke-${{ inputs.environment }}
-          path: ${{ runner.temp }}/phase10-azure-runtime-smoke.md
+          path: |
+            ${{ runner.temp }}/phase10-azure-runtime-hosts.md
+            ${{ runner.temp }}/phase10-azure-runtime-smoke.md
           if-no-files-found: ignore
           retention-days: 14
