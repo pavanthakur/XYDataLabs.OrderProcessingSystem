@@ -170,8 +170,8 @@ This repo uses a small set of primary operational workflows, with additional sup
 | `phase10-docker-dev-http-e2e.yml` | Manual or PR changes to Phase 10 Docker hook paths | Validation only | Runs the local Docker Dev HTTP end-to-end hook in CI and uploads the same Phase 10 logs used by the VS Code task and runbook |
 | `validate-deployment.yml` | Called by infra-deploy | Reusable workflow | **[See README-VALIDATE-DEPLOYMENT.md](./README-VALIDATE-DEPLOYMENT.md)** - Pre-deployment validation workflow |
 | `test-validate-deployment.yml` | Manual or PR changes | Test only | **[Quick Start](./QUICK-START-TEST-VALIDATION.md)** \| **[Full Docs](./README-TEST-VALIDATE-DEPLOYMENT.md)** - Tests validation workflow independently |
-| `deploy-api-to-azure.yml` | API/Backend code changes | All branches (dev/staging/main) | Legacy App Service deployment path for the API |
-| `deploy-ui-to-azure.yml` | React frontend changes | All branches (dev/staging/main) | Legacy App Service deployment path for the UI, including browser smoke against the tenant bootstrap flow |
+| `deploy-api-to-azure.yml` | Manual only | Legacy App Service compatibility only | Legacy App Service deployment path for the API |
+| `deploy-ui-to-azure.yml` | Manual only | Legacy App Service compatibility only | Legacy App Service deployment path for the UI, including browser smoke against the tenant bootstrap flow |
 | `publish-template-package.yml` | Manual | Artifact only or package registry | **[See README-PUBLISH-TEMPLATE-PACKAGE.md](./README-PUBLISH-TEMPLATE-PACKAGE.md)** - Packs `XYDataLabs.SaaS.Templates`, validates the packaged `dotnet new` smoke flow, uploads the `.nupkg`, and optionally publishes it |
 | `validate-template-package-governance.yml` | Pull requests for Layer 1 template changes, or manual | Validation only | **[See README-VALIDATE-TEMPLATE-PACKAGE-GOVERNANCE.md](./README-VALIDATE-TEMPLATE-PACKAGE-GOVERNANCE.md)** - Forces a `PackageVersion` decision for Layer 1 template changes and runs packaged smoke validation |
 | `validate-adrs.yml` | ADR file, script, or lint config changes | Push/PR to main/dev/staging, or manual | **[See README-VALIDATE-ADRS.md](./README-VALIDATE-ADRS.md)** — Validates ADR filename pattern, H1 heading, `**Status:**` frontmatter, and markdownlint rules |
@@ -328,52 +328,38 @@ If automatic configuration failed:
 Workflows trigger automatically based on **what code changed**:
 
 ```bash
-# Change API code and push → triggers deploy-api-to-azure.yml
-git add XYDataLabs.OrderProcessingSystem.API/
-git commit -m "feat: Update API endpoint"
-git push origin dev  # Deploys API only to dev environment
+# Legacy App Service API deploy is manual only
+gh workflow run deploy-api-to-azure.yml --ref dev
 
 # Change a Phase 10 service host and push → validate through PR/CI, then use the Phase 10 wrapper for image build + deploy
 git add XYDataLabs.OrderProcessingSystem.Orders.API/
 git commit -m "feat: Update Orders host"
 git push origin dev  # CI validates; run 01 Phase 10 Azure Deploy Orchestrator to publish the ACR image and deploy
 
-# Change React web code and push → triggers deploy-ui-to-azure.yml
-git add frontend/
-git commit -m "feat: Update React payment flow"
-git push origin dev  # Deploys the React frontend to the dev UI App Service
+# Legacy App Service UI deploy is manual only
+gh workflow run deploy-ui-to-azure.yml --ref dev
 
-# Change API plus React frontend → triggers BOTH deploy workflows in parallel
-git add XYDataLabs.OrderProcessingSystem.API/ frontend/
-git commit -m "feat: Update API and React frontend"
-git push origin dev  # Deploys API and the React frontend to dev environment
+# Phase 10 changes should use PR/CI validation, then the manual Phase 10 wrapper
+gh workflow run phase10-deploy-orchestrator.yml --ref dev -f environment=dev -f location=centralindia -f dryRun=false -f cleanupInfra=false
 ```
 
 ### Path-Based Triggering
 
-**API Workflow** (`deploy-api-to-azure.yml`) triggers on changes to:
-- `XYDataLabs.OrderProcessingSystem.API/**`
-- `XYDataLabs.OrderProcessingSystem.Application/**`
-- `XYDataLabs.OrderProcessingSystem.Domain/**`
-- `XYDataLabs.OrderProcessingSystem.Infrastructure/**`
-- `XYDataLabs.OrderProcessingSystem.SharedKernel/**`
+**API Workflow** (`deploy-api-to-azure.yml`) is manual only and retained for archived App Service compatibility.
 
-**UI Workflow** (`deploy-ui-to-azure.yml`) triggers on changes to:
-- `frontend/**`
-- `Resources/Configuration/**`
-- `.github/workflows/deploy-ui-to-azure.yml`
+**UI Workflow** (`deploy-ui-to-azure.yml`) is manual only and retained for archived App Service compatibility.
 
 ### Pull Request Behavior
 
-**IMPORTANT**: Workflows do **NOT** trigger on Pull Request events.
+**IMPORTANT**: Legacy App Service workflows are manual only, and Phase 10 deployment workflows do **NOT** trigger on Pull Request events.
 
 - ❌ Opening a PR does **not** trigger deployment
 - ❌ Merging a PR via GitHub UI does **not** trigger deployment (unless merge creates a push event)
-- ✅ Merging via command line with push **does** trigger deployment:
+- ✅ Merging via command line with push **does** trigger CI and any configured push-based validation workflows:
   ```bash
   git checkout staging
   git merge dev
-  git push origin staging  # ← This triggers deploy-staging.yml
+  git push origin staging  # ← This triggers CI/validation; use the manual Phase 10 Azure wrapper for deployment
   ```
 
 ### Manual Triggers
@@ -449,11 +435,11 @@ Workflows use **path-based triggering** - they only run when relevant code chang
 ```bash
 # Scenario 1: Only API code changed
 # Changed: XYDataLabs.OrderProcessingSystem.API/Controllers/OrderController.cs
-# Result: Only deploy-api-to-azure.yml runs ✅
+# Result: No legacy App Service workflow auto-runs ✅
 
 # Scenario 2: Only web frontend code changed  
 # Changed: frontend/apps/web/src/App.tsx
-# Result: Only deploy-ui-to-azure.yml runs ✅
+# Result: No legacy App Service workflow auto-runs ✅
 
 # Scenario 3: Shared domain model changed
 # Changed: XYDataLabs.OrderProcessingSystem.Domain/Entities/Order.cs
