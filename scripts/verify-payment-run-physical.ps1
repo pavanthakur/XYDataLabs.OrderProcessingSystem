@@ -68,6 +68,8 @@ if ($Runtime -eq 'local' -and $Environment -ne 'dev') {
 }
 
 $repoRoot = Split-Path -Path $PSScriptRoot -Parent
+$dockerSqlGuardrailScript = Join-Path $repoRoot 'scripts\assert-docker-runtime-sql-guardrail.ps1'
+$tenantRegistryHygieneScript = Join-Path $repoRoot 'scripts\assert-docker-tenant-registry-hygiene.ps1'
 $dateTag = (Get-Date).ToString('yyyyMMdd')
 $yesterdayDateTag = (Get-Date).AddDays(-1).ToString('yyyyMMdd')
 $envTag = if ($Runtime -eq 'local') { 'dev' } else { $Environment }
@@ -90,6 +92,17 @@ $apiLogPatterns = @(
 $envLocalPath = Join-Path $repoRoot 'Resources\Docker\.env.local'
 $supportedTenantTiers = @('SharedPool', 'Dedicated')
 $supportedProviders = @('OpenPay', 'Razorpay')
+
+if (-not (Test-Path -LiteralPath $dockerSqlGuardrailScript)) {
+    throw "Docker SQL guardrail script not found: $dockerSqlGuardrailScript"
+}
+
+if (-not (Test-Path -LiteralPath $tenantRegistryHygieneScript)) {
+    throw "Docker tenant registry hygiene script not found: $tenantRegistryHygieneScript"
+}
+
+. $dockerSqlGuardrailScript
+. $tenantRegistryHygieneScript
 
 $sharedDbName = if ($Runtime -eq 'local') {
     'OrderProcessingSystem_Local'
@@ -127,6 +140,22 @@ function Assert-PhysicalRuntimeDbContract {
 }
 
 Assert-PhysicalRuntimeDbContract -Runtime $Runtime -Environment $Environment -Profile $Profile -SharedDbName $sharedDbName
+
+if ($Runtime -eq 'docker') {
+    $dockerSharedConnectionString = Get-DockerSqlConnectionString -Database $sharedDbName
+    $repairHint = if ($Environment -eq 'dev') {
+        'If this Docker dev registry is dirty, rerun scripts/start-phase10-docker-dev.ps1 or scripts/invoke-phase10-database-bootstrap.ps1 before retrying.'
+    }
+    else {
+        "Reset or reseed the Docker runtime registry data for environment '$Environment' before retrying."
+    }
+
+    Assert-DockerTenantRegistryHygiene `
+        -ScriptName (Split-Path -Leaf $PSCommandPath) `
+        -ConnectionString $dockerSharedConnectionString `
+        -SharedDatabaseName $sharedDbName `
+        -RepairHint $repairHint | Out-Null
+}
 
 function Write-Step {
     param([string] $Message)
@@ -306,7 +335,14 @@ function Get-DockerSqlConnectionString {
     )
 
     $password = Get-SqlPasswordFromEnvLocal
-    return "Server=localhost,1433;Database=$Database;User Id=sa;Password=$password;Encrypt=False;TrustServerCertificate=True;MultipleActiveResultSets=true;"
+    $connectionString = "Server=localhost,1433;Database=$Database;User Id=sa;Password=$password;Encrypt=False;TrustServerCertificate=True;MultipleActiveResultSets=true;"
+    Assert-DockerRuntimeSqlGuardrail `
+        -ScriptName (Split-Path -Leaf $PSCommandPath) `
+        -ConnectionString $connectionString `
+        -ExpectedDatabase $Database `
+        -SourceDescription 'Resources/Docker/.env.local + docker compose sql-server host port mapping' `
+        -AllowHostMappedDockerSql
+    return $connectionString
 }
 
 function Convert-DockerComposeLogLine {

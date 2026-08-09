@@ -12,6 +12,23 @@ $workspaceRoot = Split-Path -Parent $PSScriptRoot
 $composeFile = Join-Path $workspaceRoot 'compose\docker-compose.phase10.yml'
 $envExampleFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local.example'
 $envFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local'
+$dockerConfigRoot = Join-Path $workspaceRoot '.tmp\docker-config'
+$dockerSqlGuardrailScript = Join-Path $workspaceRoot 'scripts\assert-docker-runtime-sql-guardrail.ps1'
+$tenantRegistryHygieneScript = Join-Path $workspaceRoot 'scripts\assert-docker-tenant-registry-hygiene.ps1'
+
+New-Item -ItemType Directory -Path $dockerConfigRoot -Force | Out-Null
+$env:DOCKER_CONFIG = $dockerConfigRoot
+
+if (-not (Test-Path -LiteralPath $dockerSqlGuardrailScript)) {
+    throw "Docker SQL guardrail script not found: $dockerSqlGuardrailScript"
+}
+
+if (-not (Test-Path -LiteralPath $tenantRegistryHygieneScript)) {
+    throw "Docker tenant registry hygiene script not found: $tenantRegistryHygieneScript"
+}
+
+. $dockerSqlGuardrailScript
+. $tenantRegistryHygieneScript
 
 function Write-ProgressMessage {
     param([Parameter(Mandatory = $true)][string]$Message)
@@ -233,7 +250,7 @@ function Get-Phase10ActiveTenantTopology {
     }
 
     $rows = Convert-Phase10SqlRows -Rows @(
-        Invoke-Phase10SqlCmdInComposeContainer -Database 'OrderProcessingSystem_Dev' -Query @"
+        Invoke-Phase10SqlAgainstDockerHost -Database 'OrderProcessingSystem_Dev' -Query @"
 SELECT
     [Code],
     ISNULL([Status], ''),
@@ -311,7 +328,7 @@ function Get-LatestPhase10MigrationId {
     return $migrationFiles[-1].BaseName
 }
 
-function Invoke-Phase10SqlCmdInComposeContainer {
+function Invoke-Phase10SqlAgainstDockerHost {
     param(
         [Parameter(Mandatory = $true)]
         [string]$Database,
@@ -320,28 +337,54 @@ function Invoke-Phase10SqlCmdInComposeContainer {
         [string]$Query
     )
 
-    $normalizedQuery = ($Query -replace "`r?`n", ' ').Trim()
-    $escapedQuery = $normalizedQuery.Replace('"', '\"')
-    $shellCommand = [string]::Format(
-        'if [ -x /opt/mssql-tools18/bin/sqlcmd ]; then SQLCMD=/opt/mssql-tools18/bin/sqlcmd; else SQLCMD=/opt/mssql-tools/bin/sqlcmd; fi; "$SQLCMD" -l 60 -C -S localhost -U sa -P "$SA_PASSWORD" -d "{0}" -h -1 -W -Q "SET NOCOUNT ON; {1}"',
-        $Database,
-        $escapedQuery)
+    $connectionString = New-LocalSqlConnectionString -DatabaseName $Database
+    Assert-DockerRuntimeSqlGuardrail `
+        -ScriptName (Split-Path -Leaf $PSCommandPath) `
+        -ConnectionString $connectionString `
+        -ExpectedDatabase $Database `
+        -SourceDescription 'Phase 10 bootstrap host-mapped Docker SQL' `
+        -AllowHostMappedDockerSql
 
-    $attempt = 1
-    while ($attempt -le 30) {
-        $composeProfileArgs = Get-ComposeProfileArguments
-        $composeEnvArgs = Get-ComposeEnvArguments
-        $output = & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs exec -T sql-server /bin/sh -lc $shellCommand 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            return @($output | ForEach-Object { $_.ToString() })
+    $connection = [System.Data.SqlClient.SqlConnection]::new($connectionString)
+    try {
+        $connection.Open()
+        $command = $connection.CreateCommand()
+        $command.CommandText = $Query
+        $command.CommandTimeout = 180
+
+        $reader = $command.ExecuteReader()
+        $rows = New-Object 'System.Collections.Generic.List[string]'
+        do {
+            while ($reader.Read()) {
+                if ($reader.FieldCount -eq 1) {
+                    $value = if ($reader.IsDBNull(0)) { '' } else { [string]$reader.GetValue(0) }
+                    $rows.Add($value)
+                    continue
+                }
+
+                $values = for ($columnIndex = 0; $columnIndex -lt $reader.FieldCount; $columnIndex++) {
+                    if ($reader.IsDBNull($columnIndex)) {
+                        ''
+                    }
+                    else {
+                        [string]$reader.GetValue($columnIndex)
+                    }
+                }
+
+                $rows.Add(($values -join ' ').Trim())
+            }
         }
+        while ($reader.NextResult())
 
-        if ($attempt -eq 30) {
-            throw ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
+        return $rows.ToArray()
+    }
+    catch {
+        throw "Failed to execute Phase 10 Docker SQL query against '$Database' through the host-mapped container port. $($_.Exception.Message)"
+    }
+    finally {
+        if ($null -ne $connection) {
+            $connection.Dispose()
         }
-
-        Start-Sleep -Seconds 5
-        $attempt++
     }
 }
 
@@ -354,7 +397,7 @@ function Get-Phase10SqlScalar {
         [string]$Query
     )
 
-    $output = @(Invoke-Phase10SqlCmdInComposeContainer -Database $Database -Query $Query)
+    $output = @(Invoke-Phase10SqlAgainstDockerHost -Database $Database -Query $Query)
     $lines = @(
         $output |
             ForEach-Object { $_.ToString().Trim() } |
@@ -395,6 +438,26 @@ END
     return ($appliedMigration -eq $ExpectedMigrationId)
 }
 
+function Get-Phase10LatestAppliedMigrationId {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$DatabaseName
+    )
+
+    $query = @"
+IF OBJECT_ID(N'dbo.__EFMigrationsHistory', N'U') IS NULL
+BEGIN
+    SELECT N'__EFMigrationsHistory missing';
+END
+ELSE
+BEGIN
+    SELECT TOP (1) [MigrationId] FROM [__EFMigrationsHistory] ORDER BY [MigrationId] DESC;
+END
+"@
+
+    return (Get-Phase10SqlScalar -Database $DatabaseName -Query $query)
+}
+
 function Invoke-Phase10SqlScriptInComposeContainer {
     param(
         [Parameter(Mandatory = $true)]
@@ -404,35 +467,54 @@ function Invoke-Phase10SqlScriptInComposeContainer {
         [string]$ScriptPath
     )
 
-    $composeProfileArgs = Get-ComposeProfileArguments
-    $composeEnvArgs = Get-ComposeEnvArguments
-    $containerId = (& docker compose @composeEnvArgs -f $composeFile @composeProfileArgs ps -q sql-server 2>&1)
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($containerId)) {
-        throw "Could not resolve the Phase 10 sql-server container id."
+    $connectionStringBuilder = [System.Data.SqlClient.SqlConnectionStringBuilder]::new((New-LocalSqlConnectionString -DatabaseName $DatabaseName))
+    $connectionStringBuilder.MultipleActiveResultSets = $false
+    $databaseConnectionString = $connectionStringBuilder.ConnectionString
+    Assert-DockerRuntimeSqlGuardrail `
+        -ScriptName (Split-Path -Leaf $PSCommandPath) `
+        -ConnectionString $databaseConnectionString `
+        -ExpectedDatabase $DatabaseName `
+        -SourceDescription 'Phase 10 bootstrap host sqlcmd migration apply' `
+        -AllowHostMappedDockerSql
+
+    if (-not (Test-Path -LiteralPath $ScriptPath)) {
+        throw "Migration script file not found: $ScriptPath"
     }
 
-    $containerScriptPath = "/tmp/phase10-$DatabaseName-migrations.sql"
-    & docker cp $ScriptPath "${containerId}:$containerScriptPath" 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        throw "Failed to copy migration script into the sql-server container: $ScriptPath"
-    }
+    $scriptContent = Get-Content -LiteralPath $ScriptPath -Raw
+    $batches = @(
+        [regex]::Split($scriptContent, '(?im)^\s*GO\s*$') |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    )
 
-    $sqlPassword = Get-EnvLocalValue -Name 'LOCAL_SQL_PASSWORD'
-    $shellCommand = "/opt/mssql-tools18/bin/sqlcmd -l 60 -S localhost -U sa -P '$sqlPassword' -C -b -I -d '$DatabaseName' -i '$containerScriptPath'"
     for ($attempt = 1; $attempt -le 5; $attempt++) {
-        $composeProfileArgs = Get-ComposeProfileArguments
-        $composeEnvArgs = Get-ComposeEnvArguments
-        $output = & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs exec -T sql-server /bin/sh -lc $shellCommand 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            return @($output | ForEach-Object { $_.ToString() })
-        }
+        $connection = [System.Data.SqlClient.SqlConnection]::new($databaseConnectionString)
+        try {
+            $connection.Open()
+            foreach ($batch in $batches) {
+                $command = $connection.CreateCommand()
+                $command.CommandText = $batch
+                $command.CommandTimeout = 180
+                [void]$command.ExecuteNonQuery()
+            }
 
-        $message = ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
-        if ($attempt -eq 5) {
-            throw "Failed to apply EF migration script to $DatabaseName after $attempt attempt(s). $message"
+            return @("Applied $($batches.Count) migration batch(es) to $DatabaseName via host-mapped Docker SQL.")
         }
+        catch {
+            $batchPreview = ($batch -split "`r?`n" | Select-Object -First 8) -join ' '
+            $message = "Failed to apply EF migration script to $DatabaseName on attempt $attempt. Batch preview: $batchPreview. $($_.Exception.Message)"
+            if ($attempt -eq 5) {
+                throw $message
+            }
 
-        Start-Sleep -Seconds 10
+            Start-Sleep -Seconds 5
+        }
+        finally {
+            if ($null -ne $connection) {
+                $connection.Dispose()
+            }
+        }
     }
 }
 
@@ -453,9 +535,18 @@ function Invoke-Phase10EfDatabaseUpdate {
         return
     }
 
+    $currentMigrationId = Get-Phase10LatestAppliedMigrationId -DatabaseName $DatabaseName
+    $scriptStartMigration = if ([string]::IsNullOrWhiteSpace($currentMigrationId) -or $currentMigrationId -eq '__EFMigrationsHistory missing') {
+        '0'
+    }
+    else {
+        $currentMigrationId
+    }
+
     $arguments = @(
         'ef', 'migrations', 'script',
-        '--idempotent',
+        $scriptStartMigration,
+        $ExpectedMigrationId,
         '--project', 'XYDataLabs.OrderProcessingSystem.Infrastructure',
         '--startup-project', 'XYDataLabs.OrderProcessingSystem.API',
         '--context', 'OrderProcessingSystemDbContext',
@@ -479,7 +570,7 @@ function Invoke-Phase10EfDatabaseUpdate {
         for ($attempt = 1; $attempt -le 5; $attempt++) {
             $attemptLogPath = Join-Path $logRoot "ef-update-$DatabaseName-attempt-$attempt.log"
             $scriptPath = Join-Path $logRoot "ef-update-$DatabaseName-attempt-$attempt.sql"
-            Write-ProgressMessage "Starting EF migration script attempt $attempt for $DatabaseName. Log: $attemptLogPath"
+            Write-ProgressMessage "Starting EF migration script attempt $attempt for $DatabaseName from $scriptStartMigration to $ExpectedMigrationId. Log: $attemptLogPath"
 
             $output = & dotnet @arguments --output $scriptPath 2>&1
             $exitCode = $LASTEXITCODE
@@ -542,7 +633,7 @@ BEGIN
 END
 "@
 
-        Invoke-Phase10SqlCmdInComposeContainer -Database 'master' -Query $query | Out-Null
+        Invoke-Phase10SqlAgainstDockerHost -Database 'master' -Query $query | Out-Null
         Write-ProgressMessage "Ensured database exists: $databaseName"
     }
 }
@@ -630,7 +721,7 @@ SET [Status] = N'Decommissioned'
 WHERE [Code] NOT IN ($baselineTenantCodesSql)
   AND ISNULL([Status], N'') = N'Active';
 "@
-    Invoke-Phase10SqlCmdInComposeContainer -Database 'OrderProcessingSystem_Dev' -Query $registryResetQuery | Out-Null
+    Invoke-Phase10SqlAgainstDockerHost -Database 'OrderProcessingSystem_Dev' -Query $registryResetQuery | Out-Null
     Write-ProgressMessage 'Reset shared registry active tenant set to the Phase 10 local sample baseline.'
 
     foreach ($baselineTenant in $baselineContracts) {
@@ -650,7 +741,7 @@ BEGIN
     THROW 51000, N'Baseline tenant row missing for $tenantCodeSql in OrderProcessingSystem_Dev.', 1;
 END;
 "@
-        Invoke-Phase10SqlCmdInComposeContainer -Database 'OrderProcessingSystem_Dev' -Query $registryQuery | Out-Null
+        Invoke-Phase10SqlAgainstDockerHost -Database 'OrderProcessingSystem_Dev' -Query $registryQuery | Out-Null
         Write-ProgressMessage "Reset registry baseline for $($baselineTenant.TenantCode) -> $($baselineTenant.PaymentProviderCode) ($($baselineTenant.TenantTier))"
     }
 
@@ -701,7 +792,7 @@ BEGIN
 END;
 "@
 
-        Invoke-Phase10SqlCmdInComposeContainer -Database $tenant.Database -Query $sampleQuery | Out-Null
+        Invoke-Phase10SqlAgainstDockerHost -Database $tenant.Database -Query $sampleQuery | Out-Null
         Write-ProgressMessage "Ensured SQL sample data baseline for $($tenant.TenantCode) in $($tenant.Database)"
     }
 
@@ -773,7 +864,7 @@ SELECT TOP (1)
 FROM [dbo].[Tenants]
 WHERE [Code] = '$($check.TenantCode)';
 "@
-        $tenantRow = @(Convert-Phase10SqlRows -Rows @(Invoke-Phase10SqlCmdInComposeContainer -Database $check.Database -Query $query)) |
+        $tenantRow = @(Convert-Phase10SqlRows -Rows @(Invoke-Phase10SqlAgainstDockerHost -Database $check.Database -Query $query)) |
             Select-Object -Last 1
 
         if ([string]::IsNullOrWhiteSpace($tenantRow)) {
@@ -830,16 +921,29 @@ WHERE t.[Code] = '$($check.TenantCode)';
 
 function Assert-Phase10RedisAzureParity {
     Write-Host 'Validating Phase 10 local Redis parity...' -ForegroundColor Cyan
-    $composeProfileArgs = Get-ComposeProfileArguments
-    $composeEnvArgs = Get-ComposeEnvArguments
-    $output = & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs exec -T redis redis-cli ping 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        throw "Redis readiness check failed. $([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() })))"
-    }
+    $client = [System.Net.Sockets.TcpClient]::new()
+    try {
+        $client.Connect('127.0.0.1', 6379)
+        $stream = $client.GetStream()
+        $writer = [System.IO.StreamWriter]::new($stream, [System.Text.Encoding]::ASCII, 1024, $true)
+        $reader = [System.IO.StreamReader]::new($stream, [System.Text.Encoding]::ASCII, $false, 1024, $true)
 
-    $response = ([string]::Join('', @($output | ForEach-Object { $_.ToString() }))).Trim()
-    if ($response -ne 'PONG') {
-        throw "Redis readiness check returned '$response' instead of PONG."
+        $writer.NewLine = "`r`n"
+        $writer.Write('*1' + "`r`n" + '$4' + "`r`n" + 'PING' + "`r`n")
+        $writer.Flush()
+
+        $response = $reader.ReadLine()
+        if ($response -ne '+PONG') {
+            throw "Redis readiness check returned '$response' instead of +PONG."
+        }
+    }
+    catch {
+        throw "Redis readiness check failed over host port 6379. $($_.Exception.Message)"
+    }
+    finally {
+        if ($null -ne $client) {
+            $client.Dispose()
+        }
     }
 
     Write-ProgressMessage 'Verified Redis readiness: PONG'
@@ -858,5 +962,10 @@ Ensure-Phase10Databases
 Invoke-Phase10DatabaseBootstrap
 Invoke-Phase10SampleDataSeed
 Ensure-Phase10SqlSampleDataBaseline
+Assert-DockerTenantRegistryHygiene `
+    -ScriptName (Split-Path -Leaf $PSCommandPath) `
+    -ConnectionString (New-LocalSqlConnectionString -DatabaseName 'OrderProcessingSystem_Dev') `
+    -SharedDatabaseName 'OrderProcessingSystem_Dev' `
+    -RepairHint 'Phase 10 bootstrap must leave the Docker shared registry in a topology-valid state before later validation runs continue.' | Out-Null
 Assert-Phase10DatabaseAzureParity
 Assert-Phase10RedisAzureParity
