@@ -986,7 +986,7 @@ ORDER BY [Code];
             })
     }
 
-    return @($topology)
+    return $topology.ToArray()
 }
 
 $tenantTopology = @(Get-PhysicalTenantTopology)

@@ -576,7 +576,7 @@ ORDER BY [Code];
             })
     }
 
-    return @($topology)
+    return $topology.ToArray()
 }
 
 Write-Step "Resolving Azure resources and credentials for $Environment"
