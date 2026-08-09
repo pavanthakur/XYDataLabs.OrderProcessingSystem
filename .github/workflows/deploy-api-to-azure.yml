@@ -1,23 +1,11 @@
 name: Deploy API to Azure App Service
 
 on:
-  push:
-    branches:
-      - main
-      - staging
-      - dev
-    paths:
-      - 'XYDataLabs.OrderProcessingSystem.API/**'
-      - 'XYDataLabs.OrderProcessingSystem.Application/**'
-      - 'XYDataLabs.OrderProcessingSystem.Domain/**'
-      - 'XYDataLabs.OrderProcessingSystem.Infrastructure/**'
-      - 'XYDataLabs.OrderProcessingSystem.SharedKernel/**'
-      - 'XYDataLabs.OpenPayAdapter/**'           # Multitenant payment: ProcessPaymentCommandHandler uses OpenPayAdapterService for per-tenant Use3DSecure routing
-      - 'XYDataLabs.RazorpayAdapter/**'          # Multitenant payment: ProcessPaymentCommandHandler uses RazorpayAdapterService for tenant-selected hosted checkout
-      - 'Resources/Configuration/**'
-      - 'Resources/Azure-Deployment/**'
-      - '.github/workflows/deploy-api-to-azure.yml'
   workflow_dispatch:
+
+# Legacy App Service compatibility workflow.
+# Auto-triggering on push is intentionally disabled because the active Azure
+# runtime model is Phase 10 Container Apps.
 
 env:
   DOTNET_VERSION: '8.x'

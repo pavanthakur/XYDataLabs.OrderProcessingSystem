@@ -1,16 +1,11 @@
 name: Deploy React Frontend to Azure App Service
 
 on:
-  push:
-    branches:
-      - main
-      - staging
-      - dev
-    paths:
-      - 'frontend/**'
-      - 'Resources/Configuration/**'
-      - '.github/workflows/deploy-ui-to-azure.yml'
   workflow_dispatch:
+
+# Legacy App Service compatibility workflow.
+# Auto-triggering on push is intentionally disabled because the active Azure
+# runtime model is Phase 10 Container Apps.
 
 env:
   NODE_VERSION: '20'
