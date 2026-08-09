@@ -126,6 +126,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__OrderProcessingSystemDbConnection: Server=sql-server,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
+      ConnectionStrings__TenantRegistryDbConnection: Server=sql-server,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
       DedicatedTenantConnectionStrings__TenantC: Server=sql-server,1433;Database=OrderProcessingSystem_TenantC_Dev;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
       ConnectionStrings__Redis: redis:6379
       AzureWebJobsStorage: ${LOCAL_AZURITE_CONNECTION_STRING}
@@ -181,6 +182,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__OrderProcessingSystemDbConnection: Server=sql-server,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
+      ConnectionStrings__TenantRegistryDbConnection: Server=sql-server,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
       DedicatedTenantConnectionStrings__TenantC: Server=sql-server,1433;Database=OrderProcessingSystem_TenantC_Dev;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
       ConnectionStrings__Redis: redis:6379
       AzureWebJobsStorage: ${LOCAL_AZURITE_CONNECTION_STRING}
@@ -239,6 +241,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__OrderProcessingSystemDbConnection: Server=sql-server,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
+      ConnectionStrings__TenantRegistryDbConnection: Server=sql-server,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
       DedicatedTenantConnectionStrings__TenantC: Server=sql-server,1433;Database=OrderProcessingSystem_TenantC_Dev;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
       ConnectionStrings__Redis: redis:6379
       AzureWebJobsStorage: ${LOCAL_AZURITE_CONNECTION_STRING}
@@ -295,6 +298,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__OrderProcessingSystemDbConnection: Server=sql-server,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
+      ConnectionStrings__TenantRegistryDbConnection: Server=sql-server,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
       DedicatedTenantConnectionStrings__TenantC: Server=sql-server,1433;Database=OrderProcessingSystem_TenantC_Dev;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
       ConnectionStrings__Redis: redis:6379
       AzureWebJobsStorage: ${LOCAL_AZURITE_CONNECTION_STRING}
@@ -428,6 +432,7 @@ services:
     environment:
       AzureWebJobsStorage: ${LOCAL_AZURITE_CONNECTION_STRING}
       ConnectionStrings__OrderProcessingSystemDbConnection: Server=sql-server,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
+      ConnectionStrings__TenantRegistryDbConnection: Server=sql-server,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=${LOCAL_SQL_PASSWORD};TrustServerCertificate=True;
       FUNCTIONS_WORKER_RUNTIME: dotnet-isolated
       ASPNETCORE_ENVIRONMENT: Development
       ServiceBusConnection: ${LOCAL_SERVICEBUS_CONNECTION_STRING}
