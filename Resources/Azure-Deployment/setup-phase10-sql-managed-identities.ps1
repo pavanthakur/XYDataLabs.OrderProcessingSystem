@@ -326,7 +326,15 @@ WHERE [Status] = N'Active'
 ORDER BY [Code];
 "@
 
-    $authMode = Get-SqlExecutionModeSplat -UseAzureAdToken:$UseAzureAdToken -UseSqlAuth:$UseSqlAuth
+    $authMode = if ($UseSqlAuth.IsPresent) {
+        Get-SqlExecutionModeSplat -UseSqlAuth
+    }
+    elseif ($UseAzureAdToken.IsPresent) {
+        Get-SqlExecutionModeSplat -UseAzureAdToken
+    }
+    else {
+        @{}
+    }
     $tenants = @(Invoke-SqlQueryRows `
         -SqlServerFqdn $SqlServerFqdn `
         -DatabaseName $SharedDatabaseName `
