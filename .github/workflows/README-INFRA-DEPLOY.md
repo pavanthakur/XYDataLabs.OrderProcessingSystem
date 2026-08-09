@@ -44,8 +44,6 @@ The workflow summary surfaces the resources that matter for runtime and cleanup:
 | `infra-deploy.yml` | no, internal only | yes, through Bicep | no | yes | yes | current |
 | `phase10-retention-cleanup.yml` | yes | no | no | no | yes, packages/artifacts only | current |
 | `azure-bootstrap.yml` | yes, but legacy | yes, legacy App Service stack | no | yes, legacy API/UI apps | yes | legacy |
-| `deploy-api-to-azure.yml` | no, legacy child | no | no | yes | no | legacy |
-| `deploy-ui-to-azure.yml` | no, legacy child | no | no | yes | no | legacy |
 
 If you are looking for the other responsibilities in the new Phase 10 model:
 
@@ -53,7 +51,7 @@ If you are looking for the other responsibilities in the new Phase 10 model:
 - `azure-initial-setup.yml` handles one-time repository and OIDC setup
 - `build-phase10-images.yml` handles wrapper-driven ACR image publication
 - `phase10-docker-dev-http-e2e.yml` handles local-vs-CI validation
-- `azure-bootstrap.yml`, `deploy-api-to-azure.yml`, and `deploy-ui-to-azure.yml` are legacy App Service workflows only and should not be treated as the active Phase 10 path
+- `azure-bootstrap.yml` is the only remaining legacy App Service workflow surface, and its deploy toggles are retired no-ops
 - `phase10-retention-cleanup.yml` is the scheduled housekeeping workflow for ACR image tags, historical GHCR cleanup-only image versions, and stale GitHub Actions artifacts; it does not deploy or tear down Azure infrastructure
 
 It supports three execution modes:

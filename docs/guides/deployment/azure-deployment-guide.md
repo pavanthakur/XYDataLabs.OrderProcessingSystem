@@ -687,7 +687,7 @@ git push origin dev
 
 **GitHub Actions Workflow Execution:**
 
-1. **Workflow file**: `.github/workflows/deploy-api-to-azure.yml` (or `deploy-ui-to-azure.yml`)
+1. **Historical workflow file**: retired App Service child deployment workflow
 2. **Trigger**: Push to `dev` branch
 3. **Authentication**: Uses OIDC federated credential `github-dev-oidc`
 4. **Secrets**: Retrieved from repository secrets (configured in Phase 1b)
@@ -1091,7 +1091,7 @@ Run a manual workflow and confirm the `azure/login@v3` step succeeds with OIDC (
 
 > **Historical note:** this section describes the App Service deploy workflow. For the current Phase 10 path, use `build-phase10-images.yml` plus `phase10-deploy-orchestrator.yml` (which calls `infra-deploy.yml` internally) and verify the container-app ingress URLs from the deployment summary.
 
-**File**: `.github/workflows/deploy-api-to-azure.yml`
+**File**: retired legacy App Service API deployment workflow
 
 **Key Configuration** (excerpt):
 ```yaml
@@ -1161,7 +1161,7 @@ Exit code `1` aborts deployment (infra not ready); exit code `0` proceeds.
 
 > **Historical note:** this section describes the App Service UI deploy workflow. For the current Phase 10 path, use the UI container image from `build-phase10-images.yml` and the ingress URL from `phase10-deploy-orchestrator.yml` / `infra-deploy.yml`.
 
-**File**: `.github/workflows/deploy-ui-to-azure.yml`
+**File**: retired legacy App Service UI deployment workflow
 
 **Key Configuration** (excerpt):
 ```yaml
@@ -1198,16 +1198,11 @@ Include optional gating for UI only (shorter timeout):
 ### 5.1 Manual Deployment
 
 **API Deployment**:
-1. Navigate to: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/deploy-api-to-azure.yml
-2. Click **"Run workflow"** button
-3. Select **main** branch
-4. Click **"Run workflow"**
+1. Use `01 Phase 10 Azure Deploy Orchestrator` for supported Azure deployment activity
+2. Use the matching Phase 10 smoke workflows after deploy
 
 **UI Deployment**:
-1. Navigate to: https://github.com/pavanthakur/XYDataLabs.OrderProcessingSystem/actions/workflows/deploy-ui-to-azure.yml
-2. Click **"Run workflow"** button
-3. Select **main** branch
-4. Click **"Run workflow"**
+1. Use the Phase 10 image build and deploy path rather than the retired App Service UI workflow
 
 ### 5.2 Automatic Deployment
 
@@ -1970,8 +1965,7 @@ az webapp log tail --name orderprocessing-api-xyapp --resource-group rg-orderpro
 
 ### Repository Files
 - Setup Script: `Resources/Azure-Deployment/setup-github-oidc.ps1`
-- API Workflow: `.github/workflows/deploy-api-to-azure.yml`
-- UI Workflow: `.github/workflows/deploy-ui-to-azure.yml`
+- Legacy App Service child deploy workflows were retired from Actions
 - Changelog: `CHANGELOG.md`
 
 ---
@@ -2483,7 +2477,7 @@ az group delete --name rg-orderprocessing-prod --yes --no-wait
 
 ### Overview
 
-As of November 23, 2025, the Azure Bootstrap workflow (`azure-bootstrap.yml`) now includes **automated SQL Database provisioning** for all environments. Additionally, the API deployment workflow (`deploy-api-to-azure.yml`) automatically runs **EF Core database migrations** after each deployment.
+As of November 23, 2025, the Azure Bootstrap workflow (`azure-bootstrap.yml`) included **automated SQL Database provisioning** for all environments. At that time, the legacy App Service API deployment workflow also ran **EF Core database migrations** after each deployment.
 
 This ensures that:
 - ✅ SQL Database infrastructure is created during bootstrap
@@ -2606,7 +2600,7 @@ If you need to provision SQL Database manually or for troubleshooting:
 Database migrations run automatically **after each API deployment** for the respective environment based on the branch.
 
 #### API Deployment Workflow Location
-`.github/workflows/deploy-api-to-azure.yml`
+retired legacy App Service API deployment workflow
 
 #### Migration Step
 ```yaml
@@ -2785,7 +2779,7 @@ The complete bootstrap flow now includes SQL provisioning:
 | `provision-azure-sql.ps1` | Creates SQL Server and Database | `Resources/Azure-Deployment/` |
 | `run-database-migrations.ps1` | Applies EF Core migrations | `Resources/Azure-Deployment/` |
 | `azure-bootstrap.yml` | Automated bootstrap workflow | `.github/workflows/` |
-| `deploy-api-to-azure.yml` | API deployment with migrations | `.github/workflows/` |
+| Retired legacy App Service API deployment workflow | Historical API deployment with migrations | Actions history only |
 
 ### Quick Reference Commands
 

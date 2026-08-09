@@ -164,7 +164,7 @@ web deployment, but React code must not be merged back into a server-rendered MV
 - The legacy MVC payment entry route now redirects to the React payment route.
 - The legacy MVC callback route remains only as a compatibility redirect to the React callback route.
 - Razor payment views, layout files, and UI-host browser assets have been removed from the active system design.
-- `deploy-ui-to-azure.yml` now builds and deploys the React frontend to the Azure UI App Service.
+- The now-retired App Service UI workflow had been updated to build and deploy the React frontend to the Azure UI App Service before the Phase 10 Container Apps cutover.
 - Azure provisioning no longer pins the UI App Service to a .NET runtime for new environments.
 - U5 is complete for the original gate: React now owns the active runtime and deployment path.
 - Local HTTP/Docker UI launch paths now target the React frontend workspace instead of MVC.

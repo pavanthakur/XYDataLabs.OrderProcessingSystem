@@ -138,8 +138,6 @@ All workflows live in `.github/workflows/`. Each has a companion `README-*.md` i
 | `infra-deploy.yml` | Deploy Azure Infrastructure | Push to dev/staging/main or manual | Deploys Bicep IaC with what-if dry-run support. |
 | `validate-deployment.yml` | Pre-Deployment Validation | Called by `infra-deploy` or manually | Reusable workflow: Bicep what-if, OIDC verification, SharedSettings diff. |
 | `test-validate-deployment.yml` | Test Pre-Deployment Validation | Manual or PR | Tests the validation workflow independently. |
-| `deploy-api-to-azure.yml` | Deploy API to Azure App Service | Push to dev/staging/main (API paths) | Build → test → publish → Azure OIDC login → deploy → health check |
-| `deploy-ui-to-azure.yml` | Deploy UI to Azure App Service | Push to dev/staging/main (UI paths) | Build → test → publish → Azure OIDC login → deploy → health check |
 | `publish-template-package.yml` | Publish Template Package | Manual dispatch | Packs `XYDataLabs.SaaS.Templates`, validates the packaged `dotnet new` smoke flow, uploads the `.nupkg`, and optionally publishes it to NuGet.org or GitHub Packages |
 | `validate-template-package-governance.yml` | Validate Template Package Governance | Pull requests for Layer 1 template changes or manual | Forces a `PackageVersion` decision for Layer 1 template changes and runs packaged smoke validation before merge |
 | `validate-ai-customization.yml` | Validate AI Customization | Push/PR (shared AI asset paths) or manual | Validates shared Copilot instructions, prompts, agents, and AI governance docs/scripts stay in sync |
@@ -151,7 +149,7 @@ All workflows live in `.github/workflows/`. Each has a companion `README-*.md` i
 | Category | Workflows | Usage |
 |----------|-----------|-------|
 | **Primary** | `ci.yml`, `azure-initial-setup.yml`, `infra-deploy.yml`, `build-phase10-images.yml` | Default paths for PR validation, initial setup, current Phase 10 deployment, and container image delivery |
-| **Legacy / compatibility** | `azure-bootstrap.yml`, `deploy-api-to-azure.yml`, `deploy-ui-to-azure.yml` | Legacy App Service deployment and cleanup path retained for historical compatibility |
+| **Legacy / compatibility** | `azure-bootstrap.yml` | Legacy App Service bootstrap/cleanup path retained for historical compatibility; deploy toggles are retired no-ops |
 | **Support** | `configure-github-secrets.yml`, `publish-template-package.yml`, `validate-template-package-governance.yml`, `validate-deployment.yml`, `test-validate-deployment.yml`, `validate-ai-customization.yml`, `validate-adrs.yml`, `validate-doc-links.yml` | Secondary validation, package publication, troubleshooting, and governance guardrails |
 
 ### Branch → Environment Mapping

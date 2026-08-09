@@ -411,9 +411,7 @@ Current dev URLs from the latest deploy proof:
 | `Build Phase 10 Service Images (Internal)` | Do not click for normal deploy | No | Yes | No | No | Current internal |
 | `Deploy Azure Phase 10 Resources (Internal)` | Do not click for normal deploy | Yes | No | Yes | Yes | Current internal |
 | `Phase 10 Retention Cleanup (Internal)` | Housekeeping only | No | No | No | ACR plus historical GHCR retention plus artifact retention | Current internal |
-| `Azure Bootstrap & Deploy` | Do not use for Phase 10 | Legacy App Service stack | No | Legacy App Service only | Legacy App Service RG path | Legacy |
-| `Deploy API to Azure App Service` | Do not use for Phase 10 | No | No | Legacy API only | No | Legacy |
-| `Deploy React Frontend to Azure App Service` | Do not use for Phase 10 | No | No | Legacy UI only | No | Legacy |
+| `Azure Bootstrap & Deploy` | Do not use for Phase 10 deployment | Legacy App Service stack | No | Legacy App Service compatibility only; deploy toggles are retired no-ops | Yes, legacy cleanup only | Legacy |
 
 | Area | Legacy bootstrap (`azure-bootstrap.yml`) | Active Phase 10 (`phase10-deploy-orchestrator.yml`) |
 |---|---|---|

@@ -26,5 +26,5 @@ Phase 10 cleanup and provisioning now use the same wrapper-driven path:
 
 This is the replacement for the old App Service-era bootstrap/deploy split:
 - `azure-bootstrap.yml` remains only as a historical compatibility reference
-- `deploy-api-to-azure.yml` and `deploy-ui-to-azure.yml` remain only as historical compatibility references
+- the legacy App Service child deploy workflows were retired from Actions; `azure-bootstrap.yml` remains only as a historical compatibility reference
 - platform resources such as Service Bus, App Insights, Key Vault, and the Container Apps environment belong to `infra-deploy.yml`

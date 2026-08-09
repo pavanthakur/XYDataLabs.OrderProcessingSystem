@@ -17,10 +17,10 @@ It is kept for troubleshooting and historical reference only.
 - `Resources/Azure-Deployment/wait-appservice-ready.ps1`
 - `Resources/Azure-Deployment/manage-appservice-slots.ps1`
 
-## Legacy Workflows
+## Legacy Workflow Surface
 
-- `.github/workflows/deploy-api-to-azure.yml`
-- `.github/workflows/deploy-ui-to-azure.yml`
+- `.github/workflows/azure-bootstrap.yml`
+- The old App Service child deploy workflows were retired from Actions and no longer appear as runnable workflow entries.
 
 ## Legacy URLs
 

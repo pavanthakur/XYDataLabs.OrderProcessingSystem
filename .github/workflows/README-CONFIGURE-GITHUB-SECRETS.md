@@ -240,7 +240,7 @@ setupGitHubApp:   false  ← already done in Phase 0
 ```
 
 > **Note:** These inputs are on `azure-initial-setup.yml`. The legacy App Service bootstrap (`bootstrapInfra`)
-> and deployments (`deployApi`/`deployUi`) are separate inputs on `azure-bootstrap.yml`.
+> and the archived deploy toggles (`deployApi`/`deployUi`) remain separate inputs on `azure-bootstrap.yml`, but they are retired no-ops.
 
 ### Step 1 — `validate-inputs` (azure-initial-setup.yml)
 
@@ -449,7 +449,7 @@ azure-initial-setup.yml:
 # 3. Validates configuration
 
 # After initial setup completes, the legacy App Service bootstrap can be run separately if needed:
-# azure-bootstrap.yml → bootstrapInfra: true, deployApi: true, deployUi: true
+# azure-bootstrap.yml → bootstrapInfra: true, deployApi: false, deployUi: false
 ```
 
 ### Example 3: Reconfigure Secrets for Specific Environment
@@ -615,8 +615,7 @@ The workflow automatically validates configuration at the end:
 
 - **azure-initial-setup.yml**: Calls this workflow (Phase 0 → 1a → 1b)
 - **azure-bootstrap.yml**: Legacy infrastructure bootstrap & deploy (Phase A + deployments) — retained for compatibility after initial setup
-- **deploy-api-to-azure.yml**: API deployment (uses configured secrets)
-- **deploy-ui-to-azure.yml**: UI deployment (uses configured secrets)
+- **azure-bootstrap.yml**: legacy App Service bootstrap/cleanup reference; deploy toggles are retired no-ops
 
 ## Version History
 

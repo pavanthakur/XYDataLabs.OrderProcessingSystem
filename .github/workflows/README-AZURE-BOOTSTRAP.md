@@ -4,7 +4,7 @@ Archived App Service compatibility reference for Azure infrastructure provisioni
 
 ## 🎯 Purpose
 
-This workflow (`azure-bootstrap.yml`) is retained for **legacy App Service compatibility only**. It provisions the old App Service-based resources (Phase A), triggers API/UI deployments, and can tear down the matching environment-scoped App Service stack through Phase X.
+This workflow (`azure-bootstrap.yml`) is retained for **legacy App Service compatibility only**. It provisions the old App Service-based resources (Phase A), retains archived deploy toggle inputs as explicit no-ops, and can tear down the matching environment-scoped App Service stack through Phase X.
 
 For the current Phase 10 transport slice, use `infra-deploy.yml`, `build-phase10-images.yml`, and the Phase 10 smoke runbook instead of extending this archived surface.
 
@@ -77,8 +77,8 @@ See [`README-AZURE-INITIAL-SETUP.md`](README-AZURE-INITIAL-SETUP.md) for the one
 |-------|-------|-------|
 | `environment` | `dev` | Start with dev to validate cheaply |
 | `bootstrapInfra` | ✅ `true` | Provisions all Azure resources |
-| `deployApi` | ✅ `true` | Triggers API deployment after bootstrap |
-| `deployUi` | ✅ `true` | Triggers UI deployment after bootstrap |
+| `deployApi` | `false` | Retired legacy toggle; leave unchecked |
+| `deployUi` | `false` | Retired legacy toggle; leave unchecked |
 | `cleanupInfra` | `false` | Never combine with bootstrap |
 
 4. Click **Run workflow**
@@ -97,8 +97,8 @@ See [`README-AZURE-INITIAL-SETUP.md`](README-AZURE-INITIAL-SETUP.md) for the one
 |-------|------|---------|-------------|
 | `environment` | choice | `dev` | Target: `dev` / `staging` / `prod` / `all`. Branch must match: `dev`→dev, `staging`→staging, `main`→prod. |
 | `bootstrapInfra` | boolean | `true` | **Phase A** — Provisions Resource Group, App Service Plan, Web Apps, App Insights, Azure SQL, Key Vault + managed identity. |
-| `deployApi` | boolean | `true` | **Deploy** — Triggers `deploy-api-to-azure.yml` after bootstrap succeeds (or independently if bootstrap is not selected). |
-| `deployUi` | boolean | `true` | **Deploy** — Triggers `deploy-ui-to-azure.yml` after bootstrap succeeds (or independently if bootstrap is not selected). This deploys the React frontend to the Azure UI App Service. |
+| `deployApi` | boolean | `false` | **Retired** — Archived legacy toggle only. The App Service API child workflow was removed from Actions, so this input is now a no-op. |
+| `deployUi` | boolean | `false` | **Retired** — Archived legacy toggle only. The App Service UI child workflow was removed from Actions, so this input is now a no-op. |
 | `cleanupInfra` | boolean | `false` | **Phase X (DESTRUCTIVE)** — Deletes the environment-matched UI App, API App, then the entire Resource Group. ⚠️ Irreversible. Do NOT combine with bootstrap. |
 
 ---
@@ -158,18 +158,13 @@ Step 3: az account show — verify login succeeded before making changes
 - When any bootstrap job fails, includes a **failure diagnosis** section with likely causes (e.g., missing federated credentials) and remediation steps pointing to the Azure Initial Setup workflow
 
 ### 5. `trigger-deployments`
-**Runs when**: `deployApi=true` or `deployUi=true`, AND deployment guard passes  
+**Runs when**: `deployApi=true` or `deployUi=true`
 **Needs**: `summary`, `bootstrap-dev`, `bootstrap-staging`, `bootstrap-prod`
 
-**Deployment guard logic**:
-- When `bootstrapInfra=true`: Deployments are **blocked** unless the bootstrap job for the target environment succeeded. This prevents deploying to environments where infrastructure provisioning failed.
-- When `bootstrapInfra=false` (deploy-only run): Deployments proceed without bootstrap checks — assumes infrastructure already exists.
-
 **Actions**:
-- Dispatches `deploy-api-to-azure.yml` via `workflow_dispatch` (if `deployApi=true`)
-- Dispatches `deploy-ui-to-azure.yml` via `workflow_dispatch` (if `deployUi=true`) for the React frontend
-- Deployment workflows determine their target environment from the branch name
-- Adds a deployment summary with links to the triggered workflow runs
+- Writes an explicit archived-compatibility notice when `deployApi=true` or `deployUi=true`
+- Does not dispatch any child deployment workflow
+- Preserves the historical input shape so old manual instructions fail closed instead of silently running stale deployment logic
 
 ---
 
@@ -183,9 +178,11 @@ After the Azure Initial Setup workflow has completed:
 environment: dev
 bootstrapInfra: true    # Provision all Azure resources
 deployApi: true         # Deploy API after bootstrap
-deployUi: true          # Deploy React frontend after bootstrap
+deployUi: true          # Archived no-op toggle only
 cleanupInfra: false
 ```
+
+Use `deployApi: false` and `deployUi: false` for any real run. These toggles no longer dispatch child workflows.
 
 ### Scenario 2: Bootstrap Only (No Deployment)
 
@@ -203,7 +200,7 @@ cleanupInfra: false
 environment: dev
 bootstrapInfra: false   # Skip — infra already provisioned
 deployApi: true
-deployUi: true          # Deploy the React frontend to the UI App Service
+deployUi: true          # Archived no-op toggle only
 cleanupInfra: false
 ```
 
@@ -259,7 +256,7 @@ After a **full clean deployment** (the environment resource group was deleted an
 
 | Step | Action | Required after clean deploy? |
 |------|--------|-----------------------------|
-| 1 | Run `azure-bootstrap.yml` (bootstrapInfra + deployApi) | ✅ |
+| 1 | Run `azure-bootstrap.yml` (bootstrapInfra only; leave retired deploy toggles unchecked) | ✅ |
 | 2 | Verify `/api/orders` returns 200 (not 500) | ✅ |
 | 3 | Optional: open SQL firewall for local SSMS via `/XYDataLabs-sql-local-access` | Optional |
 
@@ -505,8 +502,7 @@ After bootstrap succeeds:
 
 After deployment triggers succeed:
 
-- [ ] `deploy-api-to-azure.yml` dispatched and API accessible at target environment
-- [ ] `deploy-ui-to-azure.yml` dispatched and UI accessible at target environment
+- [ ] Legacy deploy toggles left unchecked, or their archived no-op behavior was acknowledged
 
 ---
 
