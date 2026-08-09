@@ -286,6 +286,51 @@ function Resolve-DedicatedDatabaseNameFromConnectionString {
     return $match.Groups[1].Value.Trim()
 }
 
+function Invoke-SqlAuthJsonQuery {
+    param(
+        [Parameter(Mandatory = $true)][string]$SqlServerFqdn,
+        [Parameter(Mandatory = $true)][string]$DatabaseName,
+        [Parameter(Mandatory = $true)][string]$SqlQuery,
+        [Parameter(Mandatory = $true)][string]$Username,
+        [Parameter(Mandatory = $true)][string]$Password
+    )
+
+    $sqlcmd = Get-Command sqlcmd -ErrorAction SilentlyContinue
+    if ($null -eq $sqlcmd) {
+        throw "sqlcmd is required for SQL-auth topology discovery but was not found on PATH."
+    }
+
+    $tempSql = [System.IO.Path]::GetTempFileName() + '.sql'
+    $SqlQuery | Out-File -LiteralPath $tempSql -Encoding utf8
+
+    try {
+        $output = & $sqlcmd.Source `
+            -S $SqlServerFqdn `
+            -d $DatabaseName `
+            -U $Username `
+            -P $Password `
+            -W `
+            -h -1 `
+            -i $tempSql 2>&1
+
+        if ($LASTEXITCODE -ne 0) {
+            $details = [string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))
+            throw "sqlcmd JSON query failed. Output: $details"
+        }
+
+        $json = [string]::Join('', @($output | ForEach-Object { $_.ToString().Trim() })).Trim()
+        if ([string]::IsNullOrWhiteSpace($json)) {
+            return @()
+        }
+
+        $parsed = $json | ConvertFrom-Json
+        return @($parsed)
+    }
+    finally {
+        Remove-Item -LiteralPath $tempSql -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Get-ActiveDedicatedTenantDatabases {
     param(
         [Parameter(Mandatory = $true)][string]$SqlServerFqdn,
@@ -298,7 +343,7 @@ function Get-ActiveDedicatedTenantDatabases {
         [switch]$UseSqlAuth
     )
 
-    $query = @"
+    $structuredQuery = @"
 SELECT
     [Code] AS TenantCode,
     [Name] AS TenantName,
@@ -309,21 +354,32 @@ WHERE [Status] = N'Active'
 ORDER BY [Code];
 "@
 
+    $jsonQuery = @"
+SET NOCOUNT ON;
+SELECT
+    [Code] AS TenantCode,
+    [Name] AS TenantName,
+    [PaymentProviderCode]
+FROM [dbo].[Tenants]
+WHERE [Status] = N'Active'
+  AND [TenantTier] = N'Dedicated'
+ORDER BY [Code]
+FOR JSON PATH, INCLUDE_NULL_VALUES;
+"@
+
     if ($UseSqlAuth) {
-        $tenants = @(Invoke-SqlQueryRows `
+        $tenants = @(Invoke-SqlAuthJsonQuery `
             -SqlServerFqdn $SqlServerFqdn `
             -DatabaseName $SharedDatabaseName `
-            -SqlQuery $query `
-            -AccessToken $AccessToken `
+            -SqlQuery $jsonQuery `
             -Username $SqlUsername `
-            -Password $SqlPassword `
-            -UseSqlAuth)
+            -Password $SqlPassword)
     }
     elseif ($UseAzureAdToken) {
         $tenants = @(Invoke-SqlQueryRows `
             -SqlServerFqdn $SqlServerFqdn `
             -DatabaseName $SharedDatabaseName `
-            -SqlQuery $query `
+            -SqlQuery $structuredQuery `
             -AccessToken $AccessToken `
             -Username $SqlUsername `
             -Password $SqlPassword `
@@ -333,7 +389,7 @@ ORDER BY [Code];
         $tenants = @(Invoke-SqlQueryRows `
             -SqlServerFqdn $SqlServerFqdn `
             -DatabaseName $SharedDatabaseName `
-            -SqlQuery $query `
+            -SqlQuery $structuredQuery `
             -AccessToken $AccessToken `
             -Username $SqlUsername `
             -Password $SqlPassword)
