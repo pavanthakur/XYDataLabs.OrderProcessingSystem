@@ -5,8 +5,9 @@
 
 .DESCRIPTION
     Reads today's API log for payment events plus browser-originated UI telemetry captured through
-    /payment/client-event, resolves a logical run prefix, queries the shared and TenantC dedicated
-    databases directly, and emits a consolidated pass/fail report.
+    /payment/client-event, resolves a logical run prefix, discovers active tenant topology from the
+    registry, queries the shared and dedicated databases that match that topology, and emits a
+    consolidated pass/fail report.
 
     This script is the deterministic rerun path for the physical-log branch of the
     /XYDataLabs-verify-db-logs prompt flow.
@@ -87,6 +88,8 @@ $apiLogPatterns = @(
     $logPrefixes | ForEach-Object { "$_-$envTag-$runtimeTag-$Profile-.log" }
 )
 $envLocalPath = Join-Path $repoRoot 'Resources\Docker\.env.local'
+$supportedTenantTiers = @('SharedPool', 'Dedicated')
+$supportedProviders = @('OpenPay', 'Razorpay')
 
 $sharedDbName = if ($Runtime -eq 'local') {
     'OrderProcessingSystem_Local'
@@ -99,24 +102,12 @@ else {
     }
 }
 
-$tenantCDbName = if ($Runtime -eq 'local') {
-    'OrderProcessingSystem_TenantC'
-}
-else {
-    switch ($Environment) {
-        'dev' { 'OrderProcessingSystem_TenantC_Dev' }
-        'stg' { 'OrderProcessingSystem_TenantC_Stg' }
-        'prod' { 'OrderProcessingSystem_TenantC_Prod' }
-    }
-}
-
 function Assert-PhysicalRuntimeDbContract {
     param(
         [Parameter(Mandatory = $true)][string]$Runtime,
         [Parameter(Mandatory = $true)][string]$Environment,
         [Parameter(Mandatory = $true)][string]$Profile,
-        [Parameter(Mandatory = $true)][string]$SharedDbName,
-        [Parameter(Mandatory = $true)][string]$TenantCDbName
+        [Parameter(Mandatory = $true)][string]$SharedDbName
     )
 
     if ($Runtime -eq 'docker') {
@@ -126,14 +117,8 @@ function Assert-PhysicalRuntimeDbContract {
             'prod' { 'OrderProcessingSystem_Prod' }
         }
 
-        $expectedTenantC = switch ($Environment) {
-            'dev' { 'OrderProcessingSystem_TenantC_Dev' }
-            'stg' { 'OrderProcessingSystem_TenantC_Stg' }
-            'prod' { 'OrderProcessingSystem_TenantC_Prod' }
-        }
-
-        if ($SharedDbName -ne $expectedShared -or $TenantCDbName -ne $expectedTenantC) {
-            throw "Docker runtime/db-name mismatch. Runtime=$Runtime Environment=$Environment Profile=$Profile SharedDbName=$SharedDbName TenantCDbName=$TenantCDbName ExpectedShared=$expectedShared ExpectedTenantC=$expectedTenantC"
+        if ($SharedDbName -ne $expectedShared) {
+            throw "Docker runtime/db-name mismatch. Runtime=$Runtime Environment=$Environment Profile=$Profile SharedDbName=$SharedDbName ExpectedShared=$expectedShared"
         }
     }
     elseif ($Runtime -eq 'local' -and $Environment -ne 'dev') {
@@ -141,7 +126,7 @@ function Assert-PhysicalRuntimeDbContract {
     }
 }
 
-Assert-PhysicalRuntimeDbContract -Runtime $Runtime -Environment $Environment -Profile $Profile -SharedDbName $sharedDbName -TenantCDbName $tenantCDbName
+Assert-PhysicalRuntimeDbContract -Runtime $Runtime -Environment $Environment -Profile $Profile -SharedDbName $sharedDbName
 
 function Write-Step {
     param([string] $Message)
@@ -882,6 +867,134 @@ else {
     $warnings.Add("No browser UI telemetry matched run prefix '$selectedRunPrefix' in API logs: $apiLogLabel")
 }
 
+function Get-SharedSettingsFilePath {
+    if ($Runtime -eq 'local') {
+        return Join-Path $repoRoot 'Resources\Configuration\sharedsettings.local.json'
+    }
+
+    return Join-Path $repoRoot ("Resources\Configuration\sharedsettings.{0}.json" -f $Environment)
+}
+
+function Resolve-DatabaseNameFromConnectionString {
+    param([Parameter(Mandatory = $true)][string]$ConnectionString)
+
+    $match = [regex]::Match($ConnectionString, '(?i)(?:Initial\s+Catalog|Database)\s*=\s*([^;]+)')
+    if (-not $match.Success) {
+        throw "Connection string does not contain an Initial Catalog/Database segment."
+    }
+
+    return $match.Groups[1].Value.Trim()
+}
+
+function Convert-HashtableToObject {
+    param([Parameter(Mandatory = $true)][hashtable]$Table)
+
+    $ordered = [ordered]@{}
+    foreach ($key in ($Table.Keys | Sort-Object)) {
+        $ordered[$key] = $Table[$key]
+    }
+
+    return [PSCustomObject]$ordered
+}
+
+function Get-PhysicalTenantTopology {
+    $registryRows = @(Invoke-PhysicalSqlQuery -Database $sharedDbName -Query @"
+SELECT
+    [Code] AS TenantCode,
+    [Status] AS TenantStatus,
+    [TenantTier] AS TenantTier,
+    [PaymentProviderCode] AS PaymentProviderCode
+FROM [dbo].[Tenants]
+WHERE [Status] = 'Active'
+ORDER BY [Code];
+"@)
+
+    if ($registryRows.Count -eq 0) {
+        throw "The tenant registry in '$sharedDbName' returned no active tenants."
+    }
+
+    $sharedSettingsPath = Get-SharedSettingsFilePath
+    $sharedSettings = Get-Content -LiteralPath $sharedSettingsPath -Raw | ConvertFrom-Json -Depth 10
+    $dedicatedConnectionStrings = @{}
+    $dedicatedSection = Get-ObjectPropertyValue -InputObject $sharedSettings -PropertyName 'DedicatedTenantConnectionStrings'
+    if ($null -ne $dedicatedSection) {
+        foreach ($property in ($dedicatedSection.PSObject.Properties | Where-Object { -not [string]::IsNullOrWhiteSpace($_.Name) })) {
+            $dedicatedConnectionStrings[$property.Name] = [string]$property.Value
+        }
+    }
+
+    $topology = New-Object 'System.Collections.Generic.List[object]'
+    $seenTenants = @{}
+    foreach ($row in $registryRows) {
+        $tenantCode = [string](Get-ObjectPropertyValue -InputObject $row -PropertyName 'TenantCode')
+        $tenantStatus = [string](Get-ObjectPropertyValue -InputObject $row -PropertyName 'TenantStatus')
+        $tenantTier = [string](Get-ObjectPropertyValue -InputObject $row -PropertyName 'TenantTier')
+        $providerCode = [string](Get-ObjectPropertyValue -InputObject $row -PropertyName 'PaymentProviderCode')
+
+        if ([string]::IsNullOrWhiteSpace($tenantCode)) {
+            throw 'Tenant registry contract failure: an active physical-runtime tenant is missing TenantCode.'
+        }
+
+        if ($seenTenants.ContainsKey($tenantCode)) {
+            throw "Tenant registry contract failure: duplicate active tenant '$tenantCode' was returned."
+        }
+        $seenTenants[$tenantCode] = $true
+
+        if ($tenantStatus -ne 'Active') {
+            throw "Tenant registry contract failure: inactive tenant '$tenantCode' appeared in the execution catalog."
+        }
+
+        if ([string]::IsNullOrWhiteSpace($tenantTier) -or $supportedTenantTiers -notcontains $tenantTier) {
+            throw "Tenant registry contract failure: tenant '$tenantCode' has unsupported TenantTier '$tenantTier'."
+        }
+
+        if ([string]::IsNullOrWhiteSpace($providerCode)) {
+            throw "Tenant registry contract failure: tenant '$tenantCode' has missing paymentProviderCode."
+        }
+
+        if ($supportedProviders -notcontains $providerCode) {
+            throw "Tenant registry contract failure: tenant '$tenantCode' has unsupported paymentProviderCode '$providerCode'."
+        }
+
+        $dedicatedSecretName = $null
+        $dedicatedDatabaseName = $null
+        $contractStatus = 'validated'
+
+        if ($tenantTier -eq 'Dedicated') {
+            $dedicatedSecretName = "DedicatedTenantConnectionStrings--$tenantCode"
+            if (-not $dedicatedConnectionStrings.ContainsKey($tenantCode)) {
+                throw "Tenant registry contract failure: dedicated tenant '$tenantCode' is missing '$dedicatedSecretName' in $sharedSettingsPath."
+            }
+
+            $connectionString = [string]$dedicatedConnectionStrings[$tenantCode]
+            if ([string]::IsNullOrWhiteSpace($connectionString)) {
+                throw "Tenant registry contract failure: dedicated tenant '$tenantCode' has an empty '$dedicatedSecretName' connection string."
+            }
+
+            $dedicatedDatabaseName = Resolve-DatabaseNameFromConnectionString -ConnectionString $connectionString
+        }
+
+        $topology.Add([PSCustomObject]@{
+                TenantCode = $tenantCode
+                Active = $true
+                TenantTier = $tenantTier
+                PaymentProviderCode = $providerCode
+                DedicatedDatabaseName = $dedicatedDatabaseName
+                DedicatedConnectionSecret = $dedicatedSecretName
+                ProviderPrivateKeyAlias = "PaymentProviders--$tenantCode--$providerCode--PrivateKey"
+                ContractStatus = $contractStatus
+            })
+    }
+
+    return @($topology)
+}
+
+$tenantTopology = @(Get-PhysicalTenantTopology)
+$sharedTenants = @($tenantTopology | Where-Object TenantTier -eq 'SharedPool')
+$dedicatedTenants = @($tenantTopology | Where-Object TenantTier -eq 'Dedicated')
+$sharedTenantCodes = @($sharedTenants | ForEach-Object { $_.TenantCode })
+$dedicatedTenantCodes = @($dedicatedTenants | ForEach-Object { $_.TenantCode })
+
 Write-Step 'Querying SQL databases'
 $preflightShared = Invoke-PhysicalSqlQuery -Database $sharedDbName -Query @"
 SELECT t.Code AS Tenant, pp.Use3DSecure AS ThreeDSEnabled
@@ -890,11 +1003,14 @@ JOIN dbo.Tenants t ON t.Id = pp.TenantId
 ORDER BY pp.TenantId;
 "@
 
-$preflightTenantC = Invoke-PhysicalSqlQuery -Database $tenantCDbName -Query @"
-SELECT t.Code AS Tenant, pp.TenantId, pp.Use3DSecure AS ThreeDSEnabled
-FROM payments.PaymentProviders pp
-JOIN dbo.Tenants t ON t.Id = pp.TenantId;
+$preflightTenantC = @(
+    foreach ($tenant in $dedicatedTenants) {
+        Invoke-PhysicalSqlQuery -Database $tenant.DedicatedDatabaseName -Query @"
+SELECT '$($tenant.TenantCode)' AS Tenant, pp.Use3DSecure AS ThreeDSEnabled
+FROM payments.PaymentProviders pp;
 "@
+    }
+)
 
 $q2Shared = Invoke-PhysicalSqlQuery -Database $sharedDbName -Query @"
 SELECT t.Code AS Tenant, ct.CustomerOrderId, ct.TransactionId AS ChargeId,
@@ -918,51 +1034,63 @@ WHERE ct.CustomerOrderId LIKE '$selectedRunPrefix%'
 ORDER BY ct.TenantId, ct.CustomerOrderId, ct.Id, tsh.Id;
 "@
 
-$q8Shared = Invoke-PhysicalSqlQuery -Database $sharedDbName -Query @"
-SELECT ct.CustomerOrderId, ct.TenantId, t.Code
-FROM payments.CardTransactions ct
-JOIN dbo.Tenants t ON t.Id = ct.TenantId
-WHERE ct.CustomerOrderId LIKE '$selectedRunPrefix%'
-  AND ((ct.CustomerOrderId LIKE '%-tA-%' AND ct.TenantId <> 1)
-    OR (ct.CustomerOrderId LIKE '%-tB-%' AND ct.TenantId <> 2));
-"@
+$q8Shared = @()
 
-$q2TenantC = Invoke-PhysicalSqlQuery -Database $tenantCDbName -Query @"
-SELECT t.Code AS Tenant, ct.CustomerOrderId, ct.TransactionId AS ChargeId,
+$q2TenantC = @(
+    foreach ($tenant in $dedicatedTenants) {
+        Invoke-PhysicalSqlQuery -Database $tenant.DedicatedDatabaseName -Query @"
+SELECT '$($tenant.TenantCode)' AS Tenant, ct.CustomerOrderId, ct.TransactionId AS ChargeId,
        ct.TransactionStatus AS Status, ct.IsThreeDSecureEnabled AS ThreeDS,
        ct.ThreeDSecureStage, ct.TransactionReferenceId AS Ref,
        ct.IsTransactionSuccess AS OK, ct.CreatedDate
 FROM payments.CardTransactions ct
-JOIN dbo.Tenants t ON t.Id = ct.TenantId
 WHERE ct.CustomerOrderId LIKE '$selectedRunPrefix%'
-ORDER BY ct.TenantId, ct.CustomerOrderId, ct.Id;
+ORDER BY ct.CustomerOrderId, ct.Id;
 "@
+    }
+)
 
-$q5TenantC = Invoke-PhysicalSqlQuery -Database $tenantCDbName -Query @"
-SELECT t.Code AS Tenant, ct.CustomerOrderId, tsh.Status, tsh.ThreeDSecureStage AS Stage,
+$q5TenantC = @(
+    foreach ($tenant in $dedicatedTenants) {
+        Invoke-PhysicalSqlQuery -Database $tenant.DedicatedDatabaseName -Query @"
+SELECT '$($tenant.TenantCode)' AS Tenant, ct.CustomerOrderId, tsh.Status, tsh.ThreeDSecureStage AS Stage,
        tsh.IsThreeDSecureEnabled AS ThreeDS, tsh.TransactionReferenceId AS Ref
 FROM payments.TransactionStatusHistories tsh
 JOIN payments.CardTransactions ct ON ct.Id = tsh.TransactionId
-JOIN dbo.Tenants t ON t.Id = ct.TenantId
 WHERE ct.CustomerOrderId LIKE '$selectedRunPrefix%'
-ORDER BY ct.TenantId, ct.CustomerOrderId, ct.Id, tsh.Id;
+ORDER BY ct.CustomerOrderId, ct.Id, tsh.Id;
 "@
+    }
+)
 
-$q9Shared = Invoke-PhysicalSqlQuery -Database $sharedDbName -Query @"
-SELECT t.Code AS Tenant, ct.CustomerOrderId, ct.TenantId
-FROM payments.CardTransactions ct
-JOIN dbo.Tenants t ON t.Id = ct.TenantId
-WHERE ct.TenantId = 3
-  AND ct.CustomerOrderId LIKE '$selectedRunPrefix%';
-"@
+$q9Shared = @(
+    $q2Shared |
+        Where-Object {
+            $tenantCode = [string](Get-ObjectPropertyValue -InputObject $_ -PropertyName 'Tenant')
+            $dedicatedTenantCodes -contains $tenantCode
+        }
+)
+
+$q8Shared = @(
+    $q2Shared |
+        Where-Object {
+            $tenantCode = [string](Get-ObjectPropertyValue -InputObject $_ -PropertyName 'Tenant')
+            $sharedTenantCodes.Count -gt 0 -and ($sharedTenantCodes -notcontains $tenantCode)
+        }
+)
 
 $threeDsByTenant = @{}
 foreach ($row in $preflightShared) {
     $threeDsByTenant[[string] $row.Tenant] = [int] $row.ThreeDSEnabled
 }
-$tenantCRow = $preflightTenantC | Select-Object -First 1
-if ($null -ne $tenantCRow) {
-    $threeDsByTenant[[string] $tenantCRow.Tenant] = [int] $tenantCRow.ThreeDSEnabled
+foreach ($tenantRow in $preflightTenantC) {
+    $threeDsByTenant[[string] $tenantRow.Tenant] = [int] $tenantRow.ThreeDSEnabled
+}
+
+foreach ($tenant in $tenantTopology) {
+    if (-not $threeDsByTenant.ContainsKey($tenant.TenantCode)) {
+        throw "Payment-provider baseline is missing for active tenant '$($tenant.TenantCode)' in its resolved database contract."
+    }
 }
 
 $expectedOrdersByTenant = @{}
@@ -1215,11 +1343,18 @@ $report = [PSCustomObject] @{
         ApiEvidence = @($selectedApiEvents | Select-Object Timestamp, Tenant, ResolvedCustomerOrderId, ChargeId, Message)
         UiEvidence = @($reportedUiEvents | Select-Object Timestamp, Tenant, CustomerOrderId, UiEventName, ChargeId, StatusCode, Message)
     }
-    Preflight = [PSCustomObject] @{
-        TenantA = $threeDsByTenant['TenantA']
-        TenantB = $threeDsByTenant['TenantB']
-        TenantC = $threeDsByTenant['TenantC']
-    }
+    Topology = @(
+        $tenantTopology |
+            Select-Object @{ Name = 'tenantCode'; Expression = { $_.TenantCode } },
+                          @{ Name = 'active'; Expression = { $_.Active } },
+                          @{ Name = 'tier'; Expression = { $_.TenantTier } },
+                          @{ Name = 'providerCode'; Expression = { $_.PaymentProviderCode } },
+                          @{ Name = 'dedicatedDatabaseName'; Expression = { $_.DedicatedDatabaseName } },
+                          @{ Name = 'dedicatedConnectionSecret'; Expression = { $_.DedicatedConnectionSecret } },
+                          @{ Name = 'providerPrivateKeyAlias'; Expression = { $_.ProviderPrivateKeyAlias } },
+                          @{ Name = 'contractStatus'; Expression = { $_.ContractStatus } }
+    )
+    Preflight = Convert-HashtableToObject -Table $threeDsByTenant
     Checks = [PSCustomObject] $checks
     ChargeCorrelation = @($chargeCorrelation)
 }

@@ -150,6 +150,34 @@ function Get-Check {
     return $property.Value
 }
 
+function Get-DynamicTenantCheckNames {
+    param(
+        [Parameter(Mandatory = $true)]
+        [pscustomobject] $Report
+    )
+
+    $topology = @($Report.Topology)
+    if ($topology.Count -eq 0) {
+        throw 'Verifier report did not contain a topology catalog.'
+    }
+
+    $checkNames = New-Object 'System.Collections.Generic.List[string]'
+    foreach ($tenant in $topology) {
+        $tenantCode = [string] $tenant.tenantCode
+        if ([string]::IsNullOrWhiteSpace($tenantCode)) {
+            throw 'Verifier topology contains a tenant with missing tenantCode.'
+        }
+
+        $checkNames.Add("Pre-flight 3DS [$tenantCode]")
+        $checkNames.Add("Q2 rows [$tenantCode]")
+        $checkNames.Add("Q5 steps [$tenantCode]")
+    }
+
+    $checkNames.Add('Q8 bleed')
+    $checkNames.Add('Q9 bleed')
+    return @($checkNames)
+}
+
 function Assert-Equal {
     param(
         [Parameter(Mandatory = $true)]
@@ -280,19 +308,8 @@ function Test-StagingPassScenario {
     $hasLogEvidence = ($apiEvidenceCount -gt 0 -or $uiEvidenceCount -gt 0)
     Add-TestResult -TestName 'stg-pass evidence mode' -Success $true -Message "API rows: $apiEvidenceCount | UI rows: $uiEvidenceCount" -ScenarioName $scenarioName
 
-    $dbCheckNames = @(
-        'Pre-flight TenantA 3DS',
-        'Pre-flight TenantB 3DS',
-        'Pre-flight TenantC 3DS',
-        'Q2 TenantA rows',
-        'Q2 TenantB rows',
-        'Q5 TenantA steps',
-        'Q5 TenantB steps',
-        'Q8 bleed',
-        'Q2-B TenantC rows',
-        'Q5-B TenantC steps',
-        'Q9-B TenantC bleed'
-    )
+    Assert-True -TestName 'stg-pass topology artifact present' -Condition (@($report.Topology).Count -gt 0) -Message "Topology rows: $(@($report.Topology).Count)" -ScenarioName $scenarioName
+    $dbCheckNames = Get-DynamicTenantCheckNames -Report $report
 
     foreach ($checkName in $dbCheckNames) {
         $check = Get-Check -Report $report -CheckName $checkName

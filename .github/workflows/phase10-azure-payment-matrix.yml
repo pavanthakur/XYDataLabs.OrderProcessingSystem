@@ -162,9 +162,6 @@ jobs:
 
           npm --prefix automation run run:azure:matrix -- \
             --target "${{ steps.topology.outputs.targetKey }}" \
-            --tenant TenantA \
-            --tenant TenantB \
-            --tenant TenantC \
             --tenant-timeout-ms "${{ inputs.tenantTimeoutMs }}" \
             "${EXTRA_ARGS[@]}"
 

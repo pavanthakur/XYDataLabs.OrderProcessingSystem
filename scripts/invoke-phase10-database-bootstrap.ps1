@@ -90,11 +90,171 @@ function Get-ComposeProfileArguments {
     return $arguments
 }
 
+function Resolve-DatabaseNameFromConnectionString {
+    param([string] $ConnectionString)
+
+    if ([string]::IsNullOrWhiteSpace($ConnectionString)) {
+        return ''
+    }
+
+    foreach ($segment in ($ConnectionString -split ';')) {
+        if ($segment -match '^\s*(Initial Catalog|Database)\s*=\s*(.+?)\s*$') {
+            return $Matches[2].Trim()
+        }
+    }
+
+    return ''
+}
+
+function New-LocalSqlConnectionString {
+    param([Parameter(Mandatory = $true)][string] $DatabaseName)
+
+    return "Server=localhost,1433;Database=$DatabaseName;User Id=sa;Password=$localSqlPassword;Encrypt=False;TrustServerCertificate=True;MultipleActiveResultSets=true;"
+}
+
+function Get-Phase10DedicatedTenantDatabaseMap {
+    $content = Get-Content -LiteralPath $composeFile -Raw
+    $matches = [regex]::Matches(
+        $content,
+        'DedicatedTenantConnectionStrings__(?<tenant>[^:\s]+)\s*:\s*Server=sql-server,1433;Database=(?<database>[^;]+);',
+        [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+
+    $dedicatedTenants = @()
+    foreach ($match in $matches) {
+        $tenantCode = $match.Groups['tenant'].Value.Trim()
+        $databaseName = $match.Groups['database'].Value.Trim()
+        if ([string]::IsNullOrWhiteSpace($tenantCode) -or [string]::IsNullOrWhiteSpace($databaseName)) {
+            continue
+        }
+
+        if ($dedicatedTenants.TenantCode -contains $tenantCode) {
+            continue
+        }
+
+        $dedicatedTenants += [pscustomobject]@{
+            TenantCode = $tenantCode
+            DatabaseName = $databaseName
+            ConnectionString = New-LocalSqlConnectionString -DatabaseName $databaseName
+        }
+    }
+
+    return @($dedicatedTenants)
+}
+
 function Get-Phase10Databases {
-    @(
-        'OrderProcessingSystem_Dev',
-        'OrderProcessingSystem_TenantC_Dev'
+    $databaseNames = New-Object 'System.Collections.Generic.List[string]'
+    $databaseNames.Add('OrderProcessingSystem_Dev')
+    foreach ($dedicatedTenant in (Get-Phase10DedicatedTenantDatabaseMap)) {
+        if (-not $databaseNames.Contains($dedicatedTenant.DatabaseName)) {
+            $databaseNames.Add($dedicatedTenant.DatabaseName)
+        }
+    }
+
+    return @($databaseNames)
+}
+
+function Get-Phase10DedicatedTenantEnvironmentState {
+    $state = @{}
+    foreach ($dedicatedTenant in (Get-Phase10DedicatedTenantDatabaseMap)) {
+        $variableName = "DedicatedTenantConnectionStrings__{0}" -f $dedicatedTenant.TenantCode
+        $state[$variableName] = [Environment]::GetEnvironmentVariable($variableName)
+    }
+
+    return $state
+}
+
+function Set-Phase10DedicatedTenantEnvironmentState {
+    foreach ($dedicatedTenant in (Get-Phase10DedicatedTenantDatabaseMap)) {
+        $variableName = "DedicatedTenantConnectionStrings__{0}" -f $dedicatedTenant.TenantCode
+        [Environment]::SetEnvironmentVariable($variableName, $dedicatedTenant.ConnectionString)
+    }
+}
+
+function Restore-Phase10DedicatedTenantEnvironmentState {
+    param([hashtable] $State)
+
+    foreach ($entry in $State.GetEnumerator()) {
+        [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value)
+    }
+}
+
+function Convert-Phase10SqlRows {
+    param([string[]] $Rows)
+
+    return @(
+        $Rows |
+            ForEach-Object { $_.ToString().Trim() } |
+            Where-Object {
+                -not [string]::IsNullOrWhiteSpace($_) -and
+                $_ -notmatch '^\(\d+ rows? affected\)$'
+            }
     )
+}
+
+function Get-Phase10ActiveTenantTopology {
+    $dedicatedByTenant = @{}
+    foreach ($dedicatedTenant in (Get-Phase10DedicatedTenantDatabaseMap)) {
+        $dedicatedByTenant[$dedicatedTenant.TenantCode] = $dedicatedTenant
+    }
+
+    $rows = Convert-Phase10SqlRows -Rows @(
+        Invoke-Phase10SqlCmdInComposeContainer -Database 'OrderProcessingSystem_Dev' -Query @"
+SELECT
+    [Code],
+    ISNULL([Status], ''),
+    ISNULL([TenantTier], ''),
+    ISNULL([PaymentProviderCode], '')
+FROM [dbo].[Tenants]
+WHERE ISNULL([Status], '') = 'Active'
+ORDER BY [Code];
+"@
+    )
+
+    $topology = @()
+    foreach ($row in $rows) {
+        $parts = $row -split '\s+', 4
+        if ($parts.Count -lt 4) {
+            throw "Could not parse active tenant topology row: '$row'"
+        }
+
+        $tenantCode = $parts[0]
+        $tenantStatus = $parts[1]
+        $tenantTier = $parts[2]
+        $providerCode = $parts[3]
+
+        if ([string]::IsNullOrWhiteSpace($providerCode)) {
+            throw "Active tenant '$tenantCode' is missing PaymentProviderCode in OrderProcessingSystem_Dev."
+        }
+
+        $databaseName = 'OrderProcessingSystem_Dev'
+        if ($tenantTier -eq 'Dedicated') {
+            if (-not $dedicatedByTenant.ContainsKey($tenantCode)) {
+                throw "Active dedicated tenant '$tenantCode' does not have a DedicatedTenantConnectionStrings entry in compose/docker-compose.phase10.yml."
+            }
+
+            $databaseName = $dedicatedByTenant[$tenantCode].DatabaseName
+        }
+
+        $topology += [pscustomobject]@{
+            TenantCode = $tenantCode
+            Status = $tenantStatus
+            TenantTier = $tenantTier
+            PaymentProviderCode = $providerCode
+            Database = $databaseName
+        }
+    }
+
+    return @($topology)
+}
+
+function Escape-SqlLiteral {
+    param([string] $Value)
+
+    if ($null -eq $Value) {
+        return ''
+    }
+
+    return $Value.Replace("'", "''")
 }
 
 function Get-LatestPhase10MigrationId {
@@ -272,14 +432,14 @@ function Invoke-Phase10EfDatabaseUpdate {
         'ASPNETCORE_ENVIRONMENT' = [Environment]::GetEnvironmentVariable('ASPNETCORE_ENVIRONMENT')
         'ConnectionStrings__OrderProcessingSystemDbConnection' = [Environment]::GetEnvironmentVariable('ConnectionStrings__OrderProcessingSystemDbConnection')
         'ConnectionStrings__TenantRegistryDbConnection' = [Environment]::GetEnvironmentVariable('ConnectionStrings__TenantRegistryDbConnection')
-        'DedicatedTenantConnectionStrings__TenantC' = [Environment]::GetEnvironmentVariable('DedicatedTenantConnectionStrings__TenantC')
     }
+    $dedicatedState = Get-Phase10DedicatedTenantEnvironmentState
 
     try {
         [Environment]::SetEnvironmentVariable('ASPNETCORE_ENVIRONMENT', 'Development')
         [Environment]::SetEnvironmentVariable('ConnectionStrings__OrderProcessingSystemDbConnection', $databaseConnectionString)
         [Environment]::SetEnvironmentVariable('ConnectionStrings__TenantRegistryDbConnection', $databaseConnectionString)
-        [Environment]::SetEnvironmentVariable('DedicatedTenantConnectionStrings__TenantC', "Server=localhost,1433;Database=OrderProcessingSystem_TenantC_Dev;User Id=sa;Password=$localSqlPassword;Encrypt=False;TrustServerCertificate=True;MultipleActiveResultSets=true;")
+        Set-Phase10DedicatedTenantEnvironmentState
 
         for ($attempt = 1; $attempt -le 5; $attempt++) {
             $attemptLogPath = Join-Path $logRoot "ef-update-$DatabaseName-attempt-$attempt.log"
@@ -332,6 +492,7 @@ END
         foreach ($entry in $previousValues.GetEnumerator()) {
             [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value)
         }
+        Restore-Phase10DedicatedTenantEnvironmentState -State $dedicatedState
     }
 }
 
@@ -372,8 +533,7 @@ function Invoke-Phase10SampleDataSeed {
     New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
     $seedLogPath = Join-Path $logRoot 'phase10-seed-bootstrap.log'
 
-    $defaultConnectionString = "Server=localhost,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=$localSqlPassword;Encrypt=False;TrustServerCertificate=True;MultipleActiveResultSets=true;"
-    $dedicatedTenantConnectionString = "Server=localhost,1433;Database=OrderProcessingSystem_TenantC_Dev;User Id=sa;Password=$localSqlPassword;Encrypt=False;TrustServerCertificate=True;MultipleActiveResultSets=true;"
+    $defaultConnectionString = New-LocalSqlConnectionString -DatabaseName 'OrderProcessingSystem_Dev'
     $registryConnectionString = $defaultConnectionString
 
     $previousValues = @{
@@ -386,8 +546,8 @@ function Invoke-Phase10SampleDataSeed {
         'Phase10__DisableStartupDdl' = [Environment]::GetEnvironmentVariable('Phase10__DisableStartupDdl')
         'ConnectionStrings__OrderProcessingSystemDbConnection' = [Environment]::GetEnvironmentVariable('ConnectionStrings__OrderProcessingSystemDbConnection')
         'ConnectionStrings__TenantRegistryDbConnection' = [Environment]::GetEnvironmentVariable('ConnectionStrings__TenantRegistryDbConnection')
-        'DedicatedTenantConnectionStrings__TenantC' = [Environment]::GetEnvironmentVariable('DedicatedTenantConnectionStrings__TenantC')
     }
+    $dedicatedState = Get-Phase10DedicatedTenantEnvironmentState
 
     try {
         [Environment]::SetEnvironmentVariable('ASPNETCORE_ENVIRONMENT', 'Development')
@@ -399,7 +559,7 @@ function Invoke-Phase10SampleDataSeed {
         [Environment]::SetEnvironmentVariable('Phase10__DisableStartupDdl', 'true')
         [Environment]::SetEnvironmentVariable('ConnectionStrings__OrderProcessingSystemDbConnection', $defaultConnectionString)
         [Environment]::SetEnvironmentVariable('ConnectionStrings__TenantRegistryDbConnection', $registryConnectionString)
-        [Environment]::SetEnvironmentVariable('DedicatedTenantConnectionStrings__TenantC', $dedicatedTenantConnectionString)
+        Set-Phase10DedicatedTenantEnvironmentState
 
         $output = & dotnet run --project 'XYDataLabs.OrderProcessingSystem.API' --no-launch-profile -- --phase10-bootstrap-seed-only 2>&1
         $exitCode = $LASTEXITCODE
@@ -416,6 +576,7 @@ function Invoke-Phase10SampleDataSeed {
         foreach ($entry in $previousValues.GetEnumerator()) {
             [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value)
         }
+        Restore-Phase10DedicatedTenantEnvironmentState -State $dedicatedState
     }
 }
 
@@ -423,125 +584,57 @@ function Ensure-Phase10SqlSampleDataBaseline {
     Write-Host 'Ensuring Phase 10 SQL sample data baseline...' -ForegroundColor Cyan
     Write-ProgressMessage 'Ensuring Phase 10 SQL sample data baseline.'
 
-    $sharedDatabaseQuery = @"
+    foreach ($tenant in (Get-Phase10ActiveTenantTopology)) {
+        $tenantCodeSql = Escape-SqlLiteral -Value $tenant.TenantCode
+        $providerCodeSql = Escape-SqlLiteral -Value $tenant.PaymentProviderCode
+        $tenantTierSql = Escape-SqlLiteral -Value $tenant.TenantTier
+        $tenantSlug = ($tenant.TenantCode.ToLowerInvariant() -replace '[^a-z0-9]+', '')
+        $sampleQuery = @"
 DECLARE @tenantId int;
 
 SELECT @tenantId = [Id]
 FROM [dbo].[Tenants]
-WHERE [Code] = N'TenantA';
+WHERE [Code] = N'$tenantCodeSql';
 
-IF @tenantId IS NOT NULL
+IF @tenantId IS NULL
 BEGIN
-    UPDATE [dbo].[Tenants]
-    SET [Status] = N'Active',
-        [TenantTier] = N'SharedPool',
-        [PaymentProviderCode] = N'Razorpay'
-    WHERE [Id] = @tenantId
-      AND (
-        ISNULL([Status], N'') <> N'Active'
-        OR ISNULL([TenantTier], N'') <> N'SharedPool'
-        OR ISNULL([PaymentProviderCode], N'') <> N'Razorpay'
-      );
-
-    IF NOT EXISTS (SELECT 1 FROM [orders].[Customers] WHERE [TenantId] = @tenantId)
-    BEGIN
-        INSERT INTO [orders].[Customers] ([Name], [Email], [TenantId], [CreatedBy], [CreatedDate])
-        VALUES
-            (N'TenantA Sample Customer 1', N'tenanta.sample.1@example.test', @tenantId, 1, SYSUTCDATETIME()),
-            (N'TenantA Sample Customer 2', N'tenanta.sample.2@example.test', @tenantId, 1, SYSUTCDATETIME()),
-            (N'TenantA Sample Customer 3', N'tenanta.sample.3@example.test', @tenantId, 1, SYSUTCDATETIME());
-    END;
-
-    IF NOT EXISTS (SELECT 1 FROM [inventory].[Products] WHERE [TenantId] = @tenantId)
-    BEGIN
-        INSERT INTO [inventory].[Products] ([Name], [Description], [Price], [TenantId], [CreatedBy], [CreatedDate])
-        VALUES
-            (N'TenantA Laptop', N'Sample laptop for TenantA', 500.00, @tenantId, 1, SYSUTCDATETIME()),
-            (N'TenantA Phone', N'Sample phone for TenantA', 300.00, @tenantId, 1, SYSUTCDATETIME()),
-            (N'TenantA Headphones', N'Sample headphones for TenantA', 200.00, @tenantId, 1, SYSUTCDATETIME());
-    END;
+    THROW 51000, N'Tenant row missing for $tenantCodeSql.', 1;
 END;
 
-SET @tenantId = NULL;
-SELECT @tenantId = [Id]
-FROM [dbo].[Tenants]
-WHERE [Code] = N'TenantB';
+UPDATE [dbo].[Tenants]
+SET [Status] = N'Active',
+    [TenantTier] = N'$tenantTierSql',
+    [PaymentProviderCode] = N'$providerCodeSql'
+WHERE [Id] = @tenantId
+  AND (
+    ISNULL([Status], N'') <> N'Active'
+    OR ISNULL([TenantTier], N'') <> N'$tenantTierSql'
+    OR ISNULL([PaymentProviderCode], N'') <> N'$providerCodeSql'
+  );
 
-IF @tenantId IS NOT NULL
+IF NOT EXISTS (SELECT 1 FROM [orders].[Customers] WHERE [TenantId] = @tenantId)
 BEGIN
-    UPDATE [dbo].[Tenants]
-    SET [Status] = N'Active',
-        [TenantTier] = N'SharedPool',
-        [PaymentProviderCode] = N'Razorpay'
-    WHERE [Id] = @tenantId
-      AND (
-        ISNULL([Status], N'') <> N'Active'
-        OR ISNULL([TenantTier], N'') <> N'SharedPool'
-        OR ISNULL([PaymentProviderCode], N'') <> N'Razorpay'
-      );
+    INSERT INTO [orders].[Customers] ([Name], [Email], [TenantId], [CreatedBy], [CreatedDate])
+    VALUES
+        (N'$tenantCodeSql Sample Customer 1', N'$tenantSlug.sample.1@example.test', @tenantId, 1, SYSUTCDATETIME()),
+        (N'$tenantCodeSql Sample Customer 2', N'$tenantSlug.sample.2@example.test', @tenantId, 1, SYSUTCDATETIME()),
+        (N'$tenantCodeSql Sample Customer 3', N'$tenantSlug.sample.3@example.test', @tenantId, 1, SYSUTCDATETIME());
+END;
 
-    IF NOT EXISTS (SELECT 1 FROM [orders].[Customers] WHERE [TenantId] = @tenantId)
-    BEGIN
-        INSERT INTO [orders].[Customers] ([Name], [Email], [TenantId], [CreatedBy], [CreatedDate])
-        VALUES
-            (N'TenantB Sample Customer 1', N'tenantb.sample.1@example.test', @tenantId, 1, SYSUTCDATETIME()),
-            (N'TenantB Sample Customer 2', N'tenantb.sample.2@example.test', @tenantId, 1, SYSUTCDATETIME()),
-            (N'TenantB Sample Customer 3', N'tenantb.sample.3@example.test', @tenantId, 1, SYSUTCDATETIME());
-    END;
-
-    IF NOT EXISTS (SELECT 1 FROM [inventory].[Products] WHERE [TenantId] = @tenantId)
-    BEGIN
-        INSERT INTO [inventory].[Products] ([Name], [Description], [Price], [TenantId], [CreatedBy], [CreatedDate])
-        VALUES
-            (N'TenantB Laptop', N'Sample laptop for TenantB', 500.00, @tenantId, 1, SYSUTCDATETIME()),
-            (N'TenantB Phone', N'Sample phone for TenantB', 300.00, @tenantId, 1, SYSUTCDATETIME()),
-            (N'TenantB Headphones', N'Sample headphones for TenantB', 200.00, @tenantId, 1, SYSUTCDATETIME());
-    END;
+IF NOT EXISTS (SELECT 1 FROM [inventory].[Products] WHERE [TenantId] = @tenantId)
+BEGIN
+    INSERT INTO [inventory].[Products] ([Name], [Description], [Price], [TenantId], [CreatedBy], [CreatedDate])
+    VALUES
+        (N'$tenantCodeSql Laptop', N'Sample laptop for $tenantCodeSql', 500.00, @tenantId, 1, SYSUTCDATETIME()),
+        (N'$tenantCodeSql Phone', N'Sample phone for $tenantCodeSql', 300.00, @tenantId, 1, SYSUTCDATETIME()),
+        (N'$tenantCodeSql Headphones', N'Sample headphones for $tenantCodeSql', 200.00, @tenantId, 1, SYSUTCDATETIME());
 END;
 "@
 
-    $dedicatedDatabaseQuery = @"
-DECLARE @tenantId int;
+        Invoke-Phase10SqlCmdInComposeContainer -Database $tenant.Database -Query $sampleQuery | Out-Null
+        Write-ProgressMessage "Ensured SQL sample data baseline for $($tenant.TenantCode) in $($tenant.Database)"
+    }
 
-SELECT @tenantId = [Id]
-FROM [dbo].[Tenants]
-WHERE [Code] = N'TenantC';
-
-IF @tenantId IS NOT NULL
-BEGIN
-    UPDATE [dbo].[Tenants]
-    SET [Status] = N'Active',
-        [TenantTier] = N'Dedicated',
-        [PaymentProviderCode] = N'OpenPay'
-    WHERE [Id] = @tenantId
-      AND (
-        ISNULL([Status], N'') <> N'Active'
-        OR ISNULL([TenantTier], N'') <> N'Dedicated'
-        OR ISNULL([PaymentProviderCode], N'') <> N'OpenPay'
-      );
-
-    IF NOT EXISTS (SELECT 1 FROM [orders].[Customers] WHERE [TenantId] = @tenantId)
-    BEGIN
-        INSERT INTO [orders].[Customers] ([Name], [Email], [TenantId], [CreatedBy], [CreatedDate])
-        VALUES
-            (N'TenantC Sample Customer 1', N'tenantc.sample.1@example.test', @tenantId, 1, SYSUTCDATETIME()),
-            (N'TenantC Sample Customer 2', N'tenantc.sample.2@example.test', @tenantId, 1, SYSUTCDATETIME()),
-            (N'TenantC Sample Customer 3', N'tenantc.sample.3@example.test', @tenantId, 1, SYSUTCDATETIME());
-    END;
-
-    IF NOT EXISTS (SELECT 1 FROM [inventory].[Products] WHERE [TenantId] = @tenantId)
-    BEGIN
-        INSERT INTO [inventory].[Products] ([Name], [Description], [Price], [TenantId], [CreatedBy], [CreatedDate])
-        VALUES
-            (N'TenantC Laptop', N'Sample laptop for TenantC', 500.00, @tenantId, 1, SYSUTCDATETIME()),
-            (N'TenantC Phone', N'Sample phone for TenantC', 300.00, @tenantId, 1, SYSUTCDATETIME()),
-            (N'TenantC Headphones', N'Sample headphones for TenantC', 200.00, @tenantId, 1, SYSUTCDATETIME());
-    END;
-END;
-"@
-
-    Invoke-Phase10SqlCmdInComposeContainer -Database 'OrderProcessingSystem_Dev' -Query $sharedDatabaseQuery | Out-Null
-    Invoke-Phase10SqlCmdInComposeContainer -Database 'OrderProcessingSystem_TenantC_Dev' -Query $dedicatedDatabaseQuery | Out-Null
     Write-ProgressMessage 'Completed Phase 10 SQL sample data baseline.'
 }
 
@@ -558,14 +651,17 @@ function Assert-Phase10DatabaseAzureParity {
         Write-ProgressMessage "Verified latest migration for ${databaseName}: $appliedMigration"
     }
 
-    $providerChecks = @(
-        [pscustomobject]@{ Database = 'OrderProcessingSystem_Dev'; TenantCode = 'TenantA'; ProviderType = 'Razorpay' },
-        [pscustomobject]@{ Database = 'OrderProcessingSystem_Dev'; TenantCode = 'TenantA'; ProviderType = 'OpenPay' },
-        [pscustomobject]@{ Database = 'OrderProcessingSystem_Dev'; TenantCode = 'TenantB'; ProviderType = 'Razorpay' },
-        [pscustomobject]@{ Database = 'OrderProcessingSystem_Dev'; TenantCode = 'TenantB'; ProviderType = 'OpenPay' },
-        [pscustomobject]@{ Database = 'OrderProcessingSystem_TenantC_Dev'; TenantCode = 'TenantC'; ProviderType = 'Razorpay' },
-        [pscustomobject]@{ Database = 'OrderProcessingSystem_TenantC_Dev'; TenantCode = 'TenantC'; ProviderType = 'OpenPay' }
-    )
+    $activeTopology = @(Get-Phase10ActiveTenantTopology)
+    $providerChecks = @()
+    foreach ($tenant in $activeTopology) {
+        foreach ($providerType in @('Razorpay', 'OpenPay')) {
+            $providerChecks += [pscustomobject]@{
+                Database = $tenant.Database
+                TenantCode = $tenant.TenantCode
+                ProviderType = $providerType
+            }
+        }
+    }
 
     foreach ($check in $providerChecks) {
         $query = @"
@@ -587,9 +683,15 @@ WHERE t.[Code] = '$($check.TenantCode)'
     }
 
     $tenantRoutingChecks = @(
-        [pscustomobject]@{ Database = 'OrderProcessingSystem_Dev'; TenantCode = 'TenantA'; ExpectedProvider = 'Razorpay'; ExpectedStatus = 'Active'; ExpectedTier = 'SharedPool' },
-        [pscustomobject]@{ Database = 'OrderProcessingSystem_Dev'; TenantCode = 'TenantB'; ExpectedProvider = 'Razorpay'; ExpectedStatus = 'Active'; ExpectedTier = 'SharedPool' },
-        [pscustomobject]@{ Database = 'OrderProcessingSystem_TenantC_Dev'; TenantCode = 'TenantC'; ExpectedProvider = 'OpenPay'; ExpectedStatus = 'Active'; ExpectedTier = 'Dedicated' }
+        $activeTopology | ForEach-Object {
+            [pscustomobject]@{
+                Database = $_.Database
+                TenantCode = $_.TenantCode
+                ExpectedProvider = $_.PaymentProviderCode
+                ExpectedStatus = $_.Status
+                ExpectedTier = $_.TenantTier
+            }
+        }
     )
 
     foreach ($check in $tenantRoutingChecks) {
@@ -601,12 +703,7 @@ SELECT TOP (1)
 FROM [dbo].[Tenants]
 WHERE [Code] = '$($check.TenantCode)';
 "@
-        $tenantRow = @(Invoke-Phase10SqlCmdInComposeContainer -Database $check.Database -Query $query) |
-            ForEach-Object { $_.ToString().Trim() } |
-            Where-Object {
-                -not [string]::IsNullOrWhiteSpace($_) -and
-                $_ -notmatch '^\(\d+ rows? affected\)$'
-            } |
+        $tenantRow = @(Convert-Phase10SqlRows -Rows @(Invoke-Phase10SqlCmdInComposeContainer -Database $check.Database -Query $query)) |
             Select-Object -Last 1
 
         if ([string]::IsNullOrWhiteSpace($tenantRow)) {
@@ -634,9 +731,13 @@ WHERE [Code] = '$($check.TenantCode)';
     }
 
     $productSeedChecks = @(
-        [pscustomobject]@{ Database = 'OrderProcessingSystem_Dev'; TenantCode = 'TenantA'; MinimumProductCount = 1 },
-        [pscustomobject]@{ Database = 'OrderProcessingSystem_Dev'; TenantCode = 'TenantB'; MinimumProductCount = 1 },
-        [pscustomobject]@{ Database = 'OrderProcessingSystem_TenantC_Dev'; TenantCode = 'TenantC'; MinimumProductCount = 1 }
+        $activeTopology | ForEach-Object {
+            [pscustomobject]@{
+                Database = $_.Database
+                TenantCode = $_.TenantCode
+                MinimumProductCount = 1
+            }
+        }
     )
 
     foreach ($check in $productSeedChecks) {

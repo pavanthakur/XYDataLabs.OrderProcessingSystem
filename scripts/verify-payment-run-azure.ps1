@@ -5,7 +5,8 @@
 
 .DESCRIPTION
     Queries API and UI traces from Application Insights, resolves a logical run prefix,
-    reads the payment state from the shared and TenantC dedicated Azure SQL databases,
+    discovers active tenant topology from the deployed registry and Key Vault contracts,
+    reads the payment state from the shared and resolved dedicated Azure SQL databases,
     and emits a consolidated pass/fail report.
 
     This script is the deterministic Azure rerun path for the manual
@@ -71,22 +72,18 @@ $appInsightsName = "ai-orderprocessing-$envSuffix"
 $keyVaultName = "kv-orderprocessing-$envSuffix"
 $sqlServerName = "orderprocessing-sql-$envSuffix"
 $sqlServerFqdn = "$sqlServerName.database.windows.net"
+$supportedTenantTiers = @('SharedPool', 'Dedicated')
+$supportedProviders = @('OpenPay', 'Razorpay')
 $sharedDbName = switch ($logicalEnvironment) {
     'dev' { 'OrderProcessingSystem_Dev' }
     'staging' { 'OrderProcessingSystem_Staging' }
     'prod' { 'OrderProcessingSystem_Prod' }
 }
-$tenantCDbName = switch ($logicalEnvironment) {
-    'dev' { 'OrderProcessingSystem_TenantC_Dev' }
-    'staging' { 'OrderProcessingSystem_TenantC_Staging' }
-    'prod' { 'OrderProcessingSystem_TenantC_Prod' }
-}
 
 function Assert-AzureRuntimeDbContract {
     param(
         [Parameter(Mandatory = $true)][string]$Environment,
-        [Parameter(Mandatory = $true)][string]$SharedDbName,
-        [Parameter(Mandatory = $true)][string]$TenantCDbName
+        [Parameter(Mandatory = $true)][string]$SharedDbName
     )
 
     $expectedShared = switch ($Environment) {
@@ -95,18 +92,12 @@ function Assert-AzureRuntimeDbContract {
         'prod' { 'OrderProcessingSystem_Prod' }
     }
 
-    $expectedTenantC = switch ($Environment) {
-        'dev' { 'OrderProcessingSystem_TenantC_Dev' }
-        'staging' { 'OrderProcessingSystem_TenantC_Staging' }
-        'prod' { 'OrderProcessingSystem_TenantC_Prod' }
-    }
-
-    if ($SharedDbName -ne $expectedShared -or $TenantCDbName -ne $expectedTenantC) {
-        throw "Azure runtime/db-name mismatch. Environment=$Environment SharedDbName=$SharedDbName TenantCDbName=$TenantCDbName ExpectedShared=$expectedShared ExpectedTenantC=$expectedTenantC"
+    if ($SharedDbName -ne $expectedShared) {
+        throw "Azure runtime/db-name mismatch. Environment=$Environment SharedDbName=$SharedDbName ExpectedShared=$expectedShared"
     }
 }
 
-Assert-AzureRuntimeDbContract -Environment $logicalEnvironment -SharedDbName $sharedDbName -TenantCDbName $tenantCDbName
+Assert-AzureRuntimeDbContract -Environment $logicalEnvironment -SharedDbName $sharedDbName
 
 function Write-Step {
     param([string] $Message)
@@ -469,6 +460,125 @@ function Convert-CheckResult {
     }
 }
 
+function Resolve-DatabaseNameFromConnectionString {
+    param([Parameter(Mandatory = $true)][string]$ConnectionString)
+
+    $match = [regex]::Match($ConnectionString, '(?i)(?:Initial\s+Catalog|Database)\s*=\s*([^;]+)')
+    if (-not $match.Success) {
+        throw "Connection string does not contain an Initial Catalog/Database segment."
+    }
+
+    return $match.Groups[1].Value.Trim()
+}
+
+function Convert-HashtableToObject {
+    param([Parameter(Mandatory = $true)][hashtable]$Table)
+
+    $ordered = [ordered]@{}
+    foreach ($key in ($Table.Keys | Sort-Object)) {
+        $ordered[$key] = $Table[$key]
+    }
+
+    return [PSCustomObject]$ordered
+}
+
+function Get-AzureTenantTopology {
+    param(
+        [Parameter(Mandatory = $true)][string]$SqlAdminUser,
+        [Parameter(Mandatory = $true)][string]$SqlAdminPassword
+    )
+
+    $registryRows = @(Invoke-AzureSqlQuery -Database $sharedDbName -UserName $SqlAdminUser -Password $SqlAdminPassword -Query @"
+SELECT
+    [Id] AS TenantId,
+    [Code] AS TenantCode,
+    [Name] AS TenantName,
+    [Status] AS TenantStatus,
+    [TenantTier] AS TenantTier,
+    [PaymentProviderCode] AS PaymentProviderCode
+FROM [dbo].[Tenants]
+WHERE [Status] = 'Active'
+ORDER BY [Code];
+"@)
+
+    if ($registryRows.Count -eq 0) {
+        throw "The Azure tenant registry in '$sharedDbName' returned no active tenants."
+    }
+
+    $topology = New-Object 'System.Collections.Generic.List[object]'
+    $seenTenants = @{}
+    foreach ($row in $registryRows) {
+        $tenantCode = [string](Get-ObjectPropertyValue -Object $row -PropertyName 'TenantCode')
+        $tenantStatus = [string](Get-ObjectPropertyValue -Object $row -PropertyName 'TenantStatus')
+        $tenantTier = [string](Get-ObjectPropertyValue -Object $row -PropertyName 'TenantTier')
+        $providerCode = [string](Get-ObjectPropertyValue -Object $row -PropertyName 'PaymentProviderCode')
+        $tenantId = [int](Get-ObjectPropertyValue -Object $row -PropertyName 'TenantId')
+
+        if ([string]::IsNullOrWhiteSpace($tenantCode)) {
+            throw 'Tenant registry contract failure: an active Azure tenant is missing TenantCode.'
+        }
+
+        if ($seenTenants.ContainsKey($tenantCode)) {
+            throw "Tenant registry contract failure: duplicate active tenant '$tenantCode' was returned."
+        }
+        $seenTenants[$tenantCode] = $true
+
+        if ($tenantStatus -ne 'Active') {
+            throw "Tenant registry contract failure: inactive tenant '$tenantCode' appeared in the execution catalog."
+        }
+
+        if ([string]::IsNullOrWhiteSpace($tenantTier) -or $supportedTenantTiers -notcontains $tenantTier) {
+            throw "Tenant registry contract failure: tenant '$tenantCode' has unsupported TenantTier '$tenantTier'."
+        }
+
+        if ([string]::IsNullOrWhiteSpace($providerCode)) {
+            throw "Tenant registry contract failure: tenant '$tenantCode' has missing paymentProviderCode."
+        }
+
+        if ($supportedProviders -notcontains $providerCode) {
+            throw "Tenant registry contract failure: tenant '$tenantCode' has unsupported paymentProviderCode '$providerCode'."
+        }
+
+        $dedicatedSecretName = $null
+        $dedicatedDatabaseName = $null
+        if ($tenantTier -eq 'Dedicated') {
+            $dedicatedSecretName = "DedicatedTenantConnectionStrings--$tenantCode"
+            $dedicatedConnectionString = Invoke-AzureCliText -Operation "Resolve $dedicatedSecretName from Key Vault" -Command {
+                az keyvault secret show --vault-name $keyVaultName --name $dedicatedSecretName --query value -o tsv
+            }
+
+            if ([string]::IsNullOrWhiteSpace($dedicatedConnectionString)) {
+                throw "Tenant registry contract failure: dedicated tenant '$tenantCode' is missing Key Vault secret '$dedicatedSecretName'."
+            }
+
+            $dedicatedDatabaseName = Resolve-DatabaseNameFromConnectionString -ConnectionString $dedicatedConnectionString
+        }
+
+        $providerPrivateKeyAlias = "PaymentProviders--$tenantCode--$providerCode--PrivateKey"
+        $providerPrivateKeyValue = Invoke-AzureCliText -Operation "Resolve $providerPrivateKeyAlias from Key Vault" -Command {
+            az keyvault secret show --vault-name $keyVaultName --name $providerPrivateKeyAlias --query value -o tsv
+        }
+
+        if ([string]::IsNullOrWhiteSpace($providerPrivateKeyValue)) {
+            throw "Tenant registry contract failure: active tenant/provider mapping '$tenantCode/$providerCode' is missing Key Vault secret '$providerPrivateKeyAlias'."
+        }
+
+        $topology.Add([PSCustomObject]@{
+                TenantId = $tenantId
+                TenantCode = $tenantCode
+                Active = $true
+                TenantTier = $tenantTier
+                PaymentProviderCode = $providerCode
+                DedicatedDatabaseName = $dedicatedDatabaseName
+                DedicatedConnectionSecret = $dedicatedSecretName
+                ProviderPrivateKeyAlias = $providerPrivateKeyAlias
+                ContractStatus = 'validated'
+            })
+    }
+
+    return @($topology)
+}
+
 Write-Step "Resolving Azure resources and credentials for $Environment"
 $sqlAdminUser = Invoke-AzureCliText -Operation 'Resolve SQL administrator login' -Command {
     az sql server show --name $sqlServerName --resource-group $resourceGroup --query administratorLogin -o tsv
@@ -495,6 +605,12 @@ if ($PreQueryDelaySeconds -gt 0) {
     Write-Step "Waiting $PreQueryDelaySeconds seconds for App Insights telemetry ingestion..."
     Start-Sleep -Seconds $PreQueryDelaySeconds
 }
+
+$tenantTopology = @(Get-AzureTenantTopology -SqlAdminUser $sqlAdminUser -SqlAdminPassword $sqlAdminPassword)
+$sharedTenants = @($tenantTopology | Where-Object TenantTier -eq 'SharedPool')
+$dedicatedTenants = @($tenantTopology | Where-Object TenantTier -eq 'Dedicated')
+$sharedTenantCodes = @($sharedTenants | ForEach-Object { $_.TenantCode })
+$dedicatedTenantCodes = @($dedicatedTenants | ForEach-Object { $_.TenantCode })
 
 Write-Step "Querying App Insights API telemetry"
 $apiQuery = @"
@@ -720,10 +836,14 @@ JOIN dbo.Tenants t ON t.Id = pp.TenantId
 ORDER BY pp.TenantId;
 "@
 
-$preflightTenantC = Invoke-AzureSqlQuery -Database $tenantCDbName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
-SELECT pp.TenantId, pp.Use3DSecure AS ThreeDSEnabled
+$preflightTenantC = @(
+    foreach ($tenant in $dedicatedTenants) {
+        Invoke-AzureSqlQuery -Database $tenant.DedicatedDatabaseName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
+SELECT '$($tenant.TenantCode)' AS Tenant, pp.Use3DSecure AS ThreeDSEnabled
 FROM payments.PaymentProviders pp;
 "@
+    }
+)
 
 $q2Shared = Invoke-AzureSqlQuery -Database $sharedDbName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
 SELECT t.Code AS Tenant, ct.CustomerOrderId, ct.TransactionId AS ChargeId,
@@ -747,42 +867,50 @@ WHERE ct.CustomerOrderId LIKE '$selectedRunPrefix%'
 ORDER BY ct.TenantId, ct.CustomerOrderId, ct.Id, tsh.Id;
 "@
 
-$q8Shared = Invoke-AzureSqlQuery -Database $sharedDbName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
-SELECT ct.CustomerOrderId, ct.TenantId, t.Code
-FROM payments.CardTransactions ct
-JOIN dbo.Tenants t ON t.Id = ct.TenantId
-WHERE ct.CustomerOrderId LIKE '$selectedRunPrefix%'
-  AND ((ct.CustomerOrderId LIKE '%-tA-%' AND ct.TenantId <> 1)
-    OR (ct.CustomerOrderId LIKE '%-tB-%' AND ct.TenantId <> 2));
-"@
+$q8Shared = @()
 
-$q2TenantC = Invoke-AzureSqlQuery -Database $tenantCDbName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
-SELECT ct.CustomerOrderId, ct.TransactionId AS ChargeId,
+$q2TenantC = @(
+    foreach ($tenant in $dedicatedTenants) {
+        Invoke-AzureSqlQuery -Database $tenant.DedicatedDatabaseName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
+SELECT '$($tenant.TenantCode)' AS Tenant, ct.CustomerOrderId, ct.TransactionId AS ChargeId,
        ct.TransactionStatus AS Status, ct.IsThreeDSecureEnabled AS ThreeDS,
        ct.ThreeDSecureStage, ct.TransactionReferenceId AS Ref,
        ct.IsTransactionSuccess AS OK, ct.CreatedDate
 FROM payments.CardTransactions ct
-WHERE ct.TenantId = 3
-  AND ct.CustomerOrderId LIKE '$selectedRunPrefix%'
+WHERE ct.CustomerOrderId LIKE '$selectedRunPrefix%'
 ORDER BY ct.CustomerOrderId, ct.Id;
 "@
+    }
+)
 
-$q5TenantC = Invoke-AzureSqlQuery -Database $tenantCDbName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
-SELECT ct.CustomerOrderId, tsh.Status, tsh.ThreeDSecureStage AS Stage,
+$q5TenantC = @(
+    foreach ($tenant in $dedicatedTenants) {
+        Invoke-AzureSqlQuery -Database $tenant.DedicatedDatabaseName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
+SELECT '$($tenant.TenantCode)' AS Tenant, ct.CustomerOrderId, tsh.Status, tsh.ThreeDSecureStage AS Stage,
        tsh.IsThreeDSecureEnabled AS ThreeDS, tsh.TransactionReferenceId AS Ref
 FROM payments.TransactionStatusHistories tsh
 JOIN payments.CardTransactions ct ON ct.Id = tsh.TransactionId
-WHERE ct.TenantId = 3
-  AND ct.CustomerOrderId LIKE '$selectedRunPrefix%'
+WHERE ct.CustomerOrderId LIKE '$selectedRunPrefix%'
 ORDER BY ct.CustomerOrderId, ct.Id, tsh.Id;
 "@
+    }
+)
 
-$q9Shared = Invoke-AzureSqlQuery -Database $sharedDbName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
-SELECT ct.CustomerOrderId, ct.TenantId
-FROM payments.CardTransactions ct
-WHERE ct.TenantId = 3
-  AND ct.CustomerOrderId LIKE '$selectedRunPrefix%';
-"@
+$q9Shared = @(
+    $q2Shared |
+        Where-Object {
+            $tenantCode = [string](Get-ObjectPropertyValue -Object $_ -PropertyName 'Tenant')
+            $dedicatedTenantCodes -contains $tenantCode
+        }
+)
+
+$q8Shared = @(
+    $q2Shared |
+        Where-Object {
+            $tenantCode = [string](Get-ObjectPropertyValue -Object $_ -PropertyName 'Tenant')
+            $sharedTenantCodes.Count -gt 0 -and ($sharedTenantCodes -notcontains $tenantCode)
+        }
+)
 
 $threeDsByTenant = @{}
 foreach ($row in $preflightShared) {
@@ -796,18 +924,21 @@ foreach ($row in $preflightShared) {
     $threeDsByTenant[$tenantCode] = [int] $threeDsValue
 }
 
-foreach ($tenantCode in @('TenantA', 'TenantB')) {
-    if (-not $threeDsByTenant.ContainsKey($tenantCode)) {
-        throw "Shared payment-provider baseline is missing for $tenantCode in database '$sharedDbName'. Run 01 Phase 10 Azure Deploy Orchestrator so migrations seed the baseline before payment verification."
+foreach ($tenantRow in $preflightTenantC) {
+    $tenantCode = [string](Get-ObjectPropertyValue -Object $tenantRow -PropertyName 'Tenant')
+    $threeDsValue = Get-ObjectPropertyValue -Object $tenantRow -PropertyName 'ThreeDSEnabled'
+    if ([string]::IsNullOrWhiteSpace($tenantCode) -or $null -eq $threeDsValue) {
+        throw 'Dedicated payment-provider preflight returned an invalid row. Expected columns: Tenant, ThreeDSEnabled.'
     }
+
+    $threeDsByTenant[$tenantCode] = [int]$threeDsValue
 }
 
-$tenantCPreflightRow = $preflightTenantC | Select-Object -First 1
-$tenantCThreeDs = Get-ObjectPropertyValue -Object $tenantCPreflightRow -PropertyName 'ThreeDSEnabled'
-if ($null -eq $tenantCThreeDs) {
-    throw "TenantC payment-provider baseline is missing in dedicated database '$tenantCDbName'. Run 01 Phase 10 Azure Deploy Orchestrator so migrations seed the baseline before payment verification."
+foreach ($tenant in $tenantTopology) {
+    if (-not $threeDsByTenant.ContainsKey($tenant.TenantCode)) {
+        throw "Payment-provider baseline is missing for active tenant '$($tenant.TenantCode)' in its resolved database contract."
+    }
 }
-$threeDsByTenant['TenantC'] = [int] $tenantCThreeDs
 
 $expectedOrdersByTenant = @{}
 foreach ($tenantGroup in ($selectedApiEvents | Where-Object { -not [string]::IsNullOrWhiteSpace($_.ResolvedCustomerOrderId) } | Group-Object Tenant)) {
@@ -820,9 +951,8 @@ if ($expectedOrdersByTenant.Count -eq 0) {
         $expectedOrdersByTenant[$tenantGroup.Name] = @($tenantGroup.Group | Select-Object -ExpandProperty CustomerOrderId -Unique)
     }
 
-    $tenantCOrders = @($q2TenantC | Select-Object -ExpandProperty CustomerOrderId -Unique)
-    if ($tenantCOrders.Count -gt 0) {
-        $expectedOrdersByTenant['TenantC'] = $tenantCOrders
+    foreach ($tenantGroup in ($q2TenantC | Group-Object Tenant)) {
+        $expectedOrdersByTenant[$tenantGroup.Name] = @($tenantGroup.Group | Select-Object -ExpandProperty CustomerOrderId -Unique)
     }
 }
 
@@ -1094,25 +1224,16 @@ foreach ($chargeEvent in $apiChargeEvents) {
         $uiStatusCodes = $globalUiStatusCodes
     }
 
-    $dbRow = if ($chargeEvent.Tenant -eq 'TenantC') {
-        $q2TenantC | Where-Object ChargeId -eq $chargeEvent.ChargeId | Select-Object -First 1
-    }
-    else {
-        $q2Shared | Where-Object ChargeId -eq $chargeEvent.ChargeId | Select-Object -First 1
-    }
+    $dbCandidates = @($q2Shared) + @($q2TenantC)
+    $dbRow = $dbCandidates | Where-Object ChargeId -eq $chargeEvent.ChargeId | Select-Object -First 1
 
     if ($null -eq $dbRow -and -not [string]::IsNullOrWhiteSpace($chargeEvent.ResolvedCustomerOrderId)) {
-        $dbRow = if ($chargeEvent.Tenant -eq 'TenantC') {
-            $q2TenantC | Where-Object CustomerOrderId -eq $chargeEvent.ResolvedCustomerOrderId | Select-Object -First 1
-        }
-        else {
-            $q2Shared |
-                Where-Object {
-                    $_.Tenant -eq $chargeEvent.Tenant -and
-                    $_.CustomerOrderId -eq $chargeEvent.ResolvedCustomerOrderId
-                } |
-                Select-Object -First 1
-        }
+        $dbRow = $dbCandidates |
+            Where-Object {
+                $_.Tenant -eq $chargeEvent.Tenant -and
+                $_.CustomerOrderId -eq $chargeEvent.ResolvedCustomerOrderId
+            } |
+            Select-Object -First 1
     }
 
     [PSCustomObject] @{
@@ -1173,7 +1294,7 @@ function Get-ExpectedHistoryStepsForTenant {
             $TransactionRows |
                 Where-Object {
                     $_.CustomerOrderId -eq $customerOrderId -and
-                    (($TenantCode -eq 'TenantC') -or $_.Tenant -eq $TenantCode)
+                    $_.Tenant -eq $TenantCode
                 }
         )
 
@@ -1181,7 +1302,7 @@ function Get-ExpectedHistoryStepsForTenant {
             $HistoryRows |
                 Where-Object {
                     $_.CustomerOrderId -eq $customerOrderId -and
-                    (($TenantCode -eq 'TenantC') -or $_.Tenant -eq $TenantCode)
+                    $_.Tenant -eq $TenantCode
                 }
         )
 
@@ -1223,31 +1344,25 @@ function Get-ExpectedHistoryStepsForTenant {
     return $expectedSteps
 }
 
-$expectedTenantARows = if ($expectedOrdersByTenant.ContainsKey('TenantA')) { $expectedOrdersByTenant['TenantA'].Count * 2 } else { 0 }
-$expectedTenantBRows = if ($expectedOrdersByTenant.ContainsKey('TenantB')) { $expectedOrdersByTenant['TenantB'].Count * 2 } else { 0 }
-$expectedTenantCRows = if ($expectedOrdersByTenant.ContainsKey('TenantC')) { $expectedOrdersByTenant['TenantC'].Count * 2 } else { 0 }
-$expectedTenantASteps = if ($expectedOrdersByTenant.ContainsKey('TenantA')) {
-    Get-ExpectedHistoryStepsForTenant -TenantCode 'TenantA' -CustomerOrderIds $expectedOrdersByTenant['TenantA'] -RunApiEvents $selectedApiEvents -RunChargeEvents $apiChargeEvents -TransactionRows $q2Shared -HistoryRows $q5Shared -TenantThreeDsByTenant $threeDsByTenant
-} else { 0 }
-$expectedTenantBSteps = if ($expectedOrdersByTenant.ContainsKey('TenantB')) {
-    Get-ExpectedHistoryStepsForTenant -TenantCode 'TenantB' -CustomerOrderIds $expectedOrdersByTenant['TenantB'] -RunApiEvents $selectedApiEvents -RunChargeEvents $apiChargeEvents -TransactionRows $q2Shared -HistoryRows $q5Shared -TenantThreeDsByTenant $threeDsByTenant
-} else { 0 }
-$expectedTenantCSteps = if ($expectedOrdersByTenant.ContainsKey('TenantC')) {
-    Get-ExpectedHistoryStepsForTenant -TenantCode 'TenantC' -CustomerOrderIds $expectedOrdersByTenant['TenantC'] -RunApiEvents $selectedApiEvents -RunChargeEvents $apiChargeEvents -TransactionRows $q2TenantC -HistoryRows $q5TenantC -TenantThreeDsByTenant $threeDsByTenant
-} else { 0 }
-
 $checks = [ordered] @{}
-$checks['Pre-flight TenantA 3DS'] = Convert-CheckResult -Expected 'configured' -Actual ([string] $threeDsByTenant['TenantA']) -Outcome $(if ($null -ne $threeDsByTenant['TenantA']) { 'PASS' } else { 'FAIL' })
-$checks['Pre-flight TenantB 3DS'] = Convert-CheckResult -Expected 'configured' -Actual ([string] $threeDsByTenant['TenantB']) -Outcome $(if ($null -ne $threeDsByTenant['TenantB']) { 'PASS' } else { 'FAIL' })
-$checks['Pre-flight TenantC 3DS'] = Convert-CheckResult -Expected 'configured' -Actual ([string] $threeDsByTenant['TenantC']) -Outcome $(if ($null -ne $threeDsByTenant['TenantC']) { 'PASS' } else { 'FAIL' })
-$checks['Q2 TenantA rows'] = Convert-CheckResult -Expected ([string] $expectedTenantARows) -Actual ([string] (@($q2Shared | Where-Object Tenant -eq 'TenantA').Count)) -Outcome $(if (@($q2Shared | Where-Object Tenant -eq 'TenantA').Count -eq $expectedTenantARows) { 'PASS' } else { 'FAIL' })
-$checks['Q2 TenantB rows'] = Convert-CheckResult -Expected ([string] $expectedTenantBRows) -Actual ([string] (@($q2Shared | Where-Object Tenant -eq 'TenantB').Count)) -Outcome $(if (@($q2Shared | Where-Object Tenant -eq 'TenantB').Count -eq $expectedTenantBRows) { 'PASS' } else { 'FAIL' })
-$checks['Q5 TenantA steps'] = Convert-CheckResult -Expected ([string] $expectedTenantASteps) -Actual ([string] (@($q5Shared | Where-Object Tenant -eq 'TenantA').Count)) -Outcome $(if (@($q5Shared | Where-Object Tenant -eq 'TenantA').Count -eq $expectedTenantASteps) { 'PASS' } else { 'FAIL' })
-$checks['Q5 TenantB steps'] = Convert-CheckResult -Expected ([string] $expectedTenantBSteps) -Actual ([string] (@($q5Shared | Where-Object Tenant -eq 'TenantB').Count)) -Outcome $(if (@($q5Shared | Where-Object Tenant -eq 'TenantB').Count -eq $expectedTenantBSteps) { 'PASS' } else { 'FAIL' })
+$expectedStepsByTenant = @{}
+$transactionRowsForHistory = @(@($q2Shared) + @($q2TenantC))
+$historyRowsForHistory = @(@($q5Shared) + @($q5TenantC))
+foreach ($tenantCode in $expectedOrdersByTenant.Keys) {
+    $expectedStepsByTenant[$tenantCode] = Get-ExpectedHistoryStepsForTenant -TenantCode $tenantCode -CustomerOrderIds $expectedOrdersByTenant[$tenantCode] -RunApiEvents $selectedApiEvents -RunChargeEvents $apiChargeEvents -TransactionRows $transactionRowsForHistory -HistoryRows $historyRowsForHistory -TenantThreeDsByTenant $threeDsByTenant
+}
+
+$allRows = @(@($q2Shared) + @($q2TenantC))
+$allHistoryRows = @(@($q5Shared) + @($q5TenantC))
+foreach ($tenantCode in ($expectedOrdersByTenant.Keys | Sort-Object)) {
+    $checks["Pre-flight 3DS [$tenantCode]"] = Convert-CheckResult -Expected 'configured' -Actual ([string] $threeDsByTenant[$tenantCode]) -Outcome $(if ($threeDsByTenant.ContainsKey($tenantCode)) { 'PASS' } else { 'FAIL' })
+    $tenantRows = @($allRows | Where-Object { $_.Tenant -eq $tenantCode })
+    $tenantHistoryRows = @($allHistoryRows | Where-Object { $_.Tenant -eq $tenantCode })
+    $checks["Q2 rows [$tenantCode]"] = Convert-CheckResult -Expected ([string] ($expectedOrdersByTenant[$tenantCode].Count * 2)) -Actual ([string] $tenantRows.Count) -Outcome $(if ($tenantRows.Count -eq ($expectedOrdersByTenant[$tenantCode].Count * 2)) { 'PASS' } else { 'FAIL' })
+    $checks["Q5 steps [$tenantCode]"] = Convert-CheckResult -Expected ([string] $expectedStepsByTenant[$tenantCode]) -Actual ([string] $tenantHistoryRows.Count) -Outcome $(if ($tenantHistoryRows.Count -eq $expectedStepsByTenant[$tenantCode]) { 'PASS' } else { 'FAIL' })
+}
 $checks['Q8 bleed'] = Convert-CheckResult -Expected '0' -Actual ([string] @($q8Shared).Count) -Outcome $(if (@($q8Shared).Count -eq 0) { 'PASS' } else { 'FAIL' })
-$checks['Q2-B TenantC rows'] = Convert-CheckResult -Expected ([string] $expectedTenantCRows) -Actual ([string] @($q2TenantC).Count) -Outcome $(if (@($q2TenantC).Count -eq $expectedTenantCRows) { 'PASS' } else { 'FAIL' })
-$checks['Q5-B TenantC steps'] = Convert-CheckResult -Expected ([string] $expectedTenantCSteps) -Actual ([string] @($q5TenantC).Count) -Outcome $(if (@($q5TenantC).Count -eq $expectedTenantCSteps) { 'PASS' } else { 'FAIL' })
-$checks['Q9-B TenantC bleed'] = Convert-CheckResult -Expected '0' -Actual ([string] @($q9Shared).Count) -Outcome $(if (@($q9Shared).Count -eq 0) { 'PASS' } else { 'FAIL' })
+$checks['Q9 bleed'] = Convert-CheckResult -Expected '0' -Actual ([string] @($q9Shared).Count) -Outcome $(if (@($q9Shared).Count -eq 0) { 'PASS' } else { 'FAIL' })
 
 if ($apiChargeEvents.Count -eq 0) {
     $checks['API log -> DB charge IDs'] = Convert-CheckResult -Expected 'App Insights charge rows' -Actual 'No API charge rows returned for the selected run prefix' -Outcome 'INCONCLUSIVE'
@@ -1275,11 +1390,18 @@ $report = [PSCustomObject] @{
         ApiEvidence = @($selectedApiEvents | Select-Object Timestamp, Tenant, ResolvedCustomerOrderId, ChargeId, Message)
         UiEvidence = @($reportedUiEvents | Select-Object Timestamp, Tenant, CustomerOrderId, UiEventName, ChargeId, StatusCode, Message)
     }
-    Preflight = [PSCustomObject] @{
-        TenantA = $threeDsByTenant['TenantA']
-        TenantB = $threeDsByTenant['TenantB']
-        TenantC = $threeDsByTenant['TenantC']
-    }
+    Topology = @(
+        $tenantTopology |
+            Select-Object @{ Name = 'tenantCode'; Expression = { $_.TenantCode } },
+                          @{ Name = 'active'; Expression = { $_.Active } },
+                          @{ Name = 'tier'; Expression = { $_.TenantTier } },
+                          @{ Name = 'providerCode'; Expression = { $_.PaymentProviderCode } },
+                          @{ Name = 'dedicatedDatabaseName'; Expression = { $_.DedicatedDatabaseName } },
+                          @{ Name = 'dedicatedConnectionSecret'; Expression = { $_.DedicatedConnectionSecret } },
+                          @{ Name = 'providerPrivateKeyAlias'; Expression = { $_.ProviderPrivateKeyAlias } },
+                          @{ Name = 'contractStatus'; Expression = { $_.ContractStatus } }
+    )
+    Preflight = Convert-HashtableToObject -Table $threeDsByTenant
     Checks = [PSCustomObject] $checks
     ChargeCorrelation = @($chargeCorrelation)
 }

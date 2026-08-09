@@ -62,6 +62,20 @@ function Assert-FileContains {
         -FailMessage "$RelativePath is missing expected contract: $Description"
 }
 
+function Assert-FileNotContains {
+    param(
+        [string] $RelativePath,
+        [string] $RegexPattern,
+        [string] $Description
+    )
+
+    $content = Get-FileText -RelativePath $RelativePath
+    Assert-Condition `
+        -Condition (-not ($content -match $RegexPattern)) `
+        -PassMessage "$RelativePath -> $Description" `
+        -FailMessage "$RelativePath violates expected contract: $Description"
+}
+
 function Assert-ParameterValue {
     param(
         [string] $RelativePath,
@@ -168,12 +182,24 @@ Assert-FileContains -RelativePath '.github/workflows/phase10-azure-runtime-smoke
 Assert-FileContains -RelativePath '.github/workflows/phase10-azure-runtime-smoke.yml' -RegexPattern 'Orders Container App' -Description 'runtime smoke workflow context links include backend runtime hosts'
 Assert-FileContains -RelativePath '.github/workflows/phase10-azure-transport-smoke.yml' -RegexPattern '(?s)\$\{\{\s*inputs\.environment\s*\}\}.*staging.*ENV_SUFFIX="stg"' -Description 'staging to stg normalization in transport smoke workflow'
 Assert-FileContains -RelativePath '.github/workflows/phase10-azure-payment-matrix.yml' -RegexPattern '(?s)\$\{\{\s*inputs\.environment\s*\}\}.*staging.*ENV_SUFFIX="stg"' -Description 'staging to stg normalization in payment matrix workflow'
-Assert-FileContains -RelativePath 'Resources/Azure-Deployment/setup-phase10-sql-managed-identities.ps1' -RegexPattern 'OrderProcessingSystem_TenantC_' -Description 'Phase 10 SQL identity setup includes TenantC dedicated database grants'
+Assert-FileContains -RelativePath 'Resources/Azure-Deployment/setup-phase10-sql-managed-identities.ps1' -RegexPattern 'TenantTier\] = N''Dedicated''' -Description 'Phase 10 SQL identity setup discovers dedicated tenants from the tenant registry'
+Assert-FileContains -RelativePath 'Resources/Azure-Deployment/setup-phase10-sql-managed-identities.ps1' -RegexPattern 'DedicatedTenantConnectionStrings--' -Description 'Phase 10 SQL identity setup resolves dedicated tenant databases from Key Vault secrets'
 Assert-FileContains -RelativePath 'Resources/Azure-Deployment/setup-phase10-sql-managed-identities.ps1' -RegexPattern 'Resolve-ContainerAppPrincipalId' -Description 'Phase 10 SQL identity setup resolves Container App identities directly'
 Assert-FileContains -RelativePath 'Resources/Azure-Deployment/setup-phase10-sql-managed-identities.ps1' -RegexPattern 'Resolve-FunctionAppPrincipalId' -Description 'Phase 10 SQL identity setup resolves Function App identity directly'
 Assert-FileContains -RelativePath 'scripts/verify-phase10-azure-runtime-hosts.ps1' -RegexPattern 'orderprocessing-pay-\$envSuffix' -Description 'runtime host verifier includes the payments container'
 Assert-FileContains -RelativePath 'scripts/verify-phase10-azure-runtime-hosts.ps1' -RegexPattern 'orderprocessing-functions-\$envSuffix' -Description 'runtime host verifier includes the Functions host'
 Assert-FileContains -RelativePath 'scripts/verify-phase10-azure-runtime-hosts.ps1' -RegexPattern 'containerapp.*revision.*list' -Description 'runtime host verifier inspects latest ACA revisions'
+Assert-FileContains -RelativePath 'scripts/verify-phase10-azure-tenant-topology.ps1' -RegexPattern 'api/v1/Info/tenant-registry' -Description 'tenant topology verifier reads the runtime tenant registry endpoint'
+Assert-FileContains -RelativePath 'scripts/verify-phase10-azure-tenant-topology.ps1' -RegexPattern 'DedicatedTenantConnectionStrings--' -Description 'tenant topology verifier validates dedicated tenant Key Vault secrets dynamically'
+Assert-FileContains -RelativePath 'scripts/verify-phase10-azure-tenant-topology.ps1' -RegexPattern 'PaymentProviders--' -Description 'tenant topology verifier validates tenant/provider secret contracts dynamically'
+Assert-FileContains -RelativePath '.github/workflows/infra-deploy.yml' -RegexPattern 'verify-phase10-azure-tenant-topology\.ps1' -Description 'reusable deploy workflow verifies active tenant topology before endpoint smoke'
+Assert-FileContains -RelativePath '.github/workflows/phase10-azure-runtime-smoke.yml' -RegexPattern 'verify-phase10-azure-tenant-topology\.ps1' -Description 'runtime smoke workflow verifies active tenant topology before route smoke'
+Assert-FileNotContains -RelativePath '.github/workflows/phase10-azure-payment-matrix.yml' -RegexPattern '\bTenantA\b|\bTenantB\b|\bTenantC\b' -Description 'Azure payment matrix workflow does not hardcode sample tenant codes'
+Assert-FileNotContains -RelativePath 'scripts/verify-payment-run-azure.ps1' -RegexPattern '\bTenantA\b|\bTenantB\b|\bTenantC\b' -Description 'Azure payment verifier does not hardcode sample tenant codes in active execution logic'
+Assert-FileNotContains -RelativePath 'scripts/verify-payment-run-physical.ps1' -RegexPattern '\bTenantA\b|\bTenantB\b|\bTenantC\b' -Description 'physical payment verifier does not hardcode sample tenant codes in active execution logic'
+Assert-FileNotContains -RelativePath 'automation/src/catalog/api-tenant-execution-catalog.ts' -RegexPattern '\bTenantA\b|\bTenantB\b|\bTenantC\b' -Description 'automation tenant catalog does not infer topology from sample tenant codes'
+Assert-FileNotContains -RelativePath 'automation/src/orchestrator/payment-automation-executor.ts' -RegexPattern '\bTenantA\b|\bTenantB\b|\bTenantC\b' -Description 'payment automation executor does not hardcode sample tenant codes'
+Assert-FileNotContains -RelativePath 'scripts/run-phase10-local-container-stack-end-to-end.ps1' -RegexPattern '\bTenantA\b|\bTenantB\b|\bTenantC\b' -Description 'local Phase 10 end-to-end wrapper does not pass hardcoded sample tenant lists'
 
 Assert-FileContains -RelativePath 'scripts/run-phase10-azure-runtime-smoke.ps1' -RegexPattern '\$envSuffix = if \(\$Environment -eq ''staging''\) \{ ''stg'' \} else \{ \$Environment \}' -Description 'runtime smoke script staging normalization'
 Assert-FileContains -RelativePath 'scripts/run-phase10-azure-runtime-smoke.ps1' -RegexPattern 'Gateway backend route contract' -Description 'runtime smoke includes gateway backend route validation'

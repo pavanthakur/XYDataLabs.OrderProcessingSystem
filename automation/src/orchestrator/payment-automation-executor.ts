@@ -1,7 +1,7 @@
 import http from "node:http";
 import https from "node:https";
 import { spawn } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { CleanupOutcome } from "../contracts/payment-fixture-provisioner.js";
@@ -54,6 +54,17 @@ interface ExecutionItem {
   executionRunPrefix: string;
 }
 
+interface TenantTopologyArtifactItem {
+  tenantCode: string;
+  active: boolean;
+  tier: string;
+  providerCode: string | null;
+  dedicatedDatabaseName: string | null;
+  dedicatedConnectionSecret: string | null;
+  providerPrivateKeyAlias: string | null;
+  contractStatus: string;
+}
+
 export async function executePaymentAutomationRun(
   options: ExecutePaymentAutomationRunOptions
 ): Promise<PaymentAutomationRunOutput> {
@@ -66,9 +77,9 @@ export async function executePaymentAutomationRun(
   const target = await runtimeTargetCatalog.resolve(options.target);
   log(`Resolved runtime target ${target.key} (${target.runtime}/${target.profile}).`);
   log(`Resolving tenant execution plan for ${options.target}.`);
-  const tenantExecutionCatalog = !options.dryRun && target.expectedTenantSource === "runtime-configuration"
-    ? new ApiTenantExecutionCatalog(target)
-    : new StaticTenantExecutionCatalog();
+  const tenantExecutionCatalog = options.dryRun
+    ? new StaticTenantExecutionCatalog()
+    : new ApiTenantExecutionCatalog(target);
   const tenantPlan = await tenantExecutionCatalog.resolve(
     options.tenantCodes,
     options.allowPartialExecution || target.supportsPartialExecution,
@@ -88,6 +99,8 @@ export async function executePaymentAutomationRun(
   );
 
   await mkdir(reportDirectory, { recursive: true });
+  const tenantTopology = await buildTenantTopologyArtifact(target.runtime, target.environment, tenantPlan.resolvedTenants);
+  await writeFile(path.join(reportDirectory, "tenant-topology.json"), JSON.stringify(tenantTopology, null, 2), "utf8");
   log(`Starting payment automation run ${runId} with prefix ${runPrefix}.`);
 
   const targetUrl = `${target.baseUrl}${target.paymentPagePath}`;
@@ -372,6 +385,71 @@ function normalizeRequestedProviders(requestedProviders: string[]): string[] {
         .filter(Boolean)
     )
   );
+}
+
+async function buildTenantTopologyArtifact(
+  runtime: string,
+  environment: string,
+  tenants: Array<{ tenantCode: string; tenantTier: string; paymentProviderCode: string | null }>
+): Promise<TenantTopologyArtifactItem[]> {
+  const dedicatedDatabaseNames = await loadDedicatedDatabaseNames(runtime, environment);
+
+  return tenants.map((tenant) => {
+    const normalizedTier = tenant.tenantTier.trim();
+    const normalizedProvider = tenant.paymentProviderCode?.trim() ?? null;
+    const dedicatedConnectionSecret = normalizedTier.toLowerCase() === "dedicated"
+      ? `DedicatedTenantConnectionStrings--${tenant.tenantCode}`
+      : null;
+    const providerPrivateKeyAlias = normalizedProvider
+      ? `PaymentProviders--${tenant.tenantCode}--${normalizedProvider}--PrivateKey`
+      : null;
+    const dedicatedDatabaseName = dedicatedConnectionSecret
+      ? dedicatedDatabaseNames.get(tenant.tenantCode.toLowerCase()) ?? null
+      : null;
+    const contractStatus = normalizedTier.toLowerCase() === "dedicated" && !dedicatedDatabaseName
+      ? "registry-discovered-awaiting-secret-validation"
+      : "registry-discovered";
+
+    return {
+      tenantCode: tenant.tenantCode,
+      active: true,
+      tier: normalizedTier,
+      providerCode: normalizedProvider,
+      dedicatedDatabaseName,
+      dedicatedConnectionSecret,
+      providerPrivateKeyAlias,
+      contractStatus
+    };
+  });
+}
+
+async function loadDedicatedDatabaseNames(runtime: string, environment: string): Promise<Map<string, string>> {
+  if (runtime === "azure") {
+    return new Map<string, string>();
+  }
+
+  const sharedSettingsFileName = runtime === "local"
+    ? "sharedsettings.local.json"
+    : `sharedsettings.${environment}.json`;
+  const sharedSettingsPath = path.join(automationRoot, "..", "Resources", "Configuration", sharedSettingsFileName);
+  const sharedSettings = JSON.parse(await readFile(sharedSettingsPath, "utf8")) as {
+    DedicatedTenantConnectionStrings?: Record<string, string>;
+  };
+
+  const results = new Map<string, string>();
+  for (const [tenantCode, connectionString] of Object.entries(sharedSettings.DedicatedTenantConnectionStrings ?? {})) {
+    const databaseName = parseDatabaseNameFromConnectionString(connectionString);
+    if (databaseName) {
+      results.set(tenantCode.trim().toLowerCase(), databaseName);
+    }
+  }
+
+  return results;
+}
+
+function parseDatabaseNameFromConnectionString(connectionString: string): string | null {
+  const match = /(?:Initial\s+Catalog|Database)\s*=\s*([^;]+)/i.exec(connectionString);
+  return match?.[1]?.trim() || null;
 }
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {

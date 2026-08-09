@@ -101,6 +101,80 @@ function Resolve-ManagedIdentityAppId {
     return $appId.Trim()
 }
 
+function Invoke-AzText {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$Arguments,
+        [Parameter(Mandatory = $true)][string]$Operation
+    )
+
+    $result = & az @Arguments -o tsv 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "$Operation failed. Azure CLI output: $result"
+    }
+
+    return [string]::Join([Environment]::NewLine, @($result | ForEach-Object { $_.ToString() })).Trim()
+}
+
+function Invoke-SqlQueryRows {
+    param(
+        [Parameter(Mandatory = $true)][string]$SqlServerFqdn,
+        [Parameter(Mandatory = $true)][string]$DatabaseName,
+        [Parameter(Mandatory = $true)][string]$SqlQuery,
+        [string]$AccessToken,
+        [string]$Username,
+        [string]$Password,
+        [switch]$UseAzureAdToken,
+        [switch]$UseSqlAuth
+    )
+
+    Add-Type -AssemblyName System.Data | Out-Null
+
+    $connectionString = if ($UseSqlAuth) {
+        "Server=tcp:$SqlServerFqdn,1433;Initial Catalog=$DatabaseName;Persist Security Info=False;User ID=$Username;Password=$Password;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+    }
+    else {
+        "Server=tcp:$SqlServerFqdn,1433;Initial Catalog=$DatabaseName;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+    }
+
+    $connection = [System.Data.SqlClient.SqlConnection]::new($connectionString)
+    if ($UseAzureAdToken) {
+        $connection.AccessToken = $AccessToken
+    }
+
+    try {
+        $connection.Open()
+        $command = $connection.CreateCommand()
+        $command.CommandText = $SqlQuery
+        $command.CommandTimeout = 60
+
+        $reader = $command.ExecuteReader()
+        $rows = New-Object 'System.Collections.Generic.List[object]'
+
+        try {
+            while ($reader.Read()) {
+                $row = [ordered]@{}
+                for ($index = 0; $index -lt $reader.FieldCount; $index++) {
+                    $row[$reader.GetName($index)] = if ($reader.IsDBNull($index)) { $null } else { $reader.GetValue($index) }
+                }
+
+                $rows.Add([pscustomobject]$row)
+            }
+        }
+        finally {
+            $reader.Dispose()
+        }
+
+        return @($rows)
+    }
+    finally {
+        if ($connection.State -ne [System.Data.ConnectionState]::Closed) {
+            $connection.Close()
+        }
+
+        $connection.Dispose()
+    }
+}
+
 function Invoke-SqlScriptFile {
     param(
         [Parameter(Mandatory = $true)][string]$SqlScript,
@@ -174,6 +248,84 @@ function Resolve-FunctionAppPrincipalId {
     }
 
     return $principalId.Trim()
+}
+
+function Get-KeyVaultName {
+    param(
+        [Parameter(Mandatory = $true)][string]$CurrentBaseName,
+        [Parameter(Mandatory = $true)][string]$CurrentEnvironmentSuffix
+    )
+
+    $shortBaseName = $CurrentBaseName.Substring(0, [Math]::Min(15, $CurrentBaseName.Length))
+    return "kv-$shortBaseName-$CurrentEnvironmentSuffix"
+}
+
+function Resolve-DedicatedDatabaseNameFromConnectionString {
+    param([Parameter(Mandatory = $true)][string]$ConnectionString)
+
+    $match = [regex]::Match($ConnectionString, '(?i)(?:Initial\s+Catalog|Database)\s*=\s*([^;]+)')
+    if (-not $match.Success) {
+        throw "Dedicated tenant connection string does not contain an Initial Catalog/Database segment."
+    }
+
+    return $match.Groups[1].Value.Trim()
+}
+
+function Get-ActiveDedicatedTenantDatabases {
+    param(
+        [Parameter(Mandatory = $true)][string]$SqlServerFqdn,
+        [Parameter(Mandatory = $true)][string]$SharedDatabaseName,
+        [Parameter(Mandatory = $true)][string]$KeyVaultName,
+        [string]$AccessToken,
+        [string]$SqlUsername,
+        [string]$SqlPassword,
+        [switch]$UseAzureAdToken,
+        [switch]$UseSqlAuth
+    )
+
+    $query = @"
+SELECT
+    [Code] AS TenantCode,
+    [Name] AS TenantName,
+    [PaymentProviderCode]
+FROM [dbo].[Tenants]
+WHERE [Status] = N'Active'
+  AND [TenantTier] = N'Dedicated'
+ORDER BY [Code];
+"@
+
+    $tenants = @(Invoke-SqlQueryRows `
+        -SqlServerFqdn $SqlServerFqdn `
+        -DatabaseName $SharedDatabaseName `
+        -SqlQuery $query `
+        -AccessToken $AccessToken `
+        -Username $SqlUsername `
+        -Password $SqlPassword `
+        -UseAzureAdToken:$UseAzureAdToken `
+        -UseSqlAuth:$UseSqlAuth)
+
+    $results = New-Object 'System.Collections.Generic.List[object]'
+    foreach ($tenant in $tenants) {
+        $tenantCode = [string]$tenant.TenantCode
+        $secretName = "DedicatedTenantConnectionStrings--$tenantCode"
+        $connectionString = Invoke-AzText `
+            -Arguments @('keyvault', 'secret', 'show', '--vault-name', $KeyVaultName, '--name', $secretName, '--query', 'value') `
+            -Operation "Resolve Key Vault secret '$secretName'"
+
+        if ([string]::IsNullOrWhiteSpace($connectionString)) {
+            throw "Dedicated tenant '$tenantCode' is active in the tenant registry, but Key Vault secret '$secretName' is missing or empty."
+        }
+
+        $results.Add([pscustomobject]@{
+                TenantCode = $tenantCode
+                TenantName = [string]$tenant.TenantName
+                PaymentProviderCode = [string]$tenant.PaymentProviderCode
+                SecretName = $secretName
+                DatabaseName = Resolve-DedicatedDatabaseNameFromConnectionString -ConnectionString $connectionString
+            })
+    }
+
+    return @($results)
 }
 
 function Grant-IdentityAccessToDatabase {
@@ -280,7 +432,7 @@ $dbEnvTitle = $environmentDescriptor.AzureSqlDatabaseSuffix
 $resourceGroupName = "rg-$BaseName-$envSuffix"
 $sqlFqdn = "$BaseName-sql-$envSuffix.database.windows.net"
 $sharedDatabaseName = "OrderProcessingSystem_$dbEnvTitle"
-$tenantCDatabaseName = "OrderProcessingSystem_TenantC_$dbEnvTitle"
+$keyVaultName = Get-KeyVaultName -CurrentBaseName $BaseName -CurrentEnvironmentSuffix $envSuffix
 
 $runtimeIdentities = @(
     @{
@@ -314,8 +466,8 @@ Write-Host "Configuring Phase 10 SQL access for runtime identities..." -Foregrou
 Write-Host "Environment      : $Environment ($envSuffix)" -ForegroundColor White
 Write-Host "Resource Group   : $resourceGroupName" -ForegroundColor White
 Write-Host "SQL Server       : $sqlFqdn" -ForegroundColor White
+Write-Host "Key Vault        : $keyVaultName" -ForegroundColor White
 Write-Host "Shared Database  : $sharedDatabaseName" -ForegroundColor White
-Write-Host "TenantC Database : $tenantCDatabaseName" -ForegroundColor White
 Write-Host ''
 
 $token = $null
@@ -336,6 +488,27 @@ else {
 
 $resolvedSqlUsername = if ($null -ne $sqlAdmin) { [string]$sqlAdmin.Username } else { '' }
 $resolvedSqlPassword = if ($null -ne $sqlAdmin) { [string]$sqlAdmin.Password } else { '' }
+
+$dedicatedTenantDatabases = @(Get-ActiveDedicatedTenantDatabases `
+    -SqlServerFqdn $sqlFqdn `
+    -SharedDatabaseName $sharedDatabaseName `
+    -KeyVaultName $keyVaultName `
+    -AccessToken $token `
+    -SqlUsername $resolvedSqlUsername `
+    -SqlPassword $resolvedSqlPassword `
+    -UseAzureAdToken:(!$UseSqlAuthentication) `
+    -UseSqlAuth:$UseSqlAuthentication)
+
+if ($dedicatedTenantDatabases.Count -eq 0) {
+    Write-Host 'Dedicated Databases: none active in tenant registry' -ForegroundColor Yellow
+}
+else {
+    Write-Host 'Dedicated Databases discovered from tenant registry + Key Vault:' -ForegroundColor White
+    foreach ($dedicatedDatabase in $dedicatedTenantDatabases) {
+        Write-Host "  - $($dedicatedDatabase.TenantCode) -> $($dedicatedDatabase.DatabaseName) [$($dedicatedDatabase.PaymentProviderCode)]" -ForegroundColor Gray
+    }
+}
+Write-Host ''
 
 foreach ($identity in $runtimeIdentities) {
     $resourceName = [string]$identity.ResourceName
@@ -368,18 +541,25 @@ foreach ($identity in $runtimeIdentities) {
         -UseAzureAdToken:(!$UseSqlAuthentication) `
         -UseSqlAuth:$UseSqlAuthentication
 
-    Grant-IdentityAccessToDatabase `
-        -DisplayName $resourceName `
-        -ManagedIdentityAppId $appId `
-        -SqlServerFqdn $sqlFqdn `
-        -DatabaseName $tenantCDatabaseName `
-        -AccessToken $token `
-        -SqlUsername $resolvedSqlUsername `
-        -SqlPassword $resolvedSqlPassword `
-        -UseAzureAdToken:(!$UseSqlAuthentication) `
-        -UseSqlAuth:$UseSqlAuthentication
+    foreach ($dedicatedDatabase in $dedicatedTenantDatabases) {
+        Grant-IdentityAccessToDatabase `
+            -DisplayName $resourceName `
+            -ManagedIdentityAppId $appId `
+            -SqlServerFqdn $sqlFqdn `
+            -DatabaseName $dedicatedDatabase.DatabaseName `
+            -AccessToken $token `
+            -SqlUsername $resolvedSqlUsername `
+            -SqlPassword $resolvedSqlPassword `
+            -UseAzureAdToken:(!$UseSqlAuthentication) `
+            -UseSqlAuth:$UseSqlAuthentication
+    }
 
-    Write-Host "  Granted shared + TenantC database access." -ForegroundColor Green
+    if ($dedicatedTenantDatabases.Count -eq 0) {
+        Write-Host '  Granted shared database access.' -ForegroundColor Green
+    }
+    else {
+        Write-Host '  Granted shared + dedicated database access.' -ForegroundColor Green
+    }
 }
 
 Write-Host ''
