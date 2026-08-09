@@ -30,7 +30,7 @@ function Invoke-AzJson {
 
 function Get-NestedValue {
     param(
-        [Parameter(Mandatory)]
+        [AllowNull()]
         [object]$Object,
         [Parameter(Mandatory)]
         [string[]]$Path
@@ -46,6 +46,27 @@ function Get-NestedValue {
     }
 
     return $current
+}
+
+function ConvertTo-Array {
+    param(
+        [AllowNull()]
+        [object]$InputObject
+    )
+
+    if ($null -eq $InputObject) {
+        return @()
+    }
+
+    if ($InputObject -is [string]) {
+        return @($InputObject)
+    }
+
+    if ($InputObject -is [System.Collections.IEnumerable]) {
+        return @($InputObject)
+    }
+
+    return @($InputObject)
 }
 
 function Test-ContainerAppHost {
@@ -68,9 +89,10 @@ function Test-ContainerAppHost {
             $fqdn = [string](Get-NestedValue -Object $app -Path @('properties', 'configuration', 'ingress', 'fqdn'))
 
             $revisions = Invoke-AzJson -Arguments @('containerapp', 'revision', 'list', '--resource-group', $resourceGroup, '--name', $Name)
+            $revisionList = ConvertTo-Array -InputObject $revisions
             $latestRevision = $null
-            if ($revisions -is [System.Collections.IEnumerable]) {
-                $latestRevision = @($revisions | Where-Object { $_.name -eq $latestRevisionName }) | Select-Object -First 1
+            if ($revisionList.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace($latestRevisionName)) {
+                $latestRevision = @($revisionList | Where-Object { $_.name -eq $latestRevisionName }) | Select-Object -First 1
             }
 
             $revisionRunningState = [string](Get-NestedValue -Object $latestRevision -Path @('properties', 'runningState'))
@@ -120,6 +142,7 @@ function Test-ContainerAppHost {
                 "provisioningState=$([string]::IsNullOrWhiteSpace($provisioningState) ? 'n/a' : $provisioningState)",
                 "runningStatus=$([string]::IsNullOrWhiteSpace($runningStatus) ? 'n/a' : $runningStatus)",
                 "latestRevision=$([string]::IsNullOrWhiteSpace($latestRevisionName) ? 'n/a' : $latestRevisionName)",
+                "revisions=$($revisionList.Count)",
                 "revisionRunning=$([string]::IsNullOrWhiteSpace($revisionRunningState) ? 'n/a' : $revisionRunningState)",
                 "revisionHealth=$([string]::IsNullOrWhiteSpace($revisionHealthState) ? 'n/a' : $revisionHealthState)",
                 "active=$([string]::IsNullOrWhiteSpace([string]$active) ? 'n/a' : [string]$active)",
