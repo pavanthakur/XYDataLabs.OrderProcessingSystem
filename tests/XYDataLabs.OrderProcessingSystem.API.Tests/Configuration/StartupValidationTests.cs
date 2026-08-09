@@ -55,7 +55,99 @@ public sealed class StartupValidationTests
         }
     }
 
-    private static void CreateSharedSettingsFile(string rootPath, bool includeActiveTenantCode)
+    [Fact]
+    public async Task SharedSettingsLoader_Fails_When_DeploymentExpectedEnvironment_Differs_From_RuntimeEnvironment()
+    {
+        await WorkingDirectoryGate.WaitAsync();
+
+        var originalCurrentDirectory = Directory.GetCurrentDirectory();
+        var originalExpectedEnvironment = Environment.GetEnvironmentVariable("ORDERPROCESSING_EXPECTED_ENVIRONMENT");
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"ops-startup-validation-{Guid.NewGuid():N}");
+
+        try
+        {
+            CreateSharedSettingsFile(tempRoot, includeActiveTenantCode: true, sharedSettingsFileName: "sharedsettings.prod.json");
+            Directory.SetCurrentDirectory(tempRoot);
+            Environment.SetEnvironmentVariable("ORDERPROCESSING_EXPECTED_ENVIRONMENT", "staging");
+
+            var builder = Host.CreateApplicationBuilder();
+            builder.Logging.ClearProviders();
+
+            var act = () => SharedSettingsLoader.AddAndBindSettings(
+                builder.Services,
+                builder.Configuration,
+                Constants.Environments.Production,
+                isDocker: true,
+                groupSelector: settings => settings.API,
+                out _,
+                out _);
+
+            act.Should()
+                .Throw<InvalidOperationException>()
+                .Which.Message.Should().Contain("deployment expected 'staging'");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("ORDERPROCESSING_EXPECTED_ENVIRONMENT", originalExpectedEnvironment);
+            Directory.SetCurrentDirectory(originalCurrentDirectory);
+            if (Directory.Exists(tempRoot))
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+
+            WorkingDirectoryGate.Release();
+        }
+    }
+
+    [Fact]
+    public async Task SharedSettingsLoader_Fails_When_AspNetCore_And_DotNet_Environment_Vars_Disagree()
+    {
+        await WorkingDirectoryGate.WaitAsync();
+
+        var originalCurrentDirectory = Directory.GetCurrentDirectory();
+        var originalAspNetCoreEnvironment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+        var originalDotNetEnvironment = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT");
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"ops-startup-validation-{Guid.NewGuid():N}");
+
+        try
+        {
+            CreateSharedSettingsFile(tempRoot, includeActiveTenantCode: true, sharedSettingsFileName: "sharedsettings.stg.json");
+            Directory.SetCurrentDirectory(tempRoot);
+            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Staging");
+            Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", "Production");
+
+            var builder = Host.CreateApplicationBuilder();
+            builder.Logging.ClearProviders();
+
+            var act = () => SharedSettingsLoader.AddAndBindSettings(
+                builder.Services,
+                builder.Configuration,
+                Constants.Environments.Staging,
+                isDocker: true,
+                groupSelector: settings => settings.API,
+                out _,
+                out _);
+
+            act.Should()
+                .Throw<InvalidOperationException>()
+                .Which.Message.Should().Contain("ASPNETCORE_ENVIRONMENT='Staging'")
+                .And.Contain("DOTNET_ENVIRONMENT='Production'");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", originalAspNetCoreEnvironment);
+            Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", originalDotNetEnvironment);
+            Directory.SetCurrentDirectory(originalCurrentDirectory);
+            if (Directory.Exists(tempRoot))
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+
+            WorkingDirectoryGate.Release();
+        }
+    }
+
+    private static void CreateSharedSettingsFile(string rootPath, bool includeActiveTenantCode, string sharedSettingsFileName = "sharedsettings.local.json")
     {
         var configurationPath = Path.Combine(rootPath, "Resources", "Configuration");
         Directory.CreateDirectory(configurationPath);
@@ -109,7 +201,7 @@ public sealed class StartupValidationTests
             };
         }
 
-        var targetFile = Path.Combine(configurationPath, "sharedsettings.local.json");
+        var targetFile = Path.Combine(configurationPath, sharedSettingsFileName);
         File.WriteAllText(targetFile, JsonSerializer.Serialize(payload, new JsonSerializerOptions
         {
             WriteIndented = true

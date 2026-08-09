@@ -29,6 +29,8 @@ namespace XYDataLabs.OrderProcessingSystem.SharedKernel
         [SuppressMessage("Globalization", "CA1303:Do not pass literals as localized parameters", Justification = "Startup diagnostics and remediation guidance are operational messages, not user-facing localized UI.")]
         public static IConfigurationBuilder LoadSharedSettings(this IConfigurationBuilder builder, string environmentName, bool isDocker)
         {
+            ValidateHostingEnvironmentContract(environmentName);
+
             // Detect Azure App Service using WEBSITE_SITE_NAME environment variable
             var isAzure = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME"));
             
@@ -128,6 +130,54 @@ namespace XYDataLabs.OrderProcessingSystem.SharedKernel
             }
             
             return builder;
+        }
+
+        private static void ValidateHostingEnvironmentContract(string environmentName)
+        {
+            var expectedEnvironment = Environment.GetEnvironmentVariable("ORDERPROCESSING_EXPECTED_ENVIRONMENT");
+            var aspNetCoreEnvironment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+            var dotNetEnvironment = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT");
+
+            var normalizedResolvedEnvironment = NormalizeEnvironmentName(environmentName);
+            var normalizedExpectedEnvironment = NormalizeEnvironmentName(expectedEnvironment);
+            var normalizedAspNetCoreEnvironment = NormalizeEnvironmentName(aspNetCoreEnvironment);
+            var normalizedDotNetEnvironment = NormalizeEnvironmentName(dotNetEnvironment);
+
+            if (!string.IsNullOrWhiteSpace(normalizedAspNetCoreEnvironment)
+                && !string.IsNullOrWhiteSpace(normalizedDotNetEnvironment)
+                && !string.Equals(normalizedAspNetCoreEnvironment, normalizedDotNetEnvironment, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"Runtime environment mismatch detected. ASPNETCORE_ENVIRONMENT='{aspNetCoreEnvironment}' and DOTNET_ENVIRONMENT='{dotNetEnvironment}' resolve to different values.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(normalizedExpectedEnvironment)
+                && !string.Equals(normalizedResolvedEnvironment, normalizedExpectedEnvironment, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"Environment contract violation detected. Host resolved environment '{environmentName}' but deployment expected '{expectedEnvironment}'. " +
+                    "Check ASPNETCORE_ENVIRONMENT/DOTNET_ENVIRONMENT wiring for this runtime.");
+            }
+        }
+
+        private static string NormalizeEnvironmentName(string? environmentName)
+        {
+            if (string.IsNullOrWhiteSpace(environmentName))
+            {
+                return string.Empty;
+            }
+
+            return environmentName.Trim().ToUpperInvariant() switch
+            {
+                "DEVELOPMENT" => Constants.Environments.Dev,
+                "DEV" => Constants.Environments.Dev,
+                "STAGING" => Constants.Environments.Staging,
+                "STG" => Constants.Environments.Staging,
+                "PRODUCTION" => Constants.Environments.Production,
+                "PROD" => Constants.Environments.Production,
+                "LOCAL" => Constants.Environments.Local,
+                _ => environmentName.Trim().ToUpperInvariant()
+            };
         }
 
         /// <summary>

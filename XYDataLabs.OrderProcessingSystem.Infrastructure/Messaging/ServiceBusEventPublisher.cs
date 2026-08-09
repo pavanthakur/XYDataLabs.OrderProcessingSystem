@@ -35,7 +35,7 @@ public sealed class ServiceBusEventPublisher : IEventPublisher, IAsyncDisposable
 
         var sender = _sender ??= _client.CreateSender(_options.TopicName);
         var message = _messageFactory.Create(eventEnvelope);
-        message.TimeToLive = _options.MessageTtl;
+        message.TimeToLive = _options.MessageTtlTimeSpan;
 
         await sender.SendMessageAsync(message, cancellationToken).ConfigureAwait(false);
     }

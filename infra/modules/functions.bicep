@@ -43,6 +43,11 @@ param maxDeliveryCount int = 10
 param messageTtl string = 'P7D'
 
 var effectiveResourceSuffix = empty(resourceSuffix) ? environment : resourceSuffix
+var aspNetCoreEnvironment = environment == 'prod'
+  ? 'Production'
+  : environment == 'staging'
+    ? 'Staging'
+    : 'Development'
 var functionAppName = '${baseName}-functions-${effectiveResourceSuffix}'
 
 resource plan 'Microsoft.Web/serverfarms@2023-12-01' = {
@@ -74,6 +79,18 @@ var appSettings = [
   {
     name: 'KeyVault__Uri'
     value: keyVaultUri
+  }
+  {
+    name: 'ORDERPROCESSING_EXPECTED_ENVIRONMENT'
+    value: environment
+  }
+  {
+    name: 'ASPNETCORE_ENVIRONMENT'
+    value: aspNetCoreEnvironment
+  }
+  {
+    name: 'DOTNET_ENVIRONMENT'
+    value: aspNetCoreEnvironment
   }
   {
     name: 'ServiceBus__Enabled'
