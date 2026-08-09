@@ -187,28 +187,43 @@ function Invoke-SqlScriptFile {
         [switch]$UseSqlAuth
     )
 
-    $tmpSql = [System.IO.Path]::GetTempFileName() + '.sql'
-    $SqlScript | Out-File -FilePath $tmpSql -Encoding UTF8
+    Add-Type -AssemblyName System.Data | Out-Null
+
+    $connectionString = if ($UseSqlAuth) {
+        "Server=tcp:$SqlServerFqdn,1433;Initial Catalog=$DatabaseName;Persist Security Info=False;User ID=$Username;Password=$Password;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+    }
+    else {
+        "Server=tcp:$SqlServerFqdn,1433;Initial Catalog=$DatabaseName;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+    }
+
+    $connection = [System.Data.SqlClient.SqlConnection]::new($connectionString)
+    if ($UseAzureAdToken) {
+        $connection.AccessToken = $AccessToken
+    }
+
+    $batches = [regex]::Split($SqlScript, '(?im)^\s*GO\s*(?:--.*)?$') |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
 
     try {
-        if ($UseAzureAdToken) {
-            if (Get-Command Invoke-Sqlcmd -ErrorAction SilentlyContinue) {
-                Invoke-Sqlcmd -ServerInstance $SqlServerFqdn -Database $DatabaseName -AccessToken $AccessToken -Query $SqlScript
-                return
+        $connection.Open()
+        foreach ($batch in $batches) {
+            $command = $connection.CreateCommand()
+            $command.CommandText = $batch
+            $command.CommandTimeout = 120
+            try {
+                [void]$command.ExecuteNonQuery()
             }
-
-            sqlcmd -S $SqlServerFqdn -d $DatabaseName -G -i $tmpSql
-        }
-        elseif ($UseSqlAuth) {
-            sqlcmd -S $SqlServerFqdn -d $DatabaseName -U $Username -P $Password -b -i $tmpSql
-        }
-
-        if ($LASTEXITCODE -ne 0) {
-            throw 'sqlcmd execution failed.'
+            finally {
+                $command.Dispose()
+            }
         }
     }
     finally {
-        Remove-Item $tmpSql -ErrorAction SilentlyContinue
+        if ($connection.State -ne [System.Data.ConnectionState]::Closed) {
+            $connection.Close()
+        }
+
+        $connection.Dispose()
     }
 }
 
