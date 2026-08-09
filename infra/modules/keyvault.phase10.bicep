@@ -18,6 +18,9 @@ param gatewayPrincipalId string = ''
 @description('Principal ID allowed to read secrets for Orders')
 param ordersPrincipalId string = ''
 
+@description('Principal ID allowed to read secrets for Payments')
+param paymentsPrincipalId string = ''
+
 @description('Principal ID allowed to read secrets for Inventory')
 param inventoryPrincipalId string = ''
 
@@ -57,7 +60,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   }
 }
 
-resource accessPolicies 'Microsoft.KeyVault/vaults/accessPolicies@2023-07-01' = if (!empty(gatewayPrincipalId) || !empty(ordersPrincipalId) || !empty(inventoryPrincipalId) || !empty(notificationsPrincipalId) || !empty(functionsPrincipalId) || !empty(deploymentPrincipalObjectId)) {
+resource accessPolicies 'Microsoft.KeyVault/vaults/accessPolicies@2023-07-01' = if (!empty(gatewayPrincipalId) || !empty(ordersPrincipalId) || !empty(paymentsPrincipalId) || !empty(inventoryPrincipalId) || !empty(notificationsPrincipalId) || !empty(functionsPrincipalId) || !empty(deploymentPrincipalObjectId)) {
   name: 'add'
   parent: keyVault
   properties: {
@@ -78,6 +81,18 @@ resource accessPolicies 'Microsoft.KeyVault/vaults/accessPolicies@2023-07-01' = 
         {
           tenantId: subscription().tenantId
           objectId: ordersPrincipalId
+          permissions: {
+            secrets: [
+              'get'
+              'list'
+            ]
+          }
+        }
+      ] : [],
+      !empty(paymentsPrincipalId) ? [
+        {
+          tenantId: subscription().tenantId
+          objectId: paymentsPrincipalId
           permissions: {
             secrets: [
               'get'

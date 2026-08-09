@@ -269,6 +269,7 @@ jobs:
       acrPullIdentityId: ${{ needs.resolve_platform.outputs.acrPullIdentityId }}
       gatewayImage: ${{ needs.resolve_platform.outputs.acrLoginServer && format('{0}/orderprocessing-gateway:phase10', needs.resolve_platform.outputs.acrLoginServer) || '' }}
       ordersImage: ${{ needs.resolve_platform.outputs.acrLoginServer && format('{0}/orderprocessing-orders:phase10', needs.resolve_platform.outputs.acrLoginServer) || '' }}
+      paymentsImage: ${{ needs.resolve_platform.outputs.acrLoginServer && format('{0}/orderprocessing-payments:phase10', needs.resolve_platform.outputs.acrLoginServer) || '' }}
       inventoryImage: ${{ needs.resolve_platform.outputs.acrLoginServer && format('{0}/orderprocessing-inventory:phase10', needs.resolve_platform.outputs.acrLoginServer) || '' }}
       notificationsImage: ${{ needs.resolve_platform.outputs.acrLoginServer && format('{0}/orderprocessing-notifications:phase10', needs.resolve_platform.outputs.acrLoginServer) || '' }}
       uiImage: ${{ needs.resolve_platform.outputs.acrLoginServer && format('{0}/orderprocessing-ui:phase10', needs.resolve_platform.outputs.acrLoginServer) || '' }}

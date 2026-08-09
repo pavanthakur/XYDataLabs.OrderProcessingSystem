@@ -60,6 +60,9 @@ param gatewayImage string
 @description('Orders container image reference')
 param ordersImage string
 
+@description('Payments container image reference')
+param paymentsImage string
+
 @description('Inventory container image reference')
 param inventoryImage string
 
@@ -92,6 +95,7 @@ var effectiveResourceSuffix = empty(resourceSuffix) ? environment : resourceSuff
 var environmentName = 'aca-${baseName}-${effectiveResourceSuffix}'
 var gatewayName = '${baseName}-gate-${effectiveResourceSuffix}'
 var ordersName = '${baseName}-ord-${effectiveResourceSuffix}'
+var paymentsName = '${baseName}-pay-${effectiveResourceSuffix}'
 var inventoryName = '${baseName}-inv-${effectiveResourceSuffix}'
 var notificationsName = '${baseName}-notif-${effectiveResourceSuffix}'
 var uiName = '${baseName}-ui-${effectiveResourceSuffix}'
@@ -291,6 +295,40 @@ resource inventoryApp 'Microsoft.App/containerApps@2024-03-01' = {
   }
 }
 
+resource paymentsApp 'Microsoft.App/containerApps@2024-03-01' = {
+  name: paymentsName
+  location: location
+  identity: appIdentity
+  properties: {
+    managedEnvironmentId: acaEnvironment.id
+    configuration: {
+      secrets: registrySecrets
+      registries: registryConfigs
+      ingress: {
+        external: false
+        targetPort: 8080
+      }
+    }
+    template: {
+      containers: [
+        {
+          name: 'payments'
+          image: paymentsImage
+          env: concat(runtimeCommonEnv, publisherEnv)
+          resources: {
+            cpu: json(cpuCores)
+            memory: '0.5Gi'
+          }
+        }
+      ]
+      scale: {
+        minReplicas: 1
+        maxReplicas: 10
+      }
+    }
+  }
+}
+
 resource notificationsApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: notificationsName
   location: location
@@ -360,6 +398,7 @@ resource uiApp 'Microsoft.App/containerApps@2024-03-01' = {
 }
 
 var ordersInternalAddress = 'https://${ordersApp.properties.configuration.ingress.fqdn}'
+var paymentsInternalAddress = 'https://${paymentsApp.properties.configuration.ingress.fqdn}'
 var inventoryInternalAddress = 'https://${inventoryApp.properties.configuration.ingress.fqdn}'
 var notificationsInternalAddress = 'https://${notificationsApp.properties.configuration.ingress.fqdn}'
 var uiInternalAddress = 'https://${uiApp.properties.configuration.ingress.fqdn}'
@@ -393,6 +432,10 @@ resource gatewayApp 'Microsoft.App/containerApps@2024-03-01' = {
               value: ordersInternalAddress
             }
             {
+              name: 'ReverseProxy__Clusters__payments-cluster__Destinations__payments-primary__Address'
+              value: paymentsInternalAddress
+            }
+            {
               name: 'ReverseProxy__Clusters__inventory-cluster__Destinations__inventory-primary__Address'
               value: inventoryInternalAddress
             }
@@ -422,6 +465,7 @@ resource gatewayApp 'Microsoft.App/containerApps@2024-03-01' = {
 output managedEnvironmentId string = acaEnvironment.id
 output gatewayContainerAppName string = gatewayApp.name
 output ordersContainerAppName string = ordersApp.name
+output paymentsContainerAppName string = paymentsApp.name
 output inventoryContainerAppName string = inventoryApp.name
 output notificationsContainerAppName string = notificationsApp.name
 output uiContainerAppName string = uiApp.name
@@ -429,6 +473,7 @@ output gatewayContainerAppFqdn string = gatewayApp.properties.configuration.ingr
 output uiContainerAppFqdn string = uiApp.properties.configuration.ingress.fqdn
 output gatewayPrincipalId string = gatewayApp.identity.principalId
 output ordersPrincipalId string = ordersApp.identity.principalId
+output paymentsPrincipalId string = paymentsApp.identity.principalId
 output inventoryPrincipalId string = inventoryApp.identity.principalId
 output notificationsPrincipalId string = notificationsApp.identity.principalId
 output uiPrincipalId string = uiApp.identity.principalId

@@ -42,6 +42,9 @@ param gatewayImage string
 @description('Orders container image reference')
 param ordersImage string
 
+@description('Payments container image reference')
+param paymentsImage string
+
 @description('Inventory container image reference')
 param inventoryImage string
 
@@ -209,6 +212,7 @@ module containerApps 'modules/containerapps.bicep' = {
     keyVaultUri: keyVaultUri
     gatewayImage: gatewayImage
     ordersImage: ordersImage
+    paymentsImage: paymentsImage
     inventoryImage: inventoryImage
     notificationsImage: notificationsImage
     uiImage: uiImage
@@ -261,6 +265,7 @@ module keyVault 'modules/keyvault.phase10.bicep' = {
     baseName: baseName
     gatewayPrincipalId: containerApps.outputs.gatewayPrincipalId
     ordersPrincipalId: containerApps.outputs.ordersPrincipalId
+    paymentsPrincipalId: containerApps.outputs.paymentsPrincipalId
     inventoryPrincipalId: containerApps.outputs.inventoryPrincipalId
     notificationsPrincipalId: containerApps.outputs.notificationsPrincipalId
     functionsPrincipalId: functions.outputs.functionPrincipalId
@@ -275,6 +280,7 @@ output logAnalyticsWorkspaceName string = logAnalytics.outputs.logAnalyticsWorks
 output managedEnvironmentId string = containerApps.outputs.managedEnvironmentId
 output gatewayContainerAppName string = containerApps.outputs.gatewayContainerAppName
 output ordersContainerAppName string = containerApps.outputs.ordersContainerAppName
+output paymentsContainerAppName string = containerApps.outputs.paymentsContainerAppName
 output inventoryContainerAppName string = containerApps.outputs.inventoryContainerAppName
 output notificationsContainerAppName string = containerApps.outputs.notificationsContainerAppName
 output uiContainerAppName string = containerApps.outputs.uiContainerAppName

@@ -156,7 +156,7 @@ function Test-GatewayBackendRoutes {
     }
 
     $shortNameRoute = $routes | Where-Object {
-        $_ -match "-> http://orderprocessing-(ord|inv|notif|ui)-$CurrentEnvironmentSuffix$"
+        $_ -match "-> http://orderprocessing-(ord|pay|inv|notif|ui)-$CurrentEnvironmentSuffix$"
     } | Select-Object -First 1
 
     if ($null -ne $shortNameRoute) {
@@ -168,6 +168,7 @@ function Test-GatewayBackendRoutes {
 
     $requiredClusters = @(
         'orders-cluster/orders-primary',
+        'payments-cluster/payments-primary',
         'inventory-cluster/inventory-primary',
         'notifications-cluster/notifications-primary',
         'ui-cluster/ui-primary'
