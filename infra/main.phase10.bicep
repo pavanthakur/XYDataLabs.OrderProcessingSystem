@@ -163,6 +163,12 @@ module redis 'modules/redis.phase10.bicep' = if (deployRedis) {
 #disable-next-line BCP318
 var sqlConnectionString = deploySql ? 'Server=tcp:${sql.outputs.sqlServerFqdn},1433;Initial Catalog=${sql.outputs.databaseName};User ID=${sqlAdminUsername};Password=${sqlAdminPassword};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;' : ''
 #disable-next-line BCP318
+var baselineDedicatedTenantConnectionStrings = deploySql ? {
+  // TenantC is sample baseline seed data. Runtime topology remains registry-driven.
+  #disable-next-line BCP318
+  TenantC: 'Server=tcp:${sql.outputs.sqlServerFqdn},1433;Initial Catalog=${sql.outputs.tenantCDatabaseName};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;Authentication=Active Directory Default'
+} : {}
+#disable-next-line BCP318
 var redisConnectionString = deployRedis ? '${redis.outputs.redisHostName}:${string(redis.outputs.redisSslPort)},password=${redis.outputs.redisPrimaryKey},ssl=True,abortConnect=False' : ''
 
 module logAnalytics 'modules/loganalytics.phase10.bicep' = {
@@ -271,6 +277,7 @@ module keyVault 'modules/keyvault.phase10.bicep' = {
     functionsPrincipalId: functions.outputs.functionPrincipalId
     deploymentPrincipalObjectId: deploymentPrincipalObjectId
     sqlAdminPassword: sqlAdminPassword
+    dedicatedTenantConnectionStrings: baselineDedicatedTenantConnectionStrings
   }
 }
 

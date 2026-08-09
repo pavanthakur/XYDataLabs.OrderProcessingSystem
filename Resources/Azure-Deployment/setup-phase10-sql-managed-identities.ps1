@@ -104,15 +104,29 @@ function Resolve-ManagedIdentityAppId {
 function Invoke-AzText {
     param(
         [Parameter(Mandatory = $true)][string[]]$Arguments,
-        [Parameter(Mandatory = $true)][string]$Operation
+        [Parameter(Mandatory = $true)][string]$Operation,
+        [ValidateRange(1, 5)][int]$MaxAttempts = 3,
+        [ValidateRange(1, 30)][int]$InitialDelaySeconds = 2
     )
 
-    $result = & az @Arguments -o tsv 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        throw "$Operation failed. Azure CLI output: $result"
+    $lastOutput = ''
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        $result = & az @Arguments -o tsv 2>&1
+        $exitCode = $LASTEXITCODE
+        $lastOutput = [string]::Join([Environment]::NewLine, @($result | ForEach-Object { $_.ToString() })).Trim()
+
+        if ($exitCode -eq 0) {
+            return $lastOutput
+        }
+
+        if ($attempt -lt $MaxAttempts) {
+            $delaySeconds = [int]($InitialDelaySeconds * [Math]::Pow(2, $attempt - 1))
+            Write-Host "$Operation attempt $attempt/$MaxAttempts failed; retrying in $delaySeconds second(s). Azure CLI output: $lastOutput" -ForegroundColor Yellow
+            Start-Sleep -Seconds $delaySeconds
+        }
     }
 
-    return [string]::Join([Environment]::NewLine, @($result | ForEach-Object { $_.ToString() })).Trim()
+    throw "$Operation failed after $MaxAttempts attempt(s). Azure CLI output: $lastOutput"
 }
 
 function Invoke-SqlQueryRows {
@@ -288,6 +302,78 @@ function Resolve-DedicatedDatabaseNameFromConnectionString {
     return $match.Groups[1].Value.Trim()
 }
 
+function Get-Phase10FailureClassification {
+    param([Parameter(Mandatory = $true)][string]$Message)
+
+    $classification = switch -Regex ($Message) {
+        'SecretNotFound|was not found in this key vault|missing or empty' { 'ConfigurationContract.MissingSecret'; break }
+        'Forbidden|AuthorizationFailed|AccessDenied|does not have secrets (get|list) permission' { 'AzureAuthorization'; break }
+        'Login failed for user|SqlException.*18456' { 'SqlAuthentication'; break }
+        'Client with IP address|firewall|network-related or instance-specific' { 'SqlNetwork'; break }
+        'ManagedIdentity|principalId|service principal' { 'ManagedIdentityResolution'; break }
+        'Argument types do not match' { 'PowerShellRuntime'; break }
+        default { 'Unhandled' }
+    }
+
+    return $classification
+}
+
+function Write-Phase10FailureDiagnostics {
+    param(
+        [Parameter(Mandatory = $true)][System.Management.Automation.ErrorRecord]$ErrorRecord,
+        [Parameter(Mandatory = $true)][string]$Stage
+    )
+
+    $message = [string]$ErrorRecord.Exception.Message
+    $classification = Get-Phase10FailureClassification -Message $message
+    $location = if ($null -ne $ErrorRecord.InvocationInfo -and -not [string]::IsNullOrWhiteSpace($ErrorRecord.InvocationInfo.PositionMessage)) {
+        ($ErrorRecord.InvocationInfo.PositionMessage -replace "`r?`n", ' ' -replace '\s+', ' ').Trim()
+    }
+    else {
+        'Unavailable'
+    }
+
+    Write-Host ''
+    Write-Host 'Phase 10 SQL identity setup failed.' -ForegroundColor Red
+    Write-Host "  Stage          : $Stage" -ForegroundColor Red
+    Write-Host "  Classification : $classification" -ForegroundColor Red
+    Write-Host "  Error type     : $($ErrorRecord.Exception.GetType().FullName)" -ForegroundColor Red
+    Write-Host "  Error id       : $($ErrorRecord.FullyQualifiedErrorId)" -ForegroundColor Red
+    Write-Host "  Location       : $location" -ForegroundColor Red
+    Write-Host "  Message        : $message" -ForegroundColor Red
+
+    $annotationMessage = $message.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+    if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_ACTIONS)) {
+        Write-Host "::error title=Phase 10 SQL identity setup [$classification]::$annotationMessage"
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
+        $summaryMessage = $message.Replace('|', '\|').Replace("`r", '').Replace("`n", '<br>')
+        try {
+            @"
+### Phase 10 SQL identity setup failure
+
+| Field | Value |
+|---|---|
+| Stage | $Stage |
+| Classification | $classification |
+| Environment | $Environment |
+| Resource group | $resourceGroupName |
+| SQL server | $sqlFqdn |
+| Shared database | $sharedDatabaseName |
+| Key Vault | $keyVaultName |
+| Error type | $($ErrorRecord.Exception.GetType().FullName) |
+| Error | $summaryMessage |
+
+No secret values or connection-string credentials are included in this diagnostic.
+"@ | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
+        }
+        catch {
+            Write-Host "Could not append failure diagnostics to GITHUB_STEP_SUMMARY: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+    }
+}
+
 function Get-ActiveDedicatedTenantDatabases {
     param(
         [Parameter(Mandatory = $true)][string]$SqlServerFqdn,
@@ -344,9 +430,17 @@ ORDER BY [Code];
     foreach ($tenant in $tenants) {
         $tenantCode = [string]$tenant.TenantCode
         $secretName = "DedicatedTenantConnectionStrings--$tenantCode"
-        $connectionString = Invoke-AzText `
-            -Arguments @('keyvault', 'secret', 'show', '--vault-name', $KeyVaultName, '--name', $secretName, '--query', 'value') `
-            -Operation "Resolve Key Vault secret '$secretName'"
+        Write-Host "Validating dedicated topology contract: tenant '$tenantCode', secret '$secretName'." -ForegroundColor Gray
+
+        try {
+            $connectionString = Invoke-AzText `
+                -Arguments @('keyvault', 'secret', 'show', '--vault-name', $KeyVaultName, '--name', $secretName, '--query', 'value') `
+                -Operation "Resolve Key Vault secret '$secretName'"
+        }
+        catch {
+            $cause = $_.Exception.Message
+            throw "Dedicated tenant topology contract validation failed for tenant '$tenantCode'. Registry tier is Dedicated, so Key Vault '$KeyVaultName' must contain secret '$secretName'. Discovery came from the registry; this secret validates the provisioned database contract. Cause: $cause"
+        }
 
         if ([string]::IsNullOrWhiteSpace($connectionString)) {
             throw "Dedicated tenant '$tenantCode' is active in the tenant registry, but Key Vault secret '$secretName' is missing or empty."
@@ -463,6 +557,12 @@ $roleGrantSql
         -UseAzureAdToken
 }
 
+$script:CurrentStage = 'Initialize SQL identity setup'
+trap {
+    Write-Phase10FailureDiagnostics -ErrorRecord $_ -Stage $script:CurrentStage
+    exit 1
+}
+
 $envSuffix = $environmentDescriptor.ResourceSuffix
 $dbEnvTitle = $environmentDescriptor.AzureSqlDatabaseSuffix
 $resourceGroupName = "rg-$BaseName-$envSuffix"
@@ -510,11 +610,13 @@ $token = $null
 $sqlAdmin = $null
 
 if ($UseSqlAuthentication) {
+    $script:CurrentStage = 'Resolve SQL administrator settings'
     $sqlAdmin = Resolve-SqlAdminSettings -Environment $Environment -ExplicitUsername $SqlAdminUsername -ExplicitPassword $SqlAdminPassword
     Write-Host "Execution mode   : SQL authentication automation" -ForegroundColor Green
     Write-Host "SQL Admin        : $($sqlAdmin.Username)" -ForegroundColor Green
 }
 else {
+    $script:CurrentStage = 'Acquire Azure SQL access token'
     Write-Host "Execution mode   : Azure AD admin token" -ForegroundColor Green
     $token = az account get-access-token --resource https://database.windows.net --query accessToken -o tsv 2>&1
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($token)) {
@@ -526,6 +628,7 @@ $resolvedSqlUsername = if ($null -ne $sqlAdmin) { [string]$sqlAdmin.Username } e
 $resolvedSqlPassword = if ($null -ne $sqlAdmin) { [string]$sqlAdmin.Password } else { '' }
 
 if ($UseSqlAuthentication) {
+    $script:CurrentStage = 'Discover and validate dedicated tenant topology'
     $dedicatedTenantDatabases = @(Get-ActiveDedicatedTenantDatabases `
         -SqlServerFqdn $sqlFqdn `
         -SharedDatabaseName $sharedDatabaseName `
@@ -536,6 +639,7 @@ if ($UseSqlAuthentication) {
         -UseSqlAuth)
 }
 else {
+    $script:CurrentStage = 'Discover and validate dedicated tenant topology'
     $dedicatedTenantDatabases = @(Get-ActiveDedicatedTenantDatabases `
         -SqlServerFqdn $sqlFqdn `
         -SharedDatabaseName $sharedDatabaseName `
@@ -564,6 +668,7 @@ foreach ($identity in $runtimeIdentities) {
 
     Write-Host ''
     Write-Host "Granting SQL access for $friendlyName ($resourceName)..." -ForegroundColor Yellow
+    $script:CurrentStage = "Resolve managed identity for $friendlyName ($resourceName)"
 
     $principalId = if ($kind -eq 'ContainerApp') {
         Resolve-ContainerAppPrincipalId -ResourceGroupName $resourceGroupName -ContainerAppName $resourceName
@@ -578,6 +683,7 @@ foreach ($identity in $runtimeIdentities) {
     Write-Host "  App ID       : $appId" -ForegroundColor Gray
 
     if ($UseSqlAuthentication) {
+        $script:CurrentStage = "Grant $friendlyName access to shared database '$sharedDatabaseName'"
         Grant-IdentityAccessToDatabase `
             -DisplayName $resourceName `
             -ManagedIdentityAppId $appId `
@@ -589,6 +695,7 @@ foreach ($identity in $runtimeIdentities) {
             -UseSqlAuth
     }
     else {
+        $script:CurrentStage = "Grant $friendlyName access to shared database '$sharedDatabaseName'"
         Grant-IdentityAccessToDatabase `
             -DisplayName $resourceName `
             -ManagedIdentityAppId $appId `
@@ -601,6 +708,7 @@ foreach ($identity in $runtimeIdentities) {
     }
 
     foreach ($dedicatedDatabase in $dedicatedTenantDatabases) {
+        $script:CurrentStage = "Grant $friendlyName access to dedicated database '$($dedicatedDatabase.DatabaseName)' for tenant '$($dedicatedDatabase.TenantCode)'"
         if ($UseSqlAuthentication) {
             Grant-IdentityAccessToDatabase `
                 -DisplayName $resourceName `
@@ -634,5 +742,6 @@ foreach ($identity in $runtimeIdentities) {
 }
 
 Write-Host ''
+$script:CurrentStage = 'Complete'
 Write-Host 'Phase 10 runtime SQL identity setup complete.' -ForegroundColor Green
 exit 0

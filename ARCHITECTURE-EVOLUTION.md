@@ -1476,41 +1476,23 @@ Secure, scalable cloud-native microservices with durable Azure transport, contro
 
 ### Architecture Diagram
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    SERVICE DATA OWNERSHIP                            │
-│                                                                      │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐  │
-│  │   Orders API     │  │  Inventory API   │  │ Notifications API│  │
-│  │                  │  │                  │  │                  │  │
-│  │  Own entities:   │  │  Own entities:   │  │  Own entities:   │  │
-│  │  • Order         │  │  • StockItem     │  │  • Notification  │  │
-│  │  • Customer      │  │  • Reservation   │  │  • Template      │  │
-│  │  • Payment       │  │  • StockMovement │  │  • DeliveryLog   │  │
-│  │  Own migrations  │  │  Own migrations  │  │  Own migrations  │  │
-│  └────────┬─────────┘  └────────┬─────────┘  └────────┬─────────┘  │
-│           │                     │                      │            │
-│  ┌────────▼─────────┐  ┌───────▼──────────┐  ┌────────▼─────────┐  │
-│  │   Orders DB      │  │  Inventory DB    │  │ Notifications DB │  │
-│  │   (SQL Server)   │  │  (SQL Server)    │  │  (SQL Server)    │  │
-│  └────────┬─────────┘  └───────┬──────────┘  └────────┬─────────┘  │
-│           │                     │                      │            │
-│           └─────────────────────┼──────────────────────┘            │
-│                                 │                                    │
-│              ┌──────────────────▼──────────────────┐                │
-│              │       Azure Service Bus              │                │
-│              │   (eventual consistency via events)   │                │
-│              │                                      │                │
-│              │  No cross-service joins allowed!      │                │
-│              │  Data sync = events only              │                │
-│              └──────────────────────────────────────┘                │
-│                                                                      │
-└─────────────────────────────────────────────────────────────────────┘
+```text
+Orders API        Payments API        Inventory API        Notifications API
+    |                  |                   |                       |
+Orders DB          Payments DB         Inventory DB          Notifications DB
+    |                  |                   |                       |
+    +------------------+--------- Azure Service Bus --------------+
+
+Each service owns its entities, migrations, shared-tenant pool, and dedicated-
+tenant stores. Cross-service joins are prohibited; synchronization uses events
+and service-owned projections.
 ```
 
 ### Key Deliverables
 
-- **Database per service** — Orders DB, Inventory DB, Notifications DB
+The canonical execution detail for these deliverables is [Phase 11 Implementation Plan](docs/internal/phase11-implementation-plan.md). In particular, tenant topology changes use a prepare, migrate, validate, activate, verify sequence so registry truth never advertises an unprovisioned database or provider contract.
+
+- **Database per service** — Orders DB, Payments DB, Inventory DB, Notifications DB
 - Remove shared `DbContext` — each service owns its entities and EF migrations
 - Shared projects (`Application`, `Domain`, `Infrastructure`) split into per-service libraries
 - **Eventual consistency** — no cross-service joins; data synchronization via events only
@@ -1519,18 +1501,22 @@ Secure, scalable cloud-native microservices with durable Azure transport, contro
 - **Discovery vs validation kept explicit** — registry data remains the only discovery source; infrastructure, secret, database, and runtime contracts remain validation concerns
 - **Topology change evidence** — every tenant-topology change produces an auditable operator packet before traffic promotion
 - **Reconciliation and drift repair** — registry, secret contracts, DB topology, and runtime execution are checked for mismatch and repaired through governed workflows
+- **Prepare-before-activate topology control plane** — dedicated databases, migrations, secret contracts, provider contracts, and managed-identity grants are complete before the concurrency-checked registry activation step
+- **Idempotent topology operations** — tenant-scoped operation locks, stable operation IDs, resumable stages, bounded retries, rollback windows, and immutable non-secret evidence prevent partial changes from becoming runtime truth
 - **`XYDataLabs.OrderProcessingSystem.DurableFunctions`** — separate Azure Functions project (isolated process model) hosting Durable Function orchestrations for cross-service workflows that require compensating actions (see Distributed Workflow Strategy below)
 
 ### Phase 11 Status Table
 
 | Area | Status | Next Step | Phase |
 |---|---|---|---|
-| Database per service | Planned | Split Orders, Inventory, and Notifications into independent stores | Phase 11 |
+| Database per service | Planned | Split Orders, Payments, Inventory, and Notifications into independent stores | Phase 11 |
 | Shared DbContext removal | Planned | Remove shared persistence coupling between services | Phase 11 |
 | Per-service migrations | Planned | Give each service its own EF Core migration pipeline | Phase 11 |
 | Tenant lifecycle operations | Planned | Add governed onboarding, activation, tier-move, provider-change, and rollback workflows | Phase 11 |
 | Discovery / validation operational workflow | Planned | Keep registry discovery separate from infra/secret/runtime validation in operator flows | Phase 11 |
 | Topology drift detection and repair | Planned | Add mismatch detection between registry, secrets, DB topology, and runtime execution | Phase 11 |
+| Prepare-before-activate provisioning | Planned | Provision DB, migrations, secrets, provider contract, and identity grants before changing registry topology | Phase 11 |
+| Idempotency and concurrency control | Planned | Add stable operation IDs, tenant locks, registry version checks, resumability, and bounded rollback windows | Phase 11 |
 | Eventual consistency | Planned | Use events and local projections instead of cross-service joins | Phase 11 |
 | Durable Functions workflow support | Planned | Add orchestration for compensating workflows that need it | Phase 11 |
 | Notifications PostgreSQL pilot | Not Phase 11 core | Move the portability showcase into Phase 11.5 | Phase 11.5 |
@@ -1544,6 +1530,8 @@ Secure, scalable cloud-native microservices with durable Azure transport, contro
 - Cross-service reads use lightweight HTTP queries (via gateway) for real-time needs
 - Tenant topology discovery always comes from the authoritative registry; secrets, dedicated databases, and runtime state only validate the discovered topology
 - No tenant or provider change may rely on ad hoc script edits; shared/dedicated moves and provider reassignment must be workflow-driven and auditable
+- Registry activation is the final topology mutation after target provisioning and validation; failed preparation must leave the currently working topology unchanged
+- Retries are bounded and limited to transient failures; missing contracts and authorization failures fail immediately with classified, non-secret diagnostics
 
 ### Distributed Workflow Strategy
 

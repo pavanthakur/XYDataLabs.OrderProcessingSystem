@@ -9,6 +9,7 @@ Use these documents:
 - `phase9-remaining-roadmap.md` — short Phase 9 closeout and Phase 10 pointer
 - `phase10-preazure-lld.md` — canonical pre-Azure Phase 10 architecture baseline, ownership model, invariants, gates, and rollout controls
 - `phase10-implementation-checklist.md` — Phase 10 execution checklist, completion contract, 10.2-10.7 execution slices, risks, NFRs, rollback, and evidence requirements
+- `phase11-implementation-plan.md` — canonical Phase 11 service-autonomy and tenant-topology operations plan, including prepare-before-activate provisioning, tier moves, provider reassignment, drift repair, rollback, and evidence contracts
 - `phase10-parity-matrix.md` — next SQL/Redis/ACR parity change set, based on local Docker versus Azure
 - `phase10-zoocode-local-model-handoff.md` — bounded Zoo Code/local-model handoff for staging/prod promotion planning after dev validation
 - `docs/runbooks/phase10-azure-smoke.md` — first Azure what-if / deploy / transport smoke runbook for Phase 10

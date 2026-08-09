@@ -362,7 +362,7 @@ Use this placement rule so the current Phase 10 closure remains narrow and futur
 | Topology artifact and promotion-safe topology proof | Phase 10 | Protects the current runtime and promotion model without expanding into general hardening |
 | Topology evidence in each environment where Phase 10 smoke or payment-matrix execution runs | Phase 10 | Evidence is part of the current validation contract, not a future platform enhancement |
 | `staging` / `prod` promotion-safe topology proof even when full payment matrix is not executed | Phase 10 | Promotion safety must be explicit before final closeout |
-| Tenant lifecycle operations: onboarding, activation, shared/dedicated moves, provider reassignment, rollback | Phase 11 | These are operational topology workflows that belong with service autonomy and data ownership |
+| Tenant lifecycle operations: onboarding, activation, shared/dedicated moves, provider reassignment, rollback | Phase 11 | Follow `phase11-implementation-plan.md`: provision and validate DB, migrations, secrets, provider contracts, and identity grants before the final registry activation |
 | Discovery = registry truth; validation = infra/secret/runtime contract | Phase 11 | This becomes a governed operator workflow once transport closeout is done |
 | Drift detection and repair between registry, secrets, DB topology, and runtime execution | Phase 11 | Reconciliation belongs with service autonomy and topology operations |
 | Observability dashboards, alerting, provider rotation, DR, quotas, noisy-neighbor policy, security hardening closure | Phase 12 | These are platform-operability concerns, not Phase 10 transport/runtime exit criteria |
