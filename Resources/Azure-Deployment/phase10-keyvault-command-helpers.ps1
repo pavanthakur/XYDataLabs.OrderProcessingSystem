@@ -207,23 +207,38 @@ function Wait-Phase10KeyVaultSecretWriteAccess {
                     }
                 }
 
-                $policy = @($properties.accessPolicies | Where-Object {
+                $matchingPolicies = @($properties.accessPolicies | Where-Object {
                         [string]::Equals([string]$_.objectId, $PrincipalObjectId, [StringComparison]::OrdinalIgnoreCase)
-                    } | Select-Object -First 1)
-                $observedPermissions = @($policy.permissions.secrets | ForEach-Object { ([string]$_).ToLowerInvariant() })
-                $missingPermissions = @('get', 'list', 'set') | Where-Object { $observedPermissions -notcontains $_ }
+                    })
 
-                if ($missingPermissions.Count -eq 0) {
-                    return [pscustomobject]@{
-                        Succeeded = $true
-                        AuthorizationMode = $authorizationMode
-                        ObservedPermissions = $observedPermissions
-                        Diagnostic = 'Deployment principal has get/list/set secret permissions at the vault scope.'
-                        Attempts = $attempt
+                if ($matchingPolicies.Count -eq 0) {
+                    $observedPermissions = @()
+                    $lastDiagnostic = "Deployment principal '$PrincipalObjectId' does not have a Key Vault access policy entry."
+                }
+                else {
+                    $policy = $matchingPolicies[0]
+                    $observedPermissions = @(
+                        @($policy.permissions.secrets) |
+                            ForEach-Object { ([string]$_).ToLowerInvariant() } |
+                            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+                    )
+                    $missingPermissions = @(
+                        @('get', 'list', 'set') | Where-Object { $observedPermissions -notcontains $_ }
+                    )
+
+                    if ($missingPermissions.Count -eq 0) {
+                        return [pscustomobject]@{
+                            Succeeded = $true
+                            AuthorizationMode = $authorizationMode
+                            ObservedPermissions = $observedPermissions
+                            Diagnostic = 'Deployment principal has get/list/set secret permissions at the vault scope.'
+                            Attempts = $attempt
+                        }
                     }
+
+                    $lastDiagnostic = "Deployment principal '$PrincipalObjectId' is missing Key Vault secret permission(s): $($missingPermissions -join ', ')."
                 }
 
-                $lastDiagnostic = "Deployment principal '$PrincipalObjectId' is missing Key Vault secret permission(s): $($missingPermissions -join ', ')."
             }
             catch {
                 $lastDiagnostic = "Key Vault authorization metadata could not be parsed: $($_.Exception.Message)"
