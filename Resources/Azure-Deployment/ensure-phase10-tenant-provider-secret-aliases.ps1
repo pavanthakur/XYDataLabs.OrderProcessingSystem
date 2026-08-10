@@ -5,12 +5,17 @@ param(
     [string]$ResourceGroupName,
     [string]$SummaryPath,
     [string]$BaseName = 'orderprocessing',
+    [string]$DeploymentPrincipalObjectId,
     [int]$Attempts = 6,
-    [int]$DelaySeconds = 10
+    [int]$DelaySeconds = 10,
+    [int]$AccessPolicyAttempts = 6,
+    [int]$AccessPolicyDelaySeconds = 10
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+
+. (Join-Path $PSScriptRoot 'phase10-keyvault-command-helpers.ps1')
 
 $envSuffix = if ($Environment -eq 'staging') { 'stg' } else { $Environment }
 $resourceGroup = if ([string]::IsNullOrWhiteSpace($ResourceGroupName)) { "rg-$BaseName-$envSuffix" } else { $ResourceGroupName }
@@ -77,31 +82,33 @@ function Get-TenantRegistryTopology {
     throw "Failed to resolve tenant topology from the runtime after $Attempts attempt(s). $lastError"
 }
 
-function Get-KeyVaultSecretValue {
-    param([Parameter(Mandatory)][string]$SecretName)
-
-    $value = Invoke-AzText -Arguments @('keyvault', 'secret', 'show', '--vault-name', $keyVaultName, '--name', $SecretName, '--query', 'value')
-    if ([string]::IsNullOrWhiteSpace($value)) {
-        return $null
-    }
-
-    return $value
-}
-
-function Set-KeyVaultSecretValue {
-    param(
-        [Parameter(Mandatory)][string]$SecretName,
-        [Parameter(Mandatory)][string]$SecretValue
-    )
-
-    & az keyvault secret set --vault-name $keyVaultName --name $SecretName --value $SecretValue --only-show-errors 1>$null 2>$null
-    return ($LASTEXITCODE -eq 0)
-}
-
 $topology = Get-TenantRegistryTopology
 $results = New-Object 'System.Collections.Generic.List[object]'
 $createdCount = 0
 $failures = New-Object 'System.Collections.Generic.List[string]'
+$accessCheck = [pscustomobject]@{
+    Succeeded = $false
+    AuthorizationMode = 'unknown'
+    ObservedPermissions = @()
+    Diagnostic = 'Deployment principal object ID was not provided.'
+    Attempts = 0
+}
+
+if ([string]::IsNullOrWhiteSpace($DeploymentPrincipalObjectId)) {
+    $failures.Add('Deployment principal object ID is required for the Key Vault write-access preflight.')
+}
+else {
+    $accessCheck = Wait-Phase10KeyVaultSecretWriteAccess `
+        -KeyVaultName $keyVaultName `
+        -ResourceGroupName $resourceGroup `
+        -PrincipalObjectId $DeploymentPrincipalObjectId `
+        -Attempts $AccessPolicyAttempts `
+        -DelaySeconds $AccessPolicyDelaySeconds
+
+    if (-not $accessCheck.Succeeded) {
+        $failures.Add("Key Vault write-access preflight failed. $($accessCheck.Diagnostic)")
+    }
+}
 
 foreach ($tenant in $topology.Items) {
     $tenantCode = [string]$tenant.TenantCode
@@ -110,6 +117,8 @@ foreach ($tenant in $topology.Items) {
     $providerFallbackSecret = ''
     $action = 'unchanged'
     $detail = 'Alias already present.'
+    $diagnostic = ''
+    $attemptsUsed = 0
 
     if ([string]::IsNullOrWhiteSpace($tenantCode)) {
         $failures.Add('Active tenant is missing TenantCode.')
@@ -127,26 +136,57 @@ foreach ($tenant in $topology.Items) {
     }
 
     $providerAlias = "PaymentProviders--$tenantCode--$providerCode--PrivateKey"
-    $existingAlias = Get-KeyVaultSecretValue -SecretName $providerAlias
 
-    if ([string]::IsNullOrWhiteSpace($existingAlias)) {
+    if (-not $accessCheck.Succeeded) {
+        $action = 'blocked'
+        $detail = 'Alias synchronization was not attempted because the deployment principal lacks confirmed write access.'
+        $diagnostic = $accessCheck.Diagnostic
+    }
+    else {
+        $aliasRead = Get-Phase10KeyVaultSecret -KeyVaultName $keyVaultName -SecretName $providerAlias
+        $attemptsUsed += $aliasRead.Attempts
+        if ($aliasRead.State -eq 'Error') {
+            $action = 'failed'
+            $detail = "Failed to read alias '$providerAlias'."
+            $diagnostic = $aliasRead.Diagnostic
+            $failures.Add("Tenant '$tenantCode' alias read failed. $diagnostic")
+        }
+        elseif ($aliasRead.State -eq 'Missing') {
         $providerFallbackSecret = "$providerCode--PrivateKey"
-        $fallbackValue = Get-KeyVaultSecretValue -SecretName $providerFallbackSecret
+            $fallbackRead = Get-Phase10KeyVaultSecret -KeyVaultName $keyVaultName -SecretName $providerFallbackSecret
+            $attemptsUsed += $fallbackRead.Attempts
 
-        if ([string]::IsNullOrWhiteSpace($fallbackValue)) {
+            if ($fallbackRead.State -eq 'Error') {
+                $action = 'failed'
+                $detail = "Failed to read fallback secret '$providerFallbackSecret'."
+                $diagnostic = $fallbackRead.Diagnostic
+                $failures.Add("Tenant '$tenantCode' fallback provider secret read failed. $diagnostic")
+            }
+            elseif ($fallbackRead.State -eq 'Missing') {
             $action = 'failed'
             $detail = "Missing alias '$providerAlias' and fallback secret '$providerFallbackSecret'."
             $failures.Add("Tenant '$tenantCode' provider alias '$providerAlias' could not be created because fallback secret '$providerFallbackSecret' is missing.")
-        }
-        elseif (-not (Set-KeyVaultSecretValue -SecretName $providerAlias -SecretValue $fallbackValue)) {
+            }
+            else {
+                $writeResult = Set-Phase10KeyVaultSecret `
+                    -KeyVaultName $keyVaultName `
+                    -SecretName $providerAlias `
+                    -SecretValue $fallbackRead.Value `
+                    -SecretValues @($fallbackRead.Value)
+                $attemptsUsed += $writeResult.Attempts
+
+                if (-not $writeResult.Succeeded) {
             $action = 'failed'
             $detail = "Failed to create alias '$providerAlias' from fallback secret '$providerFallbackSecret'."
-            $failures.Add("Tenant '$tenantCode' provider alias '$providerAlias' could not be written to Key Vault.")
-        }
-        else {
+                    $diagnostic = $writeResult.Diagnostic
+                    $failures.Add("Tenant '$tenantCode' provider alias '$providerAlias' could not be written to Key Vault. $diagnostic")
+                }
+                else {
             $action = 'created'
             $detail = "Created alias '$providerAlias' from fallback secret '$providerFallbackSecret'."
             $createdCount++
+                }
+            }
         }
     }
 
@@ -157,6 +197,8 @@ foreach ($tenant in $topology.Items) {
             ProviderFallbackSecret = $providerFallbackSecret
             Action = $action
             Detail = $detail
+            Diagnostic = $diagnostic
+            Attempts = $attemptsUsed
         })
 }
 
@@ -173,15 +215,20 @@ $summary += ('**Gateway App:** `{0}`' -f $gatewayApp)
 $summary += ('**Gateway FQDN:** `{0}`' -f $topology.GatewayFqdn)
 $summary += ('**Tenant Registry Endpoint:** `{0}`' -f $topology.RegistryUri)
 $summary += ('**Key Vault:** `{0}`' -f $keyVaultName)
+$summary += ('**Deployment Principal Object ID:** `{0}`' -f $(if ([string]::IsNullOrWhiteSpace($DeploymentPrincipalObjectId)) { 'missing' } else { $DeploymentPrincipalObjectId }))
+$summary += ('**Authorization Mode:** `{0}`' -f $accessCheck.AuthorizationMode)
+$summary += ('**Observed Secret Permissions:** `{0}`' -f $(if (@($accessCheck.ObservedPermissions).Count -eq 0) { 'none' } else { @($accessCheck.ObservedPermissions) -join ', ' }))
+$summary += ('**Authorization Attempts:** `{0}`' -f $accessCheck.Attempts)
 $summary += ('**Aliases Created:** `{0}`' -f $createdCount)
 $summary += ('**Completed UTC:** `{0}`' -f $completedUtc.ToString('O'))
 $summary += ''
-$summary += '| Tenant | Provider | Alias | Fallback Secret | Action | Detail |'
-$summary += '|---|---|---|---|---|---|'
+$summary += '| Tenant | Provider | Alias | Fallback Secret | Action | Attempts | Detail | Azure Diagnostic |'
+$summary += '|---|---|---|---|---|---|---|---|'
 foreach ($result in $results) {
     $fallbackSecret = if ([string]::IsNullOrWhiteSpace($result.ProviderFallbackSecret)) { '-' } else { $result.ProviderFallbackSecret }
     $detail = ([string]$result.Detail).Replace('|', '\|').Replace("`r", ' ').Replace("`n", ' ')
-    $summary += "| $($result.TenantCode) | $($result.ProviderCode) | $($result.ProviderPrivateKeyAlias) | $fallbackSecret | $($result.Action) | $detail |"
+    $diagnostic = if ([string]::IsNullOrWhiteSpace([string]$result.Diagnostic)) { '-' } else { ([string]$result.Diagnostic).Replace('|', '\|').Replace("`r", ' ').Replace("`n", ' ') }
+    $summary += "| $($result.TenantCode) | $($result.ProviderCode) | $($result.ProviderPrivateKeyAlias) | $fallbackSecret | $($result.Action) | $($result.Attempts) | $detail | $diagnostic |"
 }
 
 if ($failures.Count -eq 0) {
@@ -205,14 +252,26 @@ if (-not [string]::IsNullOrWhiteSpace($SummaryPath)) {
     $summaryText | Set-Content -LiteralPath $SummaryPath -Encoding UTF8
 
     $jsonPath = [System.IO.Path]::ChangeExtension($SummaryPath, '.json')
-    @(
-        $results |
-            Select-Object @{ Name = 'tenantCode'; Expression = { $_.TenantCode } },
-                          @{ Name = 'providerCode'; Expression = { $_.ProviderCode } },
-                          @{ Name = 'providerPrivateKeyAlias'; Expression = { $_.ProviderPrivateKeyAlias } },
-                          @{ Name = 'providerFallbackSecret'; Expression = { $_.ProviderFallbackSecret } },
-                          @{ Name = 'action'; Expression = { $_.Action } }
-    ) | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $jsonPath -Encoding UTF8
+    [pscustomobject]@{
+        status = $status
+        environment = $Environment
+        resourceGroup = $resourceGroup
+        gatewayFqdn = $topology.GatewayFqdn
+        registryUri = $topology.RegistryUri
+        keyVault = $keyVaultName
+        deploymentPrincipalObjectId = $DeploymentPrincipalObjectId
+        authorizationMode = $accessCheck.AuthorizationMode
+        observedSecretPermissions = @($accessCheck.ObservedPermissions)
+        results = @($results | Select-Object `
+                @{ Name = 'tenantCode'; Expression = { $_.TenantCode } },
+                @{ Name = 'providerCode'; Expression = { $_.ProviderCode } },
+                @{ Name = 'providerPrivateKeyAlias'; Expression = { $_.ProviderPrivateKeyAlias } },
+                @{ Name = 'providerFallbackSecret'; Expression = { $_.ProviderFallbackSecret } },
+                @{ Name = 'action'; Expression = { $_.Action } },
+                @{ Name = 'attempts'; Expression = { $_.Attempts } },
+                @{ Name = 'detail'; Expression = { $_.Detail } },
+                @{ Name = 'diagnostic'; Expression = { $_.Diagnostic } })
+    } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $jsonPath -Encoding UTF8
 }
 
 if ($failures.Count -gt 0) {

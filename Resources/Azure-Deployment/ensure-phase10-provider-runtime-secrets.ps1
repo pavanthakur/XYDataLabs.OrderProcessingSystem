@@ -5,6 +5,9 @@ param(
     [string]$ResourceGroupName,
     [string]$SummaryPath,
     [string]$BaseName = 'orderprocessing',
+    [string]$DeploymentPrincipalObjectId,
+    [int]$AccessPolicyAttempts = 6,
+    [int]$AccessPolicyDelaySeconds = 10,
 
     [string]$OpenPayMerchantId,
     [string]$OpenPayPublicKey,
@@ -19,45 +22,12 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+. (Join-Path $PSScriptRoot 'phase10-keyvault-command-helpers.ps1')
+
 $envSuffix = if ($Environment -eq 'staging') { 'stg' } else { $Environment }
 $resourceGroup = if ([string]::IsNullOrWhiteSpace($ResourceGroupName)) { "rg-$BaseName-$envSuffix" } else { $ResourceGroupName }
 $shortBaseName = $BaseName.Substring(0, [Math]::Min(15, $BaseName.Length))
 $keyVaultName = "kv-$shortBaseName-$envSuffix"
-
-function Invoke-AzText {
-    param(
-        [Parameter(Mandatory)]
-        [string[]]$Arguments
-    )
-
-    $output = & az @Arguments -o tsv 2>$null
-    if ($LASTEXITCODE -ne 0) {
-        return $null
-    }
-
-    return [string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() })).Trim()
-}
-
-function Get-KeyVaultSecretValue {
-    param([Parameter(Mandatory)][string]$SecretName)
-
-    $value = Invoke-AzText -Arguments @('keyvault', 'secret', 'show', '--vault-name', $keyVaultName, '--name', $SecretName, '--query', 'value')
-    if ([string]::IsNullOrWhiteSpace($value)) {
-        return $null
-    }
-
-    return $value
-}
-
-function Set-KeyVaultSecretValue {
-    param(
-        [Parameter(Mandatory)][string]$SecretName,
-        [Parameter(Mandatory)][string]$SecretValue
-    )
-
-    & az keyvault secret set --vault-name $keyVaultName --name $SecretName --value $SecretValue --only-show-errors 1>$null 2>$null
-    return ($LASTEXITCODE -eq 0)
-}
 
 $secretMap = [ordered]@{
     'OpenPay--MerchantId' = $OpenPayMerchantId
@@ -69,6 +39,7 @@ $secretMap = [ordered]@{
     'Webhooks--OpenPay--Secret' = $OpenPayWebhookSecret
     'Webhooks--Razorpay--Secret' = $RazorpayWebhookSecret
 }
+$secretValues = @($secretMap.Values | ForEach-Object { [string]$_ })
 
 $missingInputs = New-Object 'System.Collections.Generic.List[string]'
 foreach ($entry in $secretMap.GetEnumerator()) {
@@ -81,25 +52,76 @@ $results = New-Object 'System.Collections.Generic.List[object]'
 $failures = New-Object 'System.Collections.Generic.List[string]'
 $updatedCount = 0
 $createdCount = 0
+$accessCheck = [pscustomobject]@{
+    Succeeded = $false
+    AuthorizationMode = 'unknown'
+    ObservedPermissions = @()
+    Diagnostic = 'Deployment principal object ID was not provided.'
+    Attempts = 0
+}
 
 if ($missingInputs.Count -gt 0) {
     foreach ($secretName in $missingInputs) {
         $failures.Add("Required GitHub environment secret backing '$secretName' was not provided to the workflow.")
     }
 }
+elseif ([string]::IsNullOrWhiteSpace($DeploymentPrincipalObjectId)) {
+    $failures.Add('Deployment principal object ID is required for the Key Vault write-access preflight.')
+}
 else {
+    $accessCheck = Wait-Phase10KeyVaultSecretWriteAccess `
+        -KeyVaultName $keyVaultName `
+        -ResourceGroupName $resourceGroup `
+        -PrincipalObjectId $DeploymentPrincipalObjectId `
+        -Attempts $AccessPolicyAttempts `
+        -DelaySeconds $AccessPolicyDelaySeconds
+
+    if (-not $accessCheck.Succeeded) {
+        $failures.Add("Key Vault write-access preflight failed. $($accessCheck.Diagnostic)")
+        foreach ($secretName in $secretMap.Keys) {
+            $results.Add([pscustomobject]@{
+                    SecretName = $secretName
+                    Action = 'blocked'
+                    Detail = 'Secret synchronization was not attempted because the deployment principal lacks confirmed write access.'
+                    Diagnostic = $accessCheck.Diagnostic
+                    Attempts = 0
+                })
+        }
+    }
+}
+
+if ($failures.Count -eq 0) {
     foreach ($entry in $secretMap.GetEnumerator()) {
         $secretName = [string]$entry.Key
         $desiredValue = [string]$entry.Value
-        $existingValue = Get-KeyVaultSecretValue -SecretName $secretName
+        $readResult = Get-Phase10KeyVaultSecret `
+            -KeyVaultName $keyVaultName `
+            -SecretName $secretName `
+            -SecretValues $secretValues
         $action = 'unchanged'
         $detail = 'Secret already matched the GitHub environment source.'
+        $diagnostic = ''
+        $attemptsUsed = $readResult.Attempts
 
-        if ([string]::IsNullOrWhiteSpace($existingValue)) {
-            if (-not (Set-KeyVaultSecretValue -SecretName $secretName -SecretValue $desiredValue)) {
+        if ($readResult.State -eq 'Error') {
+            $action = 'failed'
+            $detail = "Failed to read '$secretName' before synchronization."
+            $diagnostic = $readResult.Diagnostic
+            $failures.Add("$detail $diagnostic")
+        }
+        elseif ($readResult.State -eq 'Missing') {
+            $writeResult = Set-Phase10KeyVaultSecret `
+                -KeyVaultName $keyVaultName `
+                -SecretName $secretName `
+                -SecretValue $desiredValue `
+                -SecretValues $secretValues
+            $attemptsUsed += $writeResult.Attempts
+
+            if (-not $writeResult.Succeeded) {
                 $action = 'failed'
                 $detail = "Failed to create '$secretName' in Key Vault."
-                $failures.Add($detail)
+                $diagnostic = $writeResult.Diagnostic
+                $failures.Add("$detail $diagnostic")
             }
             else {
                 $action = 'created'
@@ -107,11 +129,19 @@ else {
                 $createdCount++
             }
         }
-        elseif ($existingValue -ne $desiredValue) {
-            if (-not (Set-KeyVaultSecretValue -SecretName $secretName -SecretValue $desiredValue)) {
+        elseif ($readResult.Value -ne $desiredValue) {
+            $writeResult = Set-Phase10KeyVaultSecret `
+                -KeyVaultName $keyVaultName `
+                -SecretName $secretName `
+                -SecretValue $desiredValue `
+                -SecretValues $secretValues
+            $attemptsUsed += $writeResult.Attempts
+
+            if (-not $writeResult.Succeeded) {
                 $action = 'failed'
                 $detail = "Failed to update '$secretName' in Key Vault."
-                $failures.Add($detail)
+                $diagnostic = $writeResult.Diagnostic
+                $failures.Add("$detail $diagnostic")
             }
             else {
                 $action = 'updated'
@@ -124,6 +154,8 @@ else {
                 SecretName = $secretName
                 Action = $action
                 Detail = $detail
+                Diagnostic = $diagnostic
+                Attempts = $attemptsUsed
             })
     }
 }
@@ -138,23 +170,28 @@ $summary += "**Status:** $status"
 $summary += ('**Environment:** `{0}`' -f $Environment)
 $summary += ('**Resource Group:** `{0}`' -f $resourceGroup)
 $summary += ('**Key Vault:** `{0}`' -f $keyVaultName)
+$summary += ('**Deployment Principal Object ID:** `{0}`' -f $(if ([string]::IsNullOrWhiteSpace($DeploymentPrincipalObjectId)) { 'missing' } else { $DeploymentPrincipalObjectId }))
+$summary += ('**Authorization Mode:** `{0}`' -f $accessCheck.AuthorizationMode)
+$summary += ('**Observed Secret Permissions:** `{0}`' -f $(if (@($accessCheck.ObservedPermissions).Count -eq 0) { 'none' } else { @($accessCheck.ObservedPermissions) -join ', ' }))
+$summary += ('**Authorization Attempts:** `{0}`' -f $accessCheck.Attempts)
 $summary += ('**Secrets Created:** `{0}`' -f $createdCount)
 $summary += ('**Secrets Updated:** `{0}`' -f $updatedCount)
 $summary += ('**Completed UTC:** `{0}`' -f $completedUtc.ToString('O'))
 $summary += ''
-$summary += '| Secret | Action | Detail |'
-$summary += '|---|---|---|'
+$summary += '| Secret | Action | Attempts | Detail | Azure Diagnostic |'
+$summary += '|---|---|---|---|---|'
 
 if ($results.Count -gt 0) {
     foreach ($result in $results) {
         $detail = ([string]$result.Detail).Replace('|', '\|').Replace("`r", ' ').Replace("`n", ' ')
-        $summary += "| $($result.SecretName) | $($result.Action) | $detail |"
+        $diagnostic = if ([string]::IsNullOrWhiteSpace([string]$result.Diagnostic)) { '-' } else { ([string]$result.Diagnostic).Replace('|', '\|').Replace("`r", ' ').Replace("`n", ' ') }
+        $summary += "| $($result.SecretName) | $($result.Action) | $($result.Attempts) | $detail | $diagnostic |"
     }
 }
 else {
     foreach ($failure in $failures) {
         $detail = ([string]$failure).Replace('|', '\|').Replace("`r", ' ').Replace("`n", ' ')
-        $summary += "| - | failed | $detail |"
+        $summary += "| - | failed | 0 | $detail | - |"
     }
 }
 
@@ -179,11 +216,21 @@ if (-not [string]::IsNullOrWhiteSpace($SummaryPath)) {
     $summaryText | Set-Content -LiteralPath $SummaryPath -Encoding UTF8
 
     $jsonPath = [System.IO.Path]::ChangeExtension($SummaryPath, '.json')
-    @(
-        $results |
-            Select-Object @{ Name = 'secretName'; Expression = { $_.SecretName } },
-                          @{ Name = 'action'; Expression = { $_.Action } }
-    ) | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $jsonPath -Encoding UTF8
+    [pscustomobject]@{
+        status = $status
+        environment = $Environment
+        resourceGroup = $resourceGroup
+        keyVault = $keyVaultName
+        deploymentPrincipalObjectId = $DeploymentPrincipalObjectId
+        authorizationMode = $accessCheck.AuthorizationMode
+        observedSecretPermissions = @($accessCheck.ObservedPermissions)
+        results = @($results | Select-Object `
+                @{ Name = 'secretName'; Expression = { $_.SecretName } },
+                @{ Name = 'action'; Expression = { $_.Action } },
+                @{ Name = 'attempts'; Expression = { $_.Attempts } },
+                @{ Name = 'detail'; Expression = { $_.Detail } },
+                @{ Name = 'diagnostic'; Expression = { $_.Diagnostic } })
+    } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $jsonPath -Encoding UTF8
 }
 
 if ($failures.Count -gt 0) {

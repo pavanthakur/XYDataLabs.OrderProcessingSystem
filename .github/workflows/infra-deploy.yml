@@ -326,13 +326,13 @@ jobs:
           if [ -z "$PRINCIPAL_OBJECT_ID" ]; then
             echo "## ❌ Could not resolve deployment principal" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "The Phase 10 deploy needs the OIDC service principal object id so Bicep can grant Key Vault secret read access for Azure verification." >> "$GITHUB_STEP_SUMMARY"
+            echo "The Phase 10 deploy needs the OIDC service principal object id so Bicep can grant scoped Key Vault secret synchronization access." >> "$GITHUB_STEP_SUMMARY"
             echo "Could not resolve Azure service principal object id for the configured OIDC client id." >&2
             exit 1
           fi
 
           echo "objectId=${PRINCIPAL_OBJECT_ID}" >> "$GITHUB_OUTPUT"
-          echo "✅ Deployment principal resolved for Key Vault verification access." >> "$GITHUB_STEP_SUMMARY"
+          echo "✅ Deployment principal resolved for scoped Key Vault secret synchronization." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Verify Azure resource providers are registered
         shell: bash
@@ -573,13 +573,13 @@ jobs:
           if [ -z "$PRINCIPAL_OBJECT_ID" ]; then
             echo "## ❌ Could not resolve deployment principal" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "The Phase 10 deploy needs the OIDC service principal object id so Bicep can grant Key Vault secret read access for Azure verification." >> "$GITHUB_STEP_SUMMARY"
+            echo "The Phase 10 deploy needs the OIDC service principal object id so Bicep can grant scoped Key Vault secret synchronization access." >> "$GITHUB_STEP_SUMMARY"
             echo "Could not resolve Azure service principal object id for the configured OIDC client id." >&2
             exit 1
           fi
 
           echo "objectId=${PRINCIPAL_OBJECT_ID}" >> "$GITHUB_OUTPUT"
-          echo "✅ Deployment principal resolved for Key Vault verification access." >> "$GITHUB_STEP_SUMMARY"
+          echo "✅ Deployment principal resolved for scoped Key Vault secret synchronization." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Verify Azure resource providers are registered
         shell: bash
@@ -1144,6 +1144,7 @@ jobs:
             -Environment '${{ steps.params.outputs.env }}' `
             -ResourceGroupName '${{ steps.outputs.outputs.rg }}' `
             -SummaryPath $summaryPath `
+            -DeploymentPrincipalObjectId '${{ steps.deployment_principal.outputs.objectId }}' `
             -OpenPayMerchantId $env:OPENPAY_MERCHANT_ID `
             -OpenPayPublicKey $env:OPENPAY_PUBLIC_KEY `
             -OpenPayPrivateKey $env:OPENPAY_PRIVATE_KEY `
@@ -1170,7 +1171,8 @@ jobs:
           & pwsh -NoProfile -ExecutionPolicy Bypass -File Resources/Azure-Deployment/ensure-phase10-tenant-provider-secret-aliases.ps1 `
             -Environment '${{ steps.params.outputs.env }}' `
             -ResourceGroupName '${{ steps.outputs.outputs.rg }}' `
-            -SummaryPath $summaryPath
+            -SummaryPath $summaryPath `
+            -DeploymentPrincipalObjectId '${{ steps.deployment_principal.outputs.objectId }}'
 
           $syncExitCode = $LASTEXITCODE
           if (Test-Path -LiteralPath $summaryPath) {
