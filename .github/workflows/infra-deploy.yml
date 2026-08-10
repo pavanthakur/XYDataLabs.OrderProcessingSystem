@@ -1126,6 +1126,25 @@ jobs:
             throw "Phase 10 Azure runtime host verification failed with exit code $verifyExitCode."
           }
 
+      - name: Ensure Active Tenant Provider Secret Aliases
+        shell: pwsh
+        run: |
+          $summaryPath = Join-Path $env:RUNNER_TEMP 'phase10-azure-tenant-provider-aliases-deploy.md'
+
+          & pwsh -NoProfile -ExecutionPolicy Bypass -File Resources/Azure-Deployment/ensure-phase10-tenant-provider-secret-aliases.ps1 `
+            -Environment '${{ steps.params.outputs.env }}' `
+            -ResourceGroupName '${{ steps.outputs.outputs.rg }}' `
+            -SummaryPath $summaryPath
+
+          $syncExitCode = $LASTEXITCODE
+          if (Test-Path -LiteralPath $summaryPath) {
+            Get-Content -LiteralPath $summaryPath | Add-Content -Path $env:GITHUB_STEP_SUMMARY
+          }
+
+          if ($syncExitCode -ne 0) {
+            throw "Phase 10 Azure tenant provider alias sync failed with exit code $syncExitCode."
+          }
+
       - name: Verify Active Tenant Topology Contract
         shell: pwsh
         run: |
@@ -1204,6 +1223,20 @@ jobs:
           smoke_url "Gateway Health" "$GATEWAY_HEALTH" "healthy"
           smoke_url "Orders API Smoke" "$ORDERS_SMOKE" "activeTenantCode"
           smoke_url "UI Reachability" "$UI_URL" "<!doctype html"
+
+      - name: Upload deployment verification artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: phase10-azure-deploy-verification-${{ steps.params.outputs.env }}
+          path: |
+            ${{ runner.temp }}/phase10-azure-runtime-hosts-deploy.md
+            ${{ runner.temp }}/phase10-azure-tenant-provider-aliases-deploy.md
+            ${{ runner.temp }}/phase10-azure-tenant-provider-aliases-deploy.json
+            ${{ runner.temp }}/phase10-azure-tenant-topology-deploy.md
+            ${{ runner.temp }}/phase10-azure-tenant-topology-deploy.json
+          if-no-files-found: ignore
+          retention-days: 14
       
       - name: Deployment Summary
         run: |

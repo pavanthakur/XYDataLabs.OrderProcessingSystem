@@ -120,6 +120,25 @@ jobs:
             throw "Phase 10 Azure runtime host verification failed with exit code $verifyExitCode."
           }
 
+      - name: Ensure active tenant provider secret aliases
+        shell: pwsh
+        run: |
+          $summaryPath = Join-Path $env:RUNNER_TEMP 'phase10-azure-tenant-provider-aliases.md'
+
+          & pwsh -NoProfile -ExecutionPolicy Bypass -File Resources/Azure-Deployment/ensure-phase10-tenant-provider-secret-aliases.ps1 `
+            -Environment '${{ inputs.environment }}' `
+            -ResourceGroupName '${{ steps.topology.outputs.resourceGroup }}' `
+            -SummaryPath $summaryPath
+
+          $syncExitCode = $LASTEXITCODE
+          if (Test-Path -LiteralPath $summaryPath) {
+            Get-Content -LiteralPath $summaryPath | Add-Content -Path $env:GITHUB_STEP_SUMMARY
+          }
+
+          if ($syncExitCode -ne 0) {
+            throw "Phase 10 Azure tenant provider alias sync failed with exit code $syncExitCode."
+          }
+
       - name: Verify active tenant topology contract
         shell: pwsh
         run: |
@@ -167,6 +186,8 @@ jobs:
           name: phase10-azure-runtime-smoke-${{ inputs.environment }}
           path: |
             ${{ runner.temp }}/phase10-azure-runtime-hosts.md
+            ${{ runner.temp }}/phase10-azure-tenant-provider-aliases.md
+            ${{ runner.temp }}/phase10-azure-tenant-provider-aliases.json
             ${{ runner.temp }}/phase10-azure-tenant-topology.md
             ${{ runner.temp }}/phase10-azure-tenant-topology.json
             ${{ runner.temp }}/phase10-azure-runtime-smoke.md
