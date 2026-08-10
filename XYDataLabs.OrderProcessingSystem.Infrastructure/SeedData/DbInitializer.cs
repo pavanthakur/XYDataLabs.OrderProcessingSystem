@@ -49,6 +49,17 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
             InitializeDedicatedTenants(context, configuration, applyMigrations, integrationEventMapperRegistry);
         }
 
+        public static void ApplySchemaOnly(
+            OrderProcessingSystemDbContext context,
+            IConfiguration? configuration = null)
+        {
+            ArgumentNullException.ThrowIfNull(context);
+
+            context.Database.SetCommandTimeout(180);
+            context.Database.Migrate();
+            ApplyDedicatedTenantSchemaMigrations(context, configuration);
+        }
+
         public static void InitializeSharedPool(
             OrderProcessingSystemDbContext context,
             IConfiguration? configuration = null,
@@ -384,6 +395,46 @@ namespace XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData
                 SeedRazorpayProviders(dedicatedContext, new[] { seedTenant }, configuration);
 
                 SeedTenantSampleData(dedicatedContext, seedTenant, seedOrders);
+            }
+        }
+
+        private static void ApplyDedicatedTenantSchemaMigrations(
+            OrderProcessingSystemDbContext mainContext,
+            IConfiguration? configuration)
+        {
+            if (configuration is null)
+                return;
+
+            var section = configuration.GetSection("DedicatedTenantConnectionStrings");
+            if (!section.Exists())
+                return;
+
+            var configuredStrings = section.GetChildren()
+                .ToDictionary(c => c.Key, c => c.Value, StringComparer.OrdinalIgnoreCase);
+
+            if (configuredStrings.Count == 0)
+                return;
+
+            var dedicatedTenants = mainContext.Tenants
+                .AsNoTracking()
+                .Where(t => t.TenantTier == "Dedicated")
+                .ToList()
+                .Where(t => configuredStrings.TryGetValue(t.Code, out var cs) && !string.IsNullOrWhiteSpace(cs))
+                .ToList();
+
+            foreach (var tenant in dedicatedTenants)
+            {
+                var connectionString = configuredStrings[tenant.Code]!;
+                var dedicatedOptions = new DbContextOptionsBuilder<OrderProcessingSystemDbContext>()
+                    .UseSqlServer(connectionString, sqlOptions => sqlOptions.CommandTimeout(180))
+                    .Options;
+
+                using var dedicatedContext = new OrderProcessingSystemDbContext(
+                    dedicatedOptions,
+                    new NullTenantProvider());
+
+                dedicatedContext.Database.SetCommandTimeout(180);
+                dedicatedContext.Database.Migrate();
             }
         }
 

@@ -7,7 +7,9 @@ using Microsoft.Extensions.Options;
 using XYDataLabs.OrderProcessingSystem.Application;
 using XYDataLabs.OrderProcessingSystem.Application.Abstractions;
 using XYDataLabs.OrderProcessingSystem.Application.CQRS;
+using XYDataLabs.OrderProcessingSystem.Infrastructure.DataContext;
 using XYDataLabs.OrderProcessingSystem.Infrastructure.Messaging;
+using XYDataLabs.OrderProcessingSystem.Infrastructure.SeedData;
 using XYDataLabs.OrderProcessingSystem.Inventory.Features.Module;
 using XYDataLabs.OrderProcessingSystem.Orders.API;
 using XYDataLabs.OrderProcessingSystem.Orders.Features.Module;
@@ -122,6 +124,40 @@ if (!string.IsNullOrWhiteSpace(connectionString))
 }
 
 var app = builder.Build();
+var bootstrapMigrateOnly = args.Any(argument =>
+    string.Equals(argument, "--phase10-bootstrap-migrate-only", StringComparison.OrdinalIgnoreCase))
+    || app.Configuration.GetValue("Phase10:BootstrapMigrateOnly", false);
+var bootstrapSeedOnly = args.Any(argument =>
+    string.Equals(argument, "--phase10-bootstrap-seed-only", StringComparison.OrdinalIgnoreCase))
+    || app.Configuration.GetValue("Phase10:BootstrapSeedOnly", false);
+
+if (bootstrapMigrateOnly)
+{
+    using var bootstrapScope = app.Services.CreateScope();
+    var dbContext = bootstrapScope.ServiceProvider.GetRequiredService<OrderProcessingSystemDbContext>();
+    DbInitializer.ApplySchemaOnly(dbContext, app.Configuration);
+    app.Logger.LogInformation("Phase 10 bootstrap migrate completed successfully.");
+    return;
+}
+
+if (bootstrapSeedOnly)
+{
+    using var bootstrapScope = app.Services.CreateScope();
+    var dbContext = bootstrapScope.ServiceProvider.GetRequiredService<OrderProcessingSystemDbContext>();
+    DbInitializer.InitializeSharedPool(
+        dbContext,
+        app.Configuration,
+        applyMigrations: false,
+        seedOrders: false);
+    DbInitializer.InitializeDedicatedTenants(
+        dbContext,
+        app.Configuration,
+        applyMigrations: false,
+        integrationEventMapperRegistry: null,
+        seedOrders: false);
+    app.Logger.LogInformation("Phase 10 bootstrap seed completed successfully.");
+    return;
+}
 
 app.UseExceptionHandler();
 if (identityEnabled)

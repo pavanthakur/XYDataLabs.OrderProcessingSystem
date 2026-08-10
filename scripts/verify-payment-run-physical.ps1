@@ -70,6 +70,7 @@ if ($Runtime -eq 'local' -and $Environment -ne 'dev') {
 $repoRoot = Split-Path -Path $PSScriptRoot -Parent
 $dockerSqlGuardrailScript = Join-Path $repoRoot 'scripts\assert-docker-runtime-sql-guardrail.ps1'
 $tenantRegistryHygieneScript = Join-Path $repoRoot 'scripts\assert-docker-tenant-registry-hygiene.ps1'
+$dockerConfigRoot = Join-Path $repoRoot '.tmp\docker-config'
 $dateTag = (Get-Date).ToString('yyyyMMdd')
 $yesterdayDateTag = (Get-Date).AddDays(-1).ToString('yyyyMMdd')
 $envTag = if ($Runtime -eq 'local') { 'dev' } else { $Environment }
@@ -90,8 +91,13 @@ $apiLogPatterns = @(
     $logPrefixes | ForEach-Object { "$_-$envTag-$runtimeTag-$Profile-.log" }
 )
 $envLocalPath = Join-Path $repoRoot 'Resources\Docker\.env.local'
+$envLocalExamplePath = Join-Path $repoRoot 'Resources\Docker\.env.local.example'
 $supportedTenantTiers = @('SharedPool', 'Dedicated')
 $supportedProviders = @('OpenPay', 'Razorpay')
+
+New-Item -ItemType Directory -Path $dockerConfigRoot -Force | Out-Null
+$previousDockerConfig = $env:DOCKER_CONFIG
+$env:DOCKER_CONFIG = $dockerConfigRoot
 
 if (-not (Test-Path -LiteralPath $dockerSqlGuardrailScript)) {
     throw "Docker SQL guardrail script not found: $dockerSqlGuardrailScript"
@@ -140,22 +146,6 @@ function Assert-PhysicalRuntimeDbContract {
 }
 
 Assert-PhysicalRuntimeDbContract -Runtime $Runtime -Environment $Environment -Profile $Profile -SharedDbName $sharedDbName
-
-if ($Runtime -eq 'docker') {
-    $dockerSharedConnectionString = Get-DockerSqlConnectionString -Database $sharedDbName
-    $repairHint = if ($Environment -eq 'dev') {
-        'If this Docker dev registry is dirty, rerun scripts/start-phase10-docker-dev.ps1 or scripts/invoke-phase10-database-bootstrap.ps1 before retrying.'
-    }
-    else {
-        "Reset or reseed the Docker runtime registry data for environment '$Environment' before retrying."
-    }
-
-    Assert-DockerTenantRegistryHygiene `
-        -ScriptName (Split-Path -Leaf $PSCommandPath) `
-        -ConnectionString $dockerSharedConnectionString `
-        -SharedDatabaseName $sharedDbName `
-        -RepairHint $repairHint | Out-Null
-}
 
 function Write-Step {
     param([string] $Message)
@@ -345,6 +335,22 @@ function Get-DockerSqlConnectionString {
     return $connectionString
 }
 
+if ($Runtime -eq 'docker') {
+    $dockerSharedConnectionString = Get-DockerSqlConnectionString -Database $sharedDbName
+    $repairHint = if ($Environment -eq 'dev') {
+        'If this Docker dev registry is dirty, rerun scripts/start-phase10-docker-dev.ps1 or scripts/invoke-phase10-database-bootstrap.ps1 before retrying.'
+    }
+    else {
+        "Reset or reseed the Docker runtime registry data for environment '$Environment' before retrying."
+    }
+
+    Assert-DockerTenantRegistryHygiene `
+        -ScriptName (Split-Path -Leaf $PSCommandPath) `
+        -ConnectionString $dockerSharedConnectionString `
+        -SharedDatabaseName $sharedDbName `
+        -RepairHint $repairHint | Out-Null
+}
+
 function Convert-DockerComposeLogLine {
     param([Parameter(Mandatory = $true)] [string] $Line)
 
@@ -386,6 +392,10 @@ function Get-PhysicalApiEvidence {
 
         $services = @('gateway', 'orders', 'payments', 'inventory', 'notifications')
         $composeArguments = @('compose')
+        if (Test-Path -LiteralPath $envLocalExamplePath) {
+            $composeArguments += @('--env-file', $envLocalExamplePath)
+        }
+
         if (-not [string]::IsNullOrWhiteSpace($EnvLocalPath) -and (Test-Path -LiteralPath $EnvLocalPath)) {
             $composeArguments += @('--env-file', $EnvLocalPath)
         }
@@ -405,7 +415,13 @@ function Get-PhysicalApiEvidence {
         $composeArguments += $services
         $rawLines = & docker @composeArguments 2>&1
         if ($LASTEXITCODE -ne 0) {
-            throw "docker compose logs failed with exit code $LASTEXITCODE while reading physical evidence for $Environment/$Profile."
+            $composePreview = @(
+                @($rawLines) |
+                    ForEach-Object { $_.ToString().Trim() } |
+                    Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+                    Select-Object -First 12
+            ) -join [Environment]::NewLine
+            throw "docker compose logs failed with exit code $LASTEXITCODE while reading physical evidence for $Environment/$Profile. $composePreview"
         }
 
         $normalizedLines = @(
@@ -1472,6 +1488,7 @@ try {
     Stop-Transcript | Out-Null
 } catch {
 }
+$env:DOCKER_CONFIG = $previousDockerConfig
 
 Write-Host "Payment matrix artifacts: $runDir" -ForegroundColor Cyan
 $runDir | Set-Content -Path $latestPointerPath -Encoding utf8
