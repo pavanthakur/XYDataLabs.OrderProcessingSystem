@@ -7,12 +7,13 @@ public sealed class TenantClaimConsistencyMiddleware(RequestDelegate next)
 {
     public const string TenantClaimType = "tenant_code";
     private const string RuntimeConfigurationPath = "/api/v1/info/runtime-configuration";
+    private const string TenantRegistryPath = "/api/v1/info/tenant-registry";
 
     public async Task InvokeAsync(HttpContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        if (IsRuntimeConfigurationRequest(context.Request.Path))
+        if (IsBootstrapDiscoveryRequest(context.Request.Path))
         {
             await next(context).ConfigureAwait(false);
             return;
@@ -44,8 +45,9 @@ public sealed class TenantClaimConsistencyMiddleware(RequestDelegate next)
         await next(context).ConfigureAwait(false);
     }
 
-    private static bool IsRuntimeConfigurationRequest(PathString requestPath)
+    private static bool IsBootstrapDiscoveryRequest(PathString requestPath)
     {
-        return string.Equals(requestPath.Value, RuntimeConfigurationPath, StringComparison.OrdinalIgnoreCase);
+        return string.Equals(requestPath.Value, RuntimeConfigurationPath, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(requestPath.Value, TenantRegistryPath, StringComparison.OrdinalIgnoreCase);
     }
 }

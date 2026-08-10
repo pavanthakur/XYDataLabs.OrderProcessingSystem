@@ -60,6 +60,21 @@ public sealed class TenantMiddlewareTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task TenantRegistry_WithoutTenantHeader_ReturnsOk()
+    {
+        var tenantA = await IntegrationTestData.CreateTenantAsync(_factory);
+        var tenantB = await IntegrationTestData.CreateTenantAsync(_factory);
+        using var client = _factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/info/tenant-registry");
+        var body = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        body.Should().Contain(tenantA.TenantCode);
+        body.Should().Contain(tenantB.TenantCode);
+    }
+
+    [Fact]
     public async Task PaymentCallback_WithoutTenantHeader_RedirectsToFrontendCallback()
     {
         using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions

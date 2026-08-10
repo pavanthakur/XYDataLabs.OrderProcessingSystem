@@ -11,6 +11,7 @@ public sealed class TenantMiddleware
     public const string TenantHeaderName = "X-Tenant-Code";
     internal const string HttpContextItemKey = "TenantContext";
     private const string RuntimeConfigurationPath = "/api/v1/info/runtime-configuration";
+    private const string TenantRegistryPath = "/api/v1/info/tenant-registry";
     private const string HealthPath = "/health";
     private const string HealthLivePath = "/health/live";
     private const string HealthReadyPath = "/health/ready";
@@ -113,7 +114,7 @@ public sealed class TenantMiddleware
 
     private static bool IsTenantOptionalRequest(PathString requestPath, string? requestedTenantCode)
     {
-        if (IsRuntimeConfigurationRequest(requestPath) || IsPaymentCallbackRequest(requestPath))
+        if (IsBootstrapDiscoveryRequest(requestPath) || IsPaymentCallbackRequest(requestPath))
         {
             return true;
         }
@@ -121,9 +122,10 @@ public sealed class TenantMiddleware
         return IsHealthRequest(requestPath) && string.IsNullOrWhiteSpace(requestedTenantCode);
     }
 
-    private static bool IsRuntimeConfigurationRequest(PathString requestPath)
+    private static bool IsBootstrapDiscoveryRequest(PathString requestPath)
     {
-        return string.Equals(requestPath.Value, RuntimeConfigurationPath, StringComparison.OrdinalIgnoreCase);
+        return string.Equals(requestPath.Value, RuntimeConfigurationPath, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(requestPath.Value, TenantRegistryPath, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsHealthRequest(PathString requestPath)

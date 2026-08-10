@@ -13,6 +13,7 @@ $ErrorActionPreference = 'Stop'
 
 $testProject = Join-Path $WorkspaceRoot 'tests\XYDataLabs.OrderProcessingSystem.Integration.Tests\XYDataLabs.OrderProcessingSystem.Integration.Tests.csproj'
 $resultsRoot = Join-Path $WorkspaceRoot 'TestResults\Integration'
+$dockerSqlGuardrailScript = Join-Path $WorkspaceRoot 'scripts\assert-docker-runtime-sql-guardrail.ps1'
 $runDir = if ([string]::IsNullOrWhiteSpace($env:PHASE10_RUN_ROOT)) {
     Join-Path $resultsRoot (Get-Date -Format 'yyyyMMdd-HHmmss')
 }
@@ -33,6 +34,12 @@ if (-not (Test-Path $envLocalPath)) {
     throw "Local Docker secrets file not found: $envLocalPath"
 }
 
+if (-not (Test-Path -LiteralPath $dockerSqlGuardrailScript)) {
+    throw "Docker SQL guardrail script not found: $dockerSqlGuardrailScript"
+}
+
+. $dockerSqlGuardrailScript
+
 $sqlPasswordLine = Get-Content -LiteralPath $envLocalPath | Where-Object { $_ -match '^LOCAL_SQL_PASSWORD=' } | Select-Object -First 1
 if ([string]::IsNullOrWhiteSpace($sqlPasswordLine)) {
     throw "LOCAL_SQL_PASSWORD was not found in $envLocalPath"
@@ -44,6 +51,12 @@ if ([string]::IsNullOrWhiteSpace($sqlPassword)) {
 }
 
 $connectionString = "Server=localhost,1433;Database=OrderProcessingSystem_Dev;User Id=sa;Password=$sqlPassword;TrustServerCertificate=True;MultipleActiveResultSets=true;"
+Assert-DockerRuntimeSqlGuardrail `
+    -ScriptName (Split-Path -Leaf $PSCommandPath) `
+    -ConnectionString $connectionString `
+    -ExpectedDatabase 'OrderProcessingSystem_Dev' `
+    -SourceDescription 'Resources/Docker/.env.local + docker sql host port mapping' `
+    -AllowHostMappedDockerSql
 
 New-Item -ItemType Directory -Path $runDir -Force | Out-Null
 

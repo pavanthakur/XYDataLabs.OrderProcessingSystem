@@ -12,6 +12,23 @@ $workspaceRoot = Split-Path -Parent $PSScriptRoot
 $composeFile = Join-Path $workspaceRoot 'compose\docker-compose.phase10.yml'
 $envExampleFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local.example'
 $envFile = Join-Path $workspaceRoot 'Resources\Docker\.env.local'
+$dockerConfigRoot = Join-Path $workspaceRoot '.tmp\docker-config'
+$dockerSqlGuardrailScript = Join-Path $workspaceRoot 'scripts\assert-docker-runtime-sql-guardrail.ps1'
+$tenantRegistryHygieneScript = Join-Path $workspaceRoot 'scripts\assert-docker-tenant-registry-hygiene.ps1'
+
+New-Item -ItemType Directory -Path $dockerConfigRoot -Force | Out-Null
+$env:DOCKER_CONFIG = $dockerConfigRoot
+
+if (-not (Test-Path -LiteralPath $dockerSqlGuardrailScript)) {
+    throw "Docker SQL guardrail script not found: $dockerSqlGuardrailScript"
+}
+
+if (-not (Test-Path -LiteralPath $tenantRegistryHygieneScript)) {
+    throw "Docker tenant registry hygiene script not found: $tenantRegistryHygieneScript"
+}
+
+. $dockerSqlGuardrailScript
+. $tenantRegistryHygieneScript
 
 function Write-ProgressMessage {
     param([Parameter(Mandatory = $true)][string]$Message)
@@ -233,7 +250,7 @@ function Get-Phase10ActiveTenantTopology {
     }
 
     $rows = Convert-Phase10SqlRows -Rows @(
-        Invoke-Phase10SqlCmdInComposeContainer -Database 'OrderProcessingSystem_Dev' -Query @"
+        Invoke-Phase10SqlAgainstDockerHost -Database 'OrderProcessingSystem_Dev' -Query @"
 SELECT
     [Code],
     ISNULL([Status], ''),
@@ -311,7 +328,7 @@ function Get-LatestPhase10MigrationId {
     return $migrationFiles[-1].BaseName
 }
 
-function Invoke-Phase10SqlCmdInComposeContainer {
+function Invoke-Phase10SqlAgainstDockerHost {
     param(
         [Parameter(Mandatory = $true)]
         [string]$Database,
@@ -320,29 +337,46 @@ function Invoke-Phase10SqlCmdInComposeContainer {
         [string]$Query
     )
 
-    $normalizedQuery = ($Query -replace "`r?`n", ' ').Trim()
-    $escapedQuery = $normalizedQuery.Replace('"', '\"')
-    $shellCommand = [string]::Format(
-        'if [ -x /opt/mssql-tools18/bin/sqlcmd ]; then SQLCMD=/opt/mssql-tools18/bin/sqlcmd; else SQLCMD=/opt/mssql-tools/bin/sqlcmd; fi; "$SQLCMD" -l 60 -C -S localhost -U sa -P "$SA_PASSWORD" -d "{0}" -h -1 -W -Q "SET NOCOUNT ON; {1}"',
-        $Database,
-        $escapedQuery)
+    $connectionString = "Server=sql-server,1433;Database=$Database;User Id=sa;Password=$localSqlPassword;TrustServerCertificate=True;"
+    Assert-DockerRuntimeSqlGuardrail `
+        -ScriptName (Split-Path -Leaf $PSCommandPath) `
+        -ConnectionString $connectionString `
+        -ExpectedDatabase $Database `
+        -SourceDescription 'Phase 10 bootstrap compose-managed SQL container'
 
-    $attempt = 1
-    while ($attempt -le 30) {
-        $composeProfileArgs = Get-ComposeProfileArguments
-        $composeEnvArgs = Get-ComposeEnvArguments
-        $output = & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs exec -T sql-server /bin/sh -lc $shellCommand 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            return @($output | ForEach-Object { $_.ToString() })
-        }
+    $composeEnvArgs = Get-ComposeEnvArguments
+    $composeProfileArgs = Get-ComposeProfileArguments
+    $sqlcmdArguments = @(
+        'compose'
+    ) + $composeEnvArgs + @(
+        '-f', $composeFile
+    ) + $composeProfileArgs + @(
+        'exec',
+        '-T',
+        'sql-server',
+        '/opt/mssql-tools18/bin/sqlcmd',
+        '-S', 'localhost',
+        '-U', 'sa',
+        '-P', $localSqlPassword,
+        '-C',
+        '-b',
+        '-W',
+        '-h', '-1',
+        '-d', $Database,
+        '-Q', ("SET NOCOUNT ON;`n{0}" -f $Query)
+    )
 
-        if ($attempt -eq 30) {
-            throw ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
-        }
-
-        Start-Sleep -Seconds 5
-        $attempt++
+    $output = & docker @sqlcmdArguments 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        $message = ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
+        throw "Failed to execute Phase 10 Docker SQL query against '$Database' through the compose-managed SQL container. $message"
     }
+
+    return @(
+        @($output) |
+            ForEach-Object { $_.ToString().Trim() } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    )
 }
 
 function Get-Phase10SqlScalar {
@@ -354,7 +388,7 @@ function Get-Phase10SqlScalar {
         [string]$Query
     )
 
-    $output = @(Invoke-Phase10SqlCmdInComposeContainer -Database $Database -Query $Query)
+    $output = @(Invoke-Phase10SqlAgainstDockerHost -Database $Database -Query $Query)
     $lines = @(
         $output |
             ForEach-Object { $_.ToString().Trim() } |
@@ -395,116 +429,13 @@ END
     return ($appliedMigration -eq $ExpectedMigrationId)
 }
 
-function Invoke-Phase10SqlScriptInComposeContainer {
+function Get-Phase10LatestAppliedMigrationId {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$DatabaseName,
-
-        [Parameter(Mandatory = $true)]
-        [string]$ScriptPath
+        [string]$DatabaseName
     )
 
-    $composeProfileArgs = Get-ComposeProfileArguments
-    $composeEnvArgs = Get-ComposeEnvArguments
-    $containerId = (& docker compose @composeEnvArgs -f $composeFile @composeProfileArgs ps -q sql-server 2>&1)
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($containerId)) {
-        throw "Could not resolve the Phase 10 sql-server container id."
-    }
-
-    $containerScriptPath = "/tmp/phase10-$DatabaseName-migrations.sql"
-    & docker cp $ScriptPath "${containerId}:$containerScriptPath" 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        throw "Failed to copy migration script into the sql-server container: $ScriptPath"
-    }
-
-    $sqlPassword = Get-EnvLocalValue -Name 'LOCAL_SQL_PASSWORD'
-    $shellCommand = "/opt/mssql-tools18/bin/sqlcmd -l 60 -S localhost -U sa -P '$sqlPassword' -C -b -I -d '$DatabaseName' -i '$containerScriptPath'"
-    for ($attempt = 1; $attempt -le 5; $attempt++) {
-        $composeProfileArgs = Get-ComposeProfileArguments
-        $composeEnvArgs = Get-ComposeEnvArguments
-        $output = & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs exec -T sql-server /bin/sh -lc $shellCommand 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            return @($output | ForEach-Object { $_.ToString() })
-        }
-
-        $message = ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
-        if ($attempt -eq 5) {
-            throw "Failed to apply EF migration script to $DatabaseName after $attempt attempt(s). $message"
-        }
-
-        Start-Sleep -Seconds 10
-    }
-}
-
-function Invoke-Phase10EfDatabaseUpdate {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$DatabaseName,
-
-        [Parameter(Mandatory = $true)]
-        [string]$ExpectedMigrationId
-    )
-
-    $logRoot = if ([string]::IsNullOrWhiteSpace($RunDir)) { Join-Path $workspaceRoot '.tmp\phase10-bootstrap' } else { $RunDir }
-    New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
-
-    if (Test-Phase10MigrationApplied -DatabaseName $DatabaseName -ExpectedMigrationId $ExpectedMigrationId) {
-        Write-ProgressMessage "EF migration already current for ${DatabaseName}: $ExpectedMigrationId"
-        return
-    }
-
-    $arguments = @(
-        'ef', 'migrations', 'script',
-        '--idempotent',
-        '--project', 'XYDataLabs.OrderProcessingSystem.Infrastructure',
-        '--startup-project', 'XYDataLabs.OrderProcessingSystem.API',
-        '--context', 'OrderProcessingSystemDbContext',
-        '--verbose'
-    )
-
-    $databaseConnectionString = "Server=localhost,1433;Database=$DatabaseName;User Id=sa;Password=$localSqlPassword;Encrypt=False;TrustServerCertificate=True;MultipleActiveResultSets=true;"
-    $previousValues = @{
-        'ASPNETCORE_ENVIRONMENT' = [Environment]::GetEnvironmentVariable('ASPNETCORE_ENVIRONMENT')
-        'ConnectionStrings__OrderProcessingSystemDbConnection' = [Environment]::GetEnvironmentVariable('ConnectionStrings__OrderProcessingSystemDbConnection')
-        'ConnectionStrings__TenantRegistryDbConnection' = [Environment]::GetEnvironmentVariable('ConnectionStrings__TenantRegistryDbConnection')
-    }
-    $dedicatedState = Get-Phase10DedicatedTenantEnvironmentState
-
-    try {
-        [Environment]::SetEnvironmentVariable('ASPNETCORE_ENVIRONMENT', 'Development')
-        [Environment]::SetEnvironmentVariable('ConnectionStrings__OrderProcessingSystemDbConnection', $databaseConnectionString)
-        [Environment]::SetEnvironmentVariable('ConnectionStrings__TenantRegistryDbConnection', $databaseConnectionString)
-        Set-Phase10DedicatedTenantEnvironmentState
-
-        for ($attempt = 1; $attempt -le 5; $attempt++) {
-            $attemptLogPath = Join-Path $logRoot "ef-update-$DatabaseName-attempt-$attempt.log"
-            $scriptPath = Join-Path $logRoot "ef-update-$DatabaseName-attempt-$attempt.sql"
-            Write-ProgressMessage "Starting EF migration script attempt $attempt for $DatabaseName. Log: $attemptLogPath"
-
-            $output = & dotnet @arguments --output $scriptPath 2>&1
-            $exitCode = $LASTEXITCODE
-            $message = ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
-            Set-Content -Path $attemptLogPath -Value $message -Encoding utf8
-
-            if ($exitCode -eq 0) {
-                try {
-                    $applyOutput = @(Invoke-Phase10SqlScriptInComposeContainer -DatabaseName $DatabaseName -ScriptPath $scriptPath)
-                    if ($applyOutput.Count -gt 0) {
-                        Add-Content -Path $attemptLogPath -Value ([Environment]::NewLine + [string]::Join([Environment]::NewLine, $applyOutput))
-                    }
-                }
-                catch {
-                    $exitCode = 1
-                    Add-Content -Path $attemptLogPath -Value ([Environment]::NewLine + $_.Exception.Message)
-                }
-            }
-
-            if ($exitCode -eq 0 -and (Test-Phase10MigrationApplied -DatabaseName $DatabaseName -ExpectedMigrationId $ExpectedMigrationId)) {
-                Write-ProgressMessage "EF migration verified for ${DatabaseName}: $ExpectedMigrationId"
-                return
-            }
-
-            $appliedMigration = Get-Phase10SqlScalar -Database $DatabaseName -Query @"
+    $query = @"
 IF OBJECT_ID(N'dbo.__EFMigrationsHistory', N'U') IS NULL
 BEGIN
     SELECT N'__EFMigrationsHistory missing';
@@ -515,20 +446,7 @@ BEGIN
 END
 "@
 
-            Write-ProgressMessage "EF migration bootstrap attempt $attempt did not verify for $DatabaseName. ExitCode=$exitCode Expected=$ExpectedMigrationId Actual=$appliedMigration Log=$attemptLogPath"
-            if ($attempt -eq 5) {
-                throw "EF migration failed to verify for $DatabaseName after $attempt attempt(s). Expected '$ExpectedMigrationId', actual '$appliedMigration'. See $attemptLogPath."
-            }
-
-            Start-Sleep -Seconds 10
-        }
-    }
-    finally {
-        foreach ($entry in $previousValues.GetEnumerator()) {
-            [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value)
-        }
-        Restore-Phase10DedicatedTenantEnvironmentState -State $dedicatedState
-    }
+    return (Get-Phase10SqlScalar -Database $DatabaseName -Query $query)
 }
 
 function Ensure-Phase10Databases {
@@ -542,7 +460,7 @@ BEGIN
 END
 "@
 
-        Invoke-Phase10SqlCmdInComposeContainer -Database 'master' -Query $query | Out-Null
+        Invoke-Phase10SqlAgainstDockerHost -Database 'master' -Query $query | Out-Null
         Write-ProgressMessage "Ensured database exists: $databaseName"
     }
 }
@@ -551,11 +469,47 @@ function Invoke-Phase10DatabaseBootstrap {
     Write-Host 'Applying Phase 10 local EF migrations...' -ForegroundColor Cyan
     Write-ProgressMessage 'Starting Phase 10 local EF migration bootstrap.'
     $latestMigrationId = Get-LatestPhase10MigrationId
+
+    $logRoot = if ([string]::IsNullOrWhiteSpace($RunDir)) { Join-Path $workspaceRoot '.tmp\phase10-bootstrap' } else { $RunDir }
+    New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
+    $schemaLogPath = Join-Path $logRoot 'phase10-schema-bootstrap.log'
+
+    try {
+        $composeEnvArgs = Get-ComposeEnvArguments
+        $composeProfileArgs = Get-ComposeProfileArguments
+        $output = & docker @(
+            'compose'
+        ) @composeEnvArgs @(
+            '-f', $composeFile
+        ) @composeProfileArgs @(
+            'run',
+            '--build',
+            '--rm',
+            '--no-deps',
+            '-T',
+            '-e', 'Phase10__BootstrapMigrateOnly=true',
+            '-e', 'Phase10__BootstrapSeedOnly=false',
+            '-e', 'Phase10__DisableStartupDdl=false',
+            'orders'
+        ) 2>&1
+        $exitCode = $LASTEXITCODE
+        $message = ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
+        Set-Content -Path $schemaLogPath -Value $message -Encoding utf8
+
+        if ($exitCode -ne 0) {
+            throw "Phase 10 runtime schema bootstrap failed. See $schemaLogPath."
+        }
+    }
+    finally {
+    }
+
     foreach ($databaseName in (Get-Phase10Databases)) {
-        Write-ProgressMessage "Starting EF migration bootstrap for $databaseName."
-        Write-Host "  Migrating $databaseName..." -ForegroundColor Yellow
-        Invoke-Phase10EfDatabaseUpdate -DatabaseName $databaseName -ExpectedMigrationId $latestMigrationId
-        Write-ProgressMessage "Completed EF migration bootstrap for $databaseName."
+        $appliedMigration = Get-Phase10LatestAppliedMigrationId -DatabaseName $databaseName
+        if ($appliedMigration -ne $latestMigrationId) {
+            throw "Runtime schema bootstrap did not reach the latest migration for $databaseName. Expected '$latestMigrationId', actual '$appliedMigration'. See $schemaLogPath."
+        }
+
+        Write-ProgressMessage "Verified EF migration bootstrap for ${databaseName}: $latestMigrationId"
     }
     Write-ProgressMessage 'Completed Phase 10 local EF migration bootstrap.'
 }
@@ -568,35 +522,24 @@ function Invoke-Phase10SampleDataSeed {
     New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
     $seedLogPath = Join-Path $logRoot 'phase10-seed-bootstrap.log'
 
-    $defaultConnectionString = New-LocalSqlConnectionString -DatabaseName 'OrderProcessingSystem_Dev'
-    $registryConnectionString = $defaultConnectionString
-
-    $previousValues = @{
-        'ASPNETCORE_ENVIRONMENT' = [Environment]::GetEnvironmentVariable('ASPNETCORE_ENVIRONMENT')
-        'USE_HTTPS' = [Environment]::GetEnvironmentVariable('USE_HTTPS')
-        'ApiSettings__API__https__HttpsEnabled' = [Environment]::GetEnvironmentVariable('ApiSettings__API__https__HttpsEnabled')
-        'ApiSettings__API__https__CertPath' = [Environment]::GetEnvironmentVariable('ApiSettings__API__https__CertPath')
-        'ApiSettings__API__https__CertPassword' = [Environment]::GetEnvironmentVariable('ApiSettings__API__https__CertPassword')
-        'Phase10__BootstrapSeedOnly' = [Environment]::GetEnvironmentVariable('Phase10__BootstrapSeedOnly')
-        'Phase10__DisableStartupDdl' = [Environment]::GetEnvironmentVariable('Phase10__DisableStartupDdl')
-        'ConnectionStrings__OrderProcessingSystemDbConnection' = [Environment]::GetEnvironmentVariable('ConnectionStrings__OrderProcessingSystemDbConnection')
-        'ConnectionStrings__TenantRegistryDbConnection' = [Environment]::GetEnvironmentVariable('ConnectionStrings__TenantRegistryDbConnection')
-    }
-    $dedicatedState = Get-Phase10DedicatedTenantEnvironmentState
-
     try {
-        [Environment]::SetEnvironmentVariable('ASPNETCORE_ENVIRONMENT', 'Development')
-        [Environment]::SetEnvironmentVariable('USE_HTTPS', 'false')
-        [Environment]::SetEnvironmentVariable('ApiSettings__API__https__HttpsEnabled', 'false')
-        [Environment]::SetEnvironmentVariable('ApiSettings__API__https__CertPath', '')
-        [Environment]::SetEnvironmentVariable('ApiSettings__API__https__CertPassword', '')
-        [Environment]::SetEnvironmentVariable('Phase10__BootstrapSeedOnly', 'true')
-        [Environment]::SetEnvironmentVariable('Phase10__DisableStartupDdl', 'true')
-        [Environment]::SetEnvironmentVariable('ConnectionStrings__OrderProcessingSystemDbConnection', $defaultConnectionString)
-        [Environment]::SetEnvironmentVariable('ConnectionStrings__TenantRegistryDbConnection', $registryConnectionString)
-        Set-Phase10DedicatedTenantEnvironmentState
-
-        $output = & dotnet run --project 'XYDataLabs.OrderProcessingSystem.API' --no-launch-profile -- --phase10-bootstrap-seed-only 2>&1
+        $composeEnvArgs = Get-ComposeEnvArguments
+        $composeProfileArgs = Get-ComposeProfileArguments
+        $output = & docker @(
+            'compose'
+        ) @composeEnvArgs @(
+            '-f', $composeFile
+        ) @composeProfileArgs @(
+            'run',
+            '--build',
+            '--rm',
+            '--no-deps',
+            '-T',
+            '-e', 'Phase10__BootstrapMigrateOnly=false',
+            '-e', 'Phase10__BootstrapSeedOnly=true',
+            '-e', 'Phase10__DisableStartupDdl=true',
+            'orders'
+        ) 2>&1
         $exitCode = $LASTEXITCODE
         $message = ([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() }))).Trim()
         Set-Content -Path $seedLogPath -Value $message -Encoding utf8
@@ -608,10 +551,6 @@ function Invoke-Phase10SampleDataSeed {
         Write-ProgressMessage "Completed Phase 10 local sample data seed. Log: $seedLogPath"
     }
     finally {
-        foreach ($entry in $previousValues.GetEnumerator()) {
-            [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value)
-        }
-        Restore-Phase10DedicatedTenantEnvironmentState -State $dedicatedState
     }
 }
 
@@ -630,7 +569,7 @@ SET [Status] = N'Decommissioned'
 WHERE [Code] NOT IN ($baselineTenantCodesSql)
   AND ISNULL([Status], N'') = N'Active';
 "@
-    Invoke-Phase10SqlCmdInComposeContainer -Database 'OrderProcessingSystem_Dev' -Query $registryResetQuery | Out-Null
+    Invoke-Phase10SqlAgainstDockerHost -Database 'OrderProcessingSystem_Dev' -Query $registryResetQuery | Out-Null
     Write-ProgressMessage 'Reset shared registry active tenant set to the Phase 10 local sample baseline.'
 
     foreach ($baselineTenant in $baselineContracts) {
@@ -650,7 +589,7 @@ BEGIN
     THROW 51000, N'Baseline tenant row missing for $tenantCodeSql in OrderProcessingSystem_Dev.', 1;
 END;
 "@
-        Invoke-Phase10SqlCmdInComposeContainer -Database 'OrderProcessingSystem_Dev' -Query $registryQuery | Out-Null
+        Invoke-Phase10SqlAgainstDockerHost -Database 'OrderProcessingSystem_Dev' -Query $registryQuery | Out-Null
         Write-ProgressMessage "Reset registry baseline for $($baselineTenant.TenantCode) -> $($baselineTenant.PaymentProviderCode) ($($baselineTenant.TenantTier))"
     }
 
@@ -701,7 +640,7 @@ BEGIN
 END;
 "@
 
-        Invoke-Phase10SqlCmdInComposeContainer -Database $tenant.Database -Query $sampleQuery | Out-Null
+        Invoke-Phase10SqlAgainstDockerHost -Database $tenant.Database -Query $sampleQuery | Out-Null
         Write-ProgressMessage "Ensured SQL sample data baseline for $($tenant.TenantCode) in $($tenant.Database)"
     }
 
@@ -773,7 +712,7 @@ SELECT TOP (1)
 FROM [dbo].[Tenants]
 WHERE [Code] = '$($check.TenantCode)';
 "@
-        $tenantRow = @(Convert-Phase10SqlRows -Rows @(Invoke-Phase10SqlCmdInComposeContainer -Database $check.Database -Query $query)) |
+        $tenantRow = @(Convert-Phase10SqlRows -Rows @(Invoke-Phase10SqlAgainstDockerHost -Database $check.Database -Query $query)) |
             Select-Object -Last 1
 
         if ([string]::IsNullOrWhiteSpace($tenantRow)) {
@@ -830,16 +769,29 @@ WHERE t.[Code] = '$($check.TenantCode)';
 
 function Assert-Phase10RedisAzureParity {
     Write-Host 'Validating Phase 10 local Redis parity...' -ForegroundColor Cyan
-    $composeProfileArgs = Get-ComposeProfileArguments
-    $composeEnvArgs = Get-ComposeEnvArguments
-    $output = & docker compose @composeEnvArgs -f $composeFile @composeProfileArgs exec -T redis redis-cli ping 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        throw "Redis readiness check failed. $([string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() })))"
-    }
+    $client = [System.Net.Sockets.TcpClient]::new()
+    try {
+        $client.Connect('127.0.0.1', 6379)
+        $stream = $client.GetStream()
+        $writer = [System.IO.StreamWriter]::new($stream, [System.Text.Encoding]::ASCII, 1024, $true)
+        $reader = [System.IO.StreamReader]::new($stream, [System.Text.Encoding]::ASCII, $false, 1024, $true)
 
-    $response = ([string]::Join('', @($output | ForEach-Object { $_.ToString() }))).Trim()
-    if ($response -ne 'PONG') {
-        throw "Redis readiness check returned '$response' instead of PONG."
+        $writer.NewLine = "`r`n"
+        $writer.Write('*1' + "`r`n" + '$4' + "`r`n" + 'PING' + "`r`n")
+        $writer.Flush()
+
+        $response = $reader.ReadLine()
+        if ($response -ne '+PONG') {
+            throw "Redis readiness check returned '$response' instead of +PONG."
+        }
+    }
+    catch {
+        throw "Redis readiness check failed over host port 6379. $($_.Exception.Message)"
+    }
+    finally {
+        if ($null -ne $client) {
+            $client.Dispose()
+        }
     }
 
     Write-ProgressMessage 'Verified Redis readiness: PONG'
@@ -858,5 +810,10 @@ Ensure-Phase10Databases
 Invoke-Phase10DatabaseBootstrap
 Invoke-Phase10SampleDataSeed
 Ensure-Phase10SqlSampleDataBaseline
+Assert-DockerTenantRegistryHygiene `
+    -ScriptName (Split-Path -Leaf $PSCommandPath) `
+    -ConnectionString (New-LocalSqlConnectionString -DatabaseName 'OrderProcessingSystem_Dev') `
+    -SharedDatabaseName 'OrderProcessingSystem_Dev' `
+    -RepairHint 'Phase 10 bootstrap must leave the Docker shared registry in a topology-valid state before later validation runs continue.' | Out-Null
 Assert-Phase10DatabaseAzureParity
 Assert-Phase10RedisAzureParity
