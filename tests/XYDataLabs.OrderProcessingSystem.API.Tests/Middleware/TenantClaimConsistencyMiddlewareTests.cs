@@ -63,6 +63,24 @@ public sealed class TenantClaimConsistencyMiddlewareTests
         nextCalled.Should().BeTrue();
     }
 
+    [Fact]
+    public async Task InvokeAsync_TenantRegistryBootstrapRequest_BypassesClaimConsistencyCheck()
+    {
+        var nextCalled = false;
+        var middleware = new TenantClaimConsistencyMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+        var context = CreateAuthenticatedContext("TenantA", null);
+        context.Request.Path = "/api/v1/info/tenant-registry";
+
+        await middleware.InvokeAsync(context);
+
+        nextCalled.Should().BeTrue();
+        context.Response.StatusCode.Should().Be(StatusCodes.Status200OK);
+    }
+
     private static DefaultHttpContext CreateAuthenticatedContext(
         string? tenantClaim,
         string? tenantHeader)
