@@ -1126,6 +1126,42 @@ jobs:
             throw "Phase 10 Azure runtime host verification failed with exit code $verifyExitCode."
           }
 
+      - name: Ensure Phase 10 provider runtime secrets
+        shell: pwsh
+        env:
+          OPENPAY_MERCHANT_ID: ${{ secrets.OPENPAY_MERCHANT_ID }}
+          OPENPAY_PUBLIC_KEY: ${{ secrets.OPENPAY_PUBLIC_KEY }}
+          OPENPAY_PRIVATE_KEY: ${{ secrets.OPENPAY_PRIVATE_KEY }}
+          OPENPAY_DEVICE_SESSION_ID: ${{ secrets.OPENPAY_DEVICE_SESSION_ID }}
+          OPENPAY_WEBHOOK_SECRET: ${{ secrets.OPENPAY_WEBHOOK_SECRET }}
+          RAZORPAY_MERCHANT_ID: ${{ secrets.RAZORPAY_MERCHANT_ID }}
+          RAZORPAY_PRIVATE_KEY: ${{ secrets.RAZORPAY_PRIVATE_KEY }}
+          RAZORPAY_WEBHOOK_SECRET: ${{ secrets.RAZORPAY_WEBHOOK_SECRET }}
+        run: |
+          $summaryPath = Join-Path $env:RUNNER_TEMP 'phase10-azure-provider-runtime-secrets-deploy.md'
+
+          & pwsh -NoProfile -ExecutionPolicy Bypass -File Resources/Azure-Deployment/ensure-phase10-provider-runtime-secrets.ps1 `
+            -Environment '${{ steps.params.outputs.env }}' `
+            -ResourceGroupName '${{ steps.outputs.outputs.rg }}' `
+            -SummaryPath $summaryPath `
+            -OpenPayMerchantId $env:OPENPAY_MERCHANT_ID `
+            -OpenPayPublicKey $env:OPENPAY_PUBLIC_KEY `
+            -OpenPayPrivateKey $env:OPENPAY_PRIVATE_KEY `
+            -OpenPayDeviceSessionId $env:OPENPAY_DEVICE_SESSION_ID `
+            -OpenPayWebhookSecret $env:OPENPAY_WEBHOOK_SECRET `
+            -RazorpayMerchantId $env:RAZORPAY_MERCHANT_ID `
+            -RazorpayPrivateKey $env:RAZORPAY_PRIVATE_KEY `
+            -RazorpayWebhookSecret $env:RAZORPAY_WEBHOOK_SECRET
+
+          $secretSyncExitCode = $LASTEXITCODE
+          if (Test-Path -LiteralPath $summaryPath) {
+            Get-Content -LiteralPath $summaryPath | Add-Content -Path $env:GITHUB_STEP_SUMMARY
+          }
+
+          if ($secretSyncExitCode -ne 0) {
+            throw "Phase 10 Azure provider runtime secret sync failed with exit code $secretSyncExitCode."
+          }
+
       - name: Ensure Active Tenant Provider Secret Aliases
         shell: pwsh
         run: |
@@ -1231,6 +1267,8 @@ jobs:
           name: phase10-azure-deploy-verification-${{ steps.params.outputs.env }}
           path: |
             ${{ runner.temp }}/phase10-azure-runtime-hosts-deploy.md
+            ${{ runner.temp }}/phase10-azure-provider-runtime-secrets-deploy.md
+            ${{ runner.temp }}/phase10-azure-provider-runtime-secrets-deploy.json
             ${{ runner.temp }}/phase10-azure-tenant-provider-aliases-deploy.md
             ${{ runner.temp }}/phase10-azure-tenant-provider-aliases-deploy.json
             ${{ runner.temp }}/phase10-azure-tenant-topology-deploy.md
