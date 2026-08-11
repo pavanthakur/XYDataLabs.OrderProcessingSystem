@@ -30,7 +30,7 @@ param notificationsPrincipalId string = ''
 @description('Principal ID allowed to read secrets for Functions')
 param functionsPrincipalId string = ''
 
-@description('Deployment workflow service principal object ID allowed to read secrets for Azure verification scripts')
+@description('Deployment workflow service principal object ID allowed to read and synchronize deployment-owned secrets')
 param deploymentPrincipalObjectId string = ''
 
 @description('SQL Server admin password to persist in Key Vault for later SQL and managed-identity workflows')
@@ -149,6 +149,7 @@ resource accessPolicies 'Microsoft.KeyVault/vaults/accessPolicies@2023-07-01' = 
             secrets: [
               'get'
               'list'
+              'set'
             ]
           }
         }

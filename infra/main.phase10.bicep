@@ -95,7 +95,7 @@ param acrRegistryUsername string = ''
 @description('ACR pull token password used by Container Apps when the deploy path does not own Azure RBAC grants')
 param acrRegistryPassword string = ''
 
-@description('Deployment workflow service principal object ID allowed to read Key Vault secrets for Azure verification scripts')
+@description('Deployment workflow service principal object ID allowed to read and synchronize deployment-owned Key Vault secrets')
 param deploymentPrincipalObjectId string = ''
 
 var effectiveResourceSuffix = empty(resourceSuffix) ? environment : resourceSuffix
