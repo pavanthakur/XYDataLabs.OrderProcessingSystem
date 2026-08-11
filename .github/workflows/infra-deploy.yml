@@ -911,6 +911,14 @@ jobs:
 
           "✅ Phase 10 Azure SQL migrations completed." | Add-Content -Path $env:GITHUB_STEP_SUMMARY
 
+      - name: Refresh Azure CLI Login (OIDC) Before SQL Identity Access
+        if: ${{ steps.params.outputs.deploySql == 'true' }}
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+
       - name: Grant Phase 10 Runtime SQL Managed Identity Access
         id: phase10-sql-identities
         if: ${{ steps.params.outputs.deploySql == 'true' }}
@@ -930,6 +938,14 @@ jobs:
           }
 
           "✅ Phase 10 runtime SQL identities granted access to the shared registry database and every active dedicated tenant database resolved from tenant topology." | Add-Content -Path $env:GITHUB_STEP_SUMMARY
+
+      - name: Refresh Azure CLI Login (OIDC) Before SQL Identity Diagnostics
+        if: ${{ always() && steps.params.outputs.deploySql == 'true' && steps['phase10-sql-identities'].outcome == 'failure' }}
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
 
       - name: Diagnose Phase 10 SQL Identity Setup Failure
         if: ${{ always() && steps.params.outputs.deploySql == 'true' && steps['phase10-sql-identities'].outcome == 'failure' }}

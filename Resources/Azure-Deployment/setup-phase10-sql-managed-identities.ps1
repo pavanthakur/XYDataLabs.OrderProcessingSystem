@@ -306,6 +306,7 @@ function Get-Phase10FailureClassification {
     param([Parameter(Mandatory = $true)][string]$Message)
 
     $classification = switch -Regex ($Message) {
+        'AADSTS700024|Client assertion is not within its valid time range' { 'AzureOidcTokenExpired'; break }
         'SecretNotFound|was not found in this key vault|missing or empty' { 'ConfigurationContract.MissingSecret'; break }
         'Forbidden|AuthorizationFailed|AccessDenied|does not have secrets (get|list) permission' { 'AzureAuthorization'; break }
         'Login failed for user|SqlException.*18456' { 'SqlAuthentication'; break }
@@ -341,6 +342,10 @@ function Write-Phase10FailureDiagnostics {
     Write-Host "  Error id       : $($ErrorRecord.FullyQualifiedErrorId)" -ForegroundColor Red
     Write-Host "  Location       : $location" -ForegroundColor Red
     Write-Host "  Message        : $message" -ForegroundColor Red
+
+    if ($classification -eq 'AzureOidcTokenExpired') {
+        Write-Host '  Guidance       : Refresh Azure OIDC login in the workflow immediately before this step or before any post-failure diagnostics that still need Azure CLI access.' -ForegroundColor Yellow
+    }
 
     $annotationMessage = $message.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
     if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_ACTIONS)) {
