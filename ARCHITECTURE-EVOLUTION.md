@@ -1,6 +1,6 @@
 # Architecture Evolution: Monolith to Enterprise Microservices
 
-**Last Updated:** August 8, 2026
+**Last Updated:** August 11, 2026
 **Current Status:** Phase 8 Closeout Matrix Validation Passed ✅ | Track U U5 Complete ✅ | Phase 8.5 Complete ✅ | Phase 8.6 Complete ✅ | Phase 8.7 Complete ✅ | Phase 9 closeout complete for extraction/tasking ✅ | Phase 9.5 identity portability wiring implemented and runtime verified in local HTTP and Docker Dev HTTP ✅ | Phase 10.1 local baseline reconciliation complete ✅ | Phase 10 local NFR proof passed and Docker parity proof passed ✅ | Phase 10 Azure dev validation lane complete ✅ | Staging promotion and final closeout pending ⏳ | Phases 11, 11.5, 12-14 Planned 📅 | Post-14 Horizons captured 📘
 
 ---
@@ -1348,17 +1348,17 @@ Completed proof points:
 
 ### Phase 10 Azure Dev Validation Candidate ✅
 
-The active `dev` Azure validation lane completed successfully on August 8, 2026:
+The active `dev` Azure validation lane completed successfully on August 11, 2026:
 
 | Workflow | Run | Result |
 |---|---:|---|
 | `00 Azure Platform Foundation` | `31264306311` | Passed |
 | `01 Phase 10 Azure Deploy Orchestrator` (real deploy) | `31264680030` | Passed |
-| `02 Phase 10 Azure Runtime Smoke` | `31266011709` | Passed |
-| `03 Phase 10 Azure Transport Smoke` | `31266391019` | Passed |
-| `04 Phase 10 Azure Payment Matrix` | `31266516115` | Passed |
+| `02 Phase 10 Azure Runtime Smoke` | `31457036766` | Passed |
+| `03 Phase 10 Azure Transport Smoke` | `31458734458` | Passed |
+| `04 Phase 10 Azure Payment Matrix` | `31459588541` | Passed |
 
-The only Azure validation defect uncovered in this lane was stale smoke naming for the replay subscription. The validated topology and runbooks now use `dlq-replay-<environment>` rather than the old `dlq-intake-<environment>` label.
+The original Azure transport defect uncovered in this lane was stale smoke naming for the replay subscription. The validated topology and runbooks now use `dlq-replay-<environment>` rather than the old `dlq-intake-<environment>` label. The August 11 rerun also tightened the transport-smoke proof so it resolves active tenant topology from the deployed runtime, validates tenant/provider and dedicated-database contracts, and verifies durable SQL effects instead of racing live subscriptions directly.
 
 ### Phase 10 Status Table
 

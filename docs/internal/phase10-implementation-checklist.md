@@ -62,7 +62,7 @@ Environment note:
 - Run `Resources/Azure-Deployment/validate-phase10-environment-contract.ps1` whenever Azure workflow, parameter, or naming changes are introduced. CI PR validation now runs this contract automatically.
 - Use the environment-specific checklist in [phase10-azure-smoke.md](../runbooks/phase10-azure-smoke.md) for the exact operator inputs and capture rules for `dev`, `staging`, and `prod`.
 
-### August 8, 2026 Dev Azure Evidence Snapshot
+### August 11, 2026 Dev Azure Evidence Snapshot
 
 The current `dev` candidate has completed the full Azure execution lane successfully:
 
@@ -70,13 +70,14 @@ The current `dev` candidate has completed the full Azure execution lane successf
 |---|---:|---|
 | `00 Azure Platform Foundation` | `31264306311` | Passed |
 | `01 Phase 10 Azure Deploy Orchestrator` (real deploy) | `31264680030` | Passed |
-| `02 Phase 10 Azure Runtime Smoke` | `31266011709` | Passed |
-| `03 Phase 10 Azure Transport Smoke` | `31266391019` | Passed |
-| `04 Phase 10 Azure Payment Matrix` | `31266516115` | Passed |
+| `02 Phase 10 Azure Runtime Smoke` | `31457036766` | Passed |
+| `03 Phase 10 Azure Transport Smoke` | `31458734458` | Passed |
+| `04 Phase 10 Azure Payment Matrix` | `31459588541` | Passed |
 
 Notes:
 
-- The August 8, 2026 transport-smoke rerun succeeded after the stale replay-subscription name was corrected from `dlq-intake-<environment>` to `dlq-replay-<environment>`.
+- `02` passed on commit `5a1dc0af97420c4d74386ff98b52525ddadc3fc4`; `03` and `04` passed on the follow-up transport-smoke fix commit `bb388e73e4a1983304bec40082e5f71beeed6525`.
+- The August 11, 2026 transport-smoke proof is topology-driven: active tenant topology is resolved from the deployed runtime, tenant/provider and dedicated-database contracts are validated before execution, and success is measured through durable SQL effects plus DLQ/replay proof.
 - This evidence clears the `dev` lane. Staging remains the next promotion gate; do not treat `prod` as in scope until staging is clean.
 
 ### Graduated Gate Policy
@@ -372,8 +373,9 @@ Use this placement rule so the current Phase 10 closure remains narrow and futur
 | Proof | Run | Result | What it proves |
 |---|---|---|---|
 | Deploy orchestrator | `29273224237` | PASS | Preflight, per-service image build, and Azure dev resource deployment completed through the wrapper path. |
-| Runtime smoke | `29273711615` | PASS | Gateway health, gateway-routed API runtime configuration, UI route, and UI API proxy returned `200`. |
-| Broker transport smoke | `29273881488` | PASS | Service Bus topic/subscriptions, fan-out consume, controlled DLQ forwarding, DLQ replay receive, and utility-driven replay publish/consume passed; deployed Function invocation was not exercised. |
+| Runtime smoke | `31457036766` | PASS | Gateway health, gateway-routed API runtime configuration, UI route, and UI API proxy returned `200` on the current August 11 validation lane. |
+| Broker transport smoke | `31458734458` | PASS | Service Bus topology exists, runtime tenant/provider topology resolves, durable inventory/notification SQL effects are observed, DLQ forwarding succeeds, and replay-subscription proof passes; deployed Function invocation was not exercised. |
+| Azure payment matrix | `31459588541` | PASS | All-tenant Azure browser/payment automation completed, verification remained enabled, and the run packet uploaded successfully on the current August 11 validation lane. |
 | Local/CI container parity | `29268434294` | PASS | Docker Dev HTTP E2E passed smoke, integration, payment matrix, and cleanup on the optional CI parity workflow. |
 
 ### Cleanup Policy Snapshot
