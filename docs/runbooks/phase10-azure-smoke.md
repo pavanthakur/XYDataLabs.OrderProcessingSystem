@@ -141,20 +141,21 @@ These are the numbered Phase 10 workflows and their responsibilities:
 
 ### Latest Dev Evidence Snapshot
 
-As of August 8, 2026, the active `dev` Azure validation lane is green with the following workflow evidence:
+As of August 11, 2026, the active `dev` Azure validation lane is green with the following workflow evidence:
 
 | Workflow | Run | Result |
 |---|---:|---|
 | `00 Azure Platform Foundation` | `31264306311` | Passed |
 | `01 Phase 10 Azure Deploy Orchestrator` (real deploy) | `31264680030` | Passed |
-| `02 Phase 10 Azure Runtime Smoke` | `31266011709` | Passed |
-| `03 Phase 10 Azure Transport Smoke` | `31266391019` | Passed |
-| `04 Phase 10 Azure Payment Matrix` | `31266516115` | Passed |
+| `02 Phase 10 Azure Runtime Smoke` | `31457036766` | Passed |
+| `03 Phase 10 Azure Transport Smoke` | `31458734458` | Passed |
+| `04 Phase 10 Azure Payment Matrix` | `31459588541` | Passed |
+| `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | `29268434294` | Passed |
 
 Operator note:
 
 - The original `03` failure on August 8, 2026 was caused by stale smoke validation naming (`dlq-intake-<environment>`). The validated topology and smoke path now use `dlq-replay-<environment>`.
-| `99` | `99 Phase 10 Docker Dev HTTP End-to-End (local-Optional)` | CI pre-deployment clean-room parity for the current container graph when the change affects Compose, gateway, images, workflows, Bicep, transport, or payment automation |
+- The August 11, 2026 transport-smoke pass is stronger than the earlier utility-only shape: it resolves active tenant topology from the deployed runtime, validates tenant/provider and dedicated-database contracts, and verifies durable SQL effects before completing the DLQ/replay proof.
 
 Rule of thumb:
 - Run `99` first as the clean-room pre-deployment parity gate before Azure when a change affects Compose, gateway, service images, workflow, Bicep, transport, or payment-matrix behavior.
@@ -1020,26 +1021,26 @@ The workflow runs `scripts/run-phase10-azure-transport-smoke.ps1`, which calls t
 The smoke verifies:
 
 1. The Service Bus namespace, main topic, fan-out subscriptions, DLQ topic, and replay subscription exist.
-2. A controlled `OrderCreatedV1` smoke message can be published to `order-events-<env>`.
-3. `inventory-order-created-<env>` receives and completes its copy.
-4. `notifications-order-created-<env>` receives and completes its copy.
-5. A controlled message can be dead-lettered from the inventory subscription and forwarded to `order-events-dlq`.
+2. Active tenant topology is resolved from the deployed runtime and validated against Key Vault secret contracts before execution begins.
+3. A valid `OrderCreatedV1` smoke message can be published to `order-events-<env>`.
+4. Live Inventory and Notifications consumers persist durable SQL effects for that correlation id.
+5. A malformed contract message is forwarded into `order-events-dlq` by the live consumer path.
 6. `dlq-replay-<env>` receives the dead-lettered message.
-7. A replay message can be republished to `order-events-<env>`.
-8. Inventory and Notifications both receive and complete the replay message.
+7. A replay-stage valid message can be republished to `order-events-<env>`.
+8. Inventory and Notifications both persist replay-stage durable effects for the same correlation id.
 
 Expected workflow summary:
 
 | Check | Expected |
 |---|---|
 | Publish fanout | PASS |
-| Inventory fan-out consume | PASS |
-| Notifications fan-out consume | PASS |
-| Inventory controlled dead-letter | PASS |
+| Inventory fan-out processing | PASS |
+| Notifications fan-out processing | PASS |
+| Publish dlq-seed | PASS |
 | DLQ replay subscription receive | PASS |
 | Publish replay | PASS |
-| Inventory replay consume | PASS |
-| Notifications replay consume | PASS |
+| Inventory replay processing | PASS |
+| Notifications replay processing | PASS |
 
 Local equivalent:
 
@@ -1053,11 +1054,12 @@ The local command requires Azure CLI login and access to the `phase10-transport`
 
 The automated transport smoke proves the broker path through `tools/Phase10.TransportSmoke`:
 
-1. It dead-letters a controlled message from the inventory subscription.
-2. It verifies forwarding to `order-events-dlq`.
-3. It receives the message from `dlq-replay-<env>`.
-4. It republishes a replay message to `order-events-<env>`.
-5. It verifies both downstream subscriptions receive the replayed flow.
+1. It resolves active topology from the deployed runtime and validates tenant/provider plus dedicated-database contracts.
+2. It publishes a valid `OrderCreatedV1` message and verifies durable Inventory and Notifications effects in Azure SQL.
+3. It publishes a malformed contract message and verifies forwarding to `order-events-dlq`.
+4. It receives the dead-lettered message from `dlq-replay-<env>`.
+5. It republishes a replay-stage valid message to `order-events-<env>`.
+6. It verifies both downstream consumers persist replay-stage durable effects for the same correlation id.
 
 This proves topology and controlled receive/republish behavior. It does **not** invoke or prove the deployed `XYDataLabs.OrderProcessingSystem.Functions/DlqReplayFunction.cs`. Phase 10.4 must separately capture the Function package identifier, function discovery, invocation identifier, quarantine/approval state, replay attempt, and downstream business effect before deployed Function behavior is considered complete.
 

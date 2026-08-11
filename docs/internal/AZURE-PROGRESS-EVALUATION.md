@@ -9,15 +9,16 @@
 
 ## 🟢 Current State (August 2026) — Phase 10 Dev Validation Green
 
-### August 8, 2026 Phase 10 Azure Dev Validation Complete
+### August 11, 2026 Phase 10 Azure Dev Validation Refresh Complete
 
 - ✅ `00 Azure Platform Foundation` passed in run `31264306311`.
 - ✅ `01 Phase 10 Azure Deploy Orchestrator` dry run and real deploy passed; the real deploy passed in run `31264680030`.
-- ✅ `02 Phase 10 Azure Runtime Smoke` passed in run `31266011709`.
-- ✅ `03 Phase 10 Azure Transport Smoke` passed in run `31266391019`.
-- ✅ `04 Phase 10 Azure Payment Matrix` passed in run `31266516115`.
-- ✅ The Azure `dev` validation lane is now green across foundation, deploy, runtime, messaging, and business/browser payment proof.
-- ✅ The stale replay-subscription naming drift has been corrected: operational docs and smoke automation now use `dlq-replay-<environment>` instead of the old `dlq-intake-<environment>` label.
+- ✅ `02 Phase 10 Azure Runtime Smoke` passed again in run `31457036766` on commit `5a1dc0af97420c4d74386ff98b52525ddadc3fc4`.
+- ✅ `03 Phase 10 Azure Transport Smoke` passed in run `31458734458` on commit `bb388e73e4a1983304bec40082e5f71beeed6525`.
+- ✅ `04 Phase 10 Azure Payment Matrix` passed in run `31459588541` on commit `bb388e73e4a1983304bec40082e5f71beeed6525`.
+- ✅ The Azure `dev` validation lane is green across foundation, deploy, runtime, messaging, and business/browser payment proof with current August 11 evidence.
+- ✅ The transport-smoke path is now topology-driven: it resolves active tenants from the deployed runtime, validates tenant/provider and dedicated-database contracts, and verifies durable SQL effects instead of racing live subscriptions directly.
+- ✅ The stale replay-subscription naming drift remains corrected: operational docs and smoke automation now use `dlq-replay-<environment>` instead of the old `dlq-intake-<environment>` label.
 - 🔜 Next promotion gate: run the same `01 -> 04` sequence in `staging`, then review the combined evidence packet before any `prod` decision.
 
 ### July 25, 2026 Phase 10 Completion Contract
