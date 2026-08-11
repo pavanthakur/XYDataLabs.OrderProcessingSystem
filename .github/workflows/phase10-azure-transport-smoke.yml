@@ -94,7 +94,7 @@ jobs:
             echo ""
             echo "### Broker Replay Proof"
             echo ""
-            echo "This workflow validates broker topology and controlled receive/republish behavior through the transport-smoke utility. It does not invoke or prove the deployed DLQ replay Function."
+            echo "This workflow validates broker topology, live consumer durable effects, DLQ forwarding, and replay-subscription visibility through the transport-smoke utility. It does not invoke or prove the deployed DLQ replay Function."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Verify Service Bus topology exists
@@ -144,6 +144,8 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: phase10-azure-transport-smoke-${{ inputs.environment }}
-          path: ${{ runner.temp }}/phase10-azure-transport-smoke.md
+          path: |
+            ${{ runner.temp }}/phase10-azure-transport-smoke.md
+            ${{ runner.temp }}/phase10-azure-transport-smoke.topology.json
           if-no-files-found: ignore
           retention-days: 14
