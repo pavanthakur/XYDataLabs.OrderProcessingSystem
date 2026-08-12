@@ -18,7 +18,10 @@ export class PowerShellVerificationAdapter implements VerificationAdapter {
 
   private async executePhysical(request: VerificationRequest): Promise<VerificationResult> {
     const scriptPath = path.join(repoRoot, "scripts", "verify-payment-run-physical.ps1");
-    const runAnchor = request.customerOrderId ?? request.runPrefix;
+    const explicitCustomerOrderId = request.customerOrderId?.trim();
+    const runAnchor = explicitCustomerOrderId && explicitCustomerOrderId.length > 0
+      ? explicitCustomerOrderId
+      : request.runPrefix;
 
     const stdout = await this.invokePowerShell([
       "-NoProfile",
@@ -39,9 +42,10 @@ export class PowerShellVerificationAdapter implements VerificationAdapter {
     const rawReport = parseJsonPayload(stdout) as { Checks?: Record<string, { Outcome?: string }> };
     const outcomes = Object.values(rawReport.Checks ?? {}).map((value) => value.Outcome ?? "");
     const hasFailure = outcomes.includes("FAIL");
+    const hasInconclusive = outcomes.includes("INCONCLUSIVE");
 
     return {
-      outcome: hasFailure ? "failed" : "passed",
+      outcome: hasFailure ? "failed" : hasInconclusive ? "partial" : "passed",
       summary: `Physical verification completed for ${runAnchor}.`,
       threeDsByTenant: extractThreeDsByTenant(rawReport),
       rawReport
@@ -67,9 +71,10 @@ export class PowerShellVerificationAdapter implements VerificationAdapter {
     const rawReport = parseJsonPayload(stdout) as { Checks?: Record<string, { Outcome?: string }> };
     const outcomes = Object.values(rawReport.Checks ?? {}).map((value) => value.Outcome ?? "");
     const hasFailure = outcomes.includes("FAIL");
+    const hasInconclusive = outcomes.includes("INCONCLUSIVE");
 
     return {
-      outcome: hasFailure ? "failed" : "passed",
+      outcome: hasFailure ? "failed" : hasInconclusive ? "partial" : "passed",
       summary: `Azure verification completed for ${request.runPrefix}.`,
       threeDsByTenant: extractThreeDsByTenant(rawReport),
       rawReport

@@ -281,12 +281,26 @@ export class PaymentJourneyRunner {
     try {
       const response = await apiContext.get("/api/v1/Info/payment-configuration");
       if (!response.ok()) {
-        throw new Error(`Payment configuration request failed with status ${response.status()}.`);
+        const responseBody = await response.text().catch(() => "");
+        const normalizedBody = responseBody.trim().replace(/\s+/g, " ");
+        const responseDetail = normalizedBody.length > 0
+          ? ` Response: ${normalizedBody.slice(0, 500)}`
+          : "";
+        throw new Error(`Payment configuration request failed with status ${response.status()}.${responseDetail}`);
       }
 
       const paymentConfiguration = await response.json() as PaymentConfigurationResponse;
       if (!paymentConfiguration.activeProviderType?.trim()) {
         throw new Error("Payment configuration response did not include an active provider type.");
+      }
+
+      if (
+        request.requestedProvider
+        && !this.providersMatch(request.requestedProvider, paymentConfiguration.activeProviderType)
+      ) {
+        throw new Error(
+          `Requested provider ${request.requestedProvider} but API resolved ${paymentConfiguration.activeProviderType} for tenant ${request.tenantCode}.`
+        );
       }
 
       log(
