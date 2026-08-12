@@ -11,11 +11,18 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $workspaceRoot = Split-Path -Parent $PSScriptRoot
+$localTenantRegistryHygieneScript = Join-Path $workspaceRoot 'scripts\assert-local-tenant-registry-hygiene.ps1'
 
 $launchSettingsPath = Join-Path $workspaceRoot 'XYDataLabs.OrderProcessingSystem.API\Properties\launchSettings.json'
 if (-not (Test-Path $launchSettingsPath)) {
     throw "launchSettings.json not found: $launchSettingsPath"
 }
+
+if (-not (Test-Path -LiteralPath $localTenantRegistryHygieneScript)) {
+    throw "Local tenant registry hygiene script not found: $localTenantRegistryHygieneScript"
+}
+
+. $localTenantRegistryHygieneScript
 
 $launchSettings = Get-Content $launchSettingsPath -Raw | ConvertFrom-Json
 $sharedSettingsPath = $launchSettings.profiles.http.environmentVariables.SHAREDSETTINGS_PATH
@@ -149,4 +156,12 @@ if (-not $sqlReady) {
 }
 
 Invoke-LocalDatabaseBootstrap -TimeoutSeconds $BootstrapTimeoutSeconds
+Repair-LocalTenantRegistryBaseline `
+    -ConnectionString $connectionString `
+    -DatabaseName 'OrderProcessingSystem_Local'
+Assert-LocalTenantRegistryHygiene `
+    -ScriptName (Split-Path -Leaf $PSCommandPath) `
+    -ConnectionString $connectionString `
+    -DatabaseName 'OrderProcessingSystem_Local' `
+    -RepairHint 'Local bootstrap must leave the local shared registry in a topology-valid state before local matrix execution continues.' | Out-Null
 Write-Host "Local DB bootstrap completed successfully." -ForegroundColor Green

@@ -43,6 +43,10 @@ function Test-HttpReady {
     }
 }
 
+function Test-ProfileReady {
+    return (Test-HttpReady -Url $apiReadyUrl) -and (Test-HttpReady -Url $uiReadyUrl)
+}
+
 function Start-ChildProfileProcess {
     param(
         [Parameter(Mandatory = $true)]
@@ -92,6 +96,17 @@ $startupDeadline = (Get-Date).AddSeconds(120)
 
 try
 {
+    $apiAlreadyReady = Test-HttpReady -Url $apiReadyUrl
+    $uiAlreadyReady = Test-HttpReady -Url $uiReadyUrl
+
+    if ($apiAlreadyReady -and $uiAlreadyReady)
+    {
+        $profileBecameReady = $true
+        Write-Host "Local '$Profile' profile is already running at $apiReadyUrl and $uiReadyUrl."
+        & pwsh -NoProfile -ExecutionPolicy Bypass -File $statusWriter -EnvironmentKey $sequenceEnvironmentKey -TaskName 'local-http-env-ready' -Status passed -Message "$Profile (already running)"
+        return
+    }
+
     & pwsh -NoProfile -ExecutionPolicy Bypass -File $statusWriter -EnvironmentKey $sequenceEnvironmentKey -TaskName 'local-http-env-ready' -Status started -Message $Profile
     & pwsh -NoProfile -ExecutionPolicy Bypass -File $bootstrapScriptPath
     if ($LASTEXITCODE -ne 0)
@@ -103,8 +118,24 @@ try
     {
         throw "Failed to start Keycloak for local '$Profile' profile."
     }
-    Start-ChildProfileProcess -Name 'API' -ScriptPath $apiScriptPath -ProfileName $Profile -DisableStartupDdl | Out-Null
-    Start-ChildProfileProcess -Name 'UI' -ScriptPath $frontendScriptPath -ProfileName $Profile | Out-Null
+
+    if (-not $apiAlreadyReady)
+    {
+        Start-ChildProfileProcess -Name 'API' -ScriptPath $apiScriptPath -ProfileName $Profile -DisableStartupDdl | Out-Null
+    }
+    else
+    {
+        Write-Host "API for '$Profile' profile is already running at $apiReadyUrl."
+    }
+
+    if (-not $uiAlreadyReady)
+    {
+        Start-ChildProfileProcess -Name 'UI' -ScriptPath $frontendScriptPath -ProfileName $Profile | Out-Null
+    }
+    else
+    {
+        Write-Host "UI for '$Profile' profile is already running at $uiReadyUrl."
+    }
 
     Write-Host "Local '$Profile' profile bootstrap is running."
     Write-Host "Waiting for API readiness at $apiReadyUrl and UI readiness at $uiReadyUrl."

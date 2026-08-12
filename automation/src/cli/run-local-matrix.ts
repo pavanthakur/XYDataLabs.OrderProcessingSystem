@@ -67,6 +67,10 @@ async function main(): Promise<void> {
   const startedAt = new Date();
   const matrixRunId = `payment-automation-local-matrix-${formatIstStamp(startedAt)}_matrix`;
   const runtimeTargetCatalog = new JsonRuntimeTargetCatalog();
+  const normalizedProviders = normalizeRequestedProviders(options.requestedProviders);
+  const effectiveProviders = normalizedProviders.length > 0
+    ? normalizedProviders
+    : getDefaultMatrixProviders();
   const environmentKey = options.targets.length === 1
     ? resolveEnvironmentKey(await runtimeTargetCatalog.resolve(options.targets[0]))
     : defaultEnvironmentKey;
@@ -105,10 +109,10 @@ async function main(): Promise<void> {
     await appendStatus(environmentKey, "local-http-matrix", "started", `runDir=${reportDirectory}`);
     await writeFile(runPlanPath, [
     "Local HTTP matrix sanity run",
-    `Goal: confirm local-http tenant/provider discovery and basic execution flow.`,
+    "Goal: confirm local tenant/provider discovery and browser/payment execution across the active matrix.",
     `Environment: ${environmentKey}`,
     `Targets: ${options.targets.join(", ")}`,
-    `Requested providers: ${options.requestedProviders.length > 0 ? options.requestedProviders.join(", ") : "runtime default"}`,
+    `Requested providers: ${effectiveProviders.join(", ")}`,
     `Tenant limit: ${options.tenantLimit ?? "none"}`,
     `Dry run: ${options.dryRun ? "yes" : "no"}`,
     `Verification: ${options.verify ? "yes" : "no"}`,
@@ -125,7 +129,7 @@ async function main(): Promise<void> {
     `[${formatIstTimestamp(new Date())}] Matrix startup`,
     `environment=${environmentKey}`,
     `targets=${options.targets.join(",")}`,
-    `requestedProviders=${options.requestedProviders.length > 0 ? options.requestedProviders.join(",") : "runtime default"}`,
+    `requestedProviders=${effectiveProviders.join(",")}`,
     `tenantLimit=${options.tenantLimit ?? "none"}`,
     `dryRun=${options.dryRun}`,
     `verify=${options.verify}`,
@@ -160,20 +164,22 @@ async function main(): Promise<void> {
       await startLocalProfile(runtimeTarget.profile, (message) => {
         void writeRunMessage(startupLogPath, progressLogPath, `[${target}] ${message}`).catch(() => undefined);
       });
+      await writeRunMessage(startupLogPath, progressLogPath, `[${formatIstTimestamp(new Date())}] target=${target} state=local-profile-ready`);
     }
 
     await writeRunMessage(startupLogPath, progressLogPath, `[${formatIstTimestamp(new Date())}] target=${target} state=starting-automation-run`);
     const run = await executePaymentAutomationRun({
       target,
       tenantCodes: options.tenantCodes,
-      requestedProviders: options.requestedProviders,
+      requestedProviders: effectiveProviders,
       allowPartialExecution: options.allowPartialExecution,
       dryRun: options.dryRun,
       headless: options.headless,
       verify: options.verify,
       sandboxOtpCode: options.sandboxOtpCode,
       tenantTimeoutMs: options.tenantTimeoutMs,
-      autoStopLocalSessions: false,
+      autoStartLocalSessions: false,
+      autoStopLocalSessions: options.autoStopLocalSessions,
       tenantLimit: options.tenantLimit ?? undefined,
       reportDirectoryRoot: environmentRoot,
       startedAt: targetStart,
@@ -190,7 +196,11 @@ async function main(): Promise<void> {
   const rows = targetRuns.flatMap((targetRun) => targetRun.rows);
   const markdownSummary = await reportComposer.compose(rows);
   const hasFailures = targetRuns.some((targetRun) =>
-    targetRun.rows.some((row) => !row.journeyOutcome.startsWith("completed") && row.journeyOutcome !== "dry_run")
+    targetRun.rows.some((row) => {
+      const journeyFailed = !row.journeyOutcome.startsWith("completed") && row.journeyOutcome !== "dry_run";
+      const verificationFailed = options.verify && !options.dryRun && row.verificationOutcome !== "passed";
+      return journeyFailed || verificationFailed;
+    })
   );
   matrixOutput.finishedUtc = new Date().toISOString();
   matrixOutput.finishedIst = formatIstTimestamp(new Date());
@@ -275,7 +285,7 @@ function parseCliOptions(argumentsList: string[]): LocalMatrixOptions {
   let verify = true;
   let sandboxOtpCode = "999";
   let tenantTimeoutMs = 180000;
-  let autoStopLocalSessions = true;
+  let autoStopLocalSessions = false;
   let tenantLimit: number | null = null;
 
   for (let index = 0; index < argumentsList.length; index += 1) {
@@ -321,6 +331,9 @@ function parseCliOptions(argumentsList: string[]): LocalMatrixOptions {
         tenantTimeoutMs = Number(argumentsList[index + 1] ?? tenantTimeoutMs);
         index += 1;
         break;
+      case "--stop-local-sessions":
+        autoStopLocalSessions = true;
+        break;
       case "--keep-local-sessions":
         autoStopLocalSessions = false;
         break;
@@ -333,8 +346,12 @@ function parseCliOptions(argumentsList: string[]): LocalMatrixOptions {
     }
   }
 
+  const normalizedTargets = targets.length > 0
+    ? Array.from(new Set(targets.map((target) => target.trim()).filter(Boolean)))
+    : ["local-http", "local-https"];
+
   return {
-    targets: targets.length > 0 ? targets : ["local-http", "local-https"],
+    targets: normalizedTargets,
     tenantCodes,
     requestedProviders,
     allowPartialExecution,
@@ -346,6 +363,24 @@ function parseCliOptions(argumentsList: string[]): LocalMatrixOptions {
     autoStopLocalSessions,
     tenantLimit
   };
+}
+
+function normalizeRequestedProviders(requestedProviders: string[]): string[] {
+  if (requestedProviders.length === 0) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      requestedProviders
+        .map((provider) => provider.trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+function getDefaultMatrixProviders(): string[] {
+  return ["OpenPay", "Razorpay"];
 }
 
 void main().catch((error: unknown) => {
