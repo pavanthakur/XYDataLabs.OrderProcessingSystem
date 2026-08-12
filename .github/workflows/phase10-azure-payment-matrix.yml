@@ -137,6 +137,27 @@ jobs:
             echo "| Redis ${REDIS_NAME} | Present |"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Verify tenant and provider matrix contract
+        shell: pwsh
+        run: |
+          $artifactRoot = Join-Path $PWD 'TestResults/Playwright/azure-https'
+          $summaryPath = Join-Path $artifactRoot 'topology-preflight-${{ inputs.environment }}-${{ github.run_id }}.md'
+
+          & pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-phase10-azure-tenant-topology.ps1 `
+            -Environment '${{ inputs.environment }}' `
+            -ResourceGroupName '${{ steps.topology.outputs.resourceGroup }}' `
+            -RequiredProviderCodes @('OpenPay', 'Razorpay') `
+            -SummaryPath $summaryPath
+
+          $verifyExitCode = $LASTEXITCODE
+          if (Test-Path -LiteralPath $summaryPath) {
+            Get-Content -LiteralPath $summaryPath | Add-Content -Path $env:GITHUB_STEP_SUMMARY
+          }
+
+          if ($verifyExitCode -ne 0) {
+            throw "Azure payment matrix topology/provider preflight failed with exit code $verifyExitCode. Run the Phase 10 deploy orchestrator to synchronize provider aliases before retrying the matrix."
+          }
+
       - name: Install automation dependencies
         working-directory: automation
         run: npm ci

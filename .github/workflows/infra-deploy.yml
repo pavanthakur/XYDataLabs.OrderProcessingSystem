@@ -1179,7 +1179,7 @@ jobs:
             throw "Phase 10 Azure provider runtime secret sync failed with exit code $secretSyncExitCode."
           }
 
-      - name: Ensure Active Tenant Provider Secret Aliases
+      - name: Ensure Tenant Payment Matrix Provider Secret Aliases
         shell: pwsh
         run: |
           $summaryPath = Join-Path $env:RUNNER_TEMP 'phase10-azure-tenant-provider-aliases-deploy.md'
@@ -1188,7 +1188,8 @@ jobs:
             -Environment '${{ steps.params.outputs.env }}' `
             -ResourceGroupName '${{ steps.outputs.outputs.rg }}' `
             -SummaryPath $summaryPath `
-            -DeploymentPrincipalObjectId '${{ steps.deployment_principal.outputs.objectId }}'
+            -DeploymentPrincipalObjectId '${{ steps.deployment_principal.outputs.objectId }}' `
+            -RequiredProviderCodes @('OpenPay', 'Razorpay')
 
           $syncExitCode = $LASTEXITCODE
           if (Test-Path -LiteralPath $summaryPath) {
@@ -1199,7 +1200,34 @@ jobs:
             throw "Phase 10 Azure tenant provider alias sync failed with exit code $syncExitCode."
           }
 
-      - name: Verify Active Tenant Topology Contract
+      - name: Refresh Payment Runtime Hosts After Provider Secret Sync
+        shell: bash
+        run: |
+          RG_NAME="${{ steps.outputs.outputs.rg }}"
+          REVISION_MARKER="${{ github.run_id }}-${{ github.run_attempt }}"
+          PAYMENT_RUNTIME_APPS=(
+            "${{ steps.outputs.outputs.orders }}"
+            "${{ steps.outputs.outputs.payments }}"
+          )
+
+          echo "Refreshing payment-aware Container Apps so newly synchronized Key Vault aliases are loaded..."
+          for APP_NAME in "${PAYMENT_RUNTIME_APPS[@]}"; do
+            if [ -z "$APP_NAME" ]; then
+              echo "A required payment-aware Container App output is empty." >&2
+              exit 1
+            fi
+
+            echo "Refreshing ${APP_NAME}..."
+            az containerapp update \
+              --resource-group "$RG_NAME" \
+              --name "$APP_NAME" \
+              --set-env-vars "Phase10__ProviderSecretSyncRun=${REVISION_MARKER}" \
+              --only-show-errors 1>/dev/null
+          done
+
+          echo "✅ Orders and Payments runtime hosts refreshed after provider secret synchronization." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify Active Tenant And Payment Matrix Contract
         shell: pwsh
         run: |
           $summaryPath = Join-Path $env:RUNNER_TEMP 'phase10-azure-tenant-topology-deploy.md'
@@ -1207,6 +1235,7 @@ jobs:
           & pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-phase10-azure-tenant-topology.ps1 `
             -Environment '${{ steps.params.outputs.env }}' `
             -ResourceGroupName '${{ steps.outputs.outputs.rg }}' `
+            -RequiredProviderCodes @('OpenPay', 'Razorpay') `
             -SummaryPath $summaryPath
 
           $verifyExitCode = $LASTEXITCODE

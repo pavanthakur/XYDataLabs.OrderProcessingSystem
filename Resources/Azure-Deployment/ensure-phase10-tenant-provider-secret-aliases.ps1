@@ -6,6 +6,8 @@ param(
     [string]$SummaryPath,
     [string]$BaseName = 'orderprocessing',
     [string]$DeploymentPrincipalObjectId,
+    [ValidateSet('OpenPay', 'Razorpay')]
+    [string[]]$RequiredProviderCodes = @('OpenPay', 'Razorpay'),
     [int]$Attempts = 6,
     [int]$DelaySeconds = 10,
     [int]$AccessPolicyAttempts = 6,
@@ -23,6 +25,16 @@ $gatewayApp = "$BaseName-gate-$envSuffix"
 $shortBaseName = $BaseName.Substring(0, [Math]::Min(15, $BaseName.Length))
 $keyVaultName = "kv-$shortBaseName-$envSuffix"
 $supportedProviders = @('OpenPay', 'Razorpay')
+$executionProviderCodes = @(
+    $RequiredProviderCodes |
+        ForEach-Object { $_.Trim() } |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        Select-Object -Unique
+)
+
+if ($executionProviderCodes.Count -eq 0) {
+    throw 'At least one required provider code must be supplied for tenant provider alias synchronization.'
+}
 
 function Invoke-AzText {
     param(
@@ -112,86 +124,86 @@ else {
 
 foreach ($tenant in $topology.Items) {
     $tenantCode = [string]$tenant.TenantCode
-    $providerCode = [string]$tenant.PaymentProviderCode
-    $providerAlias = ''
-    $providerFallbackSecret = ''
-    $action = 'unchanged'
-    $detail = 'Alias already present.'
-    $diagnostic = ''
-    $attemptsUsed = 0
+    $assignedProviderCode = [string]$tenant.PaymentProviderCode
 
     if ([string]::IsNullOrWhiteSpace($tenantCode)) {
         $failures.Add('Active tenant is missing TenantCode.')
         continue
     }
 
-    if ([string]::IsNullOrWhiteSpace($providerCode)) {
+    if ([string]::IsNullOrWhiteSpace($assignedProviderCode)) {
         $failures.Add("Active tenant '$tenantCode' is missing PaymentProviderCode.")
         continue
     }
 
-    if ($supportedProviders -notcontains $providerCode) {
-        $failures.Add("Active tenant '$tenantCode' uses unsupported provider '$providerCode'.")
+    if ($supportedProviders -notcontains $assignedProviderCode) {
+        $failures.Add("Active tenant '$tenantCode' uses unsupported provider '$assignedProviderCode'.")
         continue
     }
 
-    $providerAlias = "PaymentProviders--$tenantCode--$providerCode--PrivateKey"
-
-    if (-not $accessCheck.Succeeded) {
-        $action = 'blocked'
-        $detail = 'Alias synchronization was not attempted because the deployment principal lacks confirmed write access.'
-        $diagnostic = $accessCheck.Diagnostic
-    }
-    else {
-        $aliasRead = Get-Phase10KeyVaultSecret -KeyVaultName $keyVaultName -SecretName $providerAlias
-        $attemptsUsed += $aliasRead.Attempts
-        if ($aliasRead.State -eq 'Error') {
-            $action = 'failed'
-            $detail = "Failed to read alias '$providerAlias'."
-            $diagnostic = $aliasRead.Diagnostic
-            $failures.Add("Tenant '$tenantCode' alias read failed. $diagnostic")
-        }
-        elseif ($aliasRead.State -eq 'Missing') {
+    foreach ($providerCode in $executionProviderCodes) {
+        $providerAlias = "PaymentProviders--$tenantCode--$providerCode--PrivateKey"
         $providerFallbackSecret = "$providerCode--PrivateKey"
-            $fallbackRead = Get-Phase10KeyVaultSecret -KeyVaultName $keyVaultName -SecretName $providerFallbackSecret
-            $attemptsUsed += $fallbackRead.Attempts
+        $action = 'unchanged'
+        $detail = 'Alias already present.'
+        $diagnostic = ''
+        $attemptsUsed = 0
 
-            if ($fallbackRead.State -eq 'Error') {
+        if (-not $accessCheck.Succeeded) {
+            $action = 'blocked'
+            $detail = 'Alias synchronization was not attempted because the deployment principal lacks confirmed write access.'
+            $diagnostic = $accessCheck.Diagnostic
+        }
+        else {
+            $aliasRead = Get-Phase10KeyVaultSecret -KeyVaultName $keyVaultName -SecretName $providerAlias
+            $attemptsUsed += $aliasRead.Attempts
+            if ($aliasRead.State -eq 'Error') {
                 $action = 'failed'
-                $detail = "Failed to read fallback secret '$providerFallbackSecret'."
-                $diagnostic = $fallbackRead.Diagnostic
-                $failures.Add("Tenant '$tenantCode' fallback provider secret read failed. $diagnostic")
+                $detail = "Failed to read alias '$providerAlias'."
+                $diagnostic = $aliasRead.Diagnostic
+                $failures.Add("Tenant '$tenantCode' alias read failed for provider '$providerCode'. $diagnostic")
             }
-            elseif ($fallbackRead.State -eq 'Missing') {
-            $action = 'failed'
-            $detail = "Missing alias '$providerAlias' and fallback secret '$providerFallbackSecret'."
-            $failures.Add("Tenant '$tenantCode' provider alias '$providerAlias' could not be created because fallback secret '$providerFallbackSecret' is missing.")
-            }
-            else {
-                $writeResult = Set-Phase10KeyVaultSecret `
-                    -KeyVaultName $keyVaultName `
-                    -SecretName $providerAlias `
-                    -SecretValue $fallbackRead.Value `
-                    -SecretValues @($fallbackRead.Value)
-                $attemptsUsed += $writeResult.Attempts
+            elseif ($aliasRead.State -eq 'Missing') {
+                $fallbackRead = Get-Phase10KeyVaultSecret -KeyVaultName $keyVaultName -SecretName $providerFallbackSecret
+                $attemptsUsed += $fallbackRead.Attempts
 
-                if (-not $writeResult.Succeeded) {
-            $action = 'failed'
-            $detail = "Failed to create alias '$providerAlias' from fallback secret '$providerFallbackSecret'."
-                    $diagnostic = $writeResult.Diagnostic
-                    $failures.Add("Tenant '$tenantCode' provider alias '$providerAlias' could not be written to Key Vault. $diagnostic")
+                if ($fallbackRead.State -eq 'Error') {
+                    $action = 'failed'
+                    $detail = "Failed to read fallback secret '$providerFallbackSecret'."
+                    $diagnostic = $fallbackRead.Diagnostic
+                    $failures.Add("Tenant '$tenantCode' fallback provider secret read failed for provider '$providerCode'. $diagnostic")
+                }
+                elseif ($fallbackRead.State -eq 'Missing') {
+                    $action = 'failed'
+                    $detail = "Missing alias '$providerAlias' and fallback secret '$providerFallbackSecret'."
+                    $failures.Add("Tenant '$tenantCode' provider alias '$providerAlias' could not be created because fallback secret '$providerFallbackSecret' is missing.")
                 }
                 else {
-            $action = 'created'
-            $detail = "Created alias '$providerAlias' from fallback secret '$providerFallbackSecret'."
-            $createdCount++
+                    $writeResult = Set-Phase10KeyVaultSecret `
+                        -KeyVaultName $keyVaultName `
+                        -SecretName $providerAlias `
+                        -SecretValue $fallbackRead.Value `
+                        -SecretValues @($fallbackRead.Value)
+                    $attemptsUsed += $writeResult.Attempts
+
+                    if (-not $writeResult.Succeeded) {
+                        $action = 'failed'
+                        $detail = "Failed to create alias '$providerAlias' from fallback secret '$providerFallbackSecret'."
+                        $diagnostic = $writeResult.Diagnostic
+                        $failures.Add("Tenant '$tenantCode' provider alias '$providerAlias' could not be written to Key Vault. $diagnostic")
+                    }
+                    else {
+                        $action = 'created'
+                        $detail = "Created alias '$providerAlias' from fallback secret '$providerFallbackSecret'."
+                        $createdCount++
+                    }
                 }
             }
         }
-    }
 
-    $results.Add([pscustomobject]@{
+        $results.Add([pscustomobject]@{
             TenantCode = $tenantCode
+            AssignedProviderCode = $assignedProviderCode
             ProviderCode = $providerCode
             ProviderPrivateKeyAlias = $providerAlias
             ProviderFallbackSecret = $providerFallbackSecret
@@ -200,6 +212,7 @@ foreach ($tenant in $topology.Items) {
             Diagnostic = $diagnostic
             Attempts = $attemptsUsed
         })
+    }
 }
 
 $status = if ($failures.Count -eq 0) { 'PASS' } else { 'FAIL' }
@@ -219,21 +232,22 @@ $summary += ('**Deployment Principal Object ID:** `{0}`' -f $(if ([string]::IsNu
 $summary += ('**Authorization Mode:** `{0}`' -f $accessCheck.AuthorizationMode)
 $summary += ('**Observed Secret Permissions:** `{0}`' -f $(if (@($accessCheck.ObservedPermissions).Count -eq 0) { 'none' } else { @($accessCheck.ObservedPermissions) -join ', ' }))
 $summary += ('**Authorization Attempts:** `{0}`' -f $accessCheck.Attempts)
+$summary += ('**Required Execution Providers:** `{0}`' -f ($executionProviderCodes -join ', '))
 $summary += ('**Aliases Created:** `{0}`' -f $createdCount)
 $summary += ('**Completed UTC:** `{0}`' -f $completedUtc.ToString('O'))
 $summary += ''
-$summary += '| Tenant | Provider | Alias | Fallback Secret | Action | Attempts | Detail | Azure Diagnostic |'
-$summary += '|---|---|---|---|---|---|---|---|'
+$summary += '| Tenant | Assigned Provider | Validated Execution Provider | Alias | Fallback Secret | Action | Attempts | Detail | Azure Diagnostic |'
+$summary += '|---|---|---|---|---|---|---|---|---|'
 foreach ($result in $results) {
     $fallbackSecret = if ([string]::IsNullOrWhiteSpace($result.ProviderFallbackSecret)) { '-' } else { $result.ProviderFallbackSecret }
     $detail = ([string]$result.Detail).Replace('|', '\|').Replace("`r", ' ').Replace("`n", ' ')
     $diagnostic = if ([string]::IsNullOrWhiteSpace([string]$result.Diagnostic)) { '-' } else { ([string]$result.Diagnostic).Replace('|', '\|').Replace("`r", ' ').Replace("`n", ' ') }
-    $summary += "| $($result.TenantCode) | $($result.ProviderCode) | $($result.ProviderPrivateKeyAlias) | $fallbackSecret | $($result.Action) | $($result.Attempts) | $detail | $diagnostic |"
+    $summary += "| $($result.TenantCode) | $($result.AssignedProviderCode) | $($result.ProviderCode) | $($result.ProviderPrivateKeyAlias) | $fallbackSecret | $($result.Action) | $($result.Attempts) | $detail | $diagnostic |"
 }
 
 if ($failures.Count -eq 0) {
     $summary += ''
-    $summary += 'All active tenant/provider private-key aliases are present for the current topology.'
+    $summary += 'All active tenants have private-key aliases for every required matrix execution provider. Registry assignments remain unchanged.'
 }
 else {
     $summary += ''
@@ -262,8 +276,10 @@ if (-not [string]::IsNullOrWhiteSpace($SummaryPath)) {
         deploymentPrincipalObjectId = $DeploymentPrincipalObjectId
         authorizationMode = $accessCheck.AuthorizationMode
         observedSecretPermissions = @($accessCheck.ObservedPermissions)
+        requiredProviderCodes = @($executionProviderCodes)
         results = @($results | Select-Object `
                 @{ Name = 'tenantCode'; Expression = { $_.TenantCode } },
+                @{ Name = 'assignedProviderCode'; Expression = { $_.AssignedProviderCode } },
                 @{ Name = 'providerCode'; Expression = { $_.ProviderCode } },
                 @{ Name = 'providerPrivateKeyAlias'; Expression = { $_.ProviderPrivateKeyAlias } },
                 @{ Name = 'providerFallbackSecret'; Expression = { $_.ProviderFallbackSecret } },
