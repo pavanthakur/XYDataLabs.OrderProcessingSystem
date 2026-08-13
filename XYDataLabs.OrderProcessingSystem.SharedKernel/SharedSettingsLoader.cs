@@ -31,8 +31,10 @@ namespace XYDataLabs.OrderProcessingSystem.SharedKernel
         {
             ValidateHostingEnvironmentContract(environmentName);
 
-            // Detect Azure App Service using WEBSITE_SITE_NAME environment variable
-            var isAzure = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME"));
+            // App Service exposes WEBSITE_SITE_NAME; Container Apps uses the
+            // explicit deployment marker supplied by our IaC.
+            var isAzure = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME"))
+                || string.Equals(Environment.GetEnvironmentVariable("ORDERPROCESSING_AZURE_HOST"), "true", StringComparison.OrdinalIgnoreCase);
             
             // Determine effective environment:
             // - Azure/Docker: Use the provided environment or fall back to "dev"
@@ -75,14 +77,31 @@ namespace XYDataLabs.OrderProcessingSystem.SharedKernel
                 // ENTERPRISE REQUIREMENT: Key Vault is mandatory for Azure deployments
                 try
                 {
-                    // Get Key Vault name from environment variable (set by bootstrap/deployment)
+                    // Container Apps receives the exact vault URI from IaC.
+                    // App Service deployments may continue to provide a name.
+                    var configuredKeyVaultUri = Environment.GetEnvironmentVariable("KeyVault__Uri");
                     var keyVaultName = Environment.GetEnvironmentVariable("KEY_VAULT_NAME");
+                    Uri keyVaultUri;
+                    if (!string.IsNullOrWhiteSpace(configuredKeyVaultUri))
+                    {
+                        if (!Uri.TryCreate(configuredKeyVaultUri, UriKind.Absolute, out keyVaultUri!)
+                            || !string.Equals(keyVaultUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+                        {
+                            throw new InvalidOperationException($"Invalid KeyVault__Uri value: {configuredKeyVaultUri}");
+                        }
+
+                        keyVaultName = keyVaultUri.Host.Split('.')[0];
+                    }
+                    else
+                    {
                     if (string.IsNullOrWhiteSpace(keyVaultName))
                     {
                         // Fallback: Construct Key Vault name (assumes standard naming: kv-{baseName}-{env})
                         // Bootstrap script sets KEY_VAULT_NAME, so this fallback is rarely used
                         keyVaultName = $"kv-orderprocessing-{effectiveEnvironment}";
                         Console.WriteLine($"[WARN] KEY_VAULT_NAME environment variable not set. Using constructed name: {keyVaultName}");
+                    }
+                        keyVaultUri = new Uri($"https://{keyVaultName}.vault.azure.net/");
                     }
                     
                     // Validate Key Vault name format (alphanumeric and hyphens only, 3-24 chars)
@@ -96,12 +115,11 @@ namespace XYDataLabs.OrderProcessingSystem.SharedKernel
                         throw new InvalidOperationException(errorMsg);
                     }
                     
-                    var keyVaultUri = $"https://{keyVaultName}.vault.azure.net/";
                     Console.WriteLine($"[INFO] Attempting to load secrets from Key Vault: {keyVaultUri}");
                     
                     // Use DefaultAzureCredential which supports Managed Identity in Azure
                     builder.AddAzureKeyVault(
-                        new Uri(keyVaultUri),
+                        keyVaultUri,
                         new DefaultAzureCredential());
                     
                     Console.WriteLine($"[SUCCESS] Azure Key Vault configuration added successfully: {keyVaultUri}");

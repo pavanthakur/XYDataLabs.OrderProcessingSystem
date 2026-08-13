@@ -118,6 +118,10 @@ var commonEnv = [
     value: keyVaultUri
   }
   {
+    name: 'ORDERPROCESSING_AZURE_HOST'
+    value: 'true'
+  }
+  {
     name: 'ORDERPROCESSING_EXPECTED_ENVIRONMENT'
     value: environment
   }
