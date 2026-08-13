@@ -1,5 +1,13 @@
 #!/bin/sh
 # Simple pre-commit hook: scan for obvious secrets and prevent committing .env-like files
+current_branch=$(git rev-parse --abbrev-ref HEAD)
+case "$current_branch" in
+  staging|main)
+    echo "Error: Direct commits are blocked on $current_branch. Commit on dev and merge forward." >&2
+    exit 1
+    ;;
+esac
+
 changed_files=$(git diff --cached --name-only)
 # Block real env/key files and common AI artifacts, but allow checked-in example templates.
 for f in $changed_files; do
