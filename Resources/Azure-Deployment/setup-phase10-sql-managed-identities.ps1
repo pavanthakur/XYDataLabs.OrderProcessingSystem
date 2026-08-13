@@ -281,6 +281,25 @@ function Resolve-FunctionAppPrincipalId {
     return $principalId.Trim()
 }
 
+function Resolve-UserAssignedIdentityPrincipalId {
+    param(
+        [Parameter(Mandatory = $true)][string]$ResourceGroupName,
+        [Parameter(Mandatory = $true)][string]$IdentityName
+    )
+
+    $principalId = az identity show `
+        --resource-group $ResourceGroupName `
+        --name $IdentityName `
+        --query principalId `
+        -o tsv 2>&1
+
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($principalId)) {
+        throw "Could not resolve principalId for user-assigned identity '$IdentityName'. Azure CLI output: $principalId"
+    }
+
+    return $principalId.Trim()
+}
+
 function Get-KeyVaultName {
     param(
         [Parameter(Mandatory = $true)][string]$CurrentBaseName,
@@ -466,7 +485,7 @@ ORDER BY [Code];
 function Grant-IdentityAccessToDatabase {
     param(
         [Parameter(Mandatory = $true)][string]$DisplayName,
-        [Parameter(Mandatory = $true)][string]$ManagedIdentityPrincipalId,
+        [Parameter(Mandatory = $true)][string]$ManagedIdentityAppId,
         [Parameter(Mandatory = $true)][string]$SqlServerFqdn,
         [Parameter(Mandatory = $true)][string]$DatabaseName,
         [string]$AccessToken,
@@ -503,9 +522,7 @@ PRINT 'Roles granted: db_datareader, db_datawriter'
 "@
 
     if ($UseSqlAuth) {
-        # Azure SQL external-provider SIDs match the service principal object ID
-        # carried by managed-identity tokens, not the application/client ID.
-        $sidHex = Convert-GuidToSqlSidHex -GuidText $ManagedIdentityPrincipalId
+        $sidHex = Convert-GuidToSqlSidHex -GuidText $ManagedIdentityAppId
         $sqlScript = @"
 IF EXISTS (
     SELECT 1
@@ -603,6 +620,12 @@ $runtimeIdentities = @(
         ResourceName = "$BaseName-functions-$envSuffix"
         FriendlyName = 'Functions'
     }
+    @{
+        Kind = 'UserAssignedIdentity'
+        ResourceGroupName = 'rg-orderprocessing-platform'
+        ResourceName = 'id-orderprocessing-acr-pull-platform'
+        FriendlyName = 'Shared Container Apps user-assigned identity'
+    }
 )
 
 Write-Host "Configuring Phase 10 SQL access for runtime identities..." -ForegroundColor Cyan
@@ -677,11 +700,11 @@ foreach ($identity in $runtimeIdentities) {
     Write-Host "Granting SQL access for $friendlyName ($resourceName)..." -ForegroundColor Yellow
     $script:CurrentStage = "Resolve managed identity for $friendlyName ($resourceName)"
 
-    $principalId = if ($kind -eq 'ContainerApp') {
-        Resolve-ContainerAppPrincipalId -ResourceGroupName $resourceGroupName -ContainerAppName $resourceName
-    }
-    else {
-        Resolve-FunctionAppPrincipalId -ResourceGroupName $resourceGroupName -FunctionAppName $resourceName
+    $principalId = switch ($kind) {
+        'ContainerApp' { Resolve-ContainerAppPrincipalId -ResourceGroupName $resourceGroupName -ContainerAppName $resourceName }
+        'FunctionApp' { Resolve-FunctionAppPrincipalId -ResourceGroupName $resourceGroupName -FunctionAppName $resourceName }
+        'UserAssignedIdentity' { Resolve-UserAssignedIdentityPrincipalId -ResourceGroupName ([string]$identity.ResourceGroupName) -IdentityName $resourceName }
+        default { throw "Unsupported runtime identity kind '$kind'." }
     }
 
     $appId = Resolve-ManagedIdentityAppId -PrincipalId $principalId
@@ -693,7 +716,7 @@ foreach ($identity in $runtimeIdentities) {
         $script:CurrentStage = "Grant $friendlyName access to shared database '$sharedDatabaseName'"
         Grant-IdentityAccessToDatabase `
             -DisplayName $resourceName `
-            -ManagedIdentityPrincipalId $principalId `
+            -ManagedIdentityAppId $appId `
             -SqlServerFqdn $sqlFqdn `
             -DatabaseName $sharedDatabaseName `
             -AccessToken $token `
@@ -705,7 +728,7 @@ foreach ($identity in $runtimeIdentities) {
         $script:CurrentStage = "Grant $friendlyName access to shared database '$sharedDatabaseName'"
         Grant-IdentityAccessToDatabase `
             -DisplayName $resourceName `
-            -ManagedIdentityPrincipalId $principalId `
+            -ManagedIdentityAppId $appId `
             -SqlServerFqdn $sqlFqdn `
             -DatabaseName $sharedDatabaseName `
             -AccessToken $token `
@@ -719,7 +742,7 @@ foreach ($identity in $runtimeIdentities) {
         if ($UseSqlAuthentication) {
             Grant-IdentityAccessToDatabase `
                 -DisplayName $resourceName `
-                -ManagedIdentityPrincipalId $principalId `
+                -ManagedIdentityAppId $appId `
                 -SqlServerFqdn $sqlFqdn `
                 -DatabaseName $dedicatedDatabase.DatabaseName `
                 -AccessToken $token `
@@ -730,7 +753,7 @@ foreach ($identity in $runtimeIdentities) {
         else {
             Grant-IdentityAccessToDatabase `
                 -DisplayName $resourceName `
-                -ManagedIdentityPrincipalId $principalId `
+                -ManagedIdentityAppId $appId `
                 -SqlServerFqdn $sqlFqdn `
                 -DatabaseName $dedicatedDatabase.DatabaseName `
                 -AccessToken $token `
