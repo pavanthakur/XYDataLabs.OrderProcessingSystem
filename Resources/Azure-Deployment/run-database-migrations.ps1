@@ -105,6 +105,64 @@ if ([string]::IsNullOrWhiteSpace($AdminPassword)) {
 # Build connection string for migrations
 $connectionString = "Server=tcp:$fullyQualifiedDomain,1433;Initial Catalog=$dbName;User ID=$AdminUsername;Password=$AdminPassword;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
 
+function Ensure-TenantProducts {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$DatabaseName,
+
+        [Parameter(Mandatory=$true)]
+        [string[]]$TenantCodes
+    )
+
+    foreach ($tenantCode in $TenantCodes) {
+        if ($tenantCode -notmatch '^[A-Za-z0-9_-]+$') {
+            throw "Unsafe tenant code '$tenantCode' supplied to Azure product seed."
+        }
+
+        $seedQuery = @"
+SET NOCOUNT ON;
+DECLARE @tenantId int;
+
+SELECT @tenantId = [Id]
+FROM [dbo].[Tenants]
+WHERE [Code] = N'$tenantCode';
+
+IF @tenantId IS NULL
+    THROW 51000, N'Tenant row missing for $tenantCode.', 1;
+
+IF NOT EXISTS (SELECT 1 FROM [inventory].[Products] WHERE [TenantId] = @tenantId)
+BEGIN
+    INSERT INTO [inventory].[Products] ([Name], [Description], [Price], [TenantId], [CreatedBy], [CreatedDate])
+    VALUES
+        (N'$tenantCode Laptop', N'Sample laptop for $tenantCode', 500.00, @tenantId, 1, SYSUTCDATETIME()),
+        (N'$tenantCode Phone', N'Sample phone for $tenantCode', 300.00, @tenantId, 1, SYSUTCDATETIME()),
+        (N'$tenantCode Headphones', N'Sample headphones for $tenantCode', 200.00, @tenantId, 1, SYSUTCDATETIME());
+END;
+
+SELECT COUNT_BIG(*) AS ProductCount
+FROM [inventory].[Products]
+WHERE [TenantId] = @tenantId;
+"@
+
+        $databaseConnectionString = "Server=tcp:$fullyQualifiedDomain,1433;Initial Catalog=$DatabaseName;User ID=$AdminUsername;Password=$AdminPassword;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+        $connection = [System.Data.SqlClient.SqlConnection]::new($databaseConnectionString)
+        try {
+            $connection.Open()
+            $command = $connection.CreateCommand()
+            $command.CommandText = $seedQuery
+            $command.CommandTimeout = 60
+            $productCount = [long]$command.ExecuteScalar()
+        }
+        finally {
+            if ($null -ne $connection) {
+                $connection.Dispose()
+            }
+        }
+
+        Write-Ok "  [OK] Product baseline ensured for $tenantCode in $DatabaseName ($productCount rows)."
+    }
+}
+
 # Navigate to solution root
 $scriptDir = Split-Path -Parent $PSCommandPath
 $solutionRoot = Split-Path -Parent (Split-Path -Parent $scriptDir)
@@ -174,6 +232,9 @@ try {
     }
     Write-Ok "Migrations applied via script."
 }
+
+Write-Info "Ensuring shared-database product baselines for TenantA and TenantB..."
+Ensure-TenantProducts -DatabaseName $dbName -TenantCodes @('TenantA', 'TenantB')
 
 Write-Host ""
 Write-Host "[3/3] Verifying database schema..." -ForegroundColor Cyan
@@ -272,6 +333,65 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($tenantCDbExists)) {
             Write-Err "  [ERROR] TenantC dedicated database migration exception: $($_.Exception.Message)"
         exit 1
     }
+
+    Write-Info "  [INFO] Ensuring TenantC dedicated product baseline..."
+    Ensure-TenantProducts -DatabaseName $tenantCDbName -TenantCodes @('TenantC')
+
+    # The dedicated runtime credential is a contained database user with only
+    # reader/writer membership. Rotate it on every deployment and keep the
+    # generated value exclusively in the database and Key Vault.
+    $runtimeUsername = 'tenantc_runtime'
+    $passwordBytes = [byte[]]::new(32)
+    [System.Security.Cryptography.RandomNumberGenerator]::Fill($passwordBytes)
+    $runtimePassword = [Convert]::ToBase64String($passwordBytes)
+    $runtimeUserSql = @"
+IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'$runtimeUsername')
+    ALTER USER [$runtimeUsername] WITH PASSWORD = N'$runtimePassword';
+ELSE
+    CREATE USER [$runtimeUsername] WITH PASSWORD = N'$runtimePassword';
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.database_role_members drm
+    JOIN sys.database_principals r ON r.principal_id = drm.role_principal_id
+    JOIN sys.database_principals m ON m.principal_id = drm.member_principal_id
+    WHERE r.name = N'db_datareader' AND m.name = N'$runtimeUsername'
+)
+    ALTER ROLE db_datareader ADD MEMBER [$runtimeUsername];
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.database_role_members drm
+    JOIN sys.database_principals r ON r.principal_id = drm.role_principal_id
+    JOIN sys.database_principals m ON m.principal_id = drm.member_principal_id
+    WHERE r.name = N'db_datawriter' AND m.name = N'$runtimeUsername'
+)
+    ALTER ROLE db_datawriter ADD MEMBER [$runtimeUsername];
+"@
+
+    $runtimeConnection = [System.Data.SqlClient.SqlConnection]::new($tenantCConnectionString)
+    try {
+        $runtimeConnection.Open()
+        $runtimeCommand = $runtimeConnection.CreateCommand()
+        $runtimeCommand.CommandText = $runtimeUserSql
+        $runtimeCommand.CommandTimeout = 60
+        [void]$runtimeCommand.ExecuteNonQuery()
+    }
+    finally {
+        if ($null -ne $runtimeConnection) {
+            $runtimeConnection.Dispose()
+        }
+    }
+
+    $dedicatedRuntimeConnectionString = "Server=tcp:$fullyQualifiedDomain,1433;Initial Catalog=$tenantCDbName;User ID=$runtimeUsername;Password=$runtimePassword;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+    $dedicatedSecretName = 'DedicatedTenantConnectionStrings--TenantC'
+    az keyvault secret set `
+        --vault-name "kv-$BaseName-$envSuffix" `
+        --name $dedicatedSecretName `
+        --value $dedicatedRuntimeConnectionString `
+        --output none
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to update Key Vault secret '$dedicatedSecretName' with the dedicated runtime connection contract."
+    }
+    Write-Ok "  [OK] TenantC least-privilege contained runtime credential rotated and refreshed in Key Vault."
 
     # Verify TenantC migrations
     try {

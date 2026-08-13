@@ -892,6 +892,14 @@ jobs:
           echo "redisHost=${REDIS_HOST}" >> $GITHUB_OUTPUT
           echo "redisSslPort=${REDIS_SSL_PORT}" >> $GITHUB_OUTPUT
 
+      - name: Refresh Azure CLI Login (OIDC) Before SQL Migrations
+        if: ${{ steps.params.outputs.deploySql == 'true' }}
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+
       - name: Run Azure SQL Migrations
         if: ${{ steps.params.outputs.deploySql == 'true' }}
         shell: pwsh
@@ -1166,6 +1174,7 @@ jobs:
             -OpenPayPrivateKey $env:OPENPAY_PRIVATE_KEY `
             -OpenPayDeviceSessionId $env:OPENPAY_DEVICE_SESSION_ID `
             -OpenPayWebhookSecret $env:OPENPAY_WEBHOOK_SECRET `
+            -OpenPayRedirectUrl 'https://${{ steps.outputs.outputs.gatewayFqdn }}/payment/callback' `
             -RazorpayMerchantId $env:RAZORPAY_MERCHANT_ID `
             -RazorpayPrivateKey $env:RAZORPAY_PRIVATE_KEY `
             -RazorpayWebhookSecret $env:RAZORPAY_WEBHOOK_SECRET
@@ -1179,43 +1188,82 @@ jobs:
             throw "Phase 10 Azure provider runtime secret sync failed with exit code $secretSyncExitCode."
           }
 
-      - name: Ensure Active Tenant Provider Secret Aliases
+      - name: Ensure Tenant Payment Matrix Provider Secret Aliases
         shell: pwsh
         run: |
           $summaryPath = Join-Path $env:RUNNER_TEMP 'phase10-azure-tenant-provider-aliases-deploy.md'
 
-          & pwsh -NoProfile -ExecutionPolicy Bypass -File Resources/Azure-Deployment/ensure-phase10-tenant-provider-secret-aliases.ps1 `
-            -Environment '${{ steps.params.outputs.env }}' `
-            -ResourceGroupName '${{ steps.outputs.outputs.rg }}' `
-            -SummaryPath $summaryPath `
-            -DeploymentPrincipalObjectId '${{ steps.deployment_principal.outputs.objectId }}'
+          $syncError = $null
+          try {
+            & Resources/Azure-Deployment/ensure-phase10-tenant-provider-secret-aliases.ps1 `
+              -Environment '${{ steps.params.outputs.env }}' `
+              -ResourceGroupName '${{ steps.outputs.outputs.rg }}' `
+              -SummaryPath $summaryPath `
+              -DeploymentPrincipalObjectId '${{ steps.deployment_principal.outputs.objectId }}' `
+              -RequiredProviderCodes @('OpenPay', 'Razorpay')
+          }
+          catch {
+            $syncError = $_
+          }
 
-          $syncExitCode = $LASTEXITCODE
           if (Test-Path -LiteralPath $summaryPath) {
             Get-Content -LiteralPath $summaryPath | Add-Content -Path $env:GITHUB_STEP_SUMMARY
           }
 
-          if ($syncExitCode -ne 0) {
-            throw "Phase 10 Azure tenant provider alias sync failed with exit code $syncExitCode."
+          if ($null -ne $syncError) {
+            throw "Phase 10 Azure tenant provider alias sync failed. $($syncError.Exception.Message)"
           }
 
-      - name: Verify Active Tenant Topology Contract
+      - name: Refresh Payment Runtime Hosts After Provider Secret Sync
+        shell: bash
+        run: |
+          RG_NAME="${{ steps.outputs.outputs.rg }}"
+          REVISION_MARKER="${{ github.run_id }}-${{ github.run_attempt }}"
+          PAYMENT_RUNTIME_APPS=(
+            "${{ steps.outputs.outputs.orders }}"
+            "${{ steps.outputs.outputs.payments }}"
+          )
+
+          echo "Refreshing payment-aware Container Apps so newly synchronized Key Vault aliases are loaded..."
+          for APP_NAME in "${PAYMENT_RUNTIME_APPS[@]}"; do
+            if [ -z "$APP_NAME" ]; then
+              echo "A required payment-aware Container App output is empty." >&2
+              exit 1
+            fi
+
+            echo "Refreshing ${APP_NAME}..."
+            az containerapp update \
+              --resource-group "$RG_NAME" \
+              --name "$APP_NAME" \
+              --set-env-vars "Phase10__ProviderSecretSyncRun=${REVISION_MARKER}" \
+              --only-show-errors 1>/dev/null
+          done
+
+          echo "✅ Orders and Payments runtime hosts refreshed after provider secret synchronization." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify Active Tenant And Payment Matrix Contract
         shell: pwsh
         run: |
           $summaryPath = Join-Path $env:RUNNER_TEMP 'phase10-azure-tenant-topology-deploy.md'
 
-          & pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-phase10-azure-tenant-topology.ps1 `
-            -Environment '${{ steps.params.outputs.env }}' `
-            -ResourceGroupName '${{ steps.outputs.outputs.rg }}' `
-            -SummaryPath $summaryPath
+          $verifyError = $null
+          try {
+            & scripts/verify-phase10-azure-tenant-topology.ps1 `
+              -Environment '${{ steps.params.outputs.env }}' `
+              -ResourceGroupName '${{ steps.outputs.outputs.rg }}' `
+              -RequiredProviderCodes @('OpenPay', 'Razorpay') `
+              -SummaryPath $summaryPath
+          }
+          catch {
+            $verifyError = $_
+          }
 
-          $verifyExitCode = $LASTEXITCODE
           if (Test-Path -LiteralPath $summaryPath) {
             Get-Content -LiteralPath $summaryPath | Add-Content -Path $env:GITHUB_STEP_SUMMARY
           }
 
-          if ($verifyExitCode -ne 0) {
-            throw "Phase 10 Azure tenant topology verification failed with exit code $verifyExitCode."
+          if ($null -ne $verifyError) {
+            throw "Phase 10 Azure tenant topology verification failed. $($verifyError.Exception.Message)"
           }
 
       - name: Post-Deployment Endpoint Smoke

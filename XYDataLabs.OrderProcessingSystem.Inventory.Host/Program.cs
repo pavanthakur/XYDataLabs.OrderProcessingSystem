@@ -60,16 +60,19 @@ builder.Services.AddCqrs(typeof(InventoryModuleRegistration).Assembly);
 builder.Services.AddInventoryModule();
 builder.Services.AddInventoryInfrastructure();
 
-builder.Services.AddAuthorization(options =>
-{
-    options.FallbackPolicy = new AuthorizationPolicyBuilder()
-        .RequireAuthenticatedUser()
-        .Build();
-});
-
 var identityEnabled = builder.Configuration
     .GetSection("IdentityProvider")
     .GetValue("Enabled", false);
+builder.Services.AddAuthorization(options =>
+{
+    if (identityEnabled)
+    {
+        options.FallbackPolicy = new AuthorizationPolicyBuilder()
+            .RequireAuthenticatedUser()
+            .Build();
+    }
+});
+
 if (identityEnabled)
 {
     builder.Services

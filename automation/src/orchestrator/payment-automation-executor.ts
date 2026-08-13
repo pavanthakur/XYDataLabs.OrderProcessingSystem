@@ -49,6 +49,7 @@ const automationRoot = path.resolve(currentDirectory, "../..");
 interface ExecutionItem {
   tenantCode: string;
   tenantTier: string;
+  registryProviderCode?: string | null;
   paymentProviderCode?: string | null;
   shouldPrepareProviderFixture: boolean;
   executionRunPrefix: string;
@@ -101,6 +102,22 @@ export async function executePaymentAutomationRun(
   await mkdir(reportDirectory, { recursive: true });
   const tenantTopology = await buildTenantTopologyArtifact(target.runtime, target.environment, tenantPlan.resolvedTenants);
   await writeFile(path.join(reportDirectory, "tenant-topology.json"), JSON.stringify(tenantTopology, null, 2), "utf8");
+  await writeFile(
+    path.join(reportDirectory, "execution-plan.json"),
+    JSON.stringify(
+      executionItems.map((item) => ({
+        tenantCode: item.tenantCode,
+        tenantTier: item.tenantTier,
+        registryProviderCode: item.registryProviderCode ?? null,
+        executionProviderCode: item.paymentProviderCode ?? null,
+        usesProviderOverride: item.shouldPrepareProviderFixture,
+        executionRunPrefix: item.executionRunPrefix
+      })),
+      null,
+      2
+    ),
+    "utf8"
+  );
   log(`Starting payment automation run ${runId} with prefix ${runPrefix}.`);
 
   const targetUrl = `${target.baseUrl}${target.paymentPagePath}`;
@@ -204,6 +221,9 @@ export async function executePaymentAutomationRun(
               await new Promise((resolve) => setTimeout(resolve, 15000));
             }
 
+            log(
+              `[${executionItem.tenantCode}] Verification anchor customerOrderId=${customerOrderId} runPrefix=${executionItem.executionRunPrefix}.`
+            );
             const verificationResult = await verificationAdapter.execute({
               runtimeTarget: target.key,
               runtime: target.runtime,
@@ -347,6 +367,7 @@ function buildExecutionItems(
     return tenants.map((tenant, index) => ({
       tenantCode: tenant.tenantCode,
       tenantTier: tenant.tenantTier,
+      registryProviderCode: tenant.paymentProviderCode,
       paymentProviderCode: tenant.paymentProviderCode,
       shouldPrepareProviderFixture: false,
       executionRunPrefix: index === 0 ? defaultRunPrefix : buildRunPrefix(new Date(startedAt.getTime() + (index * 1000)))
@@ -361,6 +382,7 @@ function buildExecutionItems(
       return {
         tenantCode: tenant.tenantCode,
         tenantTier: tenant.tenantTier,
+        registryProviderCode: tenant.paymentProviderCode,
         paymentProviderCode: requestedProvider,
         shouldPrepareProviderFixture: true,
         executionRunPrefix: executionIndex === 0 ? defaultRunPrefix : buildRunPrefix(executionStartedAt)
@@ -567,11 +589,28 @@ export async function startLocalProfile(profile: "http" | "https", log: (message
       "-ReturnWhenReady"
     ], {
       cwd: path.resolve(automationRoot, ".."),
-      stdio: ["ignore", "pipe", "pipe"]
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true
     });
 
     let stdout = "";
     let stderr = "";
+    let settled = false;
+
+    const settle = (callback: () => void): void => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      child.stdout.removeAllListeners("data");
+      child.stderr.removeAllListeners("data");
+      child.removeAllListeners("error");
+      child.removeAllListeners("exit");
+      child.stdout.destroy();
+      child.stderr.destroy();
+      callback();
+    };
 
     child.stdout.on("data", (chunk: Buffer | string) => {
       stdout += chunk.toString();
@@ -582,17 +621,17 @@ export async function startLocalProfile(profile: "http" | "https", log: (message
     });
 
     child.on("error", (error) => {
-      reject(error);
+      settle(() => reject(error));
     });
 
     child.on("exit", (exitCode) => {
       if (exitCode === 0) {
-        resolve();
+        settle(resolve);
         return;
       }
 
       const combinedOutput = [stdout.trim(), stderr.trim()].filter(Boolean).join("\n");
-      reject(new Error(combinedOutput || `Local ${profile} profile exited unexpectedly with code ${exitCode}.`));
+      settle(() => reject(new Error(combinedOutput || `Local ${profile} profile exited unexpectedly with code ${exitCode}.`)));
     });
   });
 }
@@ -613,11 +652,28 @@ async function stopLocalSessions(profile: "http" | "https", log: (message: strin
       profile
     ], {
       cwd: path.resolve(automationRoot, ".."),
-      stdio: ["ignore", "pipe", "pipe"]
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true
     });
 
     let stdout = "";
     let stderr = "";
+    let settled = false;
+
+    const settle = (callback: () => void): void => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      child.stdout.removeAllListeners("data");
+      child.stderr.removeAllListeners("data");
+      child.removeAllListeners("error");
+      child.removeAllListeners("exit");
+      child.stdout.destroy();
+      child.stderr.destroy();
+      callback();
+    };
 
     child.stdout.on("data", (chunk: Buffer | string) => {
       stdout += chunk.toString();
@@ -628,7 +684,7 @@ async function stopLocalSessions(profile: "http" | "https", log: (message: strin
     });
 
     child.on("error", (error) => {
-      reject(error);
+      settle(() => reject(error));
     });
 
     child.on("exit", (exitCode) => {
@@ -638,11 +694,11 @@ async function stopLocalSessions(profile: "http" | "https", log: (message: strin
       }
 
       if (exitCode === 0) {
-        resolve();
+        settle(resolve);
         return;
       }
 
-      reject(new Error(`Automatic local ${profile} session stop exited with code ${exitCode}.`));
+      settle(() => reject(new Error(`Automatic local ${profile} session stop exited with code ${exitCode}.`)));
     });
   });
 }

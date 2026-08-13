@@ -67,7 +67,10 @@ public sealed class OpenPayPaymentGateway : IPaymentProviderGateway
                 Currency = request.Currency,
                 Description = request.Description,
                 DeviceSessionId = request.DeviceSessionId,
-                OrderId = request.AttemptOrderId,
+                // OpenPay requires order_id to remain unique even when our database is rebuilt.
+                // AttemptOrderId is intentionally deterministic for internal reconciliation,
+                // while ProviderOrderId is backed by the globally unique payment trace id.
+                OrderId = request.ProviderOrderId ?? request.AttemptOrderId,
                 Use3DSecure = request.Use3DSecure,
                 RedirectUrl = request.RedirectUrl,
                 Customer = new Customer

@@ -5,12 +5,16 @@ param(
     [string]$ResourceGroupName,
     [string]$SummaryPath,
     [string]$BaseName = 'orderprocessing',
+    [ValidateSet('OpenPay', 'Razorpay')]
+    [string[]]$RequiredProviderCodes = @(),
     [int]$Attempts = 6,
     [int]$DelaySeconds = 10
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+
+. (Join-Path $PSScriptRoot '../Resources/Azure-Deployment/phase10-keyvault-command-helpers.ps1')
 
 $envSuffix = if ($Environment -eq 'staging') { 'stg' } else { $Environment }
 $resourceGroup = if ([string]::IsNullOrWhiteSpace($ResourceGroupName)) { "rg-$BaseName-$envSuffix" } else { $ResourceGroupName }
@@ -19,6 +23,12 @@ $shortBaseName = $BaseName.Substring(0, [Math]::Min(15, $BaseName.Length))
 $keyVaultName = "kv-$shortBaseName-$envSuffix"
 $supportedTenantTiers = @('SharedPool', 'Dedicated')
 $supportedProviders = @('OpenPay', 'Razorpay')
+$requiredExecutionProviderCodes = @(
+    $RequiredProviderCodes |
+        ForEach-Object { $_.Trim() } |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        Select-Object -Unique
+)
 
 function Invoke-AzText {
     param(
@@ -89,17 +99,6 @@ function Resolve-DedicatedDatabaseNameFromConnectionString {
     return $match.Groups[1].Value.Trim()
 }
 
-function Test-KeyVaultSecretPresence {
-    param([Parameter(Mandatory)][string]$SecretName)
-
-    $value = Invoke-AzText -Arguments @('keyvault', 'secret', 'show', '--vault-name', $keyVaultName, '--name', $SecretName, '--query', 'value')
-    if ([string]::IsNullOrWhiteSpace($value)) {
-        return $null
-    }
-
-    return $value
-}
-
 $topology = Get-TenantRegistryTopology
 $results = New-Object 'System.Collections.Generic.List[object]'
 $failures = New-Object 'System.Collections.Generic.List[string]'
@@ -111,6 +110,7 @@ foreach ($tenant in $topology.Items) {
     $dedicatedSecretName = ''
     $dedicatedDatabaseName = ''
     $providerSecretName = ''
+    $validatedProviderSecretNames = New-Object 'System.Collections.Generic.List[string]'
     $detailMessages = New-Object 'System.Collections.Generic.List[string]'
     $passed = $true
 
@@ -135,22 +135,50 @@ foreach ($tenant in $topology.Items) {
 
     if (-not [string]::IsNullOrWhiteSpace($tenantCode) -and -not [string]::IsNullOrWhiteSpace($providerCode)) {
         $providerSecretName = "PaymentProviders--$tenantCode--$providerCode--PrivateKey"
-        $providerSecretValue = Test-KeyVaultSecretPresence -SecretName $providerSecretName
-        if ([string]::IsNullOrWhiteSpace($providerSecretValue)) {
-            $passed = $false
-            $detailMessages.Add("Missing Key Vault secret '$providerSecretName' for the active tenant/provider mapping.")
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($tenantCode)) {
+        $providerCodesToValidate = @(
+            @($providerCode) + $requiredExecutionProviderCodes |
+                Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+                Select-Object -Unique
+        )
+
+        foreach ($providerCodeToValidate in $providerCodesToValidate) {
+            if ($supportedProviders -notcontains $providerCodeToValidate) {
+                $passed = $false
+                $detailMessages.Add("Required execution provider '$providerCodeToValidate' is not part of the supported provider catalog.")
+                continue
+            }
+
+            $executionProviderSecretName = "PaymentProviders--$tenantCode--$providerCodeToValidate--PrivateKey"
+            $validatedProviderSecretNames.Add($executionProviderSecretName)
+            $providerSecretRead = Get-Phase10KeyVaultSecret -KeyVaultName $keyVaultName -SecretName $executionProviderSecretName
+            if ($providerSecretRead.State -eq 'Error') {
+                $passed = $false
+                $detailMessages.Add("Unable to validate Key Vault secret '$executionProviderSecretName'. $($providerSecretRead.Diagnostic)")
+            }
+            elseif ($providerSecretRead.State -eq 'Missing') {
+                $passed = $false
+                $contractPurpose = if ($providerCodeToValidate -eq $providerCode) { 'active tenant/provider mapping' } else { 'requested matrix execution path' }
+                $detailMessages.Add("Missing Key Vault secret '$executionProviderSecretName' for the $contractPurpose.")
+            }
         }
     }
 
     if ($tenantTier -eq 'Dedicated' -and -not [string]::IsNullOrWhiteSpace($tenantCode)) {
         $dedicatedSecretName = "DedicatedTenantConnectionStrings--$tenantCode"
-        $dedicatedSecretValue = Test-KeyVaultSecretPresence -SecretName $dedicatedSecretName
-        if ([string]::IsNullOrWhiteSpace($dedicatedSecretValue)) {
+        $dedicatedSecretRead = Get-Phase10KeyVaultSecret -KeyVaultName $keyVaultName -SecretName $dedicatedSecretName
+        if ($dedicatedSecretRead.State -eq 'Error') {
+            $passed = $false
+            $detailMessages.Add("Unable to validate dedicated connection secret '$dedicatedSecretName'. $($dedicatedSecretRead.Diagnostic)")
+        }
+        elseif ($dedicatedSecretRead.State -eq 'Missing') {
             $passed = $false
             $detailMessages.Add("Missing dedicated connection secret '$dedicatedSecretName'.")
         }
         else {
-            $dedicatedDatabaseName = [string](Resolve-DedicatedDatabaseNameFromConnectionString -ConnectionString $dedicatedSecretValue)
+            $dedicatedDatabaseName = [string](Resolve-DedicatedDatabaseNameFromConnectionString -ConnectionString $dedicatedSecretRead.Value)
             if ([string]::IsNullOrWhiteSpace($dedicatedDatabaseName)) {
                 $passed = $false
                 $detailMessages.Add("Secret '$dedicatedSecretName' does not expose an Initial Catalog/Database name.")
@@ -171,6 +199,7 @@ foreach ($tenant in $topology.Items) {
             DedicatedSecretName = $dedicatedSecretName
             DedicatedDatabaseName = $dedicatedDatabaseName
             ProviderSecretName = $providerSecretName
+            ValidatedProviderSecretNames = @($validatedProviderSecretNames)
             Passed = $passed
             ContractStatus = if ($passed) { 'validated' } else { 'invalid' }
             Detail = $detail
@@ -195,15 +224,17 @@ $summary += ('**Gateway App:** `{0}`' -f $gatewayApp)
 $summary += ('**Gateway FQDN:** `{0}`' -f $topology.GatewayFqdn)
 $summary += ('**Tenant Registry Endpoint:** `{0}`' -f $topology.RegistryUri)
 $summary += ('**Key Vault:** `{0}`' -f $keyVaultName)
+$summary += ('**Required Matrix Providers:** `{0}`' -f $(if ($requiredExecutionProviderCodes.Count -eq 0) { 'registry assignments only' } else { $requiredExecutionProviderCodes -join ', ' }))
 $summary += ('**Completed UTC:** `{0}`' -f $completedUtc.ToString('O'))
 $summary += ''
-$summary += '| Tenant | Tier | Provider | Dedicated DB | Result | Detail |'
-$summary += '|---|---|---|---|---|---|'
+$summary += '| Tenant | Tier | Assigned Provider | Validated Provider Aliases | Dedicated DB | Result | Detail |'
+$summary += '|---|---|---|---|---|---|---|'
 foreach ($result in $results) {
     $resultText = if ($result.Passed) { 'PASS' } else { 'FAIL' }
     $dbName = if ([string]::IsNullOrWhiteSpace($result.DedicatedDatabaseName)) { '-' } else { $result.DedicatedDatabaseName }
+    $providerAliases = if (@($result.ValidatedProviderSecretNames).Count -eq 0) { '-' } else { @($result.ValidatedProviderSecretNames) -join ', ' }
     $detail = ([string]$result.Detail).Replace('|', '\|').Replace("`r", ' ').Replace("`n", ' ')
-    $summary += "| $($result.TenantCode) | $($result.TenantTier) | $($result.PaymentProviderCode) | $dbName | $resultText | $detail |"
+    $summary += "| $($result.TenantCode) | $($result.TenantTier) | $($result.PaymentProviderCode) | $providerAliases | $dbName | $resultText | $detail |"
 }
 
 if ($failures.Count -eq 0) {
@@ -236,6 +267,7 @@ if (-not [string]::IsNullOrWhiteSpace($SummaryPath)) {
                           @{ Name = 'dedicatedDatabaseName'; Expression = { $_.DedicatedDatabaseName } },
                           @{ Name = 'dedicatedConnectionSecret'; Expression = { $_.DedicatedSecretName } },
                           @{ Name = 'providerPrivateKeyAlias'; Expression = { $_.ProviderSecretName } },
+                          @{ Name = 'validatedProviderPrivateKeyAliases'; Expression = { @($_.ValidatedProviderSecretNames) } },
                           @{ Name = 'contractStatus'; Expression = { $_.ContractStatus } }
     ) | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $jsonPath -Encoding UTF8
 }

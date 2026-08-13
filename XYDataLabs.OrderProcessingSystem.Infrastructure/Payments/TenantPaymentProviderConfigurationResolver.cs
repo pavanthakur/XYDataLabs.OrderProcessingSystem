@@ -27,7 +27,8 @@ public sealed class TenantPaymentProviderConfigurationResolver : ITenantPaymentP
         var merchantId = ResolveMerchantId(paymentProvider);
         var publicKey = ResolvePublicKey(paymentProvider);
         var privateKeyConfigurationKey = ResolvePrivateKeyConfigurationKey(paymentProvider);
-        var privateKey = _configuration[privateKeyConfigurationKey];
+        var privateKey = ResolveConfigurationValue(privateKeyConfigurationKey);
+        privateKey ??= ResolveConfigurationValue(GetFallbackConfigurationKey(paymentProvider.ProviderType, "PrivateKey"));
 
         if (string.IsNullOrWhiteSpace(privateKey))
         {
@@ -59,6 +60,7 @@ public sealed class TenantPaymentProviderConfigurationResolver : ITenantPaymentP
         }
 
         var fallbackMerchantId = _configuration[GetFallbackConfigurationKey(paymentProvider.ProviderType, "MerchantId")];
+        fallbackMerchantId ??= ResolveConfigurationValue(GetFallbackConfigurationKey(paymentProvider.ProviderType, "MerchantId"));
         if (!string.IsNullOrWhiteSpace(fallbackMerchantId))
         {
             return fallbackMerchantId;
@@ -80,7 +82,7 @@ public sealed class TenantPaymentProviderConfigurationResolver : ITenantPaymentP
             return paymentProvider.PublicKey;
         }
 
-        return _configuration[GetFallbackConfigurationKey(paymentProvider.ProviderType, "PublicKey")];
+        return ResolveConfigurationValue(GetFallbackConfigurationKey(paymentProvider.ProviderType, "PublicKey"));
     }
 
     private static string ResolvePrivateKeyConfigurationKey(PaymentProvider paymentProvider)
@@ -106,5 +108,37 @@ public sealed class TenantPaymentProviderConfigurationResolver : ITenantPaymentP
         }
 
         throw new InvalidOperationException($"Unsupported payment provider type '{providerType}'.");
+    }
+
+    private string? ResolveConfigurationValue(string configurationKey)
+    {
+        foreach (var candidateKey in ExpandConfigurationKeyCandidates(configurationKey))
+        {
+            var value = _configuration[candidateKey];
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<string> ExpandConfigurationKeyCandidates(string configurationKey)
+    {
+        yield return configurationKey;
+
+        var envStyleKey = configurationKey.Replace(":", "__");
+        if (!string.Equals(envStyleKey, configurationKey, StringComparison.Ordinal))
+        {
+            yield return envStyleKey;
+        }
+
+        var keyVaultStyleKey = configurationKey.Replace(":", "--");
+        if (!string.Equals(keyVaultStyleKey, configurationKey, StringComparison.Ordinal)
+            && !string.Equals(keyVaultStyleKey, envStyleKey, StringComparison.Ordinal))
+        {
+            yield return keyVaultStyleKey;
+        }
     }
 }

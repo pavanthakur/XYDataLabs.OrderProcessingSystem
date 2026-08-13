@@ -64,6 +64,10 @@ async function main(): Promise<void> {
   const matrixRunId = `payment-automation-docker-matrix-${formatIstStamp(startedAt)}_matrix`;
   const reportComposer = new FileReportComposer();
   const runtimeTargetCatalog = new JsonRuntimeTargetCatalog();
+  const normalizedProviders = normalizeRequestedProviders(options.requestedProviders);
+  const effectiveProviders = normalizedProviders.length > 0
+    ? normalizedProviders
+    : getDefaultMatrixProviders();
   const environmentKey = options.targets.length === 1
     ? options.targets[0]
     : "docker-matrix";
@@ -73,6 +77,7 @@ async function main(): Promise<void> {
     : path.join(playrightRoot, environmentKey);
   const reportDirectory = path.join(environmentRoot, matrixRunId);
   const latestPointerPath = path.join(environmentRoot, "latest-playwright-matrix.txt");
+  const rootMarkerPath = path.join(playrightRoot, "latest-playwright-run.txt");
   const runPlanPath = path.join(reportDirectory, "run-plan.txt");
   const startupLogPath = path.join(reportDirectory, "startup.log");
   const progressLogPath = path.join(reportDirectory, "progress.log");
@@ -93,12 +98,14 @@ async function main(): Promise<void> {
 
   await mkdir(reportDirectory, { recursive: true });
   await mkdir(path.dirname(latestPointerPath), { recursive: true });
+  await mkdir(path.dirname(rootMarkerPath), { recursive: true });
   await writeFile(latestPointerPath, `${reportDirectory}\n`, "utf8");
+  await writeFile(rootMarkerPath, `${reportDirectory}\n`, "utf8");
   await writeFile(startupLogPath, [
     `[${formatIstTimestamp(new Date())}] Matrix startup`,
     `environment=${environmentKey}`,
     `targets=${options.targets.join(",")}`,
-    `requestedProviders=${options.requestedProviders.length > 0 ? options.requestedProviders.join(",") : "runtime default"}`,
+    `requestedProviders=${effectiveProviders.join(",")}`,
     `tenantLimit=${options.tenantLimit ?? "none"}`,
     `dryRun=${options.dryRun}`,
     `verify=${options.verify}`,
@@ -107,10 +114,10 @@ async function main(): Promise<void> {
   await writeFile(progressLogPath, "Matrix progress log initialized.\n", "utf8");
   await writeFile(runPlanPath, [
     "Docker HTTP matrix sanity run",
-    `Goal: confirm docker target discovery and basic execution flow.`,
+    "Goal: confirm docker target discovery and browser/payment execution across the active tenant/provider matrix.",
     `Environment: ${environmentKey}`,
     `Targets: ${options.targets.join(", ")}`,
-    `Requested providers: ${options.requestedProviders.length > 0 ? options.requestedProviders.join(", ") : "runtime default"}`,
+    `Requested providers: ${effectiveProviders.join(", ")}`,
     `Tenant limit: ${options.tenantLimit ?? "none"}`,
     `Dry run: ${options.dryRun ? "yes" : "no"}`,
     `Verification: ${options.verify ? "yes" : "no"}`,
@@ -139,10 +146,11 @@ async function main(): Promise<void> {
       throw new Error(`Docker matrix target ${target} resolved to runtime ${runtimeTarget.runtime}.`);
     }
 
+    await writeRunMessage(startupLogPath, progressLogPath, `[${formatIstTimestamp(new Date())}] target=${target} state=resolved-target runtime=${runtimeTarget.runtime} profile=${runtimeTarget.profile}`);
     const run = await executePaymentAutomationRun({
       target,
       tenantCodes: options.tenantCodes,
-      requestedProviders: options.requestedProviders,
+      requestedProviders: effectiveProviders,
       allowPartialExecution: options.allowPartialExecution,
       dryRun: options.dryRun,
       headless: options.headless,
@@ -159,12 +167,17 @@ async function main(): Promise<void> {
     });
 
     targetRuns.push(run);
+    await writeRunMessage(startupLogPath, progressLogPath, `[${formatIstTimestamp(new Date())}] target=${target} state=completed-automation-run`);
   }
 
   const rows = targetRuns.flatMap((targetRun) => targetRun.rows);
   const markdownSummary = await reportComposer.compose(rows);
   const hasFailures = targetRuns.some((targetRun) =>
-    targetRun.rows.some((row) => !row.journeyOutcome.startsWith("completed") && row.journeyOutcome !== "dry_run")
+    targetRun.rows.some((row) => {
+      const journeyFailed = !row.journeyOutcome.startsWith("completed") && row.journeyOutcome !== "dry_run";
+      const verificationFailed = options.verify && !options.dryRun && row.verificationOutcome !== "passed";
+      return journeyFailed || verificationFailed;
+    })
   );
   matrixOutput.finishedUtc = new Date().toISOString();
   matrixOutput.finishedIst = formatIstTimestamp(new Date());
@@ -198,6 +211,7 @@ async function main(): Promise<void> {
   await writeFile(path.join(reportDirectory, "summary.json"), JSON.stringify(matrixOutput, null, 2), "utf8");
   await writeFile(currentStepPath, "completed\n", "utf8");
   await writeFile(latestPointerPath, `${reportDirectory}\n`, "utf8");
+  await writeRunMessage(startupLogPath, progressLogPath, `[${formatIstTimestamp(new Date())}] state=completed-matrix`);
 
   process.stdout.write(`${JSON.stringify(matrixOutput, null, 2)}\n`);
 
@@ -276,17 +290,19 @@ function parseCliOptions(argumentsList: string[]): DockerMatrixOptions {
     }
   }
 
+  const normalizedTargets = targets.length > 0
+    ? Array.from(new Set(targets.map((target) => target.trim()).filter(Boolean)))
+    : [
+      "docker-dev-http",
+      "docker-dev-https",
+      "docker-stg-http",
+      "docker-stg-https",
+      "docker-prod-http",
+      "docker-prod-https"
+    ];
+
   return {
-    targets: targets.length > 0
-      ? targets
-      : [
-        "docker-dev-http",
-        "docker-dev-https",
-        "docker-stg-http",
-        "docker-stg-https",
-        "docker-prod-http",
-        "docker-prod-https"
-      ],
+    targets: normalizedTargets,
     tenantCodes,
     requestedProviders,
     allowPartialExecution,
@@ -297,6 +313,24 @@ function parseCliOptions(argumentsList: string[]): DockerMatrixOptions {
     tenantTimeoutMs,
     tenantLimit
   };
+}
+
+function normalizeRequestedProviders(requestedProviders: string[]): string[] {
+  if (requestedProviders.length === 0) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      requestedProviders
+        .map((provider) => provider.trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+function getDefaultMatrixProviders(): string[] {
+  return ["OpenPay", "Razorpay"];
 }
 
 void main().catch((error: unknown) => {

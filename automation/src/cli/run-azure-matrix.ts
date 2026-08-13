@@ -11,12 +11,14 @@ import { resolveEnvironmentKey } from "../support/environment-key.js";
 interface AzureMatrixOptions {
   targets: string[];
   tenantCodes: string[];
+  requestedProviders: string[];
   allowPartialExecution: boolean;
   dryRun: boolean;
   headless: boolean;
   verify: boolean;
   sandboxOtpCode: string;
   tenantTimeoutMs: number;
+  tenantLimit: number | null;
 }
 
 interface AzureMatrixOutput {
@@ -25,6 +27,12 @@ interface AzureMatrixOutput {
   environmentKey: string;
   startedUtc: string;
   finishedUtc: string;
+  startedIst: string;
+  finishedIst: string;
+  currentStep?: string;
+  status?: "running" | "passed" | "failed";
+  targetCount: number;
+  targets: string[];
   targetRuns: PaymentAutomationRunOutput[];
 }
 
@@ -63,6 +71,24 @@ async function main(): Promise<void> {
   const runPlanPath = path.join(reportDirectory, "run-plan.txt");
   const startupLogPath = path.join(reportDirectory, "startup.log");
   const progressLogPath = path.join(reportDirectory, "progress.log");
+  const currentStepPath = path.join(reportDirectory, "current-step.txt");
+  const normalizedProviders = normalizeRequestedProviders(options.requestedProviders);
+  const effectiveProviders = normalizedProviders.length > 0
+    ? normalizedProviders
+    : getDefaultMatrixProviders();
+  const matrixOutput: AzureMatrixOutput = {
+    matrixRunId,
+    reportDirectory,
+    environmentKey,
+    startedUtc: startedAt.toISOString(),
+    finishedUtc: startedAt.toISOString(),
+    startedIst: formatIstTimestamp(startedAt),
+    finishedIst: formatIstTimestamp(startedAt),
+    status: "running",
+    targetCount: 0,
+    targets: options.targets,
+    targetRuns: []
+  };
 
   await mkdir(reportDirectory, { recursive: true });
   await mkdir(path.dirname(latestPointerPath), { recursive: true });
@@ -71,10 +97,12 @@ async function main(): Promise<void> {
   await writeFile(rootMarkerPath, `${reportDirectory}\n`, "utf8");
   await writeFile(runPlanPath, [
     "Azure payment automation matrix run",
-    `Goal: confirm Azure target discovery and browser automation flow.`,
+    "Goal: confirm Azure target discovery and browser automation flow across the active tenant/provider matrix.",
     `Environment: ${environmentKey}`,
     `Targets: ${options.targets.join(", ")}`,
-    `Tenant limit: ${options.tenantCodes.length > 0 ? options.tenantCodes.join(", ") : "runtime default"}`,
+    `Requested providers: ${effectiveProviders.join(", ")}`,
+    `Tenant selection: ${options.tenantCodes.length > 0 ? options.tenantCodes.join(", ") : "runtime default"}`,
+    `Tenant limit: ${options.tenantLimit ?? "none"}`,
     `Dry run: ${options.dryRun ? "yes" : "no"}`,
     `Verification: ${options.verify ? "yes" : "no"}`,
     "",
@@ -88,18 +116,25 @@ async function main(): Promise<void> {
     `[${formatIstTimestamp(new Date())}] Matrix startup`,
     `environment=${environmentKey}`,
     `targets=${options.targets.join(",")}`,
+    `requestedProviders=${effectiveProviders.join(",")}`,
     `tenantCodes=${options.tenantCodes.length > 0 ? options.tenantCodes.join(",") : "runtime default"}`,
+    `tenantLimit=${options.tenantLimit ?? "none"}`,
     `dryRun=${options.dryRun}`,
     `verify=${options.verify}`,
     `state=created-run-folder`
   ].join("\n") + "\n", "utf8");
   await writeFile(progressLogPath, "Matrix progress log initialized.\n", "utf8");
+  await writeFile(currentStepPath, "initialized\n", "utf8");
+  await writeFile(path.join(reportDirectory, "summary.json"), JSON.stringify({ ...matrixOutput, status: "running" }, null, 2), "utf8");
   await writeRunMessage(startupLogPath, progressLogPath, `Starting azure payment matrix ${matrixRunId}.`);
 
   const targetRuns: PaymentAutomationRunOutput[] = [];
   for (const [index, target] of options.targets.entries()) {
     const targetStart = new Date(startedAt.getTime() + (index * 1000));
     const targetRunPrefix = buildRunPrefix(targetStart);
+    matrixOutput.currentStep = `target:${target}`;
+    await writeFile(path.join(reportDirectory, "summary.json"), JSON.stringify({ ...matrixOutput, status: "running" }, null, 2), "utf8");
+    await writeFile(currentStepPath, `${matrixOutput.currentStep}\n`, "utf8");
     await writeRunMessage(startupLogPath, progressLogPath, `Executing target ${target} with prefix ${targetRunPrefix}.`);
 
     const runtimeTarget = await runtimeTargetCatalog.resolve(target);
@@ -107,15 +142,18 @@ async function main(): Promise<void> {
       throw new Error(`Azure matrix target ${target} resolved to runtime ${runtimeTarget.runtime}.`);
     }
 
+    await writeRunMessage(startupLogPath, progressLogPath, `[${formatIstTimestamp(new Date())}] target=${target} state=resolved-target runtime=${runtimeTarget.runtime} profile=${runtimeTarget.profile}`);
     const run = await executePaymentAutomationRun({
       target,
       tenantCodes: options.tenantCodes,
+      requestedProviders: effectiveProviders,
       allowPartialExecution: options.allowPartialExecution,
       dryRun: options.dryRun,
       headless: options.headless,
       verify: options.verify,
       sandboxOtpCode: options.sandboxOtpCode,
       tenantTimeoutMs: options.tenantTimeoutMs,
+      tenantLimit: options.tenantLimit ?? undefined,
       reportDirectoryRoot: environmentRoot,
       startedAt: targetStart,
       runPrefix: targetRunPrefix,
@@ -125,18 +163,27 @@ async function main(): Promise<void> {
     });
 
     targetRuns.push(run);
+    await writeRunMessage(startupLogPath, progressLogPath, `[${formatIstTimestamp(new Date())}] target=${target} state=completed-automation-run`);
   }
 
   const rows = targetRuns.flatMap((targetRun) => targetRun.rows);
   const markdownSummary = await reportComposer.compose(rows);
-  const matrixOutput: AzureMatrixOutput = {
-    matrixRunId,
-    reportDirectory,
-    environmentKey,
-    startedUtc: startedAt.toISOString(),
-    finishedUtc: new Date().toISOString(),
-    targetRuns
-  };
+  const hasFailures = targetRuns.some((targetRun) =>
+    targetRun.rows.some((row) => {
+      const journeyFailed = !row.journeyOutcome.startsWith("completed") && row.journeyOutcome !== "dry_run";
+      const verificationFailed = options.verify && !options.dryRun && row.verificationOutcome === "failed";
+      return journeyFailed || verificationFailed;
+    })
+  );
+  const hasVerificationWarnings = targetRuns.some((targetRun) =>
+    targetRun.rows.some((row) => options.verify && !options.dryRun && row.verificationOutcome === "partial")
+  );
+  matrixOutput.finishedUtc = new Date().toISOString();
+  matrixOutput.finishedIst = formatIstTimestamp(new Date());
+  matrixOutput.currentStep = "completed";
+  matrixOutput.status = hasFailures ? "failed" : "passed";
+  matrixOutput.targetCount = targetRuns.length;
+  matrixOutput.targetRuns = targetRuns;
 
   const targetSections = targetRuns.flatMap((targetRun) => [
     `- ${targetRun.rows[0]?.runtimeTarget ?? "unknown"}: prefix ${targetRun.runPrefix}`,
@@ -151,6 +198,16 @@ async function main(): Promise<void> {
       "",
       `Started: ${matrixOutput.startedUtc}`,
       `Finished: ${matrixOutput.finishedUtc}`,
+      `Started IST: ${matrixOutput.startedIst}`,
+      `Finished IST: ${matrixOutput.finishedIst}`,
+      `Status: ${matrixOutput.status}`,
+      ...(hasVerificationWarnings
+        ? [
+          "",
+          "> Verification warnings were reported for one or more tenant runs.",
+          "> The browser journey and cleanup completed, but some post-run evidence remained partial."
+        ]
+        : []),
       "",
       "## Target Runs",
       "",
@@ -161,9 +218,16 @@ async function main(): Promise<void> {
     "utf8"
   );
   await writeFile(path.join(reportDirectory, "summary.json"), JSON.stringify(matrixOutput, null, 2), "utf8");
+  await writeFile(currentStepPath, "completed\n", "utf8");
+  await writeFile(latestPointerPath, `${reportDirectory}\n`, "utf8");
+  await writeFile(rootMarkerPath, `${reportDirectory}\n`, "utf8");
   await writeRunMessage(startupLogPath, progressLogPath, `[${formatIstTimestamp(new Date())}] state=completed-matrix`);
 
   process.stdout.write(`${JSON.stringify(matrixOutput, null, 2)}\n`);
+
+  if (hasFailures) {
+    throw new Error("Azure payment matrix completed with failed tenant journey(s).");
+  }
 }
 
 async function writeRunMessage(startupLogPath: string, progressLogPath: string, line: string): Promise<void> {
@@ -175,12 +239,14 @@ async function writeRunMessage(startupLogPath: string, progressLogPath: string, 
 function parseCliOptions(argumentsList: string[]): AzureMatrixOptions {
   const targets: string[] = [];
   const tenantCodes: string[] = [];
+  const requestedProviders: string[] = [];
   let allowPartialExecution = false;
   let dryRun = false;
   let headless = true;
   let verify = true;
   let sandboxOtpCode = "999";
   let tenantTimeoutMs = 180000;
+  let tenantLimit: number | null = null;
 
   for (let index = 0; index < argumentsList.length; index += 1) {
     const argument = argumentsList[index];
@@ -195,6 +261,12 @@ function parseCliOptions(argumentsList: string[]): AzureMatrixOptions {
       case "--tenant":
         if (argumentsList[index + 1]) {
           tenantCodes.push(argumentsList[index + 1]);
+        }
+        index += 1;
+        break;
+      case "--provider":
+        if (argumentsList[index + 1]) {
+          requestedProviders.push(argumentsList[index + 1]);
         }
         index += 1;
         break;
@@ -219,27 +291,53 @@ function parseCliOptions(argumentsList: string[]): AzureMatrixOptions {
         tenantTimeoutMs = Number(argumentsList[index + 1] ?? tenantTimeoutMs);
         index += 1;
         break;
+      case "--tenant-limit":
+        tenantLimit = Number(argumentsList[index + 1] ?? tenantLimit);
+        index += 1;
+        break;
       default:
         break;
     }
   }
 
+  const normalizedTargets = targets.length > 0
+    ? Array.from(new Set(targets.map((target) => target.trim()).filter(Boolean)))
+    : [
+      "azure-dev",
+      "azure-stg",
+      "azure-prod"
+    ];
+
   return {
-    targets: targets.length > 0
-      ? targets
-      : [
-        "azure-dev",
-        "azure-stg",
-        "azure-prod"
-      ],
+    targets: normalizedTargets,
     tenantCodes,
+    requestedProviders,
     allowPartialExecution,
     dryRun,
     headless,
     verify,
     sandboxOtpCode,
-    tenantTimeoutMs
+    tenantTimeoutMs,
+    tenantLimit
   };
+}
+
+function normalizeRequestedProviders(requestedProviders: string[]): string[] {
+  if (requestedProviders.length === 0) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      requestedProviders
+        .map((provider) => provider.trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+function getDefaultMatrixProviders(): string[] {
+  return ["OpenPay", "Razorpay"];
 }
 
 void main().catch((error: unknown) => {

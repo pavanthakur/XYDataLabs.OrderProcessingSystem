@@ -14,6 +14,7 @@ param(
     [string]$OpenPayPrivateKey,
     [string]$OpenPayDeviceSessionId,
     [string]$OpenPayWebhookSecret,
+    [string]$OpenPayRedirectUrl,
     [string]$RazorpayMerchantId,
     [string]$RazorpayPrivateKey,
     [string]$RazorpayWebhookSecret
@@ -34,6 +35,7 @@ $secretMap = [ordered]@{
     'OpenPay--PublicKey' = $OpenPayPublicKey
     'OpenPay--PrivateKey' = $OpenPayPrivateKey
     'OpenPay--DeviceSessionId' = $OpenPayDeviceSessionId
+    'OpenPay--RedirectUrl' = $OpenPayRedirectUrl
     'Razorpay--MerchantId' = $RazorpayMerchantId
     'Razorpay--PrivateKey' = $RazorpayPrivateKey
     'Webhooks--OpenPay--Secret' = $OpenPayWebhookSecret

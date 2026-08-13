@@ -118,6 +118,12 @@ public class ProcessPaymentHandlerTests : PaymentServiceTestBase
         paymentAttempt.AttemptOrderId.Should().Be("ORDER-001-1");
         paymentAttempt.AttemptNumber.Should().Be(1);
         paymentAttempt.PaymentTraceId.Should().NotBeNullOrWhiteSpace();
+        var chargeRequest = (PaymentGatewayCreateChargeRequest)MockPaymentGateway.Invocations
+            .Single(invocation => invocation.Method.Name == nameof(IPaymentProviderGateway.CreateChargeAsync))
+            .Arguments[0];
+        chargeRequest.AttemptOrderId.Should().Be(paymentAttempt.AttemptOrderId);
+        chargeRequest.ProviderOrderId.Should().Be(paymentAttempt.PaymentTraceId);
+        chargeRequest.ProviderOrderId.Should().NotBe(paymentAttempt.AttemptOrderId);
         paymentAttempt.ProviderChargeId.Should().Be("charge-001");
         paymentAttempt.ProviderReferenceId.Should().Be("auth-ref-001");
         paymentAttempt.Status.Should().Be(PaymentAttemptStatus.Succeeded);

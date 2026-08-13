@@ -281,6 +281,25 @@ function Resolve-FunctionAppPrincipalId {
     return $principalId.Trim()
 }
 
+function Resolve-UserAssignedIdentityPrincipalId {
+    param(
+        [Parameter(Mandatory = $true)][string]$ResourceGroupName,
+        [Parameter(Mandatory = $true)][string]$IdentityName
+    )
+
+    $principalId = az identity show `
+        --resource-group $ResourceGroupName `
+        --name $IdentityName `
+        --query principalId `
+        -o tsv 2>&1
+
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($principalId)) {
+        throw "Could not resolve principalId for user-assigned identity '$IdentityName'. Azure CLI output: $principalId"
+    }
+
+    return $principalId.Trim()
+}
+
 function Get-KeyVaultName {
     param(
         [Parameter(Mandatory = $true)][string]$CurrentBaseName,
@@ -476,6 +495,11 @@ function Grant-IdentityAccessToDatabase {
         [switch]$UseSqlAuth
     )
 
+    # Azure SQL external service principals use the canonical Microsoft Entra
+    # application/client GUID bytes. Guid.ToByteArray() uses CLR mixed-endian
+    # layout and creates a valid external principal that cannot match the token.
+    $managedIdentitySid = '0x' + ([System.Guid]::Parse($ManagedIdentityAppId)).ToString('N').ToUpperInvariant()
+
     $roleGrantSql = @"
 IF NOT EXISTS (
     SELECT 1
@@ -503,28 +527,27 @@ PRINT 'Roles granted: db_datareader, db_datawriter'
 "@
 
     if ($UseSqlAuth) {
-        $sidHex = Convert-GuidToSqlSidHex -GuidText $ManagedIdentityAppId
         $sqlScript = @"
 IF EXISTS (
     SELECT 1
     FROM sys.database_principals
     WHERE name = '$DisplayName'
       AND type = 'E'
-      AND CONVERT(varchar(max), sid, 1) <> '$sidHex'
+      AND sid <> $managedIdentitySid
 )
 BEGIN
     DROP USER [$DisplayName];
-    PRINT 'Dropped contained user with stale SID: $DisplayName'
+    PRINT 'Dropped contained external user whose SID did not match: $DisplayName'
 END
 
 IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '$DisplayName')
 BEGIN
-    CREATE USER [$DisplayName] WITH SID = $sidHex, TYPE = E;
-    PRINT 'Created contained user by SID: $DisplayName'
+    CREATE USER [$DisplayName] WITH SID = $managedIdentitySid, TYPE = E;
+    PRINT 'Created contained external user with explicit object SID: $DisplayName'
 END
 ELSE
 BEGIN
-    PRINT 'User already exists with expected SID (idempotent): $DisplayName'
+    PRINT 'User already exists with the expected object SID: $DisplayName'
 END
 
 $roleGrantSql
@@ -601,6 +624,12 @@ $runtimeIdentities = @(
         ResourceName = "$BaseName-functions-$envSuffix"
         FriendlyName = 'Functions'
     }
+    @{
+        Kind = 'UserAssignedIdentity'
+        ResourceGroupName = 'rg-orderprocessing-platform'
+        ResourceName = 'id-orderprocessing-acr-pull-platform'
+        FriendlyName = 'Shared Container Apps user-assigned identity'
+    }
 )
 
 Write-Host "Configuring Phase 10 SQL access for runtime identities..." -ForegroundColor Cyan
@@ -675,11 +704,11 @@ foreach ($identity in $runtimeIdentities) {
     Write-Host "Granting SQL access for $friendlyName ($resourceName)..." -ForegroundColor Yellow
     $script:CurrentStage = "Resolve managed identity for $friendlyName ($resourceName)"
 
-    $principalId = if ($kind -eq 'ContainerApp') {
-        Resolve-ContainerAppPrincipalId -ResourceGroupName $resourceGroupName -ContainerAppName $resourceName
-    }
-    else {
-        Resolve-FunctionAppPrincipalId -ResourceGroupName $resourceGroupName -FunctionAppName $resourceName
+    $principalId = switch ($kind) {
+        'ContainerApp' { Resolve-ContainerAppPrincipalId -ResourceGroupName $resourceGroupName -ContainerAppName $resourceName }
+        'FunctionApp' { Resolve-FunctionAppPrincipalId -ResourceGroupName $resourceGroupName -FunctionAppName $resourceName }
+        'UserAssignedIdentity' { Resolve-UserAssignedIdentityPrincipalId -ResourceGroupName ([string]$identity.ResourceGroupName) -IdentityName $resourceName }
+        default { throw "Unsupported runtime identity kind '$kind'." }
     }
 
     $appId = Resolve-ManagedIdentityAppId -PrincipalId $principalId

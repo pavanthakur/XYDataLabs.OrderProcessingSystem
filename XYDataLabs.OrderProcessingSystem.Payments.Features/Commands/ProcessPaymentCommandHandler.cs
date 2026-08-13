@@ -674,7 +674,8 @@ public sealed class ProcessPaymentCommandHandler : ICommandHandler<ProcessPaymen
                 request.Name,
                 request.ExpirationYear,
                 request.ExpirationMonth,
-                request.Cvv2));
+                request.Cvv2),
+            ProviderOrderId: paymentTraceId);
 
         var charge = await _paymentProviderGateway.CreateChargeAsync(chargeRequest, cancellationToken);
         _logger.LogInformation("Charge created with ID: {ChargeId}", charge.Id);
