@@ -1184,20 +1184,25 @@ jobs:
         run: |
           $summaryPath = Join-Path $env:RUNNER_TEMP 'phase10-azure-tenant-provider-aliases-deploy.md'
 
-          & pwsh -NoProfile -ExecutionPolicy Bypass -File Resources/Azure-Deployment/ensure-phase10-tenant-provider-secret-aliases.ps1 `
-            -Environment '${{ steps.params.outputs.env }}' `
-            -ResourceGroupName '${{ steps.outputs.outputs.rg }}' `
-            -SummaryPath $summaryPath `
-            -DeploymentPrincipalObjectId '${{ steps.deployment_principal.outputs.objectId }}' `
-            -RequiredProviderCodes @('OpenPay', 'Razorpay')
+          $syncError = $null
+          try {
+            & Resources/Azure-Deployment/ensure-phase10-tenant-provider-secret-aliases.ps1 `
+              -Environment '${{ steps.params.outputs.env }}' `
+              -ResourceGroupName '${{ steps.outputs.outputs.rg }}' `
+              -SummaryPath $summaryPath `
+              -DeploymentPrincipalObjectId '${{ steps.deployment_principal.outputs.objectId }}' `
+              -RequiredProviderCodes @('OpenPay', 'Razorpay')
+          }
+          catch {
+            $syncError = $_
+          }
 
-          $syncExitCode = $LASTEXITCODE
           if (Test-Path -LiteralPath $summaryPath) {
             Get-Content -LiteralPath $summaryPath | Add-Content -Path $env:GITHUB_STEP_SUMMARY
           }
 
-          if ($syncExitCode -ne 0) {
-            throw "Phase 10 Azure tenant provider alias sync failed with exit code $syncExitCode."
+          if ($null -ne $syncError) {
+            throw "Phase 10 Azure tenant provider alias sync failed. $($syncError.Exception.Message)"
           }
 
       - name: Refresh Payment Runtime Hosts After Provider Secret Sync
@@ -1232,19 +1237,24 @@ jobs:
         run: |
           $summaryPath = Join-Path $env:RUNNER_TEMP 'phase10-azure-tenant-topology-deploy.md'
 
-          & pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-phase10-azure-tenant-topology.ps1 `
-            -Environment '${{ steps.params.outputs.env }}' `
-            -ResourceGroupName '${{ steps.outputs.outputs.rg }}' `
-            -RequiredProviderCodes @('OpenPay', 'Razorpay') `
-            -SummaryPath $summaryPath
+          $verifyError = $null
+          try {
+            & scripts/verify-phase10-azure-tenant-topology.ps1 `
+              -Environment '${{ steps.params.outputs.env }}' `
+              -ResourceGroupName '${{ steps.outputs.outputs.rg }}' `
+              -RequiredProviderCodes @('OpenPay', 'Razorpay') `
+              -SummaryPath $summaryPath
+          }
+          catch {
+            $verifyError = $_
+          }
 
-          $verifyExitCode = $LASTEXITCODE
           if (Test-Path -LiteralPath $summaryPath) {
             Get-Content -LiteralPath $summaryPath | Add-Content -Path $env:GITHUB_STEP_SUMMARY
           }
 
-          if ($verifyExitCode -ne 0) {
-            throw "Phase 10 Azure tenant topology verification failed with exit code $verifyExitCode."
+          if ($null -ne $verifyError) {
+            throw "Phase 10 Azure tenant topology verification failed. $($verifyError.Exception.Message)"
           }
 
       - name: Post-Deployment Endpoint Smoke

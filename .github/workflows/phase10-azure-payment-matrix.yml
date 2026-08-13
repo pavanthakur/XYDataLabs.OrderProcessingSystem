@@ -143,19 +143,24 @@ jobs:
           $artifactRoot = Join-Path $PWD 'TestResults/Playwright/azure-https'
           $summaryPath = Join-Path $artifactRoot 'topology-preflight-${{ inputs.environment }}-${{ github.run_id }}.md'
 
-          & pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-phase10-azure-tenant-topology.ps1 `
-            -Environment '${{ inputs.environment }}' `
-            -ResourceGroupName '${{ steps.topology.outputs.resourceGroup }}' `
-            -RequiredProviderCodes @('OpenPay', 'Razorpay') `
-            -SummaryPath $summaryPath
+          $verifyError = $null
+          try {
+            & scripts/verify-phase10-azure-tenant-topology.ps1 `
+              -Environment '${{ inputs.environment }}' `
+              -ResourceGroupName '${{ steps.topology.outputs.resourceGroup }}' `
+              -RequiredProviderCodes @('OpenPay', 'Razorpay') `
+              -SummaryPath $summaryPath
+          }
+          catch {
+            $verifyError = $_
+          }
 
-          $verifyExitCode = $LASTEXITCODE
           if (Test-Path -LiteralPath $summaryPath) {
             Get-Content -LiteralPath $summaryPath | Add-Content -Path $env:GITHUB_STEP_SUMMARY
           }
 
-          if ($verifyExitCode -ne 0) {
-            throw "Azure payment matrix topology/provider preflight failed with exit code $verifyExitCode. Run the Phase 10 deploy orchestrator to synchronize provider aliases before retrying the matrix."
+          if ($null -ne $verifyError) {
+            throw "Azure payment matrix topology/provider preflight failed. $($verifyError.Exception.Message) Run the Phase 10 deploy orchestrator to synchronize provider aliases before retrying the matrix."
           }
 
       - name: Install automation dependencies
