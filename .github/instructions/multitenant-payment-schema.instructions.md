@@ -41,7 +41,7 @@ These rules are binding for all tenant, payment, DTO, migration, middleware, and
 ## Tenant registry (seed state — authoritative routing, ADR-019)
 | TenantCode | Tier | Active provider | Notes |
 |---|---|---|---|
-| TenantA | SharedPool | OpenPay | Razorpay seeded inactive; `Use3DSecure=false` for Razorpay (popup/SAQ A) |
+| TenantA | SharedPool | Razorpay | OpenPay seeded inactive; Razorpay is the active routing baseline and uses `Use3DSecure=false` (popup/SAQ A) |
 | TenantB | SharedPool | Razorpay | OpenPay seeded inactive |
 | TenantC | Dedicated | OpenPay | Separate DB; requires `DedicatedTenantConnectionStrings:TenantC` in config |
 - `Tenant.PaymentProviderCode` (`nvarchar(50)`, nullable) is the **only** authoritative routing field — set by migration/ops script, never by code.
