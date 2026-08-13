@@ -320,6 +320,23 @@ function Get-LocalSqlPassword {
     return $script:LocalSqlPassword
 }
 
+function Get-EnvLocalValue {
+    param(
+        [Parameter(Mandatory = $true)] [string] $Name
+    )
+
+    if (-not (Test-Path -LiteralPath $envLocalPath)) {
+        return $null
+    }
+
+    $line = Get-Content -LiteralPath $envLocalPath | Where-Object { $_ -match "^$([regex]::Escape($Name))=" } | Select-Object -First 1
+    if ([string]::IsNullOrWhiteSpace($line)) {
+        return $null
+    }
+
+    return $line.Split('=', 2)[1].Trim()
+}
+
 function Initialize-DockerClientContext {
     if ($Runtime -ne 'docker') {
         return
@@ -531,6 +548,129 @@ WHERE Code = '$escapedTenantCode';
     [void](Invoke-SqlTextQuery -Database $Database -Query $updateQuery)
 }
 
+function Ensure-ProviderRuntimeContract {
+    param(
+        [Parameter(Mandatory = $true)] [string] $Database,
+        [Parameter(Mandatory = $true)] [string] $CurrentTenantCode,
+        [Parameter(Mandatory = $true)] [string] $CurrentProviderType
+    )
+
+    $escapedTenantCode = Escape-SqlLiteral -Value $CurrentTenantCode
+    $escapedProviderType = Escape-SqlLiteral -Value $CurrentProviderType
+    $providerName = if ($CurrentProviderType -eq 'OpenPay') { 'OpenPay' } else { 'Razorpay' }
+    $apiUrl = if ($CurrentProviderType -eq 'OpenPay') { 'https://sandbox-api.openpay.mx/v1' } else { 'https://api.razorpay.com/v1' }
+    $privateKeyConfigurationKey = "PaymentProviders:${CurrentTenantCode}:${CurrentProviderType}:PrivateKey"
+    $escapedPrivateKeyConfigurationKey = Escape-SqlLiteral -Value $privateKeyConfigurationKey
+    $use3DSecure = if ($CurrentProviderType -eq 'OpenPay') { 1 } else { 0 }
+    $keyVaultName = $null
+    if ($Runtime -eq 'azure') {
+        $environmentDescriptor = Get-AzureEnvironmentDescriptor -CurrentEnvironment $Environment
+        $keyVaultName = "kv-orderprocessing-$($environmentDescriptor.ResourceSuffix)"
+    }
+
+    if ($CurrentProviderType -eq 'OpenPay') {
+        if ($Runtime -eq 'azure') {
+            $merchantId = Invoke-AzureCliText -Operation "Resolve OpenPay merchant id contract for $CurrentTenantCode" -Command {
+                az keyvault secret show --vault-name $keyVaultName --name 'OpenPay--MerchantId' --query value -o tsv
+            }
+            $publicKey = Invoke-AzureCliText -Operation "Resolve OpenPay public key contract for $CurrentTenantCode" -Command {
+                az keyvault secret show --vault-name $keyVaultName --name 'OpenPay--PublicKey' --query value -o tsv
+            }
+        }
+        else {
+            $merchantId = Get-EnvLocalValue -Name 'LOCAL_OPENPAY_MERCHANT_ID'
+            $publicKey = Get-EnvLocalValue -Name 'LOCAL_OPENPAY_PUBLIC_KEY'
+        }
+
+        if ([string]::IsNullOrWhiteSpace($merchantId) -or [string]::IsNullOrWhiteSpace($publicKey)) {
+            throw "Provider runtime contract repair for OpenPay requires non-empty MerchantId and PublicKey for tenant $CurrentTenantCode."
+        }
+
+        $escapedMerchantId = Escape-SqlLiteral -Value $merchantId
+        $escapedPublicKey = Escape-SqlLiteral -Value $publicKey
+        $providerRuntimeQuery = @"
+MERGE [payments].[PaymentProviders] AS target
+USING (
+    SELECT
+        t.Id AS TenantId,
+        '$providerName' AS ProviderName,
+        '$apiUrl' AS ApiUrl,
+        '$escapedProviderType' AS ProviderType,
+        '$escapedMerchantId' AS MerchantId,
+        '$escapedPublicKey' AS PublicKey,
+        '$escapedPrivateKeyConfigurationKey' AS PrivateKeyConfigurationKey,
+        CAST($use3DSecure AS bit) AS Use3DSecure
+    FROM [dbo].[Tenants] t
+    WHERE t.Code = '$escapedTenantCode'
+) AS source
+ON target.TenantId = source.TenantId AND target.ProviderType = source.ProviderType
+WHEN MATCHED THEN
+    UPDATE SET
+        [Name] = source.ProviderName,
+        [APIUrl] = source.ApiUrl,
+        [IsProduction] = 0,
+        [ProviderType] = source.ProviderType,
+        [MerchantId] = source.MerchantId,
+        [PublicKey] = source.PublicKey,
+        [PrivateKeyConfigurationKey] = source.PrivateKeyConfigurationKey,
+        [Use3DSecure] = source.Use3DSecure
+WHEN NOT MATCHED THEN
+    INSERT ([Name], [APIUrl], [IsProduction], [IsActive], [ProviderType], [MerchantId], [PublicKey], [PrivateKeyConfigurationKey], [Use3DSecure], [TenantId], [CreatedBy], [CreatedDate])
+    VALUES (source.ProviderName, source.ApiUrl, 0, 0, source.ProviderType, source.MerchantId, source.PublicKey, source.PrivateKeyConfigurationKey, source.Use3DSecure, source.TenantId, 1, GETUTCDATE());
+"@
+
+        [void](Invoke-SqlTextQuery -Database $Database -Query $providerRuntimeQuery)
+        return
+    }
+
+    if ($Runtime -eq 'azure') {
+        $razorpayMerchantId = Invoke-AzureCliText -Operation "Resolve Razorpay merchant id contract for $CurrentTenantCode" -Command {
+            az keyvault secret show --vault-name $keyVaultName --name 'Razorpay--MerchantId' --query value -o tsv
+        }
+    }
+    else {
+        $razorpayMerchantId = Get-EnvLocalValue -Name 'LOCAL_RAZORPAY_MERCHANT_ID'
+    }
+
+    if ([string]::IsNullOrWhiteSpace($razorpayMerchantId)) {
+        throw "Provider runtime contract repair for Razorpay requires a non-empty MerchantId for tenant $CurrentTenantCode."
+    }
+
+    $escapedRazorpayMerchantId = Escape-SqlLiteral -Value $razorpayMerchantId
+
+    $razorpayRuntimeQuery = @"
+MERGE [payments].[PaymentProviders] AS target
+USING (
+    SELECT
+        t.Id AS TenantId,
+        '$providerName' AS ProviderName,
+        '$apiUrl' AS ApiUrl,
+        '$escapedProviderType' AS ProviderType,
+        '$escapedRazorpayMerchantId' AS MerchantId,
+        '$escapedPrivateKeyConfigurationKey' AS PrivateKeyConfigurationKey,
+        CAST($use3DSecure AS bit) AS Use3DSecure
+    FROM [dbo].[Tenants] t
+    WHERE t.Code = '$escapedTenantCode'
+) AS source
+ON target.TenantId = source.TenantId AND target.ProviderType = source.ProviderType
+WHEN MATCHED THEN
+    UPDATE SET
+        [Name] = source.ProviderName,
+        [APIUrl] = source.ApiUrl,
+        [IsProduction] = 0,
+        [ProviderType] = source.ProviderType,
+        [MerchantId] = source.MerchantId,
+        [PublicKey] = NULL,
+        [PrivateKeyConfigurationKey] = source.PrivateKeyConfigurationKey,
+        [Use3DSecure] = source.Use3DSecure
+WHEN NOT MATCHED THEN
+    INSERT ([Name], [APIUrl], [IsProduction], [IsActive], [ProviderType], [MerchantId], [PublicKey], [PrivateKeyConfigurationKey], [Use3DSecure], [TenantId], [CreatedBy], [CreatedDate])
+    VALUES (source.ProviderName, source.ApiUrl, 0, 0, source.ProviderType, source.MerchantId, NULL, source.PrivateKeyConfigurationKey, source.Use3DSecure, source.TenantId, 1, GETUTCDATE());
+"@
+
+    [void](Invoke-SqlTextQuery -Database $Database -Query $razorpayRuntimeQuery)
+}
+
 try {
     $database = Get-DatabaseName -CurrentRuntime $Runtime -CurrentEnvironment $Environment
     Assert-TenantExists -Database $database -CurrentTenantCode $TenantCode
@@ -541,6 +681,7 @@ try {
     }
 
     if ($previousProviderType -ne $ProviderType) {
+        Ensure-ProviderRuntimeContract -Database $database -CurrentTenantCode $TenantCode -CurrentProviderType $ProviderType
         Set-ActiveProvider -Database $database -CurrentTenantCode $TenantCode -CurrentProviderType $ProviderType
     }
 
