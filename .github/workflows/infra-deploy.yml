@@ -892,6 +892,14 @@ jobs:
           echo "redisHost=${REDIS_HOST}" >> $GITHUB_OUTPUT
           echo "redisSslPort=${REDIS_SSL_PORT}" >> $GITHUB_OUTPUT
 
+      - name: Refresh Azure CLI Login (OIDC) Before SQL Migrations
+        if: ${{ steps.params.outputs.deploySql == 'true' }}
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+
       - name: Run Azure SQL Migrations
         if: ${{ steps.params.outputs.deploySql == 'true' }}
         shell: pwsh
