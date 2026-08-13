@@ -1,7 +1,7 @@
 #Requires -Version 7.0
 
 param(
-    [ValidateRange(30, 900)]
+    [ValidateRange(60, 900)]
     [int]$StabilizationDelaySeconds = 120,
 
     [ValidateSet('minimal', 'normal', 'detailed', 'quiet')]
@@ -192,7 +192,23 @@ try {
     }
 
     Invoke-LoggedCommand -Name 'baseline-restore' -Script {
-        & pwsh -NoProfile -ExecutionPolicy Bypass -File $databaseBootstrapScript -Profile apps -RunDir $runDir -ProgressLogPath $progressLogPath
+        $baselineExitCode = 1
+        for ($attempt = 1; $attempt -le 3; $attempt++) {
+            & pwsh -NoProfile -ExecutionPolicy Bypass -File $databaseBootstrapScript -Profile apps -RunDir $runDir -ProgressLogPath $progressLogPath
+            $baselineExitCode = $LASTEXITCODE
+            if ($baselineExitCode -eq 0) {
+                break
+            }
+
+            if ($attempt -lt 3) {
+                Write-ProgressLine "Baseline restore attempt $attempt failed after integration cleanup; retrying in 5 seconds."
+                Start-Sleep -Seconds 5
+            }
+        }
+
+        if ($baselineExitCode -ne 0) {
+            throw "Baseline restore failed after 3 attempts with exit code $baselineExitCode."
+        }
     } | Out-Null
     $summary.steps += [ordered]@{
         name = 'baseline-restore'

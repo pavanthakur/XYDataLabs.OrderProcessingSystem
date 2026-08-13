@@ -1,7 +1,7 @@
 #Requires -Version 7.0
 
 param(
-    [ValidateRange(30, 900)]
+    [ValidateRange(60, 900)]
     [int]$StabilizationDelaySeconds = 120,
 
     [ValidateSet('minimal', 'normal', 'detailed', 'quiet')]
