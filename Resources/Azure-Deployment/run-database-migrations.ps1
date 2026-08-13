@@ -337,6 +337,29 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($tenantCDbExists)) {
     Write-Info "  [INFO] Ensuring TenantC dedicated product baseline..."
     Ensure-TenantProducts -DatabaseName $tenantCDbName -TenantCodes @('TenantC')
 
+    # Keep managed-identity selection deterministic when Container Apps have
+    # both system-assigned and user-assigned identities. This identity receives
+    # only the runtime reader/writer roles in the SQL identity setup step.
+    $runtimeIdentityClientId = az identity show `
+        --resource-group 'rg-orderprocessing-platform' `
+        --name 'id-orderprocessing-acr-pull-platform' `
+        --query clientId `
+        --output tsv
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($runtimeIdentityClientId)) {
+        throw 'Failed to resolve the shared Container Apps user-assigned identity client ID.'
+    }
+    $dedicatedRuntimeConnectionString = "Server=tcp:$fullyQualifiedDomain,1433;Initial Catalog=$tenantCDbName;User ID=$($runtimeIdentityClientId.Trim());Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;Authentication=Active Directory Managed Identity;"
+    $dedicatedSecretName = 'DedicatedTenantConnectionStrings--TenantC'
+    az keyvault secret set `
+        --vault-name "kv-$BaseName-$envSuffix" `
+        --name $dedicatedSecretName `
+        --value $dedicatedRuntimeConnectionString `
+        --output none
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to update Key Vault secret '$dedicatedSecretName' with the dedicated runtime connection contract."
+    }
+    Write-Ok "  [OK] TenantC dedicated runtime connection contract refreshed in Key Vault."
+
     # Verify TenantC migrations
     try {
             Write-Info "  [INFO] Verifying TenantC dedicated database applied migrations..."
