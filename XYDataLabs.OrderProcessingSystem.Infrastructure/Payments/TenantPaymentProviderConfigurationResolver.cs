@@ -28,6 +28,7 @@ public sealed class TenantPaymentProviderConfigurationResolver : ITenantPaymentP
         var publicKey = ResolvePublicKey(paymentProvider);
         var privateKeyConfigurationKey = ResolvePrivateKeyConfigurationKey(paymentProvider);
         var privateKey = ResolveConfigurationValue(privateKeyConfigurationKey);
+        privateKey ??= ResolveConfigurationValue(GetFallbackConfigurationKey(paymentProvider.ProviderType, "PrivateKey"));
 
         if (string.IsNullOrWhiteSpace(privateKey))
         {

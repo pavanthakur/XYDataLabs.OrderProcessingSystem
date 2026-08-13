@@ -119,6 +119,31 @@ public class TenantPaymentProviderConfigurationResolverTests
     }
 
     [Fact]
+    public void ResolveCurrentTenantConfiguration_WhenTenantAliasIsUnavailable_FallsBackToProviderPrivateKey()
+    {
+        var paymentProvider = new PaymentProvider
+        {
+            TenantId = 7,
+            ProviderType = PaymentProviderTypes.OpenPay,
+            MerchantId = "mt_tenant_7",
+            PublicKey = "pk_tenant_7",
+            PrivateKeyConfigurationKey = "PaymentProviders:TenantA:OpenPay:PrivateKey",
+            IsProduction = false
+        };
+
+        var sut = CreateResolver(
+            paymentProvider,
+            new Dictionary<string, string?>
+            {
+                ["OpenPay:PrivateKey"] = "sk_provider_fallback"
+            });
+
+        var result = sut.ResolveCurrentTenantConfiguration();
+
+        result.PrivateKey.Should().Be("sk_provider_fallback");
+    }
+
+    [Fact]
     public void ResolveCurrentTenantConfiguration_ForOpenPay_ThrowsWhenPublicKeyMissing()
     {
         var paymentProvider = new PaymentProvider
