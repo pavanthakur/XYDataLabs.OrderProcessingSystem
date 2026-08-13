@@ -54,6 +54,31 @@ export class PowerShellVerificationAdapter implements VerificationAdapter {
 
   private async executeAzure(request: VerificationRequest): Promise<VerificationResult> {
     const scriptPath = path.join(repoRoot, "scripts", "verify-payment-run-azure.ps1");
+    const firstAttempt = await this.runAzureVerification(scriptPath, request, 90);
+    if (firstAttempt.outcome !== "partial") {
+      return firstAttempt;
+    }
+
+    await delay(45000);
+    const secondAttempt = await this.runAzureVerification(scriptPath, request, 0);
+    if (secondAttempt.outcome === "passed" || secondAttempt.outcome === "failed") {
+      return {
+        ...secondAttempt,
+        summary: `${secondAttempt.summary} Retried after initial inconclusive evidence.`
+      };
+    }
+
+    return {
+      ...secondAttempt,
+      summary: `${secondAttempt.summary} Evidence remained partial after retry.`
+    };
+  }
+
+  private async runAzureVerification(
+    scriptPath: string,
+    request: VerificationRequest,
+    preQueryDelaySeconds: number
+  ): Promise<VerificationResult> {
     const stdout = await this.invokePowerShell([
       "-NoProfile",
       "-File",
@@ -65,7 +90,7 @@ export class PowerShellVerificationAdapter implements VerificationAdapter {
       "-OutputFormat",
       "Json",
       "-PreQueryDelaySeconds",
-      "90"
+      String(preQueryDelaySeconds)
     ]);
 
     const rawReport = parseJsonPayload(stdout) as { Checks?: Record<string, { Outcome?: string }> };
@@ -113,6 +138,12 @@ export class PowerShellVerificationAdapter implements VerificationAdapter {
       });
     });
   }
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
 }
 
 function parseJsonPayload(stdout: string): unknown {
