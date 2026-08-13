@@ -544,6 +544,8 @@ BEGIN
     PRINT 'User already exists: $DisplayName'
 END
 
+GO
+
 $roleGrantSql
 "@
 
