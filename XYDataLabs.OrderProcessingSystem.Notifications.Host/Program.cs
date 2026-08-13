@@ -44,16 +44,19 @@ builder.Services.AddCqrs(typeof(NotificationsModuleRegistration).Assembly);
 builder.Services.AddNotificationsModule();
 builder.Services.AddNotificationsInfrastructure();
 
-builder.Services.AddAuthorization(options =>
-{
-    options.FallbackPolicy = new AuthorizationPolicyBuilder()
-        .RequireAuthenticatedUser()
-        .Build();
-});
-
 var identityEnabled = builder.Configuration
     .GetSection("IdentityProvider")
     .GetValue("Enabled", false);
+builder.Services.AddAuthorization(options =>
+{
+    if (identityEnabled)
+    {
+        options.FallbackPolicy = new AuthorizationPolicyBuilder()
+            .RequireAuthenticatedUser()
+            .Build();
+    }
+});
+
 if (identityEnabled)
 {
     builder.Services
