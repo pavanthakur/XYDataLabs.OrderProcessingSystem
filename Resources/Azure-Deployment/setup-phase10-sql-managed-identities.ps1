@@ -86,8 +86,10 @@ function Convert-GuidToSqlSidHex {
     param([Parameter(Mandatory = $true)][string]$GuidText)
 
     $guid = [Guid]$GuidText
-    $bytes = $guid.ToByteArray()
-    return '0x' + (($bytes | ForEach-Object { $_.ToString('X2') }) -join '')
+    # Azure SQL external principals store the canonical Entra GUID bytes.
+    # Guid.ToByteArray() uses mixed-endian CLR layout and produces a SID that
+    # cannot match the oid claim in a managed-identity access token.
+    return '0x' + $guid.ToString('N').ToUpperInvariant()
 }
 
 function Resolve-ManagedIdentityAppId {
