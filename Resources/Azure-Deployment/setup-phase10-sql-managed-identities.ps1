@@ -522,28 +522,26 @@ PRINT 'Roles granted: db_datareader, db_datawriter'
 "@
 
     if ($UseSqlAuth) {
-        $sidHex = Convert-GuidToSqlSidHex -GuidText $ManagedIdentityPrincipalId
         $sqlScript = @"
 IF EXISTS (
     SELECT 1
     FROM sys.database_principals
     WHERE name = '$DisplayName'
       AND type = 'E'
-      AND CONVERT(varchar(max), sid, 1) <> '$sidHex'
 )
 BEGIN
     DROP USER [$DisplayName];
-    PRINT 'Dropped contained user with stale SID: $DisplayName'
+    PRINT 'Dropped contained external user for deterministic recreation: $DisplayName'
 END
 
 IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '$DisplayName')
 BEGIN
-    CREATE USER [$DisplayName] WITH SID = $sidHex, TYPE = E;
-    PRINT 'Created contained user by SID: $DisplayName'
+    CREATE USER [$DisplayName] FROM EXTERNAL PROVIDER WITH OBJECT_ID='$ManagedIdentityPrincipalId';
+    PRINT 'Created contained user through external provider by object ID: $DisplayName'
 END
 ELSE
 BEGIN
-    PRINT 'User already exists with expected SID (idempotent): $DisplayName'
+    PRINT 'User already exists: $DisplayName'
 END
 
 $roleGrantSql
