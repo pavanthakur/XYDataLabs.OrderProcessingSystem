@@ -171,9 +171,12 @@ async function main(): Promise<void> {
   const hasFailures = targetRuns.some((targetRun) =>
     targetRun.rows.some((row) => {
       const journeyFailed = !row.journeyOutcome.startsWith("completed") && row.journeyOutcome !== "dry_run";
-      const verificationFailed = options.verify && !options.dryRun && row.verificationOutcome !== "passed";
+      const verificationFailed = options.verify && !options.dryRun && row.verificationOutcome === "failed";
       return journeyFailed || verificationFailed;
     })
+  );
+  const hasVerificationWarnings = targetRuns.some((targetRun) =>
+    targetRun.rows.some((row) => options.verify && !options.dryRun && row.verificationOutcome === "partial")
   );
   matrixOutput.finishedUtc = new Date().toISOString();
   matrixOutput.finishedIst = formatIstTimestamp(new Date());
@@ -198,6 +201,13 @@ async function main(): Promise<void> {
       `Started IST: ${matrixOutput.startedIst}`,
       `Finished IST: ${matrixOutput.finishedIst}`,
       `Status: ${matrixOutput.status}`,
+      ...(hasVerificationWarnings
+        ? [
+          "",
+          "> Verification warnings were reported for one or more tenant runs.",
+          "> The browser journey and cleanup completed, but some post-run evidence remained partial."
+        ]
+        : []),
       "",
       "## Target Runs",
       "",
