@@ -1166,6 +1166,7 @@ jobs:
             -OpenPayPrivateKey $env:OPENPAY_PRIVATE_KEY `
             -OpenPayDeviceSessionId $env:OPENPAY_DEVICE_SESSION_ID `
             -OpenPayWebhookSecret $env:OPENPAY_WEBHOOK_SECRET `
+            -OpenPayRedirectUrl 'https://${{ steps.outputs.outputs.gatewayFqdn }}/payment/callback' `
             -RazorpayMerchantId $env:RAZORPAY_MERCHANT_ID `
             -RazorpayPrivateKey $env:RAZORPAY_PRIVATE_KEY `
             -RazorpayWebhookSecret $env:RAZORPAY_WEBHOOK_SECRET
