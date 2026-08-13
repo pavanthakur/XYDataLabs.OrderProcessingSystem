@@ -46,7 +46,8 @@ public sealed record PaymentGatewayCreateChargeRequest(
     bool Use3DSecure,
     string RedirectUrl,
     PaymentGatewayCustomer Customer,
-    PaymentGatewayCardDetails? CardDetails = null);
+    PaymentGatewayCardDetails? CardDetails = null,
+    string? ProviderOrderId = null);
 
 public sealed record PaymentGatewayChargeResult(
     string Id,
