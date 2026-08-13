@@ -337,18 +337,51 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($tenantCDbExists)) {
     Write-Info "  [INFO] Ensuring TenantC dedicated product baseline..."
     Ensure-TenantProducts -DatabaseName $tenantCDbName -TenantCodes @('TenantC')
 
-    # Keep managed-identity selection deterministic when Container Apps have
-    # both system-assigned and user-assigned identities. This identity receives
-    # only the runtime reader/writer roles in the SQL identity setup step.
-    $runtimeIdentityClientId = az identity show `
-        --resource-group 'rg-orderprocessing-platform' `
-        --name 'id-orderprocessing-acr-pull-platform' `
-        --query clientId `
-        --output tsv
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($runtimeIdentityClientId)) {
-        throw 'Failed to resolve the shared Container Apps user-assigned identity client ID.'
+    # The dedicated runtime credential is a contained database user with only
+    # reader/writer membership. Rotate it on every deployment and keep the
+    # generated value exclusively in the database and Key Vault.
+    $runtimeUsername = 'tenantc_runtime'
+    $passwordBytes = [byte[]]::new(32)
+    [System.Security.Cryptography.RandomNumberGenerator]::Fill($passwordBytes)
+    $runtimePassword = [Convert]::ToBase64String($passwordBytes)
+    $runtimeUserSql = @"
+IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'$runtimeUsername')
+    ALTER USER [$runtimeUsername] WITH PASSWORD = N'$runtimePassword';
+ELSE
+    CREATE USER [$runtimeUsername] WITH PASSWORD = N'$runtimePassword';
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.database_role_members drm
+    JOIN sys.database_principals r ON r.principal_id = drm.role_principal_id
+    JOIN sys.database_principals m ON m.principal_id = drm.member_principal_id
+    WHERE r.name = N'db_datareader' AND m.name = N'$runtimeUsername'
+)
+    ALTER ROLE db_datareader ADD MEMBER [$runtimeUsername];
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.database_role_members drm
+    JOIN sys.database_principals r ON r.principal_id = drm.role_principal_id
+    JOIN sys.database_principals m ON m.principal_id = drm.member_principal_id
+    WHERE r.name = N'db_datawriter' AND m.name = N'$runtimeUsername'
+)
+    ALTER ROLE db_datawriter ADD MEMBER [$runtimeUsername];
+"@
+
+    $runtimeConnection = [System.Data.SqlClient.SqlConnection]::new($tenantCConnectionString)
+    try {
+        $runtimeConnection.Open()
+        $runtimeCommand = $runtimeConnection.CreateCommand()
+        $runtimeCommand.CommandText = $runtimeUserSql
+        $runtimeCommand.CommandTimeout = 60
+        [void]$runtimeCommand.ExecuteNonQuery()
     }
-    $dedicatedRuntimeConnectionString = "Server=tcp:$fullyQualifiedDomain,1433;Initial Catalog=$tenantCDbName;User ID=$($runtimeIdentityClientId.Trim());Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;Authentication=Active Directory Managed Identity;"
+    finally {
+        if ($null -ne $runtimeConnection) {
+            $runtimeConnection.Dispose()
+        }
+    }
+
+    $dedicatedRuntimeConnectionString = "Server=tcp:$fullyQualifiedDomain,1433;Initial Catalog=$tenantCDbName;User ID=$runtimeUsername;Password=$runtimePassword;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
     $dedicatedSecretName = 'DedicatedTenantConnectionStrings--TenantC'
     az keyvault secret set `
         --vault-name "kv-$BaseName-$envSuffix" `
@@ -358,7 +391,7 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($tenantCDbExists)) {
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to update Key Vault secret '$dedicatedSecretName' with the dedicated runtime connection contract."
     }
-    Write-Ok "  [OK] TenantC dedicated runtime connection contract refreshed in Key Vault."
+    Write-Ok "  [OK] TenantC least-privilege contained runtime credential rotated and refreshed in Key Vault."
 
     # Verify TenantC migrations
     try {
