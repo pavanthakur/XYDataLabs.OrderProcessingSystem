@@ -485,7 +485,7 @@ ORDER BY [Code];
 function Grant-IdentityAccessToDatabase {
     param(
         [Parameter(Mandatory = $true)][string]$DisplayName,
-        [Parameter(Mandatory = $true)][string]$ManagedIdentityPrincipalId,
+        [Parameter(Mandatory = $true)][string]$ManagedIdentityAppId,
         [Parameter(Mandatory = $true)][string]$SqlServerFqdn,
         [Parameter(Mandatory = $true)][string]$DatabaseName,
         [string]$AccessToken,
@@ -495,10 +495,10 @@ function Grant-IdentityAccessToDatabase {
         [switch]$UseSqlAuth
     )
 
-    # Azure SQL maps the token's oid claim to the canonical Microsoft Entra
-    # object/principal GUID bytes. Guid.ToByteArray() uses CLR mixed-endian
+    # Azure SQL external service principals use the canonical Microsoft Entra
+    # application/client GUID bytes. Guid.ToByteArray() uses CLR mixed-endian
     # layout and creates a valid external principal that cannot match the token.
-    $managedIdentitySid = '0x' + ([System.Guid]::Parse($ManagedIdentityPrincipalId)).ToString('N').ToUpperInvariant()
+    $managedIdentitySid = '0x' + ([System.Guid]::Parse($ManagedIdentityAppId)).ToString('N').ToUpperInvariant()
 
     $roleGrantSql = @"
 IF NOT EXISTS (
@@ -720,7 +720,7 @@ foreach ($identity in $runtimeIdentities) {
         $script:CurrentStage = "Grant $friendlyName access to shared database '$sharedDatabaseName'"
         Grant-IdentityAccessToDatabase `
             -DisplayName $resourceName `
-            -ManagedIdentityPrincipalId $principalId `
+            -ManagedIdentityAppId $appId `
             -SqlServerFqdn $sqlFqdn `
             -DatabaseName $sharedDatabaseName `
             -AccessToken $token `
@@ -732,7 +732,7 @@ foreach ($identity in $runtimeIdentities) {
         $script:CurrentStage = "Grant $friendlyName access to shared database '$sharedDatabaseName'"
         Grant-IdentityAccessToDatabase `
             -DisplayName $resourceName `
-            -ManagedIdentityPrincipalId $principalId `
+            -ManagedIdentityAppId $appId `
             -SqlServerFqdn $sqlFqdn `
             -DatabaseName $sharedDatabaseName `
             -AccessToken $token `
@@ -746,7 +746,7 @@ foreach ($identity in $runtimeIdentities) {
         if ($UseSqlAuthentication) {
             Grant-IdentityAccessToDatabase `
                 -DisplayName $resourceName `
-                -ManagedIdentityPrincipalId $principalId `
+                -ManagedIdentityAppId $appId `
                 -SqlServerFqdn $sqlFqdn `
                 -DatabaseName $dedicatedDatabase.DatabaseName `
                 -AccessToken $token `
@@ -757,7 +757,7 @@ foreach ($identity in $runtimeIdentities) {
         else {
             Grant-IdentityAccessToDatabase `
                 -DisplayName $resourceName `
-                -ManagedIdentityPrincipalId $principalId `
+                -ManagedIdentityAppId $appId `
                 -SqlServerFqdn $sqlFqdn `
                 -DatabaseName $dedicatedDatabase.DatabaseName `
                 -AccessToken $token `
