@@ -485,7 +485,7 @@ ORDER BY [Code];
 function Grant-IdentityAccessToDatabase {
     param(
         [Parameter(Mandatory = $true)][string]$DisplayName,
-        [Parameter(Mandatory = $true)][string]$ManagedIdentityPrincipalId,
+        [Parameter(Mandatory = $true)][string]$ManagedIdentityAppId,
         [Parameter(Mandatory = $true)][string]$SqlServerFqdn,
         [Parameter(Mandatory = $true)][string]$DatabaseName,
         [string]$AccessToken,
@@ -494,6 +494,14 @@ function Grant-IdentityAccessToDatabase {
         [switch]$UseAzureAdToken,
         [switch]$UseSqlAuth
     )
+
+    # Azure SQL stores Microsoft Entra application/client IDs using the byte layout returned
+    # by Guid.ToByteArray(), not the left-to-right hexadecimal form of the GUID.
+    # Supplying the textual hex order creates a valid external principal whose
+    # SID cannot match the token presented by the managed identity.
+    $managedIdentitySid = '0x' + [System.BitConverter]::ToString(
+        ([System.Guid]::Parse($ManagedIdentityAppId)).ToByteArray()
+    ).Replace('-', '')
 
     $roleGrantSql = @"
 IF NOT EXISTS (
@@ -528,23 +536,22 @@ IF EXISTS (
     FROM sys.database_principals
     WHERE name = '$DisplayName'
       AND type = 'E'
+      AND sid <> $managedIdentitySid
 )
 BEGIN
     DROP USER [$DisplayName];
-    PRINT 'Dropped contained external user for deterministic recreation: $DisplayName'
+    PRINT 'Dropped contained external user whose SID did not match: $DisplayName'
 END
 
 IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '$DisplayName')
 BEGIN
-    CREATE USER [$DisplayName] FROM EXTERNAL PROVIDER WITH OBJECT_ID='$ManagedIdentityPrincipalId';
-    PRINT 'Created contained user through external provider by object ID: $DisplayName'
+    CREATE USER [$DisplayName] WITH SID = $managedIdentitySid, TYPE = E;
+    PRINT 'Created contained external user with explicit object SID: $DisplayName'
 END
 ELSE
 BEGIN
-    PRINT 'User already exists: $DisplayName'
+    PRINT 'User already exists with the expected object SID: $DisplayName'
 END
-
-GO
 
 $roleGrantSql
 "@
@@ -716,7 +723,7 @@ foreach ($identity in $runtimeIdentities) {
         $script:CurrentStage = "Grant $friendlyName access to shared database '$sharedDatabaseName'"
         Grant-IdentityAccessToDatabase `
             -DisplayName $resourceName `
-            -ManagedIdentityPrincipalId $principalId `
+            -ManagedIdentityAppId $appId `
             -SqlServerFqdn $sqlFqdn `
             -DatabaseName $sharedDatabaseName `
             -AccessToken $token `
@@ -728,7 +735,7 @@ foreach ($identity in $runtimeIdentities) {
         $script:CurrentStage = "Grant $friendlyName access to shared database '$sharedDatabaseName'"
         Grant-IdentityAccessToDatabase `
             -DisplayName $resourceName `
-            -ManagedIdentityPrincipalId $principalId `
+            -ManagedIdentityAppId $appId `
             -SqlServerFqdn $sqlFqdn `
             -DatabaseName $sharedDatabaseName `
             -AccessToken $token `
@@ -742,7 +749,7 @@ foreach ($identity in $runtimeIdentities) {
         if ($UseSqlAuthentication) {
             Grant-IdentityAccessToDatabase `
                 -DisplayName $resourceName `
-                -ManagedIdentityPrincipalId $principalId `
+                -ManagedIdentityAppId $appId `
                 -SqlServerFqdn $sqlFqdn `
                 -DatabaseName $dedicatedDatabase.DatabaseName `
                 -AccessToken $token `
@@ -753,7 +760,7 @@ foreach ($identity in $runtimeIdentities) {
         else {
             Grant-IdentityAccessToDatabase `
                 -DisplayName $resourceName `
-                -ManagedIdentityPrincipalId $principalId `
+                -ManagedIdentityAppId $appId `
                 -SqlServerFqdn $sqlFqdn `
                 -DatabaseName $dedicatedDatabase.DatabaseName `
                 -AccessToken $token `
