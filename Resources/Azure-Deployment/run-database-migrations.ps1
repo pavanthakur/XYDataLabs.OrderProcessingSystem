@@ -144,12 +144,22 @@ FROM [inventory].[Products]
 WHERE [TenantId] = @tenantId;
 "@
 
-        $seedOutput = sqlcmd -S $fullyQualifiedDomain -d $DatabaseName -U $AdminUsername -P $AdminPassword -b -Q $seedQuery -h -1 -W
-        if ($LASTEXITCODE -ne 0) {
-            throw "Failed to ensure product baseline for tenant '$tenantCode' in '$DatabaseName'."
+        $databaseConnectionString = "Server=tcp:$fullyQualifiedDomain,1433;Initial Catalog=$DatabaseName;User ID=$AdminUsername;Password=$AdminPassword;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+        $connection = [System.Data.SqlClient.SqlConnection]::new($databaseConnectionString)
+        try {
+            $connection.Open()
+            $command = $connection.CreateCommand()
+            $command.CommandText = $seedQuery
+            $command.CommandTimeout = 60
+            $productCount = [long]$command.ExecuteScalar()
+        }
+        finally {
+            if ($null -ne $connection) {
+                $connection.Dispose()
+            }
         }
 
-        Write-Ok "  [OK] Product baseline ensured for $tenantCode in $DatabaseName ($([string]::Join(' ', @($seedOutput)).Trim()) rows)."
+        Write-Ok "  [OK] Product baseline ensured for $tenantCode in $DatabaseName ($productCount rows)."
     }
 }
 
