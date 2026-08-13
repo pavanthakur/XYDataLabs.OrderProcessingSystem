@@ -495,14 +495,10 @@ function Grant-IdentityAccessToDatabase {
         [switch]$UseSqlAuth
     )
 
-    # Azure SQL maps the token's oid claim to the Microsoft Entra object/principal ID.
-    # It stores that GUID using the byte layout returned
-    # by Guid.ToByteArray(), not the left-to-right hexadecimal form of the GUID.
-    # Supplying the textual hex order creates a valid external principal whose
-    # SID cannot match the token presented by the managed identity.
-    $managedIdentitySid = '0x' + [System.BitConverter]::ToString(
-        ([System.Guid]::Parse($ManagedIdentityPrincipalId)).ToByteArray()
-    ).Replace('-', '')
+    # Azure SQL maps the token's oid claim to the canonical Microsoft Entra
+    # object/principal GUID bytes. Guid.ToByteArray() uses CLR mixed-endian
+    # layout and creates a valid external principal that cannot match the token.
+    $managedIdentitySid = '0x' + ([System.Guid]::Parse($ManagedIdentityPrincipalId)).ToString('N').ToUpperInvariant()
 
     $roleGrantSql = @"
 IF NOT EXISTS (
