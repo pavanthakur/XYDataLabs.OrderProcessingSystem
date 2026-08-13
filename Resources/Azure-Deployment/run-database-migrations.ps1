@@ -105,6 +105,54 @@ if ([string]::IsNullOrWhiteSpace($AdminPassword)) {
 # Build connection string for migrations
 $connectionString = "Server=tcp:$fullyQualifiedDomain,1433;Initial Catalog=$dbName;User ID=$AdminUsername;Password=$AdminPassword;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
 
+function Ensure-TenantProducts {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$DatabaseName,
+
+        [Parameter(Mandatory=$true)]
+        [string[]]$TenantCodes
+    )
+
+    foreach ($tenantCode in $TenantCodes) {
+        if ($tenantCode -notmatch '^[A-Za-z0-9_-]+$') {
+            throw "Unsafe tenant code '$tenantCode' supplied to Azure product seed."
+        }
+
+        $seedQuery = @"
+SET NOCOUNT ON;
+DECLARE @tenantId int;
+
+SELECT @tenantId = [Id]
+FROM [dbo].[Tenants]
+WHERE [Code] = N'$tenantCode';
+
+IF @tenantId IS NULL
+    THROW 51000, N'Tenant row missing for $tenantCode.', 1;
+
+IF NOT EXISTS (SELECT 1 FROM [inventory].[Products] WHERE [TenantId] = @tenantId)
+BEGIN
+    INSERT INTO [inventory].[Products] ([Name], [Description], [Price], [TenantId], [CreatedBy], [CreatedDate])
+    VALUES
+        (N'$tenantCode Laptop', N'Sample laptop for $tenantCode', 500.00, @tenantId, 1, SYSUTCDATETIME()),
+        (N'$tenantCode Phone', N'Sample phone for $tenantCode', 300.00, @tenantId, 1, SYSUTCDATETIME()),
+        (N'$tenantCode Headphones', N'Sample headphones for $tenantCode', 200.00, @tenantId, 1, SYSUTCDATETIME());
+END;
+
+SELECT COUNT_BIG(*) AS ProductCount
+FROM [inventory].[Products]
+WHERE [TenantId] = @tenantId;
+"@
+
+        $seedOutput = sqlcmd -S $fullyQualifiedDomain -d $DatabaseName -U $AdminUsername -P $AdminPassword -b -Q $seedQuery -h -1 -W
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to ensure product baseline for tenant '$tenantCode' in '$DatabaseName'."
+        }
+
+        Write-Ok "  [OK] Product baseline ensured for $tenantCode in $DatabaseName ($([string]::Join(' ', @($seedOutput)).Trim()) rows)."
+    }
+}
+
 # Navigate to solution root
 $scriptDir = Split-Path -Parent $PSCommandPath
 $solutionRoot = Split-Path -Parent (Split-Path -Parent $scriptDir)
@@ -174,6 +222,9 @@ try {
     }
     Write-Ok "Migrations applied via script."
 }
+
+Write-Info "Ensuring shared-database product baselines for TenantA and TenantB..."
+Ensure-TenantProducts -DatabaseName $dbName -TenantCodes @('TenantA', 'TenantB')
 
 Write-Host ""
 Write-Host "[3/3] Verifying database schema..." -ForegroundColor Cyan
@@ -272,6 +323,9 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($tenantCDbExists)) {
             Write-Err "  [ERROR] TenantC dedicated database migration exception: $($_.Exception.Message)"
         exit 1
     }
+
+    Write-Info "  [INFO] Ensuring TenantC dedicated product baseline..."
+    Ensure-TenantProducts -DatabaseName $tenantCDbName -TenantCodes @('TenantC')
 
     # Verify TenantC migrations
     try {
