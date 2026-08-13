@@ -104,6 +104,7 @@ var paymentsName = '${baseName}-pay-${effectiveResourceSuffix}'
 var inventoryName = '${baseName}-inv-${effectiveResourceSuffix}'
 var notificationsName = '${baseName}-notif-${effectiveResourceSuffix}'
 var uiName = '${baseName}-ui-${effectiveResourceSuffix}'
+var frontendWebBaseUrl = 'https://${uiName}.${acaEnvironment.properties.defaultDomain}'
 var commonEnv = [
   {
     name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
@@ -120,6 +121,10 @@ var commonEnv = [
   {
     name: 'ORDERPROCESSING_AZURE_HOST'
     value: 'true'
+  }
+  {
+    name: 'Frontend__WebBaseUrl'
+    value: frontendWebBaseUrl
   }
   {
     name: 'ORDERPROCESSING_EXPECTED_ENVIRONMENT'
