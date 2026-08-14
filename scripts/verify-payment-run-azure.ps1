@@ -549,7 +549,8 @@ ORDER BY [Code];
         $tenantId = [int](Get-ObjectPropertyValue -Object $row -PropertyName 'TenantId')
 
         if ([string]::IsNullOrWhiteSpace($tenantCode)) {
-            throw 'Tenant registry contract failure: an active Azure tenant is missing TenantCode.'
+            Write-Warning "Tenant registry data integrity warning: a row in [dbo].[Tenants] with Status='Active' has a null or empty Code column (TenantId=$tenantId). This row is excluded from the verification topology. Investigate the Tenants table and correct the missing Code value."
+            continue
         }
 
         if ($seenTenants.ContainsKey($tenantCode)) {

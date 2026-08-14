@@ -74,13 +74,19 @@ export class PaymentJourneyRunner {
       const page = await context.newPage();
       page.on("console", (message) => {
         const text = message.text();
+        const messageType = message.type();
 
         if (this.usesLocalParityBrowserNoiseFilter(request.target) && this.isExpectedLocalParityConsoleNoise(text)) {
           log("[browser:expected] Suppressed expected local provider/browser diagnostic.");
           return;
         }
 
-        log(`[browser:${message.type()}] ${text}`);
+        if (this.usesAzureBrowserNoiseFilter(request.target) && this.isExpectedAzureConsoleNoise(text, messageType)) {
+          log(`[browser:azure-suppressed] Suppressed expected Azure provider browser diagnostic (${messageType}).`);
+          return;
+        }
+
+        log(`[browser:${messageType}] ${text}`);
       });
       page.on("pageerror", (error) => {
         log(`[browser:error] ${error.message}`);
@@ -91,6 +97,10 @@ export class PaymentJourneyRunner {
 
         if (this.usesLocalParityBrowserNoiseFilter(request.target) && this.isExpectedLocalParityRequestNoise(url, errorText)) {
           log(`[browser:expected] Suppressed expected local provider/browser request diagnostic for ${this.describeExpectedBrowserNoiseTarget(url)}.`);
+          return;
+        }
+
+        if (this.usesAzureBrowserNoiseFilter(request.target) && this.isExpectedAzureRequestNoise(url, errorText)) {
           return;
         }
 
@@ -994,6 +1004,57 @@ export class PaymentJourneyRunner {
 
   private usesLocalParityBrowserNoiseFilter(target: RuntimeTargetDefinition): boolean {
     return target.runtime === "local" || target.runtime === "docker";
+  }
+
+  private usesAzureBrowserNoiseFilter(target: RuntimeTargetDefinition): boolean {
+    return target.runtime === "azure";
+  }
+
+  private isExpectedAzureConsoleNoise(text: string, messageType: string): boolean {
+    // Razorpay's checkout iframe generates Mixed Content warnings when the payment page
+    // is served over HTTPS but Razorpay's frame loads sub-resources from HTTP or from
+    // domains that refuse cross-origin connections in the sandbox environment.
+    if (messageType === "warning" && text.includes("Mixed Content")) {
+      return true;
+    }
+
+    // ERR_CONNECTION_REFUSED errors logged as browser console errors originate from
+    // Razorpay's checkout frame trying to reach local/sandbox broker endpoints that
+    // are not available in the Azure runner environment.
+    if (messageType === "error" && text.includes("Failed to load resource: net::ERR_CONNECTION_REFUSED")) {
+      return true;
+    }
+
+    return false;
+  }
+
+  private isExpectedAzureRequestNoise(url: string, errorText: string): boolean {
+    // UI telemetry events abort during provider redirect — expected and harmless.
+    if (url.includes("/payment/client-event") && errorText === "net::ERR_ABORTED") {
+      return true;
+    }
+
+    // hCaptcha and other 3rd-party SDK resources abort when the checkout frame
+    // navigates away during the payment flow.
+    if (errorText === "net::ERR_ABORTED" || errorText === "net::ERR_CONNECTION_REFUSED") {
+      let hostname = "";
+      try {
+        hostname = new URL(url).hostname;
+      }
+      catch {
+        return false;
+      }
+
+      if (
+        hostname === "hcaptcha.com" || hostname.endsWith(".hcaptcha.com") ||
+        hostname === "razorpay.com" || hostname.endsWith(".razorpay.com") ||
+        hostname === "checkout-static.razorpay.com" || hostname.endsWith(".checkout-static.razorpay.com")
+      ) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   private isExpectedLocalParityRequestNoise(url: string, errorText: string): boolean {
