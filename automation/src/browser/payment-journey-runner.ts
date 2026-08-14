@@ -181,6 +181,7 @@ export class PaymentJourneyRunner {
       }).catch(() => undefined);
       await submitButton.click();
 
+      let razorpayMockBankChallengeRan = false;
       if (
         paymentConfiguration.collectionMode === "provider_checkout"
         && this.providersMatch(paymentConfiguration.activeProviderType, "Razorpay")
@@ -197,7 +198,7 @@ export class PaymentJourneyRunner {
           await page.goto(callbackUrl.toString(), { waitUntil: "domcontentloaded" });
         }
         else {
-          await this.completeRazorpayHostedCheckout(page, automationPayerEmail, log);
+          razorpayMockBankChallengeRan = await this.completeRazorpayHostedCheckout(page, automationPayerEmail, log);
         }
       }
 
@@ -214,6 +215,7 @@ export class PaymentJourneyRunner {
       let challengeOutcome: ChallengeOutcome = "not-applicable";
       let threeDsSetting: ThreeDsSetting = "unknown";
       if (nextState === "redirect") {
+        // OpenPay 3DS: redirect to provider challenge page
         threeDsSetting = "enabled";
         log("3DS redirect state detected.");
         const continueLink = page.getByRole("link", { name: /Continue to secure verification now/i });
@@ -237,6 +239,12 @@ export class PaymentJourneyRunner {
         log(`Challenge outcome: ${challengeOutcome}. Waiting for callback page.`);
         await page.waitForURL((url) => url.toString().startsWith(request.target.baseUrl), { timeout: 120000 }).catch(() => undefined);
         await callbackHeading.waitFor({ timeout: 120000 });
+      }
+      else if (razorpayMockBankChallengeRan) {
+        // Razorpay 3DS: bank challenge was handled inside the hosted checkout iframe
+        threeDsSetting = "enabled";
+        challengeOutcome = "passed";
+        log("Razorpay mock bank 3DS challenge completed inside hosted checkout.");
       }
       else {
         threeDsSetting = "disabled";
@@ -557,15 +565,20 @@ export class PaymentJourneyRunner {
     });
   }
 
+  /**
+   * Drives the Razorpay hosted checkout flow and returns whether the mock bank 3DS challenge
+   * was presented and completed (true) or whether the checkout was already settled (false, meaning
+   * Razorpay skipped the 3DS step for this card/configuration).
+   */
   private async completeRazorpayHostedCheckout(
     page: import("playwright").Page,
     payerEmail: string,
     log: (message: string) => void
-  ): Promise<void> {
+  ): Promise<boolean> {
     const callbackHeading = page.getByRole("heading", { name: /Review the final payment outcome/i });
     if (await callbackHeading.isVisible().catch(() => false)) {
       log("Razorpay callback page is already visible; hosted checkout steps are not required.");
-      return;
+      return false;
     }
 
     log("Waiting for Razorpay hosted checkout UI.");
@@ -573,6 +586,7 @@ export class PaymentJourneyRunner {
     await this.fillRazorpayCardDetails(page, log);
     await this.dismissRazorpaySaveCardPrompt(page, log);
     await this.completeRazorpayMockBankChallenge(page, log);
+    return true;
   }
 
   private async fillRazorpayContactDetails(

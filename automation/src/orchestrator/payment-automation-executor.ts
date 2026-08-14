@@ -164,6 +164,8 @@ export async function executePaymentAutomationRun(
     let verificationOutcome = options.verify && !options.dryRun ? "pending" : "skipped";
     let cleanupOutcome = resolveCleanupOutcome();
     let evidenceReference = `customerOrderId:${syntheticCustomerOrderId} | runPrefix:${executionItem.executionRunPrefix}`;
+    let outcomeMessage = "";
+    let errorDetail = "";
     let fixtureIds: string[] = [];
     let provisioner: PaymentFixtureProvisioner | undefined;
     let stopAfterCurrentItem = false;
@@ -213,6 +215,7 @@ export async function executePaymentAutomationRun(
         orderReferenceId = journeyResult.orderReferenceId;
         orderAmount = journeyResult.orderAmount;
         orderCurrencyCode = journeyResult.orderCurrencyCode;
+        outcomeMessage = journeyResult.statusMessage;
         evidenceReference = `customerOrderId:${customerOrderId} | orderId:${orderId} | orderRef:${orderReferenceId} | amount:${orderAmount} ${orderCurrencyCode} -> ${journeyResult.finalUrl}`;
         const providerPaymentId = extractProviderPaymentId(journeyResult.finalUrl);
 
@@ -263,7 +266,9 @@ export async function executePaymentAutomationRun(
       }
     }
     catch (error) {
-      journeyOutcome = error instanceof Error ? `failed: ${error.message}` : "failed";
+      const errorMessage = error instanceof Error ? error.message : "Unknown error.";
+      journeyOutcome = `failed: ${errorMessage}`;
+      errorDetail = errorMessage;
       verificationOutcome = "skipped";
       if (!options.allowPartialExecution) {
         stopAfterCurrentItem = true;
@@ -295,6 +300,8 @@ export async function executePaymentAutomationRun(
         orderReferenceId,
         orderAmount,
         orderCurrencyCode,
+        outcomeMessage,
+        errorDetail,
         startedUtc: tenantStartedAt.toISOString(),
         finishedUtc: new Date().toISOString(),
         evidenceReference,
