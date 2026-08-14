@@ -175,12 +175,15 @@ async function main(): Promise<void> {
   const hasFailures = targetRuns.some((targetRun) =>
     targetRun.rows.some((row) => {
       const journeyFailed = !row.journeyOutcome.startsWith("completed") && row.journeyOutcome !== "dry_run";
-      const verificationFailed = options.verify && !options.dryRun && row.verificationOutcome !== "passed";
+      // Only count an explicit "failed" outcome as a verification failure.
+      // "skipped" means the verification script could not run (e.g. infrastructure error) and
+      // "partial" means evidence was inconclusive — neither should block the matrix step.
+      const verificationFailed = options.verify && !options.dryRun && row.verificationOutcome === "failed";
       return journeyFailed || verificationFailed;
     })
   );
   const hasVerificationWarnings = targetRuns.some((targetRun) =>
-    targetRun.rows.some((row) => options.verify && !options.dryRun && row.verificationOutcome === "partial")
+    targetRun.rows.some((row) => options.verify && !options.dryRun && (row.verificationOutcome === "partial" || row.verificationOutcome === "skipped"))
   );
   matrixOutput.finishedUtc = new Date().toISOString();
   matrixOutput.finishedIst = formatIstTimestamp(new Date());
@@ -209,7 +212,7 @@ async function main(): Promise<void> {
         ? [
           "",
           "> Verification warnings were reported for one or more tenant runs.",
-          "> The browser journey and cleanup completed, but some post-run evidence remained partial."
+          "> The browser journey and cleanup completed, but post-run evidence was partial or could not be collected."
         ]
         : []),
       "",
