@@ -148,7 +148,8 @@ jobs:
             & scripts/verify-phase10-azure-tenant-topology.ps1 `
               -Environment '${{ inputs.environment }}' `
               -ResourceGroupName '${{ steps.topology.outputs.resourceGroup }}' `
-              -SummaryPath $summaryPath
+               -RequiredProviderCodes @('OpenPay', 'Razorpay') `
+               -SummaryPath $summaryPath
           }
           catch {
             $verifyError = $_
