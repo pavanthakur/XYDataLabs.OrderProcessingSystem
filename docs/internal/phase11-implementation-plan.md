@@ -21,6 +21,25 @@ Phase 11 removes that remaining operational gap. Its target is:
 
 Phase 11 does not make arbitrary unknown provider implementations data-driven. OpenPay and Razorpay remain supported provider capabilities until another provider adapter, credential schema, callback contract, deterministic test adapter, and operational runbook are approved.
 
+## Phase 11 Entry Corrections From Phase 10 Evidence
+
+The final Phase 10 Azure-dev proof exposed two failure modes that Phase 11 must close before topology mutations or service-store splitting begin:
+
+1. The live Orders host and `/api/v1/Info/tenant-registry` correctly followed `OrderProcessingSystem_Dev.dbo.Tenants`, where `TenantC` had been changed to `Razorpay`. A matching `OpenPay` value in the Tenant C dedicated database did not make the runtime stale; that copy was non-authoritative and made operator diagnosis ambiguous.
+2. Azure Payment Matrix run `31737938342` completed all six tenant/provider browser journeys, challenges, callbacks, and cleanup paths, but every row remained `verification=partial`. Application Insights contained request telemetry, while the custom payment and UI correlation events required by the verifier were absent. A green workflow conclusion therefore did not prove the complete evidence contract.
+
+These are mandatory Phase 11 entry corrections:
+
+- topology fields exist and are read only in the central operations-owned registry; service-owned and tenant-dedicated databases must not carry writable shadow copies of active tier or provider assignment;
+- application runtime identities and payment-test identities receive read-only registry access; only the topology control-plane identity may update topology through a concurrency-checked operation;
+- every topology write records actor, operation ID, old value, new value, registry version, reason, and timestamp in immutable audit history;
+- workflows compare an independent control-plane registry observation with the runtime topology endpoint before business execution and again after cleanup;
+- the Azure payment workflow must prove that its required custom telemetry can be emitted and queried before starting the matrix;
+- `partial`, `inconclusive`, missing telemetry, or uncorrelated evidence cannot satisfy a dev, staging, or promotion gate, even when the browser journey succeeds;
+- alternate-provider matrix coverage must use a run-scoped test override that does not mutate authoritative registry state. Until that override exists, any transitional reassignment must use an operation lock, optimistic concurrency, a durable compensation path, and a mandatory read-back of the original registry version and contract hash.
+
+Phase 11 work cannot claim a clean entry baseline until the Payments host emits the payment/UI custom-event contract, the verifier queries it successfully, and an Azure-dev matrix produces complete rather than partial evidence for every required row.
+
 ## Architecture Invariants
 
 1. The tenant registry is the only source of truth for active status, tenant tier, and assigned payment provider.
@@ -37,6 +56,10 @@ Phase 11 does not make arbitrary unknown provider implementations data-driven. O
 12. An execution filter or debug provider override never truncates discovery, weakens validation, or mutates registry-derived topology.
 13. A tenant-level dedicated tier expands to the complete governed set of service-owned dedicated stores; a partially provisioned dedicated tenant cannot be activated.
 14. Environment and branch mapping is validated before any mutation: `dev -> dev`, `staging -> staging`, and `main -> prod`.
+15. Service-owned stores may consume a versioned topology projection, but they never own or accept writes to active tier/provider truth. A stale shadow topology row is drift, not fallback authority.
+16. Runtime and test identities are registry readers. Direct topology DML outside the control-plane operation boundary is denied and audited.
+17. Workflow success requires both business outcome and complete evidence outcome. `Partial` and `Inconclusive` are non-promotable terminal results unless the workflow was explicitly invoked in diagnostic-only mode.
+18. Cleanup is proven by a post-operation registry version/hash read-back; executing a `finally` block without proving the final state is not sufficient.
 
 ## Logical Component Design
 
@@ -190,6 +213,11 @@ providerContract:
   privateKeyAlias
   webhookSecretAlias
   callbackContract
+telemetryContract:
+  requiredEventNames[]
+  requiredCorrelationFields[]
+  ingestionTargetResourceId
+  maximumIngestionDelay
 contractHash
 ```
 
@@ -244,9 +272,10 @@ All four workflows operate on the same environment, commit SHA, registry version
 ### `02 Azure Runtime Smoke`
 
 - requires the successful `01` evidence version for topology-changing deployments;
-- rediscovers runtime topology and compares it with the activated contract hash;
+- independently reads the central registry snapshot and the runtime topology endpoint, then compares both with the activated registry version and contract hash;
 - verifies each active tenant's tier, service-store reachability, gateway route, and assigned provider configuration;
-- fails before business smoke on missing, stale, inactive, or conflicting topology.
+- fails before business smoke on missing, stale, inactive, conflicting, or shadow-copy-derived topology;
+- records the resolved physical central-registry resource identifier without recording its credentials, so an operator can distinguish the authoritative store from a tenant-dedicated database.
 
 ### `03 Azure Transport Smoke`
 
@@ -259,10 +288,14 @@ All four workflows operate on the same environment, commit SHA, registry version
 
 - discovers and validates all active topology before applying tenant filters;
 - executes the registry-assigned provider by default;
-- may test every validated supported provider through a bounded debug/test override without changing registry truth;
-- restores the original provider assignment in a guaranteed cleanup path when reassignment is part of the test;
+- tests alternate validated providers only through a bounded, run-scoped debug/test override that does not change registry truth;
+- emits and queries a preflight telemetry canary from the same Payments-host path, Application Insights component, and correlation schema used by the matrix;
 - verifies authoritative amount/currency, callback/webhook idempotency, order state, inventory effect, notification effect, and correlation evidence;
+- requires every mandatory verification check to be `PASS`; `Partial` or `Inconclusive` fails standard mode and is allowed only in an explicitly labeled diagnostic-only run that cannot be promoted;
+- rediscovers registry and runtime topology after all journeys and proves that registry version and contract hash are unchanged;
 - emits journey results linked to the topology contract hash.
+
+Until the non-mutating provider override is delivered, the transitional matrix path must acquire the tenant operation lock, capture the original assignment and registry version, use compare-and-swap for both change and restore, register durable cancellation compensation outside the runner process, and fail unless final read-back proves the original version/hash-equivalent topology. A best-effort `finally` reset is not an acceptance mechanism.
 
 Promotion is rejected when workflow evidence references different environment, commit SHA, registry version, or contract hash. A workflow rerun after topology mutation must rediscover and revalidate rather than reuse stale evidence.
 
@@ -312,11 +345,17 @@ Workstream identifiers deliberately avoid `11.5`; the architecture roadmap reser
 - Implement one topology resolver shared by local, Docker, CI, and Azure operator paths.
 - Validate duplicate tenant codes, conflicting records, unsupported tiers/providers, inactive catalog leakage, malformed dedicated connections, missing provider aliases, and missing dedicated contracts.
 - Reconcile every existing active tenant into a clean baseline before enabling topology mutations. Existing drift must be repaired or recorded as a time-bounded exception; it must not be silently imported as valid state.
+- Remove or explicitly classify writable topology shadow columns in tenant-dedicated and service-owned stores. The central registry is the only accepted write/read authority for active tier and provider assignment; projections carry a source registry version and are validated as projections.
+- Introduce immutable registry change history and restrict direct table updates. Runtime services and test automation receive read-only registry permissions; the topology-operator identity is the only writer.
+- Deliver the minimum read-only reconciler here, before mutation workstreams: compare central registry, runtime endpoint, service-store projections, provider aliases, and latest evidence version, and fail closed on disagreement.
+- Define the complete telemetry evidence contract and add a queryable Payments-host canary. Resource existence or request auto-collection alone does not satisfy observability readiness.
 - Extend the generic IaC contract so a topology operation can provision any approved tenant code without editing Bicep or workflow logic.
 - Keep existing sample tenants as seed data only.
 - Add architecture tests that reject tenant-code discrimination and non-dry-run static catalogs.
 
 **Exit gate:** arbitrary tenant codes and multiple dedicated tenants can be represented, validated, and evidenced without script changes.
+
+The exit gate also requires a denied direct-DML proof for runtime/test identities, an audited control-plane update proof, central-registry/runtime parity, and a fully queryable custom telemetry canary.
 
 ### P11-W2 Service-Owned Persistence Foundation
 
@@ -388,7 +427,9 @@ For the service-owned target model, database preparation through identity grant 
 7. Retain the old provider secret during an approved overlap/rollback window.
 8. Remove the old contract only after reconciliation confirms no pending attempts depend on it.
 
-Debug overrides may execute another validated provider path, but must not modify registry truth or bypass contract validation.
+Debug overrides may execute another validated provider path, but must not modify registry truth or bypass contract validation. The override is scoped to one authenticated test run, tenant, provider capability, and expiry; it is rejected in production and cannot be persisted as tenant topology.
+
+Retire the Phase 10 matrix behavior that updates `Tenants.PaymentProviderCode` for alternate-provider coverage. Before retirement, wrap the transitional behavior in the topology operation lock and durable compensation contract described in the workflow section, and treat any unproven restoration as a failed topology operation.
 
 Adding a new provider capability is a code-and-contract change, not a tenant operation. It requires:
 
@@ -413,6 +454,8 @@ Implement a scheduled and on-demand reconciler that compares:
 - provider contracts
 - runtime topology endpoint
 - recent topology evidence
+- registry change audit history and the last completed operation
+- post-workflow registry version/hash read-backs
 
 Detection is read-only by default. Repairs require an approved topology operation; the reconciler must not silently change registry truth, create credentials, move data, or activate tenants.
 
@@ -426,8 +469,13 @@ Classify drift at minimum as:
 - runtime/registry mismatch
 - orphaned dedicated database or secret
 - inactive tenant present in an execution catalog
+- non-authoritative topology shadow disagreeing with the central registry
+- unauthorized or operation-less registry mutation
+- business journey present without complete correlated telemetry evidence
 
 **Exit gate:** drift produces actionable, non-secret evidence and an approved repair path.
+
+The read-only parity subset begins in P11-W1 and gates every later mutation. P11-W6 completes scheduling, repair proposals, orphan detection, and fleet-wide reporting; drift protection is not deferred until after mutation workflows exist.
 
 ### P11-W7 Acceptance And Operational Handover
 
@@ -447,6 +495,11 @@ Run these scenarios in local Docker, CI, Azure dev, and staging before Phase 11 
 - prove dry-run/what-if identifies expected resource and secret identifiers and checks caller capabilities without reading or printing secret values
 - reject concurrent conflicting operations
 - prove no topology operation logs secret values
+- interrupt the alternate-provider matrix at every mutation/callback boundary and prove authoritative provider assignment is unchanged or durably restored
+- change a non-authoritative dedicated-store topology copy and prove runtime remains bound to the central registry while reconciliation reports the shadow drift
+- prove an Application Insights resource with healthy request telemetry but missing payment custom events fails evidence preflight
+- prove `partial` and `inconclusive` verification results cannot produce promotable workflow success
+- emit a telemetry canary, query it by operation/run correlation, and verify required custom dimensions before starting business journeys
 
 Production promotion requires staging evidence plus an explicit approval. Production testing must use bounded, non-destructive verification unless a separately approved tenant migration is being executed.
 
@@ -454,6 +507,7 @@ Production promotion requires staging evidence plus an explicit approval. Produc
 
 ```text
 P11-W1 Topology contract foundation
+        |-- minimum read-only parity reconciler and telemetry evidence gate
         |
         +--> P11-W2 Service-owned persistence foundation
         |         |
@@ -474,7 +528,7 @@ P11-W3 + P11-W4 + P11-W5
 - P11-W2 must establish service storage ownership before P11-W3 claims full dedicated-tenant provisioning.
 - P11-W5 may proceed after P11-W1 because provider capability is independent of database splitting, but final acceptance still requires the service-owned model.
 - P11-W4 cannot start until onboarding, migration, reconciliation, and rollback primitives are proven by P11-W3.
-- P11-W6 detects against the final expected contract and therefore follows the mutation workflows.
+- The minimum read-only P11-W6 parity capability is delivered inside P11-W1 and gates the mutation workflows. P11-W6 follows them to add scheduled fleet reconciliation and governed repair proposals against the final contract.
 - P11-W7 is evidence and operational acceptance, not a development catch-all.
 
 Each workstream must deliver code, tests, Docker evidence, runbook updates, and architecture-conformance checks together. Documentation-only completion is not accepted for an executable workstream.
@@ -490,6 +544,10 @@ Each workstream must deliver code, tests, Docker evidence, runbook updates, and 
 - reject evidence serializers that include configured secret values;
 - validate service and provider catalog uniqueness and supported-version rules;
 - validate workflow `01` through `04` environment, commit, registry-version, and contract-hash handoff.
+- reject runtime or test identities with topology write permission;
+- reject service-owned code that treats a local topology shadow as authority or fallback;
+- reject a standard workflow path that maps `Partial` or `Inconclusive` evidence to success;
+- require the Payments host to register the custom-event telemetry publisher when the Azure telemetry connection is configured.
 
 ### Provisioning scenarios
 
@@ -523,6 +581,9 @@ Each workstream must deliver code, tests, Docker evidence, runbook updates, and 
 - debug override validates the alternate capability but leaves registry assignment unchanged;
 - callback, webhook, idempotency, timeout, retry, and reconciliation behavior remains provider-specific but contract-consistent;
 - a newly implemented provider cannot enter the registry until its complete capability catalog and validation suite pass.
+- alternate-provider matrix execution leaves registry version/provider assignment unchanged;
+- forced runner cancellation cannot strand a temporary provider assignment;
+- restoration with a stale registry version fails safely and creates a repair operation instead of overwriting a newer operator change.
 
 ### Isolation and consistency scenarios
 
@@ -542,6 +603,10 @@ Each workstream must deliver code, tests, Docker evidence, runbook updates, and 
 - branch/environment mismatch fails before Azure mutation;
 - workflow cancellation and rerun resumes safely from durable operation state;
 - production uses approved bounded verification and never depends on sample tenant names.
+- central registry and runtime endpoint are observed independently before and after each workflow;
+- an authoritative-central/non-authoritative-dedicated topology mismatch is diagnosed as shadow drift, not runtime cache drift;
+- request telemetry without required custom payment/UI events fails the telemetry canary and prevents matrix execution;
+- every standard Azure matrix row has complete correlated evidence; diagnostic-only partial evidence is visibly non-promotable.
 
 ## Measurable Phase 11 Completion Gates
 
@@ -562,6 +627,7 @@ Phase 11 is complete only when all gates pass independently:
 - both tier transitions and provider rollback pass;
 - duplicate/retried operations produce one authoritative result;
 - workflows `01` through `04` complete against the same topology contract and all active tenants.
+- workflow `04` leaves registry version and assigned providers unchanged and reports zero `Partial` or `Inconclusive` mandatory checks.
 
 ### Data and isolation acceptance
 
@@ -577,6 +643,9 @@ Phase 11 is complete only when all gates pass independently:
 - failure injection proves missing configuration, authorization denial, transient failure, stale version, and post-activation rollback classifications;
 - each operation emits the required evidence packet with environment, commit, contract hash, registry version, workflow URL, and timestamps;
 - no secret value appears in logs or artifacts.
+- direct topology DML by runtime/test identities is denied, while every approved update is attributable to one topology operation and actor;
+- the telemetry canary and all required payment/UI correlation events are queryable within the declared ingestion bound;
+- a green standard workflow always means complete business and evidence contracts, never journey-only success.
 
 ### Deployment readiness
 
@@ -594,6 +663,9 @@ Phase 11 is complete only when all gates pass independently:
 - Never delete the current database, current provider contract, or last known-good evidence during target preparation.
 - Post-activation verification failure must automatically stop promotion and invoke the declared rollback or mark the operation for manual intervention.
 - Cleanup is a separate approved operation and cannot be an implicit consequence of successful activation.
+- An alternate-provider test must not mutate registry truth. A temporary Phase 10 compatibility mutation is treated as a topology operation and requires durable compensation plus final version/hash proof.
+- Missing required custom telemetry is an evidence-contract failure. Waiting or retrying is appropriate only while the declared ingestion bound remains open; after that bound it fails rather than degrading to promotable `Partial`.
+- If central registry, runtime endpoint, and a service/dedicated-store shadow disagree, central registry remains authoritative, promotion stops, and reconciliation identifies the writer and repair path. Operators must not update multiple databases to make screenshots agree.
 
 ## Evidence Contract
 
@@ -611,6 +683,12 @@ migrationStatus
 identityGrantStatus
 providerContractStatus
 runtimeValidationStatus
+registryVersionBefore
+registryVersionAfter
+runtimeContractHashBefore
+runtimeContractHashAfter
+telemetryCanaryStatus
+evidenceCompletenessStatus
 activationVersion
 rollbackDeadline
 commitSha

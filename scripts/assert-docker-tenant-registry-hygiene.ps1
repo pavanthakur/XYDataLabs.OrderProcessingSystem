@@ -78,6 +78,11 @@ function Assert-DockerTenantRegistryHygiene {
 
     $seenTenants = @{}
     $issues = New-Object 'System.Collections.Generic.List[string]'
+    $expectedTenantContracts = @{
+        TenantA = [pscustomobject]@{ TenantTier = 'SharedPool'; PaymentProviderCode = 'Razorpay' }
+        TenantB = [pscustomobject]@{ TenantTier = 'SharedPool'; PaymentProviderCode = 'Razorpay' }
+        TenantC = [pscustomobject]@{ TenantTier = 'Dedicated'; PaymentProviderCode = 'OpenPay' }
+    }
 
     foreach ($row in $rows) {
         $tenantCode = [string]$row.TenantCode
@@ -111,6 +116,18 @@ function Assert-DockerTenantRegistryHygiene {
 
         if ($SupportedProviders -notcontains $providerCode) {
             $issues.Add("tenant '$tenantCode' has unsupported paymentProviderCode '$providerCode'")
+            continue
+        }
+
+        if ($expectedTenantContracts.ContainsKey($tenantCode)) {
+            $expectedContract = $expectedTenantContracts[$tenantCode]
+            if ($tenantTier -ne [string]$expectedContract.TenantTier) {
+                $issues.Add("tenant '$tenantCode' has tenant-tier drift '$tenantTier' (expected '$($expectedContract.TenantTier)')")
+            }
+
+            if ($providerCode -ne [string]$expectedContract.PaymentProviderCode) {
+                $issues.Add("tenant '$tenantCode' has payment-provider drift '$providerCode' (expected '$($expectedContract.PaymentProviderCode)')")
+            }
         }
     }
 

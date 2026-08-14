@@ -23,6 +23,11 @@ $shortBaseName = $BaseName.Substring(0, [Math]::Min(15, $BaseName.Length))
 $keyVaultName = "kv-$shortBaseName-$envSuffix"
 $supportedTenantTiers = @('SharedPool', 'Dedicated')
 $supportedProviders = @('OpenPay', 'Razorpay')
+$expectedTenantContracts = @{
+    TenantA = [pscustomobject]@{ TenantTier = 'SharedPool'; PaymentProviderCode = 'Razorpay' }
+    TenantB = [pscustomobject]@{ TenantTier = 'SharedPool'; PaymentProviderCode = 'Razorpay' }
+    TenantC = [pscustomobject]@{ TenantTier = 'Dedicated'; PaymentProviderCode = 'OpenPay' }
+}
 $requiredExecutionProviderCodes = @(
     $RequiredProviderCodes |
         ForEach-Object { $_.Trim() } |
@@ -124,6 +129,20 @@ foreach ($tenant in $topology.Items) {
         $detailMessages.Add("TenantTier '$tenantTier' is not supported by the current topology contract.")
     }
 
+    $expectedContract = if (-not [string]::IsNullOrWhiteSpace($tenantCode) -and $expectedTenantContracts.ContainsKey($tenantCode)) {
+        $expectedTenantContracts[$tenantCode]
+    }
+    else {
+        $null
+    }
+
+    if ($null -ne $expectedContract) {
+        if ($tenantTier -ne [string]$expectedContract.TenantTier) {
+            $passed = $false
+            $detailMessages.Add("TenantTier drift detected. Expected '$($expectedContract.TenantTier)' for $tenantCode but runtime reported '$tenantTier'.")
+        }
+    }
+
     if ([string]::IsNullOrWhiteSpace($providerCode)) {
         $passed = $false
         $detailMessages.Add('PaymentProviderCode is missing.')
@@ -131,6 +150,10 @@ foreach ($tenant in $topology.Items) {
     elseif ($supportedProviders -notcontains $providerCode) {
         $passed = $false
         $detailMessages.Add("PaymentProviderCode '$providerCode' is not part of the supported provider catalog.")
+    }
+    elseif ($null -ne $expectedContract -and $providerCode -ne [string]$expectedContract.PaymentProviderCode) {
+        $passed = $false
+        $detailMessages.Add("PaymentProviderCode drift detected. Expected '$($expectedContract.PaymentProviderCode)' for $tenantCode but runtime reported '$providerCode'.")
     }
 
     if (-not [string]::IsNullOrWhiteSpace($tenantCode) -and -not [string]::IsNullOrWhiteSpace($providerCode)) {
