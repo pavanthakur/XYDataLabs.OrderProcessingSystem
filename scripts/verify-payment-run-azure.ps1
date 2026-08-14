@@ -318,16 +318,20 @@ function Invoke-AzureSqlQuery {
         $table = [System.Data.DataTable]::new()
         $table.Load($reader)
 
-        $results = foreach ($dataRow in $table.Rows) {
+        $resultRows = [System.Collections.Generic.List[object]]::new()
+        foreach ($dataRow in $table.Rows) {
             $row = [ordered] @{}
             foreach ($column in $table.Columns) {
                 $row[$column.ColumnName] = $dataRow[$column.ColumnName]
             }
 
-            [PSCustomObject] $row
+            $resultRows.Add([PSCustomObject] $row)
         }
 
-        return @($results)
+        # Use the comma operator to return the array without PowerShell unwrapping it.
+        # Without this, a 0-row result returns $null and a 1-row result returns a scalar,
+        # both of which cause Set-StrictMode -Version Latest to throw on .Count access.
+        return ,$resultRows.ToArray()
     }
     finally {
         if ($connection.State -ne [System.Data.ConnectionState]::Closed) {
@@ -859,13 +863,13 @@ foreach ($row in $uiRows) {
 )
 
 Write-Step "Querying Azure SQL"
-$preflightShared = Invoke-AzureSqlQuery -Database $sharedDbName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
+$preflightShared = @(Invoke-AzureSqlQuery -Database $sharedDbName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
 SELECT t.Code AS Tenant, pp.Use3DSecure AS ThreeDSEnabled
 FROM payments.PaymentProviders pp
 JOIN dbo.Tenants t ON t.Id = pp.TenantId
 WHERE pp.ProviderType = t.PaymentProviderCode
 ORDER BY pp.TenantId;
-"@
+"@)
 
 $preflightTenantC = @(
     foreach ($tenant in $dedicatedTenants) {
@@ -887,7 +891,7 @@ else {
     "ct.CustomerOrderId LIKE N'$escapedRunPrefix%'"
 }
 
-$q2Shared = Invoke-AzureSqlQuery -Database $sharedDbName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
+$q2Shared = @(Invoke-AzureSqlQuery -Database $sharedDbName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
 SELECT t.Code AS Tenant, ct.CustomerOrderId, ct.TransactionId AS ChargeId,
        ct.TransactionType, ct.TransactionStatus AS Status, ct.IsThreeDSecureEnabled AS ThreeDS,
        ct.ThreeDSecureStage, ct.TransactionReferenceId AS Ref,
@@ -896,9 +900,9 @@ FROM payments.CardTransactions ct
 JOIN dbo.Tenants t ON t.Id = ct.TenantId
 WHERE $customerOrderSqlPredicate
 ORDER BY ct.TenantId, ct.CustomerOrderId, ct.Id;
-"@
+"@)
 
-$q5Shared = Invoke-AzureSqlQuery -Database $sharedDbName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
+$q5Shared = @(Invoke-AzureSqlQuery -Database $sharedDbName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
 SELECT t.Code AS Tenant, ct.CustomerOrderId, tsh.Status,
        tsh.ThreeDSecureStage AS Stage, tsh.IsThreeDSecureEnabled AS ThreeDS,
        tsh.TransactionReferenceId AS Ref
@@ -907,7 +911,7 @@ JOIN payments.CardTransactions ct ON ct.Id = tsh.TransactionId
 JOIN dbo.Tenants t ON t.Id = ct.TenantId
 WHERE $customerOrderSqlPredicate
 ORDER BY ct.TenantId, ct.CustomerOrderId, ct.Id, tsh.Id;
-"@
+"@)
 
 $q8Shared = @()
 
