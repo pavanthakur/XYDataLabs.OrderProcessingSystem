@@ -192,11 +192,28 @@ async function main(): Promise<void> {
   matrixOutput.targetCount = targetRuns.length;
   matrixOutput.targetRuns = targetRuns;
 
-  const targetSections = targetRuns.flatMap((targetRun) => [
-    `- ${targetRun.rows[0]?.runtimeTarget ?? "unknown"}: prefix ${targetRun.runPrefix}`,
-    `  report: ${targetRun.reportDirectory}`,
-    `  verification: ${targetRun.verificationSummary}`
-  ]);
+  const targetSections: string[] = [];
+  for (const targetRun of targetRuns) {
+    const runtimeTarget = targetRun.rows[0]?.runtimeTarget ?? "unknown";
+    targetSections.push(`### ${runtimeTarget} (prefix: ${targetRun.runPrefix})`);
+    targetSections.push("");
+    targetSections.push("| Tenant | Provider | Journey | Challenge | Verification | Cleanup |");
+    targetSections.push("|---|---|---|---|---|---|");
+    for (const row of targetRun.rows) {
+      targetSections.push(
+        `| ${row.tenantCode} | ${row.paymentProvider} | ${row.journeyOutcome} | ${row.challengeOutcome} | ${row.verificationOutcome} | ${row.cleanupOutcome} |`
+      );
+    }
+    if (targetRun.rows.length === 0) {
+      targetSections.push("| — | — | no tenants ran | — | — | — |");
+    }
+    const cleanVerificationSummary = stripAnsiCodes(targetRun.verificationSummary);
+    if (cleanVerificationSummary && cleanVerificationSummary !== "Verification skipped.") {
+      targetSections.push("");
+      targetSections.push(`> ${cleanVerificationSummary.replace(/\s*\|\s*/g, "\n> ")}`);
+    }
+    targetSections.push("");
+  }
 
   await writeFile(
     path.join(reportDirectory, "summary.md"),
@@ -241,6 +258,13 @@ async function writeRunMessage(startupLogPath: string, progressLogPath: string, 
   process.stdout.write(`${line}\n`);
   await writeFile(progressLogPath, `${line}\n`, { flag: "a" });
   await writeFile(startupLogPath, `${line}\n`, { flag: "a" });
+}
+
+// eslint-disable-next-line no-control-regex
+const ansiCodePattern = /\x1B\[[0-9;]*[mGKHF]/g;
+
+function stripAnsiCodes(text: string): string {
+  return text.replace(ansiCodePattern, "");
 }
 
 function parseCliOptions(argumentsList: string[]): AzureMatrixOptions {
