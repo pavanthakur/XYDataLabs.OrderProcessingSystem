@@ -861,6 +861,17 @@ async function openProviderCheckout(options: {
       persistPendingPaymentContext(response.razorpay_payment_id, options.pendingPaymentContext);
       options.setSubmitState("success");
 
+      void trackPaymentEvent({
+        eventName: "ui_payment_callback_received",
+        severity: "information",
+        tenantCode: options.activeTenantCode,
+        clientFlowId: options.pendingPaymentContext.clientFlowId,
+        customerOrderId: options.pendingPaymentContext.customerOrderId,
+        paymentId: response.razorpay_payment_id,
+        attemptOrderId: response.razorpay_order_id,
+        paymentStatus: "razorpay_checkout_success"
+      }, { useBeacon: true });
+
       const summarySearchParams = new URLSearchParams({
         tenantCode: options.activeTenantCode,
         razorpay_payment_id: response.razorpay_payment_id,

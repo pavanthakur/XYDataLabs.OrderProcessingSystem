@@ -187,7 +187,7 @@ function Get-RegexValue {
 function Convert-AppInsightsRows {
     param([Parameter(Mandatory = $true)] [object] $Response)
 
-    if ($null -eq $Response.tables -or $Response.tables.Count -eq 0) {
+    if ($null -eq $Response -or $null -eq $Response.tables -or @($Response.tables).Count -eq 0) {
         return @()
     }
 
@@ -197,8 +197,9 @@ function Convert-AppInsightsRows {
 
     foreach ($row in $table.rows) {
         $item = [ordered] @{}
+        $rowArray = @($row)
         for ($index = 0; $index -lt $columnNames.Count; $index++) {
-            $item[$columnNames[$index]] = if ($index -lt $row.Count) { $row[$index] } else { $null }
+            $item[$columnNames[$index]] = if ($index -lt $rowArray.Count) { $rowArray[$index] } else { $null }
         }
 
         $rows += [PSCustomObject] $item
