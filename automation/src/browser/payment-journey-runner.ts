@@ -1061,6 +1061,19 @@ export class PaymentJourneyRunner {
       return true;
     }
 
+    // Razorpay's checkout iframe declares permissions-policy features (accelerometer,
+    // devicemotion, deviceorientation, web-share) that the headless Chromium runner does
+    // not grant. These policy violations and unrecognised-feature warnings carry no signal
+    // about payment flow correctness.
+    if (
+      (messageType === "error" && text.includes("Permissions policy violation:")) ||
+      (messageType === "warning" && text.includes("Unrecognized feature:")) ||
+      (messageType === "warning" && text.includes("devicemotion events are blocked by permissions policy")) ||
+      (messageType === "warning" && text.includes("deviceorientation events are blocked by permissions policy"))
+    ) {
+      return true;
+    }
+
     return false;
   }
 
@@ -1068,6 +1081,22 @@ export class PaymentJourneyRunner {
     // UI telemetry events abort during provider redirect — expected and harmless.
     if (url.includes("/payment/client-event") && errorText === "net::ERR_ABORTED") {
       return true;
+    }
+
+    // Razorpay's PerimeterX anti-bot SDK probes random localhost ports with numeric PNG
+    // paths (e.g. http://localhost:37857/1901812.png) to fingerprint the runner environment.
+    // These connection-refused failures are structural noise that will never succeed on a
+    // CI runner and carry no signal about the payment flow.
+    if (errorText === "net::ERR_CONNECTION_REFUSED") {
+      try {
+        const parsedUrl = new URL(url);
+        if (parsedUrl.hostname === "localhost" || parsedUrl.hostname === "127.0.0.1") {
+          return true;
+        }
+      }
+      catch {
+        // malformed URL — fall through
+      }
     }
 
     // hCaptcha and other 3rd-party SDK resources abort or are blocked by ORB when the
