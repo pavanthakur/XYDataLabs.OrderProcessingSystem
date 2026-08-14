@@ -290,6 +290,8 @@ All four workflows operate on the same environment, commit SHA, registry version
 - executes exactly one journey per active tenant using its registry-assigned provider;
 - rejects provider overrides and never changes `Tenants.PaymentProviderCode` as part of payment verification;
 - emits and queries a preflight telemetry canary from the same Payments-host path, Application Insights component, and correlation schema used by the matrix;
+- scopes persisted order evidence by both tenant and customer-order ID so equal order numbers in separate tenant stores cannot be combined;
+- carries the provider payment ID observed at the browser callback into verification and correlates it across successful Application Insights requests and dependencies, even when the provider's database charge key differs;
 - verifies authoritative amount/currency, callback/webhook idempotency, order state, inventory effect, notification effect, and correlation evidence;
 - requires every mandatory verification check to be `PASS`; `Partial` or `Inconclusive` fails standard mode and is allowed only in an explicitly labeled diagnostic-only run that cannot be promoted;
 - rediscovers registry and runtime topology after all journeys and proves that registry version and contract hash are unchanged;
@@ -548,6 +550,7 @@ Each workstream must deliver code, tests, Docker evidence, runbook updates, and 
 - reject service-owned code that treats a local topology shadow as authority or fallback;
 - reject a standard workflow path that maps `Partial` or `Inconclusive` evidence to success;
 - require the Payments host to register the custom-event telemetry publisher when the Azure telemetry connection is configured.
+- require Action 4 verifier contracts to include tenant code, persisted customer-order ID, and browser-observed provider payment ID.
 
 ### Provisioning scenarios
 

@@ -23,6 +23,15 @@
     Optional persisted customer order ID for an individual automation journey.
     SQL evidence is scoped to this exact ID when supplied.
 
+.PARAMETER TenantCode
+    Optional tenant code for an individual automation journey. When supplied,
+    same-number customer orders belonging to other tenants are excluded.
+
+.PARAMETER ProviderPaymentId
+    Optional payment ID observed in the browser callback. This is the primary
+    request/dependency correlation key when the provider stores a different
+    transaction identifier in the database (for example Razorpay pay_* vs order_*).
+
 .PARAMETER OutputFormat
     Human-readable table output or JSON.
 
@@ -49,6 +58,12 @@ param(
 
     [Parameter(Mandatory = $false)]
     [string] $CustomerOrderId,
+
+    [Parameter(Mandatory = $false)]
+    [string] $TenantCode,
+
+    [Parameter(Mandatory = $false)]
+    [string] $ProviderPaymentId,
 
     [Parameter(Mandatory = $false)]
     [ValidateSet('Table', 'Json')]
@@ -938,6 +953,14 @@ $q8Shared = @(
         }
 )
 
+if (-not [string]::IsNullOrWhiteSpace($TenantCode)) {
+    $scopedTenantCode = $TenantCode.Trim()
+    $q2Shared = @($q2Shared | Where-Object Tenant -eq $scopedTenantCode)
+    $q5Shared = @($q5Shared | Where-Object Tenant -eq $scopedTenantCode)
+    $q2TenantC = @($q2TenantC | Where-Object Tenant -eq $scopedTenantCode)
+    $q5TenantC = @($q5TenantC | Where-Object Tenant -eq $scopedTenantCode)
+}
+
 $threeDsByTenant = @{}
 foreach ($row in $preflightShared) {
     $tenantCode = [string] (Get-ObjectPropertyValue -Object $row -PropertyName 'Tenant')
@@ -995,11 +1018,18 @@ $providerDbChargeRows = @(
                 $transactionType -eq 'charge'
         }
 )
+
 $providerDbChargeIds = @($providerDbChargeRows | Select-Object -ExpandProperty ChargeId -Unique)
+$providerCorrelationIds = if (-not [string]::IsNullOrWhiteSpace($ProviderPaymentId)) {
+    @($ProviderPaymentId.Trim())
+}
+else {
+    @($providerDbChargeIds)
+}
 $transportEvidence = @()
 
-if ($providerDbChargeIds.Count -gt 0) {
-    $providerChargeIdList = Get-KqlQuotedValues -Values $providerDbChargeIds
+if ($providerCorrelationIds.Count -gt 0) {
+    $providerChargeIdList = Get-KqlQuotedValues -Values $providerCorrelationIds
     $transportQuery = @"
 union isfuzzy=true
 (
@@ -1026,7 +1056,7 @@ dependencies
     try {
         $transportRows = @(Convert-AppInsightsRows -Response (Invoke-AppInsightsQuery -Query $transportQuery))
         $transportEvidence = @(
-            foreach ($providerChargeId in $providerDbChargeIds) {
+            foreach ($providerChargeId in $providerCorrelationIds) {
                 $matchingRows = @(
                     $transportRows |
                         Where-Object {
@@ -1175,6 +1205,9 @@ $transportApiEvents = @(
         }
 
         $dbRow = $providerDbChargeRows | Where-Object ChargeId -eq $evidence.ChargeId | Select-Object -First 1
+        if ($null -eq $dbRow -and $providerDbChargeRows.Count -eq 1) {
+            $dbRow = $providerDbChargeRows | Select-Object -First 1
+        }
         if ($null -eq $dbRow) {
             continue
         }
@@ -1519,9 +1552,9 @@ $checks['Q9 bleed'] = Convert-CheckResult -Expected '0' -Actual ([string] @($q9S
 
 $correlatedTransportCount = @($transportEvidence | Where-Object Correlated).Count
 $checks['Provider payment IDs -> request/dependency correlation'] = Convert-CheckResult `
-    -Expected ([string]$providerDbChargeIds.Count) `
+    -Expected ([string]$providerCorrelationIds.Count) `
     -Actual ([string]$correlatedTransportCount) `
-    -Outcome $(if ($providerDbChargeIds.Count -gt 0 -and $correlatedTransportCount -eq $providerDbChargeIds.Count) { 'PASS' } else { 'FAIL' })
+    -Outcome $(if ($providerCorrelationIds.Count -gt 0 -and $correlatedTransportCount -eq $providerCorrelationIds.Count) { 'PASS' } else { 'FAIL' })
 
 if ($apiChargeEvents.Count -eq 0) {
     $checks['API log -> DB charge IDs'] = Convert-CheckResult -Expected 'App Insights charge rows' -Actual 'No API charge rows returned for the selected run prefix' -Outcome 'INCONCLUSIVE'

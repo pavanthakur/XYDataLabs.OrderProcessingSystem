@@ -7,7 +7,9 @@ export interface VerificationRequest {
   environment: EnvironmentName;
   profile: RuntimeProfile;
   runPrefix: string;
+  tenantCode?: string;
   customerOrderId?: string;
+  providerPaymentId?: string;
 }
 
 export interface VerificationResult {

@@ -214,6 +214,7 @@ export async function executePaymentAutomationRun(
         orderAmount = journeyResult.orderAmount;
         orderCurrencyCode = journeyResult.orderCurrencyCode;
         evidenceReference = `customerOrderId:${customerOrderId} | orderId:${orderId} | orderRef:${orderReferenceId} | amount:${orderAmount} ${orderCurrencyCode} -> ${journeyResult.finalUrl}`;
+        const providerPaymentId = extractProviderPaymentId(journeyResult.finalUrl);
 
         if (options.verify) {
           try {
@@ -230,7 +231,9 @@ export async function executePaymentAutomationRun(
               environment: target.environment,
               profile: target.profile,
               runPrefix: executionItem.executionRunPrefix,
-              customerOrderId
+              tenantCode: executionItem.tenantCode,
+              customerOrderId,
+              providerPaymentId
             });
 
             verificationOutcome = verificationResult.outcome;
@@ -331,6 +334,18 @@ export async function executePaymentAutomationRun(
   }
 
   return output;
+}
+
+function extractProviderPaymentId(finalUrl: string): string | undefined {
+  try {
+    const callbackUrl = new URL(finalUrl);
+    return callbackUrl.searchParams.get("razorpay_payment_id")
+      ?? callbackUrl.searchParams.get("id")
+      ?? undefined;
+  }
+  catch {
+    return undefined;
+  }
 }
 
 function applyTenantLimit(
