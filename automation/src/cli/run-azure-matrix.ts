@@ -210,7 +210,12 @@ async function main(): Promise<void> {
     const cleanVerificationSummary = stripAnsiCodes(targetRun.verificationSummary);
     if (cleanVerificationSummary && cleanVerificationSummary !== "Verification skipped.") {
       targetSections.push("");
-      targetSections.push(`> ${cleanVerificationSummary.replace(/\s*\|\s*/g, "\n> ")}`);
+      for (const segment of cleanVerificationSummary.split(" | ")) {
+        const trimmed = segment.trim();
+        if (trimmed) {
+          targetSections.push(`> ${trimmed}`);
+        }
+      }
     }
     targetSections.push("");
   }

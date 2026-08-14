@@ -82,6 +82,7 @@ export class PaymentJourneyRunner {
         }
 
         if (this.usesAzureBrowserNoiseFilter(request.target) && this.isExpectedAzureConsoleNoise(text, messageType)) {
+          log(`[browser:azure-suppressed] Suppressed expected Azure provider browser diagnostic (${messageType}).`);
           return;
         }
 
@@ -1035,11 +1036,22 @@ export class PaymentJourneyRunner {
 
     // hCaptcha and other 3rd-party SDK resources abort when the checkout frame
     // navigates away during the payment flow.
-    if (
-      (url.includes("hcaptcha.com") || url.includes("checkout-static") || url.includes("razorpay.com")) &&
-      (errorText === "net::ERR_ABORTED" || errorText === "net::ERR_CONNECTION_REFUSED")
-    ) {
-      return true;
+    if (errorText === "net::ERR_ABORTED" || errorText === "net::ERR_CONNECTION_REFUSED") {
+      let hostname = "";
+      try {
+        hostname = new URL(url).hostname;
+      }
+      catch {
+        return false;
+      }
+
+      if (
+        hostname === "hcaptcha.com" || hostname.endsWith(".hcaptcha.com") ||
+        hostname === "razorpay.com" || hostname.endsWith(".razorpay.com") ||
+        hostname === "checkout-static.razorpay.com" || hostname.endsWith(".checkout-static.razorpay.com")
+      ) {
+        return true;
+      }
     }
 
     return false;
