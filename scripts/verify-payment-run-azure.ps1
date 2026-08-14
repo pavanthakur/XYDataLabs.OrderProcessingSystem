@@ -19,6 +19,10 @@
     Optional logical run prefix such as OR-1-2ndApr. If omitted and exactly one
     prefix is found in today's API traces, that prefix is used automatically.
 
+.PARAMETER CustomerOrderId
+    Optional persisted customer order ID for an individual automation journey.
+    SQL evidence is scoped to this exact ID when supplied.
+
 .PARAMETER OutputFormat
     Human-readable table output or JSON.
 
@@ -42,6 +46,9 @@ param(
 
     [Parameter(Mandatory = $false)]
     [string] $RunPrefix,
+
+    [Parameter(Mandatory = $false)]
+    [string] $CustomerOrderId,
 
     [Parameter(Mandatory = $false)]
     [ValidateSet('Table', 'Json')]
@@ -355,6 +362,12 @@ function Get-KqlQuotedValues {
     }
 
     return ($normalizedValues | ForEach-Object { "'{0}'" -f $_.Replace("'", "''") }) -join ', '
+}
+
+function ConvertTo-SqlStringLiteral {
+    param([Parameter(Mandatory = $true)][string]$Value)
+
+    return $Value.Replace("'", "''")
 }
 
 function Ensure-AzureSqlFirewallAccess {
@@ -834,17 +847,29 @@ $preflightShared = Invoke-AzureSqlQuery -Database $sharedDbName -UserName $sqlAd
 SELECT t.Code AS Tenant, pp.Use3DSecure AS ThreeDSEnabled
 FROM payments.PaymentProviders pp
 JOIN dbo.Tenants t ON t.Id = pp.TenantId
+WHERE pp.ProviderType = t.PaymentProviderCode
 ORDER BY pp.TenantId;
 "@
 
 $preflightTenantC = @(
     foreach ($tenant in $dedicatedTenants) {
+        $assignedProviderCode = ConvertTo-SqlStringLiteral -Value $tenant.PaymentProviderCode
         Invoke-AzureSqlQuery -Database $tenant.DedicatedDatabaseName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
 SELECT '$($tenant.TenantCode)' AS Tenant, pp.Use3DSecure AS ThreeDSEnabled
-FROM payments.PaymentProviders pp;
+FROM payments.PaymentProviders pp
+WHERE pp.ProviderType = N'$assignedProviderCode';
 "@
     }
 )
+
+$customerOrderSqlPredicate = if (-not [string]::IsNullOrWhiteSpace($CustomerOrderId)) {
+    $escapedCustomerOrderId = ConvertTo-SqlStringLiteral -Value $CustomerOrderId.Trim()
+    "ct.CustomerOrderId = N'$escapedCustomerOrderId'"
+}
+else {
+    $escapedRunPrefix = ConvertTo-SqlStringLiteral -Value $selectedRunPrefix
+    "ct.CustomerOrderId LIKE N'$escapedRunPrefix%'"
+}
 
 $q2Shared = Invoke-AzureSqlQuery -Database $sharedDbName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
 SELECT t.Code AS Tenant, ct.CustomerOrderId, ct.TransactionId AS ChargeId,
@@ -853,7 +878,7 @@ SELECT t.Code AS Tenant, ct.CustomerOrderId, ct.TransactionId AS ChargeId,
        ct.IsTransactionSuccess AS OK, ct.CreatedDate
 FROM payments.CardTransactions ct
 JOIN dbo.Tenants t ON t.Id = ct.TenantId
-WHERE ct.CustomerOrderId LIKE '$selectedRunPrefix%'
+WHERE $customerOrderSqlPredicate
 ORDER BY ct.TenantId, ct.CustomerOrderId, ct.Id;
 "@
 
@@ -864,7 +889,7 @@ SELECT t.Code AS Tenant, ct.CustomerOrderId, tsh.Status,
 FROM payments.TransactionStatusHistories tsh
 JOIN payments.CardTransactions ct ON ct.Id = tsh.TransactionId
 JOIN dbo.Tenants t ON t.Id = ct.TenantId
-WHERE ct.CustomerOrderId LIKE '$selectedRunPrefix%'
+WHERE $customerOrderSqlPredicate
 ORDER BY ct.TenantId, ct.CustomerOrderId, ct.Id, tsh.Id;
 "@
 
@@ -878,7 +903,7 @@ SELECT '$($tenant.TenantCode)' AS Tenant, ct.CustomerOrderId, ct.TransactionId A
        ct.ThreeDSecureStage, ct.TransactionReferenceId AS Ref,
        ct.IsTransactionSuccess AS OK, ct.CreatedDate
 FROM payments.CardTransactions ct
-WHERE ct.CustomerOrderId LIKE '$selectedRunPrefix%'
+WHERE $customerOrderSqlPredicate
 ORDER BY ct.CustomerOrderId, ct.Id;
 "@
     }
@@ -891,7 +916,7 @@ SELECT '$($tenant.TenantCode)' AS Tenant, ct.CustomerOrderId, tsh.Status, tsh.Th
        tsh.IsThreeDSecureEnabled AS ThreeDS, tsh.TransactionReferenceId AS Ref
 FROM payments.TransactionStatusHistories tsh
 JOIN payments.CardTransactions ct ON ct.Id = tsh.TransactionId
-WHERE ct.CustomerOrderId LIKE '$selectedRunPrefix%'
+WHERE $customerOrderSqlPredicate
 ORDER BY ct.CustomerOrderId, ct.Id, tsh.Id;
 "@
     }
@@ -1357,6 +1382,13 @@ foreach ($chargeEvent in $apiChargeEvents) {
             Select-Object -First 1
     }
 
+    $chargeThreeDsEnabled = if ($null -ne $dbRow) {
+        [int](Get-ObjectPropertyValue -Object $dbRow -PropertyName 'ThreeDS')
+    }
+    else {
+        [int]$threeDsByTenant[$chargeEvent.Tenant]
+    }
+
     [PSCustomObject] @{
         ChargeId = $chargeEvent.ChargeId
         Tenant = $chargeEvent.Tenant
@@ -1364,8 +1396,8 @@ foreach ($chargeEvent in $apiChargeEvents) {
         InDb = ($null -ne $dbRow)
         DbStatus = if ($null -ne $dbRow) { [string] (Get-ObjectPropertyValue -Object $dbRow -PropertyName 'Status') } else { '' }
         DbStage = if ($null -ne $dbRow) { [string] (Get-ObjectPropertyValue -Object $dbRow -PropertyName 'ThreeDSecureStage') } else { '' }
-        ThreeDSEnabled = $threeDsByTenant[$chargeEvent.Tenant]
-        UiCallbackExpected = ($threeDsByTenant[$chargeEvent.Tenant] -eq 1) -and (-not ($chargeEvent.ChargeId -match '^order_'))
+        ThreeDSEnabled = $chargeThreeDsEnabled
+        UiCallbackExpected = ($chargeThreeDsEnabled -eq 1) -and (-not ($chargeEvent.ChargeId -match '^order_'))
         UiCallbackLogged = ($uiMatches.Count -gt 0)
         UiCorrelationMode = $uiCorrelationMode
         UiEventNames = @($uiEventNames)

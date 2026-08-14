@@ -87,6 +87,8 @@ export class PowerShellVerificationAdapter implements VerificationAdapter {
       request.environment,
       "-RunPrefix",
       request.runPrefix,
+      "-CustomerOrderId",
+      request.customerOrderId ?? "",
       "-OutputFormat",
       "Json",
       "-PreQueryDelaySeconds",
