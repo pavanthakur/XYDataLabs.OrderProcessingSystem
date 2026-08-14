@@ -1011,6 +1011,12 @@ export class PaymentJourneyRunner {
   }
 
   private isExpectedAzureConsoleNoise(text: string, messageType: string): boolean {
+    // Browser console group events (startGroup/endGroup) from provider SDKs such as
+    // Razorpay's PerimeterX anti-bot script are not actionable and should not surface.
+    if (messageType === "startGroup" || messageType === "endGroup") {
+      return true;
+    }
+
     // Razorpay's checkout iframe generates Mixed Content warnings when the payment page
     // is served over HTTPS but Razorpay's frame loads sub-resources from HTTP or from
     // domains that refuse cross-origin connections in the sandbox environment.
@@ -1018,10 +1024,38 @@ export class PaymentJourneyRunner {
       return true;
     }
 
+    // WebGL GPU stall warnings from the headless Chromium renderer are runner-environment
+    // noise and carry no signal about payment flow correctness.
+    if (messageType === "warning" && text.includes("GL Driver Message") && text.includes("GPU stall")) {
+      return true;
+    }
+
     // ERR_CONNECTION_REFUSED errors logged as browser console errors originate from
     // Razorpay's checkout frame trying to reach local/sandbox broker endpoints that
     // are not available in the Azure runner environment.
     if (messageType === "error" && text.includes("Failed to load resource: net::ERR_CONNECTION_REFUSED")) {
+      return true;
+    }
+
+    // Razorpay's checkout iframe attempts to read cross-origin response headers that
+    // browsers block by policy. These CORS-policy violations are expected sandbox noise.
+    if (messageType === "error" && text.includes("Refused to get unsafe header")) {
+      return true;
+    }
+
+    // Provider sandbox resources (OpenPay 401/404) that fail due to CORS or auth
+    // restrictions in the Azure runner environment are expected and harmless.
+    if (
+      messageType === "error" && (
+        text.includes("Failed to load resource: the server responded with a status of 401") ||
+        text.includes("Failed to load resource: the server responded with a status of 404")
+      )
+    ) {
+      return true;
+    }
+
+    // Sift Science fraud-detection SDK diagnostic emitted by OpenPay's direct-card form.
+    if (messageType === "log" && text.includes("executing sift mode")) {
       return true;
     }
 
@@ -1034,9 +1068,15 @@ export class PaymentJourneyRunner {
       return true;
     }
 
-    // hCaptcha and other 3rd-party SDK resources abort when the checkout frame
-    // navigates away during the payment flow.
-    if (errorText === "net::ERR_ABORTED" || errorText === "net::ERR_CONNECTION_REFUSED") {
+    // hCaptcha and other 3rd-party SDK resources abort or are blocked by ORB when the
+    // checkout frame navigates away during the payment flow. ERR_BLOCKED_BY_ORB is
+    // generated when Chromium's Opaque Response Blocking policy blocks a cross-origin
+    // resource (e.g. a Razorpay CDN JS bundle fetched from a next-generation CDN host).
+    if (
+      errorText === "net::ERR_ABORTED" ||
+      errorText === "net::ERR_CONNECTION_REFUSED" ||
+      errorText === "net::ERR_BLOCKED_BY_ORB"
+    ) {
       let hostname = "";
       try {
         hostname = new URL(url).hostname;

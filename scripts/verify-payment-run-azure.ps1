@@ -869,6 +869,7 @@ SELECT t.Code AS Tenant, pp.Use3DSecure AS ThreeDSEnabled
 FROM payments.PaymentProviders pp
 JOIN dbo.Tenants t ON t.Id = pp.TenantId
 WHERE pp.ProviderType = t.PaymentProviderCode
+  AND t.Status = 'Active'
 ORDER BY pp.TenantId;
 "@)
 
