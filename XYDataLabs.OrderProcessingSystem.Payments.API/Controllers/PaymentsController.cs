@@ -1,4 +1,5 @@
 using Asp.Versioning;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Logging;
@@ -93,6 +94,7 @@ public sealed class PaymentsController : ControllerBase
     }
 
     [HttpPost("/payment/client-event")]
+    [AllowAnonymous]
     public IActionResult LogPaymentClientEvent([FromBody] PaymentClientEventRequest? request)
     {
         if (request is null || string.IsNullOrWhiteSpace(request.EventName))

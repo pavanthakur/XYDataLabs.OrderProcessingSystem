@@ -73,9 +73,13 @@ async function main(): Promise<void> {
   const progressLogPath = path.join(reportDirectory, "progress.log");
   const currentStepPath = path.join(reportDirectory, "current-step.txt");
   const normalizedProviders = normalizeRequestedProviders(options.requestedProviders);
-  const effectiveProviders = normalizedProviders.length > 0
-    ? normalizedProviders
-    : getDefaultMatrixProviders();
+  if (normalizedProviders.length > 0) {
+    throw new Error(
+      "Azure payment automation follows each tenant's authoritative provider assignment. " +
+      "Provider overrides are not supported by the promotion workflow."
+    );
+  }
+  const effectiveProviders: string[] = [];
   const matrixOutput: AzureMatrixOutput = {
     matrixRunId,
     reportDirectory,
@@ -97,10 +101,10 @@ async function main(): Promise<void> {
   await writeFile(rootMarkerPath, `${reportDirectory}\n`, "utf8");
   await writeFile(runPlanPath, [
     "Azure payment automation matrix run",
-    "Goal: confirm Azure target discovery and browser automation flow across the active tenant/provider matrix.",
+    "Goal: confirm Azure target discovery and browser automation flow for every active tenant using its assigned provider.",
     `Environment: ${environmentKey}`,
     `Targets: ${options.targets.join(", ")}`,
-    `Requested providers: ${effectiveProviders.join(", ")}`,
+    "Provider selection: authoritative tenant registry assignment (no override)",
     `Tenant selection: ${options.tenantCodes.length > 0 ? options.tenantCodes.join(", ") : "runtime default"}`,
     `Tenant limit: ${options.tenantLimit ?? "none"}`,
     `Dry run: ${options.dryRun ? "yes" : "no"}`,
@@ -116,7 +120,7 @@ async function main(): Promise<void> {
     `[${formatIstTimestamp(new Date())}] Matrix startup`,
     `environment=${environmentKey}`,
     `targets=${options.targets.join(",")}`,
-    `requestedProviders=${effectiveProviders.join(",")}`,
+    "providerSelection=authoritative-tenant-registry",
     `tenantCodes=${options.tenantCodes.length > 0 ? options.tenantCodes.join(",") : "runtime default"}`,
     `tenantLimit=${options.tenantLimit ?? "none"}`,
     `dryRun=${options.dryRun}`,
@@ -171,7 +175,7 @@ async function main(): Promise<void> {
   const hasFailures = targetRuns.some((targetRun) =>
     targetRun.rows.some((row) => {
       const journeyFailed = !row.journeyOutcome.startsWith("completed") && row.journeyOutcome !== "dry_run";
-      const verificationFailed = options.verify && !options.dryRun && row.verificationOutcome === "failed";
+      const verificationFailed = options.verify && !options.dryRun && row.verificationOutcome !== "passed";
       return journeyFailed || verificationFailed;
     })
   );
@@ -334,10 +338,6 @@ function normalizeRequestedProviders(requestedProviders: string[]): string[] {
         .filter(Boolean)
     )
   );
-}
-
-function getDefaultMatrixProviders(): string[] {
-  return ["OpenPay", "Razorpay"];
 }
 
 void main().catch((error: unknown) => {

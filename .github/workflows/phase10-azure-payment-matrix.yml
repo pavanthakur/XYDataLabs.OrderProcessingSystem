@@ -148,7 +148,6 @@ jobs:
             & scripts/verify-phase10-azure-tenant-topology.ps1 `
               -Environment '${{ inputs.environment }}' `
               -ResourceGroupName '${{ steps.topology.outputs.resourceGroup }}' `
-              -RequiredProviderCodes @('OpenPay', 'Razorpay') `
               -SummaryPath $summaryPath
           }
           catch {
@@ -171,7 +170,7 @@ jobs:
         working-directory: automation
         run: npx playwright install chromium
 
-      - name: Run all-tenant Azure payment matrix
+      - name: Run all tenants with assigned payment providers
         shell: bash
         env:
           XYDATALABS_RUNTIME_TARGET_AZURE_DEV_BASE_URL: ${{ steps.topology.outputs.uiBaseUrl }}
@@ -190,6 +189,20 @@ jobs:
             --target "${{ steps.topology.outputs.targetKey }}" \
             --tenant-timeout-ms "${{ inputs.tenantTimeoutMs }}" \
             "${EXTRA_ARGS[@]}"
+
+      - name: Verify assigned topology remains unchanged
+        if: always()
+        shell: pwsh
+        run: |
+          $summaryPath = Join-Path $PWD 'TestResults/Playwright/azure-https/topology-postflight-${{ inputs.environment }}-${{ github.run_id }}.md'
+          & scripts/verify-phase10-azure-tenant-topology.ps1 `
+            -Environment '${{ inputs.environment }}' `
+            -ResourceGroupName '${{ steps.topology.outputs.resourceGroup }}' `
+            -SummaryPath $summaryPath
+
+          if (Test-Path -LiteralPath $summaryPath) {
+            Get-Content -LiteralPath $summaryPath | Add-Content -Path $env:GITHUB_STEP_SUMMARY
+          }
 
       - name: Resolve Azure matrix run packet
         id: run_packet

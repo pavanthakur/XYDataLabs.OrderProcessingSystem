@@ -205,6 +205,7 @@ function Invoke-AppInsightsQuery {
                 --app $appInsightsName `
                 --resource-group $resourceGroup `
                 --analytics-query $normalizedQuery `
+                --offset 7d `
                 --output json `
                 --only-show-errors
 
@@ -847,7 +848,7 @@ FROM payments.PaymentProviders pp;
 
 $q2Shared = Invoke-AzureSqlQuery -Database $sharedDbName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
 SELECT t.Code AS Tenant, ct.CustomerOrderId, ct.TransactionId AS ChargeId,
-       ct.TransactionStatus AS Status, ct.IsThreeDSecureEnabled AS ThreeDS,
+       ct.TransactionType, ct.TransactionStatus AS Status, ct.IsThreeDSecureEnabled AS ThreeDS,
        ct.ThreeDSecureStage, ct.TransactionReferenceId AS Ref,
        ct.IsTransactionSuccess AS OK, ct.CreatedDate
 FROM payments.CardTransactions ct
@@ -873,7 +874,7 @@ $q2TenantC = @(
     foreach ($tenant in $dedicatedTenants) {
         Invoke-AzureSqlQuery -Database $tenant.DedicatedDatabaseName -UserName $sqlAdminUser -Password $sqlAdminPassword -Query @"
 SELECT '$($tenant.TenantCode)' AS Tenant, ct.CustomerOrderId, ct.TransactionId AS ChargeId,
-       ct.TransactionStatus AS Status, ct.IsThreeDSecureEnabled AS ThreeDS,
+       ct.TransactionType, ct.TransactionStatus AS Status, ct.IsThreeDSecureEnabled AS ThreeDS,
        ct.ThreeDSecureStage, ct.TransactionReferenceId AS Ref,
        ct.IsTransactionSuccess AS OK, ct.CreatedDate
 FROM payments.CardTransactions ct
@@ -959,6 +960,86 @@ if ($expectedOrdersByTenant.Count -eq 0) {
 $sharedDbChargeIds = @($q2Shared | Select-Object -ExpandProperty ChargeId)
 $tenantCDbChargeIds = @($q2TenantC | Select-Object -ExpandProperty ChargeId)
 $allDbChargeIds = @($sharedDbChargeIds + $tenantCDbChargeIds)
+$allDbChargeRows = @(@($q2Shared) + @($q2TenantC))
+$providerDbChargeRows = @(
+    $allDbChargeRows |
+        Where-Object {
+            $chargeId = [string](Get-ObjectPropertyValue -Object $_ -PropertyName 'ChargeId')
+            $transactionType = [string](Get-ObjectPropertyValue -Object $_ -PropertyName 'TransactionType')
+            -not [string]::IsNullOrWhiteSpace($chargeId) -and
+                $transactionType -eq 'charge'
+        }
+)
+$providerDbChargeIds = @($providerDbChargeRows | Select-Object -ExpandProperty ChargeId -Unique)
+$transportEvidence = @()
+
+if ($providerDbChargeIds.Count -gt 0) {
+    $providerChargeIdList = Get-KqlQuotedValues -Values $providerDbChargeIds
+    $transportQuery = @"
+union isfuzzy=true
+(
+requests
+| where timestamp >= ago(7d)
+| extend telemetryType = 'request'
+| extend detail = strcat(name, ' ', url)
+| where detail has_any ($providerChargeIdList)
+| where success == true
+| project timestamp, telemetryType, operation_Id, cloud_RoleName, name, resultCode, success, target='', detail
+),
+(
+dependencies
+| where timestamp >= ago(7d)
+| extend telemetryType = 'dependency'
+| extend detail = strcat(name, ' ', data, ' ', target)
+| where detail has_any ($providerChargeIdList)
+| where success == true
+| project timestamp, telemetryType, operation_Id, cloud_RoleName, name, resultCode, success, target, detail
+)
+| order by timestamp asc
+"@
+
+    try {
+        $transportRows = @(Convert-AppInsightsRows -Response (Invoke-AppInsightsQuery -Query $transportQuery))
+        $transportEvidence = @(
+            foreach ($providerChargeId in $providerDbChargeIds) {
+                $matchingRows = @(
+                    $transportRows |
+                        Where-Object {
+                            ([string]$_.detail).IndexOf($providerChargeId, [System.StringComparison]::OrdinalIgnoreCase) -ge 0
+                        }
+                )
+                $requestOperationIds = @(
+                    $matchingRows |
+                        Where-Object telemetryType -eq 'request' |
+                        Select-Object -ExpandProperty operation_Id -Unique
+                )
+                $dependencyOperationIds = @(
+                    $matchingRows |
+                        Where-Object telemetryType -eq 'dependency' |
+                        Select-Object -ExpandProperty operation_Id -Unique
+                )
+                $correlatedOperationIds = @(
+                    $requestOperationIds |
+                        Where-Object { $dependencyOperationIds -contains $_ } |
+                        Sort-Object -Unique
+                )
+
+                [PSCustomObject]@{
+                    ChargeId = $providerChargeId
+                    RequestCount = @($matchingRows | Where-Object telemetryType -eq 'request').Count
+                    DependencyCount = @($matchingRows | Where-Object telemetryType -eq 'dependency').Count
+                    CorrelatedOperationIds = $correlatedOperationIds
+                    Correlated = ($correlatedOperationIds.Count -gt 0)
+                    Rows = @($matchingRows | Select-Object timestamp, telemetryType, operation_Id, cloud_RoleName, name, resultCode, target, detail)
+                }
+            }
+        )
+    }
+    catch {
+        $appInsightsWarnings += "Provider payment transport query failed: $($_.Exception.Message)"
+        Write-Host 'App Insights request/dependency correlation query failed.' -ForegroundColor Yellow
+    }
+}
 $expectedUiTenants = @($expectedOrdersByTenant.Keys | Sort-Object -Unique)
 $expectedUiCustomerOrders = @(
     foreach ($tenantName in $expectedOrdersByTenant.Keys) {
@@ -1060,6 +1141,46 @@ if (@($apiChargeEvents).Count -eq 0 -and @($allDbChargeIds).Count -gt 0) {
             )
         }
     }
+}
+
+$transportApiEvents = @(
+    foreach ($evidence in ($transportEvidence | Where-Object Correlated)) {
+        if (@($apiChargeEvents | Where-Object ChargeId -eq $evidence.ChargeId).Count -gt 0) {
+            continue
+        }
+
+        $dbRow = $providerDbChargeRows | Where-Object ChargeId -eq $evidence.ChargeId | Select-Object -First 1
+        if ($null -eq $dbRow) {
+            continue
+        }
+
+        $evidenceRows = @($evidence.Rows)
+        $timestamp = if ($evidenceRows.Count -gt 0) {
+            [datetimeoffset]($evidenceRows | Sort-Object timestamp | Select-Object -First 1).timestamp
+        }
+        else {
+            [datetimeoffset](Get-ObjectPropertyValue -Object $dbRow -PropertyName 'CreatedDate')
+        }
+        $tenant = [string](Get-ObjectPropertyValue -Object $dbRow -PropertyName 'Tenant')
+        $customerOrderId = [string](Get-ObjectPropertyValue -Object $dbRow -PropertyName 'CustomerOrderId')
+
+        [PSCustomObject]@{
+            Timestamp = $timestamp
+            Tenant = $tenant
+            CustomerOrderId = $customerOrderId
+            ResolvedCustomerOrderId = $customerOrderId
+            RunPrefix = $selectedRunPrefix
+            ResolvedRunPrefix = $selectedRunPrefix
+            ChargeId = [string]$evidence.ChargeId
+            Message = "Provider payment ID correlated through successful requests and dependencies."
+        }
+    }
+)
+
+if ($transportApiEvents.Count -gt 0) {
+    $selectedApiEvents = @($selectedApiEvents + $transportApiEvents | Sort-Object Timestamp)
+    $apiChargeEvents = @($apiChargeEvents + $transportApiEvents | Sort-Object Timestamp)
+    $appInsightsAvailable = $true
 }
 
 $apiChargeIds = @($apiChargeEvents | Select-Object -ExpandProperty ChargeId -Unique)
@@ -1364,6 +1485,12 @@ foreach ($tenantCode in ($expectedOrdersByTenant.Keys | Sort-Object)) {
 $checks['Q8 bleed'] = Convert-CheckResult -Expected '0' -Actual ([string] @($q8Shared).Count) -Outcome $(if (@($q8Shared).Count -eq 0) { 'PASS' } else { 'FAIL' })
 $checks['Q9 bleed'] = Convert-CheckResult -Expected '0' -Actual ([string] @($q9Shared).Count) -Outcome $(if (@($q9Shared).Count -eq 0) { 'PASS' } else { 'FAIL' })
 
+$correlatedTransportCount = @($transportEvidence | Where-Object Correlated).Count
+$checks['Provider payment IDs -> request/dependency correlation'] = Convert-CheckResult `
+    -Expected ([string]$providerDbChargeIds.Count) `
+    -Actual ([string]$correlatedTransportCount) `
+    -Outcome $(if ($providerDbChargeIds.Count -gt 0 -and $correlatedTransportCount -eq $providerDbChargeIds.Count) { 'PASS' } else { 'FAIL' })
+
 if ($apiChargeEvents.Count -eq 0) {
     $checks['API log -> DB charge IDs'] = Convert-CheckResult -Expected 'App Insights charge rows' -Actual 'No API charge rows returned for the selected run prefix' -Outcome 'INCONCLUSIVE'
 }
@@ -1389,6 +1516,7 @@ $report = [PSCustomObject] @{
     AppInsights = [PSCustomObject] @{
         ApiEvidence = @($selectedApiEvents | Select-Object Timestamp, Tenant, ResolvedCustomerOrderId, ChargeId, Message)
         UiEvidence = @($reportedUiEvents | Select-Object Timestamp, Tenant, CustomerOrderId, UiEventName, ChargeId, StatusCode, Message)
+        TransportEvidence = @($transportEvidence)
     }
     Topology = @(
         $tenantTopology |
