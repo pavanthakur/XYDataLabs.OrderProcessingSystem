@@ -1043,12 +1043,14 @@ export class PaymentJourneyRunner {
       return true;
     }
 
-    // Provider sandbox resources (OpenPay 401/404) that fail due to CORS or auth
-    // restrictions in the Azure runner environment are expected and harmless.
+    // OpenPay sandbox resources emit 401/404 errors with an empty reason phrase
+    // (e.g. "status of 401 ()") due to CORS and auth restrictions in the Azure
+    // runner environment. These differ from application-level auth errors which
+    // include a non-empty reason phrase such as "(Unauthorized)" or "(Not Found)".
     if (
       messageType === "error" && (
-        text.includes("Failed to load resource: the server responded with a status of 401") ||
-        text.includes("Failed to load resource: the server responded with a status of 404")
+        text.includes("Failed to load resource: the server responded with a status of 401 ()") ||
+        text.includes("Failed to load resource: the server responded with a status of 404 ()")
       )
     ) {
       return true;
