@@ -297,6 +297,7 @@ Regression runner for `verify-payment-run-azure.ps1`.
 - Replays the Azure verifier as a child script and asserts expected behavior from structured JSON output
 - Guards the staging SQL pass path and, when App Insights evidence is still available, the full log correlation path end-to-end
 - Guards the sparse/no-App-Insights fallback path so missing evidence degrades to `INCONCLUSIVE` instead of crashing
+- Smoke-checks the table-format verifier path so sparse runs do not fail on collection count handling
 
 **Usage**:
 ```powershell
