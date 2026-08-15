@@ -1249,8 +1249,8 @@ $apiChargeIds = @($apiChargeEvents | Select-Object -ExpandProperty ChargeId -Uni
 $knownUiChargeIds = @($apiChargeIds + $allDbChargeIds | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)
 $selectedUiEvents = @(Get-ScopedUiEvents -Events @($uiEvents) -KnownChargeIds $knownUiChargeIds -KnownTenants $expectedUiTenants -KnownCustomerOrders $expectedUiCustomerOrders)
 
-if ($selectedUiEvents.Count -eq 0) {
-    $evidenceChargeIds = if ($apiChargeIds.Count -gt 0) { $apiChargeIds } else { @($allDbChargeIds | Sort-Object -Unique) }
+if (@($selectedUiEvents).Count -eq 0) {
+    $evidenceChargeIds = if (@($apiChargeIds).Count -gt 0) { $apiChargeIds } else { @($allDbChargeIds | Sort-Object -Unique) }
     $evidenceChargeIdList = Get-KqlQuotedValues -Values $evidenceChargeIds
     if (-not [string]::IsNullOrWhiteSpace($evidenceChargeIdList)) {
         $fallbackUiQuery = @"
@@ -1323,11 +1323,11 @@ if ($selectedUiEvents.Count -eq 0) {
     }
 }
 
-if ($selectedApiEvents.Count -gt 0 -or $selectedUiEvents.Count -gt 0) {
+if (@($selectedApiEvents).Count -gt 0 -or @($selectedUiEvents).Count -gt 0) {
     $appInsightsAvailable = $true
 }
 
-if (($apiQueryFailed -or $uiQueryFailed) -and $selectedApiEvents.Count -eq 0 -and $selectedUiEvents.Count -eq 0) {
+if (($apiQueryFailed -or $uiQueryFailed) -and @($selectedApiEvents).Count -eq 0 -and @($selectedUiEvents).Count -eq 0) {
     $appInsightsAvailable = $false
 }
 
@@ -1560,7 +1560,7 @@ $checks['Provider payment IDs -> request/dependency correlation'] = Convert-Chec
     -Actual ([string]$correlatedTransportCount) `
     -Outcome $(if ($providerCorrelationIds.Count -gt 0 -and $correlatedTransportCount -eq $providerCorrelationIds.Count) { 'PASS' } else { 'FAIL' })
 
-if ($apiChargeEvents.Count -eq 0) {
+if (@($apiChargeEvents).Count -eq 0) {
     $checks['API log -> DB charge IDs'] = Convert-CheckResult -Expected 'App Insights charge rows' -Actual 'No API charge rows returned for the selected run prefix' -Outcome 'INCONCLUSIVE'
 }
 else {
@@ -1569,7 +1569,7 @@ else {
 
 $expectedUiCallbacks = @($chargeCorrelation | Where-Object UiCallbackExpected).Count
 $actualUiCallbacks = @($chargeCorrelation | Where-Object { $_.UiCallbackExpected -and $_.UiCallbackLogged }).Count
-if ($apiChargeEvents.Count -eq 0 -and $selectedUiEvents.Count -eq 0) {
+if (@($apiChargeEvents).Count -eq 0 -and @($selectedUiEvents).Count -eq 0) {
     $checks['UI telemetry -> callbacks present where expected'] = Convert-CheckResult -Expected '3DS tenants only' -Actual 'No browser/UI telemetry rows returned for the selected run prefix' -Outcome 'INCONCLUSIVE'
 }
 else {
@@ -1617,7 +1617,7 @@ if (-not $appInsightsAvailable) {
 }
 
 Write-Step 'API evidence'
-if ($selectedApiEvents.Count -eq 0) {
+if (@($selectedApiEvents).Count -eq 0) {
     Write-Host 'No API evidence rows matched the selected run prefix.' -ForegroundColor Yellow
 }
 else {
@@ -1629,7 +1629,7 @@ else {
 }
 
 Write-Step 'UI evidence'
-if ($selectedUiEvents.Count -eq 0) {
+if (@($selectedUiEvents).Count -eq 0) {
     Write-Host 'No UI callback rows matched the selected charge IDs.' -ForegroundColor Yellow
 }
 else {
