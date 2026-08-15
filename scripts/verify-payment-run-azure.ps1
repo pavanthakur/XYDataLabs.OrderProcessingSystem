@@ -328,10 +328,7 @@ function Invoke-AzureSqlQuery {
             $resultRows.Add([PSCustomObject] $row)
         }
 
-        # Use the comma operator to return the array without PowerShell unwrapping it.
-        # Without this, a 0-row result returns $null and a 1-row result returns a scalar,
-        # both of which cause Set-StrictMode -Version Latest to throw on .Count access.
-        return ,$resultRows.ToArray()
+        return @($resultRows.ToArray())
     }
     finally {
         if ($connection.State -ne [System.Data.ConnectionState]::Closed) {
