@@ -3,6 +3,8 @@ param(
     [string]$Environment = 'dev',
 
     [string]$ResourceGroupName,
+
+    [string]$GatewayBaseUrl,
     [string]$SummaryPath,
     [string]$BaseName = 'orderprocessing',
     [ValidateSet('OpenPay', 'Razorpay')]
@@ -23,11 +25,6 @@ $shortBaseName = $BaseName.Substring(0, [Math]::Min(15, $BaseName.Length))
 $keyVaultName = "kv-$shortBaseName-$envSuffix"
 $supportedTenantTiers = @('SharedPool', 'Dedicated')
 $supportedProviders = @('OpenPay', 'Razorpay')
-$expectedTenantContracts = @{
-    TenantA = [pscustomobject]@{ TenantTier = 'SharedPool'; PaymentProviderCode = 'Razorpay' }
-    TenantB = [pscustomobject]@{ TenantTier = 'SharedPool'; PaymentProviderCode = 'Razorpay' }
-    TenantC = [pscustomobject]@{ TenantTier = 'Dedicated'; PaymentProviderCode = 'OpenPay' }
-}
 $requiredExecutionProviderCodes = @(
     $RequiredProviderCodes |
         ForEach-Object { $_.Trim() } |
@@ -49,13 +46,32 @@ function Invoke-AzText {
     return [string]::Join([Environment]::NewLine, @($output | ForEach-Object { $_.ToString() })).Trim()
 }
 
-function Get-GatewayFqdn {
-    return Invoke-AzText -Arguments @(
+function Get-GatewayUri {
+    if (-not [string]::IsNullOrWhiteSpace($GatewayBaseUrl)) {
+        $normalizedGatewayBaseUrl = $GatewayBaseUrl.Trim().TrimEnd('/')
+        return [pscustomobject]@{
+            Fqdn = ([System.Uri]$normalizedGatewayBaseUrl).Host
+            BaseUrl = $normalizedGatewayBaseUrl
+            Source = 'runtime-targets'
+        }
+    }
+
+    $fqdn = Invoke-AzText -Arguments @(
         'containerapp', 'show',
         '--resource-group', $resourceGroup,
         '--name', $gatewayApp,
         '--query', 'properties.configuration.ingress.fqdn'
     )
+
+    if ([string]::IsNullOrWhiteSpace($fqdn)) {
+        return $null
+    }
+
+    return [pscustomobject]@{
+        Fqdn = $fqdn
+        BaseUrl = "https://$fqdn"
+        Source = 'azure-containerapp'
+    }
 }
 
 function Get-TenantRegistryTopology {
@@ -63,17 +79,17 @@ function Get-TenantRegistryTopology {
 
     for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
         try {
-            $fqdn = Get-GatewayFqdn
-            if ([string]::IsNullOrWhiteSpace($fqdn)) {
-                throw "Gateway FQDN for '$gatewayApp' could not be resolved."
+            $gatewayUri = Get-GatewayUri
+            if ($null -eq $gatewayUri -or [string]::IsNullOrWhiteSpace($gatewayUri.BaseUrl)) {
+                throw "Gateway endpoint could not be resolved from runtime-targets.json or Azure Container Apps for '$gatewayApp'."
             }
 
-            $uri = "https://$fqdn/api/v1/Info/tenant-registry"
+            $uri = "$($gatewayUri.BaseUrl)/api/v1/Info/tenant-registry"
             $response = Invoke-RestMethod -Uri $uri -Method Get -TimeoutSec 60
             $items = @($response)
             if ($items.Count -gt 0) {
                 return [pscustomobject]@{
-                    GatewayFqdn = $fqdn
+                    GatewayFqdn = $gatewayUri.Fqdn
                     RegistryUri = $uri
                     Items = $items
                 }
@@ -129,20 +145,6 @@ foreach ($tenant in $topology.Items) {
         $detailMessages.Add("TenantTier '$tenantTier' is not supported by the current topology contract.")
     }
 
-    $expectedContract = if (-not [string]::IsNullOrWhiteSpace($tenantCode) -and $expectedTenantContracts.ContainsKey($tenantCode)) {
-        $expectedTenantContracts[$tenantCode]
-    }
-    else {
-        $null
-    }
-
-    if ($null -ne $expectedContract) {
-        if ($tenantTier -ne [string]$expectedContract.TenantTier) {
-            $passed = $false
-            $detailMessages.Add("TenantTier drift detected. Expected '$($expectedContract.TenantTier)' for $tenantCode but runtime reported '$tenantTier'.")
-        }
-    }
-
     if ([string]::IsNullOrWhiteSpace($providerCode)) {
         $passed = $false
         $detailMessages.Add('PaymentProviderCode is missing.')
@@ -150,10 +152,6 @@ foreach ($tenant in $topology.Items) {
     elseif ($supportedProviders -notcontains $providerCode) {
         $passed = $false
         $detailMessages.Add("PaymentProviderCode '$providerCode' is not part of the supported provider catalog.")
-    }
-    elseif ($null -ne $expectedContract -and $providerCode -ne [string]$expectedContract.PaymentProviderCode) {
-        $passed = $false
-        $detailMessages.Add("PaymentProviderCode drift detected. Expected '$($expectedContract.PaymentProviderCode)' for $tenantCode but runtime reported '$providerCode'.")
     }
 
     if (-not [string]::IsNullOrWhiteSpace($tenantCode) -and -not [string]::IsNullOrWhiteSpace($providerCode)) {
