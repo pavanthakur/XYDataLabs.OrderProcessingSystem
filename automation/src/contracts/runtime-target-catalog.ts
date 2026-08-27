@@ -18,6 +18,11 @@ export interface RuntimeTargetDefinition {
   environment: EnvironmentName;
   profile: RuntimeProfile;
   paymentPagePath: string;
+  azureResourceGroupName?: string;
+  azureGatewayContainerAppName?: string;
+  azureUiContainerAppName?: string;
+  azureSqlServerName?: string;
+  azureRedisName?: string;
   ignoreHttpsErrors: boolean;
 }
 

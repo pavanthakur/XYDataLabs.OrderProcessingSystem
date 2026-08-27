@@ -60,16 +60,24 @@ jobs:
             TARGET_KEY="azure-dev"
           fi
 
-          RG_NAME="rg-orderprocessing-${ENV_SUFFIX}"
-          GATEWAY_APP="orderprocessing-gate-${ENV_SUFFIX}"
-          UI_APP="orderprocessing-ui-${ENV_SUFFIX}"
-          SQL_SERVER="orderprocessing-sql-${ENV_SUFFIX}"
-          REDIS_NAME="orderprocessing-redis-${ENV_SUFFIX}"
+          TARGET_JSON="$(TARGET_KEY="$TARGET_KEY" node -e 'const doc = require("./automation/config/runtime-targets.json"); const target = doc.targets.find((item) => item.key === process.env.TARGET_KEY); if (!target) { throw new Error(`Unknown runtime target ${process.env.TARGET_KEY}`); } process.stdout.write(JSON.stringify(target));')"
+          read_target_field() {
+            TARGET_JSON="$TARGET_JSON" FIELD_NAME="$1" node -e 'const target = JSON.parse(process.env.TARGET_JSON); process.stdout.write(String(target[process.env.FIELD_NAME] || ""));'
+          }
+
+          RG_NAME="$(read_target_field azureResourceGroupName)"
+          GATEWAY_APP="$(read_target_field azureGatewayContainerAppName)"
+          UI_APP="$(read_target_field azureUiContainerAppName)"
+          SQL_SERVER="$(read_target_field azureSqlServerName)"
+          REDIS_NAME="$(read_target_field azureRedisName)"
+          GATEWAY_BASE_URL="$(read_target_field apiBaseUrl | sed 's#/*$##')"
+          UI_BASE_URL="$(read_target_field baseUrl | sed 's#/*$##')"
           SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
 
-          TARGET_JSON="$(TARGET_KEY="$TARGET_KEY" node -e 'const doc = require("./automation/config/runtime-targets.json"); const target = doc.targets.find((item) => item.key === process.env.TARGET_KEY); if (!target) { throw new Error(`Unknown runtime target ${process.env.TARGET_KEY}`); } process.stdout.write(JSON.stringify(target));')"
-          GATEWAY_BASE_URL="$(TARGET_JSON="$TARGET_JSON" node -e 'const target = JSON.parse(process.env.TARGET_JSON); process.stdout.write((target.apiBaseUrl || target.baseUrl || "").replace(/\/+$/, ""));')"
-          UI_BASE_URL="$(TARGET_JSON="$TARGET_JSON" node -e 'const target = JSON.parse(process.env.TARGET_JSON); process.stdout.write((target.baseUrl || "").replace(/\/+$/, ""));')"
+          if [ -z "$RG_NAME" ] || [ -z "$GATEWAY_APP" ] || [ -z "$UI_APP" ] || [ -z "$SQL_SERVER" ] || [ -z "$REDIS_NAME" ]; then
+            echo "Selected runtime target ${TARGET_KEY} is missing Azure resource metadata in automation/config/runtime-targets.json." >&2
+            exit 1
+          fi
 
           GATEWAY_FQDN="$(az containerapp show --resource-group "$RG_NAME" --name "$GATEWAY_APP" --query properties.configuration.ingress.fqdn -o tsv 2>/dev/null || true)"
           UI_FQDN="$(az containerapp show --resource-group "$RG_NAME" --name "$UI_APP" --query properties.configuration.ingress.fqdn -o tsv 2>/dev/null || true)"

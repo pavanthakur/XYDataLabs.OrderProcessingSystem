@@ -163,7 +163,12 @@
       "environment": "dev",
       "profile": "https",
       "paymentPagePath": "/payments/new",
-      "ignoreHttpsErrors": false
+      "ignoreHttpsErrors": false,
+      "azureResourceGroupName": "rg-orderprocessing-dev",
+      "azureGatewayContainerAppName": "orderprocessing-gate-dev",
+      "azureUiContainerAppName": "orderprocessing-ui-dev",
+      "azureSqlServerName": "orderprocessing-sql-dev",
+      "azureRedisName": "orderprocessing-redis-dev"
     },
     {
       "key": "azure-stg",
@@ -178,7 +183,12 @@
       "environment": "stg",
       "profile": "https",
       "paymentPagePath": "/payments/new",
-      "ignoreHttpsErrors": false
+      "ignoreHttpsErrors": false,
+      "azureResourceGroupName": "rg-orderprocessing-stg",
+      "azureGatewayContainerAppName": "orderprocessing-gate-stg",
+      "azureUiContainerAppName": "orderprocessing-ui-stg",
+      "azureSqlServerName": "orderprocessing-sql-stg",
+      "azureRedisName": "orderprocessing-redis-stg"
     },
     {
       "key": "azure-prod",
@@ -193,7 +203,12 @@
       "environment": "prod",
       "profile": "https",
       "paymentPagePath": "/payments/new",
-      "ignoreHttpsErrors": false
+      "ignoreHttpsErrors": false,
+      "azureResourceGroupName": "rg-orderprocessing-prod",
+      "azureGatewayContainerAppName": "orderprocessing-gate-prod",
+      "azureUiContainerAppName": "orderprocessing-ui-prod",
+      "azureSqlServerName": "orderprocessing-sql-prod",
+      "azureRedisName": "orderprocessing-redis-prod"
     }
   ]
 }
