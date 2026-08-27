@@ -20,9 +20,18 @@ export interface RuntimeTargetDefinition {
   paymentPagePath: string;
   azureResourceGroupName?: string;
   azureGatewayContainerAppName?: string;
+  azureOrdersContainerAppName?: string;
+  azurePaymentsContainerAppName?: string;
+  azureInventoryContainerAppName?: string;
+  azureNotificationsContainerAppName?: string;
   azureUiContainerAppName?: string;
+  azureFunctionAppName?: string;
   azureSqlServerName?: string;
   azureRedisName?: string;
+  azureBrokerSuffix?: string;
+  azureServiceBusNamespaceName?: string;
+  azureApplicationInsightsName?: string;
+  azureKeyVaultName?: string;
   ignoreHttpsErrors: boolean;
 }
 

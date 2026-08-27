@@ -70,6 +70,8 @@ jobs:
           UI_APP="$(read_target_field azureUiContainerAppName)"
           SQL_SERVER="$(read_target_field azureSqlServerName)"
           REDIS_NAME="$(read_target_field azureRedisName)"
+          APP_INSIGHTS_NAME="$(read_target_field azureApplicationInsightsName)"
+          KEY_VAULT_NAME="$(read_target_field azureKeyVaultName)"
           GATEWAY_BASE_URL="$(read_target_field apiBaseUrl | sed 's#/*$##')"
           UI_BASE_URL="$(read_target_field baseUrl | sed 's#/*$##')"
           SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
@@ -106,6 +108,8 @@ jobs:
           echo "uiApp=${UI_APP}" >> "$GITHUB_OUTPUT"
           echo "sqlServer=${SQL_SERVER}" >> "$GITHUB_OUTPUT"
           echo "redisName=${REDIS_NAME}" >> "$GITHUB_OUTPUT"
+          echo "appInsightsName=${APP_INSIGHTS_NAME}" >> "$GITHUB_OUTPUT"
+          echo "keyVaultName=${KEY_VAULT_NAME}" >> "$GITHUB_OUTPUT"
           echo "gatewayBaseUrl=${GATEWAY_BASE_URL}" >> "$GITHUB_OUTPUT"
           echo "uiBaseUrl=${UI_BASE_URL}" >> "$GITHUB_OUTPUT"
 
@@ -198,6 +202,10 @@ jobs:
           XYDATALABS_RUNTIME_TARGET_AZURE_STG_API_BASE_URL: ${{ steps.topology.outputs.gatewayBaseUrl }}
           XYDATALABS_RUNTIME_TARGET_AZURE_PROD_BASE_URL: ${{ steps.topology.outputs.uiBaseUrl }}
           XYDATALABS_RUNTIME_TARGET_AZURE_PROD_API_BASE_URL: ${{ steps.topology.outputs.gatewayBaseUrl }}
+          XYDATALABS_AZURE_APP_INSIGHTS_NAME: ${{ steps.topology.outputs.appInsightsName }}
+          XYDATALABS_AZURE_KEY_VAULT_NAME: ${{ steps.topology.outputs.keyVaultName }}
+          XYDATALABS_AZURE_SQL_SERVER_NAME: ${{ steps.topology.outputs.sqlServer }}
+          XYDATALABS_AZURE_RESOURCE_GROUP_NAME: ${{ steps.topology.outputs.resourceGroup }}
         run: |
           EXTRA_ARGS=()
           if [ "${{ inputs.skipVerification }}" = "true" ]; then

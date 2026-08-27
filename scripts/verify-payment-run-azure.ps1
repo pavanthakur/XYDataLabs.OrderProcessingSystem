@@ -96,10 +96,10 @@ $logicalEnvironment = switch ($Environment) {
 }
 
 $envSuffix = $resourceEnvironment
-$resourceGroup = "rg-orderprocessing-$envSuffix"
-$appInsightsName = "ai-orderprocessing-$envSuffix"
-$keyVaultName = "kv-orderprocessing-$envSuffix"
-$sqlServerName = "orderprocessing-sql-$envSuffix"
+$resourceGroup = if ([string]::IsNullOrWhiteSpace($env:XYDATALABS_AZURE_RESOURCE_GROUP_NAME)) { "rg-orderprocessing-$envSuffix" } else { $env:XYDATALABS_AZURE_RESOURCE_GROUP_NAME }
+$appInsightsName = if ([string]::IsNullOrWhiteSpace($env:XYDATALABS_AZURE_APP_INSIGHTS_NAME)) { "ai-orderprocessing-$envSuffix" } else { $env:XYDATALABS_AZURE_APP_INSIGHTS_NAME }
+$keyVaultName = if ([string]::IsNullOrWhiteSpace($env:XYDATALABS_AZURE_KEY_VAULT_NAME)) { "kv-orderprocessing-$envSuffix" } else { $env:XYDATALABS_AZURE_KEY_VAULT_NAME }
+$sqlServerName = if ([string]::IsNullOrWhiteSpace($env:XYDATALABS_AZURE_SQL_SERVER_NAME)) { "orderprocessing-sql-$envSuffix" } else { $env:XYDATALABS_AZURE_SQL_SERVER_NAME }
 $sqlServerFqdn = "$sqlServerName.database.windows.net"
 $supportedTenantTiers = @('SharedPool', 'Dedicated')
 $supportedProviders = @('OpenPay', 'Razorpay')
