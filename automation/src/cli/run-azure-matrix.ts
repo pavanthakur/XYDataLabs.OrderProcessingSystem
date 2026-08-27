@@ -60,8 +60,19 @@ async function main(): Promise<void> {
   const matrixRunId = `payment-automation-azure-matrix-${startedAt.toISOString().replace(/[.:]/g, "-")}`;
   const reportComposer = new FileReportComposer();
   const runtimeTargetCatalog = new JsonRuntimeTargetCatalog();
-  const environmentKey = options.targets.length === 1
-    ? resolveEnvironmentKey(await runtimeTargetCatalog.resolve(options.targets[0]))
+  const resolvedTargets = await Promise.all(options.targets.map((target) => runtimeTargetCatalog.resolve(target)));
+  const invalidTargets = resolvedTargets.filter((target) =>
+    target.runtime !== "azure" || target.expectedTenantSource !== "runtime-configuration"
+  );
+  if (invalidTargets.length > 0) {
+    throw new Error(
+      "Azure payment matrix targets must be Azure runtime targets with expectedTenantSource=runtime-configuration in automation/config/runtime-targets.json. " +
+      `Invalid targets: ${invalidTargets.map((target) => `${target.key}(${target.runtime}/${target.expectedTenantSource})`).join(", ")}.`
+    );
+  }
+
+  const environmentKey = resolvedTargets.length === 1
+    ? resolveEnvironmentKey(resolvedTargets[0])
     : "azure-https";
   const playwrightRoot = path.join(workspaceRoot, "TestResults", "Playwright");
   const environmentRoot = path.join(playwrightRoot, environmentKey);
@@ -76,7 +87,7 @@ async function main(): Promise<void> {
   if (normalizedProviders.length > 0) {
     throw new Error(
       "Azure payment automation follows each tenant's authoritative provider assignment. " +
-      "Provider overrides are not supported by the promotion workflow."
+      "Provider overrides are not supported by the promotion workflow; update the runtime target/deployment configuration instead."
     );
   }
   const effectiveProviders: string[] = [];
@@ -101,10 +112,11 @@ async function main(): Promise<void> {
   await writeFile(rootMarkerPath, `${reportDirectory}\n`, "utf8");
   await writeFile(runPlanPath, [
     "Azure payment automation matrix run",
-    "Goal: confirm Azure target discovery and browser automation flow for every active tenant using its assigned provider.",
+    "Goal: confirm Azure target discovery and browser automation flow for every active tenant using the provider resolved from runtime configuration.",
     `Environment: ${environmentKey}`,
+    "Runtime target config: automation/config/runtime-targets.json",
     `Targets: ${options.targets.join(", ")}`,
-    "Provider selection: authoritative tenant registry assignment (no override)",
+    "Provider selection: runtime configuration -> tenant registry API (no override)",
     `Tenant selection: ${options.tenantCodes.length > 0 ? options.tenantCodes.join(", ") : "runtime default"}`,
     `Tenant limit: ${options.tenantLimit ?? "none"}`,
     `Dry run: ${options.dryRun ? "yes" : "no"}`,
@@ -119,8 +131,9 @@ async function main(): Promise<void> {
   await writeFile(startupLogPath, [
     `[${formatIstTimestamp(new Date())}] Matrix startup`,
     `environment=${environmentKey}`,
+    "runtimeTargetConfig=automation/config/runtime-targets.json",
     `targets=${options.targets.join(",")}`,
-    "providerSelection=authoritative-tenant-registry",
+    "providerSelection=runtime-configuration-tenant-registry",
     `tenantCodes=${options.tenantCodes.length > 0 ? options.tenantCodes.join(",") : "runtime default"}`,
     `tenantLimit=${options.tenantLimit ?? "none"}`,
     `dryRun=${options.dryRun}`,
@@ -141,12 +154,9 @@ async function main(): Promise<void> {
     await writeFile(currentStepPath, `${matrixOutput.currentStep}\n`, "utf8");
     await writeRunMessage(startupLogPath, progressLogPath, `Executing target ${target} with prefix ${targetRunPrefix}.`);
 
-    const runtimeTarget = await runtimeTargetCatalog.resolve(target);
-    if (runtimeTarget.runtime !== "azure") {
-      throw new Error(`Azure matrix target ${target} resolved to runtime ${runtimeTarget.runtime}.`);
-    }
+    const runtimeTarget = resolvedTargets[index];
 
-    await writeRunMessage(startupLogPath, progressLogPath, `[${formatIstTimestamp(new Date())}] target=${target} state=resolved-target runtime=${runtimeTarget.runtime} profile=${runtimeTarget.profile}`);
+    await writeRunMessage(startupLogPath, progressLogPath, `[${formatIstTimestamp(new Date())}] target=${target} state=resolved-target runtime=${runtimeTarget.runtime} profile=${runtimeTarget.profile} expectedTenantSource=${runtimeTarget.expectedTenantSource}`);
     const run = await executePaymentAutomationRun({
       target,
       tenantCodes: options.tenantCodes,
@@ -175,15 +185,9 @@ async function main(): Promise<void> {
   const hasFailures = targetRuns.some((targetRun) =>
     targetRun.rows.some((row) => {
       const journeyFailed = !row.journeyOutcome.startsWith("completed") && row.journeyOutcome !== "dry_run";
-      // Only count an explicit "failed" outcome as a verification failure.
-      // "skipped" means the verification script could not run (e.g. infrastructure error) and
-      // "partial" means evidence was inconclusive — neither should block the matrix step.
-      const verificationFailed = options.verify && !options.dryRun && row.verificationOutcome === "failed";
+      const verificationFailed = options.verify && !options.dryRun && row.verificationOutcome !== "passed";
       return journeyFailed || verificationFailed;
     })
-  );
-  const hasVerificationWarnings = targetRuns.some((targetRun) =>
-    targetRun.rows.some((row) => options.verify && !options.dryRun && (row.verificationOutcome === "partial" || row.verificationOutcome === "skipped"))
   );
   matrixOutput.finishedUtc = new Date().toISOString();
   matrixOutput.finishedIst = formatIstTimestamp(new Date());
@@ -230,13 +234,6 @@ async function main(): Promise<void> {
       `Started IST: ${matrixOutput.startedIst}`,
       `Finished IST: ${matrixOutput.finishedIst}`,
       `Status: ${matrixOutput.status}`,
-      ...(hasVerificationWarnings
-        ? [
-          "",
-          "> Verification warnings were reported for one or more tenant runs.",
-          "> The browser journey and cleanup completed, but post-run evidence was partial or could not be collected."
-        ]
-        : []),
       "",
       "## Target Runs",
       "",

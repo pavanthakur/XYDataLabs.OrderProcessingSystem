@@ -9,11 +9,12 @@ export interface VerificationRequest {
   runPrefix: string;
   tenantCode?: string;
   customerOrderId?: string;
+  orderReferenceId?: string;
   providerPaymentId?: string;
 }
 
 export interface VerificationResult {
-  outcome: "passed" | "failed" | "partial" | "skipped";
+  outcome: "passed" | "failed" | "skipped";
   summary: string;
   threeDsByTenant?: Partial<Record<string, ThreeDsSetting>>;
   rawReport?: unknown;

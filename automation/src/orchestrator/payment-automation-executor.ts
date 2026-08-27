@@ -78,7 +78,7 @@ export async function executePaymentAutomationRun(
   const target = await runtimeTargetCatalog.resolve(options.target);
   log(`Resolved runtime target ${target.key} (${target.runtime}/${target.profile}).`);
   log(`Resolving tenant execution plan for ${options.target}.`);
-  const tenantExecutionCatalog = options.dryRun
+  const tenantExecutionCatalog = options.dryRun && target.runtime !== "azure"
     ? new StaticTenantExecutionCatalog()
     : new ApiTenantExecutionCatalog(target);
   const tenantPlan = await tenantExecutionCatalog.resolve(
@@ -236,6 +236,7 @@ export async function executePaymentAutomationRun(
               runPrefix: executionItem.executionRunPrefix,
               tenantCode: executionItem.tenantCode,
               customerOrderId,
+              orderReferenceId,
               providerPaymentId
             });
 
@@ -257,10 +258,10 @@ export async function executePaymentAutomationRun(
             );
           }
           catch (error) {
-            verificationOutcome = "skipped";
+            verificationOutcome = "failed";
             const verificationMessage = error instanceof Error ? error.message : "Verification failed.";
-            verificationSummaries.push(`Verification skipped for ${executionItem.tenantCode}: ${verificationMessage}`);
-            log(`[${executionItem.tenantCode}] Verification skipped: ${verificationMessage}`);
+            verificationSummaries.push(`Verification failed for ${executionItem.tenantCode}: ${verificationMessage}`);
+            log(`[${executionItem.tenantCode}] Verification failed: ${verificationMessage}`);
           }
         }
       }

@@ -23,6 +23,10 @@
     Optional persisted customer order ID for an individual automation journey.
     SQL evidence is scoped to this exact ID when supplied.
 
+.PARAMETER OrderReferenceId
+    Optional persisted authoritative order reference for an individual automation journey.
+    SQL evidence is additionally scoped to this exact order reference when supplied.
+
 .PARAMETER TenantCode
     Optional tenant code for an individual automation journey. When supplied,
     same-number customer orders belonging to other tenants are excluded.
@@ -58,6 +62,9 @@ param(
 
     [Parameter(Mandatory = $false)]
     [string] $CustomerOrderId,
+
+    [Parameter(Mandatory = $false)]
+    [string] $OrderReferenceId,
 
     [Parameter(Mandatory = $false)]
     [string] $TenantCode,
@@ -166,6 +173,12 @@ function Convert-DynamicJsonValue {
     return $Value
 }
 
+function Get-CollectionCount {
+    param([Parameter(Mandatory = $false)] [object] $Value)
+
+    return @($Value).Count
+}
+
 function Get-RegexValue {
     param(
         [Parameter(Mandatory = $true)]
@@ -187,7 +200,7 @@ function Get-RegexValue {
 function Convert-AppInsightsRows {
     param([Parameter(Mandatory = $true)] [object] $Response)
 
-    if ($null -eq $Response -or $null -eq $Response.tables -or @($Response.tables).Count -eq 0) {
+    if ($null -eq $Response.tables -or (Get-CollectionCount -Value $Response.tables) -eq 0) {
         return @()
     }
 
@@ -197,9 +210,8 @@ function Convert-AppInsightsRows {
 
     foreach ($row in $table.rows) {
         $item = [ordered] @{}
-        $rowArray = @($row)
-        for ($index = 0; $index -lt $columnNames.Count; $index++) {
-            $item[$columnNames[$index]] = if ($index -lt $rowArray.Count) { $rowArray[$index] } else { $null }
+        for ($index = 0; $index -lt (Get-CollectionCount -Value $columnNames); $index++) {
+            $item[$columnNames[$index]] = if ($index -lt (Get-CollectionCount -Value $row)) { $row[$index] } else { $null }
         }
 
         $rows += [PSCustomObject] $item
@@ -374,7 +386,7 @@ function Get-KqlQuotedValues {
             Sort-Object -Unique
     )
 
-    if ($normalizedValues.Count -eq 0) {
+    if ((Get-CollectionCount -Value $normalizedValues) -eq 0) {
         return ''
     }
 
@@ -410,7 +422,7 @@ function Get-MinimumTimeDeltaSeconds {
         [datetimeoffset[]] $ReferenceTimestamps
     )
 
-    if ($ReferenceTimestamps.Count -eq 0) {
+    if ((Get-CollectionCount -Value $ReferenceTimestamps) -eq 0) {
         return [double]::PositiveInfinity
     }
 
@@ -449,7 +461,7 @@ function Get-ScopedUiEvents {
         [string[]] $KnownCustomerOrders = @()
     )
 
-    if ($null -eq $Events -or $Events.Count -eq 0) {
+    if ($null -eq $Events -or (Get-CollectionCount -Value $Events) -eq 0) {
         return @()
     }
 
@@ -462,7 +474,7 @@ function Get-ScopedUiEvents {
             Sort-Object Timestamp
     )
 
-    if ($directMatches.Count -gt 0) {
+    if ((Get-CollectionCount -Value $directMatches) -gt 0) {
         return $directMatches
     }
 
@@ -532,7 +544,7 @@ WHERE [Status] = 'Active'
 ORDER BY [Code];
 "@)
 
-    if ($registryRows.Count -eq 0) {
+    if ((Get-CollectionCount -Value $registryRows) -eq 0) {
         throw "The Azure tenant registry in '$sharedDbName' returned no active tenants."
     }
 
@@ -747,14 +759,14 @@ $resolvedApiEvents = foreach ($apiEvent in $apiEvents) {
 }
 
 $availableRunPrefixes = @($resolvedApiEvents | Where-Object { -not [string]::IsNullOrWhiteSpace($_.ResolvedRunPrefix) } | Select-Object -ExpandProperty ResolvedRunPrefix -Unique)
-$appInsightsAvailable = ($availableRunPrefixes.Count -gt 0)
+$appInsightsAvailable = ((Get-CollectionCount -Value $availableRunPrefixes) -gt 0)
 
 $selectedRunPrefix = $RunPrefix
 if ([string]::IsNullOrWhiteSpace($selectedRunPrefix)) {
-    if ($availableRunPrefixes.Count -eq 1) {
+    if ((Get-CollectionCount -Value $availableRunPrefixes) -eq 1) {
         $selectedRunPrefix = $availableRunPrefixes[0]
     }
-    elseif ($availableRunPrefixes.Count -gt 1) {
+    elseif ((Get-CollectionCount -Value $availableRunPrefixes) -gt 1) {
         $prefixList = ($availableRunPrefixes | ForEach-Object { "- $_" }) -join "`n"
         throw "Multiple run prefixes were found. Re-run with -RunPrefix.`n$prefixList"
     }
@@ -763,7 +775,7 @@ if ([string]::IsNullOrWhiteSpace($selectedRunPrefix)) {
     }
 }
 
-if ($availableRunPrefixes.Count -gt 0 -and $availableRunPrefixes -notcontains $selectedRunPrefix) {
+if ((Get-CollectionCount -Value $availableRunPrefixes) -gt 0 -and $availableRunPrefixes -notcontains $selectedRunPrefix) {
     if ([string]::IsNullOrWhiteSpace($RunPrefix)) {
         $prefixList = ($availableRunPrefixes | ForEach-Object { "- $_" }) -join "`n"
         throw "Run prefix '$selectedRunPrefix' was not found in today's API telemetry.`n$prefixList"
@@ -881,9 +893,18 @@ WHERE pp.ProviderType = N'$assignedProviderCode';
     }
 )
 
-$customerOrderSqlPredicate = if (-not [string]::IsNullOrWhiteSpace($CustomerOrderId)) {
+$customerOrderSqlPredicate = if (-not [string]::IsNullOrWhiteSpace($CustomerOrderId) -and -not [string]::IsNullOrWhiteSpace($OrderReferenceId)) {
+    $escapedCustomerOrderId = ConvertTo-SqlStringLiteral -Value $CustomerOrderId.Trim()
+    $escapedOrderReferenceId = ConvertTo-SqlStringLiteral -Value $OrderReferenceId.Trim()
+    "(ct.CustomerOrderId = N'$escapedCustomerOrderId' OR ct.TransactionReferenceId = N'$escapedOrderReferenceId')"
+}
+elseif (-not [string]::IsNullOrWhiteSpace($CustomerOrderId)) {
     $escapedCustomerOrderId = ConvertTo-SqlStringLiteral -Value $CustomerOrderId.Trim()
     "ct.CustomerOrderId = N'$escapedCustomerOrderId'"
+}
+elseif (-not [string]::IsNullOrWhiteSpace($OrderReferenceId)) {
+    $escapedOrderReferenceId = ConvertTo-SqlStringLiteral -Value $OrderReferenceId.Trim()
+    "ct.TransactionReferenceId = N'$escapedOrderReferenceId'"
 }
 else {
     $escapedRunPrefix = ConvertTo-SqlStringLiteral -Value $selectedRunPrefix
@@ -953,7 +974,7 @@ $q8Shared = @(
     $q2Shared |
         Where-Object {
             $tenantCode = [string](Get-ObjectPropertyValue -Object $_ -PropertyName 'Tenant')
-            $sharedTenantCodes.Count -gt 0 -and ($sharedTenantCodes -notcontains $tenantCode)
+            (Get-CollectionCount -Value $sharedTenantCodes) -gt 0 -and ($sharedTenantCodes -notcontains $tenantCode)
         }
 )
 
@@ -998,7 +1019,7 @@ foreach ($tenantGroup in ($selectedApiEvents | Where-Object { -not [string]::IsN
     $expectedOrdersByTenant[$tenantGroup.Name] = @($tenantGroup.Group | Select-Object -ExpandProperty ResolvedCustomerOrderId -Unique)
 }
 
-if ($expectedOrdersByTenant.Count -eq 0) {
+if ((Get-CollectionCount -Value $expectedOrdersByTenant.Keys) -eq 0) {
     $sharedOrdersByTenant = $q2Shared | Group-Object Tenant
     foreach ($tenantGroup in $sharedOrdersByTenant) {
         $expectedOrdersByTenant[$tenantGroup.Name] = @($tenantGroup.Group | Select-Object -ExpandProperty CustomerOrderId -Unique)
@@ -1032,7 +1053,7 @@ else {
 }
 $transportEvidence = @()
 
-if ($providerCorrelationIds.Count -gt 0) {
+if ((Get-CollectionCount -Value $providerCorrelationIds) -gt 0) {
     $providerChargeIdList = Get-KqlQuotedValues -Values $providerCorrelationIds
     $transportQuery = @"
 union isfuzzy=true
@@ -1085,10 +1106,10 @@ dependencies
 
                 [PSCustomObject]@{
                     ChargeId = $providerChargeId
-                    RequestCount = @($matchingRows | Where-Object telemetryType -eq 'request').Count
-                    DependencyCount = @($matchingRows | Where-Object telemetryType -eq 'dependency').Count
-                    CorrelatedOperationIds = $correlatedOperationIds
-                    Correlated = ($correlatedOperationIds.Count -gt 0)
+                    RequestCount = (Get-CollectionCount -Value @($matchingRows | Where-Object telemetryType -eq 'request'))
+                    DependencyCount = (Get-CollectionCount -Value @($matchingRows | Where-Object telemetryType -eq 'dependency'))
+                    CorrelatedOperationIds = @($correlatedOperationIds)
+                    Correlated = ((Get-CollectionCount -Value @($correlatedOperationIds)) -gt 0)
                     Rows = @($matchingRows | Select-Object timestamp, telemetryType, operation_Id, cloud_RoleName, name, resultCode, target, detail)
                 }
             }
@@ -1109,7 +1130,7 @@ $expectedUiCustomerOrders = @(
 )
 $expectedUiCustomerOrders = @($expectedUiCustomerOrders | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)
 
-if (@($apiChargeEvents).Count -eq 0 -and @($allDbChargeIds).Count -gt 0) {
+if ((Get-CollectionCount -Value @($apiChargeEvents)) -eq 0 -and (Get-CollectionCount -Value @($allDbChargeIds)) -gt 0) {
     $dbChargeIdList = Get-KqlQuotedValues -Values $allDbChargeIds
     if (-not [string]::IsNullOrWhiteSpace($dbChargeIdList)) {
         $fallbackApiQuery = @"
@@ -1169,7 +1190,7 @@ if (@($apiChargeEvents).Count -eq 0 -and @($allDbChargeIds).Count -gt 0) {
             }
         )
 
-        if ($fallbackApiEvents.Count -gt 0) {
+        if ((Get-CollectionCount -Value $fallbackApiEvents) -gt 0) {
             $selectedApiEvents = @(
                 $fallbackApiEvents |
                     Where-Object {
@@ -1180,7 +1201,7 @@ if (@($apiChargeEvents).Count -eq 0 -and @($allDbChargeIds).Count -gt 0) {
                     Sort-Object Timestamp
             )
 
-            if ($selectedApiEvents.Count -eq 0) {
+            if ((Get-CollectionCount -Value $selectedApiEvents) -eq 0) {
                 $selectedApiEvents = @($fallbackApiEvents | Sort-Object Timestamp)
             }
 
@@ -1204,12 +1225,12 @@ if (@($apiChargeEvents).Count -eq 0 -and @($allDbChargeIds).Count -gt 0) {
 
 $transportApiEvents = @(
     foreach ($evidence in ($transportEvidence | Where-Object Correlated)) {
-        if (@($apiChargeEvents | Where-Object ChargeId -eq $evidence.ChargeId).Count -gt 0) {
+        if ((Get-CollectionCount -Value @($apiChargeEvents | Where-Object ChargeId -eq $evidence.ChargeId)) -gt 0) {
             continue
         }
 
         $dbRow = $providerDbChargeRows | Where-Object ChargeId -eq $evidence.ChargeId | Select-Object -First 1
-        if ($null -eq $dbRow -and $providerDbChargeRows.Count -eq 1) {
+        if ($null -eq $dbRow -and (Get-CollectionCount -Value $providerDbChargeRows) -eq 1) {
             $dbRow = $providerDbChargeRows | Select-Object -First 1
         }
         if ($null -eq $dbRow) {
@@ -1217,7 +1238,7 @@ $transportApiEvents = @(
         }
 
         $evidenceRows = @($evidence.Rows)
-        $timestamp = if ($evidenceRows.Count -gt 0) {
+        $timestamp = if ((Get-CollectionCount -Value $evidenceRows) -gt 0) {
             [datetimeoffset]($evidenceRows | Sort-Object timestamp | Select-Object -First 1).timestamp
         }
         else {
@@ -1239,7 +1260,7 @@ $transportApiEvents = @(
     }
 )
 
-if ($transportApiEvents.Count -gt 0) {
+if ((Get-CollectionCount -Value $transportApiEvents) -gt 0) {
     $selectedApiEvents = @($selectedApiEvents + $transportApiEvents | Sort-Object Timestamp)
     $apiChargeEvents = @($apiChargeEvents + $transportApiEvents | Sort-Object Timestamp)
     $appInsightsAvailable = $true
@@ -1249,8 +1270,8 @@ $apiChargeIds = @($apiChargeEvents | Select-Object -ExpandProperty ChargeId -Uni
 $knownUiChargeIds = @($apiChargeIds + $allDbChargeIds | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)
 $selectedUiEvents = @(Get-ScopedUiEvents -Events @($uiEvents) -KnownChargeIds $knownUiChargeIds -KnownTenants $expectedUiTenants -KnownCustomerOrders $expectedUiCustomerOrders)
 
-if (@($selectedUiEvents).Count -eq 0) {
-    $evidenceChargeIds = if (@($apiChargeIds).Count -gt 0) { $apiChargeIds } else { @($allDbChargeIds | Sort-Object -Unique) }
+if ((Get-CollectionCount -Value $selectedUiEvents) -eq 0) {
+    $evidenceChargeIds = if ((Get-CollectionCount -Value $apiChargeIds) -gt 0) { $apiChargeIds } else { @($allDbChargeIds | Sort-Object -Unique) }
     $evidenceChargeIdList = Get-KqlQuotedValues -Values $evidenceChargeIds
     if (-not [string]::IsNullOrWhiteSpace($evidenceChargeIdList)) {
         $fallbackUiQuery = @"
@@ -1323,11 +1344,11 @@ if (@($selectedUiEvents).Count -eq 0) {
     }
 }
 
-if (@($selectedApiEvents).Count -gt 0 -or @($selectedUiEvents).Count -gt 0) {
+if ((Get-CollectionCount -Value $selectedApiEvents) -gt 0 -or (Get-CollectionCount -Value $selectedUiEvents) -gt 0) {
     $appInsightsAvailable = $true
 }
 
-if (($apiQueryFailed -or $uiQueryFailed) -and @($selectedApiEvents).Count -eq 0 -and @($selectedUiEvents).Count -eq 0) {
+if (($apiQueryFailed -or $uiQueryFailed) -and (Get-CollectionCount -Value $selectedApiEvents) -eq 0 -and (Get-CollectionCount -Value $selectedUiEvents) -eq 0) {
     $appInsightsAvailable = $false
 }
 
@@ -1343,9 +1364,9 @@ foreach ($chargeEvent in $apiChargeEvents) {
         $null = $matchedUiEventKeys.Add($uiMatch.EventKey)
     }
 
-    $uiCorrelationMode = if ($uiMatches.Count -gt 0) { 'chargeId' } else { 'none' }
+    $uiCorrelationMode = if ((Get-CollectionCount -Value $uiMatches) -gt 0) { 'chargeId' } else { 'none' }
 
-    if ($uiMatches.Count -eq 0 -and $threeDsByTenant[$chargeEvent.Tenant] -eq 1) {
+    if ((Get-CollectionCount -Value $uiMatches) -eq 0 -and $threeDsByTenant[$chargeEvent.Tenant] -eq 1) {
         $candidateApiEvents = @(
             $selectedApiEvents |
                 Where-Object {
@@ -1360,11 +1381,11 @@ foreach ($chargeEvent in $apiChargeEvents) {
                 Select-Object -ExpandProperty Timestamp
         )
 
-        if ($referenceTimestamps.Count -eq 0) {
+        if ((Get-CollectionCount -Value $referenceTimestamps) -eq 0) {
             $referenceTimestamps = @($candidateApiEvents | Select-Object -ExpandProperty Timestamp)
         }
 
-        if ($referenceTimestamps.Count -eq 0) {
+        if ((Get-CollectionCount -Value $referenceTimestamps) -eq 0) {
             $referenceTimestamps = @($chargeEvent.Timestamp)
         }
 
@@ -1392,18 +1413,18 @@ foreach ($chargeEvent in $apiChargeEvents) {
                 Select-Object -First 1
             )
 
-        if ($fallbackMatch.Count -gt 0 -and $null -ne $fallbackMatch[0]) {
-            $uiMatches = @($fallbackMatch[0].UiEvent)
+        if ((Get-CollectionCount -Value @($fallbackMatch)) -gt 0 -and $null -ne @($fallbackMatch)[0]) {
+            $uiMatches = @(@($fallbackMatch)[0].UiEvent)
             $uiCorrelationMode = 'tenant+time'
-            $null = $usedFallbackUiEventKeys.Add($fallbackMatch[0].UiEvent.EventKey)
-            $null = $matchedUiEventKeys.Add($fallbackMatch[0].UiEvent.EventKey)
+            $null = $usedFallbackUiEventKeys.Add(@($fallbackMatch)[0].UiEvent.EventKey)
+            $null = $matchedUiEventKeys.Add(@($fallbackMatch)[0].UiEvent.EventKey)
         }
     }
 
     $uiStatusCodes = @($uiMatches | Where-Object { -not [string]::IsNullOrWhiteSpace($_.StatusCode) } | Select-Object -ExpandProperty StatusCode -Unique)
     $uiEventNames = @($uiMatches | Where-Object { -not [string]::IsNullOrWhiteSpace($_.UiEventName) } | Select-Object -ExpandProperty UiEventName -Unique)
 
-    if ($uiStatusCodes.Count -eq 0 -and $globalUiStatusCodes.Count -gt 0 -and $apiChargeEvents.Count -eq 1) {
+    if ((Get-CollectionCount -Value $uiStatusCodes) -eq 0 -and (Get-CollectionCount -Value $globalUiStatusCodes) -gt 0 -and (Get-CollectionCount -Value $apiChargeEvents) -eq 1) {
         $uiStatusCodes = $globalUiStatusCodes
     }
 
@@ -1435,7 +1456,7 @@ foreach ($chargeEvent in $apiChargeEvents) {
         DbStage = if ($null -ne $dbRow) { [string] (Get-ObjectPropertyValue -Object $dbRow -PropertyName 'ThreeDSecureStage') } else { '' }
         ThreeDSEnabled = $chargeThreeDsEnabled
         UiCallbackExpected = ($chargeThreeDsEnabled -eq 1) -and (-not ($chargeEvent.ChargeId -match '^order_'))
-        UiCallbackLogged = ($uiMatches.Count -gt 0)
+        UiCallbackLogged = ((Get-CollectionCount -Value $uiMatches) -gt 0)
         UiCorrelationMode = $uiCorrelationMode
         UiEventNames = @($uiEventNames)
         UiStatusCodes = @($uiStatusCodes)
@@ -1443,7 +1464,7 @@ foreach ($chargeEvent in $apiChargeEvents) {
 }
 )
 
-$reportedUiEvents = if ($matchedUiEventKeys.Count -gt 0) {
+$reportedUiEvents = if ((Get-CollectionCount -Value $matchedUiEventKeys) -gt 0) {
     @($selectedUiEvents | Where-Object { $matchedUiEventKeys.Contains($_.EventKey) } | Sort-Object Timestamp)
 }
 else {
@@ -1497,15 +1518,15 @@ function Get-ExpectedHistoryStepsForTenant {
         )
 
         $runtimeThreeDsEnabled = $false
-        $hasOrderLevelRuntimeEvidence = ($orderApiEvents.Count -gt 0) -or ($orderTransactionRows.Count -gt 0) -or ($orderHistoryRows.Count -gt 0)
+        $hasOrderLevelRuntimeEvidence = ((Get-CollectionCount -Value $orderApiEvents) -gt 0) -or ((Get-CollectionCount -Value $orderTransactionRows) -gt 0) -or ((Get-CollectionCount -Value $orderHistoryRows) -gt 0)
 
-        if (@($orderApiEvents | Where-Object { $_.PSObject.Properties.Name -contains 'IsThreeDSecureEnabled' -and $_.IsThreeDSecureEnabled }).Count -gt 0) {
+        if ((Get-CollectionCount -Value @($orderApiEvents | Where-Object { $_.PSObject.Properties.Name -contains 'IsThreeDSecureEnabled' -and $_.IsThreeDSecureEnabled })) -gt 0) {
             $runtimeThreeDsEnabled = $true
         }
-        elseif (@($orderTransactionRows | Where-Object { $_.ThreeDS -eq 1 -or [string] $_.ThreeDSecureStage -match 'redirect|challenge|authenticated' }).Count -gt 0) {
+        elseif ((Get-CollectionCount -Value @($orderTransactionRows | Where-Object { $_.ThreeDS -eq 1 -or [string] $_.ThreeDSecureStage -match 'redirect|challenge|authenticated' })) -gt 0) {
             $runtimeThreeDsEnabled = $true
         }
-        elseif (@($orderHistoryRows | Where-Object { $_.ThreeDS -eq 1 -or [string] $_.Stage -match 'redirect|challenge|authenticated' }).Count -gt 0) {
+        elseif ((Get-CollectionCount -Value @($orderHistoryRows | Where-Object { $_.ThreeDS -eq 1 -or [string] $_.Stage -match 'redirect|challenge|authenticated' })) -gt 0) {
             $runtimeThreeDsEnabled = $true
         }
         elseif (-not $hasOrderLevelRuntimeEvidence -and $TenantThreeDsByTenant.ContainsKey($TenantCode) -and $TenantThreeDsByTenant[$TenantCode] -eq 1) {
@@ -1520,12 +1541,12 @@ function Get-ExpectedHistoryStepsForTenant {
 
         $expectedSteps += $(if ($runtimeThreeDsEnabled) { 4 } else { 2 })
 
-        if (-not $runtimeThreeDsEnabled -and $uniqueChargeIds.Count -gt 1) {
-            $expectedSteps += ($uniqueChargeIds.Count - 1)
+        if (-not $runtimeThreeDsEnabled -and (Get-CollectionCount -Value $uniqueChargeIds) -gt 1) {
+            $expectedSteps += ((Get-CollectionCount -Value $uniqueChargeIds) - 1)
         }
         elseif (
             -not $runtimeThreeDsEnabled -and
-            @($orderHistoryRows | Where-Object { [string] $_.Stage -eq 'tokenization_completed' }).Count -gt 0
+            (Get-CollectionCount -Value @($orderHistoryRows | Where-Object { [string] $_.Stage -eq 'tokenization_completed' })) -gt 0
         ) {
             $expectedSteps += 1
         }
@@ -1548,28 +1569,33 @@ foreach ($tenantCode in ($expectedOrdersByTenant.Keys | Sort-Object)) {
     $checks["Pre-flight 3DS [$tenantCode]"] = Convert-CheckResult -Expected 'configured' -Actual ([string] $threeDsByTenant[$tenantCode]) -Outcome $(if ($threeDsByTenant.ContainsKey($tenantCode)) { 'PASS' } else { 'FAIL' })
     $tenantRows = @($allRows | Where-Object { $_.Tenant -eq $tenantCode })
     $tenantHistoryRows = @($allHistoryRows | Where-Object { $_.Tenant -eq $tenantCode })
-    $checks["Q2 rows [$tenantCode]"] = Convert-CheckResult -Expected ([string] ($expectedOrdersByTenant[$tenantCode].Count * 2)) -Actual ([string] $tenantRows.Count) -Outcome $(if ($tenantRows.Count -eq ($expectedOrdersByTenant[$tenantCode].Count * 2)) { 'PASS' } else { 'FAIL' })
-    $checks["Q5 steps [$tenantCode]"] = Convert-CheckResult -Expected ([string] $expectedStepsByTenant[$tenantCode]) -Actual ([string] $tenantHistoryRows.Count) -Outcome $(if ($tenantHistoryRows.Count -eq $expectedStepsByTenant[$tenantCode]) { 'PASS' } else { 'FAIL' })
+    $expectedOrderCount = (Get-CollectionCount -Value $expectedOrdersByTenant[$tenantCode])
+    $tenantRowCount = (Get-CollectionCount -Value $tenantRows)
+    $tenantHistoryRowCount = (Get-CollectionCount -Value $tenantHistoryRows)
+    $checks["Q2 rows [$tenantCode]"] = Convert-CheckResult -Expected ([string] ($expectedOrderCount * 2)) -Actual ([string] $tenantRowCount) -Outcome $(if ($tenantRowCount -eq ($expectedOrderCount * 2)) { 'PASS' } else { 'FAIL' })
+    $checks["Q5 steps [$tenantCode]"] = Convert-CheckResult -Expected ([string] $expectedStepsByTenant[$tenantCode]) -Actual ([string] $tenantHistoryRowCount) -Outcome $(if ($tenantHistoryRowCount -eq $expectedStepsByTenant[$tenantCode]) { 'PASS' } else { 'FAIL' })
 }
-$checks['Q8 bleed'] = Convert-CheckResult -Expected '0' -Actual ([string] @($q8Shared).Count) -Outcome $(if (@($q8Shared).Count -eq 0) { 'PASS' } else { 'FAIL' })
-$checks['Q9 bleed'] = Convert-CheckResult -Expected '0' -Actual ([string] @($q9Shared).Count) -Outcome $(if (@($q9Shared).Count -eq 0) { 'PASS' } else { 'FAIL' })
+$checks['Q8 bleed'] = Convert-CheckResult -Expected '0' -Actual ([string] (Get-CollectionCount -Value @($q8Shared))) -Outcome $(if ((Get-CollectionCount -Value @($q8Shared)) -eq 0) { 'PASS' } else { 'FAIL' })
+$checks['Q9 bleed'] = Convert-CheckResult -Expected '0' -Actual ([string] (Get-CollectionCount -Value @($q9Shared))) -Outcome $(if ((Get-CollectionCount -Value @($q9Shared)) -eq 0) { 'PASS' } else { 'FAIL' })
 
-$correlatedTransportCount = @($transportEvidence | Where-Object Correlated).Count
+$correlatedTransportCount = (Get-CollectionCount -Value @($transportEvidence | Where-Object Correlated))
 $checks['Provider payment IDs -> request/dependency correlation'] = Convert-CheckResult `
-    -Expected ([string]$providerCorrelationIds.Count) `
+    -Expected ([string](Get-CollectionCount -Value $providerCorrelationIds)) `
     -Actual ([string]$correlatedTransportCount) `
-    -Outcome $(if ($providerCorrelationIds.Count -gt 0 -and $correlatedTransportCount -eq $providerCorrelationIds.Count) { 'PASS' } else { 'FAIL' })
+    -Outcome $(if ((Get-CollectionCount -Value $providerCorrelationIds) -gt 0 -and $correlatedTransportCount -eq (Get-CollectionCount -Value $providerCorrelationIds)) { 'PASS' } else { 'FAIL' })
 
-if (@($apiChargeEvents).Count -eq 0) {
+if ((Get-CollectionCount -Value $apiChargeEvents) -eq 0) {
     $checks['API log -> DB charge IDs'] = Convert-CheckResult -Expected 'App Insights charge rows' -Actual 'No API charge rows returned for the selected run prefix' -Outcome 'INCONCLUSIVE'
 }
 else {
-    $checks['API log -> DB charge IDs'] = Convert-CheckResult -Expected ([string] @($apiChargeEvents).Count) -Actual ([string] @($chargeCorrelation | Where-Object InDb).Count) -Outcome $(if (@($chargeCorrelation | Where-Object InDb).Count -eq @($apiChargeEvents).Count) { 'PASS' } else { 'FAIL' })
+    $apiChargeEventCount = (Get-CollectionCount -Value @($apiChargeEvents))
+    $correlatedDbChargeCount = (Get-CollectionCount -Value @($chargeCorrelation | Where-Object InDb))
+    $checks['API log -> DB charge IDs'] = Convert-CheckResult -Expected ([string] $apiChargeEventCount) -Actual ([string] $correlatedDbChargeCount) -Outcome $(if ($correlatedDbChargeCount -eq $apiChargeEventCount) { 'PASS' } else { 'FAIL' })
 }
 
-$expectedUiCallbacks = @($chargeCorrelation | Where-Object UiCallbackExpected).Count
-$actualUiCallbacks = @($chargeCorrelation | Where-Object { $_.UiCallbackExpected -and $_.UiCallbackLogged }).Count
-if (@($apiChargeEvents).Count -eq 0 -and @($selectedUiEvents).Count -eq 0) {
+$expectedUiCallbacks = (Get-CollectionCount -Value @($chargeCorrelation | Where-Object UiCallbackExpected))
+$actualUiCallbacks = (Get-CollectionCount -Value @($chargeCorrelation | Where-Object { $_.UiCallbackExpected -and $_.UiCallbackLogged }))
+if ((Get-CollectionCount -Value $apiChargeEvents) -eq 0 -and (Get-CollectionCount -Value $selectedUiEvents) -eq 0) {
     $checks['UI telemetry -> callbacks present where expected'] = Convert-CheckResult -Expected '3DS tenants only' -Actual 'No browser/UI telemetry rows returned for the selected run prefix' -Outcome 'INCONCLUSIVE'
 }
 else {
@@ -1617,7 +1643,7 @@ if (-not $appInsightsAvailable) {
 }
 
 Write-Step 'API evidence'
-if (@($selectedApiEvents).Count -eq 0) {
+if ((Get-CollectionCount -Value $selectedApiEvents) -eq 0) {
     Write-Host 'No API evidence rows matched the selected run prefix.' -ForegroundColor Yellow
 }
 else {
@@ -1629,7 +1655,7 @@ else {
 }
 
 Write-Step 'UI evidence'
-if (@($selectedUiEvents).Count -eq 0) {
+if ((Get-CollectionCount -Value $selectedUiEvents) -eq 0) {
     Write-Host 'No UI callback rows matched the selected charge IDs.' -ForegroundColor Yellow
 }
 else {
@@ -1641,7 +1667,7 @@ else {
 }
 
 Write-Step 'Charge correlation'
-if (@($chargeCorrelation).Count -eq 0) {
+if ((Get-CollectionCount -Value @($chargeCorrelation)) -eq 0) {
     Write-Host 'No API charge events were resolved for the selected run prefix.' -ForegroundColor Yellow
 }
 else {

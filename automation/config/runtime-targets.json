@@ -152,8 +152,8 @@
     },
     {
       "key": "azure-dev",
-      "baseUrl": "https://pavanthakur-orderprocessing-ui-xyapp-dev.azurewebsites.net",
-      "apiBaseUrl": "https://pavanthakur-orderprocessing-api-xyapp-dev.azurewebsites.net",
+      "baseUrl": "https://orderprocessing-ui-dev.gentlepond-ffb47f67.centralindia.azurecontainerapps.io",
+      "apiBaseUrl": "https://orderprocessing-gate-dev.gentlepond-ffb47f67.centralindia.azurecontainerapps.io",
       "verificationMode": "azure",
       "browserMode": "azure",
       "expectedTenantSource": "runtime-configuration",
