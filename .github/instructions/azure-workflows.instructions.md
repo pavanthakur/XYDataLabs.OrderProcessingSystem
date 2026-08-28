@@ -41,11 +41,20 @@ Actions → "Azure Bootstrap & Deploy" → Run workflow:
 - API: `pavanthakur-orderprocessing-api-xyapp-dev`
 - UI: `pavanthakur-orderprocessing-ui-xyapp-dev`
 
+## Strict Azure Runtime Target Convention
+- `automation/config/runtime-targets.json` is the source of truth for environment-specific runtime endpoints and Azure resource names consumed by automation.
+- Every Azure runtime dependency used by Actions 2/3/4 or verifier scripts must have explicit metadata for `azure-dev`, `azure-stg`, and `azure-prod` before the workflow/script consumes it.
+- Required examples include Container Apps, Azure Functions, SQL, Redis, Key Vault, Application Insights, Service Bus, broker suffixes, gateway URLs, and UI URLs.
+- Do not hardcode `rg-orderprocessing-*`, `orderprocessing-*-{env}`, `kv-orderprocessing-*`, `ai-orderprocessing-*`, or `sb-orderprocessing-*` in runtime smoke, transport smoke, payment matrix, or verifier workflows when the value can be read from `runtime-targets.json`.
+- Do not commit generated Azure Container Apps FQDNs, revision names, random suffixes, GUIDs, or discovery output into `runtime-targets.json`; discover generated values at runtime from Azure control plane or workflow outputs.
+- When a new Azure service is added, update `automation/config/runtime-targets.json`, `automation/src/contracts/runtime-target-catalog.ts`, the owning workflow/script, and `Resources/Azure-Deployment/validate-phase10-environment-contract.ps1` in the same change.
+- Keep deployment/IaC resource creation parameterized by environment/resource suffix, but keep post-deploy automation validation driven by `runtime-targets.json`.
+
 ## Naming Rule for New Azure Assets
-- Use the same `appname-env` pattern for any new Azure service, queue, topic, subscription, or cleanup target
-- Keep deployment and Phase X cleanup names symmetric so the teardown can safely remove exactly what the deployment created
-- Prefer `stg` for staging resource suffixes in Azure resource names when the resource itself uses an abbreviated environment code
-- For the current Phase 10 stack, keep the same `appname-env` pattern across Container Apps names, images, and cleanup targets so local Docker and Azure stay aligned
+- Use the same `appname-env` pattern for any new Azure service, queue, topic, subscription, or cleanup target unless the runtime target catalog documents a deliberate exception.
+- Keep deployment and Phase X cleanup names symmetric so the teardown can safely remove exactly what the deployment created.
+- Prefer `stg` for staging resource suffixes in Azure resource names when the resource itself uses an abbreviated environment code.
+- For the current Phase 10 stack, keep the same `appname-env` pattern across Container Apps names, images, and cleanup targets so local Docker and Azure stay aligned.
 
 ## Required Secrets
 - GitHub environment secrets: `AZUREAPPSERVICE_CLIENTID`, `AZUREAPPSERVICE_TENANTID`, `AZUREAPPSERVICE_SUBSCRIPTIONID`

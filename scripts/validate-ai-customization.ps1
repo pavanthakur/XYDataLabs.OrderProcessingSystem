@@ -186,6 +186,17 @@ Assert-Contains -Content $operatingModel -Needle 'scripts/validate-ai-customizat
 Assert-Contains -Content $workflowReadme -Needle 'validate-ai-customization.yml' -FailureMessage '.github/workflows/README.md must document validate-ai-customization.yml'
 Assert-Contains -Content $scriptReadme -Needle 'validate-ai-customization.ps1' -FailureMessage 'scripts/README.md must document validate-ai-customization.ps1'
 
+$azureWorkflowInstructions = Get-FileText -RelativePath '.github/instructions/azure-workflows.instructions.md'
+$azureDeploymentSkill = Get-FileText -RelativePath '.github/skills/azure-deployment-operations/SKILL.md'
+
+Assert-Contains -Content $copilotInstructions -Needle 'Strict Azure Runtime Target Convention' -FailureMessage '.github/copilot-instructions.md must document the strict Azure runtime target convention'
+Assert-Contains -Content $copilotInstructions -Needle 'automation/config/runtime-targets.json' -FailureMessage '.github/copilot-instructions.md must identify runtime-targets.json as the Azure automation source of truth'
+Assert-Contains -Content $copilotInstructions -Needle 'validate-phase10-environment-contract.ps1' -FailureMessage '.github/copilot-instructions.md must require the Phase 10 environment contract validator for Azure automation changes'
+Assert-Contains -Content $azureWorkflowInstructions -Needle 'Strict Azure Runtime Target Convention' -FailureMessage '.github/instructions/azure-workflows.instructions.md must document the strict Azure runtime target convention'
+Assert-Contains -Content $azureWorkflowInstructions -Needle 'Do not commit generated Azure Container Apps FQDNs' -FailureMessage '.github/instructions/azure-workflows.instructions.md must ban generated Azure hostnames in runtime-targets.json'
+Assert-Contains -Content $azureDeploymentSkill -Needle 'Runtime target convention for Phase 10+ automation' -FailureMessage 'azure-deployment-operations skill must document the runtime target convention'
+Assert-Contains -Content $azureDeploymentSkill -Needle 'validate-phase10-environment-contract.ps1' -FailureMessage 'azure-deployment-operations skill must require the Phase 10 environment contract validator when Azure runtime target behavior changes'
+
 if ($failures.Count -eq 0) {
     Write-Host "AI customization validation passed. Checked $($instructionFiles.Count) instruction file(s), $($promptFiles.Count) prompt file(s), $($agentFiles.Count) agent file(s), and $($skillFiles.Count) skill file(s)." -ForegroundColor Green
     exit 0
