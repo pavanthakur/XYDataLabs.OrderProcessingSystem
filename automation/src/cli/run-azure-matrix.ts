@@ -60,8 +60,19 @@ async function main(): Promise<void> {
   const matrixRunId = `payment-automation-azure-matrix-${startedAt.toISOString().replace(/[.:]/g, "-")}`;
   const reportComposer = new FileReportComposer();
   const runtimeTargetCatalog = new JsonRuntimeTargetCatalog();
-  const environmentKey = options.targets.length === 1
-    ? resolveEnvironmentKey(await runtimeTargetCatalog.resolve(options.targets[0]))
+  const resolvedTargets = await Promise.all(options.targets.map((target) => runtimeTargetCatalog.resolve(target)));
+  const invalidTargets = resolvedTargets.filter((target) =>
+    target.runtime !== "azure" || target.expectedTenantSource !== "runtime-configuration"
+  );
+  if (invalidTargets.length > 0) {
+    throw new Error(
+      "Azure payment matrix targets must be Azure runtime targets with expectedTenantSource=runtime-configuration in automation/config/runtime-targets.json. " +
+      `Invalid targets: ${invalidTargets.map((target) => `${target.key}(${target.runtime}/${target.expectedTenantSource})`).join(", ")}.`
+    );
+  }
+
+  const environmentKey = resolvedTargets.length === 1
+    ? resolveEnvironmentKey(resolvedTargets[0])
     : "azure-https";
   const playwrightRoot = path.join(workspaceRoot, "TestResults", "Playwright");
   const environmentRoot = path.join(playwrightRoot, environmentKey);
@@ -73,9 +84,13 @@ async function main(): Promise<void> {
   const progressLogPath = path.join(reportDirectory, "progress.log");
   const currentStepPath = path.join(reportDirectory, "current-step.txt");
   const normalizedProviders = normalizeRequestedProviders(options.requestedProviders);
-  const effectiveProviders = normalizedProviders.length > 0
-    ? normalizedProviders
-    : getDefaultMatrixProviders();
+  if (normalizedProviders.length > 0) {
+    throw new Error(
+      "Azure payment automation follows each tenant's authoritative provider assignment. " +
+      "Provider overrides are not supported by the promotion workflow; update the runtime target/deployment configuration instead."
+    );
+  }
+  const effectiveProviders: string[] = [];
   const matrixOutput: AzureMatrixOutput = {
     matrixRunId,
     reportDirectory,
@@ -97,10 +112,11 @@ async function main(): Promise<void> {
   await writeFile(rootMarkerPath, `${reportDirectory}\n`, "utf8");
   await writeFile(runPlanPath, [
     "Azure payment automation matrix run",
-    "Goal: confirm Azure target discovery and browser automation flow across the active tenant/provider matrix.",
+    "Goal: confirm Azure target discovery and browser automation flow for every active tenant using the provider resolved from runtime configuration.",
     `Environment: ${environmentKey}`,
+    "Runtime target config: automation/config/runtime-targets.json",
     `Targets: ${options.targets.join(", ")}`,
-    `Requested providers: ${effectiveProviders.join(", ")}`,
+    "Provider selection: runtime configuration -> tenant registry API (no override)",
     `Tenant selection: ${options.tenantCodes.length > 0 ? options.tenantCodes.join(", ") : "runtime default"}`,
     `Tenant limit: ${options.tenantLimit ?? "none"}`,
     `Dry run: ${options.dryRun ? "yes" : "no"}`,
@@ -115,8 +131,9 @@ async function main(): Promise<void> {
   await writeFile(startupLogPath, [
     `[${formatIstTimestamp(new Date())}] Matrix startup`,
     `environment=${environmentKey}`,
+    "runtimeTargetConfig=automation/config/runtime-targets.json",
     `targets=${options.targets.join(",")}`,
-    `requestedProviders=${effectiveProviders.join(",")}`,
+    "providerSelection=runtime-configuration-tenant-registry",
     `tenantCodes=${options.tenantCodes.length > 0 ? options.tenantCodes.join(",") : "runtime default"}`,
     `tenantLimit=${options.tenantLimit ?? "none"}`,
     `dryRun=${options.dryRun}`,
@@ -137,12 +154,9 @@ async function main(): Promise<void> {
     await writeFile(currentStepPath, `${matrixOutput.currentStep}\n`, "utf8");
     await writeRunMessage(startupLogPath, progressLogPath, `Executing target ${target} with prefix ${targetRunPrefix}.`);
 
-    const runtimeTarget = await runtimeTargetCatalog.resolve(target);
-    if (runtimeTarget.runtime !== "azure") {
-      throw new Error(`Azure matrix target ${target} resolved to runtime ${runtimeTarget.runtime}.`);
-    }
+    const runtimeTarget = resolvedTargets[index];
 
-    await writeRunMessage(startupLogPath, progressLogPath, `[${formatIstTimestamp(new Date())}] target=${target} state=resolved-target runtime=${runtimeTarget.runtime} profile=${runtimeTarget.profile}`);
+    await writeRunMessage(startupLogPath, progressLogPath, `[${formatIstTimestamp(new Date())}] target=${target} state=resolved-target runtime=${runtimeTarget.runtime} profile=${runtimeTarget.profile} expectedTenantSource=${runtimeTarget.expectedTenantSource}`);
     const run = await executePaymentAutomationRun({
       target,
       tenantCodes: options.tenantCodes,
@@ -171,12 +185,9 @@ async function main(): Promise<void> {
   const hasFailures = targetRuns.some((targetRun) =>
     targetRun.rows.some((row) => {
       const journeyFailed = !row.journeyOutcome.startsWith("completed") && row.journeyOutcome !== "dry_run";
-      const verificationFailed = options.verify && !options.dryRun && row.verificationOutcome === "failed";
+      const verificationFailed = options.verify && !options.dryRun && row.verificationOutcome !== "passed";
       return journeyFailed || verificationFailed;
     })
-  );
-  const hasVerificationWarnings = targetRuns.some((targetRun) =>
-    targetRun.rows.some((row) => options.verify && !options.dryRun && row.verificationOutcome === "partial")
   );
   matrixOutput.finishedUtc = new Date().toISOString();
   matrixOutput.finishedIst = formatIstTimestamp(new Date());
@@ -185,11 +196,33 @@ async function main(): Promise<void> {
   matrixOutput.targetCount = targetRuns.length;
   matrixOutput.targetRuns = targetRuns;
 
-  const targetSections = targetRuns.flatMap((targetRun) => [
-    `- ${targetRun.rows[0]?.runtimeTarget ?? "unknown"}: prefix ${targetRun.runPrefix}`,
-    `  report: ${targetRun.reportDirectory}`,
-    `  verification: ${targetRun.verificationSummary}`
-  ]);
+  const targetSections: string[] = [];
+  for (const targetRun of targetRuns) {
+    const runtimeTarget = targetRun.rows[0]?.runtimeTarget ?? "unknown";
+    targetSections.push(`### ${runtimeTarget} (prefix: ${targetRun.runPrefix})`);
+    targetSections.push("");
+    targetSections.push("| Tenant | Provider | Journey | Challenge | Verification | Cleanup |");
+    targetSections.push("|---|---|---|---|---|---|");
+    for (const row of targetRun.rows) {
+      targetSections.push(
+        `| ${row.tenantCode} | ${row.paymentProvider} | ${row.journeyOutcome} | ${row.challengeOutcome} | ${row.verificationOutcome} | ${row.cleanupOutcome} |`
+      );
+    }
+    if (targetRun.rows.length === 0) {
+      targetSections.push("| — | — | no tenants ran | — | — | — |");
+    }
+    const cleanVerificationSummary = stripAnsiCodes(targetRun.verificationSummary);
+    if (cleanVerificationSummary && cleanVerificationSummary !== "Verification skipped.") {
+      targetSections.push("");
+      for (const segment of cleanVerificationSummary.split(" | ")) {
+        const trimmed = segment.trim();
+        if (trimmed) {
+          targetSections.push(`> ${trimmed}`);
+        }
+      }
+    }
+    targetSections.push("");
+  }
 
   await writeFile(
     path.join(reportDirectory, "summary.md"),
@@ -201,13 +234,6 @@ async function main(): Promise<void> {
       `Started IST: ${matrixOutput.startedIst}`,
       `Finished IST: ${matrixOutput.finishedIst}`,
       `Status: ${matrixOutput.status}`,
-      ...(hasVerificationWarnings
-        ? [
-          "",
-          "> Verification warnings were reported for one or more tenant runs.",
-          "> The browser journey and cleanup completed, but some post-run evidence remained partial."
-        ]
-        : []),
       "",
       "## Target Runs",
       "",
@@ -234,6 +260,13 @@ async function writeRunMessage(startupLogPath: string, progressLogPath: string, 
   process.stdout.write(`${line}\n`);
   await writeFile(progressLogPath, `${line}\n`, { flag: "a" });
   await writeFile(startupLogPath, `${line}\n`, { flag: "a" });
+}
+
+// eslint-disable-next-line no-control-regex
+const ansiCodePattern = /\x1B\[[0-9;]*[mGKHF]/g;
+
+function stripAnsiCodes(text: string): string {
+  return text.replace(ansiCodePattern, "");
 }
 
 function parseCliOptions(argumentsList: string[]): AzureMatrixOptions {
@@ -334,10 +367,6 @@ function normalizeRequestedProviders(requestedProviders: string[]): string[] {
         .filter(Boolean)
     )
   );
-}
-
-function getDefaultMatrixProviders(): string[] {
-  return ["OpenPay", "Razorpay"];
 }
 
 void main().catch((error: unknown) => {

@@ -38,6 +38,14 @@ Open the relevant sources before changing deployment behavior:
 
 ## Operating Rules
 
+Runtime target convention for Phase 10+ automation:
+
+- Treat `automation/config/runtime-targets.json` as the source of truth for runtime endpoints and Azure resource names used by smoke, transport, payment, and verifier automation.
+- For every new automation-used Azure service, add explicit values for `azure-dev`, `azure-stg`, and `azure-prod` before wiring workflows or scripts to it.
+- Update `automation/src/contracts/runtime-target-catalog.ts` and `Resources/Azure-Deployment/validate-phase10-environment-contract.ps1` with the service field so future hardcoding fails validation.
+- Do not put generated ACA FQDNs, random revision suffixes, GUIDs, or one-run discovery values in `runtime-targets.json`; discover generated values at runtime.
+- Deployment/IaC may create resources from suffix parameters; post-deploy automation must consume stable configured names from `runtime-targets.json` or workflow outputs derived from it.
+
 1. Keep the two-workflow split intact.
    - `azure-initial-setup.yml` is one-time setup.
    - `azure-bootstrap.yml` is the day-to-day coordinated deployment entrypoint.
@@ -82,6 +90,7 @@ Open the relevant sources before changing deployment behavior:
 
 After deployment-governance changes, prefer the same repo-standard checks used elsewhere:
 
+- `pwsh Resources/Azure-Deployment/validate-phase10-environment-contract.ps1` when Azure workflow/resource-target behavior changed
 - `pwsh scripts/validate-ai-customization.ps1` when `.github/` AI assets changed
 - `node scripts/validate-doc-links.js` when `docs/` changed
 - Focused workflow/script validation for the specific deployment path that changed

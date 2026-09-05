@@ -60,23 +60,43 @@ jobs:
             TARGET_KEY="azure-dev"
           fi
 
-          RG_NAME="rg-orderprocessing-${ENV_SUFFIX}"
-          GATEWAY_APP="orderprocessing-gate-${ENV_SUFFIX}"
-          UI_APP="orderprocessing-ui-${ENV_SUFFIX}"
-          SQL_SERVER="orderprocessing-sql-${ENV_SUFFIX}"
-          REDIS_NAME="orderprocessing-redis-${ENV_SUFFIX}"
+          TARGET_JSON="$(TARGET_KEY="$TARGET_KEY" node -e 'const doc = require("./automation/config/runtime-targets.json"); const target = doc.targets.find((item) => item.key === process.env.TARGET_KEY); if (!target) { throw new Error(`Unknown runtime target ${process.env.TARGET_KEY}`); } process.stdout.write(JSON.stringify(target));')"
+          read_target_field() {
+            TARGET_JSON="$TARGET_JSON" FIELD_NAME="$1" node -e 'const target = JSON.parse(process.env.TARGET_JSON); process.stdout.write(String(target[process.env.FIELD_NAME] || ""));'
+          }
+
+          RG_NAME="$(read_target_field azureResourceGroupName)"
+          GATEWAY_APP="$(read_target_field azureGatewayContainerAppName)"
+          UI_APP="$(read_target_field azureUiContainerAppName)"
+          SQL_SERVER="$(read_target_field azureSqlServerName)"
+          REDIS_NAME="$(read_target_field azureRedisName)"
+          APP_INSIGHTS_NAME="$(read_target_field azureApplicationInsightsName)"
+          KEY_VAULT_NAME="$(read_target_field azureKeyVaultName)"
+          GATEWAY_BASE_URL="$(read_target_field apiBaseUrl | sed 's#/*$##')"
+          UI_BASE_URL="$(read_target_field baseUrl | sed 's#/*$##')"
           SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
 
-          GATEWAY_FQDN="$(az containerapp show --resource-group "$RG_NAME" --name "$GATEWAY_APP" --query properties.configuration.ingress.fqdn -o tsv)"
-          UI_FQDN="$(az containerapp show --resource-group "$RG_NAME" --name "$UI_APP" --query properties.configuration.ingress.fqdn -o tsv)"
-
-          if [ -z "$GATEWAY_FQDN" ] || [ -z "$UI_FQDN" ]; then
-            echo "Failed to resolve Gateway/UI Container App ingress FQDNs." >&2
+          if [ -z "$RG_NAME" ] || [ -z "$GATEWAY_APP" ] || [ -z "$UI_APP" ] || [ -z "$SQL_SERVER" ] || [ -z "$REDIS_NAME" ]; then
+            echo "Selected runtime target ${TARGET_KEY} is missing Azure resource metadata in automation/config/runtime-targets.json." >&2
             exit 1
           fi
 
-          GATEWAY_BASE_URL="https://${GATEWAY_FQDN}"
-          UI_BASE_URL="https://${UI_FQDN}"
+          GATEWAY_FQDN="$(az containerapp show --resource-group "$RG_NAME" --name "$GATEWAY_APP" --query properties.configuration.ingress.fqdn -o tsv 2>/dev/null || true)"
+          UI_FQDN="$(az containerapp show --resource-group "$RG_NAME" --name "$UI_APP" --query properties.configuration.ingress.fqdn -o tsv 2>/dev/null || true)"
+
+          if [ -n "$GATEWAY_FQDN" ]; then
+            GATEWAY_BASE_URL="https://${GATEWAY_FQDN}"
+          fi
+
+          if [ -n "$UI_FQDN" ]; then
+            UI_BASE_URL="https://${UI_FQDN}"
+          fi
+
+          if [ -z "$GATEWAY_BASE_URL" ] || [ -z "$UI_BASE_URL" ]; then
+            echo "Failed to resolve Gateway/UI URLs from automation/config/runtime-targets.json or Azure Container Apps." >&2
+            exit 1
+          fi
+
           RESOURCE_GROUP_URL="https://portal.azure.com/#/resource/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/overview"
           GATEWAY_URL="https://portal.azure.com/#/resource/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/providers/Microsoft.App/containerApps/${GATEWAY_APP}/overview"
           UI_URL="https://portal.azure.com/#/resource/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/providers/Microsoft.App/containerApps/${UI_APP}/overview"
@@ -88,6 +108,8 @@ jobs:
           echo "uiApp=${UI_APP}" >> "$GITHUB_OUTPUT"
           echo "sqlServer=${SQL_SERVER}" >> "$GITHUB_OUTPUT"
           echo "redisName=${REDIS_NAME}" >> "$GITHUB_OUTPUT"
+          echo "appInsightsName=${APP_INSIGHTS_NAME}" >> "$GITHUB_OUTPUT"
+          echo "keyVaultName=${KEY_VAULT_NAME}" >> "$GITHUB_OUTPUT"
           echo "gatewayBaseUrl=${GATEWAY_BASE_URL}" >> "$GITHUB_OUTPUT"
           echo "uiBaseUrl=${UI_BASE_URL}" >> "$GITHUB_OUTPUT"
 
@@ -148,7 +170,7 @@ jobs:
             & scripts/verify-phase10-azure-tenant-topology.ps1 `
               -Environment '${{ inputs.environment }}' `
               -ResourceGroupName '${{ steps.topology.outputs.resourceGroup }}' `
-              -RequiredProviderCodes @('OpenPay', 'Razorpay') `
+              -GatewayBaseUrl '${{ steps.topology.outputs.gatewayBaseUrl }}' `
               -SummaryPath $summaryPath
           }
           catch {
@@ -171,7 +193,7 @@ jobs:
         working-directory: automation
         run: npx playwright install chromium
 
-      - name: Run all-tenant Azure payment matrix
+      - name: Run all tenants with assigned payment providers
         shell: bash
         env:
           XYDATALABS_RUNTIME_TARGET_AZURE_DEV_BASE_URL: ${{ steps.topology.outputs.uiBaseUrl }}
@@ -180,6 +202,10 @@ jobs:
           XYDATALABS_RUNTIME_TARGET_AZURE_STG_API_BASE_URL: ${{ steps.topology.outputs.gatewayBaseUrl }}
           XYDATALABS_RUNTIME_TARGET_AZURE_PROD_BASE_URL: ${{ steps.topology.outputs.uiBaseUrl }}
           XYDATALABS_RUNTIME_TARGET_AZURE_PROD_API_BASE_URL: ${{ steps.topology.outputs.gatewayBaseUrl }}
+          XYDATALABS_AZURE_APP_INSIGHTS_NAME: ${{ steps.topology.outputs.appInsightsName }}
+          XYDATALABS_AZURE_KEY_VAULT_NAME: ${{ steps.topology.outputs.keyVaultName }}
+          XYDATALABS_AZURE_SQL_SERVER_NAME: ${{ steps.topology.outputs.sqlServer }}
+          XYDATALABS_AZURE_RESOURCE_GROUP_NAME: ${{ steps.topology.outputs.resourceGroup }}
         run: |
           EXTRA_ARGS=()
           if [ "${{ inputs.skipVerification }}" = "true" ]; then
@@ -190,6 +216,21 @@ jobs:
             --target "${{ steps.topology.outputs.targetKey }}" \
             --tenant-timeout-ms "${{ inputs.tenantTimeoutMs }}" \
             "${EXTRA_ARGS[@]}"
+
+      - name: Verify assigned topology remains unchanged
+        if: always()
+        shell: pwsh
+        run: |
+          $summaryPath = Join-Path $PWD 'TestResults/Playwright/azure-https/topology-postflight-${{ inputs.environment }}-${{ github.run_id }}.md'
+          & scripts/verify-phase10-azure-tenant-topology.ps1 `
+            -Environment '${{ inputs.environment }}' `
+            -ResourceGroupName '${{ steps.topology.outputs.resourceGroup }}' `
+            -GatewayBaseUrl '${{ steps.topology.outputs.gatewayBaseUrl }}' `
+            -SummaryPath $summaryPath
+
+          if (Test-Path -LiteralPath $summaryPath) {
+            Get-Content -LiteralPath $summaryPath | Add-Content -Path $env:GITHUB_STEP_SUMMARY
+          }
 
       - name: Resolve Azure matrix run packet
         id: run_packet

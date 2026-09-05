@@ -27,6 +27,8 @@ Always follow the rules in these instruction files when they apply:
 - **Staging suffix is `stg`** in Azure resource names (not `staging`). Scripts map via `$envSuffix = switch ($Environment) { 'staging' { 'stg' } default { $Environment } }`.
 - **Two-track split**: `azure-initial-setup.yml` (one-time OIDC/secrets) plus `azure-bootstrap.yml` for the legacy App Service path and `infra-deploy.yml` for the current Phase 10 Container Apps path.
 - **Bicep subscription scope**: Use `az deployment sub create` for subscription-scoped templates. Never `az deployment group create` for subscription-scope.
+- **Runtime target source of truth**: For Phase 10+ automation, read stable runtime endpoints and Azure resource names from `automation/config/runtime-targets.json`; never commit generated ACA FQDNs, random suffixes, GUIDs, or one-run discovery values there.
+- **New Azure service checklist**: Add the service metadata for `azure-dev`, `azure-stg`, and `azure-prod`, update `automation/src/contracts/runtime-target-catalog.ts`, wire the owning workflow/script, and extend `Resources/Azure-Deployment/validate-phase10-environment-contract.ps1` in the same change.
 
 ## Phase 10 guidance
 

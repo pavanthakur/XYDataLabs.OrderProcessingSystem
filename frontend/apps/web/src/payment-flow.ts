@@ -99,7 +99,7 @@ export function trackPaymentEvent(
     body,
     keepalive: options?.useBeacon === true
   })
-    .then(() => true)
+    .then((response) => response.ok)
     .catch(() => false);
 }
 

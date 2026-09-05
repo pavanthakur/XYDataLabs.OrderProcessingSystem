@@ -78,7 +78,7 @@ export async function executePaymentAutomationRun(
   const target = await runtimeTargetCatalog.resolve(options.target);
   log(`Resolved runtime target ${target.key} (${target.runtime}/${target.profile}).`);
   log(`Resolving tenant execution plan for ${options.target}.`);
-  const tenantExecutionCatalog = options.dryRun
+  const tenantExecutionCatalog = options.dryRun && target.runtime !== "azure"
     ? new StaticTenantExecutionCatalog()
     : new ApiTenantExecutionCatalog(target);
   const tenantPlan = await tenantExecutionCatalog.resolve(
@@ -164,6 +164,8 @@ export async function executePaymentAutomationRun(
     let verificationOutcome = options.verify && !options.dryRun ? "pending" : "skipped";
     let cleanupOutcome = resolveCleanupOutcome();
     let evidenceReference = `customerOrderId:${syntheticCustomerOrderId} | runPrefix:${executionItem.executionRunPrefix}`;
+    let outcomeMessage = "";
+    let errorDetail = "";
     let fixtureIds: string[] = [];
     let provisioner: PaymentFixtureProvisioner | undefined;
     let stopAfterCurrentItem = false;
@@ -213,7 +215,9 @@ export async function executePaymentAutomationRun(
         orderReferenceId = journeyResult.orderReferenceId;
         orderAmount = journeyResult.orderAmount;
         orderCurrencyCode = journeyResult.orderCurrencyCode;
+        outcomeMessage = journeyResult.statusMessage;
         evidenceReference = `customerOrderId:${customerOrderId} | orderId:${orderId} | orderRef:${orderReferenceId} | amount:${orderAmount} ${orderCurrencyCode} -> ${journeyResult.finalUrl}`;
+        const providerPaymentId = extractProviderPaymentId(journeyResult.finalUrl);
 
         if (options.verify) {
           try {
@@ -230,7 +234,10 @@ export async function executePaymentAutomationRun(
               environment: target.environment,
               profile: target.profile,
               runPrefix: executionItem.executionRunPrefix,
-              customerOrderId
+              tenantCode: executionItem.tenantCode,
+              customerOrderId,
+              orderReferenceId,
+              providerPaymentId
             });
 
             verificationOutcome = verificationResult.outcome;
@@ -251,16 +258,18 @@ export async function executePaymentAutomationRun(
             );
           }
           catch (error) {
-            verificationOutcome = "skipped";
+            verificationOutcome = "failed";
             const verificationMessage = error instanceof Error ? error.message : "Verification failed.";
-            verificationSummaries.push(`Verification skipped for ${executionItem.tenantCode}: ${verificationMessage}`);
-            log(`[${executionItem.tenantCode}] Verification skipped: ${verificationMessage}`);
+            verificationSummaries.push(`Verification failed for ${executionItem.tenantCode}: ${verificationMessage}`);
+            log(`[${executionItem.tenantCode}] Verification failed: ${verificationMessage}`);
           }
         }
       }
     }
     catch (error) {
-      journeyOutcome = error instanceof Error ? `failed: ${error.message}` : "failed";
+      const errorMessage = error instanceof Error ? error.message : "Unknown error.";
+      journeyOutcome = `failed: ${errorMessage}`;
+      errorDetail = errorMessage;
       verificationOutcome = "skipped";
       if (!options.allowPartialExecution) {
         stopAfterCurrentItem = true;
@@ -292,6 +301,8 @@ export async function executePaymentAutomationRun(
         orderReferenceId,
         orderAmount,
         orderCurrencyCode,
+        outcomeMessage,
+        errorDetail,
         startedUtc: tenantStartedAt.toISOString(),
         finishedUtc: new Date().toISOString(),
         evidenceReference,
@@ -331,6 +342,18 @@ export async function executePaymentAutomationRun(
   }
 
   return output;
+}
+
+function extractProviderPaymentId(finalUrl: string): string | undefined {
+  try {
+    const callbackUrl = new URL(finalUrl);
+    return callbackUrl.searchParams.get("razorpay_payment_id")
+      ?? callbackUrl.searchParams.get("id")
+      ?? undefined;
+  }
+  catch {
+    return undefined;
+  }
 }
 
 function applyTenantLimit(

@@ -45,7 +45,7 @@ export class PowerShellVerificationAdapter implements VerificationAdapter {
     const hasInconclusive = outcomes.includes("INCONCLUSIVE");
 
     return {
-      outcome: hasFailure ? "failed" : hasInconclusive ? "partial" : "passed",
+      outcome: hasFailure || hasInconclusive ? "failed" : "passed",
       summary: `Physical verification completed for ${runAnchor}.`,
       threeDsByTenant: extractThreeDsByTenant(rawReport),
       rawReport
@@ -55,22 +55,22 @@ export class PowerShellVerificationAdapter implements VerificationAdapter {
   private async executeAzure(request: VerificationRequest): Promise<VerificationResult> {
     const scriptPath = path.join(repoRoot, "scripts", "verify-payment-run-azure.ps1");
     const firstAttempt = await this.runAzureVerification(scriptPath, request, 90);
-    if (firstAttempt.outcome !== "partial") {
+    if (firstAttempt.outcome !== "failed") {
       return firstAttempt;
     }
 
     await delay(45000);
     const secondAttempt = await this.runAzureVerification(scriptPath, request, 0);
-    if (secondAttempt.outcome === "passed" || secondAttempt.outcome === "failed") {
+    if (secondAttempt.outcome === "passed") {
       return {
         ...secondAttempt,
-        summary: `${secondAttempt.summary} Retried after initial inconclusive evidence.`
+        summary: `${secondAttempt.summary} Retried after initial verification failure.`
       };
     }
 
     return {
       ...secondAttempt,
-      summary: `${secondAttempt.summary} Evidence remained partial after retry.`
+      summary: `${secondAttempt.summary} Verification failed after retry.`
     };
   }
 
@@ -87,6 +87,14 @@ export class PowerShellVerificationAdapter implements VerificationAdapter {
       request.environment,
       "-RunPrefix",
       request.runPrefix,
+      "-TenantCode",
+      request.tenantCode ?? "",
+      "-CustomerOrderId",
+      request.customerOrderId ?? "",
+      "-OrderReferenceId",
+      request.orderReferenceId ?? "",
+      "-ProviderPaymentId",
+      request.providerPaymentId ?? "",
       "-OutputFormat",
       "Json",
       "-PreQueryDelaySeconds",
@@ -99,7 +107,7 @@ export class PowerShellVerificationAdapter implements VerificationAdapter {
     const hasInconclusive = outcomes.includes("INCONCLUSIVE");
 
     return {
-      outcome: hasFailure ? "failed" : hasInconclusive ? "partial" : "passed",
+      outcome: hasFailure || hasInconclusive ? "failed" : "passed",
       summary: `Azure verification completed for ${request.runPrefix}.`,
       threeDsByTenant: extractThreeDsByTenant(rawReport),
       rawReport

@@ -3,6 +3,14 @@ param(
     [string]$Environment = 'dev',
 
     [string]$ResourceGroupName,
+
+    [string]$GatewayContainerAppName,
+    [string]$OrdersContainerAppName,
+    [string]$PaymentsContainerAppName,
+    [string]$InventoryContainerAppName,
+    [string]$NotificationsContainerAppName,
+    [string]$UiContainerAppName,
+    [string]$FunctionAppName,
     [string]$SummaryPath,
     [int]$Attempts = 12,
     [int]$DelaySeconds = 10
@@ -220,14 +228,14 @@ function Test-FunctionAppHost {
 }
 
 $containerApps = @(
-    "orderprocessing-gate-$envSuffix",
-    "orderprocessing-ord-$envSuffix",
-    "orderprocessing-pay-$envSuffix",
-    "orderprocessing-inv-$envSuffix",
-    "orderprocessing-notif-$envSuffix",
-    "orderprocessing-ui-$envSuffix"
+    $(if ([string]::IsNullOrWhiteSpace($GatewayContainerAppName)) { "orderprocessing-gate-$envSuffix" } else { $GatewayContainerAppName }),
+    $(if ([string]::IsNullOrWhiteSpace($OrdersContainerAppName)) { "orderprocessing-ord-$envSuffix" } else { $OrdersContainerAppName }),
+    $(if ([string]::IsNullOrWhiteSpace($PaymentsContainerAppName)) { "orderprocessing-pay-$envSuffix" } else { $PaymentsContainerAppName }),
+    $(if ([string]::IsNullOrWhiteSpace($InventoryContainerAppName)) { "orderprocessing-inv-$envSuffix" } else { $InventoryContainerAppName }),
+    $(if ([string]::IsNullOrWhiteSpace($NotificationsContainerAppName)) { "orderprocessing-notif-$envSuffix" } else { $NotificationsContainerAppName }),
+    $(if ([string]::IsNullOrWhiteSpace($UiContainerAppName)) { "orderprocessing-ui-$envSuffix" } else { $UiContainerAppName })
 )
-$functionApp = "orderprocessing-functions-$envSuffix"
+$functionApp = if ([string]::IsNullOrWhiteSpace($FunctionAppName)) { "orderprocessing-functions-$envSuffix" } else { $FunctionAppName }
 
 Write-Host "Verifying Phase 10 Azure runtime hosts for '$Environment' in '$resourceGroup'..."
 

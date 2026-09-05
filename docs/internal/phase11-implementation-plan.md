@@ -26,7 +26,7 @@ Phase 11 does not make arbitrary unknown provider implementations data-driven. O
 The final Phase 10 Azure-dev proof exposed two failure modes that Phase 11 must close before topology mutations or service-store splitting begin:
 
 1. The live Orders host and `/api/v1/Info/tenant-registry` correctly followed `OrderProcessingSystem_Dev.dbo.Tenants`, where `TenantC` had been changed to `Razorpay`. A matching `OpenPay` value in the Tenant C dedicated database did not make the runtime stale; that copy was non-authoritative and made operator diagnosis ambiguous.
-2. Azure Payment Matrix run `31737938342` completed all six tenant/provider browser journeys, challenges, callbacks, and cleanup paths, but every row remained `verification=partial`. Application Insights contained request telemetry, while the custom payment and UI correlation events required by the verifier were absent. A green workflow conclusion therefore did not prove the complete evidence contract.
+2. Azure Payment Matrix run `31737938342` incorrectly expanded three tenants into six tenant/provider combinations and every row remained `verification=partial`. The promotion matrix must instead mirror Action 2: one journey per active tenant using the provider currently assigned by the authoritative registry. Application Insights contained request/dependency telemetry, while the custom payment and UI correlation events required by the verifier were absent. A green workflow conclusion therefore did not prove the complete evidence contract.
 
 These are mandatory Phase 11 entry corrections:
 
@@ -36,7 +36,7 @@ These are mandatory Phase 11 entry corrections:
 - workflows compare an independent control-plane registry observation with the runtime topology endpoint before business execution and again after cleanup;
 - the Azure payment workflow must prove that its required custom telemetry can be emitted and queried before starting the matrix;
 - `partial`, `inconclusive`, missing telemetry, or uncorrelated evidence cannot satisfy a dev, staging, or promotion gate, even when the browser journey succeeds;
-- alternate-provider matrix coverage must use a run-scoped test override that does not mutate authoritative registry state. Until that override exists, any transitional reassignment must use an operation lock, optimistic concurrency, a durable compensation path, and a mandatory read-back of the original registry version and contract hash.
+- the standard Azure payment workflow must never override or temporarily rewrite provider assignment; cross-provider capability coverage belongs to local/CI adapter suites or to a separately governed provider-reassignment operation, after which the workflow tests the newly authoritative assignment.
 
 Phase 11 work cannot claim a clean entry baseline until the Payments host emits the payment/UI custom-event contract, the verifier queries it successfully, and an Azure-dev matrix produces complete rather than partial evidence for every required row.
 
@@ -53,7 +53,7 @@ Phase 11 work cannot claim a clean entry baseline until the Payments host emits 
 9. Evidence contains secret identifiers and contract status only, never secret values, credentials, or private-key material.
 10. Every operation is idempotent, concurrency-controlled, auditable, resumable, and reversible within its declared rollback window.
 11. Discovery determines desired topology; provisioning prepares it; validation proves it; activation changes registry truth. These stages cannot be collapsed.
-12. An execution filter or debug provider override never truncates discovery, weakens validation, or mutates registry-derived topology.
+12. An execution filter never truncates discovery or weakens validation. The standard Azure payment workflow has no provider-override path and never mutates registry-derived topology.
 13. A tenant-level dedicated tier expands to the complete governed set of service-owned dedicated stores; a partially provisioned dedicated tenant cannot be activated.
 14. Environment and branch mapping is validated before any mutation: `dev -> dev`, `staging -> staging`, and `main -> prod`.
 15. Service-owned stores may consume a versioned topology projection, but they never own or accept writes to active tier/provider truth. A stale shadow topology row is drift, not fallback authority.
@@ -287,15 +287,17 @@ All four workflows operate on the same environment, commit SHA, registry version
 ### `04 Azure Payment Matrix`
 
 - discovers and validates all active topology before applying tenant filters;
-- executes the registry-assigned provider by default;
-- tests alternate validated providers only through a bounded, run-scoped debug/test override that does not change registry truth;
+- executes exactly one journey per active tenant using its registry-assigned provider;
+- rejects provider overrides and never changes `Tenants.PaymentProviderCode` as part of payment verification;
 - emits and queries a preflight telemetry canary from the same Payments-host path, Application Insights component, and correlation schema used by the matrix;
+- scopes persisted order evidence by both tenant and customer-order ID so equal order numbers in separate tenant stores cannot be combined;
+- carries the provider payment ID observed at the browser callback into verification and correlates it across successful Application Insights requests and dependencies, even when the provider's database charge key differs;
 - verifies authoritative amount/currency, callback/webhook idempotency, order state, inventory effect, notification effect, and correlation evidence;
 - requires every mandatory verification check to be `PASS`; `Partial` or `Inconclusive` fails standard mode and is allowed only in an explicitly labeled diagnostic-only run that cannot be promoted;
 - rediscovers registry and runtime topology after all journeys and proves that registry version and contract hash are unchanged;
 - emits journey results linked to the topology contract hash.
 
-Until the non-mutating provider override is delivered, the transitional matrix path must acquire the tenant operation lock, capture the original assignment and registry version, use compare-and-swap for both change and restore, register durable cancellation compensation outside the runner process, and fail unless final read-back proves the original version/hash-equivalent topology. A best-effort `finally` reset is not an acceptance mechanism.
+Cross-provider adapter capability is proven independently in local/CI suites. An Azure provider switch is tested only as a governed P11-W5 reassignment: validate the target contract, update registry truth through the control plane, then run Action 4 against that assigned provider. Action 4 itself performs no topology mutation or restoration.
 
 Promotion is rejected when workflow evidence references different environment, commit SHA, registry version, or contract hash. A workflow rerun after topology mutation must rediscover and revalidate rather than reuse stale evidence.
 
@@ -427,9 +429,9 @@ For the service-owned target model, database preparation through identity grant 
 7. Retain the old provider secret during an approved overlap/rollback window.
 8. Remove the old contract only after reconciliation confirms no pending attempts depend on it.
 
-Debug overrides may execute another validated provider path, but must not modify registry truth or bypass contract validation. The override is scoped to one authenticated test run, tenant, provider capability, and expiry; it is rejected in production and cannot be persisted as tenant topology.
+Action 4 validates only the provider assigned after the governed operation completes. Alternate-provider adapter behavior is exercised by non-mutating local/CI capability tests; no debug override may impersonate a different registry assignment in the Azure promotion workflow.
 
-Retire the Phase 10 matrix behavior that updates `Tenants.PaymentProviderCode` for alternate-provider coverage. Before retirement, wrap the transitional behavior in the topology operation lock and durable compensation contract described in the workflow section, and treat any unproven restoration as a failed topology operation.
+The Phase 10 matrix behavior that updated `Tenants.PaymentProviderCode` for alternate-provider coverage is retired at Phase 11 entry and is not a supported transitional path.
 
 Adding a new provider capability is a code-and-contract change, not a tenant operation. It requires:
 
@@ -495,7 +497,7 @@ Run these scenarios in local Docker, CI, Azure dev, and staging before Phase 11 
 - prove dry-run/what-if identifies expected resource and secret identifiers and checks caller capabilities without reading or printing secret values
 - reject concurrent conflicting operations
 - prove no topology operation logs secret values
-- interrupt the alternate-provider matrix at every mutation/callback boundary and prove authoritative provider assignment is unchanged or durably restored
+- interrupt Action 4 at every journey/callback boundary and prove authoritative provider assignment and registry version remain unchanged
 - change a non-authoritative dedicated-store topology copy and prove runtime remains bound to the central registry while reconciliation reports the shadow drift
 - prove an Application Insights resource with healthy request telemetry but missing payment custom events fails evidence preflight
 - prove `partial` and `inconclusive` verification results cannot produce promotable workflow success
@@ -548,6 +550,7 @@ Each workstream must deliver code, tests, Docker evidence, runbook updates, and 
 - reject service-owned code that treats a local topology shadow as authority or fallback;
 - reject a standard workflow path that maps `Partial` or `Inconclusive` evidence to success;
 - require the Payments host to register the custom-event telemetry publisher when the Azure telemetry connection is configured.
+- require Action 4 verifier contracts to include tenant code, persisted customer-order ID, and browser-observed provider payment ID.
 
 ### Provisioning scenarios
 
@@ -578,12 +581,12 @@ Each workstream must deliver code, tests, Docker evidence, runbook updates, and 
 - switch each supported provider in both directions and restore the original assignment;
 - missing key/webhook contract fails before assignment;
 - unsupported provider code fails discovery/contract construction;
-- debug override validates the alternate capability but leaves registry assignment unchanged;
+- local/CI capability tests validate each adapter without changing registry assignment;
 - callback, webhook, idempotency, timeout, retry, and reconciliation behavior remains provider-specific but contract-consistent;
 - a newly implemented provider cannot enter the registry until its complete capability catalog and validation suite pass.
-- alternate-provider matrix execution leaves registry version/provider assignment unchanged;
-- forced runner cancellation cannot strand a temporary provider assignment;
-- restoration with a stale registry version fails safely and creates a repair operation instead of overwriting a newer operator change.
+- Action 4 execution leaves registry version/provider assignment unchanged;
+- forced Action 4 runner cancellation cannot strand any temporary provider assignment because the workflow never creates one;
+- a governed provider reassignment with a stale registry version fails safely and creates a repair operation instead of overwriting a newer operator change.
 
 ### Isolation and consistency scenarios
 
@@ -663,7 +666,7 @@ Phase 11 is complete only when all gates pass independently:
 - Never delete the current database, current provider contract, or last known-good evidence during target preparation.
 - Post-activation verification failure must automatically stop promotion and invoke the declared rollback or mark the operation for manual intervention.
 - Cleanup is a separate approved operation and cannot be an implicit consequence of successful activation.
-- An alternate-provider test must not mutate registry truth. A temporary Phase 10 compatibility mutation is treated as a topology operation and requires durable compensation plus final version/hash proof.
+- Action 4 must test only registry-assigned providers and must not mutate registry truth. Provider reassignment is a separate governed topology operation with its own compensation and version/hash proof.
 - Missing required custom telemetry is an evidence-contract failure. Waiting or retrying is appropriate only while the declared ingestion bound remains open; after that bound it fails rather than degrading to promotable `Partial`.
 - If central registry, runtime endpoint, and a service/dedicated-store shadow disagree, central registry remains authoritative, promotion stops, and reconciliation identifies the writer and repair path. Operators must not update multiple databases to make screenshots agree.
 

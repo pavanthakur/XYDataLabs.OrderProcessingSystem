@@ -53,6 +53,9 @@ Open the relevant sources before changing backend behavior:
 5. Never store raw payment card data.
    - Preserve masking and tokenized data rules.
 6. Keep migrations and model changes together.
+7. Treat Azure/runtime automation impact as part of feature design.
+   - If a backend feature adds or renames a deployed runtime dependency, endpoint, background worker, Function, queue/topic/subscription, provider integration, or verifier dependency, stop and coordinate the Azure deployment/runtime-target updates instead of leaving them as follow-up.
+   - The required Azure automation update set is `automation/config/runtime-targets.json`, `automation/src/contracts/runtime-target-catalog.ts`, the owning workflow/script, and `Resources/Azure-Deployment/validate-phase10-environment-contract.ps1`.
    - If schema changes, update the owning mappings and migration assets in the same change.
 
 ## Recommended Execution Flow
@@ -90,6 +93,7 @@ After backend changes, prefer the narrowest executable validation for the touche
 - Focused `dotnet test` for the changed backend project or scenario
 - Focused build when a narrow test is not available
 - `pwsh scripts/validate-ai-customization.ps1` when shared AI governance files changed
+- `pwsh Resources/Azure-Deployment/validate-phase10-environment-contract.ps1` when backend work adds/renames Azure runtime dependencies or automation-visible services
 
 ## Related Assets
 

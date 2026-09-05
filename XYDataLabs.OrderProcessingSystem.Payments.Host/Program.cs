@@ -48,6 +48,16 @@ builder.Services.AddOptions<TenantConfigurationOptions>()
     .ValidateOnStart();
 
 builder.Services.AddHttpClient();
+var applicationInsightsOptions = ApplicationInsightsOptions.FromConfiguration(builder.Configuration);
+if (!string.IsNullOrWhiteSpace(applicationInsightsOptions.ConnectionString))
+{
+    builder.Services.AddApplicationInsightsTelemetry(options =>
+    {
+        options.ConnectionString = applicationInsightsOptions.ConnectionString;
+        options.EnableAdaptiveSampling = false;
+        options.EnableQuickPulseMetricStream = true;
+    });
+}
 var redisConnectionString = builder.Configuration.GetConnectionString("Redis");
 if (!string.IsNullOrWhiteSpace(redisConnectionString))
 {

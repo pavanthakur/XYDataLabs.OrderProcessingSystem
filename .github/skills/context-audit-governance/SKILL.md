@@ -16,6 +16,7 @@ Use when the task involves any of the following:
 - Verifying prompt, agent, and skill discovery surfaces are still aligned
 - Detecting stale project tables, test-project lists, package references, or directory maps
 - Checking AI-facing assets for secret-like values or unsafe tracked config samples
+- Auditing that Copilot/Codex guidance still describes `runtime-targets.json` as the Phase 10+ Azure automation source of truth
 
 Do not use this skill for:
 
@@ -31,6 +32,7 @@ Open the relevant sources before running the audit:
 - `.github/copilot-instructions.md`
 - `.github/prompts/README.md`
 - `.github/skills/README.md`
+- `.github/instructions/azure-workflows.instructions.md`
 - `docs/AI-OPERATING-MODEL.md`
 - `/memories/repo/` files relevant to repo facts and conventions
 
@@ -47,6 +49,8 @@ Open the relevant sources before running the audit:
 5. Prefer fixing shared-truth surfaces at the source.
    - If the codebase is correct and the docs or memory are stale, update the stale surface rather than weakening the audit.
 6. Use the repository's severity model.
+7. Include the Azure runtime-target convention in shared-context drift checks.
+   - Verify AI-facing guidance does not encourage hardcoded Azure resource names or generated ACA hostnames in `runtime-targets.json`.
    - High for wrong always-on context, medium for missing discovery or incomplete coverage, low for minor drift.
 
 ## Recommended Execution Flow
@@ -74,6 +78,7 @@ Open the relevant sources before running the audit:
 - Prompt indexes that omit newer prompts, agents, or skills
 - Architecture phase/status surfaces disagreeing on completed phase or next phase
 - AI-facing markdown or tracked config samples containing credential-like literals
+- AI-facing guidance missing the strict Azure runtime target convention or the Phase 10 environment contract validation path
 
 ## Output Guidance
 
@@ -88,6 +93,7 @@ Present findings as an audit table.
 For shared AI customization changes related to this skill:
 
 - `pwsh scripts/validate-ai-customization.ps1`
+- `pwsh Resources/Azure-Deployment/validate-phase10-environment-contract.ps1` if the audit touched Azure runtime-target or deployment guidance
 
 If `docs/` changed materially while fixing audit findings:
 

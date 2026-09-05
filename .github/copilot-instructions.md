@@ -152,6 +152,27 @@ All workflows live in `.github/workflows/`. Each has a companion `README-*.md` i
 | **Legacy / compatibility** | `azure-bootstrap.yml` | Legacy App Service bootstrap/cleanup path retained for historical compatibility; deploy toggles are retired no-ops |
 | **Support** | `configure-github-secrets.yml`, `publish-template-package.yml`, `validate-template-package-governance.yml`, `validate-deployment.yml`, `test-validate-deployment.yml`, `validate-ai-customization.yml`, `validate-adrs.yml`, `validate-doc-links.yml` | Secondary validation, package publication, troubleshooting, and governance guardrails |
 
+
+### Strict Azure Runtime Target Convention
+
+For Phase 10+ Azure automation, `automation/config/runtime-targets.json` is the source of truth for environment-specific runtime endpoints and Azure resource names used by validation/smoke/payment automation.
+
+When adding or renaming an Azure runtime dependency used by automation — Container App, Function App, SQL, Redis, Key Vault, App Insights, Service Bus, topic/subscription suffix, gateway/UI endpoint, or future service — update all of these together:
+
+- `automation/config/runtime-targets.json` for `azure-dev`, `azure-stg`, and `azure-prod`.
+- `automation/src/contracts/runtime-target-catalog.ts` if a new target field is needed.
+- The owning workflow/script so it reads the value from `runtime-targets.json` or receives it from the workflow topology step.
+- `Resources/Azure-Deployment/validate-phase10-environment-contract.ps1` so hardcoded resource-name regressions fail locally.
+
+Never commit generated Azure hostnames, revision URLs, random ACA suffixes, GUID-like names, or one-run discovery output into `runtime-targets.json`. Stable configured names are allowed; generated FQDNs must be discovered at runtime from Azure control plane or workflow outputs.
+
+Before committing Azure workflow/deployment automation changes, run:
+
+```powershell
+pwsh .\Resources\Azure-Deployment\validate-phase10-environment-contract.ps1
+pwsh .\scripts\validate-ai-customization.ps1
+```
+
 ### Branch → Environment Mapping
 
 | Branch | Environment | Azure resource suffix |

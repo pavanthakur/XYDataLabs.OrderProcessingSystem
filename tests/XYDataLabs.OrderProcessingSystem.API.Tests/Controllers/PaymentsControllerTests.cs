@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -46,5 +47,14 @@ public class PaymentsControllerTests
         });
 
         Assert.IsType<NoContentResult>(result);
+    }
+
+    [Fact]
+    public void LogPaymentClientEvent_AllowsAnonymousPostRedirectTelemetry()
+    {
+        var method = typeof(PaymentsController).GetMethod(nameof(PaymentsController.LogPaymentClientEvent));
+
+        Assert.NotNull(method);
+        Assert.NotNull(method!.GetCustomAttributes(typeof(AllowAnonymousAttribute), inherit: true).SingleOrDefault());
     }
 }

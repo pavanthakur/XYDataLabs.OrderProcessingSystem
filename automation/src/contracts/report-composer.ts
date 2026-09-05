@@ -18,6 +18,10 @@ export interface ExecutiveSummaryRow {
   challengeOutcome: ChallengeOutcome;
   verificationOutcome: string;
   cleanupOutcome: CleanupOutcome;
+  /** Human-readable callback status message displayed on the final payment page (success or failure). */
+  outcomeMessage: string;
+  /** Exact error detail captured from exceptions or provider error banners; empty string when no error occurred. */
+  errorDetail: string;
   startedUtc: string;
   finishedUtc: string;
   evidenceReference: string;

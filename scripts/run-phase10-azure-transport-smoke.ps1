@@ -4,6 +4,9 @@ param(
 
     [string]$ResourceGroupName,
     [string]$ServiceBusNamespaceName,
+    [string]$GatewayContainerAppName,
+    [string]$KeyVaultName,
+    [string]$SqlServerName,
     [string]$ConnectionString,
     [string]$RunId,
     [string]$SummaryPath
@@ -17,9 +20,9 @@ $brokerSuffix = $Environment
 $resourceGroup = if ([string]::IsNullOrWhiteSpace($ResourceGroupName)) { "rg-orderprocessing-$resourceSuffix" } else { $ResourceGroupName }
 $namespace = if ([string]::IsNullOrWhiteSpace($ServiceBusNamespaceName)) { "sb-orderprocessing-$resourceSuffix" } else { $ServiceBusNamespaceName }
 $smokeRunId = if ([string]::IsNullOrWhiteSpace($RunId)) { "phase10-transport-$brokerSuffix-$(Get-Date -Format 'yyyyMMddHHmmss')" } else { $RunId }
-$gatewayApp = "orderprocessing-gate-$resourceSuffix"
-$keyVaultName = "kv-orderprocessing-$resourceSuffix"
-$sqlServerName = "orderprocessing-sql-$resourceSuffix"
+$gatewayApp = if ([string]::IsNullOrWhiteSpace($GatewayContainerAppName)) { "orderprocessing-gate-$resourceSuffix" } else { $GatewayContainerAppName }
+$keyVaultName = if ([string]::IsNullOrWhiteSpace($KeyVaultName)) { "kv-orderprocessing-$resourceSuffix" } else { $KeyVaultName }
+$sqlServerName = if ([string]::IsNullOrWhiteSpace($SqlServerName)) { "orderprocessing-sql-$resourceSuffix" } else { $SqlServerName }
 $sqlServerFqdn = "$sqlServerName.database.windows.net"
 $sharedDbName = switch ($Environment) {
     'dev' { 'OrderProcessingSystem_Dev' }

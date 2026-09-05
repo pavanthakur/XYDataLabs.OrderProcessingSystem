@@ -74,13 +74,19 @@ export class PaymentJourneyRunner {
       const page = await context.newPage();
       page.on("console", (message) => {
         const text = message.text();
+        const messageType = message.type();
 
         if (this.usesLocalParityBrowserNoiseFilter(request.target) && this.isExpectedLocalParityConsoleNoise(text)) {
           log("[browser:expected] Suppressed expected local provider/browser diagnostic.");
           return;
         }
 
-        log(`[browser:${message.type()}] ${text}`);
+        if (this.usesAzureBrowserNoiseFilter(request.target) && this.isExpectedAzureConsoleNoise(text, messageType)) {
+          log(`[browser:azure-suppressed] Suppressed expected Azure provider browser diagnostic (${messageType}).`);
+          return;
+        }
+
+        log(`[browser:${messageType}] ${text}`);
       });
       page.on("pageerror", (error) => {
         log(`[browser:error] ${error.message}`);
@@ -91,6 +97,10 @@ export class PaymentJourneyRunner {
 
         if (this.usesLocalParityBrowserNoiseFilter(request.target) && this.isExpectedLocalParityRequestNoise(url, errorText)) {
           log(`[browser:expected] Suppressed expected local provider/browser request diagnostic for ${this.describeExpectedBrowserNoiseTarget(url)}.`);
+          return;
+        }
+
+        if (this.usesAzureBrowserNoiseFilter(request.target) && this.isExpectedAzureRequestNoise(url, errorText)) {
           return;
         }
 
@@ -171,6 +181,7 @@ export class PaymentJourneyRunner {
       }).catch(() => undefined);
       await submitButton.click();
 
+      let razorpayMockBankChallengeRan = false;
       if (
         paymentConfiguration.collectionMode === "provider_checkout"
         && this.providersMatch(paymentConfiguration.activeProviderType, "Razorpay")
@@ -187,7 +198,7 @@ export class PaymentJourneyRunner {
           await page.goto(callbackUrl.toString(), { waitUntil: "domcontentloaded" });
         }
         else {
-          await this.completeRazorpayHostedCheckout(page, automationPayerEmail, log);
+          razorpayMockBankChallengeRan = await this.completeRazorpayHostedCheckout(page, automationPayerEmail, log);
         }
       }
 
@@ -204,6 +215,7 @@ export class PaymentJourneyRunner {
       let challengeOutcome: ChallengeOutcome = "not-applicable";
       let threeDsSetting: ThreeDsSetting = "unknown";
       if (nextState === "redirect") {
+        // OpenPay 3DS: redirect to provider challenge page
         threeDsSetting = "enabled";
         log("3DS redirect state detected.");
         const continueLink = page.getByRole("link", { name: /Continue to secure verification now/i });
@@ -227,6 +239,12 @@ export class PaymentJourneyRunner {
         log(`Challenge outcome: ${challengeOutcome}. Waiting for callback page.`);
         await page.waitForURL((url) => url.toString().startsWith(request.target.baseUrl), { timeout: 120000 }).catch(() => undefined);
         await callbackHeading.waitFor({ timeout: 120000 });
+      }
+      else if (razorpayMockBankChallengeRan) {
+        // Razorpay 3DS: bank challenge was handled inside the hosted checkout iframe
+        threeDsSetting = "enabled";
+        challengeOutcome = "passed";
+        log("Razorpay mock bank 3DS challenge completed inside hosted checkout.");
       }
       else {
         threeDsSetting = "disabled";
@@ -547,15 +565,20 @@ export class PaymentJourneyRunner {
     });
   }
 
+  /**
+   * Drives the Razorpay hosted checkout flow and returns whether the mock bank 3DS challenge
+   * was presented and completed (true) or whether the checkout was already settled (false, meaning
+   * Razorpay skipped the 3DS step for this card/configuration).
+   */
   private async completeRazorpayHostedCheckout(
     page: import("playwright").Page,
     payerEmail: string,
     log: (message: string) => void
-  ): Promise<void> {
+  ): Promise<boolean> {
     const callbackHeading = page.getByRole("heading", { name: /Review the final payment outcome/i });
     if (await callbackHeading.isVisible().catch(() => false)) {
       log("Razorpay callback page is already visible; hosted checkout steps are not required.");
-      return;
+      return false;
     }
 
     log("Waiting for Razorpay hosted checkout UI.");
@@ -563,6 +586,7 @@ export class PaymentJourneyRunner {
     await this.fillRazorpayCardDetails(page, log);
     await this.dismissRazorpaySaveCardPrompt(page, log);
     await this.completeRazorpayMockBankChallenge(page, log);
+    return true;
   }
 
   private async fillRazorpayContactDetails(
@@ -994,6 +1018,128 @@ export class PaymentJourneyRunner {
 
   private usesLocalParityBrowserNoiseFilter(target: RuntimeTargetDefinition): boolean {
     return target.runtime === "local" || target.runtime === "docker";
+  }
+
+  private usesAzureBrowserNoiseFilter(target: RuntimeTargetDefinition): boolean {
+    return target.runtime === "azure";
+  }
+
+  private isExpectedAzureConsoleNoise(text: string, messageType: string): boolean {
+    // Browser console group events (startGroup/endGroup) from provider SDKs such as
+    // Razorpay's PerimeterX anti-bot script are not actionable and should not surface.
+    if (messageType === "startGroup" || messageType === "endGroup") {
+      return true;
+    }
+
+    // Razorpay's checkout iframe generates Mixed Content warnings when the payment page
+    // is served over HTTPS but Razorpay's frame loads sub-resources from HTTP or from
+    // domains that refuse cross-origin connections in the sandbox environment.
+    if (messageType === "warning" && text.includes("Mixed Content")) {
+      return true;
+    }
+
+    // WebGL GPU stall warnings from the headless Chromium renderer are runner-environment
+    // noise and carry no signal about payment flow correctness.
+    if (messageType === "warning" && text.includes("GL Driver Message") && text.includes("GPU stall")) {
+      return true;
+    }
+
+    // ERR_CONNECTION_REFUSED errors logged as browser console errors originate from
+    // Razorpay's checkout frame trying to reach local/sandbox broker endpoints that
+    // are not available in the Azure runner environment.
+    if (messageType === "error" && text.includes("Failed to load resource: net::ERR_CONNECTION_REFUSED")) {
+      return true;
+    }
+
+    // Razorpay's checkout iframe attempts to read cross-origin response headers that
+    // browsers block by policy. These CORS-policy violations are expected sandbox noise.
+    if (messageType === "error" && text.includes("Refused to get unsafe header")) {
+      return true;
+    }
+
+    // OpenPay sandbox resources emit 401/404 errors with an empty reason phrase
+    // (e.g. "status of 401 ()") due to CORS and auth restrictions in the Azure
+    // runner environment. These differ from application-level auth errors which
+    // include a non-empty reason phrase such as "(Unauthorized)" or "(Not Found)".
+    if (
+      messageType === "error" && (
+        text.includes("Failed to load resource: the server responded with a status of 401 ()") ||
+        text.includes("Failed to load resource: the server responded with a status of 404 ()")
+      )
+    ) {
+      return true;
+    }
+
+    // Sift Science fraud-detection SDK diagnostic emitted by OpenPay's direct-card form.
+    if (messageType === "log" && text.includes("executing sift mode")) {
+      return true;
+    }
+
+    // Razorpay's checkout iframe declares permissions-policy features (accelerometer,
+    // devicemotion, deviceorientation, web-share) that the headless Chromium runner does
+    // not grant. These policy violations and unrecognised-feature warnings carry no signal
+    // about payment flow correctness.
+    if (
+      (messageType === "error" && text.includes("Permissions policy violation:")) ||
+      (messageType === "warning" && text.includes("Unrecognized feature:")) ||
+      (messageType === "warning" && text.includes("devicemotion events are blocked by permissions policy")) ||
+      (messageType === "warning" && text.includes("deviceorientation events are blocked by permissions policy"))
+    ) {
+      return true;
+    }
+
+    return false;
+  }
+
+  private isExpectedAzureRequestNoise(url: string, errorText: string): boolean {
+    // UI telemetry events abort during provider redirect — expected and harmless.
+    if (url.includes("/payment/client-event") && errorText === "net::ERR_ABORTED") {
+      return true;
+    }
+
+    // Razorpay's PerimeterX anti-bot SDK probes random localhost ports with numeric PNG
+    // paths (e.g. http://localhost:37857/1901812.png) to fingerprint the runner environment.
+    // These connection-refused failures are structural noise that will never succeed on a
+    // CI runner and carry no signal about the payment flow.
+    if (errorText === "net::ERR_CONNECTION_REFUSED") {
+      try {
+        const parsedUrl = new URL(url);
+        if (parsedUrl.hostname === "localhost" || parsedUrl.hostname === "127.0.0.1") {
+          return true;
+        }
+      }
+      catch {
+        // malformed URL — fall through
+      }
+    }
+
+    // hCaptcha and other 3rd-party SDK resources abort or are blocked by ORB when the
+    // checkout frame navigates away during the payment flow. ERR_BLOCKED_BY_ORB is
+    // generated when Chromium's Opaque Response Blocking policy blocks a cross-origin
+    // resource (e.g. a Razorpay CDN JS bundle fetched from a next-generation CDN host).
+    if (
+      errorText === "net::ERR_ABORTED" ||
+      errorText === "net::ERR_CONNECTION_REFUSED" ||
+      errorText === "net::ERR_BLOCKED_BY_ORB"
+    ) {
+      let hostname = "";
+      try {
+        hostname = new URL(url).hostname;
+      }
+      catch {
+        return false;
+      }
+
+      if (
+        hostname === "hcaptcha.com" || hostname.endsWith(".hcaptcha.com") ||
+        hostname === "razorpay.com" || hostname.endsWith(".razorpay.com") ||
+        hostname === "checkout-static.razorpay.com" || hostname.endsWith(".checkout-static.razorpay.com")
+      ) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   private isExpectedLocalParityRequestNoise(url: string, errorText: string): boolean {

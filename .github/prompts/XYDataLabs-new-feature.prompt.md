@@ -14,6 +14,7 @@ Ask the user:
 2. "What properties does the main entity need?"
 3. "Is this entity tenant-owned? (default: yes — all business entities require TenantId)"
 4. "Does it relate to any existing entity? (e.g., FK to Order, Customer)"
+5. "Does this feature add or rename any deployed runtime dependency or automation-visible Azure service? (e.g., Container App, Function App, queue/topic/subscription, Key Vault secret family, App Insights dependency, gateway/UI endpoint)"
 
 Once answered, confirm the plan before proceeding.
 
@@ -148,6 +149,21 @@ Add to `tests/XYDataLabs.OrderProcessingSystem.Architecture.Tests/`:
 >
 > This is the same class of gap as the `TransactionReferenceId` bug (commit `49077f3`) — a code path with no test. Reference: `docs/architecture/decisions/ADR-010-runtime-environment-detection.md`
 
+## Step 8B: Azure Runtime/Automation Impact Check (conditional)
+
+Run this step if the feature adds or renames any deployed runtime dependency, automation-visible endpoint, background worker, Azure Function, queue/topic/subscription, payment/provider dependency, Key Vault secret family, App Insights dependency, gateway route, or UI/API runtime target.
+
+Required update set:
+- Add explicit metadata for `azure-dev`, `azure-stg`, and `azure-prod` in `automation/config/runtime-targets.json`.
+- Update `automation/src/contracts/runtime-target-catalog.ts` when a new runtime-target field is introduced.
+- Update the owning workflow/script so Actions 2/3/4 or verifier automation reads the value from `runtime-targets.json` or receives workflow outputs derived from it.
+- Extend `Resources/Azure-Deployment/validate-phase10-environment-contract.ps1` so future hardcoded resource-name regressions fail locally.
+
+Rules:
+- Do NOT commit generated Azure Container Apps FQDNs, revision names, random suffixes, GUIDs, or one-run discovery output into `runtime-targets.json`.
+- Stable configured resource names are allowed in `runtime-targets.json`; generated runtime values must be discovered at execution time from Azure control plane or workflow outputs.
+- Deployment/IaC may create resources from suffix parameters; post-deploy automation validation must be driven by `runtime-targets.json`.
+
 ## Step 9: Build + Test
 
 Run the full build and test suite:
@@ -177,6 +193,7 @@ Before committing, perform a self-review against this checklist:
 | IAppDbContext updated? | `DbSet<T>` added to both concrete DbContext and `IAppDbContext` interface |
 | No tenant params in controller? | No `TenantId`/`TenantCode`/`TenantExternalId` in action params or request DTOs |
 | All tests pass? | `dotnet test` exits with 0 failures |
+| Azure runtime target impact handled? | New automation-visible Azure dependencies update `runtime-targets.json`, TypeScript contract, owning workflow/script, and Phase 10 environment contract validator together |
 
 ## Step 11: Commit
 

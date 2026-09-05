@@ -17,6 +17,7 @@ Use when the task involves any of the following:
 - Verifying CQRS correctness and `Result<T>` usage
 - Inspecting EF Core migrations for safety or drift risk
 - Confirming backend test coverage expectations were met
+- Reviewing feature changes for missing Azure runtime-target, workflow, or environment-contract updates when new services or automation-visible dependencies are introduced
 
 Do not use this skill for:
 
@@ -34,6 +35,7 @@ Open the relevant sources before reviewing:
 - `.github/instructions/multitenant-payment-schema.instructions.md` when payment or tenant-owned data is involved
 - `.github/instructions/ef-migrations.instructions.md` when Infrastructure or migrations changed
 - `.github/instructions/architecture.instructions.md` when ADR or architecture docs changed
+- `.github/instructions/azure-workflows.instructions.md` when Azure resources, runtime-targets, workflows, verifier scripts, or deployment automation are touched
 
 ## Operating Rules
 
@@ -49,6 +51,9 @@ Open the relevant sources before reviewing:
 5. Treat tenant and payment boundaries as non-negotiable.
    - Missing `TenantId`, tenant filter bypass, raw PAN, or CVV2 exposure are immediate findings.
 6. Treat migration safety as part of the review, not an optional follow-up.
+7. Treat runtime-target drift as a review finding.
+   - If a change adds or renames an automation-used Azure service, verify `runtime-targets.json`, the TypeScript target contract, the owning workflow/script, and the Phase 10 environment contract validator changed together.
+   - Flag generated ACA hostnames, random suffixes, GUID-like discovery values, or sample tenant assumptions in automation-facing config.
    - Flag data loss risk, missing mapping updates, and breaking schema assumptions.
 
 ## Recommended Execution Flow
@@ -84,6 +89,7 @@ Open the relevant sources before reviewing:
 - CQRS handlers returning plain values or throwing for expected outcomes
 - Migrations that drop data, omit mapping updates, or lack corresponding test coverage
 - New backend behavior without matching Domain, Application, API, or Architecture tests where appropriate
+- New Azure/runtime automation dependency without matching `runtime-targets.json`, workflow/script, and contract-validator updates
 
 ## Output Guidance
 

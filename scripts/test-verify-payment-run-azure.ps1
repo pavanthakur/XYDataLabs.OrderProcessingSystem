@@ -222,7 +222,11 @@ function Invoke-Verifier {
         [string] $Environment,
 
         [Parameter(Mandatory = $false)]
-        [string] $RunPrefix
+        [string] $RunPrefix,
+
+        [Parameter(Mandatory = $false)]
+        [ValidateSet('Json', 'Table')]
+        [string] $OutputFormat = 'Json'
     )
 
     $arguments = @(
@@ -232,7 +236,7 @@ function Invoke-Verifier {
         '-Environment'
         $Environment
         '-OutputFormat'
-        'Json'
+        $OutputFormat
     )
 
     if (-not [string]::IsNullOrWhiteSpace($RunPrefix)) {
@@ -264,6 +268,10 @@ function Invoke-Verifier {
         if (Test-Path $stderrPath) {
             Remove-Item $stderrPath -Force -ErrorAction SilentlyContinue
         }
+    }
+
+    if ($OutputFormat -eq 'Table') {
+        return $stdoutText
     }
 
     $rawText = $stdoutText
@@ -363,6 +371,9 @@ function Test-DevFallbackScenario {
     if ($uiEvidenceCount -eq 0) {
         Assert-Equal -TestName 'dev-fallback UI no-evidence is inconclusive' -Expected 'INCONCLUSIVE' -Actual $uiCheck.Outcome -ScenarioName $scenarioName
     }
+
+    $tableOutput = Invoke-Verifier -Environment 'dev' -RunPrefix $DevRunPrefix -OutputFormat 'Table'
+    Assert-True -TestName 'dev-fallback table output completes' -Condition (-not [string]::IsNullOrWhiteSpace($tableOutput)) -Message 'Verifier completed in table mode without Count-property failures.' -ScenarioName $scenarioName
 }
 
 function Show-TestSummary {

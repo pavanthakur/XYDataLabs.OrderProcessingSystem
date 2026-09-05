@@ -102,6 +102,7 @@ if (identityEnabled)
             path.StartsWithSegments("/health", StringComparison.OrdinalIgnoreCase)
             || path.Equals("/", StringComparison.OrdinalIgnoreCase)
             || path.StartsWithSegments("/api/v1/info", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("/payment/client-event", StringComparison.OrdinalIgnoreCase)
             || path.StartsWithSegments("/payment/callback", StringComparison.OrdinalIgnoreCase)
             || path.StartsWithSegments("/payments/callback", StringComparison.OrdinalIgnoreCase)
             || path.Value?.Contains("/webhook/", StringComparison.OrdinalIgnoreCase) == true;

@@ -31,6 +31,7 @@ Always follow the rules in these instruction files when they apply:
 - **Result<T> pattern** from SharedKernel for error handling — avoid throwing exceptions for expected failures
 - **Multi-tenancy**: `TenantId` is a required FK on all tenant-owned entities; resolved via `ITenantProvider`
 - **Card data**: Never store raw PAN or CVV2. Use `MaskCardNumber()` — BIN(6) + stars + last 4
+- **Azure/runtime impact check**: If backend work adds or renames an automation-visible service, endpoint, background worker, Function, queue/topic/subscription, or provider dependency, flag the required Azure DevOps handoff: update `runtime-targets.json`, its TypeScript contract, the owning workflow/script, and `validate-phase10-environment-contract.ps1`.
 
 ## Workflow Role
 

@@ -163,7 +163,21 @@
       "environment": "dev",
       "profile": "https",
       "paymentPagePath": "/payments/new",
-      "ignoreHttpsErrors": false
+      "ignoreHttpsErrors": false,
+      "azureResourceGroupName": "rg-orderprocessing-dev",
+      "azureGatewayContainerAppName": "orderprocessing-gate-dev",
+      "azureOrdersContainerAppName": "orderprocessing-ord-dev",
+      "azurePaymentsContainerAppName": "orderprocessing-pay-dev",
+      "azureInventoryContainerAppName": "orderprocessing-inv-dev",
+      "azureNotificationsContainerAppName": "orderprocessing-notif-dev",
+      "azureUiContainerAppName": "orderprocessing-ui-dev",
+      "azureFunctionAppName": "orderprocessing-functions-dev",
+      "azureSqlServerName": "orderprocessing-sql-dev",
+      "azureRedisName": "orderprocessing-redis-dev",
+      "azureKeyVaultName": "kv-orderprocessing-dev",
+      "azureApplicationInsightsName": "ai-orderprocessing-dev",
+      "azureServiceBusNamespaceName": "sb-orderprocessing-dev",
+      "azureBrokerSuffix": "dev"
     },
     {
       "key": "azure-stg",
@@ -178,7 +192,21 @@
       "environment": "stg",
       "profile": "https",
       "paymentPagePath": "/payments/new",
-      "ignoreHttpsErrors": false
+      "ignoreHttpsErrors": false,
+      "azureResourceGroupName": "rg-orderprocessing-stg",
+      "azureGatewayContainerAppName": "orderprocessing-gate-stg",
+      "azureOrdersContainerAppName": "orderprocessing-ord-stg",
+      "azurePaymentsContainerAppName": "orderprocessing-pay-stg",
+      "azureInventoryContainerAppName": "orderprocessing-inv-stg",
+      "azureNotificationsContainerAppName": "orderprocessing-notif-stg",
+      "azureUiContainerAppName": "orderprocessing-ui-stg",
+      "azureFunctionAppName": "orderprocessing-functions-stg",
+      "azureSqlServerName": "orderprocessing-sql-stg",
+      "azureRedisName": "orderprocessing-redis-stg",
+      "azureKeyVaultName": "kv-orderprocessing-stg",
+      "azureApplicationInsightsName": "ai-orderprocessing-stg",
+      "azureServiceBusNamespaceName": "sb-orderprocessing-stg",
+      "azureBrokerSuffix": "staging"
     },
     {
       "key": "azure-prod",
@@ -193,7 +221,21 @@
       "environment": "prod",
       "profile": "https",
       "paymentPagePath": "/payments/new",
-      "ignoreHttpsErrors": false
+      "ignoreHttpsErrors": false,
+      "azureResourceGroupName": "rg-orderprocessing-prod",
+      "azureGatewayContainerAppName": "orderprocessing-gate-prod",
+      "azureOrdersContainerAppName": "orderprocessing-ord-prod",
+      "azurePaymentsContainerAppName": "orderprocessing-pay-prod",
+      "azureInventoryContainerAppName": "orderprocessing-inv-prod",
+      "azureNotificationsContainerAppName": "orderprocessing-notif-prod",
+      "azureUiContainerAppName": "orderprocessing-ui-prod",
+      "azureFunctionAppName": "orderprocessing-functions-prod",
+      "azureSqlServerName": "orderprocessing-sql-prod",
+      "azureRedisName": "orderprocessing-redis-prod",
+      "azureKeyVaultName": "kv-orderprocessing-prod",
+      "azureApplicationInsightsName": "ai-orderprocessing-prod",
+      "azureServiceBusNamespaceName": "sb-orderprocessing-prod",
+      "azureBrokerSuffix": "prod"
     }
   ]
 }
