@@ -31,6 +31,7 @@ Open the relevant sources before running the closeout gate:
 - `docs/internal/DEFERRED-WORK-LOG.md` when something may need deferral
 - `docs/AI-OPERATING-MODEL.md` when the task touched shared AI customization surfaces
 - `.github/copilot-instructions.md` when the task changed discoverability or repo context
+- `.github/instructions/azure-workflows.instructions.md` when Azure runtime targets, workflows, deployment scripts, or environment validation changed
 
 ## Operating Rules
 
@@ -77,6 +78,7 @@ Open the relevant sources before running the closeout gate:
 - A code change landed without the narrowest matching unit or integration test
 - A workflow or script change introduced an undocumented or non-automated manual step
 - A gap is being deferred even though it affects correctness, security, tenant isolation, deployment safety, or shared repo truth
+- Azure automation changed without proving `runtime-targets.json`, workflow/script wiring, and `validate-phase10-environment-contract.ps1` stayed aligned
 
 ## Output Guidance
 
@@ -91,6 +93,7 @@ Summarize results by completion category and call out any unresolved items.
 For shared AI customization changes related to this skill:
 
 - `pwsh scripts/validate-ai-customization.ps1`
+- `pwsh Resources/Azure-Deployment/validate-phase10-environment-contract.ps1` when Azure workflow/resource-target behavior changed
 
 For task closeout work, use the executable checks defined in `.github/prompts/XYDataLabs-completion-check.prompt.md`.
 

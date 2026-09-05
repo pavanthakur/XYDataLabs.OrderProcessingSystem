@@ -31,6 +31,7 @@ Load all instruction files relevant to the files under review:
 5. **Migration safety**: Does the migration have data loss risk? Is seed SQL correct?
 6. **Test coverage**: Do new entities/handlers have corresponding tests?
 7. **Secret hygiene**: Are connection strings, keys, or tokens hardcoded?
+8. **Azure runtime targets**: If new Azure services or automation-visible runtime dependencies were added, did `runtime-targets.json`, the TypeScript contract, workflows/scripts, and `validate-phase10-environment-contract.ps1` change together?
 
 ## Output Format
 

@@ -188,6 +188,14 @@ Assert-Contains -Content $scriptReadme -Needle 'validate-ai-customization.ps1' -
 
 $azureWorkflowInstructions = Get-FileText -RelativePath '.github/instructions/azure-workflows.instructions.md'
 $azureDeploymentSkill = Get-FileText -RelativePath '.github/skills/azure-deployment-operations/SKILL.md'
+$cqrsBackendSkill = Get-FileText -RelativePath '.github/skills/cqrs-backend-implementation/SKILL.md'
+$codeReviewSkill = Get-FileText -RelativePath '.github/skills/code-review-guardrails/SKILL.md'
+$completionCheckSkill = Get-FileText -RelativePath '.github/skills/completion-check-governance/SKILL.md'
+$contextAuditSkill = Get-FileText -RelativePath '.github/skills/context-audit-governance/SKILL.md'
+$newFeaturePrompt = Get-FileText -RelativePath '.github/prompts/XYDataLabs-new-feature.prompt.md'
+$cqrsBackendAgent = Get-FileText -RelativePath '.github/agents/cqrs-backend.agent.md'
+$codeReviewerAgent = Get-FileText -RelativePath '.github/agents/code-reviewer.agent.md'
+$azureDevOpsAgent = Get-FileText -RelativePath '.github/agents/azure-devops.agent.md'
 
 Assert-Contains -Content $copilotInstructions -Needle 'Strict Azure Runtime Target Convention' -FailureMessage '.github/copilot-instructions.md must document the strict Azure runtime target convention'
 Assert-Contains -Content $copilotInstructions -Needle 'automation/config/runtime-targets.json' -FailureMessage '.github/copilot-instructions.md must identify runtime-targets.json as the Azure automation source of truth'
@@ -196,6 +204,14 @@ Assert-Contains -Content $azureWorkflowInstructions -Needle 'Strict Azure Runtim
 Assert-Contains -Content $azureWorkflowInstructions -Needle 'Do not commit generated Azure Container Apps FQDNs' -FailureMessage '.github/instructions/azure-workflows.instructions.md must ban generated Azure hostnames in runtime-targets.json'
 Assert-Contains -Content $azureDeploymentSkill -Needle 'Runtime target convention for Phase 10+ automation' -FailureMessage 'azure-deployment-operations skill must document the runtime target convention'
 Assert-Contains -Content $azureDeploymentSkill -Needle 'validate-phase10-environment-contract.ps1' -FailureMessage 'azure-deployment-operations skill must require the Phase 10 environment contract validator when Azure runtime target behavior changes'
+Assert-Contains -Content $cqrsBackendSkill -Needle 'Azure/runtime automation impact' -FailureMessage 'cqrs-backend-implementation skill must require Azure/runtime automation impact checks for new services'
+Assert-Contains -Content $codeReviewSkill -Needle 'runtime-target drift' -FailureMessage 'code-review-guardrails skill must flag runtime-target drift'
+Assert-Contains -Content $completionCheckSkill -Needle 'Azure automation changed without proving' -FailureMessage 'completion-check-governance skill must require Azure runtime-target closeout validation'
+Assert-Contains -Content $contextAuditSkill -Needle 'Azure runtime-target convention' -FailureMessage 'context-audit-governance skill must include runtime-target convention drift checks'
+Assert-Contains -Content $newFeaturePrompt -Needle 'Azure Runtime/Automation Impact Check' -FailureMessage 'new feature prompt must include Azure runtime/automation impact check'
+Assert-Contains -Content $cqrsBackendAgent -Needle 'Azure/runtime impact check' -FailureMessage 'CQRS backend agent must flag Azure/runtime automation impact for new services'
+Assert-Contains -Content $codeReviewerAgent -Needle 'Azure runtime targets' -FailureMessage 'code reviewer agent must review Azure runtime target updates for new services'
+Assert-Contains -Content $azureDevOpsAgent -Needle 'Runtime target source of truth' -FailureMessage 'Azure DevOps agent must document runtime-target source-of-truth convention'
 
 if ($failures.Count -eq 0) {
     Write-Host "AI customization validation passed. Checked $($instructionFiles.Count) instruction file(s), $($promptFiles.Count) prompt file(s), $($agentFiles.Count) agent file(s), and $($skillFiles.Count) skill file(s)." -ForegroundColor Green
