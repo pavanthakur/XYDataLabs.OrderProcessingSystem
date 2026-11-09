@@ -441,6 +441,8 @@ For the service-owned target model, database preparation through identity grant 
 
 ### P11-W5 Provider Reassignment
 
+**Required legacy-tool correction:** `scripts/set-tenant-payment-provider.ps1` currently calls `Ensure-ProviderRuntimeContract` during switching, which can upsert provider metadata and force OpenPay `Use3DSecure=true`. Replace this implicit repair with read-only validation of the requested provider in the tenant's resolved business database before changing the authoritative shared-registry route. Preserve credentials, provider metadata, 3DS flags, and non-authoritative dedicated tenant rows. Missing or invalid configuration must fail before route mutation; provisioning/repair is a separate explicitly approved operation. Apply the correction consistently to supported runtimes, but do not deploy or mutate Azure as part of local implementation. Test that a valid switch changes only the registry route and a rejected switch changes nothing, including OpenPay 3DS-off preservation and dedicated-provider resolution. Complete this correction before reusing the legacy switch tool; the current Docker acceptance fixture is a separate path.
+
 1. Keep the existing registry assignment active.
 2. Provision the target provider key and webhook contracts.
 3. Validate provider support, credentials, callback URLs, currency, and deterministic adapter behavior.
@@ -512,6 +514,8 @@ Classify drift at minimum as:
 The read-only parity subset begins in P11-W1 and gates every later mutation. P11-W6 completes scheduling, repair proposals, orphan detection, and fleet-wide reporting; drift protection is not deferred until after mutation workflows exist.
 
 ### P11-W7 Acceptance And Operational Handover
+
+**Low-priority backlog — generalized fixture regression evidence:** after P11-W0, extend the focused Docker fixture regressions beyond A/B/C with an arbitrarily named shared tenant and an arbitrarily named dedicated tenant in isolated test databases. Prove independent shared-registry/dedicated-provider discovery, requested-provider validation, missing-provider rejection, missing dedicated mapping with no shared fallback, and exact snapshot/restoration after ordinary failure. Preserve the TenantC regression and existing application settings; no new production tenants or credentials are required. This does not block the already accepted bounded A/B/C Docker baseline or P11-W0. Schedule it with the acceptance work here, and require the evidence before claiming arbitrary-tenant fixture support; existing provisioning and isolation safety gates are not waived.
 
 Run these scenarios in local Docker, CI, Azure dev, and staging before Phase 11 closes:
 
