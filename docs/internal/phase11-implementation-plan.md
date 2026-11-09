@@ -6,6 +6,8 @@ Phase 11 turns tenant topology changes and service data ownership into governed 
 
 This document is the execution companion to the Phase 11 roadmap in `ARCHITECTURE-EVOLUTION.md`.
 
+The first implementation step is **P11-W0: user-friendly order-first payment collection**. Complete its local Docker acceptance before starting P11-W1 topology implementation. This prioritization does not authorize Azure deployment or expand the deferred payment/fulfillment scope.
+
 ## Phase 10 Carry-Forward And Phase 11 Target
 
 Phase 10 proves that runtime discovery, validation, smoke, and payment execution can follow registry topology without treating `TenantA`, `TenantB`, or `TenantC` as invariants. It intentionally fails closed when a newly configured dedicated tenant has no provisioned database contract.
@@ -338,6 +340,25 @@ A gate cannot be promoted when a prior required gate is failed, skipped without 
 
 Workstream identifiers deliberately avoid `11.5`; the architecture roadmap reserves Phase 11.5 for the isolated PostgreSQL portability proof.
 
+### P11-W0 User-Friendly Order-First Payment Collection — First Step
+
+**Goal:** let an end user find an order, understand what is owed, pay securely, and see a confirmed result without assembling a payment request or understanding provider configuration.
+
+- Make **Customers → search customer → open order → Collect payment** the primary journey. Carry the selected customer and saved order into payment review; do not ask the user to select them again.
+- Replace the Payments entry page's dependent customer/order dropdowns with a **Collect payment** workspace: search by customer name, email, or order number; show searchable order results with customer, date, amount/currency, and payment status; then review and pay. Support growing customer/order lists through bounded results or existing pagination contracts rather than rendering an unlimited dropdown.
+- Provide payment-status filters such as Unpaid, Pending confirmation, and Paid only where backed by authoritative application state. Show payment status separately from fulfillment status: an unfulfilled order may already be paid and must not be charged again.
+- Review shows the selected order summary, editable payer contact details, contextual Back navigation, and one primary amount-labelled action such as **Pay ₹100 securely**. Provider-hosted collection remains provider-specific; provider selection and saved order references/amount/currency stay server-controlled.
+- Adapt actions to state: **Collect payment** for eligible unpaid orders; **View payment** for confirmed paid orders; **Check payment status** for unresolved attempts when the authenticated recovery capability exists. Until DW-023 supplies that capability, explain the pending state and block another charge; do not add a non-functional Resume/Check action or infer failure from a timeout.
+- Remove routine **Reload orders** and competing browse/create buttons from the main payment action area. Load current data automatically, expose **Try again** on load failure, use contextual back links, and offer **Create an order** in appropriate empty states or customer context.
+- Show a truthful result page with confirmed payment outcome, safe reference/receipt details when available, and **Return to order**. Never equate payment completion with fulfillment or an unconfirmed callback with payment success.
+- Preserve authorized search/selection when navigating back; clear tenant-specific form/selection state and ignore stale responses on tenant changes. Retain regular-user isolation, admin switching, accessible labels, keyboard operation, visible focus, responsive layout, and clear loading/empty/error states.
+- Keep sandbox/3DS/runtime diagnostics separate from the normal business journey and visible only in explicitly enabled development/test environments. Preserve provider evidence and reporting for automation.
+- Implement incrementally using existing frontend conventions and APIs first. Any required API/search contract change needs a separate review; do not weaken eligibility, authorization, signature verification, callback correlation, or duplicate-charge guards to simplify the UI.
+
+**Affected areas:** frontend Payments entry/review/result screens, customer/order action links, associated styles, frontend tests, Playwright journeys, and the local manual runbook. No database migration, provider baseline change, Azure workflow edit, or deployment is included by this workstream.
+
+**Exit gate:** local Docker Playwright evidence covers both entry points for every active acceptance tenant and both supported providers, with fresh saved orders and original provider settings restored. Verify amount/currency, authoritative payment confirmation and Paid-order projection; paid/pending charge prevention; customer/order/tenant mismatch denial; admin and regular-user access; back/refresh behavior; accessible keyboard controls; and mobile/desktop loading, empty, error, and result states. Keep deterministic and real-sandbox results separate. DW-023/DW-024, installments, and fulfillment remain independently tracked and uncertified until their own gates pass. No automatic retry of an ambiguous charge.
+
 ### P11-W1 Topology Contract Foundation
 
 - Define typed registry, expected-contract, validation-result, and evidence schemas.
@@ -519,6 +540,9 @@ Production promotion requires staging evidence plus an explicit approval. Produc
 ## Workstream Dependency Order
 
 ```text
+P11-W0 Order-first payment UX and local Docker acceptance
+        |
+        v
 P11-W1 Topology contract foundation
         |-- minimum read-only parity reconciler and telemetry evidence gate
         |
@@ -537,7 +561,8 @@ P11-W3 + P11-W4 + P11-W5
                     +--> P11-W7 Acceptance and handover
 ```
 
-- P11-W1 is the mandatory first slice and includes removal of the Phase 10 `TenantC`-specific active provisioning contract.
+- P11-W0 is the mandatory first implementation step; complete its local Docker acceptance before P11-W1 implementation begins. Azure remains a separately approved later gate.
+- P11-W1 is the first topology slice and includes removal of the Phase 10 `TenantC`-specific active provisioning contract.
 - P11-W2 must establish service storage ownership before P11-W3 claims full dedicated-tenant provisioning.
 - P11-W5 may proceed after P11-W1 because provider capability is independent of database splitting, but final acceptance still requires the service-owned model.
 - P11-W4 cannot start until onboarding, migration, reconciliation, and rollback primitives are proven by P11-W3.
